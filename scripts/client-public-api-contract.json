@@ -2,6 +2,36 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "PLUGIN_UI_BRIDGE_LIMITS", "kind": "runtime-export" },
+    { "name": "PluginUiBridgeError", "kind": "runtime-export" },
+    { "name": "decodePluginUiBridgeMessage", "kind": "runtime-export" },
+    { "name": "encodePluginUiBridgeMessage", "kind": "runtime-export" },
+    { "name": "parsePluginUiBridgeRequest", "kind": "runtime-export" },
+    { "name": "parsePluginUiBridgeSnapshot", "kind": "runtime-export" },
+    { "name": "parsePluginUiBridgeReceipt", "kind": "runtime-export" },
+    { "name": "readPluginUiBridgeResponse", "kind": "runtime-export" },
+    { "name": "readPluginUiBridgeNotification", "kind": "runtime-export" },
+    { "name": "readPluginUiInstance", "kind": "runtime-export" },
+    { "name": "readPluginUiAction", "kind": "runtime-export" },
+    { "name": "JsonValue", "kind": "type-export" },
+    { "name": "PluginUiViewSnapshot", "kind": "type-export" },
+    { "name": "PluginUiSurface", "kind": "type-export" },
+    { "name": "PluginUiBridgeMethod", "kind": "type-export" },
+    { "name": "PluginUiBridgeRequest", "kind": "type-export" },
+    { "name": "PluginUiBridgeResponse", "kind": "type-export" },
+    { "name": "PluginUiBridgeNotification", "kind": "type-export" },
+    { "name": "PluginUiActionRunMetadata", "kind": "type-export" },
+    { "name": "PluginUiResource", "kind": "runtime-export" },
+    { "name": "pluginUi", "kind": "client-resource" },
+    { "name": "DismissPluginUiInput", "kind": "type-export" },
+    { "name": "InvokePluginUiActionInput", "kind": "type-export" },
+    { "name": "PluginUiActionReceipt", "kind": "type-export" },
+    { "name": "PluginUiActionResponse", "kind": "type-export" },
+    { "name": "PluginUiActionDescription", "kind": "type-export" },
+    { "name": "PluginUiAvailability", "kind": "type-export" },
+    { "name": "PluginUiDocumentResponse", "kind": "type-export" },
+    { "name": "PluginUiInstanceRecord", "kind": "type-export" },
+    { "name": "PluginUiInstanceResponse", "kind": "type-export" },
     {
       "name": "AttachmentResource",
       "kind": "runtime-export"
@@ -540,6 +570,10 @@
     },
     {
       "name": "PluginRuntimeStatus",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiInventory",
       "kind": "type-export"
     },
     {

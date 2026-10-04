@@ -35,6 +35,37 @@ function createExecutionContext(
 }
 
 describe("run capability execution boundary", () => {
+  it("withdraws UI after Native definition replacement without rebinding an old component", async () => {
+    const registry = new ToolRegistry();
+    registry.register(tool("Alpha", "original"), { kind: "plugin", id: "alpha" });
+    const sources = { toolRegistry: registry, pluginIds: new Set(["alpha"]) };
+    const original = createRunCapabilityView(sources, "alpha").tools.get("Alpha")!;
+    const ui = { pluginId: "alpha", pluginVersion: "1", pluginDigest: "digest", componentId: "panel",
+      componentDigest: "component", htmlSha256: "html", root: "/plugin", entryPath: "/plugin/ui.html",
+      definition: { id: "panel", title: "Panel", entry: "./ui.html", surfaces: ["tool-result" as const],
+        actions: [{ id: "go", label: "Go", tool: "Alpha", completion: "keep-open" as const }] }, actionTools: [original] };
+    const captured = createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha");
+    expect(captured.pluginUi?.size).toBe(1);
+    registry.override(tool("Alpha", "replacement"), { kind: "plugin", id: "alpha" });
+    expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
+    ui.definition.title = "mutated";
+    expect(captured.pluginUi?.get("alpha:panel")?.definition.title).toBe("Panel");
+    expect(await captured.tools.get("Alpha")!.invoke({}, { cwd: "." })).toEqual({ content: [{ type: "text", text: "original" }] });
+  });
+
+  it.each([undefined, { kind: "builtin" as const }, { kind: "mcp" as const, id: "server" }, { kind: "plugin" as const, id: "other" }])(
+    "does not admit a UI action with invalid provenance %j", source => {
+      const registry = new ToolRegistry();
+      registry.register(tool("Action"), source);
+      const sources = { toolRegistry: registry, pluginIds: new Set(["alpha", "other"]),
+        mcpServers: [{ serverId: "server", serverName: "server", definition: { type: "stdio" as const, command: "node" } }] };
+      const candidate = createRunCapabilityView(sources, source?.kind === "plugin" ? "other" : "alpha").tools.get("Action")!;
+      const ui = { pluginId: "alpha", pluginVersion: "1", pluginDigest: "digest", componentId: "panel",
+        componentDigest: "component", htmlSha256: "html", root: "/plugin", entryPath: "/plugin/ui.html",
+        definition: { id: "panel", title: "Panel", entry: "./ui.html", surfaces: ["tool-result" as const],
+          actions: [{ id: "go", label: "Go", tool: "Action", completion: "keep-open" as const }] }, actionTools: [candidate] };
+      expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
+    });
   it.each([false, true])("enforces normalized Bash restrictions during View invocation: denied=%s", async (denied) => {
     let invocations = 0;
     const registry = new ToolRegistry();

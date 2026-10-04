@@ -8,6 +8,7 @@ import type {
   AgentChildResult,
   AgentChildSpawnInput,
   AgentEffects,
+  AgentEventInput,
   AgentEventListener,
   AgentEventSubscription,
   AgentPostRunChildParent,
@@ -27,13 +28,15 @@ import type {
   AgentRequestConfigurationReader,
   AgentRequestConfigurationStore,
   ToolDescriptor,
+  ToolExecutionResult,
+  ToolUseBlock,
   ToolRegistrationSource,
   UsageSnapshot,
 } from "@vykor/core";
 import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
-import { createRunCapabilityView } from "./run-capability-view.js";
+import { createRunCapabilityView, readonlyMap } from "./run-capability-view.js";
 import {
   AgentOperationConflictError,
   type VykorAgentState,
@@ -102,6 +105,14 @@ export interface VykorAgentSubmitOptions {
   };
 }
 
+export interface VykorAgentRunToolOptions {
+  capabilityView: RunCapabilityView;
+  scope: AgentRunScope;
+  signal?: AbortSignal;
+  /** Reliable sink for the independent operation; rejection fails execution. */
+  onToolEvent?: (event: AgentEventInput) => Promise<void>;
+}
+
 export interface AgentCompactResult {
   history: Message[];
   beforeMessageCount: number;
@@ -154,6 +165,7 @@ export interface VykorAgent {
     content: string | ContentBlock[],
     options?: VykorAgentSubmitOptions,
   ): Promise<AgentRunResult>;
+  runTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions): Promise<ToolExecutionResult>;
   getHistory(): Message[];
   loadHistory(messages: Message[]): void;
   clear(): void;
@@ -194,8 +206,9 @@ class DefaultVykorAgent implements VykorAgent {
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
-    kind: "compact" | "remember" | "post_run_child";
+    kind: "compact" | "remember" | "post_run_child" | "tool";
     settled: Promise<void>;
+    controller?: AbortController;
   };
   private lifecycleState: VykorAgentState = "idle";
   private closePromise?: Promise<void>;
@@ -283,6 +296,55 @@ class DefaultVykorAgent implements VykorAgent {
     options: VykorAgentSubmitOptions = {},
   ): Promise<AgentRunResult> {
     return await this.submitMessage(content, options).result;
+  }
+
+  async runTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions): Promise<ToolExecutionResult> {
+    if (options.scope.sessionId !== this.id || options.scope.agentId !== this.id) {
+      throw new Error("Tool operation scope does not belong to this Agent session");
+    }
+    this.assertIdle("run a UI tool");
+    const requested = options.capabilityView.tools.get(toolUse.name);
+    const current = this.createRunCapabilityView(options.capabilityView.pluginId);
+    const ui = [...(options.capabilityView.pluginUi?.values() ?? [])].find(binding => {
+      const trusted = current.pluginUi?.get(`${binding.pluginId}:${binding.componentId}`);
+      return trusted && trusted.pluginDigest === binding.pluginDigest && trusted.componentDigest === binding.componentDigest
+        && trusted.definition.actions.some(action => action.tool === toolUse.name);
+    });
+    const trustedUi = ui && current.pluginUi?.get(`${ui.pluginId}:${ui.componentId}`);
+    const tool = trustedUi?.actionTools.find(binding => binding.definition.name === toolUse.name);
+    if (!tool || !requested || requested.definitionIdentity !== tool.definitionIdentity
+      || requested.definition.execute !== tool.definition.execute || tool.source?.kind !== "plugin"
+      || tool.ownerPluginId !== current.pluginId) {
+      throw new Error("Tool is not a captured Native UI action for this Agent");
+    }
+    // Never execute caller-supplied functions or expose other tools through ToolContext.
+    const capabilityView: RunCapabilityView = Object.freeze({
+      pluginId: current.pluginId, tools: readonlyMap([[toolUse.name, tool]]),
+      skills: readonlyMap<never>([]), agents: readonlyMap<never>([]), mcpServers: readonlyMap<never>([]),
+      pluginUi: readonlyMap([[`${trustedUi!.pluginId}:${trustedUi!.componentId}`, trustedUi!]]),
+    });
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, options.scope.signal, ...(options.signal ? [options.signal] : [])]);
+    const scope: AgentRunScope = {
+      agentId: this.id, sessionId: this.id, cwd: this.childManager.cwd,
+      runId: options.scope.runId, traceId: options.scope.traceId,
+      // Attribution only: independent UI Runs have no persisted SessionInputRecord.
+      inputId: options.scope.runId, signal,
+    };
+    return await this.runMaintenance("tool", async () => {
+      const releaseConnections = this.retainMcpConnectionsForRun();
+      try {
+        await options.onToolEvent?.({ type: "tool.started", data: { toolUse } });
+        const result = await this.runtime.queryEngine.executeTool(toolUse, { signal, execution: {
+          scope, capabilityView, effects: this.effects,
+          children: this.childManager.createController(scope, capabilityView),
+          emit: options.onToolEvent ?? (async () => {}),
+          takeSteeredInputs: async () => [], closeSteering: () => {},
+        } });
+        await options.onToolEvent?.({ type: "tool.completed", data: { toolUseId: toolUse.id, result } });
+        return result;
+      } finally { releaseConnections(); }
+    }, controller);
   }
 
   getHistory(): Message[] {
@@ -454,6 +516,7 @@ class DefaultVykorAgent implements VykorAgent {
     if (this.closePromise) return this.closePromise;
     if (this.lifecycleState === "closed") return Promise.resolve();
     this.lifecycleState = "closing";
+    this.maintenance?.controller?.abort("Agent closed");
     const closing = (async () => {
       const failures: unknown[] = [];
       try {
@@ -493,8 +556,9 @@ class DefaultVykorAgent implements VykorAgent {
   }
 
   private runMaintenance<T>(
-    kind: "compact" | "remember" | "post_run_child",
+    kind: "compact" | "remember" | "post_run_child" | "tool",
     work: () => Promise<T>,
+    controller?: AbortController,
   ): Promise<T> {
     this.assertIdle(kind);
     this.lifecycleState = "maintaining";
@@ -502,7 +566,7 @@ class DefaultVykorAgent implements VykorAgent {
     const settled = new Promise<void>((resolve) => {
       settle = resolve;
     });
-    const operation = { kind, settled };
+    const operation = { kind, settled, controller };
     this.maintenance = operation;
     return (async () => {
       try {

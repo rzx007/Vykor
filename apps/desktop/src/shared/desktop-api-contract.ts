@@ -5,6 +5,7 @@ import type {
   TrayNotificationOptions,
 } from "./ipc-channels"
 import { IpcChannels, type IpcInvokeMap } from "./ipc-channels"
+import type { DesktopPluginUiAPI } from "./plugin-ui-types"
 import type {
   CheckoutDesktopProjectBranchInput,
   CreateDesktopSessionInput,
@@ -173,6 +174,7 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  pluginUi: DesktopPluginUiAPI
   activity: {
     open: () => Promise<DesktopActivityUpdate>
     onUpdated: (listener: (update: DesktopActivityUpdate) => void) => () => void

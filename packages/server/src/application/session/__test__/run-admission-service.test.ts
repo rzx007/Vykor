@@ -140,6 +140,39 @@ function createMockOptions() {
 }
 
 describe("RunAdmissionService", () => {
+  it.each(["metadata", "runMetadata"] as const)("rejects host UI %s before Prompt persistence or goal cancellation", async namespace => {
+    for (const name of ["pluginUi", "uiAction"]) {
+      const { options, inputs, runs } = createMockOptions();
+      const cancelGoalRuns = vi.fn(() => []);
+      options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }), cancelGoalRuns };
+      const service = new RunAdmissionService(options);
+      await expect(Promise.resolve().then(() => service.admitPromptAndMaybeRun("s1", {
+        items: [{ type: "text", text: "hello" }], [namespace]: { [name]: {} },
+      }))).rejects.toMatchObject({ code: "invalid_request" });
+      expect(inputs.size).toBe(0);
+      expect(runs.size).toBe(0);
+      expect(cancelGoalRuns).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each(["metadata", "runMetadata"] as const)("rejects host UI %s for transcript replacement, latest edits and goals", namespace => {
+    const { options, inputs, runs } = createMockOptions();
+    const service = new RunAdmissionService(options);
+    const input = { items: [{ type: "text" as const, text: "hello" }], [namespace]: { uiAction: {} } };
+    expect(() => service.replaceTranscriptAndAdmitPrompt("s1", [], input)).toThrow();
+    expect(() => service.replaceLatestPrompt("s1", "m1", input)).toThrow();
+    expect(() => service.persistGoalRun("s1", input)).toThrow();
+    expect(inputs.size).toBe(0);
+    expect(runs.size).toBe(0);
+  });
+
+  it("rejects host UI replay metadata before creating a Run", () => {
+    const { options, inputs, runs } = createMockOptions();
+    inputs.set("i1", { id: "i1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 });
+    const service = new RunAdmissionService(options);
+    expect(() => service.replayInput("i1", { metadata: { pluginUi: {} } })).toThrow();
+    expect(runs.size).toBe(0);
+  });
   it("dispatches a persisted pending run once", () => {
     const { options, inputs, runs, enqueueRunFn } = createMockOptions();
     inputs.set("i1", { id: "i1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);

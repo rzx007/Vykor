@@ -910,6 +910,7 @@ describe("DaemonAgentEventProjector", () => {
     expect(bridge.bindChildExecutionRun).toHaveBeenCalledTimes(2);
     expect(store.updateRun).toHaveBeenLastCalledWith("run-2", {
       status: "completed",
+      metadata: { toolGeneration: [] },
     });
     expect([...attempts.values()]).toMatchObject([
       { id: "attempt_run-1_1", runId: "run-1", sequence: 1, status: "failed" },

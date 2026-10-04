@@ -10,6 +10,48 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("adds UI facts only to the submitted normal input without changing the durable user prompt", async () => {
+    const store = createStore();
+    let submitted = "";
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      pluginUi: { registerRunView: () => {}, releaseRunView: () => {}, summarizeForInput: () => "[外部工具数据] interrupted unknown" },
+      agentPool: { configured: true, acquireSession: async () => ({
+        submitMessage: (content: string) => { submitted = content; return completedHandle(); },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitted).toBe("hello\n\n[外部工具数据] interrupted unknown");
+    expect(store.spies.getInput().content).toBe("hello");
+  });
+  it.each([false, true])("registers the host Run view before submission and releases it on settlement (failure=%s)", async (fail) => {
+    const store = createStore();
+    const view = createRunCapabilityView({ toolRegistry: new ToolRegistry() });
+    const views = new Map();
+    let registeredAtSubmit = false;
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      pluginUi: { registerRunView: (id, captured) => views.set(id, captured), releaseRunView: id => { views.delete(id); } },
+      agentPool: { configured: true, acquireSession: async () => ({
+        createRunCapabilityView: () => view,
+        submitMessage: () => {
+          registeredAtSubmit = views.get("run-1") === view;
+          if (fail) throw new Error("submission failed");
+          return completedHandle();
+        },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(registeredAtSubmit).toBe(true);
+    expect(views.size).toBe(0);
+  });
   it("records a selected plugin preparation failure before submitting to the model", async () => {
     const store = createStore();
     Object.assign(store.spies.getRun(), { metadata: { pluginId: "selected", retained: "yes" } });

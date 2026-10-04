@@ -173,6 +173,15 @@ export function PluginDetailsDialog({
               <p className="text-xs text-muted-foreground">没有声明贡献内容。</p>
             )}
           </DetailSection>
+          {plugin.uiInventory ? (
+            <DetailSection title="插件界面定义">
+              <DetailRow label="定义文件" value={String(plugin.uiInventory.manifestCount)} />
+              <DetailRow label="静态校验" value={plugin.uiInventory.componentCount === null
+                ? "UI 定义数量暂不可确认"
+                : `已校验 ${plugin.uiInventory.validatedComponentCount} 个 UI 定义`} />
+              <p className="text-xs text-muted-foreground">在工具结果中按需打开交互，是否可用以会话检查为准。</p>
+            </DetailSection>
+          ) : null}
           <DetailSection title="权限">
             <DetailRow
               label="已批准"

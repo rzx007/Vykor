@@ -6,6 +6,16 @@ import {
 } from "../session-interaction-service.js";
 
 describe("SessionInteractionService editLatestPrompt", () => {
+  it.each(["pluginUi", "uiAction"])("rejects %s before closing the agent or editing the transcript", async name => {
+    const context = editContext();
+    const service = new SessionInteractionService(context as any);
+    await expect(service.editLatestPrompt("session-1", {
+      id: "edit-1", items: [{ type: "text", text: "replacement" }], sourceMessageId: "message-1",
+      traceId: "trace-edit", metadata: { [name]: {} },
+    })).rejects.toMatchObject({ code: "invalid_request" });
+    expect(context.agentPool.close).not.toHaveBeenCalled();
+    expect(context.runEngine.replaceLatestPrompt).not.toHaveBeenCalled();
+  });
   it("revalidates the selected source message after entering the session operation", async () => {
     let messages = [userMessage("message-1", 1)];
     const context = editContext({

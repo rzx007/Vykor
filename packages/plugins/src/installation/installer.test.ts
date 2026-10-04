@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { installLocalNativePlugin } from "./installer.js";
+import { installLocalNativePlugin, requestedPluginPermissions } from "./installer.js";
+import { writeNativeUiFixture } from "../test-helpers/native-ui.js";
 import { readInstalledPluginStore, updateInstalledPluginStore } from "./store.js";
 
 const fixture = fileURLToPath(new URL("../../fixtures/native-v1/minimal-skill", import.meta.url));
@@ -12,6 +13,32 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-install-
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("installLocalNativePlugin", () => {
+  it("requires both inferred UI permissions and never executes the plugin", async () => {
+    const sourcePath = join(root, "source");
+    const plugin = await writeNativeUiFixture(sourcePath);
+    expect(requestedPluginPermissions(plugin.manifest)).toEqual(["ui:invoke-own-tools", "ui:render"]);
+    const input = { sourcePath, scope: "user" as const, cwd: root,
+      cacheDir: join(root, "cache"), storePath: join(root, "installed.json") };
+    expect((await installLocalNativePlugin({ ...input, approvedPermissions: [] })).status).toBe("blocked");
+    expect((await readInstalledPluginStore(input.storePath)).plugins).toEqual({});
+    const installed = await installLocalNativePlugin({ ...input,
+      approvedPermissions: ["ui:invoke-own-tools", "ui:render"] });
+    expect(installed.status).toBe("installed");
+    if (installed.status !== "installed") throw new Error("expected installed UI fixture");
+    expect(installed.record.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"]);
+  });
+
+  it("rejects broken UI without publishing an installed record or snapshot", async () => {
+    const sourcePath = join(root, "source");
+    await writeNativeUiFixture(sourcePath);
+    await writeFile(join(sourcePath, "ui", "manifest.json"), "{");
+    const input = { sourcePath, scope: "user" as const, cwd: root,
+      cacheDir: join(root, "cache"), storePath: join(root, "installed.json"),
+      approvedPermissions: ["ui:invoke-own-tools", "ui:render"] };
+    expect((await installLocalNativePlugin(input)).status).toBe("invalid");
+    expect((await readInstalledPluginStore(input.storePath)).plugins).toEqual({});
+    expect(await readdir(input.cacheDir).catch(() => [])).toEqual([]);
+  });
   it("validates, copies, validates again, then updates installed state", async () => {
     const result = await installLocalNativePlugin({
       sourcePath: fixture, scope: "user", cwd: root, approvedPermissions: [],

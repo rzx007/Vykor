@@ -14,6 +14,10 @@ import {
   resolveWindowMaterialState,
 } from "./window-material"
 import { attachWindowsMaterialRepaint } from "./window-material-repaint"
+import { desktopPluginUiDocuments } from "../plugin-ui/document-runtime"
+import { attachPluginUiWindowPolicy, isPluginUiExternalOpenBlocked } from "../plugin-ui/window-policy"
+import { getDesktopPluginUiService } from "../plugin-ui/service-runtime"
+import { pathToFileURL } from "node:url"
 import {
   getWindowMaterialPreference,
   setWindowMaterialPreference,
@@ -61,6 +65,8 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       },
     },
     onCreated: (win) => {
+      getDesktopPluginUiService()?.registerOwner(win.webContents, ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href)
+      attachPluginUiWindowPolicy(win.webContents, desktopPluginUiDocuments)
       attachMainWindowBehavior(ctx, win)
       attachMainWindowDiagnostics(win)
       // 构造期材质激活有历史 bug（electron/electron#46657、#47386），这里再应用一次做兜底。
@@ -164,7 +170,8 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
     win.webContents.send(IpcEvents.windowMaximizedChanged, false)
   })
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, referrer }) => {
+    if (isPluginUiExternalOpenBlocked(referrer.url)) return { action: "deny" }
     if (url.startsWith("https:") || url.startsWith("http:")) {
       void shell.openExternal(url)
     }

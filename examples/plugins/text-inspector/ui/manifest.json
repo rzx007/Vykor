@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "components": [{
+    "id": "text-inspector",
+    "title": "文本格式检查",
+    "entry": "./ui/panel.html",
+    "surfaces": ["tool-result", "session-sidebar"],
+    "actions": [{
+      "id": "preview",
+      "label": "生成所选修复预览",
+      "tool": "TextInspectorPreview",
+      "completion": "keep-open"
+    }]
+  }]
+}

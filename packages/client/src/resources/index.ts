@@ -3,6 +3,7 @@ export * from "./provider-resource.js";
 export * from "./auth-resource.js";
 export * from "./project-resource.js";
 export * from "./plugin-resource.js";
+export * from "./plugin-ui-resource.js";
 export * from "./development-resource.js";
 export * from "./session-resource.js";
 export * from "./attachment-resource.js";

@@ -12,7 +12,7 @@ const contract = JSON.parse(readFileSync(contractPath, "utf8"));
 const entries = contract.entries;
 const resourceNames = [
   "attachments", "auth", "channels", "development", "events", "jobs", "mcp",
-  "permissions", "plugins", "projects", "protocol", "providers", "schedules",
+  "permissions", "plugins", "pluginUi", "projects", "protocol", "providers", "schedules",
   "sessions", "system", "terminals",
 ].sort();
 

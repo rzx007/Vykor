@@ -20,6 +20,7 @@ export function toolFeedbackFields(result: Partial<ToolResult>): Pick<ToolResult
 /** Free tool metadata cannot impersonate host identities, lifecycle facts or summaries. */
 export function externalToolMetadata(metadata?: Record<string, unknown>): Record<string, unknown> {
   const reserved = new Set([
+    "pluginUi", "uiAction",
     "toolUseId", "toolName", "toolCallId", "toolAttemptId", "outcome", "modelGeneration",
     "committed", "superseded", "recoveryGuard", "failureKind", "executionState", "recoveryHint", "compactSummary", "toolFeedbackVersion", "toolProgress",
   ]);

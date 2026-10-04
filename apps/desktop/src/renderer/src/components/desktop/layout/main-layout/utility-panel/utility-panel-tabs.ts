@@ -4,13 +4,15 @@ import {
   Folder,
   Globe2,
   MessageCirclePlus,
+  PanelsTopLeft,
   SquareTerminal,
   type LucideIcon,
 } from "lucide-react"
 
 import type { FileViewerTab } from "@renderer/components/desktop/tools/file-viewer"
 
-export type UtilityTool = "review" | "terminal" | "browser" | "files" | "side-chat" | "agents"
+export type UtilityTool =
+  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "plugin-ui"
 
 export type UtilityToolRequest = Extract<UtilityTool, "terminal" | "files" | "browser" | "agents" | "side-chat">
 
@@ -35,6 +37,7 @@ export const utilityToolMeta: Record<
   files: { icon: Folder, label: "文件", shortcut: "Ctrl+P" },
   "side-chat": { icon: MessageCirclePlus, label: "侧边聊天", shortcut: "Ctrl+Alt+S" },
   agents: { icon: Bot, label: "子智能体" },
+  "plugin-ui": { icon: PanelsTopLeft, label: "插件交互" },
 }
 
 export const utilityToolOrder: UtilityTool[] = [

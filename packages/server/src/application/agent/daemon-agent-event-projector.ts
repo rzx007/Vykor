@@ -27,6 +27,7 @@ import type {
   SessionExecutionProjector,
 } from "../session/session-execution-projector.js";
 import type { ActiveTranscriptProjectionState, SessionTranscriptProjection } from "../session/transcript-projection.js";
+import type { SessionPluginUiService } from "../session/session-plugin-ui-service.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import {
   decodeDaemonAgentSettlement,
@@ -52,6 +53,7 @@ interface PendingEventSettlement {
 }
 
 export interface DaemonAgentEventProjectorContext {
+  pluginUi?: Pick<SessionPluginUiService, "preflightSource">;
   /** Required in production; optional only for narrow projector test doubles. */
   projectorId?: string;
   rootSessionId?: string;
@@ -157,6 +159,11 @@ export class DaemonAgentEventProjector {
         this.projectStream(event, { type: "tool_use_start", toolUse: event.data.toolUse });
         return;
       case "tool.completed":
+        if (event.context.runId) await this.context.pluginUi?.preflightSource({
+          runId: event.context.runId, toolUseId: event.data.toolUseId,
+          toolName: this.transcripts.get(event.context.runId)?.toolParts.get(event.data.toolUseId)?.toolName ?? "",
+          result: event.data.result,
+        });
         this.projectStream(event, {
           type: "tool_use_end",
           toolUseId: event.data.toolUseId,

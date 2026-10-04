@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ class TestRegistry implements IToolRegistry {
   has(name: string): boolean { return this.tools.has(name); }
 }
 
-async function withInspector(run: (tool: ToolDefinition, cwd: string) => Promise<void>) {
+async function withInspector(run: (tool: ToolDefinition, cwd: string, registry: TestRegistry) => Promise<void>) {
   const cwd = mkdtempSync(join(tmpdir(), "vykor-text-inspector-"));
   const registry = new TestRegistry();
   const cleanups: Array<() => Promise<void> | void> = [];
@@ -32,7 +32,7 @@ async function withInspector(run: (tool: ToolDefinition, cwd: string) => Promise
     });
     expect(activation.state, JSON.stringify(activation.diagnostics)).toBe("active");
     expect(registry.has("TextInspectorCheck")).toBe(true);
-    await run(registry.get("TextInspectorCheck")!, cwd);
+    await run(registry.get("TextInspectorCheck")!, cwd, registry);
   } finally {
     try {
       for (const cleanup of cleanups.reverse()) await cleanup();
@@ -45,6 +45,40 @@ async function withInspector(run: (tool: ToolDefinition, cwd: string) => Promise
 }
 
 describe("text-inspector reference plugin (real child process)", () => {
+  it("returns a real UI proposal for bounded input without changing ordinary result JSON", async () => {
+    await withInspector(async (check, cwd) => {
+      const result = await check.execute({ text: "ok  \n\titem\n" }, { cwd });
+      expect(result.metadata?.ui).toMatchObject({ schemaVersion: 1, componentId: "text-inspector",
+        data: { text: "ok  \n\titem\n", findings: [{ line: 1, code: "trailing-whitespace" }, { line: 2, code: "tab-indentation" }] } });
+    });
+  });
+  it.each([
+    { text: "ok  \n\titem \n", selected: ["1:trailing-whitespace"], want: "ok\n\titem \n" },
+    { text: "\titem \r\nend\t\r\n", selected: ["1:tab-indentation", "2:trailing-whitespace"], want: "  item \r\nend\r\n" },
+  ])("previews only selected fixes without file writes ($selected)", async ({ text, selected, want }) => {
+    await withInspector(async (_check, cwd, registry) => {
+      const preview = registry.get("TextInspectorPreview");
+      expect(preview).toBeDefined();
+      const result = await preview!.execute({ text, selected }, { cwd });
+      expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ text: want });
+      expect(result.metadata?.ui).toMatchObject({ componentId: "text-inspector", data: { text: want } });
+      expect(readdirSync(cwd)).toEqual([]);
+    });
+  });
+  it("keeps very large ordinary results usable without an oversized UI proposal", async () => {
+    await withInspector(async (check, cwd) => {
+      const result = await check.execute({ text: "中".repeat(90000) }, { cwd });
+      expect(result.metadata?.ui).toBeUndefined();
+      expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual({ findings: [], truncated: false });
+    });
+  });
+  it.each([{ selected: ["1:trailing-whitespace", "1:trailing-whitespace"] }, { selected: ["2:trailing-whitespace"] }])("rejects duplicate or absent selection $selected without a partial preview", async ({ selected }) => {
+    await withInspector(async (_check, cwd, registry) => {
+      expect(registry.get("TextInspectorPreview")).toBeDefined();
+      await expect(registry.get("TextInspectorPreview")!.execute({ text: "x ", selected }, { cwd })).rejects.toThrow();
+      expect(readdirSync(cwd)).toEqual([]);
+    });
+  });
   it.each([
     { name: "mixed problems", text: "ok  \n\titem\n", findings: [
       { line: 1, code: "trailing-whitespace" }, { line: 2, code: "tab-indentation" },
@@ -62,7 +96,7 @@ describe("text-inspector reference plugin (real child process)", () => {
   ])("checks $name", async ({ text, findings }) => {
     await withInspector(async (tool, cwd) => {
       expect(tool.safeToRetry).toBe(true);
-      await expect(tool.execute({ text }, { cwd })).resolves.toEqual({
+      await expect(tool.execute({ text }, { cwd })).resolves.toMatchObject({
         content: [{ type: "text", text: JSON.stringify({ findings, truncated: false }) }],
       });
     });
@@ -73,7 +107,7 @@ describe("text-inspector reference plugin (real child process)", () => {
       const findings = Array.from({ length: 100 }, (_, index) => ({
         line: index + 1, code: "trailing-whitespace",
       }));
-      await expect(tool.execute({ text: "x \n".repeat(count) }, { cwd })).resolves.toEqual({
+      await expect(tool.execute({ text: "x \n".repeat(count) }, { cwd })).resolves.toMatchObject({
         content: [{ type: "text", text: JSON.stringify({ findings, truncated: count > 100 }) }],
       });
     });
@@ -85,7 +119,7 @@ describe("text-inspector reference plugin (real child process)", () => {
         ...Array.from({ length: 99 }, (_, index) => ({ line: index + 1, code: "trailing-whitespace" })),
         { line: 100, code: "tab-indentation" },
       ];
-      await expect(tool.execute({ text: "x \n".repeat(99) + "\tend " }, { cwd })).resolves.toEqual({
+      await expect(tool.execute({ text: "x \n".repeat(99) + "\tend " }, { cwd })).resolves.toMatchObject({
         content: [{ type: "text", text: JSON.stringify({ findings, truncated: true }) }],
       });
     });

@@ -132,11 +132,20 @@ describe("Desktop Native Git import acceptance", () => {
     const repository = await createPluginRepository()
     const resolverRootsBefore = await resolverRoots()
 
-    const result = await createDesktopService().importGit({
+    const service = createDesktopService()
+    const preview = await service.importGit({
       cwd: root,
       url: pathToFileURL(repository.path).href,
       ref: repository.commit,
     })
+
+    expect(preview.status, JSON.stringify(preview)).toBe("approval-required")
+    if (preview.status !== "approval-required") throw new Error("Expected the Git Native UI permissions to require approval")
+    expect(preview.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"])
+    expect(preview.uiInventory).toEqual({ manifestCount: 1, componentCount: 1, validatedComponentCount: 1 })
+    expect(await discoverInstalledNativePlugins({ cwd: root })).toEqual([])
+
+    const result = await service.confirmGit({ cwd: root, selectionId: preview.selectionId })
 
     expect(result.status, JSON.stringify(result)).toBe("installed")
     if (result.status !== "installed") throw new Error("Expected the Git Native plugin to install")
@@ -150,6 +159,7 @@ describe("Desktop Native Git import acceptance", () => {
     await rm(repository.path, { recursive: true, force: true })
     const records = await discoverInstalledNativePlugins({ cwd: root })
     expect(records.map((record) => record.id)).toEqual(["example.text-inspector"])
+    expect(records[0]?.approvedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"])
     expect(records[0]).not.toHaveProperty("linkedSourcePath")
     await expect(stat(join(records[0]!.cachePath, ".git"))).rejects.toThrow()
 
@@ -161,6 +171,7 @@ describe("Desktop Native Git import acceptance", () => {
     expect(loaded.components.tools?.value).toMatchObject([
       { declaredEntry: "./tools/index.mjs", runtime: "node" },
     ])
+    expect(loaded.components.ui?.value).toHaveLength(1)
     expect(await resolverRoots()).toEqual(resolverRootsBefore)
   }, 30_000)
 })

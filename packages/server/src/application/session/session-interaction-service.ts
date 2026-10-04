@@ -5,11 +5,14 @@ import {
 } from "@vykor/services";
 import {
   sessionUserInputText,
+  assertPromptMetadataAllowed,
+  readPluginUiAction,
   type SessionInputRecord,
   type SessionRecord,
   type SessionRunRecord,
   type SessionUserInputItem,
 } from "@vykor/protocol";
+import { ApplicationError } from "../../shared/application-error.js";
 
 import type {
   AdmitPromptInput,
@@ -83,6 +86,7 @@ export class SessionInteractionService {
     sessionId: string,
     input: EditLatestPromptInput,
   ): Promise<AdmitPromptResult> {
+    assertPromptMetadataAllowed(input);
     return this.context.operationRunner.run(sessionId, async () => {
       const session = this.requireSession(sessionId);
       const items = inputItems(input);
@@ -170,6 +174,7 @@ export class SessionInteractionService {
   }
 
   async admitPrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult> {
+    assertPromptMetadataAllowed(input);
     return this.context.operationRunner.run(sessionId, () =>
       this.admitPromptWork(this.requireSession(sessionId), input),
     );
@@ -321,6 +326,9 @@ export class SessionInteractionService {
       const sourceRun = this.context.runs.getRun(runId);
       if (!sourceRun || sourceRun.sessionId !== sessionId) {
         throw new SessionApplicationError(404, "Interrupted run not found");
+      }
+      if (readPluginUiAction(sourceRun.metadata)) {
+        throw new ApplicationError(409, "插件操作不能通过继续运行重放；请检查实际结果后重新发起操作", "plugin_ui_action_not_resumable");
       }
       if (sourceRun.status !== "interrupted") {
         throw new SessionApplicationError(409, "Only interrupted runs can be resumed");

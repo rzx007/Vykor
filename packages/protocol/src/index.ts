@@ -13,3 +13,6 @@ export * from "./session-goals.js";
 export * from "./mcp-oauth.js";
 export * from "./execution-observability.js";
 export * from "./auto-review.js";
+export * from "./plugin-ui.js";
+export * from "./plugin-ui-requests.js";
+export * from "./plugin-ui-bridge.js";

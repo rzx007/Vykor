@@ -17,6 +17,7 @@ export interface SessionRunWorkContext {
 }
 
 export interface EnqueueRunOptions {
+  acceptsSteers?: boolean;
   sessionId: string;
   runId: string;
   work: (context: SessionRunWorkContext) => Promise<void>;
@@ -367,7 +368,7 @@ export class SessionRunCoordinator {
       pendingSteers: [],
       steerRequests: new Set(),
       controlChain: Promise.resolve(),
-      acceptingSteers: true,
+      acceptingSteers: options.acceptsSteers ?? true,
       onSteerRejected: options.onSteerRejected,
     };
   }

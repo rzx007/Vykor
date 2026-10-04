@@ -4,12 +4,20 @@ import type {
   DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
+import { readPluginUiInstance, type PluginUiInstanceRecord } from "@vykor/client"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 
 export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
   | { id: string; type: "reasoning"; text: string }
   | { id: string; type: "tool"; call: DesktopSessionPart; result?: DesktopSessionPart }
+  | {
+      id: string
+      type: "plugin-ui"
+      call: DesktopSessionPart
+      result?: DesktopSessionPart
+      instance: PluginUiInstanceRecord
+    }
   | { id: string; type: "agent"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
       id: string
@@ -95,6 +103,18 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
     if (part.type === "tool") {
       if (isToolGenerationPresentation(part)) {
         units.push({ id: part.id, type: "tool", call: part })
+        continue
+      }
+      const result = part.toolUseId ? results.get(part.toolUseId) : undefined
+      const source = readPluginUiInstance(part.metadata) ?? readPluginUiInstance(result?.metadata)
+      if (
+        source &&
+        source.sessionId === part.sessionId &&
+        source.sourcePartId === part.id &&
+        source.sourceToolUseId === part.toolUseId &&
+        source.sourceToolName === part.toolName
+      ) {
+        units.push({ id: part.id, type: "plugin-ui", call: part, result, instance: source })
         continue
       }
       if (part.toolName === "ImageGeneration") {

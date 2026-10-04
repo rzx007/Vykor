@@ -7,9 +7,10 @@ import type {
   SessionInputRecord,
   SessionMessagePartStatus,
 } from "@vykor/protocol";
-import { settleSessionToolMetadata } from "@vykor/protocol";
+import { isCommittedModelPart, readPluginUiInstance, settleSessionToolMetadata } from "@vykor/protocol";
 import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 import { generatedImageAssets, recordValue } from "./transcript-image-metadata.js";
+import type { SessionPluginUiService } from "./session-plugin-ui-service.js";
 
 const REASONING_PART_CHAR_LIMIT = 1_000_000;
 const REASONING_TRUNCATION_NOTICE = "\n\n…（思考内容过长，已截断）";
@@ -69,6 +70,7 @@ export type AppliedTranscriptStreamEvent = {
 export class SessionTranscriptProjection {
   constructor(
     private readonly store: Pick<SessionStore, "conversations" | "incrementalOutput" | "runs">,
+    private readonly pluginUi?: Pick<SessionPluginUiService, "createInstance">,
   ) {}
 
   beginRun(
@@ -260,10 +262,23 @@ export class SessionTranscriptProjection {
       }
       case "tool_use_end": {
         const active = state.toolParts.get(event.toolUseId);
+        const previous = this.pluginUi && this.store.conversations.listMessageParts(state.sessionId)
+          .find(part => part.id === (active?.partId ?? event.toolUseId));
+        const existing = previous && readPluginUiInstance(previous.metadata);
+        // A reliable event may be delivered again after commit. Preserve the first output
+        // and all subsequent UI state, including resolved/dismissed business outcomes.
+        if (previous && existing && previous.status === "completed" && isCommittedModelPart(previous)
+          && existing.sessionId === state.sessionId && existing.sourceRunId === state.runId
+          && existing.sourcePartId === previous.id && existing.sourceToolUseId === event.toolUseId
+          && existing.sourceToolName === previous.toolName
+          && this.store.conversations.listMessages(state.sessionId).some(message => message.id === previous.messageId && message.runId === state.runId)) {
+          state.toolParts.delete(event.toolUseId);
+          return { completedToolName: previous.toolName };
+        }
         const messageId = active?.messageId ?? this.ensureAssistantMessage(state);
         const attachmentOcr = recordValue(event.result.metadata?.attachmentOcr);
         const feedback = toolFeedbackFields(event.result);
-        this.store.conversations.upsertMessagePart({
+        const part = this.store.conversations.upsertMessagePart({
           id: active?.partId ?? event.toolUseId,
           sessionId: state.sessionId,
           messageId,
@@ -292,6 +307,13 @@ export class SessionTranscriptProjection {
             ...feedback,
             ...(Object.keys(feedback).length ? { toolFeedbackVersion: 1 } : {}),
           },
+        });
+        const instance = this.pluginUi?.createInstance({
+          sessionId: state.sessionId, runId: state.runId, partId: part.id,
+          toolUseId: event.toolUseId, toolName: active?.toolName ?? part.toolName ?? "", result: event.result,
+        });
+        if (instance) this.store.conversations.upsertMessagePart({
+          id: part.id, sessionId: state.sessionId, messageId, type: "tool", metadata: { pluginUi: instance },
         });
         if (!event.result.isError) {
           for (const [index, image] of generatedImageAssets(

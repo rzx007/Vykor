@@ -141,10 +141,19 @@ describe("Desktop Native ZIP archive import acceptance", () => {
     const { archivePath, sourcePath } = await packageTextInspector()
     const resolverRootsBefore = await resolverRoots()
 
-    const result = await createDesktopService(archivePath).importArchive({} as never, { cwd: root })
+    const service = createDesktopService(archivePath)
+    const preview = await service.importArchive({} as never, { cwd: root })
+
+    expect(preview.status).toBe("approval-required")
+    if (preview.status !== "approval-required") throw new Error("Expected the Native ZIP UI permissions to require approval")
+    expect(preview.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"])
+    expect(preview.uiInventory).toEqual({ manifestCount: 1, componentCount: 1, validatedComponentCount: 1 })
+    expect(await discoverInstalledNativePlugins({ cwd: root })).toEqual([])
+
+    const result = await service.confirmArchive({ cwd: root, selectionId: preview.selectionId })
 
     expect(result.status).toBe("installed")
-    if (result.status !== "installed") throw new Error("Expected the permission-free Native ZIP to install")
+    if (result.status !== "installed") throw new Error("Expected the approved Native ZIP to install")
     expect(result.snapshot?.plugins.map((plugin) => plugin.identity.id)).toContain("example.text-inspector")
     const rendererJson = JSON.stringify(result)
     expect(rendererJson).not.toContain(archivePath)
@@ -153,6 +162,7 @@ describe("Desktop Native ZIP archive import acceptance", () => {
     await rm(sourcePath, { recursive: true, force: true })
     const records = await discoverInstalledNativePlugins({ cwd: root })
     expect(records.map((record) => record.id)).toEqual(["example.text-inspector"])
+    expect(records[0]?.approvedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"])
     expect(records[0]?.cachePath).not.toMatch(/\.zip$/i)
     expect(records[0]).not.toHaveProperty("linkedSourcePath")
     const verified = await verifyInstalledNativePlugin(records[0]!)
@@ -163,6 +173,7 @@ describe("Desktop Native ZIP archive import acceptance", () => {
     expect(loaded.components.tools?.value).toMatchObject([
       { declaredEntry: "./tools/index.mjs", runtime: "node" },
     ])
+    expect(loaded.components.ui?.value).toHaveLength(1)
     expect(await resolverRoots()).toEqual(resolverRootsBefore)
   }, 30_000)
 

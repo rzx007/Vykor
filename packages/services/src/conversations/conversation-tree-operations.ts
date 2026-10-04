@@ -85,6 +85,7 @@ export function forkSessionWithHistory(input: {
     for (const part of sourceParts) {
       const messageId = messageIdMap.get(part.messageId);
       if (!messageId) continue;
+      const { pluginUi: _pluginUi, uiAction: _uiAction, ...copiedMetadata } = part.metadata;
       const sourceReferenceId = typeof part.metadata.inputAttachmentId === "string"
         ? part.metadata.inputAttachmentId
         : undefined;
@@ -109,8 +110,8 @@ export function forkSessionWithHistory(input: {
         ...(part.processor !== undefined ? { processor: part.processor } : {}),
         ...(part.transformationError !== undefined ? { transformationError: part.transformationError } : {}),
         metadata: sourceReferenceId && attachmentReferenceIdMap.has(sourceReferenceId)
-          ? { ...part.metadata, inputAttachmentId: attachmentReferenceIdMap.get(sourceReferenceId) }
-          : part.metadata,
+          ? { ...copiedMetadata, inputAttachmentId: attachmentReferenceIdMap.get(sourceReferenceId) }
+          : copiedMetadata,
       });
     }
     context.testHooks?.afterForkPartsCopied?.();

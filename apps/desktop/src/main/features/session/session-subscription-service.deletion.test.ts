@@ -102,6 +102,8 @@ describe("active session subscription after deletion", () => {
     const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 10 })
     try {
       await service.openSession(client as never, webContents as never, "A")
+      const invalidatedOwners: number[] = []
+      service.onOwnerInvalidated(ownerId => invalidatedOwners.push(ownerId))
       await service.openAuxSession(client as never, webContents as never, {
         subscriptionId: "side-B",
         sessionId: "B",
@@ -112,6 +114,7 @@ describe("active session subscription after deletion", () => {
       await service.openSession(client as never, webContents as never, "A")
       await vi.advanceTimersByTimeAsync(1)
       const nextPrimary = signals[2]!.signal
+      expect(invalidatedOwners).toEqual([77])
       expect(firstPrimary.aborted).toBe(true)
       expect(nextPrimary.aborted).toBe(false)
       expect(auxiliary.aborted).toBe(false)

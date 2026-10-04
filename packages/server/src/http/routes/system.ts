@@ -26,8 +26,12 @@ import {
   type ServerCapabilities,
 } from "@vykor/protocol";
 import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
+import type { SessionPluginUiService } from "../../application/session/session-plugin-ui-service.js";
 
 export interface SystemRoutesContext {
+  pluginUiReady?: boolean;
+  pluginUiLifecycleReady?: boolean;
+  pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
   settingsService?: SettingsService;
@@ -55,6 +59,13 @@ export interface SystemRoutesContext {
 
 export function createSystemRoutes(context: SystemRoutesContext): Hono {
   return new Hono()
+    .use("/settings", async (c, next) => {
+      if (c.req.method !== "PATCH" || !context.pluginUi) return next();
+      let body: Record<string, unknown>;
+      try { body = await readJson(c); } catch { return next(); }
+      if (!Object.hasOwn(body, "plugins") && !(typeof body.path === "string" && body.path.startsWith("plugins."))) return next();
+      await context.pluginUi.withPluginUiLifecycleMutation({ kind: "global" }, async () => { await next(); });
+    })
     .get("/capabilities", async () =>
       jsonResponse(
         context.capabilities ??
@@ -73,6 +84,8 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               retention: 1,
               attachments: 1,
               pluginCapabilities: 1,
+              ...(context.pluginUiReady ? { pluginUi: 1 } : {}),
+              ...(context.pluginUiReady && context.pluginUiLifecycleReady ? { pluginUiLifecycle: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
             },

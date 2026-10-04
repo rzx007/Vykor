@@ -5,6 +5,7 @@ import {
   loadNativePlugin,
   readInstalledPluginStore,
   requestedPluginPermissions,
+  summarizeNativeUi,
   updateInstalledPluginStore,
   validateNativePlugin,
   verifyInstalledNativePlugin,
@@ -98,6 +99,7 @@ async function inspectCandidate(candidateRoot: string): Promise<Omit<PluginArchi
     inventory[kind] = values.length;
   }
   const requestedPermissions = requestedPluginPermissions(validation.plugin.manifest);
+  const uiInventory = summarizeNativeUi(validation.plugin.manifest.components.ui?.length ?? 0, loaded.components.ui);
   const store = await readInstalledPluginStore(getInstalledPluginStorePath());
   const previous = findUserPluginRecord(store, validation.plugin.manifest.id);
   return {
@@ -111,6 +113,7 @@ async function inspectCandidate(candidateRoot: string): Promise<Omit<PluginArchi
     approvalRequired: requestedPermissions.length > 0
       && !permissionsCovered(requestedPermissions, previous?.approvedPermissions ?? []),
     inventory,
+    ...(uiInventory ? { uiInventory } : {}),
     diagnostics,
   };
 }
@@ -236,6 +239,8 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
   if (
     diagnostic.code.startsWith("native_")
     || diagnostic.code.startsWith("component_")
+    || diagnostic.code === "plugin_ui_invalid_definition"
+    || diagnostic.code === "plugin_ui_payload_too_large"
   ) {
     return {
       state: "failed",
@@ -320,7 +325,9 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
       const warnings: string[] = [];
       for (const record of Object.values(store.plugins)) {
         const verification = await verifyInstalledNativePlugin(record);
-        const manifest = verification.plugin?.manifest;
+        const manifest = verification.status === "valid"
+          ? verification.plugin.manifest
+          : verification.plugin?.manifest ?? verification.rootManifest;
         const loaded = verification.status === "valid" ? await loadNativePlugin(verification.plugin) : undefined;
         const liveTools = getNativeToolRuntimeSnapshot(verification.plugin?.root ?? record.cachePath);
         const diagnostics = [...verification.diagnostics, ...(loaded?.diagnostics ?? [])];
@@ -338,6 +345,8 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
         } satisfies RuntimeToolStatus : undefined;
         const inventory: Record<string, number> = {};
         if (manifest) for (const [kind, values] of Object.entries(manifest.components)) inventory[kind] = values.length;
+        const uiInventory = summarizeNativeUi(manifest?.components.ui?.length ?? 0, loaded?.components.ui);
+        const requested = manifest ? requestedPluginPermissions(manifest) : record.requestedPermissions;
         plugins.push({
           identity: {
             id: record.id,
@@ -359,10 +368,11 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
             ...(toolRuntime ? { toolRuntime } : {}),
           }),
           inventory,
+          ...(uiInventory ? { uiInventory } : {}),
           permissions: {
-            requested: record.requestedPermissions,
+            requested,
             approved: record.approvedPermissions,
-            missing: record.requestedPermissions.filter((item) => !record.approvedPermissions.includes(item)),
+            missing: requested.filter((item) => !record.approvedPermissions.includes(item)),
           },
           diagnostics,
         });

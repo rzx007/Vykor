@@ -62,6 +62,7 @@ import { createRunExecutionRoutes } from "./routes/run-execution.js";
 import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
 import { createSessionGoalRoutes } from "./routes/session-goal.js";
+import { createSessionPluginUiRoutes } from "./routes/session-plugin-ui.js";
 import { createSessionUtilityRoutes } from "./routes/session-utility.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { RequestTraceRegistry } from "./control/request-trace-registry.js";
@@ -343,6 +344,9 @@ export class VykorHttpServer {
         retention: this.application.retention,
         attachmentLimits: this.application.attachments.limits,
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
+        pluginUiReady: this.application.pluginUi?.backendReady === true,
+        pluginUiLifecycleReady: this.application.pluginUi?.lifecycleReady === true,
+        pluginUi: this.application.pluginUi,
       }),
     );
     this.app.route(
@@ -376,6 +380,7 @@ export class VykorHttpServer {
         outputStyleService: this.services.outputStyle,
         projectInitService: this.services.projectInit,
         pluginService: this.services.plugin,
+        pluginUi: this.application.pluginUi,
         skillService:
           this.services.skill ??
           createSkillManagementService({ projects: this.application.projects }),
@@ -446,6 +451,7 @@ export class VykorHttpServer {
       }),
     );
     this.app.route("/sessions", createSessionGoalRoutes(this.application.goals));
+    if (this.application.pluginUi) this.app.route("/sessions", createSessionPluginUiRoutes(this.application.pluginUi));
     this.app.route(
       "/sessions",
       createRunExecutionRoutes({

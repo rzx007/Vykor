@@ -2,7 +2,7 @@ import type { StreamingMessageClient } from "./client";
 import type { AgentBackgroundShellHost, McpAuthHost, ShellOutputLogHost, ToolRegistry } from "./tools";
 import type { PermissionChecker } from "./permissions";
 import type { HookExecutor } from "./hooks";
-import type { ContentBlock, Message } from "./messages";
+import type { ContentBlock, Message, ToolUseBlock } from "./messages";
 import type { StreamEvent } from "./events";
 import type { Settings } from "./settings";
 import type { CompactContextProvider } from "../engine/compact-service";
@@ -237,12 +237,28 @@ export interface RunMcpServerBinding {
   readonly definition: import("./settings").McpServerConfig;
 }
 
+/** Host-only installation snapshot; never serialize paths or invocation functions. */
+export interface RunPluginUiBinding {
+  readonly pluginId: string;
+  readonly pluginVersion: string;
+  readonly pluginDigest: string;
+  readonly componentId: string;
+  readonly componentDigest: string;
+  readonly htmlSha256: string;
+  readonly root: string;
+  readonly entryPath: string;
+  readonly definition: import("@vykor/protocol").PluginUiComponentDefinition;
+  /** Exact Native definitions captured when this component was installed in the Runtime. */
+  readonly actionTools: readonly RunToolBinding[];
+}
+
 export interface RunCapabilityView {
   readonly pluginId?: string;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
   readonly skills: ReadonlyMap<string, RunSkillBinding>;
   readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
   readonly agents: ReadonlyMap<string, RunAgentBinding>;
+  readonly pluginUi?: ReadonlyMap<string, RunPluginUiBinding>;
 }
 
 /** Framework-internal execution capabilities shared with tool packages. */
@@ -280,6 +296,10 @@ export interface AgentRunHandle {
 }
 
 export interface QueryEngine {
+  executeTool(
+    toolUse: ToolUseBlock,
+    options: { signal?: AbortSignal; execution: AgentExecutionContext },
+  ): Promise<import("./tools").ToolExecutionResult>;
   submitMessage(
     content: string | ContentBlock[],
     options?: {

@@ -2,7 +2,7 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含一个 Skill、一个 Plugin Agent 和一个真正运行在独立 Node 进程中的 Tool，没有外部服务或运行依赖。SDK 类型尚未作为独立 npm 产品发布。
+本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含 Skill、Plugin Agent、独立 Node 工具和使用公开浏览器 SDK 的单文件 UI，没有外部服务或安装后的运行依赖。SDK 尚未作为独立 npm 产品发布。
 
 ## 从样例开始
 
@@ -10,7 +10,7 @@
 
 ```sh
 vk plugin validate ./examples/plugins/text-inspector
-vk plugin link ./examples/plugins/text-inspector
+vk plugin link ./examples/plugins/text-inspector --approve ui:render --approve ui:invoke-own-tools
 vk plugin list --verbose
 vk plugin details example.text-inspector
 ```
@@ -40,7 +40,7 @@ tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 正式安装将源目录复制到用户级不可变快照，后续源目录修改不会改变正在运行的版本：
 
 ```sh
-vk plugin install-local ./examples/plugins/text-inspector
+vk plugin install-local ./examples/plugins/text-inspector --approve ui:render --approve ui:invoke-own-tools
 vk plugin disable example.text-inspector
 vk plugin enable example.text-inspector
 vk plugin uninstall example.text-inspector
@@ -78,11 +78,12 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
   "schemaVersion": 1,
   "id": "example.text-inspector",
   "name": "text-inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "components": {
     "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
-    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }]
+    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }],
+    "ui": ["./ui/manifest.json"]
   },
   "runtime": { "engine": "node", "isolation": "process" }
 }
@@ -91,6 +92,118 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
 ID 使用稳定的点分名称；name 使用小写连字符名称。版本用于安装身份核对。组件路径必须以 `./` 开头并留在插件根目录内；附属脚本、图片和参考文档随插件一起安装。推荐逐个声明 Skill 文件，避免目录中的普通 Markdown 被当成额外技能。
 
 manifest 描述插件包，不保存启用状态、批准记录、用户配置或进程状态。不要修改已安装快照；更新时重新安装一个经过校验的源目录。
+
+## UI 定义与后台工具操作
+
+UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
+仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。Desktop 同时检查 backend 的 `pluginUi=1`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。A4 的正式参考插件见 [文本检查助手](../examples/plugins/text-inspector/README.md)，自动化桌面证据和未验证范围见 [A4 验证记录](superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)。自动化验证不等同用户人工验收或正式发布。
+下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
+
+Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "example.ui-viewer",
+  "name": "ui-viewer",
+  "version": "1.0.0",
+  "components": { "ui": ["./ui/manifest.json"] }
+}
+```
+
+定义文件单独使用 schemaVersion 1。纯展示组件必须显式写 actions 空数组：
+
+```json
+{
+  "schemaVersion": 1,
+  "components": [{
+    "id": "findings",
+    "title": "检查结果",
+    "entry": "./ui/findings.html",
+    "surfaces": ["tool-result", "session-sidebar"],
+    "actions": []
+  }]
+}
+```
+
+entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/manifest.json。组件 ID 在插件内唯一，匹配 `^[a-z][a-z0-9-]{0,63}$`。组件与动作的字段严格校验，标签为非空纯文本且最多 80 个 Unicode 字符。一个定义文件至少包含一个组件；动作可以为空，声明动作时必须显式提供 id、label、精确 tool 注册名与 completion（keep-open / resolve），不在 UI 定义中复制 inputSchema。
+
+单插件最多 8 个定义文件、16 个组件，每组件最多 16 个动作；单个定义 JSON 最多 UTF-8 256 KiB，单个 HTML 最多 UTF-8 2 MiB。所有 UI 入口必须是普通 UTF-8 文件，禁止根目录外路径、文件 symlink 和目录 junction。HTML 应提前构建成单文件；校验和安装只读文件，不运行 HTML 或 Node Tool。
+
+只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。后台只绑定同插件的实际 Native Tool；builtin、其他插件和 MCP 工具不能作为 UI 动作。目标工具参数格式取自实际注册的 inputSchema，UI manifest 不另存一份。
+
+安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面：实际界面从工具结果中按需打开，仍需通过会话和隔离能力检查。
+
+### 工具结果如何产生实例
+
+成功的同插件 Native Tool 可以返回下列建议数据；宿主验证当前插件、组件和工具归属后，在原工具 Part 上保存一个可信实例。原始文字结果保持可用，建议无效时也不改变业务工具的成功结果。
+
+```js
+return {
+  content: [{ type: "text", text: "发现 1 项问题" }],
+  metadata: { ui: { schemaVersion: 1, componentId: "findings", data: { count: 1 } } }
+};
+```
+
+`data` 必须是有限的 JSON 对象，最多 UTF-8 256 KiB。`pluginUi`、`uiAction`、实例 ID、revision 和执行状态由宿主保存，插件返回的同名保留 metadata 会被移除，不能取得可信身份。初始 Run 未选择该插件、源 Part 未提交或组件快照发生漂移时，不会生成可信实例。
+
+### 已接入的 Client 后台接口
+
+`VykorClient.pluginUi` 提供 `get`、`getDocument`、`invokeAction`、`getAction` 和 `dismiss`。它们通过已有 daemon 认证访问当前会话的实例；调用方先读实例 revision，再为提交生成新的 UUID requestId。`invokeAction` 只接收声明的 actionId 和 JSON args（最多 UTF-8 64 KiB），不接收任意工具名称。重试必须沿用相同 requestId、revision 和参数；修改其中内容会返回冲突，同一请求跨 daemon 重启不会再次执行。
+
+动作使用原有参数检查、工具权限、Hook、超时和取消流程；它有自己的持久 Run，但不创建模型输入、不请求模型，也不唤醒 Goal。成功可按 completion 更新 data 或 resolve；失败保持准确结果，工具已经开始但无法确认结局时记为 unknown，恢复时不自动重放。下一次普通模型输入只获得有长度上限的外部工具结果摘要。
+
+`dismiss` 只保存关闭状态，和取消运行分开；已经运行的动作不能通过 dismiss 撤销。当前会话忙、revision 过期、归档或实例终态时不能提交新动作。每次读取文档和动作准入都会核对实际安装、授权、启用状态和摘要；精确静态快照在 Native Host 暂不可用时可只读返回文档，但没有可调用动作。
+
+feature `pluginUi: 1` 只表示 daemon 已装配这些后台接口，不代表当前客户端能安全显示 UI。Desktop 还要求 `pluginUiLifecycle: 1` 和本地隔离能力；CLI/TUI 继续读取原文字，不等待界面。
+
+### 编写浏览器界面
+
+UI 的入口、数据和操作走三条明确路径：manifest 声明组件及动作；Native 工具返回 `metadata.ui`，宿主保存到原工具结果；HTML 通过 SDK 读取快照，请求已声明动作。确认弹窗在主界面中，确认后才由后台校验参数并调用工具；结果保存在 SQLite，经过会话更新通知返回页面。
+
+`@vykor/plugins/ui-sdk` 和 Node 工具的类型入口 `@vykor/plugins/sdk` 不同：前者是需要提前打包的浏览器运行代码，后者仅用于工具类型检查。
+
+```js
+import { createPluginUiClient } from "@vykor/plugins/ui-sdk";
+
+async function start() {
+  const client = await createPluginUiClient();
+  const off = client.onSnapshot(snapshot => {
+    // 只用 textContent、value 等安全方式渲染插件自己的 JSON 数据。
+    // snapshot.readOnly 时禁用操作；用 revision 判断是否是新结果。
+    render(snapshot);
+  });
+  button.addEventListener("click", async () => {
+    try {
+      await client.requestAction("preview", { text, selected });
+      // 回执可能仅表示已受理，完成状态应以 onSnapshot 通知为准。
+    } catch (error) {
+      showError(error.code);
+    }
+  });
+  window.addEventListener("pagehide", () => { off(); client.dispose(); }, { once: true });
+}
+start();
+```
+
+以上是接口示意，`render`、`button`、`text` 等由插件实现；可直接运行的完整代码在参考插件 `ui/panel.mjs`。
+
+SDK 提供：
+
+| 方法 | 实际用途 |
+| --- | --- |
+| `getSnapshot()` / `onSnapshot(listener)` | 读取当前状态 / 立即接收当前状态并订阅更新 |
+| `requestAction(actionId, args)` | 请求宿主确认后执行本组件声明的工具；不是任意工具接口 |
+| `openSidebar()` | 把同一实例移到会话侧栏，不新建业务实例 |
+| `resize(height)` | 请求卡片高度，宿主限制在 160–640 px |
+| `dismiss()` | 经宿主确认结束交互，不撤销已执行的工具 |
+| `dispose()` | 页面卸载时关闭通信，不改变业务状态 |
+
+`onSnapshot` 返回取消订阅函数；快照还含主题、语言、显示位置、`activeAction` 和 `lastAction`。动作受理不代表完成，不能在收到 pending/running 回执时报告成功。unknown 表示工具可能已产生效果但结果不可确认，不自动重试。取消确认会返回 `plugin_ui_user_cancelled`；版本冲突时重新读取结果，让用户重新选择。
+
+先用已有构建工具将 HTML、CSS 和 SDK 合成单文件，再提交/打包生成文件。安装和校验不会执行构建。参考命令：`node examples/plugins/text-inspector/scripts/build-ui.mjs`；脚本会拒绝 Node 依赖，不新增样例运行依赖。
+
+UI 没有父页面 DOM、Node、preload、网络、文件、剪贴板或任意 IPC 权限；外部 script、CSS、字体和嵌套 frame 也不可用。不要从 CDN 加载资源，不要手写 MessagePort 协议，不要用 `innerHTML` 渲染输入。超出 UI 或动作参数限制时保留普通文字路径。完整范围见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)。
 
 ## Node Tool 的公开接口
 
@@ -243,7 +356,7 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 
 ## 诊断与验证
 
-`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
+`validate` 检查 manifest 和声明路径；有 UI 时还校验定义内容、HTML 文件边界与大小，不执行前端代码。它不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
 
 `PluginInfo.runtimeStatus` 是面向展示的主状态，目前包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`。列表页只需要看这一个字段；`diagnostics` 和 `toolRuntime` 保留在详情里，用于作者排查具体原因。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。
 
@@ -271,4 +384,4 @@ pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.tes
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。
 
-Output Styles、Themes、Monitors、Workflows、Channels、Providers、UI、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。阶段范围见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。Native UI 已接入后台、Desktop 隔离文档、公开浏览器 SDK 与参考插件；是否可用仍取决于客户端、后台、授权和当前安装快照。A4 不增加转换诊断，也不修改或删除现有转换器。UI 阶段范围见 [Native Plugin UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。

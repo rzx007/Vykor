@@ -3,6 +3,7 @@ import { loadNativeHooks } from "./components/hooks.js";
 import { loadNativeMcpServers } from "./components/mcp.js";
 import { loadNativeSkills } from "./components/skills.js";
 import { loadNativeToolMetadata } from "./components/tools.js";
+import { loadNativeUiMetadata } from "./components/ui.js";
 import type {
   LoadedNativePlugin,
   NativePluginComponentKind,
@@ -11,7 +12,7 @@ import type {
 } from "./types.js";
 
 const deferredKinds: NativePluginComponentKind[] = [
-  "lspServers", "workflows", "channels", "providers", "ui", "outputStyles", "themes", "monitors", "binaries",
+  "lspServers", "workflows", "channels", "providers", "outputStyles", "themes", "monitors", "binaries",
 ];
 
 function unsupported(plugin: ValidatedNativePlugin, kind: NativePluginComponentKind): PluginComponentResult<never> {
@@ -31,13 +32,14 @@ export async function loadNativePlugin(plugin: ValidatedNativePlugin): Promise<L
   if (plugin.manifest.components.tools) {
     components.tools = await loadNativeToolMetadata(plugin);
   }
+  if (plugin.manifest.components.ui) components.ui = await loadNativeUiMetadata(plugin);
   for (const kind of deferredKinds) {
     if (plugin.manifest.components[kind]) {
       components.unsupported ??= {};
       components.unsupported[kind] = unsupported(plugin, kind);
     }
   }
-  const results = [components.skills, components.agents, components.hooks, components.mcpServers, components.tools,
+  const results = [components.skills, components.agents, components.hooks, components.mcpServers, components.tools, components.ui,
     ...Object.values(components.unsupported ?? {})].filter((value) => value !== undefined);
   const diagnostics = results.flatMap((result) => result.diagnostics);
   return {

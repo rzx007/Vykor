@@ -40,6 +40,9 @@ function auxiliarySubscriptionSlot(subscriptionId: string): string {
 
 export class SessionSubscriptionService {
   private readonly subscriptions = new SessionSubscriptionRegistry()
+  private readonly invalidationListeners = new Set<(ownerId: number) => void>()
+  private readonly primaryOwners = new Set<number>()
+  private readonly snapshotListeners = new Set<(ownerId: number, view: DesktopSessionView) => void>()
   private readonly sessionUpdateIntervalMs: number
 
   constructor(options: SessionSubscriptionServiceOptions = {}) {
@@ -51,11 +54,29 @@ export class SessionSubscriptionService {
     return sub?.sessionId === sessionId
   }
 
+  getOwnerSessionId(ownerId: number): string | undefined {
+    const subscription = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    return subscription && !subscription.controller.signal.aborted ? subscription.sessionId : undefined
+  }
+
+  onOwnerInvalidated(listener: (ownerId: number) => void): () => void {
+    this.invalidationListeners.add(listener)
+    return () => { this.invalidationListeners.delete(listener) }
+  }
+  onOwnerSnapshot(listener: (ownerId: number, view: DesktopSessionView) => void): () => void {
+    this.snapshotListeners.add(listener)
+    return () => { this.snapshotListeners.delete(listener) }
+  }
+
   closeDeletedSessions(webContentsId: number, sessionIds: readonly string[]): void {
+    if (sessionIds.includes(this.getOwnerSessionId(webContentsId) ?? ""))
+      for (const listener of this.invalidationListeners) listener(webContentsId)
     this.subscriptions.deleteMatchingSessions(webContentsId, new Set(sessionIds))
   }
 
   closeSession(webContentsId: number): void {
+    for (const listener of this.invalidationListeners) listener(webContentsId)
+    this.primaryOwners.delete(webContentsId)
     this.subscriptions.clearOwner(webContentsId)
   }
 
@@ -65,6 +86,9 @@ export class SessionSubscriptionService {
   }
 
   clearAll(): void {
+    for (const ownerId of this.primaryOwners)
+      for (const listener of this.invalidationListeners) listener(ownerId)
+    this.primaryOwners.clear()
     this.subscriptions.clearAll()
   }
 
@@ -74,9 +98,12 @@ export class SessionSubscriptionService {
     sessionIdInput: string
   ): Promise<DesktopSessionView> {
     const sessionId = requireString(sessionIdInput, "会话 ID")
+    // Retire the primary view's UI bindings without closing auxiliary chats.
+    for (const listener of this.invalidationListeners) listener(webContents.id)
 
     const controller = new AbortController()
     const subscription = { controller, sessionId }
+    this.primaryOwners.add(webContents.id)
     webContents.once("destroyed", () => this.closeSession(webContents.id))
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
       this.subscriptions,
@@ -103,7 +130,9 @@ export class SessionSubscriptionService {
       )
     }, 0)
 
-    return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    const initialView = toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
+    return initialView
   }
 
   async openAuxSession(
@@ -193,17 +222,25 @@ export class SessionSubscriptionService {
           this.subscriptions.isCurrent(webContents.id, slot, subscription!),
         onUpdate: (update) => {
           if (!update.state.buckets[sessionId]?.session) {
+            if (slot === primarySubscriptionSlot)
+              for (const listener of this.invalidationListeners) listener(webContents.id)
             this.subscriptions.delete(webContents.id, slot)
             coalescer.dispose()
             return
           }
+          if (slot === primarySubscriptionSlot)
+            for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(update.state, sessionId, update.source))
           if (update.source === "reconnecting") {
             coalescer.flushNow(update.state, "reconnecting")
             return
           }
           coalescer.queue(update.state, update.source)
         },
-        onReconnecting: (last) => coalescer.flushNow(last.state, "reconnecting"),
+        onReconnecting: (last) => {
+          if (slot === primarySubscriptionSlot)
+            for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
+          coalescer.flushNow(last.state, "reconnecting")
+        },
         onError: (error) => {
           if (!controller.signal.aborted && !webContents.isDestroyed()) {
             console.error(`[session] sync failed for ${sessionId}`, error)

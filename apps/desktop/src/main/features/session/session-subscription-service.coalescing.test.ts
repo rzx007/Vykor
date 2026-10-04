@@ -98,6 +98,25 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("observes a lifecycle generation before the renderer's coalesced update", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield { ...sessionUpdated(2), payload: { session: { ...session, metadata: { ...session.metadata, pluginUiGeneration: "new-generation" } } } }
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+    const observed: unknown[] = []
+    service.onOwnerSnapshot((_id, view) => observed.push(view.session.metadata.pluginUiGeneration))
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(1)
+      expect(observed).toContain("new-generation")
+      expect(sent).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+    } finally { service.clearAll() }
+  })
   it("shows a real Write generation in the transcript while arguments are paused, then hands off once", async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(tmpdir(), "vykor-write-timing-"))
@@ -224,9 +243,9 @@ describe("SessionSubscriptionService coalescing", () => {
           }))))
         const groupHtml = html.match(/<section aria-label="工具活动组"[^>]*>([\s\S]*?)<\/section>/)?.[1]
         expect(groupHtml).toBeDefined()
-        expect(groupHtml).toContain("Write")
-        expect(groupHtml).toContain("生成参数")
-        expect(groupHtml).toContain('aria-label="正在生成参数，尚未执行"')
+        expect(groupHtml).toContain("写入文件")
+        expect(groupHtml).toContain("new.html")
+        expect(groupHtml).toContain('aria-label="正在生成文件内容，尚未开始执行"')
         expect(html).not.toContain("文件编辑 1 次")
 
         releaseArguments?.()

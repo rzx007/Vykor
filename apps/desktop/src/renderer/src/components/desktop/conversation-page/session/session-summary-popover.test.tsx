@@ -267,8 +267,10 @@ it("shows Git failures with retry and does not query non-Git directories", async
   await click("当前聊天的工作摘要")
   expect(document.body.textContent).toContain("git unavailable")
   await click("刷新工作区变更")
-  expect(document.body.textContent).not.toContain("git unavailable")
-  expect(document.body.textContent).toContain("暂无变更")
+  await vi.waitFor(() => {
+    expect(document.body.textContent).not.toContain("git unavailable")
+    expect(document.body.textContent).toContain("暂无变更")
+  })
 })
 
 it("expands sources, opens files, and adds files to the composer draft", async () => {

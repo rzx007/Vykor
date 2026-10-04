@@ -32,7 +32,7 @@ describe("daemon settings", () => {
 
   it("keeps automatic daemon startup off by default", async () => {
     expect((await loadSettings()).daemon).toEqual({ autoStart: false });
-    expect((await loadSettings()).plugins).toEqual({ enabled: true });
+    expect((await loadSettings()).plugins).toEqual({ enabled: true, uiEnabled: true });
     expect((await loadSettings()).workStyle).toBe("practical");
   });
 
@@ -97,11 +97,76 @@ describe("daemon settings", () => {
       plugins: { enabled: false },
     }));
 
-    expect((await loadSettings(undefined, { includeProject: true, projectRoot })).plugins).toEqual({ enabled: false });
+    expect((await loadSettings(undefined, { includeProject: true, projectRoot })).plugins).toEqual({ enabled: false, uiEnabled: true });
     expect((await loadSettings(
       { plugins: { enabled: true } },
       { includeProject: true, projectRoot },
-    )).plugins).toEqual({ enabled: true });
+    )).plugins).toEqual({ enabled: true, uiEnabled: true });
+  });
+
+  it.each(["user", "project"] as const)("preserves a disabled plugin UI flag after %s settings save and reload", async (scope) => {
+    const projectRoot = join(configDir, "ui-project");
+    if (scope === "user") {
+      const settings = await loadSettings();
+      await saveSettings({ ...settings, plugins: { enabled: true, uiEnabled: false } });
+    } else {
+      await saveProjectSettings({ plugins: { enabled: true, uiEnabled: false } }, projectRoot);
+    }
+
+    expect((await loadSettings(undefined, { includeProject: true, projectRoot })).plugins)
+      .toEqual({ enabled: true, uiEnabled: false });
+  });
+
+  it.each([
+    { user: false, project: true, cli: false },
+    { user: true, project: false, cli: true },
+  ])("merges the plugin UI flag with user, project and CLI precedence: %j", async ({ user, project, cli }) => {
+    const projectRoot = join(configDir, "ui-precedence");
+    const projectConfigDir = join(projectRoot, ".vykor");
+    mkdirSync(projectConfigDir, { recursive: true });
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      plugins: { enabled: false, uiEnabled: user },
+    }));
+    writeFileSync(join(projectConfigDir, "settings.json"), JSON.stringify({
+      plugins: { uiEnabled: project },
+    }));
+
+    expect((await loadSettings()).plugins).toEqual({ enabled: false, uiEnabled: user });
+    expect((await loadSettings(undefined, { includeProject: true, projectRoot })).plugins)
+      .toEqual({ enabled: false, uiEnabled: project });
+    expect((await loadSettings(
+      { plugins: { enabled: false, uiEnabled: cli } },
+      { includeProject: true, projectRoot },
+    )).plugins).toEqual({ enabled: false, uiEnabled: cli });
+  });
+
+  it.each(
+    (["user", "project", "CLI"] as const).flatMap(scope =>
+      ["false", 0, null].map(value => ({ scope, value }))),
+  )("rejects a non-boolean plugin UI flag from $scope: $value", async ({ scope, value }) => {
+    const projectRoot = join(configDir, "invalid-ui-project");
+    const projectConfigDir = join(projectRoot, ".vykor");
+    mkdirSync(projectConfigDir, { recursive: true });
+    if (scope !== "CLI") {
+      writeFileSync(join(scope === "user" ? configDir : projectConfigDir, "settings.json"),
+        JSON.stringify({ plugins: { uiEnabled: value } }));
+    }
+
+    await expect(loadSettings(
+      scope === "CLI" ? { plugins: { enabled: true, uiEnabled: value as unknown as boolean } } : undefined,
+      { includeProject: true, projectRoot },
+    )).rejects.toMatchObject({ name: "SettingsFileError", field: "settings.plugins.uiEnabled" });
+  });
+
+  it.each(["user", "project"] as const)("rejects unknown plugin fields in %s settings alongside a valid UI flag", async (scope) => {
+    const projectRoot = join(configDir, "unknown-plugin-project");
+    const projectConfigDir = join(projectRoot, ".vykor");
+    mkdirSync(projectConfigDir, { recursive: true });
+    writeFileSync(join(scope === "user" ? configDir : projectConfigDir, "settings.json"),
+      JSON.stringify({ plugins: { enabled: true, uiEnabled: false, unknown: true } }));
+
+    await expect(loadSettings(undefined, { includeProject: true, projectRoot }))
+      .rejects.toMatchObject({ name: "SettingsFileError", field: "settings.plugins.unknown" });
   });
 
   it("merges daemon.autoStart from the user settings file", async () => {

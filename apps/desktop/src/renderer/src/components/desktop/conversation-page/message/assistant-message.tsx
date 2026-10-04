@@ -45,6 +45,7 @@ import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
+import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
 const diagnosticToolLabels = new Set(["失败", "已中断", "结果不确定", "工具失败，等待本轮结果"])
@@ -119,6 +120,16 @@ export function AssistantMessage({
           )
         }
         const unit = block.unit
+        if (unit.type === "plugin-ui") {
+          return (
+            <PluginUiCard
+              key={unit.id}
+              instance={unit.instance}
+              call={unit.call}
+              result={unit.result}
+            />
+          )
+        }
         if (unit.type === "agent") {
           return (
             <ContentEntrance

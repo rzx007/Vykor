@@ -137,7 +137,7 @@
 - [Native Plugin v1 与 Claude Code Converter 实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)：按 Native schema、安装激活、格式硬切、Converter core 和 Claude 转换闭环拆分的可执行任务。
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
 - [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
-- [插件 UI 完整规格（设计提案）](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与[A1 实施计划](./superpowers/plans/2026-10-02-native-plugin-ui-a1.md)：工具结果卡片、会话侧栏、隔离 HTML、受控工具操作和持久状态；先落实定义校验、加载与安装授权。
+- [插件 UI 完整规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与[A4 验证记录](./superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)：定义与授权、持久实例、受控工具操作、Desktop 隔离卡片/侧栏和正式参考插件；用户人工验收与发布另行进行。
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop 本地插件包导入、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [插件机制现状调研报告](./plugin-mechanism-report.md)：按当前代码逐段说明 manifest 契约、安装快照、发现与激活、Native Tool 子进程、权限三层、Run 级可见性与管理面，并列出未覆盖的缺口与容易误判的代码事实。

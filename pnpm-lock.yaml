@@ -683,6 +683,9 @@ importers:
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
@@ -883,6 +886,9 @@ importers:
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@vykor/skills':
         specifier: workspace:*
         version: link:../skills

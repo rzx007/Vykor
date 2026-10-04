@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   outputTokenMax: DEFAULT_OUTPUT_TOKEN_MAX,
   maxTurns: 50,
   permission: { mode: "default" },
-  plugins: { enabled: true },
+  plugins: { enabled: true, uiEnabled: true },
   memory: {
     enabled: true,
     maxFiles: 5,
@@ -86,6 +86,7 @@ export async function loadSettings(
   cliOverrides?: Partial<Settings>,
   options: { projectRoot?: string; includeProject?: boolean } = {},
 ): Promise<Settings> {
+  assertPluginUiEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
   // 从环境变量加载配置
   const envSettings = loadFromEnv();
   // 从配置文件异步加载配置
@@ -406,7 +407,8 @@ function validateSettingsFields(
     assertNestedFields(sandbox, "srt", ["runtimeCommand"], configPath, "settings.sandbox");
   }
   assertNestedFields(settings, "terminal", ["localShell"], configPath);
-  assertNestedFields(settings, "plugins", ["enabled"], configPath);
+  assertNestedFields(settings, "plugins", ["enabled", "uiEnabled"], configPath);
+  assertPluginUiEnabled(recordValue(settings.plugins)?.uiEnabled, configPath);
   assertNestedFields(settings, "daemon", ["autoStart"], configPath);
   assertNestedFields(settings, "autoReview", ["mode"], configPath);
   const autoReview = recordValue(settings.autoReview);
@@ -453,6 +455,12 @@ function validateSettingsFields(
         }
       }
     }
+  }
+}
+
+function assertPluginUiEnabled(value: unknown, configPath: string): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new SettingsFileError("settings.plugins.uiEnabled", configPath);
   }
 }
 

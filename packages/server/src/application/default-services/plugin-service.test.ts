@@ -362,6 +362,57 @@ describe("default plugin service user scope", () => {
 });
 
 describe("default plugin service archive imports", () => {
+  it("reports two UI components from one manifest and preserves approvals through installation", async () => {
+    const definition = { id: "first", title: "第一个界面", entry: "./ui/app.html", surfaces: ["tool-result"], actions: [] };
+    const archivePath = await writeNativeArchive("ui.zip", {
+      ".vykor-plugin/plugin.json": JSON.stringify({ schemaVersion: 1,
+        id: "dev.vykor.archive", name: "archive", version: "1.0.0",
+        components: { tools: ["./tools/not-executed.js"], ui: ["./ui/manifest.json"] } }),
+      "ui/manifest.json": JSON.stringify({ schemaVersion: 1,
+        components: [definition, { ...definition, id: "second", title: "第二个界面" }] }),
+      "ui/app.html": "<!doctype html><script>throw new Error('not executed')</script>",
+    });
+    const plugins = service();
+    if (!plugins.previewArchive || !plugins.installArchive) throw new Error("archive service must be configured");
+    const preview = await plugins.previewArchive({ cwd: root, archivePath });
+    expect(preview.inventory.ui).toBe(1);
+    expect(preview.uiInventory).toEqual({ manifestCount: 1, componentCount: 2, validatedComponentCount: 2 });
+    expect(preview.approvalRequired).toBe(true);
+    expect(preview.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"]);
+    await plugins.installArchive({ cwd: root, archivePath, expectedArchiveDigest: preview.archiveDigest,
+      approvedPermissions: ["ui:invoke-own-tools", "ui:render"] });
+    const listed = await plugins.list({ cwd: root });
+    expect(listed.plugins[0]?.uiInventory).toEqual(preview.uiInventory);
+    const storePath = getInstalledPluginStorePath();
+    await updateInstalledPluginStore(storePath, store => {
+      store.plugins["user::dev.vykor.archive"]!.requestedPermissions = [];
+      store.plugins["user::dev.vykor.archive"]!.approvedPermissions = [];
+    });
+    const obsolete = (await plugins.list({ cwd: root })).plugins[0]!;
+    expect(obsolete.runtimeStatus).toMatchObject({ state: "failed", code: "permission_missing", action: "approve" });
+    expect(obsolete.permissions.missing).toEqual(["ui:invoke-own-tools", "ui:render"]);
+    expect(obsolete.uiInventory).toEqual({ manifestCount: 1, componentCount: null, validatedComponentCount: 0 });
+    expect((await readInstalledPluginStore(storePath)).plugins["user::dev.vykor.archive"]!.approvedPermissions).toEqual([]);
+    const cachePath = (await readInstalledPluginStore(storePath)).plugins["user::dev.vykor.archive"]!.cachePath;
+    await writeFile(join(cachePath, "ui", "manifest.json"), "{");
+    const brokenUi = (await plugins.list({ cwd: root })).plugins[0]!;
+    expect(brokenUi.uiInventory).toEqual({ manifestCount: 1, componentCount: null, validatedComponentCount: 0 });
+    expect(brokenUi.permissions.missing).toEqual(["ui:invoke-own-tools", "ui:render"]);
+    expect(brokenUi.runtimeStatus).toMatchObject({ state: "failed", code: "component_invalid", action: "reimport" });
+  });
+
+  it("rejects broken UI archives before approving or installing them", async () => {
+    const archivePath = await writeNativeArchive("broken-ui.zip", {
+      ".vykor-plugin/plugin.json": JSON.stringify({ schemaVersion: 1,
+        id: "dev.vykor.archive", name: "archive", version: "1.0.0",
+        components: { ui: ["./ui/manifest.json"] } }),
+      "ui/manifest.json": "{",
+    });
+    await expect(service().previewArchive!({ cwd: root, archivePath })).rejects.toMatchObject({
+      body: { code: "plugin_archive_invalid", diagnostics: [expect.objectContaining({ code: "plugin_ui_invalid_definition" })] },
+    });
+    expect((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins).toEqual({});
+  });
   it("previews a real ZIP without executing Node Tool code", async () => {
     const archive = await writeNativeArchive();
 

@@ -67,7 +67,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
     get globalCloseCount() { return globalCloseCount; },
     async install(link: boolean) {
       await client.plugins.installLocal({
-        cwd: fixture.cwds[0], sourcePath: fixture.source, scope: "user", approvedPermissions: [], link,
+        cwd: fixture.cwds[0], sourcePath: fixture.source, scope: "user", approvedPermissions: ["ui:invoke-own-tools", "ui:render"], link,
       });
       expect(requests.at(-1)).toEqual({ path: link ? "/plugins/link-local" : "/plugins/install-local", method: "POST" });
       const records = Object.values((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins);
@@ -97,7 +97,7 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       const installed = await routes.install(true);
       const oldRuntime = await fixture.activate();
       const oldTool = oldRuntime.registry.get(toolName)!;
-      await expect(callInspector(oldRuntime)).resolves.toEqual({ content: [{
+      await expect(callInspector(oldRuntime)).resolves.toMatchObject({ content: [{
         type: "text", text: JSON.stringify({ findings: [{ line: 1, code: "trailing-whitespace" }], truncated: false }),
       }] });
       const manifestBefore = await readFile(fixture.manifest, "utf8");
@@ -122,7 +122,7 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       const newRuntime = await fixture.activate();
       expect(newRuntime.activation!.host).not.toBe(oldRuntime.activation!.host);
       expect(newRuntime.pid).not.toBe(oldRuntime.pid);
-      await expect(callInspector(newRuntime)).resolves.toEqual({ content: [{
+      await expect(callInspector(newRuntime)).resolves.toMatchObject({ content: [{
         type: "text", text: JSON.stringify({ findings: [{ line: 1, code: "trailing-whitespace-v2" }], truncated: false }),
       }] });
       expect(oldRuntime.registry.has(toolName)).toBe(false);
@@ -159,7 +159,7 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       for (const cwd of fixture.cwds) {
         const discovery = await fixture.discover(cwd);
         expect(discovery.plugins).toEqual([]);
-        expect(discovery.warnings.join("\n")).toContain("actual plugin permissions [network:example.test]");
+        expect(discovery.warnings.join("\n")).toContain("actual plugin permissions [network:example.test, ui:invoke-own-tools, ui:render]");
       }
       expect(await fixture.executions()).toHaveLength(1);
       expect(Object.values((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins)).toEqual([installed]);
@@ -180,9 +180,9 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       expect(firstResult.isError).not.toBe(true);
       await expect(callInspector(second)).resolves.toEqual(firstResult);
       // Status reports unique tool names; each cwd still owns its own registry and Host.
-      expect(first.registry.getAll()).toHaveLength(1);
-      expect(second.registry.getAll()).toHaveLength(1);
-      expect(getNativeToolRuntimeSnapshot(installed.cachePath)).toMatchObject({ hostCount: 2, registeredToolCount: 1 });
+      expect(first.registry.getAll()).toHaveLength(2);
+      expect(second.registry.getAll()).toHaveLength(2);
+      expect(getNativeToolRuntimeSnapshot(installed.cachePath)).toMatchObject({ hostCount: 2, registeredToolCount: 2 });
       const before = await readInstalledPluginStore(getInstalledPluginStorePath());
       const previousCloses = routes.globalCloseCount;
 

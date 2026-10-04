@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from "electron"
+import { app, BrowserWindow, Menu, session } from "electron"
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
 
 import { createAppContext, type AppContext } from "./core/app-context"
@@ -17,6 +17,11 @@ import {
   runDesktopDaemonEntry,
 } from "./features/daemon-autostart/daemon-entry"
 import icon from "../../resources/icon.png?asset"
+import { registerPluginUiScheme, installPluginUiDocumentProtocol } from "./features/plugin-ui/document-protocol"
+import { desktopPluginUiDocuments } from "./features/plugin-ui/document-runtime"
+import { DesktopPluginUiService } from "./features/plugin-ui/plugin-ui-service"
+import { setDesktopPluginUiService, getDesktopPluginUiService } from "./features/plugin-ui/service-runtime"
+import { pluginUiDocumentProtocolAvailable } from "./features/plugin-ui/document-protocol"
 
 let ctx: AppContext | null = null
 let ipcRegistry: IpcRegistry | null = null
@@ -36,6 +41,7 @@ if (daemonMode) {
 }
 
 function startDesktopApplication(): void {
+  registerPluginUiScheme()
   if (process.platform === "linux") {
     app.commandLine.appendSwitch("enable-transparent-visuals")
   }
@@ -46,6 +52,7 @@ function startDesktopApplication(): void {
   }
 
   app.whenReady().then(() => {
+    installPluginUiDocumentProtocol(desktopPluginUiDocuments, session.defaultSession)
     electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
     app.setName("Vykor")
     Menu.setApplicationMenu(null)
@@ -69,6 +76,17 @@ function startDesktopApplication(): void {
       windowManager,
       createMainWindow: () => createMainWindow(requireContext()),
     })
+
+    const pluginUi = new DesktopPluginUiService({
+      documents: desktopPluginUiDocuments,
+      getClient: () => desktopSessionService.daemonClient(),
+      getOwnerSessionId: id => desktopSessionService.subscriptions.getOwnerSessionId(id),
+      localAvailable: contents => pluginUiDocumentProtocolAvailable(contents.session),
+    })
+    setDesktopPluginUiService(pluginUi)
+    desktopSessionService.connection.onInvalidated(() => pluginUi.invalidateConnection())
+    desktopSessionService.subscriptions.onOwnerInvalidated(id => pluginUi.invalidateOwner(id))
+    desktopSessionService.subscriptions.onOwnerSnapshot((id, view) => pluginUi.observeSession(id, view))
 
     ipcRegistry = new IpcRegistry(ctx)
     updaterRuntime = startDesktopUpdater()
@@ -104,6 +122,8 @@ function startDesktopApplication(): void {
   })
 
   app.on("before-quit", () => {
+    getDesktopPluginUiService()?.dispose()
+    desktopPluginUiDocuments.clear()
     updaterRuntime?.service.dispose()
     updaterRuntime = null
     ipcRegistry?.dispose()

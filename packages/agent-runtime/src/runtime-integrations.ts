@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type {
   ActiveMcpRuntimeHandle,
   McpRuntimeRegistry,
   McpServerConfig,
   McpServerIdentity,
   RuntimeBundle,
+  RunPluginUiBinding,
+  RunToolBinding,
   Settings,
   ToolDefinition,
 } from "@vykor/core";
 import { loadProjectSettings, loadSettings } from "@vykor/core";
+import { computePluginBehaviorDigest, loadNativeUiMetadata } from "@vykor/plugins";
 import {
   createMcpServerIdentity,
   McpClientManager,
@@ -68,6 +72,58 @@ export async function installRuntimeIntegrations(
       process.stderr.write(`[plugins] ${plugin.manifest.id}: ${diagnostic.message}\n`);
     },
   });
+  const pluginUi: RunPluginUiBinding[] = [];
+  for (const plugin of options.discovery.plugins) {
+    if (options.settings.plugins?.uiEnabled === false) continue;
+    const original = plugin.components.ui;
+    if (original?.status !== "loaded" || !original.value?.length) continue;
+    const pluginId = plugin.manifest.id;
+    const diagnostic = (message: string) => {
+      plugin.diagnostics.push({ severity: "error", phase: "activate", component: "ui", pluginId,
+        code: "plugin_ui_snapshot_unavailable", message });
+      process.stderr.write(`[plugins] ${pluginId}: ${message}\n`);
+    };
+    try {
+      const pluginDigest = inventory.plugins.get(pluginId)?.behaviorDigest;
+      if (!pluginDigest || await computePluginBehaviorDigest(plugin.root) !== pluginDigest) {
+        diagnostic("Plugin UI installation changed since discovery.");
+        continue;
+      }
+      const checked = await loadNativeUiMetadata({ root: plugin.root, manifest: plugin.manifest,
+        manifestPath: join(plugin.root, ".vykor-plugin", "plugin.json") });
+      if (checked.status !== "loaded" || checked.value?.length !== original.value.length
+        || original.value.some(component => !checked.value?.some(current =>
+          current.definition.id === component.definition.id && current.componentDigest === component.componentDigest
+          && current.htmlSha256 === component.htmlSha256 && current.entryPath === component.entryPath))) {
+        diagnostic("Plugin UI component changed since discovery.");
+        continue;
+      }
+      const activation = toolActivations.find(item => item.pluginId === pluginId);
+      const captured = createRunCapabilityView({ toolRegistry: runtime.toolRegistry, pluginIds: new Set([pluginId]) }, pluginId);
+      const bindings: RunPluginUiBinding[] = [];
+      for (const component of original.value) {
+        const actionTools: RunToolBinding[] = [];
+        for (const action of component.definition.actions) {
+          const tool = captured.tools.get(action.tool);
+          if (activation?.state !== "active" || !activation.toolNames.includes(action.tool)
+            || tool?.source?.kind !== "plugin" || tool.source.id !== pluginId) break;
+          actionTools.push(tool);
+        }
+        if (actionTools.length !== component.definition.actions.length) {
+          diagnostic(`Plugin UI component '${component.definition.id}' requires its own active Native tools.`);
+          continue;
+        }
+        bindings.push({ pluginId, pluginVersion: plugin.manifest.version, pluginDigest,
+          componentId: component.definition.id, componentDigest: component.componentDigest,
+          htmlSha256: component.htmlSha256, root: plugin.root, entryPath: component.entryPath,
+          definition: component.definition, actionTools });
+      }
+      pluginUi.push(...createRunCapabilityView({ toolRegistry: runtime.toolRegistry,
+        pluginIds: new Set([pluginId]), pluginUi: bindings }, pluginId).pluginUi!.values());
+    } catch {
+      diagnostic("Plugin UI snapshot could not be verified.");
+    }
+  }
   await installProgrammaticExtensions(options);
 
   const credentialStore = new McpOAuthCredentialStore();
@@ -282,7 +338,7 @@ export async function installRuntimeIntegrations(
     const errors: string[] = [];
     if (pluginId !== undefined) {
       const plugin = options.discovery.plugins.find((item) => item.manifest.id === pluginId);
-      errors.push(...(plugin?.diagnostics.filter((item) => item.severity === "error").map((item) => item.message) ?? []));
+      errors.push(...(plugin?.diagnostics.filter((item) => item.severity === "error" && item.component !== "ui").map((item) => item.message) ?? []));
       const activation = toolActivations.find((item) => item.pluginId === pluginId);
       if (inventory.plugins.get(pluginId)?.nativeToolEntries.length &&
           (!activation || (activation.host?.state ?? activation.state) !== "active")) {
@@ -319,7 +375,7 @@ export async function installRuntimeIntegrations(
       toolRegistry: runtime.toolRegistry,
       pluginIds: new Set(inventory.plugins.keys()),
       pluginPreparationErrors: pluginId === undefined ? undefined : new Map([[pluginId, errors]]),
-      skills, agents, mcpServers: connectedServers,
+      skills, agents, mcpServers: connectedServers, pluginUi,
     }, pluginId);
   };
 

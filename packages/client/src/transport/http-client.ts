@@ -24,6 +24,7 @@ import {
   AuthResource,
   ProjectResource,
   PluginResource,
+  PluginUiResource,
   DevelopmentResource,
   SessionResource,
   AttachmentResource,
@@ -65,6 +66,7 @@ export {
 
 /** 面向 daemon 的 typed fetch 客户端。 */
 export class VykorClient {
+  readonly pluginUi: PluginUiResource;
   readonly protocol: ProtocolClient;
   readonly system: SystemResource;
   readonly providers: ProviderResource;
@@ -91,6 +93,7 @@ export class VykorClient {
     this.auth = new AuthResource(transport);
     this.projects = new ProjectResource(transport);
     this.plugins = new PluginResource(transport);
+    this.pluginUi = new PluginUiResource(transport);
     this.development = new DevelopmentResource(transport);
     this.sessions = new SessionResource(transport);
     this.attachments = new AttachmentResource(transport);

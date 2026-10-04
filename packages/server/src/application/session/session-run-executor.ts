@@ -13,6 +13,7 @@ import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import type { SessionPostRunMaintenance } from "./session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import type { SessionTranscriptProjection } from "./transcript-projection.js";
+import type { SessionPluginUiService } from "./session-plugin-ui-service.js";
 import type {
   AttachmentRoutingDecision,
   AttachmentRoutingError,
@@ -36,6 +37,7 @@ const DEFAULT_RUN_STALL_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_RUN_STALL_CHECK_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
+  pluginUi?: Pick<SessionPluginUiService, "registerRunView" | "releaseRunView"> & Partial<Pick<SessionPluginUiService, "summarizeForInput">>;
   data: Pick<SessionStore,
     "conversations" | "conversationTransactions" | "permissions" | "runs" | "sessions" | "transaction"
   >;
@@ -166,6 +168,7 @@ export class SessionRunExecutor {
       const pluginId = typeof storedRun?.metadata?.pluginId === "string" ? storedRun.metadata.pluginId : undefined;
       const capabilityView = agent.createRunCapabilityView?.(pluginId);
       if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");
+      if (capabilityView) this.context.pluginUi?.registerRunView(runId, capabilityView);
       const materialized = hasStructuredContext
         ? materializeSessionInput(
             admitted.items,
@@ -246,6 +249,9 @@ export class SessionRunExecutor {
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
+      const uiSummary = this.context.pluginUi?.summarizeForInput?.(sessionId, runId);
+      if (uiSummary) submittedContent = typeof submittedContent === "string"
+        ? `${submittedContent}\n\n${uiSummary}` : [...submittedContent, { type: "text", text: uiSummary }];
       const run = agent.submitMessage(submittedContent, {
         ...(capabilityView ? { capabilityView } : {}),
         ...(goalBinding ? { goal: goalBinding } : {}),
@@ -471,6 +477,7 @@ export class SessionRunExecutor {
       // Failed / interrupted terminal: drop stale usage; next usage() may reassemble.
       this.context.contextUsageCache?.invalidate(sessionId);
     } finally {
+      this.context.pluginUi?.releaseRunView(runId);
       watchdog?.dispose();
       if (cleanupAttachmentResources) {
         try {

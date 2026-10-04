@@ -459,6 +459,7 @@ export class ConversationTransactions {
 
         for (const partInput of row.parts) {
           const partId = randomUUID();
+          const { pluginUi: _pluginUi, uiAction: _uiAction, ...importedMetadata } = partInput.metadata ?? {};
           const part: SessionMessagePartRecord = {
             id: partId,
             sessionId: input.sessionId,
@@ -481,7 +482,7 @@ export class ConversationTransactions {
             ...(partInput.representationId !== undefined ? { representationId: partInput.representationId } : {}),
             ...(partInput.processor !== undefined ? { processor: partInput.processor } : {}),
             ...(partInput.transformationError !== undefined ? { transformationError: partInput.transformationError } : {}),
-            metadata: partInput.metadata ?? {},
+            metadata: importedMetadata,
             createdAt: timestamp,
             updatedAt: timestamp,
           };

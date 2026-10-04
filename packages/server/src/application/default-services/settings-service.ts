@@ -291,6 +291,7 @@ function coerceConfigValue(key: string, value: string): unknown {
       "fastMode",
       "showReasoning",
       "plugins.enabled",
+      "plugins.uiEnabled",
       "memory.enabled",
       "memory.sessionMemoryEnabled",
       "memory.autoExtractEnabled",

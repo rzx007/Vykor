@@ -13,8 +13,10 @@ import type {
   SkillService,
 } from "../../application/index.js";
 import type { DaemonControlService } from "../../application/control/index.js";
+import type { SessionPluginUiService, PluginUiLifecycleScope } from "../../application/session/session-plugin-ui-service.js";
 
 export interface ServiceRoutesContext {
+  pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
   contextService?: ContextService;
   dreamService?: DreamService;
   profileService?: ProfileService;
@@ -38,6 +40,32 @@ export interface ServiceRoutesContext {
 
 export function createServiceRoutes(context: ServiceRoutesContext): Hono {
   return new Hono()
+    .use("*", async (c, next) => {
+      const path = c.req.path;
+      const mutation = c.req.method === "POST" && /^\/plugins\/(install-local|link-local|archive\/install|git\/install|reload|[^/]+\/(enable|disable))$/.test(path)
+        || c.req.method === "DELETE" && /^\/plugins\/[^/]+$/.test(path);
+      if (!mutation || !context.pluginUi || !context.pluginService) return next();
+      if (path.endsWith("/install-local") || path.endsWith("/link-local")) {
+        if (!context.pluginService.installLocal) return next();
+      }
+      if (path === "/plugins/archive/install" && !context.pluginService.installArchive
+        || path === "/plugins/git/install" && !context.pluginService.installGit
+        || c.req.method === "DELETE" && !context.pluginService.uninstall) return next();
+      let body: Record<string, unknown>;
+      try { body = await readJson(c); } catch { return next(); }
+      const cwd = typeof body.cwd === "string" ? body.cwd : path === "/plugins/reload" ? c.req.query("cwd") : undefined;
+      if (!cwd) return next();
+      if (/\/(install-local|link-local)$/.test(path) && (!body.sourcePath || body.scope !== "user")) return next();
+      if (path === "/plugins/archive/install" && (!body.archivePath || !body.expectedArchiveDigest || !Array.isArray(body.approvedPermissions))) return next();
+      if (path === "/plugins/git/install" && (!body.url || !body.expectedSourceDigest || !Array.isArray(body.approvedPermissions))) return next();
+      let scope: PluginUiLifecycleScope = { kind: "global" };
+      if (path === "/plugins/reload") {
+        scope = { kind: "cwd", cwd };
+      } else if (c.req.method === "DELETE" || /\/(enable|disable)$/.test(path)) {
+        scope = { kind: "global", pluginId: decodeURIComponent(path.split("/")[2]!) };
+      }
+      await context.pluginUi.withPluginUiLifecycleMutation(scope, async () => { await next(); });
+    })
     .get("/context/plugins", async (c) => {
       if (!context.contextService?.plugins)
         return errorResponse(501, "Plugin catalog is not configured");

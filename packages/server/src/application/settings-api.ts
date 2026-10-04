@@ -1,3 +1,5 @@
+import type { PluginUiInventory } from "@vykor/protocol";
+
 /**
  * Injectable daemon settings / provider surfaces.
  * Kept separate from slash-command registries — clients mutate via resource APIs.
@@ -266,6 +268,7 @@ export interface PluginInfo {
   };
   runtimeStatus: PluginRuntimeStatus;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   permissions: { requested: string[]; approved: string[]; missing: string[] };
   diagnostics: Array<{
     severity: "info" | "warning" | "error";
@@ -282,6 +285,7 @@ export interface PluginArchivePreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 
@@ -294,6 +298,7 @@ export interface PluginGitPreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 

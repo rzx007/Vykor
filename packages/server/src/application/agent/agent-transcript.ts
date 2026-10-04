@@ -112,6 +112,7 @@ function isPresentationOnlyMessage(message: SessionMessageRecord): boolean {
   }
   const value = presentation as Record<string, unknown>;
   return (
+    value.kind === "plugin_ui_action" ||
     (value.kind === "model_switch" &&
       typeof value.fromModel === "string" &&
       Boolean(value.fromModel.trim()) &&

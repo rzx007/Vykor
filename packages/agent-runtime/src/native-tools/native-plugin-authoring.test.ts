@@ -13,13 +13,13 @@ describe("native plugin authoring installation (real Tool Host)", () => {
   it("keeps a verified user snapshot callable after its source is deleted", async () => {
     await withNativePluginFixture(async fixture => {
       const installed = await installLocalNativePlugin({
-        sourcePath: fixture.source, cwd: fixture.cwds[0], scope: "user", approvedPermissions: [],
+        sourcePath: fixture.source, cwd: fixture.cwds[0], scope: "user", approvedPermissions: ["ui:invoke-own-tools", "ui:render"],
       });
       expect(installed.status, JSON.stringify(installed.diagnostics)).toBe("installed");
       if (installed.status !== "installed") throw new Error("Expected installation");
       expect(installed.record).toMatchObject({
         id: pluginId, origin: "native", scope: "user", enabled: true,
-        requestedPermissions: [], approvedPermissions: [], behaviorDigest: expect.any(String),
+        requestedPermissions: ["ui:invoke-own-tools", "ui:render"], approvedPermissions: ["ui:invoke-own-tools", "ui:render"], behaviorDigest: expect.any(String),
       });
       expect(installed.record.behaviorDigest).toMatch(/^[a-f0-9]{64}$/);
       expect(installed.record.linkedSourcePath).toBeUndefined();
@@ -37,7 +37,7 @@ describe("native plugin authoring installation (real Tool Host)", () => {
       if (verified.status !== "valid") throw new Error("Expected verified snapshot");
       expect((await loadNativePlugin(verified.plugin)).root).toBe(installed.record.cachePath);
       const runtime = await fixture.activate(fixture.cwds[1]);
-      await expect(callInspector(runtime)).resolves.toEqual({ content: [{
+      await expect(callInspector(runtime)).resolves.toMatchObject({ content: [{
         type: "text", text: JSON.stringify({ findings: [{ line: 1, code: "trailing-whitespace" }], truncated: false }),
       }] });
       await runtime.close();
@@ -53,7 +53,7 @@ describe("native plugin authoring installation (real Tool Host)", () => {
       expect((await loadNativePlugin(inspected.plugin!)).components.tools?.value).toHaveLength(1);
       expect(await fixture.executions()).toEqual([]);
       const installed = await installLocalNativePlugin({
-        sourcePath: fixture.source, cwd: fixture.cwds[0], scope: "user", approvedPermissions: [], link: true,
+        sourcePath: fixture.source, cwd: fixture.cwds[0], scope: "user", approvedPermissions: ["ui:invoke-own-tools", "ui:render"], link: true,
       });
       expect(installed.status).toBe("installed");
       const discovery = await fixture.discover();

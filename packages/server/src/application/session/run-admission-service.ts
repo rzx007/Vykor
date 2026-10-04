@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  assertPromptMetadataAllowed,
   type AdmitPromptAttachmentInput,
   type AttachmentLimits,
   type ReplaceTranscriptMessageInput,
@@ -302,6 +303,7 @@ export class RunAdmissionService {
     sessionId: string,
     input: AdmitPromptInput,
   ): { input: SessionInputRecord; run: SessionRunRecord } {
+    assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     if (!this.options.runtimeQueue.hasRuntime) throw new Error("请先配置模型，再启动目标");
     return this.options.conversationTransactions.admitPromptWithRun(
@@ -326,6 +328,7 @@ export class RunAdmissionService {
     messages: ReplaceTranscriptMessageInput[],
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
+    assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -363,6 +366,7 @@ export class RunAdmissionService {
     sourceMessageId: string,
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
+    assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -399,6 +403,7 @@ export class RunAdmissionService {
     inputId: string,
     input: { id?: string; metadata?: Record<string, unknown>; traceId?: string },
   ): AdmitPromptResult {
+    assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const sourceInput = this.options.conversationTransactions.getInput(inputId);
     if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
@@ -432,6 +437,7 @@ export class RunAdmissionService {
     sessionId: string,
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
+    assertPromptMetadataAllowed(input);
     this.assertReady();
     if (!this.accepting) {
       return Promise.reject(new Error("Session run engine is stopping"));

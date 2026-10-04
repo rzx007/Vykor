@@ -1,7 +1,7 @@
 # Native Plugin UI A1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：当前可执行计划，任务尚未实施。本仓库默认使用 executing-plans 在当前会话逐项执行；不默认启动多个 Agent。
+> 状态：A1 七项任务已实施并通过验收；实现保留在 codex/plugin-ui-a1 隔离分支，未合并 main。
 
 **Goal:** 原生插件能够声明 UI 定义，经过严格静态校验、安装授权和快照验证，并在安装预览与管理页准确显示定义数量。
 
@@ -91,7 +91,7 @@ git diff -- packages/plugins packages/protocol packages/server/src/application/d
 
 **Interfaces:** 后续任务消费 `PluginUiManifestV1`、`PluginUiComponentDefinition`、`PluginUiInventory`、`PLUGIN_UI_LIMITS`、`stringifyPluginUiJson(value: unknown): string`。本任务不引用 plugins、core 或 Node。
 
-- [ ] **Step 1: 写出会失败的规范化测试。** 通过 protocol 的公开入口导入，先确认不存在导出导致失败。
+- [x] **Step 1: 写出会失败的规范化测试。** 通过 protocol 的公开入口导入，先确认不存在导出导致失败。
 
 ```ts
 import { expect, it } from "vitest";
@@ -116,8 +116,8 @@ it("rejects deeper than twenty containers", () => {
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/protocol exec vitest run src/plugin-ui.test.ts`，失败原因应是缺少新导出，不是 Node 环境或依赖安装失败。
-- [ ] **Step 3: 定义实际接口和限额。** 下面类型全部位于新文件，随后从 index 导出。
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/protocol exec vitest run src/plugin-ui.test.ts`，失败原因应是缺少新导出，不是 Node 环境或依赖安装失败。
+- [x] **Step 3: 定义实际接口和限额。** 下面类型全部位于新文件，随后从 index 导出。
 
 ```ts
 export type JsonValue = null | boolean | number | string | JsonValue[]
@@ -187,8 +187,8 @@ export function stringifyPluginUiJson(value: unknown): string {
 }
 ```
 
-- [ ] **Step 4: 验证。** 补充包含 `__proto__` 的 JSON、空数组、循环引用、稀疏数组和对象中的 undefined 用例；循环/稀疏数组不能无限递归或静默变成不同数据。重复运行同一聚焦测试，再运行 `pnpm --filter @vykor/protocol check-types`。
-- [ ] **Step 5: 检查 diff。** 只检查这两个文件和 index；本任务不增加 Feature、不改基础协议版本。
+- [x] **Step 4: 验证。** 补充包含 `__proto__` 的 JSON、空数组、循环引用、稀疏数组和对象中的 undefined 用例；循环/稀疏数组不能无限递归或静默变成不同数据。重复运行同一聚焦测试，再运行 `pnpm --filter @vykor/protocol check-types`。
+- [x] **Step 5: 检查 diff。** 只检查这两个文件和 index；本任务不增加 Feature、不改基础协议版本。
 
 ## Task 2: 严格 UI schema 与测试插件构造
 
@@ -196,7 +196,7 @@ export function stringifyPluginUiJson(value: unknown): string {
 
 **Interfaces:** 产出 `PluginUiManifestV1Schema`。测试 helper 产出 `writeNativeUiFixture(root: string, ui?: PluginUiManifestV1): Promise<ValidatedNativePlugin>`，仅构造文件和测试对象，不调用待测 validator。
 
-- [ ] **Step 1: 写失败测试。** 最小定义为 `{ schemaVersion: 1, components: [{ id: "findings", title: "检查结果", entry: "./ui/findings.html", surfaces: ["tool-result"], actions: [] }] }`。
+- [x] **Step 1: 写失败测试。** 最小定义为 `{ schemaVersion: 1, components: [{ id: "findings", title: "检查结果", entry: "./ui/findings.html", surfaces: ["tool-result"], actions: [] }] }`。
 
 ```ts
 import { expect, it } from "vitest";
@@ -223,8 +223,8 @@ it.each([
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui-schema.test.ts`。
-- [ ] **Step 3: 使用现有 Zod 实现。** 所有对象 strict，数量与 Unicode 字符数有明确校验。
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui-schema.test.ts`。
+- [x] **Step 3: 使用现有 Zod 实现。** 所有对象 strict，数量与 Unicode 字符数有明确校验。
 
 ```ts
 import { z } from "zod";
@@ -299,8 +299,8 @@ export async function writeNativeUiFixture(
 }
 ```
 
-- [ ] **Step 4: 验证。** 测试动作 completion 必填、未知字段、ID 长度、纯空白标签、80 / 81 个 emoji、17 个组件和动作；确保 title 长度按 Unicode 字符数而非 UTF-16 单元计算。
-- [ ] **Step 5: 检查依赖与 diff。** 只增加已有 workspace 依赖；使用仓库指定 pnpm 同步锁文件与 workspace 链接，不升级第三方版本。网络受限时先使用已有依赖缓存和离线模式；不能为运行测试安装另一套依赖。
+- [x] **Step 4: 验证。** 测试动作 completion 必填、未知字段、ID 长度、纯空白标签、80 / 81 个 emoji、17 个组件和动作；确保 title 长度按 Unicode 字符数而非 UTF-16 单元计算。
+- [x] **Step 5: 检查依赖与 diff。** 只增加已有 workspace 依赖；使用仓库指定 pnpm 同步锁文件与 workspace 链接，不升级第三方版本。网络受限时先使用已有依赖缓存和离线模式；不能为运行测试安装另一套依赖。
 
 ## Task 3: 有界文件读取与 Native UI metadata 加载
 
@@ -319,7 +319,7 @@ export interface NativeUiComponentMetadata {
 }
 ```
 
-- [ ] **Step 1: 写真实文件测试。** 每例 mkdtemp，afterEach 仅删除该测试临时根；先用 helper 构造，直接调用 loader。
+- [x] **Step 1: 写真实文件测试。** 每例 mkdtemp，afterEach 仅删除该测试临时根；先用 helper 构造，直接调用 loader。
 
 ```ts
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -351,8 +351,8 @@ it("changes the component digest when HTML bytes change", async () => {
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui.test.ts`。
-- [ ] **Step 3: 在 ui.ts 实现有界读取。** 以下 helper 只供该文件使用。路径边界复用已有 resolveNativePluginPath，另外检查原始普通文件路径上的所有父节点，防止允许“仍在根内”的链接。
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui.test.ts`。
+- [x] **Step 3: 在 ui.ts 实现有界读取。** 以下 helper 只供该文件使用。路径边界复用已有 resolveNativePluginPath，另外检查原始普通文件路径上的所有父节点，防止允许“仍在根内”的链接。
 
 ```ts
 import { lstat, open, realpath } from "node:fs/promises";
@@ -460,9 +460,9 @@ export async function loadNativeUiMetadata(
 }
 ```
 
-- [ ] **Step 4: 补齐文件和摘要回归。** 缺失/目录入口、HTML 超限、JSON 超限、非法 UTF-8、根外入口、指向根内的文件链接与目录 junction、两个 manifest 同名组件、跨 manifest 超过 16 个组件全部被拒绝。Windows 必须实际创建目录 junction，不能因为文件 symlink 权限缺失就跳过全部链接验收。
-- [ ] **Step 5: 验证摘要规则。** 仅改变标签、动作或 surfaces 时 componentDigest 改变；只改变 JSON 键排列不改变；htmlSha256 保持原字节摘要。错误不返回 HTML、绝对 entryPath 或异常正文。两个不同组件可以复用同一个 HTML 文件。
-- [ ] **Step 6: 运行聚焦检查并检查 diff。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui.test.ts src/components/ui-schema.test.ts`，随后运行 plugins check-types。
+- [x] **Step 4: 补齐文件和摘要回归。** 缺失/目录入口、HTML 超限、JSON 超限、非法 UTF-8、根外入口、指向根内的文件链接与目录 junction、两个 manifest 同名组件、跨 manifest 超过 16 个组件全部被拒绝。Windows 必须实际创建目录 junction，不能因为文件 symlink 权限缺失就跳过全部链接验收。
+- [x] **Step 5: 验证摘要规则。** 仅改变标签、动作或 surfaces 时 componentDigest 改变；只改变 JSON 键排列不改变；htmlSha256 保持原字节摘要。错误不返回 HTML、绝对 entryPath 或异常正文。两个不同组件可以复用同一个 HTML 文件。
+- [x] **Step 6: 运行聚焦检查并检查 diff。** `pnpm --filter @vykor/plugins exec vitest run src/components/ui.test.ts src/components/ui-schema.test.ts`，随后运行 plugins check-types。
 
 ## Task 4: 接入校验与加载，安装前拒绝错误 UI
 
@@ -470,7 +470,7 @@ export async function loadNativeUiMetadata(
 
 **Interfaces:** NativePluginComponents 增加 `ui?: PluginComponentResult<NativeUiComponentMetadata[]>`；validateNativePlugin 的成功语义增加“UI 定义和 HTML 已通过静态校验”。其他组件的加载语义不变。
 
-- [ ] **Step 1: 写安装入口会失败的回归。** 在现有 validate.test.ts 的临时 root 内使用 helper。
+- [x] **Step 1: 写安装入口会失败的回归。** 在现有 validate.test.ts 的临时 root 内使用 helper。
 
 ```ts
 it("rejects a broken UI definition before installation", async () => {
@@ -484,8 +484,8 @@ it("rejects a broken UI definition before installation", async () => {
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/manifest/validate.test.ts src/load-native-plugin.test.ts`；当前 validator 只看文件路径，应使上述新断言失败。
-- [ ] **Step 3: 接线。** 外层 `components.ui` 添加 8 个文件上限；在 validate.ts 现有路径校验结束、构造 plugin 后调用 UI loader：
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/manifest/validate.test.ts src/load-native-plugin.test.ts`；当前 validator 只看文件路径，应使上述新断言失败。
+- [x] **Step 3: 接线。** 外层 `components.ui` 添加 8 个文件上限；在 validate.ts 现有路径校验结束、构造 plugin 后调用 UI loader：
 
 ```ts
 if (plugin.manifest.components.ui) {
@@ -506,9 +506,9 @@ const results = [components.skills, components.agents, components.hooks,
   ...Object.values(components.unsupported ?? {})].filter(value => value !== undefined);
 ```
 
-- [ ] **Step 4: 验证独立组件与无执行副作用。** 正常 UI 加载得到 loaded，unsupported.ui 不再出现。先取得有效 plugin，再损坏 UI 文件、调用 loadNativePlugin，必须得到 degraded 且 Skills 仍加载。HTML / Tool 的 throw 标记不能被触发。
-- [ ] **Step 5: 验证实际安装安全。** installLocalNativePlugin 面对错误 UI 必须返回 invalid，installed store 不增加记录，cache 不产生已提交快照；有效快照复制后须再次通过同一静态校验。
-- [ ] **Step 6: 检查公开入口和聚焦回归。** 从 `@vykor/plugins` 可导入 loader 和 metadata 类型；运行 manifest、paths、load-native-plugin、installer、cache 的现有聚焦测试。保持其他 deferredKinds 不变，不在 A1 注册 UI 执行能力。
+- [x] **Step 4: 验证独立组件与无执行副作用。** 正常 UI 加载得到 loaded，unsupported.ui 不再出现。先取得有效 plugin，再损坏 UI 文件、调用 loadNativePlugin，必须得到 degraded 且 Skills 仍加载。HTML / Tool 的 throw 标记不能被触发。
+- [x] **Step 5: 验证实际安装安全。** installLocalNativePlugin 面对错误 UI 必须返回 invalid，installed store 不增加记录，cache 不产生已提交快照；有效快照复制后须再次通过同一静态校验。
+- [x] **Step 6: 检查公开入口和聚焦回归。** 从 `@vykor/plugins` 可导入 loader 和 metadata 类型；运行 manifest、paths、load-native-plugin、installer、cache 的现有聚焦测试。保持其他 deferredKinds 不变，不在 A1 注册 UI 执行能力。
 
 ## Task 5: UI 授权贯穿安装、旧记录验证和重新安装
 
@@ -516,7 +516,7 @@ const results = [components.skills, components.agents, components.hooks,
 
 **Interfaces:** 现有 `requestedPluginPermissions(manifest): string[]` 保持签名，新增两项推导值，所有调用方使用同一个函数。
 
-- [ ] **Step 1: 写权限计算和真实安装的失败测试。** 在 installer.test.ts 的既有 root 中构造有效 UI。
+- [x] **Step 1: 写权限计算和真实安装的失败测试。** 在 installer.test.ts 的既有 root 中构造有效 UI。
 
 ```ts
 it("requires both inferred UI permissions without executing the plugin", async () => {
@@ -532,8 +532,8 @@ it("requires both inferred UI permissions without executing the plugin", async (
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts`。
-- [ ] **Step 3: 在唯一权限计算入口加入 UI 推导。** 在既有 result Set 中增加：
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts`。
+- [x] **Step 3: 在唯一权限计算入口加入 UI 推导。** 在既有 result Set 中增加：
 
 ```ts
 if (manifest.components.ui?.length) {
@@ -544,7 +544,7 @@ if (manifest.components.ui?.length) {
 
 纯展示组件也申请同样两项能力。不能扩展 VykorPluginPermissions 的 filesystem/network/process/secrets 解析去识别 UI，更不能把 UI 授权翻译为文件、网络或进程权限。
 
-- [ ] **Step 4: 写真实已安装验证。** verify-ui.test.ts 自己创建临时根、helper 插件，安装并批准两项，再修改保存记录模拟旧状态：
+- [x] **Step 4: 写真实已安装验证。** verify-ui.test.ts 自己创建临时根、helper 插件，安装并批准两项，再修改保存记录模拟旧状态：
 
 ```ts
 const approved = ["ui:invoke-own-tools", "ui:render"];
@@ -565,8 +565,8 @@ expect(verified.diagnostics[0]?.code).toBe("plugin_installation_permissions_mism
 
 该片段置于具有 beforeEach/afterEach 的测试内；sourcePath、cacheDir、storePath 分别是 root 下 ui-plugin、cache、installed.json，均由本用例初始化。
 
-- [ ] **Step 5: 覆盖批准缺失、快照篡改和重装。** requested 两项正确但 approved 少一项，诊断必须是 plugin_permissions_not_approved。安装后修改 HTML，诊断必须是 plugin_content_digest_mismatch。仅重新生成 UI 授权请求，不自动写 approved。重装增加 UI 时再次确认；同样授权重装沿用既有权限覆盖逻辑；保留 disabled 和 installedAt。
-- [ ] **Step 6: 检查并验证。** `pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts src/installation/verify-ui.test.ts src/installation/cache.test.ts`；原有无 UI 插件的 requested 数组保持原语义。
+- [x] **Step 5: 覆盖批准缺失、快照篡改和重装。** requested 两项正确但 approved 少一项，诊断必须是 plugin_permissions_not_approved。安装后修改 HTML，诊断必须是 plugin_content_digest_mismatch。仅重新生成 UI 授权请求，不自动写 approved。重装增加 UI 时再次确认；同样授权重装沿用既有权限覆盖逻辑；保留 disabled 和 installedAt。
+- [x] **Step 6: 检查并验证。** `pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts src/installation/verify-ui.test.ts src/installation/cache.test.ts`；原有无 UI 插件的 requested 数组保持原语义。
 
 ## Task 6: 安装预览、列表和 Desktop 管理反馈
 
@@ -574,7 +574,7 @@ expect(verified.diagnostics[0]?.code).toBe("plugin_installation_permissions_mism
 
 **Interfaces:** 在 PluginInfo / PluginArchivePreview / PluginGitPreview 增加 `uiInventory?: PluginUiInventory`。原 inventory.ui 继续表示 UI manifest 文件数，不偷偷改变既有字段含义。Desktop 的 approval-required 返回增加相同的可选安全数量字段。
 
-- [ ] **Step 1: 写真实 ZIP 安装预览测试。** 在现有 Server 测试中复用 writeNativeArchive，不新增解压器或网络依赖。
+- [x] **Step 1: 写真实 ZIP 安装预览测试。** 在现有 Server 测试中复用 writeNativeArchive，不新增解压器或网络依赖。
 
 ```ts
 it("reports two UI components from one manifest and requests approval", async () => {
@@ -599,8 +599,8 @@ it("reports two UI components from one manifest and requests approval", async ()
 });
 ```
 
-- [ ] **Step 2: 执行失败测试。** `pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts -t "UI components"`。
-- [ ] **Step 3: 计算并传递明确数量。** 在 plugins 新增/导出一个纯 helper，放在 components/ui.ts 中，参数和产出如下；Server 预览和列表都调用它：
+- [x] **Step 2: 执行失败测试。** `pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts -t "UI components"`。
+- [x] **Step 3: 计算并传递明确数量。** 在 plugins 新增/导出一个纯 helper，放在 components/ui.ts 中，参数和产出如下；Server 预览和列表都调用它：
 
 ```ts
 export function summarizeNativeUi(
@@ -622,8 +622,8 @@ Plugin Service 对权限不一致的旧记录，在展示层使用 `manifest ? r
 
 新 UI 定义 / 大小诊断映射为 component_invalid、建议 reimport。安装成功、定义静态有效、工具 Host active 分别沿用已有事实；validatedComponentCount 不表示 UI 已运行。
 
-- [ ] **Step 4: 同步类型并验证透传。** Server / Client 的三个响应结构引用共享 PluginUiInventory，不再各写一份数量类型。Desktop approval-required 在 archive 和 Git 两条返回分支透传 uiInventory，但不传 HTML、entryPath、digest 或包源路径；selection-store 原有授权与摘要校验保持不变。
-- [ ] **Step 5: 增加中文反馈。** 在既有 groupPermissions 中识别 ui 分类；两项 suffix 显示为“显示插件的隔离交互界面”和“请求插件自身工具，执行前仍需确认”。安装预览显示组件数量；详情页显示“已校验 2 个 UI 定义”，A1 交付文案附“交互界面尚未接入”。null 显示“UI 定义数量暂不可确认”，不能显示 0 或“全部已加载”。
+- [x] **Step 4: 同步类型并验证透传。** Server / Client 的三个响应结构引用共享 PluginUiInventory，不再各写一份数量类型。Desktop approval-required 在 archive 和 Git 两条返回分支透传 uiInventory，但不传 HTML、entryPath、digest 或包源路径；selection-store 原有授权与摘要校验保持不变。
+- [x] **Step 5: 增加中文反馈。** 在既有 groupPermissions 中识别 ui 分类；两项 suffix 显示为“显示插件的隔离交互界面”和“请求插件自身工具，执行前仍需确认”。安装预览显示组件数量；详情页显示“已校验 2 个 UI 定义”，A1 交付文案附“交互界面尚未接入”。null 显示“UI 定义数量暂不可确认”，不能显示 0 或“全部已加载”。
 
 在现有 PluginManager 测试的 root / props / window.desktop setup 中加入：
 
@@ -643,8 +643,8 @@ it("explains UI permissions in the host approval dialog", async () => {
 });
 ```
 
-- [ ] **Step 6: 验证管理服务。** 有效预览/批准安装/列表的 uiInventory 一致；错误 ZIP 无提交残留；同一审批内容变更仍按原 archiveDigest / sourceDigest 拒绝安装。Git 共用 inspectCandidate 的计算，不访问真实网络；采用现有 Git fixture。保持现有权限分类和旧插件展示。
-- [ ] **Step 7: 聚焦检查。** 运行 Server 插件 service、Desktop main plugin-service、renderer plugin-manager 测试；运行 Client check-types、Server check-types、Desktop typecheck:node / typecheck:web。
+- [x] **Step 6: 验证管理服务。** 有效预览/批准安装/列表的 uiInventory 一致；错误 ZIP 无提交残留；同一审批内容变更仍按原 archiveDigest / sourceDigest 拒绝安装。Git 共用 inspectCandidate 的计算，不访问真实网络；采用现有 Git fixture。保持现有权限分类和旧插件展示。
+- [x] **Step 7: 聚焦检查。** 运行 Server 插件 service、Desktop main plugin-service、renderer plugin-manager 测试；运行 Client check-types、Server check-types、Desktop typecheck:node / typecheck:web。
 
 ## Task 7: 文档与 A1 交付检查
 
@@ -652,7 +652,7 @@ it("explains UI permissions in the host approval dialog", async () => {
 
 **Interfaces:** 作者得到与实际静态校验一致的 Native UI 示例和授权解释；A2 得到已验证的公共类型、metadata 与数量接口。
 
-- [ ] **Step 1: 作者指南新增 A1 状态说明。** 使用以下原文，位置紧邻当前组件支持范围：
+- [x] **Step 1: 作者指南新增 A1 状态说明。** 使用以下原文，位置紧邻当前组件支持范围：
 
 ```text
 UI 定义的静态校验、安装授权和元数据加载已经接入。
@@ -660,10 +660,10 @@ UI 定义的静态校验、安装授权和元数据加载已经接入。
 UI 定义有效不等于组件已经运行；交互能力由后续 Desktop 接入阶段交付。
 ```
 
-- [ ] **Step 2: 插入真实格式示例。** 从 Spec 第 7 节复制 Native manifest 和 UI manifest 的三方一致例子，明确 entry 相对于插件根、不复制 inputSchema、两项推导权限与文件/数量上限。未提供 ui-sdk 调用代码，不把 A3 的接口写成当前 API。
-- [ ] **Step 3: 执行 A1 合并检查。** UI-01 字段、数量、重复 ID；UI-02 文件、链接、边界；UI-03 两项授权与预览/安装/验证；UI-04 no-execute。每项记录实际测试文件与命令结果。
-- [ ] **Step 4: 验证文档。** 运行 `node scripts/check-docs.mjs`、`git diff --check`；逐个检查新 JSON 示例、公共导出、相对路径及文档状态。
-- [ ] **Step 5: 准备单阶段 diff。** 只包含本计划涉及的 A1 文件。实现的每个任务完成后保留可独立审阅的提交边界；本次写计划不执行代码提交。禁止把 QueryEngine、UI 实例、MCP Apps、frame 或新数据库表混入 A1。
+- [x] **Step 2: 插入真实格式示例。** 从 Spec 第 7 节复制 Native manifest 和 UI manifest 的三方一致例子，明确 entry 相对于插件根、不复制 inputSchema、两项推导权限与文件/数量上限。未提供 ui-sdk 调用代码，不把 A3 的接口写成当前 API。
+- [x] **Step 3: 执行 A1 合并检查。** UI-01 字段、数量、重复 ID；UI-02 文件、链接、边界；UI-03 两项授权与预览/安装/验证；UI-04 no-execute。每项记录实际测试文件与命令结果。
+- [x] **Step 4: 验证文档。** 运行 `node scripts/check-docs.mjs`、`git diff --check`；逐个检查新 JSON 示例、公共导出、相对路径及文档状态。
+- [x] **Step 5: 准备单阶段 diff。** 只包含本计划涉及的 A1 文件。实现的每个任务完成后保留可独立审阅的提交边界；本次写计划不执行代码提交。禁止把 QueryEngine、UI 实例、MCP Apps、frame 或新数据库表混入 A1。
 
 ## 4. 验证命令与当前环境备用路径
 
@@ -715,4 +715,4 @@ A2 在这些接口之上建立不可变 Run UI 定义视图和实例，不反向
 - manifest 文件数与组件数分开，不用缓存文件数假装组件数量。
 - 每个代码任务都有失败测试、最小实现和聚焦验证步骤。
 - 用户工作区的其他改动不会被本计划的实施或提交覆盖。
-- A1 完成以 UI-01–UI-04 的实际证据为准；当前仅创建计划，所有任务均保持未勾选。
+- A1 已按 UI-01–UI-04 完成验证；复核问题、构建准备和测试结果见 [A1 验收记录](../reviews/2026-10-03-native-plugin-ui-a1-verification.md)。

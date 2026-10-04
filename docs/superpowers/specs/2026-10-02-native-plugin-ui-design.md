@@ -1,10 +1,10 @@
 # 插件 UI 完整规格：工具结果卡片与会话侧栏
 
-> 状态：当前设计提案，尚未实现；用于后续评审和编写实施计划。
+> 状态：A1–A3 已完成。A4 提供正式参考插件、作者指南与真实 Electron 自动化验收，具体证据见 [A4 验证记录](../reviews/2026-10-04-native-plugin-ui-a4-verification.md)。用户人工验收仍待完成，不能宣称首版已发布。2026-10-04 用户明确排除转换诊断；本阶段不修改或删除转换功能。
 > 日期：2026-10-02
 > 产品：OpenHarness；仓库包名和原生插件目录继续使用 Vykor / `@vykor/*` / `.vykor-plugin`。
 > 首版交付：Desktop 中的 Native Plugin UI，包括自定义 HTML、工具结果卡片、会话侧栏、受控工具操作和持久状态恢复。
-> 本文中的新增类型、方法和路径均为拟实现接口；“当前事实”章节列出的能力才是已有实现。
+> 实现范围以各阶段验收记录为准；本文仍包含尚未实施的 UI 运行接口。
 
 ## 1. 目标与成功条件
 
@@ -51,9 +51,9 @@ CLI、TUI、普通 Web、IDE 和 Bot 在首版继续使用工具文字结果；�
 
 完整的 MCP Apps 接入和 Rome 式独立应用分别见第 22 节；它们不是首版验收的隐含要求。
 
-## 4. 当前事实与复用点
+## 4. 设计前事实与复用点
 
-以 2026-10-02 的工作区代码为依据。
+下表以 2026-10-02 设计前的工作区代码为依据；A1 交付后的能力见验收记录与当前作者指南。
 
 | 当前能力 | 代码位置 | 设计影响 |
 | --- | --- | --- |
@@ -436,6 +436,8 @@ activeActionRunId 只表示有一项执行中的操作，不是新的业务状�
 
 返回值为 `{ code, canRender, canInvoke }`。canInvoke 为 true 必须同时满足 canRender、实例 open、会话可变、Runtime 准备成功和没有未知结果保护。plugin-disabled、permission-missing、snapshot-missing、snapshot-changed、invalid-definition 的 canRender / canInvoke 都为 false。Session 归档或 Tool Host 暂不可用但快照仍有效时，可以 canRender=true、canInvoke=false，以只读方式查看既有数据。
 
+后台读取设置、安装记录、文档与准备 Runtime 的整段流程使用现有 operation gate（运行与维护互斥入口）。reload、卸载或全局维护持有维护入口时，UI 读取不能重新创建 Runtime；daemon 尚未就绪或已开始关闭时也不准备 Runtime，不返回可显示的 HTML。已进入的读取在关闭时排空并清理，Host 真正启动失败的精确快照只读回退仅适用于 daemon 正常运行期间。关闭流程先封住新入口、取消并等待活动 Run 结算，再等待既有读取与执行租约释放；动作执行租约仍覆盖权限等待、工具调用和原子结算。
+
 实例查找只在请求所属会话的 Parts 内进行，不扫描其他会话。缺少组件、工具归属或 UI 运行端造成的诊断只限制 UI 能力，不作为所有业务工具的准备失败；整体插件权限缺失仍遵守既有安装校验规则。
 
 | 可用性 | 行为 |
@@ -455,6 +457,7 @@ activeActionRunId 只表示有一项执行中的操作，不是新的业务状�
 - 业务数据和实例状态：源 Part 的 `metadata.pluginUi`。
 - 动作参数、执行状态与结果：UI Run metadata 和该 Run 的工具 Part。
 - 当前挂载、MessagePort、文档 URL、pending Promise：只在 Desktop 内存中。
+- 挂载撤销通知：复用 Session metadata 的可选 pluginUiGeneration 和现有 session.updated；只通知重新核验，不是 UI 业务状态或授权凭据，不保存窗口/挂载身份。
 - 未提交表单内容、排序、滚动位置：插件前端临时状态，首版不承诺跨关闭保存。
 - 不提供通用 `state.set()`、任意文件写入或浏览器 localStorage 持久接口。
 
@@ -482,6 +485,8 @@ rewind / 替换 transcript 删除源 Part 时，相关挂载立即失效；保�
 
 首版新增可选能力 `features.pluginUi = 1`。保持当前基础协议形状，使用现有 Part/Run metadata 和事件，因而该功能自身不要求提升基础协议版本。实现时若实际改变必填 Snapshot 字段或既有请求形状，必须按协议契约提升版本，不能用 feature 掩盖破坏性改动。
 
+A3 另用可选 `features.pluginUiLifecycle = 1` 标识后台即时撤销与管理结算已完整接线。Desktop 同时要求这两项及本地隔离文档能力；不把旧 A2 daemon 的 pluginUi=1 误认为已经具备页面撤销能力。缺少时保留原文字结果，不增加新的必填基础字段。
+
 所有路由通过现有 daemon 认证和 Origin 检查，输入由 `@vykor/protocol` 的 decoder 严格读取。
 
 | 方法与路径 | 输入 | 返回 | 说明 |
@@ -502,7 +507,7 @@ rewind / 替换 transcript 删除源 Part 时，相关挂载立即失效；保�
 
 ### 14.1 SDK 入口
 
-在现有插件包增加浏览器安全子路径 `@vykor/plugins/ui-sdk`。它只依赖浏览器 API 和共享协议的类型，不运行 Node 模块，不创建新的 npm 包，也不要求作者使用特定前端框架。
+在现有插件包增加浏览器安全子路径 `@vykor/plugins/ui-sdk`。它只依赖浏览器 API，以及浏览器安全的共享协议类型、常量和校验代码，不运行 Node 模块，不创建新的 npm 包，也不要求作者使用特定前端框架。
 
 拟提供：
 
@@ -785,7 +790,7 @@ UI 授权、定义加载、后台 Runtime 可用性和某窗口挂载状态分�
 
 实施阶段按所改包运行聚焦 Vitest、check-types 和浏览器构建；修改共享工具执行时必须覆盖既有参数复用、批次取消和权限回归。真实 Electron 验收是首版发布门槛，Node 单测不能替代。
 
-当前仅编写规格，文档验收运行 `pnpm check-docs`、`git diff --check`，并逐项检查类型、状态、来源、恢复规则和本地链接；不把未来 UI-01–UI-26 标为已通过。
+规格编写阶段只执行文档检查。A1 已有实现与测试证据；A2 的逐项后台回归与未验证范围见 [A2 验收记录](../reviews/2026-10-03-native-plugin-ui-a2-verification.md)。完整 UI-01–UI-26 仍是首版发布门槛，不把单阶段实现等同于完整交互 UI 已交付。
 
 ## 22. 后续阶段及明确边界
 
@@ -819,6 +824,8 @@ Native 的组件动作白名单不能直接当作 MCP Apps 工具 visibility，N
 
 ### 22.4 Claude Mods 与外部转换
 
+2026-10-04 范围修订：用户明确取消本阶段转换诊断。以下转换器要求保留为历史设计背景，不列入 A4 实施或验收；不修改、删除或宣布退役现有转换功能。Native UI 的样例和作者文档独立交付。
+
 首版 Native UI 与 Claude Mods 不是代码级兼容。Claude Mod 可以改写宿主内部事件和绘制组件，这些行为没有本规格中的等价入口。
 
 Converter 必须把 `hooks.json.modules`、相关代码入口及内部 UI 能力明确标为 unsupported，给出“需要按 Native UI 接口重新编写”的原因；不得只转换普通 Skill 后报告整个插件完全可用。
@@ -834,13 +841,17 @@ Converter 必须把 `hooks.json.modules`、相关代码入口及内部 UI 能力
 | A1：定义与授权 | UI 文件校验、加载结果、摘要、安装授权、诊断 | UI-01–UI-04 可独立验证，尚不执行前端 |
 | A2：实例与工具操作 | 精确工具归属、可信实例、共享受检执行、UI Run、防重放、状态恢复、API / Client | UI-05–UI-16 通过，无界面也可验证全部后台事实 |
 | A3：Desktop 与 SDK | 专用文档协议、隔离 frame、消息接口、卡片、侧栏、宿主确认 | UI-17–UI-23 通过，包括真实 Electron 隔离 |
-| A4：参考插件与交付 | 样例、开发指南、Converter 诊断、错误文案、人工验收 | UI-24–UI-26 通过，首版可发布 |
+| A4：参考插件与交付 | 样例、开发指南、错误文案、真实桌面自动化验证；用户人工验收另行记录 | 转换诊断按用户要求排除；人工验收完成后再决定首版发布 |
 
 feature `pluginUi` 只在完整后台能力接线后公布；Desktop 还需检测本地隔离文档能力。缺任一端能力时不开放交互入口，继续显示原工具结果，不试探其他请求形状。
 
-第一版不创建实施代码、不改写现有工具行为、不把规格示例当作已可运行的 API。最终发布需要全部首版验收证据，而不是仅凭 feature 字段或插件数量证明完成。
+本规格区分拟议接口与已验证实现；未交付的交互接口不能宣传为当前 API。最终发布需要全部首版验收证据，而不是仅凭 feature 字段或插件数量证明完成。
 
-当前可执行入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)。工具真实归属和可信实例的完整验收属于 A2，不能用 A1 静态 schema 测试代替。
+已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)、[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)、[A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)及[A4 参考插件与作者指南实施计划](../plans/2026-10-04-native-plugin-ui-a4.md)。A3 的真实 Native Tool、SQLite、Daemon/Hono/Client、Electron 与双窗口证据见验收记录；A4 的自动化证据与未完成的用户人工验收单独记录。
+
+A3的具体接线和测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)，完整阶段证据见[真实验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。后端只在生命周期完整接线时声明可选 `pluginUiLifecycle=1`；旧能力和精确快照不可用时仍保留原结果，不扩大当前证据到尚未完成的 A4。
+
+A1 实际交付与验证：[2026-10-03 验收记录](../reviews/2026-10-03-native-plugin-ui-a1-verification.md)。
 
 ## 24. 已确定的取舍与调研依据
 
