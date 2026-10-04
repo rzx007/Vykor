@@ -2,7 +2,7 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含一个 Skill、一个 Plugin Agent 和一个真正运行在独立 Node 进程中的 Tool，没有外部服务或运行依赖。SDK 类型尚未作为独立 npm 产品发布。
+本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含 Skill、Plugin Agent、独立 Node 工具和使用公开浏览器 SDK 的单文件 UI，没有外部服务或安装后的运行依赖。SDK 尚未作为独立 npm 产品发布。
 
 ## 从样例开始
 
@@ -10,7 +10,7 @@
 
 ```sh
 vk plugin validate ./examples/plugins/text-inspector
-vk plugin link ./examples/plugins/text-inspector
+vk plugin link ./examples/plugins/text-inspector --approve ui:render --approve ui:invoke-own-tools
 vk plugin list --verbose
 vk plugin details example.text-inspector
 ```
@@ -40,7 +40,7 @@ tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 正式安装将源目录复制到用户级不可变快照，后续源目录修改不会改变正在运行的版本：
 
 ```sh
-vk plugin install-local ./examples/plugins/text-inspector
+vk plugin install-local ./examples/plugins/text-inspector --approve ui:render --approve ui:invoke-own-tools
 vk plugin disable example.text-inspector
 vk plugin enable example.text-inspector
 vk plugin uninstall example.text-inspector
@@ -78,11 +78,12 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
   "schemaVersion": 1,
   "id": "example.text-inspector",
   "name": "text-inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "components": {
     "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
-    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }]
+    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }],
+    "ui": ["./ui/manifest.json"]
   },
   "runtime": { "engine": "node", "isolation": "process" }
 }
@@ -95,7 +96,7 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 ## UI 定义与后台工具操作
 
 UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
-仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。Desktop 同时检查 backend 的 `pluginUi=1`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。证据和平台边界见 [A3 验证记录](superpowers/reviews/2026-10-03-native-plugin-ui-a3-verification.md)。正式首版样例及用户人工验收属于 A4，不能据此声称已经发布。
+仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。Desktop 同时检查 backend 的 `pluginUi=1`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。A4 的正式参考插件见 [文本检查助手](../examples/plugins/text-inspector/README.md)，自动化桌面证据和未验证范围见 [A4 验证记录](superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)。自动化验证不等同用户人工验收或正式发布。
 下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
 
 Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
@@ -154,7 +155,55 @@ return {
 
 `dismiss` 只保存关闭状态，和取消运行分开；已经运行的动作不能通过 dismiss 撤销。当前会话忙、revision 过期、归档或实例终态时不能提交新动作。每次读取文档和动作准入都会核对实际安装、授权、启用状态和摘要；精确静态快照在 Native Host 暂不可用时可只读返回文档，但没有可调用动作。
 
-feature `pluginUi: 1` 只表示 daemon 已装配这些后台接口，不表示 Desktop 交互界面已经交付。完整范围与证据见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)和[A2 验收记录](./superpowers/reviews/2026-10-03-native-plugin-ui-a2-verification.md)。
+feature `pluginUi: 1` 只表示 daemon 已装配这些后台接口，不代表当前客户端能安全显示 UI。Desktop 还要求 `pluginUiLifecycle: 1` 和本地隔离能力；CLI/TUI 继续读取原文字，不等待界面。
+
+### 编写浏览器界面
+
+UI 的入口、数据和操作走三条明确路径：manifest 声明组件及动作；Native 工具返回 `metadata.ui`，宿主保存到原工具结果；HTML 通过 SDK 读取快照，请求已声明动作。确认弹窗在主界面中，确认后才由后台校验参数并调用工具；结果保存在 SQLite，经过会话更新通知返回页面。
+
+`@vykor/plugins/ui-sdk` 和 Node 工具的类型入口 `@vykor/plugins/sdk` 不同：前者是需要提前打包的浏览器运行代码，后者仅用于工具类型检查。
+
+```js
+import { createPluginUiClient } from "@vykor/plugins/ui-sdk";
+
+async function start() {
+  const client = await createPluginUiClient();
+  const off = client.onSnapshot(snapshot => {
+    // 只用 textContent、value 等安全方式渲染插件自己的 JSON 数据。
+    // snapshot.readOnly 时禁用操作；用 revision 判断是否是新结果。
+    render(snapshot);
+  });
+  button.addEventListener("click", async () => {
+    try {
+      await client.requestAction("preview", { text, selected });
+      // 回执可能仅表示已受理，完成状态应以 onSnapshot 通知为准。
+    } catch (error) {
+      showError(error.code);
+    }
+  });
+  window.addEventListener("pagehide", () => { off(); client.dispose(); }, { once: true });
+}
+start();
+```
+
+以上是接口示意，`render`、`button`、`text` 等由插件实现；可直接运行的完整代码在参考插件 `ui/panel.mjs`。
+
+SDK 提供：
+
+| 方法 | 实际用途 |
+| --- | --- |
+| `getSnapshot()` / `onSnapshot(listener)` | 读取当前状态 / 立即接收当前状态并订阅更新 |
+| `requestAction(actionId, args)` | 请求宿主确认后执行本组件声明的工具；不是任意工具接口 |
+| `openSidebar()` | 把同一实例移到会话侧栏，不新建业务实例 |
+| `resize(height)` | 请求卡片高度，宿主限制在 160–640 px |
+| `dismiss()` | 经宿主确认结束交互，不撤销已执行的工具 |
+| `dispose()` | 页面卸载时关闭通信，不改变业务状态 |
+
+`onSnapshot` 返回取消订阅函数；快照还含主题、语言、显示位置、`activeAction` 和 `lastAction`。动作受理不代表完成，不能在收到 pending/running 回执时报告成功。unknown 表示工具可能已产生效果但结果不可确认，不自动重试。取消确认会返回 `plugin_ui_user_cancelled`；版本冲突时重新读取结果，让用户重新选择。
+
+先用已有构建工具将 HTML、CSS 和 SDK 合成单文件，再提交/打包生成文件。安装和校验不会执行构建。参考命令：`node examples/plugins/text-inspector/scripts/build-ui.mjs`；脚本会拒绝 Node 依赖，不新增样例运行依赖。
+
+UI 没有父页面 DOM、Node、preload、网络、文件、剪贴板或任意 IPC 权限；外部 script、CSS、字体和嵌套 frame 也不可用。不要从 CDN 加载资源，不要手写 MessagePort 协议，不要用 `innerHTML` 渲染输入。超出 UI 或动作参数限制时保留普通文字路径。完整范围见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)。
 
 ## Node Tool 的公开接口
 
@@ -335,4 +384,4 @@ pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.tes
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。
 
-Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。UI 已实现静态定义、可信持久实例和后台动作执行；Desktop 隔离文档与交互界面尚未实现。UI 阶段范围见 [Native Plugin UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。Native UI 已接入后台、Desktop 隔离文档、公开浏览器 SDK 与参考插件；是否可用仍取决于客户端、后台、授权和当前安装快照。A4 不增加转换诊断，也不修改或删除现有转换器。UI 阶段范围见 [Native Plugin UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。

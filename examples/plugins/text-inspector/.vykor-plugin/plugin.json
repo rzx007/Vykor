@@ -2,12 +2,13 @@
   "schemaVersion": 1,
   "id": "example.text-inspector",
   "name": "text-inspector",
-  "version": "1.0.0",
-  "description": "检查传入文本的行首制表符和行尾空白。",
+  "version": "1.1.0",
+  "description": "检查文本格式问题，通过交互界面选择修复并预览；不写入文件。",
   "components": {
     "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
-    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }]
+    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }],
+    "ui": ["./ui/manifest.json"]
   },
   "permissions": {},
   "runtime": { "engine": "node", "isolation": "process" }

@@ -103,6 +103,7 @@ it("can dismiss without an iframe, but never submits before or after cancelled c
   await click("取消交互")
   expect(document.body.textContent).toContain("example.ui")
   expect(document.body.textContent).toContain("取消此次交互")
+  await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("返回"))
   expect(api.dismiss).not.toHaveBeenCalled()
   await click("返回")
   expect(api.dismiss).not.toHaveBeenCalled()

@@ -1,6 +1,6 @@
 # 插件 UI 完整规格：工具结果卡片与会话侧栏
 
-> 状态：A1 静态定义/授权、A2 持久实例/动作，以及 A3 Desktop隔离文档、SDK、卡片/侧栏、确认和撤销已实现；A3通过实际双窗口 Native/SQLite Electron验证及一次限定安全审查。具体证据和平台边界见 [A3验收记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。A4正式参考插件、Converter交付与用户人工验收尚未交付，不能宣称整个首版已发布。
+> 状态：A1–A3 已完成。A4 提供正式参考插件、作者指南与真实 Electron 自动化验收，具体证据见 [A4 验证记录](../reviews/2026-10-04-native-plugin-ui-a4-verification.md)。用户人工验收仍待完成，不能宣称首版已发布。2026-10-04 用户明确排除转换诊断；本阶段不修改或删除转换功能。
 > 日期：2026-10-02
 > 产品：OpenHarness；仓库包名和原生插件目录继续使用 Vykor / `@vykor/*` / `.vykor-plugin`。
 > 首版交付：Desktop 中的 Native Plugin UI，包括自定义 HTML、工具结果卡片、会话侧栏、受控工具操作和持久状态恢复。
@@ -824,6 +824,8 @@ Native 的组件动作白名单不能直接当作 MCP Apps 工具 visibility，N
 
 ### 22.4 Claude Mods 与外部转换
 
+2026-10-04 范围修订：用户明确取消本阶段转换诊断。以下转换器要求保留为历史设计背景，不列入 A4 实施或验收；不修改、删除或宣布退役现有转换功能。Native UI 的样例和作者文档独立交付。
+
 首版 Native UI 与 Claude Mods 不是代码级兼容。Claude Mod 可以改写宿主内部事件和绘制组件，这些行为没有本规格中的等价入口。
 
 Converter 必须把 `hooks.json.modules`、相关代码入口及内部 UI 能力明确标为 unsupported，给出“需要按 Native UI 接口重新编写”的原因；不得只转换普通 Skill 后报告整个插件完全可用。
@@ -839,13 +841,13 @@ Converter 必须把 `hooks.json.modules`、相关代码入口及内部 UI 能力
 | A1：定义与授权 | UI 文件校验、加载结果、摘要、安装授权、诊断 | UI-01–UI-04 可独立验证，尚不执行前端 |
 | A2：实例与工具操作 | 精确工具归属、可信实例、共享受检执行、UI Run、防重放、状态恢复、API / Client | UI-05–UI-16 通过，无界面也可验证全部后台事实 |
 | A3：Desktop 与 SDK | 专用文档协议、隔离 frame、消息接口、卡片、侧栏、宿主确认 | UI-17–UI-23 通过，包括真实 Electron 隔离 |
-| A4：参考插件与交付 | 样例、开发指南、Converter 诊断、错误文案、人工验收 | UI-24–UI-26 通过，首版可发布 |
+| A4：参考插件与交付 | 样例、开发指南、错误文案、真实桌面自动化验证；用户人工验收另行记录 | 转换诊断按用户要求排除；人工验收完成后再决定首版发布 |
 
 feature `pluginUi` 只在完整后台能力接线后公布；Desktop 还需检测本地隔离文档能力。缺任一端能力时不开放交互入口，继续显示原工具结果，不试探其他请求形状。
 
 本规格区分拟议接口与已验证实现；未交付的交互接口不能宣传为当前 API。最终发布需要全部首版验收证据，而不是仅凭 feature 字段或插件数量证明完成。
 
-已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)、[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)及[A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)。A3的真实 Native Tool、SQLite、Daemon/Hono/Client、Electron与双窗口证据见验收记录；A4正式参考插件和首版用户人工验收尚未交付。
+已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)、[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)、[A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)及[A4 参考插件与作者指南实施计划](../plans/2026-10-04-native-plugin-ui-a4.md)。A3 的真实 Native Tool、SQLite、Daemon/Hono/Client、Electron 与双窗口证据见验收记录；A4 的自动化证据与未完成的用户人工验收单独记录。
 
 A3的具体接线和测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)，完整阶段证据见[真实验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。后端只在生命周期完整接线时声明可选 `pluginUiLifecycle=1`；旧能力和精确快照不可用时仍保留原结果，不扩大当前证据到尚未完成的 A4。
 

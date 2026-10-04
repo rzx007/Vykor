@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +24,7 @@ export function PluginUiConfirmation({
   details: PluginUiConfirmationDetails | null
   decide(accepted: boolean): void
 }) {
+  const cancelButton = useRef<HTMLButtonElement>(null)
   return (
     <AlertDialog
       open={Boolean(details)}
@@ -30,7 +32,7 @@ export function PluginUiConfirmation({
         if (!open) decide(false)
       }}
     >
-      <AlertDialogContent className="max-h-[80vh] overflow-y-auto">
+      <AlertDialogContent initialFocus={cancelButton} className="max-h-[80vh] overflow-y-auto">
         <AlertDialogHeader>
           <AlertDialogTitle>{details?.dismiss ? "取消此次交互" : "确认插件操作"}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -54,7 +56,9 @@ export function PluginUiConfirmation({
           )}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => decide(false)}>返回</AlertDialogCancel>
+          <AlertDialogCancel ref={cancelButton} onClick={() => decide(false)}>
+            返回
+          </AlertDialogCancel>
           <AlertDialogAction onClick={() => decide(true)}>
             {details?.dismiss ? "确认取消" : "确认执行"}
           </AlertDialogAction>

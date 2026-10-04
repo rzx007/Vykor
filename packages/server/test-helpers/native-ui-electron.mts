@@ -9,10 +9,13 @@ import { VykorHttpServer } from "../src/http/server.js"
 import { createDefaultPluginService } from "../src/application/default-services/plugin-service.js"
 
 const workspace = process.env.VYKOR_UI_TEST_ROOT!
+const reference = process.env.VYKOR_UI_TEST_REFERENCE === "1"
+const pluginId = reference ? "example.text-inspector" : "test.ui-electron"
 process.send?.({ stage: "installing" })
 const root = mkdtempSync(join(workspace, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/native-"))
 process.env.VYKOR_CONFIG_DIR = join(root, "config")
-const source = join(root, "source")
+const source = reference ? join(workspace, "examples/plugins/text-inspector") : join(root, "source")
+if (!reference) {
 for (const folder of [".vykor-plugin", "ui", "tools"]) mkdirSync(join(source, folder), { recursive: true })
 const assets = join(workspace, "tests/browser-plugin-ui-sdk/dist/assets")
 const sdk = readFileSync(join(assets, readdirSync(assets).find(name => name.endsWith(".js"))!), "utf8").replace(/<\/script/gi, "<\\/script")
@@ -48,6 +51,7 @@ writeFileSync(join(source, "tools/index.mjs"), `
       } }
   ]; }
 `)
+}
 await installLocalNativePlugin({ sourcePath: source, cwd: root, scope: "user", approvedPermissions: ["ui:render", "ui:invoke-own-tools"] })
 process.send?.({ stage: "assembling" })
 const settings = { apiFormat: "openai" as const, model: "local-fixture", maxTurns: 3,
@@ -61,7 +65,8 @@ const server = new VykorHttpServer({ store, token, settings, logger: () => {},
     capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
     client: { async *streamMessage() {
       if (++modelCalls === 1) {
-        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "source-call", name: "NativeInspect", input: {} } }
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "source-call",
+          name: reference ? "TextInspectorCheck" : "NativeInspect", input: reference ? { text: "ok  \n\titem\n" } : {} } }
         yield { type: "complete", stopReason: "tool_use" }
       } else { yield { type: "text_delta", delta: "Done" }; yield { type: "complete", stopReason: "end_turn" } }
     } },
@@ -71,7 +76,7 @@ await server.application.ready()
 process.send?.({ stage: "source model" })
 const session = store.sessions.create({ id: "session", cwd: root, model: "local-fixture", metadata: { runtime: { model: "local-fixture" } } })
 const admitted = await server.application.interactions.admitPrompt(session.id, { items: [
-  { type: "text", text: "Inspect" }, { type: "capability", kind: "plugin", pluginId: "test.ui-electron", displayName: "Electron fixture" },
+  { type: "text", text: "Inspect" }, { type: "capability", kind: "plugin", pluginId, displayName: "Electron fixture" },
 ] })
 await server.application.runControl.waitForRuns([admitted.run!.id])
 process.send?.({ stage: "listening" })

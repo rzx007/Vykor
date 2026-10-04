@@ -15,7 +15,7 @@ let stderr = "";
 let stdout = "";
 child.stdout.on("data", chunk => { stdout += chunk; process.stdout.write(chunk); });
 child.stderr.on("data", chunk => { stderr += chunk; });
-const timeout = setTimeout(() => { child.kill(); process.exitCode = 2; }, 90_000);
+const timeout = setTimeout(() => { child.kill(); process.exitCode = 2; }, 130_000);
 child.on("error", error => { clearTimeout(timeout); console.error(error); process.exitCode = 1; });
 child.on("close", code => {
   clearTimeout(timeout);
