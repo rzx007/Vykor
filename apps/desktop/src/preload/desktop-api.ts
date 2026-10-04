@@ -26,16 +26,25 @@ const invoke = <C extends IpcChannel>(
 export const desktopAPI = {
   pluginUi: {
     capabilities: () => invoke(IpcChannels.pluginUiCapabilities),
-    mount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiMount]["args"][0]) => invoke(IpcChannels.pluginUiMount, input),
-    getState: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetState]["args"][0]) => invoke(IpcChannels.pluginUiGetState, input),
-    invokeAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiInvokeAction]["args"][0]) => invoke(IpcChannels.pluginUiInvokeAction, input),
-    getAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetAction]["args"][0]) => invoke(IpcChannels.pluginUiGetAction, input),
-    dismiss: (input: IpcInvokeMap[typeof IpcChannels.pluginUiDismiss]["args"][0]) => invoke(IpcChannels.pluginUiDismiss, input),
-    unmount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiUnmount]["args"][0]) => invoke(IpcChannels.pluginUiUnmount, input),
+    mount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiMount]["args"][0]) =>
+      invoke(IpcChannels.pluginUiMount, input),
+    getState: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetState]["args"][0]) =>
+      invoke(IpcChannels.pluginUiGetState, input),
+    invokeAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiInvokeAction]["args"][0]) =>
+      invoke(IpcChannels.pluginUiInvokeAction, input),
+    getAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetAction]["args"][0]) =>
+      invoke(IpcChannels.pluginUiGetAction, input),
+    dismiss: (input: IpcInvokeMap[typeof IpcChannels.pluginUiDismiss]["args"][0]) =>
+      invoke(IpcChannels.pluginUiDismiss, input),
+    unmount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiUnmount]["args"][0]) =>
+      invoke(IpcChannels.pluginUiUnmount, input),
     onRevoked: (listener: (event: { mountId: string }) => void) => {
-      const wrapped = (_event: Electron.IpcRendererEvent, value: { mountId: string }): void => listener(value)
+      const wrapped = (_event: Electron.IpcRendererEvent, value: { mountId: string }): void =>
+        listener(value)
       ipcRenderer.on(IpcEvents.pluginUiRevoked, wrapped)
-      return () => { ipcRenderer.removeListener(IpcEvents.pluginUiRevoked, wrapped) }
+      return () => {
+        ipcRenderer.removeListener(IpcEvents.pluginUiRevoked, wrapped)
+      }
     },
   },
   activity: {
@@ -147,6 +156,8 @@ export const desktopAPI = {
   clipboard: {
     readText: () => invoke(IpcChannels.clipboardReadText),
     writeText: (text: string) => invoke(IpcChannels.clipboardWriteText, text),
+    showTextMenu: (input: IpcInvokeMap[typeof IpcChannels.clipboardShowTextMenu]["args"][0]) =>
+      invoke(IpcChannels.clipboardShowTextMenu, input),
   },
   attachments: {
     pickFiles: () => invoke(IpcChannels.attachmentPickFiles),

@@ -1,22 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
+import { Copy } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent } from "@renderer/components/ui/popover"
 import { useMainLayout } from "../layout/main-layout/main-layout-context"
-
-function endpointElement(node: Node | null): Element | null {
-  return node instanceof Element ? node : (node?.parentElement ?? null)
-}
-function isInside(node: Node | null, viewport: HTMLElement): boolean {
-  let element = endpointElement(node)
-  while (element) {
-    if (element.closest('textarea,input,[contenteditable]:not([contenteditable="false"])'))
-      return false
-    if (viewport.contains(element)) return true
-    const root = element.getRootNode()
-    element = root instanceof ShadowRoot ? root.host : null
-  }
-  return false
-}
+import {
+  copyConversationText,
+  readConversationSelection,
+} from "../conversation-page/conversation-text-actions"
 
 export function SideChatSelectionActions({
   sourceId,
@@ -36,29 +26,22 @@ export function SideChatSelectionActions({
   useEffect(() => {
     const read = (): void => {
       if (gesture.current.dragging) return
-      const selected = window.getSelection()
       const viewport = viewportRef.current
-      if (
-        !sourceId ||
-        !viewport ||
-        !selected ||
-        !selected.rangeCount ||
-        !selected.toString().trim() ||
-        !isInside(selected.anchorNode, viewport) ||
-        !isInside(selected.focusNode, viewport)
-      ) {
+      const selected = viewport ? readConversationSelection(viewport) : null
+      if (!sourceId || !viewport || !selected || !selected.text.trim()) {
         setSelection(null)
         return
       }
       setSelection({
         sourceId,
-        text: selected.toString(),
-        rect: selected.getRangeAt(0).getBoundingClientRect(),
+        text: selected.text,
+        rect: selected.range.getBoundingClientRect(),
       })
     }
     const down = (event: MouseEvent): void => {
       gesture.current.releaseClick = false
-      gesture.current.dragging = !!viewportRef.current?.contains(event.target as Node)
+      gesture.current.dragging =
+        event.button === 0 && !!viewportRef.current?.contains(event.target as Node)
     }
     const up = (): void => {
       if (!gesture.current.dragging) return
@@ -69,15 +52,20 @@ export function SideChatSelectionActions({
     const key = (event: KeyboardEvent): void => {
       if (event.key === "Escape") setSelection(null)
     }
+    const contextMenu = (): void => {
+      setSelection(null)
+    }
     document.addEventListener("mousedown", down, true)
     document.addEventListener("mouseup", up)
     document.addEventListener("selectionchange", read)
     document.addEventListener("keydown", key)
+    document.addEventListener("contextmenu", contextMenu, true)
     return () => {
       document.removeEventListener("mousedown", down, true)
       document.removeEventListener("mouseup", up)
       document.removeEventListener("selectionchange", read)
       document.removeEventListener("keydown", key)
+      document.removeEventListener("contextmenu", contextMenu, true)
     }
   }, [sourceId, viewportRef])
   if (!sourceId || !selection || selection.sourceId !== sourceId) return null
@@ -100,8 +88,23 @@ export function SideChatSelectionActions({
         align="start"
         initialFocus={false}
         finalFocus={false}
-        className="w-auto p-1"
+        className="w-auto flex-row items-center gap-0.5 p-1"
       >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="复制选中内容"
+          title="复制选中内容"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            void copyConversationText(selection.text).then((copied) => {
+              if (copied) setSelection((current) => (current === selection ? null : current))
+            })
+          }}
+        >
+          <Copy />
+        </Button>
         <Button
           variant="ghost"
           size="sm"

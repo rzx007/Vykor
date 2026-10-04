@@ -76,6 +76,7 @@ import { ConversationPreviewRail } from "./transcript/conversation-preview-rail"
 import { ConversationScrollHold } from "./conversation-scroll-hold"
 import { ConversationTranscript } from "./transcript/transcript"
 import { useShowReasoning } from "./use-show-reasoning"
+import { openConversationTextMenu } from "./conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
 import {
   resolveScrollerAgentStatus,
@@ -610,7 +611,11 @@ function ConversationPane({
                   sessionView && "animate-in duration-200 fade-in-0 motion-reduce:animate-none"
                 )}
               >
-                <MessageScrollerViewport ref={messageViewportRef} className="overflow-x-hidden">
+                <MessageScrollerViewport
+                  ref={messageViewportRef}
+                  onContextMenu={(event) => void openConversationTextMenu(event)}
+                  className="overflow-x-hidden"
+                >
                   <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
                     {openingSession && !sessionView ? null : (
                       <ConversationTranscript

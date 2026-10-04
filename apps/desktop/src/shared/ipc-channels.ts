@@ -1,3 +1,4 @@
+import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type {
   CreateDesktopSessionInput,
   CheckoutDesktopProjectBranchInput,
@@ -277,6 +278,7 @@ export const IpcChannels = {
 
   clipboardReadText: "clipboard:read-text",
   clipboardWriteText: "clipboard:write-text",
+  clipboardShowTextMenu: "clipboard:show-text-menu",
 
   terminalCreate: "terminal:create",
   terminalWrite: "terminal:write",
@@ -415,12 +417,30 @@ export interface PetState {
 }
 
 export interface IpcInvokeMap {
-  [IpcChannels.pluginUiCapabilities]: { args: []; result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>> }
-  [IpcChannels.pluginUiMount]: { args: Parameters<DesktopPluginUiAPI["mount"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["mount"]>> }
-  [IpcChannels.pluginUiGetState]: { args: Parameters<DesktopPluginUiAPI["getState"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["getState"]>> }
-  [IpcChannels.pluginUiInvokeAction]: { args: Parameters<DesktopPluginUiAPI["invokeAction"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["invokeAction"]>> }
-  [IpcChannels.pluginUiGetAction]: { args: Parameters<DesktopPluginUiAPI["getAction"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>> }
-  [IpcChannels.pluginUiDismiss]: { args: Parameters<DesktopPluginUiAPI["dismiss"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["dismiss"]>> }
+  [IpcChannels.pluginUiCapabilities]: {
+    args: []
+    result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>>
+  }
+  [IpcChannels.pluginUiMount]: {
+    args: Parameters<DesktopPluginUiAPI["mount"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["mount"]>>
+  }
+  [IpcChannels.pluginUiGetState]: {
+    args: Parameters<DesktopPluginUiAPI["getState"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["getState"]>>
+  }
+  [IpcChannels.pluginUiInvokeAction]: {
+    args: Parameters<DesktopPluginUiAPI["invokeAction"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["invokeAction"]>>
+  }
+  [IpcChannels.pluginUiGetAction]: {
+    args: Parameters<DesktopPluginUiAPI["getAction"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>>
+  }
+  [IpcChannels.pluginUiDismiss]: {
+    args: Parameters<DesktopPluginUiAPI["dismiss"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["dismiss"]>>
+  }
   [IpcChannels.pluginUiUnmount]: { args: Parameters<DesktopPluginUiAPI["unmount"]>; result: void }
   [IpcChannels.appGetInfo]: { args: []; result: DesktopAppInfo }
   [IpcChannels.appGetPlatform]: { args: []; result: PlatformInfo }
@@ -815,6 +835,10 @@ export interface IpcInvokeMap {
   [IpcChannels.clipboardWriteText]: {
     args: [text: string]
     result: void
+  }
+  [IpcChannels.clipboardShowTextMenu]: {
+    args: [input: DesktopTextMenuInput]
+    result: DesktopTextMenuAction
   }
 
   [IpcChannels.terminalCreate]: {

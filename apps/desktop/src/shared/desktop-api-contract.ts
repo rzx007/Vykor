@@ -1,3 +1,4 @@
+import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type {
   DesktopAppInfo,
   PetState,
@@ -252,6 +253,7 @@ export type DesktopAPI = {
   clipboard: {
     readText: () => Promise<string>
     writeText: (text: string) => Promise<void>
+    showTextMenu: (input: DesktopTextMenuInput) => Promise<DesktopTextMenuAction>
   }
   attachments: {
     pickFiles: () => Promise<DesktopAttachmentCandidate[]>

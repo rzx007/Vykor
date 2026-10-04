@@ -17,6 +17,7 @@ import type { ComposerSkill } from "./composer-types"
 import { ResourceMentionNode } from "./resource-mention-node"
 import { SkillMentionNode } from "./skill-mention-node"
 import { PluginMentionNode } from "./plugin-mention-node"
+import { openComposerTextMenu } from "../conversation-text-actions"
 
 export type { ComposerSkill } from "./composer-types"
 export { composerDocumentFromLexical, restoreComposerDocument } from "./composer-lexical-document"
@@ -99,6 +100,7 @@ export function RichPromptInput({
               id={id}
               aria-label="输入对话内容"
               aria-multiline="true"
+              onContextMenu={(event) => void openComposerTextMenu(event, disabled)}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               className={cn(
