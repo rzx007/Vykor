@@ -102,7 +102,10 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
               <Settings2 />
             </Button>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button />} aria-label="添加扩展">
+              <DropdownMenuTrigger
+                render={<Button className="rounded-full" />}
+                aria-label="添加扩展"
+              >
                 添加
                 <ChevronDown data-icon="inline-end" />
               </DropdownMenuTrigger>

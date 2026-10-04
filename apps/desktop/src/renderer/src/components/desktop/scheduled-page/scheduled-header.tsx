@@ -6,6 +6,7 @@ import { Input } from "@renderer/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu"
@@ -77,30 +78,26 @@ export function ScheduledHeader({
           >
             <RefreshCw className={cn("size-4", loading && "animate-spin")} />
           </Button>
-          <ButtonGroup className="overflow-hidden rounded-full bg-foreground">
-            <Button
-              size="sm"
-              onClick={onStartConversation}
-              className="h-8 rounded-none! border-0 bg-transparent px-3 text-xs font-medium text-background hover:bg-white/10"
-            >
-              创建
-            </Button>
+          <ButtonGroup className="overflow-hidden rounded-full">
+            <Button onClick={onStartConversation}>创建</Button>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button size="icon-sm" title="更多创建方式" />}
-                className="h-8 w-8 rounded-none! border-0 bg-transparent text-background hover:bg-white/10"
+                render={<Button size="icon" title="更多创建方式" />}
+                aria-label="更多创建方式"
               >
                 <ChevronDown data-icon="inline-end" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={6} className="min-w-44">
-                <DropdownMenuItem onClick={onCreateManual}>
-                  <PenLine />
-                  手动创建
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onStartConversation}>
-                  <Bot />
-                  在对话中安排
-                </DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={onCreateManual}>
+                    <PenLine />
+                    手动创建
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onStartConversation}>
+                    <Bot />
+                    在对话中安排
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </ButtonGroup>
