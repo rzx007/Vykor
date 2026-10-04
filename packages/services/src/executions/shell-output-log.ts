@@ -1,5 +1,4 @@
 import { randomUUID, createHash } from "node:crypto";
-import { spawn } from "node:child_process";
 import {
   constants, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync,
   readFileSync, readSync, readdirSync, rmSync, statSync, writeFileSync,
@@ -248,43 +247,43 @@ async function searchLog(directory: string, input: Parameters<ShellOutputLogHost
     return { status: "invalid_pattern", matches: [], truncated: false };
   }
   if (input.signal?.aborted) return { status: "timeout", matches: [], truncated: true };
-  return await new Promise((resolveResult) => {
-    let output = Buffer.alloc(0);
-    let error = "";
-    let status: ShellOutputLogSearchResult["status"] | undefined;
-    const args = ["--no-config", "--text", "--no-heading", "--color", "never", "--byte-offset", "--only-matching"];
-    if (!input.caseSensitive) args.push("--ignore-case");
-    args.push("-e", input.pattern, "--", found.path);
-    let child: ReturnType<typeof spawn>;
-    try { child = spawn("rg", args, { windowsHide: true }); }
-    catch { resolveResult({ status: "search_unavailable", matches: [], truncated: false }); return; }
-    const timer = setTimeout(() => { status = "timeout"; child.kill(); }, 5000);
-    const abort = () => { status = "timeout"; child.kill(); };
-    input.signal?.addEventListener("abort", abort, { once: true });
-    child.stdout?.on("data", (chunk: Buffer) => {
-      if (status) return;
-      if (output.length + chunk.length > 32 * 1024) { status = "limit"; child.kill(); return; }
-      output = Buffer.concat([output, chunk]);
-    });
-    child.stderr?.on("data", (chunk: Buffer) => { error += chunk.toString("utf8").slice(0, 2048 - error.length); });
-    child.on("error", () => { status = "search_unavailable"; });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      input.signal?.removeEventListener("abort", abort);
-      const matches: ShellOutputLogSearchResult["matches"] = [];
-      const lines = output.toString("utf8").split(/\r?\n/);
-      if (status && lines.at(-1)) lines.pop();
-      for (const line of lines) {
-        const match = /^(\d+):(.*)$/.exec(line);
-        if (match) {
-          if (matches.length === 200) { status = "limit"; break; }
-          matches.push({ byteOffset: Number(match[1]), text: match[2]! });
-        }
-      }
-      if (!status && code === 2) status = error.includes("regex parse error") ? "invalid_pattern" : "search_unavailable";
-      resolveResult({ status: status ?? "ok", matches, truncated: !!status });
-    });
-  });
+  let buffer: Buffer;
+  try {
+    buffer = readFileSync(found.path);
+  } catch { return unavailable; }
+  let regex: RegExp;
+  try {
+    regex = new RegExp(input.pattern, input.caseSensitive ? "g" : "gi");
+  } catch {
+    return { status: "invalid_pattern", matches: [], truncated: false };
+  }
+  const text = new TextDecoder("utf-8").decode(buffer);
+  const matches: ShellOutputLogSearchResult["matches"] = [];
+  let emittedBytes = 0;
+  let truncated = false;
+  let charIndex = 0;
+  let byteOffset = 0;
+  for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
+    while (charIndex < match.index) {
+      const codePoint = text.codePointAt(charIndex)!;
+      byteOffset += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+      charIndex += codePoint > 0xffff ? 2 : 1;
+    }
+    const matchText = match[0];
+    const lineBytes = Buffer.byteLength(`${byteOffset}:${matchText}\n`, "utf8");
+    if (matches.length >= 200 || emittedBytes + lineBytes > 32 * 1024) { truncated = true; break; }
+    matches.push({ byteOffset, text: matchText });
+    emittedBytes += lineBytes;
+    charIndex += matchText.length;
+    byteOffset += Buffer.byteLength(matchText, "utf8");
+    if (matchText.length === 0) {
+      regex.lastIndex += 1;
+      const codePoint = text.codePointAt(match.index)!;
+      charIndex += codePoint > 0xffff ? 2 : 1;
+      byteOffset += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    }
+  }
+  return { status: truncated ? "limit" : "ok", matches, truncated };
 }
 
 /** Managed foreground Shell logs. The directory is chosen by the host, never by a tool input. */
