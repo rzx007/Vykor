@@ -15,6 +15,7 @@ export const NEW_CONVERSATION_SCOPE = "new-conversation"
 export interface DesktopComposerDraft {
   document: ComposerDocument
   attachments: DesktopAttachmentDraft[]
+  textSelections?: Array<{ id: string; text: string }>
 }
 
 export interface ComposerDraftState {

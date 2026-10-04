@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { MessageSquarePlus, MessageSquareText, X } from "lucide-react"
 import { Composer } from "../conversation-page/composer/composer"
 import { toComposerSkills } from "../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../conversation-page/composer/composer-command-catalog"
@@ -13,7 +14,20 @@ import { resolveScrollerAgentStatus } from "../conversation-page/transcript/scro
 import { useShowReasoning } from "../conversation-page/use-show-reasoning"
 import { resolveModelLabel } from "../conversation-page/utils"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@renderer/components/ui/empty"
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@renderer/components/ui/empty"
+import { Button } from "@renderer/components/ui/button"
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverTitle,
+} from "@renderer/components/ui/popover"
 import {
   MessageScroller,
   MessageScrollerProvider,
@@ -24,10 +38,7 @@ import {
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import {
-  composerDocument,
-  selectComposerDocumentText,
-} from "@renderer/stores/desktop-session/composer-document"
+import { selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
 import {
   selectDraftDocument,
   selectDraftAttachments,
@@ -87,25 +98,36 @@ function bindValidatedTarget(sourceId: string, targetId: string): void {
     const target = state.composerDraftsByScope[to]
     if (source && target && (target.document.items.length || target.attachments.length))
       return state
-    return migrateComposerScope(state, from, to)
+    const migrated = migrateComposerScope(state, from, to)
+    if (!source || !target?.textSelections?.length) return migrated
+    return {
+      composerDraftsByScope: {
+        ...migrated.composerDraftsByScope,
+        [to]: {
+          ...source,
+          textSelections: [...target.textSelections, ...(source.textSelections ?? [])],
+        },
+      },
+    }
   })
 }
 export function appendSideChatQuote(sourceId: string, text: string): void {
   if (!text.trim()) return
   const state = useDesktopSessionStore.getState()
   const scope = sideChatDraftScope(sourceId)
-  const draft = selectDraftDocument(state, scope)
-  const quote = text
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n")
-  state.setComposerDraftDocument(
-    scope,
-    composerDocument([
-      ...draft.items,
-      { type: "text", text: `${draft.items.length ? "\n\n" : ""}${quote}\n\n` },
-    ])
-  )
+  const current = state.composerDraftsByScope[scope] ?? {
+    document: selectDraftDocument(state, scope),
+    attachments: [],
+  }
+  useDesktopSessionStore.setState({
+    composerDraftsByScope: {
+      ...state.composerDraftsByScope,
+      [scope]: {
+        ...current,
+        textSelections: [...(current.textSelections ?? []), { id: crypto.randomUUID(), text }],
+      },
+    },
+  })
 }
 function forkTarget(sourceId: string): Promise<DesktopSessionRecord> {
   const pending = pendingForks.get(sourceId)
@@ -197,12 +219,15 @@ export function SideChatPanel({
   const draftConflict = Boolean(
     preforkDraft &&
     targetDraft &&
-    (targetDraft.document.items.length || targetDraft.attachments.length)
+    (targetDraft.document.items.length ||
+      targetDraft.attachments.length ||
+      targetDraft.textSelections?.length)
   )
   const scope =
     verifiedTargetId && !preforkDraft ? sessionComposerScope(verifiedTargetId) : preforkScope
   const draft = useDesktopSessionStore((state) => selectDraftDocument(state, scope))
   const attachments = useDesktopSessionStore((state) => selectDraftAttachments(state, scope))
+  const textSelections = (scope === preforkScope ? preforkDraft : targetDraft)?.textSelections ?? []
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
     : undefined
@@ -364,6 +389,7 @@ export function SideChatPanel({
       return
     submitPending.current = true
     setError(null)
+    const submittedSelections = textSelections
     try {
       let id = targetId
       if (!id) {
@@ -392,7 +418,32 @@ export function SideChatPanel({
         target: { sessionId: id, view: acceptedView.current },
         contextItems: [
           { type: "context", kind: "conversation", id: sourceId, displayName: "主聊天" },
+          ...submittedSelections.map((selection) => ({
+            type: "text" as const,
+            text: `选中文本片段：\n${selection.text
+              .split("\n")
+              .map((line) => `> ${line}`)
+              .join("\n")}\n\n`,
+          })),
         ],
+      })
+      const submittedIds = new Set(submittedSelections.map((selection) => selection.id))
+      useDesktopSessionStore.setState((current) => {
+        const targetScope = sessionComposerScope(id)
+        const currentDraft = current.composerDraftsByScope[targetScope]
+        if (!currentDraft?.textSelections?.some((selection) => submittedIds.has(selection.id)))
+          return current
+        return {
+          composerDraftsByScope: {
+            ...current.composerDraftsByScope,
+            [targetScope]: {
+              ...currentDraft,
+              textSelections: currentDraft.textSelections.filter(
+                (selection) => !submittedIds.has(selection.id)
+              ),
+            },
+          },
+        }
       })
     } catch (cause) {
       if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
@@ -427,7 +478,7 @@ export function SideChatPanel({
       <MessageScrollerProvider autoScroll defaultScrollPosition="end">
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
-            <MessageScrollerContent className="min-h-full gap-6 px-5 py-5">
+            <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
               {view || submissions.length ? (
                 <ConversationTranscript
                   inputs={view?.inputs ?? []}
@@ -450,10 +501,11 @@ export function SideChatPanel({
               ) : (
                 <Empty>
                   <EmptyHeader>
+                    <EmptyMedia>
+                      <MessageSquarePlus className="size-7 text-muted-foreground" />
+                    </EmptyMedia>
                     <EmptyTitle>侧边聊天</EmptyTitle>
-                    <EmptyDescription>
-                      引用主聊天，在这里继续提问。首次发送会创建普通分支聊天。
-                    </EmptyDescription>
+                    <EmptyDescription>围绕主聊天继续提问，不打断左侧任务。</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
@@ -462,7 +514,7 @@ export function SideChatPanel({
           <MessageScrollerButton title={status?.title} />
         </MessageScroller>
       </MessageScrollerProvider>
-      <div className="flex shrink-0 flex-col gap-2 p-3">
+      <div className="mx-auto mb-4 flex w-[min(760px,calc(100%-32px))] shrink-0 flex-col gap-2 px-px">
         {view?.syncStatus === "reconnecting" ? (
           <p role="status" className="text-xs text-muted-foreground">
             正在重新连接聊天
@@ -526,6 +578,66 @@ export function SideChatPanel({
             <PluginPreparationStatus activeSessionId={targetId} view={view} />
             <Composer
               id={`side-chat-composer-${sourceId}`}
+              contextContent={
+                textSelections.length ? (
+                  <div className="px-3 pt-3">
+                    <Popover>
+                      <PopoverTrigger
+                        render={<Button type="button" variant="outline" size="xs" />}
+                        aria-label="查看已选文本片段"
+                      >
+                        <MessageSquareText data-icon="inline-start" />
+                        {textSelections.length} 个已选文本片段
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="top"
+                        align="start"
+                        className="w-80 max-w-[calc(100vw-32px)]"
+                      >
+                        <PopoverTitle>已选文本片段</PopoverTitle>
+                        <ul className="flex max-h-64 flex-col gap-3 overflow-y-auto">
+                          {textSelections.map((selection, index) => (
+                            <li key={selection.id} className="flex min-w-0 items-start gap-2">
+                              <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">
+                                {selection.text}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`移除文本片段 ${index + 1}`}
+                                disabled={sending || creating}
+                                onClick={() => {
+                                  useDesktopSessionStore.setState((current) => {
+                                    const currentDraft = current.composerDraftsByScope[scope]
+                                    if (!currentDraft) return current
+                                    return {
+                                      composerDraftsByScope: {
+                                        ...current.composerDraftsByScope,
+                                        [scope]: {
+                                          ...currentDraft,
+                                          textSelections: currentDraft.textSelections?.filter(
+                                            (item) => item.id !== selection.id
+                                          ),
+                                        },
+                                      },
+                                    }
+                                  })
+                                  sectionRef.current
+                                    ?.querySelector<HTMLElement>('[contenteditable="true"]')
+                                    ?.focus()
+                                }}
+                              >
+                                <X />
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                ) : null
+              }
               draft={draft}
               sending={sending || creating}
               running={running}

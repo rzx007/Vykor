@@ -1,6 +1,6 @@
 import { ChevronDown, Goal, Mic, ShieldCheck, X } from "lucide-react"
 import { IconPlus } from "@tabler/icons-react"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -70,6 +70,7 @@ export function Composer({
   onCancelAttachment,
   onRetryAttachment,
   onRemoveAttachment,
+  contextContent,
 }: {
   id: string
   draft: ComposerDocument
@@ -113,6 +114,7 @@ export function Composer({
   onCancelAttachment?: (draftId: string) => void
   onRetryAttachment?: (draftId: string) => void
   onRemoveAttachment?: (draftId: string) => void
+  contextContent?: ReactNode
 }): React.JSX.Element {
   const [activePicker, setActivePicker] = useState<"model" | "permission" | "effort" | null>(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
@@ -215,6 +217,7 @@ export function Composer({
       <label htmlFor={id} className="sr-only">
         输入对话内容
       </label>
+      {contextContent}
       <ComposerAttachments
         attachments={attachments}
         readOnly={attachmentReadOnly || sending}

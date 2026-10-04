@@ -41,7 +41,7 @@ const fork = vi.fn(async ({ sessionId }: { sessionId: string }) => sideView(sess
 const openAux = vi.fn(async ({ sessionId }: { sessionId: string; subscriptionId: string }) =>
   sideView(sessionId.replace("side-", ""))
 )
-const sendPrompt = vi.fn(async (_input: unknown) => undefined)
+const sendPrompt = vi.fn(async (_input: unknown): Promise<void> => undefined)
 const interrupt = vi.fn(async (_input: unknown) => undefined)
 const replyPermission = vi.fn(async (_input: unknown) => undefined)
 const closeAux = vi.fn(async (_input: unknown) => undefined)
@@ -147,6 +147,13 @@ async function submit() {
 function draft(source: string, text: string) {
   useDesktopSessionStore.getState().setComposerDraftText(`linked-chat:${source}`, text)
 }
+function selections(scope: string): string[] {
+  return (
+    useDesktopSessionStore
+      .getState()
+      .composerDraftsByScope[scope]?.textSelections?.map((item) => item.text) ?? []
+  )
+}
 async function emit(
   view: DesktopSessionView,
   subscriptionId = openAux.mock.calls.at(-1)![0].subscriptionId
@@ -159,12 +166,132 @@ it("opening and quoting uses the side draft without creating a session or changi
   draft("main", "side draft")
   appendSideChatQuote("main", "selected text")
   await mount()
-  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
-    "selected text"
-  )
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("side draft")
+  expect(container.querySelector("form")?.textContent).toContain("1 个已选文本片段")
+  expect(selections("linked-chat:main")).toEqual(["selected text"])
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
   expect(fork).not.toHaveBeenCalled()
   expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("selected snippets can be previewed and removed without editing the question or sending", async () => {
+  draft("main", "my question")
+  appendSideChatQuote("main", "<script>literal & safe</script>\nsecond line")
+  appendSideChatQuote("main", "other passage")
+  await mount()
+  const trigger = container.querySelector<HTMLButtonElement>('[aria-label="查看已选文本片段"]')!
+  expect(trigger).not.toBeNull()
+  expect(trigger.textContent).toContain("2 个已选文本片段")
+  await act(async () => trigger.click())
+  expect(document.body.textContent).toContain("<script>literal & safe</script>\nsecond line")
+  expect(document.querySelector('[data-slot="popover-content"] script')).toBeNull()
+  await act(async () =>
+    document.querySelector<HTMLButtonElement>('[aria-label="移除文本片段 1"]')!.click()
+  )
+  expect(selections("linked-chat:main")).toEqual(["other passage"])
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("my question")
+  expect(fork).not.toHaveBeenCalled()
+  expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("a successful send includes selected text as context and removes it from the composer", async () => {
+  draft("main", "explain this")
+  appendSideChatQuote("main", "original passage")
+  await mount()
+  await submit()
+  expect(sendPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionId: "side-main",
+      items: [
+        { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+        { type: "text", text: "选中文本片段：\n> original passage\n\n" },
+        { type: "text", text: "explain this" },
+      ],
+    })
+  )
+  expect(selections("session:side-main")).toEqual([])
+  expect(container.querySelector('[aria-label="查看已选文本片段"]')).toBeNull()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("")
+})
+
+it("removing the last snippet closes the preview and a later quote does not reopen it or take input focus", async () => {
+  draft("main", "my question")
+  appendSideChatQuote("main", "first passage")
+  await mount()
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="查看已选文本片段"]')!.click()
+  )
+  await act(async () =>
+    document.querySelector<HTMLButtonElement>('[aria-label="移除文本片段 1"]')!.click()
+  )
+  expect(container.querySelector('[aria-label="查看已选文本片段"]')).toBeNull()
+  await act(async () => appendSideChatQuote("main", "next passage"))
+  expect(container.querySelector('[aria-label="查看已选文本片段"]')).not.toBeNull()
+  expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
+  expect(document.activeElement?.id).toBe("side-chat-composer-main")
+})
+
+it("failed sends retain selected text and retry the same ordinary input", async () => {
+  sendPrompt.mockRejectedValueOnce(new Error("offline"))
+  draft("main", "retry question")
+  appendSideChatQuote("main", "retry passage")
+  await mount()
+  await submit()
+  const first = sendPrompt.mock.calls[0]![0]
+  expect(selections("session:side-main")).toEqual(["retry passage"])
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("retry question")
+  await act(async () => root.render(null))
+  await mount()
+  expect(container.querySelector('[aria-label="查看已选文本片段"]')).not.toBeNull()
+  await submit()
+  expect(sendPrompt.mock.calls[1]![0]).toEqual(first)
+  expect(selections("session:side-main")).toEqual([])
+})
+
+it("reopening with new source context retains previous target snippets without an invisible draft conflict", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  await mount()
+  await act(async () => appendSideChatQuote("main", "previous passage"))
+  await act(async () => root.render(null))
+  draft("main", "next question")
+  appendSideChatQuote("main", "new passage")
+  await mount()
+  expect(container.querySelector('[role="alert"]')).toBeNull()
+  expect(selections("session:side-main")).toEqual(["previous passage", "new passage"])
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("next question")
+  await submit()
+  expect(sendPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+        { type: "text", text: "选中文本片段：\n> previous passage\n\n" },
+        { type: "text", text: "选中文本片段：\n> new passage\n\n" },
+        { type: "text", text: "next question" },
+      ],
+    })
+  )
+  expect(selections("session:side-main")).toEqual([])
+  expect(fork).not.toHaveBeenCalled()
+})
+
+it("successful acknowledgement consumes only submitted snippets even if a new identical snippet arrives", async () => {
+  let finish!: () => void
+  sendPrompt.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      })
+  )
+  draft("main", "question")
+  appendSideChatQuote("main", "same passage")
+  await mount()
+  await submit()
+  await act(async () => appendSideChatQuote("main", "same passage"))
+  await act(async () => finish())
+  expect(selections("session:side-main")).toEqual(["same passage"])
+  expect(container.querySelector('[aria-label="查看已选文本片段"]')?.textContent).toContain(
+    "1 个已选文本片段"
+  )
 })
 
 it("first send forks once, sends normal context, skill, plugin and attachment items, and leaves the primary view intact", async () => {
@@ -307,14 +434,11 @@ it("keeps A and B drafts and routes quoted text to each correct side", async () 
   await mount("B")
   await act(async () => appendSideChatQuote("main", "quote A"))
   await act(async () => appendSideChatQuote("B", "quote B"))
-  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain("quote B")
-  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
-    "quote A"
-  )
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("B")
+  expect(selections("linked-chat:B")).toEqual(["quote B"])
+  expect(selections("linked-chat:main")).toEqual(["quote A"])
   await mount("main")
-  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
-    "quote A"
-  )
+  expect(selections("session:side-main")).toEqual(["quote A"])
   expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("")
   expect(fork).toHaveBeenCalledTimes(1)
 })
@@ -410,9 +534,7 @@ it("the complete drag, stream update, mouseup and click gesture leaves a clickab
     button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))
     button.click()
   })
-  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
-    "select this"
-  )
+  expect(selections("linked-chat:main")).toEqual(["select this"])
   expect(fork).not.toHaveBeenCalled()
 })
 it("keyboard selection opens without moving focus and a second outside click or Escape closes it", async () => {
@@ -455,9 +577,7 @@ it("a quotation added while fork is delayed stays in the ordinary draft and is n
       ],
     })
   )
-  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
-    "new quote"
-  )
+  expect(selections("session:side-main")).toEqual(["new quote"])
 })
 
 it("AskUser renders the normal answer card and records its reply only in the side runtime", async () => {
@@ -791,9 +911,8 @@ it("quotes stay in this window's visible side draft if another window changes th
   await mount()
   localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "other-fork" }))
   await act(async () => appendSideChatQuote("main", "visible quote"))
-  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
-    "visible quote"
-  )
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("")
+  expect(selections("session:side-main")).toEqual(["visible quote"])
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:other-fork")).toBe("")
 })
 
@@ -927,9 +1046,7 @@ it.each(["self", "wrong-parent"])(
     expect(selectDraftText(useDesktopSessionStore.getState(), "session:foreign")).toBe(
       "foreign remains"
     )
-    expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
-      "quote before validation"
-    )
+    expect(selections("linked-chat:main")).toEqual(["quote before validation"])
     await mount()
     expect(container.querySelector('[role="alert"]')).not.toBeNull()
     await act(async () => appendSideChatQuote("main", "quote after rejection"))
@@ -953,18 +1070,13 @@ it("quotes wait in the source scope and migrate only after a saved ordinary targ
   appendSideChatQuote("main", "waiting quote")
   await mount()
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("")
-  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
-    "waiting quote"
-  )
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("")
+  expect(selections("linked-chat:main")).toEqual(["waiting quote"])
   await act(async () => finish(sideView()))
   expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("")
-  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
-    "waiting quote"
-  )
+  expect(selections("session:side-main")).toEqual(["waiting quote"])
   await act(async () => appendSideChatQuote("main", "verified quote"))
-  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
-    "verified quote"
-  )
+  expect(selections("session:side-main")).toEqual(["waiting quote", "verified quote"])
   expect(fork).not.toHaveBeenCalled()
 })
 
