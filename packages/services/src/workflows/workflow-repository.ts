@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, placeholder } from "drizzle-orm";
+import { and, asc, desc, eq, or, placeholder, sql } from "drizzle-orm";
+import { parseChatResourceSource } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 import {
@@ -23,13 +24,26 @@ export class WorkflowRepository {
     this.storage.assertWritable();
     const database = this.storage.database.orm;
     this.storage.database.connection.transaction(() => {
+      const session = input.ownerSessionId ? this.storage.state.sessions[input.ownerSessionId] : undefined;
+      const fork = session?.metadata.fork as { sourceSessionId?: unknown } | undefined;
+      const origin = session ? parseChatResourceSource({
+        storage: session.storage ?? "sqlite",
+        sessionId: session.id,
+        ...(typeof fork?.sourceSessionId === "string" ? { sourceSessionId: fork.sourceSessionId } : {}),
+        ...(input.ownerInputId ? { inputId: input.ownerInputId } : {}),
+        ...(input.ownerRunId ? { runId: input.ownerRunId } : {}),
+      }) : input.origin ?? (input.ownerSessionId ? this.loadRun(input.runId)?.origin : undefined);
+      const owners = {
+        ownerSessionId: origin?.storage === "memory" ? null : input.ownerSessionId ?? null,
+        ownerInputId: origin?.storage === "memory" ? null : input.ownerInputId ?? null,
+        ownerRunId: origin?.storage === "memory" ? null : input.ownerRunId ?? null,
+      };
       database
         .insert(workflowRuns)
         .values({
           runId: input.runId,
-          ownerSessionId: input.ownerSessionId ?? null,
-          ownerInputId: input.ownerInputId ?? null,
-          ownerRunId: input.ownerRunId ?? null,
+          ...owners,
+          originJson: origin ? JSON.stringify(origin) : null,
           status: input.status,
           termination: input.termination ?? null,
           snapshotJson: input.snapshotJson,
@@ -39,9 +53,8 @@ export class WorkflowRepository {
         .onConflictDoUpdate({
           target: workflowRuns.runId,
           set: {
-            ownerSessionId: input.ownerSessionId ?? null,
-            ownerInputId: input.ownerInputId ?? null,
-            ownerRunId: input.ownerRunId ?? null,
+            ...owners,
+            originJson: origin ? JSON.stringify(origin) : sql`${workflowRuns.originJson}`,
             status: input.status,
             termination: input.termination ?? null,
             snapshotJson: input.snapshotJson,
@@ -91,7 +104,10 @@ export class WorkflowRepository {
       .select()
       .from(workflowRuns)
       .where(and(
-        options.ownerSessionId ? eq(workflowRuns.ownerSessionId, options.ownerSessionId) : undefined,
+        options.ownerSessionId ? or(
+          eq(workflowRuns.ownerSessionId, options.ownerSessionId),
+          sql`json_extract(${workflowRuns.originJson}, '$.sessionId') = ${options.ownerSessionId}`,
+        ) : undefined,
         options.status ? eq(workflowRuns.status, options.status) : undefined,
       ))
       .orderBy(desc(workflowRuns.updatedAt))

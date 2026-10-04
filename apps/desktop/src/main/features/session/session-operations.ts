@@ -364,6 +364,7 @@ export class SessionOperations {
     const sessionId = requireString(input.sessionId, "会话 ID")
     return toDesktopSessionRecord(
       await client.sessions.fork(sessionId, {
+        ...(input.storage !== undefined ? { storage: input.storage } : {}),
         ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
         ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
       })

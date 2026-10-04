@@ -18,6 +18,9 @@ export class PermissionRepository {
       if (input.runId && !this.options.getRun(input.runId)) {
         throw new Error(`Session run not found: ${input.runId}`);
       }
+      if (input.runId && this.options.getRun(input.runId)?.sessionId !== input.sessionId) {
+        throw new Error(`Session run does not belong to session: ${input.runId}`);
+      }
       const id = input.id ?? randomUUID();
       if (this.options.storage.state.permissions[id]) {
         throw new Error(`Permission request already exists: ${id}`);

@@ -21,7 +21,7 @@ export function isChannelSession(session: DesktopSessionRecord): boolean {
  * 默认已过滤掉；这里同步拦掉 Activity 推送带来的同类会话，避免它们混进侧边栏。
  */
 export function isTopLevelSession(session: DesktopSessionRecord): boolean {
-  return !session.parentId
+  return !session.parentId && session.storage !== "memory"
 }
 
 export function upsertProject(

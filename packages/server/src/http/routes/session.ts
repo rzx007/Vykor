@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   parseCreateSessionRequest,
+  parseForkSessionRequest,
   parseUpdateSessionRequest,
 } from "@vykor/protocol";
 
@@ -71,18 +72,14 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
     .post("/:sessionId/fork", async (c) => {
       const sessionId = c.req.param("sessionId");
       if (!sessionId) return errorResponse(400, "sessionId is required");
-      const body = await readJson(c);
+      let input;
       try {
-        const session = context.commands.forkSession(sessionId, {
-          beforeMessageId:
-            typeof body.beforeMessageId === "string"
-              ? body.beforeMessageId
-              : undefined,
-          afterMessageId:
-            typeof body.afterMessageId === "string"
-              ? body.afterMessageId
-              : undefined,
-        });
+        input = parseForkSessionRequest(await readJson(c));
+      } catch (error) {
+        return protocolValidationErrorResponse(error);
+      }
+      try {
+        const session = context.commands.forkSession(sessionId, input);
         return jsonResponse({ session }, 201);
       } catch (error) {
         return applicationErrorResponse(error, 404);

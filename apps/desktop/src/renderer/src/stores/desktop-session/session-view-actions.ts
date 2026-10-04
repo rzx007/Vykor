@@ -44,7 +44,7 @@ export function createApplySessionUpdate(
     if (acceptActiveSessionView(get().activeSessionId, current, view) !== view) return
 
     if (view.session.status === "archived") clearPersistedActiveSessionId()
-    else writePersistedActiveSessionId(view.session.id)
+    else if (view.session.storage !== "memory") writePersistedActiveSessionId(view.session.id)
 
     const shouldRefreshContextUsage = didActiveRunFinish(current, view)
 

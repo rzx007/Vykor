@@ -1,15 +1,10 @@
 import type { CreateSessionInput, SessionInputRecord, SessionRecord } from "@vykor/protocol";
-import { inArray, sql } from "drizzle-orm";
 import type { StorageContext } from "../database/storage-context.js";
+import { assertSynchronousCommit } from "../database/chat-persistence.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
 import { assertSession, clone } from "../session-runtime/store-state.js";
 import type { ConversationRepository } from "./conversation-repository.js";
 import type { AdmitPromptTransactionInput, ConversationTransactionTestHooks } from "./conversation-transactions.js";
-import {
-  sessions, sessionInputs, sessionMessages, sessionMessageParts, sessionRuns,
-  sessionRunAttempts, sessionTasks, sessionEvents, permissionRequests,
-  scheduledRuns, scheduledTasks,
-} from "../session-runtime/schema.js";
 
 interface TreeContext {
   storage: StorageContext;
@@ -139,30 +134,8 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
   );
 
   return context.storage.atomic(() => {
-    const database = context.storage.database.orm;
-    const timestamp = Date.now();
-    database.update(scheduledRuns).set({ sessionId: null, updatedAt: timestamp })
-      .where(inArray(scheduledRuns.sessionId, sessionIds)).run();
-    database.update(scheduledTasks).set({
-      status: sql`CASE WHEN ${scheduledTasks.destination} = 'chat' THEN 'paused' ELSE ${scheduledTasks.status} END`,
-      nextRunAt: sql`CASE WHEN ${scheduledTasks.destination} = 'chat' THEN NULL ELSE ${scheduledTasks.nextRunAt} END`,
-      sessionId: null,
-      updatedAt: timestamp,
-    }).where(inArray(scheduledTasks.sessionId, sessionIds)).run();
-    database.update(scheduledTasks).set({ createdFromSessionId: null, updatedAt: timestamp })
-      .where(inArray(scheduledTasks.createdFromSessionId, sessionIds)).run();
-    database.delete(permissionRequests).where(inArray(permissionRequests.sessionId, sessionIds)).run();
-    database.delete(sessionTasks).where(inArray(sessionTasks.sessionId, sessionIds)).run();
-    database.delete(sessionRunAttempts).where(inArray(sessionRunAttempts.runId,
-      database.select({ id: sessionRuns.id }).from(sessionRuns)
-        .where(inArray(sessionRuns.sessionId, sessionIds)),
-    )).run();
-    database.delete(sessionRuns).where(inArray(sessionRuns.sessionId, sessionIds)).run();
-    database.delete(sessionMessageParts).where(inArray(sessionMessageParts.sessionId, sessionIds)).run();
-    database.delete(sessionMessages).where(inArray(sessionMessages.sessionId, sessionIds)).run();
-    database.delete(sessionInputs).where(inArray(sessionInputs.sessionId, sessionIds)).run();
-    database.delete(sessionEvents).where(inArray(sessionEvents.sessionId, sessionIds)).run();
-    database.delete(sessions).where(inArray(sessions.id, sessionIds)).run();
+    if (!context.storage.chatPersistence) throw new Error("Chat persistence is not configured");
+    assertSynchronousCommit(context.storage.chatPersistence.deleteSessions(sessionIds));
 
     for (const id of sessionIds) {
       delete context.storage.state.sessions[id];

@@ -4,6 +4,7 @@ import {
   parseAdmitPromptRequest,
   parseCreateScheduledTaskRequest,
   parseCreateSessionRequest,
+  parseForkSessionRequest,
   parseReplyPermissionRequest,
   parseUpdateScheduledTaskRequest,
   parseUpdateSessionRequest,
@@ -58,6 +59,22 @@ describe("HTTP request parsers", () => {
       model: "gpt-test",
       metadata: { runtime: { model: "gpt-test" }, source: "desktop" },
     });
+  });
+
+  it("preserves creation storage and rejects unsupported or updated storage", () => {
+    expect(parseCreateSessionRequest({ cwd: "/repo", model: "gpt-test", storage: "memory" }))
+      .toMatchObject({ storage: "memory" });
+    expect(parseCreateSessionRequest({ cwd: "/repo", model: "gpt-test" }))
+      .not.toHaveProperty("storage");
+    expectInvalid(() => parseCreateSessionRequest({ cwd: "/repo", model: "gpt-test", storage: "disk" }), "storage");
+    expectInvalid(() => parseUpdateSessionRequest({ storage: "sqlite" }), "storage");
+  });
+
+  it("validates fork storage and retains the fork point", () => {
+    expect(parseForkSessionRequest({ afterMessageId: "m1", storage: "memory" }))
+      .toEqual({ afterMessageId: "m1", storage: "memory" });
+    expect(parseForkSessionRequest({})).toEqual({});
+    expectInvalid(() => parseForkSessionRequest({ storage: "disk" }), "storage");
   });
 
   it("rejects invalid session fields instead of silently dropping them", () => {

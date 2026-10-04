@@ -325,6 +325,16 @@ describe("SessionCommandService", () => {
   });
 
   describe("forkSession", () => {
+    it("passes the requested temporary storage to the history fork", () => {
+      const { service, sessions } = createService();
+
+      service.forkSession("s1", { storage: "memory" });
+
+      expect(sessions.forkSessionWithHistory).toHaveBeenCalledWith(expect.objectContaining({
+        sourceSessionId: "s1",
+        session: expect.objectContaining({ parentId: "s1", storage: "memory" }),
+      }));
+    });
     it("fails when source session does not exist", () => {
       const { service } = createService({ sessionRecord: null });
 

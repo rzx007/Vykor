@@ -1,13 +1,14 @@
 import type {
   InputDelivery, PermissionStatus, ProjectionSettlementAction, ProjectionSettlementStatus,
   RunAttemptStatus, RunStatus, SessionMessagePartStatus, SessionMessagePartType,
-  SessionMessageRole, SessionTaskStatus,
+  SessionMessageRole, SessionTaskStatus, SessionStorage,
 } from "./session.js";
 import type { AttachmentIntent } from "./attachment.js";
 import type { SessionUserInputItem } from "./session-input-items.js";
 
 export interface CreateSessionInput {
   id?: string;
+  storage?: SessionStorage;
   parentId?: string;
   projectId?: string;
   cwd: string;
@@ -15,6 +16,12 @@ export interface CreateSessionInput {
   model: string;
   agent?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface ForkSessionInput {
+  beforeMessageId?: string;
+  afterMessageId?: string;
+  storage?: SessionStorage;
 }
 
 export interface UpdateSessionInput {

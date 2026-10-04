@@ -141,7 +141,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       if (!snapshotApplied) return "cancelled"
 
       get().markActivitySessionRead(sessionId)
-      writePersistedActiveSessionId(sessionId)
+      if (view.session.storage !== "memory") writePersistedActiveSessionId(sessionId)
       const workspace = resolveSessionWorkspace(get().projects, view.session)
       if (
         workspace.selectedProject &&

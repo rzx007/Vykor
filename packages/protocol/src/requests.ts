@@ -7,6 +7,7 @@ import type {
   AdmitPromptInput,
   CreateScheduledTaskInput,
   CreateSessionInput,
+  ForkSessionInput,
   ReplyPermissionInput,
   ScheduledPermissionProfile,
   ScheduledStopPolicy,
@@ -184,6 +185,7 @@ export function parseCreateSessionRequest(value: unknown): CreateSessionInput {
   const projectId = optionalString(body, "projectId");
   const title = optionalString(body, "title");
   const agent = optionalString(body, "agent");
+  const storage = optionalEnum(body, "storage", ["sqlite", "memory"] as const);
 
   return {
     cwd,
@@ -194,11 +196,27 @@ export function parseCreateSessionRequest(value: unknown): CreateSessionInput {
     ...(projectId !== undefined ? { projectId } : {}),
     ...(title !== undefined ? { title } : {}),
     ...(agent !== undefined ? { agent } : {}),
+    ...(storage !== undefined ? { storage } : {}),
+  };
+}
+
+export function parseForkSessionRequest(value: unknown): ForkSessionInput {
+  const body = record(value);
+  const beforeMessageId = optionalString(body, "beforeMessageId");
+  const afterMessageId = optionalString(body, "afterMessageId");
+  const storage = optionalEnum(body, "storage", ["sqlite", "memory"] as const);
+  return {
+    ...(beforeMessageId !== undefined ? { beforeMessageId } : {}),
+    ...(afterMessageId !== undefined ? { afterMessageId } : {}),
+    ...(storage !== undefined ? { storage } : {}),
   };
 }
 
 export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   const body = record(value);
+  if ("storage" in body) {
+    throw new ProtocolValidationError("storage is selected when the session is created", "storage");
+  }
   if ("model" in body) {
     throw new ProtocolValidationError(
       "model must be changed through metadata.runtime.model",

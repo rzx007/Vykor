@@ -84,7 +84,6 @@ import {
   createMutationBuffer,
   type MutationBuffer,
 } from "../database/mutation-buffer.js";
-import { loadSessionReadModel } from "../database/read-model.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   TransactionCoordinator,
@@ -138,6 +137,9 @@ import {
   type SessionState,
 } from "./store-state.js";
 import { persistSessionChanges } from "./store-persistence.js";
+import { assertSynchronousCommit, ChatPersistenceRouter } from "../database/chat-persistence.js";
+import { TemporaryControlRecords } from "../database/temporary-control-records.js";
+import { SqliteChatPersistence } from "../database/sqlite-chat-persistence.js";
 import {
   abandonProjectionSettlement,
   createProjectionSettlement,
@@ -248,17 +250,14 @@ export class SessionStore {
       ...options.attachmentLimits,
     });
     try {
-      const loaded = loadSessionReadModel(
-        database.orm,
-        this.eventRegistry,
-      );
+      const loadedState = new SqliteChatPersistence(database).load(this.eventRegistry);
       this.storage = {
         database,
-        state: loaded.state,
+        state: loadedState,
         mutations: createMutationBuffer(),
         eventSequence: DurableEventSequence.load(
           database.orm,
-          loaded.state,
+          loadedState,
         ),
         deltaCheckpoint,
         atomic: (work) => this.coordinator.atomic(work),
@@ -271,6 +270,8 @@ export class SessionStore {
         flushDeltas: () => this.incrementalOutput.flushMessagePartDeltas(),
         hooks: options.transactionHooks,
       });
+      this.storage.chatPersistence = new ChatPersistenceRouter(this.storage);
+      this.storage.temporaryControls = new TemporaryControlRecords();
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.workflows = new WorkflowRepository(this.storage);
@@ -279,6 +280,7 @@ export class SessionStore {
         storage: this.storage,
         eventRegistry: this.eventRegistry,
         save: () => this.save(),
+        recordAttachmentSource: (assetId, sessionId) => this.recordChatAttachmentSource(assetId, sessionId),
       });
       this.incrementalOutput = new IncrementalOutput({
         storage: this.storage,
@@ -328,6 +330,7 @@ export class SessionStore {
         attachmentLimits: this.attachmentLimits,
         save: () => this.save(),
         notifySessionTask: (taskId) => this.notifySessionTask(taskId),
+        recordAttachmentSource: (assetId, sessionId) => this.recordChatAttachmentSource(assetId, sessionId),
       });
     } catch (error) {
       database.close();
@@ -493,7 +496,8 @@ export class SessionStore {
     settlements: number;
   } {
     if (this.activeOwnerLease) this.assertApplicationOwner(this.activeOwnerLease);
-    return applyRetention(this.orm, this.state, policy, timestamp);
+    return applyRetention(this.orm, this.state, policy, timestamp,
+      new Set(this.storage.chatPersistence?.snapshot().events.map((event) => event.id)));
   }
 
   listRetentionAudits(): Array<Record<string, unknown>> {
@@ -547,35 +551,35 @@ export class SessionStore {
 
   createProjectionSettlement(input: CreateProjectionSettlementInput): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return createProjectionSettlement(this.orm, input);
+    return createProjectionSettlement(this.orm, input, this.storage.temporaryControls, this.state.sessions[input.rootSessionId]?.storage ?? "sqlite");
   }
 
   getProjectionSettlement(id: string): ProjectionSettlementRecord | undefined {
-    return getProjectionSettlement(this.orm, id);
+    return getProjectionSettlement(this.orm, id, this.storage.temporaryControls);
   }
 
   listProjectionSettlements(options: ListProjectionSettlementsOptions = {}): ProjectionSettlementRecord[] {
-    return listProjectionSettlements(this.orm, options);
+    return listProjectionSettlements(this.orm, options, this.storage.temporaryControls);
   }
 
   markProjectionSettlementRetrying(id: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return markProjectionSettlementRetrying(this.orm, id);
+    return markProjectionSettlementRetrying(this.orm, id, this.storage.temporaryControls);
   }
 
   failProjectionSettlement(id: string, error: string, nextRetryAt?: number): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return failProjectionSettlement(this.orm, id, error, nextRetryAt);
+    return failProjectionSettlement(this.orm, id, error, nextRetryAt, this.storage.temporaryControls);
   }
 
   resolveProjectionSettlement(id: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return resolveProjectionSettlement(this.orm, id);
+    return resolveProjectionSettlement(this.orm, id, this.storage.temporaryControls);
   }
 
   abandonProjectionSettlement(id: string, error: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return abandonProjectionSettlement(this.orm, id, error);
+    return abandonProjectionSettlement(this.orm, id, error, this.storage.temporaryControls);
   }
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
@@ -753,9 +757,9 @@ export class SessionStore {
   }
 
   private load(): SessionState {
-    const loaded = loadSessionReadModel(this.orm, this.eventRegistry);
-    this.eventSequence = DurableEventSequence.load(this.orm, loaded.state);
-    return loaded.state;
+    const state = new SqliteChatPersistence(this.databaseKernel).load(this.eventRegistry);
+    this.eventSequence = DurableEventSequence.load(this.orm, state);
+    return state;
   }
 
   private get databaseKernel(): SessionDatabase {
@@ -811,6 +815,7 @@ export class SessionStore {
       });
     } catch (error) {
       this.state = this.load();
+      this.storage.chatPersistence?.restoreTemporaryState(this.state);
       this.deltaCheckpoint.clear();
       this.mutations = createMutationBuffer();
       throw error;
@@ -831,7 +836,16 @@ export class SessionStore {
   }
 
   private persistChanges(): void {
-    persistSessionChanges(this.storage, this.incrementalOutput);
+    this.incrementalOutput.flushMessagePartDeltas();
+    if (this.storage.chatPersistence) assertSynchronousCommit(this.storage.chatPersistence.commit());
+    else persistSessionChanges(this.storage, this.incrementalOutput);
+  }
+
+  private recordChatAttachmentSource(assetId: string, sessionId: string): void {
+    // Diagnostic/transformation parts may reference an asset not yet registered.
+    if (this.attachments.getAttachment(assetId, { includeDeleted: true })) {
+      this.attachments.recordChatSource(assetId, assertSession(this.state, sessionId));
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getSessionStorage,
   isCommittedModelPart,
   isSupersededModelPart,
   readModelGenerationMetadata,
@@ -9,6 +10,12 @@ import {
   readSessionModelUsage,
   type SessionMessagePartRecord,
 } from "./session.js";
+
+it("treats existing sessions as sqlite and memory as an explicit creation choice", () => {
+  expect(getSessionStorage(undefined)).toBe("sqlite");
+  expect(getSessionStorage({})).toBe("sqlite");
+  expect(getSessionStorage({ storage: "memory" })).toBe("memory");
+});
 
 function part(metadata: Record<string, unknown>): SessionMessagePartRecord {
   return {

@@ -1,8 +1,9 @@
-import { parseAttachmentAssetRecord } from "@vykor/protocol";
+import { parseAttachmentAssetRecord, parseChatResourceSource } from "@vykor/protocol";
 import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
+  SessionRecord,
 } from "@vykor/protocol";
 import { AttachmentError } from "../attachment-errors.js";
 import type { StorageContext } from "../../database/storage-context.js";
@@ -27,7 +28,25 @@ export class AttachmentTransactions {
   constructor(private readonly options: AttachmentTransactionsOptions) {}
 
   countAttachmentReferences(assetId: string): number {
-    return this.options.countAttachmentReferences(assetId);
+    return Math.max(this.options.countAttachmentReferences(assetId), this.hasPersistentChatSource(assetId) ? 1 : 0);
+  }
+
+  recordChatSource(
+    assetId: string,
+    session: Pick<SessionRecord, "id" | "storage" | "metadata">,
+  ): void {
+    this.write(() => {
+      const fork = session.metadata.fork as { sourceSessionId?: unknown } | undefined;
+      this.options.repository.recordChatSource(assetId, parseChatResourceSource({
+        storage: session.storage ?? "sqlite",
+        sessionId: session.id,
+        ...(typeof fork?.sourceSessionId === "string" ? { sourceSessionId: fork.sourceSessionId } : {}),
+      }));
+    });
+  }
+
+  hasPersistentChatSource(assetId: string): boolean {
+    return this.options.repository.hasPersistentChatSource(assetId);
   }
 
   countInputAttachmentReferences(assetId: string): number {

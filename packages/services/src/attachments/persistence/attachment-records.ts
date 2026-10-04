@@ -75,6 +75,7 @@ export function attachmentAssetFromRow(
       : {}),
     ...(typeof row.sha256 === "string" ? { sha256: row.sha256 } : {}),
     status: row.status,
+    ...(row.chatSourcesJson ? { chatSources: JSON.parse(row.chatSourcesJson) } : {}),
     ...(typeof row.failureCode === "string"
       ? { failureCode: row.failureCode }
       : {}),

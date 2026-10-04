@@ -5,6 +5,7 @@ import {
   restoreMutationBuffer,
 } from "./mutation-buffer.js";
 import type { StorageContext } from "./storage-context.js";
+import { assertSynchronousCommit } from "./chat-persistence.js";
 
 export interface TransactionCoordinatorHooks {
   beforeFlush?: () => void;
@@ -69,6 +70,10 @@ export class TransactionCoordinator {
     }
 
     const previousState = structuredClone(this.storage.state);
+    const previousMemory = this.storage.chatPersistence?.snapshot();
+    const previousControls = this.storage.temporaryControls?.snapshot();
+    const previousTransactionState = this.storage.transactionState;
+    this.storage.transactionState = previousState;
     const previousDeltaCheckpoint = this.storage.deltaCheckpoint.snapshot();
     const previousEventSequence = this.storage.eventSequence.snapshot();
     const previousMutations = cloneMutationBuffer(this.storage.mutations);
@@ -91,7 +96,7 @@ export class TransactionCoordinator {
           this.saveRequested || hasPendingMutations(this.storage.mutations);
 
         if (shouldPersist && this.persistChangesFn) {
-          this.persistChangesFn();
+          assertSynchronousCommit(this.persistChangesFn());
           persisted = true;
         }
 
@@ -102,6 +107,9 @@ export class TransactionCoordinator {
 
     } catch (error) {
       Object.assign(this.storage.state, previousState);
+      if (previousMemory) this.storage.chatPersistence?.restore(previousMemory);
+      if (previousControls) this.storage.temporaryControls?.restore(previousControls);
+      this.storage.transactionState = previousTransactionState;
       this.storage.eventSequence.restore(previousEventSequence);
       this.storage.deltaCheckpoint.restore(previousDeltaCheckpoint);
       restoreMutationBuffer(this.storage.mutations, previousMutations);
@@ -127,6 +135,7 @@ export class TransactionCoordinator {
       return result;
     } finally {
       this.depth = 0;
+      this.storage.transactionState = previousTransactionState;
       this.saveRequested = previousSaveRequested;
       if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
         if (completed && this.storage.deltaCheckpoint.reachedThreshold()) {

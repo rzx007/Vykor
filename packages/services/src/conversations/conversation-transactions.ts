@@ -84,6 +84,7 @@ export interface ConversationTransactionsOptions {
   attachmentLimits?: AttachmentLimits;
   save?: () => void;
   notifySessionTask?: (taskId: string) => void;
+  recordAttachmentSource?: (assetId: string, sessionId: string) => void;
   testHooks?: ConversationTransactionTestHooks;
 }
 
@@ -270,6 +271,8 @@ export class ConversationTransactions {
           `Session attachments use ${sessionBytes} bytes; limit is ${attachmentLimits.maxSessionReferencedBytes}`,
         );
       }
+
+      for (const { asset } of assets) this.options.recordAttachmentSource?.(asset.id, session.id);
 
       const timestamp = now();
       const seq = maxSeq(this.storage.state.inputs, input.sessionId) + 1;
@@ -486,6 +489,7 @@ export class ConversationTransactions {
             createdAt: timestamp,
             updatedAt: timestamp,
           };
+          if (part.assetId) this.options.recordAttachmentSource?.(part.assetId, input.sessionId);
           this.storage.state.parts[partId] = part;
           this.storage.mutations.parts.add(partId);
           parts.push(part);

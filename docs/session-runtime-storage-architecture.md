@@ -4,7 +4,7 @@
 
 ## 一句话说明
 
-Session Runtime 使用一份由 daemon 独占的 SQLite 数据库。`SessionStore` 负责打开和关闭数据库、组装存储能力以及少量跨域运行协调；业务记录由各领域 Repository 读写，必须一起成功或失败的操作由具名 Transaction 完成。
+Session Runtime 在同一个 daemon 中同时支持正式 SQLite 聊天和临时 JS 内存聊天。`SessionStore` 负责组装共享的聊天业务入口、存储实现及事务协调；附件与工作流继续使用现有持久存储并记录来源。必须一起成功或失败的操作由具名 Transaction 完成。
 
 这里的 Repository 是“某类记录的唯一读写入口”，Transaction 是“把多个入口放进同一次提交”。它们共享同一个数据库和内存 read model，不会因为拆文件而拆散事务。
 
@@ -15,9 +15,10 @@ Session Runtime 使用一份由 daemon 独占的 SQLite 数据库。`SessionStor
 ```text
 new SessionStore(options)
   -> SessionDatabase.open(path)
-  -> loadSessionReadModel(database.orm)
+  -> SqliteChatPersistence.load(eventRegistry)
   -> DurableEventSequence.load(database.orm, state)
   -> TransactionCoordinator(storage)
+  -> ChatPersistenceRouter(SQLite + JS memory)
   -> 构造各领域 Repository / Transaction
   -> 对 Server 暴露明确的领域属性和系统级能力
 ```
@@ -28,7 +29,15 @@ new SessionStore(options)
 
 批量保存、流式正文保存、工作流任务快照和历史事件清理使用 Drizzle 生成的预编译查询：每个批次按记录类型准备一次，循环内绑定命名参数并执行，避免为每条记录重新编译查询。这里的 `.prepare()` 属于 Drizzle 查询构造器，不接收手写 SQL 字符串。
 
-SQLite 连接配置、备份与外层同步事务继续由现有连接负责，因此 Drizzle 写入参与同一事务，不会独立提交。SQL 迁移文件继续由 Drizzle Kit 管理。本阶段完成查询方式改造，持久化实现仍绑定 SQLite；可替换的存储接口属于下一阶段。
+SQLite 连接配置、备份与外层同步事务继续由现有连接负责，因此共享持久资源和正式聊天写入参与同一事务。聊天记录通过 `ChatPersistence` 的加载、提交、checkpoint 和删除接口选择具体实现；业务 Repository 继续共用内存读模型。SQL 迁移文件继续由 Drizzle Kit 管理。
+
+创建会话或 fork 时传 `storage: "memory"` 可选择临时聊天，缺省为 SQLite；子会话继承归属，创建后不能切换。侧边聊天明确选择 memory，其目标关联只存当前 renderer 的 Map。临时会话、输入与附件引用、消息/工具结果、Run/Attempt/Task、权限、事件及控制记录不写进 SQLite，重启后消失。正式上下文沿现有 fork 历史复制及 conversation 只读引用提供，临时分支写入自己的记录。审批只在相同存储归属的父子会话间上溯。
+
+附件来源保存在 `attachment_asset.chat_sources_json`，工作流来源保存在 `workflow_run.origin_json`。临时来源附件作为持久资源保留，不随临时聊天删除或因聊天重启消失被当作无引用垃圾回收；本阶段没有增加过期策略。工作流不把临时 session/input/run ID 写入 SQLite 外键列，真实 owner 信息在来源和原快照中保留。重启后已消失的临时会话不再接收工作流聊天事件，工作流自身事件仍持久化。
+
+长期记忆库共用。临时会话跳过自动 personalization、会话记忆 checkpoint、自动 remember 和 autoDream，明确的记住操作仍可保存。普通工具按现有权限操作项目文件；聊天使用内存不代表整个应用不落盘。
+
+当前两个实现使用同步提交；同步入口会拒绝 Promise 返回值，回滚并阻止提交后通知。未来异步数据库需增加等待提交的事务入口，同时调整 admission、projection 和通知调用者；缓存查询可以保持同步，不把后台异步写入当作已经成功。
 
 ## 状态放在哪里
 
@@ -46,7 +55,7 @@ SQLite 连接配置、备份与外层同步事务继续由现有连接负责，�
 | Goal | `GoalRepository` + `GoalTransactions` | goal 记录及其 request、assessment、continuation、run 联合写入 |
 | Attachment | `AttachmentRepository` + `AttachmentTransactions` | asset、representation、lease、引用和 GC 联合写入 |
 | prompt/run、fork、delete、replace、recovery | `ConversationTransactions` | Session、Conversation、Run、Permission、Attachment 之间的原子操作 |
-| text delta checkpoint | `IncrementalOutput` + `DeltaCheckpoint` | 立即发布 transient delta，按时间或字节阈值批量持久化正文 |
+| text delta checkpoint | `IncrementalOutput` + `DeltaCheckpoint` | 临时正文立即写入 JS 存储；正式正文按时间或字节阈值批量持久化 |
 
 Repository 不开第二个数据库连接，也不自行创建外层事务。它通过收到的 `StorageContext` 读写同一份状态。
 
@@ -55,14 +64,14 @@ Repository 不开第二个数据库连接，也不自行创建外层事务。它
 `TransactionCoordinator.atomic()` 是最外层事务入口，执行顺序是：
 
 ```text
-1. 复制 read model、event sequence、delta checkpoint 和 mutation buffer
+1. 复制 read model、临时聊天存储、临时控制记录、event sequence、delta checkpoint 和 mutation buffer
 2. 在 better-sqlite3 transaction 中执行业务操作
-3. 将 mutation buffer 写入 SQLite
+3. 按归属将 mutation buffer 写入 SQLite 或 JS 存储
 4. SQLite commit
 5. 执行 deferUntilCommit 回调，例如唤醒 waiter 或发布提交后动作
 ```
 
-任何一步在 commit 前失败，协调器会恢复四份内存快照并丢弃 deferred callback。因此调用方看不到“SQLite 回滚了，但内存已经变了”或“数据没提交，waiter 却被唤醒”的半完成状态。
+任何一步在 commit 前失败，协调器会恢复上述内存快照并丢弃 deferred callback。因此调用方看不到“SQLite 回滚了，但内存已经变了”或“数据没提交，waiter 却被唤醒”的半完成状态。
 
 嵌套 `atomic()` 只增加深度，真正的 SQLite transaction 仍由最外层拥有。Repository 可以组合，但不能偷偷形成相互独立的提交。
 
@@ -103,7 +112,7 @@ DaemonApplication start
 
 ## 事件、waiter 与提交后的通知
 
-Durable event 的全局 `seq` 由 `DurableEventSequence` 分配。序号可以因预留或崩溃出现空洞，但不会复用客户端已经见过的 cursor。
+所有对客户端发布的事件共用 `DurableEventSequence` 分配全局 `seq`。SQLite 只保留序号预留上限等共享元数据，不保存临时聊天的事件记录或内容；这样即使临时事件超过一个预留块，重启也不会让正式聊天的 cursor 回退。序号可以因预留或崩溃出现空洞。
 
 Session Task 的 wait 由 Store 维护进程内 listener。状态变更先进入 Repository/Transaction，通知通过 `deferUntilCommit()` 排到成功提交之后；回滚不会制造一次虚假的状态变化。
 
@@ -111,6 +120,7 @@ text delta 有两条路径：
 
 - live delta 立即交给当前 SSE 客户端，用于流式显示；
 - durable text 按默认时间或字节阈值 checkpoint 到 SQLite，part 完成、Tool 边界、Run terminal 和 Store close 会强制 flush。
+- 临时正文每次增量立即 checkpoint 到 JS 存储，不等待 SQLite 批量写入计时器；无关正式聊天保存失败后的状态重载保留已接受的临时正文，失败事务内部的增量仍一起回滚。
 
 ## Schema 与启动边界
 
@@ -119,8 +129,10 @@ text delta 有两条路径：
 ```text
 packages/services/src/session-runtime/migrations/0000_current_schema.sql
 packages/services/src/session-runtime/migrations/0001_drop_application_storage_format.sql
+packages/services/src/session-runtime/migrations/0002_temporary_resource_sources.sql
 packages/services/src/session-runtime/migrations/meta/0000_snapshot.json
 packages/services/src/session-runtime/migrations/meta/0001_snapshot.json
+packages/services/src/session-runtime/migrations/meta/0002_snapshot.json
 packages/services/src/session-runtime/migrations/meta/_journal.json
 ```
 

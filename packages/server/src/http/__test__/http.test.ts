@@ -10,6 +10,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ModelCatalogService } from "@vykor/api";
+import { VykorClient } from "../../../../client/src/index.js";
 
 import {
   createWorkflowPlan,
@@ -5040,6 +5041,164 @@ describe("VykorHttpServer", () => {
             }),
           ]),
         );
+      },
+      { runtimeFactory },
+    );
+  });
+
+  it("runs formal and temporary fork prompts through the same HTTP execution flow and only restores formal records", async () => {
+    const runtimeFactory: TestAgentProgramFactory = {
+      async createRuntime() {
+        return {
+          async runPrompt(input, run) {
+            const content = input.input.content;
+            const toolUseId = `${input.session.id}-write`;
+            await run.emit({
+              type: "output.text.delta",
+              data: { delta: "checking" },
+            });
+            await run.emit({
+              type: "tool.started",
+              data: {
+                toolUse: {
+                  type: "tool_use",
+                  id: toolUseId,
+                  name: "Write",
+                  input: { path: "README.md", content },
+                },
+              },
+            });
+            await run.emit({
+              type: "output.turn.completed",
+              data: { stopReason: "tool_use" },
+            });
+            const decision = await run.requestPermission({
+              toolName: "Write",
+              reason: "needs edit",
+              input: { path: "README.md", content },
+            });
+            if (decision.status !== "approved") throw new Error("Edit denied");
+            await run.emit({
+              type: "tool.completed",
+              data: {
+                toolUseId,
+                result: { content: [{ type: "text", text: `saved ${content}` }] },
+              },
+            });
+            await run.emit({
+              type: "output.text.delta",
+              data: { delta: `finished ${content}` },
+            });
+            await run.emit({
+              type: "output.turn.completed",
+              data: { stopReason: "end_turn" },
+            });
+          },
+          async close() {},
+        };
+      },
+    };
+
+    await withServer(
+      async ({ baseUrl, token, storePath, server }) => {
+        const client = new VykorClient({ baseUrl, token, fetch });
+        const execute = async (sessionId: string, content: string) => {
+          const admitted = await client.sessions.admitPrompt(sessionId, { content });
+          expect(admitted).toMatchObject({
+            input: { sessionId, content },
+            run: { sessionId, inputId: admitted.input.id },
+            queue_state: "running",
+          });
+          const runId = admitted.run!.id;
+          await waitForEvent(baseUrl, token, (event) => {
+            const request = event.payload?.request as {
+              runId?: string;
+              payload?: { childRunId?: string };
+            } | undefined;
+            return event.type === "permission.asked" &&
+              (request?.runId === runId || request?.payload?.childRunId === runId);
+          });
+          const pending = await client.permissions.list({ sessionId, status: "pending" });
+          expect(pending).toMatchObject([{ sessionId, runId, toolName: "Write", status: "pending" }]);
+          expect((await client.sessions.getState(sessionId)).runs).toMatchObject([
+            { id: runId, status: "running" },
+          ]);
+          await client.permissions.reply(pending[0]!.id, {
+            status: "approved",
+            decision: "once",
+            clientId: "mixed-chat-client",
+          });
+          await waitForEvent(baseUrl, token, (event) =>
+            event.type === "session.run.updated" &&
+            (event.payload?.run as { id?: string; status?: string } | undefined)?.id === runId &&
+            (event.payload?.run as { status?: string } | undefined)?.status === "completed",
+          );
+          const state = await client.sessions.getState(sessionId);
+          expect(state.inputs.at(-1)).toMatchObject({ id: admitted.input.id, content });
+          expect(state.messages.slice(-3).map((message) => message.role)).toEqual([
+            "user", "assistant", "assistant",
+          ]);
+          expect(state.parts).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              type: "tool", toolUseId: `${sessionId}-write`, toolName: "Write", status: "completed",
+              output: { content: [{ type: "text", text: `saved ${content}` }] },
+            }),
+            expect.objectContaining({ type: "text", status: "completed", text: `finished ${content}` }),
+          ]));
+          expect(state.runs).toMatchObject([{ id: runId, inputId: admitted.input.id, status: "completed" }]);
+          expect(state.attempts).toMatchObject([{ runId, status: "completed" }]);
+          expect(state.permissions).toMatchObject([{ id: pending[0]!.id, status: "approved", decision: "once" }]);
+          const events = await client.events.list({ sessionId });
+          expect(events.every((event) => event.sessionId === sessionId)).toBe(true);
+          expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
+            "session.input.admitted", "session.message.created", "session.message.part.updated",
+            "session.run.updated", "permission.asked", "permission.replied",
+          ]));
+          return state;
+        };
+
+        const formal = await client.sessions.create({ cwd: process.cwd(), model: "m", title: "Formal" });
+        const formalState = await execute(formal.id, "formal edit");
+        const temporary = await client.sessions.fork(formal.id, { storage: "memory" });
+        expect(temporary).toMatchObject({ parentId: formal.id, storage: "memory" });
+        expect((await client.sessions.getState(temporary.id)).parts.map((part) => part.text))
+          .toEqual(formalState.parts.map((part) => part.text));
+        const temporaryState = await execute(temporary.id, "temporary edit");
+        const sourceAfter = await client.sessions.getState(formal.id);
+        expect({ ...sourceAfter, cursor: 0 }).toEqual({ ...formalState, cursor: 0 });
+
+        const database = (server.store as any).storage.database.connection;
+        expect(database.prepare("SELECT id FROM session").all()).toEqual([{ id: formal.id }]);
+        for (const table of ["session_input", "session_message", "session_message_part", "session_run", "permission_request", "session_event"]) {
+          expect(database.prepare(`SELECT DISTINCT session_id FROM ${table} WHERE session_id IS NOT NULL`).all())
+            .toEqual([{ session_id: formal.id }]);
+        }
+        expect(database.prepare("SELECT count(*) AS count FROM session_task WHERE session_id = ?").get(temporary.id))
+          .toEqual({ count: 0 });
+        expect(database.prepare("SELECT count(*) AS count FROM session_run_attempt WHERE run_id = ?").get(temporaryState.runs[0]!.id))
+          .toEqual({ count: 0 });
+        expect(database.prepare("SELECT DISTINCT run_id FROM session_run_attempt").all())
+          .toEqual([{ run_id: formalState.runs[0]!.id }]);
+
+        await server.close();
+        const reopened = new VykorHttpServer({ token, storePath, logger: () => {} });
+        try {
+          const listen = await reopened.listen();
+          const restartedClient = new VykorClient({ baseUrl: listen.url, token, fetch });
+          const restored = await restartedClient.sessions.getState(formal.id);
+          expect(restored.messages).toEqual(formalState.messages);
+          expect(restored.parts).toEqual(formalState.parts);
+          expect(restored.inputs).toEqual(formalState.inputs);
+          expect(restored.runs).toEqual(formalState.runs);
+          expect(restored.attempts).toEqual(formalState.attempts);
+          expect(restored.permissions).toEqual(formalState.permissions);
+          expect((await restartedClient.events.list({ sessionId: formal.id })).length).toBeGreaterThan(0);
+          await expect(restartedClient.sessions.getState(temporary.id)).rejects.toMatchObject({ status: 404 });
+          expect(reopened.store.runs.getRun(temporaryState.runs[0]!.id)).toBeUndefined();
+          expect(await restartedClient.events.list({ sessionId: temporary.id })).toEqual([]);
+        } finally {
+          await reopened.close();
+        }
       },
       { runtimeFactory },
     );

@@ -4,6 +4,8 @@ import type { DurableEventSequence } from "./event-sequence.js";
 import type { MutationBuffer } from "./mutation-buffer.js";
 import type { SessionDatabase } from "./session-database.js";
 import type { TransactionCoordinator } from "./transaction-coordinator.js";
+import type { ChatStoragePersistence } from "./chat-persistence.js";
+import type { TemporaryControlRecords } from "./temporary-control-records.js";
 
 export interface StorageContext {
   database: SessionDatabase;
@@ -12,6 +14,9 @@ export interface StorageContext {
   eventSequence: DurableEventSequence;
   deltaCheckpoint: DeltaCheckpoint;
   coordinator?: TransactionCoordinator;
+  chatPersistence?: ChatStoragePersistence;
+  temporaryControls?: TemporaryControlRecords;
+  transactionState?: SessionState;
   atomic<T>(work: () => T): T;
   deferUntilCommit?(callback: () => void): void;
   assertWritable(): void;

@@ -50,6 +50,55 @@ function ready(store: SessionStore, id = "asset", createdAt = 10) {
 }
 
 describe("AttachmentTransactions", () => {
+  it("allows ordinary unreferenced formal attachments to be cleaned up despite retained source metadata", () => {
+    withStore((store) => {
+      ready(store);
+      const main = store.sessions.create({ id: "main", cwd: process.cwd(), model: "m" });
+      store.attachments.recordChatSource("asset", main);
+      expect(store.attachments.hasPersistentChatSource("asset")).toBe(false);
+      expect(store.attachments.countAttachmentReferences("asset")).toBe(0);
+      const deleted = store.attachments.softDeleteUnreferencedAttachment("asset", 50);
+      expect(store.attachments.purgeDeletedAttachment("asset", 60)).toEqual(deleted);
+    });
+  });
+
+  it("retains both formal and temporary attachment sources after restart and protects temporary resources from cleanup", () => {
+    withStore((store, path) => {
+      ready(store);
+      const main = store.sessions.create({ id: "main", cwd: process.cwd(), model: "m" });
+      const temporary = { ...main, id: "temporary", storage: "memory" as const, metadata: { fork: { sourceSessionId: "main" } } };
+      for (const session of [main, temporary, temporary]) {
+        store.attachments.recordChatSource("asset", session);
+      }
+      expect(store.attachments.getAttachment("asset")).toHaveProperty("chatSources", [
+        { storage: "sqlite", sessionId: "main" },
+        { storage: "memory", sessionId: "temporary", sourceSessionId: "main" },
+      ]);
+      store.close();
+      const reopened = new SessionStore({ path });
+      try {
+        expect(reopened.attachments.hasPersistentChatSource("asset")).toBe(true);
+        expect(reopened.attachments.countAttachmentReferences("asset")).toBeGreaterThan(0);
+        expect(() => reopened.attachments.softDeleteUnreferencedAttachment("asset", 50)).toThrow("attachment_in_use");
+        expect(reopened.attachments.getAttachment("asset")?.status).toBe("ready");
+      } finally { reopened.close(); }
+    });
+  });
+
+  it("rolls back source attribution together with the surrounding transaction", () => {
+    withStore((store) => {
+      ready(store);
+      const main = store.sessions.create({ id: "main", cwd: process.cwd(), model: "m" });
+      expect(() => store.transaction(() => {
+        store.attachments.recordChatSource("asset", { ...main, id: "temporary", storage: "memory" });
+        expect(store.attachments.getAttachment("asset")).toHaveProperty("chatSources", [{ storage: "memory", sessionId: "temporary" }]);
+        throw new Error("rollback source");
+      })).toThrow("rollback source");
+      expect(store.attachments.getAttachment("asset")).not.toHaveProperty("chatSources");
+      expect(store.attachments.countAttachmentReferences("asset")).toBe(0);
+    });
+  });
+
   it("keeps repository conditional updates from overwriting terminal asset and representation rows", () => {
     withStore((store) => {
       const repository = new AttachmentRepository((store as any).storage);
@@ -394,6 +443,7 @@ describe("AttachmentTransactions", () => {
         });
         for (const api of [store.attachments]) {
           const writes = [
+            () => api.recordChatSource("asset", { id: "temporary", storage: "memory", metadata: {} }),
             () =>
               api.createImportingAttachment({
                 id: "new",

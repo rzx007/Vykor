@@ -92,10 +92,14 @@ export class DesktopSessionService {
     const allSessions = await client.sessions.list({ includeArchived: true, limit: 400 })
     return {
       sessions: sortSessions(
-        allSessions.filter((session) => session.status !== "archived").map(toDesktopSessionRecord)
+        allSessions
+          .filter((session) => session.storage !== "memory" && session.status !== "archived")
+          .map(toDesktopSessionRecord)
       ),
       archivedSessions: sortSessions(
-        allSessions.filter((session) => session.status === "archived").map(toDesktopSessionRecord)
+        allSessions
+          .filter((session) => session.storage !== "memory" && session.status === "archived")
+          .map(toDesktopSessionRecord)
       ),
     }
   }
@@ -115,10 +119,10 @@ export class DesktopSessionService {
     ])
     requireDesktopPluginCapabilities(capabilities)
     const sessions = allSessions
-      .filter((session) => session.status !== "archived")
+      .filter((session) => session.storage !== "memory" && session.status !== "archived")
       .map(toDesktopSessionRecord)
     const archivedSessions = allSessions
-      .filter((session) => session.status === "archived")
+      .filter((session) => session.storage !== "memory" && session.status === "archived")
       .map(toDesktopSessionRecord)
     const models = providers.flatMap((provider) => provider.models)
     const runtimeSnapshot = resolveDesktopRuntimeSnapshot(models, {

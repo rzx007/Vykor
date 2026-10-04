@@ -3,14 +3,22 @@ import { isDeepStrictEqual } from "node:util";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { CreateProjectionSettlementInput, ListProjectionSettlementsOptions, ProjectionSettlementRecord } from "@vykor/protocol";
 import type { SessionDatabase } from "../database/session-database.js";
+import type { TemporaryControlRecords } from "../database/temporary-control-records.js";
 import { projectionSettlements } from "./schema.js";
 import { decode, encode, now } from "./store-state.js";
 
 export function createProjectionSettlement(
   database: SessionDatabase["orm"],
   input: CreateProjectionSettlementInput,
+  temporaryControls?: TemporaryControlRecords,
+  storage: "memory" | "sqlite" = "sqlite",
 ): ProjectionSettlementRecord {
-  const existing = database
+  const existing = [...temporaryControls?.settlements.values() ?? []]
+    .find((row) =>
+      row.projector === input.projector &&
+      row.rootSessionId === input.rootSessionId &&
+      row.eventSequence === input.eventSequence,
+    ) ?? database
     .select()
     .from(projectionSettlements)
     .where(and(
@@ -33,29 +41,44 @@ export function createProjectionSettlement(
   }
   const timestamp = now();
   const id = input.id ?? randomUUID();
+  const row: typeof projectionSettlements.$inferSelect = {
+    id,
+    projector: input.projector,
+    rootSessionId: input.rootSessionId,
+    eventSequence: input.eventSequence,
+    action: input.action,
+    payloadJson: encode(input.payload),
+    status: "pending",
+    attemptCount: 0,
+    lastError: input.error ?? null,
+    nextRetryAt: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    resolvedAt: null,
+  };
+  if (getProjectionSettlement(database, id, temporaryControls)) {
+    throw new Error("UNIQUE constraint failed: projection_settlement.id");
+  }
+  if (storage === "memory") {
+    if (!temporaryControls) {
+      throw new Error("Temporary control records not initialized");
+    }
+    temporaryControls.settlements.set(id, row);
+    return projectionSettlementFromRow(row);
+  }
   database
     .insert(projectionSettlements)
-    .values({
-      id,
-      projector: input.projector,
-      rootSessionId: input.rootSessionId,
-      eventSequence: input.eventSequence,
-      action: input.action,
-      payloadJson: encode(input.payload),
-      status: "pending",
-      attemptCount: 0,
-      lastError: input.error ?? null,
-      nextRetryAt: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      resolvedAt: null,
-    })
+    .values(row)
     .run();
   return getProjectionSettlement(database, id)!;
 }
 
-export function getProjectionSettlement(database: SessionDatabase["orm"], id: string): ProjectionSettlementRecord | undefined {
-  const row = database
+export function getProjectionSettlement(
+  database: SessionDatabase["orm"],
+  id: string,
+  temporaryControls?: TemporaryControlRecords,
+): ProjectionSettlementRecord | undefined {
+  const row = temporaryControls?.settlements.get(id) ?? database
     .select()
     .from(projectionSettlements)
     .where(eq(projectionSettlements.id, id))
@@ -66,12 +89,18 @@ export function getProjectionSettlement(database: SessionDatabase["orm"], id: st
 export function listProjectionSettlements(
   database: SessionDatabase["orm"],
   options: ListProjectionSettlementsOptions = {},
+  temporaryControls?: TemporaryControlRecords,
 ): ProjectionSettlementRecord[] {
-  let records = database
+  const stored = database
     .select()
     .from(projectionSettlements)
     .orderBy(asc(projectionSettlements.createdAt), asc(projectionSettlements.id))
-    .all()
+    .all();
+  let records = [...stored, ...temporaryControls?.settlements.values() ?? []]
+    .sort((left, right) =>
+      left.createdAt - right.createdAt ||
+      (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+    )
     .map(projectionSettlementFromRow);
   if (options.projector)
     records = records.filter((row) => row.projector === options.projector);
@@ -88,8 +117,26 @@ export function listProjectionSettlements(
   return records;
 }
 
-export function markProjectionSettlementRetrying(database: SessionDatabase["orm"], id: string): ProjectionSettlementRecord {
+export function markProjectionSettlementRetrying(
+  database: SessionDatabase["orm"],
+  id: string,
+  temporaryControls?: TemporaryControlRecords,
+): ProjectionSettlementRecord {
   const timestamp = now();
+  const temporaryRow = temporaryControls?.settlements.get(id);
+  if (temporaryRow) {
+    if (temporaryRow.status === "pending" || temporaryRow.status === "retrying") {
+      temporaryControls!.settlements.set(id, {
+        ...temporaryRow,
+        status: "retrying",
+        attemptCount: temporaryRow.attemptCount + 1,
+        lastError: null,
+        nextRetryAt: null,
+        updatedAt: timestamp,
+      });
+    }
+    return getProjectionSettlement(database, id, temporaryControls)!;
+  }
   const result = database
     .update(projectionSettlements)
     .set({
@@ -117,10 +164,24 @@ export function failProjectionSettlement(
   id: string,
   error: string,
   nextRetryAt?: number,
+  temporaryControls?: TemporaryControlRecords,
 ): ProjectionSettlementRecord {
+  const changes = {
+    status: "pending",
+    lastError: error,
+    nextRetryAt: nextRetryAt ?? null,
+    updatedAt: now(),
+  };
+  const temporaryRow = temporaryControls?.settlements.get(id);
+  if (temporaryRow) {
+    if (temporaryRow.status !== "resolved" && temporaryRow.status !== "abandoned") {
+      temporaryControls!.settlements.set(id, { ...temporaryRow, ...changes });
+    }
+    return getProjectionSettlement(database, id, temporaryControls)!;
+  }
   const result = database
     .update(projectionSettlements)
-    .set({ status: "pending", lastError: error, nextRetryAt: nextRetryAt ?? null, updatedAt: now() })
+    .set(changes)
     .where(and(
       eq(projectionSettlements.id, id),
       ne(projectionSettlements.status, "resolved"),
@@ -133,15 +194,33 @@ export function failProjectionSettlement(
   return getProjectionSettlement(database, id)!;
 }
 
-export function resolveProjectionSettlement(database: SessionDatabase["orm"], id: string): ProjectionSettlementRecord {
+export function resolveProjectionSettlement(
+  database: SessionDatabase["orm"],
+  id: string,
+  temporaryControls?: TemporaryControlRecords,
+): ProjectionSettlementRecord {
   const timestamp = now();
+  const changes = {
+    status: "resolved",
+    lastError: null,
+    nextRetryAt: null,
+    updatedAt: timestamp,
+  };
+  const temporaryRow = temporaryControls?.settlements.get(id);
+  if (temporaryRow) {
+    if (temporaryRow.status !== "abandoned") {
+      temporaryControls!.settlements.set(id, {
+        ...temporaryRow,
+        ...changes,
+        resolvedAt: temporaryRow.resolvedAt ?? timestamp,
+      });
+    }
+    return getProjectionSettlement(database, id, temporaryControls)!;
+  }
   const result = database
     .update(projectionSettlements)
     .set({
-      status: "resolved",
-      lastError: null,
-      nextRetryAt: null,
-      updatedAt: timestamp,
+      ...changes,
       resolvedAt: sql<number>`coalesce(${projectionSettlements.resolvedAt}, ${timestamp})`,
     })
     .where(and(eq(projectionSettlements.id, id), ne(projectionSettlements.status, "abandoned")))
@@ -156,10 +235,24 @@ export function abandonProjectionSettlement(
   database: SessionDatabase["orm"],
   id: string,
   error: string,
+  temporaryControls?: TemporaryControlRecords,
 ): ProjectionSettlementRecord {
+  const changes = {
+    status: "abandoned",
+    lastError: error,
+    nextRetryAt: null,
+    updatedAt: now(),
+  };
+  const temporaryRow = temporaryControls?.settlements.get(id);
+  if (temporaryRow) {
+    if (temporaryRow.status !== "resolved") {
+      temporaryControls!.settlements.set(id, { ...temporaryRow, ...changes });
+    }
+    return getProjectionSettlement(database, id, temporaryControls)!;
+  }
   const result = database
     .update(projectionSettlements)
-    .set({ status: "abandoned", lastError: error, nextRetryAt: null, updatedAt: now() })
+    .set(changes)
     .where(and(eq(projectionSettlements.id, id), ne(projectionSettlements.status, "resolved")))
     .run();
   if (result.changes === 0 && !getProjectionSettlement(database, id)) {

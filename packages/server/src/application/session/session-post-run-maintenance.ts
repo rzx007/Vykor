@@ -48,7 +48,7 @@ export class SessionPostRunMaintenance {
   ): Promise<void> {
     const session = this.context.data.sessions.get(sessionId);
     const run = this.context.data.runs.getRun(runId);
-    if (!session || run?.status !== "completed") return;
+    if (!session || session.storage === "memory" || run?.status !== "completed") return;
 
     const messages = transcriptMessages(this.context.data, sessionId);
 
@@ -85,7 +85,7 @@ export class SessionPostRunMaintenance {
         const lastAtMs = (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;
         const recentSessionIds = this.context.data.sessions
           .list({ cwd: session.cwd, includeArchived: true })
-          .filter((candidate) => candidate.updatedAt > lastAtMs)
+          .filter((candidate) => candidate.storage !== "memory" && candidate.updatedAt > lastAtMs)
           .map((candidate) => candidate.id);
         await this.context.autoDream?.({
           cwd: session.cwd,

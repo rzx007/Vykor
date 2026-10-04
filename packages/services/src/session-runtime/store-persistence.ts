@@ -19,9 +19,11 @@ function namedPlaceholders<T extends Record<string, unknown>>(fields: T): { [K i
   };
 }
 
-export function persistSessionChanges(storage: StorageContext, output: Pick<IncrementalOutput, "flushMessagePartDeltas">): void {
-  const dirtyPartIds = storage.deltaCheckpoint.dirtyPartIds();
-  if (dirtyPartIds.length > 0) output.flushMessagePartDeltas();
+export function persistSessionChanges(
+  storage: Pick<StorageContext, "database" | "state" | "mutations"> & Partial<Pick<StorageContext, "deltaCheckpoint">>,
+  output?: Pick<IncrementalOutput, "flushMessagePartDeltas">,
+): void {
+  if (storage.deltaCheckpoint?.dirtyPartIds().length) output?.flushMessagePartDeltas();
 
   const database = storage.database.orm;
   if (storage.mutations.deletedInputAttachments.size > 0) {

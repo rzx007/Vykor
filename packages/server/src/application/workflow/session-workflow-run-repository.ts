@@ -49,6 +49,7 @@ export interface SessionWorkflowRunRepositoryOptions {
   workflows: WorkflowStorage;
   events: WorkflowSessionEvents;
   path: string;
+  sessionExists?: (sessionId: string) => boolean;
   onDurableEvent?: (previousEventSeq: number) => void;
 }
 
@@ -87,7 +88,8 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   appendEvent(event: WorkflowRunEvent): void {
-    const snapshot = this.load(event.runId);
+    const stored = this.options.workflows.loadRun(event.runId);
+    const snapshot = stored ? decodeWorkflowRunSnapshot(stored.snapshotJson) : undefined;
     const previousEventSeq = this.options.events.latestEventSeq();
     this.options.workflows.appendEvent({
       runId: event.runId,
@@ -95,7 +97,9 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
       eventJson: JSON.stringify(event),
       createdAt: event.timestamp,
     });
-    if (snapshot?.ownerSession) {
+    const missingTemporaryOwner = stored?.origin?.storage === "memory" &&
+      snapshot?.ownerSession && this.options.sessionExists?.(snapshot.ownerSession) === false;
+    if (snapshot?.ownerSession && !missingTemporaryOwner) {
       this.options.events.appendEvent({
         type: `workflow.${event.type}`,
         sessionId: snapshot.ownerSession,

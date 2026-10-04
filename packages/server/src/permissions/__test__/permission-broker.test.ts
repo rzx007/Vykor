@@ -180,6 +180,85 @@ describe("StorePermissionBroker", () => {
     });
   });
 
+  it("keeps temporary fork asks and replies out of the formal session and SQLite", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const temporary = store.conversationTransactions.forkSessionWithHistory({
+        sourceSessionId: "s1",
+        session: { id: "temporary", cwd: process.cwd(), model: "m", storage: "memory" },
+      });
+      const admitted = store.conversationTransactions.admitPromptWithRun({
+        prompt: { sessionId: temporary.id, content: "edit" },
+        run: { id: "temporary-run" },
+      });
+      const database = (store as any).storage.database.connection;
+      const sqliteEvents = database.prepare("SELECT * FROM session_event ORDER BY seq").all();
+
+      const allowed = broker.ask({ sessionId: temporary.id, runId: admitted.run.id, toolName: "Write" });
+      const request = store.permissions.list({ status: "pending" })[0]!;
+      expect(request).toMatchObject({ sessionId: temporary.id, runId: admitted.run.id, status: "pending" });
+      expect(store.permissions.list({ sessionId: "s1" })).toEqual([]);
+      expect(database.prepare("SELECT * FROM permission_request").all()).toEqual([]);
+      expect(database.prepare("SELECT * FROM session_event ORDER BY seq").all()).toEqual(sqliteEvents);
+
+      broker.reply({ requestId: request.id, status: "approved", decision: "once" });
+      await expect(allowed).resolves.toEqual({ status: "approved", decision: "once" });
+      expect(store.permissions.get(request.id)).toMatchObject({ sessionId: temporary.id, status: "approved" });
+      expect(store.permissions.list({ sessionId: "s1" })).toEqual([]);
+      expect(database.prepare("SELECT * FROM permission_request").all()).toEqual([]);
+      expect(database.prepare("SELECT * FROM session_event ORDER BY seq").all()).toEqual(sqliteEvents);
+    });
+  });
+
+  it("routes nested temporary child asks to the temporary root and reuses its approvals", async () => {
+    await withBroker(async ({ broker, store }) => {
+      store.sessions.create({ id: "temporary", parentId: "s1", cwd: process.cwd(), model: "m", storage: "memory" });
+      store.sessions.create({ id: "temporary-child", parentId: "temporary", cwd: process.cwd(), model: "m", storage: "memory" });
+      const first = broker.ask({ sessionId: "temporary", toolName: "Bash" });
+      const firstRequest = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: firstRequest.id, status: "approved", decision: "session" });
+      await expect(first).resolves.toEqual({ status: "approved", decision: "session" });
+
+      await expect(broker.ask({ sessionId: "temporary-child", toolName: "Bash" })).resolves.toEqual({
+        status: "approved", decision: "session",
+      });
+      expect(store.permissions.list({ sessionId: "temporary", toolName: "Bash" }).at(-1)).toMatchObject({
+        sessionId: "temporary",
+        status: "approved",
+        payload: { childSessionId: "temporary-child", reusedApprovalRequestId: firstRequest.id },
+      });
+      expect(store.permissions.list({ sessionId: "temporary-child" })).toEqual([]);
+      expect(store.permissions.list({ sessionId: "s1" })).toEqual([]);
+      const database = (store as any).storage.database.connection;
+      expect(database.prepare("SELECT * FROM permission_request").all()).toEqual([]);
+    });
+  });
+
+  it("does not reuse a formal session approval for a temporary fork", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const formalAsk = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
+      const formalRequest = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: formalRequest.id, status: "approved", decision: "session" });
+      await expect(formalAsk).resolves.toEqual({ status: "approved", decision: "session" });
+      const temporary = store.conversationTransactions.forkSessionWithHistory({
+        sourceSessionId: "s1",
+        session: { id: "temporary", cwd: process.cwd(), model: "m", storage: "memory" },
+      });
+      const database = (store as any).storage.database.connection;
+      const sqlitePermissions = database.prepare("SELECT * FROM permission_request").all();
+      const sqliteEvents = database.prepare("SELECT * FROM session_event ORDER BY seq").all();
+
+      const temporaryAsk = broker.ask({ sessionId: temporary.id, toolName: "Write" });
+      const pending = store.permissions.list({ sessionId: temporary.id, status: "pending" });
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.payload).not.toHaveProperty("reusedApprovalRequestId");
+      broker.reply({ requestId: pending[0]!.id, status: "denied", decision: "once" });
+      await expect(temporaryAsk).resolves.toEqual({ status: "denied", decision: "once" });
+      expect(store.permissions.list({ sessionId: "s1" })).toEqual([store.permissions.get(formalRequest.id)]);
+      expect(database.prepare("SELECT * FROM permission_request").all()).toEqual(sqlitePermissions);
+      expect(database.prepare("SELECT * FROM session_event ORDER BY seq").all()).toEqual(sqliteEvents);
+    });
+  });
+
   it("does not reuse a parent BrowserDeveloper approval for a child request", async () => {
     await withBroker(async ({ broker, store }) => {
       store.sessions.create({ id: "child", parentId: "s1", cwd: process.cwd(), model: "m" });

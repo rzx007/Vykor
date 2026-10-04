@@ -1,10 +1,12 @@
 import type { workflowRuns } from "../session-runtime/schema.js";
+import { parseChatResourceSource, type ChatResourceSource } from "@vykor/protocol";
 
 export interface StoredWorkflowRunInput {
   runId: string;
   ownerSessionId?: string;
   ownerInputId?: string;
   ownerRunId?: string;
+  origin?: ChatResourceSource;
   status: string;
   termination?: string;
   snapshotJson: string;
@@ -45,13 +47,18 @@ export interface WorkflowRunClaim {
 export function storedWorkflowRunFromRow(
   row: typeof workflowRuns.$inferSelect,
 ): StoredWorkflowRunRecord {
+  const origin = row.originJson ? parseChatResourceSource(JSON.parse(row.originJson)) : undefined;
+  const ownerSessionId = row.ownerSessionId ?? (origin?.storage === "memory" ? origin.sessionId : undefined);
+  const ownerInputId = row.ownerInputId ?? (origin?.storage === "memory" ? origin.inputId : undefined);
+  const ownerRunId = row.ownerRunId ?? (origin?.storage === "memory" ? origin.runId : undefined);
   return {
     runId: row.runId,
-    ...(row.ownerSessionId
-      ? { ownerSessionId: row.ownerSessionId }
+    ...(ownerSessionId
+      ? { ownerSessionId }
       : {}),
-    ...(row.ownerInputId ? { ownerInputId: row.ownerInputId } : {}),
-    ...(row.ownerRunId ? { ownerRunId: row.ownerRunId } : {}),
+    ...(ownerInputId ? { ownerInputId } : {}),
+    ...(ownerRunId ? { ownerRunId } : {}),
+    ...(origin ? { origin } : {}),
     status: row.status,
     ...(row.termination ? { termination: row.termination } : {}),
     snapshotJson: row.snapshotJson,

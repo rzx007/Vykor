@@ -15,6 +15,7 @@ import type {
 } from "./types"
 
 const emptySessionRuntime = createEmptySessionRuntime()
+const durableSessionLists = new WeakMap<DesktopSessionRecord[], DesktopSessionRecord[]>()
 const outsideWorkspaceProjects = new WeakMap<DesktopSessionRecord, DesktopProject>()
 let cachedOutsideDraftRoot: string | null = null
 let cachedOutsideDraftWorkspace: DesktopProject | null = null
@@ -51,13 +52,22 @@ export function selectProjects(state: DesktopSessionState): DesktopSessionState[
 }
 
 export function selectSessions(state: DesktopSessionState): DesktopSessionState["sessions"] {
-  return state.sessions
+  return durableSessions(state.sessions)
+}
+
+function durableSessions(sessions: DesktopSessionRecord[]): DesktopSessionRecord[] {
+  let durable = durableSessionLists.get(sessions)
+  if (!durable) {
+    durable = sessions.filter((session) => session.storage !== "memory")
+    durableSessionLists.set(sessions, durable)
+  }
+  return durable
 }
 
 export function selectArchivedSessions(
   state: DesktopSessionState
 ): DesktopSessionState["archivedSessions"] {
-  return state.archivedSessions
+  return durableSessions(state.archivedSessions)
 }
 
 export function selectActiveSessionId(

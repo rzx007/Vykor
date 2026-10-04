@@ -41,6 +41,7 @@ export function applyRetention(
   state: SessionState,
   policy: RetentionPolicy = DEFAULT_RETENTION_POLICY,
   timestamp = Date.now(),
+  temporaryEventIds: ReadonlySet<string> = new Set(),
 ): {
   events: number;
   workflowEvents: number;
@@ -133,7 +134,7 @@ export function applyRetention(
       database.select({ id: sessionEvents.id }).from(sessionEvents).all().map((row) => row.id),
     );
     state.events = state.events.filter((event) =>
-      removed.has(event.id),
+      removed.has(event.id) || temporaryEventIds.has(event.id),
     );
   }
   return result;

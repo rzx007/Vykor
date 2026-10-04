@@ -316,7 +316,7 @@
       "type": "table",
       "name": "attachment_asset",
       "tbl_name": "attachment_asset",
-      "sql": "CREATE TABLE `attachment_asset` ( `id` text PRIMARY KEY NOT NULL, `display_name` text NOT NULL, `declared_media_type` text, `media_type` text, `size_bytes` integer, `sha256` text, `status` text NOT NULL, `staging_name` text, `failure_code` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `deleted_at` integer )"
+      "sql": "CREATE TABLE `attachment_asset` ( `id` text PRIMARY KEY NOT NULL, `display_name` text NOT NULL, `declared_media_type` text, `media_type` text, `size_bytes` integer, `sha256` text, `status` text NOT NULL, `staging_name` text, `failure_code` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `deleted_at` integer , `chat_sources_json` text)"
     },
     {
       "type": "table",
@@ -484,7 +484,7 @@
       "type": "table",
       "name": "workflow_run",
       "tbl_name": "workflow_run",
-      "sql": "CREATE TABLE `workflow_run` ( `run_id` text PRIMARY KEY NOT NULL, `owner_session_id` text, `owner_input_id` text, `owner_run_id` text, `status` text NOT NULL, `termination` text, `snapshot_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`owner_session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE set null )"
+      "sql": "CREATE TABLE `workflow_run` ( `run_id` text PRIMARY KEY NOT NULL, `owner_session_id` text, `owner_input_id` text, `owner_run_id` text, `status` text NOT NULL, `termination` text, `snapshot_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `origin_json` text, FOREIGN KEY (`owner_session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE set null )"
     },
     {
       "type": "table",
@@ -643,6 +643,14 @@
           "cid": 11,
           "name": "deleted_at",
           "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "chat_sources_json",
+          "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
@@ -3485,6 +3493,14 @@
           "name": "updated_at",
           "type": "INTEGER",
           "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "origin_json",
+          "type": "TEXT",
+          "notnull": 0,
           "dflt_value": null,
           "pk": 0
         }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   CreateSessionInput,
+  ForkSessionInput,
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionMessageRole,
@@ -18,10 +19,7 @@ import type { SessionPluginUiService } from "./session-plugin-ui-service.js";
 
 export type CreateSessionCommand = CreateSessionInput;
 
-export interface ForkSessionCommand {
-  beforeMessageId?: string;
-  afterMessageId?: string;
-}
+export type ForkSessionCommand = ForkSessionInput;
 
 export interface UpdateSessionCommand {
   title?: string;
@@ -239,6 +237,7 @@ export class SessionCommandService {
         ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
         session: {
           parentId: source.id,
+          ...(input.storage !== undefined ? { storage: input.storage } : {}),
           ...(source.projectId ? { projectId: source.projectId } : {}),
           cwd: source.cwd,
           title: source.title ? `${source.title} fork` : "",

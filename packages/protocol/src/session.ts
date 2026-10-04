@@ -4,6 +4,7 @@
  */
 export type SessionStatus =
   "idle" | "running" | "closing" | "archived" | "error";
+export type SessionStorage = "sqlite" | "memory";
 export type InputDelivery = "queue" | "steer";
 export type RunStatus =
   "pending" | "running" | "completed" | "failed" | "interrupted";
@@ -43,6 +44,7 @@ export function sessionEventSchemaVersion(type: string): number {
 
 export interface SessionRecord {
   id: string;
+  storage?: SessionStorage;
   parentId?: string;
   projectId?: string;
   cwd: string;
@@ -55,6 +57,10 @@ export interface SessionRecord {
   createdAt: number;
   updatedAt: number;
   archivedAt?: number;
+}
+
+export function getSessionStorage(session: Pick<SessionRecord, "storage"> | undefined): SessionStorage {
+  return session?.storage ?? "sqlite";
 }
 
 export interface ProjectRecord {

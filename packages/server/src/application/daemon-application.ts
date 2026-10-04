@@ -295,6 +295,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.eventPublisher = new SessionEventPublisher(store.conversations, this.events);
       this.workflows = new SessionWorkflowRunRepository({
         workflows: store.workflows,
+        sessionExists: (sessionId) => !!store.sessions.get(sessionId),
         events: {
           latestEventSeq: () => store.conversations.latestEventSeq(),
           appendEvent: (input) => store.conversations.appendEvent(input),

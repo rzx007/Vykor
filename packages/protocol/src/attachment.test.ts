@@ -7,6 +7,21 @@ import {
 } from "./attachment.js";
 
 describe("attachment protocol", () => {
+  it("retains validated chat sources when reading persistent attachments", () => {
+    const sources = [
+      { storage: "sqlite", sessionId: "main" },
+      { storage: "memory", sessionId: "temporary", sourceSessionId: "main" },
+    ];
+    expect(parseAttachmentAssetRecord({
+      id: "asset", displayName: "a.txt", status: "importing", createdAt: 1, updatedAt: 1,
+      chatSources: sources,
+    })).toHaveProperty("chatSources", sources);
+    expect(() => parseAttachmentAssetRecord({
+      id: "asset", displayName: "a.txt", status: "importing", createdAt: 1, updatedAt: 1,
+      chatSources: [{ storage: "disk", sessionId: "temporary" }],
+    })).toThrow("storage");
+  });
+
   it("parses the documented default limits", () => {
     expect(parseAttachmentLimits(DEFAULT_ATTACHMENT_LIMITS)).toEqual({
       maxFilesPerPrompt: 20,

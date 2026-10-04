@@ -4,6 +4,18 @@ vi.mock("electron", () => ({ app: { getPath: () => "C:\\Documents" } }))
 
 import { SessionOperations } from "./session-operations"
 
+it("retains temporary storage when forking through the desktop service", async () => {
+  const fork = vi.fn(async (_id: string, input: Record<string, unknown>) => ({
+    id: "side", parentId: "main", cwd: "D:\\repo", title: "Side", model: "m", status: "idle",
+    metadata: {}, createdAt: 1, updatedAt: 1, ...input,
+  }))
+  const result = await new SessionOperations().forkSession({ sessions: { fork } } as never, {
+    sessionId: "main", storage: "memory",
+  })
+  expect(fork).toHaveBeenCalledWith("main", { storage: "memory" })
+  expect(result.storage).toBe("memory")
+})
+
 it("marks a new session as following the default effort only when effort is not selected", async () => {
   const create = vi.fn(async (input: Record<string, any>) => ({
     ...input,

@@ -149,6 +149,7 @@ function validateSession(value: unknown, path: string) {
   stringField(item, "title", path);
   stringField(item, "model", path);
   enumField(item, "status", path, ["idle", "running", "closing", "archived", "error"] as const);
+  if (item.storage !== undefined) enumField(item, "storage", path, ["sqlite", "memory"] as const);
   recordField(item, "metadata", path);
   numberField(item, "createdAt", path);
   numberField(item, "updatedAt", path);

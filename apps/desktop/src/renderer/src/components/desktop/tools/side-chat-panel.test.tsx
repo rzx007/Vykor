@@ -11,7 +11,7 @@ import { composerDocument } from "@renderer/stores/desktop-session/composer-docu
 import { selectDraftText } from "@renderer/stores/desktop-session/composer-draft-state"
 import { MainLayoutContext } from "../layout/main-layout/main-layout-context"
 import type { DesktopAuxSessionUpdate, DesktopSessionView } from "@shared/session-types"
-import { SideChatPanel, appendSideChatQuote } from "./side-chat-panel"
+import { SideChatPanel, appendSideChatQuote, sideChatTargets } from "./side-chat-panel"
 import { SideChatSelectionActions } from "./side-chat-selection-actions"
 import { UtilityPanel } from "../layout/main-layout/utility-panel/utility-panel"
 import {
@@ -35,7 +35,7 @@ let container: HTMLDivElement
 let listeners: Set<(update: DesktopAuxSessionUpdate) => void>
 const sideView = (source = "main", cursor = 0): DesktopSessionView => ({
   ...emptySessionView(`side-${source}`, cursor),
-  session: { ...emptySessionView(`side-${source}`).session, parentId: source },
+  session: { ...emptySessionView(`side-${source}`).session, parentId: source, storage: "memory" },
 })
 const fork = vi.fn(async ({ sessionId }: { sessionId: string }) => sideView(sessionId).session)
 const openAux = vi.fn(async ({ sessionId }: { sessionId: string; subscriptionId: string }) =>
@@ -86,6 +86,7 @@ beforeEach(() => {
   HTMLElement.prototype.scrollTo = () => {}
   HTMLElement.prototype.getAnimations = () => []
   localStorage.clear()
+  sideChatTargets.clear()
   listeners = new Set()
   vi.clearAllMocks()
   fork.mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
@@ -174,6 +175,13 @@ it("opening and quoting uses the side draft without creating a session or changi
   expect(sendPrompt).not.toHaveBeenCalled()
 })
 
+it("ignores previous durable target associations stored in localStorage", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "legacy-fork" }))
+  await mount()
+  expect(openAux).not.toHaveBeenCalled()
+  expect(fork).not.toHaveBeenCalled()
+})
+
 it("selected snippets can be previewed and removed without editing the question or sending", async () => {
   draft("main", "my question")
   appendSideChatQuote("main", "<script>literal & safe</script>\nsecond line")
@@ -249,7 +257,7 @@ it("failed sends retain selected text and retry the same ordinary input", async 
 })
 
 it("reopening with new source context retains previous target snippets without an invisible draft conflict", async () => {
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   await mount()
   await act(async () => appendSideChatQuote("main", "previous passage"))
   await act(async () => root.render(null))
@@ -328,7 +336,8 @@ it("first send forks once, sends normal context, skill, plugin and attachment it
   const primary = useDesktopSessionStore.getState().sessionView
   await mount()
   await submit()
-  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main" })
+  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory" })
+  expect(localStorage.getItem("vykor.desktop.linked-chat-targets")).toBeNull()
   expect(sendPrompt).toHaveBeenCalledWith(
     expect.objectContaining({
       sessionId: "side-main",
@@ -626,7 +635,7 @@ it("AskUser renders the normal answer card and records its reply only in the sid
 it.each(["wrong parent", "wrong ID", "deleted"])(
   "persisted target with %s cannot send or create a replacement",
   async (kind) => {
-    localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+    sideChatTargets.set("main", "side-main")
     useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "do not send")
     if (kind === "deleted") openAux.mockRejectedValueOnce(new Error("session_not_found"))
     else
@@ -642,6 +651,194 @@ it.each(["wrong parent", "wrong ID", "deleted"])(
     expect(fork).not.toHaveBeenCalled()
   }
 )
+
+it.each([
+  "Session not found: side-main",
+  "Error invoking remote method 'session:aux-open': Error: Session not found: side-main",
+  "Error invoking remote method 'session:aux-open': VykorApiError: Session not found: side-main",
+])("recreates an expired temporary target on the next send and retains its draft: %s", async (message) => {
+  sideChatTargets.set("main", "side-main")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "unsent question")
+  useDesktopSessionStore.setState((state) => ({
+    composerDraftsByScope: {
+      ...state.composerDraftsByScope,
+      "session:side-main": {
+        ...state.composerDraftsByScope["session:side-main"]!,
+        textSelections: [{ id: "quoted", text: "quoted passage" }],
+        attachments: [{ draftId: "file", taskId: "upload", assetId: "asset", displayName: "note.txt",
+          declaredMediaType: "text/plain", mediaType: "text/plain", sizeBytes: 2,
+          status: "ready", bytesUploaded: 2, progress: 1 }],
+      },
+    },
+  }))
+  openAux.mockRejectedValueOnce(new Error(message))
+  const primary = useDesktopSessionStore.getState().sessionView
+
+  await mount()
+
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("unsent question")
+  expect(selections("linked-chat:main")).toEqual(["quoted passage"])
+  expect(fork).not.toHaveBeenCalled()
+  expect(sendPrompt).not.toHaveBeenCalled()
+  expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+
+  await act(async () => root.render(null))
+  await mount()
+  expect(openAux).toHaveBeenCalledTimes(1)
+  const replacement = { ...sideView(), session: { ...sideView().session, id: "side-recreated" } }
+  fork.mockResolvedValueOnce(replacement.session)
+  openAux.mockResolvedValueOnce(replacement)
+  await submit()
+
+  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory" })
+  expect(sendPrompt).toHaveBeenCalledWith(expect.objectContaining({
+    sessionId: "side-recreated",
+    items: [
+      { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+      { type: "text", text: "选中文本片段：\n> quoted passage\n\n" },
+      { type: "text", text: "unsent question" },
+    ],
+    attachments: [{ assetId: "asset", intent: "auto", displayName: "note.txt" }],
+  }))
+  expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+})
+
+it.each(["Failed to fetch", "Session not found: other-target"])(
+  "keeps the existing target and draft on an unconfirmed failure: %s", async (message) => {
+    sideChatTargets.set("main", "side-main")
+    useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "keep this question")
+    openAux.mockRejectedValueOnce(new Error(message))
+
+    await mount()
+    await submit()
+
+    expect(sideChatTargets.get("main")).toBe("side-main")
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("keep this question")
+    expect(fork).not.toHaveBeenCalled()
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+  }
+)
+
+it("checks a reconnecting target without replacing its live subscription and recovers only confirmed absence", async () => {
+  sideChatTargets.set("main", "side-main")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "pending question")
+  const connected = {
+    ...sideView("main", 2),
+    runs: [{ id: "run", sessionId: "side-main", status: "running" as const,
+      metadata: {}, createdAt: 1, updatedAt: 1 }],
+    messages: [{ id: "response", sessionId: "side-main", role: "assistant" as const, seq: 1,
+      metadata: {}, createdAt: 1, updatedAt: 1 }],
+    parts: [{ id: "text", sessionId: "side-main", messageId: "response", seq: 1, type: "text" as const,
+      status: "completed" as const, text: "last response", metadata: {}, createdAt: 1, updatedAt: 1 }],
+  }
+  openAux.mockResolvedValueOnce(connected)
+  await mount()
+  const subscriptionId = openAux.mock.calls[0]![0].subscriptionId
+  openAux.mockRejectedValueOnce(new Error("Failed to fetch"))
+
+  await emit({ ...connected, syncStatus: "reconnecting" }, subscriptionId)
+
+  expect(openAux).toHaveBeenCalledTimes(2)
+  expect(openAux.mock.calls[1]![0].subscriptionId).not.toBe(subscriptionId)
+  expect(closeAux).not.toHaveBeenCalledWith({ subscriptionId })
+  expect(sideChatTargets.get("main")).toBe("side-main")
+  expect(container.textContent).toContain("last response")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("pending question")
+  expect(fork).not.toHaveBeenCalled()
+
+  openAux.mockRejectedValueOnce(new Error("Session not found: side-main"))
+  await emit({ ...connected, syncStatus: "reconnecting" }, subscriptionId)
+
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("pending question")
+  expect(container.textContent).not.toContain("last response")
+  expect(fork).not.toHaveBeenCalled()
+  expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("keeps one target check in flight across repeated reconnect updates", async () => {
+  sideChatTargets.set("main", "side-main")
+  await mount()
+  const subscriptionId = openAux.mock.calls[0]![0].subscriptionId
+  let rejectCheck!: (error: Error) => void
+  openAux.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectCheck = reject }))
+
+  await emit({ ...sideView(), syncStatus: "reconnecting" }, subscriptionId)
+  await emit({ ...sideView(), syncStatus: "reconnecting" }, subscriptionId)
+  expect(openAux).toHaveBeenCalledTimes(2)
+  expect(closeAux).not.toHaveBeenCalledWith({ subscriptionId })
+
+  await act(async () => rejectCheck(new Error("Failed to fetch")))
+  await emit({ ...sideView(), syncStatus: "reconnecting" }, subscriptionId)
+  expect(openAux).toHaveBeenCalledTimes(3)
+  expect(sideChatTargets.get("main")).toBe("side-main")
+})
+
+it("merges the expired target draft with a new source draft entered while its snapshot is pending", async () => {
+  sideChatTargets.set("main", "side-main")
+  const attachment = {
+    draftId: "old-file", taskId: "old-upload", assetId: "old-asset", displayName: "old.txt",
+    declaredMediaType: "text/plain", mediaType: "text/plain", sizeBytes: 2,
+    status: "ready" as const, bytesUploaded: 2, progress: 1,
+  }
+  useDesktopSessionStore.setState({ composerDraftsByScope: {
+    "session:side-main": {
+      document: composerDocument([{ type: "text", text: "old question" }]),
+      attachments: [attachment], textSelections: [{ id: "old-quote", text: "old quote" }],
+    },
+  } })
+  let rejectSnapshot!: (error: Error) => void
+  openAux.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSnapshot = reject }))
+  await mount()
+  await act(async () => {
+    draft("main", "new question")
+    appendSideChatQuote("main", "new quote")
+    useDesktopSessionStore.setState((state) => ({ composerDraftsByScope: {
+      ...state.composerDraftsByScope,
+      "linked-chat:main": { ...state.composerDraftsByScope["linked-chat:main"]!,
+        attachments: [{ ...attachment, draftId: "new-file", assetId: "new-asset", displayName: "new.txt" }],
+      },
+    } }))
+  })
+  await act(async () => rejectSnapshot(new Error("Session not found: side-main")))
+
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain("old question")
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain("new question")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("old question\n\nnew question")
+  expect(selections("linked-chat:main")).toEqual(["old quote", "new quote"])
+  expect(useDesktopSessionStore.getState().composerDraftsByScope["linked-chat:main"]?.attachments.map((item) => item.assetId))
+    .toEqual(["old-asset", "new-asset"])
+  expect(useDesktopSessionStore.getState().composerDraftsByScope["session:side-main"]).toBeUndefined()
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(fork).not.toHaveBeenCalled()
+})
+
+it("an old target check cannot close the new check after the panel is hidden and shown", async () => {
+  sideChatTargets.set("main", "side-main")
+  await mount()
+  const subscriptionId = openAux.mock.calls[0]![0].subscriptionId
+  let finishOldCheck!: (view: DesktopSessionView) => void
+  openAux.mockImplementationOnce(() => new Promise((resolve) => { finishOldCheck = resolve }))
+  await emit({ ...sideView(), syncStatus: "reconnecting" }, subscriptionId)
+  const oldCheckId = openAux.mock.calls.at(-1)![0].subscriptionId
+  await mount("main", false)
+  await mount("main", true)
+  let finishNewCheck!: (view: DesktopSessionView) => void
+  openAux.mockImplementationOnce(() => new Promise((resolve) => { finishNewCheck = resolve }))
+  await emit({ ...sideView(), syncStatus: "reconnecting" }, subscriptionId)
+  const newCheckId = openAux.mock.calls.at(-1)![0].subscriptionId
+  closeAux.mockClear()
+
+  await act(async () => finishOldCheck(sideView()))
+  const closedByOldCheck = closeAux.mock.calls.map(([input]) => input)
+  await act(async () => finishNewCheck(sideView()))
+
+  expect(closedByOldCheck).toContainEqual({ subscriptionId: oldCheckId })
+  expect(closedByOldCheck).not.toContainEqual({ subscriptionId: newCheckId })
+  expect(sideChatTargets.get("main")).toBe("side-main")
+})
 
 it("discarding an A selection on a source switch prevents appending it to B", async () => {
   await act(async () => root.render(<SelectionHarness />))
@@ -830,7 +1027,7 @@ it("a rare target draft collision preserves both drafts, reports it and reuses t
 })
 
 it("side configuration reflects accepted session settings and rolls back a rejected permission change", async () => {
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   const updatePermissionMode = vi.fn().mockRejectedValueOnce(new Error("config offline"))
   Object.assign(window.desktop.sessions, { updatePermissionMode })
   await mount()
@@ -863,7 +1060,7 @@ it("side configuration reflects accepted session settings and rolls back a rejec
 })
 
 it("a newer auxiliary configuration replaces a successfully changed side permission while keeping immediate RPC feedback", async () => {
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   const updatePermissionMode = vi.fn(async () => ({
     ...sideView().session,
     metadata: { runtime: { permissionMode: "full_auto" } },
@@ -907,7 +1104,7 @@ it("a newer auxiliary configuration replaces a successfully changed side permiss
 })
 
 it("quotes stay in this window's visible side draft if another window changes the saved association", async () => {
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   await mount()
   localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "other-fork" }))
   await act(async () => appendSideChatQuote("main", "visible quote"))
@@ -975,7 +1172,7 @@ it("a side event reconciles its pending ordinary send without changing the prima
 })
 
 it("model and effort selections update the explicit side session and leave primary settings alone", async () => {
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   const original = {
     id: "test-model",
     label: "Original",
@@ -1030,7 +1227,7 @@ it.each(["self", "wrong-parent"])(
   "an unverified %s association cannot receive a quote in the main or another chat draft",
   async (kind) => {
     const target = kind === "self" ? "main" : "foreign"
-    localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: target }))
+    sideChatTargets.set("main", target)
     const state = useDesktopSessionStore.getState()
     state.setComposerDraftText("session:main", "main remains")
     state.setComposerDraftText("session:foreign", "foreign remains")
@@ -1060,7 +1257,7 @@ it.each(["self", "wrong-parent"])(
 
 it("quotes wait in the source scope and migrate only after a saved ordinary target is verified", async () => {
   let finish!: (view: DesktopSessionView) => void
-  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  sideChatTargets.set("main", "side-main")
   openAux.mockImplementationOnce(
     () =>
       new Promise((resolve) => {

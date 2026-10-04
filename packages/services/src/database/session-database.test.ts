@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { sessionEventSequence } from "../session-runtime/schema.js";
 import { SessionDatabase } from "./session-database.js";
 
-// Regenerated from the current migration chain (0000_current_schema + 0001_drop_application_storage_format).
+// Regenerated from the current migration chain, including temporary resource sources.
 const expected = JSON.parse(readFileSync(new URL("./__fixtures__/current-schema-inventory.json", import.meta.url), "utf8"));
 
 function inventory(database: Database.Database) {
@@ -83,7 +83,7 @@ describe("SessionDatabase", () => {
       expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
       first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
       const journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-      expect(journal).toHaveLength(2);
+      expect(journal).toHaveLength(3);
       first.close();
       const second = SessionDatabase.open({ path });
       try {
@@ -97,11 +97,13 @@ describe("SessionDatabase", () => {
     expect(sqlFiles).toEqual([
       "0000_current_schema.sql",
       "0001_drop_application_storage_format.sql",
+      "0002_temporary_resource_sources.sql",
     ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
     expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
       "0000_current_schema",
       "0001_drop_application_storage_format",
+      "0002_temporary_resource_sources",
     ]);
   });
 

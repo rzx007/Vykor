@@ -54,6 +54,11 @@ export class SessionRepository {
     if (this.storage.state.sessions[id])
       throw new Error(`Session already exists: ${id}`);
     const timestamp = now();
+    const parent = input.parentId ? this.storage.state.sessions[input.parentId] : undefined;
+    if (parent?.storage === "memory" && input.storage === "sqlite") {
+      throw new Error("A temporary chat cannot own a persistent child chat");
+    }
+    const storage = input.storage ?? parent?.storage ?? "sqlite";
     const projectId =
       input.projectId ??
       (input.parentId
@@ -74,6 +79,7 @@ export class SessionRepository {
       model: input.model,
       ...(input.agent ? { agent: input.agent } : {}),
       status: "idle",
+      ...(storage === "memory" ? { storage: "memory" as const } : {}),
       metadata: input.metadata ?? {},
       createdAt: timestamp,
       updatedAt: timestamp,

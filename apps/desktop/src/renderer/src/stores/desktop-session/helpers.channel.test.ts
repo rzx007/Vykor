@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { isChannelSession, projectFromSession, resolveSessionWorkspace } from "./helpers"
+import { isChannelSession, isTopLevelSession, projectFromSession, resolveSessionWorkspace } from "./helpers"
 import type { DesktopSessionRecord } from "@shared/session-types"
 
 function session(overrides: Partial<DesktopSessionRecord> = {}): DesktopSessionRecord {
@@ -19,6 +19,10 @@ function session(overrides: Partial<DesktopSessionRecord> = {}): DesktopSessionR
 }
 
 describe("isChannelSession", () => {
+  it("excludes temporary sessions from ordinary sidebar entries", () => {
+    expect(isTopLevelSession(session({ storage: "memory" }))).toBe(false)
+    expect(isTopLevelSession(session())).toBe(true)
+  })
   it("detects channel sessions by metadata and excludes forks", () => {
     expect(isChannelSession(session({ metadata: { externalConversation: { connector: "feishu" } } }))).toBe(true)
     expect(isChannelSession(session({ metadata: { source: "channel" } }))).toBe(true)

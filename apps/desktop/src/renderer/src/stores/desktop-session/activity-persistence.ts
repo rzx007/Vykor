@@ -48,7 +48,10 @@ export function saveActivityPersistence(state: ActivityState): void {
 
         lastNotifiedCursor: state.lastNotifiedCursor,
 
-        readSeqBySessionId: state.readSeqBySessionId,
+        readSeqBySessionId: Object.fromEntries(
+          Object.entries(state.readSeqBySessionId)
+            .filter(([sessionId]) => state.sessions[sessionId]?.session.storage !== "memory")
+        ),
       })
     )
   } catch {

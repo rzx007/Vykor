@@ -41,7 +41,7 @@ try {
         for (let i = 0; i < 2; i++) {
           const db = SessionDatabase.open({ path: ${JSON.stringify(path)} });
           assert.equal(db.connection.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations'").get().n, 31);
-          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get().n, 2);
+          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get().n, ${journalEntries.length});
           db.close();
         }
       })().catch(error => { console.error(error); process.exitCode = 1; });

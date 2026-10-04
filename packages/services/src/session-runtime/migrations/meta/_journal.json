@@ -15,6 +15,13 @@
       "when": 1789896940683,
       "tag": "0001_drop_application_storage_format",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791123651986,
+      "tag": "0002_temporary_resource_sources",
+      "breakpoints": true
     }
   ]
 }

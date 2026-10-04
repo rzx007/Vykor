@@ -8,6 +8,67 @@ import { SessionStore } from "../session-runtime/store.js";
 import { WorkflowRepository } from "./workflow-repository.js";
 
 describe("WorkflowRepository", () => {
+  it("keeps formal workflow foreign keys and records its actual formal owner", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-formal-workflow-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.sessions.create({ id: "formal", cwd: process.cwd(), model: "m" });
+      store.conversationTransactions.admitPrompt({ id: "formal-input", sessionId: "formal", content: "run" });
+      store.runs.createRun({ id: "formal-run", sessionId: "formal", inputId: "formal-input" });
+      store.workflows.saveRun({
+        runId: "workflow", ownerSessionId: "formal", ownerInputId: "formal-input", ownerRunId: "formal-run",
+        status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2, taskAttempts: [],
+      });
+      expect((store as any).storage.database.connection.prepare(
+        "SELECT owner_session_id, owner_input_id, owner_run_id FROM workflow_run WHERE run_id = ?",
+      ).get("workflow")).toEqual({ owner_session_id: "formal", owner_input_id: "formal-input", owner_run_id: "formal-run" });
+      expect(store.workflows.listRuns({ ownerSessionId: "formal" })[0]).toMatchObject({
+        origin: { storage: "sqlite", sessionId: "formal", inputId: "formal-input", runId: "formal-run" },
+      });
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("persists temporary workflow provenance without chat foreign keys and reloads it after the chat disappears", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-temporary-workflow-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    const input = {
+      runId: "temporary-workflow", ownerSessionId: "temporary", ownerInputId: "temporary-input",
+      ownerRunId: "temporary-run", status: "running", snapshotJson: '{"ownerSession":"temporary"}',
+      createdAt: 1, updatedAt: 2, taskAttempts: [],
+    };
+    try {
+      const main = store.sessions.create({ id: "main", cwd: process.cwd(), model: "m" });
+      (store as any).storage.state.sessions.temporary = {
+        ...main, id: "temporary", storage: "memory", metadata: { fork: { sourceSessionId: "main" } },
+      };
+      store.workflows.saveRun(input);
+      const database = (store as any).storage.database.connection;
+      expect(database.prepare("SELECT owner_session_id, owner_input_id, owner_run_id FROM workflow_run WHERE run_id = ?").get(input.runId))
+        .toEqual({ owner_session_id: null, owner_input_id: null, owner_run_id: null });
+      expect(store.workflows.loadRun(input.runId)).toMatchObject({
+        ownerSessionId: "temporary", ownerInputId: "temporary-input", ownerRunId: "temporary-run",
+        origin: { storage: "memory", sessionId: "temporary", sourceSessionId: "main", inputId: "temporary-input", runId: "temporary-run" },
+      });
+      expect(store.workflows.listRuns({ ownerSessionId: "main" })).toEqual([]);
+      delete (store as any).storage.state.sessions.temporary;
+      store.close();
+      const reopened = new SessionStore({ path });
+      try {
+        expect(reopened.workflows.listRuns({ ownerSessionId: "temporary" })).toHaveLength(1);
+        reopened.workflows.saveRun({ ...input, status: "completed", updatedAt: 3 });
+        expect(reopened.workflows.loadRun(input.runId)).toMatchObject({ status: "completed", origin: { storage: "memory", sessionId: "temporary" } });
+        expect((reopened as any).storage.database.connection.pragma("foreign_key_check")).toEqual([]);
+      } finally { reopened.close(); }
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("saves and reloads a run with its task attempts", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-workflow-repository-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });

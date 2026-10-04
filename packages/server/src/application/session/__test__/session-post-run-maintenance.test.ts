@@ -37,6 +37,49 @@ function createStore(runStatus = "completed") {
 }
 
 describe("SessionPostRunMaintenance", () => {
+  it("never writes automatic memory or personalization for temporary sessions", async () => {
+    const store = createStore();
+    store.getSession.mockReturnValue({ ...store.getSession(), storage: "memory" } as any);
+    const personalizationUpdater = vi.fn(() => 1);
+    const sessionMemoryWriter = vi.fn();
+    const remember = vi.fn();
+    const autoDream = vi.fn();
+    const maintenance = new SessionPostRunMaintenance({
+      data: store as any,
+      getSettings: async () => ({ memory: { enabled: true, autoExtractEnabled: true, autoDreamEnabled: true } } as any),
+      personalizationUpdater,
+      sessionMemoryWriter,
+      autoDream,
+      log: vi.fn(),
+    });
+
+    await maintenance.run("s1", "run-1", { remember } as any);
+
+    expect(personalizationUpdater).not.toHaveBeenCalled();
+    expect(sessionMemoryWriter).not.toHaveBeenCalled();
+    expect(remember).not.toHaveBeenCalled();
+    expect(autoDream).not.toHaveBeenCalled();
+  });
+
+  it("excludes temporary sessions from a durable session's automatic dream", async () => {
+    const store = createStore();
+    store.listSessions.mockReturnValue([
+      { id: "durable", updatedAt: 30 },
+      { id: "temporary", storage: "memory", updatedAt: 30 },
+    ] as any);
+    const autoDream = vi.fn();
+    const maintenance = new SessionPostRunMaintenance({
+      data: store as any,
+      getSettings: async () => ({ memory: { enabled: true, autoExtractEnabled: false, autoDreamEnabled: true } } as any),
+      personalizationUpdater: () => 0,
+      autoDream,
+      log: vi.fn(),
+    });
+
+    await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
+
+    expect(autoDream).toHaveBeenCalledWith(expect.objectContaining({ recentSessionIds: ["durable"] }));
+  });
   it("passes a bound session goal into the checkpoint", async () => {
     const store = createStore();
     store.getRun.mockReturnValue({ id: "run-1", sessionId: "s1", status: "completed", metadata: { goalId: "goal-1" } } as any);

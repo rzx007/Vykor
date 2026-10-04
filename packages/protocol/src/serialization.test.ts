@@ -59,6 +59,12 @@ const event: SessionEventRecord = {
 };
 
 describe("protocol serialization", () => {
+  it("keeps temporary storage in snapshots and rejects unknown storage", () => {
+    expect(decodeSessionStateSnapshot({ ...snapshot, session: { ...snapshot.session, storage: "memory" } }).session)
+      .toMatchObject({ storage: "memory" });
+    expect(() => decodeSessionStateSnapshot({ ...snapshot, session: { ...snapshot.session, storage: "disk" } }))
+      .toThrowError(expect.objectContaining({ details: { path: "snapshot.session.storage" } }));
+  });
   it("round-trips a Session snapshot through JSON", () => {
     const text = serializeSessionStateSnapshot(snapshot);
     expect(deserializeSessionStateSnapshot(text)).toEqual(snapshot);

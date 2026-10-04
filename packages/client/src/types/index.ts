@@ -15,6 +15,7 @@ import type {
   AttachmentAssetRecord,
   CreateScheduledTaskInput,
   CreateSessionInput,
+  ForkSessionInput,
   InputDelivery,
   PermissionRequestRecord,
   ScheduledRunRecord,
@@ -112,10 +113,7 @@ export interface ListSessionsOptions {
 /** `POST /sessions` 请求体。 */
 export type CreateClientSessionInput = CreateSessionInput;
 
-export interface ForkClientSessionInput {
-  beforeMessageId?: string;
-  afterMessageId?: string;
-}
+export type ForkClientSessionInput = ForkSessionInput;
 
 export interface EditLatestClientPromptInput {
   id: string;

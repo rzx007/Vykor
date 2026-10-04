@@ -39,7 +39,7 @@ import {
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import { selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
+import { composerDocument, selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
 import {
   selectDraftDocument,
   selectDraftAttachments,
@@ -67,20 +67,10 @@ import type {
   DesktopPermissionMode,
 } from "@shared/session-types"
 
-const associationKey = "vykor.desktop.linked-chat-targets"
+export const sideChatTargets = new Map<string, string>()
 const pendingForks = new Map<string, Promise<DesktopSessionRecord>>()
 // Each renderer keeps the association currently displayed in its own panel.
 const boundTargets = new Map<string, string | null>()
-function associations(): Record<string, string> {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(associationKey) ?? "{}")
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? Object.fromEntries(Object.entries(value).filter((entry) => typeof entry[1] === "string"))
-      : {}
-  } catch {
-    return {}
-  }
-}
 export function sideChatDraftScope(sourceId: string): string {
   const targetId = boundTargets.get(sourceId)
   const prefork = `linked-chat:${sourceId}`
@@ -92,11 +82,28 @@ export function sideChatDraftScope(sourceId: string): string {
 }
 function bindValidatedTarget(sourceId: string, targetId: string): void {
   if (boundTargets.has(sourceId)) boundTargets.set(sourceId, targetId)
-  const from = `linked-chat:${sourceId}`
-  const to = sessionComposerScope(targetId)
+  moveSideChatDraft(`linked-chat:${sourceId}`, sessionComposerScope(targetId))
+}
+function moveSideChatDraft(from: string, to: string, merge = false): void {
   useDesktopSessionStore.setState((state) => {
     const source = state.composerDraftsByScope[from]
     const target = state.composerDraftsByScope[to]
+    if (merge && source && target) {
+      const migrated = migrateComposerScope(state, from, to)
+      return { composerDraftsByScope: {
+        ...migrated.composerDraftsByScope,
+        [to]: {
+          document: composerDocument([
+            ...source.document.items,
+            ...(source.document.items.length && target.document.items.length
+              ? [{ type: "text" as const, text: "\n\n" }] : []),
+            ...target.document.items,
+          ]),
+          attachments: [...source.attachments, ...target.attachments],
+          textSelections: [...(source.textSelections ?? []), ...(target.textSelections ?? [])],
+        },
+      } }
+    }
     if (source && target && (target.document.items.length || target.attachments.length))
       return state
     const migrated = migrateComposerScope(state, from, to)
@@ -111,6 +118,11 @@ function bindValidatedTarget(sourceId: string, targetId: string): void {
       },
     }
   })
+}
+function isMissingTarget(cause: unknown, targetId: string): boolean {
+  const message = cause instanceof Error ? cause.message : String(cause)
+  return message.replace(/^Error invoking remote method 'session:aux-open': (?:Error|VykorApiError): /, "") ===
+    `Session not found: ${targetId}`
 }
 export function appendSideChatQuote(sourceId: string, text: string): void {
   if (!text.trim()) return
@@ -134,15 +146,11 @@ function forkTarget(sourceId: string): Promise<DesktopSessionRecord> {
   const pending = pendingForks.get(sourceId)
   if (pending) return pending
   const request = window.desktop.sessions
-    .fork({ sessionId: sourceId })
+    .fork({ sessionId: sourceId, storage: "memory" })
     .then((session) => {
-      if (session.id === sourceId || session.parentId !== sourceId)
+      if (session.id === sourceId || session.parentId !== sourceId || session.storage !== "memory")
         throw new Error("侧边聊天的来源不匹配，未发送消息。")
-      // Save the ordinary fork ID before sending, including when the send later fails.
-      localStorage.setItem(
-        associationKey,
-        JSON.stringify({ ...associations(), [sourceId]: session.id })
-      )
+      sideChatTargets.set(sourceId, session.id)
       bindValidatedTarget(sourceId, session.id)
       return session
     })
@@ -168,13 +176,14 @@ export function SideChatPanel({
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
 }): React.JSX.Element {
-  const [targetId, setTargetId] = useState(() => associations()[sourceId] ?? null)
+  const [targetId, setTargetId] = useState(() => sideChatTargets.get(sourceId) ?? null)
   const [view, setView] = useState<DesktopSessionView | null>(null)
   const verifiedTargetId =
     targetId &&
     targetId !== sourceId &&
     view?.session.id === targetId &&
-    view.session.parentId === sourceId
+    view.session.parentId === sourceId &&
+    view.session.storage === "memory"
       ? targetId
       : null
   const [error, setError] = useState<string | null>(null)
@@ -306,12 +315,38 @@ export function SideChatPanel({
   useEffect(() => {
     if (!targetId || !active) return
     let disposed = false
+    let checking = false
+    // A separate snapshot check leaves the existing live subscription intact on network errors.
+    const checkSubscriptionId = `${subscriptionId}:check:${crypto.randomUUID()}`
+    const recoverMissingTarget = (cause: unknown): boolean => {
+      if (disposed || !isMissingTarget(cause, targetId)) return false
+      if (sideChatTargets.get(sourceId) === targetId) sideChatTargets.delete(sourceId)
+      moveSideChatDraft(sessionComposerScope(targetId), `linked-chat:${sourceId}`, true)
+      boundTargets.set(sourceId, null)
+      acceptedView.current = null
+      setView(null)
+      setTargetId(null)
+      setLoadError(null)
+      setError(null)
+      return true
+    }
+    const checkTarget = (): void => {
+      if (disposed || checking) return
+      checking = true
+      void window.desktop.sessions.openAux({ subscriptionId: checkSubscriptionId, sessionId: targetId })
+        .then(() => {}, (cause) => { recoverMissingTarget(cause) })
+        .finally(async () => {
+          await window.desktop.sessions.closeAux({ subscriptionId: checkSubscriptionId }).catch(() => {})
+          checking = false
+        })
+    }
     const accept = (next: DesktopSessionView, snapshot = false): void => {
       if (disposed) return
       if (
         next.session.id === sourceId ||
         next.session.id !== targetId ||
-        next.session.parentId !== sourceId
+        next.session.parentId !== sourceId ||
+        next.session.storage !== "memory"
       ) {
         if (snapshot) {
           boundTargets.set(sourceId, null)
@@ -327,6 +362,7 @@ export function SideChatPanel({
       useDesktopSessionStore.getState().applySessionUpdate(next)
       setView(next)
       setLoadError(null)
+      if (next.syncStatus === "reconnecting") checkTarget()
     }
     const unsubscribe = window.desktop.sessions.onAuxUpdated((update) => {
       if (update.subscriptionId === subscriptionId) accept(update.view)
@@ -335,6 +371,7 @@ export function SideChatPanel({
       (next) => accept(next, true),
       (cause) => {
         if (!disposed) {
+          if (recoverMissingTarget(cause)) return
           boundTargets.set(sourceId, null)
           acceptedView.current = null
           setView(null)
@@ -346,6 +383,8 @@ export function SideChatPanel({
       disposed = true
       unsubscribe()
       void window.desktop.sessions.closeAux({ subscriptionId }).catch(() => {})
+      if (checking)
+        void window.desktop.sessions.closeAux({ subscriptionId: checkSubscriptionId }).catch(() => {})
     }
   }, [active, sourceId, subscriptionId, targetId])
 
@@ -684,7 +723,7 @@ export function SideChatPanel({
               onCommand={async (command) => {
                 if (command.id === "compact") {
                   if (!verifiedTargetId || running) throw new Error("当前会话无法压缩。")
-                  await window.desktop.sessions.compact({ sessionId: targetId })
+                  await window.desktop.sessions.compact({ sessionId: verifiedTargetId })
                 }
               }}
               attachments={attachments}

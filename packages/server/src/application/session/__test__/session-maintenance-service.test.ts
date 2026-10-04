@@ -79,6 +79,13 @@ function createMaintenance(agent: Record<string, any>, options: { personalizatio
 }
 
 describe("SessionMaintenanceService", () => {
+  it("allows an explicit remember in a temporary session", async () => {
+    const remembered = { skipped: false, writtenIds: ["memory-1"], titles: ["Fact"] };
+    const { maintenance, store } = createMaintenance({ remember: async () => remembered });
+    store.getSession.mockReturnValue({ ...session, storage: "memory" } as any);
+
+    await expect(maintenance.remember("s1")).resolves.toBe(remembered);
+  });
   it("keeps durable prompt attachment references unchanged while compacting the transcript", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-compact-attachments-"));
     const store = new SessionStore({ path: join(dir, "sessions.db") });

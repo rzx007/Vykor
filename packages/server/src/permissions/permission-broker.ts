@@ -1,4 +1,4 @@
-import type { PermissionRequestRecord, PermissionStatus } from "@vykor/protocol";
+import { getSessionStorage, type PermissionRequestRecord, type PermissionStatus } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";
 import type { AgentPermissionDecision } from "@vykor/core";
 import type { StructuredLogger } from "../shared/observability.js";
@@ -191,11 +191,15 @@ export class StorePermissionBroker implements PermissionBroker {
   private sessionLineage(sessionId: string): string[] {
     const lineage: string[] = [];
     const seen = new Set<string>();
+    const storage = getSessionStorage(this.getSession(sessionId));
     let currentId: string | undefined = sessionId;
     while (currentId && !seen.has(currentId)) {
+      const session = this.getSession(currentId);
+      // 正式与临时会话只共享分叉上下文，不共享审批。
+      if (getSessionStorage(session) !== storage) break;
       seen.add(currentId);
       lineage.push(currentId);
-      currentId = this.getSession(currentId)?.parentId;
+      currentId = session?.parentId;
     }
     return lineage;
   }

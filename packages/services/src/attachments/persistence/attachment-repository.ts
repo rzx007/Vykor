@@ -3,6 +3,7 @@ import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
+  ChatResourceSource,
 } from "@vykor/protocol";
 import { and, eq, gt, lte, ne } from "drizzle-orm";
 import type { StorageContext } from "../../database/storage-context.js";
@@ -28,6 +29,20 @@ export class AttachmentRepository {
 
   private get database() {
     return this.storage.database.orm;
+  }
+
+  recordChatSource(assetId: string, source: ChatResourceSource): void {
+    const asset = this.getAttachment(assetId, { includeDeleted: true });
+    if (!asset) throw new Error(`Attachment ${assetId} was not found`);
+    const sources = asset.chatSources ?? [];
+    if (sources.some((current) => current.storage === source.storage && current.sessionId === source.sessionId)) return;
+    this.database.update(attachmentAssets)
+      .set({ chatSourcesJson: JSON.stringify([...sources, source]) })
+      .where(eq(attachmentAssets.id, assetId)).run();
+  }
+
+  hasPersistentChatSource(assetId: string): boolean {
+    return this.getAttachment(assetId, { includeDeleted: true })?.chatSources?.some((source) => source.storage === "memory") ?? false;
   }
 
   getAttachment(

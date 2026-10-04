@@ -31,12 +31,14 @@ export interface ConversationRepositoryOptions {
   storage: StorageContext;
   eventRegistry?: DurableEventRegistry;
   save?: () => void;
+  recordAttachmentSource?: (assetId: string, sessionId: string) => void;
 }
 
 export class ConversationRepository {
   private readonly storage: StorageContext;
   private readonly eventRegistry: DurableEventRegistry;
   private readonly saveChanges?: () => void;
+  private readonly recordAttachmentSource?: ConversationRepositoryOptions["recordAttachmentSource"];
 
   constructor(options: StorageContext | ConversationRepositoryOptions) {
     if ("state" in options) {
@@ -46,6 +48,7 @@ export class ConversationRepository {
       this.storage = options.storage;
       this.eventRegistry = options.eventRegistry ?? defaultDurableEventRegistry;
       this.saveChanges = options.save;
+      this.recordAttachmentSource = options.recordAttachmentSource;
     }
   }
 
@@ -53,13 +56,17 @@ export class ConversationRepository {
     input: AppendEventInput,
     retain = true,
   ): SessionEventRecord {
+    const id = input.id ?? randomUUID();
+    if (retain && input.id && this.storage.state.events.some((event) => event.id === id)) {
+      throw new Error(`Session event already exists: ${id}`);
+    }
     const prepared = this.eventRegistry.prepareWrite(
       input.type,
       input.payload ?? {},
       input.sessionId,
     );
     const event: SessionEventRecord = {
-      id: input.id ?? randomUUID(),
+      id,
       seq: this.storage.eventSequence.allocate(),
       type: input.type,
       schemaVersion: prepared.schemaVersion,
@@ -83,6 +90,10 @@ export class ConversationRepository {
 
   createMessage(input: CreateMessageInput): SessionMessageRecord {
     const session = assertSession(this.storage.state, input.sessionId);
+    const run = input.runId ? this.storage.state.runs[input.runId] : undefined;
+    const prompt = input.inputId ? this.storage.state.inputs[input.inputId] : undefined;
+    if (run && run.sessionId !== session.id) throw new Error(`Session run ${run.id} does not belong to session ${session.id}`);
+    if (prompt && prompt.sessionId !== session.id) throw new Error(`Session input ${prompt.id} does not belong to session ${session.id}`);
     const id = input.id ?? randomUUID();
     if (this.storage.state.messages[id])
       throw new Error(`Session message already exists: ${id}`);
@@ -112,6 +123,13 @@ export class ConversationRepository {
   }
 
   upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord {
+    if (input.assetId || (input.id && this.storage.state.parts[input.id]?.assetId)) {
+      return this.storage.atomic(() => this.upsertMessagePartWork(input));
+    }
+    return this.upsertMessagePartWork(input);
+  }
+
+  private upsertMessagePartWork(input: UpsertMessagePartInput): SessionMessagePartRecord {
     const session = assertSession(this.storage.state, input.sessionId);
     const message = assertMessage(this.storage.state, input.messageId);
     if (message.sessionId !== input.sessionId) {
@@ -122,6 +140,9 @@ export class ConversationRepository {
     const id = input.id ?? randomUUID();
     const timestamp = now();
     const existing = this.storage.state.parts[id];
+    if (existing && (existing.sessionId !== input.sessionId || existing.messageId !== input.messageId)) {
+      throw new Error(`Session message part ${id} does not belong to message ${input.messageId}`);
+    }
     const row: SessionMessagePartRecord = existing
       ? {
           ...existing,
@@ -202,6 +223,7 @@ export class ConversationRepository {
           updatedAt: timestamp,
         };
 
+    if (row.assetId) this.recordAttachmentSource?.(row.assetId, session.id);
     this.storage.state.parts[id] = row;
     message.updatedAt = timestamp;
     session.updatedAt = timestamp;

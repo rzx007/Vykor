@@ -27,6 +27,15 @@ export type AttachmentRepresentationKind =
   | "archive_manifest"
   | "directory_manifest";
 
+/** 持久资源来自哪个聊天；临时聊天消失后仍保留这些来源信息。 */
+export interface ChatResourceSource {
+  storage: "memory" | "sqlite";
+  sessionId: string;
+  sourceSessionId?: string;
+  inputId?: string;
+  runId?: string;
+}
+
 export interface AttachmentAssetRecord {
   id: string;
   displayName: string;
@@ -39,6 +48,7 @@ export interface AttachmentAssetRecord {
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
+  chatSources?: ChatResourceSource[];
 }
 
 export interface SessionInputAttachmentRecord {
@@ -164,6 +174,10 @@ export function parseAttachmentAssetRecord(
   if (sha256 !== undefined) asset.sha256 = sha256;
   if (failureCode !== undefined) asset.failureCode = failureCode;
   if (deletedAt !== undefined) asset.deletedAt = deletedAt;
+  if (record.chatSources !== undefined) {
+    if (!Array.isArray(record.chatSources)) throw new Error("chatSources must be an array");
+    asset.chatSources = record.chatSources.map(parseChatResourceSource);
+  }
 
   if (status === "ready" || status === "deleted") {
     if (asset.mediaType === undefined) throw new Error("mediaType is required");
@@ -177,6 +191,19 @@ export function parseAttachmentAssetRecord(
     throw new Error("deletedAt is required");
   }
   return asset;
+}
+
+export function parseChatResourceSource(value: unknown): ChatResourceSource {
+  const record = recordValue(value, "chat resource source");
+  const source: ChatResourceSource = {
+    storage: enumValue(record.storage, ["memory", "sqlite"] as const, "storage"),
+    sessionId: nonEmptyString(record.sessionId, "sessionId"),
+  };
+  for (const field of ["sourceSessionId", "inputId", "runId"] as const) {
+    const id = optionalNonEmptyString(record[field], field);
+    if (id !== undefined) source[field] = id;
+  }
+  return source;
 }
 
 function recordValue(value: unknown, field: string): Record<string, unknown> {

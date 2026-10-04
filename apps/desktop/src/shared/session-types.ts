@@ -55,6 +55,7 @@ export interface DesktopModel {
 
 export interface DesktopSessionRecord {
   id: string
+  storage?: "sqlite" | "memory"
   parentId?: string
   projectId?: string
   workspaceMode?: DesktopWorkspaceMode
@@ -336,6 +337,7 @@ export interface CancelDesktopQueuedPromptInput {
 
 export interface ForkDesktopSessionInput {
   sessionId: string
+  storage?: "sqlite" | "memory"
   beforeMessageId?: string
   afterMessageId?: string
 }
