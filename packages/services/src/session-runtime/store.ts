@@ -103,6 +103,7 @@ import {
   IncrementalOutput,
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
+import { NoteRepository } from "../notes/note-repository.js";
 import {
   type CreateSessionGoalStoreInput,
   type SessionGoalRequestRecord,
@@ -199,6 +200,7 @@ export class SessionStore {
   readonly path: string;
   readonly projects!: ProjectRepository;
   readonly schedules!: ScheduleRepository;
+  readonly notes!: NoteRepository;
   readonly workflows!: WorkflowRepository;
   readonly channels!: ChannelRepository;
   readonly permissions!: PermissionRepository;
@@ -274,6 +276,7 @@ export class SessionStore {
       this.storage.temporaryControls = new TemporaryControlRecords();
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
+      this.notes = new NoteRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
       this.conversations = new ConversationRepository({

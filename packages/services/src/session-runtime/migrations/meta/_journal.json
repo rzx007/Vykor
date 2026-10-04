@@ -22,6 +22,13 @@
       "when": 1791123651986,
       "tag": "0002_temporary_resource_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791129253155,
+      "tag": "0003_global_notes",
+      "breakpoints": true
     }
   ]
 }
