@@ -196,4 +196,38 @@ describe("useNotesController", () => {
     expect(latest.status).toBe("error")
     expect(latest.error).toBe("delete failed")
   })
+
+  it("waits for an in-flight create before deleting a new note", async () => {
+    vi.useFakeTimers()
+    let resolveCreate!: (note: DesktopNote) => void
+    const create = vi.fn(
+      () =>
+        new Promise<DesktopNote>((resolve) => {
+          resolveCreate = resolve
+        })
+    )
+    const remove = vi.fn(async () => undefined)
+    await render([], { create, remove })
+
+    act(() => latest.edit("temporary"))
+    await act(async () => vi.advanceTimersByTimeAsync(300))
+    let deletion!: Promise<void>
+    await act(async () => {
+      deletion = latest.removeSelected()
+      await Promise.resolve()
+    })
+    expect(remove).not.toHaveBeenCalled()
+
+    resolveCreate({
+      id: "created",
+      content: "temporary",
+      revision: 1,
+      createdAt: 3,
+      updatedAt: 3,
+    })
+    await act(async () => deletion)
+
+    expect(remove).toHaveBeenCalledWith("created")
+    expect(latest.visibleNotes).toEqual([])
+  })
 })

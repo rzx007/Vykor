@@ -267,9 +267,12 @@ export function useNotesController(): NotesController {
     const current = notesRef.current.find((note) => note.draftId === draftId)
     if (!draftId || !current) return
     try {
-      if (current.noteId) await window.desktop.notes.remove(current.noteId)
+      const coordinator = coordinators.current.get(draftId)
+      await coordinator?.flush()
+      const persistedId = coordinator?.snapshot().record?.id ?? current.noteId
+      if (persistedId) await window.desktop.notes.remove(persistedId)
       removeRecoveryDraft(window.localStorage, draftId)
-      coordinators.current.get(draftId)?.dispose()
+      coordinator?.dispose()
       coordinators.current.delete(draftId)
       const remaining = notesRef.current.filter((note) => note.draftId !== draftId)
       if (remaining.length === 0) remaining.push(createLocalDraft())
