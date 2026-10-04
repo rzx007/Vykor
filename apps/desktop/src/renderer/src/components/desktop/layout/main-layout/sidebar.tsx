@@ -2,13 +2,13 @@ import {
   Archive,
   Bell,
   Clock3,
-  GitPullRequest,
   Moon,
   PlugZap,
   Search,
   Settings,
   Smartphone,
   SquarePen,
+  StickyNote,
   Sun,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
@@ -67,20 +67,22 @@ import {
 type SidebarProps = {
   open: boolean
   onOpenSettings: () => void
+  onOpenNotes?: () => void
   onOpenScheduled: () => void
   onOpenPlugins: () => void
   onOpenConversation: (sessionId?: string | null) => void
 }
 
 const secondaryNavigation = [
-  { icon: GitPullRequest, label: "拉取请求" },
-  { icon: Clock3, label: "定时任务" },
-  { icon: PlugZap, label: "插件" },
-]
+  { id: "notes", icon: StickyNote, label: "便签" },
+  { id: "scheduled", icon: Clock3, label: "定时任务" },
+  { id: "plugins", icon: PlugZap, label: "插件" },
+] as const
 
 export function Sidebar({
   open,
   onOpenSettings,
+  onOpenNotes,
   onOpenScheduled,
   onOpenPlugins,
   onOpenConversation,
@@ -89,6 +91,7 @@ export function Sidebar({
   const { resolvedTheme, setPreference } = useAppearance()
   const scheduledSelected = Boolean(matchRoute({ to: "/scheduled" }))
   const pluginsSelected = Boolean(matchRoute({ to: "/plugins" }))
+  const notesSelected = Boolean(matchRoute({ to: "/notes" }))
   const darkTheme = resolvedTheme === "dark"
   const projects = useDesktopSessionStore(selectProjects)
   const sessions = useDesktopSessionStore(selectSessions)
@@ -250,29 +253,39 @@ export function Sidebar({
                 onClick={() => beginNewConversation()}
               />
             </div>
-            {secondaryNavigation.map(({ icon, label }) => {
-              const isScheduled = label === "定时任务"
-              const isPlugins = label === "插件"
+            {secondaryNavigation.map(({ id, icon, label }) => {
+              const isNotes = id === "notes"
+              const isScheduled = id === "scheduled"
+              const isPlugins = id === "plugins"
               return (
                 <div key={label}>
                   <SidebarNavigationButton
                     icon={icon}
                     label={label}
-                    selected={(isScheduled && scheduledSelected) || (isPlugins && pluginsSelected)}
+                    selected={
+                      (isNotes && notesSelected) ||
+                      (isScheduled && scheduledSelected) ||
+                      (isPlugins && pluginsSelected)
+                    }
                     badge={isScheduled ? scheduledUnread : 0}
                     running={isScheduled && scheduledRunning}
                     onClick={
-                      isScheduled
+                      isNotes
                         ? () => {
                             setArchiveMode(false)
-                            onOpenScheduled()
+                            onOpenNotes?.()
                           }
-                        : isPlugins
+                        : isScheduled
                           ? () => {
                               setArchiveMode(false)
-                              onOpenPlugins()
+                              onOpenScheduled()
                             }
-                          : undefined
+                          : isPlugins
+                            ? () => {
+                                setArchiveMode(false)
+                                onOpenPlugins()
+                              }
+                            : undefined
                     }
                   />
                 </div>

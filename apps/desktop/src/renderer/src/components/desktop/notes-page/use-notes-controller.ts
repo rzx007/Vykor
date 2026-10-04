@@ -128,6 +128,7 @@ export function useNotesController(): NotesController {
 
   useEffect(() => {
     let disposed = false
+    const activeCoordinators = coordinators.current
     void window.desktop.notes
       .list()
       .then((records) => {
@@ -180,8 +181,8 @@ export function useNotesController(): NotesController {
       })
     return () => {
       disposed = true
-      for (const coordinator of coordinators.current.values()) coordinator.dispose()
-      coordinators.current.clear()
+      for (const coordinator of activeCoordinators.values()) coordinator.dispose()
+      activeCoordinators.clear()
     }
   }, [commitNotes, commitSelection, createLocalDraft, installCoordinator])
 
