@@ -238,10 +238,7 @@ export function toolActivityLabel(
   if (status === "failed") return import.meta.env.DEV ? "失败" : undefined
   if (status === "interrupted") return import.meta.env.DEV ? "已中断" : undefined
   if (status === "completed") return undefined
-  if (isToolGenerationPresentation(call)) {
-    const chars = recordValue(call.metadata.toolProgress)?.receivedChars
-    return `生成参数 · ${typeof chars === "number" ? chars.toLocaleString("en-US") : 0} 字符`
-  }
+  if (isToolGenerationPresentation(call)) return "准备中"
   const phase = recordValue(call.metadata.toolProgress)?.phase
   if (!import.meta.env.DEV && (phase === "failed" || phase === "unknown")) return undefined
   return (
@@ -305,6 +302,7 @@ export function conversationActivityLabel(
     .filter((part) => part.type === "tool")
     .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
   const toolLabel = toolGroupActivityLabel(tools)
+  if (toolLabel === "准备中") return "正在处理"
   if (toolLabel) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
   const generating = activeRuns
     .flatMap((run) =>
@@ -314,10 +312,7 @@ export function conversationActivityLabel(
       (entry) =>
         recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0
     )
-  if (generating.length) {
-    const chars = generating.reduce((total, entry) => total + entry.receivedChars, 0)
-    return `正在生成${generating.length > 1 ? ` ${generating.length} 个工具的` : "工具"}参数，已接收 ${chars.toLocaleString("en-US")} 个字符`
-  }
+  if (generating.length) return "正在处理"
   return "等待模型响应"
 }
 
@@ -342,10 +337,14 @@ function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessio
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
-  if (isToolGenerationPresentation(part)) return { name: rawName }
+  const preparing = isToolGenerationPresentation(part)
   const normalized = rawName.toLocaleLowerCase().replace(/[-_]/g, "")
-  if (normalized === "imagetotext") return summarizeLocalOcr(part)
+  if (normalized === "imagetotext" && !preparing) return summarizeLocalOcr(part)
   const names: Array<[RegExp, string]> = [
+    [/^agent$/, "调用子智能体"],
+    [/^imagegeneration$/, "生成图片"],
+    [/^backgroundshellcreate$/, "创建后台终端"],
+    [/^imagetotext$/, "识别图片文字"],
     [/^(?:glob|listfiles|findfiles)/, "查找文件"],
     [/^(?:read|readfile)/, "读取文件"],
     [/^(?:write|writefile|createfile)/, "写入文件"],
@@ -357,6 +356,7 @@ export function summarizeToolCall(part: DesktopSessionPart): { name: string; det
     [/fetch|http|request/, "请求网络"],
   ]
   const name = names.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
+  if (preparing) return { name }
   return {
     name,
     detail: summarizeToolInput(part.input, /^(?:edit|editfile|replace)/.test(normalized)),

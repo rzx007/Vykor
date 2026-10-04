@@ -23,18 +23,19 @@ describe("createBashTool", () => {
     expect(launches).toBe(1);
   });
 
-  it.skipIf(process.platform !== "win32").each([
+  it.each([
     "Write-Output (",
     "$code = @'print('hello')\n'@\n$code | python -",
-  ])("rejects broken PowerShell syntax before executing: %s", async (command) => {
+  ])("retains the selected executor's failure for broken PowerShell syntax: %s", async (command) => {
     let executions = 0;
     const executor: ShellExecutor = {
       async resolve(request) { return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } }); },
-      async run() { executions++; return result(); },
+      async run() { executions++; return result({ status: "failed", failureKind: "command", exitCode: 1, output: "actual syntax diagnostic" }); },
     };
     const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
-    expect(feedback).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
-    expect(executions).toBe(0);
+    expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
+    expect(feedback.content[0]).toMatchObject({ text: "actual syntax diagnostic" });
+    expect(executions).toBe(1);
   });
 
   it.each([
@@ -454,8 +455,8 @@ describe("createBashTool", () => {
     expect(toolResult.isError).not.toBe(true);
   });
 
-  it.skipIf(process.platform !== "win32")("rejects Bash heredoc before PowerShell executes it", async () => {
-    const run = vi.fn(async () => result());
+  it("delegates Bash heredoc to the selected executor and retains its failure", async () => {
+    const run = vi.fn(async () => result({ status: "failed", failureKind: "command", exitCode: 1, output: "interpreter rejected heredoc" }));
     const executor: ShellExecutor = {
       async resolve(request) {
         return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } });
@@ -466,9 +467,10 @@ describe("createBashTool", () => {
 
     const toolResult = await tool.execute({ command: "python - <<'PY'\nprint('ok')\nPY" }, { cwd: process.cwd() });
 
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledOnce();
     expect(toolResult.isError).toBe(true);
-    expect(toolResult.content[0]).toMatchObject({ text: expect.stringContaining("PowerShell syntax error") });
+    expect(toolResult).toMatchObject({ failureKind: "command", executionState: "completed" });
+    expect(toolResult.content[0]).toMatchObject({ text: "interpreter rejected heredoc" });
   });
 });
 

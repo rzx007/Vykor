@@ -1,6 +1,6 @@
 import type { ToolDefinition } from "@vykor/core";
 import type { ShellDescriptor } from "@vykor/environment";
-import { createShellDescription, shellCommandSyntaxError } from "../shell/index.js";
+import { createShellDescription } from "../shell/index.js";
 
 export function createBackgroundShellTool(shell?: ShellDescriptor): ToolDefinition {
 return {
@@ -33,9 +33,9 @@ return {
     if (!context.sessionId) return { ...failed("Background shell jobs require a durable session."), failureKind: "configuration" as const };
     if (!context.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
     if (!context.toolCallId) return { ...failed("Background shell request identity is not configured."), failureKind: "configuration" as const };
-    const descriptor = context.environment?.info.shellDescriptor ?? shell;
-    const error = await shellCommandSyntaxError(command.value, descriptor, context);
-    if (error) return error;
+    if (context.abortSignal?.aborted) {
+      return { ...failed("Shell interrupted before the command started."), failureKind: "interrupted" as const };
+    }
 
     try {
       const created = await context.backgroundShell.create({

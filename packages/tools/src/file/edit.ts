@@ -26,7 +26,7 @@ export const fileEditTool: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      file_path: { type: "string", description: "Absolute path to the file." },
+      file_path: { type: "string", description: "Absolute path to the file. Prefer providing file_path before the replacement text." },
       ...replacementProperties,
       edits: { type: "array", description: "Ordered replacements in one file; do not also provide the single-replacement fields.",
         items: { type: "object", properties: replacementProperties, required: ["old_string", "new_string"] } },

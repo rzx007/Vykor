@@ -17,6 +17,7 @@ import {
 } from "../errors/index";
 import { createRequestLifecycle } from "./retry";
 import { parseToolInput } from "./tool-input.js";
+import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
 import { ModelRequestFailure } from "@vykor/core";
 import {
   prepareNativeImagePayload,
@@ -135,7 +136,8 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
 
       const toolCalls: ToolUseBlock[] = [];
       const outputPhases = new Map<string, "commentary" | "final_answer">();
-      const toolProgress = new Map<string, { toolUseId?: string; toolName?: string; receivedChars: number }>();
+      const toolProgress = new Map<string, { toolUseId?: string; toolName?: string; receivedChars: number; filePath?: string | null }>();
+      const pathSummaries = new Map<string, ReturnType<typeof createToolPathSummary>>();
       let stopReason = "end_turn";
       let completed = false;
       let incompleteReason: string | undefined;
@@ -161,7 +163,12 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
                   receivedChars: typeof item.arguments === "string" ? item.arguments.length : 0,
                 };
                 toolProgress.set(item.id, progress);
-                yield { type: "tool_generation_progress", toolKey: item.id, ...progress };
+                const summary = createToolPathSummary();
+                pathSummaries.set(item.id, summary);
+                const filePath = summary.push(typeof item.arguments === "string" ? item.arguments : "");
+                yield { type: "tool_generation_progress", toolKey: item.id, ...progress,
+                  ...(isFileTool(progress.toolName) && filePath !== undefined ? { filePath } : {}),
+                };
               }
             }
           } else if (eventType === "response.function_call_arguments.delta") {
@@ -169,6 +176,11 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
               const progress = toolProgress.get(event.item_id) ?? { receivedChars: 0 };
               progress.receivedChars += event.delta.length;
               toolProgress.set(event.item_id, progress);
+              let summary = pathSummaries.get(event.item_id);
+              if (!summary) { summary = createToolPathSummary(); pathSummaries.set(event.item_id, summary); }
+              const filePath = summary.push(event.delta);
+              if (isFileTool(progress.toolName) && filePath !== undefined) progress.filePath = filePath;
+              else delete progress.filePath;
               yield { type: "tool_generation_progress", toolKey: event.item_id, ...progress };
             }
           } else if (eventType === "response.output_text.delta") {
@@ -193,7 +205,10 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
               const previous = toolProgress.get(item.id);
               const receivedChars = typeof item.arguments === "string" ? item.arguments.length : previous?.receivedChars ?? 0;
               if (!previous || previous.receivedChars !== receivedChars || previous.toolUseId !== callId || previous.toolName !== name) {
-                yield { type: "tool_generation_progress", toolKey: item.id, toolUseId: callId, toolName: name, receivedChars };
+                const filePath = typeof item.arguments === "string" ? createToolPathSummary().push(item.arguments) : previous?.filePath;
+                yield { type: "tool_generation_progress", toolKey: item.id, toolUseId: callId, toolName: name, receivedChars,
+                  ...(isFileTool(name) && filePath !== undefined ? { filePath } : {}),
+                };
               }
             }
             toolCalls.push({

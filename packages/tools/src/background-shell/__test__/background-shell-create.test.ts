@@ -22,15 +22,16 @@ describe("BackgroundShellCreate", () => {
     expect(launches).toBe(1);
   });
 
-  it.skipIf(process.platform !== "win32")("rejects actual syntax errors before launching a background PowerShell job", async () => {
+  it.skipIf(process.platform !== "win32")("registers invalid PowerShell syntax for the background interpreter to report", async () => {
     let launches = 0;
     const tool = createBackgroundShellTool(shellDescriptor);
     const result = await tool.execute({ description: "install", command: "Write-Output (" }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
-    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
-    expect(launches).toBe(0);
+    expect(result).toMatchObject({ executionState: "completed" });
+    expect(result.isError).not.toBe(true);
+    expect(launches).toBe(1);
   });
 
   it("allows JavaScript logical operators inside a here-string before delegating to the host", async () => {

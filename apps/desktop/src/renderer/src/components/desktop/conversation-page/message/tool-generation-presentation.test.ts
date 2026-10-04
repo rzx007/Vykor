@@ -13,6 +13,26 @@ const derive = (entries: unknown[], messages = [message], parts: DesktopSessionP
 const uiParts = (parts: DesktopSessionPart[]) => parts.filter(isToolGenerationPresentation)
 
 describe("render-only tool generation cards", () => {
+  it("carries the path only as display metadata without executable fields", () => {
+    const part = derive([{ ...entry, filePath: "C:/fixture/index.html" }]).parts[0]!;
+    expect(part.metadata.toolProgress).toMatchObject({ filePath: "C:/fixture/index.html", receivedChars: 100 });
+    expect(part).not.toHaveProperty("input");
+    expect(part).not.toHaveProperty("toolUseId");
+    expect(part).not.toHaveProperty("output");
+  });
+
+  it("removes a withdrawn display path without removing the pending tool row", () => {
+    const first = derive([{ ...entry, filePath: "fake.html" }]).parts[0]!;
+    const withdrawn = derive([{ ...entry, filePath: null }]).parts[0]!;
+    expect(withdrawn.id).toBe(first.id);
+    expect(withdrawn.metadata.toolProgress).not.toHaveProperty("filePath");
+    expect(withdrawn).not.toHaveProperty("input");
+  });
+
+  it("ignores path summaries attached to unrelated tools", () => {
+    const part = derive([{ ...entry, toolName: "Shell", filePath: "fake.html" }]).parts[0]!;
+    expect(part.metadata.toolProgress).not.toHaveProperty("filePath");
+  });
   it("attaches to the current run's last assistant message without mutating source records", () => {
     const messages = [message, { ...message, id: "last", seq: 4 }, { ...message, id: "foreign", runId: "other", seq: 6 }]
     const parts = [{ ...formal, id: "text", type: "text" as const, messageId: "last", toolUseId: undefined, seq: 10 }]

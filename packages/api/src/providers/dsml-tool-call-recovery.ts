@@ -1,3 +1,6 @@
+import type { ToolGenerationProgressEvent } from "@vykor/core";
+import { isFileTool, safeFilePath } from "./tool-path-summary.js";
+
 export interface RecoveredToolCall {
   id: string;
   name: string;
@@ -7,6 +10,7 @@ export interface RecoveredToolCall {
 export interface DsmlScanResult {
   visible: string;
   toolCalls: RecoveredToolCall[];
+  progress: ToolGenerationProgressEvent[];
 }
 
 export interface DsmlRecoveryScanner {
@@ -227,7 +231,7 @@ function parseParameters(body: string): Record<string, unknown> {
 
 type Candidate =
   | { kind: "none" }
-  | { kind: "hold"; index: number }
+  | { kind: "hold"; index: number; name?: string; bodyStart?: number }
   | { kind: "release"; index: number; end: number }
   | { kind: "call"; index: number; name: string; input: Record<string, unknown>; end: number };
 
@@ -247,7 +251,7 @@ function findCandidate(s: string, declared: ReadonlySet<string>): Candidate {
     if (!declared.has(open.name)) return { kind: "release", index: start, end: open.end };
 
     const close = INVOKE_CLOSE_RE.exec(s.slice(open.end));
-    if (!close) return { kind: "hold", index: start };
+    if (!close) return { kind: "hold", index: start, name: open.name, bodyStart: open.end };
 
     const body = s.slice(open.end, open.end + close.index);
     let end = open.end + close.index + close[0].length;
@@ -266,10 +270,75 @@ export function createDsmlRecoveryScanner(options: {
   let buffer = "";
   let nextCallIndex = 0;
   let afterCall = false;
+  let active: { id: string; name: string; cursor: number; bodyStart: number; tag: string; tagOverflow?: boolean;
+    parameter?: string; valueTag?: string; value: string; pathAmbiguous?: boolean; filePath?: string; receivedChars: number } | undefined;
+
+  // Scan only newly received body characters. Tags/paths are bounded; content is never retained here.
+  function progressFor(name: string, bodyStart: number, bodyEnd = buffer.length): ToolGenerationProgressEvent | undefined {
+    if (!isFileTool(name)) return undefined;
+    active ??= { id: `dsml_${nextCallIndex}`, name, cursor: bodyStart, bodyStart, tag: "", value: "", receivedChars: 0 };
+    function appendPath(text: string) {
+      if (active!.parameter !== "file_path") return;
+      if (active!.value.length + text.length > 4096 * 6 + 2) active!.pathAmbiguous = true;
+      else active!.value += text;
+    }
+    function finishParameter() {
+      if (active!.parameter === "file_path") {
+        let value: unknown;
+        if (!active!.pathAmbiguous) {
+          const raw = active!.value.endsWith("\\") ? active!.value.slice(0, -1) : active!.value;
+          if (extractAttribute(active!.valueTag ?? "", "string")?.toLowerCase() === "true") value = raw.trim();
+          else { try { value = JSON.parse(raw.trim()); } catch { /* Ambiguous path: omit the summary. */ } }
+        }
+        active!.filePath = safeFilePath(value);
+      }
+      active!.parameter = undefined; active!.value = ""; active!.pathAmbiguous = false;
+    }
+    for (; active.cursor < bodyEnd; active.cursor++) {
+      const ch = buffer[active.cursor]!;
+      if (active.tagOverflow) {
+        if (ch === ">") active.tagOverflow = false;
+      } else if (ch === "<" && !active.tag) active.tag = "<";
+      else if (active.tag) {
+        active.tag += ch;
+        if (active.tag.length > 512) {
+          if (active.parameter === "file_path") active.pathAmbiguous = true;
+          active.tag = ""; active.tagOverflow = ch !== ">";
+        }
+        else if (ch === ">") {
+          const boundary = [PARAM_CLOSE_RE.exec(active.tag), PARAM_BARE_CLOSE_RE.exec(active.tag), PARAM_TAG_RE.exec(active.tag)]
+            .filter((match): match is RegExpExecArray => match !== null).sort((a, b) => a.index - b.index)[0];
+          if (boundary) {
+            appendPath(active.tag.slice(0, boundary.index));
+            finishParameter();
+            if (PARAM_TAG_RE.test(boundary[0])) {
+              active.parameter = extractAttribute(boundary[0], "name") ?? "";
+              active.valueTag = boundary[0];
+            }
+          } else appendPath(active.tag);
+          active.tag = "";
+        }
+      } else appendPath(ch);
+    }
+    active.receivedChars = Math.max(active.receivedChars, bodyEnd - active.bodyStart);
+    return { type: "tool_generation_progress", toolKey: active.id, toolUseId: active.id, toolName: active.name,
+      receivedChars: active.receivedChars, ...(active.filePath ? { filePath: active.filePath } : {}),
+    };
+  }
+
+  function discard(): ToolGenerationProgressEvent[] {
+    if (!active) return [];
+    const progress: ToolGenerationProgressEvent = { type: "tool_generation_progress", toolKey: active.id, toolUseId: active.id,
+      toolName: active.name, receivedChars: active.receivedChars, discarded: true };
+    active = undefined;
+    // Only completed recovery increments the existing call counter.
+    return [progress];
+  }
 
   function drain(): DsmlScanResult {
     let visible = "";
     const toolCalls: RecoveredToolCall[] = [];
+    const progress: ToolGenerationProgressEvent[] = [];
 
     for (;;) {
       if (afterCall) {
@@ -297,23 +366,36 @@ export function createDsmlRecoveryScanner(options: {
         buffer = buffer.slice(candidate.index);
         continue;
       }
-      if (candidate.kind === "hold") break;
+      if (candidate.kind === "hold") {
+        if (candidate.name && candidate.bodyStart !== undefined) {
+          const update = progressFor(candidate.name, candidate.bodyStart);
+          if (update) progress.push(update);
+        }
+        break;
+      }
       if (candidate.kind === "release") {
         visible += buffer.slice(0, candidate.end);
         buffer = buffer.slice(candidate.end);
         continue;
       }
 
+      const open = readInvokeOpen(buffer, 0);
+      if (open.kind === "open") {
+        const close = INVOKE_CLOSE_RE.exec(buffer.slice(open.end));
+        const update = progressFor(candidate.name, open.end, open.end + (close?.index ?? 0));
+        if (update) progress.push(update);
+      }
       toolCalls.push({
         id: `dsml_${nextCallIndex++}`,
         name: candidate.name,
         input: candidate.input,
       });
+      active = undefined;
       buffer = buffer.slice(candidate.end);
       afterCall = true;
     }
 
-    return { visible, toolCalls };
+    return { visible, toolCalls, progress };
   }
 
   return {
@@ -323,7 +405,7 @@ export function createDsmlRecoveryScanner(options: {
         const released = buffer;
         buffer = "";
         afterCall = false;
-        return { visible: released, toolCalls: [] };
+        return { visible: released, toolCalls: [], progress: discard() };
       }
       return drain();
     },
@@ -332,7 +414,7 @@ export function createDsmlRecoveryScanner(options: {
       const held = buffer;
       buffer = "";
       afterCall = false;
-      return { visible: held, toolCalls: [] };
+      return { visible: held, toolCalls: [], progress: discard() };
     },
   };
 }

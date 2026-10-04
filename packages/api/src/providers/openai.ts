@@ -17,6 +17,7 @@ import {
   createDsmlRecoveryScanner,
   type RecoveredToolCall,
 } from "./dsml-tool-call-recovery.js";
+import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
 import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
@@ -179,6 +180,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
     const collectedToolCalls: Map<number, { id: string; name: string; arguments: string }> =
       new Map();
+    const pathSummaries = new Map<number, ReturnType<typeof createToolPathSummary>>();
     let finishReason: string | null = null;
     // Buffer to strip inline <think>…</think> blocks across streaming chunks.
     let thinkBuf = "";
@@ -247,6 +249,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
                 yield { type: "text_delta", delta: scanned.visible };
               }
               recoveredToolCalls.push(...scanned.toolCalls);
+              if ("progress" in scanned) yield* scanned.progress;
             }
           }
 
@@ -264,16 +267,19 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
               const idx = tc.index;
               if (!collectedToolCalls.has(idx)) {
                 collectedToolCalls.set(idx, { id: tc.id ?? "", name: "", arguments: "" });
+                pathSummaries.set(idx, createToolPathSummary());
               }
               const entry = collectedToolCalls.get(idx)!;
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+              const filePath = pathSummaries.get(idx)!.push(tc.function?.arguments ?? "");
               yield {
                 type: "tool_generation_progress", toolKey: String(idx),
                 ...(entry.id ? { toolUseId: entry.id } : {}),
                 ...(entry.name ? { toolName: entry.name } : {}),
                 receivedChars: entry.arguments.length,
+                ...(isFileTool(entry.name) && filePath !== undefined ? { filePath } : {}),
               };
             }
           }
@@ -314,6 +320,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
           yield { type: "text_delta", delta: scanned.visible };
         }
         recoveredToolCalls.push(...scanned.toolCalls);
+        if ("progress" in scanned) yield* scanned.progress;
       }
       thinkBuf = "";
     }
@@ -324,6 +331,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
         yield { type: "text_delta", delta: tail.visible };
       }
       recoveredToolCalls.push(...tail.toolCalls);
+      yield* tail.progress;
     }
 
     let nativeToolUseCount = 0;

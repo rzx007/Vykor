@@ -9,36 +9,100 @@ import { ConversationTranscript } from "../transcript"
 import { MessageScroller, MessageScrollerProvider } from "@renderer/components/ui/message-scroller"
 
 describe("conversation running activity", () => {
-  it("shows Write as a non-expandable generation status before any real tool call exists", () => {
+  it("shows a localized preparation row without jargon or duplicated character counts before a real call exists", () => {
     const messages: DesktopSessionMessage[] = []
     const parts: DesktopSessionPart[] = []
-    const html = renderToStaticMarkup(createElement(MessageScrollerProvider, null, createElement(MessageScroller, null, createElement(ConversationTranscript, {
-      messages, parts, runs: [{ id: "r", sessionId: "s", inputId: "input", status: "running", metadata: {
-        toolGeneration: [{ generationId: "g", attempt: 1, toolKey: "0", toolUseId: "call", toolName: "Write", receivedChars: 8192 }],
-      }, createdAt: 1, updatedAt: 1 }],
-      running: true, canEditLastUserMessage: false, canOpenReview: false,
-      onEditLastUserMessage() {}, onCopyAssistantMessage() {}, onOpenFile() {}, onOpenReview() {}, onOpenTerminal() {},
-    }))))
-    expect(html).not.toContain('aria-expanded=')
-    expect(html).toContain('role="img" aria-label="正在生成参数，尚未执行"')
-    expect(html).toContain("Write")
-    expect(html).toContain("生成参数")
-    expect(html).toContain("8,192")
-    expect(html).toContain("未执行")
+    const html = renderToStaticMarkup(
+      createElement(
+        MessageScrollerProvider,
+        null,
+        createElement(
+          MessageScroller,
+          null,
+          createElement(ConversationTranscript, {
+            messages,
+            parts,
+            runs: [
+              {
+                id: "r",
+                sessionId: "s",
+                inputId: "input",
+                status: "running",
+                metadata: {
+                  toolGeneration: [
+                    {
+                      generationId: "g",
+                      attempt: 1,
+                      toolKey: "0",
+                      toolUseId: "call",
+                      toolName: "Write",
+                      receivedChars: 8192,
+                    },
+                  ],
+                },
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
+            running: true,
+            canEditLastUserMessage: false,
+            canOpenReview: false,
+            onEditLastUserMessage: () => undefined,
+            onCopyAssistantMessage: () => undefined,
+            onOpenFile: () => undefined,
+            onOpenReview: () => undefined,
+            onOpenTerminal: () => undefined,
+          })
+        )
+      )
+    )
+    expect(html).not.toContain("aria-expanded=")
+    expect(html).toContain('role="img" aria-label="正在生成文件内容，尚未开始执行"')
+    expect(html).toContain("写入文件")
+    expect(html).not.toContain("准备中")
+    expect(html).toContain("正在处理")
+    expect(html).not.toMatch(/Write|生成参数|已接收|8,192|字符/)
     expect(html).not.toContain("文件编辑 1 次")
     expect(html).not.toContain("已编辑")
     expect(messages).toEqual([])
     expect(parts).toEqual([])
   })
 
-  it("renders received parameter counts in the existing running status", () => {
-    const html = renderToStaticMarkup(createElement(MessageScrollerProvider, null, createElement(MessageScroller, null, createElement(ConversationTranscript, {
-      messages: [], parts: [], runs: [{ id: "r", sessionId: "s", status: "running", metadata: { toolGeneration: [{ receivedChars: 8192 }] }, createdAt: 1, updatedAt: 1 }],
-      running: true, canEditLastUserMessage: false, canOpenReview: false,
-      onEditLastUserMessage() {}, onCopyAssistantMessage() {}, onOpenFile() {}, onOpenReview() {}, onOpenTerminal() {},
-    }))))
-    expect(html).toContain("参数")
-    expect(html).toContain("8,192")
+  it("keeps an understandable running status for legacy progress without a tool name", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        MessageScrollerProvider,
+        null,
+        createElement(
+          MessageScroller,
+          null,
+          createElement(ConversationTranscript, {
+            messages: [],
+            parts: [],
+            runs: [
+              {
+                id: "r",
+                sessionId: "s",
+                status: "running",
+                metadata: { toolGeneration: [{ receivedChars: 8192 }] },
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
+            running: true,
+            canEditLastUserMessage: false,
+            canOpenReview: false,
+            onEditLastUserMessage: () => undefined,
+            onCopyAssistantMessage: () => undefined,
+            onOpenFile: () => undefined,
+            onOpenReview: () => undefined,
+            onOpenTerminal: () => undefined,
+          })
+        )
+      )
+    )
+    expect(html).toContain("正在处理")
+    expect(html).not.toMatch(/参数|8,192|字符/)
     expect(html).not.toContain("等待模型响应")
   })
 })

@@ -1860,3 +1860,123 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 - 未运行会话中的浏览器、进程清理或递归删除脚本，未操作用户任务文件／DB、调用真实模型、构建／重启应用或提交／push。前轮 Write／Codex 和并行侧边聊天等工作区改动保留。
 
 后续授权：用户要求提交代码。本次提交 §38–39 对应的 Write／Codex 调用契约、Shell 语法检查、直接相关测试及本文档，共十八份文件。提交前 tools 十四文件 190、API 一文件 23、core 两文件 34，共 247 项定向测试通过；正常提交钩子继续检查仓库类型。仅提交当前 codex/file-workflow-followup 分支，不 push、不合并，不包含并行侧边聊天、UI 或插件改动。
+
+## 40. DeepSeek 官方 Harness 对照后的收敛评估
+
+本节记录用户同意继续评估后的代码／会话核对，不代表生产行为已经修改。§39 保留为已实施历史；以下建议删除的是独立语法探测，不恢复旧正则拒绝规则。
+
+### 证据与适用范围
+
+- 参照固定在 deepseek-ai/deepseek-harness 提交 `5badb15009ae1756c3afe0ae0cef1faafc290ccc`：标准配置选择 deepseek-flash，目录标为 DeepSeek-V41-Flash；核心 Write 没有 overwrite，Edit 在统一 CRLF／LF 后仍按原文字面量匹配，不能据此放宽数字或正文差异。[模型目录](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15009ae1756c3afe0ae0cef1faafc290ccc/packages/llm/llm-deepseek/src/models.ts)、[编辑实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15009ae1756c3afe0ae0cef1faafc290ccc/packages/fs/fs-local/src/fsio.ts#L814)。
+- 官方原生适配器请求 Messages API；PowerShell 命令直接作为一个 argv 交给解释器，不额外运行 ParseInput 探测；生成期间的工具条目仅展示参数，不提前执行。[模型请求入口](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15009ae1756c3afe0ae0cef1faafc290ccc/packages/llm/llm-deepseek/src/adapter.ts#L120)、[PowerShell 执行入口](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15009ae1756c3afe0ae0cef1faafc290ccc/packages/shell/pwsh-local/src/index.ts#L193)。
+- 本地最近八个 DeepSeek 会话均记录 radeon 通道，最近两个模型标识为 DeepSeek-V4-Flash-Vision-Exp。当前配置为 openai，自定义 radeon 在 default-runtime-provider.ts 固定解析为 openai_compat；这是现有配置与代码事实，不是对历史每个请求的原始网络报文证明，也不能确认它等于官方 V41 权重。
+- 最近会话 `f7473764-a21e-44e9-a882-9f82e6628813`：Write 4／错误 0，Edit 14／错误 5，Read 7／错误 2，Shell 4／错误 0。Edit seq42 漏 new_string；seq48／52 将原文 stats upcoming7 的 10099 写成 13923，seq52 在已有原文反馈后仍重复；seq60／62 的批量旧文也包含与反馈不一致的数字。Read 两次失败分别是错路径和 offset330 超出182行，不是包装层拒绝。另一会话 `2cc478eb-10e1-4877-bb6f-f4231719d079` 的 Write1／Edit2／Read5 均无错误，Shell 一次是 interrupted，而不是语法失败；Browser 不在范围内。
+- 已核对 parseToolInput／normalizeToolInput：解析 JSON、解包和字段别名不改写字符串里的数字。历史保存了调用输入和诊断，但这些记录未保存可用于确定生成来源的完整原始 SSE，不能进一步归因于模型本身或网关，也不能把当前代码版本等同于会话实际运行的构建版本。
+
+### 建议的最小调整
+
+1. **Shell：删除独立语法探测。** 保留当前真实执行器，让实际 PowerShell 一次完成语法解析与运行；前台、自动后台、显式后台均取消探测调用。不恢复方言正则硬拒，不增加常驻解析服务、探测缓存或新开关。权限／hook／sandbox 仍在原边界执行，必要的取消检查不能随探测一起删除。
+2. **协议：先重放已知输入，不切换供应商。** 以遗漏 new_string、错误数字和合法参数包装建立小型离线回归，确认输入经过解析、规范化、校验及 Edit 后的实际结果。既有 AnthropicClient 不等于已经支持官方 DeepSeek Messages 的思考参数、鉴权和回放协议；不盲目改 apiFormat、不新增 provider。若要验证真实 Messages 通道，先确认通道支持与用户授权，不发起付费请求。
+3. **文件版本：本轮不增加状态。** 当前错误不是根据旧 Read 覆盖了新版本，强制先读不能补齐 new_string 或纠正数字。现有可选 hash、写前字节快照、独占创建、原子替换及正文复用保留。后续只有出现旧观察导致实际冲突的证据，才单独讨论自动版本记录；不移植官方插件系统，也不新增恢复框架、事件或 DB 表。
+
+### 行为边界与验收要求
+
+- Shell 生产范围限于 shell.ts／background-shell-tools.ts：移除探测函数及仅供探测使用的 import，保留失败后的参考提示、真实错误输出与日志引用。实际命令退出非零仍为 command，不凭错误文字猜测“完全未执行”，也不改成成功来降低错误计数。后台创建成功只证明登记成功，真实执行结果仍由 JobRead／JobWait 取得。
+- 回归要证明：前台合法 PowerShell 仅调用一次实际执行器；JS here-string 的逻辑运算符不被拒；真实错误由解释器返回；取消后不创建后台任务，取消／超时／策略拒绝与长输出补读不退化。旧“探测不可用／三秒预算”的测试随删除而收敛，不保留无生产调用的测试框架。
+- 文件回归要证明：漏 new_string 明确未写，10099／13923 不会被匹配规则偷偷等同；当前原文可用于短且唯一的更正调用，正确参数和合法包装仍可成功。已有 Edit 的单次／批量条件主要在工具内部校验，此事实可以解释 schema 必填表达偏弱的风险，但不足以证明它造成了本次数字错误，不因此扩展通用 schema 规范化器。
+- 这轮评估只读了源码、白名单配置字段及 readonly／query_only 会话数据；仅更新本文档。没有改生产／测试代码、切换通道、读取凭据文件、运行会话脚本、调用真实模型、构建／重启应用或提交／push。其他未提交工作保留。
+
+## 41. 已授权实施：执行链路收敛与克制的生成展示
+
+用户授权将 §40 的 Shell 删减、真实失败参数离线回归及参数生成展示一起完成；界面必须克制，不能靠堆文字制造进度感。自动文件版本保护、切换供应商／Messages API、供应商测速仍不实施。
+
+### 运行范围与职责
+
+- Shell 删除独立 ParseInput 探测及三个入口的调用，不恢复正则硬拒；实际解释器负责语法解析，原执行器保留 stdout／stderr、退出码、超时、取消和日志。后台只登记任务，失败仍由 JobWait／JobRead 查看。探测承担过的取消保护必须留在正常启动边界，而不是再建一套预检。
+- 离线测试使用 §40 的遗漏 new_string、10099／13923 差异及合法 arguments 包装：替换模型网络传输，真实解析／核心准备／权限／Edit 写入仍执行。遗漏或旧文不符均不落盘，修正后的短且唯一调用才成功；不为测试新增参数修复逻辑、不放宽数字匹配。
+- 生成展示沿用现有 tool_generation_progress → Agent domain event → Run 临时 metadata → renderer 占位工具行的路线，增加可选 `filePath` 摘要；省略表示保留此前摘要，字符串更新路径，null 明确撤回已经不可信的路径。放弃恢复时在同一进度事件中附带 discarded 撤销标记，仅清理该占位。provider 负责从生成中的参数提取已完整接收的路径，核心的普通接收量继续按既有 250ms 节流；撤销不是累计量，立即转发并清掉对应待发进度，不能被后续进度合并吞掉。服务端过滤摘要，renderer 只消费展示信息。
+- 摘要只限文件工具，只接受完整、合法转义的路径字符串，最多 4096 字符，含控制字符或不可确定时不展示；不能从正文里的示例字段推测路径。支持现有合法参数包装与跨分片字符串，不把别名转换或半成品 JSON 用于实际执行。路径晚于正文时等它真正到达，不要求模型字段顺序永远正确。
+- 不传／持久化原始参数片段和完整正文，不修改正式 tool_use_start 的发布时间；正式执行仍等待完整参数、校验和授权。renderer 生成占位不得填入可执行 input／正式 toolUseId／output，不算已完成操作；进度事件及 Run 摘要继续保留已有可选 toolUseId 用于身份衔接。重试、取消、结束及正式调用到达时按已有 generation／attempt／调用身份收束，不凭文件名合并调用。
+- 原生 OpenAI／Anthropic／Codex 增量共同支持。已声明文件工具的 DSML invoke 同样发布展示进度，复用 scanner 的识别边界及最终 dsml_N 身份，不另建 DSML 解析框架；完整路径才进入摘要。未知工具和普通引用不产生占位，未闭合、超限释放或最终放弃恢复只清理展示，不生成正式调用，不改变恢复执行条件。
+- 路径摘要可以使用一个共享的小型字符串扫描辅助模块，复用 provider 已有参数缓冲及调用生命周期；不新增通用半成品 JSON 修复器、参数规范化器或执行输入。按增量扫描或已有节流窗口处理，不能每个字符都重新遍历一份不断变长的正文。
+- Write／Edit 仅在已有 file_path 字段说明中建议先提供路径，再提供正文／替换；不改变参数形状、校验或字段顺序的容忍规则。该建议不保证模型遵守，展示仍等待真实路径到达。
+
+### 界面约束
+
+- 沿用现有工具组、28px 工具行、语义颜色、Lucide 图标和 Tooltip；不新建卡片、进度条、百分比、不断跳动的常驻计数、自动展开面板或动画依赖。
+- 生成行默认仅工具名、已知路径及一个低对比但可辨识的旋转状态图标；不再重复显示“准备中／正在生成参数”等同义文案。路径能截断，完整路径及“已接收 X 字符；尚未开始执行”在悬停／键盘聚焦提示中取得。接收字符数是参数量，不冒充落盘字节或完成比例。
+- 折叠工具组仍能看到生成中的工具／目标；展开后由具体行承载，不在组头重复同一份状态和路径。无路径时保持现有工具名与状态图标；等待批准、真实执行和失败继续由原有状态表示，不能用一个永远旋转的图标掩盖确认或失败。
+- 同一逻辑调用在生成到正式阶段只出现一项，不产生重复计数／详情空壳；保持键盘可访问性，状态不只靠颜色，尊重减少动态效果设置。高频字符更新不复制大正文或触发额外网络请求。
+
+### 验收与工作区边界
+
+- 先观察 RED 再改生产代码：真实执行器只调用一次、合法 JS here-string 仍能执行、实际 PowerShell 错误仍报告失败；取消不启动前台命令／后台任务，策略与日志回归不退化。离线已有正确行为用特征回归固定，不伪造失败来满足测试流程。
+- 展示回归覆盖路径跨片、转义／正文伪字段、合法包装、多个交错调用及重试清理；端到端验证摘要能到达 Run 和工具行，但正式参数、权限及工具执行没有提前。组件测试验证路径可见、仅一个状态标记、计数只在提示中、正式行无重复；在可用的受控渲染环境检查明暗主题与窄窗口，不启动用户会话或供应商请求。
+- 基线已验证：tools 三文件37项、desktop 两文件42项通过。当前是 codex/file-workflow-followup 普通工作区，需沿用未提交工具 UI；仅做局部 patch，保留并行 UI／侧边聊天修改，不自动建新分支、不提交／合并／push，不构建／重启用户应用，不新增依赖、生产状态服务或 DB 表。
+- 先审核本规格并修订，再将实施计划及结果继续写在本文；实施子代理不得提交或分派额外子代理。测试按受影响范围运行，独立审核以本轮增量为范围，不能把别人的 dirty diff 纳入本轮成果。
+
+### 实施计划（§41）
+
+> 执行方式：当前会话按 subagent-driven-development 分任务实施、每项审核后继续；用户要求统一文档，因此计划与规格同文件。仅保留未提交修改，任务报告／基线在忽略的临时工作目录，不自动提交。
+
+**Goal:** 减少 Shell 重复启动并让生成阶段可感知，同时保持文件错误真实、工具执行边界不变。
+
+**Architecture:** Task41 删除额外执行层并固定已知失败输入；Task42 用既有进度事件传少量显示摘要，renderer 复用现有工具行。两项不共享生产文件，不新增文件版本记录。
+
+**Tech Stack:** 现有 TypeScript／Vitest／React／Base UI Tooltip／Lucide／Tailwind；无新依赖。
+
+**Spec:** 本文 §41；全局约束为不提交／合并／push、不切换通道或调用真实模型、不启动用户任务脚本、不覆盖并行 dirty 工作、不增加卡片／百分比／常驻计数或状态服务。
+
+### Task 41: Shell 一次执行与真实失败输入回归
+
+**Files:** shell/shell.ts、background-shell/background-shell-tools.ts 及其直接测试；file/__test__/file-workflow.integration.test.ts。路径均在 packages/tools/src；file 工具和 core 参数规范化生产代码不改。
+
+**Interfaces:** 保留 createShellTool／createBackgroundShellTool；删除 shellCommandSyntaxError 对外出口，正常启动边界保留取消判断。用现有 OpenAICompatibleClient／QueryEngine／Read／Edit 验证原生 JSON 和合法 arguments 包装。
+
+- [x] 先改回归并观察 RED：环境 PowerShell 的一条合法命令只交给实际执行器一次；错误语法不提前拒绝后台登记，而真实前台解释器返回失败；已取消调用不得执行／登记。
+
+    expect(executedCommands).toEqual([source]);
+    expect(result).toMatchObject({ failureKind: "command", executionState: "completed" });
+
+- [x] 最小实现删除独立 ParseInput 函数／探测专用 import 和调用，补正常路径中的取消检查，不恢复方言拒绝。shell-syntax.test.ts 收敛为真实解释器／取消／一次执行的回归，不保留探测专用测试。
+- [x] 添加两个离线特征案例：一次缺 new_string，一次把旧文10099误写13923；网络替身发送完整 SSE，真实 Edit 拒绝且文件不变，随后短且唯一的正确参数成功。包含 arguments 包装，断言传输后的参数未被偷偷修复。
+
+    expect(firstResult.isError).toBe(true);
+    expect(beforeCorrection).toBe(original);
+    expect(await readFile(file, "utf8")).toBe(corrected);
+
+- [x] 定向运行 tools 的 Shell／后台／文件工作流回归及 tools tsc；报告实际 RED／GREEN、文件列表及风险。审核 Task41 增量后才进入下一项。
+
+### Task 42: 有界生成摘要与安静的工具行
+
+**Files:** packages/core/src/types/events.ts 及 query-engine.ts 的进度转发分支／对应测试；packages/api/src/providers 中现有三种适配器／DSML scanner／进度测试和至多一个共享摘要模块；packages/server/src/application/agent/daemon-agent-event-projector.ts 及进度投影测试；desktop 的 tool-generation-presentation.ts／assistant-message.tsx 及直接测试；tools Write／Edit 仅调整 file_path 描述。不改协议存储 schema、核心工具执行／权限／恢复分支或其他 UI 功能。
+
+**Interfaces:** ToolGenerationProgressEvent 增加可选 filePath:string|null、可选 discarded:boolean。null 只撤回该调用的路径，不删除其接收量；丢弃事件仍带原 generation／attempt／toolKey，只撤销对应 Run 摘要；正常进度继续单调 receivedChars。renderer 路径放在展示 metadata，不放进正式 input。
+
+- [x] 先补并观察 RED：跨分片的完整路径在长正文收齐前出现；正文伪字段、未闭合／坏转义路径不展示；三 provider 与 DSML 已声明调用都发布摘要，DSML 身份和最终调用一致，放弃不执行并撤销对应占位。
+
+    expect(progress).toMatchObject({ toolName: "Write", filePath: "C:/fixture/index.html" });
+    expect(JSON.stringify(progress)).not.toContain(privateBody);
+    expect(formalCallsBeforeClose).toHaveLength(0);
+
+- [x] 一个共享、有界的摘要提取辅助模块配合现有缓冲／生命周期；三个 provider 只附加摘要，DSML scanner 在已有识别后附加展示进度，不改变 parseParameters／实际恢复的输出。
+- [x] 普通接收量保持250ms节流，撤销立即转发并删除同 key 的待发项；服务端过滤4096字符以内、无控制字符的路径，discarded 只移除匹配调用，其他交错调用及重试清理保持。投影测试断言摘要进入客户端增量，但 DB 不新增原始参数持久化。
+- [x] 用现有 Tooltip 和状态图标更新工具行：默认只有工具名／路径／一个图标；悬停及键盘聚焦获取接收量和未执行说明；折叠组仍可感知目标，展开不重复。沿用已有去重，取消／重试／正式行衔接后无残留占位。
+
+    expect(row.textContent).toContain("index.html");
+    expect(row.textContent).not.toMatch(/9337|字符|生成参数|准备中/);
+    expect(row.querySelectorAll('[aria-label="正在生成文件内容，尚未开始执行"]')).toHaveLength(1);
+
+- [x] 跑 API／server 进度／desktop 工具展示定向测试和相应类型检查；受控方式检查明暗主题、窄窗口及键盘提示，既有组件不足以运行时明确限制，不启动真实用户应用。只运行一次界面机械检查，修订后最多一轮复核。
+- [x] Task42 审核及最终跨任务审核，修复 Important／Critical；更新本节实际结果。未经真实通道验证，不宣称模型错误率或生成耗时已改善。
+
+### 本轮实施与验收记录
+
+- Task41 删除独立探测及专用生命周期逻辑，真实 PowerShell 5.1 语法错误仍为 command／completed，合法 Node here-string 可执行；前台和两种后台的取消保护保留。六文件生产／回归整体净减少50行。SDK HTTP 替身的离线 SSE 验证遗漏 new_string／错误数字原样进入核心与权限，真实 Edit 拒绝且目标未变，正确重试才落盘；不修改 file／core 参数纠错生产逻辑。
+- Task42 原生三 provider 与已声明 DSML 都发布有界路径摘要，辅助模块逐片扫描且不存正文。3.9M字符／1000片后才到路径的回归通过。真实参数／恢复编号不变；null 只在已有路径失效时发一次，立即撤回显示，后续接收量继续正常节流。服务端临时 DB 回归证明增量客户端取得路径，磁盘没有新增路径或正文持久化。
+- 首次审核找到非法容器闭合、包装后追加兄弟字段、DSML 普通尖括号被吞三个 Important。分别补有效 RED，修正摘要而非真实参数；跨分片失效明确撤路径。图标去掉70%透明度，使用已有完整 muted 颜色以保持可辨识。一次修订后同席复核全部 ADDRESSED，Task42 与跨任务审核 Approved，无待修复 Critical／Important。
+- 最新定向范围：tools 十文件109、API 五文件120、core 两文件52、server 进度一文件20、desktop 三文件48，共349项通过，重复执行不累加；tools／API／core／server／desktop web 五项 TypeScript 检查 exit0，限定 diff 检查通过。未运行全仓。额外旧 daemon-agent-event-projector 测试仍25／26，其 completed 断言只期待status，而既有行为清空toolGeneration；完成分支与保存基线不变，未越界修该旧断言，沿用§33的既有问题记录。
+- UI 默认只有原工具行、工具名、短路径和状态图标；接收量与完整路径在原 Tooltip 内。隐藏、阻断网络的独立 Electron 夹具加载真实组件与现有CSS，已检查明暗主题和946／366px内容宽度，无横向溢出、工具行仍28px；一批修订缩短路径及通用工具说明后复核。键盘提示经真实组件DOM focus测试验证；隐藏窗口document.hasFocus=false，未取得实际Popup截图，因此不宣称真实用户应用键盘验收。一次机械界面检查返回空列表；最后图标只恢复已有颜色，无额外视觉打磨。
+- 本轮没有新依赖、状态服务、DB结构、文件版本记录、通道切换或供应商调用。没有执行用户任务脚本、构建／重启用户应用、提交／合并／push；隔离截图生成物仅为临时QA资料。保留并行修改及暂存区，后续提交需按本轮增量选择范围，不能直接把整份共享UI文件的其他修改当作本轮成果。
+
+后续授权：用户要求提交代码。提交范围包含§40–41、Shell／文件离线回归、路径摘要及生成展示，共二十八个文件；生成展示依赖的工具状态文案、本地化摘要与相关 transcript／activity 回归一并纳入。提交前扩展到这些依赖时，transcript 一项旧断言仍期待“准备中”及旧图标说明；只更新两条断言符合新显示约定，不改运行行为。其余六份已暂存的通知设置、插件文档和能力视图测试保留，不并入本次提交。使用限定路径提交并正常运行仓库类型钩子，仅提交当前分支，不合并、不 push。

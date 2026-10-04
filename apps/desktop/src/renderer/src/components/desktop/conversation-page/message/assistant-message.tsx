@@ -7,11 +7,12 @@ import {
   Pencil,
   TerminalSquare,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
 
 import { Button } from "@renderer/components/ui/button"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
 import {
@@ -368,7 +369,32 @@ function ToolDiagnosticDot({ label }: { label: string }): React.JSX.Element {
   )
 }
 
+function generationSummary(tool: ToolUnit): { label: string; tooltip: string } {
+  const progress = tool.call.metadata.toolProgress as { filePath?: string; receivedChars?: number }
+  const path = typeof progress?.filePath === "string" ? progress.filePath : ""
+  const displayPath = path.split(/[\\/]/).filter(Boolean).slice(-2).join("/")
+  const name = summarizeToolCall(tool.call).name
+  return {
+    label: displayPath ? `${name} ${displayPath}` : name,
+    tooltip: `${path ? `${path}；` : ""}已接收 ${progress?.receivedChars ?? 0} 字符；尚未开始执行`,
+  }
+}
+
+function ToolGenerationIcon({ toolName }: { toolName?: string }): React.JSX.Element {
+  return (
+    <LoaderCircle
+      role="img"
+      aria-label={toolName === "Write" || toolName === "Edit"
+        ? "正在生成文件内容，尚未开始执行"
+        : "正在生成工具参数，尚未开始执行"}
+      className="size-3.5 shrink-0 text-ui-muted motion-safe:animate-spin"
+      strokeWidth={1.7}
+    />
+  )
+}
+
 function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element {
+  const groupTooltipId = useId()
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const grouped = tools.length > 1
@@ -396,16 +422,10 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   ]
     .filter(Boolean)
     .join("，")
-  const generatingNames = [
-    ...new Set(
-      tools
-        .filter((tool) => isToolGenerationPresentation(tool.call))
-        .map((tool) => tool.call.toolName ?? "工具")
-    ),
-  ]
+  const generatingTools = tools.filter((tool) => isToolGenerationPresentation(tool.call))
   const heading = [
     activityHeading,
-    generatingNames.length ? `${generatingNames.join("、")} 生成参数` : "",
+    !open ? generatingTools.map((tool) => generationSummary(tool).label).join("、") : "",
   ]
     .filter(Boolean)
     .join(" · ")
@@ -418,46 +438,70 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   return (
     <section aria-label="工具活动组" className="text-ui-small text-ui-muted">
       {grouped ? (
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          className={cn(
-            "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-            active && "shimmer"
-          )}
-        >
-          <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
-          <span className="truncate">
-            {heading || `工具调用 ${tools.length} 次`}
-            {activityLabel &&
-            !diagnosticToolLabels.has(activityLabel) &&
-            !(generatingNames.length && activityLabel.startsWith("生成参数"))
-              ? ` · ${activityLabel}`
-              : ""}
-          </span>
-          {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}
-          <ChevronDown
-            className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
-          />
-        </button>
+        <Tooltip disabled={open || !generatingTools.length}>
+          <TooltipTrigger
+            aria-describedby={!open && generatingTools.length ? groupTooltipId : undefined}
+            render={
+              <button
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                aria-expanded={open}
+                className={cn(
+                  "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  active && !generatingTools.length && "shimmer"
+                )}
+              />
+            }
+          >
+            {!open && generatingTools.length ? (
+              <ToolGenerationIcon toolName={generatingTools.length === 1 ? generatingTools[0]?.call.toolName : undefined} />
+            ) : (
+              <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
+            )}
+            <span className="truncate">
+              {heading || "工具活动"}
+              {activityLabel &&
+              !diagnosticToolLabels.has(activityLabel) &&
+              !(generatingTools.length && activityLabel === "准备中")
+                ? ` · ${activityLabel}`
+                : ""}
+            </span>
+            {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}
+            <ChevronDown
+              className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
+            />
+          </TooltipTrigger>
+          <TooltipContent id={groupTooltipId} role="tooltip" className="max-w-sm break-all">
+            {generatingTools.map((tool) => generationSummary(tool).tooltip).join("；")}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       {!grouped || open ? (
         <div className={cn("space-y-0.5", grouped && "mt-1 border-l border-border/70 pl-4")}>
           {tools.map((tool) => {
             if (isToolGenerationPresentation(tool.call))
               return (
-                <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
-                  <LoaderCircle
-                    role="img"
-                    aria-label="正在生成参数，尚未执行"
-                    className="size-3.5 shrink-0 motion-safe:animate-spin"
-                    strokeWidth={1.7}
-                  />
-                  <span className="min-w-0 truncate">
-                    {tool.call.toolName} · {toolActivityLabel(tool.call)}
-                  </span>
-                </div>
+                <Tooltip key={tool.id}>
+                  <TooltipTrigger
+                    aria-describedby={`tool-generation-hint-${tool.id}`}
+                    render={
+                      <div
+                        tabIndex={0}
+                        className="flex h-7 min-w-0 items-center gap-2 text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      />
+                    }
+                  >
+                    <ToolGenerationIcon toolName={tool.call.toolName} />
+                    <span className="min-w-0 truncate">{generationSummary(tool).label}</span>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    id={`tool-generation-hint-${tool.id}`}
+                    role="tooltip"
+                    className="max-w-sm break-all"
+                  >
+                    {generationSummary(tool).tooltip}
+                  </TooltipContent>
+                </Tooltip>
               )
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id

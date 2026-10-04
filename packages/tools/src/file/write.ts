@@ -65,7 +65,7 @@ export const fileWriteTool: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      file_path: { type: "string", description: "Absolute path to write to." },
+      file_path: { type: "string", description: "Absolute path to write to. Prefer providing file_path before the file content." },
       content: { type: "string", description: "Content to write." },
       content_from: { type: "string", description: "Previous settled Write tool call ID whose complete content to reuse. Do not also pass content. Only works while that content remains in the current conversation history." },
       expected_sha256: {

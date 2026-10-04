@@ -489,7 +489,11 @@ export class QueryEngine implements IQueryEngine {
               const progress = { ...event, generationId, attempt };
               const now = Date.now();
               const lastSent = progressSentAt.get(event.toolKey);
-              if (lastSent === undefined || now - lastSent >= 250) {
+              if (event.discarded === true || event.filePath === null) {
+                pendingProgress.delete(event.toolKey);
+                progressSentAt.delete(event.toolKey);
+                yield progress;
+              } else if (lastSent === undefined || now - lastSent >= 250) {
                 progressSentAt.set(event.toolKey, now);
                 pendingProgress.delete(event.toolKey);
                 yield progress;

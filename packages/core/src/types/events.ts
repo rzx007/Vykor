@@ -33,6 +33,9 @@ export interface ToolGenerationProgressEvent {
   toolUseId?: string;
   toolName?: string;
   receivedChars: number;
+  /** Omitted keeps the current display path; null explicitly withdraws it. */
+  filePath?: string | null;
+  discarded?: boolean;
   generationId?: string;
   attempt?: number;
 }

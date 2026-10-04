@@ -10,6 +10,7 @@ vi.mock("@renderer/stores/desktop-session", async (importOriginal) => {
 })
 
 import { AssistantMessage } from "./assistant-message"
+import { TooltipProvider } from "@renderer/components/ui/tooltip"
 
 let container: HTMLDivElement
 let root: Root
@@ -54,14 +55,14 @@ function part(
 function render(parts: DesktopSessionPart[], streaming = false) {
   act(() =>
     root.render(
-      <AssistantMessage
+      <TooltipProvider><AssistantMessage
         parts={parts}
         streaming={streaming}
         onOpenFile={vi.fn()}
         canOpenReview={false}
         onOpenReview={vi.fn()}
         onOpenTerminal={vi.fn()}
-      />
+      /></TooltipProvider>
     )
   )
 }
@@ -224,40 +225,43 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).not.toMatch(/命令调用|工具查看/)
     expect(container.querySelectorAll("button[aria-expanded]")).toHaveLength(2)
   })
-  it.each(["Agent", "ImageGeneration", "BackgroundShellCreate", "ImageToText"])(
-    "shows %s generation as a compact non-expandable status",
-    (toolName) => {
-      render([
-        part(
-          toolName,
-          {},
-          {
-            id: "ui-tool-generation:r:g:1:0",
-            input: undefined,
-            toolUseId: undefined,
-            status: "running",
-            metadata: {
-              uiToolGeneration: true,
-              toolProgress: {
-                phase: "generating",
-                receivedChars: 100,
-                executionState: "not_started",
-              },
+  it.each([
+    ["Agent", "调用子智能体"],
+    ["ImageGeneration", "生成图片"],
+    ["BackgroundShellCreate", "创建后台终端"],
+    ["ImageToText", "识别图片文字"],
+  ])("shows %s generation as a compact non-expandable status", (toolName, actionName) => {
+    render([
+      part(
+        toolName,
+        {},
+        {
+          id: "ui-tool-generation:r:g:1:0",
+          input: undefined,
+          toolUseId: undefined,
+          status: "running",
+          metadata: {
+            uiToolGeneration: true,
+            toolProgress: {
+              phase: "generating",
+              receivedChars: 100,
+              executionState: "not_started",
             },
-          }
-        ),
-      ])
-      expect(container.textContent).toContain(toolName)
-      expect(container.textContent).toContain("生成参数")
-      expect(container.textContent).toContain("100")
-      expect(container.textContent).not.toContain("未执行")
-      expect(container.textContent).not.toMatch(/文件编辑|工具查看|命令调用/)
-      expect(container.querySelector("button[aria-expanded]")).toBeNull()
-      expect(
-        container.querySelector('[role="img"][aria-label="正在生成参数，尚未执行"]')
-      ).not.toBeNull()
-    }
-  )
+          },
+        }
+      ),
+    ])
+    expect(container.textContent).toContain(actionName)
+    expect(container.textContent).not.toContain(toolName)
+    expect(container.textContent).not.toContain("准备中")
+    expect(container.textContent).not.toMatch(/生成参数|100|字符/)
+    expect(container.textContent).not.toContain("未执行")
+    expect(container.textContent).not.toMatch(/文件编辑|工具查看|命令调用/)
+    expect(container.querySelector("button[aria-expanded]")).toBeNull()
+    expect(
+      container.querySelector('[role="img"][aria-label="正在生成工具参数，尚未开始执行"]')
+    ).not.toBeNull()
+  })
 
   it("shows a generating Write once without repeated status or empty detail panels", () => {
     render([
@@ -280,10 +284,9 @@ describe("tool parameter and result display", () => {
         }
       ),
     ])
-    expect(container.textContent).toContain("Write")
-    expect(container.textContent).toContain("9,337")
-    expect(container.textContent?.match(/生成参数/g)).toHaveLength(1)
-    expect(container.textContent?.match(/9,337/g)).toHaveLength(1)
+    expect(container.textContent).toContain("写入文件")
+    expect(container.textContent).not.toContain("准备中")
+    expect(container.textContent).not.toMatch(/Write|生成参数|9,337|字符/)
     expect(container.textContent).not.toContain("未执行")
     expect(container.textContent).not.toMatch(/文件编辑|工具查看|命令调用/)
     expect(container.textContent).not.toContain("参数尚未完整")
@@ -294,12 +297,39 @@ describe("tool parameter and result display", () => {
     const group = container.querySelector("section")
     expect(group).not.toBeNull()
     expect(group!.getAttribute("aria-label")).toBe("工具活动组")
-    expect(group!.textContent).toContain("Write")
+    expect(group!.textContent).toContain("写入文件")
+  })
+
+  it("reveals the complete target and received count on keyboard focus without a details button", async () => {
+    render([part("Write", {}, {
+      id: "ui-tool-generation:r:g:1:0", input: undefined, toolUseId: undefined, status: "running",
+      metadata: { uiToolGeneration: true, toolProgress: {
+        phase: "generating", filePath: "C:/a/long/workspace/path/fixture/index.html", receivedChars: 9337, executionState: "not_started",
+      } },
+    })])
+    const row = container.querySelector<HTMLElement>('[data-slot="tooltip-trigger"][tabindex="0"]')!
+    expect(row).not.toBeNull()
+    expect(row.textContent).toContain("index.html")
+    expect(row.textContent).toContain("fixture/index.html")
+    expect(row.textContent).not.toContain("C:/a/long/workspace/path")
+    expect(row.textContent).not.toMatch(/9337|字符|生成参数|准备中/)
+    expect(row.querySelectorAll('[aria-label="正在生成文件内容，尚未开始执行"]')).toHaveLength(1)
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))
+      row.focus()
+    })
+    expect(document.activeElement).toBe(row)
+    const tooltip = document.querySelector('[role="tooltip"]')
+    expect(tooltip?.textContent).toContain("C:/a/long/workspace/path/fixture/index.html")
+    expect(tooltip?.textContent).toContain("已接收 9337 字符；尚未开始执行")
+    expect(row.getAttribute("aria-describedby")).toBe(tooltip?.id)
+    expect(container.querySelector("pre")).toBeNull()
+    expect(container.querySelector("button[aria-expanded]")).toBeNull()
   })
 
   it("keeps completed Read and generating Write in one collapsible tool group", () => {
     render([
-      part("Read", { file_path: "index.html" }, { output: "file content" }),
+      part("Read", { file_path: "source.html" }, { output: "file content" }),
       part(
         "Write",
         {},
@@ -313,7 +343,8 @@ describe("tool parameter and result display", () => {
             uiToolGeneration: true,
             toolProgress: {
               phase: "generating",
-              receivedChars: 100,
+              receivedChars: 9337,
+              filePath: "C:/fixture/index.html",
               executionState: "not_started",
             },
           },
@@ -322,12 +353,14 @@ describe("tool parameter and result display", () => {
     ])
     const group = container.querySelector("section")
     expect(group).not.toBeNull()
-    expect(group!.textContent).toContain("Write")
+    expect(group!.textContent).toContain("写入文件")
     expect(group!.getAttribute("aria-label")).toBe("工具活动组")
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
     expect(heading?.getAttribute("aria-expanded")).toBe("false")
     expect(heading?.textContent).toContain("工具查看 1 次")
-    expect(heading?.textContent).toContain("Write")
+    expect(heading?.textContent).toContain("写入文件")
+    expect(heading?.textContent).toContain("index.html")
+    expect(heading?.textContent).not.toMatch(/9337|字符|生成参数|准备中/)
     expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
     act(() => heading!.click())
@@ -335,12 +368,16 @@ describe("tool parameter and result display", () => {
       (button) => button.textContent?.includes("读取文件")
     )
     expect(read).toBeDefined()
-    expect(group!.textContent).toContain("Write")
-    expect(group!.textContent?.match(/生成参数/g)).toHaveLength(2)
+    expect(group!.textContent).toContain("写入文件")
+    expect(group!.textContent).not.toMatch(/准备中|9337|字符|生成参数/)
+    expect(heading?.textContent).not.toContain("index.html")
+    expect(group!.textContent?.match(/index.html/g)).toHaveLength(1)
+    expect(group!.querySelectorAll('[aria-label="正在生成文件内容，尚未开始执行"]')).toHaveLength(1)
+    expect(group!.textContent).not.toMatch(/Write|生成参数|100|字符/)
     expect(
       [...group!.querySelectorAll("button[aria-expanded]")]
         .filter((button) => button !== heading)
-        .some((button) => button.textContent?.includes("Write"))
+        .some((button) => button.textContent?.includes("写入文件"))
     ).toBe(false)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
     act(() => read!.click())
@@ -370,13 +407,15 @@ describe("tool parameter and result display", () => {
     const group = container.querySelector('section[aria-label="工具活动组"]')
     expect(group).not.toBeNull()
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
-    expect(heading?.textContent).toContain("Write")
-    expect(heading?.textContent).toContain("Read")
+    expect(heading?.textContent).toContain("写入文件")
+    expect(heading?.textContent).toContain("读取文件")
+    expect(heading?.textContent).not.toMatch(/Write|Read|生成参数|字符/)
     expect(heading?.textContent).not.toMatch(/工具调用|工具查看|文件编辑/)
     act(() => heading!.click())
     expect(
-      group!.querySelectorAll('[role="img"][aria-label="正在生成参数，尚未执行"]')
-    ).toHaveLength(2)
+      group!.querySelectorAll('[role="img"][aria-label="正在生成文件内容，尚未开始执行"]')
+    ).toHaveLength(1)
+    expect(group!.querySelectorAll('[role="img"][aria-label="正在生成工具参数，尚未开始执行"]')).toHaveLength(1)
     expect(group!.querySelectorAll("button[aria-expanded]")).toHaveLength(1)
     expect(group!.querySelector("pre")).toBeNull()
   })

@@ -12,6 +12,7 @@ import { fileEditTool } from "../edit.js";
 import { applyPatchTool } from "../apply-patch.js";
 import { buildRuntimeSystemPrompt } from "../../../../prompts/src/index.js";
 import { CodexSubscriptionClient } from "../../../../api/src/providers/codex.js";
+import { OpenAICompatibleClient } from "../../../../api/src/providers/openai.js";
 import { computeFileChange } from "../preview.js";
 
 async function defaultPrompt(cwd: string) {
@@ -31,6 +32,102 @@ function expectWriteGuidance(system: string | undefined) {
 }
 
 describe("one complete file workflow", () => {
+  it.each([
+    { fault: "missing new_string", wrapped: false },
+    { fault: "13923 instead of observed 10099", wrapped: true },
+  ])("keeps $fault intact through offline SSE and rejects it before a short correction", async ({ fault, wrapped }) => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-offline-edit-input-"));
+    try {
+      const file = join(dir, "fixture.txt");
+      const original = "const todo = 10099;\nconst done = 7;\n";
+      const corrected = "const todo = 10099;\nconst done = 8;\n";
+      await writeFile(file, original);
+      const faultyInput: Record<string, unknown> = fault === "missing new_string"
+        ? { file_path: file, old_string: "const done = 7;" }
+        : { file_path: file, old_string: "const todo = 13923;", new_string: "const todo = 10099;" };
+      const correction = { file_path: file, old_string: "const done = 7;", new_string: "const done = 8;" };
+      const calls = [
+        { name: "Read", id: "inspect", input: { file_path: file } },
+        { name: "Edit", id: "bad-edit", input: wrapped ? { arguments: faultyInput } : faultyInput },
+        { name: "Edit", id: "correct-edit", input: { arguments: correction } },
+      ];
+      const requests: Array<{ messages: Array<{ role: string; tool_call_id?: string; content?: string }> }> = [];
+      let beforeCorrection: string | undefined;
+      const offlineFetch = async (url: string | URL | Request, init?: RequestInit) => {
+        expect(String(url)).toBe("https://offline.invalid/v1/chat/completions");
+        const turn = requests.length;
+        requests.push(JSON.parse(String(init?.body)));
+        if (turn === 2) beforeCorrection = await readFile(file, "utf8");
+        const call = calls[turn];
+        const chunks: Array<Record<string, unknown>> = [];
+        const frame = (delta: object, finishReason: string | null = null) => ({
+          id: "chatcmpl-fixture-" + turn, object: "chat.completion.chunk", created: 0, model: "fixture",
+          choices: [{ index: 0, delta, finish_reason: finishReason, logprobs: null }],
+        });
+        chunks.push(frame({ role: "assistant", content: "" }));
+        if (call) {
+          const argumentsJson = JSON.stringify(call.input);
+          const split = Math.floor(argumentsJson.length / 2);
+          chunks.push(frame({ tool_calls: [{ index: 0, id: call.id, type: "function", function: {
+            name: call.name, arguments: argumentsJson.slice(0, split),
+          } }] }));
+          chunks.push(frame({ tool_calls: [{ index: 0, function: { arguments: argumentsJson.slice(split) } }] }));
+        }
+        chunks.push(frame({}, call ? "tool_calls" : "stop"));
+        chunks.push({ id: "chatcmpl-fixture-" + turn, object: "chat.completion.chunk", created: 0, model: "fixture",
+          choices: [], usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 } });
+        return new Response(chunks.map(chunk => "data: " + JSON.stringify(chunk) + "\n\n").join("") + "data: [DONE]\n\n", {
+          headers: { "content-type": "text/event-stream" },
+        });
+      };
+      const checked: Array<{ name: string; input: Record<string, unknown> }> = [];
+      const approved: Record<string, unknown>[] = [];
+      const registry = new ToolRegistry();
+      registry.register(fileReadTool); registry.register(fileEditTool);
+      const execution = {
+        scope: { agentId: "fixture", sessionId: "fixture", inputId: "fixture", runId: "fixture", traceId: "fixture", cwd: dir,
+          signal: new AbortController().signal },
+        effects: { requestPermission: async (request: { input?: Record<string, unknown> }) => {
+          approved.push(structuredClone(request.input!)); return { status: "approved" };
+        } },
+        emit: async () => {}, takeSteeredInputs: async () => [], closeSteering() {},
+      } as unknown as AgentExecutionContext;
+      const client = new OpenAICompatibleClient({ apiKey: "offline-fixture", baseURL: "https://offline.invalid/v1" });
+      // The installed SDK captures its own node-fetch; replace only that HTTP boundary.
+      vi.spyOn(client.client as unknown as { fetch: typeof fetch }, "fetch").mockImplementation(offlineFetch);
+      const engine = new QueryEngine(client,
+        registry, { checkTool: async (name, input) => {
+          checked.push({ name, input: structuredClone(input) }); return { action: name === "Read" ? "allow" : "ask" };
+        } }, { register() {}, execute: async () => ({ blocked: false }) }, {
+          cwd: dir, model: "fixture", trajectoryTrackerFactory: false,
+          settings: { model: "fixture", apiFormat: "openai", maxTurns: 10, permission: { mode: "default" }, sandbox: { enabled: false } },
+        });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("offline fixture", { execution })) events.push(event);
+      const ends = events.filter(event => event.type === "tool_use_end");
+      expect(ends.map(event => event.toolUseId)).toEqual(["inspect", "bad-edit", "correct-edit"]);
+      expect(ends[0]?.result.isError).not.toBe(true);
+      expect(JSON.stringify(ends[0]?.result.content)).toContain("const todo = 10099;");
+      const firstResult = ends[1]!.result;
+      expect(firstResult.isError).toBe(true);
+      expect(firstResult).toMatchObject({ failureKind: fault === "missing new_string" ? "invalid_input" : "precondition", executionState: "not_started" });
+      expect(beforeCorrection).toBe(original);
+      expect(checked).toEqual([
+        { name: "Read", input: { file_path: file } },
+        { name: "Edit", input: faultyInput },
+        { name: "Edit", input: correction },
+      ]);
+      expect(approved).toEqual([faultyInput, correction]);
+      if (fault === "missing new_string") expect(checked[1]!.input).not.toHaveProperty("new_string");
+      else expect(checked[1]!.input.old_string).toBe("const todo = 13923;");
+      expect(ends[2]?.result).toMatchObject({ executionState: "completed" });
+      expect(ends[2]?.result.isError).not.toBe(true);
+      expect(requests).toHaveLength(4);
+      expect(requests[2]!.messages.find(message => message.role === "tool" && message.tool_call_id === "bad-edit")).toBeDefined();
+      expect(await readFile(file, "utf8")).toBe(corrected);
+    } finally { vi.restoreAllMocks(); await rm(dir, { recursive: true, force: true }); }
+  });
+
   it.each([false, true])("preserves optional Write fields through Codex, reuse and current permissions (deny retry: %s)", async denyRetry => {
     const dir = await mkdtemp(join(tmpdir(), "oh-codex-write-contract-"));
     try {

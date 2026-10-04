@@ -46,6 +46,53 @@ async function harness() {
 }
 
 describe("tool progress projection", () => {
+  it("clears an explicitly withdrawn path while retaining an omitted path and other calls", async () => {
+    const h = await harness();
+    await h.progress({ toolKey: "a", filePath: "fake.html" });
+    await h.progress({ toolKey: "b", filePath: "other.html" });
+    await h.progress({ toolKey: "a", receivedChars: 9000 });
+    expect(h.run().metadata.toolGeneration).toEqual([
+      expect.objectContaining({ toolKey: "a", filePath: "fake.html" }),
+      expect.objectContaining({ toolKey: "b", filePath: "other.html" }),
+    ]);
+    await h.progress({ toolKey: "a", receivedChars: 9100, filePath: null });
+    const client = applyEvents(createInitialClientState(), h.published);
+    expect(client.buckets[h.session.id]?.runs.run?.metadata.toolGeneration).toEqual([
+      expect.not.objectContaining({ filePath: "fake.html" }),
+      expect.objectContaining({ toolKey: "b", filePath: "other.html" }),
+    ]);
+    expect((h.run().metadata.toolGeneration as any[])[0]).not.toHaveProperty("filePath");
+  });
+  it("omits path summaries for non-file tools", async () => {
+    const h = await harness();
+    await h.progress({ toolName: "Shell", filePath: "fake.html" });
+    expect(h.run().metadata.toolGeneration).toEqual([expect.not.objectContaining({ filePath: "fake.html" })]);
+  });
+  it("streams only a bounded safe path and removes only the discarded invocation", async () => {
+    const h = await harness();
+    await h.progress({ toolKey: "a", filePath: "C:/fixture/index.html", raw: "PRIVATE BODY" });
+    await h.progress({ toolKey: "b", filePath: "other.html" });
+    const client = applyEvents(createInitialClientState(), h.published);
+    expect(client.buckets[h.session.id]?.runs.run?.metadata.toolGeneration).toEqual([
+      expect.objectContaining({ toolKey: "a", filePath: "C:/fixture/index.html" }),
+      expect.objectContaining({ toolKey: "b", filePath: "other.html" }),
+    ]);
+    expect(JSON.stringify(h.run().metadata)).not.toContain("PRIVATE BODY");
+    const persistedRun = (h.store as any).storage.database.connection.prepare("SELECT metadata_json FROM session_run WHERE id = ?").get("run");
+    expect(persistedRun.metadata_json).not.toMatch(/PRIVATE BODY|C:\/fixture\/index.html/);
+    expect(JSON.parse(persistedRun.metadata_json).toolGeneration).toEqual([]);
+    expect(h.store.conversations.listMessageParts(h.session.id).filter(part => part.type === "tool")).toEqual([]);
+    await h.progress({ toolKey: "a", receivedChars: 0, discarded: true });
+    expect(h.run().metadata.toolGeneration).toEqual([expect.objectContaining({ toolKey: "b" })]);
+    await h.progress({ toolKey: "missing", discarded: true });
+    expect(h.run().metadata.toolGeneration).toHaveLength(1);
+  });
+
+  it.each(["a\n.html", "a\u007f.html", "x".repeat(4097), 123])( "omits unsafe path metadata (case %#)", async filePath => {
+    const h = await harness();
+    await h.progress({ filePath });
+    expect(h.run().metadata.toolGeneration).toEqual([expect.not.objectContaining({ filePath })]);
+  });
   it("publishes 240 isolated progress snapshots without retained history, dirty mutations or full-state transactions", async () => {
     const h = await harness();
     const storage = (h.store as any).storage;

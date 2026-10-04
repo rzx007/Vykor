@@ -70,6 +70,50 @@ async function fixture(options: {
 function results(events: StreamEvent[]) { return events.filter(e => e.type === "tool_use_end").map(e => e.result); }
 
 describe("tool workflow", () => {
+  it("forwards path withdrawal immediately without losing other calls or executing tools", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1000);
+    const result = await fixture({ script: async function* () {
+      for (const event of [
+        { toolKey: "a", receivedChars: 0 }, { toolKey: "b", receivedChars: 0 },
+        { toolKey: "a", receivedChars: 100, filePath: "fake.html" },
+        { toolKey: "b", receivedChars: 200, filePath: "other.html" },
+        { toolKey: "a", receivedChars: 120, filePath: null },
+        { toolKey: "a", receivedChars: 130 },
+      ]) yield { type: "tool_generation_progress", toolName: "Write", ...event } as StreamEvent;
+      yield { type: "text_delta", delta: "after withdrawal" };
+    } });
+    const progress = result.events.filter(e => e.type === "tool_generation_progress");
+    expect(progress).toMatchObject([
+      { toolKey: "a", receivedChars: 0 }, { toolKey: "b", receivedChars: 0 },
+      { toolKey: "a", filePath: null, generationId: expect.any(String), attempt: 1 },
+      { toolKey: "a", receivedChars: 130 },
+      { toolKey: "b", receivedChars: 200, filePath: "other.html" },
+    ]);
+    expect(result.events.indexOf(progress[2]!)).toBeLessThan(result.events.findIndex(e => e.type === "text_delta"));
+    expect(result.executed).toEqual([]);
+    expect(result.checked).toEqual([]);
+  });
+  it("forwards discard immediately and removes only its queued progress", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1000);
+    const result = await fixture({ script: async function* () {
+      for (const event of [
+        { toolKey: "a", receivedChars: 0 }, { toolKey: "b", receivedChars: 0 },
+        { toolKey: "a", receivedChars: 100, filePath: "a.html" },
+        { toolKey: "b", receivedChars: 200, filePath: "b.html" },
+        { toolKey: "a", receivedChars: 100, discarded: true },
+      ]) yield { type: "tool_generation_progress", toolName: "Write", ...event } as StreamEvent;
+      yield { type: "text_delta", delta: "after discard" };
+    } });
+    const progress = result.events.filter(e => e.type === "tool_generation_progress");
+    expect(progress).toMatchObject([
+      { toolKey: "a", receivedChars: 0 }, { toolKey: "b", receivedChars: 0 },
+      { toolKey: "a", discarded: true, generationId: expect.any(String), attempt: 1 },
+      { toolKey: "b", filePath: "b.html", receivedChars: 200 },
+    ]);
+    expect(result.events.indexOf(progress[2]!)).toBeLessThan(result.events.findIndex(e => e.type === "text_delta"));
+    expect(result.executed).toEqual([]);
+    expect(result.checked).toEqual([]);
+  });
   it.each([undefined, false])("normalizes explicit unknown with isError=%s as uncertain feedback", async (isError) => {
     const result = await fixture({ calls: [call("first")], execute: async () => ({
       content: [{ type: "text", text: "uncertain output" }], executionState: "unknown", isError,

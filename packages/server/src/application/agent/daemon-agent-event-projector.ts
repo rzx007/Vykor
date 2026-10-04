@@ -611,15 +611,24 @@ export class DaemonAgentEventProjector {
       ...(typeof payload.toolUseId === "string" && payload.toolUseId ? { toolUseId: payload.toolUseId } : {}),
       ...(typeof payload.toolName === "string" && payload.toolName ? { toolName: payload.toolName } : {}),
       receivedChars: payload.receivedChars,
+      ...(typeof payload.toolName === "string" && ["Write", "Edit", "Read"].includes(payload.toolName) &&
+        typeof payload.filePath === "string" && payload.filePath.length > 0 && payload.filePath.length <= 4096 &&
+        !/[\u0000-\u001f\u007f-\u009f]/.test(payload.filePath) ? { filePath: payload.filePath } : {}),
     };
     const entries = Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration.filter(isRecord) : [];
     const index = entries.findIndex(old => old.generationId === entry.generationId && old.attempt === entry.attempt && old.toolKey === entry.toolKey);
+    if (payload.discarded === true) {
+      if (index >= 0) this.context.events.publish(this.context.store.incrementalOutput.updateRunToolGeneration(runId,
+        entries.filter((_, i) => i !== index)));
+      return;
+    }
     if (index < 0 && entries.length >= 32) return;
     const previous = index < 0 ? undefined : entries[index];
     if (previous && Number(previous.receivedChars) > Number(entry.receivedChars)) return;
     const next = [...entries];
     if (index < 0) next.push(entry);
     else next[index] = { ...previous, ...entry };
+    if (payload.filePath === null) delete next[index < 0 ? next.length - 1 : index]!.filePath;
     if (jsonEqual(entries, next)) return;
     this.context.events.publish(this.context.store.incrementalOutput.updateRunToolGeneration(runId, next));
   }

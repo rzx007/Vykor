@@ -20,6 +20,7 @@ import {
 } from "../errors/index";
 import { createRequestLifecycle } from "./retry";
 import { parseToolInput } from "./tool-input.js";
+import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
 import {
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
@@ -83,6 +84,7 @@ export class AnthropicClient implements StreamingMessageClient {
 
       const toolInputBuffers: Map<number, { id: string; name: string; initialInput: unknown; partialJson: string }> =
         new Map();
+      const pathSummaries = new Map<number, ReturnType<typeof createToolPathSummary>>();
       const completedToolUses: ToolUseBlock[] = [];
       let sawMessageStop = false;
       let stopReason: string = "end_turn";
@@ -124,6 +126,7 @@ export class AnthropicClient implements StreamingMessageClient {
               initialInput: event.content_block.input,
               partialJson: "",
             });
+            pathSummaries.set(event.index, createToolPathSummary());
             yield {
               type: "tool_generation_progress", toolKey: String(event.index),
               toolUseId: event.content_block.id, toolName: event.content_block.name, receivedChars: 0,
@@ -135,9 +138,11 @@ export class AnthropicClient implements StreamingMessageClient {
             const buf = toolInputBuffers.get(event.index);
             if (buf) {
               buf.partialJson += event.delta.partial_json;
+              const filePath = pathSummaries.get(event.index)!.push(event.delta.partial_json);
               yield {
                 type: "tool_generation_progress", toolKey: String(event.index),
                 toolUseId: buf.id, toolName: buf.name, receivedChars: buf.partialJson.length,
+                ...(isFileTool(buf.name) && filePath !== undefined ? { filePath } : {}),
               };
             }
           } else if (event.type === "content_block_stop") {
@@ -150,6 +155,7 @@ export class AnthropicClient implements StreamingMessageClient {
                 ...parseToolInput(buf.partialJson || JSON.stringify(buf.initialInput)),
               });
               toolInputBuffers.delete(event.index);
+              pathSummaries.delete(event.index);
             }
           }
         }

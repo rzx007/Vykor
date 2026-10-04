@@ -49,6 +49,40 @@ function readBlock(filePath: string): string {
 }
 
 describe("createDsmlRecoveryScanner", () => {
+  it.each(["C:/fixture/a<b>c.html", "C:/fixture/a<b<c>d.html"])("preserves ordinary angle brackets in a split path: %s", filePath => {
+    const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Read"]) });
+    const source = readBlock(filePath);
+    const progress = [];
+    const calls: RecoveredToolCall[] = [];
+    for (const character of source) {
+      const result = scanner.push(character);
+      progress.push(...result.progress);
+      calls.push(...result.toolCalls);
+    }
+    expect(calls[0]!.input).toEqual({ file_path: filePath });
+    expect(progress.at(-1)).toMatchObject({ filePath });
+    expect(progress.some(event => event.filePath === "C:/fixture/ac.html")).toBe(false);
+  });
+  it("keeps the existing recovered IDs after abandoning an over-limit invoke", () => {
+    const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Write", "Read"]) });
+    const first = scanner.push('<invoke name="Write"><parameter name="content" string="true">private body');
+    expect(first.progress).toMatchObject([{ toolKey: "dsml_0", toolUseId: "dsml_0" }]);
+    const discarded = scanner.push("a".repeat(4_000_001));
+    expect(discarded.progress).toMatchObject([{ toolKey: "dsml_0", discarded: true }]);
+    expect(discarded.toolCalls).toEqual([]);
+    const next = scanner.push(readBlock("C:/fixture/index.html"));
+    expect(next.toolCalls).toEqual([{ id: "dsml_0", name: "Read", input: { file_path: "C:/fixture/index.html" } }]);
+    expect(next.progress).toMatchObject([{ toolKey: "dsml_0", toolUseId: "dsml_0", filePath: "C:/fixture/index.html" }]);
+  });
+
+  it("omits malformed JSON path strings without changing recovered parameter values", () => {
+    const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Write"]) });
+    const source = '<invoke name="Write"><parameter name="file_path">"bad\\q.html"</parameter></invoke>';
+    const result = scanner.push(source);
+    expect(result.progress).toHaveLength(1);
+    expect(result.progress[0]).not.toHaveProperty("filePath");
+    expect(result.toolCalls[0]!.input).toEqual({ file_path: '"bad\\q.html"' });
+  });
   it("recovers a wrapped invoke block and hides the markup", () => {
     const outcome = scan([`先确认模板结构。\n${readBlock("C:\\tmp\\a.json")}`]);
 
