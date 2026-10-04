@@ -183,4 +183,17 @@ describe("useNotesController", () => {
     expect(latest.selectedKey).toBe(second.id)
     expect(latest.content).toBe("second")
   })
+
+  it("keeps the selected note visible when deletion fails", async () => {
+    const remove = vi.fn().mockRejectedValue(new Error("delete failed"))
+    await render([first], { remove })
+
+    await act(async () => latest.removeSelected())
+
+    expect(remove).toHaveBeenCalledWith(first.id)
+    expect(latest.notes).toHaveLength(1)
+    expect(latest.content).toBe(first.content)
+    expect(latest.status).toBe("error")
+    expect(latest.error).toBe("delete failed")
+  })
 })
