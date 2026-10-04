@@ -57,7 +57,7 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
 
 系统在后台复制、校验和准备插件内容；不申请权限的插件会直接安装，申请权限的插件只会出现一次完整权限确认。重新导入同一插件 ID 就是更新或修复：之前的批准能够覆盖本次权限时不重复确认，新增权限时才重新确认；安装成功前保留旧记录，且不会自动启用原本已禁用的插件。页面只反馈成功、失败或无法确认的安装结果；成功后插件在下一次对话中生效。
 
-对话中也可以让 Agent 使用 `PluginInstall` 安装本地插件包或 Git URL/ref。工具先展示插件身份、固定来源和完整权限；只有用户回复“确认安装”才会调用同一安装服务，新插件从下一次对话生效。内置 `/create-plugin` Skill 可以指导生成 Native 插件目录并运行校验。自动更新、独立 Repair 命令、版本回滚、Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 仍未支持。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
+对话中也可以让 Agent 使用 `PluginInstall` 安装本地插件包或 Git URL/ref。工具先展示插件身份、固定来源和完整权限；只有用户回复“确认安装”才会调用同一安装服务，新插件从下一次对话生效。插件开发指导改为单独分发的 [create-plugin Skill](../skills/create-plugin/README.md)，不再内置；用户自行安装该 Skill 后才能通过 `/create-plugin` 或 `Skill` 调用。自动更新、独立 Repair 命令、版本回滚、Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 仍未支持。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
 
 本地插件包导入的作者侧检查很短：
 

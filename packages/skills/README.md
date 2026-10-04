@@ -58,6 +58,11 @@ skills to `.agents/skills` unless the user asks for that layout.
 
 Only these current directories are scanned. Other tool-specific skill directories are not Vykor project sources.
 
+Plugin authoring is distributed separately as `skills/create-plugin/` at the
+repository root. It is not included in `BUNDLED_SKILLS` and is not discovered
+until the user installs it into one of the skill directories above. The
+standalone folder includes its own references and offline UI example.
+
 Registration is last-writer-wins, so the effective priority is:
 
 ```text

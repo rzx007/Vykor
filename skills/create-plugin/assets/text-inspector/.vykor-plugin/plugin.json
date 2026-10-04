@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "example.text-inspector",
+  "name": "text-inspector",
+  "version": "1.1.1",
+  "description": "检查传入文本并由用户选择生成修复预览；不读写文件。",
+  "components": {
+    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }],
+    "ui": ["./ui/manifest.json"]
+  },
+  "permissions": {},
+  "runtime": { "engine": "node", "isolation": "process" }
+}
