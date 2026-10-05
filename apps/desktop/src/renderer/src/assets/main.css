@@ -56,12 +56,11 @@
 }
 
 /* Sparse extension navigation and optional compact rows. */
-.extension-tabs [data-slot="tabs-trigger"] {
-  padding-inline: 0.75rem;
-}
-.extension-tabs [data-slot="tabs-trigger"][data-active] {
+.extension-tabs [data-tabs-indicator] {
   background: var(--muted);
-  box-shadow: none;
+}
+.extension-tabs [data-tabs-label] {
+  color: var(--foreground);
 }
 .extension-management[data-compact="true"] [data-extension-row] {
   min-height: 3.5rem;
@@ -110,6 +109,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-annotation: var(--annotation);
   --color-diff-addition: var(--diff-addition);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -147,6 +147,7 @@
 
   --shadow-composer: var(--composer-shadow);
   --shadow-workspace: var(--workspace-shadow);
+  --shadow-control: var(--control-shadow);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -157,6 +158,8 @@
 
 :root {
   color-scheme: light;
+  --annotation: oklch(0.56 0.17 42);
+  --control-shadow: 0 2px 8px oklch(0.145 0 0 / 4%);
   --ui-font-size: 14px;
   --ui-font-size-caption: calc(var(--ui-font-size) - 3px);
   --ui-font-size-xs: calc(var(--ui-font-size) - 2px);
@@ -234,6 +237,8 @@
 }
 
 .dark {
+  --annotation: oklch(0.77 0.13 48);
+  --control-shadow: 0 2px 8px oklch(0 0 0 / 16%);
   color-scheme: dark;
   --background: #181818;
   --foreground: #f2f2f2;

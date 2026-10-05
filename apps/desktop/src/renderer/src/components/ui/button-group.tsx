@@ -15,9 +15,15 @@ const buttonGroupVariants = cva(
         vertical:
           "flex-col *:data-slot:rounded-b-none [&>[data-slot]:not(:has(~[data-slot]))]:rounded-b-lg! [&>[data-slot]~[data-slot]]:rounded-t-none [&>[data-slot]~[data-slot]]:border-t-0",
       },
+      variant: {
+        default: "",
+        toolbar:
+          "shrink-0 items-center gap-0.5 rounded-full border border-border/70 bg-background p-0.5 shadow-control [&>[data-slot]]:rounded-full! [&>[data-slot]]:border-0",
+      },
     },
     defaultVariants: {
       orientation: "horizontal",
+      variant: "default",
     },
   }
 )
@@ -25,6 +31,7 @@ const buttonGroupVariants = cva(
 function ButtonGroup({
   className,
   orientation,
+  variant = "default",
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>): React.JSX.Element {
   return (
@@ -32,7 +39,8 @@ function ButtonGroup({
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
-      className={cn(buttonGroupVariants({ orientation }), className)}
+      data-variant={variant}
+      className={cn(buttonGroupVariants({ orientation, variant }), className)}
       {...props}
     />
   )
