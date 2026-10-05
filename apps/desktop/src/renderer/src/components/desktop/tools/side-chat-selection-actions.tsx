@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
-import { Copy, StickyNote } from "lucide-react"
+import { Copy, MessageCirclePlus, StickyNote } from "lucide-react"
 import { toast } from "@renderer/lib/toast"
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent } from "@renderer/components/ui/popover"
@@ -91,12 +91,13 @@ export function SideChatSelectionActions({
         align="start"
         initialFocus={false}
         finalFocus={false}
-        className="w-auto flex-row items-center gap-0.5 p-1"
+        className="w-auto max-w-[calc(100vw-24px)] flex-row flex-wrap items-center gap-0.5 rounded-2xl p-1.5"
       >
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
+          shape="circle"
           aria-label="复制选中内容"
           title="复制选中内容"
           onMouseDown={(event) => event.preventDefault()}
@@ -112,6 +113,7 @@ export function SideChatSelectionActions({
           type="button"
           variant="ghost"
           size="sm"
+          shape="pill"
           disabled={savingNote}
           aria-busy={savingNote}
           onMouseDown={(event) => event.preventDefault()}
@@ -131,18 +133,20 @@ export function SideChatSelectionActions({
             }
           }}
         >
-          <StickyNote />
+          <StickyNote data-icon="inline-start" />
           添加到便签
         </Button>
         <Button
           variant="ghost"
           size="sm"
+          shape="pill"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             openSideChat(sourceId, selection.text)
             setSelection(null)
           }}
         >
+          <MessageCirclePlus data-icon="inline-start" />
           在侧边聊天中提问
         </Button>
       </PopoverContent>

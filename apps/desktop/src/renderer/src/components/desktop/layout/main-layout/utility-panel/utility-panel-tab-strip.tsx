@@ -1,9 +1,10 @@
-import { Minimize2, PanelRightClose, Plus, X } from "lucide-react"
+import { CirclePlus, Minimize2, PanelRightClose, X } from "lucide-react"
 import { useState } from "react"
 import { createPortal } from "react-dom"
 
 import type { BrowserToolTab } from "@renderer/components/desktop/tools/browser-tool"
 import { Button } from "@renderer/components/ui/button"
+import { ButtonGroup } from "@renderer/components/ui/button-group"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -74,7 +75,7 @@ export function UtilityPanelTabStrip({
 
   return (
     <>
-      <header className="flex h-10 shrink-0 items-center gap-2 bg-conversation px-2.5">
+      <header className="flex h-14 shrink-0 items-center gap-2 bg-conversation px-3">
         <div className="utility-tab-strip flex min-w-0 flex-1 items-center overflow-x-auto">
           {tabs.map((tab, index) => (
             <UtilityTabButton
@@ -97,40 +98,44 @@ export function UtilityPanelTabStrip({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                shape="circle"
                 title="新建工具标签"
                 aria-label="新建工具标签"
                 onClick={toggleAddMenu}
                 className="text-muted-foreground"
               >
-                <Plus />
+                <CirclePlus />
               </Button>
             </div>
           )}
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          title={maximized ? "恢复面板" : "最大化面板"}
-          aria-label={maximized ? "恢复面板" : "最大化面板"}
-          aria-pressed={maximized}
-          onClick={onToggleMaximized}
-          className="text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-        >
-          <Minimize2 className={cn(!maximized && "rotate-180", "size-3.5")} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          title="关闭面板"
-          aria-label="关闭面板"
-          onClick={onClosePanel}
-          className="bg-muted/55 text-muted-foreground"
-        >
-          <PanelRightClose className="size-3.5" />
-        </Button>
+        <ButtonGroup variant="toolbar" aria-label="工具面板操作">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            shape="circle"
+            title={maximized ? "恢复面板" : "最大化面板"}
+            aria-label={maximized ? "恢复面板" : "最大化面板"}
+            aria-pressed={maximized}
+            onClick={onToggleMaximized}
+            className="text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
+          >
+            <Minimize2 className={cn(!maximized && "rotate-180", "size-3.5")} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            shape="circle"
+            title="关闭面板"
+            aria-label="关闭面板"
+            onClick={onClosePanel}
+          >
+            <PanelRightClose className="size-3.5" />
+          </Button>
+        </ButtonGroup>
       </header>
 
       {menuPosition &&
@@ -221,7 +226,7 @@ function UtilityTabButton({
         className={cn(
           "text-ui-small group relative flex h-8 max-w-42 min-w-28 flex-[1_1_10.5rem] items-center rounded-xl transition-colors",
           active
-            ? "bg-neutral-200/80 text-ui-foreground dark:bg-neutral-800"
+            ? "bg-muted text-ui-foreground"
             : "text-ui-muted hover:bg-muted/35 hover:text-ui-foreground",
           showSeparator &&
             "after:absolute after:top-2 after:-right-0.5 after:h-4 after:w-px after:bg-border/55"
@@ -230,12 +235,12 @@ function UtilityTabButton({
         <button
           type="button"
           onClick={onSelect}
-          className="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl px-2.5 pr-1 text-left text-sidebar-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl px-2.5 pr-1 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={tab.title}
         >
           <TabIcon
             className={cn("size-3.5 shrink-0", loading && "animate-pulse")}
-            strokeWidth={1.8}
+            strokeWidth={1.75}
           />
           <span className="utility-tab-title relative min-w-0 flex-1 overflow-hidden text-xs whitespace-nowrap">
             {tab.title}
@@ -247,7 +252,7 @@ function UtilityTabButton({
           title="关闭标签"
           onClick={onClose}
           className={cn(
-            "mr-1 grid size-5 shrink-0 place-items-center rounded-md text-ui-muted transition-opacity group-hover:opacity-100 hover:bg-background hover:text-ui-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            "mr-1 grid size-6 shrink-0 place-items-center rounded-full text-ui-muted transition-opacity group-hover:opacity-100 hover:bg-background hover:text-ui-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             active ? "opacity-75" : "opacity-0"
           )}
         >

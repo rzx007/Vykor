@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { CircleStop, CircleX, PanelsTopLeft, PanelRightOpen, X } from "lucide-react"
 import type { PluginUiInstanceRecord } from "@vykor/client"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { Button } from "@renderer/components/ui/button"
@@ -54,11 +55,14 @@ export function PluginUiCard({
     }
   }
   return (
-    <section aria-label={instance.title} className="min-w-0 overflow-hidden rounded-lg border">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+    <section
+      aria-label={instance.title}
+      className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-background"
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">{instance.title}</h3>
-          <p className="text-xs break-all text-muted-foreground">
+          <p className="mt-1 text-xs break-all text-muted-foreground">
             {instance.pluginId} · {instance.pluginVersion}
           </p>
         </div>
@@ -76,29 +80,33 @@ export function PluginUiCard({
         </span>
       </header>
       {text && (
-        <pre className="max-h-64 overflow-auto px-3 pb-3 text-xs break-all whitespace-pre-wrap">
+        <pre className="max-h-64 overflow-auto px-4 pb-4 text-xs break-all whitespace-pre-wrap">
           {text}
         </pre>
       )}
       {display && <PluginUiFrame key={display.key} display={display} />}
       {host?.available && (
-        <footer className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
+        <footer className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-3">
           {instance.surfaces.includes("tool-result") &&
             (display ? (
               <Button
                 variant="ghost"
                 size="sm"
+                shape="pill"
                 title="只收起界面，结果保留，可重新打开"
                 onClick={() => host.close(instance.instanceId)}
               >
+                <X data-icon="inline-start" />
                 关闭显示
               </Button>
             ) : (
               <Button
-                variant="default"
+                variant="control"
                 size="sm"
+                shape="pill"
                 onClick={(event) => host.open(instance, "tool-result", event.currentTarget)}
               >
+                <PanelsTopLeft data-icon="inline-start" />
                 打开交互
               </Button>
             ))}
@@ -106,9 +114,11 @@ export function PluginUiCard({
             <Button
               variant="ghost"
               size="sm"
+              shape="pill"
               title="只改变显示位置，不执行插件工具"
               onClick={(event) => host.open(instance, "session-sidebar", event.currentTarget)}
             >
+              <PanelRightOpen data-icon="inline-start" />
               在侧栏打开
             </Button>
           )}
@@ -116,12 +126,14 @@ export function PluginUiCard({
             <Button
               variant="destructive"
               size="sm"
+              shape="pill"
               className="ml-auto"
               title="确认后结束交互，保留原始结果"
               onClick={() => {
                 void dismiss()
               }}
             >
+              <CircleX data-icon="inline-start" />
               取消交互
             </Button>
           )}
@@ -129,12 +141,14 @@ export function PluginUiCard({
             <Button
               variant="destructive"
               size="sm"
+              shape="pill"
               onClick={() => {
                 void window.desktop.sessions
                   .interrupt({ sessionId: instance.sessionId, expectedRunId: activeAction })
                   .catch(() => setMessage("操作未能停止，请查看会话状态。"))
               }}
             >
+              <CircleStop data-icon="inline-start" />
               停止操作
             </Button>
           )}

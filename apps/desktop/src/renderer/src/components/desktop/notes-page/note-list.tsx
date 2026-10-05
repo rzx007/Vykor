@@ -1,7 +1,6 @@
-import { FolderOpen, Plus, Search, StickyNote } from "lucide-react"
+import { FolderOpen, CirclePlus, Search, StickyNote } from "lucide-react"
 import { toast } from "@renderer/lib/toast"
 
-import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import {
   Empty,
@@ -49,28 +48,17 @@ export function NoteList({
   return (
     <aside
       aria-label="便签列表"
-      className="flex min-h-0 min-w-0 flex-col border-r border-border/70 bg-muted/20"
+      className="flex min-h-0 min-w-0 flex-col border-r border-border/60 bg-background"
     >
       <header className="flex h-14 shrink-0 items-center gap-2 px-4">
         <h1 className="text-lg font-semibold tracking-tight">便签</h1>
-        <Badge variant="secondary">全部项目共用</Badge>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="ml-auto"
-          aria-label="新建便签"
-          title="新建便签"
-          onClick={onCreate}
-        >
-          <Plus />
-        </Button>
+        <span className="ml-auto text-xs text-muted-foreground">全部项目共用</span>
       </header>
 
-      <div className="shrink-0 px-3 pb-3">
-        <InputGroup>
+      <div className="flex shrink-0 items-center gap-2 px-3 pb-3">
+        <InputGroup shape="pill">
           <InputGroupAddon>
-            <Search />
+            <Search strokeWidth={1.75} />
           </InputGroupAddon>
           <InputGroupInput
             aria-label="搜索便签"
@@ -79,6 +67,17 @@ export function NoteList({
             onChange={(event) => onQueryChange(event.target.value)}
           />
         </InputGroup>
+        <Button
+          type="button"
+          size="lg"
+          shape="pill"
+          aria-label="新建便签"
+          title="新建便签"
+          onClick={onCreate}
+        >
+          <CirclePlus data-icon="inline-start" />
+          新建
+        </Button>
       </div>
 
       <ScrollArea horizontal={false} className="min-h-0 flex-1" viewportClassName="px-2 pb-3">
@@ -120,7 +119,7 @@ export function NoteList({
                   <ItemContent className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <ItemTitle className="min-w-0 flex-1 truncate">{description.title}</ItemTitle>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                         {noteTimeFormatter.format(note.updatedAt)}
                       </span>
                     </div>
@@ -130,7 +129,7 @@ export function NoteList({
                       </ItemDescription>
                     ) : null}
                     {note.recovered ? (
-                      <span className="text-[10px] text-muted-foreground">待恢复</span>
+                      <span className="text-xs text-muted-foreground">待恢复</span>
                     ) : null}
                   </ItemContent>
                 </Item>
@@ -143,13 +142,14 @@ export function NoteList({
         <Button
           size="xs"
           variant="ghost"
+          shape="pill"
           onClick={() => {
             void window.desktop.notes
               .openDirectory()
               .catch((cause) => toast.error("无法打开便签文件夹", String(cause)))
           }}
         >
-          <FolderOpen />
+          <FolderOpen data-icon="inline-start" />
           打开便签文件夹
         </Button>
       </div>

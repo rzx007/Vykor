@@ -237,11 +237,12 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
   }, [mounted, host.view?.cursor, host.available, display.key])
   if (error)
     return (
-      <div role="status" className="space-y-2 p-3 text-sm">
+      <div role="status" className="flex flex-col items-start gap-2 p-4 text-sm">
         <p>交互页面未能加载，原始结果仍然保留。</p>
         <Button
           variant="ghost"
           size="sm"
+          shape="pill"
           onClick={() => host.open(display.instance, display.surface, undefined, true)}
         >
           重新加载

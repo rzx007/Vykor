@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { MessageSquarePlus, MessageSquareText, X } from "lucide-react"
+import { MessageCirclePlus, MessageCircleMore, X } from "lucide-react"
 import { Composer } from "../conversation-page/composer/composer"
 import { toComposerSkills } from "../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../conversation-page/composer/composer-command-catalog"
@@ -39,7 +39,10 @@ import {
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import { composerDocument, selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
+import {
+  composerDocument,
+  selectComposerDocumentText,
+} from "@renderer/stores/desktop-session/composer-document"
 import {
   selectDraftDocument,
   selectDraftAttachments,
@@ -91,19 +94,22 @@ function moveSideChatDraft(from: string, to: string, merge = false): void {
     const target = state.composerDraftsByScope[to]
     if (merge && source && target) {
       const migrated = migrateComposerScope(state, from, to)
-      return { composerDraftsByScope: {
-        ...migrated.composerDraftsByScope,
-        [to]: {
-          document: composerDocument([
-            ...source.document.items,
-            ...(source.document.items.length && target.document.items.length
-              ? [{ type: "text" as const, text: "\n\n" }] : []),
-            ...target.document.items,
-          ]),
-          attachments: [...source.attachments, ...target.attachments],
-          textSelections: [...(source.textSelections ?? []), ...(target.textSelections ?? [])],
+      return {
+        composerDraftsByScope: {
+          ...migrated.composerDraftsByScope,
+          [to]: {
+            document: composerDocument([
+              ...source.document.items,
+              ...(source.document.items.length && target.document.items.length
+                ? [{ type: "text" as const, text: "\n\n" }]
+                : []),
+              ...target.document.items,
+            ]),
+            attachments: [...source.attachments, ...target.attachments],
+            textSelections: [...(source.textSelections ?? []), ...(target.textSelections ?? [])],
+          },
         },
-      } }
+      }
     }
     if (source && target && (target.document.items.length || target.attachments.length))
       return state
@@ -122,8 +128,12 @@ function moveSideChatDraft(from: string, to: string, merge = false): void {
 }
 function isMissingTarget(cause: unknown, targetId: string): boolean {
   const message = cause instanceof Error ? cause.message : String(cause)
-  return message.replace(/^Error invoking remote method 'session:(?:aux-open|delete)': (?:Error|VykorApiError): /, "") ===
-    `Session not found: ${targetId}`
+  return (
+    message.replace(
+      /^Error invoking remote method 'session:(?:aux-open|delete)': (?:Error|VykorApiError): /,
+      ""
+    ) === `Session not found: ${targetId}`
+  )
 }
 export async function destroySideChat(sourceId: string): Promise<void> {
   closingSources.add(sourceId)
@@ -135,8 +145,15 @@ export async function destroySideChat(sourceId: string): Promise<void> {
       if (targetId === sourceId) throw new Error("不能把主聊天作为临时聊天销毁。")
       const subscriptionId = `side-chat-delete:${crypto.randomUUID()}`
       try {
-        const { session } = await window.desktop.sessions.openAux({ subscriptionId, sessionId: targetId })
-        if (session.id !== targetId || session.parentId !== sourceId || session.storage !== "memory")
+        const { session } = await window.desktop.sessions.openAux({
+          subscriptionId,
+          sessionId: targetId,
+        })
+        if (
+          session.id !== targetId ||
+          session.parentId !== sourceId ||
+          session.storage !== "memory"
+        )
           throw new Error("侧边聊天的来源不匹配，未销毁会话。")
         for (const id of await window.desktop.sessions.delete(targetId)) deleted.add(id)
       } catch (cause) {
@@ -152,7 +169,9 @@ export async function destroySideChat(sourceId: string): Promise<void> {
     store.resetComposerDraft(`linked-chat:${sourceId}`)
     for (const id of deleted) store.resetComposerDraft(sessionComposerScope(id))
     useDesktopSessionStore.setState((state) => ({
-      sessionRuntimes: Object.fromEntries(Object.entries(state.sessionRuntimes).filter(([id]) => !deleted.has(id))),
+      sessionRuntimes: Object.fromEntries(
+        Object.entries(state.sessionRuntimes).filter(([id]) => !deleted.has(id))
+      ),
       sessions: state.sessions.filter((session) => !deleted.has(session.id)),
       archivedSessions: state.archivedSessions.filter((session) => !deleted.has(session.id)),
     }))
@@ -369,10 +388,18 @@ export function SideChatPanel({
     const checkTarget = (): void => {
       if (disposed || checking) return
       checking = true
-      void window.desktop.sessions.openAux({ subscriptionId: checkSubscriptionId, sessionId: targetId })
-        .then(() => {}, (cause) => { recoverMissingTarget(cause) })
+      void window.desktop.sessions
+        .openAux({ subscriptionId: checkSubscriptionId, sessionId: targetId })
+        .then(
+          () => {},
+          (cause) => {
+            recoverMissingTarget(cause)
+          }
+        )
         .finally(async () => {
-          await window.desktop.sessions.closeAux({ subscriptionId: checkSubscriptionId }).catch(() => {})
+          await window.desktop.sessions
+            .closeAux({ subscriptionId: checkSubscriptionId })
+            .catch(() => {})
           checking = false
         })
     }
@@ -420,7 +447,9 @@ export function SideChatPanel({
       unsubscribe()
       void window.desktop.sessions.closeAux({ subscriptionId }).catch(() => {})
       if (checking)
-        void window.desktop.sessions.closeAux({ subscriptionId: checkSubscriptionId }).catch(() => {})
+        void window.desktop.sessions
+          .closeAux({ subscriptionId: checkSubscriptionId })
+          .catch(() => {})
     }
   }, [active, sourceId, subscriptionId, targetId])
 
@@ -459,7 +488,15 @@ export function SideChatPanel({
   const isCurrentTarget = (id: string): boolean =>
     sideChatTargets.get(sourceId) === id && !closingSources.has(sourceId)
   const submit = async (): Promise<void> => {
-    if (closingSources.has(sourceId) || creating || submitPending.current || sending || archived || unavailable) return
+    if (
+      closingSources.has(sourceId) ||
+      creating ||
+      submitPending.current ||
+      sending ||
+      archived ||
+      unavailable
+    )
+      return
     if (
       (!selectComposerDocumentText(draft).trim() && !attachments.length) ||
       !areDesktopAttachmentsSendable(attachments)
@@ -589,7 +626,10 @@ export function SideChatPanel({
                 <Empty>
                   <EmptyHeader>
                     <EmptyMedia>
-                      <MessageSquarePlus className="size-7 text-muted-foreground" />
+                      <MessageCirclePlus
+                        className="size-7 text-muted-foreground"
+                        strokeWidth={1.75}
+                      />
                     </EmptyMedia>
                     <EmptyTitle>侧边聊天</EmptyTitle>
                     <EmptyDescription>围绕主聊天继续提问，不打断左侧任务。</EmptyDescription>
@@ -670,16 +710,16 @@ export function SideChatPanel({
                   <div className="px-3 pt-3">
                     <Popover>
                       <PopoverTrigger
-                        render={<Button type="button" variant="outline" size="xs" />}
+                        render={<Button type="button" variant="control" shape="pill" size="sm" />}
                         aria-label="查看已选文本片段"
                       >
-                        <MessageSquareText data-icon="inline-start" />
+                        <MessageCircleMore data-icon="inline-start" />
                         {textSelections.length} 个已选文本片段
                       </PopoverTrigger>
                       <PopoverContent
                         side="top"
                         align="start"
-                        className="w-80 max-w-[calc(100vw-32px)]"
+                        className="w-80 max-w-[calc(100vw-32px)] rounded-2xl p-4"
                       >
                         <PopoverTitle>已选文本片段</PopoverTitle>
                         <ul className="flex max-h-64 flex-col gap-3 overflow-y-auto">
@@ -692,6 +732,7 @@ export function SideChatPanel({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
+                                shape="circle"
                                 aria-label={`移除文本片段 ${index + 1}`}
                                 disabled={sending || creating}
                                 onClick={() => {
@@ -754,17 +795,28 @@ export function SideChatPanel({
               }
               onSelectModel={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionModel(targetId, next, () => isCurrentTarget(targetId)))
+                if (targetId)
+                  update(
+                    actions.updateSessionModel(targetId, next, () => isCurrentTarget(targetId))
+                  )
                 else setPreferences((current) => ({ ...current, model: next }))
               }}
               onSelectPermissionMode={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionPermissionMode(targetId, next, () => isCurrentTarget(targetId)))
+                if (targetId)
+                  update(
+                    actions.updateSessionPermissionMode(targetId, next, () =>
+                      isCurrentTarget(targetId)
+                    )
+                  )
                 else setPreferences((current) => ({ ...current, mode: next }))
               }}
               onSelectEffort={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionEffort(targetId, next, () => isCurrentTarget(targetId)))
+                if (targetId)
+                  update(
+                    actions.updateSessionEffort(targetId, next, () => isCurrentTarget(targetId))
+                  )
                 else setPreferences((current) => ({ ...current, effort: next }))
               }}
               onCommand={async (command) => {

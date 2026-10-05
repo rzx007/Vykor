@@ -39,7 +39,7 @@ export function PluginUiConfirmation({
             {details?.instance.pluginId} · {details?.instance.pluginVersion}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="min-w-0 space-y-2 text-sm">
+        <div className="flex min-w-0 flex-col gap-2 text-sm">
           <p>{details?.label}</p>
           {details?.toolName && (
             <p className="break-all text-muted-foreground">实际工具：{details.toolName}</p>

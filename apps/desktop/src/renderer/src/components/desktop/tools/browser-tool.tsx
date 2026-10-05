@@ -4,7 +4,8 @@ import {
   ArrowRight,
   ArrowUpRight,
   Globe2,
-  MessageSquareText,
+  MessageCircleMore,
+  MousePointer2,
   RefreshCw,
   SlidersHorizontal,
 } from "lucide-react"
@@ -13,6 +14,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { DesktopEmptyState } from "@renderer/components/desktop/desktop-empty-state"
 import { Button } from "@renderer/components/ui/button"
+import { ButtonGroup } from "@renderer/components/ui/button-group"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
+import { Separator } from "@renderer/components/ui/separator"
 import { cn } from "@renderer/lib/utils"
 
 import {
@@ -56,14 +60,23 @@ type BrowserWebviewElement = HTMLElement & {
   getWebContentsId?: () => number
 }
 
-export function BrowserTool({ tab, active, visible, onUpdate }: BrowserToolProps): React.JSX.Element {
+export function BrowserTool({
+  tab,
+  active,
+  visible,
+  onUpdate,
+}: BrowserToolProps): React.JSX.Element {
   const webviewRef = useRef<BrowserWebviewElement | null>(null)
   const webviewReadyRef = useRef(false)
   const activeRef = useRef(active)
   const onUpdateRef = useRef(onUpdate)
   const [browserError, setBrowserError] = useState<string | null>(null)
   const pageContainer = useRef<HTMLDivElement | null>(null)
-  const annotation = useBrowserAnnotations({ tabId: tab.id, visible, ready: webviewReadyRef.current && !tab.loading && Boolean(tab.url) })
+  const annotation = useBrowserAnnotations({
+    tabId: tab.id,
+    visible,
+    ready: webviewReadyRef.current && !tab.loading && Boolean(tab.url),
+  })
   const { resolvedTheme } = useAppearance()
 
   useEffect(() => {
@@ -195,86 +208,114 @@ export function BrowserTool({ tab, active, visible, onUpdate }: BrowserToolProps
         !active && "pointer-events-none opacity-0"
       )}
     >
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b px-3">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-3">
+        <ButtonGroup variant="toolbar" aria-label="浏览器导航">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            shape="circle"
+            title="后退"
+            aria-label="后退"
+            disabled={!tab.canGoBack}
+            onClick={() => getWebview()?.goBack?.()}
+          >
+            <ArrowLeft />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            shape="circle"
+            title="前进"
+            aria-label="前进"
+            disabled={!tab.canGoForward}
+            onClick={() => getWebview()?.goForward?.()}
+          >
+            <ArrowRight />
+          </Button>
+          <Separator orientation="vertical" className="mx-0.5 h-4" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            shape="circle"
+            title={tab.loading ? "停止加载" : "刷新"}
+            aria-label={tab.loading ? "停止加载" : "刷新"}
+            onClick={() => (tab.loading ? getWebview()?.stop?.() : getWebview()?.reload?.())}
+          >
+            <RefreshCw className={cn(tab.loading && "animate-spin")} />
+          </Button>
+        </ButtonGroup>
+
         <Button
           type="button"
-          variant="ghost"
-          size="icon"
-          title="后退"
-          aria-label="后退"
-          disabled={!tab.canGoBack}
-          onClick={() => getWebview()?.goBack?.()}
-          className="text-muted-foreground"
+          variant="annotation"
+          size="lg"
+          shape="pill"
+          title="选择页面元素添加批注"
+          aria-label="选择页面元素添加批注"
+          aria-pressed={Boolean(annotation.snapshot?.mode && annotation.snapshot.mode !== "off")}
+          disabled={!tab.url || tab.loading || annotation.pending}
+          onClick={() =>
+            void (annotation.snapshot?.mode === "pick"
+              ? annotation.showSaved()
+              : annotation.startPicking())
+          }
         >
-          <ArrowLeft />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          title="前进"
-          aria-label="前进"
-          disabled={!tab.canGoForward}
-          onClick={() => getWebview()?.goForward?.()}
-          className="text-muted-foreground"
-        >
-          <ArrowRight />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          title={tab.loading ? "停止加载" : "刷新"}
-          aria-label={tab.loading ? "停止加载" : "刷新"}
-          onClick={() => (tab.loading ? getWebview()?.stop?.() : getWebview()?.reload?.())}
-          className="text-muted-foreground"
-        >
-          <RefreshCw className={cn(tab.loading && "animate-spin")} />
+          <MousePointer2 data-icon="inline-start" />
+          批注
         </Button>
 
         <form
-          className="mx-3 flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 focus-within:bg-muted/80"
+          className="min-w-0 flex-1"
           onSubmit={(event) => {
             event.preventDefault()
             navigate()
           }}
         >
-          <SlidersHorizontal className="size-4 shrink-0 text-ui-muted" strokeWidth={1.7} />
-          <input
-            value={tab.input}
-            onChange={(event) => onUpdate({ input: event.target.value })}
-            placeholder="输入 URL 或本地路径"
-            className="h-full min-w-0 flex-1 bg-transparent text-center text-sm text-ui-foreground outline-none placeholder:text-xs"
-          />
+          <InputGroup shape="pill">
+            <InputGroupAddon>
+              <SlidersHorizontal strokeWidth={1.75} />
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="浏览器地址"
+              value={tab.input}
+              onChange={(event) => onUpdate({ input: event.target.value })}
+              placeholder="输入 URL 或本地路径"
+              className="text-center"
+            />
+            <InputGroupAddon align="inline-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                shape="circle"
+                aria-label="在浏览器中打开"
+                title="在浏览器中打开"
+                disabled={!externalUrl}
+                onClick={openInSystemBrowser}
+              >
+                <ArrowUpRight />
+              </Button>
+            </InputGroupAddon>
+          </InputGroup>
+        </form>
+        {Boolean(annotation.snapshot?.annotations.length) && (
           <Button
             type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="在浏览器中打开"
-            title="在浏览器中打开"
-            disabled={!externalUrl}
-            className="text-muted-foreground hover:bg-background"
-            onClick={openInSystemBrowser}
+            variant="control"
+            shape="pill"
+            size="lg"
+            aria-label="查看已保存批注"
+            title="查看已保存批注"
+            disabled={annotation.pending}
+            onClick={() => void annotation.showSaved()}
           >
-            <ArrowUpRight />
+            <MessageCircleMore data-icon="inline-start" />
+            {annotation.snapshot!.annotations.length}
           </Button>
-        </form>
-        <Button
-          type="button"
-          variant={annotation.snapshot?.mode && annotation.snapshot.mode !== "off" ? "secondary" : "ghost"}
-          size="icon"
-          title="选择页面元素添加批注"
-          aria-label="选择页面元素添加批注"
-          aria-pressed={annotation.snapshot?.mode === "pick"}
-          disabled={!tab.url || tab.loading || annotation.pending}
-          onClick={() => void (annotation.snapshot?.mode === "pick" ? annotation.showSaved() : annotation.startPicking())}
-          className="shrink-0 text-muted-foreground"
-        >
-          <MessageSquareText />
-        </Button>
-        {Boolean(annotation.snapshot?.annotations.length) && <Button type="button" variant="ghost" size="sm" aria-label="查看已保存批注" disabled={annotation.pending} onClick={() => void annotation.showSaved()}>
-          {annotation.snapshot!.annotations.length}
-        </Button>}
+        )}
       </div>
 
       <div ref={pageContainer} className="relative min-h-0 flex-1 bg-background">
@@ -291,7 +332,9 @@ export function BrowserTool({ tab, active, visible, onUpdate }: BrowserToolProps
             <DesktopEmptyState icon={Globe2} title="开始浏览" description="输入 URL 以打开页面" />
           </div>
         )}
-        {tab.url && visible && <BrowserAnnotationPanel ui={annotation} containerRef={pageContainer} />}
+        {tab.url && visible && (
+          <BrowserAnnotationPanel ui={annotation} containerRef={pageContainer} />
+        )}
         {browserError && (
           <p
             role="status"

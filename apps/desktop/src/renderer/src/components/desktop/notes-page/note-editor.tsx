@@ -54,8 +54,9 @@ export function NoteEditor({
               render={
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon-sm"
+                  variant="control"
+                  size="icon"
+                  shape="circle"
                   className="ml-2"
                   aria-label="便签操作"
                 />
@@ -117,7 +118,7 @@ export function NoteEditor({
         placeholder="直接写下想法…"
         disabled={status === "loading"}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-0 flex-1 resize-none rounded-none border-0 px-8 py-7 font-mono text-sm leading-7 focus-visible:border-transparent md:text-sm"
+        className="min-h-0 flex-1 resize-none rounded-none border-0 px-8 py-7 text-sm leading-7 font-normal focus-visible:border-transparent md:text-sm"
       />
     </section>
   )
