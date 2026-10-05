@@ -320,6 +320,25 @@ describe("DaemonJobService", () => {
     expect(result).toMatchObject({ text: "ready", cursor: 5, snapshot: { kind: "terminal" } });
   });
 
+  it("reads full task output then applies maxChars so truncation is honest", async () => {
+    const longOutput = "x".repeat(20_000);
+    const { service, manager } = createService();
+    manager.readOutput.mockImplementation((_id: string, maxBytes?: number) => {
+      const limit = maxBytes ?? 12_000;
+      return longOutput.length > limit ? longOutput.slice(-limit) : longOutput;
+    });
+
+    const result = await service.read({
+      sessionId: "session-1",
+      jobId: "task-1",
+      maxChars: 12_000,
+    });
+
+    expect(manager.readOutput).toHaveBeenCalledWith("manager-1", Number.MAX_SAFE_INTEGER);
+    expect(result.text).toHaveLength(12_000);
+    expect(result.truncated).toBe(true);
+  });
+
   it("uses the terminal provider settlement wait", async () => {
     const { service, terminals } = createService();
     terminals.wait.mockResolvedValue({
