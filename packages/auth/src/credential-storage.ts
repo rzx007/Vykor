@@ -17,7 +17,9 @@ export class CredentialStorage {
   }
 
   async storeCredential(provider: string, key: string, value: string): Promise<void> {
-    const data = await this.load();
+    // Always re-read before mutating so a second CredentialStorage instance (or an
+    // external writer) cannot leave this cache stale and wipe other providers' keys.
+    const data = await this.loadFromDisk();
     if (!data[provider]) data[provider] = {};
     data[provider]![key] = value;
     await this.save(data);
@@ -29,7 +31,7 @@ export class CredentialStorage {
   }
 
   async clearProviderCredentials(provider: string): Promise<void> {
-    const data = await this.load();
+    const data = await this.loadFromDisk();
     if (data[provider]) {
       delete data[provider];
       await this.save(data);
@@ -55,6 +57,10 @@ export class CredentialStorage {
 
   private async load(): Promise<CredentialData> {
     if (this.cache) return this.cache;
+    return this.loadFromDisk();
+  }
+
+  private async loadFromDisk(): Promise<CredentialData> {
     try {
       await access(this.filePath);
       const raw = await readFile(this.filePath, "utf-8");

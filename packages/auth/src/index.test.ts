@@ -176,4 +176,34 @@ describe("CredentialStorage", () => {
     const providers = await storage.listStoredProviders();
     expect(providers).toEqual([]);
   });
+
+  it("does not wipe keys written by another CredentialStorage on the same file", async () => {
+    const path = join(tempDir, "credentials.json");
+    const warmed = new CredentialStorage(path);
+    const other = new CredentialStorage(path);
+
+    await warmed.storeApiKey("anthropic", "sk-ant");
+    await warmed.listStoredProviders(); // warm in-memory cache
+    await other.storeApiKey("custom", "sk-custom");
+    await warmed.storeApiKey("openai", "sk-openai");
+
+    expect(await warmed.loadApiKey("anthropic")).toBe("sk-ant");
+    expect(await warmed.loadApiKey("custom")).toBe("sk-custom");
+    expect(await warmed.loadApiKey("openai")).toBe("sk-openai");
+    expect(await other.loadApiKey("custom")).toBe("sk-custom");
+  });
+
+  it("clear on a stale instance keeps credentials written by another instance", async () => {
+    const path = join(tempDir, "credentials.json");
+    const warmed = new CredentialStorage(path);
+    const other = new CredentialStorage(path);
+
+    await warmed.storeApiKey("anthropic", "sk-ant");
+    await warmed.listStoredProviders();
+    await other.storeApiKey("custom", "sk-custom");
+    await warmed.clearProviderCredentials("anthropic");
+
+    expect(await warmed.loadApiKey("anthropic")).toBeUndefined();
+    expect(await warmed.loadApiKey("custom")).toBe("sk-custom");
+  });
 });
