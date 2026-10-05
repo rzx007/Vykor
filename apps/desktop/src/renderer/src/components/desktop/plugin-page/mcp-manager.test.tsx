@@ -31,22 +31,30 @@ function operation(
   next: DesktopMcpSnapshot,
   overrides: Partial<DesktopMcpOperationResult> = {}
 ): DesktopMcpOperationResult {
-  return { persisted: true, credentialRemoved: false, runtimeFailures: [], snapshot: next, ...overrides }
+  return {
+    persisted: true,
+    credentialRemoved: false,
+    runtimeFailures: [],
+    snapshot: next,
+    ...overrides,
+  }
 }
 
-function installDesktop(overrides: {
-  snapshot?: ReturnType<typeof vi.fn>
-  getConfig?: ReturnType<typeof vi.fn>
-  exportConfig?: ReturnType<typeof vi.fn>
-  add?: ReturnType<typeof vi.fn>
-  update?: ReturnType<typeof vi.fn>
-  remove?: ReturnType<typeof vi.fn>
-  setEnabled?: ReturnType<typeof vi.fn>
-  login?: ReturnType<typeof vi.fn>
-  loginStatus?: ReturnType<typeof vi.fn>
-  cancelLogin?: ReturnType<typeof vi.fn>
-  logout?: ReturnType<typeof vi.fn>
-} = {}) {
+function installDesktop(
+  overrides: {
+    snapshot?: ReturnType<typeof vi.fn>
+    getConfig?: ReturnType<typeof vi.fn>
+    exportConfig?: ReturnType<typeof vi.fn>
+    add?: ReturnType<typeof vi.fn>
+    update?: ReturnType<typeof vi.fn>
+    remove?: ReturnType<typeof vi.fn>
+    setEnabled?: ReturnType<typeof vi.fn>
+    login?: ReturnType<typeof vi.fn>
+    loginStatus?: ReturnType<typeof vi.fn>
+    cancelLogin?: ReturnType<typeof vi.fn>
+    logout?: ReturnType<typeof vi.fn>
+  } = {}
+) {
   const desktop = {
     mcp: {
       snapshot: overrides.snapshot ?? vi.fn(async () => snapshot(server())),
@@ -58,9 +66,33 @@ function installDesktop(overrides: {
       update: overrides.update ?? vi.fn(async () => operation(snapshot(server()))),
       remove: overrides.remove ?? vi.fn(async () => operation(snapshot())),
       setEnabled: overrides.setEnabled ?? vi.fn(async () => operation(snapshot(server()))),
-      login: overrides.login ?? vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "completed", credentialCommitted: true, authorizationReady: true })),
-      loginStatus: overrides.loginStatus ?? vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "completed", credentialCommitted: true, authorizationReady: true })),
-      cancelLogin: overrides.cancelLogin ?? vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "cancelled", credentialCommitted: false, authorizationReady: true })),
+      login:
+        overrides.login ??
+        vi.fn(async () => ({
+          loginId: "login-1",
+          name: "linear",
+          state: "completed",
+          credentialCommitted: true,
+          authorizationReady: true,
+        })),
+      loginStatus:
+        overrides.loginStatus ??
+        vi.fn(async () => ({
+          loginId: "login-1",
+          name: "linear",
+          state: "completed",
+          credentialCommitted: true,
+          authorizationReady: true,
+        })),
+      cancelLogin:
+        overrides.cancelLogin ??
+        vi.fn(async () => ({
+          loginId: "login-1",
+          name: "linear",
+          state: "cancelled",
+          credentialCommitted: false,
+          authorizationReady: true,
+        })),
       logout: overrides.logout ?? vi.fn(async () => snapshot(server())),
     },
   }
@@ -77,6 +109,21 @@ describe("MCP manager against the desktop API", () => {
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+      }
+    )
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
     localStorage.clear()
     container = document.createElement("div")
     document.body.append(container)
@@ -86,6 +133,7 @@ describe("MCP manager against the desktop API", () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     container.remove()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
       .IS_REACT_ACT_ENVIRONMENT
@@ -219,7 +267,12 @@ describe("MCP manager against the desktop API", () => {
     installDesktop({
       snapshot: vi.fn(async () =>
         snapshot(
-          server({ name: "linear", transport: "http", authMode: "oauth", authStatus: "not-logged-in" }),
+          server({
+            name: "linear",
+            transport: "http",
+            authMode: "oauth",
+            authStatus: "not-logged-in",
+          }),
           server({ name: "beui", transport: "stdio", authMode: "none", summary: "npx beui" })
         )
       ),
@@ -240,8 +293,21 @@ describe("MCP manager against the desktop API", () => {
 
   it("refreshes the snapshot after an OAuth login", async () => {
     const desktop = installDesktop({
-      snapshot: vi.fn().mockResolvedValueOnce(snapshot(server({ name: "linear", authMode: "oauth", authStatus: "not-logged-in" }))).mockResolvedValue(snapshot(server({ name: "linear", authMode: "oauth", authStatus: "valid" }))),
-      login: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "completed", credentialCommitted: true, authorizationReady: true })),
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce(
+          snapshot(server({ name: "linear", authMode: "oauth", authStatus: "not-logged-in" }))
+        )
+        .mockResolvedValue(
+          snapshot(server({ name: "linear", authMode: "oauth", authStatus: "valid" }))
+        ),
+      login: vi.fn(async () => ({
+        loginId: "login-1",
+        name: "linear",
+        state: "completed",
+        credentialCommitted: true,
+        authorizationReady: true,
+      })),
     })
     await render()
 
@@ -254,7 +320,13 @@ describe("MCP manager against the desktop API", () => {
 
   it("shows a pending OAuth operation and lets the user cancel it", async () => {
     const desktop = installDesktop({
-      login: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true })),
+      login: vi.fn(async () => ({
+        loginId: "login-1",
+        name: "linear",
+        state: "pending",
+        credentialCommitted: false,
+        authorizationReady: true,
+      })),
     })
     await render()
     await click("查看 linear 的 MCP 配置")
@@ -266,8 +338,20 @@ describe("MCP manager against the desktop API", () => {
 
   it("reports a committed login truthfully when cancel arrives after commit", async () => {
     installDesktop({
-      login: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true })),
-      cancelLogin: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "completed", credentialCommitted: true, authorizationReady: true })),
+      login: vi.fn(async () => ({
+        loginId: "login-1",
+        name: "linear",
+        state: "pending",
+        credentialCommitted: false,
+        authorizationReady: true,
+      })),
+      cancelLogin: vi.fn(async () => ({
+        loginId: "login-1",
+        name: "linear",
+        state: "completed",
+        credentialCommitted: true,
+        authorizationReady: true,
+      })),
     })
     await render()
     await click("查看 linear 的 MCP 配置")

@@ -24,7 +24,7 @@ import { Field, FieldError, FieldLabel } from "@renderer/components/ui/field"
 import { Separator } from "@renderer/components/ui/separator"
 import { Switch } from "@renderer/components/ui/switch"
 import { Textarea } from "@renderer/components/ui/textarea"
-import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { toast } from "@renderer/lib/toast"
 import type {
   DesktopMcpAuthMode,
@@ -167,20 +167,27 @@ export function McpManager({
     if (loginOperation?.state !== "pending") return
     let disposed = false
     const timer = window.setInterval(() => {
-      void window.desktop.mcp.loginStatus({ loginId: loginOperation.loginId }).then(async (next) => {
-        if (disposed) return
-        setLoginOperation(next)
-        if (next.state !== "pending") {
-          await load()
-          if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${next.name}`)
-          else if (next.credentialCommitted) notify(`${next.name} 授权已保存`)
-          else if (next.state === "failed") notify(`授权失败：${next.errorCode ?? "请重试"}`)
-        }
-      }).catch((error) => {
-        if (!disposed) notify(errorMessage(error))
-      })
+      void window.desktop.mcp
+        .loginStatus({ loginId: loginOperation.loginId })
+        .then(async (next) => {
+          if (disposed) return
+          setLoginOperation(next)
+          if (next.state !== "pending") {
+            await load()
+            if (next.credentialCommitted && next.runtimeWarning)
+              notify(`授权已保存，但重连失败：${next.name}`)
+            else if (next.credentialCommitted) notify(`${next.name} 授权已保存`)
+            else if (next.state === "failed") notify(`授权失败：${next.errorCode ?? "请重试"}`)
+          }
+        })
+        .catch((error) => {
+          if (!disposed) notify(errorMessage(error))
+        })
     }, 800)
-    return () => { disposed = true; window.clearInterval(timer) }
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+    }
     // The operation ID determines this subscription; load and notify come from the current component.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginOperation?.loginId, loginOperation?.state])
@@ -281,7 +288,8 @@ export function McpManager({
       setLoginOperation(next)
       if (next.state !== "pending") {
         await load()
-        if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${server.name}`)
+        if (next.credentialCommitted && next.runtimeWarning)
+          notify(`授权已保存，但重连失败：${server.name}`)
         else if (next.credentialCommitted) notify(`${server.name} 授权已保存`)
         else notify(`授权失败：${next.errorCode ?? "请重试"}`)
       }
@@ -305,7 +313,8 @@ export function McpManager({
       const next = await window.desktop.mcp.cancelLogin({ loginId: loginOperation.loginId })
       setLoginOperation(next)
       if (next.state !== "pending") await load()
-      if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${next.name}`)
+      if (next.credentialCommitted && next.runtimeWarning)
+        notify(`授权已保存，但重连失败：${next.name}`)
       else if (next.credentialCommitted) notify(`${next.name} 授权已保存`)
       else if (next.state === "cancelled") notify(`${next.name} 授权已取消`)
       else notify(`授权状态：${next.state}`)
@@ -382,21 +391,24 @@ export function McpManager({
   const detail = servers.find((server) => server.name === detailName)
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <Tabs value={filter} onValueChange={setFilter} className="flex min-w-0 flex-col gap-6">
       {servers.length ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <ToggleGroup
+          <TabsList
             aria-label="MCP 状态筛选"
-            value={[filter]}
-            onValueChange={(value) => {
-              if (value[0]) setFilter(value[0])
-            }}
-            size="sm"
+            className="extension-tabs bg-transparent"
+            wrapperClassName="w-auto"
           >
-            <ToggleGroupItem value="all">全部</ToggleGroupItem>
-            <ToggleGroupItem value="enabled">已启用</ToggleGroupItem>
-            <ToggleGroupItem value="disabled">已停用</ToggleGroupItem>
-          </ToggleGroup>
+            <TabsTrigger value="all" aria-label="全部">
+              全部
+            </TabsTrigger>
+            <TabsTrigger value="enabled" aria-label="已启用">
+              已启用
+            </TabsTrigger>
+            <TabsTrigger value="disabled" aria-label="已停用">
+              已停用
+            </TabsTrigger>
+          </TabsList>
           <Button
             variant="ghost"
             size="sm"
@@ -414,71 +426,72 @@ export function McpManager({
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       ) : null}
-      {visible.length ? (
-        <ul aria-label="已保存的 MCP 服务器">
-          {visible.map((server, index) => {
-            const Icon = server.transport === "stdio" ? Terminal : Globe
-            const busy = busyName === server.name
-            return (
-              <Fragment key={server.name}>
-                {index > 0 && (
-                  <li aria-hidden="true">
-                    <Separator />
-                  </li>
-                )}
-                <li
-                  data-extension-row
-                  data-enabled={server.enabled}
-                  className={`flex min-h-18 items-center gap-3 py-3 ${server.enabled ? "" : "opacity-60"}`}
-                >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
-                  </div>
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`查看 ${server.name} 的 MCP 配置`}
-                    onClick={() => void openDetail(server)}
+      <TabsContent value={filter} className="mt-0">
+        {visible.length ? (
+          <ul aria-label="已保存的 MCP 服务器">
+            {visible.map((server, index) => {
+              const Icon = server.transport === "stdio" ? Terminal : Globe
+              const busy = busyName === server.name
+              return (
+                <Fragment key={server.name}>
+                  {index > 0 && (
+                    <li aria-hidden="true">
+                      <Separator />
+                    </li>
+                  )}
+                  <li
+                    data-extension-row
+                    data-enabled={server.enabled}
+                    className={`flex min-h-18 items-center gap-3 py-3 ${server.enabled ? "" : "opacity-60"}`}
                   >
-                    <span className="block truncate text-sm font-medium">{server.name}</span>
-                    <span className="block truncate text-xs leading-5 text-muted-foreground">
-                      {server.summary || "—"}
-                    </span>
-                    <span className="block text-xs text-muted-foreground sm:hidden">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`查看 ${server.name} 的 MCP 配置`}
+                      onClick={() => void openDetail(server)}
+                    >
+                      <span className="block truncate text-sm font-medium">{server.name}</span>
+                      <span className="block truncate text-xs leading-5 text-muted-foreground">
+                        {server.summary || "—"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground sm:hidden">
+                        {server.transport.toUpperCase()} · {statusLabel(server)}
+                      </span>
+                    </button>
+                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
                       {server.transport.toUpperCase()} · {statusLabel(server)}
                     </span>
-                  </button>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {server.transport.toUpperCase()} · {statusLabel(server)}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Switch
-                      size="sm"
-                      aria-label={`${server.enabled ? "停用" : "启用"} ${server.name}`}
-                      checked={server.enabled}
-                      disabled={busy || Boolean(loadError)}
-                      onCheckedChange={(checked) => void toggle(server, checked)}
-                    />
-                  </div>
-                </li>
-              </Fragment>
-            )
-          })}
-        </ul>
-      ) : (
-        <Empty className="py-8">
-          <EmptyHeader>
-            <EmptyTitle>
-              {servers.length
-                ? "没有符合条件的服务器"
-                : loadError
-                  ? "暂时无法显示 MCP 配置"
-                  : "还没有 MCP"}
-            </EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      )}
-
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Switch
+                        size="sm"
+                        aria-label={`${server.enabled ? "停用" : "启用"} ${server.name}`}
+                        checked={server.enabled}
+                        disabled={busy || Boolean(loadError)}
+                        onCheckedChange={(checked) => void toggle(server, checked)}
+                      />
+                    </div>
+                  </li>
+                </Fragment>
+              )
+            })}
+          </ul>
+        ) : (
+          <Empty className="py-8">
+            <EmptyHeader>
+              <EmptyTitle>
+                {servers.length
+                  ? "没有符合条件的服务器"
+                  : loadError
+                    ? "暂时无法显示 MCP 配置"
+                    : "还没有 MCP"}
+              </EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        )}
+      </TabsContent>
       {editor && (
         <McpEditor
           initial={editor.initial}
@@ -531,30 +544,35 @@ export function McpManager({
                 <div className="flex flex-wrap items-center gap-2">
                   {loginOperation?.name === detail.name && loginOperation.state === "pending" ? (
                     <>
-                      <span role="status" className="text-xs text-muted-foreground">等待浏览器授权</span>
-                      <Button variant="outline" onClick={() => void cancelLogin()}>取消授权</Button>
+                      <span role="status" className="text-xs text-muted-foreground">
+                        等待浏览器授权
+                      </span>
+                      <Button variant="outline" onClick={() => void cancelLogin()}>
+                        取消授权
+                      </Button>
                     </>
                   ) : (
                     <>
-                  {detail.authStatus === "valid" || detail.authStatus === "expired-refreshable" ? (
-                    <Button
-                      variant="outline"
-                      disabled={busyName === detail.name}
-                      onClick={() => void logout(detail)}
-                    >
-                      退出登录
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      disabled={busyName === detail.name}
-                      onClick={() => void login(detail)}
-                    >
-                      {detail.authStatus === "reauthentication-required"
-                        ? "重新授权"
-                        : "浏览器授权"}
-                    </Button>
-                  )}
+                      {detail.authStatus === "valid" ||
+                      detail.authStatus === "expired-refreshable" ? (
+                        <Button
+                          variant="outline"
+                          disabled={busyName === detail.name}
+                          onClick={() => void logout(detail)}
+                        >
+                          退出登录
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          disabled={busyName === detail.name}
+                          onClick={() => void login(detail)}
+                        >
+                          {detail.authStatus === "reauthentication-required"
+                            ? "重新授权"
+                            : "浏览器授权"}
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -655,6 +673,6 @@ export function McpManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Tabs>
   )
 }

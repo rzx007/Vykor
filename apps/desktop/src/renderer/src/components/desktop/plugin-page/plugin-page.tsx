@@ -1,6 +1,7 @@
 import { ChevronDown, CircleCheck, RefreshCw, Search, Settings2, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { ButtonGroup } from "@renderer/components/ui/button-group"
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Switch } from "@renderer/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { PluginManager } from "./plugin-manager"
 import { SkillManager } from "./skill-manager"
@@ -72,40 +73,45 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
       <Tabs
         value={tab}
         onValueChange={(value) => setTab(value as ExtensionTab)}
-        className="min-h-0 flex-1 gap-0"
+        className="flex min-h-0 flex-1 flex-col gap-0"
       >
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 px-4 py-2 sm:px-6">
-          <TabsList className="extension-tabs bg-transparent" aria-label="扩展管理">
+          <TabsList
+            className="extension-tabs bg-transparent"
+            wrapperClassName="w-auto"
+            aria-label="扩展管理"
+          >
             <TabsTrigger value="plugins">插件</TabsTrigger>
             <TabsTrigger value="skills">技能</TabsTrigger>
             <TabsTrigger value="mcp">MCP</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`刷新${sections[tab].title}`}
-              title="刷新列表"
-              onClick={() =>
-                setRefreshRequests((previous) => ({ ...previous, [tab]: previous[tab] + 1 }))
-              }
-            >
-              <RefreshCw />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="显示设置"
-              title="显示设置"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <Settings2 />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button className="rounded-full" />}
-                aria-label="添加扩展"
+            <ButtonGroup variant="toolbar" aria-label="扩展工具">
+              <Button
+                variant="ghost"
+                size="icon"
+                shape="circle"
+                aria-label={`刷新${sections[tab].title}`}
+                title="刷新列表"
+                onClick={() =>
+                  setRefreshRequests((previous) => ({ ...previous, [tab]: previous[tab] + 1 }))
+                }
               >
+                <RefreshCw />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                shape="circle"
+                aria-label="显示设置"
+                title="显示设置"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings2 />
+              </Button>
+            </ButtonGroup>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button shape="pill" size="lg" />} aria-label="添加扩展">
                 添加
                 <ChevronDown data-icon="inline-end" />
               </DropdownMenuTrigger>
@@ -127,7 +133,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
               </h1>
               <p className="text-sm leading-6 text-muted-foreground">{sections[tab].description}</p>
             </header>
-            <InputGroup className="h-8 rounded-full shadow-none">
+            <InputGroup shape="pill">
               <InputGroupAddon>
                 <Search />
               </InputGroupAddon>
@@ -144,6 +150,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    shape="circle"
                     aria-label="清除搜索"
                     onClick={() => setQueries((previous) => ({ ...previous, [tab]: "" }))}
                   >
@@ -152,7 +159,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 </InputGroupAddon>
               ) : null}
             </InputGroup>
-            <TabsContent value="plugins" keepMounted>
+            <TabsContent value="plugins" keepMounted className="mt-0">
               <PluginManager
                 key={projectPath}
                 projectPath={projectPath}
@@ -163,7 +170,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 notify={setMessage}
               />
             </TabsContent>
-            <TabsContent value="skills" keepMounted>
+            <TabsContent value="skills" keepMounted className="mt-0">
               <SkillManager
                 key={projectPath}
                 projectPath={projectPath}
@@ -172,7 +179,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 notify={setMessage}
               />
             </TabsContent>
-            <TabsContent value="mcp" keepMounted>
+            <TabsContent value="mcp" keepMounted className="mt-0">
               <McpManager
                 query={queries.mcp}
                 addRequest={addRequests.mcp}

@@ -33,7 +33,7 @@ import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Switch } from "@renderer/components/ui/switch"
-import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { toast } from "@renderer/lib/toast"
 import type {
@@ -83,8 +83,9 @@ function groupPermissions(permissions: string[]): Array<{ label: string; values:
   for (const permission of permissions) {
     const prefix = permission.split(/[:/]/u, 1)[0]
     const label = permissionLabels[prefix] ?? "其他权限"
-    const suffix = uiPermissionLabels[permission]
-      ?? (permission.slice(prefix.length).replace(/^[:/]/u, "") || permission)
+    const suffix =
+      uiPermissionLabels[permission] ??
+      (permission.slice(prefix.length).replace(/^[:/]/u, "") || permission)
     const values = groups.get(label) ?? []
     if (!values.includes(suffix)) values.push(suffix)
     groups.set(label, values)
@@ -386,71 +387,83 @@ export function PluginManager({
       </section>
       {plugins.length ? (
         <section className="flex flex-col gap-3" aria-labelledby="plugin-list-title">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="plugin-list-title" className="text-sm font-medium">
-              我的插件
-            </h2>
-            <ToggleGroup
-              value={[filter]}
-              onValueChange={(value) => value[0] && setFilter(value[0])}
-              size="sm"
-              aria-label="插件状态"
-            >
-              <ToggleGroupItem value="all">全部</ToggleGroupItem>
-              <ToggleGroupItem value="enabled">已启用</ToggleGroupItem>
-              <ToggleGroupItem value="attention">需处理</ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-          <Separator />
-          {visiblePlugins.length ? (
-            <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2">
-              {visiblePlugins.map((plugin) => (
-                <ExtensionRow
-                  key={plugin.identity.id}
-                  name={displayName(plugin)}
-                  description={`${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${pluginRuntimeLabel(plugin)}`}
-                  onClick={() => setDetailId(plugin.identity.id)}
-                  action={
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        size="sm"
-                        checked={plugin.enabled}
-                        disabled={busy || plugin.scope === "managed"}
-                        aria-label={`${plugin.enabled ? "禁用" : "启用"} ${displayName(plugin)}`}
-                        onCheckedChange={() => void mutate(plugin)}
-                      />
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={<Button variant="ghost" size="icon-sm" />}
-                          aria-label={`${displayName(plugin)} 更多操作`}
-                        >
-                          <Ellipsis />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuGroup>
-                            <DropdownMenuItem onClick={() => setDetailId(plugin.identity.id)}>
-                              查看详情
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              disabled={busy || plugin.scope === "managed"}
-                              variant="destructive"
-                              onClick={() =>
-                                setRemoval({ id: plugin.identity.id, name: displayName(plugin) })
-                              }
-                            >
-                              卸载
-                            </DropdownMenuItem>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  }
-                />
-              ))}
+          <Tabs value={filter} onValueChange={setFilter} className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="plugin-list-title" className="text-sm font-medium">
+                我的插件
+              </h2>
+              <TabsList
+                className="extension-tabs bg-transparent"
+                wrapperClassName="w-auto"
+                aria-label="插件状态"
+              >
+                <TabsTrigger value="all" aria-label="全部">
+                  全部
+                </TabsTrigger>
+                <TabsTrigger value="enabled" aria-label="已启用">
+                  已启用
+                </TabsTrigger>
+                <TabsTrigger value="attention" aria-label="需处理">
+                  需处理
+                </TabsTrigger>
+              </TabsList>
             </div>
-          ) : (
-            <NoPlugins searched={Boolean(normalizedQuery) || filter !== "all"} />
-          )}
+            <Separator />
+            <TabsContent value={filter} className="mt-0">
+              {visiblePlugins.length ? (
+                <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2">
+                  {visiblePlugins.map((plugin) => (
+                    <ExtensionRow
+                      key={plugin.identity.id}
+                      name={displayName(plugin)}
+                      description={`${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${pluginRuntimeLabel(plugin)}`}
+                      onClick={() => setDetailId(plugin.identity.id)}
+                      action={
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            size="sm"
+                            checked={plugin.enabled}
+                            disabled={busy || plugin.scope === "managed"}
+                            aria-label={`${plugin.enabled ? "禁用" : "启用"} ${displayName(plugin)}`}
+                            onCheckedChange={() => void mutate(plugin)}
+                          />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={<Button variant="ghost" size="icon-sm" />}
+                              aria-label={`${displayName(plugin)} 更多操作`}
+                            >
+                              <Ellipsis />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem onClick={() => setDetailId(plugin.identity.id)}>
+                                  查看详情
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={busy || plugin.scope === "managed"}
+                                  variant="destructive"
+                                  onClick={() =>
+                                    setRemoval({
+                                      id: plugin.identity.id,
+                                      name: displayName(plugin),
+                                    })
+                                  }
+                                >
+                                  卸载
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <NoPlugins searched={Boolean(normalizedQuery) || filter !== "all"} />
+              )}
+            </TabsContent>
+          </Tabs>
         </section>
       ) : null}
       <PluginDetailsDialog

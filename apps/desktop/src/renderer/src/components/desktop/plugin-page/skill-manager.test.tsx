@@ -105,6 +105,21 @@ async function click(node: Element | null | undefined): Promise<void> {
 
 beforeEach(() => {
   actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }))
   Object.defineProperty(window, "desktop", {
     configurable: true,
     value: { skills: api },
@@ -125,6 +140,7 @@ beforeEach(() => {
 afterEach(() => {
   if (root) act(() => root.unmount())
   host?.remove()
+  vi.unstubAllGlobals()
   delete actEnvironment.IS_REACT_ACT_ENVIRONMENT
 })
 
@@ -135,12 +151,9 @@ describe("SkillManager filesystem management", () => {
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("agent-browser")
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("docs")
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("archify")
-    expect([...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent)).toEqual([
-      "Vykor",
-      "通用",
-      "个人",
-      "Client",
-    ])
+    expect(
+      [...host.querySelectorAll('[role="tab"]')].map((node) => node.getAttribute("title"))
+    ).toEqual(["Vykor", "通用", "个人", "Client"])
     expect(host.textContent).not.toContain("系统")
     expect(host.textContent).not.toContain("推荐")
     expect(host.textContent).not.toContain("创建技能")
@@ -151,17 +164,23 @@ describe("SkillManager filesystem management", () => {
   it("filters project and VK global skills into their real categories", async () => {
     await render()
     await click(
-      [...host.querySelectorAll('[role="tab"]')].find((node) => node.textContent === "Client")
+      [...host.querySelectorAll('[role="tab"]')].find(
+        (node) => node.getAttribute("title") === "Client"
+      )
     )
     expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("release")
     expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("docs")
     await click(
-      [...host.querySelectorAll('[role="tab"]')].find((node) => node.textContent === "个人")
+      [...host.querySelectorAll('[role="tab"]')].find(
+        (node) => node.getAttribute("title") === "个人"
+      )
     )
     expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("docs")
     expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("archify")
     await click(
-      [...host.querySelectorAll('[role="tab"]')].find((node) => node.textContent === "通用")
+      [...host.querySelectorAll('[role="tab"]')].find(
+        (node) => node.getAttribute("title") === "通用"
+      )
     )
     expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("archify")
     expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("docs")

@@ -68,6 +68,21 @@ describe("PluginManager archive import", () => {
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+      }
+    )
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
     vi.clearAllMocks()
     Object.defineProperty(window, "desktop", {
       configurable: true,
@@ -103,6 +118,7 @@ describe("PluginManager archive import", () => {
   afterEach(() => {
     act(() => root.unmount())
     host.remove()
+    vi.unstubAllGlobals()
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
       .IS_REACT_ACT_ENVIRONMENT
   })
@@ -175,7 +191,9 @@ describe("PluginManager archive import", () => {
 
   it("explains UI permissions and component counts in the host approval dialog", async () => {
     api().importArchive.mockResolvedValue({
-      status: "approval-required", selectionId: "ui-selection", pluginName: "UI Fixture",
+      status: "approval-required",
+      selectionId: "ui-selection",
+      pluginName: "UI Fixture",
       requestedPermissions: ["ui:render", "ui:invoke-own-tools"],
       uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
     })
@@ -187,9 +205,14 @@ describe("PluginManager archive import", () => {
   })
 
   it("shows validated UI metadata without claiming the interface is running", async () => {
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
-      uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
-    })] })
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
+        }),
+      ],
+    })
     await render()
     await click("查看 Alpha 详情")
     expect(document.body.textContent).toContain("已校验 2 个 UI 定义")
@@ -197,9 +220,14 @@ describe("PluginManager archive import", () => {
   })
 
   it("shows unverified component counts as unknown rather than zero", async () => {
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
-      uiInventory: { manifestCount: 1, componentCount: null, validatedComponentCount: 0 },
-    })] })
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          uiInventory: { manifestCount: 1, componentCount: null, validatedComponentCount: 0 },
+        }),
+      ],
+    })
     await render()
     await click("查看 Alpha 详情")
     expect(document.body.textContent).toContain("UI 定义数量暂不可确认")

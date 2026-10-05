@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { Empty, EmptyHeader, EmptyTitle } from "@renderer/components/ui/empty"
 import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { SkillIcon } from "./skill-controls"
 import { SkillDetail } from "./skill-detail"
 
@@ -176,25 +176,22 @@ export function SkillManager({
         <Tabs
           value={activeCategory}
           onValueChange={(value) => setCategory(String(value))}
-          className="gap-5"
+          className="flex min-w-0 flex-col gap-5"
         >
-          <TabsList
-            aria-label="技能来源"
-            className="h-auto! max-w-full flex-wrap justify-start gap-1 bg-transparent p-0"
-          >
+          <TabsList aria-label="技能来源" className="extension-tabs bg-transparent">
             {categories.map((item) => (
               <TabsTrigger
                 key={categoryId(item)}
                 value={categoryId(item)}
                 title={item.name}
-                className="h-8 max-w-full min-w-0 flex-none rounded-full px-3 data-active:border-transparent! data-active:bg-muted! data-active:shadow-none!"
+                className="max-w-48 min-w-0"
               >
                 <span className="truncate">{item.name}</span>
               </TabsTrigger>
             ))}
           </TabsList>
           {categories.map((item) => (
-            <TabsContent key={categoryId(item)} value={categoryId(item)}>
+            <TabsContent key={categoryId(item)} value={categoryId(item)} className="mt-0">
               {skillsFor(item).length ? (
                 <SkillRows skills={skillsFor(item)} onOpen={setSelectedId} />
               ) : (
