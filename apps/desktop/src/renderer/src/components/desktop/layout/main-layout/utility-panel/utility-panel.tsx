@@ -623,6 +623,7 @@ export function UtilityPanel({
               key={tab.id}
               tab={tab}
               active={activeTab?.id === tab.id}
+              visible={open && activeTab?.id === tab.id}
               onUpdate={(patch) => updateBrowserTab(tab.id, patch)}
             />
           ))}

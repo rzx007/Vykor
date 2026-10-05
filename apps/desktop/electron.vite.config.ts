@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
+import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-selector-plugin"
 
 function copySessionMigrations(): Plugin {
   return {
@@ -35,7 +36,7 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [copySessionMigrations()],
+    plugins: [copySessionMigrations(), browserAnnotationSelectorPlugin()],
     build: {
       externalizeDeps: {
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树

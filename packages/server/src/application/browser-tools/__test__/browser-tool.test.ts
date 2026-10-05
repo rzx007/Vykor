@@ -43,6 +43,19 @@ describe("isBrowserPermissionApproved", () => {
   });
 });
 
+it("returns saved annotation selectors as data without adding tool actions", async () => {
+  const annotations = [{ target: "button: 提交", comment: "增加留白", selector: "#target" }];
+  const tool = createBrowserTool({ execute: async () => ({
+    url: "http://localhost/fixture", title: "Fixture", pageText: "提交", annotations,
+  }) }, async () => "unused.png", async () => ({}));
+  const result = await tool.execute({ action: "inspect" }, {
+    cwd: ".", sessionId: "s1", requestPermission: async () => ({ status: "approved" }),
+  });
+  const block = result.content.find(item => item.type === "text")!;
+  expect(JSON.parse(block.text).annotations).toEqual([{ target: "button: 提交", comment: "增加留白", selector: "#target" }]);
+  expect(tool.inputSchema).toMatchObject({ properties: { action: { enum: ["inspect", "navigate", "click", "type", "scroll"] } } });
+});
+
 describe("Browser screenshot capability", () => {
   it("loads catalog capabilities only when the browser is used", async () => {
     const loadCatalog = vi.fn(async () => ({

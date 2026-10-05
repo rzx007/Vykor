@@ -1,4 +1,5 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
 import type {
   CreateDesktopSessionInput,
   CheckoutDesktopProjectBranchInput,
@@ -192,7 +193,10 @@ export const IpcChannels = {
   windowSetMaterial: "window:set-material",
 
   browserTabUpdate: "browser:tab:update",
-  browserInspectAt: "browser:inspect-at",
+  browserReadAnnotations: "browser:annotations:read",
+  browserSetAnnotationMode: "browser:annotations:mode",
+  browserFocusAnnotation: "browser:annotations:focus",
+  browserRemoveAnnotation: "browser:annotations:remove",
   browserAddAnnotation: "browser:annotation:add",
 
   trayFlash: "tray:flash",
@@ -472,13 +476,13 @@ export interface IpcInvokeMap {
     ]
     result: void
   }
-  [IpcChannels.browserInspectAt]: {
-    args: [input: { tabId: string; x: number; y: number }]
-    result: string
-  }
+  [IpcChannels.browserReadAnnotations]: { args: [input: { tabId: string }]; result: BrowserAnnotationSnapshot }
+  [IpcChannels.browserSetAnnotationMode]: { args: [input: SetAnnotationModeInput]; result: BrowserAnnotationSnapshot }
+  [IpcChannels.browserFocusAnnotation]: { args: [input: AnnotationIdInput]; result: BrowserAnnotationSnapshot }
+  [IpcChannels.browserRemoveAnnotation]: { args: [input: AnnotationIdInput]; result: BrowserAnnotationSnapshot }
   [IpcChannels.browserAddAnnotation]: {
-    args: [input: { tabId: string; target: string; comment: string }]
-    result: void
+    args: [input: AddAnnotationInput]
+    result: BrowserAnnotationSnapshot
   }
 
   [IpcChannels.trayFlash]: { args: []; result: void }

@@ -23,6 +23,8 @@ import {
 } from "./browser-navigation"
 import { insertWebviewCssWhenReady } from "./browser-webview-css"
 import { buildBrowserScrollbarCss } from "./browser-webview-style"
+import { useBrowserAnnotations } from "./use-browser-annotations"
+import { BrowserAnnotationPanel } from "./browser-annotation-panel"
 
 export type BrowserToolTab = {
   id: string
@@ -37,6 +39,7 @@ export type BrowserToolTab = {
 type BrowserToolProps = {
   tab: BrowserToolTab
   active: boolean
+  visible: boolean
   onUpdate: (patch: Partial<BrowserToolTab>) => void
 }
 
@@ -53,16 +56,14 @@ type BrowserWebviewElement = HTMLElement & {
   getWebContentsId?: () => number
 }
 
-export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.JSX.Element {
+export function BrowserTool({ tab, active, visible, onUpdate }: BrowserToolProps): React.JSX.Element {
   const webviewRef = useRef<BrowserWebviewElement | null>(null)
   const webviewReadyRef = useRef(false)
   const activeRef = useRef(active)
   const onUpdateRef = useRef(onUpdate)
-  const [annotationMode, setAnnotationMode] = useState(false)
-  const [annotationTarget, setAnnotationTarget] = useState("")
-  const [annotationComment, setAnnotationComment] = useState("")
-  const [annotationError, setAnnotationError] = useState<string | null>(null)
-  const [savedAnnotationCount, setSavedAnnotationCount] = useState(0)
+  const [browserError, setBrowserError] = useState<string | null>(null)
+  const pageContainer = useRef<HTMLDivElement | null>(null)
+  const annotation = useBrowserAnnotations({ tabId: tab.id, visible, ready: webviewReadyRef.current && !tab.loading && Boolean(tab.url) })
   const { resolvedTheme } = useAppearance()
 
   useEffect(() => {
@@ -87,6 +88,8 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
     const webview = webviewRef.current
     if (webview) applyScrollbarStyle(webview)
   }, [applyScrollbarStyle])
+  const scrollbarStyleRef = useRef(applyScrollbarStyle)
+  scrollbarStyleRef.current = applyScrollbarStyle
 
   const navigate = (): void => {
     const url = normalizeBrowserUrl(tab.input)
@@ -136,7 +139,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
 
       webview.addEventListener("dom-ready", () => {
         webviewReadyRef.current = true
-        applyScrollbarStyle(webview)
+        scrollbarStyleRef.current(webview)
         const webContentsId = webview.getWebContentsId?.()
         if (webContentsId !== undefined) {
           void window.desktop.browser
@@ -147,7 +150,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
               }
             })
             .catch((error: unknown) =>
-              setAnnotationError(error instanceof Error ? error.message : String(error))
+              setBrowserError(error instanceof Error ? error.message : String(error))
             )
         }
       })
@@ -155,7 +158,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
         onUpdateRef.current({ loading: true })
       })
       webview.addEventListener("did-stop-loading", () => {
-        applyScrollbarStyle(webview)
+        scrollbarStyleRef.current(webview)
         updateNavigationState()
       })
       webview.addEventListener("did-navigate", updateNavigationState)
@@ -165,7 +168,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
         if (title) onUpdateRef.current({ title })
       })
     },
-    [applyScrollbarStyle, tab.id]
+    [tab.id]
   )
 
   useEffect(() => {
@@ -258,27 +261,23 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
         </form>
         <Button
           type="button"
-          variant={annotationMode ? "secondary" : "ghost"}
+          variant={annotation.snapshot?.mode && annotation.snapshot.mode !== "off" ? "secondary" : "ghost"}
           size="icon"
-          title={annotationMode ? "退出标注" : "给页面添加标注"}
-          aria-label={annotationMode ? "退出标注" : "给页面添加标注"}
-          aria-pressed={annotationMode}
-          disabled={!tab.url}
-          onClick={() => {
-            setAnnotationError(null)
-            setAnnotationTarget("")
-            setAnnotationMode((value) => !value)
-          }}
+          title="选择页面元素添加批注"
+          aria-label="选择页面元素添加批注"
+          aria-pressed={annotation.snapshot?.mode === "pick"}
+          disabled={!tab.url || tab.loading || annotation.pending}
+          onClick={() => void (annotation.snapshot?.mode === "pick" ? annotation.showSaved() : annotation.startPicking())}
           className="shrink-0 text-muted-foreground"
         >
           <MessageSquareText />
-          {savedAnnotationCount > 0 && (
-            <span className="sr-only">已保存 {savedAnnotationCount} 条标注</span>
-          )}
         </Button>
+        {Boolean(annotation.snapshot?.annotations.length) && <Button type="button" variant="ghost" size="sm" aria-label="查看已保存批注" disabled={annotation.pending} onClick={() => void annotation.showSaved()}>
+          {annotation.snapshot!.annotations.length}
+        </Button>}
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-background">
+      <div ref={pageContainer} className="relative min-h-0 flex-1 bg-background">
         <webview
           {...{
             ref: bindWebview,
@@ -292,98 +291,13 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
             <DesktopEmptyState icon={Globe2} title="开始浏览" description="输入 URL 以打开页面" />
           </div>
         )}
-        {tab.url && annotationMode && (
-          <div
-            className="absolute inset-0 z-10 cursor-crosshair bg-transparent"
-            aria-label="点击页面元素添加标注"
-            onClick={(event) => {
-              event.preventDefault()
-              const bounds = event.currentTarget.getBoundingClientRect()
-              setAnnotationError(null)
-              void window.desktop.browser
-                .inspectAt({
-                  tabId: tab.id,
-                  x: event.clientX - bounds.left,
-                  y: event.clientY - bounds.top,
-                })
-                .then(setAnnotationTarget)
-                .catch((error: unknown) =>
-                  setAnnotationError(error instanceof Error ? error.message : String(error))
-                )
-            }}
-          >
-            <div className="absolute top-3 left-3 rounded-lg border bg-background/95 px-3 py-2 text-xs text-foreground shadow-sm">
-              点击需要反馈的页面元素
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label="退出标注"
-                className="ml-2"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setAnnotationMode(false)
-                }}
-              >
-                ×
-              </Button>
-            </div>
-            {annotationTarget && (
-              <form
-                className="absolute top-14 left-3 w-[min(22rem,calc(100%-1.5rem))] cursor-auto rounded-xl border bg-background p-3 shadow-lg"
-                onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  const comment = annotationComment.trim()
-                  if (!comment) return
-                  void window.desktop.browser
-                    .addAnnotation({ tabId: tab.id, target: annotationTarget, comment })
-                    .then(() => {
-                      setSavedAnnotationCount((count) => count + 1)
-                      setAnnotationTarget("")
-                      setAnnotationComment("")
-                      setAnnotationMode(false)
-                    })
-                    .catch((error: unknown) =>
-                      setAnnotationError(error instanceof Error ? error.message : String(error))
-                    )
-                }}
-              >
-                <p className="mb-2 truncate text-xs text-muted-foreground">{annotationTarget}</p>
-                <label className="sr-only" htmlFor={`browser-annotation-${tab.id}`}>
-                  标注内容
-                </label>
-                <textarea
-                  id={`browser-annotation-${tab.id}`}
-                  autoFocus
-                  value={annotationComment}
-                  onChange={(event) => setAnnotationComment(event.target.value)}
-                  placeholder="描述希望怎么调整…"
-                  className="min-h-20 w-full resize-y rounded-lg border bg-background p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                <div className="mt-2 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAnnotationTarget("")}
-                  >
-                    取消
-                  </Button>
-                  <Button type="submit" size="sm" disabled={!annotationComment.trim()}>
-                    保存标注
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-        {annotationError && (
+        {tab.url && visible && <BrowserAnnotationPanel ui={annotation} containerRef={pageContainer} />}
+        {browserError && (
           <p
             role="status"
             className="absolute bottom-3 left-3 z-20 max-w-[80%] rounded-lg border bg-background px-3 py-2 text-xs text-destructive shadow-sm"
           >
-            {annotationError}
+            {browserError}
           </p>
         )}
       </div>

@@ -97,8 +97,14 @@ export const desktopAPI = {
   browser: {
     updateTab: (input: IpcInvokeMap[typeof IpcChannels.browserTabUpdate]["args"][0]) =>
       invoke(IpcChannels.browserTabUpdate, input),
-    inspectAt: (input: IpcInvokeMap[typeof IpcChannels.browserInspectAt]["args"][0]) =>
-      invoke(IpcChannels.browserInspectAt, input),
+    readAnnotations: (input: IpcInvokeMap[typeof IpcChannels.browserReadAnnotations]["args"][0]) =>
+      invoke(IpcChannels.browserReadAnnotations, input),
+    setAnnotationMode: (input: IpcInvokeMap[typeof IpcChannels.browserSetAnnotationMode]["args"][0]) =>
+      invoke(IpcChannels.browserSetAnnotationMode, input),
+    focusAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserFocusAnnotation]["args"][0]) =>
+      invoke(IpcChannels.browserFocusAnnotation, input),
+    removeAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserRemoveAnnotation]["args"][0]) =>
+      invoke(IpcChannels.browserRemoveAnnotation, input),
     addAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]) =>
       invoke(IpcChannels.browserAddAnnotation, input),
     onOpenRequest: (listener: () => void): (() => void) => {

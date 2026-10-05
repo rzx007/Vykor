@@ -38,3 +38,19 @@ Developer mode 是四类受控检查能力，不提供任意 CDP 方法或脚本
 ## 实现入口
 
 普通动作由 `packages/server/src/application/browser-tools/browser-tool.ts` 定义，Desktop 的 `apps/desktop/src/main/features/browser/browser-agent-service.ts` 负责选择标签页并执行。开发者动作由同目录的 `browser-developer-tool.ts` 定义；Desktop 的 `browser-developer-inspector.ts` 负责固定 CDP 检查、有限采集和清理。授权请求由 `packages/server/src/permissions/permission-broker.ts` 管理，Developer mode 的开关保存在 Desktop 本地偏好中。
+
+## 用户批注
+
+工具栏的批注按钮进入选择模式：悬停显示元素边框和名称，点击锁定后在目标旁填写意见。保存后出现编号标记，可以继续选择；点击编号或批注数量打开列表，定位或删除已保存意见。选择模式保留主文档的原生滚动，点击目标不会执行目标本身的网页点击处理器。
+
+输入框支持 `Ctrl/Cmd + Enter` 保存，Enter 换行，Escape 取消当前输入或结束选择。保存失败、切换标签页、隐藏工具面板或页面变化后保留当前组件中的草稿文字，但旧目标关联失效，需要重新选择才能提交。页面中的键盘选择使用网页原有 Tab 焦点和 Enter；列表中的定位与删除按钮可通过键盘操作。
+
+每个标签页只在主进程内存中保留当前页面的至多 20 条批注，意见最多 2,000 字。同地址刷新保留记录，唯一 ID 或基于稳定属性/类名的目标重新核对后可以定位；结构路径的原元素失效后显示“目标位置暂不可用”，不猜测另一个同名元素。完整页面地址改变或 guest 销毁时清空记录，退出应用后不恢复。
+
+批注支持普通 HTML、React、Vue 等主文档，不依赖 React Scan。iframe 只支持选择外层元素，选择模式下不能操作其内部；不遍历 Shadow DOM 内部节点。已保存的当前页面批注及其有限选择器随普通 Browser 观察结果返回给 Agent，草稿和实时坐标不进入模型上下文；选择器是说明数据，不增加新的工具动作或权限。
+
+CSS 选择器使用固定版本 `@medv/finder`，只在锁定目标时生成。构建阶段把库和选择器规则打包成自包含的浏览器脚本，进入选择时注入隔离执行环境，后续悬停与读取不重复加载库。只允许有限的测试标识属性和经过筛选的 ID/类名，仍会在恢复时核对唯一性及元素特征，不保证页面改写后始终对应原语义目标。
+
+Agent 执行导航、点击、输入或滚动时，在通过现有授权后结束页面选择模式，避免批注的点击捕获挡住自动操作；已保存记录保留，未保存意见保留在界面草稿中。只读 `inspect` 不结束选择。
+
+代码职责和生命周期见 [批注设计](./superpowers/specs/2026-10-04-desktop-browser-annotations-design.md)，实施与验证记录见 [实施计划](./superpowers/plans/2026-10-04-desktop-browser-annotations.md)。

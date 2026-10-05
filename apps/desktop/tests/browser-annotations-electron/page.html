@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:24px;font-family:system-ui}button{padding:12px}#scroll{margin-top:30px;width:300px;height:140px;overflow:auto}#content{height:1200px;background:linear-gradient(#fafafa,#ddd)}iframe{width:260px;height:90px}
+</style></head><body>
+<form id="form"><button id="target" data-testid="submit-button" type="submit">提交</button></form>
+<div id="scroll"><div id="content">原生内层滚动</div></div>
+<iframe id="frame" srcdoc="<button onclick='window.clicked=1'>子页面按钮</button>"></iframe>
+<div><button>同名</button><button>同名</button></div>
+<script>
+window.pageActions={down:0,click:0,submit:0};
+target.addEventListener('pointerdown',()=>window.pageActions.down++);
+target.addEventListener('click',()=>window.pageActions.click++);
+form.addEventListener('submit',event=>{event.preventDefault();window.pageActions.submit++});
+</script></body></html>

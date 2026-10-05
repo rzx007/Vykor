@@ -18,7 +18,7 @@ export interface BrowserObservation {
     requiresConfirmation?: boolean;
   }>;
   screenshotBytes?: Uint8Array;
-  annotations?: Array<{ target: string; comment: string }>;
+  annotations?: Array<{ target: string; comment: string; selector: string }>;
 }
 
 /** The only developer inspections the agent may request. Never a raw CDP method. */

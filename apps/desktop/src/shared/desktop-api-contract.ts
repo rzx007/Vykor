@@ -1,4 +1,5 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
 import type {
   DesktopAppInfo,
   PetState,
@@ -214,12 +215,11 @@ export type DesktopAPI = {
     updateTab: (
       input: IpcInvokeMap[typeof IpcChannels.browserTabUpdate]["args"][0]
     ) => Promise<void>
-    inspectAt: (
-      input: IpcInvokeMap[typeof IpcChannels.browserInspectAt]["args"][0]
-    ) => Promise<string>
-    addAnnotation: (
-      input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]
-    ) => Promise<void>
+    readAnnotations: (input: { tabId: string }) => Promise<BrowserAnnotationSnapshot>
+    setAnnotationMode: (input: SetAnnotationModeInput) => Promise<BrowserAnnotationSnapshot>
+    addAnnotation: (input: AddAnnotationInput) => Promise<BrowserAnnotationSnapshot>
+    focusAnnotation: (input: AnnotationIdInput) => Promise<BrowserAnnotationSnapshot>
+    removeAnnotation: (input: AnnotationIdInput) => Promise<BrowserAnnotationSnapshot>
     onOpenRequest: (listener: () => void) => () => void
   }
   tray: {

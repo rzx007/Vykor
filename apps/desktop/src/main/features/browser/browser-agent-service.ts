@@ -17,8 +17,26 @@ import {
   type DeveloperGuest,
   type DeveloperScope,
 } from "./browser-developer-inspector"
-import { ELEMENT_INSPECT_SCRIPT, fingerprintPage, waitForPageUpdate, type InspectedPage } from "./browser-page-inspection"
-import { capDeveloperDiagnosticsResult, capDeveloperReadResult } from "./browser-developer-result-limits"
+import {
+  ELEMENT_INSPECT_SCRIPT,
+  fingerprintPage,
+  waitForPageUpdate,
+  type InspectedPage,
+} from "./browser-page-inspection"
+import {
+  capDeveloperDiagnosticsResult,
+  capDeveloperReadResult,
+} from "./browser-developer-result-limits"
+import {
+  BrowserAnnotationController,
+  type AnnotationPageContext,
+} from "./browser-annotation-controller"
+import type {
+  AddAnnotationInput,
+  AnnotationIdInput,
+  SetAnnotationModeInput,
+  BrowserAnnotationSnapshot,
+} from "../../../shared/browser-annotation"
 
 type ElementTarget = {
   webContentsId: number
@@ -29,13 +47,12 @@ type ElementTarget = {
   requiresConfirmation: boolean
 }
 
-type BrowserAnnotation = { target: string; comment: string }
-
 export class BrowserAgentService implements BrowserHost {
   private readonly guestsByWindow = new Map<number, Set<number>>()
   private readonly tabs = new Map<string, { ownerId: number; webContentsId: number }>()
   private readonly targets = new Map<string, ElementTarget>()
-  private readonly annotations = new Map<number, BrowserAnnotation[]>()
+  private readonly annotations = new BrowserAnnotationController()
+  private readonly annotationPageRevisions = new Map<number, number>()
   private readonly approvedOrigins = new Map<string, Set<string>>()
   private readonly pageFingerprints = new Map<number, string>()
   private readonly developerInspector = new BrowserDeveloperInspector()
@@ -50,11 +67,10 @@ export class BrowserAgentService implements BrowserHost {
   // ponytail: serialize browser operations globally; use per-tab queues only if throughput becomes a measured bottleneck.
   private operationQueue: Promise<void> = Promise.resolve()
 
-  constructor(
-    private readonly options: { isDeveloperModeEnabled?: () => boolean } = {}
-  ) {}
+  constructor(private readonly options: { isDeveloperModeEnabled?: () => boolean } = {}) {}
 
   trackGuest(ownerId: number, guest: WebContents): void {
+    this.annotationPageRevisions.set(guest.id, 0)
     const guests = this.guestsByWindow.get(ownerId) ?? new Set<number>()
     guests.add(guest.id)
     this.guestsByWindow.set(ownerId, guests)
@@ -65,10 +81,32 @@ export class BrowserAgentService implements BrowserHost {
       const nextUrl = typeof info?.url === "string" ? info.url : typeof url === "string" ? url : ""
       const epoch = (this.navigationEpochs.get(guest.id) ?? 0) + 1
       this.navigationEpochs.set(guest.id, epoch)
+      const revision = (this.annotationPageRevisions.get(guest.id) ?? 0) + 1
+      this.annotationPageRevisions.set(guest.id, revision)
+      this.annotations.navigationStarted(guest.id, revision)
       this.developerInspector.handleNavigationStart(guest.id, nextUrl || undefined, epoch)
     }
     guest.on("did-start-navigation", onMainNavigation)
     guest.on("did-redirect-navigation", onMainNavigation)
+    let previousMainUrl = guest.getURL()
+    const ready = (): void => {
+      previousMainUrl = guest.getURL()
+      this.annotations.pageReady(
+        guest.id,
+        previousMainUrl,
+        this.annotationPageRevisions.get(guest.id) ?? 0
+      )
+    }
+    guest.on("dom-ready", ready)
+    guest.on("did-stop-loading", ready)
+    guest.on("did-navigate-in-page", (_event, url: string, isMainFrame: boolean) => {
+      if (!isMainFrame || url === previousMainUrl) return
+      const revision = (this.annotationPageRevisions.get(guest.id) ?? 0) + 1
+      this.annotationPageRevisions.set(guest.id, revision)
+      this.annotations.navigationStarted(guest.id, revision)
+      this.annotations.pageReady(guest.id, url, revision)
+      previousMainUrl = url
+    })
     guest.once("destroyed", () => {
       this.guestsByWindow.get(ownerId)?.delete(guest.id)
       for (const [tabId, tab] of this.tabs) {
@@ -77,10 +115,12 @@ export class BrowserAgentService implements BrowserHost {
           if (this.activeTabId === tabId) this.activeTabId = null
         }
       }
-      this.annotations.delete(guest.id)
+      this.annotations.release(guest.id)
+      this.annotationPageRevisions.delete(guest.id)
       this.pageFingerprints.delete(guest.id)
       this.navigationEpochs.delete(guest.id)
-      if (this.developerInspector.summary()?.webContentsId === guest.id) this.stopDeveloperDiagnostics()
+      if (this.developerInspector.summary()?.webContentsId === guest.id)
+        this.stopDeveloperDiagnostics()
     })
   }
 
@@ -95,6 +135,7 @@ export class BrowserAgentService implements BrowserHost {
     if (!/^[\w-]{1,100}$/.test(tabId)) throw new Error("Invalid browser tab ID.")
     const previous = this.tabs.get(tabId)
     if (previous && previous.webContentsId !== webContentsId) {
+      this.annotations.release(previous.webContentsId)
       this.developerGeneration += 1
       if (this.developerInspector.summary()?.tabId === tabId) {
         this.developerInspector.stopDiagnostics("tab rebound")
@@ -106,6 +147,8 @@ export class BrowserAgentService implements BrowserHost {
   setActiveTab(ownerId: number, tabId: string | null): void {
     if (tabId === null) {
       if (this.activeTabId && this.tabs.get(this.activeTabId)?.ownerId === ownerId) {
+        const previous = this.tabs.get(this.activeTabId)!
+        this.annotations.suspend(previous.webContentsId)
         this.stopDeveloperDiagnostics()
         this.activeTabId = null
       }
@@ -113,6 +156,10 @@ export class BrowserAgentService implements BrowserHost {
     }
     const tab = this.tabs.get(tabId)
     if (!tab || tab.ownerId !== ownerId) throw new Error("Unknown browser tab.")
+    if (this.activeTabId !== tabId && this.activeTabId) {
+      const previous = this.tabs.get(this.activeTabId)
+      if (previous) this.annotations.suspend(previous.webContentsId)
+    }
     if (this.activeTabId !== tabId) this.stopDeveloperDiagnostics()
     this.activeTabId = tabId
     for (const resolve of this.activeTabWaiters) resolve(tabId)
@@ -121,6 +168,7 @@ export class BrowserAgentService implements BrowserHost {
 
   unbindTab(ownerId: number, tabId: string): void {
     if (this.tabs.get(tabId)?.ownerId !== ownerId) return
+    this.annotations.suspend(this.tabs.get(tabId)!.webContentsId)
     if (this.activeTabId === tabId || this.developerInspector.summary()?.tabId === tabId) {
       this.stopDeveloperDiagnostics()
     }
@@ -135,29 +183,64 @@ export class BrowserAgentService implements BrowserHost {
     return this.developerInspector.stopDiagnostics("stopped")
   }
 
-  addAnnotation(ownerId: number, tabId: string, annotation: BrowserAnnotation): void {
-    const tab = this.tabs.get(tabId)
-    if (!tab || tab.ownerId !== ownerId) throw new Error("Unknown browser tab.")
-    const target = annotation.target.trim().slice(0, 200)
-    const comment = annotation.comment.trim().slice(0, 2_000)
-    if (!target || !comment) throw new Error("A target and comment are required.")
-    const items = this.annotations.get(tab.webContentsId) ?? []
-    items.push({ target, comment })
-    this.annotations.set(tab.webContentsId, items.slice(-20))
-  }
-
-  async inspectAt(ownerId: number, tabId: string, x: number, y: number): Promise<string> {
+  private annotationPage(ownerId: number, tabId: string): AnnotationPageContext {
     const tab = this.tabs.get(tabId)
     const contents =
       tab && tab.ownerId === ownerId ? webContents.fromId(tab.webContentsId) : undefined
-    if (!contents || contents.isDestroyed()) throw new Error("Browser tab is no longer available.")
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > 20_000 || y > 20_000) {
-      throw new Error("Invalid selection coordinates.")
+    if (!contents || contents.isDestroyed() || this.activeTabId !== tabId)
+      throw new Error("浏览器标签页已变化，请重新选择")
+    const pageRevision = this.annotationPageRevisions.get(contents.id) ?? 0
+    const pageUrl = contents.getURL()
+    const ready = !(contents.isLoadingMainFrame?.() ?? contents.isLoading())
+    if (ready) this.annotations.pageReady(contents.id, pageUrl, pageRevision)
+    return {
+      tabId,
+      contents,
+      pageUrl,
+      pageRevision,
+      ready,
+      assertCurrent: () => {
+        const actual = this.tabs.get(tabId)
+        if (
+          this.activeTabId !== tabId ||
+          actual?.ownerId !== ownerId ||
+          actual.webContentsId !== contents.id ||
+          contents.isDestroyed() ||
+          (this.annotationPageRevisions.get(contents.id) ?? 0) !== pageRevision ||
+          contents.getURL() !== pageUrl
+        ) {
+          throw new Error("页面已变化，请重新选择目标")
+        }
+      },
     }
-    const target = await contents.executeJavaScript(
-      `(() => { const el = document.elementFromPoint(${Math.floor(x)}, ${Math.floor(y)}); if (!el) return 'page'; const role = el.getAttribute('role') || el.tagName.toLowerCase(); const name = (el.getAttribute('aria-label') || el.getAttribute('title') || el.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 180); return role + (name ? ': ' + name : ''); })()`
-    )
-    return typeof target === "string" ? target : "page element"
+  }
+
+  async readAnnotations(ownerId: number, tabId: string): Promise<BrowserAnnotationSnapshot> {
+    return this.annotations.read(this.annotationPage(ownerId, tabId))
+  }
+  async setAnnotationMode(
+    ownerId: number,
+    input: SetAnnotationModeInput
+  ): Promise<BrowserAnnotationSnapshot> {
+    return this.annotations.setMode(this.annotationPage(ownerId, input.tabId), input)
+  }
+  async addAnnotation(
+    ownerId: number,
+    input: AddAnnotationInput
+  ): Promise<BrowserAnnotationSnapshot> {
+    return this.annotations.add(this.annotationPage(ownerId, input.tabId), input)
+  }
+  async focusAnnotation(
+    ownerId: number,
+    input: AnnotationIdInput
+  ): Promise<BrowserAnnotationSnapshot> {
+    return this.annotations.focus(this.annotationPage(ownerId, input.tabId), input)
+  }
+  async removeAnnotation(
+    ownerId: number,
+    input: AnnotationIdInput
+  ): Promise<BrowserAnnotationSnapshot> {
+    return this.annotations.remove(this.annotationPage(ownerId, input.tabId), input)
   }
 
   execute(input: {
@@ -238,6 +321,10 @@ export class BrowserAgentService implements BrowserHost {
       }
     }
 
+    if (input.action.action === "navigate" || input.action.action === "scroll") {
+      await this.annotations.pauseForBrowserAction(contents)
+      this.assertActiveTab(tabId, contents)
+    }
     if (input.action.action === "navigate") {
       await this.withNavigationGuard(
         contents,
@@ -275,9 +362,11 @@ export class BrowserAgentService implements BrowserHost {
       pageText: page.pageText,
       elements,
       ...(screenshotBytes ? { screenshotBytes } : {}),
-      ...(this.annotations.get(contents.id)?.length
-        ? { annotations: [...this.annotations.get(contents.id)!] }
-        : {}),
+      annotations: this.annotations.project(
+        contents.id,
+        page.url,
+        this.annotationPageRevisions.get(contents.id) ?? 0
+      ),
     }
   }
 
@@ -286,7 +375,8 @@ export class BrowserAgentService implements BrowserHost {
     this.guestsByWindow.clear()
     this.tabs.clear()
     this.targets.clear()
-    this.annotations.clear()
+    for (const id of this.annotationPageRevisions.keys()) this.annotations.release(id)
+    this.annotationPageRevisions.clear()
     this.approvedOrigins.clear()
     this.pageFingerprints.clear()
     this.activeTabWaiters.clear()
@@ -318,7 +408,8 @@ export class BrowserAgentService implements BrowserHost {
 
     // Stopping is always allowed so a stuck capture can be cleaned up.
     if (action.action === "stop_diagnostics") {
-      const owner = this.developerInspector.summary()?.sessionId ?? this.activeDeveloperRequestSessionId
+      const owner =
+        this.developerInspector.summary()?.sessionId ?? this.activeDeveloperRequestSessionId
       if (owner && owner !== input.sessionId) {
         throw new Error("Another session owns the active browser diagnostics capture.")
       }
@@ -360,7 +451,15 @@ export class BrowserAgentService implements BrowserHost {
         scope: scope.scope,
         navigationEpoch: epoch,
       })
-      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      this.assertDeveloperIdentity(
+        input.sessionId,
+        tabId,
+        contents,
+        scope.scope,
+        epoch,
+        generation,
+        input.cwd
+      )
       return capDeveloperDiagnosticsResult({
         action: "read_diagnostics",
         url: page.url,
@@ -382,9 +481,7 @@ export class BrowserAgentService implements BrowserHost {
     }
     await this.requireOrigin(scope.url, input.sessionId, input.cwd, input.approveOrigin)
     this.assertDeveloperSnapshot(snapshot, input.cwd)
-    const approved = await input.approveDeveloper(
-      this.developerReason(scope, action.action)
-    )
+    const approved = await input.approveDeveloper(this.developerReason(scope, action.action))
     this.assertDeveloperSnapshot(snapshot, input.cwd)
     if (!approved) {
       throw new Error(
@@ -402,7 +499,15 @@ export class BrowserAgentService implements BrowserHost {
         navigationEpoch: epoch,
       })
       try {
-        this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+        this.assertDeveloperIdentity(
+          input.sessionId,
+          tabId,
+          contents,
+          scope.scope,
+          epoch,
+          generation,
+          input.cwd
+        )
         if (!this.developerInspector.ownsSession(input.sessionId)) {
           throw new Error("Browser diagnostics stopped while starting.")
         }
@@ -419,13 +524,29 @@ export class BrowserAgentService implements BrowserHost {
 
     if (action.action === "inspect_dom") {
       const data = await this.developerInspector.inspectDom(guest, action.selector)
-      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      this.assertDeveloperIdentity(
+        input.sessionId,
+        tabId,
+        contents,
+        scope.scope,
+        epoch,
+        generation,
+        input.cwd
+      )
       return capDeveloperReadResult({ action: "inspect_dom", url: resultUrl, data })
     }
 
     if (action.action === "inspect_styles") {
       const data = await this.developerInspector.inspectStyles(guest, action.selector)
-      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      this.assertDeveloperIdentity(
+        input.sessionId,
+        tabId,
+        contents,
+        scope.scope,
+        epoch,
+        generation,
+        input.cwd
+      )
       return capDeveloperReadResult({ action: "inspect_styles", url: resultUrl, data })
     }
 
@@ -446,7 +567,13 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   private assertDeveloperSnapshot(
-    snapshot: { tabId: string; webContentsId: number; scope: string; epoch: number; generation: number },
+    snapshot: {
+      tabId: string
+      webContentsId: number
+      scope: string
+      epoch: number
+      generation: number
+    },
     cwd: string
   ): void {
     if (!this.developerModeEnabled()) {
@@ -468,11 +595,15 @@ export class BrowserAgentService implements BrowserHost {
       throw new Error("The browser tab is no longer available.")
     }
     if ((this.navigationEpochs.get(snapshot.webContentsId) ?? 0) !== snapshot.epoch) {
-      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+      throw new Error(
+        "The browser page changed while the tool was waiting. Inspect the page again."
+      )
     }
     const scope = resolveDeveloperScope(current.getURL(), cwd)
     if (!scope || scope.scope !== snapshot.scope) {
-      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+      throw new Error(
+        "The browser page changed while the tool was waiting. Inspect the page again."
+      )
     }
   }
 
@@ -502,11 +633,15 @@ export class BrowserAgentService implements BrowserHost {
       throw new Error("The browser tab changed while the tool was waiting. Inspect the page again.")
     }
     if ((this.navigationEpochs.get(contents.id) ?? 0) !== epoch) {
-      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+      throw new Error(
+        "The browser page changed while the tool was waiting. Inspect the page again."
+      )
     }
     const currentScope = resolveDeveloperScope(contents.getURL(), cwd)
     if (!currentScope || currentScope.scope !== scope) {
-      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+      throw new Error(
+        "The browser page changed while the tool was waiting. Inspect the page again."
+      )
     }
     if (this.developerInspector.active && !this.developerInspector.ownsSession(sessionId)) {
       throw new Error("Another session is already capturing browser diagnostics.")
@@ -684,9 +819,11 @@ export class BrowserAgentService implements BrowserHost {
     }
     this.assertActiveTab(tabId, contents)
     const selector = JSON.stringify(target.selector)
+    await this.annotations.pauseForBrowserAction(contents)
+    this.assertActiveTab(tabId, contents)
     const role = JSON.stringify(target.role)
     const name = JSON.stringify(target.name)
-    const text = action.action === "type" ? JSON.stringify(action.text.slice(0, 4_000)) : ""
+    const text = action.action === "type" ? JSON.stringify(action.text.slice(0, 4_000)) : '""'
     const operation =
       action.action === "click"
         ? "const target = el; setTimeout(() => { if (!target.isConnected) return; try { target.click(); } catch { /* Navigation may destroy this execution context. */ } }, 0); return 'click queued';"
