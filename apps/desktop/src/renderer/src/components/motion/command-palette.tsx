@@ -152,7 +152,7 @@ export function CommandPalette({
         initialFocus={inputRef}
         onKeyDown={keyDown}
         className={cn(
-          "top-[16vh] max-h-[54dvh] translate-y-0 gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[42rem]",
+          "top-[16vh] flex h-[54dvh] translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[38rem]",
           className
         )}
       >
@@ -193,7 +193,7 @@ export function CommandPalette({
           id={uid + "-list"}
           role="listbox"
           aria-label="搜索结果"
-          className="max-h-[40dvh] overflow-y-auto overscroll-contain px-2 pb-3"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3"
         >
           {rows.length === 0 ? (
             <p role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">
