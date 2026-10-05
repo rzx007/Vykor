@@ -428,6 +428,112 @@ describe("SessionRunCoordinator", () => {
     await expect(queued.promise).rejects.toThrow("Daemon shutting down");
   });
 
+  it("does not restart a promoted queued run after interrupt aborts steer delivery", async () => {
+    const coordinator = new SessionRunCoordinator();
+    const steerStarted = deferred();
+    const steerRelease = deferred();
+    let promotedWorkStarted = false;
+    const handle: AgentRunHandle = {
+      id: "active",
+      inputId: "active-input",
+      sessionId: "s1",
+      traceId: "trace-active",
+      started: Promise.resolve({
+        sessionId: "s1",
+        inputId: "active-input",
+        runId: "active",
+      }),
+      result: Promise.resolve({
+        status: "completed",
+        output: "",
+        history: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+      }),
+      steer: async (input) => {
+        steerStarted.resolve();
+        await steerRelease.promise;
+        return { sessionId: "s1", inputId: input.id!, runId: "active" };
+      },
+      interrupt: async () => {},
+    };
+    const active = coordinator.enqueue({
+      sessionId: "s1",
+      runId: "active",
+      work: async (context) => {
+        await context.registerHandle(handle);
+        await new Promise<void>((_resolve, reject) => {
+          context.signal.addEventListener(
+            "abort",
+            () => {
+              reject(
+                new RunInterruptedError(
+                  typeof context.signal.reason === "string"
+                    ? context.signal.reason
+                    : "Run interrupted",
+                ),
+              );
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+    const promotedQueued = coordinator.enqueue({
+      sessionId: "s1",
+      runId: "promoted",
+      work: async () => {
+        promotedWorkStarted = true;
+      },
+    });
+    const siblingQueued = coordinator.enqueue({
+      sessionId: "s1",
+      runId: "sibling",
+      work: async () => {
+        throw new Error("sibling should stay cancelled");
+      },
+    });
+    const activeRejected = expect(active.promise).rejects.toBeInstanceOf(
+      RunInterruptedError,
+    );
+    const promotedRejected = expect(
+      promotedQueued.promise,
+    ).rejects.toBeInstanceOf(RunInterruptedError);
+    const siblingRejected = expect(
+      siblingQueued.promise,
+    ).rejects.toBeInstanceOf(RunInterruptedError);
+
+    const promoted = coordinator.promoteQueuedRun(
+      "s1",
+      "promoted",
+      "active",
+      {
+        id: "promoted-input",
+        content: "take over",
+        delivery: "steer",
+      },
+    );
+    if (!promoted.promoted) throw new Error("Expected promotion handle");
+    const deliveryRejected = expect(promoted.delivery).rejects.toBeInstanceOf(
+      RunInterruptedError,
+    );
+    await steerStarted.promise;
+
+    const result = coordinator.interrupt("s1", "User stopped");
+    expect(result.activeRunId).toBe("active");
+    expect(result.queuedRunIds.sort()).toEqual(["promoted", "sibling"]);
+    expect(result.interrupted).toBe(true);
+
+    steerRelease.resolve();
+    await Promise.all([
+      activeRejected,
+      deliveryRejected,
+      promotedRejected,
+      siblingRejected,
+    ]);
+    expect(promotedWorkStarted).toBe(false);
+    expect(coordinator.hasWork("s1")).toBe(false);
+  });
+
   it("never interrupts an active run through the queued-only operation", async () => {
     const coordinator = new SessionRunCoordinator();
     const release = deferred();
