@@ -14,11 +14,12 @@ import {
   removeDraftAttachment,
   resetComposerScope,
   selectDraftAttachments,
+  selectDraftDocument,
   setDraftDocument,
   setDraftText,
 } from "./composer-draft-state"
 import type { AttachmentActions, DesktopStoreContext } from "./types"
-import type { ComposerDocument } from "./composer-document"
+import { composerDocument, type ComposerDocument } from "./composer-document"
 
 export function createAttachmentActions(context: DesktopStoreContext): AttachmentActions {
   const { get, set } = context
@@ -53,6 +54,41 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
   }
 
   return {
+    async addImageFeedback(scope, input) {
+      const support = get().attachmentSupport
+      if (!support?.interactionEnabled) throw new Error("当前聊天暂不支持图片附件")
+      if (!input.text.trim()) throw new Error("请先填写批注意见")
+      const hasOriginal =
+        input.originalAssetId &&
+        selectDraftAttachments(get(), scope).some((a) => a.assetId === input.originalAssetId)
+      const uploads = hasOriginal ? [input.marked] : [input.original, input.marked]
+      const existing = selectDraftAttachments(get(), scope)
+      if (
+        support.limits &&
+        (existing.length + uploads.length > support.limits.maxFilesPerPrompt ||
+          uploads.some((file) => file.bytes.byteLength > support.limits!.maxBytesPerFile) ||
+          existing.reduce((sum, a) => sum + a.sizeBytes, 0) +
+            uploads.reduce((sum, file) => sum + file.bytes.byteLength, 0) >
+            support.limits.maxBytesPerPrompt)
+      ) {
+        throw new Error("图片批注超过当前聊天的附件数量或大小限制")
+      }
+      set((state) =>
+        setDraftDocument(
+          state,
+          scope,
+          composerDocument([
+            ...selectDraftDocument(state, scope).items,
+            {
+              type: "text",
+              text: (selectDraftDocument(state, scope).items.length ? "\n\n" : "") + input.text,
+            },
+          ])
+        )
+      )
+      // 在首次 await 前添加全部候选，已有的草稿迁移和上传事件路由负责后续结果。
+      await Promise.all(uploads.map((file) => get().addClipboardAttachment(scope, file)))
+    },
     setComposerDraftText(scope, text) {
       set((state) => setDraftText(state, scope, text))
     },

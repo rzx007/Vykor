@@ -15,8 +15,12 @@ import type {
   DesktopAttachmentSessionPart,
   DesktopTransformationSessionPart,
 } from "@shared/session-types"
-import { AttachmentImagePreview, attachmentImageActionClassName } from "../composer/attachment-image-preview"
+import {
+  AttachmentImagePreview,
+  attachmentImageActionClassName,
+} from "../composer/attachment-image-preview"
 import { attachmentRoutingMessage } from "./attachment-routing-message"
+import { useImageViewer } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
 
 const safePreviewMediaTypes = new Set([
   "image/png",
@@ -37,6 +41,7 @@ export function MessageAttachment({
   alignMixedAttachmentHeights?: boolean
   fill?: boolean
 }): React.JSX.Element {
+  const viewer = useImageViewer()
   const previewUrl = useMessageAttachmentPreview(part)
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null)
   const visiblePreviewUrl = previewUrl && previewUrl !== failedPreviewUrl ? previewUrl : null
@@ -48,6 +53,11 @@ export function MessageAttachment({
         displayName={part.displayName}
         alignMixedAttachmentHeights={alignMixedAttachmentHeights}
         fill={fill}
+        onOpen={
+          viewer
+            ? () => viewer.openImage({ assetId: part.assetId, name: part.displayName, readOnly })
+            : undefined
+        }
         actionsClassName="pointer-events-none opacity-0 transition-opacity duration-150 group-hover/attachment:pointer-events-auto group-hover/attachment:opacity-100 group-focus-within/attachment:pointer-events-auto group-focus-within/attachment:opacity-100"
         onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
         actions={

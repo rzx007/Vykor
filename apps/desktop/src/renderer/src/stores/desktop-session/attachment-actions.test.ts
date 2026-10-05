@@ -33,6 +33,69 @@ describe("desktop attachment actions", () => {
     })
   })
 
+  it("adds numbered image feedback to its captured composer without losing references or sending", async () => {
+    const scope = "session:a"
+    const reference = {
+      type: "mention" as const,
+      displayName: "screen.tsx",
+      name: "screen.tsx",
+      path: "screen.tsx",
+    }
+    useDesktopSessionStore.setState({
+      activeSessionId: "b",
+      composerDraftsByScope: {
+        [scope]: {
+          document: { version: 1, items: [reference, { type: "text", text: "已有意见" }] },
+          attachments: [],
+        },
+      },
+    })
+    vi.stubGlobal("window", {
+      desktop: { attachments: { uploadClipboardImage: vi.fn(async () => {}) } },
+    })
+    await useDesktopSessionStore.getState().addImageFeedback(scope, {
+      original: {
+        bytes: new Uint8Array([1]).buffer,
+        mediaType: "image/png",
+        displayName: "screen.png",
+      },
+      marked: {
+        bytes: new Uint8Array([2]).buffer,
+        mediaType: "image/png",
+        displayName: "screen-批注.png",
+      },
+      text: "1. 增加间距",
+    })
+    const state = useDesktopSessionStore.getState()
+    expect(state.composerDraftsByScope[scope]!.document.items[0]).toEqual(reference)
+    expect(state.composerDraftsByScope[scope]!.document.items[1]).toEqual({
+      type: "text",
+      text: "已有意见\n\n1. 增加间距",
+    })
+    expect(state.composerDraftsByScope[scope]!.attachments.map((a) => a.displayName)).toEqual([
+      "screen.png",
+      "screen-批注.png",
+    ])
+    expect(state.composerDraftsByScope["session:b"]).toBeUndefined()
+  })
+
+  it("does not change a draft when image feedback attachments are disabled", async () => {
+    useDesktopSessionStore.setState({
+      attachmentSupport: {
+        ...useDesktopSessionStore.getState().attachmentSupport!,
+        interactionEnabled: false,
+      },
+    })
+    await expect(
+      useDesktopSessionStore.getState().addImageFeedback("session:a", {
+        original: { bytes: new ArrayBuffer(1), mediaType: "image/png", displayName: "a.png" },
+        marked: { bytes: new ArrayBuffer(1), mediaType: "image/png", displayName: "b.png" },
+        text: "意见",
+      })
+    ).rejects.toThrow()
+    expect(useDesktopSessionStore.getState().composerDraftsByScope).toEqual({})
+  })
+
   it("adds picked candidates in order and sets the task id before starting each upload", async () => {
     const startUpload = vi.fn(async (input: { taskId: string }) => ({ taskId: input.taskId }))
     vi.stubGlobal("window", {

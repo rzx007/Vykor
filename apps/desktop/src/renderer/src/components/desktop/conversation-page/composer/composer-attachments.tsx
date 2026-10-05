@@ -17,6 +17,7 @@ import {
   type DesktopAttachmentDraft,
 } from "@shared/attachment-types"
 import { AttachmentImagePreview, attachmentImageActionClassName } from "./attachment-image-preview"
+import { useImageViewer } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
 
 export function ComposerAttachments({
   attachments,
@@ -69,6 +70,7 @@ function ComposerAttachmentCard({
   onRemove: (draftId: string) => void
   alignMixedAttachmentHeights: boolean
 }): React.JSX.Element {
+  const viewer = useImageViewer()
   const previewUrl = useAttachmentPreviewUrl(attachment)
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null)
   const visiblePreviewUrl = previewUrl && previewUrl !== failedPreviewUrl ? previewUrl : null
@@ -94,6 +96,17 @@ function ComposerAttachmentCard({
         src={visiblePreviewUrl}
         displayName={attachment.displayName}
         alignMixedAttachmentHeights={alignMixedAttachmentHeights}
+        onOpen={
+          viewer && attachment.assetId
+            ? () =>
+                viewer.openImage({
+                  assetId: attachment.assetId!,
+                  name: attachment.displayName,
+                  draftId: attachment.draftId,
+                  readOnly,
+                })
+            : undefined
+        }
         onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
         actions={
           !readOnly ? (

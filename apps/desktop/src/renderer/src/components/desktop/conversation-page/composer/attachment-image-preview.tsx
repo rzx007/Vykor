@@ -14,6 +14,7 @@ export function AttachmentImagePreview({
   actions,
   actionsClassName,
   onError,
+  onOpen,
 }: {
   src: string
   displayName: string
@@ -22,6 +23,7 @@ export function AttachmentImagePreview({
   actions?: ReactNode
   actionsClassName?: string
   onError: () => void
+  onOpen?: () => void
 }): React.JSX.Element {
   return (
     <Attachment
@@ -32,11 +34,22 @@ export function AttachmentImagePreview({
         fill
           ? "size-full min-w-0 flex-nowrap overflow-hidden border-border/50 bg-muted p-0"
           : alignMixedAttachmentHeights
-          ? "h-20 w-20 min-w-0 flex-nowrap overflow-hidden border-border/50 bg-muted p-0"
-          : "size-24 min-w-0 flex-nowrap overflow-hidden border-border/50 bg-muted p-0"
+            ? "h-20 w-20 min-w-0 flex-nowrap overflow-hidden border-border/50 bg-muted p-0"
+            : "size-24 min-w-0 flex-nowrap overflow-hidden border-border/50 bg-muted p-0"
       }
     >
-      <img src={src} alt={displayName} className="size-full object-cover" onError={onError} />
+      {onOpen ? (
+        <button
+          type="button"
+          aria-label={`查看图片 ${displayName}`}
+          className="size-full rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          onClick={onOpen}
+        >
+          <img src={src} alt={displayName} className="size-full object-cover" onError={onError} />
+        </button>
+      ) : (
+        <img src={src} alt={displayName} className="size-full object-cover" onError={onError} />
+      )}
       {actions ? (
         <AttachmentActions className={cn("absolute top-1.5 right-1.5 gap-1", actionsClassName)}>
           {actions}

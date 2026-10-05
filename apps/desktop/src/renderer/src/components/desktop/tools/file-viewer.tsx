@@ -102,6 +102,7 @@ export function FileViewer({
               bytes={activeTab.preview.previewBytes}
               mediaType={activeTab.preview.mediaType}
               name={activeTab.preview.name}
+              path={activeTab.preview.path}
             />
           ) : (
             <DocumentPlaceholder preview={activeTab.preview} />

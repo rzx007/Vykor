@@ -10,3 +10,12 @@ Vykor includes the following components for local attachment OCR. The packaged a
 | `sharp` | 0.34.4 | Apache-2.0 | Image validation and normalization |
 
 Platform-specific `@arcships/light-ocr-*` native packages use the license and NOTICE files distributed with those packages. Sharp's prebuilt `@img/*` dependencies include libvips and their own bundled notices. This summary does not replace the complete license texts included in the installed packages or release artifact.
+
+## Image viewing and annotations
+
+| Component | Version | License | Purpose |
+| --- | ---: | --- | --- |
+| `@annotorious/annotorious`, `@annotorious/core` | 3.9.3 | BSD-3-Clause | Image region annotations and history |
+| `react-zoom-pan-pinch` | 4.0.4 | MIT | Image zoom and pan |
+
+The complete notices for these bundled frontend libraries are distributed in `apps/desktop/resources/licenses/image-annotations.txt`, included by the desktop application's existing `resources/**` packaging rule.

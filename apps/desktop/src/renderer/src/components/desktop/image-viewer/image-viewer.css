@@ -1,0 +1,26 @@
+.image-annotation-viewer .a9s-annotationlayer .a9s-inner,
+.image-annotation-viewer [data-theme] .a9s-annotationlayer .a9s-inner {
+  stroke: var(--annotation);
+  stroke-width: 2px;
+  fill: color-mix(in srgb, var(--annotation) 8%, transparent);
+}
+.image-annotation-viewer .a9s-annotationlayer .a9s-outer,
+.image-annotation-viewer [data-theme] .a9s-annotationlayer .a9s-outer {
+  display: none;
+}
+.image-annotation-viewer .a9s-annotationlayer .a9s-handle,
+.image-annotation-viewer [data-theme] .a9s-annotationlayer .a9s-handle {
+  fill: var(--popover);
+  stroke: var(--annotation);
+}
+.image-annotation-viewer [data-image-mode="annotate"] .a9s-annotationlayer {
+  cursor: crosshair;
+}
+:root[data-reduced-motion="true"] .image-annotation-viewer .a9s-handle-selected {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .image-annotation-viewer .a9s-handle-selected {
+    animation: none;
+  }
+}

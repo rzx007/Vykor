@@ -41,6 +41,7 @@
     "sharp": "0.34.4"
   },
   "devDependencies": {
+    "@annotorious/annotorious": "3.9.3",
     "@base-ui/react": "^1.7.0",
     "@blobatar/react": "^2.5.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -97,6 +98,7 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-resizable-panels": "4.12.2",
+    "react-zoom-pan-pinch": "4.0.4",
     "shadcn": "^4.18.0",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",

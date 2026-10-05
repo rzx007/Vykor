@@ -129,13 +129,21 @@ export interface SessionActions {
   startNewConversation: () => Promise<void>
   selectModel: (model: DesktopModel) => Promise<void>
   selectPermissionMode: (mode: DesktopPermissionMode) => Promise<void>
-  updateSessionModel: (sessionId: string, model: DesktopModel, isCurrent?: () => boolean) => Promise<void>
+  updateSessionModel: (
+    sessionId: string,
+    model: DesktopModel,
+    isCurrent?: () => boolean
+  ) => Promise<void>
   updateSessionPermissionMode: (
     sessionId: string,
     permissionMode: DesktopPermissionMode,
     isCurrent?: () => boolean
   ) => Promise<void>
-  updateSessionEffort: (sessionId: string, effort: string, isCurrent?: () => boolean) => Promise<void>
+  updateSessionEffort: (
+    sessionId: string,
+    effort: string,
+    isCurrent?: () => boolean
+  ) => Promise<void>
   selectEffort: (effort: string) => void
   openSession: (sessionId: string) => Promise<void>
   resyncActiveSessionSnapshot: () => Promise<void>
@@ -211,6 +219,15 @@ export interface QueuedPromptActions {
 }
 
 export interface AttachmentActions {
+  addImageFeedback: (
+    scope: string,
+    input: {
+      original: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">
+      marked: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">
+      text: string
+      originalAssetId?: string
+    }
+  ) => Promise<void>
   setComposerDraftText: (scope: string, text: string) => void
   setComposerDraftDocument: (scope: string, document: ComposerDocument) => void
   pickAttachmentFiles: (scope: string) => Promise<void>
