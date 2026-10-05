@@ -1,6 +1,6 @@
 import { useId, useState } from "react"
 import type { FeishuChannelSnapshot } from "@vykor/client"
-import { Info, MessageCircle, Plus, ShieldCheck, UserRound, Users } from "lucide-react"
+import { Info, MessageCircle, Plus, ShieldCheck, Trash2, UserRound, Users } from "lucide-react"
 import { BouncyAccordion } from "@renderer/components/motion/bouncy-accordion"
 import { Button } from "@renderer/components/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@renderer/components/ui/field"
@@ -41,13 +41,15 @@ export function FeishuConnectionDetails({
   }
   return (
     <BouncyAccordion
-      defaultValue="access"
+      defaultValue={null}
       classNames={{
-        item: "rounded-none! bg-transparent!",
-        trigger: "px-0 min-h-14 focus-visible:ring-2 focus-visible:ring-ring",
+        item: "rounded-none! border-b border-border/70 bg-transparent! last:border-b-0",
+        trigger:
+          "min-h-14 gap-3 px-0 transition-colors hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring",
         title: "text-sm",
         description: "text-xs",
-        content: "[&>div]:px-0 [&>div]:sm:pl-11",
+        icon: "size-8",
+        content: "[&>div]:px-0 [&>div]:pb-5 [&>div]:sm:pl-11",
       }}
       items={[
         {
@@ -76,18 +78,23 @@ export function FeishuConnectionDetails({
                         )}
                       </span>
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
-                        <span className="text-foreground">{entry.name}</span>
-                        <code className="break-all text-muted-foreground">{entry.id}</code>
+                        <span className="break-all text-foreground">
+                          {entry.name === entry.id ? entry.id : entry.name}
+                        </span>
+                        {entry.name !== entry.id ? (
+                          <code className="break-all text-muted-foreground">{entry.id}</code>
+                        ) : null}
                       </div>
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        shape="pill"
+                        variant="destructive"
+                        size="icon-sm"
+                        shape="circle"
                         aria-label={"移除访问权限 " + entry.name}
+                        title="移除访问权限"
                         disabled={busy}
                         onClick={() => onAllowRemove(entry.name)}
                       >
-                        移除
+                        <Trash2 />
                       </Button>
                     </li>
                   ))}

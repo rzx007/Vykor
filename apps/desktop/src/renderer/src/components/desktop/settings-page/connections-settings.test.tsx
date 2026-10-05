@@ -127,8 +127,19 @@ describe("ConnectionsSettings", () => {
 
     expect(container.textContent).toContain("已连接")
     expect(container.textContent).toContain("Harness Bot")
+    const logo = container.querySelector<HTMLImageElement>('img[data-channel-logo="feishu"]')
+    expect(logo).toBeTruthy()
+    expect(logo?.getAttribute("src")).toMatch(/^data:image\/svg\+xml/)
     await clickButton("管理")
+    expect(
+      container.querySelector('[aria-expanded="true"][aria-controls="feishu-connection-details"]')
+    ).toBeTruthy()
+    const connectionInfo = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.includes("连接信息")
+    )
+    expect(connectionInfo?.getAttribute("aria-expanded")).toBe("false")
     await clickButton("连接信息")
+    expect(connectionInfo?.getAttribute("aria-expanded")).toBe("true")
     expect(container.textContent).toContain("cli_x")
     await clickButton("访问权限 · 1 个用户或群聊")
 
@@ -152,6 +163,24 @@ describe("ConnectionsSettings", () => {
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     })
     expect(connections.allowAdd).toHaveBeenCalledWith({ id: "ou_new" })
+  })
+
+  it("does not repeat an allowlist ID when it is also used as the display name", async () => {
+    installDesktop({
+      snapshot: vi.fn(async () => ({
+        feishu: {
+          ...feishuSnapshot,
+          allowFrom: [{ name: "ou_same", id: "ou_same" }],
+        },
+        runtime: runningRuntime,
+      })),
+    })
+    await act(async () => root.render(<ConnectionsSettings />))
+    await clickButton("管理")
+    await clickButton("访问权限 · 1 个用户或群聊")
+
+    const details = container.querySelector("#feishu-connection-details")!
+    expect(details.textContent?.match(/ou_same/g)).toHaveLength(1)
   })
 
   it("surfaces denied senders with an add-to-allowlist action", async () => {

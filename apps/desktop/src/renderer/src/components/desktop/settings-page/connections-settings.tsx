@@ -4,6 +4,7 @@ import {
   CircleCheck,
   CircleHelp,
   CircleX,
+  ChevronDown,
   Clock3,
   Info,
   MoreHorizontal,
@@ -188,13 +189,13 @@ export function ConnectionsSettings(): React.JSX.Element {
           ) : null}
         </Alert>
       ) : null}
-      <section aria-labelledby="connection-channels-heading">
-        <div className="flex items-center justify-between gap-3">
+      <section aria-labelledby="connection-channels-heading" className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3 py-1">
           <h2 id="connection-channels-heading" className="text-sm font-semibold">
             聊天渠道
           </h2>
           <span className="text-xs text-muted-foreground">
-            {configured ? "1 个已添加" : "选择一个渠道开始"}
+            {configured ? "已添加 1 个" : "选择一个渠道开始"}
           </span>
         </div>
         <ConnectionChannelRow
@@ -233,6 +234,7 @@ export function ConnectionsSettings(): React.JSX.Element {
               <>
                 <Switch
                   aria-label="启用飞书渠道"
+                  title={enabled ? "停用飞书渠道" : "启用飞书渠道"}
                   checked={enabled}
                   disabled={busy !== null}
                   onCheckedChange={(value) => patch({ enabled: value })}
@@ -246,6 +248,11 @@ export function ConnectionsSettings(): React.JSX.Element {
                   onClick={() => setDetailsOpen((value) => !value)}
                 >
                   {detailsOpen ? "收起" : "管理"}
+                  <ChevronDown
+                    data-icon="inline-end"
+                    aria-hidden="true"
+                    className={cn("transition-transform", detailsOpen && "rotate-180")}
+                  />
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -332,7 +339,7 @@ export function ConnectionsSettings(): React.JSX.Element {
             </Alert>
           ) : null}
           {configured && detailsOpen && feishu ? (
-            <div id="feishu-connection-details" className="pt-2 sm:pl-14">
+            <div id="feishu-connection-details" className="pt-1 pb-1 sm:pl-14">
               <FeishuConnectionDetails
                 feishu={feishu}
                 busy={busy !== null}
@@ -344,7 +351,7 @@ export function ConnectionsSettings(): React.JSX.Element {
           ) : null}
         </ConnectionChannelRow>
         {!configured ? (
-          <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="flex items-start gap-2 py-3 text-xs leading-relaxed text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
             连接后可管理谁能使用机器人，以及消息展示方式。
           </p>
@@ -381,7 +388,7 @@ export function ConnectionsSettings(): React.JSX.Element {
           </ul>
         </section>
       ) : null}
-      <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
         <CircleHelp className="size-3.5" />
         连接问题？
         <Button
