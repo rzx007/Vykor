@@ -26,6 +26,8 @@ import type {
   DesktopProjectDetails,
   DesktopSessionRecord,
   DesktopSessionLists,
+  DesktopSessionSearchResult,
+  SearchSessionsOptions,
   DesktopSessionView,
   EditLatestDesktopPromptInput,
   ForkDesktopSessionInput,
@@ -102,6 +104,14 @@ export class DesktopSessionService {
           .map(toDesktopSessionRecord)
       ),
     }
+  }
+
+  async searchSessions(input: SearchSessionsOptions): Promise<DesktopSessionSearchResult[]> {
+    const query = requireString(input?.query, "query")
+    if (query.length > 256) throw new Error("搜索关键词不能超过 256 个字符")
+    const client = await this.getClient()
+    const results = await client.sessions.search({ query, limit: 30 })
+    return results.map((result) => ({ ...result, session: toDesktopSessionRecord(result.session) }))
   }
 
   async bootstrap(): Promise<DesktopBootstrapData> {

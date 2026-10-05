@@ -29,6 +29,7 @@ import { searchCommands } from "@renderer/lib/command-search"
 export type CommandItem = {
   id: string
   label: string
+  description?: string
   group?: string
   hint?: string
   keywords?: string[]
@@ -50,6 +51,9 @@ export interface CommandPaletteProps {
   initialGroupLimits?: Readonly<Record<string, number>>
   renderHint?: (item: CommandItem, index: number) => string | undefined
   onKeyDown?: (event: KeyboardEvent, rows: CommandItem[]) => void
+  onQueryChange?: (query: string) => void
+  searchResults?: { query: string; items: CommandItem[] }
+  searchStatus?: string
 }
 
 export function CommandPalette({
@@ -65,6 +69,9 @@ export function CommandPalette({
   initialGroupLimits,
   renderHint,
   onKeyDown: consumerKeyDown,
+  onQueryChange,
+  searchResults,
+  searchStatus,
 }: CommandPaletteProps): React.JSX.Element {
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen ?? internalOpen
@@ -95,7 +102,17 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, shortcut, setOpen])
 
-  const filtered = useMemo(() => searchCommands(items, query), [items, query])
+  useEffect(() => {
+    onQueryChange?.(query)
+  }, [query, onQueryChange])
+
+  const filtered = useMemo(
+    () => [
+      ...searchCommands(items, query),
+      ...(query.trim() && searchResults?.query === query ? searchResults.items : []),
+    ],
+    [items, query, searchResults]
+  )
   const hasIcons = useMemo(() => items.some((item) => item.icon), [items])
   const grouped = useMemo(() => {
     const map = new Map<string, CommandItem[]>()
@@ -195,10 +212,17 @@ export function CommandPalette({
           aria-label="搜索结果"
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3"
         >
-          {rows.length === 0 ? (
-            <p role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">
-              {emptyMessage}
+          {searchStatus ? (
+            <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+              {searchStatus}
             </p>
+          ) : null}
+          {rows.length === 0 ? (
+            searchStatus ? null : (
+              <p role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </p>
+            )
           ) : (
             grouped.map(([group, list]) => (
               <div key={group} role="group" aria-label={group}>
@@ -247,7 +271,14 @@ export function CommandPalette({
                       ) : hasIcons ? (
                         <span aria-hidden="true" className="relative size-4 shrink-0" />
                       ) : null}
-                      <span className="relative min-w-0 flex-1 truncate">{item.label}</span>
+                      <span className="relative min-w-0 flex-1">
+                        <span className="block truncate">{item.label}</span>
+                        {item.description ? (
+                          <span className="mt-1 line-clamp-2 block text-xs font-normal text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
                       {item.badge ? (
                         <span className="relative hidden max-w-40 min-w-0 truncate text-xs text-muted-foreground sm:block">
                           {item.badge}

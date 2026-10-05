@@ -59,6 +59,17 @@ export interface SessionRecord {
   archivedAt?: number;
 }
 
+export interface SearchSessionsOptions {
+  query: string;
+  limit?: number;
+}
+
+export interface SessionSearchResult {
+  session: SessionRecord;
+  messageId: string;
+  snippet: string;
+}
+
 export function getSessionStorage(session: Pick<SessionRecord, "storage"> | undefined): SessionStorage {
   return session?.storage ?? "sqlite";
 }

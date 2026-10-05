@@ -3,7 +3,11 @@ import { act, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import type { DesktopSessionRecord } from "@shared/session-types"
+import type {
+  DesktopSessionRecord,
+  DesktopSessionSearchResult,
+  SearchSessionsOptions,
+} from "@shared/session-types"
 import { useDesktopShortcuts } from "./use-desktop-shortcuts"
 import { setShortcutBinding } from "./desktop-shortcuts"
 import { DesktopSearchDialog } from "./desktop-search-dialog"
@@ -14,6 +18,8 @@ const onOpenConversation = vi.fn(),
   onChooseProject = vi.fn(),
   onSearchFiles = vi.fn(),
   onOpenSettings = vi.fn()
+const searchSessions =
+  vi.fn<(input: SearchSessionsOptions) => Promise<DesktopSessionSearchResult[]>>()
 const session = (
   id: string,
   title: string,
@@ -70,6 +76,11 @@ async function render(open = true) {
   await act(async () => root.render(<Harness initiallyOpen={open} />))
 }
 beforeEach(() => {
+  Object.defineProperty(window, "desktop", {
+    configurable: true,
+    value: { sessions: { search: searchSessions } },
+  })
+  searchSessions.mockReset().mockResolvedValue([])
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   vi.stubGlobal(
     "ResizeObserver",
@@ -116,6 +127,100 @@ afterEach(() => {
 })
 
 describe("desktop chat search", () => {
+  it("shows content snippets even when the title does not match and opens the chat", async () => {
+    searchSessions.mockResolvedValueOnce([
+      {
+        session: session("older", "网络调试", 1, { status: "archived" }),
+        messageId: "message-1",
+        snippet: "这里遇到了 ECONNRESET 连接错误",
+      },
+    ])
+    await render()
+    await type("ECONNRESET")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    expect(options()).toHaveLength(1)
+    expect(options()[0].textContent).toContain("网络调试")
+    expect(options()[0].textContent).toContain("ECONNRESET 连接错误")
+    await key("Enter")
+    expect(onOpenConversation).toHaveBeenCalledWith("older")
+  })
+  it("ignores an older response after the query changes", async () => {
+    let resolveOld!: (results: DesktopSessionSearchResult[]) => void
+    searchSessions.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve
+        })
+    )
+    searchSessions.mockResolvedValueOnce([
+      {
+        session: session("latest", "新结果", 2),
+        messageId: "new-message",
+        snippet: "最新关键词",
+      },
+    ])
+    await render()
+    await type("旧关键词")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    await type("最新关键词")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    await act(async () =>
+      resolveOld([
+        {
+          session: session("old-response", "旧结果", 1),
+          messageId: "old-message",
+          snippet: "旧关键词",
+        },
+      ])
+    )
+    expect(options()).toHaveLength(1)
+    expect(options()[0].textContent).toContain("新结果")
+    expect(options()[0].textContent).not.toContain("旧结果")
+  })
+  it("keeps title search available when content search fails and can retry", async () => {
+    searchSessions.mockRejectedValueOnce(new Error("daemon unavailable"))
+    await render()
+    await type("优化")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    expect(options()[0].textContent).toContain("优化搜索界面")
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("搜索失败")
+    await type("找不到")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("没有找到")
+  })
+  it("starts a fresh content search after reopening", async () => {
+    searchSessions.mockResolvedValueOnce([
+      {
+        session: session("previous", "上次的结果", 1),
+        messageId: "m",
+        snippet: "同一个关键词",
+      },
+    ])
+    await render()
+    await type("同一个关键词")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    await key("Escape")
+    await act(async () => host.querySelector<HTMLButtonElement>("button")!.click())
+    await type("同一个关键词")
+    expect(options()).toHaveLength(0)
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("正在搜索")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
+    expect(options()).toHaveLength(0)
+  })
   it("shows recent chats with their projects and only implemented settings", async () => {
     await render()
     expect(options()[0].textContent).toContain("调研 DeepSeek Harness")
@@ -233,6 +338,10 @@ describe("desktop chat search", () => {
     await render()
     await type("zzzz不存在的聊天")
     expect(options()).toHaveLength(0)
+    expect(document.body.textContent).toContain("正在搜索")
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
+    })
     expect(document.body.textContent).toContain("没有找到")
     await key("Escape")
     await act(async () => host.querySelector("button")!.click())

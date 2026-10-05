@@ -7,6 +7,8 @@ import type {
   GoalActionInput,
   SessionGoal,
   UpdateSessionGoalInput,
+  SearchSessionsOptions,
+  SessionSearchResult,
 } from "@vykor/protocol";
 import { decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
@@ -51,6 +53,17 @@ export function createPromptRequestId(): string {
 
 export class SessionResource {
   constructor(private readonly transport: HttpTransport) {}
+
+  /** `GET /sessions/search` - search saved conversation text without opening it. */
+  async search(
+    options: SearchSessionsOptions & { signal?: AbortSignal },
+  ): Promise<SessionSearchResult[]> {
+    const { signal, ...query } = options;
+    const response = await this.transport.request<{
+      results: SessionSearchResult[];
+    }>(this.transport.path("/sessions/search", query), { signal });
+    return response.results;
+  }
 
   /** `GET /sessions` */
   async list(

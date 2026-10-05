@@ -23,6 +23,7 @@ import type {
   UpdateDesktopSessionPermissionModeInput,
   UpdateDesktopSessionEffortInput,
   GetDesktopContextUsageInput,
+  SearchSessionsOptions,
 } from "../../../shared/session-types"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "./session-service"
@@ -42,6 +43,11 @@ export const sessionIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.sessionList,
         handler: () => desktopSessionService.listSessions(),
+      },
+      {
+        channel: IpcChannels.sessionSearch,
+        handler: (_event, input) =>
+          desktopSessionService.searchSessions(input as SearchSessionsOptions),
       },
       {
         channel: IpcChannels.sessionDaemonStatus,

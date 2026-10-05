@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { FolderOpen, Search, SquarePen } from "lucide-react"
 import { CommandPalette, type CommandItem } from "@renderer/components/motion/command-palette"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -9,6 +9,8 @@ import {
   selectSessions,
 } from "@renderer/stores/desktop-session/selectors"
 import { channelConnectorLabel } from "@shared/channel-types"
+import type { DesktopSessionSearchResult } from "@shared/session-types"
+import { useOnOpen } from "@renderer/lib/hooks/use-on-open"
 import {
   codingSettingsNavigation,
   integrationSettingsNavigation,
@@ -16,7 +18,7 @@ import {
 } from "./settings-page/settings-navigation"
 import { getShortcutRevision, shortcutLabel, subscribeShortcutChanges } from "./desktop-shortcuts"
 
-const GROUP_ORDER = ["聊天", "已归档聊天", "快捷操作", "设置"]
+const GROUP_ORDER = ["聊天", "已归档聊天", "聊天内容", "快捷操作", "设置"]
 const INITIAL_LIMITS = { 聊天: 9, 已归档聊天: 0 }
 const AVAILABLE_SETTINGS = new Set([
   "general",
@@ -50,6 +52,56 @@ export function DesktopSearchDialog({
   const sessions = useDesktopSessionStore(selectSessions)
   const archivedSessions = useDesktopSessionStore(selectArchivedSessions)
   const projects = useDesktopSessionStore(selectProjects)
+  const [query, setQuery] = useState("")
+  const [contentSearch, setContentSearch] = useState<{
+    query: string
+    results: DesktopSessionSearchResult[]
+    error?: string
+  }>({ query: "", results: [] })
+  useOnOpen(open, () => {
+    setQuery("")
+    setContentSearch({ query: "", results: [] })
+  })
+  useEffect(() => {
+    if (!open || !query.trim() || query.length > 256) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      window.desktop.sessions.search({ query, limit: 30 }).then(
+        (results) => {
+          if (!cancelled) setContentSearch({ query, results })
+        },
+        () => {
+          if (!cancelled)
+            setContentSearch({ query, results: [], error: "聊天内容搜索失败，请修改关键词重试。" })
+        }
+      )
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [open, query])
+  const searchResults = useMemo(
+    () => ({
+      query: contentSearch.query,
+      items: contentSearch.results.map((result) => ({
+        id: "session:content:" + result.session.id,
+        label: result.session.title || "未命名对话",
+        description: result.snippet,
+        group: "聊天内容",
+        badge: result.session.status === "archived" ? "已归档" : undefined,
+        onSelect: () => onOpenConversation(result.session.id),
+      })),
+    }),
+    [contentSearch, onOpenConversation]
+  )
+  const searchStatus = !query.trim()
+    ? undefined
+    : query.length > 256
+      ? "搜索关键词不能超过 256 个字符。"
+      : contentSearch.query !== query
+        ? "正在搜索聊天内容…"
+        : contentSearch.error
   useSyncExternalStore(subscribeShortcutChanges, getShortcutRevision)
   const isMac = navigator.platform.toLowerCase().includes("mac")
   const newConversationHint = shortcutLabel("newConversation", isMac)
@@ -151,10 +203,13 @@ export function DesktopSearchDialog({
       open={open}
       onOpenChange={onOpenChange}
       items={items}
+      onQueryChange={setQuery}
+      searchResults={searchResults}
+      searchStatus={searchStatus}
       shortcut={null}
       label="搜索聊天"
       placeholder="搜索聊天"
-      emptyMessage="没有找到匹配的聊天或操作。试试聊天标题或项目名称。"
+      emptyMessage="没有找到匹配的聊天或操作。试试聊天标题、正文关键词或项目名称。"
       groupOrder={GROUP_ORDER}
       initialGroupLimits={INITIAL_LIMITS}
       renderHint={(item, index) =>

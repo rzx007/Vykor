@@ -556,6 +556,7 @@ describe("session routes", () => {
         listMessageParts: vi.fn(() => []),
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
+        searchSessions: vi.fn(() => []),
       },
       commands: {
         createSession,
@@ -600,6 +601,7 @@ describe("session routes", () => {
         listMessageParts: vi.fn(() => []),
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
+        searchSessions: vi.fn(() => []),
       },
       commands: {
         createSession: vi.fn(),
@@ -634,6 +636,7 @@ describe("session routes", () => {
         listMessageParts: vi.fn(() => []),
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
+        searchSessions: vi.fn(() => []),
       },
       commands: {
         createSession: vi.fn(),

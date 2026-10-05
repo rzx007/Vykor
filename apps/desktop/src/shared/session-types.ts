@@ -7,6 +7,7 @@ import type {
 } from "@vykor/client"
 
 export type { SessionUserInputItem, SessionGoal } from "@vykor/client"
+export type { SearchSessionsOptions } from "@vykor/client"
 export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/client"
 
 export interface GetDesktopSessionGoalInput {
@@ -69,6 +70,12 @@ export interface DesktopSessionRecord {
   createdAt: number
   updatedAt: number
   archivedAt?: number
+}
+
+export interface DesktopSessionSearchResult {
+  session: DesktopSessionRecord
+  messageId: string
+  snippet: string
 }
 
 export interface DesktopSessionInput {

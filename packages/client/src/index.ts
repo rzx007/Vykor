@@ -65,6 +65,8 @@ export type {
   ClientProtocolSupport,
   ProtocolCompatibility,
   ServerCapabilities,
+  SearchSessionsOptions,
+  SessionSearchResult,
 } from "@vykor/protocol";
 export {
   checkProtocolCompatibility,

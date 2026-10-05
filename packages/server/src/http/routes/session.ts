@@ -28,6 +28,7 @@ export interface SessionRoutesContext {
     | "listMessageParts"
     | "listMessages"
     | "listSessions"
+    | "searchSessions"
   >;
   commands: Pick<
     SessionCommandService,
@@ -51,6 +52,17 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
         limit: readLimit(c.req.query("limit")),
       });
       return jsonResponse({ sessions });
+    })
+    .get("/search", (c) => {
+      const query = c.req.query("query") ?? "";
+      if (query.length > 256)
+        return errorResponse(400, "query must be at most 256 characters");
+      return jsonResponse({
+        results: context.queries.searchSessions({
+          query,
+          limit: readLimit(c.req.query("limit")),
+        }),
+      });
     })
     .post("/", async (c) => {
       let input;

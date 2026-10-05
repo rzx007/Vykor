@@ -13,6 +13,8 @@ import type {
   DesktopCompactSessionResult,
   DesktopSessionRecord,
   DesktopSessionLists,
+  DesktopSessionSearchResult,
+  SearchSessionsOptions,
   DesktopSessionView,
   CloseDesktopAuxSessionInput,
   EditLatestDesktopPromptInput,
@@ -218,6 +220,7 @@ export const IpcChannels = {
   sessionBootstrap: "session:bootstrap",
   activityOpen: "activity:open",
   sessionList: "session:list",
+  sessionSearch: "session:search",
   sessionDaemonStatus: "session:daemon-status",
   sessionChooseProject: "session:choose-project",
   sessionInspectProject: "session:inspect-project",
@@ -625,6 +628,10 @@ export interface IpcInvokeMap {
 
   [IpcChannels.sessionBootstrap]: { args: []; result: DesktopBootstrapData }
   [IpcChannels.sessionList]: { args: []; result: DesktopSessionLists }
+  [IpcChannels.sessionSearch]: {
+    args: [SearchSessionsOptions]
+    result: DesktopSessionSearchResult[]
+  }
   [IpcChannels.sessionDaemonStatus]: { args: []; result: DesktopDaemonStatus }
   [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDetails | null }
   [IpcChannels.sessionInspectProject]: {

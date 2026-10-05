@@ -20,6 +20,7 @@ function sessionRoutes(createSession = vi.fn(), updateSession = vi.fn()) {
         listMessageParts: vi.fn(() => []),
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
+        searchSessions: vi.fn(() => []),
       },
       commands: {
         createSession,
