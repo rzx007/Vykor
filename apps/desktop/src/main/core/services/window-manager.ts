@@ -1,8 +1,8 @@
-import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
+import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron"
 
-import type { RuntimePaths } from '../app-context'
+import type { RuntimePaths } from "../app-context"
 
-export type WindowId = 'main' | 'pet'
+export type WindowId = "main" | "pet"
 
 export interface WindowDescriptor {
   id: WindowId
@@ -35,7 +35,7 @@ export class WindowManager {
   }
 
   getMain(): BrowserWindow | null {
-    return this.get('main')
+    return this.get("main")
   }
 
   createWindow(descriptor: WindowDescriptor): BrowserWindow {
@@ -49,30 +49,37 @@ export class WindowManager {
         contextIsolation: true,
         sandbox: false,
         backgroundThrottling: false,
-        ...descriptor.options.webPreferences
-      }
+        ...descriptor.options.webPreferences,
+      },
     })
 
-    win.on('closed', () => {
+    win.on("closed", () => {
       this.set(descriptor.id, null)
     })
 
     this.set(descriptor.id, win)
     descriptor.onCreated?.(win)
-    loadRendererRoute(win, descriptor.paths, descriptor.route)
+    void loadRendererRoute(win, descriptor.paths, descriptor.route)
     return win
   }
 }
 
-function loadRendererRoute(win: BrowserWindow, paths: RuntimePaths, route: string): void {
-  const hash = route.startsWith('/') ? route : `/${route}`
+async function loadRendererRoute(
+  win: BrowserWindow,
+  paths: RuntimePaths,
+  route: string
+): Promise<void> {
+  const hash = route.startsWith("/") ? route : `/${route}`
 
   if (paths.rendererUrl) {
     const url = new URL(paths.rendererUrl)
     url.hash = hash
-    void win.loadURL(url.toString())
+    // Vite 重建依赖后，旧 HTTP 缓存仍会引用失效分包（504），使 React 入口无法执行。
+    // 只清开发窗口的资源缓存；localStorage、登录信息和正式版缓存均保留。
+    await win.webContents.session.clearCache()
+    await win.loadURL(url.toString())
     return
   }
 
-  void win.loadFile(paths.indexHtml, { hash })
+  await win.loadFile(paths.indexHtml, { hash })
 }
