@@ -73,7 +73,7 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
                   : selectedSection === "外观"
                     ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
                     : selectedSection === "连接"
-                      ? "把飞书接入 Vykor：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
+                      ? "把 Vykor 接到你常用的聊天工具，在熟悉的地方继续对话。"
                       : selectedSection === "键盘快捷键"
                         ? "查找并修改常用操作的按键组合。按下 Esc 可取消录入。"
                         : selectedSection === "存储"

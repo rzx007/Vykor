@@ -1,8 +1,20 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { ChannelDenialNotice } from "@vykor/client"
-import { Badge } from "@renderer/components/ui/badge"
+import {
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  Clock3,
+  Info,
+  MoreHorizontal,
+  QrCode,
+  RefreshCw,
+  ShieldCheck,
+  X,
+} from "lucide-react"
+import { StatefulButton } from "@renderer/components/motion/button/stateful"
+import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Button } from "@renderer/components/ui/button"
-import { Card, CardContent } from "@renderer/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -10,22 +22,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
-import { Input } from "@renderer/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@renderer/components/ui/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@renderer/components/ui/dropdown-menu"
+import { Separator } from "@renderer/components/ui/separator"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Switch } from "@renderer/components/ui/switch"
+import { cn } from "@renderer/lib/utils"
 import type {
-  ChannelDomain,
   DesktopConnectionsSnapshot,
-  DesktopFeishuRegistrationSnapshot,
+  DesktopFeishuAllowInput,
+  DesktopFeishuPatchInput,
 } from "@shared/channel-types"
+import { ConnectionChannelRow, FeishuConnectionIcon } from "./connection-channel-row"
+import { FeishuConnectionDetails } from "./feishu-connection-details"
+import { FeishuConnectionDialog } from "./feishu-connection-dialog"
 import { errorMessage } from "./settings-error-message"
 
 const POLL_INTERVAL_MS = 3000
@@ -37,16 +52,8 @@ export function ConnectionsSettings(): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [denials, setDenials] = useState<ChannelDenialNotice[]>([])
-  const [registration, setRegistration] =
-    useState<DesktopFeishuRegistrationSnapshot | null>(null)
-  const [method, setMethod] = useState<"scan" | "manual" | null>(null)
-  const [manual, setManual] = useState<{
-    appId: string
-    appSecret: string
-    domain: ChannelDomain
-  }>({ appId: "", appSecret: "", domain: "feishu" })
-  const [allowId, setAllowId] = useState("")
-  const [allowName, setAllowName] = useState("")
+  const [connectOpen, setConnectOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
 
   useEffect(() => {
@@ -76,9 +83,8 @@ export function ConnectionsSettings(): React.JSX.Element {
         const delta = await window.desktop.connections.runtimeStatus()
         if (cancelled) return
         setSnapshot((current) => (current ? { ...current, runtime: delta.runtime } : current))
-        if (delta.newDenials.length > 0) {
+        if (delta.newDenials.length > 0)
           setDenials((current) => [...delta.newDenials, ...current].slice(0, 20))
-        }
         delay = POLL_INTERVAL_MS
       } catch {
         delay = Math.min(delay * 2, MAX_POLL_INTERVAL_MS)
@@ -93,438 +99,346 @@ export function ConnectionsSettings(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => {
-    if (!registration) return
-    const active = ["starting", "qr_ready", "polling", "slow_down", "domain_switched"]
-    if (!active.includes(registration.state)) return
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout>
-    const poll = async (): Promise<void> => {
-      try {
-        const value = await window.desktop.connections.registrationStatus()
-        if (!cancelled) setRegistration(value)
-      } catch (cause) {
-        if (!cancelled) setError(errorMessage(cause))
-      } finally {
-        if (!cancelled) timer = setTimeout(poll, 1000)
-      }
-    }
-    timer = setTimeout(poll, 1000)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [registration])
-
-  const refresh = async (): Promise<void> => {
-    const value = await window.desktop.connections.snapshot()
+  const connected = useCallback((value: DesktopConnectionsSnapshot): void => {
     setSnapshot(value)
+    setDetailsOpen(true)
+    setError(null)
+  }, [])
+  const refresh = async (): Promise<void> => {
+    setSnapshot(await window.desktop.connections.snapshot())
   }
-
-  const run = async (label: string, action: () => Promise<void>): Promise<void> => {
+  const run = async (label: string, action: () => Promise<void>): Promise<boolean> => {
     setBusy(label)
     setError(null)
     try {
       await action()
+      return true
     } catch (cause) {
       setError(errorMessage(cause))
+      return false
     } finally {
       setBusy(null)
     }
   }
-
-  const toggleEnabled = (enabled: boolean): void => {
-    void run("enabled", async () => {
-      const { feishu, runtime } = await window.desktop.connections.patch({ enabled })
-      setSnapshot((current) => (current ? { feishu, runtime } : current))
-    })
+  const patch = (input: DesktopFeishuPatchInput): void => {
+    void run("patch", async () => setSnapshot(await window.desktop.connections.patch(input)))
   }
-
-  const startScan = (): void => {
-    setMethod("scan")
-    void run("registration", async () => {
-      setRegistration(await window.desktop.connections.startRegistration({ domain: "feishu" }))
+  const addAllow = async (input: DesktopFeishuAllowInput): Promise<boolean> =>
+    run("allow", async () => {
+      const feishu = await window.desktop.connections.allowAdd(input)
+      setSnapshot((current) => (current ? { ...current, feishu } : current))
     })
-  }
-
-  const submitManual = (): void => {
-    // 立即清掉明文密钥：无论成功失败都不在组件状态里保留。
-    const input = { ...manual }
-    setManual((current) => ({ ...current, appSecret: "" }))
-    void run("manual", async () => {
-      const { feishu, runtime } = await window.desktop.connections.connect(input)
-      setSnapshot((current) => (current ? { feishu, runtime } : current))
-      setMethod(null)
-      setManual({ appId: "", appSecret: "", domain: "feishu" })
-    })
-  }
-
-  const addAllow = (): void => {
-    const id = allowId.trim()
-    if (!id) return
+  const removeAllow = (name: string): void => {
     void run("allow", async () => {
-      const feishu = await window.desktop.connections.allowAdd({
-        id,
-        ...(allowName.trim() ? { name: allowName.trim() } : {}),
-      })
-      setSnapshot((current) => (current ? { ...current, feishu } : current))
-      setAllowId("")
-      setAllowName("")
-    })
-  }
-
-  const removeAllow = (key: string): void => {
-    void run(`allow:${key}`, async () => {
-      const feishu = await window.desktop.connections.allowRemove(key)
+      const feishu = await window.desktop.connections.allowRemove(name)
       setSnapshot((current) => (current ? { ...current, feishu } : current))
     })
   }
-
   const allowDenied = (denial: ChannelDenialNotice): void => {
-    void run("allow", async () => {
-      const feishu = await window.desktop.connections.allowAdd({ id: denial.sender })
-      setSnapshot((current) => (current ? { ...current, feishu } : current))
-      setDenials((current) => current.filter((item) => item.seq !== denial.seq))
+    void addAllow({ id: denial.sender }).then((ok) => {
+      if (ok)
+        setDenials((items) =>
+          items.filter((item) => !(item.connector === denial.connector && item.seq === denial.seq))
+        )
     })
   }
-
+  const retryRuntime = (): void => {
+    void run("runtime", async () => {
+      await window.desktop.connections.startRuntime()
+      await refresh()
+    })
+  }
   const removeChannel = (): void => {
-    setRemoveOpen(false)
     void run("remove", async () => {
-      const { feishu, runtime } = await window.desktop.connections.remove()
-      setSnapshot((current) => (current ? { feishu, runtime } : current))
-      setRegistration(null)
-      setMethod(null)
+      setSnapshot(await window.desktop.connections.remove())
+      setRemoveOpen(false)
+      setDetailsOpen(false)
+      setDenials([])
     })
   }
 
   if (loading)
     return (
-      <div
-        className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground"
-        aria-live="polite"
-      >
-        <Spinner /> 正在读取渠道状态…
+      <div className="flex min-h-32 items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Spinner />
+        正在读取渠道状态…
       </div>
     )
 
   const feishu = snapshot?.feishu
-  const runtime = snapshot?.runtime
-  const connector = runtime?.connectors.find((item) => item.connector === "feishu")
+  const connector = snapshot?.runtime.connectors.find((item) => item.connector === "feishu")
+  const configured = feishu?.configured ?? false
+  const enabled = feishu?.enabled ?? false
+  const label = statusLabel(configured, enabled, connector?.state)
+  const channelDenials = denials.filter((item) => item.connector === "feishu")
+  const runtimeError = configured && enabled && connector?.state === "error"
 
   return (
-    <div className="flex flex-col gap-4" aria-busy={busy !== null}>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+    <div className="flex flex-col gap-5" aria-busy={busy !== null}>
+      {error && !removeOpen ? (
+        <Alert variant="destructive">
+          <Info />
+          <AlertTitle>{error}</AlertTitle>
+          {!snapshot ? (
+            <AlertDescription>
+              <Button variant="ghost" size="sm" onClick={() => void run("refresh", refresh)}>
+                重新读取
+              </Button>
+            </AlertDescription>
+          ) : null}
+        </Alert>
       ) : null}
-
-      <Card>
-        <CardContent className="flex flex-col gap-4 py-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-heading text-base font-semibold">飞书</h2>
-            <Badge variant={badgeVariant(feishu?.configured ?? false, connector?.state)}>
-              {statusLabel(feishu?.configured ?? false, feishu?.enabled ?? false, connector?.state)}
-            </Badge>
-            {feishu?.appId ? <Badge variant="outline">{feishu.appId}</Badge> : null}
-            {feishu?.botName ? (
-              <span className="text-xs text-muted-foreground">机器人：{feishu.botName}</span>
-            ) : null}
-          </div>
-          {feishu?.replyAtBotNames?.length ? (
-            <p className="text-xs text-muted-foreground">
-              群聊 @ 机器人名：{feishu.replyAtBotNames.join("、")}
-            </p>
-          ) : null}
-          {connector?.lastError ? (
-            <p className="text-xs text-destructive">{connector.lastError}</p>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Switch
-                aria-label="启用飞书渠道"
-                checked={feishu?.enabled ?? false}
-                disabled={!feishu?.configured || busy !== null}
-                onCheckedChange={toggleEnabled}
-              />
-              启用
-            </label>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy !== null || !feishu?.configured}
-              onClick={() =>
-                void run("runtime", async () => {
-                  await window.desktop.connections.startRuntime()
-                  await refresh()
-                })
-              }
-            >
-              重试连接
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy !== null || connector?.state !== "running"}
-              onClick={() =>
-                void run("runtime", async () => {
-                  await window.desktop.connections.stopRuntime()
-                  await refresh()
-                })
-              }
-            >
-              临时停止
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy !== null || !feishu?.configured}
-              onClick={() => setRemoveOpen(true)}
-            >
-              移除接入
-            </Button>
-          </div>
-
-          {!feishu?.configured || method ? (
-            <div className="flex flex-col gap-3 rounded-lg bg-muted/45 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" disabled={busy !== null} onClick={startScan}>
-                  扫码接入
-                </Button>
+      <section aria-labelledby="connection-channels-heading">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="connection-channels-heading" className="text-sm font-semibold">
+            聊天渠道
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            {configured ? "1 个已添加" : "选择一个渠道开始"}
+          </span>
+        </div>
+        <ConnectionChannelRow
+          id="feishu"
+          name={feishu?.domain === "lark" ? "Lark（国际版）" : "飞书"}
+          icon={<FeishuConnectionIcon />}
+          description={
+            configured
+              ? (feishu?.botName ?? "飞书机器人") +
+                " · " +
+                (feishu?.domain === "lark" ? "国际版" : "中国大陆")
+              : "扫码创建机器人，在私聊和群聊中使用 Vykor。"
+          }
+          status={
+            configured ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-xs text-muted-foreground",
+                  runtimeError && "text-destructive"
+                )}
+                role="status"
+              >
+                {runtimeError ? (
+                  <CircleX className="size-3" />
+                ) : enabled && connector?.state === "running" ? (
+                  <CircleCheck className="size-3" />
+                ) : (
+                  <Clock3 className="size-3" />
+                )}
+                {label}
+              </span>
+            ) : null
+          }
+          actions={
+            configured ? (
+              <>
+                <Switch
+                  aria-label="启用飞书渠道"
+                  checked={enabled}
+                  disabled={busy !== null}
+                  onCheckedChange={(value) => patch({ enabled: value })}
+                />
                 <Button
                   size="sm"
-                  variant="outline"
-                  disabled={busy !== null}
-                  onClick={() => setMethod(method === "manual" ? null : "manual")}
+                  variant="ghost"
+                  shape="pill"
+                  aria-expanded={detailsOpen}
+                  aria-controls="feishu-connection-details"
+                  onClick={() => setDetailsOpen((value) => !value)}
                 >
-                  手填接入
+                  {detailsOpen ? "收起" : "管理"}
                 </Button>
-              </div>
-
-              {registration ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    状态：{registration.state}
-                    {registration.remainingSeconds !== undefined
-                      ? `（剩余 ${registration.remainingSeconds}s）`
-                      : ""}
-                  </p>
-                  {registration.qrDataUrl ? (
-                    <img
-                      src={registration.qrDataUrl}
-                      alt="飞书接入二维码"
-                      className="size-40 rounded-md bg-white p-2"
-                    />
-                  ) : registration.qrUrl ? (
-                    <p className="text-xs text-destructive">二维码生成失败，请使用授权链接继续。</p>
-                  ) : null}
-                  {registration.qrUrl ? (
-                    <a
-                      href={registration.qrUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-primary underline"
-                    >
-                      在浏览器打开授权链接
-                    </a>
-                  ) : null}
-                  {registration.warning ? (
-                    <p className="text-xs text-destructive">{registration.warning}</p>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      void run("registration", async () => {
-                        setRegistration(await window.desktop.connections.cancelRegistration())
-                      })
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        shape="circle"
+                        size="icon-sm"
+                        aria-label="飞书更多操作"
+                        disabled={busy !== null}
+                      />
                     }
                   >
-                    取消扫码
-                  </Button>
-                </div>
-              ) : null}
-
-              {method === "manual" ? (
-                <div className="flex flex-col gap-2 sm:max-w-md">
-                  <Input
-                    aria-label="App ID"
-                    placeholder="App ID"
-                    value={manual.appId}
-                    disabled={busy !== null}
-                    onChange={(event) =>
-                      setManual((current) => ({ ...current, appId: event.target.value }))
-                    }
-                  />
-                  <Input
-                    aria-label="App Secret"
-                    placeholder="App Secret"
-                    type="password"
-                    value={manual.appSecret}
-                    disabled={busy !== null}
-                    onChange={(event) =>
-                      setManual((current) => ({ ...current, appSecret: event.target.value }))
-                    }
-                  />
-                  <Select
-                    value={manual.domain}
-                    onValueChange={(value) =>
-                      setManual((current) => ({
-                        ...current,
-                        domain: value === "lark" ? "lark" : "feishu",
-                      }))
-                    }
-                  >
-                    <SelectTrigger aria-label="地区">
-                      <SelectValue>{manual.domain === "lark" ? "国际 lark" : "国内 feishu"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="feishu">国内 feishu</SelectItem>
-                        <SelectItem value="lark">国际 lark</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    disabled={busy !== null || !manual.appId || !manual.appSecret}
-                    onClick={submitManual}
-                  >
-                    保存并连接
-                  </Button>
-                </div>
-              ) : null}
+                    <MoreHorizontal />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem disabled={busy !== null} onClick={retryRuntime}>
+                        <RefreshCw />
+                        重试连接
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={busy !== null || connector?.state !== "running"}
+                        onClick={() =>
+                          void run("runtime", async () => {
+                            await window.desktop.connections.stopRuntime()
+                            await refresh()
+                          })
+                        }
+                      >
+                        <Clock3 />
+                        临时停止
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={busy !== null}
+                        onClick={() => {
+                          setError(null)
+                          setRemoveOpen(true)
+                        }}
+                      >
+                        <X />
+                        移除连接
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                shape="pill"
+                aria-label="连接飞书"
+                disabled={!snapshot || busy !== null}
+                onClick={() => setConnectOpen(true)}
+              >
+                <QrCode data-icon="inline-start" />
+                连接
+              </Button>
+            )
+          }
+        >
+          <Separator />
+          {runtimeError ? (
+            <Alert variant="destructive" className="mt-4">
+              <CircleX />
+              <AlertTitle>暂时无法连接飞书</AlertTitle>
+              <AlertDescription className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <p className="min-w-0 flex-1 break-words">
+                  {connector?.lastError ?? "检查网络后重试，已有配置会保留。"}
+                </p>
+                <StatefulButton
+                  size="sm"
+                  variant="outline"
+                  pressScale={1}
+                  state={busy === "runtime" ? "loading" : "idle"}
+                  disabled={busy !== null}
+                  loadingText="正在连接"
+                  onClick={retryRuntime}
+                >
+                  重试连接
+                </StatefulButton>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {configured && detailsOpen && feishu ? (
+            <div id="feishu-connection-details" className="pt-2 sm:pl-14">
+              <FeishuConnectionDetails
+                feishu={feishu}
+                busy={busy !== null}
+                onAllowAdd={addAllow}
+                onAllowRemove={removeAllow}
+                onPatch={patch}
+              />
             </div>
           ) : null}
-        </CardContent>
-      </Card>
-
-      {feishu?.configured ? (
-        <Card>
-          <CardContent className="flex flex-col gap-4 py-5">
-            <h3 className="font-heading text-sm font-semibold">白名单</h3>
-            <p className="text-xs text-muted-foreground">
-              {feishu.allowFrom.length === 0
-                ? "白名单为空：已配置但不放行任何人。"
-                : "发送者或会话任一命中即放行。"}
-            </p>
-            <ul className="flex flex-col gap-2">
-              {feishu.allowFrom.map((entry) => (
-                <li key={entry.name} className="flex items-center gap-3 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {entry.name}（{entry.id}）
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy !== null}
-                    onClick={() => removeAllow(entry.name)}
-                  >
-                    移除
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                aria-label="白名单 ID"
-                placeholder="ou_… 或 oc_…"
-                value={allowId}
-                disabled={busy !== null}
-                onChange={(event) => setAllowId(event.target.value)}
-                className="sm:max-w-56"
-              />
-              <Input
-                aria-label="白名单备注"
-                placeholder="备注（可选）"
-                value={allowName}
-                disabled={busy !== null}
-                onChange={(event) => setAllowName(event.target.value)}
-                className="sm:max-w-40"
-              />
-              <Button size="sm" disabled={busy !== null || !allowId.trim()} onClick={addAllow}>
-                添加
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  aria-label="发送进度"
-                  checked={feishu.sendProgress ?? true}
+        </ConnectionChannelRow>
+        {!configured ? (
+          <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+            连接后可管理谁能使用机器人，以及消息展示方式。
+          </p>
+        ) : null}
+      </section>
+      {configured && channelDenials.length > 0 ? (
+        <section aria-labelledby="connection-denials-heading">
+          <h3 id="connection-denials-heading" className="mb-3 text-sm font-semibold">
+            未放行的消息
+          </h3>
+          <ul className="flex flex-col gap-3">
+            {channelDenials.map((denial) => (
+              <li
+                key={denial.connector + ":" + denial.seq}
+                className="flex flex-wrap items-center gap-3"
+              >
+                <div className="min-w-0 flex-1 text-xs">
+                  <p className="break-all">{denial.sender}</p>
+                  <p className="mt-1 break-all text-muted-foreground">
+                    会话 {denial.chatId} · 不在允许列表中
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  shape="pill"
                   disabled={busy !== null}
-                  onCheckedChange={(value) =>
-                    void run("patch", async () => {
-                      const { feishu: next } = await window.desktop.connections.patch({
-                        sendProgress: value,
-                      })
-                      setSnapshot((current) => (current ? { ...current, feishu: next } : current))
-                    })
-                  }
-                />
-                发送进度
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  aria-label="发送工具提示"
-                  checked={feishu.sendToolHints ?? true}
-                  disabled={busy !== null}
-                  onCheckedChange={(value) =>
-                    void run("patch", async () => {
-                      const { feishu: next } = await window.desktop.connections.patch({
-                        sendToolHints: value,
-                      })
-                      setSnapshot((current) => (current ? { ...current, feishu: next } : current))
-                    })
-                  }
-                />
-                发送工具提示
-              </label>
-            </div>
-          </CardContent>
-        </Card>
+                  onClick={() => allowDenied(denial)}
+                >
+                  加入白名单
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
-
-      {denials.length > 0 ? (
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-5">
-            <h3 className="font-heading text-sm font-semibold">被拒消息</h3>
-            <ul className="flex flex-col gap-2">
-              {denials.map((denial) => (
-                <li key={`${denial.connector}:${denial.sender}:${denial.seq}`} className="flex items-center gap-3 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {denial.sender}（{denial.chatId}）不在白名单
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy !== null}
-                    onClick={() => allowDenied(denial)}
-                  >
-                    加入白名单
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+      <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <CircleHelp className="size-3.5" />
+        连接问题？
+        <Button
+          variant="link"
+          size="sm"
+          onClick={() =>
+            void run("help", async () => {
+              await window.desktop.window.openExternal(
+                "https://open.feishu.cn/document/mcp_open_tools/integrating-agents-with-feishu/scan-to-create-an-app-in-one-click-nodejs"
+              )
+            })
+          }
+        >
+          查看飞书接入说明
+        </Button>
+      </p>
+      <FeishuConnectionDialog
+        open={connectOpen}
+        snapshot={snapshot}
+        onOpenChange={setConnectOpen}
+        onConnected={connected}
+      />
+      <Dialog
+        open={removeOpen}
+        onOpenChange={(value) => {
+          if (busy !== "remove") setRemoveOpen(value)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>移除飞书接入</DialogTitle>
+            <DialogTitle>移除飞书连接？</DialogTitle>
             <DialogDescription>
-              会删除本机渠道配置并断开连接。之后可重新扫码或手填接入。
+              删除本机保存的凭据和访问权限，并停止接收消息。飞书侧的应用仍会保留。
             </DialogDescription>
           </DialogHeader>
+          {error ? (
+            <Alert variant="destructive">
+              <Info />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setRemoveOpen(false)}>
+            <Button
+              variant="ghost"
+              shape="pill"
+              disabled={busy !== null}
+              onClick={() => setRemoveOpen(false)}
+            >
               取消
             </Button>
-            <Button variant="destructive" onClick={removeChannel}>
-              确认移除
+            <Button
+              variant="destructive"
+              shape="pill"
+              disabled={busy !== null}
+              onClick={removeChannel}
+            >
+              {busy === "remove" ? "移除中…" : "移除连接"}
             </Button>
           </div>
         </DialogContent>
@@ -533,33 +447,19 @@ export function ConnectionsSettings(): React.JSX.Element {
   )
 }
 
-function statusLabel(
-  configured: boolean,
-  enabled: boolean,
-  state: string | undefined
-): string {
-  if (!configured) return "未配置"
+function statusLabel(configured: boolean, enabled: boolean, state: string | undefined): string {
+  if (!configured) return "未连接"
   if (!enabled) return "已停用"
   switch (state) {
     case "running":
-      return "在线"
+      return "已连接"
     case "starting":
       return "连接中"
     case "stopping":
       return "停止中"
     case "error":
-      return "失败"
+      return "连接异常"
     default:
       return "已停止"
   }
-}
-
-function badgeVariant(
-  configured: boolean,
-  state: string | undefined
-): "default" | "secondary" | "destructive" | "outline" {
-  if (!configured) return "outline"
-  if (state === "running") return "default"
-  if (state === "error") return "destructive"
-  return "secondary"
 }
