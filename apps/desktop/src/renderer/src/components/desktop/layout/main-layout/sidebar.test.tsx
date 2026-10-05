@@ -105,6 +105,25 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(container.textContent).toContain("暂无最近会话")
   })
 
+  it("opens chat search from the sidebar search action", async () => {
+    const onOpenSearch = vi.fn()
+    await act(async () =>
+      root.render(
+        <Sidebar
+          open
+          onOpenSearch={onOpenSearch}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+    const search = container.querySelector<HTMLButtonElement>('[aria-label="搜索"]')!
+    await act(async () => search.click())
+    expect(onOpenSearch).toHaveBeenCalledOnce()
+  })
+
   it("replaces the pull request placeholder with an actionable notes entry", async () => {
     const onOpenNotes = vi.fn()
     act(() => {

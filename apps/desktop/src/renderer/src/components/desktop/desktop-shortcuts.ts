@@ -1,6 +1,7 @@
 import { parseKeybinding } from "tinykeys"
 
 export const desktopShortcuts = {
+  searchChats: { bindings: ["$mod+k"], keys: "K" },
   newConversation: { bindings: ["$mod+n"], keys: "N" },
   chooseProject: { bindings: ["$mod+o"], keys: "O" },
   closeConversation: { bindings: ["$mod+w"], keys: "W" },

@@ -17,6 +17,7 @@ const groups: Array<{
   {
     title: "聊天",
     shortcuts: [
+      { id: "searchChats", title: "搜索聊天", description: "搜索聊天、快捷操作和设置" },
       { id: "newConversation", title: "新对话", description: "开始新的聊天" },
       { id: "closeConversation", title: "关闭对话", description: "关闭当前聊天" },
       { id: "previousSession", title: "上一个聊天", description: "切换到上一个聊天" },

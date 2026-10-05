@@ -12,13 +12,18 @@ import {
   Sun,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import { useMatchRoute } from "@tanstack/react-router"
 
 import { nextExplicitTheme } from "@renderer/components/appearance/appearance-actions"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
 import { Button } from "@renderer/components/ui/button"
+import {
+  getShortcutRevision,
+  shortcutLabel,
+  subscribeShortcutChanges,
+} from "@renderer/components/desktop/desktop-shortcuts"
 import {
   Dialog,
   DialogClose,
@@ -33,10 +38,7 @@ import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { cn } from "@renderer/lib/utils"
-import {
-  isChannelSession,
-  useDesktopSessionStore,
-} from "@renderer/stores/desktop-session"
+import { isChannelSession, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   groupImSessions,
   selectActiveSessionId,
@@ -66,6 +68,7 @@ import {
 
 type SidebarProps = {
   open: boolean
+  onOpenSearch?: () => void
   onOpenSettings: () => void
   onOpenNotes?: () => void
   onOpenScheduled: () => void
@@ -81,12 +84,14 @@ const secondaryNavigation = [
 
 export function Sidebar({
   open,
+  onOpenSearch,
   onOpenSettings,
   onOpenNotes,
   onOpenScheduled,
   onOpenPlugins,
   onOpenConversation,
 }: SidebarProps): React.JSX.Element {
+  useSyncExternalStore(subscribeShortcutChanges, getShortcutRevision)
   const matchRoute = useMatchRoute()
   const { resolvedTheme, setPreference } = useAppearance()
   const scheduledSelected = Boolean(matchRoute({ to: "/scheduled" }))
@@ -224,8 +229,14 @@ export function Sidebar({
               type="button"
               variant="ghost"
               size="icon"
-              title="搜索"
+              title={
+                "搜索聊天（" +
+                shortcutLabel("searchChats", navigator.platform.toLowerCase().includes("mac")) +
+                "）"
+              }
               aria-label="搜索"
+              disabled={!onOpenSearch}
+              onClick={onOpenSearch}
               className="text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
             >
               <Search />
@@ -507,9 +518,7 @@ export function Sidebar({
           <form onSubmit={submitProjectRename} className="contents">
             <DialogHeader>
               <DialogTitle>重命名项目</DialogTitle>
-              <DialogDescription>
-                只修改 Vykor 中显示的名称，不会重命名磁盘目录。
-              </DialogDescription>
+              <DialogDescription>只修改 Vykor 中显示的名称，不会重命名磁盘目录。</DialogDescription>
             </DialogHeader>
             <FieldGroup>
               <Field>

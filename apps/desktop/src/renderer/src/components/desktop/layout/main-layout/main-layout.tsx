@@ -15,6 +15,7 @@ import { PluginUiProvider } from "@renderer/components/desktop/conversation-page
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
+import { DesktopSearchDialog } from "@renderer/components/desktop/desktop-search-dialog"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import type { DesktopGitDiffScope } from "@shared/git-types"
@@ -67,6 +68,7 @@ export function MainLayout(): React.JSX.Element {
   )
   const sessionIds = useMemo(() => sessions.map((session) => session.id), [sessions])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
   const sidebarPanelRef = usePanelRef()
   const conversationPanelRef = usePanelRef()
   const utilityPanelRef = usePanelRef()
@@ -193,8 +195,16 @@ export function MainLayout(): React.JSX.Element {
   }, [nextSession, openConversationRoute])
 
   useDesktopShortcuts({
-    newConversation: startNewConversationRoute,
+    searchChats: () => {
+      if (!searchOpen && document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      setSearchOpen((value) => !value)
+    },
+    newConversation: () => {
+      setSearchOpen(false)
+      startNewConversationRoute()
+    },
     chooseProject: () => {
+      setSearchOpen(false)
       showCurrentConversation()
       void chooseProject()
     },
@@ -205,7 +215,10 @@ export function MainLayout(): React.JSX.Element {
     toggleSidebar,
     togglePanel,
     openBrowser: () => openUtilityTool("browser"),
-    openFiles: () => openUtilityTool("files"),
+    openFiles: () => {
+      setSearchOpen(false)
+      openUtilityTool("files")
+    },
     openTerminal: () => openUtilityTool("terminal"),
     previousSession: openPreviousSession,
     nextSession: openNextSession,
@@ -421,6 +434,7 @@ export function MainLayout(): React.JSX.Element {
           {renderPage(
             <Sidebar
               open={sidebarOpen}
+              onOpenSearch={() => setSearchOpen(true)}
               onOpenNotes={() => void navigate({ to: "/notes" })}
               onOpenScheduled={() => void navigate({ to: "/scheduled" })}
               onOpenPlugins={() => void navigate({ to: "/plugins" })}
@@ -434,6 +448,20 @@ export function MainLayout(): React.JSX.Element {
             />
           )}
         </MainLayoutContext.Provider>
+        <DesktopSearchDialog
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onOpenConversation={openConversationRoute}
+          onNewConversation={startNewConversationRoute}
+          onChooseProject={() => {
+            showCurrentConversation()
+            void chooseProject()
+          }}
+          onSearchFiles={() => openUtilityTool("files")}
+          onOpenSettings={(section) =>
+            void navigate({ to: "/settings/$section", params: { section } })
+          }
+        />
       </main>
     </PluginUiProvider>
   )
