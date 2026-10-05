@@ -43,6 +43,24 @@ describe("applyStartupTheme", () => {
     expect(document.documentElement.classList.contains("light")).toBe(false)
   })
 
+  it("restores saved colors before React mounts without overriding the glass shell", () => {
+    localStorage.setItem(
+      APPEARANCE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        theme: "dark",
+        colors: { dark: { background: "#282A36", foreground: "#F8F8F2" } },
+      })
+    )
+    const root = document.createElement("html")
+    applyStartupTheme(root)
+    expect(root.style.getPropertyValue("--background")).toBe("#282A36")
+    expect(root.style.getPropertyValue("--foreground")).toBe("#F8F8F2")
+    expect(root.style.getPropertyValue("--shell-solid")).toMatch(/^#[0-9A-F]{6}$/)
+    expect(root.style.getPropertyValue("--shell")).toBe("")
+    expect(root.style.getPropertyValue("--sidebar")).toBe("")
+  })
+
   it("restores glass strength before React mounts", () => {
     localStorage.setItem(APPEARANCE_STORAGE_KEY, '{"version":1,"glassStrength":80}')
     applyStartupTheme()

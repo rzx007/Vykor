@@ -13,7 +13,6 @@ import {
   AlertDialogTrigger,
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import {
   Field,
   FieldContent,
@@ -39,7 +38,11 @@ import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-gro
 import { toast } from "@renderer/lib/toast"
 import type { DesktopWindowMaterialPreference } from "@shared/window-material-types"
 
-import { ACCENT_PRESET_COLORS } from "./appearance-colors"
+import {
+  ACCENT_PRESET_COLORS,
+  APPEARANCE_SURFACES,
+  resolveAppearanceColors,
+} from "./appearance-colors"
 import { CODE_FONT_OPTIONS, UI_FONT_OPTIONS, type AppearanceFontOption } from "./appearance-fonts"
 import {
   CODE_FONT_SIZE_RANGE,
@@ -47,6 +50,7 @@ import {
   GLASS_STRENGTH_RANGE,
   UI_FONT_SIZE_RANGE,
   normalizeHexColor,
+  type AppearancePalette,
   type AccentPresetId,
   type AppearanceTheme,
   type CodeFontId,
@@ -81,6 +85,7 @@ const WINDOW_MATERIAL_OPTIONS: readonly {
 export function AppearanceSettings(): React.JSX.Element {
   const {
     preferences,
+    resolvedTheme,
     windowMaterial,
     fontAvailability,
     saveState,
@@ -92,6 +97,15 @@ export function AppearanceSettings(): React.JSX.Element {
     preferences.accent.kind === "custom"
       ? preferences.accent.value
       : ACCENT_PRESET_COLORS[preferences.accent.id]
+  const palette = preferences.colors[resolvedTheme]
+  const defaults = APPEARANCE_SURFACES[resolvedTheme]
+  const requestedForeground = palette.foreground ?? defaults.foreground
+  const colors = resolveAppearanceColors(preferences.accent, resolvedTheme, palette)
+  const setPaletteColor = (key: keyof AppearancePalette, value: `#${string}` | null): boolean =>
+    setPreference("colors", {
+      ...preferences.colors,
+      [resolvedTheme]: { ...palette, [key]: value },
+    })
   const isWindows = typeof window !== "undefined" && window.electron?.process?.platform === "win32"
   const glassStrength = preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength
   const commitSingle = <T extends string>(
@@ -116,7 +130,7 @@ export function AppearanceSettings(): React.JSX.Element {
         <ResetAppearanceDialog onReset={resetAppearance} />
       </div>
 
-      <AppearanceSection title="主题">
+      <AppearanceSection title="模式">
         <FieldGroup>
           <Field>
             <FieldLabel className="sr-only">主题</FieldLabel>
@@ -136,7 +150,11 @@ export function AppearanceSettings(): React.JSX.Element {
                   aria-label={`${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}主题`}
                   className="h-auto min-w-0 items-stretch p-2"
                 >
-                  <ThemePreviewCard theme={theme} selected={preferences.theme === theme} />
+                  <ThemePreviewCard
+                    theme={theme}
+                    selected={preferences.theme === theme}
+                    preferences={preferences}
+                  />
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -213,7 +231,7 @@ export function AppearanceSettings(): React.JSX.Element {
           <Field orientation="responsive">
             <FieldContent>
               <FieldTitle>强调色</FieldTitle>
-              <FieldDescription>用于主要操作、焦点状态和选中项。</FieldDescription>
+              <FieldDescription>用于主要操作、链接和键盘焦点。</FieldDescription>
             </FieldContent>
             <ToggleGroup
               aria-label="预设强调色"
@@ -229,7 +247,7 @@ export function AppearanceSettings(): React.JSX.Element {
                 <ToggleGroupItem key={id} value={id} aria-label={`${label}强调色`}>
                   <span
                     aria-hidden="true"
-                    className="size-3 rounded-full border border-black/10"
+                    className="size-3 rounded-full border border-border"
                     style={{ backgroundColor: ACCENT_PRESET_COLORS[id] }}
                   />
                   {label}
@@ -239,10 +257,42 @@ export function AppearanceSettings(): React.JSX.Element {
           </Field>
           <Separator />
           <CustomColorField
-            key={selectedAccent}
+            id="appearance-custom-color"
+            label="自定义强调色"
+            description="输入六位颜色值，或打开选色板。列表选中与悬停底色由背景派生。"
             initialColor={selectedAccent}
             onChange={(value) => setPreference("accent", { kind: "custom", value })}
           />
+          <Separator />
+          <FieldDescription>
+            正在调整{resolvedTheme === "light" ? "浅色" : "深色"}模式的颜色。切换模式可分别设置。
+          </FieldDescription>
+          <CustomColorField
+            key={`background-${resolvedTheme}`}
+            id="appearance-background-color"
+            label="自定义背景色"
+            description="工作区直接使用此色，侧栏、浮层和边框随之调整。"
+            initialColor={palette.background ?? defaults.background}
+            onChange={(value) => setPaletteColor("background", value)}
+            onReset={() => setPaletteColor("background", null)}
+            isCustom={palette.background !== null}
+          />
+          <Separator />
+          <CustomColorField
+            key={`foreground-${resolvedTheme}`}
+            id="appearance-foreground-color"
+            label="自定义前景色"
+            description="正文、控件与侧栏文字共用此色，按层级调整深浅。"
+            initialColor={requestedForeground}
+            onChange={(value) => setPaletteColor("foreground", value)}
+            onReset={() => setPaletteColor("foreground", null)}
+            isCustom={palette.foreground !== null}
+          />
+          {colors.foreground !== requestedForeground ? (
+            <FieldDescription role="status">
+              前景与背景过于接近，已提高文字对比度，实际文字颜色为 {colors.foreground}。
+            </FieldDescription>
+          ) : null}
         </FieldGroup>
       </AppearanceSection>
 
@@ -313,50 +363,70 @@ export function AppearanceSettings(): React.JSX.Element {
 }
 
 function CustomColorField({
+  id,
+  label,
+  description,
   initialColor,
   onChange,
+  onReset,
+  isCustom,
 }: {
+  id: string
+  label: string
+  description: string
   initialColor: string
-  onChange: (value: `#${string}`) => void
+  onChange: (value: `#${string}`) => boolean
+  onReset?: () => boolean
+  isCustom?: boolean
 }): React.JSX.Element {
-  const [customColor, setCustomColor] = useState<string>(initialColor)
+  const [draft, setDraft] = useState({ savedColor: initialColor, value: initialColor })
+  // 外部设置改变时同步草稿，保留输入节点与焦点，也不需要渲染后的额外同步。
+  if (draft.savedColor !== initialColor) {
+    setDraft({ savedColor: initialColor, value: initialColor })
+  }
+  const customColor = draft.savedColor === initialColor ? draft.value : initialColor
+  const setCustomColor = (value: string): void => setDraft({ savedColor: initialColor, value })
   const normalizedCustomColor = normalizeHexColor(customColor)
-  const customColorInvalid = customColor.length > 0 && normalizedCustomColor === null
+  const customColorInvalid = normalizedCustomColor === null
 
   const handleCommit = (value: string): void => {
     setCustomColor(value)
     const normalized = normalizeHexColor(value)
-    if (normalized) onChange(normalized)
+    if (normalized && !onChange(normalized)) setCustomColor(initialColor)
   }
 
   return (
     <Field orientation="responsive" data-invalid={customColorInvalid || undefined}>
       <FieldContent>
-        <FieldLabel htmlFor="appearance-custom-color">自定义颜色</FieldLabel>
-        <FieldDescription>
-          输入六位十六进制颜色，例如 #006AFF，或直接使用选色板选取。
-        </FieldDescription>
-        {customColorInvalid ? <FieldError>请输入完整的六位十六进制颜色。</FieldError> : null}
+        <FieldLabel htmlFor={id}>{label.replace("自定义", "")}</FieldLabel>
+        <FieldDescription id={`${id}-description`}>{description}</FieldDescription>
+        {customColorInvalid ? (
+          <FieldError id={`${id}-error`}>请输入完整的六位颜色值，例如 #006AFF。</FieldError>
+        ) : null}
       </FieldContent>
       <div className="flex w-full max-w-52 items-center gap-2">
         <label
-          htmlFor="appearance-custom-color-picker"
-          className="relative flex size-7 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-black/10 shadow-xs transition-transform focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 hover:scale-110 active:scale-95"
+          htmlFor={`${id}-picker`}
+          className="relative flex size-7 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
           style={{ backgroundColor: normalizedCustomColor ?? initialColor }}
           title="打开选色板"
         >
           <input
-            id="appearance-custom-color-picker"
+            id={`${id}-picker`}
             type="color"
-            aria-label="自定义强调色选色板"
+            aria-label={`${label}选色板`}
+            aria-describedby={`${id}-description`}
             className="absolute inset-0 size-full cursor-pointer opacity-0"
             value={normalizedCustomColor ?? initialColor}
             onChange={(event) => handleCommit(event.target.value.toUpperCase())}
           />
         </label>
         <Input
-          id="appearance-custom-color"
-          aria-label="自定义强调色"
+          id={id}
+          aria-label={label}
+          aria-describedby={
+            customColorInvalid ? `${id}-description ${id}-error` : `${id}-description`
+          }
           aria-invalid={customColorInvalid || undefined}
           value={customColor}
           maxLength={7}
@@ -364,6 +434,21 @@ function CustomColorField({
           className="font-mono uppercase"
           onChange={(event) => handleCommit(event.target.value)}
         />
+        {onReset ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            shape="circle"
+            aria-label={`恢复默认${label.replace("自定义", "")}`}
+            title="恢复默认颜色"
+            disabled={!isCustom}
+            onClick={() => {
+              if (onReset()) setCustomColor(initialColor)
+            }}
+          >
+            <RotateCcw />
+          </Button>
+        ) : null}
       </div>
     </Field>
   )
@@ -381,12 +466,7 @@ function AppearanceSection({
       <h2 id={`appearance-${title}`} className="font-heading text-lg font-semibold">
         {title}
       </h2>
-      <Card className="py-0">
-        <CardHeader className="sr-only">
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="px-5 py-5">{children}</CardContent>
-      </Card>
+      {children}
     </section>
   )
 }

@@ -2,6 +2,7 @@ import {
   APPEARANCE_STORAGE_KEY,
   parseAppearancePreferences,
 } from "./components/appearance/appearance-preferences"
+import { applyAppearanceColors } from "./components/appearance/appearance-colors"
 import {
   isGlassWindowMaterial,
   type DesktopWindowMaterialState,
@@ -16,6 +17,7 @@ export function applyStartupTheme(root: HTMLElement = document.documentElement):
       preferences.theme === "system" ? (prefersDark ? "dark" : "light") : preferences.theme
     root.classList.remove("light", "dark")
     root.classList.add(resolved)
+    applyAppearanceColors(root, preferences, resolved)
     root.style.setProperty("--window-glass-strength", `${preferences.glassStrength}%`)
   } catch {
     // Keep the CSS prefers-color-scheme fallback if storage or parsing fails.

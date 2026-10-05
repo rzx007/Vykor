@@ -140,6 +140,25 @@ describe("AppearanceProvider", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true)
   })
 
+  it("persists separate palettes, switches with the system, and resets derived colors", async () => {
+    await renderProvider()
+    act(() =>
+      latest!.setPreference("colors", {
+        light: { background: "#EFF1F5", foreground: "#4C4F69" },
+        dark: { background: "#282A36", foreground: "#F8F8F2" },
+      })
+    )
+    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#EFF1F5")
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_STORAGE_KEY)!)).toMatchObject({
+      colors: { dark: { background: "#282A36" } },
+    })
+    act(() => darkQuery.emit(true))
+    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#282A36")
+    expect(document.documentElement.style.getPropertyValue("--foreground")).toBe("#F8F8F2")
+    act(() => latest!.resetAppearance())
+    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#181818")
+  })
+
   it("resolves the three reduced-motion modes", async () => {
     reducedMotionQuery.emit(true)
     await renderProvider()

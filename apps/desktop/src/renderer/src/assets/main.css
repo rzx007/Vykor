@@ -171,24 +171,28 @@
   --chat-line-height: 1.68;
   --code-font-size: 13px;
   --code-line-height: 1.5;
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.3 0 0);
-  --card: oklch(1 0 0);
+  --background: #fcfcfd;
+  --foreground: #1b1b1b;
+  --surface-elevation-target: var(--foreground);
+  --card: var(--background);
   --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
+  --popover: var(--background);
   --popover-foreground: var(--foreground);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in srgb, var(--background), var(--surface-elevation-target) 4%);
+  --muted-foreground: color-mix(in srgb, var(--background), var(--foreground) 62%);
+  /* accent 是 shadcn 的轻量交互底色；用户选的强调色映射到 primary。 */
+  --accent: color-mix(in srgb, var(--background), var(--surface-elevation-target) 6%);
+  --accent-foreground: var(--foreground);
   --destructive: oklch(0.577 0.245 27.325);
   --diff-addition: oklch(0.627 0.194 149.214);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: color-mix(in srgb, var(--background), var(--surface-elevation-target) 10%);
+  --input: color-mix(in srgb, var(--background), var(--surface-elevation-target) 18%);
+  --selection: color-mix(in srgb, var(--background), var(--surface-elevation-target) 18%);
+  --selection-foreground: var(--foreground);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -199,13 +203,13 @@
   --scrollbar-thumb: color-mix(in oklab, var(--foreground) 8%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 16%, transparent);
 
-  --shell-solid: oklch(0.969 0.008 236);
+  --shell-solid: color-mix(in srgb, var(--background), var(--surface-elevation-target) 2%);
   --shell: var(--shell-solid);
   --chrome: var(--shell);
   --conversation: var(--background);
   --panel: var(--card);
   --workspace-border: var(--border);
-  --ui-foreground: var(--foreground);
+  --ui-foreground: color-mix(in srgb, var(--background), var(--foreground) 90%);
   --ui-muted: var(--muted-foreground);
   --content-foreground: var(--foreground);
   --placeholder: var(--muted-foreground);
@@ -218,37 +222,30 @@
   --workspace-top-shadow: -4px -4px 14px oklch(0.145 0 0 / 10%), 0 -1px 4px oklch(0.145 0 0 / 8%);
 
   --sidebar: var(--shell);
-  --sidebar-foreground: oklch(0.38 0.01 250);
+  --sidebar-foreground: color-mix(in srgb, var(--shell-solid), var(--foreground) 90%);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.945 0.009 238);
+  --sidebar-accent: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 4.5%);
   --sidebar-accent-foreground: var(--sidebar-foreground);
-  --sidebar-muted: oklch(0.54 0.011 248);
-  --sidebar-selected: oklch(0.925 0.01 238);
-  --sidebar-border: oklch(0.86 0.012 238 / 55%);
+  --sidebar-muted: color-mix(in srgb, var(--shell-solid), var(--foreground) 62%);
+  --sidebar-selected: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 8.5%);
+  --sidebar-border: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 10%);
   --sidebar-ring: var(--ring);
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: #181818;
+  --foreground: #f2f2f2;
+  --surface-elevation-target: #ffffff;
+  --card: color-mix(in srgb, var(--background), white 2.5%);
+  --popover: color-mix(in srgb, var(--background), white 4.5%);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --muted: color-mix(in srgb, var(--background), white 7%);
+  --accent: color-mix(in srgb, var(--background), white 9%);
   --destructive: oklch(0.704 0.191 22.216);
   --diff-addition: oklch(0.792 0.209 151.711);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -258,34 +255,13 @@
   --scrollbar-thumb: color-mix(in oklab, var(--foreground) 10%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 18%, transparent);
 
-  --shell-solid: oklch(0.22 0.012 250);
-  --shell: var(--shell-solid);
-  --chrome: var(--shell);
-  --conversation: var(--background);
-  --panel: var(--card);
-  --workspace-border: var(--border);
-  --ui-foreground: var(--foreground);
-  --ui-muted: var(--muted-foreground);
-  --content-foreground: var(--foreground);
-  --placeholder: var(--muted-foreground);
-  --code: var(--muted);
-  --code-foreground: var(--foreground);
-  --user-message: var(--muted);
-  --file-link: var(--primary);
+  --shell-solid: color-mix(in srgb, var(--background), white 3.5%);
   --composer-shadow: 0 -8px 22px oklch(0 0 0 / 24%), 0 4px 12px oklch(0 0 0 / 28%);
   --workspace-shadow: -7px -3px 18px oklch(0 0 0 / 28%);
   --workspace-top-shadow: -5px -4px 16px oklch(0 0 0 / 34%), 0 -1px 5px oklch(0 0 0 / 28%);
 
-  --sidebar: var(--shell);
-  --sidebar-foreground: oklch(0.88 0.006 245);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.28 0.014 250);
-  --sidebar-accent-foreground: var(--sidebar-foreground);
-  --sidebar-muted: oklch(0.67 0.01 245);
-  --sidebar-selected: oklch(0.31 0.018 248);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: var(--ring);
+  --sidebar-accent: color-mix(in srgb, var(--shell-solid), white 7%);
+  --sidebar-selected: color-mix(in srgb, var(--shell-solid), white 12%);
 }
 
 /* 玻璃档的外壳模式由主进程决定（D7）：
@@ -300,22 +276,22 @@ html[data-window-shell="transparent"] {
    （材质最明显）；不一致时才叠一层主题色，避免玻璃区比内容区亮/暗一大截。 */
 @media (prefers-color-scheme: dark) {
   html.light[data-window-shell="transparent"] {
-    --shell: color-mix(in oklab, oklch(0.969 0.008 236) 62%, transparent);
+    --shell: color-mix(in oklab, var(--shell-solid) 62%, transparent);
   }
 }
 
 @media (prefers-color-scheme: light) {
   html.dark[data-window-shell="transparent"] {
-    --shell: color-mix(in oklab, oklch(0.22 0.012 250) 80%, transparent);
+    --shell: color-mix(in oklab, var(--shell-solid) 80%, transparent);
   }
 }
 
 html[data-window-shell="translucent"] {
-  --shell: color-mix(in oklab, oklch(0.969 0.008 236) 60%, transparent);
+  --shell: color-mix(in oklab, var(--shell-solid) 60%, transparent);
 }
 
 html.dark[data-window-shell="translucent"] {
-  --shell: color-mix(in oklab, oklch(0.22 0.012 250) 64%, transparent);
+  --shell: color-mix(in oklab, var(--shell-solid) 64%, transparent);
 }
 
 /* Windows 在原生 Acrylic 上只铺一层雾面底色；其它平台保留原有材质。 */
@@ -405,7 +381,8 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
   }
 
   ::selection {
-    background: oklch(0.78 0.04 240 / 45%);
+    background: var(--selection);
+    color: var(--selection-foreground);
   }
 }
 

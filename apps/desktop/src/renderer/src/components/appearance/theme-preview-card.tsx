@@ -2,7 +2,8 @@ import { Check } from "lucide-react"
 
 import { cn } from "@renderer/lib/utils"
 
-import type { AppearanceTheme } from "./appearance-preferences"
+import { resolveAppearanceColors } from "./appearance-colors"
+import type { AppearancePreferences, AppearanceTheme } from "./appearance-preferences"
 
 const THEME_LABELS: Record<AppearanceTheme, string> = {
   system: "跟随系统",
@@ -13,46 +14,59 @@ const THEME_LABELS: Record<AppearanceTheme, string> = {
 export function ThemePreviewCard({
   theme,
   selected,
+  preferences,
 }: {
   theme: AppearanceTheme
   selected: boolean
+  preferences: AppearancePreferences
 }): React.JSX.Element {
-  const dark = theme === "dark"
-  const background = dark ? "#1B1B1B" : "#F7F7F7"
-  const panel = dark ? "#F4F4F4" : "#FFFFFF"
-  const sidebar = dark ? "#545454" : "#D9D9D9"
-  const line = dark ? "#C7C7C7" : "#B8B8B8"
+  const modes: readonly ("light" | "dark")[] = theme === "system" ? ["light", "dark"] : [theme]
 
   return (
     <span className="flex w-full flex-col gap-2">
-      <span
-        aria-hidden="true"
-        className="relative flex h-24 w-full overflow-hidden rounded-md border"
-        style={{
-          background:
-            theme === "system"
-              ? "linear-gradient(90deg, #F7F7F7 0 50%, #1B1B1B 50% 100%)"
-              : background,
-        }}
-      >
-        <span className="w-[32%] opacity-85" style={{ backgroundColor: sidebar }} />
-        <span
-          className="absolute right-2 bottom-0 left-[24%] h-[68%] rounded-t-md"
-          style={{ backgroundColor: panel }}
-        >
-          <span
-            className="mt-3 ml-3 block h-1.5 w-12 rounded-full"
-            style={{ backgroundColor: line }}
-          />
-          <span
-            className="mt-2 ml-3 block h-1.5 w-20 rounded-full opacity-60"
-            style={{ backgroundColor: line }}
-          />
-          <span
-            className="mt-2 ml-3 block h-1.5 w-14 rounded-full opacity-45"
-            style={{ backgroundColor: line }}
-          />
-        </span>
+      <span aria-hidden="true" className="flex h-24 w-full overflow-hidden rounded-md border">
+        {modes.map((mode) => {
+          const colors = resolveAppearanceColors(preferences.accent, mode, preferences.colors[mode])
+          return (
+            <span
+              key={mode}
+              className="flex min-w-0 flex-1"
+              style={{ backgroundColor: colors.background }}
+            >
+              <span
+                className="flex w-[32%] shrink-0 flex-col gap-2 px-1.5 py-3"
+                style={{ backgroundColor: colors.shellSolid }}
+              >
+                <span
+                  className="h-1.5 w-3/4 rounded-full"
+                  style={{ backgroundColor: colors.sidebarForeground }}
+                />
+                <span
+                  className="h-3 w-full rounded-sm"
+                  style={{ backgroundColor: colors.sidebarSelected }}
+                />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-2 p-3">
+                <span
+                  className="h-1.5 w-3/5 rounded-full"
+                  style={{ backgroundColor: colors.foreground }}
+                />
+                <span
+                  className="h-1.5 w-full rounded-full"
+                  style={{ backgroundColor: colors.mutedForeground }}
+                />
+                <span
+                  className="h-1.5 w-4/5 rounded-full"
+                  style={{ backgroundColor: colors.mutedForeground }}
+                />
+                <span
+                  className="mt-auto h-2 w-1/4 self-end rounded-full"
+                  style={{ backgroundColor: colors.primary }}
+                />
+              </span>
+            </span>
+          )
+        })}
       </span>
       <span className="flex items-center justify-between gap-2 text-sm">
         <span>{THEME_LABELS[theme]}</span>

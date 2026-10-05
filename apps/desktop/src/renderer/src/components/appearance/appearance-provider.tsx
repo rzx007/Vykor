@@ -20,7 +20,7 @@ import {
   detectLocalFontAvailability,
   repairUnavailableFonts,
 } from "./appearance-fonts"
-import { resolveAppearanceColors } from "./appearance-colors"
+import { applyAppearanceColors } from "./appearance-colors"
 import {
   APPEARANCE_STORAGE_KEY,
   DEFAULT_APPEARANCE_PREFERENCES,
@@ -54,20 +54,6 @@ export type AppearanceContextValue = {
 }
 
 const AppearanceContext = createContext<AppearanceContextValue | undefined>(undefined)
-
-const COLOR_PROPERTIES = {
-  primary: "--primary",
-  primaryForeground: "--primary-foreground",
-  ring: "--ring",
-  accent: "--accent",
-  accentForeground: "--accent-foreground",
-  sidebarPrimary: "--sidebar-primary",
-  sidebarPrimaryForeground: "--sidebar-primary-foreground",
-  sidebarAccent: "--sidebar-accent",
-  sidebarAccentForeground: "--sidebar-accent-foreground",
-  sidebarSelected: "--sidebar-selected",
-  fileLink: "--file-link",
-} as const
 
 function readStoredPreferences(): AppearancePreferences {
   try {
@@ -121,10 +107,7 @@ function applyAppearanceToRoot(
   root.style.setProperty("--ui-font-size", `${preferences.uiFontSize}px`)
   root.style.setProperty("--code-font-size", `${preferences.codeFontSize}px`)
 
-  const colors = resolveAppearanceColors(preferences.accent, resolvedTheme)
-  for (const [token, property] of Object.entries(COLOR_PROPERTIES)) {
-    root.style.setProperty(property, colors[token as keyof typeof colors])
-  }
+  applyAppearanceColors(root, preferences, resolvedTheme)
 }
 
 export function AppearanceProvider({ children }: { children: ReactNode }): ReactElement {
@@ -201,7 +184,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
 
   const resetAppearance = useCallback(() => {
     const saved = persistPreferences(parseAppearancePreferences(null))
-    if (saved) setWindowMaterial(DEFAULT_WINDOW_MATERIAL_PREFERENCE)
+    if (saved && windowMaterialRef.current) setWindowMaterial(DEFAULT_WINDOW_MATERIAL_PREFERENCE)
     return saved
   }, [persistPreferences, setWindowMaterial])
 

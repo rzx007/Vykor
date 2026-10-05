@@ -7,11 +7,40 @@ import {
 } from "./appearance-preferences"
 
 describe("appearance preferences", () => {
+  it("restores per-mode colors independently and normalizes valid values", () => {
+    const parsed = parseAppearancePreferences(
+      JSON.stringify({
+        version: 1,
+        theme: "system",
+        colors: {
+          light: { background: "#eff1f5", foreground: "broken" },
+          dark: { background: "#282a36", foreground: "f8f8f2" },
+        },
+      })
+    )
+    expect(parsed).toMatchObject({
+      colors: {
+        light: { background: "#EFF1F5", foreground: null },
+        dark: { background: "#282A36", foreground: "#F8F8F2" },
+      },
+    })
+    expect(parseAppearancePreferences('{"version":1,"theme":"dark"}')).toMatchObject({
+      theme: "dark",
+      colors: {
+        light: { background: null, foreground: null },
+        dark: { background: null, foreground: null },
+      },
+    })
+  })
   it("provides the product defaults", () => {
     expect(DEFAULT_APPEARANCE_PREFERENCES).toEqual({
       version: 1,
       theme: "system",
       accent: { kind: "preset", id: "neutral" },
+      colors: {
+        light: { background: null, foreground: null },
+        dark: { background: null, foreground: null },
+      },
       uiFont: "inter",
       codeFont: "geist-mono",
       uiFontSize: 14,
@@ -39,6 +68,10 @@ describe("appearance preferences", () => {
       version: 1,
       theme: "dark",
       accent: { kind: "custom", value: "#0A6AFF" },
+      colors: {
+        light: { background: null, foreground: null },
+        dark: { background: null, foreground: null },
+      },
       uiFont: "inter",
       codeFont: "consolas",
       uiFontSize: 16,
@@ -66,6 +99,10 @@ describe("appearance preferences", () => {
       version: 1,
       theme: "dark",
       accent: { kind: "preset", id: "neutral" },
+      colors: {
+        light: { background: null, foreground: null },
+        dark: { background: null, foreground: null },
+      },
       uiFont: "inter",
       codeFont: "geist-mono",
       uiFontSize: 14,

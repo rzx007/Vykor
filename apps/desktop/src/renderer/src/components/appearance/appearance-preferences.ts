@@ -9,11 +9,16 @@ export type AccentPresetId = "neutral" | "blue" | "violet" | "terracotta" | "gre
 export type UiFontId = "system" | "segoe-ui" | "inter"
 export type CodeFontId = "cascadia-code" | "cascadia-mono" | "geist-mono" | "consolas"
 export type ReducedMotionPreference = "system" | "on" | "off"
+export type AppearancePalette = {
+  background: `#${string}` | null
+  foreground: `#${string}` | null
+}
 
 export type AppearancePreferences = {
   version: 1
   theme: AppearanceTheme
   accent: { kind: "preset"; id: AccentPresetId } | { kind: "custom"; value: `#${string}` }
+  colors: Record<"light" | "dark", AppearancePalette>
   uiFont: UiFontId
   codeFont: CodeFontId
   uiFontSize: number
@@ -26,6 +31,10 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   version: 1,
   theme: "system",
   accent: { kind: "preset", id: "neutral" },
+  colors: {
+    light: { background: null, foreground: null },
+    dark: { background: null, foreground: null },
+  },
   uiFont: "inter",
   codeFont: "geist-mono",
   uiFontSize: 14,
@@ -44,6 +53,10 @@ function createDefaultPreferences(): AppearancePreferences {
   return {
     ...DEFAULT_APPEARANCE_PREFERENCES,
     accent: { ...DEFAULT_APPEARANCE_PREFERENCES.accent },
+    colors: {
+      light: { ...DEFAULT_APPEARANCE_PREFERENCES.colors.light },
+      dark: { ...DEFAULT_APPEARANCE_PREFERENCES.colors.dark },
+    },
   }
 }
 
@@ -95,6 +108,16 @@ export function normalizeHexColor(value: string): `#${string}` | null {
   return `#${candidate.toUpperCase()}`
 }
 
+function parsePalette(value: unknown): AppearancePalette {
+  const palette = isRecord(value) ? value : {}
+  return {
+    background:
+      typeof palette.background === "string" ? normalizeHexColor(palette.background) : null,
+    foreground:
+      typeof palette.foreground === "string" ? normalizeHexColor(palette.foreground) : null,
+  }
+}
+
 export function parseAppearancePreferences(raw: string | null): AppearancePreferences {
   if (raw === null) {
     return createDefaultPreferences()
@@ -116,6 +139,10 @@ export function parseAppearancePreferences(raw: string | null): AppearancePrefer
     version: 1,
     theme: isSetMember(THEMES, value.theme) ? value.theme : defaults.theme,
     accent: parseAccent(value.accent),
+    colors: {
+      light: parsePalette(isRecord(value.colors) ? value.colors.light : null),
+      dark: parsePalette(isRecord(value.colors) ? value.colors.dark : null),
+    },
     uiFont: isSetMember(UI_FONTS, value.uiFont) ? value.uiFont : defaults.uiFont,
     codeFont: isSetMember(CODE_FONTS, value.codeFont) ? value.codeFont : defaults.codeFont,
     uiFontSize: normalizeIntegerPreference(

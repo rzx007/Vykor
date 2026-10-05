@@ -135,6 +135,82 @@ describe("AppearanceSettings", () => {
     })
   })
 
+  it("offers separate background and foreground controls for the active mode", async () => {
+    await renderSettings()
+    const background = container.querySelector<HTMLInputElement>('[aria-label="自定义背景色"]')
+    const foreground = container.querySelector<HTMLInputElement>('[aria-label="自定义前景色"]')
+    expect(background?.value).toBe("#FCFCFD")
+    expect(foreground?.value).toBe("#1B1B1B")
+    act(() => {
+      setInputValue(background, "#eff1f5")
+      background?.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    expect(setPreference).toHaveBeenCalledWith("colors", {
+      light: { background: "#EFF1F5", foreground: null },
+      dark: { background: null, foreground: null },
+    })
+    act(() => {
+      setInputValue(foreground, "#4c4f69")
+      foreground?.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    expect(setPreference).toHaveBeenCalledWith("colors", {
+      light: { background: null, foreground: "#4C4F69" },
+      dark: { background: null, foreground: null },
+    })
+  })
+
+  it("keeps invalid background drafts out of saved preferences", async () => {
+    await renderSettings()
+    const input = container.querySelector<HTMLInputElement>('[aria-label="自定义背景色"]')
+    expect(input).not.toBeNull()
+    act(() => {
+      setInputValue(input, "#12")
+      input?.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    expect(input?.value).toBe("#12")
+    expect(input?.getAttribute("aria-invalid")).toBe("true")
+    expect(setPreference).not.toHaveBeenCalled()
+  })
+
+  it("edits dark colors without overwriting the saved light palette", async () => {
+    mocks.useAppearance.mockReturnValue({
+      ...mocks.useAppearance(),
+      resolvedTheme: "dark",
+      preferences: {
+        ...DEFAULT_APPEARANCE_PREFERENCES,
+        colors: {
+          light: { background: "#EFF1F5", foreground: "#4C4F69" },
+          dark: { background: "#282A36", foreground: "#F8F8F2" },
+        },
+      },
+    })
+    await renderSettings()
+    const input = container.querySelector<HTMLInputElement>('[aria-label="自定义背景色"]')
+    expect(input?.value).toBe("#282A36")
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="恢复默认背景色"]')?.click())
+    expect(setPreference).toHaveBeenCalledWith("colors", {
+      light: { background: "#EFF1F5", foreground: "#4C4F69" },
+      dark: { background: null, foreground: "#F8F8F2" },
+    })
+  })
+
+  it("keeps the color input mounted and refreshes it when preferences change", async () => {
+    await renderSettings()
+    const input = container.querySelector<HTMLInputElement>('[aria-label="自定义强调色"]')!
+    input.focus()
+    mocks.useAppearance.mockReturnValue({
+      ...mocks.useAppearance(),
+      preferences: {
+        ...DEFAULT_APPEARANCE_PREFERENCES,
+        accent: { kind: "custom", value: "#123456" },
+      },
+    })
+    await renderSettings()
+    expect(container.querySelector('[aria-label="自定义强调色"]')).toBe(input)
+    expect(input.value).toBe("#123456")
+    expect(document.activeElement).toBe(input)
+  })
+
   it("shows save feedback and asks before restoring defaults", async () => {
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
