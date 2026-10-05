@@ -10,7 +10,12 @@ import {
   mergeFileViewerTabs,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/file-viewer"
-import { SideChatPanel } from "@renderer/components/desktop/tools/side-chat-panel"
+import { SideChatPanel, destroySideChat } from "@renderer/components/desktop/tools/side-chat-panel"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@renderer/components/ui/alert-dialog"
+import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
 import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
@@ -109,6 +114,13 @@ export function UtilityPanel({
     setHandledToolRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
+  const [pendingSideChatClose, setPendingSideChatClose] = useState<{
+    tabIds: string[]; preferredActiveTabId?: string; sourceId: string; scopeId: string
+  } | null>(null)
+  const [sideChatCloseError, setSideChatCloseError] = useState<string | null>(null)
+  const [closingSideChat, setClosingSideChat] = useState(false)
+  const closeInProgress = useRef(false)
+  const latestCloseTabs = useRef<((tabIds: string[], preferredActiveTabId?: string) => void) | null>(null)
   const terminalCommandSequenceRef = useRef(0)
   const handledReviewRequestRef = useRef<number | null>(null)
   const [persistedFileTabs, setPersistedFileTabs] = useState<PersistedFileTabsByScope>(
@@ -320,7 +332,7 @@ export function UtilityPanel({
     return () => window.clearTimeout(timer)
   }, [addTab, handledToolRequestId, setHandledToolRequestId, toolOpenRequest])
 
-  const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
+  const finishCloseTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
     const closingIds = new Set(tabIds)
     if (closingIds.size === 0) return
     if (pluginTab && closingIds.has(pluginTab.id))
@@ -402,6 +414,44 @@ export function UtilityPanel({
           terminalIds: closingTerminalIds,
         },
       ])
+    }
+  }
+  latestCloseTabs.current = finishCloseTabs
+
+  const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
+    if (closeInProgress.current) return
+    if (activeSessionId && tabs.some((tab) => tab.tool === "side-chat" && tabIds.includes(tab.id))) {
+      setSideChatCloseError(null)
+      setPendingSideChatClose({ tabIds, preferredActiveTabId, sourceId: activeSessionId, scopeId })
+      return
+    }
+    finishCloseTabs(tabIds, preferredActiveTabId)
+  }
+  const closeContext = useRef({ scopeId, activeSessionId })
+  closeContext.current = { scopeId, activeSessionId }
+  useEffect(() => {
+    setPendingSideChatClose(null)
+    setSideChatCloseError(null)
+  }, [scopeId, activeSessionId])
+
+  const confirmSideChatClose = async (): Promise<void> => {
+    const request = pendingSideChatClose
+    if (!request || closeInProgress.current) return
+    closeInProgress.current = true
+    setClosingSideChat(true)
+    setSideChatCloseError(null)
+    try {
+      await destroySideChat(request.sourceId)
+      if (closeContext.current.scopeId === request.scopeId && closeContext.current.activeSessionId === request.sourceId) {
+        latestCloseTabs.current?.(request.tabIds, request.preferredActiveTabId)
+        setPendingSideChatClose(null)
+      }
+    } catch (cause) {
+      if (closeContext.current.scopeId === request.scopeId && closeContext.current.activeSessionId === request.sourceId)
+        setSideChatCloseError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      closeInProgress.current = false
+      setClosingSideChat(false)
     }
   }
 
@@ -593,6 +643,25 @@ export function UtilityPanel({
       )}
     >
       <div className="flex h-full min-w-[320px] flex-col">
+        <AlertDialog open={pendingSideChatClose !== null} onOpenChange={(nextOpen) => {
+          if (!nextOpen && !closeInProgress.current) setPendingSideChatClose(null)
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>关闭并销毁侧边聊天？</AlertDialogTitle>
+              <AlertDialogDescription>
+                将停止此临时聊天的运行，并清除消息和草稿，关闭后无法恢复。主聊天不受影响；附件、工作流和已保存的长期记忆仍保留。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {sideChatCloseError ? <Alert variant="destructive"><AlertDescription>{sideChatCloseError}</AlertDescription></Alert> : null}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={closingSideChat}>取消</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" disabled={closingSideChat} onClick={() => void confirmSideChatClose()}>
+                {closingSideChat ? "正在销毁…" : "关闭并销毁"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <UtilityPanelTabStrip
           tabs={visibleTabs}
           browserTabs={browserTabs}

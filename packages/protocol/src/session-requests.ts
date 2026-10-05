@@ -19,6 +19,7 @@ export interface CreateSessionInput {
 }
 
 export interface ForkSessionInput {
+  copyHistory?: boolean;
   beforeMessageId?: string;
   afterMessageId?: string;
   storage?: SessionStorage;

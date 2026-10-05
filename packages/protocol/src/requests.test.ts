@@ -74,6 +74,10 @@ describe("HTTP request parsers", () => {
     expect(parseForkSessionRequest({ afterMessageId: "m1", storage: "memory" }))
       .toEqual({ afterMessageId: "m1", storage: "memory" });
     expect(parseForkSessionRequest({})).toEqual({});
+    expect(parseForkSessionRequest({ storage: "memory", copyHistory: false }))
+      .toEqual({ storage: "memory", copyHistory: false });
+    expectInvalid(() => parseForkSessionRequest({ copyHistory: "false" }), "copyHistory");
+    expectInvalid(() => parseForkSessionRequest({ copyHistory: false, beforeMessageId: "m1" }), "copyHistory");
     expectInvalid(() => parseForkSessionRequest({ storage: "disk" }), "storage");
   });
 

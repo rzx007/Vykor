@@ -137,6 +137,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
             displayName,
           })),
         })
+        if (!get().sessionRuntimes[sessionId]) return
         clearSubmittedDraft(sessionId, document, attachmentDrafts)
         const keepLocalAcknowledgement = get().activeSessionId === sessionId
         replaceRuntime(sessionId, (currentRuntime) =>
@@ -158,6 +159,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           )
         )
       } catch (error) {
+        if (!get().sessionRuntimes[sessionId]) throw error
         const message = errorMessage(error)
         const confirmed = promptSubmissionConfirmed(get(), sessionId, submission.id)
         const keepLocalAcknowledgement = get().activeSessionId === sessionId
@@ -309,8 +311,10 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           sessionId,
           ...(expectedRunId ? { expectedRunId } : {}),
         })
+        if (!get().sessionRuntimes[sessionId]) return
         replaceRuntime(sessionId, (runtime) => removeOperation(runtime, operationId))
       } catch (error) {
+        if (!get().sessionRuntimes[sessionId]) return
         const message = errorMessage(error)
         const confirmed = !getSessionRuntime(get(), sessionId).operations[operationId]
         replaceRuntime(sessionId, (runtime) =>
@@ -342,8 +346,10 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           decision,
           ...(answer !== undefined ? { answer } : {}),
         })
+        if (!get().sessionRuntimes[sessionId]) return
         replaceRuntime(sessionId, (runtime) => removeOperation(runtime, operationId))
       } catch (error) {
+        if (!get().sessionRuntimes[sessionId]) return
         const message = errorMessage(error)
         const confirmed = !getSessionRuntime(get(), sessionId).operations[operationId]
         replaceRuntime(sessionId, (runtime) =>

@@ -43,6 +43,31 @@ function emptySessionView(sessionId: string, cursor = 0): DesktopSessionView {
   }
 }
 
+it.each(["model", "permission", "effort"])("does not apply a late side %s setting once its target is invalidated", async (kind) => {
+  resetDesktopSessionStore()
+  let current = true
+  let finish!: () => void
+  const delayed = () => new Promise<DesktopSessionView["session"]>((resolve) => {
+    finish = () => resolve({ ...emptySessionView("side").session, parentId: "main", storage: "memory" })
+  })
+  vi.stubGlobal("window", { desktop: { sessions: { updateModel: delayed, updatePermissionMode: delayed, updateEffort: delayed } } })
+  try {
+    const main = emptySessionView("main")
+    useDesktopSessionStore.setState({ activeSessionId: "main", sessionView: main, sessions: [main.session] })
+    const actions = useDesktopSessionStore.getState()
+    const isCurrent = () => current
+    const request = kind === "model"
+      ? actions.updateSessionModel("side", { id: "m", label: "M", provider: "test", providerName: "test" }, isCurrent)
+      : kind === "permission" ? actions.updateSessionPermissionMode("side", "default", isCurrent)
+      : actions.updateSessionEffort("side", "high", isCurrent)
+    current = false
+    finish()
+    await request
+    expect(useDesktopSessionStore.getState().sessions.map((session) => session.id)).toEqual(["main"])
+    expect(useDesktopSessionStore.getState().sessionView).toBe(main)
+  } finally { vi.unstubAllGlobals() }
+})
+
 function resetNewConversationState(): void {
   useDesktopSessionStore.setState({
     projects: [],

@@ -25,8 +25,19 @@ it("passes storage through the client and HTTP creation/fork routes without chan
     expect((await client.sessions.getState(temporary.id)).parts.map((part) => part.text)).toEqual(["source history"]);
     expect(server.store.conversations.listMessages(source.id).map((item) => item.id)).toEqual([message.id]);
 
+    const blank = await client.sessions.fork(source.id, { storage: "memory", copyHistory: false });
+    const blankState = await client.sessions.getState(blank.id);
+    expect(blankState.session).toMatchObject({ parentId: source.id, storage: "memory", cwd: directory, model: "test-model" });
+    for (const records of [blankState.messages, blankState.parts, blankState.inputs, blankState.runs, blankState.attempts, blankState.permissions]) {
+      expect(records).toEqual([]);
+    }
+    await client.sessions.delete(blank.id);
+    await expect(client.sessions.getState(blank.id)).rejects.toMatchObject({ status: 404 });
+    expect((await client.sessions.getState(source.id)).parts.map((part) => part.text)).toEqual(["source history"]);
+
     const ordinaryFork = await client.sessions.fork(source.id);
     expect(ordinaryFork).not.toHaveProperty("storage");
+    expect((await client.sessions.getState(ordinaryFork.id)).parts.map((part) => part.text)).toEqual(["source history"]);
     const directTemporary = await client.sessions.create({ cwd: directory, model: "test-model", storage: "memory" });
     expect(directTemporary.storage).toBe("memory");
     await expect(client.sessions.fork(source.id, { storage: "disk" } as any))

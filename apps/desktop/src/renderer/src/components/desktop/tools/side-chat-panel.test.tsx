@@ -45,6 +45,7 @@ const sendPrompt = vi.fn(async (_input: unknown): Promise<void> => undefined)
 const interrupt = vi.fn(async (_input: unknown) => undefined)
 const replyPermission = vi.fn(async (_input: unknown) => undefined)
 const closeAux = vi.fn(async (_input: unknown) => undefined)
+const deleteSession = vi.fn(async (sessionId: string) => [sessionId])
 const callbacks = {
   onOpenFile: () => {},
   canOpenReview: false,
@@ -89,10 +90,17 @@ beforeEach(() => {
   sideChatTargets.clear()
   listeners = new Set()
   vi.clearAllMocks()
-  fork.mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
-  openAux.mockImplementation(async ({ sessionId }) => sideView(sessionId.replace("side-", "")))
-  sendPrompt.mockImplementation(async () => undefined)
-  replyPermission.mockImplementation(async () => undefined)
+  fork.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
+  openAux.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId.replace("side-", "")))
+  sendPrompt.mockReset().mockImplementation(async () => undefined)
+  replyPermission.mockReset().mockImplementation(async () => undefined)
+  deleteSession.mockReset().mockImplementation(async (sessionId) => [sessionId])
+  window.scrollBy = () => {}
+  writeUtilityPanelRuntimeState("session:side-chat-close", {
+    ...defaultUtilityPanelRuntimeState(),
+    tabs: [{ id: "side-chat-tab", tool: "side-chat", title: "侧边聊天" }],
+    activeTabId: "side-chat-tab",
+  })
   Object.defineProperty(window, "desktop", {
     configurable: true,
     value: {
@@ -100,6 +108,7 @@ beforeEach(() => {
         fork,
         openAux,
         closeAux,
+        delete: deleteSession,
         sendPrompt,
         interrupt,
         replyPermission,
@@ -136,6 +145,28 @@ async function mount(sourceId = "main", active = true) {
   await act(async () =>
     root.render(<SideChatPanel key={sourceId} sourceId={sourceId} active={active} {...callbacks} />)
   )
+}
+async function mountUtilitySideChat(open = true) {
+  const scopeId = "session:side-chat-close"
+  if (!readUtilityPanelRuntimeState(scopeId)) {
+    writeUtilityPanelRuntimeState(scopeId, {
+      ...defaultUtilityPanelRuntimeState(),
+      tabs: [{ id: "side-chat-tab", tool: "side-chat", title: "侧边聊天" }],
+      activeTabId: "side-chat-tab",
+    })
+  }
+  await act(async () => root.render(<UtilityPanel
+    scopeId={scopeId} open={open} maximized={false} onToggleMaximized={() => {}}
+    onClose={() => {}} fileOpenRequest={null} reviewOpenRequest={null}
+    terminalOpenRequest={null} toolOpenRequest={null} {...callbacks}
+  />))
+}
+async function closeSideChatTab() {
+  await act(async () => container.querySelector<HTMLButtonElement>('.utility-tab-strip button[aria-label="关闭标签"]')!.click())
+}
+async function confirmSideChatClose() {
+  await act(async () => [...document.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "关闭并销毁")!.click())
 }
 async function submit() {
   expect(container.querySelector("form"), "ordinary shared composer must be present").not.toBeNull()
@@ -180,6 +211,180 @@ it("ignores previous durable target associations stored in localStorage", async 
   await mount()
   expect(openAux).not.toHaveBeenCalled()
   expect(fork).not.toHaveBeenCalled()
+})
+
+it("requires confirmation before destroying a side tab and cancellation preserves its records and draft", async () => {
+  sideChatTargets.set("main", "side-main")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "keep draft")
+  await mountUtilitySideChat()
+  await closeSideChatTab()
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull()
+  expect(document.body.textContent).toContain("无法恢复")
+  expect(deleteSession).not.toHaveBeenCalled()
+  await act(async () => document.querySelector<HTMLButtonElement>('[data-slot="alert-dialog-cancel"]')!.click())
+  expect(sideChatTargets.get("main")).toBe("side-main")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("keep draft")
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+})
+
+it("destroys only the temporary session after confirmation and removes its drafts and runtime cache", async () => {
+  sideChatTargets.set("main", "side-main")
+  useDesktopSessionStore.getState().setComposerDraftText("session:main", "primary draft")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "temporary draft")
+  await mountUtilitySideChat()
+  expect(useDesktopSessionStore.getState().sessionRuntimes["side-main"]).toBeDefined()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(deleteSession).toHaveBeenCalledExactlyOnceWith("side-main")
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("")
+  expect(useDesktopSessionStore.getState().sessionRuntimes["side-main"]).toBeUndefined()
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+  expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("primary draft")
+})
+
+it("discards a prefork draft on confirmed tab close without creating or deleting a session", async () => {
+  draft("main", "not sent")
+  appendSideChatQuote("main", "quote")
+  await mountUtilitySideChat()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(fork).not.toHaveBeenCalled()
+  expect(deleteSession).not.toHaveBeenCalled()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("")
+  expect(selections("linked-chat:main")).toEqual([])
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+})
+
+it("keeps the tab, target and draft when deletion fails, allowing a retry", async () => {
+  sideChatTargets.set("main", "side-main")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "keep draft")
+  deleteSession.mockRejectedValueOnce(new Error("delete offline"))
+  await mountUtilitySideChat()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(document.body.textContent).toContain("delete offline")
+  expect(sideChatTargets.get("main")).toBe("side-main")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("keep draft")
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+  await confirmSideChatClose()
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+})
+
+it("does not destroy a temporary chat when the utility panel is hidden or the component unmounts", async () => {
+  sideChatTargets.set("main", "side-main")
+  await mountUtilitySideChat()
+  await mountUtilitySideChat(false)
+  await act(async () => root.render(null))
+  expect(deleteSession).not.toHaveBeenCalled()
+  expect(sideChatTargets.get("main")).toBe("side-main")
+})
+
+it("waits for a pending first creation before destroying it and never sends the captured prompt", async () => {
+  let finish!: (value: ReturnType<typeof sideView>["session"]) => void
+  fork.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  draft("main", "do not send")
+  await mountUtilitySideChat()
+  await submit()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+  await act(async () => finish(sideView().session))
+  expect(deleteSession).toHaveBeenCalledExactlyOnceWith("side-main")
+  expect(sendPrompt).not.toHaveBeenCalled()
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+})
+
+it("does not restore or send to a destroyed target when its initial model setting finishes late", async () => {
+  const original = { id: "test-model", label: "Original", provider: "Test", providerName: "test" }
+  const alternate = { ...original, id: "alternate", label: "Alternate" }
+  useDesktopSessionStore.setState({ models: [original, alternate] })
+  let finish!: () => void
+  const updateModel = vi.fn(() => new Promise<ReturnType<typeof sideView>["session"]>((resolve) => {
+    finish = () => resolve({ ...sideView().session, model: "alternate" })
+  }))
+  Object.assign(window.desktop.sessions, { updateModel })
+  draft("main", "do not send")
+  await mountUtilitySideChat()
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === "Original")!.click())
+  await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) => item.textContent === "Alternate")!.click())
+  await submit()
+  expect(updateModel).toHaveBeenCalledTimes(1)
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  await act(async () => finish())
+  expect(sendPrompt).not.toHaveBeenCalled()
+  expect(useDesktopSessionStore.getState().sessions.map((session) => session.id)).toEqual(["main"])
+  expect(useDesktopSessionStore.getState().sessionRuntimes["side-main"]).toBeUndefined()
+  expect(sideChatTargets.has("main")).toBe(false)
+})
+
+it("allows confirmed close when the service has already lost the temporary session", async () => {
+  sideChatTargets.set("main", "side-main")
+  await mountUtilitySideChat()
+  deleteSession.mockRejectedValueOnce(new Error("Session not found: side-main"))
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+})
+
+it.each([
+  { id: "main" },
+  { parentId: "other-main" },
+  { storage: "sqlite" as const },
+])("refuses to delete a target with mismatched identity, source or storage: %s", async (patch) => {
+  sideChatTargets.set("main", "side-main")
+  await mountUtilitySideChat()
+  openAux.mockResolvedValueOnce({ ...sideView(), session: { ...sideView().session, ...patch } })
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  expect(deleteSession).not.toHaveBeenCalled()
+  expect(sideChatTargets.get("main")).toBe("side-main")
+  expect(document.body.textContent).toContain("来源不匹配")
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+})
+
+it("does not close or delete the new source when switching main chats while deletion is pending", async () => {
+  sideChatTargets.set("main", "side-main")
+  sideChatTargets.set("other", "side-other")
+  let finish!: (ids: string[]) => void
+  deleteSession.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  await mountUtilitySideChat()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  await act(async () => useDesktopSessionStore.setState({ activeSessionId: "other", sessionView: emptySessionView("other") }))
+  await act(async () => finish(["side-main"]))
+  expect(deleteSession).toHaveBeenCalledExactlyOnceWith("side-main")
+  expect(sideChatTargets.get("other")).toBe("side-other")
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+})
+
+it.each(["关闭其他标签", "关闭右侧标签"])("also confirms destruction through %s", async (action) => {
+  sideChatTargets.set("main", "side-main")
+  writeUtilityPanelRuntimeState("session:side-chat-close", {
+    ...defaultUtilityPanelRuntimeState(),
+    tabs: [
+      { id: "files-tab", tool: "files", title: "文件" },
+      { id: "side-chat-tab", tool: "side-chat", title: "侧边聊天" },
+    ],
+    activeTabId: "side-chat-tab",
+  })
+  await mountUtilitySideChat()
+  const trigger = container.querySelector<HTMLButtonElement>('.utility-tab-strip button[title="文件"]')!
+  await act(async () => trigger.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 })))
+  await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find((item) => item.textContent === action)!.click())
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull()
+  expect(deleteSession).not.toHaveBeenCalled()
+  await confirmSideChatClose()
+  expect(sideChatTargets.has("main")).toBe(false)
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).toBeNull()
+  expect(readUtilityPanelRuntimeState("session:side-chat-close")?.tabs.map((tab) => tab.id)).toEqual(["files-tab"])
 })
 
 it("selected snippets can be previewed and removed without editing the question or sending", async () => {
@@ -336,7 +541,7 @@ it("first send forks once, sends normal context, skill, plugin and attachment it
   const primary = useDesktopSessionStore.getState().sessionView
   await mount()
   await submit()
-  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory" })
+  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory", copyHistory: false })
   expect(localStorage.getItem("vykor.desktop.linked-chat-targets")).toBeNull()
   expect(sendPrompt).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -691,7 +896,7 @@ it.each([
   openAux.mockResolvedValueOnce(replacement)
   await submit()
 
-  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory" })
+  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main", storage: "memory", copyHistory: false })
   expect(sendPrompt).toHaveBeenCalledWith(expect.objectContaining({
     sessionId: "side-recreated",
     items: [

@@ -222,6 +222,9 @@ export class SessionCommandService {
     this.assertReady();
     const source = this.options.sessions.getSession(sessionId);
     if (!source) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
+    if (input.copyHistory === false && (input.beforeMessageId !== undefined || input.afterMessageId !== undefined)) {
+      throw new SessionApplicationError(400, "copyHistory=false cannot select a fork point");
+    }
 
     const before = this.options.events.checkpoint();
     const metadata = forkSessionMetadata(source.metadata, {
@@ -229,23 +232,26 @@ export class SessionCommandService {
       ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
       ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
     });
+    const sessionInput = {
+      parentId: source.id,
+      ...(input.storage !== undefined ? { storage: input.storage } : {}),
+      ...(source.projectId ? { projectId: source.projectId } : {}),
+      cwd: source.cwd,
+      title: source.title ? `${source.title} fork` : "",
+      model: source.model,
+      ...(source.agent ? { agent: source.agent } : {}),
+      metadata,
+    };
     let fork: SessionRecord;
     try {
-      fork = this.options.sessions.forkSessionWithHistory({
-        sourceSessionId: source.id,
-        ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
-        ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
-        session: {
-          parentId: source.id,
-          ...(input.storage !== undefined ? { storage: input.storage } : {}),
-          ...(source.projectId ? { projectId: source.projectId } : {}),
-          cwd: source.cwd,
-          title: source.title ? `${source.title} fork` : "",
-          model: source.model,
-          ...(source.agent ? { agent: source.agent } : {}),
-          metadata,
-        },
-      });
+      fork = input.copyHistory === false
+        ? this.options.sessions.createSession(sessionInput)
+        : this.options.sessions.forkSessionWithHistory({
+            sourceSessionId: source.id,
+            ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
+            ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
+            session: sessionInput,
+          });
     } catch (error) {
       if (error instanceof Error && error.message === "Fork point not found") {
         throw new SessionApplicationError(404, error.message);

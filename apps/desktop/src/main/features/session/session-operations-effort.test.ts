@@ -10,9 +10,9 @@ it("retains temporary storage when forking through the desktop service", async (
     metadata: {}, createdAt: 1, updatedAt: 1, ...input,
   }))
   const result = await new SessionOperations().forkSession({ sessions: { fork } } as never, {
-    sessionId: "main", storage: "memory",
+    sessionId: "main", storage: "memory", copyHistory: false,
   })
-  expect(fork).toHaveBeenCalledWith("main", { storage: "memory" })
+  expect(fork).toHaveBeenCalledWith("main", { storage: "memory", copyHistory: false })
   expect(result.storage).toBe("memory")
 })
 

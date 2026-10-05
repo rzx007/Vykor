@@ -337,6 +337,7 @@ export interface CancelDesktopQueuedPromptInput {
 
 export interface ForkDesktopSessionInput {
   sessionId: string
+  copyHistory?: boolean
   storage?: "sqlite" | "memory"
   beforeMessageId?: string
   afterMessageId?: string

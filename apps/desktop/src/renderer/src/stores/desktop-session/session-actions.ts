@@ -277,7 +277,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       }
     },
 
-    async updateSessionModel(sessionId, model) {
+    async updateSessionModel(sessionId, model, isCurrent) {
       const generation = nextRuntimeConfigGeneration(sessionId)
       const previousContextWindow =
         get().activeSessionId === sessionId ? get().contextUsageSnapshot?.contextWindow : undefined
@@ -286,6 +286,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         model: model.id,
         provider: model.providerName,
       })
+      if (isCurrent && !isCurrent()) return
       if (runtimeConfigGeneration.get(sessionId) !== generation) return
       set((state) => ({
         sessions: upsertSession(state.sessions, session),
@@ -307,11 +308,12 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       }
     },
 
-    async updateSessionPermissionMode(sessionId, permissionMode) {
+    async updateSessionPermissionMode(sessionId, permissionMode, isCurrent) {
       const session = await window.desktop.sessions.updatePermissionMode({
         sessionId,
         permissionMode,
       })
+      if (isCurrent && !isCurrent()) return
       set((state) => ({
         sessions: upsertSession(state.sessions, session),
         selectedPermissionMode:
@@ -325,9 +327,10 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       }))
     },
 
-    async updateSessionEffort(sessionId, effort) {
+    async updateSessionEffort(sessionId, effort, isCurrent) {
       const generation = nextRuntimeConfigGeneration(sessionId)
       const session = await window.desktop.sessions.updateEffort({ sessionId, effort })
+      if (isCurrent && !isCurrent()) return
       if (runtimeConfigGeneration.get(sessionId) !== generation) return
       set((state) => ({
         sessions: upsertSession(state.sessions, session),

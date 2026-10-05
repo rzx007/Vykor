@@ -129,12 +129,13 @@ export interface SessionActions {
   startNewConversation: () => Promise<void>
   selectModel: (model: DesktopModel) => Promise<void>
   selectPermissionMode: (mode: DesktopPermissionMode) => Promise<void>
-  updateSessionModel: (sessionId: string, model: DesktopModel) => Promise<void>
+  updateSessionModel: (sessionId: string, model: DesktopModel, isCurrent?: () => boolean) => Promise<void>
   updateSessionPermissionMode: (
     sessionId: string,
-    permissionMode: DesktopPermissionMode
+    permissionMode: DesktopPermissionMode,
+    isCurrent?: () => boolean
   ) => Promise<void>
-  updateSessionEffort: (sessionId: string, effort: string) => Promise<void>
+  updateSessionEffort: (sessionId: string, effort: string, isCurrent?: () => boolean) => Promise<void>
   selectEffort: (effort: string) => void
   openSession: (sessionId: string) => Promise<void>
   resyncActiveSessionSnapshot: () => Promise<void>

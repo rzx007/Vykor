@@ -69,6 +69,7 @@ import type {
 
 export const sideChatTargets = new Map<string, string>()
 const pendingForks = new Map<string, Promise<DesktopSessionRecord>>()
+const closingSources = new Set<string>()
 // Each renderer keeps the association currently displayed in its own panel.
 const boundTargets = new Map<string, string | null>()
 export function sideChatDraftScope(sourceId: string): string {
@@ -121,8 +122,43 @@ function moveSideChatDraft(from: string, to: string, merge = false): void {
 }
 function isMissingTarget(cause: unknown, targetId: string): boolean {
   const message = cause instanceof Error ? cause.message : String(cause)
-  return message.replace(/^Error invoking remote method 'session:aux-open': (?:Error|VykorApiError): /, "") ===
+  return message.replace(/^Error invoking remote method 'session:(?:aux-open|delete)': (?:Error|VykorApiError): /, "") ===
     `Session not found: ${targetId}`
+}
+export async function destroySideChat(sourceId: string): Promise<void> {
+  closingSources.add(sourceId)
+  try {
+    const pending = await pendingForks.get(sourceId)?.catch(() => undefined)
+    const targetId = sideChatTargets.get(sourceId) ?? pending?.id
+    const deleted = new Set<string>()
+    if (targetId) {
+      if (targetId === sourceId) throw new Error("不能把主聊天作为临时聊天销毁。")
+      const subscriptionId = `side-chat-delete:${crypto.randomUUID()}`
+      try {
+        const { session } = await window.desktop.sessions.openAux({ subscriptionId, sessionId: targetId })
+        if (session.id !== targetId || session.parentId !== sourceId || session.storage !== "memory")
+          throw new Error("侧边聊天的来源不匹配，未销毁会话。")
+        for (const id of await window.desktop.sessions.delete(targetId)) deleted.add(id)
+      } catch (cause) {
+        if (!isMissingTarget(cause, targetId)) throw cause
+      } finally {
+        await window.desktop.sessions.closeAux({ subscriptionId }).catch(() => {})
+      }
+      deleted.add(targetId)
+    }
+    sideChatTargets.delete(sourceId)
+    boundTargets.delete(sourceId)
+    const store = useDesktopSessionStore.getState()
+    store.resetComposerDraft(`linked-chat:${sourceId}`)
+    for (const id of deleted) store.resetComposerDraft(sessionComposerScope(id))
+    useDesktopSessionStore.setState((state) => ({
+      sessionRuntimes: Object.fromEntries(Object.entries(state.sessionRuntimes).filter(([id]) => !deleted.has(id))),
+      sessions: state.sessions.filter((session) => !deleted.has(session.id)),
+      archivedSessions: state.archivedSessions.filter((session) => !deleted.has(session.id)),
+    }))
+  } finally {
+    closingSources.delete(sourceId)
+  }
 }
 export function appendSideChatQuote(sourceId: string, text: string): void {
   if (!text.trim()) return
@@ -146,7 +182,7 @@ function forkTarget(sourceId: string): Promise<DesktopSessionRecord> {
   const pending = pendingForks.get(sourceId)
   if (pending) return pending
   const request = window.desktop.sessions
-    .fork({ sessionId: sourceId, storage: "memory" })
+    .fork({ sessionId: sourceId, storage: "memory", copyHistory: false })
     .then((session) => {
       if (session.id === sourceId || session.parentId !== sourceId || session.storage !== "memory")
         throw new Error("侧边聊天的来源不匹配，未发送消息。")
@@ -420,8 +456,10 @@ export function SideChatPanel({
     return () => cancelAnimationFrame(frame)
   }, [active, focusRequest])
 
+  const isCurrentTarget = (id: string): boolean =>
+    sideChatTargets.get(sourceId) === id && !closingSources.has(sourceId)
   const submit = async (): Promise<void> => {
-    if (creating || submitPending.current || sending || archived || unavailable) return
+    if (closingSources.has(sourceId) || creating || submitPending.current || sending || archived || unavailable) return
     if (
       (!selectComposerDocumentText(draft).trim() && !attachments.length) ||
       !areDesktopAttachmentsSendable(attachments)
@@ -435,6 +473,7 @@ export function SideChatPanel({
       if (!id) {
         setCreating(true)
         const target = await forkTarget(sourceId)
+        if (closingSources.has(sourceId)) return
         id = target.id
         if (mounted.current) {
           setTargetId(id)
@@ -444,11 +483,19 @@ export function SideChatPanel({
         if (remaining[preforkScope])
           throw new Error("两份草稿均已保留。请先在普通分支聊天中处理已有草稿，再发送这份草稿。")
         const actions = useDesktopSessionStore.getState()
-        if (preferences.model) await actions.updateSessionModel(id, preferences.model)
-        if (preferences.mode) await actions.updateSessionPermissionMode(id, preferences.mode)
+        const isCurrent = () => isCurrentTarget(target.id)
+        if (preferences.model) {
+          await actions.updateSessionModel(id, preferences.model, isCurrent)
+          if (!isCurrent()) return
+        }
+        if (preferences.mode) {
+          await actions.updateSessionPermissionMode(id, preferences.mode, isCurrent)
+          if (!isCurrent()) return
+        }
         if (preferences.effort !== undefined)
-          await actions.updateSessionEffort(id, preferences.effort)
+          await actions.updateSessionEffort(id, preferences.effort, isCurrent)
       }
+      if (!isCurrentTarget(id)) return
       const state = useDesktopSessionStore.getState()
       if (state.composerDraftsByScope[preforkScope])
         state.migrateComposerDraft(preforkScope, sessionComposerScope(id))
@@ -707,17 +754,17 @@ export function SideChatPanel({
               }
               onSelectModel={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionModel(targetId, next))
+                if (targetId) update(actions.updateSessionModel(targetId, next, () => isCurrentTarget(targetId)))
                 else setPreferences((current) => ({ ...current, model: next }))
               }}
               onSelectPermissionMode={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionPermissionMode(targetId, next))
+                if (targetId) update(actions.updateSessionPermissionMode(targetId, next, () => isCurrentTarget(targetId)))
                 else setPreferences((current) => ({ ...current, mode: next }))
               }}
               onSelectEffort={(next) => {
                 if (creating || unavailable) return
-                if (targetId) update(actions.updateSessionEffort(targetId, next))
+                if (targetId) update(actions.updateSessionEffort(targetId, next, () => isCurrentTarget(targetId)))
                 else setPreferences((current) => ({ ...current, effort: next }))
               }}
               onCommand={async (command) => {

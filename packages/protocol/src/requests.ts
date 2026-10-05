@@ -205,7 +205,12 @@ export function parseForkSessionRequest(value: unknown): ForkSessionInput {
   const beforeMessageId = optionalString(body, "beforeMessageId");
   const afterMessageId = optionalString(body, "afterMessageId");
   const storage = optionalEnum(body, "storage", ["sqlite", "memory"] as const);
+  const copyHistory = optionalBoolean(body, "copyHistory");
+  if (copyHistory === false && (beforeMessageId !== undefined || afterMessageId !== undefined)) {
+    throw new ProtocolValidationError("copyHistory=false cannot select a fork point", "copyHistory");
+  }
   return {
+    ...(copyHistory !== undefined ? { copyHistory } : {}),
     ...(beforeMessageId !== undefined ? { beforeMessageId } : {}),
     ...(afterMessageId !== undefined ? { afterMessageId } : {}),
     ...(storage !== undefined ? { storage } : {}),

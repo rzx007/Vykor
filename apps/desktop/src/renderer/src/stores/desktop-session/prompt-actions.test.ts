@@ -59,6 +59,51 @@ describe("prompt actions session runtime", () => {
     vi.unstubAllGlobals()
   })
 
+  it.each(["accepted", "rejected"])("does not recreate a destroyed runtime when a pending send is later %s", async (result) => {
+    let finish!: () => void
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () => new Promise<void>((resolve, reject) => {
+      finish = () => result === "accepted" ? resolve() : reject(new Error("Session deleted"))
+    }) } } })
+    const view = emptySessionView("temporary")
+    const document = composerDocument([{ type: "text", text: "in flight" }])
+    useDesktopSessionStore.setState({
+      activeSessionId: "main",
+      sessionView: emptySessionView("main"),
+      composerDraftsByScope: { "session:temporary": { document, attachments: [] } },
+    })
+    const request = useDesktopSessionStore.getState().sendMessage("in flight", { document, target: { sessionId: "temporary", view } })
+    expect(useDesktopSessionStore.getState().sessionRuntimes.temporary).toBeDefined()
+    // Confirmed destruction removes the cache and draft; late replies must not recreate them.
+    useDesktopSessionStore.setState({ sessionRuntimes: {}, composerDraftsByScope: {} })
+    finish()
+    if (result === "rejected") await expect(request).rejects.toThrow("Session deleted")
+    else await request
+    expect(useDesktopSessionStore.getState().sessionRuntimes.temporary).toBeUndefined()
+    expect(useDesktopSessionStore.getState().composerDraftsByScope["session:temporary"]).toBeUndefined()
+    expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
+  })
+
+  it.each([
+    ["interrupt", "accepted"], ["interrupt", "rejected"],
+    ["permission", "accepted"], ["permission", "rejected"],
+  ])("does not recreate a destroyed runtime after a late %s %s reply", async (operation, result) => {
+    let finish!: () => void
+    const delayed = () => new Promise<void>((resolve, reject) => {
+      finish = () => result === "accepted" ? resolve() : reject(new Error("Session deleted"))
+    })
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt: delayed, replyPermission: delayed } } })
+    useDesktopSessionStore.setState({ activeSessionId: "main", sessionView: emptySessionView("main") })
+    const actions = useDesktopSessionStore.getState()
+    const request = operation === "interrupt"
+      ? actions.interrupt({ sessionId: "temporary", view: emptySessionView("temporary") })
+      : actions.replyPermission("permission-1", "approved", "once", undefined, "temporary")
+    useDesktopSessionStore.setState({ sessionRuntimes: {} })
+    finish()
+    await request
+    expect(useDesktopSessionStore.getState().sessionRuntimes.temporary).toBeUndefined()
+    expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
+  })
+
   it("preserves a failed plugin draft and retries the same structured submission", async () => {
     const received: SendDesktopPromptInput[] = []
     vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: async (input: SendDesktopPromptInput) => {
