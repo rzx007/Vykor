@@ -254,6 +254,14 @@ export const desktopAPI = {
     setRunUnread: (id: string, unread: boolean) =>
       invoke(IpcChannels.scheduleSetRunUnread, id, unread),
   },
+  notes: {
+    list: () => invoke(IpcChannels.noteList),
+    create: (input: IpcInvokeMap[typeof IpcChannels.noteCreate]["args"][0]) =>
+      invoke(IpcChannels.noteCreate, input),
+    update: (id: string, input: IpcInvokeMap[typeof IpcChannels.noteUpdate]["args"][1]) =>
+      invoke(IpcChannels.noteUpdate, id, input),
+    remove: (id: string) => invoke(IpcChannels.noteRemove, id),
+  },
   providers: {
     snapshot: () => invoke(IpcChannels.providerSnapshot),
     connect: (input: IpcInvokeMap[typeof IpcChannels.providerConnect]["args"][0]) =>

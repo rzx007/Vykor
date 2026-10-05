@@ -13,6 +13,7 @@ import { Route as MainRouteImport } from './routes/_main'
 import { Route as PetRouteImport } from './routes/pet'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as MainIndexRouteImport } from './routes/_main.index'
+import { Route as MainNotesRouteImport } from './routes/_main.notes'
 import { Route as MainPluginsRouteImport } from './routes/_main.plugins'
 import { Route as MainScheduledRouteImport } from './routes/_main.scheduled'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
@@ -36,6 +37,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const MainIndexRoute = MainIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => MainRoute,
+} as any)
+const MainNotesRoute = MainNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
   getParentRoute: () => MainRoute,
 } as any)
 const MainPluginsRoute = MainPluginsRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof MainIndexRoute
   '/pet': typeof PetRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/notes': typeof MainNotesRoute
   '/plugins': typeof MainPluginsRoute
   '/scheduled': typeof MainScheduledRoute
   '/settings/$section': typeof SettingsSectionRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/pet': typeof PetRoute
+  '/notes': typeof MainNotesRoute
   '/plugins': typeof MainPluginsRoute
   '/scheduled': typeof MainScheduledRoute
   '/settings/$section': typeof SettingsSectionRoute
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/_main': typeof MainRouteWithChildren
   '/pet': typeof PetRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/_main/notes': typeof MainNotesRoute
   '/_main/plugins': typeof MainPluginsRoute
   '/_main/scheduled': typeof MainScheduledRoute
   '/settings/$section': typeof SettingsSectionRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
     | '/'
     | '/pet'
     | '/settings'
+    | '/notes'
     | '/plugins'
     | '/scheduled'
     | '/settings/$section'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/pet'
+    | '/notes'
     | '/plugins'
     | '/scheduled'
     | '/settings/$section'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/_main'
     | '/pet'
     | '/settings'
+    | '/_main/notes'
     | '/_main/plugins'
     | '/_main/scheduled'
     | '/settings/$section'
@@ -165,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainIndexRouteImport
       parentRoute: typeof MainRoute
     }
+    '/_main/notes': {
+      id: '/_main/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof MainNotesRouteImport
+      parentRoute: typeof MainRoute
+    }
     '/_main/plugins': {
       id: '/_main/plugins'
       path: '/plugins'
@@ -204,6 +223,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface MainRouteChildren {
+  MainNotesRoute: typeof MainNotesRoute
   MainPluginsRoute: typeof MainPluginsRoute
   MainScheduledRoute: typeof MainScheduledRoute
   MainIndexRoute: typeof MainIndexRoute
@@ -211,6 +231,7 @@ interface MainRouteChildren {
 }
 
 const MainRouteChildren: MainRouteChildren = {
+  MainNotesRoute: MainNotesRoute,
   MainPluginsRoute: MainPluginsRoute,
   MainScheduledRoute: MainScheduledRoute,
   MainIndexRoute: MainIndexRoute,

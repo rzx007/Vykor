@@ -47,6 +47,7 @@
 - 创建 `packages/client/src/resources/note-resource.ts`：typed HTTP 调用。
 - 修改 `packages/client/src/resources/index.ts`、`packages/client/src/transport/http-client.ts`、`packages/client/src/index.ts`、`packages/client/src/types/index.ts`：公开 `client.notes` 和类型。
 - 修改 `packages/client/src/transport/__test__/http-client.test.ts`、`packages/client/src/__test__/public-api.test.ts`：请求路径和公共表面。
+- 修改 `scripts/client-public-api-contract.json`：登记 `NoteResource`、便签类型和 `notes` client resource。
 
 ### Desktop bridge
 
@@ -478,6 +479,7 @@ git commit -m "feat(services): persist global notes"
 - 修改：`packages/client/src/types/index.ts`
 - 修改：`packages/client/src/transport/__test__/http-client.test.ts`
 - 修改：`packages/client/src/__test__/public-api.test.ts`
+- 修改：`scripts/client-public-api-contract.json`
 
 - [ ] **步骤 1：编写失败的 HTTP route 测试**
 
@@ -674,7 +676,7 @@ export class NoteResource {
 }
 ```
 
-把 `notes` 加入 `VykorClient` 的 readonly resources、公共导出和 `public-api.test.ts` 的实例键集合；从 `@vykor/client` 明确导出 `NoteRecord`、`CreateNoteInput` 和 `UpdateNoteInput` 三个类型。
+把 `notes` 加入 `VykorClient` 的 readonly resources、公共导出和 `public-api.test.ts` 的实例键集合；从 `@vykor/client` 明确导出 `NoteRecord`、`CreateNoteInput` 和 `UpdateNoteInput` 三个类型。在 `scripts/client-public-api-contract.json` 同步登记这三个类型、`NoteResource` runtime export 和 `notes` client resource。
 
 - [ ] **步骤 6：运行 route、client、公共 API 和类型检查**
 
@@ -692,7 +694,7 @@ pnpm --filter @vykor/client check-types
 - [ ] **步骤 7：提交 HTTP 与 client 交付物**
 
 ```bash
-git add packages/server/src/http/routes/notes.ts packages/server/src/http/routes/notes.test.ts packages/server/src/http/server.ts packages/server/src/application/daemon-application.ts packages/client/src/resources/note-resource.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/types/index.ts packages/client/src/transport/__test__/http-client.test.ts packages/client/src/__test__/public-api.test.ts
+git add packages/server/src/http/routes/notes.ts packages/server/src/http/routes/notes.test.ts packages/server/src/http/server.ts packages/server/src/application/daemon-application.ts packages/client/src/resources/note-resource.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/types/index.ts packages/client/src/transport/__test__/http-client.test.ts packages/client/src/__test__/public-api.test.ts scripts/client-public-api-contract.json docs/superpowers/plans/2026-10-04-global-notes.md
 git commit -m "feat(api): expose global notes"
 ```
 

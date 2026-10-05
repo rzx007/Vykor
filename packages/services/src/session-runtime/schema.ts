@@ -685,3 +685,15 @@ export const scheduledRuns = sqliteTable(
     index("scheduled_run_unread_idx").on(table.unread, table.createdAt),
   ],
 );
+
+export const notes = sqliteTable(
+  "note",
+  {
+    id: text("id").primaryKey(),
+    content: text("content").notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("note_updated_at_idx").on(table.updatedAt)],
+);

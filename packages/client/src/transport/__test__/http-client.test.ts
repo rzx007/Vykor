@@ -796,6 +796,52 @@ describe("VykorClient", () => {
     ]);
   });
 
+  it("uses the global note endpoints and preserves note payloads", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const note = { id: "n1", content: "idea", revision: 1, createdAt: 1, updatedAt: 1 };
+    const client = businessClient({
+      baseUrl: "http://127.0.0.1:3456",
+      fetch: (async (url, init = {}) => {
+        calls.push({ url: String(url), init });
+        if (init.method === "GET" || init.method === undefined) return jsonResponse({ notes: [note] });
+        if (init.method === "DELETE") return jsonResponse({ removed: true });
+        return jsonResponse({ note });
+      }) as typeof fetch,
+    });
+    const notes = Reflect.get(client, "notes") as
+      | {
+          list(): Promise<(typeof note)[]>;
+          create(input: { content: string }): Promise<typeof note>;
+          update(
+            id: string,
+            input: { content: string; expectedRevision: number },
+          ): Promise<typeof note>;
+          remove(id: string): Promise<void>;
+        }
+      | undefined;
+    expect(notes).toBeDefined();
+
+    await expect(notes!.list()).resolves.toEqual([note]);
+    await expect(notes!.create({ content: "idea" })).resolves.toEqual(note);
+    await expect(
+      notes!.update("n1", { content: "changed", expectedRevision: 1 }),
+    ).resolves.toEqual(note);
+    await expect(notes!.remove("n1")).resolves.toBeUndefined();
+
+    expect(
+      calls.map((call) => `${call.init.method ?? "GET"} ${call.url}`),
+    ).toEqual([
+      "GET http://127.0.0.1:3456/notes",
+      "POST http://127.0.0.1:3456/notes",
+      "PATCH http://127.0.0.1:3456/notes/n1",
+      "DELETE http://127.0.0.1:3456/notes/n1",
+    ]);
+    expect(calls[1]?.init.body).toBe(JSON.stringify({ content: "idea" }));
+    expect(calls[2]?.init.body).toBe(
+      JSON.stringify({ content: "changed", expectedRevision: 1 }),
+    );
+  });
+
   it("serializes the complete Jobs list query", async () => {
     const calls: string[] = [];
     const client = businessClient({

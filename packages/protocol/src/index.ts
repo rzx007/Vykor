@@ -16,3 +16,4 @@ export * from "./auto-review.js";
 export * from "./plugin-ui.js";
 export * from "./plugin-ui-requests.js";
 export * from "./plugin-ui-bridge.js";
+export * from "./notes.js";

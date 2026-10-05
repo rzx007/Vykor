@@ -71,6 +71,11 @@ import type {
   UpdateDesktopScheduledTaskInput,
 } from "./schedule-types"
 import type {
+  CreateDesktopNoteInput,
+  DesktopNote,
+  UpdateDesktopNoteInput,
+} from "./note-types"
+import type {
   ActivateDesktopProviderInput,
   ConnectDesktopProviderInput,
   DesktopProviderSnapshot,
@@ -300,6 +305,11 @@ export const IpcChannels = {
   scheduleRunNow: "schedule:run-now",
   scheduleListRuns: "schedule:list-runs",
   scheduleSetRunUnread: "schedule:set-run-unread",
+
+  noteList: "note:list",
+  noteCreate: "note:create",
+  noteUpdate: "note:update",
+  noteRemove: "note:remove",
 
   providerSnapshot: "provider:snapshot",
   providerConnect: "provider:connect",
@@ -893,6 +903,16 @@ export interface IpcInvokeMap {
     args: [id: string, unread: boolean]
     result: DesktopScheduledRun
   }
+  [IpcChannels.noteList]: { args: []; result: DesktopNote[] }
+  [IpcChannels.noteCreate]: {
+    args: [input: CreateDesktopNoteInput]
+    result: DesktopNote
+  }
+  [IpcChannels.noteUpdate]: {
+    args: [id: string, input: UpdateDesktopNoteInput]
+    result: DesktopNote
+  }
+  [IpcChannels.noteRemove]: { args: [id: string]; result: void }
   [IpcChannels.providerSnapshot]: { args: []; result: DesktopProviderSnapshot }
   [IpcChannels.providerConnect]: {
     args: [input: ConnectDesktopProviderInput]

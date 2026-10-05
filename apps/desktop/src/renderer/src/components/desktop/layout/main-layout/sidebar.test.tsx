@@ -105,6 +105,30 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(container.textContent).toContain("暂无最近会话")
   })
 
+  it("replaces the pull request placeholder with an actionable notes entry", async () => {
+    const onOpenNotes = vi.fn()
+    act(() => {
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenNotes={onOpenNotes}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    })
+
+    const notes = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "便签"
+    )
+    expect(notes).toBeTruthy()
+    expect(container.textContent).not.toContain("拉取请求")
+    await act(async () => notes?.click())
+    expect(onOpenNotes).toHaveBeenCalledOnce()
+  })
+
   it("shows pending approval only outside the current chat, even after it has been read", () => {
     const session = channelSession()
     useDesktopSessionStore.setState({

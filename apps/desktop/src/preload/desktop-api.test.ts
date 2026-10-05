@@ -76,6 +76,36 @@ describe("desktop attachment preload bridge", () => {
   })
 })
 
+describe("desktop note preload bridge", () => {
+  it("forwards global note operations through fixed IPC channels", async () => {
+    const notes = Reflect.get(desktopAPI, "notes") as
+      | {
+          list(): Promise<unknown>
+          create(input: { content: string }): Promise<unknown>
+          update(
+            id: string,
+            input: { content: string; expectedRevision: number }
+          ): Promise<unknown>
+          remove(id: string): Promise<unknown>
+        }
+      | undefined
+    expect(notes).toBeDefined()
+
+    await notes!.list()
+    await notes!.create({ content: "idea" })
+    await notes!.update("n1", { content: "changed", expectedRevision: 1 })
+    await notes!.remove("n1")
+
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteList)
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteCreate, { content: "idea" })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteUpdate, "n1", {
+      content: "changed",
+      expectedRevision: 1,
+    })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteRemove, "n1")
+  })
+})
+
 describe("desktop window preload bridge", () => {
   it("opens an address in the system browser through the window IPC channel", async () => {
     await desktopAPI.window.openExternal("file:///D:/demo/index.html")

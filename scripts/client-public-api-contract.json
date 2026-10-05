@@ -69,6 +69,10 @@
       "kind": "runtime-export"
     },
     {
+      "name": "NoteResource",
+      "kind": "runtime-export"
+    },
+    {
       "name": "LOCAL_COMMAND_DETAILS",
       "kind": "runtime-export"
     },
@@ -605,6 +609,18 @@
       "kind": "type-export"
     },
     {
+      "name": "CreateNoteInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "NoteRecord",
+      "kind": "type-export"
+    },
+    {
+      "name": "UpdateNoteInput",
+      "kind": "type-export"
+    },
+    {
       "name": "RecordChannelDeliveryInput",
       "kind": "type-export"
     },
@@ -878,6 +894,10 @@
     },
     {
       "name": "schedules",
+      "kind": "client-resource"
+    },
+    {
+      "name": "notes",
       "kind": "client-resource"
     },
     {

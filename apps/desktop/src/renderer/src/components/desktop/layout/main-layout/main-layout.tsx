@@ -421,6 +421,7 @@ export function MainLayout(): React.JSX.Element {
           {renderPage(
             <Sidebar
               open={sidebarOpen}
+              onOpenNotes={() => void navigate({ to: "/notes" })}
               onOpenScheduled={() => void navigate({ to: "/scheduled" })}
               onOpenPlugins={() => void navigate({ to: "/plugins" })}
               onOpenConversation={openConversationRoute}

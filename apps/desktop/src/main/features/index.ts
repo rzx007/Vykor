@@ -12,6 +12,7 @@ import { pluginUiIpcContribution } from "./plugin-ui/ipc"
 import { providerIpcContribution } from "./provider/ipc"
 import { sessionIpcContribution } from "./session/ipc"
 import { scheduleIpcContribution } from "./schedule/ipc"
+import { noteIpcContribution } from "./notes/ipc"
 import { settingsIpcContribution } from "./settings/ipc"
 import { skillIpcContribution } from "./skill/ipc"
 import { terminalIpcContribution } from "./terminal/ipc"
@@ -36,6 +37,7 @@ export const allIpcContributions: IpcContribution[] = [
   channelIpcContribution,
   sessionIpcContribution,
   scheduleIpcContribution,
+  noteIpcContribution,
   settingsIpcContribution,
   terminalIpcContribution,
   workspaceIpcContribution,

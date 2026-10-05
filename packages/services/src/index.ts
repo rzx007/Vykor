@@ -27,6 +27,7 @@ export {
   type NextOccurrenceOptions,
   type ScheduledRecurrence,
 } from "./schedules/index.js";
+export { NoteRepository, NoteRevisionConflictError } from "./notes/index.js";
 export { estimateTokens } from "./token-estimation";
 export type { TokenEstimate } from "./token-estimation";
 
