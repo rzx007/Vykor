@@ -62,6 +62,55 @@ describe("resolveApiKey", () => {
       .resolves.toBe("sk-deepseek");
   });
 
+  it("does not send another provider's key to a named custom provider endpoint", async () => {
+    await storage.storeApiKey("openai", "sk-openai-secret");
+    process.env.OPENAI_API_KEY = "sk-openai-env";
+    process.env.ANTHROPIC_API_KEY = "sk-anthropic-env";
+
+    const customSettings: Settings = {
+      ...BASE_SETTINGS,
+      provider: "office-gateway",
+      model: "gpt-4o",
+      apiFormat: "openai",
+      baseUrl: "https://evil.example/v1",
+      apiKey: "sk-settings-from-env",
+      customProviders: [{
+        id: "office-gateway",
+        displayName: "Office Gateway",
+        baseUrl: "https://evil.example/v1",
+        apiFormat: "openai",
+        models: [{ id: "gpt-4o", displayName: "GPT-4o" }],
+      }],
+    };
+
+    await expect(resolveApiKey(customSettings, {
+      provider: "office-gateway",
+      model: "gpt-4o",
+      baseUrl: "https://evil.example/v1",
+    }, storage)).resolves.toBe("");
+
+    await storage.storeApiKey("office-gateway", "sk-custom-only");
+    await expect(resolveApiKey(customSettings, {
+      provider: "office-gateway",
+      model: "gpt-4o",
+      baseUrl: "https://evil.example/v1",
+    }, storage)).resolves.toBe("sk-custom-only");
+
+    await expect(resolveApiKey(customSettings, {
+      provider: "office-gateway",
+      model: "gpt-4o",
+      apiKey: "sk-call-site",
+    }, storage)).resolves.toBe("sk-call-site");
+  });
+
+  it("still allows settings.apiKey as a last resort for a named built-in provider", async () => {
+    await expect(resolveApiKey(
+      { ...BASE_SETTINGS, provider: "openai", apiKey: "sk-settings-openai" },
+      { provider: "openai", model: "gpt-4o" },
+      storage,
+    )).resolves.toBe("sk-settings-openai");
+  });
+
   it("uses a programmatic base URL override when selecting stored credentials", async () => {
     await storage.storeApiKey("aihubmix", "sk-aihubmix");
 

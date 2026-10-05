@@ -16,8 +16,10 @@ export async function resolveApiKey(
   options: ApiKeyResolutionOptions = {},
   storage: CredentialStorage = new CredentialStorage(),
 ): Promise<string> {
-  const explicit = options.apiKey ?? settings.apiKey;
-  if (explicit) return explicit;
+  // Call-site overrides win. settings.apiKey is not treated as explicit here:
+  // loadSettings may inject ANTHROPIC/OPENAI env keys into it, and those must not
+  // be forwarded to a differently named (especially custom) provider endpoint.
+  if (options.apiKey) return options.apiKey;
 
   const model = options.model ?? settings.model;
   const providerName = options.provider ?? settings.provider;
@@ -33,7 +35,14 @@ export async function resolveApiKey(
     if (stored) return stored;
     const provider = findByName(providerName);
     if (provider?.envKey && process.env[provider.envKey]) return process.env[provider.envKey]!;
+    // Custom / unknown named providers must not borrow another provider's key via
+    // model detection or the global settings.apiKey / env fallbacks.
+    if (!provider) return "";
+    if (settings.apiKey) return settings.apiKey;
+    return "";
   }
+
+  if (settings.apiKey) return settings.apiKey;
 
   const detected = detectProvider(model, undefined, options.baseUrl ?? settings.baseUrl);
   if (detected) {
