@@ -2,7 +2,7 @@
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopNote } from "@shared/note-types"
 
@@ -47,9 +47,26 @@ describe("NotesPage", () => {
   let container: HTMLDivElement
   let root: Root
 
+  // Motion 会在导入时保存动画时钟。先用真实时钟加载，再模拟自动保存计时，
+  // 避免后续收纳动画一直等待已经退役的模拟时钟。
+  beforeAll(async () => {
+    await loadPage()
+  })
+
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     localStorage.clear()
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    })
     container = document.createElement("div")
     document.body.append(container)
     root = createRoot(container)
@@ -129,6 +146,13 @@ describe("NotesPage", () => {
 
   it("filters only the note list while preserving the selected editor", async () => {
     await renderPage([first, second])
+    await act(async () => {
+      ;(
+        container.querySelector(
+          'button[aria-label="打开便签：Second thought"]'
+        ) as HTMLButtonElement
+      ).click()
+    })
     const search = container.querySelector('input[aria-label="搜索便签"]') as HTMLInputElement
     const list = container.querySelector('[aria-label="便签列表"]')!
     expect(list.textContent).toContain("First thought")
@@ -148,6 +172,11 @@ describe("NotesPage", () => {
   it("requires confirmation before removing a note", async () => {
     const remove = vi.fn(async () => undefined)
     await renderPage([first], { remove })
+    await act(async () => {
+      ;(
+        container.querySelector('button[aria-label="打开便签：First thought"]') as HTMLButtonElement
+      ).click()
+    })
 
     await act(async () => {
       ;(container.querySelector('button[aria-label="便签操作"]') as HTMLButtonElement).click()
@@ -173,5 +202,128 @@ describe("NotesPage", () => {
       await Promise.resolve()
     })
     expect(remove).toHaveBeenCalledWith(first.id)
+  })
+
+  it("shows search results even when the current paper was expanded for reading", async () => {
+    await renderPage([first, second])
+    await act(async () => {
+      ;(
+        container.querySelector(
+          'button[aria-label="打开便签：Second thought"]'
+        ) as HTMLButtonElement
+      ).click()
+    })
+    act(() => {
+      ;(container.querySelector('button[aria-label="展开阅读便签"]') as HTMLButtonElement).click()
+    })
+    act(() =>
+      inputValue(
+        container.querySelector('input[aria-label="搜索便签"]') as HTMLInputElement,
+        "alpha"
+      )
+    )
+    const results = container.querySelector('[aria-label="便签列表"]')
+    expect(results).not.toBeNull()
+    expect(results?.textContent).toContain("First thought")
+    expect(results?.textContent).not.toContain("Second thought")
+    expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe(second.content)
+  })
+
+  it("saves on folding and preserves the same text when returning to the desk", async () => {
+    const api = await renderPage([first])
+    const editor = container.querySelector('textarea[aria-label="便签正文"]') as HTMLTextAreaElement
+    expect(editor.value).toBe("")
+    expect(document.activeElement).toBe(editor)
+    act(() => inputValue(editor, "a quick idea"))
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="收起便签"]') as HTMLButtonElement).click()
+    })
+    expect(container.querySelector('textarea[aria-label="便签正文"]')).toBeNull()
+    expect(api.create).toHaveBeenCalledWith({ content: "a quick idea" })
+    expect(api.remove).not.toHaveBeenCalled()
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="桌面形态"]') as HTMLButtonElement).click()
+    })
+    expect(
+      (container.querySelector('textarea[aria-label="便签正文"]') as HTMLTextAreaElement).value
+    ).toBe("a quick idea")
+  })
+
+  it("keeps a failed save visible and recoverable after folding", async () => {
+    await renderPage([], { create: vi.fn().mockRejectedValue(new Error("disk unavailable")) })
+    act(() => inputValue(container.querySelector("textarea")!, "keep this idea"))
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="收起便签"]') as HTMLButtonElement).click()
+    })
+    expect(container.textContent).toContain("保存失败")
+    expect(container.textContent).toContain("disk unavailable")
+    expect(localStorage.getItem("vykor.desktop.note-recovery-v1")).toContain("keep this idea")
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="桌面形态"]') as HTMLButtonElement).click()
+    })
+    expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe(
+      "keep this idea"
+    )
+  })
+
+  it("opens all papers from the folder rather than limiting the collection to five previews", async () => {
+    const records = Array.from({ length: 7 }, (_, index) => ({
+      ...first,
+      id: `note-${index + 1}`,
+      content: `paper ${index + 1}`,
+      updatedAt: index + 1,
+    }))
+    await renderPage(records)
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="收纳形态"]') as HTMLButtonElement).click()
+    })
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="打开便签收纳夹"]') as HTMLButtonElement).click()
+    })
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelectorAll('button[aria-label^="打开便签："]')).toHaveLength(7)
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    const search = dialog.querySelector('input[aria-label="搜索便签"]') as HTMLInputElement
+    act(() => {
+      search.focus()
+      inputValue(search, "paper 1")
+    })
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    expect(document.activeElement).toBe(search)
+    expect(dialog.querySelectorAll('button[aria-label^="打开便签："]')).toHaveLength(1)
+    await act(async () => {
+      ;(dialog.querySelector('button[aria-label="打开便签：paper 1"]') as HTMLButtonElement).click()
+    })
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe("paper 1")
+  })
+
+  it("returns keyboard focus to the folder on Escape without deleting or creating a note", async () => {
+    const api = await renderPage([first])
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="收纳形态"]') as HTMLButtonElement).click()
+    })
+    const folder = container.querySelector(
+      'button[aria-label="打开便签收纳夹"]'
+    ) as HTMLButtonElement
+    await act(async () => {
+      folder.click()
+    })
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    })
+    await vi.waitFor(
+      async () => {
+        await act(
+          async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        )
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+        expect(document.activeElement).toBe(folder)
+      },
+      { timeout: 1500 }
+    )
+    expect(api.remove).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
   })
 })

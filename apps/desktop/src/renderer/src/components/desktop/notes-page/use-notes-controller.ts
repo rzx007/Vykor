@@ -33,6 +33,7 @@ export interface NotesController {
   saveConflictAsNew(): Promise<void>
   removeSelected(draftId?: string): Promise<void>
   refresh(): Promise<void>
+  flushSelected(): Promise<void>
 }
 
 export function useNotesController(): NotesController {
@@ -173,10 +174,13 @@ export function useNotesController(): NotesController {
           })
         }
         const initial = filterAndSortNotes(views, "")
-        if (initial.length === 0) initial.push(createLocalDraft())
-        commitNotes(initial)
         const lastId = readSelectedNoteId()
-        const selected = initial.find((note) => note.noteId === lastId) ?? initial[0]!
+        const selected =
+          initial.find((note) => note.recovered && note.noteId === lastId) ??
+          initial.find((note) => note.recovered) ??
+          createLocalDraft()
+        if (!initial.includes(selected)) initial.unshift(selected)
+        commitNotes(initial)
         commitSelection(selected.draftId)
         // Move old quick-window recovery only after its body is present in the
         // main recovery cache. The retired window's text must not disappear.
@@ -241,6 +245,11 @@ export function useNotesController(): NotesController {
   const retrySave = useCallback(async (): Promise<void> => {
     const draftId = selectedKeyRef.current
     if (draftId) await coordinators.current.get(draftId)?.retry()
+  }, [])
+
+  const flushSelected = useCallback(async (): Promise<void> => {
+    const draftId = selectedKeyRef.current
+    if (draftId) await coordinators.current.get(draftId)?.flush()
   }, [])
 
   const reloadConflict = useCallback(async (): Promise<void> => {
@@ -387,5 +396,6 @@ export function useNotesController(): NotesController {
     saveConflictAsNew,
     removeSelected,
     refresh,
+    flushSelected,
   }
 }

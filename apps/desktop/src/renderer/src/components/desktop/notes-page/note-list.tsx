@@ -1,7 +1,7 @@
-import { FolderOpen, CirclePlus, Search, StickyNote } from "lucide-react"
-import { toast } from "@renderer/lib/toast"
-
+import { StickyNote } from "lucide-react"
+import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import {
   Empty,
   EmptyDescription,
@@ -9,15 +9,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@renderer/components/ui/empty"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@renderer/components/ui/item"
-import { ScrollArea } from "@renderer/components/ui/scroll-area"
+import { Skeleton } from "@renderer/components/ui/skeleton"
 import { cn } from "@renderer/lib/utils"
 import { describeNote, type NoteView } from "./note-model"
 
@@ -33,126 +25,83 @@ export function NoteList({
   selectedKey,
   query,
   loading,
-  onQueryChange,
-  onCreate,
   onSelect,
+  onCreate,
 }: {
   notes: NoteView[]
   selectedKey: string | null
   query: string
   loading: boolean
-  onQueryChange: (value: string) => void
-  onCreate: () => void
   onSelect: (draftId: string) => void
+  onCreate: () => void
 }): React.JSX.Element {
   return (
-    <aside
-      aria-label="便签列表"
-      className="flex min-h-0 min-w-0 flex-col border-r border-border/60 bg-background"
-    >
-      <header className="flex h-14 shrink-0 items-center gap-2 px-4">
-        <h1 className="text-lg font-semibold tracking-tight">便签</h1>
-        <span className="ml-auto text-xs text-muted-foreground">全部项目共用</span>
-      </header>
-
-      <div className="flex shrink-0 items-center gap-2 px-3 pb-3">
-        <InputGroup shape="pill">
-          <InputGroupAddon>
-            <Search strokeWidth={1.75} />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label="搜索便签"
-            placeholder="搜索正文"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
-        </InputGroup>
-        <Button
-          type="button"
-          size="lg"
-          shape="pill"
-          aria-label="新建便签"
-          title="新建便签"
-          onClick={onCreate}
-        >
-          <CirclePlus data-icon="inline-start" />
-          新建
-        </Button>
-      </div>
-
-      <ScrollArea horizontal={false} className="min-h-0 flex-1" viewportClassName="px-2 pb-3">
-        {loading ? (
-          <p className="px-2 py-6 text-sm text-muted-foreground">正在加载便签…</p>
-        ) : notes.length === 0 ? (
-          <Empty className="min-h-52 border-0">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <StickyNote />
-              </EmptyMedia>
-              <EmptyTitle>{query ? "没有匹配的便签" : "还没有便签"}</EmptyTitle>
-              <EmptyDescription>
-                {query ? "换个关键词试试。" : "直接在右侧输入，第一行会成为列表标题。"}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <ItemGroup className="gap-1">
-            {notes.map((note) => {
-              const description = describeNote(note.content)
-              return (
-                <Item
-                  key={note.draftId}
-                  size="xs"
-                  variant="default"
-                  render={
-                    <button
-                      type="button"
-                      aria-current={note.draftId === selectedKey ? "page" : undefined}
-                      onClick={() => onSelect(note.draftId)}
-                    />
-                  }
+    <section aria-label="便签列表" className="min-w-0">
+      {loading ? (
+        <div className="grid grid-cols-2 gap-4" aria-label="正在加载便签">
+          <Skeleton className="h-44 rounded-xl" />
+          <Skeleton className="h-52 rounded-xl" />
+        </div>
+      ) : notes.length === 0 ? (
+        <Empty className="border-0 px-0 py-8">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <StickyNote />
+            </EmptyMedia>
+            <EmptyTitle>{query ? "没有匹配的便签" : "这里留给下一句想法"}</EmptyTitle>
+            <EmptyDescription>
+              {query ? "换个关键词试试。" : "不必起标题，写下就会自动保存。"}
+            </EmptyDescription>
+          </EmptyHeader>
+          {!query ? (
+            <Button variant="ghost" shape="pill" onClick={onCreate}>
+              记一句
+            </Button>
+          ) : null}
+        </Empty>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] items-start gap-4">
+          {notes.map((note) => {
+            const { title, preview } = describeNote(note.content)
+            return (
+              <button
+                key={note.draftId}
+                type="button"
+                aria-label={"打开便签：" + title}
+                aria-current={note.draftId === selectedKey ? "true" : undefined}
+                onClick={() => onSelect(note.draftId)}
+                className="group min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+              >
+                <Card
+                  size="sm"
                   className={cn(
-                    "items-start text-left",
-                    note.draftId === selectedKey && "bg-muted"
+                    "transition-colors group-hover:bg-accent",
+                    note.draftId === selectedKey && "ring-2 ring-ring"
                   )}
                 >
-                  <ItemContent className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <ItemTitle className="min-w-0 flex-1 truncate">{description.title}</ItemTitle>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {noteTimeFormatter.format(note.updatedAt)}
-                      </span>
-                    </div>
-                    {description.preview ? (
-                      <ItemDescription className="line-clamp-1">
-                        {description.preview}
-                      </ItemDescription>
-                    ) : null}
-                    {note.recovered ? (
-                      <span className="text-xs text-muted-foreground">待恢复</span>
-                    ) : null}
-                  </ItemContent>
-                </Item>
-              )
-            })}
-          </ItemGroup>
-        )}
-      </ScrollArea>
-      <div className="shrink-0 border-t px-3 py-2">
-        <Button
-          size="xs"
-          variant="ghost"
-          shape="pill"
-          onClick={() => {
-            void window.desktop.notes
-              .openDirectory()
-              .catch((cause) => toast.error("无法打开便签文件夹", String(cause)))
-          }}
-        >
-          <FolderOpen data-icon="inline-start" />
-          打开便签文件夹
-        </Button>
-      </div>
-    </aside>
+                  <CardHeader>
+                    <CardTitle className="line-clamp-2 break-words">{title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="min-h-16">
+                    <p className="line-clamp-5 text-sm leading-6 break-words whitespace-pre-wrap text-muted-foreground">
+                      {preview || "只有这一句，也值得记下。"}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="justify-between gap-2">
+                    <time
+                      dateTime={new Date(note.updatedAt).toISOString()}
+                      className="text-xs text-muted-foreground tabular-nums"
+                    >
+                      {noteTimeFormatter.format(note.updatedAt)}
+                    </time>
+                    {note.recovered ? <Badge variant="secondary">待恢复</Badge> : null}
+                  </CardFooter>
+                </Card>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </section>
   )
 }

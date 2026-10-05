@@ -1,8 +1,20 @@
 import { useEffect, useRef } from "react"
-import { CircleAlert, Copy, Ellipsis, RotateCcw, Trash2 } from "lucide-react"
+import {
+  ArrowDownToLine,
+  CircleAlert,
+  Copy,
+  Ellipsis,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  StickyNote,
+  Trash2,
+} from "lucide-react"
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Button } from "@renderer/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@renderer/components/ui/card"
+import { cn } from "@renderer/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +36,9 @@ export function NoteEditor({
   onReloadConflict,
   onSaveConflictAsNew,
   onDelete,
+  onClose,
+  expanded,
+  onExpand,
 }: {
   selected: NoteView | undefined
   content: string
@@ -34,6 +49,9 @@ export function NoteEditor({
   onReloadConflict: () => void
   onSaveConflictAsNew: () => void
   onDelete: () => void
+  onClose: () => void
+  expanded: boolean
+  onExpand: () => void
 }): React.JSX.Element {
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -42,20 +60,34 @@ export function NoteEditor({
   }, [selected?.draftId])
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center border-b border-border/60 px-5">
-        <span aria-live="polite" className="text-xs text-muted-foreground">
-          {saveLabel(status, selected)}
-        </span>
-        <span className="ml-auto text-xs text-muted-foreground">{content.length} 字</span>
+    <Card
+      aria-label="当前便签"
+      className="min-w-0 gap-0 py-0 focus-within:ring-2 focus-within:ring-ring"
+    >
+      <CardHeader className="flex h-14 flex-row items-center gap-2">
+        <StickyNote
+          className="size-4 text-muted-foreground"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+        <CardTitle className="mr-auto">{selected?.noteId ? "继续这一句" : "随手记"}</CardTitle>
+        <Button
+          variant="ghost"
+          shape="circle"
+          size="icon-sm"
+          aria-label={expanded ? "还原便签大小" : "展开阅读便签"}
+          onClick={onExpand}
+        >
+          {expanded ? <Minimize2 /> : <Maximize2 />}
+        </Button>
         {selected && (selected.noteId || content.trim()) ? (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <Button
                   type="button"
-                  variant="control"
-                  size="icon"
+                  variant="ghost"
+                  size="icon-sm"
                   shape="circle"
                   className="ml-2"
                   aria-label="便签操作"
@@ -74,7 +106,11 @@ export function NoteEditor({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-      </header>
+        <Button variant="ghost" shape="pill" size="sm" aria-label="收起便签" onClick={onClose}>
+          <ArrowDownToLine data-icon="inline-start" />
+          收起
+        </Button>
+      </CardHeader>
 
       {error ? (
         <Alert variant="destructive" className="mx-5 mt-4 w-auto">
@@ -111,16 +147,27 @@ export function NoteEditor({
         </Alert>
       ) : null}
 
-      <Textarea
-        ref={editorRef}
-        aria-label="便签正文"
-        value={content}
-        placeholder="直接写下想法…"
-        disabled={status === "loading"}
-        onChange={(event) => onChange(event.target.value)}
-        className="min-h-0 flex-1 resize-none rounded-none border-0 px-8 py-7 text-sm leading-7 font-normal focus-visible:border-transparent md:text-sm"
-      />
-    </section>
+      <CardContent className="px-0">
+        <Textarea
+          ref={editorRef}
+          aria-label="便签正文"
+          value={content}
+          placeholder="有什么想法？记一句就好…"
+          disabled={status === "loading"}
+          onChange={(event) => onChange(event.target.value)}
+          className={cn(
+            "max-h-[55vh] min-h-52 resize-none rounded-none border-0 px-6 py-3 text-sm leading-7 font-normal focus-visible:border-transparent md:text-sm",
+            expanded && "max-h-[75vh] min-h-[60vh]"
+          )}
+        />
+      </CardContent>
+      <CardFooter className="justify-between gap-3">
+        <span aria-live="polite" className="text-xs text-muted-foreground">
+          {saveLabel(status, selected)}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">{content.length} 字</span>
+      </CardFooter>
+    </Card>
   )
 }
 

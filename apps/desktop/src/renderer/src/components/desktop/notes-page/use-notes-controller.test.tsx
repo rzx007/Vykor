@@ -26,6 +26,7 @@ interface Controller {
   saveConflictAsNew(): Promise<void>
   removeSelected(draftId?: string): Promise<void>
   refresh(): Promise<void>
+  flushSelected(): Promise<void>
 }
 
 async function loadHook(): Promise<() => Controller> {
@@ -114,7 +115,7 @@ describe("useNotesController", () => {
     })
   }
 
-  it("restores the last persisted selection and overlays newer recovery content", async () => {
+  it("opens unfinished recovery before a fresh paper without overwriting other saved notes", async () => {
     writeSelectedNoteId(localStorage, first.id)
     writeRecoveryDraft(localStorage, {
       draftId: "recovery-n2",
@@ -126,8 +127,9 @@ describe("useNotesController", () => {
 
     await render([first, second])
 
-    expect(latest.selectedKey).toBe(first.id)
-    expect(latest.content).toBe("first")
+    expect(latest.selectedKey).toBe("recovery-n2")
+    expect(latest.content).toBe("recovered second")
+    expect(latest.notes.find((note) => note.noteId === first.id)?.content).toBe("first")
     expect(latest.notes.find((note) => note.noteId === second.id)).toMatchObject({
       draftId: "recovery-n2",
       content: "recovered second",
@@ -135,10 +137,20 @@ describe("useNotesController", () => {
     })
   })
 
+  it("starts on an empty local paper when saved notes already exist", async () => {
+    const create = vi.fn()
+    await render([first, second], { create })
+    expect(latest.content).toBe("")
+    expect(latest.notes.find((note) => note.draftId === latest.selectedKey)?.noteId).toBeNull()
+    expect(latest.visibleNotes.map((note) => note.noteId)).toEqual(["n2", "n1"])
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it("refreshes external file edits but keeps a pending local edit", async () => {
     vi.useFakeTimers()
     const records = [first]
     await render(records)
+    await act(async () => latest.select(first.id))
     records[0] = { ...first, content: "external file edit", revision: 2 }
     await act(async () => latest.refresh())
     expect(latest.content).toBe("external file edit")
@@ -208,6 +220,7 @@ describe("useNotesController", () => {
       })
     )
     await render([first, second], { update })
+    await act(async () => latest.select(first.id))
 
     act(() => latest.edit("changed"))
     await act(async () => latest.select(second.id))
@@ -223,11 +236,13 @@ describe("useNotesController", () => {
   it("keeps the selected note visible when deletion fails", async () => {
     const remove = vi.fn().mockRejectedValue(new Error("delete failed"))
     await render([first], { remove })
+    await act(async () => latest.select(first.id))
 
     await act(async () => latest.removeSelected())
 
     expect(remove).toHaveBeenCalledWith(first.id)
-    expect(latest.notes).toHaveLength(1)
+    expect(latest.visibleNotes).toHaveLength(1)
+    expect(latest.selectedKey).toBe(first.id)
     expect(latest.content).toBe(first.content)
     expect(latest.status).toBe("error")
     expect(latest.error).toBe("delete failed")
