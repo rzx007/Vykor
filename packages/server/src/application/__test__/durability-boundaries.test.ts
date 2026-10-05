@@ -180,8 +180,8 @@ describe("durable application long-running boundaries", () => {
       sources: { memory, attachments },
     });
     expect(createdManifest).toMatchObject({
-      version: 2,
-      directories: { attachments: true },
+      version: 3,
+      directories: { attachments: true, notes: true },
       attachments: {
         assets: 1,
         uniqueBlobs: 1,

@@ -24,6 +24,7 @@ export class TransactionCoordinator {
   private depth = 0;
   private saveRequested = false;
   private deferredCallbacks: Array<() => void> = [];
+  private rollbackCallbacks: Array<() => void> = [];
   private hooks?: TransactionCoordinatorHooks;
   private readonly storage: StorageContext;
   private readonly persistChangesFn?: () => void;
@@ -59,6 +60,12 @@ export class TransactionCoordinator {
     }
   }
 
+  deferUntilRollback(callback: () => void): void {
+    if (this.depth === 0)
+      throw new Error("Rollback callback requires an active transaction");
+    this.rollbackCallbacks.push(callback);
+  }
+
   atomic<T>(work: () => T): T {
     if (this.depth > 0) {
       this.depth += 1;
@@ -82,6 +89,7 @@ export class TransactionCoordinator {
     this.depth = 1;
     this.saveRequested = false;
     this.deferredCallbacks = [];
+    this.rollbackCallbacks = [];
 
     let persisted = false;
     let completed = false;
@@ -104,11 +112,11 @@ export class TransactionCoordinator {
         this.hooks?.beforeCommit?.();
         return value;
       })();
-
     } catch (error) {
       Object.assign(this.storage.state, previousState);
       if (previousMemory) this.storage.chatPersistence?.restore(previousMemory);
-      if (previousControls) this.storage.temporaryControls?.restore(previousControls);
+      if (previousControls)
+        this.storage.temporaryControls?.restore(previousControls);
       this.storage.transactionState = previousTransactionState;
       this.storage.eventSequence.restore(previousEventSequence);
       this.storage.deltaCheckpoint.restore(previousDeltaCheckpoint);
@@ -116,9 +124,23 @@ export class TransactionCoordinator {
       this.saveRequested = previousSaveRequested;
       this.deferredCallbacks = [];
       this.depth = 0;
+      const rollbackErrors: unknown[] = [];
+      for (const callback of this.rollbackCallbacks.reverse()) {
+        try {
+          callback();
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError);
+        }
+      }
+      this.rollbackCallbacks = [];
       if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
         this.storage.deltaCheckpoint.schedule();
       }
+      if (rollbackErrors.length)
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          "Transaction rollback failed",
+        );
       throw error;
     }
 
@@ -127,6 +149,7 @@ export class TransactionCoordinator {
       clearMutationBuffer(this.storage.mutations);
     }
     completed = true;
+    this.rollbackCallbacks = [];
 
     try {
       const callbacks = this.deferredCallbacks;

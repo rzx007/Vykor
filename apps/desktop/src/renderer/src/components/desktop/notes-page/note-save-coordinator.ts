@@ -59,6 +59,19 @@ export class NoteSaveCoordinator {
     }
     this.pending = draft
     this.options.recovery.write(draft)
+    if (
+      !this.running &&
+      this.record &&
+      draft.noteId === this.record.id &&
+      draft.baseRevision !== this.record.revision &&
+      draft.content !== this.savedContent
+    ) {
+      this.setState(
+        "conflict",
+        "文件已在其他位置更新。本地未保存内容已保留，可重新载入或另存为新便签。"
+      )
+      return
+    }
     if (this.state.status === "conflict") return
     this.schedule()
   }
@@ -122,11 +135,18 @@ export class NoteSaveCoordinator {
         this.pending ??= target
         const message = error instanceof Error ? error.message : String(error)
         this.setState(
-          error instanceof VykorApiError && error.status === 409 ? "conflict" : "error",
+          (error instanceof VykorApiError && error.status === 409) ||
+            message.includes("Note revision conflict:")
+            ? "conflict"
+            : "error",
           message
         )
         return this.record
       }
+    }
+    if (this.pending) {
+      this.options.recovery.remove(this.pending.draftId)
+      this.pending = null
     }
     this.setState(this.record ? "saved" : "idle", null)
     return this.record

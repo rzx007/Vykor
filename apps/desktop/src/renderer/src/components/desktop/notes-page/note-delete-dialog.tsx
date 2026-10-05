@@ -24,7 +24,7 @@ export function NoteDeleteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>删除这条便签？</AlertDialogTitle>
           <AlertDialogDescription>
-            删除后无法恢复。便签正文会从本机数据库中移除。
+            删除后无法恢复。对应的本地 Markdown 文件会被移除。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

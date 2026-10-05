@@ -85,7 +85,7 @@ describe("SessionDatabase", () => {
         expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
         first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
         journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-        expect(journal).toHaveLength(4);
+        expect(journal).toHaveLength(7);
       } finally {
         first.close();
       }
@@ -103,6 +103,9 @@ describe("SessionDatabase", () => {
       "0001_drop_application_storage_format.sql",
       "0002_temporary_resource_sources.sql",
       "0003_global_notes.sql",
+      "0004_note_organization.sql",
+      "0005_note_attachments.sql",
+      "0006_note_file_index.sql",
     ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
     expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
@@ -110,6 +113,9 @@ describe("SessionDatabase", () => {
       "0001_drop_application_storage_format",
       "0002_temporary_resource_sources",
       "0003_global_notes",
+      "0004_note_organization",
+      "0005_note_attachments",
+      "0006_note_file_index",
     ]);
   });
 

@@ -16,6 +16,8 @@ export interface DesktopPreferences {
   notificationMode: DesktopNotificationMode
   notificationSounds?: DesktopNotificationSounds
   browserDeveloperMode?: boolean
+  noteQuickShortcut?: string
+  noteWindowAlwaysOnTop?: boolean
   defaultOpenerId?: string
   defaultTerminalShellId?: string
   installIdentity?: DesktopInstallIdentity
@@ -50,6 +52,8 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
         ? { notificationSounds: normalizeNotificationSounds(raw.notificationSounds) }
         : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+      ...(typeof raw.noteQuickShortcut === "string" ? { noteQuickShortcut: raw.noteQuickShortcut } : {}),
+      ...(typeof raw.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: raw.noteWindowAlwaysOnTop } : {}),
       ...(defaultOpenerId ? { defaultOpenerId } : {}),
       ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
       ...(isInstallIdentity(raw.installIdentity) ? { installIdentity: raw.installIdentity } : {}),
@@ -75,6 +79,8 @@ export function patchDesktopPreferencesAt(
       ? { notificationSounds: normalizeNotificationSounds(next.notificationSounds) }
       : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+    ...(typeof next.noteQuickShortcut === "string" ? { noteQuickShortcut: next.noteQuickShortcut } : {}),
+    ...(typeof next.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: next.noteWindowAlwaysOnTop } : {}),
     ...(defaultOpenerId ? { defaultOpenerId } : {}),
     ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
     ...(isInstallIdentity(next.installIdentity) ? { installIdentity: next.installIdentity } : {}),

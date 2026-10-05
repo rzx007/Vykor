@@ -7,6 +7,7 @@ interface NoteService {
   create(input: CreateNoteInput): Promise<NoteRecord>
   update(id: string, input: UpdateNoteInput): Promise<NoteRecord>
   remove(id: string): Promise<void>
+  openDirectory(): Promise<void>
 }
 
 async function loadContribution(service: NoteService) {
@@ -24,7 +25,7 @@ async function loadContribution(service: NoteService) {
 }
 
 describe("note IPC contribution", () => {
-  it("routes the four note operations without changing their arguments", async () => {
+  it("routes note operations and opens only the service-owned directory", async () => {
     const note: NoteRecord = {
       id: "n1",
       content: "idea",
@@ -37,6 +38,7 @@ describe("note IPC contribution", () => {
       create: vi.fn(async () => note),
       update: vi.fn(async () => ({ ...note, content: "changed", revision: 2 })),
       remove: vi.fn(async () => undefined),
+      openDirectory: vi.fn(async () => undefined),
     }
     const registrations = (await loadContribution(service)).register({} as never)
     const handler = (channel: string) =>
@@ -49,6 +51,7 @@ describe("note IPC contribution", () => {
       expectedRevision: 1,
     })
     await handler(IpcChannels.noteRemove)({}, "n1")
+    await handler(IpcChannels.noteOpenDirectory)({}, "D:/untrusted-path")
 
     expect(service.create).toHaveBeenCalledWith({ content: "idea" })
     expect(service.update).toHaveBeenCalledWith("n1", {
@@ -56,5 +59,6 @@ describe("note IPC contribution", () => {
       expectedRevision: 1,
     })
     expect(service.remove).toHaveBeenCalledWith("n1")
+    expect(service.openDirectory).toHaveBeenCalledWith()
   })
 })

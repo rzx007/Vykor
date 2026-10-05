@@ -12,6 +12,7 @@ interface NotesPort {
   create(input: CreateNoteInput): NoteRecord;
   update(id: string, input: UpdateNoteInput): NoteRecord;
   remove(id: string): boolean;
+  storageInfo?(): { directory: string; format: "markdown" };
 }
 
 async function createApp(notes: NotesPort): Promise<Hono> {
@@ -34,6 +35,25 @@ const note: NoteRecord = {
 };
 
 describe("note routes", () => {
+  it("returns the repository-owned Markdown directory", async () => {
+    const directory = "D:/user-data/session-runtime/notes";
+    const app = await createApp({
+      list: () => [],
+      create: () => note,
+      update: () => note,
+      remove: () => false,
+      storageInfo() {
+        return { directory, format: "markdown" };
+      },
+    });
+    const response = await app.request("/notes/storage");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      directory,
+      format: "markdown",
+    });
+  });
+
   it("lists, creates, updates and removes notes", async () => {
     const app = await createApp({
       list: () => [note],

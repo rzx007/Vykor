@@ -77,15 +77,16 @@ describe("desktop attachment preload bridge", () => {
 })
 
 describe("desktop note preload bridge", () => {
+  it("opens the notes directory without accepting a renderer-supplied path", async () => {
+    await desktopAPI.notes.openDirectory()
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteOpenDirectory)
+  })
   it("forwards global note operations through fixed IPC channels", async () => {
     const notes = Reflect.get(desktopAPI, "notes") as
       | {
           list(): Promise<unknown>
           create(input: { content: string }): Promise<unknown>
-          update(
-            id: string,
-            input: { content: string; expectedRevision: number }
-          ): Promise<unknown>
+          update(id: string, input: { content: string; expectedRevision: number }): Promise<unknown>
           remove(id: string): Promise<unknown>
         }
       | undefined

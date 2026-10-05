@@ -310,6 +310,7 @@ export const IpcChannels = {
   noteCreate: "note:create",
   noteUpdate: "note:update",
   noteRemove: "note:remove",
+  noteOpenDirectory: "note:directory:open",
 
   providerSnapshot: "provider:snapshot",
   providerConnect: "provider:connect",
@@ -913,6 +914,7 @@ export interface IpcInvokeMap {
     result: DesktopNote
   }
   [IpcChannels.noteRemove]: { args: [id: string]; result: void }
+  [IpcChannels.noteOpenDirectory]: { args: []; result: void }
   [IpcChannels.providerSnapshot]: { args: []; result: DesktopProviderSnapshot }
   [IpcChannels.providerConnect]: {
     args: [input: ConnectDesktopProviderInput]

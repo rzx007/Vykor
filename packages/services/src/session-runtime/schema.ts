@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const sessions = sqliteTable(
   "session",
@@ -694,6 +694,26 @@ export const notes = sqliteTable(
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    properties: text("properties", { mode: "json" }).$type<{ deletedAt?: number | null; [key: string]: unknown } | null>(),
   },
   (table) => [index("note_updated_at_idx").on(table.updatedAt)],
 );
+
+export const noteAttachments = sqliteTable("note_attachment", {
+  id: text("id").primaryKey(),
+  noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  mediaType: text("media_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: integer("created_at").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+}, (table) => [index("note_attachment_note_idx").on(table.noteId)]);
+
+export const noteFileIndex = sqliteTable("note_file_index", {
+  id: text("id").primaryKey(),
+  revision: integer("revision").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  sha256: text("sha256").notNull(),
+  deletedAt: integer("deleted_at"),
+});

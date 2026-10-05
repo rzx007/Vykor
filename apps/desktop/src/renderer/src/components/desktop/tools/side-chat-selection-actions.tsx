@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
-import { Copy } from "lucide-react"
+import { Copy, StickyNote } from "lucide-react"
+import { toast } from "@renderer/lib/toast"
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent } from "@renderer/components/ui/popover"
 import { useMainLayout } from "../layout/main-layout/main-layout-context"
@@ -16,6 +17,8 @@ export function SideChatSelectionActions({
   viewportRef: RefObject<HTMLDivElement | null>
 }): React.JSX.Element | null {
   const { openSideChat } = useMainLayout()
+  const [savingNote, setSavingNote] = useState(false)
+  const noteSavePending = useRef(false)
   const [selection, setSelection] = useState<{
     sourceId: string
     text: string
@@ -104,6 +107,32 @@ export function SideChatSelectionActions({
           }}
         >
           <Copy />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={savingNote}
+          aria-busy={savingNote}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={async () => {
+            if (noteSavePending.current) return
+            noteSavePending.current = true
+            setSavingNote(true)
+            try {
+              await window.desktop.notes.create({ content: selection.text })
+              toast.success("已添加到便签")
+              setSelection((current) => (current === selection ? null : current))
+            } catch {
+              toast.error("添加到便签失败，请重试")
+            } finally {
+              noteSavePending.current = false
+              setSavingNote(false)
+            }
+          }}
+        >
+          <StickyNote />
+          添加到便签
         </Button>
         <Button
           variant="ghost"

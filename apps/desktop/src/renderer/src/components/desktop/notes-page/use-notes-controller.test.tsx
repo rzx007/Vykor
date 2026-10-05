@@ -24,7 +24,8 @@ interface Controller {
   retrySave(): Promise<void>
   reloadConflict(): Promise<void>
   saveConflictAsNew(): Promise<void>
-  removeSelected(): Promise<void>
+  removeSelected(draftId?: string): Promise<void>
+  refresh(): Promise<void>
 }
 
 async function loadHook(): Promise<() => Controller> {
@@ -132,6 +133,41 @@ describe("useNotesController", () => {
       content: "recovered second",
       recovered: true,
     })
+  })
+
+  it("refreshes external file edits but keeps a pending local edit", async () => {
+    vi.useFakeTimers()
+    const records = [first]
+    await render(records)
+    records[0] = { ...first, content: "external file edit", revision: 2 }
+    await act(async () => latest.refresh())
+    expect(latest.content).toBe("external file edit")
+    act(() => latest.edit("pending local edit"))
+    records[0] = { ...first, content: "another external edit", revision: 3 }
+    await act(async () => latest.refresh())
+    expect(latest.content).toBe("pending local edit")
+  })
+
+  it("recovers text from the retired quick window without dropping its recovery before transfer", async () => {
+    localStorage.setItem(
+      "vykor.desktop.note-recovery-v1:quick",
+      JSON.stringify({
+        version: 1,
+        drafts: [
+          {
+            draftId: "quick-draft",
+            noteId: first.id,
+            baseRevision: 1,
+            content: "quick window idea",
+            updatedAt: 10,
+          },
+        ],
+      })
+    )
+    await render([first])
+    expect(latest.content).toBe("quick window idea")
+    expect(localStorage.getItem("vykor.desktop.note-recovery-v1:quick")).toBeNull()
+    expect(localStorage.getItem("vykor.desktop.note-recovery-v1")).toContain("quick window idea")
   })
 
   it("keeps a new blank draft local and creates it after nonblank input", async () => {

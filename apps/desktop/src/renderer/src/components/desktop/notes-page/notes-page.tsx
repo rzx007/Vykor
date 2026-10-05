@@ -8,6 +8,7 @@ import { useNotesController } from "./use-notes-controller"
 export function NotesPage(): React.JSX.Element {
   const notes = useNotesController()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const selected = notes.notes.find((note) => note.draftId === notes.selectedKey)
 
   return (
@@ -30,14 +31,17 @@ export function NotesPage(): React.JSX.Element {
         onRetry={() => void notes.retrySave()}
         onReloadConflict={() => void notes.reloadConflict()}
         onSaveConflictAsNew={() => void notes.saveConflictAsNew()}
-        onDelete={() => setDeleteOpen(true)}
+        onDelete={() => {
+          setDeleteTarget(notes.selectedKey)
+          setDeleteOpen(true)
+        }}
       />
       <NoteDeleteDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={() => {
           setDeleteOpen(false)
-          void notes.removeSelected()
+          if (deleteTarget) void notes.removeSelected(deleteTarget)
         }}
       />
     </section>

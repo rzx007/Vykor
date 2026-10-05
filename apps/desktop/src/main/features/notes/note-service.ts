@@ -10,6 +10,13 @@ import { desktopSessionService } from "../session/session-service"
 type NoteClient = Pick<VykorClient, "notes">
 
 export class DesktopNoteService {
+  async openDirectory(): Promise<void> {
+    const client = await desktopSessionService.daemonClient()
+    const { directory } = await client.notes.storageInfo()
+    const { shell } = await import("electron")
+    const error = await shell.openPath(directory)
+    if (error) throw new Error(`无法打开便签文件夹：${error}`)
+  }
   list(): Promise<DesktopNote[]> {
     return withDaemonRetry((client) => client.notes.list())
   }

@@ -1,4 +1,5 @@
-import { Plus, Search, StickyNote } from "lucide-react"
+import { FolderOpen, Plus, Search, StickyNote } from "lucide-react"
+import { toast } from "@renderer/lib/toast"
 
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
@@ -138,6 +139,20 @@ export function NoteList({
           </ItemGroup>
         )}
       </ScrollArea>
+      <div className="shrink-0 border-t px-3 py-2">
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => {
+            void window.desktop.notes
+              .openDirectory()
+              .catch((cause) => toast.error("无法打开便签文件夹", String(cause)))
+          }}
+        >
+          <FolderOpen />
+          打开便签文件夹
+        </Button>
+      </div>
     </aside>
   )
 }

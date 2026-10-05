@@ -10,7 +10,14 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 
 import {
   AttachmentBlobStore,
@@ -27,11 +34,14 @@ export interface BackupSourceDirectories {
 }
 
 export interface ApplicationBackupManifest {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   backupId: string;
   createdAt: number;
   database: "database.sqlite";
-  directories: Record<"artifacts" | "memory" | "execution-output" | "attachments", boolean>;
+  directories: Record<
+    "artifacts" | "memory" | "execution-output" | "attachments",
+    boolean
+  > & { notes?: boolean };
   attachments?: {
     assets: number;
     uniqueBlobs: number;
@@ -57,26 +67,56 @@ export async function createApplicationBackup(input: {
   if (existsSync(destination) && readdirSync(destination).length > 0) {
     throw new Error(`Backup destination is not empty: ${destination}`);
   }
-  for (const source of [input.sources?.artifacts, input.sources?.memory, input.sources?.executionOutput]) {
+  for (const source of [
+    input.sources?.artifacts,
+    input.sources?.memory,
+    input.sources?.executionOutput,
+  ]) {
     if (source) assertDestinationOutsideSource(destination, source);
   }
-  if (input.sources?.attachments) assertDestinationOutsideSource(destination, input.sources.attachments);
+  if (input.sources?.attachments)
+    assertDestinationOutsideSource(destination, input.sources.attachments);
+  assertDestinationOutsideSource(destination, input.store.notes.directory);
+  input.store.notes.list();
   const attachmentStats = validateAttachmentFiles(
     input.store,
     input.sources?.attachments,
   );
   const attachmentConsistency = input.sources?.attachments
-    ? summarizeAttachmentIntegrity(await new AttachmentIntegrityService({
-        store: input.store,
-        attachments: input.store.attachments,
-        blobs: new AttachmentBlobStore({ root: input.sources.attachments }),
-      }).scan({ gracePeriodMs: DEFAULT_RETENTION_POLICY.attachmentGracePeriodMs }))
+    ? summarizeAttachmentIntegrity(
+        await new AttachmentIntegrityService({
+          store: input.store,
+          attachments: input.store.attachments,
+          blobs: new AttachmentBlobStore({ root: input.sources.attachments }),
+        }).scan({
+          gracePeriodMs: DEFAULT_RETENTION_POLICY.attachmentGracePeriodMs,
+        }),
+      )
     : { errors: 0, warnings: 0, issueCounts: {} };
   mkdirSync(destination, { recursive: true });
   await input.store.backupDatabase(join(destination, "database.sqlite"));
+  input.store.notes.backupTo(join(destination, "notes"));
+  // Files are the body source of truth; align the copied index with the copied
+  // files if a note was saved while the asynchronous SQLite backup was running.
+  const copiedStore = new SessionStore({
+    path: join(destination, "database.sqlite"),
+  });
+  try {
+    copiedStore.notes.list();
+    copiedStore.notes.validateFiles();
+  } finally {
+    copiedStore.close();
+  }
   const directories = {
-    artifacts: copyOptionalDirectory(input.sources?.artifacts, join(destination, "artifacts")),
-    memory: copyOptionalDirectory(input.sources?.memory, join(destination, "memory")),
+    notes: true,
+    artifacts: copyOptionalDirectory(
+      input.sources?.artifacts,
+      join(destination, "artifacts"),
+    ),
+    memory: copyOptionalDirectory(
+      input.sources?.memory,
+      join(destination, "memory"),
+    ),
     "execution-output": copyOptionalDirectory(
       input.sources?.executionOutput,
       join(destination, "execution-output"),
@@ -87,7 +127,7 @@ export async function createApplicationBackup(input: {
     ),
   };
   const manifest: ApplicationBackupManifest = {
-    version: 2,
+    version: 3,
     backupId: randomUUID(),
     createdAt: Date.now(),
     database: "database.sqlite",
@@ -98,10 +138,15 @@ export async function createApplicationBackup(input: {
       closeActiveRecordsOnStartup: true,
     },
   };
-  writeFileSync(join(destination, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf-8");
+  writeFileSync(
+    join(destination, "manifest.json"),
+    JSON.stringify(manifest, null, 2) + "\n",
+    "utf-8",
+  );
   writeFileSync(
     join(destination, "checksums.json"),
-    JSON.stringify(checksumsFor(destination, ["checksums.json"]), null, 2) + "\n",
+    JSON.stringify(checksumsFor(destination, ["checksums.json"]), null, 2) +
+      "\n",
     "utf-8",
   );
   validateBackupAttachmentFiles(destination, manifest);
@@ -114,38 +159,80 @@ export function restoreApplicationBackup(input: {
   destinations?: BackupSourceDirectories;
 }): ApplicationBackupManifest {
   const source = resolve(input.source);
-  const manifest = JSON.parse(readFileSync(join(source, "manifest.json"), "utf-8")) as ApplicationBackupManifest;
-  if (![1, 2].includes(manifest.version) || manifest.database !== "database.sqlite") {
+  const manifest = JSON.parse(
+    readFileSync(join(source, "manifest.json"), "utf-8"),
+  ) as ApplicationBackupManifest;
+  if (
+    ![1, 2, 3].includes(manifest.version) ||
+    manifest.database !== "database.sqlite"
+  ) {
     throw new Error("Unsupported backup manifest");
   }
   if (!isDirectoryManifest(manifest.directories)) {
     throw new Error("Invalid backup directory manifest");
   }
+  if (manifest.version === 3 && typeof manifest.directories.notes !== "boolean")
+    throw new Error("Invalid note backup directory manifest");
   verifyChecksums(source);
-  validateBackupAttachmentFiles(source, manifest);
+  // Migration and repository validation run only on the staged copy. Opening
+  // a legacy backup with SessionStore here would mutate its checksummed DB.
   const storePath = resolve(input.storePath);
-  if (existsSync(storePath)) throw new Error(`Restore Store already exists: ${storePath}`);
+  const notesPath = join(dirname(storePath), "notes");
+  if (existsSync(storePath))
+    throw new Error(`Restore Store already exists: ${storePath}`);
   const restoreId = randomUUID();
   const targets: RestoreTarget[] = [
     createRestoreTarget(storePath, "file", restoreId),
-    ...optionalRestoreTargets(input.destinations, manifest, restoreId),
+    ...optionalRestoreTargets(
+      input.destinations,
+      manifest,
+      restoreId,
+      notesPath,
+    ),
   ];
   validateRestoreTargetLayout(source, targets);
   for (const target of targets) preflightRestoreTarget(target);
   if (manifest.directories.attachments && !input.destinations?.attachments) {
-    throw new Error("Attachment restore is incomplete: attachment destination is required");
+    throw new Error(
+      "Attachment restore is incomplete: attachment destination is required",
+    );
   }
   try {
     stageRestoreTarget(targets[0]!, join(source, manifest.database));
-    stageOptionalRestoreTarget(targets, input.destinations?.artifacts, join(source, "artifacts"));
-    stageOptionalRestoreTarget(targets, input.destinations?.memory, join(source, "memory"));
+    stageOptionalRestoreTarget(
+      targets,
+      input.destinations?.artifacts,
+      join(source, "artifacts"),
+    );
+    stageOptionalRestoreTarget(
+      targets,
+      input.destinations?.memory,
+      join(source, "memory"),
+    );
     stageOptionalRestoreTarget(
       targets,
       input.destinations?.executionOutput,
       join(source, "execution-output"),
     );
-    stageOptionalRestoreTarget(targets, input.destinations?.attachments, join(source, "attachments"));
-    validateStagedRestore(targets, storePath, input.destinations?.attachments, manifest);
+    stageOptionalRestoreTarget(
+      targets,
+      input.destinations?.attachments,
+      join(source, "attachments"),
+    );
+    if (manifest.directories.notes) {
+      stageOptionalRestoreTarget(targets, notesPath, join(source, "notes"));
+    } else {
+      const noteTarget = targets.find(
+        (target) => target.finalPath === notesPath,
+      )!;
+      mkdirSync(noteTarget.stagePath, { recursive: true });
+    }
+    validateStagedRestore(
+      targets,
+      storePath,
+      input.destinations?.attachments,
+      manifest,
+    );
     commitRestoreTargets(targets);
     return manifest;
   } catch (error) {
@@ -154,17 +241,26 @@ export function restoreApplicationBackup(input: {
   }
 }
 
-function copyOptionalDirectory(source: string | undefined, destination: string): boolean {
-  if (!source || !existsSync(source) || !statSync(source).isDirectory()) return false;
+function copyOptionalDirectory(
+  source: string | undefined,
+  destination: string,
+): boolean {
+  if (!source || !existsSync(source) || !statSync(source).isDirectory())
+    return false;
   cpSync(resolve(source), destination, { recursive: true });
   return true;
 }
 
-function assertDestinationOutsideSource(destination: string, source: string): void {
+function assertDestinationOutsideSource(
+  destination: string,
+  source: string,
+): void {
   const sourceRoot = resolve(source);
   const nested = relative(sourceRoot, destination);
   if (nested === "" || (!nested.startsWith("..") && !isAbsolute(nested))) {
-    throw new Error(`Backup destination cannot be inside a source directory: ${destination}`);
+    throw new Error(
+      `Backup destination cannot be inside a source directory: ${destination}`,
+    );
   }
 }
 
@@ -200,8 +296,10 @@ function optionalRestoreTargets(
   destinations: BackupSourceDirectories | undefined,
   manifest: ApplicationBackupManifest,
   restoreId: string,
+  notesPath: string,
 ): RestoreTarget[] {
   const entries: Array<[string | undefined, boolean | undefined]> = [
+    [notesPath, true],
     [destinations?.artifacts, manifest.directories.artifacts],
     [destinations?.memory, manifest.directories.memory],
     [destinations?.executionOutput, manifest.directories["execution-output"]],
@@ -209,15 +307,19 @@ function optionalRestoreTargets(
   ];
   return entries
     .filter((entry): entry is [string, true] => Boolean(entry[0] && entry[1]))
-    .map(([destination]) => createRestoreTarget(destination, "directory", restoreId));
+    .map(([destination]) =>
+      createRestoreTarget(destination, "directory", restoreId),
+    );
 }
 
 function preflightRestoreTarget(target: RestoreTarget): void {
   for (const temporary of [target.stagePath, target.holdPath]) {
-    if (existsSync(temporary)) throw new Error(`Restore temporary path already exists: ${temporary}`);
+    if (existsSync(temporary))
+      throw new Error(`Restore temporary path already exists: ${temporary}`);
   }
   if (!existsSync(target.finalPath)) return;
-  if (target.kind === "file") throw new Error(`Restore Store already exists: ${target.finalPath}`);
+  if (target.kind === "file")
+    throw new Error(`Restore Store already exists: ${target.finalPath}`);
   const stat = statSync(target.finalPath);
   if (!stat.isDirectory() || readdirSync(target.finalPath).length > 0) {
     throw new Error(`Restore directory is not empty: ${target.finalPath}`);
@@ -225,7 +327,10 @@ function preflightRestoreTarget(target: RestoreTarget): void {
   target.hadEmptyFinal = true;
 }
 
-function validateRestoreTargetLayout(source: string, targets: RestoreTarget[]): void {
+function validateRestoreTargetLayout(
+  source: string,
+  targets: RestoreTarget[],
+): void {
   const unique = new Set<string>();
   for (const target of targets) {
     const normalized = target.finalPath.toLocaleLowerCase();
@@ -234,8 +339,13 @@ function validateRestoreTargetLayout(source: string, targets: RestoreTarget[]): 
     }
     unique.add(normalized);
     const fromSource = relative(source, target.finalPath);
-    if (fromSource === "" || (!fromSource.startsWith("..") && !isAbsolute(fromSource))) {
-      throw new Error(`Restore target cannot be inside the backup source: ${target.finalPath}`);
+    if (
+      fromSource === "" ||
+      (!fromSource.startsWith("..") && !isAbsolute(fromSource))
+    ) {
+      throw new Error(
+        `Restore target cannot be inside the backup source: ${target.finalPath}`,
+      );
     }
   }
   for (const left of targets) {
@@ -243,7 +353,9 @@ function validateRestoreTargetLayout(source: string, targets: RestoreTarget[]): 
       if (left === right) continue;
       const nested = relative(left.finalPath, right.finalPath);
       if (nested === "" || (!nested.startsWith("..") && !isAbsolute(nested))) {
-        throw new Error(`Restore targets cannot contain one another: ${right.finalPath}`);
+        throw new Error(
+          `Restore targets cannot contain one another: ${right.finalPath}`,
+        );
       }
     }
   }
@@ -251,7 +363,11 @@ function validateRestoreTargetLayout(source: string, targets: RestoreTarget[]): 
 
 function stageRestoreTarget(target: RestoreTarget, source: string): void {
   mkdirSync(dirname(target.stagePath), { recursive: true });
-  cpSync(source, target.stagePath, target.kind === "directory" ? { recursive: true } : undefined);
+  cpSync(
+    source,
+    target.stagePath,
+    target.kind === "directory" ? { recursive: true } : undefined,
+  );
 }
 
 function stageOptionalRestoreTarget(
@@ -260,7 +376,9 @@ function stageOptionalRestoreTarget(
   source: string,
 ): void {
   if (!destination) return;
-  const target = targets.find((candidate) => candidate.finalPath === resolve(destination));
+  const target = targets.find(
+    (candidate) => candidate.finalPath === resolve(destination),
+  );
   if (target) stageRestoreTarget(target, source);
 }
 
@@ -270,18 +388,35 @@ function validateStagedRestore(
   attachmentsPath: string | undefined,
   manifest: ApplicationBackupManifest,
 ): void {
-  const databaseTarget = targets.find((target) => target.finalPath === resolve(storePath))!;
+  const databaseTarget = targets.find(
+    (target) => target.finalPath === resolve(storePath),
+  )!;
   const attachmentTarget = attachmentsPath
     ? targets.find((target) => target.finalPath === resolve(attachmentsPath))
     : undefined;
   const database = new SessionStore({ path: databaseTarget.stagePath });
   try {
-    const stats = validateAttachmentFiles(database, attachmentTarget?.stagePath);
-    if (manifest.version === 2 && manifest.attachments && (
-      manifest.attachments.assets !== stats.assets ||
-      manifest.attachments.uniqueBlobs !== stats.uniqueBlobs ||
-      manifest.attachments.physicalBytes !== stats.physicalBytes
-    )) {
+    {
+      const noteTarget = targets.find(
+        (target) =>
+          target.finalPath === join(dirname(resolve(storePath)), "notes"),
+      );
+      if (!noteTarget) throw new Error("Note restore is incomplete");
+      if (!manifest.directories.notes)
+        database.notes.copyLegacyFilesTo(noteTarget.stagePath);
+      database.notes.validateFiles(noteTarget.stagePath);
+    }
+    const stats = validateAttachmentFiles(
+      database,
+      attachmentTarget?.stagePath,
+    );
+    if (
+      manifest.version >= 2 &&
+      manifest.attachments &&
+      (manifest.attachments.assets !== stats.assets ||
+        manifest.attachments.uniqueBlobs !== stats.uniqueBlobs ||
+        manifest.attachments.physicalBytes !== stats.physicalBytes)
+    ) {
       throw new Error("Attachment restore is inconsistent with its manifest");
     }
   } finally {
@@ -328,7 +463,11 @@ function rollbackRestoreTargets(targets: RestoreTarget[]): void {
     if (target.heldFinal && existsSync(target.holdPath)) {
       renameSync(target.holdPath, target.finalPath);
       target.heldFinal = false;
-    } else if (target.committed && target.hadEmptyFinal && !existsSync(target.finalPath)) {
+    } else if (
+      target.committed &&
+      target.hadEmptyFinal &&
+      !existsSync(target.finalPath)
+    ) {
       mkdirSync(target.finalPath, { recursive: false });
     } else {
       removeRestorePath(target.holdPath);
@@ -341,24 +480,34 @@ function removeRestorePath(path: string): void {
   rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
 }
 
-function checksumsFor(root: string, excluded: string[]): Record<string, string> {
+function checksumsFor(
+  root: string,
+  excluded: string[],
+): Record<string, string> {
   const checksums: Record<string, string> = {};
   for (const path of walkFiles(root)) {
     const name = relative(root, path).replaceAll("\\", "/");
     if (excluded.includes(name)) continue;
-    checksums[name] = createHash("sha256").update(readFileSync(path)).digest("hex");
+    checksums[name] = createHash("sha256")
+      .update(readFileSync(path))
+      .digest("hex");
   }
   return checksums;
 }
 
 function verifyChecksums(root: string): void {
-  const expected = JSON.parse(readFileSync(join(root, "checksums.json"), "utf-8")) as Record<string, string>;
+  const expected = JSON.parse(
+    readFileSync(join(root, "checksums.json"), "utf-8"),
+  ) as Record<string, string>;
   const actual = checksumsFor(root, ["checksums.json"]);
   const names = Object.keys(actual).sort();
   const expectedNames = Object.keys(expected).sort();
   if (
     names.length !== expectedNames.length ||
-    names.some((name, index) => name !== expectedNames[index] || actual[name] !== expected[name])
+    names.some(
+      (name, index) =>
+        name !== expectedNames[index] || actual[name] !== expected[name],
+    )
   ) {
     throw new Error("Backup checksum verification failed");
   }
@@ -370,42 +519,61 @@ function walkFiles(root: string): string[] {
     const path = join(root, entry.name);
     if (entry.isDirectory()) files.push(...walkFiles(path));
     else if (entry.isFile()) files.push(path);
-    else throw new Error(`Backup contains unsupported filesystem entry: ${path}`);
+    else
+      throw new Error(`Backup contains unsupported filesystem entry: ${path}`);
   }
   return files.sort();
 }
 
-function isDirectoryManifest(value: unknown): value is ApplicationBackupManifest["directories"] {
+function isDirectoryManifest(
+  value: unknown,
+): value is ApplicationBackupManifest["directories"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.artifacts === "boolean" &&
+  return (
+    typeof candidate.artifacts === "boolean" &&
     typeof candidate.memory === "boolean" &&
     typeof candidate["execution-output"] === "boolean" &&
-    (typeof candidate.attachments === "boolean" || candidate.attachments === undefined);
+    (typeof candidate.attachments === "boolean" ||
+      candidate.attachments === undefined) &&
+    (typeof candidate.notes === "boolean" || candidate.notes === undefined)
+  );
 }
 
 function validateAttachmentFiles(
   store: Pick<SessionStore, "attachments">,
   attachmentsRoot: string | undefined,
 ): Omit<NonNullable<ApplicationBackupManifest["attachments"]>, "consistency"> {
-  const assets = store.attachments.listAttachments({ includeDeleted: true })
+  const assets = store.attachments
+    .listAttachments({ includeDeleted: true })
     .filter((asset) => asset.sha256 && asset.sizeBytes !== undefined);
   const unique = new Map<string, number>();
   for (const asset of assets) unique.set(asset.sha256!, asset.sizeBytes!);
   if (unique.size > 0 && !attachmentsRoot) {
-    throw new Error(`Attachment backup is incomplete: missing attachment directory for ${assets[0]!.id}`);
+    throw new Error(
+      `Attachment backup is incomplete: missing attachment directory for ${assets[0]!.id}`,
+    );
   }
   let physicalBytes = 0;
   for (const [sha256, expectedSize] of unique) {
-    const path = join(resolve(attachmentsRoot!), "blobs", sha256.slice(0, 2), sha256);
+    const path = join(
+      resolve(attachmentsRoot!),
+      "blobs",
+      sha256.slice(0, 2),
+      sha256,
+    );
     if (!existsSync(path)) {
       const asset = assets.find((candidate) => candidate.sha256 === sha256)!;
-      throw new Error(`Attachment backup is incomplete: missing blob for ${asset.id}`);
+      throw new Error(
+        `Attachment backup is incomplete: missing blob for ${asset.id}`,
+      );
     }
     const stat = statSync(path);
     if (!stat.isFile() || stat.size !== expectedSize) {
       const asset = assets.find((candidate) => candidate.sha256 === sha256)!;
-      throw new Error(`Attachment backup is incomplete: corrupt blob for ${asset.id}`);
+      throw new Error(
+        `Attachment backup is incomplete: corrupt blob for ${asset.id}`,
+      );
     }
     physicalBytes += stat.size;
   }
@@ -418,19 +586,29 @@ function validateBackupAttachmentFiles(
 ): void {
   const database = new SessionStore({ path: join(source, manifest.database) });
   try {
+    if (manifest.directories.notes)
+      database.notes.validateFiles(join(source, "notes"));
     const stats = validateAttachmentFiles(
       database,
-      manifest.directories.attachments ? join(source, "attachments") : undefined,
+      manifest.directories.attachments
+        ? join(source, "attachments")
+        : undefined,
     );
     if (manifest.version === 1 && stats.assets > 0) {
-      throw new Error("Attachment backup is incomplete: version 1 backup contains attachment records without blobs");
+      throw new Error(
+        "Attachment backup is incomplete: version 1 backup contains attachment records without blobs",
+      );
     }
-    if (manifest.version === 2 && manifest.attachments && (
-      manifest.attachments.assets !== stats.assets ||
-      manifest.attachments.uniqueBlobs !== stats.uniqueBlobs ||
-      manifest.attachments.physicalBytes !== stats.physicalBytes
-    )) {
-      throw new Error("Attachment backup manifest does not match its database and blobs");
+    if (
+      manifest.version >= 2 &&
+      manifest.attachments &&
+      (manifest.attachments.assets !== stats.assets ||
+        manifest.attachments.uniqueBlobs !== stats.uniqueBlobs ||
+        manifest.attachments.physicalBytes !== stats.physicalBytes)
+    ) {
+      throw new Error(
+        "Attachment backup manifest does not match its database and blobs",
+      );
     }
   } finally {
     database.close();

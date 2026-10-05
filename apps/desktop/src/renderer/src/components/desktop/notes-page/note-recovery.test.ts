@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
+import { createNoteRecoveryPort, readRecoveryDrafts } from "./note-recovery"
 
 type RecoveryDraft = {
   draftId: string
@@ -45,6 +46,24 @@ describe("note recovery", () => {
 
   beforeEach(() => {
     storage = memoryStorage()
+  })
+
+  it("keeps the main and quick-window drafts for the same note independent", () => {
+    const main = createNoteRecoveryPort(storage)
+    const quick = createNoteRecoveryPort(storage, "quick")
+    const original = {
+      draftId: "same-note",
+      noteId: "same-note",
+      baseRevision: 1,
+      content: "main text",
+      updatedAt: 1,
+    }
+    main.write(original)
+    quick.write({ ...original, content: "quick text" })
+    expect(readRecoveryDrafts(storage)[0]?.content).toBe("main text")
+    expect(readRecoveryDrafts(storage, "quick")[0]?.content).toBe("quick text")
+    main.remove(original.draftId)
+    expect(readRecoveryDrafts(storage, "quick")[0]?.content).toBe("quick text")
   })
 
   it("keeps drafts separately and removes only the confirmed draft", async () => {

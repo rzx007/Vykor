@@ -9,6 +9,10 @@ import type { HttpTransport } from "../transport/http-transport.js";
 export class NoteResource {
   constructor(private readonly transport: HttpTransport) {}
 
+  storageInfo(): Promise<{ directory: string; format: "markdown" }> {
+    return this.transport.request("/notes/storage");
+  }
+
   async list(options: { signal?: AbortSignal } = {}): Promise<NoteRecord[]> {
     const response = await this.transport.request<{ notes: NoteRecord[] }>(
       "/notes",

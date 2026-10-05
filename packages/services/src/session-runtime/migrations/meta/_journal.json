@@ -29,6 +29,27 @@
       "when": 1791129253155,
       "tag": "0003_global_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791172990451,
+      "tag": "0004_note_organization",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791173619638,
+      "tag": "0005_note_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791186378776,
+      "tag": "0006_note_file_index",
+      "breakpoints": true
     }
   ]
 }

@@ -305,6 +305,7 @@ export type DesktopAPI = {
     create: (input: CreateDesktopNoteInput) => Promise<DesktopNote>
     update: (id: string, input: UpdateDesktopNoteInput) => Promise<DesktopNote>
     remove: (id: string) => Promise<void>
+    openDirectory: () => Promise<void>
   }
   providers: {
     snapshot: () => Promise<DesktopProviderSnapshot>

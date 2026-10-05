@@ -17,11 +17,21 @@ import {
 } from "../support.js";
 
 export interface NoteRoutesContext {
-  notes: Pick<NoteRepository, "list" | "create" | "update" | "remove">;
+  notes: Pick<NoteRepository, "list" | "create" | "update" | "remove"> &
+    Partial<Pick<NoteRepository, "storageInfo">>;
 }
 
 export function createNoteRoutes(context: NoteRoutesContext): Hono {
   return new Hono()
+    .get("/storage", () => {
+      try {
+        if (!context.notes.storageInfo)
+          return errorResponse(503, "便签存储尚未就绪");
+        return jsonResponse(context.notes.storageInfo());
+      } catch (error) {
+        return noteError(error);
+      }
+    })
     .get("/", () => {
       try {
         return jsonResponse({ notes: context.notes.list() });

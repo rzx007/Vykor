@@ -261,6 +261,7 @@ export const desktopAPI = {
     update: (id: string, input: IpcInvokeMap[typeof IpcChannels.noteUpdate]["args"][1]) =>
       invoke(IpcChannels.noteUpdate, id, input),
     remove: (id: string) => invoke(IpcChannels.noteRemove, id),
+    openDirectory: () => invoke(IpcChannels.noteOpenDirectory),
   },
   providers: {
     snapshot: () => invoke(IpcChannels.providerSnapshot),

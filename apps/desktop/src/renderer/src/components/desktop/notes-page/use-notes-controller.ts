@@ -31,7 +31,8 @@ export interface NotesController {
   retrySave(): Promise<void>
   reloadConflict(): Promise<void>
   saveConflictAsNew(): Promise<void>
-  removeSelected(): Promise<void>
+  removeSelected(draftId?: string): Promise<void>
+  refresh(): Promise<void>
 }
 
 export function useNotesController(): NotesController {
@@ -133,8 +134,12 @@ export function useNotesController(): NotesController {
       .list()
       .then((records) => {
         if (disposed) return
+        const quickRecovery = readRecoveryDrafts(window.localStorage, "quick")
         const remainingRecovery = new Map(
-          readRecoveryDrafts().map((draft) => [draft.draftId, draft])
+          [
+            ...readRecoveryDrafts(),
+            ...quickRecovery.map((draft) => ({ ...draft, draftId: `quick-${draft.draftId}` })),
+          ].map((draft) => [draft.draftId, draft])
         )
         const views = records.map((record) => {
           const restored = [...remainingRecovery.values()]
@@ -173,6 +178,17 @@ export function useNotesController(): NotesController {
         const lastId = readSelectedNoteId()
         const selected = initial.find((note) => note.noteId === lastId) ?? initial[0]!
         commitSelection(selected.draftId)
+        // Move old quick-window recovery only after its body is present in the
+        // main recovery cache. The retired window's text must not disappear.
+        const mainRecovery = readRecoveryDrafts()
+        for (const draft of quickRecovery) {
+          if (
+            mainRecovery.some(
+              (item) => item.draftId === `quick-${draft.draftId}` && item.content === draft.content
+            )
+          )
+            removeRecoveryDraft(window.localStorage, draft.draftId, "quick")
+        }
       })
       .catch((cause) => {
         if (disposed) return
@@ -262,27 +278,88 @@ export function useNotesController(): NotesController {
     await coordinators.current.get(view.draftId)?.flush()
   }, [commitNotes, commitSelection, createLocalDraft])
 
-  const removeSelected = useCallback(async (): Promise<void> => {
-    const draftId = selectedKeyRef.current
-    const current = notesRef.current.find((note) => note.draftId === draftId)
-    if (!draftId || !current) return
+  const removeSelected = useCallback(
+    async (confirmedKey?: string): Promise<void> => {
+      const draftId = confirmedKey ?? selectedKeyRef.current
+      const current = notesRef.current.find((note) => note.draftId === draftId)
+      if (!draftId || !current) return
+      try {
+        const coordinator = coordinators.current.get(draftId)
+        await coordinator?.flush()
+        const persistedId = coordinator?.snapshot().record?.id ?? current.noteId
+        if (persistedId) await window.desktop.notes.remove(persistedId)
+        removeRecoveryDraft(window.localStorage, draftId)
+        coordinator?.dispose()
+        coordinators.current.delete(draftId)
+        const remaining = notesRef.current.filter((note) => note.draftId !== draftId)
+        if (remaining.length === 0) remaining.push(createLocalDraft())
+        commitNotes(remaining)
+        if (
+          selectedKeyRef.current === draftId ||
+          !remaining.some((note) => note.draftId === selectedKeyRef.current)
+        )
+          commitSelection(filterAndSortNotes(remaining, "")[0]!.draftId)
+      } catch (cause) {
+        setStatus("error")
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    },
+    [commitNotes, commitSelection, createLocalDraft]
+  )
+
+  const refresh = useCallback(async (): Promise<void> => {
     try {
-      const coordinator = coordinators.current.get(draftId)
-      await coordinator?.flush()
-      const persistedId = coordinator?.snapshot().record?.id ?? current.noteId
-      if (persistedId) await window.desktop.notes.remove(persistedId)
-      removeRecoveryDraft(window.localStorage, draftId)
-      coordinator?.dispose()
-      coordinators.current.delete(draftId)
-      const remaining = notesRef.current.filter((note) => note.draftId !== draftId)
-      if (remaining.length === 0) remaining.push(createLocalDraft())
-      commitNotes(remaining)
-      commitSelection(filterAndSortNotes(remaining, "")[0]!.draftId)
+      const records = await window.desktop.notes.list()
+      const local = notesRef.current
+      const updated = records.map((record) => {
+        const existing = local.find((note) => note.noteId === record.id)
+        const snapshot = existing
+          ? coordinators.current.get(existing.draftId)?.snapshot()
+          : undefined
+        if (
+          existing &&
+          (!snapshot?.record ||
+            snapshot.status === "saving" ||
+            snapshot.status === "error" ||
+            snapshot.status === "conflict" ||
+            existing.content !== snapshot.record.content ||
+            (existing.revision ?? 0) >= record.revision)
+        )
+          return existing
+        const view = { ...noteViewFromRecord(record), draftId: existing?.draftId ?? record.id }
+        if (existing) coordinators.current.get(existing.draftId)?.dispose()
+        installCoordinator(view, record)
+        return view
+      })
+      for (const note of local) {
+        const snapshot = coordinators.current.get(note.draftId)?.snapshot()
+        if (
+          !updated.some((item) => item.draftId === note.draftId) &&
+          (!note.noteId ||
+            snapshot?.status === "saving" ||
+            snapshot?.status === "error" ||
+            snapshot?.status === "conflict" ||
+            note.content !== snapshot?.record?.content)
+        )
+          updated.push(note)
+      }
+      if (!updated.length) updated.push(createLocalDraft())
+      commitNotes(updated)
+      if (!updated.some((note) => note.draftId === selectedKeyRef.current))
+        commitSelection(updated[0]!.draftId)
     } catch (cause) {
-      setStatus("error")
       setError(cause instanceof Error ? cause.message : String(cause))
+      setStatus("error")
     }
-  }, [commitNotes, commitSelection, createLocalDraft])
+  }, [commitNotes, commitSelection, createLocalDraft, installCoordinator])
+
+  useEffect(() => {
+    const onFocus = (): void => {
+      void refresh()
+    }
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [refresh])
 
   const selected = notes.find((note) => note.draftId === selectedKey)
   const visibleNotes = useMemo(
@@ -309,5 +386,6 @@ export function useNotesController(): NotesController {
     reloadConflict,
     saveConflictAsNew,
     removeSelected,
+    refresh,
   }
 }

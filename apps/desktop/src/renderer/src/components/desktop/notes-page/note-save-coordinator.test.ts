@@ -68,6 +68,42 @@ afterEach(() => {
 })
 
 describe("NoteSaveCoordinator", () => {
+  it("keeps stale recovery content without replacing the externally edited file", async () => {
+    vi.useFakeTimers()
+    const update = vi.fn()
+    const recovery = recoveryPort()
+    const coordinator = await createCoordinator({
+      api: { create: vi.fn(), update },
+      recovery,
+      record: { ...note, content: "edited outside", revision: 2 },
+    })
+    coordinator.stage({ ...draft, content: "unsaved local idea" })
+    await vi.advanceTimersByTimeAsync(1_000)
+    await coordinator.flush()
+    expect(update).not.toHaveBeenCalled()
+    expect(coordinator.snapshot().status).toBe("conflict")
+    expect(recovery.write).toHaveBeenCalledWith({ ...draft, content: "unsaved local idea" })
+    expect(recovery.remove).not.toHaveBeenCalled()
+  })
+
+  it("recognizes a revision conflict after IPC serializes it as a plain error", async () => {
+    vi.useFakeTimers()
+    const update = vi
+      .fn()
+      .mockRejectedValue(
+        new Error("Error invoking note:update: Note revision conflict: note expected 1")
+      )
+    const coordinator = await createCoordinator({
+      api: { create: vi.fn(), update },
+      recovery: recoveryPort(),
+      record: note,
+    })
+    coordinator.stage({ ...draft, content: "v2" })
+    await coordinator.flush()
+    expect(coordinator.snapshot().status).toBe("conflict")
+    coordinator.dispose()
+  })
+
   it("coalesces rapid edits and advances the revision in order", async () => {
     vi.useFakeTimers()
     let resolveFirst!: (value: DesktopNote) => void

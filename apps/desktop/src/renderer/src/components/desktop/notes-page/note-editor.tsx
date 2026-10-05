@@ -38,8 +38,8 @@ export function NoteEditor({
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
-    if (status !== "loading") editorRef.current?.focus()
-  }, [selected?.draftId, status])
+    if (editorRef.current && !editorRef.current.disabled) editorRef.current.focus()
+  }, [selected?.draftId])
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-background">

@@ -14,9 +14,16 @@ export interface NoteRecoveryPort {
   remove(draftId: string): void
 }
 
-export function readRecoveryDrafts(storage: Storage = window.localStorage): NoteRecoveryDraft[] {
+function recoveryKey(scope: "main" | "quick"): string {
+  return scope === "main" ? NOTE_RECOVERY_STORAGE_KEY : `${NOTE_RECOVERY_STORAGE_KEY}:quick`
+}
+
+export function readRecoveryDrafts(
+  storage: Storage = window.localStorage,
+  scope: "main" | "quick" = "main"
+): NoteRecoveryDraft[] {
   try {
-    const value: unknown = JSON.parse(storage.getItem(NOTE_RECOVERY_STORAGE_KEY) ?? "null")
+    const value: unknown = JSON.parse(storage.getItem(recoveryKey(scope)) ?? "null")
     if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.drafts)) return []
     if (!value.drafts.every(isRecoveryDraft)) return []
     return value.drafts
@@ -25,29 +32,40 @@ export function readRecoveryDrafts(storage: Storage = window.localStorage): Note
   }
 }
 
-export function writeRecoveryDraft(storage: Storage, draft: NoteRecoveryDraft): void {
-  const drafts = new Map(readRecoveryDrafts(storage).map((item) => [item.draftId, item]))
+export function writeRecoveryDraft(
+  storage: Storage,
+  draft: NoteRecoveryDraft,
+  scope: "main" | "quick" = "main"
+): void {
+  const drafts = new Map(readRecoveryDrafts(storage, scope).map((item) => [item.draftId, item]))
   drafts.set(draft.draftId, draft)
-  writeDrafts(storage, [...drafts.values()])
+  writeDrafts(storage, [...drafts.values()], scope)
 }
 
-export function removeRecoveryDraft(storage: Storage, draftId: string): void {
-  const drafts = readRecoveryDrafts(storage).filter((draft) => draft.draftId !== draftId)
+export function removeRecoveryDraft(
+  storage: Storage,
+  draftId: string,
+  scope: "main" | "quick" = "main"
+): void {
+  const drafts = readRecoveryDrafts(storage, scope).filter((draft) => draft.draftId !== draftId)
   if (drafts.length === 0) {
     try {
-      storage.removeItem(NOTE_RECOVERY_STORAGE_KEY)
+      storage.removeItem(recoveryKey(scope))
     } catch {
-      // SQLite remains the source of truth when recovery storage is unavailable.
+      // Saved Markdown files remain available when recovery storage is unavailable.
     }
     return
   }
-  writeDrafts(storage, drafts)
+  writeDrafts(storage, drafts, scope)
 }
 
-export function createNoteRecoveryPort(storage: Storage = window.localStorage): NoteRecoveryPort {
+export function createNoteRecoveryPort(
+  storage: Storage = window.localStorage,
+  scope: "main" | "quick" = "main"
+): NoteRecoveryPort {
   return {
-    write: (draft) => writeRecoveryDraft(storage, draft),
-    remove: (draftId) => removeRecoveryDraft(storage, draftId),
+    write: (draft) => writeRecoveryDraft(storage, draft, scope),
+    remove: (draftId) => removeRecoveryDraft(storage, draftId, scope),
   }
 }
 
@@ -68,11 +86,11 @@ export function writeSelectedNoteId(storage: Storage, noteId: string | null): vo
   }
 }
 
-function writeDrafts(storage: Storage, drafts: NoteRecoveryDraft[]): void {
+function writeDrafts(storage: Storage, drafts: NoteRecoveryDraft[], scope: "main" | "quick"): void {
   try {
-    storage.setItem(NOTE_RECOVERY_STORAGE_KEY, JSON.stringify({ version: 1, drafts }))
+    storage.setItem(recoveryKey(scope), JSON.stringify({ version: 1, drafts }))
   } catch {
-    // A failed recovery cache must not stop the durable SQLite save attempt.
+    // A failed recovery cache must not stop the Markdown file save attempt.
   }
 }
 
