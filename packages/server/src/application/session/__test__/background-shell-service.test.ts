@@ -445,6 +445,57 @@ describe("BackgroundShellService", () => {
     expect(manager.startShellExecution).toHaveBeenCalledTimes(2);
   });
 
+  it("joins in-flight startup when retry sees no runtime yet", async () => {
+    const { service, store, manager } = createTaskService();
+    const originalReserve = store.reserveSessionTask.getMockImplementation()!;
+    let reservationCount = 0;
+    store.reserveSessionTask.mockImplementation((input) => {
+      reservationCount += 1;
+      return reservationCount === 1
+        ? originalReserve(input)
+        : { task: store.getSessionTask(), created: false };
+    });
+    let finishStart!: (task: any) => void;
+    const starting = new Promise<any>((resolve) => { finishStart = resolve; });
+    manager.startShellExecution.mockImplementation(() => starting);
+    // Admission is dispatching but the supervisor map is still empty — the
+    // first caller has not registered the execution yet.
+    manager.getExecution.mockReturnValue(undefined);
+    const input = {
+      requestId: "tool:concurrent-no-runtime",
+      sessionId: "s1",
+      command: "pnpm dev",
+      origin: "tool" as const,
+    };
+
+    const first = service.create(input);
+    await Promise.resolve();
+    await Promise.resolve();
+    const retry = service.create(input);
+    let retrySettled = false;
+    void retry.then(() => { retrySettled = true; });
+    await Promise.resolve();
+
+    expect(retrySettled).toBe(false);
+    expect(store.getSessionTask().status).toBe("pending");
+    const taskId = store.getSessionTask().id;
+    finishStart({
+      id: taskId,
+      type: "shell",
+      status: "running",
+      description: "pnpm dev",
+      cwd: "/repo",
+      sessionId: "s1",
+      metadata: {},
+    });
+
+    await expect(Promise.all([first, retry])).resolves.toMatchObject([
+      { execution: { id: taskId, status: "running" }, created: true },
+      { execution: { id: taskId, status: "running" }, created: false },
+    ]);
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects the same request identity with different parameters", async () => {
     const { service, store, manager } = createTaskService();
     const input = { requestId: "tool:conflict", sessionId: "s1", command: "pnpm dev", origin: "tool" as const };

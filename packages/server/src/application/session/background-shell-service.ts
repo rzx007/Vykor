@@ -241,9 +241,11 @@ export class BackgroundShellService {
       }
       const runtime = manager.getExecution(reservation.task.id);
       const admissionPhase = reservation.task.metadata.admissionPhase;
-      if (runtime && (admissionPhase === "reserved" || admissionPhase === "dispatching")) {
+      if (admissionPhase === "reserved" || admissionPhase === "dispatching") {
         // The first caller is still starting this exact runtime. Re-entering the
-        // supervisor by id joins its in-flight promise, including its failure.
+        // supervisor by id joins its in-flight promise, including its failure —
+        // even when getExecution is still empty because startShellExecution has
+        // not registered the map entry yet.
         const execution = await manager.startShellExecution({
           id: reservation.task.id,
           command,
