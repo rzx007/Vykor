@@ -3,12 +3,16 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
+  Camera,
+  Download,
   Globe2,
   MessageCircleMore,
   MousePointer2,
   RefreshCw,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react"
+import type { NativeImage } from "electron"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
@@ -18,6 +22,9 @@ import { ButtonGroup } from "@renderer/components/ui/button-group"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 import { Separator } from "@renderer/components/ui/separator"
 import { cn } from "@renderer/lib/utils"
+import { isSafeImagePreviewLayout } from "@shared/safe-image-preview"
+import { useImageViewer } from "../image-viewer/image-viewer-provider"
+import type { ImageSource } from "../image-viewer/image-source"
 
 import {
   browserTitleFromUrl,
@@ -58,6 +65,7 @@ type BrowserWebviewElement = HTMLElement & {
   getTitle?: () => string
   insertCSS?: (css: string) => Promise<string>
   getWebContentsId?: () => number
+  capturePage?: () => Promise<NativeImage>
 }
 
 export function BrowserTool({
@@ -71,13 +79,87 @@ export function BrowserTool({
   const activeRef = useRef(active)
   const onUpdateRef = useRef(onUpdate)
   const [browserError, setBrowserError] = useState<string | null>(null)
+  const [pageReady, setPageReady] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [screenshot, setScreenshot] = useState<{
+    source: Extract<ImageSource, { kind: "memory" }>
+    url: string
+  } | null>(null)
+  const captureVersion = useRef(0)
+  const captureBusy = useRef(false)
+  const viewer = useImageViewer()
   const pageContainer = useRef<HTMLDivElement | null>(null)
   const annotation = useBrowserAnnotations({
     tabId: tab.id,
     visible,
-    ready: webviewReadyRef.current && !tab.loading && Boolean(tab.url),
+    ready: pageReady && !tab.loading && Boolean(tab.url),
   })
   const { resolvedTheme } = useAppearance()
+
+  useEffect(
+    () => () => {
+      captureVersion.current += 1
+    },
+    [active, visible, tab.url, tab.loading]
+  )
+
+  useEffect(() => {
+    if (screenshot) return () => URL.revokeObjectURL(screenshot.url)
+    return undefined
+  }, [screenshot])
+
+  const canCapture =
+    active && visible && pageReady && !tab.loading && Boolean(tab.url && tab.url !== "about:blank")
+  const captureScreenshot = async (): Promise<void> => {
+    const webview = webviewRef.current
+    if (!canCapture || captureBusy.current || !webview?.capturePage) return
+    const request = captureVersion.current
+    captureBusy.current = true
+    setCapturing(true)
+    setBrowserError(null)
+    try {
+      // 只截内嵌页面当前可见区域，不包含地址栏和宿主的浮层。
+      const image = await webview.capturePage()
+      if (request !== captureVersion.current) return
+      if (image.isEmpty()) throw new Error("页面尚未就绪，请稍后重试截图")
+      const { width, height } = image.getSize()
+      if (!isSafeImagePreviewLayout({ width, height, frames: 1 }))
+        throw new Error("截图尺寸太大，请缩小浏览器区域后重试")
+      const png = image.toPNG()
+      if (png.byteLength > 8 * 1024 * 1024) throw new Error("截图超过 8 MB，请缩小浏览器区域后重试")
+      // Buffer 可能是大缓冲区的切片；只复制这张 PNG 的字节。
+      const bytes = new Uint8Array(png).buffer
+      const title = tab.title.replace(/[<>:"/\\|?*]/g, "-").slice(0, 80) || "页面"
+      const name = `${title}-截图-${new Date().toISOString().replace(/[:.]/g, "-")}.png`
+      const source: Extract<ImageSource, { kind: "memory" }> = {
+        kind: "memory",
+        id: crypto.randomUUID(),
+        name,
+        bytes,
+        mediaType: "image/png",
+      }
+      setScreenshot({ source, url: URL.createObjectURL(new Blob([bytes], { type: "image/png" })) })
+    } catch (error) {
+      if (request === captureVersion.current)
+        setBrowserError(error instanceof Error ? error.message : "无法截取当前页面")
+    } finally {
+      captureBusy.current = false
+      setCapturing(false)
+    }
+  }
+
+  const saveScreenshot = (): void => {
+    if (!screenshot) return
+    const downloadUrl = URL.createObjectURL(
+      new Blob([screenshot.source.bytes], { type: screenshot.source.mediaType })
+    )
+    const link = document.createElement("a")
+    link.href = downloadUrl
+    link.download = screenshot.source.name
+    link.click()
+    // 下载异步读取 Blob，不能跟随缩略图的删除或替换立即释放。
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+  }
 
   useEffect(() => {
     activeRef.current = active
@@ -102,7 +184,9 @@ export function BrowserTool({
     if (webview) applyScrollbarStyle(webview)
   }, [applyScrollbarStyle])
   const scrollbarStyleRef = useRef(applyScrollbarStyle)
-  scrollbarStyleRef.current = applyScrollbarStyle
+  useEffect(() => {
+    scrollbarStyleRef.current = applyScrollbarStyle
+  }, [applyScrollbarStyle])
 
   const navigate = (): void => {
     const url = normalizeBrowserUrl(tab.input)
@@ -171,9 +255,12 @@ export function BrowserTool({
         }
       })
       webview.addEventListener("did-start-loading", () => {
+        captureVersion.current += 1
+        setPageReady(false)
         onUpdateRef.current({ loading: true })
       })
       webview.addEventListener("did-stop-loading", () => {
+        setPageReady(webviewReadyRef.current)
         scrollbarStyleRef.current(webview)
         updateNavigationState()
       })
@@ -304,6 +391,19 @@ export function BrowserTool({
             </InputGroupAddon>
           </InputGroup>
         </form>
+        <Button
+          type="button"
+          variant="control"
+          size="icon-lg"
+          shape="circle"
+          aria-label="截图"
+          aria-busy={capturing}
+          title={capturing ? "正在截图…" : "截取当前可见页面"}
+          disabled={!canCapture || capturing}
+          onClick={() => void captureScreenshot()}
+        >
+          <Camera />
+        </Button>
         {Boolean(annotation.snapshot?.annotations.length) && (
           <Button
             type="button"
@@ -337,6 +437,60 @@ export function BrowserTool({
         )}
         {tab.url && visible && (
           <BrowserAnnotationPanel ui={annotation} containerRef={pageContainer} />
+        )}
+        {screenshot && active && visible && (
+          <aside
+            aria-label="页面截图预览"
+            className="absolute top-3 right-3 z-20 flex w-44 flex-col gap-2 rounded-2xl bg-popover p-2 text-popover-foreground shadow-md"
+          >
+            <button
+              type="button"
+              aria-label="查看截图并批注"
+              title={screenshot.source.name}
+              disabled={!viewer}
+              className="overflow-hidden rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => viewer?.openImage(screenshot.source)}
+            >
+              <img src={screenshot.url} alt="页面截图" className="h-24 w-full object-contain" />
+            </button>
+            <ButtonGroup variant="toolbar" aria-label="截图操作" className="self-center">
+              <Button
+                type="button"
+                variant="ghost"
+                shape="pill"
+                size="sm"
+                aria-label="查看截图批注"
+                title="查看并批注"
+                disabled={!viewer}
+                onClick={() => viewer?.openImage(screenshot.source)}
+              >
+                <MessageCircleMore data-icon="inline-start" />
+                批注
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                shape="circle"
+                size="icon-sm"
+                aria-label="保存截图"
+                title="保存 PNG"
+                onClick={saveScreenshot}
+              >
+                <Download />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                shape="circle"
+                size="icon-sm"
+                aria-label="删除截图"
+                title="删除截图"
+                onClick={() => setScreenshot(null)}
+              >
+                <Trash2 />
+              </Button>
+            </ButtonGroup>
+          </aside>
         )}
         {browserError && (
           <p
