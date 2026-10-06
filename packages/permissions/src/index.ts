@@ -128,6 +128,16 @@ export class PermissionChecker implements IPermissionChecker {
       return { action: "deny", reason: `Tool '${toolName}' is in denied list` };
     }
 
+    // Plan is a read-only ceiling, including against ordinary explicit allow rules.
+    const modeControl = toolName === "EnterPlanMode" || toolName === "ExitPlanMode";
+    if (this.mode === "plan" && (
+      (!READ_ONLY_TOOLS.has(toolName) && !modeControl) ||
+      this.untrustedToolNames.has(toolName) ||
+      (this.trustedLocalReadOnlyToolNames && !this.trustedLocalReadOnlyToolNames.has(toolName))
+    )) {
+      return { action: "deny", reason: "Plan mode permits only trusted read-only tools and runtime mode control" };
+    }
+
     // 全部否决类检查先行（deniedTools/deniedCommands/pathRules 的 deny），
     // 任何放行机制（autoApprove/allowedTools/pathRules allow）都不得短路它们
     // ——否则 autoApprove("Shell") 会让 rm -rf 黑名单失效、autoApprove("Read")
@@ -210,6 +220,7 @@ export class PermissionChecker implements IPermissionChecker {
     }
 
     if (this.mode === "plan") {
+      if (modeControl) return { action: "allow", reason: "Runtime-scoped mode control" };
       return { action: "ask", reason: "Plan mode requires confirmation" };
     }
 

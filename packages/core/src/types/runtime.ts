@@ -340,6 +340,8 @@ export interface MemoryRetriever {
 }
 
 export interface QueryEngineOptions {
+  /** Current runtime permission owner; omitted when mode tools are unsupported. */
+  setPlanMode?: import("./tools").ToolContext["setPlanMode"];
   /** Exact tool definitions validated by the host as trusted builtin replacements. */
   trustedToolOverrides?: ReadonlyMap<string, import("./tools").ToolDefinition>;
   /** Host-provided Run prompt. With a View, takes precedence over systemPrompt/setSystemPrompt(). */

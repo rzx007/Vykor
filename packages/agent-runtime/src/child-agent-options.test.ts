@@ -105,7 +105,7 @@ describe("deriveChildAgentOptions", () => {
       sessionId: "child-session",
       model: "child-model",
       systemPrompt: "child prompt",
-      permissionMode: "default",
+      permissionMode: "plan",
       hostToolCeiling: ["Read", "Grep", "Agent"],
       roleAllowedTools: ["Read", "Grep"],
       disallowedTools: ["Write", "Shell", "Edit"],

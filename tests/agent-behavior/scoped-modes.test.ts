@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentExecutionContext, PermissionMode, StreamMessageParams, ToolUseBlock } from "@vykor/core";
 import { PermissionChecker } from "@vykor/permissions";
+import { loadSettings, saveSettings } from "@vykor/core";
+import { enterPlanModeTool, exitPlanModeTool } from "../../packages/tools/src/mode/plan-mode.js";
 import { createVykorRuntime } from "../../packages/agent-runtime/src/default-runtime.js";
 import { createRunCapabilityView } from "../../packages/agent-runtime/src/run-capability-view.js";
 
@@ -27,17 +29,17 @@ function context(runtime: Awaited<ReturnType<typeof createVykorRuntime>>, cwd: s
     children: { hasChildAgent: () => false, spawnChildAgent: async () => { throw new Error("No child in mode fixture"); }, sendChildInput: async () => { throw new Error("No child in mode fixture"); }, interruptChildAgent: async () => {}, awaitChildAgent: async () => { throw new Error("No child in mode fixture"); } },
   };
 }
-async function fixture(mode: PermissionMode, actions: ToolUseBlock[] = []) {
+async function fixture(mode: PermissionMode, actions: Array<ToolUseBlock | ToolUseBlock[]> = []) {
   const cwd = directory();
   process.env.VYKOR_CONFIG_DIR = join(cwd, "config");
   const requests: StreamMessageParams[] = [];
   const approvals: string[] = [];
   const runtime = await createVykorRuntime({ cwd,
-    settings: { model: "offline", permission: { mode, autoApproveTools: ["Write", "EnterPlanMode", "ExitPlanMode"] }, sandbox: { enabled: false } },
+    settings: { model: "offline", apiFormat: "openai", maxTurns: 20, permission: { mode, autoApproveTools: ["Write", "EnterPlanMode", "ExitPlanMode"] }, sandbox: { enabled: false } },
     configuration: { client: { async *streamMessage(params) {
       requests.push({ ...params, messages: structuredClone(params.messages) });
       const action = actions.shift();
-      if (action) yield { type: "tool_use_start", toolUse: action };
+      for (const toolUse of action ? Array.isArray(action) ? action : [action] : []) yield { type: "tool_use_start", toolUse };
       yield { type: "complete", stopReason: action ? "tool_use" : "end_turn" };
     } } },
   });
@@ -62,15 +64,15 @@ describe("scoped-mode-v1: actual checker, tools, requests and filesystem", () =>
     const globalConfig = join(other.cwd, "config", "settings.json");
     try {
       await run(sample);
-      expect(sample.runtime.permissionChecker.getMode()).toBe("plan");
+      console.info("MODE boundary: requests=%d effective=%s other=%s configWritten=%s projectWritten=%s", sample.requests.length, sample.runtime.permissionChecker.getMode!(), other.runtime.permissionChecker.getMode!(), existsSync(globalConfig), existsSync(join(sample.cwd, "blocked.txt")));
+      expect(sample.runtime.permissionChecker.getMode!()).toBe("plan");
       expect(sample.requests[1]!.system).toContain("Plan mode is enabled");
       expect(existsSync(join(sample.cwd, "blocked.txt"))).toBe(false);
-      expect(other.runtime.permissionChecker.getMode()).toBe("default");
+      expect(other.runtime.permissionChecker.getMode!()).toBe("default");
       expect(existsSync(globalConfig)).toBe(false);
       expect(sample.approvals).toEqual([]);
       await run(sample);
       expect(sample.requests.at(-1)!.system).toContain("Plan mode is enabled");
-      console.info("MODE baseline: requests=%d effective=%s other=%s configWritten=%s projectWritten=%s", sample.requests.length, sample.runtime.permissionChecker.getMode(), other.runtime.permissionChecker.getMode(), existsSync(globalConfig), existsSync(join(sample.cwd, "blocked.txt")));
     } finally { await sample.runtime.close(); await other.runtime.close(); }
   });
 
@@ -78,7 +80,7 @@ describe("scoped-mode-v1: actual checker, tools, requests and filesystem", () =>
     const sample = await fixture(mode, [use("EnterPlanMode"), use("ExitPlanMode"), use("Write", { file_path: "authorized.txt", content: "authorized" })]);
     try {
       await run(sample);
-      expect(sample.runtime.permissionChecker.getMode()).toBe(mode);
+      expect(sample.runtime.permissionChecker.getMode!()).toBe(mode);
       expect(readFileSync(join(sample.cwd, "authorized.txt"), "utf8")).toBe("authorized");
       expect(sample.requests[1]!.system).toContain("Plan mode is enabled");
       expect(sample.requests[2]!.system).toContain(mode === "full_auto" ? "Full-auto permission mode" : "Default permission mode");
@@ -91,10 +93,58 @@ describe("scoped-mode-v1: actual checker, tools, requests and filesystem", () =>
     writeFileSync(join(sample.cwd, "existing.txt"), "unchanged");
     try {
       await run(sample);
-      expect(sample.runtime.permissionChecker.getMode()).toBe("plan");
+      expect(sample.runtime.permissionChecker.getMode!()).toBe("plan");
       expect(existsSync(join(sample.cwd, "blocked.txt"))).toBe(false);
       expect(readFileSync(join(sample.cwd, "existing.txt"), "utf8")).toBe("unchanged");
       expect(existsSync(join(sample.cwd, "config", "settings.json"))).toBe(false);
     } finally { await sample.runtime.close(); }
+  });
+
+  it("applies Enter before authorizing a write in the same model response", async () => {
+    const sample = await fixture("full_auto", [[use("EnterPlanMode"), use("Write", { file_path: "same-batch.txt", content: "forbidden" })]]);
+    try { await run(sample); expect(existsSync(join(sample.cwd, "same-batch.txt"))).toBe(false); }
+    finally { await sample.runtime.close(); }
+  });
+
+  it("prevents automatic hooks from writing during user and temporary analysis mode", async () => {
+    const initial = await fixture("plan");
+    const temporary = await fixture("full_auto", [use("EnterPlanMode"), use("Read", { file_path: "existing.txt" })]);
+    const control = await fixture("default");
+    const command = process.platform === "win32" ? 'cmd.exe /d /c "echo forbidden>hook-write.txt"' : 'printf forbidden > hook-write.txt';
+    for (const sample of [initial, temporary, control]) {
+      writeFileSync(join(sample.cwd, "existing.txt"), "read-only");
+      sample.runtime.hookExecutor.register({ id: "writer", event: sample === temporary ? "post_tool_use" : "session_start", type: "command", command, enabled: true });
+    }
+    try {
+      await run(control); await run(initial); await run(temporary);
+      expect(existsSync(join(control.cwd, "hook-write.txt"))).toBe(true);
+      expect(existsSync(join(initial.cwd, "hook-write.txt"))).toBe(false);
+      expect(existsSync(join(temporary.cwd, "hook-write.txt"))).toBe(false);
+    } finally { await initial.runtime.close(); await temporary.runtime.close(); await control.runtime.close(); }
+  });
+
+  it("rebuilds from the persisted user mode while a warm instance keeps its temporary narrowing", async () => {
+    const sample = await fixture("default", [use("EnterPlanMode")]);
+    await saveSettings({ model: "offline", apiFormat: "openai", maxTurns: 20, permission: { mode: "default" }, sandbox: { enabled: false } });
+    const config = join(sample.cwd, "config", "settings.json");
+    const before = readFileSync(config, "utf8");
+    try {
+      await run(sample);
+      const settings = await loadSettings();
+      const rebuilt = await createVykorRuntime({ cwd: sample.cwd, settings, configuration: { client: { async *streamMessage() { yield { type: "complete", stopReason: "end_turn" }; } } } });
+      try {
+        expect(rebuilt.permissionChecker.getMode!()).toBe("default");
+        expect(sample.runtime.permissionChecker.getMode!()).toBe("plan");
+        expect(readFileSync(config, "utf8")).toBe(before);
+      } finally { await rebuilt.close(); }
+    } finally { await sample.runtime.close(); }
+  });
+
+  it("fails closed when a legacy host has no runtime mode binding", async () => {
+    const cwd = directory(); process.env.VYKOR_CONFIG_DIR = join(cwd, "config");
+    for (const tool of [enterPlanModeTool, exitPlanModeTool]) {
+      expect(await tool.execute({}, { cwd })).toMatchObject({ isError: true });
+    }
+    expect(existsSync(join(cwd, "config", "settings.json"))).toBe(false);
   });
 });

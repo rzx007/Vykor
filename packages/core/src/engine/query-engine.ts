@@ -980,6 +980,7 @@ export class QueryEngine implements IQueryEngine {
       toolAttemptId,
       runAbortSignal: signal,
       settings: this.options.settings,
+      setPlanMode: this.options.setPlanMode,
       ...(requestConfiguration ? { requestConfiguration } : {}),
       toolRegistry: toolRegistryView(toolRegistry),
       capabilityView: execution?.capabilityView,

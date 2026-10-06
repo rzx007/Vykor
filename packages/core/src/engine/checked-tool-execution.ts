@@ -62,8 +62,10 @@ export async function executeCheckedTools(options: CheckedToolExecutionOptions):
   const preparedByIndex = new Map(readyForPermission.map(call => [call.idx, call]));
   const groupTails = new Map<string, Promise<ToolExecutionResult>>();
   const executedIndexes = new Set<number>();
+  // A mode change affects authorization of every later call in this response.
+  const changesMode = readyForPermission.some(({ tool }) => tool.serialGroup === "permission-mode");
   const tasks = toolUses.map((toolUse, idx) => {
-    const group = toolRegistry.get(toolUse.name)?.serialGroup;
+    const group = changesMode ? "permission-mode" : toolRegistry.get(toolUse.name)?.serialGroup;
     const previous = group ? groupTails.get(group) : undefined;
     const task = (async (): Promise<ToolExecutionResult> => {
       const toolAttemptId = `tool_attempt_${toolUse.id}_1`;

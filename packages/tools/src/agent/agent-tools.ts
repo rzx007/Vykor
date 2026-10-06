@@ -27,8 +27,8 @@ export const agentTool: ToolDefinition = {
         type: "string",
         enum: ["default", "plan", "full_auto"],
         description:
-          "Permission mode for the spawned agent. Defaults to 'default': write operations are " +
-          "escalated to the leader through the framework permission effect.",
+          "Permission mode for the spawned agent. Inherits the parent's current mode when omitted; " +
+          "can only narrow that mode, never raise the parent's authority.",
       },
       isolate: {
         type: "boolean",

@@ -209,7 +209,7 @@ export async function createVykorRuntime(
   });
 
   const hookExecutor = new HookExecutor({
-    disabled: configuration.internalTextOnly === true,
+    disabled: () => configuration.internalTextOnly === true || permissionChecker.getMode() === "plan",
     cwd: options.executionEnvironment?.workspace.executionRoot ?? hostCwd,
     sessionId: options.sessionId,
     settings,
@@ -237,7 +237,7 @@ export async function createVykorRuntime(
       customPrompt: promptSettings.systemPrompt,
       cwd: hostCwd,
       environmentInfo: options.executionEnvironment?.info,
-      permissionMode: mode,
+      permissionMode: permissionChecker.getMode(),
       workStyle: promptSettings.workStyle,
       fastMode: promptSettings.fastMode,
       effort,
@@ -344,6 +344,10 @@ export async function createVykorRuntime(
     : undefined;
 
   const engineOptions = {
+    setPlanMode: (enabled: boolean) => {
+      permissionChecker.setMode(enabled ? "plan" : mode);
+      return permissionChecker.getMode();
+    },
     trustedToolOverrides: new Map([...trustedOverrides].map((name) => [name, baseToolRegistry.get(name)!])),
     maxTurns: configuration.maxTurns ?? settings.maxTurns,
     systemPrompt,

@@ -52,6 +52,7 @@ export function deriveChildAgentOptions(
   const inheritsModel = childModel === configuration.model;
   const effortUnchanged = childEffort === configuration.effort;
   const { requestConfigurationStore: _parentReader, ...inherited } = configuration;
+  const parentMode = configuration.permissionMode ?? input.settings.permission?.mode ?? "default";
   return {
     ...inherited,
     requestConfigurationStore: configuration.requestConfigurationStoreForSession?.(input.sessionId),
@@ -60,7 +61,8 @@ export function deriveChildAgentOptions(
     sessionId: input.sessionId,
     model: child.model ?? configuration.model,
     systemPrompt: child.systemPrompt ?? configuration.systemPrompt,
-    permissionMode: child.permissionMode ?? configuration.permissionMode,
+    permissionMode: parentMode === "plan" || child.permissionMode === "plan" ? "plan"
+      : parentMode === "default" ? "default" : child.permissionMode ?? parentMode,
     hostToolCeiling: configuration.hostToolCeiling,
     roleAllowedTools: child.allowedTools,
     ...(input.internalTextOnly ? { internalTextOnly: true } : {}),

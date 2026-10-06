@@ -247,25 +247,34 @@ export class AgentChildManager implements AgentChildDirectory {
     const record = {} as ChildRecord;
     const parentRequestConfiguration = this.options.configurationForChild?.()
       ?? this.options.configuration;
+    const { requestConfigurationStoreForSession, ...childConfiguration } = parentRequestConfiguration;
+    const childOptions = deriveChildAgentOptions({
+      configuration: childConfiguration,
+      settings: this.options.settings,
+      capabilityOverrides: this.options.capabilityOverrides,
+      effects: this.options.effects,
+      child: input,
+      cwd: lease.cwd,
+      sessionId,
+      ...(system ? { internalTextOnly: true } : {}),
+    });
+    // Persist the same constrained mode used by the live child, never the raw request.
+    const resolvedSpawn = { ...input, permissionMode: childOptions.permissionMode };
     const handle = new ChildHandle(this, () => record);
     Object.assign(record, {
       id: childId,
       sessionId,
       cwd: lease.cwd,
-      spawn: input,
+      spawn: resolvedSpawn,
       parentScope,
       system,
       lease,
-      createAgent: () => this.options.createAgent(deriveChildAgentOptions({
-        configuration: parentRequestConfiguration,
-        settings: this.options.settings,
-        capabilityOverrides: this.options.capabilityOverrides,
-        effects: this.options.effects,
-        child: input,
-        cwd: lease.cwd,
-        sessionId,
-        ...(system ? { internalTextOnly: true } : {}),
-      }), {
+      // The child session exists only after child.created has been projected.
+      createAgent: () => this.options.createAgent({
+        ...childOptions,
+        requestConfigurationStoreForSession,
+        requestConfigurationStore: requestConfigurationStoreForSession?.(sessionId),
+      }, {
         childId,
         parentSessionId: parentScope.sessionId,
         parentRunId: parentScope.runId,
@@ -290,7 +299,7 @@ export class AgentChildManager implements AgentChildDirectory {
         data: {
           childId,
           sessionId,
-          spawn: input,
+          spawn: resolvedSpawn,
           ...(parentRequestConfiguration.model ? {
             parentRequestConfiguration: {
               model: parentRequestConfiguration.model,

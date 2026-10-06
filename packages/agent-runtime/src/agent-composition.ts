@@ -151,14 +151,17 @@ async function composeVykorAgentInternal(
     configuration: options,
     configurationForChild: () => {
       const applied = activeRuntime?.queryEngine.getAppliedRequestConfiguration?.();
-      return applied ? {
+      return {
         ...options,
-        model: applied.model,
-        provider: applied.provider,
-        baseUrl: applied.baseUrl,
-        effort: applied.effort,
-        reasoningEffort: applied.reasoningEffort,
-      } : options;
+        permissionMode: activeRuntime?.permissionChecker.getMode?.() ?? options.permissionMode ?? settings.permission.mode,
+        ...(applied ? {
+          model: applied.model,
+          provider: applied.provider,
+          baseUrl: applied.baseUrl,
+          effort: applied.effort,
+          reasoningEffort: applied.reasoningEffort,
+        } : {}),
+      };
     },
     capabilityOverrides: options.capabilityOverrides,
     effects: options.effects,

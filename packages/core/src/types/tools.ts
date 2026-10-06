@@ -92,6 +92,8 @@ export interface ToolContext {
   /** Absolute execution deadline (Unix milliseconds); bounded waits should return before it. */
   deadlineAt?: number;
   settings?: Settings;
+  /** Runtime-owned narrowing/restoration only; never changes the user-selected ceiling. */
+  setPlanMode?: (enabled: boolean) => import("./permissions").PermissionMode;
   /** Selected model identity for the request that invoked this tool. */
   requestConfiguration?: {
     model: string;

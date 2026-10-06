@@ -174,12 +174,12 @@ describe("PermissionChecker", () => {
     expect(result.action).toBe("ask");
   });
 
-  it("asks in plan mode", async () => {
+  it("asks for a read outside the known workspace in plan mode", async () => {
     const checker = new PermissionChecker({
       mode: "plan",
       rules: [],
     });
-    const result = await checker.checkTool("read_file", {});
+    const result = await checker.checkTool("Read", {});
     expect(result.action).toBe("ask");
   });
 

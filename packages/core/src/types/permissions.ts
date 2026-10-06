@@ -13,6 +13,8 @@ export interface PermissionDecision {
 }
 
 export interface PermissionChecker {
+  /** Runtime owners may expose their current mode; custom checkers need not. */
+  getMode?(): PermissionMode;
   checkTool(
     toolName: string,
     input: Record<string, unknown>,
