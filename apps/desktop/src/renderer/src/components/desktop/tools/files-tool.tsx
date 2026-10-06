@@ -51,6 +51,7 @@ const fileTreeWidthStore = createPanelWidthStore({
 })
 
 type FilesToolProps = {
+  scopeId: string
   tabs: FileViewerTab[]
   activePath: string | null
   loadingPath: string | null
@@ -65,6 +66,7 @@ type FilesToolProps = {
 }
 
 export function FilesTool({
+  scopeId,
   tabs,
   activePath,
   loadingPath,
@@ -437,6 +439,7 @@ export function FilesTool({
               </div>
             )}
             <FileViewer
+              scopeId={scopeId}
               tabs={tabs}
               activePath={activePath}
               loadingPath={loadingPath}

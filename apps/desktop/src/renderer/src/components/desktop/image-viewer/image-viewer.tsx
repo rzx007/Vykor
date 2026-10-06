@@ -59,6 +59,7 @@ export function ImageViewer({
   const [drawing, setDrawing] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [scale, setScale] = useState(1)
+  const [expandedTools, setExpandedTools] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [status, setStatus] = useState("")
@@ -86,6 +87,8 @@ export function ImageViewer({
     const fit = () => {
       const size = element.getBoundingClientRect()
       if (!size.width || !size.height) return
+      // 依据图片面板而不是应用窗口宽度，避免文件树挤窄画布后仍展开所有文字。
+      setExpandedTools(size.width >= 640)
       const nextScale = Math.max(
         0.01,
         Math.min(
@@ -270,15 +273,15 @@ export function ImageViewer({
         </TransformWrapper>
       </div>
 
-      <header className="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-start justify-between gap-3 select-none [&_svg]:size-4 [&_svg]:stroke-[1.75]">
+      <header className="pointer-events-none absolute inset-x-3 top-4 z-20 flex items-start justify-between gap-2 select-none [&_svg]:size-4 [&_svg]:stroke-[1.75]">
         <div
           title={name}
-          className="flex h-9 max-w-64 min-w-0 items-center gap-2 rounded-full bg-popover px-3 text-[13px] text-popover-foreground shadow-control"
+          className="flex h-9 shrink-0 items-center gap-2 rounded-full bg-popover px-3 text-[13px] text-popover-foreground shadow-control"
         >
           <FileImage className="shrink-0" />
-          <span className="truncate">图片</span>
+          <span className={cn("truncate", !expandedTools && "sr-only")}>图片</span>
         </div>
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+        <div className="pointer-events-auto flex min-w-0 flex-1 flex-wrap justify-end gap-2">
           <Popover>
             <PopoverTrigger
               render={
@@ -390,7 +393,7 @@ export function ImageViewer({
       {onFeedback && panelOpen && (
         <aside
           aria-label="图片批注"
-          className="absolute top-20 right-4 z-20 flex max-h-[calc(100%-11rem)] w-80 max-w-[calc(100%-2rem)] flex-col rounded-2xl bg-popover text-popover-foreground shadow-md"
+          className="absolute top-24 right-4 z-20 flex max-h-[calc(100%_-_12rem)] w-80 max-w-[calc(100%_-_2rem)] flex-col rounded-2xl bg-popover text-popover-foreground shadow-md"
         >
           <div className="flex shrink-0 items-center justify-between px-4 py-3">
             <h2 className="text-sm font-medium">批注 · {annotation.regions.length}</h2>
@@ -494,7 +497,7 @@ export function ImageViewer({
       )}
 
       {drawing && !panelOpen && (
-        <p className="pointer-events-none absolute bottom-24 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-popover px-4 py-2 text-[13px] text-popover-foreground shadow-control">
+        <p className="pointer-events-none absolute bottom-24 left-1/2 max-w-[calc(100%_-_2rem)] -translate-x-1/2 rounded-full bg-popover px-4 py-2 text-[13px] text-popover-foreground shadow-control">
           拖动框选区域，写下希望怎么改
         </p>
       )}
@@ -502,17 +505,17 @@ export function ImageViewer({
       <div
         role="toolbar"
         aria-label="图片批注工具"
-        className="image-viewer-actions absolute inset-x-4 bottom-6 z-20 flex justify-center"
+        className="image-viewer-actions absolute inset-x-3 bottom-6 z-20 flex min-w-0 justify-center"
       >
         <ExpandableActionBar
-          expanded
+          expanded={expandedTools}
           expandOnHover={false}
           expandOnFocus={false}
           classNames={{
-            root: "max-w-full",
+            root: "min-w-0 max-w-full",
             track:
-              "rounded-2xl border-0 bg-foreground p-1.5 shadow-control backdrop-blur-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-            item: "h-9 min-w-9 rounded-xl px-3 text-background/80 hover:text-background focus-visible:text-background focus-visible:ring-2 focus-visible:ring-background/60 [&>span.absolute]:bg-background/12",
+              "min-w-0 gap-1 rounded-2xl border-0 bg-foreground p-1.5 shadow-control backdrop-blur-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            item: "h-9 min-w-9 rounded-xl px-2 text-background/80 hover:text-background focus-visible:text-background focus-visible:ring-2 focus-visible:ring-background/60 [&>span.absolute]:bg-background/12",
             activeItem: "bg-background/12 text-background",
             icon: "[&_svg]:size-4 [&_svg]:stroke-[1.75]",
             label: "text-[13px]",
@@ -580,7 +583,7 @@ export function ImageViewer({
         <p
           role="status"
           className={cn(
-            "absolute bottom-24 left-4 z-30 max-w-[calc(100%-2rem)] rounded-lg bg-popover px-3 py-2 text-[13px] shadow-control",
+            "absolute bottom-24 left-4 z-30 max-w-[calc(100%_-_2rem)] rounded-lg bg-popover px-3 py-2 text-[13px] shadow-control",
             actionError || annotation.error ? "text-destructive" : "text-muted-foreground"
           )}
         >

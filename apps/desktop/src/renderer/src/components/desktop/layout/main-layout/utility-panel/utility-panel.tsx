@@ -758,6 +758,7 @@ export function UtilityPanel({
           ))}
           {activeTab?.tool === "files" && (
             <FilesTool
+              scopeId={scopeId}
               tabs={visibleFileTabs}
               activePath={visibleActiveFilePath}
               loadingPath={visibleLoadingFilePath}

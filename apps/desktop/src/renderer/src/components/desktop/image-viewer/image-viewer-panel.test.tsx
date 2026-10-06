@@ -3,6 +3,7 @@ import { act, type ComponentProps } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { ImageViewer } from "./image-viewer"
+import type { ImageSource } from "./image-source"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { resetDesktopSessionStore } from "@renderer/stores/desktop-session/store-test-fixtures"
 
@@ -43,27 +44,38 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function mount() {
-  await act(async () =>
-    root.render(
-      <ImageViewerPanel
-        scopeId="session:one"
-        source={{
-          kind: "memory",
-          id: "capture-1",
-          name: "页面截图.png",
-          bytes: new Uint8Array([1]).buffer,
-          mediaType: "image/png",
-        }}
-      />
-    )
-  )
+async function mount(
+  source: ImageSource = {
+    kind: "memory",
+    id: "capture-1",
+    name: "页面截图.png",
+    bytes: new Uint8Array([1]).buffer,
+    mediaType: "image/png",
+  }
+) {
+  await act(async () => root.render(<ImageViewerPanel scopeId="session:one" source={source} />))
   await act(async () => {
     await vi.waitFor(() => expect(editor.props).not.toBeNull())
   })
 }
 const marked = { arrayBuffer: async () => new Uint8Array([2]).buffer } as Blob
 const regions = [{ id: "r1", x: 20, y: 10, width: 40, height: 30, comment: "增加间距" }]
+
+it("keeps the project file path in feedback and adds it to the current chat draft", async () => {
+  await mount({
+    kind: "file",
+    path: "D:/project/design.png",
+    name: "design.png",
+    bytes: new Uint8Array([1]).buffer,
+    mediaType: "image/png",
+  })
+  await act(async () => editor.props!.onFeedback!(marked, regions, 200, 100))
+  const draft = useDesktopSessionStore.getState().composerDraftsByScope["session:one"]!
+  expect(draft.attachments.map((a) => a.displayName)).toEqual(["design.png", "design-批注.png"])
+  expect(draft.document.items).toEqual([
+    { type: "text", text: expect.stringContaining("D:/project/design.png") },
+  ])
+})
 
 it("puts exported screenshot feedback into the left composer and keeps the image open", async () => {
   await mount()

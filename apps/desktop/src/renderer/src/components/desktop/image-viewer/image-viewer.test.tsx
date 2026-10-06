@@ -8,15 +8,18 @@ import { imageAnnotationKey } from "./image-annotations"
 const bytes = new Uint8Array([1, 2, 3]).buffer
 let host: HTMLDivElement
 let root: ReturnType<typeof createRoot>
+const resizeCallbacks = new Map<Element, ResizeObserverCallback>()
 
 beforeEach(() => {
   // 只控制异步事件；库用 performance.now() 合并撤销记录，不伪造其初始时间。
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  resizeCallbacks.clear()
   vi.stubGlobal(
     "ResizeObserver",
     class {
-      observe = vi.fn()
+      constructor(private callback: ResizeObserverCallback) {}
+      observe = (element: Element) => resizeCallbacks.set(element, this.callback)
       unobserve = vi.fn()
       disconnect = vi.fn()
     }
@@ -67,6 +70,38 @@ async function mount(onFeedback = vi.fn(async () => {}), openComments = true) {
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="批注"]')!.click())
   return key
 }
+
+it("collapses action labels in a narrow image panel and restores them when widened", async () => {
+  await mount(undefined, false)
+  const viewport = host.querySelector<HTMLElement>('[aria-label="图片画布"]')!
+  let width = 800
+  viewport.getBoundingClientRect = () => ({ width, height: 600 }) as DOMRect
+  const resize = async () =>
+    act(async () => {
+      resizeCallbacks.get(viewport)!([], {} as ResizeObserver)
+      await vi.advanceTimersByTimeAsync(500)
+    })
+  const toolbar = host.querySelector('[aria-label="图片批注工具"]')!
+  const commentsButton = toolbar.querySelector<HTMLButtonElement>('[aria-label="批注"]')!
+  await resize()
+  expect(commentsButton.querySelector('span[aria-hidden="false"]')?.textContent).toBe("批注")
+  width = 280
+  await resize()
+  expect(commentsButton.querySelector('span[aria-hidden="true"]')?.textContent).toBe("批注")
+  expect(
+    [...toolbar.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))
+  ).toEqual(["浏览", "添加批注", "批注", "撤销", "重做", "加入聊天"])
+  expect(commentsButton.title).toBe("批注")
+  await act(async () => {
+    commentsButton.focus()
+    commentsButton.click()
+  })
+  expect(document.activeElement).toBe(commentsButton)
+  expect(host.querySelector('[aria-label="图片批注"]')).not.toBeNull()
+  width = 800
+  await resize()
+  expect(commentsButton.querySelector('span[aria-hidden="false"]')?.textContent).toBe("批注")
+})
 
 it("keeps comments out of the canvas until explicitly opened, and closes them without losing drafts", async () => {
   const key = await mount(undefined, false)

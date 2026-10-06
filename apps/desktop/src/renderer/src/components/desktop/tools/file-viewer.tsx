@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ExternalLink, FileCode2, FileText } from "lucide-react"
+import { useMemo } from "react"
 import { Streamdown } from "streamdown"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
@@ -12,7 +13,11 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
-import { FileImagePreview } from "./file-image-preview"
+import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
+import {
+  imageSourceKey,
+  type ImageSource,
+} from "@renderer/components/desktop/image-viewer/image-source"
 import {
   canOpenHtmlInBrowser,
   shouldOfferHtmlBrowserOpen,
@@ -49,6 +54,7 @@ export function mergeFileViewerTabs(
 }
 
 interface FileViewerProps {
+  scopeId: string
   tabs: FileViewerTab[]
   activePath: string | null
   loadingPath: string | null
@@ -61,6 +67,7 @@ interface FileViewerProps {
 }
 
 export function FileViewer({
+  scopeId,
   tabs,
   activePath,
   loadingPath,
@@ -73,6 +80,19 @@ export function FileViewer({
 }: FileViewerProps): React.JSX.Element {
   const { resolvedTheme: themeType } = useAppearance()
   const activeTab = tabs.find((tab) => tab.preview.path === activePath) ?? null
+  // 保留来源对象，不让搜索、文件树等无关更新重新加载图片和批注。
+  const imageSource = useMemo<ImageSource | null>(() => {
+    const preview = activeTab?.preview
+    return activeTab?.type === "image" && preview?.previewBytes && preview.mediaType
+      ? {
+          kind: "file",
+          path: preview.path,
+          name: preview.name,
+          bytes: preview.previewBytes,
+          mediaType: preview.mediaType,
+        }
+      : null
+  }, [activeTab])
   const showLargeHtmlAction = activeTab
     ? shouldOfferHtmlBrowserOpen(activeTab.preview.path, activeTab.preview.content ?? "") &&
       canOpenHtmlInBrowser(activeTab.preview.scope)
@@ -97,12 +117,11 @@ export function FileViewer({
             正在读取文件...
           </div>
         ) : activeTab?.type === "image" ? (
-          activeTab.preview.previewBytes && activeTab.preview.mediaType ? (
-            <FileImagePreview
-              bytes={activeTab.preview.previewBytes}
-              mediaType={activeTab.preview.mediaType}
-              name={activeTab.preview.name}
-              path={activeTab.preview.path}
+          imageSource ? (
+            <ImageViewerPanel
+              key={imageSourceKey(imageSource)}
+              source={imageSource}
+              scopeId={scopeId}
             />
           ) : (
             <DocumentPlaceholder preview={activeTab.preview} />
