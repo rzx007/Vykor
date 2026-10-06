@@ -119,7 +119,10 @@ export function BrowserTool({
     const webview = webviewRef.current
     if (!webview) return
     const url = webview.getURL?.() ?? null
-    if (url === "about:blank" && !tab.url) return
+    if (url === "about:blank" && !tab.url) {
+      onUpdateRef.current({ loading: false })
+      return
+    }
     const title = webview.getTitle?.() || (url ? browserTitleFromUrl(url) : "新标签页")
     onUpdate({
       title,
