@@ -1,4 +1,5 @@
 import type { DesktopNote } from "@shared/note-types"
+import type { NoteColor } from "./note-appearance"
 
 export interface NoteView {
   draftId: string
@@ -8,6 +9,8 @@ export interface NoteView {
   createdAt: number
   updatedAt: number
   recovered: boolean
+  pinned?: boolean
+  color?: NoteColor
 }
 
 export function noteViewFromRecord(note: DesktopNote): NoteView {
@@ -35,11 +38,16 @@ export function describeNote(content: string): { title: string; preview: string 
 }
 
 export function filterAndSortNotes<
-  T extends { content: string; createdAt: number; updatedAt: number },
+  T extends { content: string; createdAt: number; updatedAt: number; pinned?: boolean },
 >(notes: readonly T[], query: string): T[] {
   const normalized = query.trim().toLocaleLowerCase()
   return notes
     .filter((note) => !normalized || note.content.toLocaleLowerCase().includes(normalized))
     .slice()
-    .sort((left, right) => right.updatedAt - left.updatedAt || right.createdAt - left.createdAt)
+    .sort(
+      (left, right) =>
+        Number(Boolean(right.pinned)) - Number(Boolean(left.pinned)) ||
+        right.updatedAt - left.updatedAt ||
+        right.createdAt - left.createdAt
+    )
 }

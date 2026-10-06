@@ -1,4 +1,4 @@
-import { StickyNote } from "lucide-react"
+import { Pin, StickyNote } from "lucide-react"
 import { ProjectFolderItem } from "@renderer/components/motion/project-folder"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
@@ -13,6 +13,8 @@ import {
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { cn } from "@renderer/lib/utils"
 import { describeNote, type NoteView } from "./note-model"
+import { NoteActions } from "./note-actions"
+import type { NoteAppearance } from "./note-appearance"
 
 const noteTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "numeric",
@@ -28,6 +30,8 @@ export function NoteList({
   loading,
   onSelect,
   onCreate,
+  onAppearanceChange,
+  onDelete,
 }: {
   notes: NoteView[]
   selectedKey: string | null
@@ -35,6 +39,8 @@ export function NoteList({
   loading: boolean
   onSelect: (draftId: string) => void
   onCreate: () => void
+  onAppearanceChange: (draftId: string, patch: Partial<NoteAppearance>) => void
+  onDelete: (draftId: string) => void
 }): React.JSX.Element {
   return (
     <section aria-label="便签列表" className="min-w-0">
@@ -61,44 +67,60 @@ export function NoteList({
           ) : null}
         </Empty>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] items-start gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] items-start gap-4">
           {notes.map((note, index) => {
             const { title, preview } = describeNote(note.content)
             return (
               <ProjectFolderItem key={note.draftId} id={note.draftId} index={index}>
-                <button
-                  type="button"
-                  aria-label={"打开便签：" + title}
-                  aria-current={note.draftId === selectedKey ? "true" : undefined}
-                  onClick={() => onSelect(note.draftId)}
-                  className="group w-full min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                <Card
+                  size="sm"
+                  data-note-id={note.draftId}
+                  data-note-color={note.color ?? "default"}
+                  className={cn(
+                    "note-paper group relative aspect-[3/4] w-full min-w-0",
+                    note.draftId === selectedKey && "ring-2 ring-ring"
+                  )}
                 >
-                  <Card
-                    size="sm"
-                    className={cn(
-                      "transition-colors group-hover:bg-accent",
-                      note.draftId === selectedKey && "ring-2 ring-ring"
-                    )}
-                  >
-                    <CardHeader>
-                      <CardTitle className="line-clamp-2 break-words">{title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="min-h-16">
-                      <p className="line-clamp-5 text-sm leading-6 break-words whitespace-pre-wrap text-muted-foreground">
-                        {preview || "只有这一句，也值得记下。"}
-                      </p>
-                    </CardContent>
-                    <CardFooter className="justify-between gap-2">
-                      <time
-                        dateTime={new Date(note.updatedAt).toISOString()}
-                        className="text-xs text-muted-foreground tabular-nums"
-                      >
-                        {noteTimeFormatter.format(note.updatedAt)}
-                      </time>
-                      {note.recovered ? <Badge variant="secondary">待恢复</Badge> : null}
-                    </CardFooter>
-                  </Card>
-                </button>
+                  <button
+                    type="button"
+                    aria-label={"打开便签：" + title}
+                    aria-current={note.draftId === selectedKey ? "true" : undefined}
+                    onClick={() => onSelect(note.draftId)}
+                    className="absolute inset-0 rounded-xl text-left outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  />
+                  <CardHeader className="pointer-events-none relative">
+                    <CardTitle className="line-clamp-2 pr-8 break-words">{title}</CardTitle>
+                    <div className="pointer-events-auto absolute top-0 right-2">
+                      <NoteActions
+                        note={note}
+                        label={"便签操作：" + title}
+                        onAppearanceChange={(patch) => onAppearanceChange(note.draftId, patch)}
+                        onDelete={() => onDelete(note.draftId)}
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pointer-events-none relative min-h-0 flex-1 overflow-hidden">
+                    <p className="line-clamp-5 text-sm leading-6 break-words whitespace-pre-wrap text-muted-foreground">
+                      {preview || "只有这一句，也值得记下。"}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="pointer-events-none relative justify-between gap-2 border-0 bg-transparent">
+                    <time
+                      dateTime={new Date(note.updatedAt).toISOString()}
+                      className="text-xs text-muted-foreground tabular-nums"
+                    >
+                      {noteTimeFormatter.format(note.updatedAt)}
+                    </time>
+                    {note.recovered ? <Badge variant="secondary">待恢复</Badge> : null}
+                    {note.pinned ? (
+                      <Pin
+                        className="size-3.5 text-muted-foreground"
+                        aria-label="已置顶"
+                        strokeWidth={1.75}
+                      />
+                    ) : null}
+                  </CardFooter>
+                </Card>
               </ProjectFolderItem>
             )
           })}

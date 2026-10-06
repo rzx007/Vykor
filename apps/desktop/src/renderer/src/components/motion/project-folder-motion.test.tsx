@@ -69,6 +69,8 @@ function Collection(): React.JSX.Element {
           loading={false}
           onCreate={() => {}}
           onSelect={() => {}}
+          onAppearanceChange={() => {}}
+          onDelete={() => {}}
         />
       }
     />

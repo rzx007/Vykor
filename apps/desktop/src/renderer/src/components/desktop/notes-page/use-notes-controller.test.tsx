@@ -8,6 +8,7 @@ import type { DesktopNote } from "@shared/note-types"
 import { writeRecoveryDraft, writeSelectedNoteId } from "./note-recovery"
 import type { NoteView } from "./note-model"
 import type { NoteSaveStatus } from "./note-save-coordinator"
+import { NOTE_APPEARANCE_KEY } from "./note-appearance"
 
 interface Controller {
   notes: NoteView[]
@@ -27,6 +28,7 @@ interface Controller {
   removeSelected(draftId?: string): Promise<void>
   refresh(): Promise<void>
   flushSelected(): Promise<void>
+  setAppearance(draftId: string, patch: { pinned?: boolean; color?: "rose" }): void
 }
 
 async function loadHook(): Promise<() => Controller> {
@@ -144,6 +146,70 @@ describe("useNotesController", () => {
     expect(latest.notes.find((note) => note.draftId === latest.selectedKey)?.noteId).toBeNull()
     expect(latest.visibleNotes.map((note) => note.noteId)).toEqual(["n2", "n1"])
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it("keeps pinned papers first and remembers their color after reopening without editing the body", async () => {
+    await render([first, second])
+    act(() => latest.setAppearance(first.id, { pinned: true, color: "rose" }))
+    expect(latest.visibleNotes.map((note) => note.noteId)).toEqual(["n1", "n2"])
+    expect(latest.visibleNotes[0]).toMatchObject({
+      content: "first",
+      pinned: true,
+      color: "rose",
+      updatedAt: 1,
+    })
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render([first, second])
+    expect(latest.visibleNotes[0]).toMatchObject({ noteId: "n1", pinned: true, color: "rose" })
+    act(() => latest.setAppearance(first.id, { pinned: false }))
+    expect(latest.visibleNotes.map((note) => note.noteId)).toEqual(["n2", "n1"])
+  })
+
+  it("loads only valid appearance fields and cannot replace a note body from display preferences", async () => {
+    localStorage.setItem(
+      NOTE_APPEARANCE_KEY,
+      JSON.stringify({
+        n1: { pinned: true, color: "rose", content: "wrong body", noteId: "wrong-id" },
+        n2: { pinned: "yes", color: "unknown" },
+      })
+    )
+    await render([first, second])
+    expect(latest.visibleNotes[0]).toMatchObject({
+      noteId: "n1",
+      content: "first",
+      pinned: true,
+      color: "rose",
+    })
+    expect(latest.visibleNotes[1]).toMatchObject({ noteId: "n2", content: "second" })
+    expect(latest.visibleNotes[1]).not.toHaveProperty("pinned")
+  })
+
+  it("moves a new paper's appearance to its saved id, including while a create is in flight", async () => {
+    let finish!: (record: DesktopNote) => void
+    await render([], {
+      create: vi.fn(
+        () =>
+          new Promise<DesktopNote>((resolve) => {
+            finish = resolve
+          })
+      ),
+    })
+    act(() => latest.edit("new idea"))
+    let flushing!: Promise<void>
+    act(() => {
+      flushing = latest.flushSelected()
+    })
+    act(() => latest.setAppearance(latest.selectedKey!, { pinned: true, color: "rose" }))
+    await act(async () => {
+      finish({ ...first, id: "created", content: "new idea" })
+      await flushing
+    })
+    expect(latest.visibleNotes[0]).toMatchObject({ noteId: "created", pinned: true, color: "rose" })
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render([{ ...first, id: "created", content: "new idea" }])
+    expect(latest.visibleNotes[0]).toMatchObject({ noteId: "created", pinned: true, color: "rose" })
   })
 
   it("refreshes external file edits but keeps a pending local edit", async () => {

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DesktopNote } from "@shared/note-types"
+import { toast } from "@renderer/lib/toast"
+import {
+  readNoteAppearances,
+  writeNoteAppearances,
+  type NoteAppearance,
+  type NoteAppearances,
+} from "./note-appearance"
 import { filterAndSortNotes, noteViewFromRecord, type NoteView } from "./note-model"
 import {
   createNoteRecoveryPort,
@@ -34,6 +41,7 @@ export interface NotesController {
   removeSelected(draftId?: string): Promise<void>
   refresh(): Promise<void>
   flushSelected(): Promise<void>
+  setAppearance(draftId: string, patch: Partial<NoteAppearance>): void
 }
 
 export function useNotesController(): NotesController {
@@ -46,6 +54,34 @@ export function useNotesController(): NotesController {
   const selectedKeyRef = useRef<string | null>(null)
   const coordinators = useRef(new Map<string, NoteSaveCoordinator>())
   const recovery = useMemo(() => createNoteRecoveryPort(), [])
+  const [appearances, setAppearances] = useState(() => readNoteAppearances(window.localStorage))
+  const appearancesRef = useRef(appearances)
+
+  const commitAppearances = useCallback((next: NoteAppearances): void => {
+    appearancesRef.current = next
+    setAppearances(next)
+    try {
+      writeNoteAppearances(window.localStorage, next)
+    } catch (cause) {
+      toast.error("便签标记未能保存", "本次仍会显示，重新打开后可能恢复原样：" + String(cause))
+    }
+  }, [])
+
+  const setAppearance = useCallback(
+    (draftId: string, patch: Partial<NoteAppearance>): void => {
+      const note = notesRef.current.find((item) => item.draftId === draftId)
+      if (!note) return
+      const key = note.noteId ?? note.draftId
+      commitAppearances({
+        ...appearancesRef.current,
+        [key]: {
+          ...(appearancesRef.current[key] ?? { pinned: false, color: "default" }),
+          ...patch,
+        },
+      })
+    },
+    [commitAppearances]
+  )
 
   const commitNotes = useCallback(
     (update: NoteView[] | ((current: NoteView[]) => NoteView[])): NoteView[] => {
@@ -70,6 +106,15 @@ export function useNotesController(): NotesController {
   const applySnapshot = useCallback(
     (draftId: string, snapshot: NoteSaveSnapshot): void => {
       if (snapshot.record) {
+        // New drafts receive a persisted id only after the file has been saved.
+        if (draftId !== snapshot.record.id && Object.hasOwn(appearancesRef.current, draftId)) {
+          const next = {
+            ...appearancesRef.current,
+            [snapshot.record.id]: appearancesRef.current[draftId]!,
+          }
+          delete next[draftId]
+          commitAppearances(next)
+        }
         commitNotes((current) =>
           current.map((note) =>
             note.draftId === draftId
@@ -93,7 +138,7 @@ export function useNotesController(): NotesController {
         setError(snapshot.error)
       }
     },
-    [commitNotes]
+    [commitNotes, commitAppearances]
   )
 
   const installCoordinator = useCallback(
@@ -297,6 +342,10 @@ export function useNotesController(): NotesController {
         await coordinator?.flush()
         const persistedId = coordinator?.snapshot().record?.id ?? current.noteId
         if (persistedId) await window.desktop.notes.remove(persistedId)
+        const nextAppearances = { ...appearancesRef.current }
+        delete nextAppearances[draftId]
+        if (persistedId) delete nextAppearances[persistedId]
+        commitAppearances(nextAppearances)
         removeRecoveryDraft(window.localStorage, draftId)
         coordinator?.dispose()
         coordinators.current.delete(draftId)
@@ -313,7 +362,7 @@ export function useNotesController(): NotesController {
         setError(cause instanceof Error ? cause.message : String(cause))
       }
     },
-    [commitNotes, commitSelection, createLocalDraft]
+    [commitNotes, commitSelection, createLocalDraft, commitAppearances]
   )
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -370,17 +419,21 @@ export function useNotesController(): NotesController {
     return () => window.removeEventListener("focus", onFocus)
   }, [refresh])
 
-  const selected = notes.find((note) => note.draftId === selectedKey)
+  const displayedNotes = useMemo(
+    () => notes.map((note) => ({ ...note, ...appearances[note.noteId ?? note.draftId] })),
+    [notes, appearances]
+  )
+  const selected = displayedNotes.find((note) => note.draftId === selectedKey)
   const visibleNotes = useMemo(
     () =>
       filterAndSortNotes(
-        notes.filter((note) => note.noteId !== null || Boolean(note.content.trim())),
+        displayedNotes.filter((note) => note.noteId !== null || Boolean(note.content.trim())),
         query
       ),
-    [notes, query]
+    [displayedNotes, query]
   )
   return {
-    notes,
+    notes: displayedNotes,
     visibleNotes,
     selectedKey,
     content: selected?.content ?? "",
@@ -397,5 +450,6 @@ export function useNotesController(): NotesController {
     removeSelected,
     refresh,
     flushSelected,
+    setAppearance,
   }
 }

@@ -63,7 +63,10 @@ export function NotesPage(): React.JSX.Element {
   const previews = papers.slice(0, 5).map((note) => ({
     id: note.draftId,
     content: (
-      <span className="flex h-full flex-col gap-2 px-3 py-4 text-left">
+      <span
+        data-note-color={note.color ?? "default"}
+        className="note-paper flex h-full flex-col gap-2 px-3 py-4 text-left"
+      >
         <span className="line-clamp-3 text-xs font-medium break-words text-foreground">
           {describeNote(note.content).title}
         </span>
@@ -99,6 +102,12 @@ export function NotesPage(): React.JSX.Element {
       loading={notes.status === "loading"}
       onCreate={createNote}
       onSelect={(draftId) => void selectNote(draftId)}
+      onAppearanceChange={notes.setAppearance}
+      onDelete={(draftId) => {
+        setFolderOpen(false)
+        setDeleteTarget(draftId)
+        setDeleteOpen(true)
+      }}
     />
   )
 
@@ -167,6 +176,9 @@ export function NotesPage(): React.JSX.Element {
                   onExpand={() => setExpanded((current) => !current)}
                   onClose={() => changeMode("collection")}
                   onChange={notes.edit}
+                  onAppearanceChange={(patch) => {
+                    if (notes.selectedKey) notes.setAppearance(notes.selectedKey, patch)
+                  }}
                   onRetry={() => void notes.retrySave()}
                   onReloadConflict={() => void notes.reloadConflict()}
                   onSaveConflictAsNew={() => void notes.saveConflictAsNew()}

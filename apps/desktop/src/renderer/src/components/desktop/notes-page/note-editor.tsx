@@ -4,12 +4,11 @@ import {
   ArrowDownToLine,
   CircleAlert,
   Copy,
-  Ellipsis,
   Maximize2,
   Minimize2,
   RotateCcw,
   StickyNote,
-  Trash2,
+  Pin,
 } from "lucide-react"
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
@@ -17,13 +16,8 @@ import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { cn } from "@renderer/lib/utils"
 import { SPRING_LAYOUT } from "@renderer/lib/ease"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@renderer/components/ui/dropdown-menu"
+import { NoteActions } from "./note-actions"
+import type { NoteAppearance } from "./note-appearance"
 import { Textarea } from "@renderer/components/ui/textarea"
 import type { NoteView } from "./note-model"
 import type { NoteSaveStatus } from "./note-save-coordinator"
@@ -44,6 +38,7 @@ export function NoteEditor({
   onClose,
   expanded,
   onExpand,
+  onAppearanceChange,
 }: {
   selected: NoteView | undefined
   content: string
@@ -57,6 +52,7 @@ export function NoteEditor({
   onClose: () => void
   expanded: boolean
   onExpand: () => void
+  onAppearanceChange?: (patch: Partial<NoteAppearance>) => void
 }): React.JSX.Element {
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
   const reduced = useReducedMotion()
@@ -72,7 +68,8 @@ export function NoteEditor({
       layout={!reduced}
       layoutDependency={`${selected?.draftId ?? "draft"}:${expanded}:${Boolean(error)}`}
       transition={transition}
-      className="min-w-0 gap-0 py-0 focus-within:ring-2 focus-within:ring-ring"
+      data-note-color={selected?.color ?? "default"}
+      className="note-paper min-w-0 gap-0 py-0 focus-within:ring-2 focus-within:ring-ring"
     >
       <motion.div layout={reduced ? false : "position"} transition={transition}>
         <CardHeader className="flex h-14 flex-row items-center gap-2">
@@ -82,6 +79,13 @@ export function NoteEditor({
             aria-hidden="true"
           />
           <CardTitle className="mr-auto">{selected?.noteId ? "继续这一句" : "随手记"}</CardTitle>
+          {selected?.pinned ? (
+            <Pin
+              className="size-3.5 text-muted-foreground"
+              aria-label="已置顶"
+              strokeWidth={1.75}
+            />
+          ) : null}
           <Button
             variant="ghost"
             shape="circle"
@@ -92,30 +96,11 @@ export function NoteEditor({
             {expanded ? <Minimize2 /> : <Maximize2 />}
           </Button>
           {selected && (selected.noteId || content.trim()) ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    shape="circle"
-                    className="ml-2"
-                    aria-label="便签操作"
-                  />
-                }
-              >
-                <Ellipsis />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                    <Trash2 />
-                    删除便签
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <NoteActions
+              note={{ ...selected, content }}
+              onAppearanceChange={onAppearanceChange}
+              onDelete={onDelete}
+            />
           ) : null}
           <Button variant="ghost" shape="pill" size="sm" aria-label="收起便签" onClick={onClose}>
             <ArrowDownToLine data-icon="inline-start" />
@@ -167,12 +152,12 @@ export function NoteEditor({
             disabled={status === "loading"}
             onChange={(event) => onChange(event.target.value)}
             className={cn(
-              "max-h-[55vh] min-h-32 resize-none rounded-none border-0 px-6 py-3 text-sm leading-7 font-normal focus-visible:border-transparent md:text-sm",
+              "max-h-[55vh] min-h-32 resize-none rounded-none border-0 bg-transparent px-6 py-3 text-sm leading-7 font-normal focus-visible:border-transparent md:text-sm dark:bg-transparent",
               expanded && "max-h-[75vh] min-h-[60vh]"
             )}
           />
         </CardContent>
-        <CardFooter className="justify-between gap-3">
+        <CardFooter className="justify-between gap-3 border-0 bg-transparent">
           <span aria-live="polite" className="text-xs text-muted-foreground">
             {saveLabel(status, selected)}
           </span>

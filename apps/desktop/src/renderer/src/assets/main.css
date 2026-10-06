@@ -9,6 +9,71 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 采用 beUI Project Folder 示例的整张纸色，而不是给中性卡片轻微染色。 */
+:root {
+  --note-sand: var(--color-amber-100);
+  --note-clay: var(--color-orange-200);
+  --note-rose: var(--color-rose-200);
+  --note-mint: var(--color-emerald-200);
+  --note-sky: var(--color-sky-200);
+  --note-lilac: var(--color-violet-200);
+  --note-ink: var(--color-slate-900);
+  --note-muted-ink: var(--color-slate-600);
+}
+.dark {
+  --note-sand: color-mix(in oklab, var(--color-amber-950) 80%, var(--color-amber-100));
+  --note-clay: color-mix(in oklab, var(--color-orange-950) 80%, var(--color-orange-200));
+  --note-rose: color-mix(in oklab, var(--color-rose-950) 80%, var(--color-rose-200));
+  --note-mint: color-mix(in oklab, var(--color-emerald-950) 80%, var(--color-emerald-200));
+  --note-sky: color-mix(in oklab, var(--color-sky-950) 80%, var(--color-sky-200));
+  --note-lilac: color-mix(in oklab, var(--color-violet-950) 80%, var(--color-violet-200));
+  --note-ink: var(--color-slate-50);
+  --note-muted-ink: var(--color-slate-300);
+}
+[data-note-color="default"] {
+  --note-mark: var(--card);
+}
+[data-note-color="sand"] {
+  --note-mark: var(--note-sand);
+}
+[data-note-color="clay"] {
+  --note-mark: var(--note-clay);
+}
+[data-note-color="rose"] {
+  --note-mark: var(--note-rose);
+}
+[data-note-color="mint"] {
+  --note-mark: var(--note-mint);
+}
+[data-note-color="sky"] {
+  --note-mark: var(--note-sky);
+}
+[data-note-color="lilac"] {
+  --note-mark: var(--note-lilac);
+}
+.note-paper:not([data-note-color="default"]),
+.note-color-swatch:not([data-note-color="default"]) {
+  --foreground: var(--note-ink);
+  --card-foreground: var(--note-ink);
+  --muted-foreground: var(--note-muted-ink);
+  --ring: var(--note-ink);
+}
+.note-paper {
+  background-color: var(--note-mark, var(--card));
+  transition: background-color 180ms ease-out;
+}
+.note-color-swatch {
+  background-color: var(--note-mark, var(--card));
+}
+:root[data-reduced-motion="true"] .note-paper {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .note-paper {
+    transition: none;
+  }
+}
+
 /* 入场只改变显示效果，布局和滚动位置仍由滚动容器负责。 */
 @keyframes conversation-content-enter {
   from {

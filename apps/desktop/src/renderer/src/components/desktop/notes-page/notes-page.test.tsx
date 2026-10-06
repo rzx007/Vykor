@@ -56,6 +56,15 @@ describe("NotesPage", () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     localStorage.clear()
+    // jsdom does not provide browser layout observers; keep the real popover.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+      }
+    )
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: (query: string) => ({
@@ -77,6 +86,7 @@ describe("NotesPage", () => {
     container.remove()
     vi.useRealTimers()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   async function renderPage(
@@ -184,7 +194,7 @@ describe("NotesPage", () => {
       ;(container.querySelector('button[aria-label="便签操作"]') as HTMLButtonElement).click()
       await Promise.resolve()
     })
-    const deleteItem = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) =>
+    const deleteItem = [...document.querySelectorAll<HTMLElement>("button")].find((item) =>
       item.textContent?.includes("删除便签")
     )
     expect(deleteItem).toBeTruthy()
@@ -204,6 +214,101 @@ describe("NotesPage", () => {
       await Promise.resolve()
     })
     expect(remove).toHaveBeenCalledWith(first.id)
+  })
+
+  it("offers actions on a paper without opening it, pins it, changes its color and copies its full body", async () => {
+    await renderPage([first, second])
+    const textarea = container.querySelector("textarea")!
+    const openActions = async (): Promise<void> => {
+      await act(async () => {
+        ;(
+          container.querySelector(
+            'button[aria-label="便签操作：First thought"]'
+          ) as HTMLButtonElement
+        ).click()
+      })
+    }
+    await openActions()
+    const pin = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "置顶"
+    )!
+    expect(pin).toBeTruthy()
+    await act(async () => pin.click())
+    expect(
+      container
+        .querySelector('[aria-label="便签列表"] button[aria-label^="打开便签："]')
+        ?.getAttribute("aria-label")
+    ).toBe("打开便签：First thought")
+    expect(container.querySelector("textarea")).toBe(textarea)
+    expect(textarea.value).toBe("")
+    await openActions()
+    await act(async () => {
+      ;(document.querySelector('button[aria-label="标记为玫瑰色"]') as HTMLButtonElement).click()
+    })
+    expect(container.querySelector('[data-note-id="n1"]')?.getAttribute("data-note-color")).toBe(
+      "rose"
+    )
+    const copy = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "复制正文"
+    )!
+    await act(async () => copy.click())
+    expect(window.desktop.clipboard.writeText).toHaveBeenCalledWith(first.content)
+    expect(textarea.value).toBe("")
+  })
+
+  it("confirms deletion of the paper under its menu rather than the one in the editor", async () => {
+    const api = await renderPage([first, second])
+    await act(async () => {
+      ;(
+        container.querySelector(
+          'button[aria-label="打开便签：Second thought"]'
+        ) as HTMLButtonElement
+      ).click()
+    })
+    await act(async () => {
+      ;(
+        container.querySelector('button[aria-label="便签操作：First thought"]') as HTMLButtonElement
+      ).click()
+    })
+    const remove = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "删除便签"
+    )!
+    await act(async () => remove.click())
+    expect(api.remove).not.toHaveBeenCalled()
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "删除"
+    )!
+    await act(async () => confirm.click())
+    expect(api.remove).toHaveBeenCalledWith("n1")
+    expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe(second.content)
+  })
+
+  it("dismisses only the actions popover on Escape inside the collection and returns focus to its trigger", async () => {
+    await renderPage([first])
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="收纳形态"]') as HTMLButtonElement).click()
+    })
+    await act(async () => {
+      ;(container.querySelector('button[aria-label="打开便签收纳夹"]') as HTMLButtonElement).click()
+    })
+    const folder = document.querySelector('[role="dialog"]')!
+    const trigger = folder.querySelector(
+      'button[aria-label="便签操作：First thought"]'
+    ) as HTMLButtonElement
+    await act(async () => trigger.click())
+    const actions = document.querySelector("[data-morph-popover-portal]")!
+    const pin = [...actions.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "置顶"
+    )!
+    await act(async () => {
+      pin.focus()
+      pin.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    })
+    expect(folder.hasAttribute("inert")).toBe(false)
+    expect(
+      container.querySelector('[aria-label="打开便签收纳夹"]')?.getAttribute("aria-expanded")
+    ).toBe("true")
+    expect(document.activeElement).toBe(trigger)
   })
 
   it("shows search results even when the current paper was expanded for reading", async () => {
