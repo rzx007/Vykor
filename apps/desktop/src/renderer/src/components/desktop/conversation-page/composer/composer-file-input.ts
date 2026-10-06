@@ -3,10 +3,14 @@ interface ComposerClipboardData {
   getData: (type: string) => string
 }
 
-export const LONG_TEXT_ATTACHMENT_BYTES = 32 * 1024
+export const LONG_TEXT_ATTACHMENT_BYTES = 20 * 1024
+export const LONG_TEXT_ATTACHMENT_CHARACTERS = 5_000
 
 export function shouldPasteAsTextAttachment(text: string): boolean {
-  return new TextEncoder().encode(text).byteLength >= LONG_TEXT_ATTACHMENT_BYTES
+  return (
+    text.length >= LONG_TEXT_ATTACHMENT_CHARACTERS ||
+    new TextEncoder().encode(text).byteLength >= LONG_TEXT_ATTACHMENT_BYTES
+  )
 }
 
 export function readComposerClipboard(data: ComposerClipboardData): {

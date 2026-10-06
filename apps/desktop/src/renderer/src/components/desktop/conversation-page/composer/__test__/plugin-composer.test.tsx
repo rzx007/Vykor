@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { $getRoot, COPY_COMMAND, PASTE_COMMAND, getNearestEditorFromDOMNode } from "lexical"
 import { Composer } from "../composer"
+import { shouldPasteAsTextAttachment } from "../composer-file-input"
 import { ScopedOperationError } from "../../session/scoped-operation-errors"
 import { composerDocumentFromLexical, restoreComposerDocument } from "../composer-lexical-document"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
@@ -72,6 +73,10 @@ const pluginOption = () =>
   [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) =>
     node.textContent?.includes("Quality")
   )
+it("uses the 20KB or 5000-character long-paste threshold", () => {
+  expect(shouldPasteAsTextAttachment("a".repeat(4_999))).toBe(false)
+  expect(shouldPasteAsTextAttachment("a".repeat(5_000))).toBe(true)
+})
 it("shows plugin selection in a default build", async () => {
   await render()
   await act(async () => plus().click())
