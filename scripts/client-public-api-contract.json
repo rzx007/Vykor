@@ -209,6 +209,10 @@
       "kind": "runtime-export"
     },
     {
+      "name": "readWorkspaceChangesMetadata",
+      "kind": "runtime-export"
+    },
+    {
       "name": "resolveSessionCwd",
       "kind": "runtime-export"
     },
@@ -850,6 +854,14 @@
     },
     {
       "name": "UploadAttachmentInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "WorkspaceChangeFile",
+      "kind": "type-export"
+    },
+    {
+      "name": "WorkspaceChangesMetadata",
       "kind": "type-export"
     },
     {
