@@ -329,6 +329,14 @@ function ConversationPane({
     for (const payload of payloads) void addClipboardAttachment(composerScope, payload)
   }
 
+  const pasteTextAttachment = (text: string): void => {
+    void addClipboardAttachment(composerScope, {
+      bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
+      displayName: "pasted-text.txt",
+      mediaType: "text/plain",
+    })
+  }
+
   const copyAssistantMessage = async (content: string): Promise<void> => {
     await window.desktop.clipboard.writeText(content)
   }
@@ -575,6 +583,7 @@ function ConversationPane({
           onPickFiles={() => void pickAttachmentFiles(composerScope)}
           onDropFiles={(files) => void addDroppedAttachments(composerScope, files)}
           onPasteFiles={(files) => void pasteAttachments(files)}
+          onPasteTextAttachment={pasteTextAttachment}
           onCancelAttachment={(draftId) => void cancelAttachment(composerScope, draftId)}
           onRetryAttachment={(draftId) => void retryAttachment(composerScope, draftId)}
           onRemoveAttachment={(draftId) => {
@@ -781,6 +790,7 @@ function ConversationPane({
                 onPickFiles={() => void pickAttachmentFiles(composerScope)}
                 onDropFiles={(files) => void addDroppedAttachments(composerScope, files)}
                 onPasteFiles={(files) => void pasteAttachments(files)}
+                onPasteTextAttachment={pasteTextAttachment}
                 onCancelAttachment={(draftId) => void cancelAttachment(composerScope, draftId)}
                 onRetryAttachment={(draftId) => void retryAttachment(composerScope, draftId)}
                 onRemoveAttachment={(draftId) => {

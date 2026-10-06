@@ -13,9 +13,17 @@ import {
   type RangeSelection,
 } from "lexical"
 
-import { composerDocument, type ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
-import { readComposerClipboard } from "./composer-file-input"
-import { composerDocumentFromLexical, composerParagraphs, descendantLeaves, textLeaves } from "./composer-lexical-document"
+import {
+  composerDocument,
+  type ComposerDocument,
+} from "@renderer/stores/desktop-session/composer-document"
+import { readComposerClipboard, shouldPasteAsTextAttachment } from "./composer-file-input"
+import {
+  composerDocumentFromLexical,
+  composerParagraphs,
+  descendantLeaves,
+  textLeaves,
+} from "./composer-lexical-document"
 import type { ComposerSkill } from "./composer-types"
 
 const COMPOSER_CLIPBOARD_TYPE = "application/x-vykor-composer"
@@ -26,9 +34,15 @@ function selectedComposerDocument(selection: RangeSelection): ComposerDocument {
     const node = point.getNode()
     if (node === $getRoot()) {
       const paragraphs = $getRoot().getChildren()
-      return paragraphs.slice(0, point.offset).reduce((sum, paragraph) => sum + paragraph.getTextContent().length, 0) + Math.min(point.offset, Math.max(0, paragraphs.length - 1))
+      return (
+        paragraphs
+          .slice(0, point.offset)
+          .reduce((sum, paragraph) => sum + paragraph.getTextContent().length, 0) +
+        Math.min(point.offset, Math.max(0, paragraphs.length - 1))
+      )
     }
-    if ($isTextNode(node)) return (leaves.find((leaf) => leaf.node === node)?.from ?? 0) + point.offset
+    if ($isTextNode(node))
+      return (leaves.find((leaf) => leaf.node === node)?.from ?? 0) + point.offset
     if ($isElementNode(node)) {
       const after = node.getChildren().slice(point.offset).flatMap(descendantLeaves)[0]
       const next = leaves.find((leaf) => leaf.node === after)
@@ -44,18 +58,32 @@ function selectedComposerDocument(selection: RangeSelection): ComposerDocument {
     }
     return 0
   }
-  const [start, end] = [pointOffset(selection.anchor), pointOffset(selection.focus)].sort((a, b) => a - b)
+  const [start, end] = [pointOffset(selection.anchor), pointOffset(selection.focus)].sort(
+    (a, b) => a - b
+  )
   let offset = 0
-  return composerDocument(composerDocumentFromLexical().items.flatMap((item): ComposerDocument["items"] => {
-    const length = item.type === "text" ? item.text.length : item.type === "context" || item.type === "capability" ? item.displayName.length + 1 : item.name.length + 1
-    const from = offset
-    offset += length
-    if (end <= from || start >= offset) return []
-    return item.type === "text" ? [{ type: "text" as const, text: item.text.slice(Math.max(0, start - from), end - from) }] : [item]
-  }))
+  return composerDocument(
+    composerDocumentFromLexical().items.flatMap((item): ComposerDocument["items"] => {
+      const length =
+        item.type === "text"
+          ? item.text.length
+          : item.type === "context" || item.type === "capability"
+            ? item.displayName.length + 1
+            : item.name.length + 1
+      const from = offset
+      offset += length
+      if (end <= from || start >= offset) return []
+      return item.type === "text"
+        ? [{ type: "text" as const, text: item.text.slice(Math.max(0, start - from), end - from) }]
+        : [item]
+    })
+  )
 }
 
-function readStructuredClipboard(raw: string, skills: readonly ComposerSkill[]): ComposerDocument | null {
+function readStructuredClipboard(
+  raw: string,
+  skills: readonly ComposerSkill[]
+): ComposerDocument | null {
   if (!raw || raw.length > 2 * 1024 * 1024) return null
   try {
     const value = JSON.parse(raw)
@@ -67,19 +95,61 @@ function readStructuredClipboard(raw: string, skills: readonly ComposerSkill[]):
         continue
       }
       if (item?.type === "context") {
-        if (item.kind !== "conversation" || typeof item.id !== "string" || typeof item.displayName !== "string") return null
-        items.push({ type: "context", kind: "conversation", id: item.id, displayName: item.displayName })
+        if (
+          item.kind !== "conversation" ||
+          typeof item.id !== "string" ||
+          typeof item.displayName !== "string"
+        )
+          return null
+        items.push({
+          type: "context",
+          kind: "conversation",
+          id: item.id,
+          displayName: item.displayName,
+        })
         continue
       }
       if (item?.type === "capability") {
-        if (typeof item.pluginId !== "string" || !item.pluginId.trim() || typeof item.displayName !== "string" || !item.displayName.trim()) return null
-        if (item.kind === "plugin") items.push({ type: "capability", kind: "plugin", pluginId: item.pluginId, displayName: item.displayName })
-        else if (item.kind === "plugin_agent" && typeof item.agentId === "string" && item.agentId.trim()) items.push({ type: "capability", kind: "plugin_agent", pluginId: item.pluginId, agentId: item.agentId, displayName: item.displayName })
+        if (
+          typeof item.pluginId !== "string" ||
+          !item.pluginId.trim() ||
+          typeof item.displayName !== "string" ||
+          !item.displayName.trim()
+        )
+          return null
+        if (item.kind === "plugin")
+          items.push({
+            type: "capability",
+            kind: "plugin",
+            pluginId: item.pluginId,
+            displayName: item.displayName,
+          })
+        else if (
+          item.kind === "plugin_agent" &&
+          typeof item.agentId === "string" &&
+          item.agentId.trim()
+        )
+          items.push({
+            type: "capability",
+            kind: "plugin_agent",
+            pluginId: item.pluginId,
+            agentId: item.agentId,
+            displayName: item.displayName,
+          })
         else return null
         continue
       }
-      if ((item?.type !== "skill" && item?.type !== "mention") || typeof item.name !== "string" || typeof item.path !== "string" || (item.displayName !== undefined && typeof item.displayName !== "string")) return null
-      if (item.type === "skill" && !skills.some((skill) => skill.name === item.name && skill.path === item.path)) {
+      if (
+        (item?.type !== "skill" && item?.type !== "mention") ||
+        typeof item.name !== "string" ||
+        typeof item.path !== "string" ||
+        (item.displayName !== undefined && typeof item.displayName !== "string")
+      )
+        return null
+      if (
+        item.type === "skill" &&
+        !skills.some((skill) => skill.name === item.name && skill.path === item.path)
+      ) {
         items.push({ type: "text", text: `$${item.name}` })
       } else {
         items.push({
@@ -97,7 +167,15 @@ function readStructuredClipboard(raw: string, skills: readonly ComposerSkill[]):
   }
 }
 
-export function ComposerClipboardPlugin({ onPasteFiles, skills }: { onPasteFiles?: (files: readonly File[]) => void; skills: readonly ComposerSkill[] }): null {
+export function ComposerClipboardPlugin({
+  onPasteFiles,
+  onPasteTextAttachment,
+  skills,
+}: {
+  onPasteFiles?: (files: readonly File[]) => void
+  onPasteTextAttachment?: (text: string) => void
+  skills: readonly ComposerSkill[]
+}): null {
   const [editor] = useLexicalComposerContext()
   useEffect(() => {
     const copy = (event: ClipboardEvent | KeyboardEvent | null, cut = false): boolean => {
@@ -107,29 +185,71 @@ export function ComposerClipboardPlugin({ onPasteFiles, skills }: { onPasteFiles
       const value = selectedComposerDocument(selection)
       event.preventDefault()
       event.clipboardData.setData(COMPOSER_CLIPBOARD_TYPE, JSON.stringify(value))
-      event.clipboardData.setData("text/plain", value.items.map((item) => item.type === "text" ? item.text : item.type === "context" || item.type === "capability" ? `@${item.displayName}` : `${item.type === "skill" ? "$" : "@"}${item.name}`).join(""))
+      event.clipboardData.setData(
+        "text/plain",
+        value.items
+          .map((item) =>
+            item.type === "text"
+              ? item.text
+              : item.type === "context" || item.type === "capability"
+                ? `@${item.displayName}`
+                : `${item.type === "skill" ? "$" : "@"}${item.name}`
+          )
+          .join("")
+      )
       if (cut) selection.removeText()
       return true
     }
-    const removeCopy = editor.registerCommand(COPY_COMMAND, (event) => copy(event), COMMAND_PRIORITY_HIGH)
-    const removeCut = editor.registerCommand(CUT_COMMAND, (event) => copy(event, true), COMMAND_PRIORITY_HIGH)
-    return () => { removeCopy(); removeCut() }
+    const removeCopy = editor.registerCommand(
+      COPY_COMMAND,
+      (event) => copy(event),
+      COMMAND_PRIORITY_HIGH
+    )
+    const removeCut = editor.registerCommand(
+      CUT_COMMAND,
+      (event) => copy(event, true),
+      COMMAND_PRIORITY_HIGH
+    )
+    return () => {
+      removeCopy()
+      removeCut()
+    }
   }, [editor])
-  useEffect(() => editor.registerCommand(PASTE_COMMAND, (event) => {
-    if (!("clipboardData" in event) || !event.clipboardData) return false
-    const { files, text } = readComposerClipboard(event.clipboardData)
-    const structured = readStructuredClipboard(event.clipboardData.getData(COMPOSER_CLIPBOARD_TYPE), skills)
-    if (files.length === 0 && !text && !structured) return false
-    event.preventDefault()
-    if (files.length > 0) onPasteFiles?.(files)
-    editor.update(() => {
-      const selection = $getSelection()
-      if (!$isRangeSelection(selection)) return
-      if (structured) selection.insertNodes(composerParagraphs(structured))
-      else if (text) selection.insertRawText(text)
-    })
-    return true
-  }, COMMAND_PRIORITY_HIGH), [editor, onPasteFiles, skills])
+  useEffect(
+    () =>
+      editor.registerCommand(
+        PASTE_COMMAND,
+        (event) => {
+          if (!("clipboardData" in event) || !event.clipboardData) return false
+          const { files, text } = readComposerClipboard(event.clipboardData)
+          const structured = readStructuredClipboard(
+            event.clipboardData.getData(COMPOSER_CLIPBOARD_TYPE),
+            skills
+          )
+          if (files.length === 0 && !text && !structured) return false
+          event.preventDefault()
+          if (
+            files.length === 0 &&
+            !structured &&
+            onPasteTextAttachment &&
+            shouldPasteAsTextAttachment(text)
+          ) {
+            onPasteTextAttachment(text)
+            return true
+          }
+          if (files.length > 0) onPasteFiles?.(files)
+          editor.update(() => {
+            const selection = $getSelection()
+            if (!$isRangeSelection(selection)) return
+            if (structured) selection.insertNodes(composerParagraphs(structured))
+            else if (text) selection.insertRawText(text)
+          })
+          return true
+        },
+        COMMAND_PRIORITY_HIGH
+      ),
+    [editor, onPasteFiles, onPasteTextAttachment, skills]
+  )
   return null
 }
 

@@ -5,13 +5,7 @@ import type { AttachmentResource } from "@vykor/client"
 export interface AttachmentClient {
   attachments: Pick<
     AttachmentResource,
-    | "upload"
-    | "get"
-    | "download"
-    | "delete"
-    | "scanStorage"
-    | "repairStorage"
-    | "gcStorage"
+    "upload" | "get" | "download" | "delete" | "scanStorage" | "repairStorage" | "gcStorage"
   >
 }
 
@@ -46,6 +40,8 @@ export const SAFE_PREVIEW_MEDIA_TYPES = new Set([
   "image/webp",
 ])
 
+export const SAFE_MEMORY_MEDIA_TYPES = new Set([...SAFE_PREVIEW_MEDIA_TYPES, "text/plain"])
+
 export function serviceError(code: string): DesktopAttachmentServiceError {
   const messages: Record<string, string> = {
     attachment_source_expired: "文件授权已过期，请重新选择。",
@@ -59,7 +55,7 @@ export function serviceError(code: string): DesktopAttachmentServiceError {
     attachment_open_unavailable: "当前环境不能打开附件。",
     attachment_open_failed: "附件打开失败。",
     attachment_save_unavailable: "当前环境不能保存附件。",
-    attachment_clipboard_unsupported: "剪贴板中的内容不是可上传的图片。",
+    attachment_clipboard_unsupported: "剪贴板中的内容不是可上传的图片或文本。",
     attachment_retry_unavailable: "这个附件已经不能重试，请重新添加。",
     attachment_task_exists: "附件上传任务重复。",
   }

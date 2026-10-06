@@ -178,6 +178,27 @@ describe("AttachmentUploadService uploads", () => {
     ).rejects.toMatchObject({ code: "attachment_file_too_large" })
   })
 
+  it("uploads a pathless plain-text attachment", async () => {
+    const uploads: UploadAttachmentInput[] = []
+    const service = createService({
+      uploadAttachment: async (input) => {
+        uploads.push(input)
+        return readyAsset("asset-text", input.displayName, await consume(input.body), "text/plain")
+      },
+    })
+
+    await service.uploadMemory(3, {
+      draftId: "draft-text",
+      displayName: "pasted-text.txt",
+      mediaType: "text/plain",
+      bytes: new TextEncoder().encode("long pasted text"),
+    })
+    await service.whenIdle()
+
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0]?.displayName).toBe("pasted-text.txt")
+  })
+
   it("streams bytes, reports monotonic progress, and emits a ready asset", async () => {
     const filePath = await temporaryFile(
       "stream.bin",

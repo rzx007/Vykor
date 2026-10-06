@@ -40,6 +40,7 @@ export function RichPromptInput({
   onSubmit,
   onCommand = async () => undefined,
   onPasteFiles,
+  onPasteTextAttachment,
   contextItems = [],
   contextPickerRequest = 0,
   contextPickerOpen = false,
@@ -58,6 +59,7 @@ export function RichPromptInput({
   onSubmit: () => void
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
   onPasteFiles?: (files: readonly File[]) => void
+  onPasteTextAttachment?: (text: string) => void
   contextItems?: readonly ContextPickerItem[]
   contextPickerRequest?: number
   contextPickerOpen?: boolean
@@ -120,7 +122,11 @@ export function RichPromptInput({
           ErrorBoundary={LexicalErrorBoundary}
         />
         <HistoryPlugin />
-        <ComposerClipboardPlugin onPasteFiles={onPasteFiles} skills={skills} />
+        <ComposerClipboardPlugin
+          onPasteFiles={onPasteFiles}
+          onPasteTextAttachment={onPasteTextAttachment}
+          skills={skills}
+        />
         <SyncDraftPlugin value={value} onChange={onChange} />
         <ComposerPickerPlugin
           skills={skills}

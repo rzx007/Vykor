@@ -1,10 +1,14 @@
 import { basename, extname, resolve } from "node:path"
 import { Readable } from "node:stream"
 
-import type { DesktopAttachmentCandidate, DesktopAttachmentError, DesktopAttachmentUploadEvent } from "@shared/attachment-types"
+import type {
+  DesktopAttachmentCandidate,
+  DesktopAttachmentError,
+  DesktopAttachmentUploadEvent,
+} from "@shared/attachment-types"
 
 import {
-  SAFE_PREVIEW_MEDIA_TYPES,
+  SAFE_MEMORY_MEDIA_TYPES,
   type AttachmentClient,
   type AttachmentFileSystem,
   DesktopAttachmentServiceError,
@@ -42,12 +46,12 @@ export interface StartAttachmentUploadInput {
 type UploadTaskEvent =
   | { type: "progress"; bytesRead: number; totalBytes: number }
   | {
-    type: "success"
-    assetId: string
-    displayName: string
-    mediaType: string
-    sizeBytes: number
-  }
+      type: "success"
+      assetId: string
+      displayName: string
+      mediaType: string
+      sizeBytes: number
+    }
   | { type: "failed"; error: DesktopAttachmentError }
   | { type: "cancelled" }
 
@@ -131,7 +135,7 @@ export class AttachmentUploadService {
     ownerId: number,
     input: UploadMemoryAttachmentInput
   ): Promise<{ taskId: string }> {
-    if (!SAFE_PREVIEW_MEDIA_TYPES.has(input.mediaType)) {
+    if (!SAFE_MEMORY_MEDIA_TYPES.has(input.mediaType)) {
       throw serviceError("attachment_clipboard_unsupported")
     }
     if (input.bytes.byteLength > this.dependencies.maxBytesPerFile) {

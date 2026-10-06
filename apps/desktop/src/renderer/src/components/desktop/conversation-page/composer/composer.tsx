@@ -67,6 +67,7 @@ export function Composer({
   onPickFiles,
   onDropFiles,
   onPasteFiles,
+  onPasteTextAttachment,
   onCancelAttachment,
   onRetryAttachment,
   onRemoveAttachment,
@@ -111,6 +112,7 @@ export function Composer({
   onPickFiles?: () => void
   onDropFiles?: (files: readonly File[]) => void
   onPasteFiles?: (files: readonly File[]) => void
+  onPasteTextAttachment?: (text: string) => void
   onCancelAttachment?: (draftId: string) => void
   onRetryAttachment?: (draftId: string) => void
   onRemoveAttachment?: (draftId: string) => void
@@ -239,7 +241,14 @@ export function Composer({
         onSubmit={submit}
         onCommand={executeCommand}
         onPasteFiles={attachmentInteractionEnabled && !sending ? onPasteFiles : undefined}
-        contextItems={onGoalModeChange ? contextItems : contextItems.filter((item) => item.action.kind !== "goal")}
+        onPasteTextAttachment={
+          attachmentInteractionEnabled && !sending ? onPasteTextAttachment : undefined
+        }
+        contextItems={
+          onGoalModeChange
+            ? contextItems
+            : contextItems.filter((item) => item.action.kind !== "goal")
+        }
         contextPickerRequest={contextPickerRequest}
         contextPickerOpen={contextPickerOpen}
         onContextPickerOpenChange={setContextPickerOpen}
