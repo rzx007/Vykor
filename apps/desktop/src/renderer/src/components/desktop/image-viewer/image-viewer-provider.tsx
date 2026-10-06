@@ -111,7 +111,8 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
         }}
       >
         <DialogContent
-          className="flex h-[min(90dvh,960px)] w-[calc(100%-2rem)] max-w-none! flex-col gap-0 overflow-hidden rounded-2xl p-0"
+          className="flex h-[min(90dvh,1040px)] w-[min(94vw,1600px)] max-w-none! flex-col gap-0 overflow-hidden rounded-2xl bg-transparent p-0 shadow-none ring-0"
+          overlayClassName="bg-background/40 supports-backdrop-filter:backdrop-blur-none"
           showCloseButton={false}
         >
           <DialogTitle className="sr-only">{opened?.name ?? "图片查看器"}</DialogTitle>

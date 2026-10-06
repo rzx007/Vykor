@@ -24,3 +24,9 @@
     animation: none;
   }
 }
+.image-annotation-viewer [data-image-sheet] > div {
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.image-annotation-viewer [data-image-sheet] img {
+  border-radius: 8px;
+}

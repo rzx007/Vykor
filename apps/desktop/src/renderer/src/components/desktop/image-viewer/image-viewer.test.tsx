@@ -41,7 +41,7 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-async function mount(onFeedback = vi.fn(async () => {})) {
+async function mount(onFeedback = vi.fn(async () => {}), openComments = true) {
   const key = await imageAnnotationKey(bytes)
   localStorage.setItem(
     key,
@@ -62,9 +62,20 @@ async function mount(onFeedback = vi.fn(async () => {})) {
   Object.defineProperties(image, { naturalWidth: { value: 200 }, naturalHeight: { value: 100 } })
   await act(async () => image.dispatchEvent(new Event("load")))
   await act(async () => vi.advanceTimersByTimeAsync(100))
-  expect(host.textContent).toContain("增加间距")
+  if (openComments)
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="批注"]')!.click())
   return key
 }
+
+it("keeps comments out of the canvas until explicitly opened, and closes them without losing drafts", async () => {
+  const key = await mount(undefined, false)
+  expect(host.querySelector('[aria-label="图片批注"]')).toBeNull()
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="批注"]')!.click())
+  expect(host.querySelector('[aria-label="图片批注"]')).not.toBeNull()
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="收起批注"]')!.click())
+  expect(host.querySelector('[aria-label="图片批注"]')).toBeNull()
+  expect(JSON.parse(localStorage.getItem(key)!)).toHaveLength(1)
+})
 
 async function selectRegion() {
   await act(async () => {
@@ -102,9 +113,7 @@ it("restores a region and edits its comment without modifying the original image
 
 it("keeps a reverse-drag rectangle in original pixels inside a CSS-scaled image", async () => {
   const key = await mount()
-  await act(async () =>
-    host.querySelector<HTMLButtonElement>('[aria-label="框选批注（R）"]')!.click()
-  )
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="添加批注"]')!.click())
   const svg = host.querySelector<SVGSVGElement>("svg.a9s-annotationlayer")!
   Object.defineProperties(svg, {
     viewBox: { configurable: true, value: { baseVal: { width: 200, height: 100 } } },

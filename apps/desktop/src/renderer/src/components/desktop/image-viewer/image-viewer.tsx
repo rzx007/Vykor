@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
+  ChevronDown,
   Copy,
+  FileImage,
+  MessageCirclePlus,
+  Send,
   Download,
   ExternalLink,
   Maximize,
@@ -20,6 +24,8 @@ import {
 } from "react-zoom-pan-pinch"
 import { Button } from "@renderer/components/ui/button"
 import { ButtonGroup } from "@renderer/components/ui/button-group"
+import { ExpandableActionBar } from "@renderer/components/motion/expandable-action-bar"
+import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { useReducedMotion } from "motion/react"
 import { cn } from "@renderer/lib/utils"
@@ -51,6 +57,7 @@ export function ImageViewer({
   onOpenOriginal?: () => Promise<unknown>
 }) {
   const [drawing, setDrawing] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const [scale, setScale] = useState(1)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -84,7 +91,7 @@ export function ImageViewer({
         Math.min(
           1,
           (size.width - 48) / annotation.dimensions.width,
-          (size.height - 48) / annotation.dimensions.height
+          (size.height - 160) / annotation.dimensions.height
         )
       )
       transform.current?.centerView(nextScale, 0)
@@ -105,7 +112,7 @@ export function ImageViewer({
         Math.min(
           1,
           (box.width - 48) / annotation.dimensions.width,
-          (box.height - 48) / annotation.dimensions.height
+          (box.height - 160) / annotation.dimensions.height
         )
       ),
       duration
@@ -157,9 +164,23 @@ export function ImageViewer({
       )
   }
 
+  const panelOpen = commentsOpen || Boolean(selected)
+  const closeComments = () => {
+    annotation.cancelSelection()
+    setCommentsOpen(false)
+  }
+  const submitFeedback = () => {
+    if (!onFeedback) return
+    void perform(async () => {
+      const snapshot = annotation.regions.map((region) => ({ ...region }))
+      const marked = await exportImage(true)
+      await onFeedback(marked, snapshot, annotation.dimensions.width, annotation.dimensions.height)
+    })
+  }
+
   return (
     <section
-      className="image-annotation-viewer flex h-full min-h-0 flex-col bg-background text-foreground"
+      className="image-annotation-viewer relative h-full min-h-0 overflow-hidden rounded-2xl bg-muted/40 text-foreground select-none"
       aria-label="图片查看与批注"
       onKeyDown={(event) => {
         const editing = (event.target as HTMLElement).closest(
@@ -167,12 +188,15 @@ export function ImageViewer({
         )
         const modifier = event.ctrlKey || event.metaKey
         if (editing) {
-          // Annotorious 的默认撤销监听在 document，不能同时撤销正在输入的评论。
           if (modifier && ["z", "y"].includes(event.key.toLowerCase())) event.stopPropagation()
           if (modifier && event.key === "Enter" && selected && comment.trim()) {
             event.preventDefault()
             event.stopPropagation()
             annotation.saveComment(selected.id, comment)
+          } else if (event.key === "Escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            closeComments()
           }
           return
         }
@@ -181,10 +205,10 @@ export function ImageViewer({
           event.stopPropagation()
           if (event.shiftKey || event.key.toLowerCase() === "y") annotation.redo()
           else annotation.undo()
-        } else if (event.key === "Escape" && (drawing || selected)) {
+        } else if (event.key === "Escape" && (drawing || panelOpen)) {
           event.preventDefault()
           event.stopPropagation()
-          annotation.cancelSelection()
+          closeComments()
           setDrawing(false)
         } else if (
           !modifier &&
@@ -203,203 +227,220 @@ export function ImageViewer({
         }
       }}
     >
-      <header className="flex h-14 shrink-0 items-center gap-2 px-3 [&_svg]:size-4 [&_svg]:stroke-[1.75]">
-        <span className="min-w-0 flex-1 truncate text-sm" title={name}>
-          {name}
-        </span>
-        <ButtonGroup variant="toolbar" aria-label="图片缩放">
-          <IconAction label="缩小（-）" onClick={() => transform.current?.zoomOut(0.25, duration)}>
-            <ZoomOut />
-          </IconAction>
-          <Button
-            variant="ghost"
-            shape="pill"
-            size="sm"
-            className="min-w-16 tabular-nums"
-            title="原始尺寸（1）"
-            onClick={() => transform.current?.centerView(1, duration)}
-          >
-            {Math.round(scale * 100)}%
-          </Button>
-          <IconAction label="放大（+）" onClick={() => transform.current?.zoomIn(0.25, duration)}>
-            <ZoomIn />
-          </IconAction>
-          <IconAction label="适应窗口（0）" onClick={fit}>
-            <Maximize />
-          </IconAction>
-        </ButtonGroup>
-        {onOpenOriginal && (
-          <IconAction
-            label="系统打开原图"
-            onClick={() =>
-              void perform(async () => {
-                await onOpenOriginal()
-              })
-            }
-          >
-            <ExternalLink />
-          </IconAction>
-        )}
-        <IconAction
-          label="复制原图"
-          disabled={busy || !annotation.ready}
-          onClick={() =>
-            void perform(async () => {
-              await navigator.clipboard.write([
-                new ClipboardItem({ "image/png": await exportImage(false) }),
-              ])
-              setStatus("已复制原图")
-            })
-          }
+      <div
+        ref={viewport}
+        className="absolute inset-0 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        tabIndex={0}
+        aria-label="图片画布"
+      >
+        <TransformWrapper
+          ref={transform}
+          minScale={0.01}
+          maxScale={8}
+          limitToBounds={false}
+          panning={{ disabled: drawing }}
+          doubleClick={{ disabled: true }}
+          smooth={!reduced}
+          zoomAnimation={{ disabled: Boolean(reduced) }}
+          autoAlignment={{ disabled: true }}
+          velocityAnimation={{ disabled: true }}
+          onTransform={(_ref, state) => setScale(state.scale)}
         >
-          <Copy />
-        </IconAction>
-        <IconAction
-          label={completed.length ? "下载批注图" : "下载原图"}
-          disabled={busy || !annotation.ready}
-          onClick={() => void download()}
-        >
-          <Download />
-        </IconAction>
-        <IconAction label="关闭图片查看器" onClick={onClose}>
-          <X />
-        </IconAction>
-      </header>
-      <div className="flex min-h-0 flex-1">
-        <div
-          ref={viewport}
-          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/25"
-          tabIndex={0}
-          aria-label="图片画布"
-        >
-          <TransformWrapper
-            ref={transform}
-            minScale={0.01}
-            maxScale={8}
-            limitToBounds={false}
-            panning={{ disabled: drawing }}
-            doubleClick={{ disabled: true }}
-            smooth={!reduced}
-            zoomAnimation={{ disabled: Boolean(reduced) }}
-            autoAlignment={{ disabled: true }}
-            velocityAnimation={{ disabled: true }}
-            onTransform={(_ref, state) => setScale(state.scale)}
-          >
-            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-              <div className="relative" data-image-mode={drawing ? "annotate" : "view"}>
-                <div ref={hostRef} />
-                <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-                  {annotation.regions.map((region, index) => (
-                    <span
-                      key={region.id}
-                      className="absolute grid place-items-center rounded-full bg-annotation font-semibold text-white"
-                      style={{
-                        left: Math.max(0, region.x),
-                        top: Math.max(0, region.y),
-                        width: 24 / scale,
-                        height: 24 / scale,
-                        fontSize: 12 / scale,
-                      }}
-                    >
-                      {index + 1}
-                    </span>
-                  ))}
-                </div>
+          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <div className="relative" data-image-mode={drawing ? "annotate" : "view"}>
+              <div ref={hostRef} data-image-sheet="" />
+              <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+                {annotation.regions.map((region, index) => (
+                  <span
+                    key={region.id}
+                    className="absolute grid place-items-center rounded-full bg-annotation font-semibold text-white"
+                    style={{
+                      left: Math.max(0, region.x),
+                      top: Math.max(0, region.y),
+                      width: 24 / scale,
+                      height: 24 / scale,
+                      fontSize: 12 / scale,
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                ))}
               </div>
-            </TransformComponent>
-          </TransformWrapper>
-          {!annotation.ready && (
-            <p
-              role="status"
-              className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted-foreground"
+            </div>
+          </TransformComponent>
+        </TransformWrapper>
+      </div>
+
+      <header className="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-start justify-between gap-3 select-none [&_svg]:size-4 [&_svg]:stroke-[1.75]">
+        <div
+          title={name}
+          className="flex h-9 max-w-64 min-w-0 items-center gap-2 rounded-full bg-popover px-3 text-[13px] text-popover-foreground shadow-control"
+        >
+          <FileImage className="shrink-0" />
+          <span className="truncate">{name}</span>
+        </div>
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="control"
+                  shape="pill"
+                  size="lg"
+                  className="h-9 gap-1.5 tabular-nums"
+                />
+              }
+              aria-label="图片缩放"
             >
-              {annotation.error ?? "正在加载图片…"}
-            </p>
-          )}
-          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
-            <ButtonGroup
-              variant="toolbar"
-              aria-label="图片批注工具"
-              className="[&_svg]:size-4 [&_svg]:stroke-[1.75]"
-            >
+              {Math.round(scale * 100)}%<ChevronDown />
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={8} className="w-56 rounded-2xl p-3">
+              <div className="flex items-center justify-between">
+                <IconAction
+                  label="缩小（-）"
+                  onClick={() => transform.current?.zoomOut(0.25, duration)}
+                >
+                  <ZoomOut />
+                </IconAction>
+                <span className="text-sm tabular-nums">{Math.round(scale * 100)}%</span>
+                <IconAction
+                  label="放大（+）"
+                  onClick={() => transform.current?.zoomIn(0.25, duration)}
+                >
+                  <ZoomIn />
+                </IconAction>
+              </div>
+              <Button variant="ghost" shape="pill" size="sm" onClick={fit}>
+                <Maximize />
+                适应窗口
+              </Button>
               <Button
                 variant="ghost"
-                shape="circle"
-                size="icon"
-                aria-label="查看模式（V）"
-                aria-pressed={!drawing}
-                onClick={() => setDrawing(false)}
+                shape="pill"
+                size="sm"
+                onClick={() => transform.current?.centerView(1, duration)}
               >
-                <MousePointer2 />
+                原始尺寸 · 100%
               </Button>
-              {onFeedback && (
+            </PopoverContent>
+          </Popover>
+          {onOpenOriginal && (
+            <Button
+              variant="control"
+              shape="pill"
+              size="lg"
+              className="h-9"
+              onClick={() =>
+                void perform(async () => {
+                  await onOpenOriginal()
+                })
+              }
+            >
+              <ExternalLink />
+              打开
+            </Button>
+          )}
+          <ButtonGroup variant="toolbar" aria-label="图片快捷操作">
+            <IconAction
+              label="复制原图"
+              disabled={busy || !annotation.ready}
+              onClick={() =>
+                void perform(async () => {
+                  await navigator.clipboard.write([
+                    new ClipboardItem({ "image/png": await exportImage(false) }),
+                  ])
+                  setStatus("已复制原图")
+                })
+              }
+            >
+              <Copy />
+            </IconAction>
+            <IconAction
+              label={completed.length ? "下载批注图" : "下载原图"}
+              disabled={busy || !annotation.ready}
+              onClick={() => void download()}
+            >
+              <Download />
+            </IconAction>
+          </ButtonGroup>
+          <Button
+            variant="control"
+            shape="circle"
+            size="icon"
+            className="size-9"
+            aria-label="关闭图片查看器"
+            title="关闭"
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        </div>
+      </header>
+
+      {!annotation.ready && (
+        <p
+          role="status"
+          className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted-foreground"
+        >
+          {annotation.error ?? "正在加载图片…"}
+        </p>
+      )}
+
+      {onFeedback && panelOpen && (
+        <aside
+          aria-label="图片批注"
+          className="absolute top-20 right-4 z-20 flex max-h-[calc(100%-11rem)] w-80 max-w-[calc(100%-2rem)] flex-col rounded-2xl bg-popover text-popover-foreground shadow-md"
+        >
+          <div className="flex shrink-0 items-center justify-between px-4 py-3">
+            <h2 className="text-sm font-medium">批注 · {annotation.regions.length}</h2>
+            <IconAction label="收起批注" onClick={closeComments}>
+              <X />
+            </IconAction>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+            {!annotation.regions.length ? (
+              <div className="flex flex-col gap-3 px-1 py-2">
+                <p className="text-[13px] leading-6 text-muted-foreground">
+                  框选图片中的区域，写下希望怎么改。
+                </p>
                 <Button
                   variant="annotation"
-                  shape="circle"
-                  size="icon"
-                  aria-label="框选批注（R）"
-                  title="框选批注（R）"
-                  aria-pressed={drawing}
-                  disabled={!annotation.ready || busy}
-                  onClick={() => setDrawing(!drawing)}
+                  shape="pill"
+                  onClick={() => {
+                    setDrawing(true)
+                    setCommentsOpen(false)
+                  }}
                 >
                   <SquareDashedMousePointer />
+                  添加第一条批注
                 </Button>
-              )}
-              <IconAction
-                label="撤销"
-                disabled={!annotation.history.undo || busy}
-                onClick={annotation.undo}
-              >
-                <Undo2 />
-              </IconAction>
-              <IconAction
-                label="重做"
-                disabled={!annotation.history.redo || busy}
-                onClick={annotation.redo}
-              >
-                <Redo2 />
-              </IconAction>
-            </ButtonGroup>
-          </div>
-        </div>
-        {onFeedback && (
-          <aside
-            className="flex w-64 shrink-0 flex-col border-l border-border/50 bg-background max-md:w-56"
-            aria-label="图片批注"
-          >
-            <div className="flex items-center justify-between px-4 py-3">
-              <h2 className="text-sm font-medium">批注 · {annotation.regions.length}</h2>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3">
-              {!annotation.regions.length && (
-                <p className="px-1 py-2 text-xs leading-6 text-muted-foreground">
-                  点击框选工具，拖出一个区域，然后填写希望如何调整。
-                </p>
-              )}
+              </div>
+            ) : (
               <ol className="flex flex-col gap-1">
                 {annotation.regions.map((region, index) => (
                   <li
                     key={region.id}
                     className={cn(
-                      "rounded-lg p-2",
-                      annotation.selectedId === region.id && "bg-muted"
+                      "rounded-xl p-2.5",
+                      annotation.selectedId === region.id && "bg-muted/70"
                     )}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-start gap-2">
                       <button
                         type="button"
-                        aria-label={`定位批注 ${index + 1}`}
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={"定位批注 " + (index + 1)}
+                        className="flex min-w-0 flex-1 items-start gap-2 rounded text-left text-[13px] leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => focusRegion(region)}
                       >
-                        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-annotation/10 text-annotation">
+                        <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-annotation/10 text-xs font-medium text-annotation">
                           {index + 1}
                         </span>
-                        <span className="truncate">{region.comment || "待填写意见"}</span>
+                        <span className="min-w-0 break-words">
+                          {region.comment || "待填写意见"}
+                        </span>
                       </button>
                       <IconAction
-                        label={`删除批注 ${index + 1}`}
+                        label={"删除批注 " + (index + 1)}
                         disabled={busy}
                         onClick={() => annotation.remove(region.id)}
                       >
@@ -408,7 +449,7 @@ export function ImageViewer({
                     </div>
                     {selected?.id === region.id && (
                       <form
-                        className="mt-2 flex flex-col gap-2"
+                        className="mt-3 flex flex-col gap-2"
                         onSubmit={(event) => {
                           event.preventDefault()
                           annotation.saveComment(region.id, comment)
@@ -423,57 +464,122 @@ export function ImageViewer({
                             annotation.updateComment(region.id, event.target.value)
                           }
                           placeholder="描述希望怎么调整…"
-                          className="min-h-24 resize-y text-sm"
+                          className="min-h-28 resize-y bg-background text-sm select-text"
                           disabled={busy}
                         />
-                        <Button
-                          type="submit"
-                          aria-label="保存批注意见"
-                          shape="pill"
-                          size="sm"
-                          disabled={!comment.trim() || busy}
-                        >
-                          保存意见
-                        </Button>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Ctrl / ⌘ + Enter</span>
+                          <Button
+                            type="submit"
+                            aria-label="保存批注意见"
+                            shape="pill"
+                            size="sm"
+                            disabled={!comment.trim() || busy}
+                          >
+                            完成
+                          </Button>
+                        </div>
                       </form>
                     )}
                   </li>
                 ))}
               </ol>
-            </div>
-            <div className="flex flex-col gap-2 p-3">
-              <p className="text-xs text-muted-foreground">
-                批注自动保存；加入聊天后由你确认发送。
-              </p>
-              <Button
-                shape="pill"
-                disabled={
-                  busy || !completed.length || completed.length !== annotation.regions.length
-                }
-                onClick={() =>
-                  void perform(async () => {
-                    const snapshot = annotation.regions.map((region) => ({ ...region }))
-                    const marked = await exportImage(true)
-                    await onFeedback(
-                      marked,
-                      snapshot,
-                      annotation.dimensions.width,
-                      annotation.dimensions.height
-                    )
-                  })
-                }
-              >
-                {busy ? "正在处理…" : "加入聊天"}
-              </Button>
-            </div>
-          </aside>
-        )}
+            )}
+          </div>
+          <p className="shrink-0 px-4 pb-4 text-xs text-muted-foreground">
+            草稿自动保存，加入聊天后由你确认发送。
+          </p>
+        </aside>
+      )}
+
+      {drawing && !panelOpen && (
+        <p className="pointer-events-none absolute bottom-24 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-popover px-4 py-2 text-[13px] text-popover-foreground shadow-control">
+          拖动框选区域，写下希望怎么改
+        </p>
+      )}
+
+      <div
+        role="toolbar"
+        aria-label="图片批注工具"
+        className="image-viewer-actions absolute inset-x-4 bottom-6 z-20 flex justify-center"
+      >
+        <ExpandableActionBar
+          expanded
+          expandOnHover={false}
+          expandOnFocus={false}
+          classNames={{
+            root: "max-w-full",
+            track:
+              "rounded-2xl border-0 bg-foreground p-1.5 shadow-control backdrop-blur-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            item: "h-9 min-w-9 rounded-xl px-3 text-background/80 hover:text-background focus-visible:text-background focus-visible:ring-2 focus-visible:ring-background/60 [&>span.absolute]:bg-background/12",
+            activeItem: "bg-background/12 text-background",
+            icon: "[&_svg]:size-4 [&_svg]:stroke-[1.75]",
+            label: "text-[13px]",
+            badge: "bg-background/15 text-background",
+          }}
+          items={[
+            {
+              id: "view",
+              label: "浏览",
+              icon: <MousePointer2 />,
+              active: !drawing,
+              onClick: () => setDrawing(false),
+            },
+            ...(onFeedback
+              ? [
+                  {
+                    id: "annotate",
+                    label: "添加批注",
+                    icon: <SquareDashedMousePointer />,
+                    active: drawing,
+                    disabled: !annotation.ready || busy,
+                    onClick: () => setDrawing(!drawing),
+                  },
+                  {
+                    id: "comments",
+                    label: "批注",
+                    icon: <MessageCirclePlus />,
+                    active: panelOpen,
+                    badge: annotation.regions.length || undefined,
+                    onClick: () => (panelOpen ? closeComments() : setCommentsOpen(true)),
+                  },
+                ]
+              : []),
+            {
+              id: "undo",
+              label: "撤销",
+              icon: <Undo2 />,
+              disabled: !annotation.history.undo || busy,
+              onClick: annotation.undo,
+            },
+            {
+              id: "redo",
+              label: "重做",
+              icon: <Redo2 />,
+              disabled: !annotation.history.redo || busy,
+              onClick: annotation.redo,
+            },
+            ...(onFeedback
+              ? [
+                  {
+                    id: "feedback",
+                    label: busy ? "正在处理…" : "加入聊天",
+                    icon: <Send />,
+                    disabled:
+                      busy || !completed.length || completed.length !== annotation.regions.length,
+                    onClick: submitFeedback,
+                  },
+                ]
+              : []),
+          ]}
+        />
       </div>
+
       {(actionError || annotation.error || status) && (
         <p
           role="status"
           className={cn(
-            "shrink-0 px-4 py-2 text-xs",
+            "absolute bottom-24 left-4 z-30 max-w-[calc(100%-2rem)] rounded-lg bg-popover px-3 py-2 text-[13px] shadow-control",
             actionError || annotation.error ? "text-destructive" : "text-muted-foreground"
           )}
         >
@@ -500,11 +606,12 @@ function IconAction({
       type="button"
       variant="ghost"
       shape="circle"
-      size="icon-sm"
+      size="icon"
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onClick}
+      className="size-8 [&_svg]:size-4 [&_svg]:stroke-[1.75]"
     >
       {children}
     </Button>
