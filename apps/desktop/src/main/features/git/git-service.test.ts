@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { promisify } from "node:util"
+import { fileURLToPath } from "node:url"
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
@@ -80,5 +81,37 @@ describe("gitService.isRepository", () => {
       isRepository: false,
       rootPath: null,
     })
+  })
+})
+
+describe("gitService.fileDiff path containment", () => {
+  it.each(["src/../../readme.txt", "src/./../../readme.txt", "src\\..\\..\\readme.txt"])(
+    "rejects an untracked file outside the supplied project root: %s",
+    async (path) => {
+      const { mkdir } = await import("node:fs/promises")
+      const projectRoot = join(plainDir, "project")
+      await mkdir(join(projectRoot, "src"), { recursive: true })
+      await expect(gitService.fileDiff({ rootPath: projectRoot, path, status: "untracked" }))
+        .rejects.toThrow(/项目目录内/)
+    }
+  )
+
+  it("reads a normalized project file from the saved root", async () => {
+    const result = await gitService.fileDiff({ rootPath: plainDir, path: "nested/../readme.txt", status: "untracked" })
+    expect(result.path).toBe("readme.txt")
+    expect(result.binary).toBe(false)
+    expect(result.patch).toContain("+not a repo")
+  })
+
+  it("preserves the current tracked diff and repository root", async () => {
+    const rootPath = fileURLToPath(new URL("../../../../../../", import.meta.url))
+    const path = "apps/desktop/src/main/features/git/git-service.ts"
+    const expected = await execFileAsync("git", ["diff", "HEAD", "--", path], { cwd: rootPath })
+    const result = await gitService.fileDiff({ rootPath, path, status: "modified" })
+    expect(result.path).toBe(path)
+    expect(result.patch).toBe(expected.stdout || "(no diff)")
+    const changes = await gitService.changes({ rootPath })
+    expect(changes.rootPath).toBe(resolve(rootPath))
+    if (expected.stdout) expect(changes.files.some((file) => file.path === path)).toBe(true)
   })
 })

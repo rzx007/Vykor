@@ -14,6 +14,10 @@ const SIGNATURES: ReadonlyArray<{
     matches: (bytes) => startsWith(bytes, [0xff, 0xd8, 0xff]),
   },
   {
+    mediaType: "image/bmp",
+    matches: (bytes) => startsWith(bytes, [0x42, 0x4d]),
+  },
+  {
     mediaType: "image/gif",
     matches: (bytes) =>
       startsWith(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||

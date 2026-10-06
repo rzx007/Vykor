@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import { realpath } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import type { Settings } from "@vykor/core";
@@ -52,7 +53,8 @@ export async function createExecutionEnvironment(
 }
 
 function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: CreateExecutionEnvironmentDependencies): ExecutionEnvironmentHandle {
-  const paths = createWslPathResolver(input.binding);
+  const process = createWslProcessExecutor(input, dependencies);
+  const paths = createWslPathResolver(input.binding, process);
   const shellDescriptor: ShellDescriptor = {
     family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: ["-lc"],
     displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp",
@@ -68,7 +70,7 @@ function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: C
       shellDescriptor,
     },
     workspace: input.binding,
-    process: createWslProcessExecutor(input, dependencies),
+    process,
     terminal: {
       async prepare(options) {
         const cwd = (await paths.resolve(options.cwd ?? input.binding.executionRoot, "execute")).executionPath;
@@ -178,6 +180,7 @@ function adaptChildProcess(child: ChildProcess): EnvironmentProcess {
 
 function createLocalPathResolver(binding: WorkspaceBinding): EnvironmentPathResolver {
   return {
+    canonicalize: (path) => realpath(isAbsolute(path) ? path : resolve(binding.executionRoot, path)),
     async resolve(path) {
       const executionPath = isAbsolute(path) ? resolve(path) : resolve(binding.executionRoot, path);
       return { executionPath, hostPath: executionPath, mountPurpose: "workspace", mountMode: "rw" };

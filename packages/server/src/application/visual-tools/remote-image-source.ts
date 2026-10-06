@@ -78,9 +78,25 @@ function mappedIpv4(address: string): string | undefined {
   const dotted = address.match(/^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/)?.[1];
   if (dotted) return dotted;
   const hexadecimal = address.match(/^::(?:ffff:)?([\da-f]{1,4}):([\da-f]{1,4})$/);
-  if (!hexadecimal) return undefined;
-  const high = Number.parseInt(hexadecimal[1]!, 16);
-  const low = Number.parseInt(hexadecimal[2]!, 16);
+  if (hexadecimal) return hextetsToIpv4(Number.parseInt(hexadecimal[1]!, 16), Number.parseInt(hexadecimal[2]!, 16));
+
+  // isPublicAddress validates IPv6 first; normalize dotted tails and :: compression.
+  const hexadecimalAddress = address.replace(/(\d+\.\d+\.\d+\.\d+)$/, (ipv4) => {
+    const [a, b, c, d] = ipv4.split(".").map(Number);
+    return `${((a! << 8) | b!).toString(16)}:${((c! << 8) | d!).toString(16)}`;
+  });
+  const [head, tail] = hexadecimalAddress.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const parts = [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right].map((part) => Number.parseInt(part, 16));
+  if (parts[0] === 0x64 && parts[1] === 0xff9b && parts.slice(2, 6).every((part) => part === 0)) {
+    return hextetsToIpv4(parts[6]!, parts[7]!);
+  }
+  if (parts[0] === 0x2002) return hextetsToIpv4(parts[1]!, parts[2]!);
+  return undefined;
+}
+
+function hextetsToIpv4(high: number, low: number): string {
   return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
 }
 

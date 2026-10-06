@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { readFile, stat } from "node:fs/promises"
-import { isAbsolute, resolve } from "node:path"
+import { isAbsolute, relative, resolve, sep } from "node:path"
 import { promisify } from "node:util"
 
 import type {
@@ -77,7 +77,7 @@ class GitService {
 
   async fileDiff(input: DesktopGitFileDiffInput): Promise<DesktopGitFileDiffResult> {
     const rootPath = await resolveDirectory(input.rootPath)
-    const path = normalizeRequestedPath(input.path)
+    const path = normalizeRequestedPath(rootPath, input.path)
     const scope = normalizeDiffScope(input.scope)
     try {
       if (
@@ -163,18 +163,14 @@ async function resolveDirectory(value: unknown): Promise<string> {
   return path
 }
 
-function normalizeRequestedPath(value: unknown): string {
+function normalizeRequestedPath(rootPath: string, value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("文件路径不能为空。")
   const normalized = normalizeGitPath(value.trim())
-  if (
-    !normalized ||
-    normalized.startsWith("../") ||
-    normalized === ".." ||
-    isAbsolute(normalized)
-  ) {
+  const relativePath = relative(rootPath, resolve(rootPath, normalized))
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath) || isAbsolute(normalized)) {
     throw new Error("文件必须位于当前项目目录内。")
   }
-  return normalized
+  return normalizeGitPath(relativePath)
 }
 
 async function runGit(cwd: string, args: string[], maxBuffer = 1024 * 1024): Promise<string> {

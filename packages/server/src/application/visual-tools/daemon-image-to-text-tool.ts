@@ -1,4 +1,4 @@
-import { extname } from "node:path";
+import { extname, posix, win32 } from "node:path";
 import type {
   Settings,
   ToolContext,
@@ -178,11 +178,25 @@ async function buildImageBlock(
   if (!context.environment) {
     throw new Error("ImageToText image_path requires an active execution environment.");
   }
-  const resolved = await context.environment.paths.resolve(input.imagePath!, "read");
+  const environment = context.environment;
+  const root = await environment.paths.resolve(context.cwd, "read");
+  const resolved = await environment.paths.resolve(input.imagePath!, "read");
+  const paths = environment.info.pathStyle === "posix" ? posix : win32;
+  const assertContained = (cwd: string, path: string) => {
+    const rel = paths.relative(cwd, path);
+    if (rel === ".." || rel.startsWith(`..${paths.sep}`) || paths.isAbsolute(rel)) {
+      throw new Error("ImageToText image_path must stay inside the session workspace (cwd).");
+    }
+  };
+  assertContained(root.executionPath, resolved.executionPath);
+  if (!environment.paths.canonicalize) throw new Error("ImageToText cannot verify image_path in this execution environment.");
+  const canonicalRoot = await environment.paths.canonicalize(root.executionPath);
+  const imagePath = await environment.paths.canonicalize(resolved.executionPath);
+  assertContained(canonicalRoot, imagePath);
   const mediaType = MEDIA_TYPES[extname(resolved.executionPath).toLowerCase()];
   if (!mediaType) throw new Error("ImageToText only supports jpg, jpeg, png, gif, and webp files.");
   const data = Buffer.from(
-    await context.environment.files.readBytes(resolved.executionPath),
+    await environment.files.readBytes(imagePath),
   ).toString("base64");
   return apiFormat === "anthropic"
     ? { type: "image", source: { type: "base64", media_type: mediaType, data } }

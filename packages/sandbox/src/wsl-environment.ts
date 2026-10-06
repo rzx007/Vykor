@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 import type {
   EnvironmentPathResolver,
+  EnvironmentProcessExecutor,
   ResolvedEnvironmentPath,
   WorkspaceBinding,
 } from "@vykor/environment";
@@ -63,7 +64,7 @@ export function wslPathToHostPath(path: string): string | undefined {
   return win32.join(`${match[1]!.toUpperCase()}:\\`, ...rest);
 }
 
-export function createWslPathResolver(binding: WorkspaceBinding): EnvironmentPathResolver {
+export function createWslPathResolver(binding: WorkspaceBinding, executor?: EnvironmentProcessExecutor): EnvironmentPathResolver {
   if (binding.kind !== "wsl") throw new Error("WSL path resolver requires a WSL binding");
   const resolveExecutionPath = (path: string) =>
     path.startsWith("/") ? posix.resolve(path) : posix.resolve(binding.executionRoot, path);
@@ -79,6 +80,25 @@ export function createWslPathResolver(binding: WorkspaceBinding): EnvironmentPat
     };
   };
   return {
+    ...(executor ? {
+      async canonicalize(path: string) {
+        const resolved = /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith("\\\\")
+          ? hostPathToWslPath(path) : resolveExecutionPath(path);
+        const process = await executor.execProcess(["/usr/bin/realpath", "-e", "--", resolved]);
+        const chunks: Uint8Array[] = [];
+        const stop = process.onOutput((chunk) => chunks.push(chunk));
+        process.end();
+        try {
+          const result = await process.wait();
+          if (result.exitCode !== 0) throw new Error(`Cannot verify image path in WSL: ${resolved}`);
+          const canonical = Buffer.concat(chunks).toString("utf8").replace(/\r?\n$/, "");
+          if (!posix.isAbsolute(canonical)) throw new Error("WSL returned an invalid canonical path");
+          return canonical;
+        } finally {
+          stop();
+        }
+      },
+    } : {}),
     async resolve(path) {
       if (/^[a-zA-Z]:[\\/]/.test(path) || path.startsWith("\\\\")) {
         return describe(hostPathToWslPath(path));

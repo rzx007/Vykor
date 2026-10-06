@@ -139,6 +139,8 @@ export interface EnvironmentFileSystem {
 }
 
 export interface EnvironmentPathResolver {
+  /** Resolve existing paths and links in the execution environment's filesystem. */
+  canonicalize?(path: string): Promise<string>;
   resolve(
     path: string,
     operation: EnvironmentPathOperation,

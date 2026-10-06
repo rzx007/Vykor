@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { EnvironmentProcessExecutor } from "@vykor/environment";
 
 import {
   WslEnvironmentUnavailableError,
@@ -37,6 +38,37 @@ describe("WSL environment", () => {
     expect(() => hostPathToWslPath("\\\\wsl$\\Ubuntu\\home\\me\\repo"))
       .toThrow("WSL filesystem projects are not supported yet");
   });
+
+  it("only exposes canonical paths when an execution transport is present", async () => {
+    const binding = { kind: "wsl" as const, hostRoot: "D:\\workspace", executionRoot: "/mnt/d/workspace" };
+    expect(createWslPathResolver(binding).canonicalize).toBeUndefined();
+    let command: string[] = [];
+    const executor: EnvironmentProcessExecutor = {
+      async execShell() { throw new Error("shell must not run"); },
+      async execProcess(argv) {
+        command = argv;
+        return { write() {}, end() {}, onOutput(listener) { listener(Buffer.from("/mnt/d/real/invoice.png\n")); return () => {}; },
+          wait: async () => ({ exitCode: 0 }), async signal() {} };
+      },
+    };
+    const resolver = createWslPathResolver(binding, executor);
+    await expect(resolver.canonicalize!("D:\\workspace\\invoice.png")).resolves.toBe("/mnt/d/real/invoice.png");
+    expect(command).toEqual(["/usr/bin/realpath", "-e", "--", "/mnt/d/workspace/invoice.png"]);
+  });
+
+  it.each([{ exitCode: 1, output: "" }, { exitCode: 0, output: "relative/path\n" }])(
+    "rejects unsuccessful or invalid WSL canonical responses: %j",
+    async ({ exitCode, output }) => {
+      const resolver = createWslPathResolver({ kind: "wsl", hostRoot: "D:\\workspace", executionRoot: "/mnt/d/workspace" }, {
+        async execShell() { throw new Error("shell must not run"); },
+        async execProcess() {
+          return { write() {}, end() {}, onOutput(listener) { listener(Buffer.from(output)); return () => {}; },
+            wait: async () => ({ exitCode }), async signal() {} };
+        },
+      });
+      await expect(resolver.canonicalize!("invoice.png")).rejects.toThrow();
+    },
+  );
 
   it("fails closed when WSL is unavailable", async () => {
     await expect(preflightWsl({
