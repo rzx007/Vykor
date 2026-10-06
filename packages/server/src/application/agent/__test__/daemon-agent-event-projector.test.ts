@@ -66,7 +66,7 @@ describe("DaemonAgentEventProjector", () => {
   it("persists the applied parent model for a new child while the target has changed", async () => {
     const sessions = new Map<string, any>([["parent", {
       id: "parent", cwd: "/repo", model: "model-b",
-      metadata: { runtime: { model: "model-b", effort: "high", baseUrl: "https://new.example/v1" }, appliedRequestModel: "model-a" },
+      metadata: { runtime: { model: "model-b", effort: "high", sessionMode: "coordinator", baseUrl: "https://new.example/v1" }, appliedRequestModel: "model-a" },
     }]]);
     const projector = new DaemonAgentEventProjector({
       rootAgent: {} as any,
@@ -86,7 +86,7 @@ describe("DaemonAgentEventProjector", () => {
       parentRequestConfiguration: { model: "model-a", effort: "low", baseUrl: "" },
     }, { sessionId: "parent", runId: "root-run", childId: "child" }));
     expect(sessions.get("child-session")?.metadata.runtime).toMatchObject({
-      model: "model-a", effort: "low", baseUrl: "",
+      model: "model-a", effort: "low", baseUrl: "", sessionMode: "direct",
     });
   });
 

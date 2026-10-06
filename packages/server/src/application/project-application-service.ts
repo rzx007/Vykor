@@ -1,6 +1,16 @@
 import { stat } from "node:fs/promises";
 
-import type { ProjectRecord } from "@vykor/protocol";
+import { isAbsolute, relative, sep } from "node:path";
+import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
+import { ApplicationError } from "../shared/application-error.js";
+
+interface ProjectRebindRuntime {
+  listSessions(): SessionRecord[];
+  hasWork(sessionId: string): boolean;
+  closeAgent(sessionId: string): Promise<void>;
+  enterRebind(isIdle: () => boolean): { release(): void } | undefined;
+  events: { checkpoint(): number; publishSince(seq: number): void };
+}
 
 export interface ProjectOperations {
   list(options?: { includeArchived?: boolean }): ProjectRecord[];
@@ -13,7 +23,7 @@ export interface ProjectOperations {
 }
 
 export class ProjectApplicationService {
-  constructor(private readonly projects: ProjectOperations) {}
+  constructor(private readonly projects: ProjectOperations, private readonly runtime?: ProjectRebindRuntime) {}
 
   list(options: { includeArchived?: boolean } = {}) {
     return this.projects.list(options);
@@ -38,7 +48,22 @@ export class ProjectApplicationService {
 
   async rebind(projectId: string, path: string) {
     await this.assertDirectory(path);
-    return this.projects.rebind(projectId, path);
+    if (!this.runtime) return this.projects.rebind(projectId, path);
+    const previous = this.projects.list({ includeArchived: true }).find(project => project.id === projectId);
+    if (!previous) throw new ApplicationError(404, `Project not found: ${projectId}`);
+    const sessions = this.runtime.listSessions().filter(session => session.projectId === projectId);
+    const lease = this.runtime.enterRebind(() => sessions.every(session => session.status !== "running" && !this.runtime!.hasWork(session.id)));
+    if (!lease) throw new ApplicationError(409, "Project has active work; wait before rebinding");
+    try {
+      for (const session of sessions) {
+        const path = relative(previous.path, session.cwd);
+        if (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path)) await this.runtime.closeAgent(session.id);
+      }
+      const before = this.runtime.events.checkpoint();
+      const project = this.projects.rebind(projectId, path);
+      this.runtime.events.publishSince(before);
+      return project;
+    } finally { lease.release(); }
   }
 
   archive(projectId: string) {

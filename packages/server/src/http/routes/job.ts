@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import type { JobKind, JobStatus } from "@vykor/protocol";
 
 import type { DaemonJobService } from "../../jobs/index.js";
-import { errorResponse, jsonResponse, readJson } from "../support.js";
+import { applicationErrorResponse, errorResponse, jsonResponse, readJson } from "../support.js";
+import { ApplicationError } from "../../shared/application-error.js";
 
 export function createJobRoutes(jobs: DaemonJobService): Hono {
   return new Hono()
@@ -73,6 +74,7 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
 }
 
 function jobError(error: unknown): Response {
+  if (error instanceof ApplicationError) return applicationErrorResponse(error);
   const message = error instanceof Error ? error.message : String(error);
   return errorResponse(message.includes("not found") || message.includes("not exist") ? 404 : 400, message);
 }

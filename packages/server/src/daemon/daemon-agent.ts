@@ -464,7 +464,7 @@ function agentConfigurationFromSession(
     // plugins, but an old session cannot re-enable them globally.
     pluginsEnabled: (settings?.plugins?.enabled ?? true) && (runtime.pluginsEnabled ?? true),
   };
-  if (runtime.sessionMode === "coordinator") {
+  if (!session.parentId && runtime.sessionMode === "coordinator") {
     // coordinator 模式换一套编排 prompt + 工具白名单（Agent/Job*/Workflow），
     // 会话自己的 systemPrompt 降级成「额外说明」附录，避免盖掉协调者角色。
     configuration.systemPrompt = coordinatorSystemPrompt({

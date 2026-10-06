@@ -22,6 +22,7 @@ import type {
 import type { SessionExecutionProjector } from "./session-execution-projector.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { ApplicationError } from "../../shared/application-error.js";
+import type { DaemonOperationGate } from "../control/daemon-operation-gate.js";
 
 type ProcessSupervisor = DetachedProcessSupervisor;
 type TaskScope = { cwd: string; sessionId?: string };
@@ -96,6 +97,7 @@ export class BackgroundShellError extends ApplicationError {
 }
 
 export interface BackgroundShellServiceContext {
+  operationGate?: Pick<DaemonOperationGate, "enter">;
   store: BackgroundShellStore;
   executionProjector: Pick<
     SessionExecutionProjector,
@@ -113,6 +115,7 @@ export interface BackgroundShellServiceContext {
 
 /** Shared background-shell creation and control for HTTP and model-tool callers. */
 export class BackgroundShellService {
+  private readonly starting = new Map<string, Promise<DetachedProcessExecution>>();
   private readonly environmentLeases = new Map<string, {
     lease: ExecutionEnvironmentHandle;
     unsubscribe: () => void;
@@ -194,6 +197,15 @@ export class BackgroundShellService {
     shellDescriptor?: ShellDescriptor;
   }): Promise<{ execution: DetachedProcessExecution | SessionExecutionRecord; created: boolean }> {
     const scope = this.resolveScope(input, { requireActiveSession: true });
+    const lease = scope.sessionId ? this.context.operationGate?.enter({ sessionId: scope.sessionId, cwd: scope.cwd }) : undefined;
+    try { return await this.createInScope(input, scope); }
+    finally { lease?.release(); }
+  }
+
+  private async createInScope(
+    input: Parameters<BackgroundShellService["create"]>[0],
+    scope: TaskScope,
+  ): ReturnType<BackgroundShellService["create"]> {
     const requestId = input.requestId.trim();
     if (!requestId) throw new BackgroundShellError(400, "requestId is required");
     const command = input.command.trim();
@@ -239,25 +251,32 @@ export class BackgroundShellService {
       if (reservation.task.metadata.requestFingerprint !== requestFingerprint) {
         throw new BackgroundShellError(409, `Background shell request identity conflict: ${requestId}`);
       }
+      const starting = this.starting.get(reservation.task.id);
+      if (starting) return { execution: await starting, created: false };
       const runtime = manager.getExecution(reservation.task.id);
       const admissionPhase = reservation.task.metadata.admissionPhase;
       if (runtime && (admissionPhase === "reserved" || admissionPhase === "dispatching")) {
-        // The first caller is still starting this exact runtime. Re-entering the
-        // supervisor by id joins its in-flight promise, including its failure.
-        const execution = await manager.startShellExecution({
-          id: reservation.task.id,
-          command,
-          description,
-          cwd: scope.cwd,
-          sessionId: scope.sessionId,
-          ...(input.settings ? { settings: input.settings } : {}),
-        });
-        return { execution, created: false };
+        throw new BackgroundShellError(409, "Background shell startup owner is unavailable");
       }
       return { execution: runtime ?? reservation.task, created: false };
     }
 
-    this.context.store.updateSessionTask(reservation.task.id, {
+    const starting = this.startReservedShell(input, scope as TaskScope & { sessionId: string }, manager, reservation.task.id, command, description, eventCursor);
+    this.starting.set(reservation.task.id, starting);
+    try { return { execution: await starting, created: true }; }
+    finally { this.starting.delete(reservation.task.id); }
+  }
+
+  private async startReservedShell(
+    input: { settings?: Settings; shellDescriptor?: ShellDescriptor },
+    scope: TaskScope & { sessionId: string },
+    manager: ProcessSupervisor,
+    taskId: string,
+    command: string,
+    description: string,
+    eventCursor: number,
+  ): Promise<DetachedProcessExecution> {
+    this.context.store.updateSessionTask(taskId, {
       metadata: { admissionPhase: "dispatching" },
     });
     this.context.events.publishSince(eventCursor);
@@ -273,7 +292,7 @@ export class BackgroundShellService {
         environmentLease = await this.context.acquireEnvironment(
           session,
           settings,
-          { kind: "background", id: reservation.task.id },
+          { kind: "background", id: taskId },
         );
         if (input.shellDescriptor && !sameShellDescriptor(
           input.shellDescriptor,
@@ -283,7 +302,7 @@ export class BackgroundShellService {
         }
       }
       task = await manager.startShellExecution({
-        id: reservation.task.id,
+        id: taskId,
         command,
         description,
         cwd: scope.cwd,
@@ -295,7 +314,7 @@ export class BackgroundShellService {
       });
     } catch (error) {
       await environmentLease?.release();
-      this.context.store.transitionPendingSessionTask(reservation.task.id, {
+      this.context.store.transitionPendingSessionTask(taskId, {
         status: "failed",
         error: errorMessage(error),
         metadata: { admissionPhase: "failed" },
@@ -320,7 +339,7 @@ export class BackgroundShellService {
     this.context.executionProjector.trackProcessExecution(manager, task.id);
     this.context.executionProjector.syncPersistentExecution(task, manager);
     this.context.events.publishSince(eventCursor);
-    return { execution: task, created: true };
+    return task;
   }
 
   get(taskId: string, input: { cwd?: string; sessionId?: string }): { execution: unknown; output?: string } {

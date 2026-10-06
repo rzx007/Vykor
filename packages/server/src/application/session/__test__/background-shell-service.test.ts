@@ -2,6 +2,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { SessionStore } from "@vykor/services";
+import { DetachedProcessSupervisor } from "@vykor/services/executions";
+import { SessionExecutionProjector } from "../session-execution-projector.js";
+import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 import { BackgroundShellService } from "../background-shell-service.js";
 
@@ -110,6 +115,55 @@ function createTaskService(options: {
 }
 
 describe("BackgroundShellService", () => {
+  it.each(["start", "failure", "cancel"])("joins complete environment acquisition on retry: %s", async (outcome) => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-shell-env-retry-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
+    let releaseAcquire!: (value: any) => void;
+    let rejectAcquire!: (error: Error) => void;
+    const acquisition = new Promise<any>((resolve, reject) => { releaseAcquire = resolve; rejectAcquire = reject; });
+    const launches: string[] = [];
+    let releases = 0;
+    const gate = new DaemonOperationGate();
+    const settings = { model: "test", sandbox: { enabled: false }, permission: { mode: "full_auto" } } as any;
+    const projector = new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); }, events: { checkpoint: () => 0, publishSince: () => {} }, traceIdForRun: () => "", log: () => {} });
+    const service = new BackgroundShellService({ operationGate: gate, store: { getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), reserveSessionTask: store.reserveSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store) } as any, executionProjector: projector, events: { checkpoint: () => 0, publishSince: () => {} }, getDetachedProcessSupervisor: () => manager, acquireEnvironment: () => acquisition });
+    try {
+      store.sessions.create({ id: "s1", cwd: dir, model: "test" });
+      const input = { requestId: "retry", sessionId: "s1", command: "environment-command", settings };
+      const first = service.create(input);
+      const firstResult = first.then(value => value, error => error);
+      await Promise.resolve();
+      const retry = service.create(input);
+      const retryResult = retry.then(value => value, error => error);
+      await Promise.resolve(); await Promise.resolve();
+      expect(manager.listExecutions()).toEqual([]);
+      expect(gate.tryEnterBarrier({ kind: "global" }, () => true)).toBeUndefined();
+      const id = store.listSessionTasks("s1")[0]!.id;
+      if (outcome === "cancel") store.transitionPendingSessionTask(id, { status: "stopped" });
+      if (outcome === "failure") rejectAcquire(new Error("environment denied"));
+      else releaseAcquire({ release: async () => { releases += 1; }, workspace: { executionRoot: dir }, process: {
+        execShell: async (_command: string, options: { cwd: string }) => {
+          launches.push(options.cwd);
+          const child = spawn(process.execPath, ["-e", "process.stdout.write('environment output');setInterval(() => {}, 1000)"], { cwd: options.cwd, windowsHide: true });
+          const completed = new Promise<{ exitCode: number | null }>(resolve => child.once("close", exitCode => resolve({ exitCode })));
+          return { pid: child.pid, write: (data: string) => { child.stdin.write(data); }, end: () => child.stdin.end(), onOutput: (listener: (chunk: Uint8Array) => void) => { child.stdout.on("data", listener); return () => child.stdout.off("data", listener); }, wait: () => completed, signal: async () => { child.kill(); } };
+        }, execProcess: async () => { throw new Error("unused"); },
+      } });
+      const [a, b] = await Promise.all([firstResult, retryResult]);
+      const idle = gate.tryEnterBarrier({ kind: "global" }, () => true);
+      expect(idle).toBeDefined();
+      idle?.release();
+      expect(b instanceof Error ? b.message : b.execution.status).toBe(a instanceof Error ? a.message : a.execution.status);
+      expect(launches).toEqual(outcome === "failure" ? [] : [dir]);
+      expect(store.getSessionTask(id)?.status).toBe(outcome === "cancel" ? "stopped" : outcome === "failure" ? "failed" : "running");
+      if (outcome === "start") {
+        await vi.waitFor(() => expect(manager.readOutput(id)).toContain("environment output"));
+        await service.stop(id, { sessionId: "s1" });
+      }
+      if (outcome !== "failure") await vi.waitFor(() => expect(releases).toBe(1));
+    } finally { await manager.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
   it("holds a background environment lease until the process finishes", async () => {
     const release = vi.fn(async () => {});
     const acquireEnvironment = vi.fn(async () => ({
@@ -442,7 +496,7 @@ describe("BackgroundShellService", () => {
       { execution: { id: taskId }, created: true },
       { execution: { id: taskId }, created: false },
     ]);
-    expect(manager.startShellExecution).toHaveBeenCalledTimes(2);
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(1);
   });
 
   it("rejects the same request identity with different parameters", async () => {

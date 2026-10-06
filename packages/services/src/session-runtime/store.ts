@@ -274,7 +274,7 @@ export class SessionStore {
       });
       this.storage.chatPersistence = new ChatPersistenceRouter(this.storage);
       this.storage.temporaryControls = new TemporaryControlRecords();
-      this.projects = new ProjectRepository(this.storage);
+      this.projects = new ProjectRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.notes = new NoteRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);

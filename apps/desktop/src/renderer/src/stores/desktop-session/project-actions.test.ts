@@ -94,6 +94,18 @@ describe("desktop session store provider refresh", () => {
 })
 
 describe("desktop session store project order", () => {
+  it("refreshes session cwd after project rebind", async () => {
+    const project = { id: "project-rebind", name: "Rebind", path: "D:\\old", lastOpenedAt: 1, available: true }
+    const rebound = { ...project, path: "D:\\new" }
+    const oldSession = { id: "s1", projectId: project.id, cwd: "D:\\old\\sub", title: "test", model: "test", status: "idle" as const, metadata: {}, createdAt: 1, updatedAt: 1 }
+    vi.stubGlobal("window", { desktop: { sessions: {
+      rebindProject: async () => rebound,
+      bootstrap: async () => ({ ...refreshedBootstrap, projects: [rebound], sessions: [{ ...oldSession, cwd: "D:\\new\\sub" }] }),
+    } } })
+    useDesktopSessionStore.setState({ projects: [project], sessions: [oldSession], selectedProject: project })
+    await useDesktopSessionStore.getState().rebindProject(project.id)
+    expect(useDesktopSessionStore.getState().sessions[0]?.cwd).toBe("D:\\new\\sub")
+  })
   it("keeps the project list stable when selecting a project", async () => {
     const projects = [
       {

@@ -43,6 +43,73 @@ const task: SessionExecutionRecord = {
 };
 
 describe("DaemonJobService", () => {
+  it("reads the full live log before applying JobRead maxChars", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-truncation-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const runtime = new DetachedProcessSupervisor(join(dir, "tasks"));
+    try {
+      store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
+      const execution = await runtime.startShellExecution({ cwd: dir, description: "output", argv: [process.execPath, "-e", "process.stdout.write('a'.repeat(20000))"] });
+      await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
+      store.createSessionTask({ id: execution.id, sessionId: "session-1", type: "shell", description: "output", cwd: dir, metadata: { executionBackend: "detached_process" } });
+      const service = new DaemonJobService({ ...store, getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      const read = await service.read({ sessionId: "session-1", jobId: execution.id, maxChars: 15000 });
+      expect(read.text.length).toBe(15000);
+      expect(read.truncated).toBe(true);
+    } finally { await runtime.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it.each(["completed", "failed"] as const)("reopens a %s Agent and observes its second completion", async (status) => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-continue-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const runtime = new DetachedProcessSupervisor(join(dir, "tasks"));
+    try {
+      store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
+      const execution = await runtime.startAgentProcess({ prompt: "first", cwd: dir, description: "agent", argv: [process.execPath, "-e", "process.stdin.once('data', d => {process.stdout.write(d); process.exit(0)})"] });
+      store.createSessionTask({ id: execution.id, sessionId: "session-1", cwd: dir, description: "agent", type: "agent", metadata: { executionBackend: "detached_process" } });
+      const projector = new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); }, events: { checkpoint: () => 0, publishSince: () => {} }, traceIdForRun: () => "", log: () => {} });
+      projector.trackProcessExecution(runtime, execution.id);
+      await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
+      await vi.waitFor(() => expect(store.getSessionTask(execution.id)?.status).toBe("completed"));
+      store.updateSessionTask(execution.id, { status, error: "old failure" });
+      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store), waitForSessionTaskChange: store.waitForSessionTaskChange.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any, projector);
+      await service.send({ sessionId: "session-1", jobId: execution.id, data: "continue" });
+      expect(store.getSessionTask(execution.id)?.status).toBe("running");
+      await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
+      await vi.waitFor(() => expect(store.getSessionTask(execution.id)).toMatchObject({ status: "completed", output: expect.stringContaining("continue") }));
+    } finally { await runtime.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("restores the durable terminal result when continue cannot reach its runtime", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-continue-failure-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const runtime = new DetachedProcessSupervisor(join(dir, "tasks"));
+    try {
+      store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
+      store.createSessionTask({ id: "missing", sessionId: "session-1", type: "agent", cwd: dir, description: "agent", metadata: { executionBackend: "detached_process" } });
+      store.updateSessionTask("missing", { status: "failed", output: "previous result", error: "previous error" });
+      const service = new DaemonJobService({ getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      await expect(service.send({ sessionId: "session-1", jobId: "missing", data: "continue" })).rejects.toThrow("Execution not found");
+      expect(store.getSessionTask("missing")).toMatchObject({ status: "failed", output: "previous result", error: "previous error" });
+      expect(await service.wait({ sessionId: "session-1", jobId: "missing", timeoutMs: 100 })).toMatchObject({ text: "previous result", timedOut: false, snapshot: { status: "failed" } });
+    } finally { await runtime.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("stops the real process when pending cancellation loses confirmation", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-cancel-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const runtime = new DetachedProcessSupervisor(join(dir, "tasks"));
+    try {
+      store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
+      store.createSessionTask({ id: "race", sessionId: "session-1", type: "shell", description: "long", cwd: dir, metadata: { executionBackend: "detached_process" } });
+      store.updateSessionTask("race", { status: "pending" });
+      await runtime.startShellExecution({ id: "race", cwd: dir, description: "long", argv: [process.execPath, "-e", "setInterval(() => {}, 1000)"] });
+      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: id => { const task = store.getSessionTask(id); store.updateSessionTask(id, { status: "running" }); return task; }, updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      await service.cancel({ sessionId: "session-1", jobId: "race" });
+      expect(runtime.getExecution("race")?.status).toBe("stopped");
+      expect(store.getSessionTask("race")?.status).toBe("stopped");
+    } finally { await runtime.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
   it("reads a projected exit code after the store reopens", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-job-exit-"));
     const path = join(dir, "store.db");
@@ -642,7 +709,7 @@ describe("DaemonJobService", () => {
       metadata: { admissionPhase: "cancelled_before_start" },
     });
     expect(manager.stopExecution).not.toHaveBeenCalled();
-    expect(store.updateSessionTask).toHaveBeenCalledWith(pending.id, {
+    expect(store.transitionPendingSessionTask).toHaveBeenCalledWith(pending.id, {
       status: "stopped",
       metadata: { admissionPhase: "cancelled_before_start" },
     });
@@ -791,6 +858,7 @@ function createService(
       ...projectedTasks[0]!,
       ...input,
     })),
+    transitionPendingSessionTask: vi.fn((_id: string, input: Record<string, unknown>) => ({ task: { ...projectedTasks[0]!, ...input }, transitioned: true })),
     ...(overrides.readChildActivity ? { readChildActivity: overrides.readChildActivity } : {}),
     ...(overrides.waitForSessionTaskChange
       ? { waitForSessionTaskChange: overrides.waitForSessionTaskChange } : {}),

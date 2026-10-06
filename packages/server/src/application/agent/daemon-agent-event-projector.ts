@@ -252,6 +252,7 @@ export class DaemonAgentEventProjector {
       const runtimePatch = {
         ...parentRuntime,
         ...parentRequestConfiguration,
+        sessionMode: "direct" as const,
         model,
         ...(spawn.systemPrompt !== undefined ? { systemPrompt: spawn.systemPrompt } : {}),
         ...(spawn.permissionMode !== undefined ? { permissionMode: spawn.permissionMode } : {}),

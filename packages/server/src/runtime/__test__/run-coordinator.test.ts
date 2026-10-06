@@ -24,6 +24,34 @@ function deferred<T = void>(): {
 }
 
 describe("SessionRunCoordinator", () => {
+  it.each(["session", "queued", "active"])("does not restore an in-flight promotion after %s interruption", async (kind) => {
+    const coordinator = new SessionRunCoordinator();
+    const steerStarted = deferred();
+    const steerRelease = deferred();
+    const workRelease = deferred();
+    const registered = deferred();
+    let queuedRan = false;
+    const active = coordinator.enqueue({ sessionId: "s1", runId: "active", work: async context => {
+      await context.registerHandle({ id: "active", steer: async () => { steerStarted.resolve(); await steerRelease.promise; throw new AgentRunNotAcceptingInputError("active"); }, interrupt: async () => {} } as any);
+      registered.resolve();
+      await workRelease.promise;
+    } });
+    await registered.promise;
+    const queued = coordinator.enqueue({ sessionId: "s1", runId: "queued", work: async () => { queuedRan = true; } });
+    const promotion = coordinator.promoteQueuedRun("s1", "queued", "active", { content: "promoted" });
+    if (!promotion.promoted) throw new Error("promotion missing");
+    await steerStarted.promise;
+    expect(coordinator.queuedRunIds("s1")).toEqual(["queued"]);
+    const result = kind === "session" ? coordinator.interrupt("s1") : kind === "queued" ? coordinator.interruptQueuedRun("s1", "queued") : coordinator.interruptRun("s1", "active");
+    expect(result.interrupted).toBe(true);
+    steerRelease.resolve();
+    workRelease.resolve();
+    await expect(promotion.delivery).rejects.toBeInstanceOf(RunInterruptedError);
+    await expect(queued.promise).rejects.toBeInstanceOf(RunInterruptedError);
+    await active.promise.catch(() => {});
+    expect(queuedRan).toBe(false);
+    expect(coordinator.hasWork("s1")).toBe(false);
+  });
   it("serializes runs for the same session", async () => {
     const coordinator = new SessionRunCoordinator();
     const firstRelease = deferred();

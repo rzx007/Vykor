@@ -8,6 +8,18 @@ import { SessionStore } from "../session-runtime/store.js";
 import { SessionRepository } from "./session-repository.js";
 
 describe("SessionRepository read operations", () => {
+  it("rejects a top-level cwd outside the explicit project while permitting child worktrees", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-session-project-boundary-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    try {
+      const root = join(directory, "root");
+      const outside = join(directory, "root-sibling");
+      const project = store.projects.inspect(root);
+      expect(() => store.sessions.create({ id: "outside", cwd: outside, projectId: project.id, model: "m" })).toThrow(/outside|within/i);
+      store.sessions.create({ id: "parent", cwd: root, projectId: project.id, model: "m" });
+      expect(store.sessions.create({ id: "child", parentId: "parent", cwd: outside, model: "m" }).cwd).toBe(outside);
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it("gets a session by id and returns deep clones", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });

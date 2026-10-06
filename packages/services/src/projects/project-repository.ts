@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import type { ProjectRecord } from "@vykor/protocol";
+import type { AppendEventInput, ProjectRecord } from "@vykor/protocol";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";
@@ -13,7 +13,7 @@ import {
 } from "./project-records.js";
 
 export class ProjectRepository {
-  constructor(private readonly storage: StorageContext) {}
+  constructor(private readonly storage: StorageContext, private readonly appendEvent?: (input: AppendEventInput) => void) {}
 
   list(options: { includeArchived?: boolean } = {}): ProjectRecord[] {
     return this.storage.database.orm
@@ -164,7 +164,8 @@ export class ProjectRepository {
   }
 
   rebind(projectId: string, inputPath: string): ProjectRecord {
-    if (!this.get(projectId)) throw new Error(`Project not found: ${projectId}`);
+    const previous = this.get(projectId);
+    if (!previous) throw new Error(`Project not found: ${projectId}`);
     const path = resolve(inputPath);
     const normalizedPath = normalizeProjectPath(path);
     const conflict = this.storage.database.orm
@@ -200,12 +201,19 @@ export class ProjectRepository {
         .run();
       for (const session of Object.values(this.storage.state.sessions)) {
         if (session.projectId !== projectId) continue;
-        session.cwd = resolve(path, session.cwdRelative ?? "");
+        const cwdRelative = relative(previous.path, session.cwd);
+        if (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative)) continue;
+        const cwd = resolve(path, cwdRelative);
+        if (session.cwd === cwd) continue;
+        session.cwd = cwd;
+        session.cwdRelative = cwdRelative;
+        session.updatedAt = timestamp;
         this.storage.database.orm
           .update(sessions)
-          .set({ cwd: session.cwd })
+          .set({ cwd: session.cwd, cwdRelative, updatedAt: timestamp })
           .where(eq(sessions.id, session.id))
           .run();
+        this.appendEvent?.({ type: "session.updated", sessionId: session.id, payload: { session: structuredClone(session) } });
       }
       return this.get(projectId)!;
     });

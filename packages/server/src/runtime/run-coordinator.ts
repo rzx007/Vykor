@@ -79,6 +79,7 @@ interface RunTask {
 interface SessionLane {
   active?: RunTask;
   queue: RunTask[];
+  promotions: Map<string, { task: RunTask; activeRunId: string }>;
 }
 
 export class SessionRunCoordinator {
@@ -173,13 +174,16 @@ export class SessionRunCoordinator {
       return { promoted: false, reason: "queued_run_changed" };
     }
     const queuedTask = lane.queue.splice(queuedIndex, 1)[0]!;
+    lane.promotions.set(queuedRunId, { task: queuedTask, activeRunId: expectedActiveRunId });
     const steered = this.steer(sessionId, input, { recoverRejected: false });
     if (!steered.merged || steered.activeRunId !== expectedActiveRunId) {
+      lane.promotions.delete(queuedRunId);
       this.restoreQueuedTask(lane, queuedTask, queuedIndex);
       return { promoted: false, reason: "active_run_changed" };
     }
     const delivery = steered.delivery
       .then((receipt) => {
+        if (queuedTask.controller.signal.aborted) throw new RunInterruptedError();
         if (receipt.runId !== expectedActiveRunId) {
           throw new Error(
             `Steer was delivered to an unexpected run: ${receipt.runId}`,
@@ -192,8 +196,12 @@ export class SessionRunCoordinator {
         return receipt;
       })
       .catch((error) => {
+        if (queuedTask.controller.signal.aborted) throw new RunInterruptedError();
         this.restoreQueuedTask(lane, queuedTask, queuedIndex);
         throw error;
+      }).finally(() => {
+        lane.promotions.delete(queuedRunId);
+        if (!lane.active && lane.queue.length === 0 && lane.promotions.size === 0 && this.lanes.get(sessionId) === lane) this.lanes.delete(sessionId);
       });
     void delivery.catch(() => {});
     return {
@@ -208,7 +216,9 @@ export class SessionRunCoordinator {
     const lane = this.lanes.get(sessionId);
     if (!lane) return { queuedRunIds: [], interrupted: false };
 
-    const queuedRunIds = lane.queue.map((task) => task.runId);
+    const queuedRunIds = [...lane.queue.map((task) => task.runId), ...lane.promotions.keys()];
+    for (const promotion of lane.promotions.values()) this.rejectQueuedTask(promotion.task, reason ?? "Queued run interrupted");
+    lane.promotions.clear();
     for (const task of lane.queue.splice(0)) {
       const message = reason ?? "Queued run interrupted";
       const error = new RunInterruptedError(message);
@@ -243,6 +253,13 @@ export class SessionRunCoordinator {
     if (!lane) return { queuedRunIds: [], interrupted: false };
 
     if (lane.active?.runId === runId) {
+      const queuedRunIds: string[] = [];
+      for (const promotion of lane.promotions.values()) {
+        if (promotion.activeRunId !== runId) continue;
+        queuedRunIds.push(promotion.task.runId);
+        this.rejectQueuedTask(promotion.task, reason ?? "Queued run interrupted");
+        lane.promotions.delete(promotion.task.runId);
+      }
       const message = reason ?? "Run interrupted";
       this.rejectSteers(
         lane.active,
@@ -250,9 +267,15 @@ export class SessionRunCoordinator {
       );
       lane.active.controller.abort(message);
       void lane.active.handle?.interrupt(message);
-      return { activeRunId: runId, queuedRunIds: [], interrupted: true };
+      return { activeRunId: runId, queuedRunIds, interrupted: true };
     }
 
+    const promotion = lane.promotions.get(runId);
+    if (promotion) {
+      lane.promotions.delete(runId);
+      this.rejectQueuedTask(promotion.task, reason ?? "Queued run interrupted");
+      return { ...(lane.active ? { activeRunId: lane.active.runId } : {}), queuedRunIds: [runId], interrupted: true };
+    }
     const queuedIndex = lane.queue.findIndex((task) => task.runId === runId);
     if (queuedIndex >= 0) {
       const [task] = lane.queue.splice(queuedIndex, 1);
@@ -284,6 +307,12 @@ export class SessionRunCoordinator {
   ): InterruptSessionResult {
     const lane = this.lanes.get(sessionId);
     if (!lane) return { queuedRunIds: [], interrupted: false };
+    const promotion = lane.promotions.get(runId);
+    if (promotion) {
+      lane.promotions.delete(runId);
+      this.rejectQueuedTask(promotion.task, reason ?? "Queued run interrupted");
+      return { ...(lane.active ? { activeRunId: lane.active.runId } : {}), queuedRunIds: [runId], interrupted: true };
+    }
     const queuedIndex = lane.queue.findIndex((task) => task.runId === runId);
     if (queuedIndex < 0) {
       return {
@@ -306,14 +335,13 @@ export class SessionRunCoordinator {
   }
 
   queuedRunIds(sessionId: string): string[] {
-    return [...(this.lanes.get(sessionId)?.queue ?? [])].map(
-      (task) => task.runId,
-    );
+    const lane = this.lanes.get(sessionId);
+    return lane ? [...lane.queue.map(task => task.runId), ...lane.promotions.keys()] : [];
   }
 
   hasWork(sessionId: string): boolean {
     const lane = this.lanes.get(sessionId);
-    return !!lane?.active || (lane?.queue.length ?? 0) > 0;
+    return !!lane?.active || (lane?.queue.length ?? 0) > 0 || (lane?.promotions.size ?? 0) > 0;
   }
 
   sessionIds(): string[] {
@@ -323,7 +351,7 @@ export class SessionRunCoordinator {
   private getLane(sessionId: string): SessionLane {
     let lane = this.lanes.get(sessionId);
     if (!lane) {
-      lane = { queue: [] };
+      lane = { queue: [], promotions: new Map() };
       this.lanes.set(sessionId, lane);
     }
     return lane;
@@ -341,6 +369,7 @@ export class SessionRunCoordinator {
     task: RunTask,
     preferredIndex: number,
   ): void {
+    if (task.controller.signal.aborted) return;
     this.lanes.set(task.sessionId, lane);
     if (lane.active) {
       lane.queue.splice(Math.min(preferredIndex, lane.queue.length), 0, task);
@@ -406,7 +435,7 @@ export class SessionRunCoordinator {
         if (lane.active === task) lane.active = undefined;
         const next = lane.queue.shift();
         if (next) this.startTask(lane, next);
-        else if (!lane.active) this.lanes.delete(task.sessionId);
+        else if (!lane.active && lane.promotions.size === 0) this.lanes.delete(task.sessionId);
       }
     })();
   }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import type {
   AppendEventInput,
@@ -69,12 +69,16 @@ export class SessionRepository {
       : this.projects?.inspect(input.cwd);
     if (!project) throw new Error(`Project not found: ${projectId}`);
     const cwd = resolve(input.cwd);
+    const cwdRelative = relative(project.path, cwd);
+    if (!input.parentId && (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative))) {
+      throw new Error("Session cwd must be within the project directory");
+    }
     const session: SessionRecord = {
       id,
       ...(input.parentId ? { parentId: input.parentId } : {}),
       projectId: project.id,
       cwd,
-      cwdRelative: relative(project.path, cwd),
+      cwdRelative,
       title: input.title ?? "",
       model: input.model,
       ...(input.agent ? { agent: input.agent } : {}),

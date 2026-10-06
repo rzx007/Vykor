@@ -368,6 +368,17 @@ describe("createDaemonAgentLoader", () => {
     expect(createAgent.mock.calls[0]![0].options.pluginsEnabled).toBe(false);
   });
 
+  it("loads a persisted child with stale coordinator mode as a direct Agent", async () => {
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn(async () => {}) }) as any);
+    const loader = createDaemonAgentLoader({ settings: { model: "default-model" } as any, createAgent })!;
+    await loader({ session: { ...session, parentId: "parent", metadata: { runtime: { ...session.metadata.runtime, sessionMode: "coordinator", permissionMode: "plan", allowedTools: ["Shell"] } } }, history: [], parts: [] });
+    const options = createAgent.mock.calls[0]![0].options;
+    expect(options.roleAllowedTools).toBeUndefined();
+    expect(options.systemPrompt ?? "").not.toContain("You are a **coordinator**");
+    expect(options.permissionMode).toBe("plan");
+    expect(options.hostToolCeiling).toEqual(["Shell"]);
+  });
+
   it("turns durable coordinator sessions into coordinator Agents", async () => {
     const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
     const createAgent = vi.fn(async () => agent);

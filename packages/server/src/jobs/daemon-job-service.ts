@@ -15,7 +15,9 @@ import {
   type JobWaitResult,
 } from "@vykor/jobs";
 import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
-import type { SessionExecutionRecord, SessionRecord } from "@vykor/protocol";
+import type { SessionExecutionRecord, SessionRecord, SessionTaskStatus } from "@vykor/protocol";
+import type { SessionExecutionProjector, DetachedProcessRuntime } from "../application/session/session-execution-projector.js";
+import type { DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
 import type { ChildActivitySnapshot } from "@vykor/core";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 
@@ -52,10 +54,15 @@ export interface JobTaskOperations {
   listSessionTasks(sessionId: string): SessionExecutionRecord[];
   getSessionTask(taskId: string): SessionExecutionRecord | undefined;
   updateSessionTask(taskId: string, input: {
-    status: "stopped";
+    status: SessionTaskStatus;
     output?: string;
+    error?: string;
     metadata?: Record<string, unknown>;
   }): SessionExecutionRecord;
+  transitionPendingSessionTask(taskId: string, input: {
+    status: SessionTaskStatus;
+    metadata?: Record<string, unknown>;
+  }): { task: SessionExecutionRecord; transitioned: boolean };
   waitForSessionTaskChange?(taskId: string, after: number, options: {
     timeoutMs: number;
     signal?: AbortSignal;
@@ -65,9 +72,10 @@ export interface JobTaskOperations {
 export interface JobSessionStore extends JobSessionQueries, JobTaskOperations {}
 
 interface JobExecutionRuntime {
-  readOutput(executionId: string): string;
+  readOutput(executionId: string, maxBytes?: number): string;
   writeInput(executionId: string, data: string): Promise<void>;
   stopExecution(executionId: string): Promise<unknown>;
+  registerExecutionListener?: DetachedProcessRuntime["registerExecutionListener"];
 }
 
 type ResolvedJobSource =
@@ -101,6 +109,8 @@ export class DaemonJobService {
       scope: { cwd: string; sessionId: string },
     ) => JobExecutionRuntime,
     private readonly workflows: WorkflowRunRepository,
+    private readonly executionProjector?: Pick<SessionExecutionProjector, "trackProcessExecution">,
+    private readonly operationGate?: Pick<DaemonOperationGate, "enter">,
   ) {}
 
   createTerminalAgentHost(session: SessionRecord): AgentJobHost {
@@ -282,6 +292,13 @@ export class DaemonJobService {
   }
 
   async send(input: { sessionId: string; jobId: string; data: string }): Promise<void> {
+    const session = this.requireSession(input.sessionId);
+    const lease = this.operationGate?.enter({ sessionId: session.id, cwd: session.cwd });
+    try { await this.sendAdmitted(input); }
+    finally { lease?.release(); }
+  }
+
+  private async sendAdmitted(input: { sessionId: string; jobId: string; data: string }): Promise<void> {
     const source = await this.resolve(input.sessionId, input.jobId);
     if (source.kind === "terminal") {
       await this.terminals.write({ terminalId: source.value.id, data: input.data });
@@ -292,7 +309,18 @@ export class DaemonJobService {
         throw new Error(`Job ${input.jobId} does not accept input.`);
       }
       const runtime = this.runtimeFor(source.value);
-      await runtime.writeInput(runtimeExecutionId(source.value), input.data);
+      const reopen = source.value.type === "agent" && (source.value.status === "completed" || source.value.status === "failed");
+      if (reopen) {
+        this.store.updateSessionTask(source.value.id, { status: "running", error: "" });
+        if (executionBackend(source.value) === "detached_process" && runtime.registerExecutionListener) {
+          this.executionProjector?.trackProcessExecution(runtime as DetachedProcessRuntime, runtimeExecutionId(source.value), source.value.id);
+        }
+      }
+      try { await runtime.writeInput(runtimeExecutionId(source.value), input.data); }
+      catch (error) {
+        if (reopen) this.store.updateSessionTask(source.value.id, { status: source.value.status, ...(source.value.output !== undefined ? { output: source.value.output } : {}), error: source.value.error ?? "" });
+        throw error;
+      }
       return;
     }
     throw new Error(`Workflow ${input.jobId} does not accept input.`);
@@ -306,11 +334,11 @@ export class DaemonJobService {
     }
     if (source.kind === "task") {
       if (source.value.status === "pending") {
-        const stopped = this.store.updateSessionTask(source.value.id, {
+        const stopped = this.store.transitionPendingSessionTask(source.value.id, {
           status: "stopped",
           metadata: { admissionPhase: "cancelled_before_start" },
         });
-        return taskSnapshot(stopped);
+        if (stopped.transitioned || stopped.task.status !== "running") return taskSnapshot(stopped.task);
       }
       const runtime = this.runtimeFor(source.value);
       await runtime.stopExecution(runtimeExecutionId(source.value));
@@ -382,7 +410,7 @@ export class DaemonJobService {
 
   private readTaskOutput(task: SessionExecutionRecord): string {
     try {
-      return this.runtimeFor(task).readOutput(runtimeExecutionId(task));
+      return this.runtimeFor(task).readOutput(runtimeExecutionId(task), Number.MAX_SAFE_INTEGER);
     } catch {
       return task.output ?? "";
     }

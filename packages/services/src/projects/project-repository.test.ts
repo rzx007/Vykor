@@ -50,6 +50,27 @@ describe("ProjectRepository queries", () => {
 });
 
 describe("ProjectRepository mutations", () => {
+  it("rebinds only in-tree cwd and publishes durable session updates", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-rebind-boundary-"));
+    const db = join(directory, "store.db");
+    const store = new SessionStore({ path: db });
+    try {
+      const root = join(directory, "old");
+      const next = join(directory, "moved", "next");
+      const outside = join(directory, "worktree");
+      const project = store.projects.inspect(root);
+      store.sessions.create({ id: "parent", cwd: root, projectId: project.id, model: "m" });
+      store.sessions.create({ id: "inside", parentId: "parent", cwd: join(root, "sub"), model: "m" });
+      store.sessions.create({ id: "outside", parentId: "parent", cwd: outside, model: "m" });
+      const before = store.conversations.latestEventSeq();
+      store.projects.rebind(project.id, next);
+      expect(store.sessions.get("outside")?.cwd).toBe(outside);
+      expect(store.sessions.get("inside")?.cwd).toBe(join(next, "sub"));
+      expect(store.conversations.listEvents({ afterSeq: before }).filter(event => event.type === "session.updated").map(event => event.sessionId).sort()).toEqual(["inside", "parent"]);
+      const reopened = new SessionStore({ path: db });
+      try { expect(reopened.sessions.get("outside")?.cwd).toBe(outside); expect(reopened.sessions.get("inside")?.cwd).toBe(join(next, "sub")); } finally { reopened.close(); }
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
   const writes: Array<[string, (store: SessionStore, id: string, path: string) => unknown]> = [
     ["inspect new", (store, _id, path) => store.projects.inspect(`${path}-new`)],
     ["inspect existing", (store, _id, path) => store.projects.inspect(path)],

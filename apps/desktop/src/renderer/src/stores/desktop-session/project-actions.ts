@@ -420,6 +420,7 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
             selectedProject:
               state.selectedProject?.id === projectId ? project : state.selectedProject,
           }))
+          await get().refreshBootstrap()
         }
       )
     },

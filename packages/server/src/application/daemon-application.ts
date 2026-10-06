@@ -93,6 +93,7 @@ import { resolveSessionPluginUiCurrent } from "./session/session-plugin-ui-curre
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
 import { SessionExecutionProjector } from "./session/session-execution-projector.js";
 import { BackgroundShellService } from "./session/background-shell-service.js";
+import { ApplicationError } from "../shared/application-error.js";
 import { SessionTranscriptProjection } from "./session/transcript-projection.js";
 import { recoverInterruptedWorkflows } from "./session/workflow-recovery.js";
 import { StartupRecoveryService } from "./recovery/startup-recovery-service.js";
@@ -335,7 +336,13 @@ export class DaemonApplication implements DurableAgentApplication {
           acquireEnvironment: acquireSessionEnvironment,
         },
       );
-      this.projects = new ProjectApplicationService(store.projects);
+      this.projects = new ProjectApplicationService(store.projects, {
+        listSessions: () => store.sessions.list({ includeArchived: true }),
+        hasWork: (id) => this.runControl.hasWork(id) || this.liveChildren.has(id) || store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"),
+        closeAgent: (id) => this.agentPool.close(id),
+        enterRebind: (isIdle) => this.operationGate.tryEnterBarrier({ kind: "global" }, isIdle),
+        events: this.eventPublisher,
+      });
       this.permissions = new StorePermissionBroker({
         permissions: store.permissions,
         getSession: (sessionId) => store.sessions.get(sessionId),
@@ -423,7 +430,17 @@ export class DaemonApplication implements DurableAgentApplication {
             listRunAttempts: (id) => store.runs.listRunAttempts(id),
           }, input),
       };
+      const jobOperationGate = {
+        enter: (scope: { sessionId: string; cwd: string }) => {
+          try { return this.operationGate.enter(scope); }
+          catch (error) {
+            if (error instanceof DaemonOperationUnavailableError) throw new ApplicationError(409, error.message);
+            throw error;
+          }
+        },
+      };
       this.backgroundShells = new BackgroundShellService({
+        operationGate: jobOperationGate,
         store: taskStore,
         executionProjector: this.executionProjector,
         getDetachedProcessSupervisor: (scope) => getDetachedProcessSupervisor(scope),
@@ -441,6 +458,8 @@ export class DaemonApplication implements DurableAgentApplication {
         (scope) => getDetachedProcessSupervisor(scope),
         (scope) => getChildAgentExecutionRegistry(scope),
         this.workflows,
+        this.executionProjector,
+        jobOperationGate,
       );
 
       const attachmentAuthorizationSessions = createAttachmentAuthorizationSessionResolver({
