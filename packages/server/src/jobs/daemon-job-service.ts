@@ -99,8 +99,11 @@ const TERMINAL_AGENT_VIEW: AgentJobView = {
 };
 
 export class DaemonJobService {
+  private readonly sessions: JobSessionQueries;
+  private readonly tasks: JobTaskOperations;
+
   constructor(
-    private readonly store: JobSessionStore,
+    store: JobSessionStore,
     private readonly terminals: DaemonTerminalService,
     private readonly getDetachedProcessSupervisor: (
       scope: { cwd: string; sessionId: string },
@@ -111,7 +114,10 @@ export class DaemonJobService {
     private readonly workflows: WorkflowRunRepository,
     private readonly executionProjector?: Pick<SessionExecutionProjector, "trackProcessExecution">,
     private readonly operationGate?: Pick<DaemonOperationGate, "enter">,
-  ) {}
+  ) {
+    this.sessions = store;
+    this.tasks = store;
+  }
 
   createTerminalAgentHost(session: SessionRecord): AgentJobHost {
     return this.createScopedAgentHost(session, TERMINAL_AGENT_VIEW);
@@ -120,7 +126,7 @@ export class DaemonJobService {
   createDetachedProcessAgentHost(session: SessionRecord): AgentJobHost {
     return this.createScopedAgentHost(session, {
       includesSnapshot: (snapshot) => {
-        const task = this.store.getSessionTask(snapshot.id);
+        const task = this.tasks.getSessionTask(snapshot.id);
         return task?.sessionId === snapshot.ownerSession &&
           isDetachedProcessAgentTask(task);
       },
@@ -175,7 +181,7 @@ export class DaemonJobService {
   async list(input: JobListRequest): Promise<JobSnapshot[]> {
     const session = this.requireSession(input.sessionId);
     const terminals = await this.terminals.list({ sessionId: session.id, source: "agent" });
-    const tasks = this.store.listSessionTasks(session.id);
+    const tasks = this.tasks.listSessionTasks(session.id);
     const workflows = this.workflows
       .list()
       .filter((workflow) => workflow.ownerSession === session.id);
@@ -275,9 +281,9 @@ export class DaemonJobService {
       const current = await this.read(input);
       return { ...current, timedOut: !isFinished(current.snapshot.status) };
     }
-    if (source.kind === "task" && this.store.waitForSessionTaskChange) {
+    if (source.kind === "task" && this.tasks.waitForSessionTaskChange) {
       const previous = source.value.updatedAt;
-      const changed = await this.store.waitForSessionTaskChange(source.value.id, previous, {
+      const changed = await this.tasks.waitForSessionTaskChange(source.value.id, previous, {
         timeoutMs: input.timeoutMs,
         signal: input.signal,
       });
@@ -310,15 +316,20 @@ export class DaemonJobService {
       }
       const runtime = this.runtimeFor(source.value);
       const reopen = source.value.type === "agent" && (source.value.status === "completed" || source.value.status === "failed");
+      let reopened: SessionExecutionRecord | undefined;
       if (reopen) {
-        this.store.updateSessionTask(source.value.id, { status: "running", error: "" });
+        reopened = this.tasks.updateSessionTask(source.value.id, { status: "running", error: "" });
         if (executionBackend(source.value) === "detached_process" && runtime.registerExecutionListener) {
           this.executionProjector?.trackProcessExecution(runtime as DetachedProcessRuntime, runtimeExecutionId(source.value), source.value.id);
         }
       }
       try { await runtime.writeInput(runtimeExecutionId(source.value), input.data); }
       catch (error) {
-        if (reopen) this.store.updateSessionTask(source.value.id, { status: source.value.status, ...(source.value.output !== undefined ? { output: source.value.output } : {}), error: source.value.error ?? "" });
+        // updatedAt is strictly increasing: only this unchanged reopen may be restored.
+        const current = reopened && this.tasks.getSessionTask(source.value.id);
+        if (current?.status === "running" && current.updatedAt === reopened!.updatedAt) {
+          this.tasks.updateSessionTask(source.value.id, { status: source.value.status, ...(source.value.output !== undefined ? { output: source.value.output } : {}), error: source.value.error ?? "" });
+        }
         throw error;
       }
       return;
@@ -334,7 +345,7 @@ export class DaemonJobService {
     }
     if (source.kind === "task") {
       if (source.value.status === "pending") {
-        const stopped = this.store.transitionPendingSessionTask(source.value.id, {
+        const stopped = this.tasks.transitionPendingSessionTask(source.value.id, {
           status: "stopped",
           metadata: { admissionPhase: "cancelled_before_start" },
         });
@@ -344,7 +355,7 @@ export class DaemonJobService {
       await runtime.stopExecution(runtimeExecutionId(source.value));
       let output: string | undefined;
       try { output = runtime.readOutput(runtimeExecutionId(source.value)); } catch { /* durable output is optional */ }
-      const stopped = this.store.updateSessionTask(source.value.id, {
+      const stopped = this.tasks.updateSessionTask(source.value.id, {
         status: "stopped",
         ...(output !== undefined ? { output } : {}),
       });
@@ -364,7 +375,7 @@ export class DaemonJobService {
    * Route stop through the same backend used for JobCancel on a plain task.
    */
   private async stopWorkflowWorker(session: SessionRecord, taskId: string): Promise<unknown> {
-    const task = this.store.getSessionTask(taskId);
+    const task = this.tasks.getSessionTask(taskId);
     if (task?.sessionId === session.id) {
       return this.runtimeFor(task).stopExecution(runtimeExecutionId(task));
     }
@@ -384,18 +395,18 @@ export class DaemonJobService {
   }
 
   private isSessionInTree(rootSessionId: string, candidateSessionId: string): boolean {
-    let current = this.store.getSession(candidateSessionId);
+    let current = this.sessions.getSession(candidateSessionId);
     const visited = new Set<string>();
     while (current && !visited.has(current.id)) {
       if (current.id === rootSessionId) return true;
       visited.add(current.id);
-      current = current.parentId ? this.store.getSession(current.parentId) : undefined;
+      current = current.parentId ? this.sessions.getSession(current.parentId) : undefined;
     }
     return false;
   }
 
   private requireSession(sessionId: string): SessionRecord {
-    const session = this.store.getSession(sessionId);
+    const session = this.sessions.getSession(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
     return session;
   }
@@ -418,7 +429,7 @@ export class DaemonJobService {
 
   private readTaskActivity(task: SessionExecutionRecord): ChildActivitySnapshot | undefined {
     if (!task.childSessionId || executionBackend(task) !== "child_agent") return undefined;
-    const query = this.store.readChildActivity;
+    const query = this.sessions.readChildActivity;
     if (!query) return undefined;
     return query({
       parentSessionId: task.sessionId,
@@ -435,7 +446,7 @@ export class DaemonJobService {
     const terminal = (await this.terminals.list({ sessionId, source: "agent" }))
       .find((candidate) => candidate.id === jobId);
     if (terminal) return { kind: "terminal", value: terminal };
-    const task = this.store.getSessionTask(jobId);
+    const task = this.tasks.getSessionTask(jobId);
     if (task?.sessionId === sessionId) return { kind: "task", value: task };
     const session = this.requireSession(sessionId);
     if (!jobId.startsWith("workflow:")) throw new Error(`Job not found: ${jobId}`);

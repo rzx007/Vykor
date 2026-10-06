@@ -249,6 +249,15 @@ export class LocalTerminalProvider implements TerminalProvider {
     return [...this.sessions.values()].map((session) => ({ ...session.info }));
   }
 
+  /** Match all supplied owner filters against the provider's current terminal state. */
+  hasActive(scope: { projectId?: string; sessionId?: string }): boolean {
+    return [...this.sessions.values()].some(({ info }) =>
+      !isTerminalStatus(info.status) &&
+      (!scope.projectId || info.projectId === scope.projectId) &&
+      (!scope.sessionId || info.sessionId === scope.sessionId),
+    );
+  }
+
   subscribe(listener: TerminalEventListener): () => void {
     return this.events.subscribe(listener);
   }

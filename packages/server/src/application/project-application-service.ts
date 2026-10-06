@@ -7,6 +7,7 @@ import { ApplicationError } from "../shared/application-error.js";
 interface ProjectRebindRuntime {
   listSessions(): SessionRecord[];
   hasWork(sessionId: string): boolean;
+  hasActiveTerminals(projectId: string): boolean;
   closeAgent(sessionId: string): Promise<void>;
   enterRebind(isIdle: () => boolean): { release(): void } | undefined;
   events: { checkpoint(): number; publishSince(seq: number): void };
@@ -52,7 +53,7 @@ export class ProjectApplicationService {
     const previous = this.projects.list({ includeArchived: true }).find(project => project.id === projectId);
     if (!previous) throw new ApplicationError(404, `Project not found: ${projectId}`);
     const sessions = this.runtime.listSessions().filter(session => session.projectId === projectId);
-    const lease = this.runtime.enterRebind(() => sessions.every(session => session.status !== "running" && !this.runtime!.hasWork(session.id)));
+    const lease = this.runtime.enterRebind(() => !this.runtime!.hasActiveTerminals(projectId) && sessions.every(session => session.status !== "running" && !this.runtime!.hasWork(session.id)));
     if (!lease) throw new ApplicationError(409, "Project has active work; wait before rebinding");
     try {
       for (const session of sessions) {

@@ -25,6 +25,7 @@ import {
 } from "@vykor/terminal-node";
 import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
 import { ApplicationError } from "../shared/application-error.js";
+import { DaemonOperationUnavailableError, type DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
 
 export interface ListDaemonTerminalsOptions {
   projectId?: string;
@@ -38,6 +39,7 @@ export interface DaemonTerminalSessionScopeQueries {
 }
 
 export interface DaemonTerminalServiceOptions {
+  operationGate?: Pick<DaemonOperationGate, "enter">;
   getSettingsForCwd?(cwd: string): Promise<Settings>;
   acquireEnvironment?(
     session: SessionRecord,
@@ -78,11 +80,23 @@ export class DaemonTerminalService {
 
   async create(input: TerminalCreateRequest): Promise<TerminalSessionInfo> {
     const resolved = this.resolveRequest(input);
-    return await this.provider.create({
-      ...input,
-      scope: resolved.scope,
-      source: input.source ?? "user",
-    });
+    let lease;
+    try {
+      lease = this.options.operationGate?.enter({
+        sessionId: resolved.session?.id ?? `project:${resolved.projectId}`,
+        cwd: resolved.cwd,
+      });
+    } catch (error) {
+      if (error instanceof DaemonOperationUnavailableError) throw new DaemonTerminalError(409, error.message);
+      throw error;
+    }
+    try {
+      return await this.provider.create({ ...input, scope: resolved.scope, source: input.source ?? "user" });
+    } finally { lease?.release(); }
+  }
+
+  hasActive(scope: { projectId?: string; sessionId?: string }): boolean {
+    return this.provider.hasActive(scope);
   }
 
   async list(options: ListDaemonTerminalsOptions = {}): Promise<TerminalSessionInfo[]> {

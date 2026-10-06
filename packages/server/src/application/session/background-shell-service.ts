@@ -115,24 +115,30 @@ export interface BackgroundShellServiceContext {
 
 /** Shared background-shell creation and control for HTTP and model-tool callers. */
 export class BackgroundShellService {
+  private readonly sessions: BackgroundShellSessionQueries;
+  private readonly tasks: BackgroundShellTaskOperations;
+
   private readonly starting = new Map<string, Promise<DetachedProcessExecution>>();
   private readonly environmentLeases = new Map<string, {
     lease: ExecutionEnvironmentHandle;
     unsubscribe: () => void;
   }>();
 
-  constructor(private readonly context: BackgroundShellServiceContext) {}
+  constructor(private readonly context: BackgroundShellServiceContext) {
+    this.sessions = context.store;
+    this.tasks = context.store;
+  }
 
   /** Reattach live process projections and terminalize rows whose runtime owner is gone. */
   async reconcileActiveTasks(reason = "Daemon restarted and the task runtime is unavailable"): Promise<number> {
     let reconciled = 0;
     const before = this.context.events.checkpoint();
-    for (const session of this.context.store.listSessions({ includeArchived: true })) {
+    for (const session of this.sessions.listSessions({ includeArchived: true })) {
       const manager = this.context.getDetachedProcessSupervisor({
         cwd: session.cwd,
         sessionId: session.id,
       });
-      for (const task of this.context.store.listSessionTasks(session.id)) {
+      for (const task of this.tasks.listSessionTasks(session.id)) {
         const isDetached = task.type === "shell" || task.metadata.executionBackend === "detached_process";
         const runtime = isDetached ? manager.getExecution(runtimeExecutionId(task)) : undefined;
         const active = task.status === "pending" || task.status === "running";
@@ -140,11 +146,11 @@ export class BackgroundShellService {
           if (runtime && (runtime.status === "pending" || runtime.status === "running")) {
             try {
               await manager.stopExecution(runtime.id);
-              this.context.store.updateSessionTask(task.id, {
+              this.tasks.updateSessionTask(task.id, {
                 metadata: { admissionPhase: "orphan_runtime_stopped" },
               });
             } catch (error) {
-              this.context.store.updateSessionTask(task.id, {
+              this.tasks.updateSessionTask(task.id, {
                 metadata: {
                   admissionPhase: "orphan_runtime_stop_failed",
                   reconciliationError: errorMessage(error),
@@ -158,11 +164,11 @@ export class BackgroundShellService {
         if (runtime) {
           this.context.executionProjector.trackProcessExecution(manager, runtime.id);
           this.context.executionProjector.syncPersistentExecution(runtime, manager, task.id);
-          this.context.store.updateSessionTask(task.id, {
+          this.tasks.updateSessionTask(task.id, {
             metadata: { admissionPhase: "recovered_live" },
           });
         } else {
-          this.context.store.updateSessionTask(task.id, {
+          this.tasks.updateSessionTask(task.id, {
             status: "interrupted",
             error: reason,
             metadata: { admissionPhase: "runtime_missing" },
@@ -179,7 +185,7 @@ export class BackgroundShellService {
     const scope = this.resolveScope(input);
     const manager = this.context.getDetachedProcessSupervisor(scope);
     if (scope.sessionId) {
-      const tasks = this.context.store.listSessionTasks(scope.sessionId);
+      const tasks = this.tasks.listSessionTasks(scope.sessionId);
       return { executions: input.status ? tasks.filter((task) => task.status === input.status) : tasks };
     }
     return { executions: manager.listExecutions(input.status) };
@@ -235,7 +241,7 @@ export class BackgroundShellService {
       executionCwd: input.executionCwd,
     });
     let eventCursor = this.context.events.checkpoint();
-    const reservation = this.context.store.reserveSessionTask({
+    const reservation = this.tasks.reserveSessionTask({
       id: `task_${randomUUID()}`,
       sessionId: scope.sessionId,
       requestNamespace,
@@ -281,7 +287,7 @@ export class BackgroundShellService {
     description: string,
     eventCursor: number,
   ): Promise<DetachedProcessExecution> {
-    this.context.store.updateSessionTask(taskId, {
+    this.tasks.updateSessionTask(taskId, {
       metadata: { admissionPhase: "dispatching" },
     });
     this.context.events.publishSince(eventCursor);
@@ -291,7 +297,7 @@ export class BackgroundShellService {
     let executionCwd: string | undefined;
     try {
       if (this.context.acquireEnvironment) {
-        const session = this.context.store.getSession(scope.sessionId);
+        const session = this.sessions.getSession(scope.sessionId);
         if (!session) throw new BackgroundShellError(404, "Session not found");
         const settings = input.settings ?? await this.context.getSettingsForCwd?.(scope.cwd);
         if (!settings) throw new BackgroundShellError(400, "Background shell settings are required");
@@ -327,7 +333,7 @@ export class BackgroundShellService {
       });
     } catch (error) {
       await environmentLease?.release();
-      this.context.store.transitionPendingSessionTask(taskId, {
+      this.tasks.transitionPendingSessionTask(taskId, {
         status: "failed",
         error: errorMessage(error),
         metadata: { admissionPhase: "failed" },
@@ -336,7 +342,7 @@ export class BackgroundShellService {
       throw error;
     }
     if (environmentLease) this.trackEnvironmentLease(manager, task, environmentLease);
-    const confirmation = this.context.store.transitionPendingSessionTask(task.id, {
+    const confirmation = this.tasks.transitionPendingSessionTask(task.id, {
       status: processTaskStatus(task.status),
       metadata: {
         admissionPhase: "confirmed",
@@ -345,7 +351,7 @@ export class BackgroundShellService {
     });
     if (!confirmation.transitioned && confirmation.task.status === "stopped" && task.status !== "stopped") {
       task = await manager.stopExecution(task.id);
-      this.context.store.updateSessionTask(task.id, {
+      this.tasks.updateSessionTask(task.id, {
         metadata: { admissionPhase: "cancelled_before_start" },
       });
     }
@@ -359,7 +365,7 @@ export class BackgroundShellService {
     const scope = this.resolveScope(input);
     const manager = this.context.getDetachedProcessSupervisor(scope);
     if (scope.sessionId) {
-      const task = this.context.store.getSessionTask(taskId);
+      const task = this.tasks.getSessionTask(taskId);
       if (!task || task.sessionId !== scope.sessionId) {
         throw new BackgroundShellError(404, `Task not found: ${taskId}`);
       }
@@ -387,7 +393,7 @@ export class BackgroundShellService {
   async stop(taskId: string, input: { cwd?: string; sessionId?: string }): Promise<{ execution: unknown }> {
     const scope = this.resolveScope(input);
     const manager = this.context.getDetachedProcessSupervisor(scope);
-    const persisted = scope.sessionId ? this.context.store.getSessionTask(taskId) : undefined;
+    const persisted = scope.sessionId ? this.tasks.getSessionTask(taskId) : undefined;
     const managerTaskId = persisted ? runtimeExecutionId(persisted) : taskId;
     const task = await manager.stopExecution(managerTaskId);
     if (task.status !== "pending" && task.status !== "running") {
@@ -428,7 +434,7 @@ export class BackgroundShellService {
   ): TaskScope {
     let cwd = input.cwd;
     if (input.sessionId) {
-      const session = this.context.store.getSession(input.sessionId);
+      const session = this.sessions.getSession(input.sessionId);
       if (!session) throw new BackgroundShellError(404, "Session not found");
       if (options.requireActiveSession && (session.status === "closing" || session.status === "archived")) {
         throw new BackgroundShellError(409, `Session is not accepting new work: ${input.sessionId}`);

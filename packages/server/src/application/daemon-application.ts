@@ -329,6 +329,7 @@ export class DaemonApplication implements DurableAgentApplication {
           getSession: (sessionId) => store.sessions.get(sessionId),
         },
         {
+          operationGate: this.operationGate,
           getSettingsForCwd: async (cwd) =>
             options.getSettingsForCwd
               ? await options.getSettingsForCwd(cwd)
@@ -338,7 +339,8 @@ export class DaemonApplication implements DurableAgentApplication {
       );
       this.projects = new ProjectApplicationService(store.projects, {
         listSessions: () => store.sessions.list({ includeArchived: true }),
-        hasWork: (id) => this.runControl.hasWork(id) || this.liveChildren.has(id) || store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"),
+        hasWork: (id) => this.runControl.hasWork(id) || this.liveChildren.has(id) || store.runs.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"),
+        hasActiveTerminals: (projectId) => this.terminals.hasActive({ projectId }),
         closeAgent: (id) => this.agentPool.close(id),
         enterRebind: (isIdle) => this.operationGate.tryEnterBarrier({ kind: "global" }, isIdle),
         events: this.eventPublisher,
