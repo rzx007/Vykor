@@ -1,4 +1,5 @@
 import { StickyNote } from "lucide-react"
+import { ProjectFolderItem } from "@renderer/components/motion/project-folder"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@renderer/components/ui/card"
@@ -61,43 +62,44 @@ export function NoteList({
         </Empty>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] items-start gap-4">
-          {notes.map((note) => {
+          {notes.map((note, index) => {
             const { title, preview } = describeNote(note.content)
             return (
-              <button
-                key={note.draftId}
-                type="button"
-                aria-label={"打开便签：" + title}
-                aria-current={note.draftId === selectedKey ? "true" : undefined}
-                onClick={() => onSelect(note.draftId)}
-                className="group min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-              >
-                <Card
-                  size="sm"
-                  className={cn(
-                    "transition-colors group-hover:bg-accent",
-                    note.draftId === selectedKey && "ring-2 ring-ring"
-                  )}
+              <ProjectFolderItem key={note.draftId} id={note.draftId} index={index}>
+                <button
+                  type="button"
+                  aria-label={"打开便签：" + title}
+                  aria-current={note.draftId === selectedKey ? "true" : undefined}
+                  onClick={() => onSelect(note.draftId)}
+                  className="group w-full min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                 >
-                  <CardHeader>
-                    <CardTitle className="line-clamp-2 break-words">{title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="min-h-16">
-                    <p className="line-clamp-5 text-sm leading-6 break-words whitespace-pre-wrap text-muted-foreground">
-                      {preview || "只有这一句，也值得记下。"}
-                    </p>
-                  </CardContent>
-                  <CardFooter className="justify-between gap-2">
-                    <time
-                      dateTime={new Date(note.updatedAt).toISOString()}
-                      className="text-xs text-muted-foreground tabular-nums"
-                    >
-                      {noteTimeFormatter.format(note.updatedAt)}
-                    </time>
-                    {note.recovered ? <Badge variant="secondary">待恢复</Badge> : null}
-                  </CardFooter>
-                </Card>
-              </button>
+                  <Card
+                    size="sm"
+                    className={cn(
+                      "transition-colors group-hover:bg-accent",
+                      note.draftId === selectedKey && "ring-2 ring-ring"
+                    )}
+                  >
+                    <CardHeader>
+                      <CardTitle className="line-clamp-2 break-words">{title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="min-h-16">
+                      <p className="line-clamp-5 text-sm leading-6 break-words whitespace-pre-wrap text-muted-foreground">
+                        {preview || "只有这一句，也值得记下。"}
+                      </p>
+                    </CardContent>
+                    <CardFooter className="justify-between gap-2">
+                      <time
+                        dateTime={new Date(note.updatedAt).toISOString()}
+                        className="text-xs text-muted-foreground tabular-nums"
+                      >
+                        {noteTimeFormatter.format(note.updatedAt)}
+                      </time>
+                      {note.recovered ? <Badge variant="secondary">待恢复</Badge> : null}
+                    </CardFooter>
+                  </Card>
+                </button>
+              </ProjectFolderItem>
             )
           })}
         </div>

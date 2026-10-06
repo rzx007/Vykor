@@ -9,9 +9,18 @@ import {
   useReducedMotion,
   type Transition,
 } from "motion/react"
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import { createPortal } from "react-dom"
-import { EASE_OUT, SPRING_PRESS } from "@renderer/lib/ease"
+import { EASE_OUT, SPRING_LAYOUT, SPRING_PRESS } from "@renderer/lib/ease"
 import { useHoverCapable } from "@renderer/lib/hooks/use-hover-capable"
 import { cn } from "@renderer/lib/utils"
 
@@ -36,11 +45,49 @@ export interface ProjectFolderProps {
   disabled?: boolean
   ariaLabel?: string
   className?: string
-  /** 展开的完整内容；五张限制只用于收纳夹封面预览。 */
+  /** 完整内容用 ProjectFolderItem 接续纸片转场；五张限制只用于封面。 */
   expandedContent?: ReactNode
 }
 
 const MAX_PREVIEWS = 5
+const FolderPaperMotion = createContext<{
+  previewIds: ReadonlySet<string>
+  closing: boolean
+  reduced: boolean
+} | null>(null)
+
+/** 让完整列表中的纸片接续夹内预览；桌面列表不受收纳动效影响。 */
+export function ProjectFolderItem({
+  id,
+  index,
+  children,
+}: {
+  id: string
+  index: number
+  children: ReactNode
+}): React.JSX.Element {
+  const folder = useContext(FolderPaperMotion)
+  if (!folder) return <>{children}</>
+  const shared = folder.previewIds.has(id)
+  const leaving = folder.closing && !shared
+  const delay = !shared && !folder.closing && !folder.reduced ? Math.min(index * 0.025, 0.1) : 0
+  return (
+    <motion.div
+      layout={!folder.reduced}
+      layoutId={shared && !folder.reduced ? `file-${id}` : undefined}
+      initial={shared || folder.reduced ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: leaving ? 0 : 1, y: leaving && !folder.reduced ? 8 : 0 }}
+      transition={{
+        layout: folder.reduced ? { duration: 0 } : SPRING_LAYOUT,
+        opacity: { duration: folder.reduced ? 0 : 0.16, delay },
+        y: { duration: folder.reduced ? 0 : 0.18, ease: EASE_OUT, delay },
+      }}
+      className="min-w-0 rounded-xl"
+    >
+      {children}
+    </motion.div>
+  )
+}
 const FOCUSABLE_SELECTOR = [
   "a[href]",
   "button:not([disabled])",
@@ -102,7 +149,7 @@ export function ProjectFolder({
   const isOpen = (open ?? internalOpen) || isExpanded
   const previewItems = previews.slice(0, MAX_PREVIEWS)
   const hasExpandedContent = expandedContent != null
-  const transition: Transition = reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }
+  const transition: Transition = reduce ? { duration: 0 } : SPRING_LAYOUT
   const countText = `${count} ${itemLabel}`
 
   const setOpen = useCallback(
@@ -221,12 +268,15 @@ export function ProjectFolder({
           ) : null}
         </AnimatePresence>
 
-        <div
+        <motion.div
+          layoutRoot
+          layoutScroll
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={dialogTitleId}
           aria-hidden={isExpanded ? undefined : "true"}
+          inert={isClosing}
           className="pointer-events-none fixed inset-x-6 inset-y-8 z-50 flex items-start justify-center overflow-y-auto sm:items-center"
         >
           {/* 61rem, not `max-w-5xl`: the cap is on a padding-free box, so it has to
@@ -266,8 +316,16 @@ export function ProjectFolder({
               ) : null}
             </AnimatePresence>
 
-            {isExpanded && expandedContent ? (
-              expandedContent
+            {(isExpanded || isClosing) && expandedContent ? (
+              <FolderPaperMotion.Provider
+                value={{
+                  previewIds: new Set(previewItems.map((preview) => preview.id)),
+                  closing: isClosing,
+                  reduced: Boolean(reduce),
+                }}
+              >
+                {expandedContent}
+              </FolderPaperMotion.Provider>
             ) : (
               <div className="grid grid-cols-2 place-items-center gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 {isExpanded
@@ -285,7 +343,7 @@ export function ProjectFolder({
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       </>
     ) : null
 

@@ -119,7 +119,9 @@ describe("NotesPage", () => {
   }
 
   it("focuses an empty editor and saves after the first nonblank input", async () => {
-    vi.useFakeTimers()
+    // 只模拟自动保存的延时；动画帧和性能时钟保持真实，避免关闭假时钟后
+    // Motion 的下一帧被丢弃，连带卡住后续的收纳用例。
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     const create = vi.fn(async ({ content }: { content: string }) => ({
       id: "created",
       content,
@@ -312,6 +314,14 @@ describe("NotesPage", () => {
     expect(document.querySelector('[role="dialog"]')).not.toBeNull()
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    })
+    // 收回过程中纸片仍需存在，才能连续回到夹内；不能先清空再播放遮罩。
+    const closing = document.querySelector('[role="dialog"][aria-hidden="true"]')
+    expect(closing).not.toBeNull()
+    expect(closing!.querySelector('button[aria-label="打开便签：First thought"]')).not.toBeNull()
+    // 将真实动画的退出回调也包进 act，避免回调在轮询间隙更新 React。
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350))
     })
     await vi.waitFor(
       async () => {

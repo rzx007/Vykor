@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { motion, useReducedMotion } from "motion/react"
 import {
   CircleAlert,
   CirclePlus,
@@ -15,6 +16,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/componen
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import { cn } from "@renderer/lib/utils"
+import { SPRING_LAYOUT } from "@renderer/lib/ease"
 import { toast } from "@renderer/lib/toast"
 import { NoteDeleteDialog } from "./note-delete-dialog"
 import { NoteEditor } from "./note-editor"
@@ -46,6 +48,8 @@ function NoteSearch({
 
 export function NotesPage(): React.JSX.Element {
   const notes = useNotesController()
+  const reduced = useReducedMotion()
+  const layoutTransition = reduced ? { duration: 0 } : SPRING_LAYOUT
   const [mode, setMode] = useState<"desk" | "collection">("desk")
   const [folderOpen, setFolderOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -149,7 +153,11 @@ export function NotesPage(): React.JSX.Element {
                 expanded && "@4xl/notes:grid-cols-1"
               )}
             >
-              <div className={cn("relative min-w-0", expanded && "mx-auto w-full max-w-4xl")}>
+              <motion.div
+                layout={reduced ? false : "position"}
+                transition={layoutTransition}
+                className={cn("relative min-w-0", expanded && "mx-auto w-full max-w-4xl")}
+              >
                 <NoteEditor
                   selected={selected}
                   content={notes.content}
@@ -167,10 +175,14 @@ export function NotesPage(): React.JSX.Element {
                     setDeleteOpen(true)
                   }}
                 />
-                <p className="mt-4 px-1 text-xs text-muted-foreground">
+                <motion.p
+                  layout={reduced ? false : "position"}
+                  transition={layoutTransition}
+                  className="mt-4 px-1 text-xs text-muted-foreground"
+                >
                   打开记一句，自动存好，随时离开。
-                </p>
-              </div>
+                </motion.p>
+              </motion.div>
               {!expanded ? (
                 <aside className="min-w-0">
                   <div className="mb-4 flex items-center justify-between gap-3">
