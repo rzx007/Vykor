@@ -38,6 +38,8 @@ export {
   McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
+export { readWorkspaceChangesMetadata } from "@vykor/protocol";
+export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
 export {
   PLUGIN_UI_BRIDGE_LIMITS, PluginUiBridgeError, decodePluginUiBridgeMessage, encodePluginUiBridgeMessage,
   parsePluginUiBridgeRequest, parsePluginUiBridgeSnapshot, parsePluginUiBridgeReceipt,

@@ -7,6 +7,8 @@ export interface DesktopGitReviewRequest {
   id: number
   path?: string
   scope?: DesktopGitDiffScope
+  /** Explicit repository from a stored Run observation; diff is still current. */
+  rootPath?: string
 }
 
 export interface DesktopGitChangesInput {

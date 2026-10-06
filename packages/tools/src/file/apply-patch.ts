@@ -314,7 +314,23 @@ function patchSuccess(changes: PatchChange[]): ToolResult {
     }],
     executionState: "completed",
     compactSummary: buildSummary(header, changes),
+    metadata: { changedFiles: completedFileIdentities(changes) },
   };
+}
+
+/** Execution facts for summary consumers; bounded identities, never patch bodies. */
+function completedFileIdentities(changes: PatchChange[]) {
+  const files: Array<{ path: string; operation: PatchChange["operation"] }> = [];
+  let bytes = 0;
+  for (const change of changes) {
+    const file = { path: change.relativePath, operation: change.operation };
+    const size = Buffer.byteLength(JSON.stringify(file));
+    // Keep the result metadata below 2 KB and 32 complete paths; never shorten an identity.
+    if (files.length >= 32 || file.path.length > 256 || bytes + size > 2048) continue;
+    files.push(file);
+    bytes += size;
+  }
+  return { files, fileCount: changes.length, truncated: files.length < changes.length };
 }
 
 function patchPartialFailure(

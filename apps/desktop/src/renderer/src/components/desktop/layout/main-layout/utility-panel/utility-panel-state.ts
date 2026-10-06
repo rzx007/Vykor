@@ -24,6 +24,7 @@ export type UtilityPanelRuntimeState = {
   terminalMounted: boolean
   handledFileRequestId: number | null
   handledToolRequestId: number | null
+  handledImageRequestId?: number | null
 }
 
 export type PersistedFileTabsByScope = Record<

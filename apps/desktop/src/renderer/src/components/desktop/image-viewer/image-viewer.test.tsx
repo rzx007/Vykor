@@ -39,6 +39,7 @@ afterEach(async () => {
   host.remove()
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 async function mount(onFeedback = vi.fn(async () => {}), openComments = true) {
@@ -173,6 +174,52 @@ it("does not apply annotation undo when typing in the comment editor", async () 
       .dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
   )
   expect(JSON.parse(localStorage.getItem(key)!)).toHaveLength(1)
+})
+
+it("does not undo image annotations when Ctrl+Z is pressed in the chat outside the viewer", async () => {
+  const key = await mount()
+  await selectRegion()
+  await act(async () => {
+    const textarea = host.querySelector("textarea")!
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+      textarea,
+      "保留这条批注"
+    )
+    textarea.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  const chat = document.createElement("textarea")
+  document.body.append(chat)
+  await act(async () => {
+    chat.focus()
+    chat.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
+  })
+  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("保留这条批注")
+  chat.remove()
+})
+
+it("undoes exactly one image action when focus is inside the image container", async () => {
+  const key = await mount()
+  await selectRegion()
+  let time = performance.now() + 1000
+  vi.spyOn(performance, "now").mockImplementation(() => time)
+  const typeComment = async (value: string) =>
+    act(async () => {
+      const textarea = host.querySelector("textarea")!
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+        textarea,
+        value
+      )
+      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+  await typeComment("第一步")
+  time += 300 // 超过库的 250ms 历史合并窗口，形成第二个独立操作。
+  await typeComment("第二步")
+  await act(async () =>
+    host
+      .querySelector("svg.a9s-annotationlayer")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
+  )
+  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("第一步")
 })
 
 it("keeps typed feedback on close even before leaving the comment editor", async () => {

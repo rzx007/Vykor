@@ -31,6 +31,7 @@ import {
 } from "./compact-messages";
 import { buildCompactPrompt, deriveWorkLog, extractRecentFiles } from "./compact-prompt";
 import { collectSummary, formatSummary, isPromptTooLongError } from "./compact-summary";
+import { appendContinuityExcerpts } from "./compact-continuity";
 export { isPromptTooLongError } from "./compact-summary";
 import type {
   CompactCheckpoint,
@@ -422,7 +423,7 @@ export class CompactService {
 
     const summary: Message = {
       type: "assistant",
-      content: formatted,
+      content: appendContinuityExcerpts(formatted, older),
       compactRole: "summary",
     };
 

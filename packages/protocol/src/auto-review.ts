@@ -36,6 +36,10 @@ export const AUTO_REVIEW_REASONS = [
   "review_preempted_by_user",
   "parent_run_not_completed",
   "daemon_restarted",
+  "concurrent_run_overlap",
+  "execution_environment_unavailable",
+  "observation_budget_exceeded",
+  "observation_cancelled",
 ] as const;
 
 export type AutoReviewMode = (typeof AUTO_REVIEW_MODES)[number];

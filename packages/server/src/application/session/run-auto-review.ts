@@ -1,9 +1,10 @@
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
+import type { WorkspaceBaselineResult, WorkspaceChangeResult } from "./session-workspace-changes.js";
 
 type AutoReviewContext = Pick<
   SessionRunExecutorContext,
-  "autoReview" | "data" | "log" | "resolveAutoReviewMode" | "traceIdForRun"
+  "autoReview" | "data" | "log" | "resolveAutoReviewMode" | "traceIdForRun" | "workspaceChanges" | "resolveLocalExecutionCwd"
 >;
 
 export async function captureAutoReviewBaseline(
@@ -11,14 +12,26 @@ export async function captureAutoReviewBaseline(
   sessionId: string,
   runId: string,
   cwd: string,
+  agent?: Awaited<ReturnType<AgentPool["acquireSession"]>>,
+  signal?: AbortSignal,
 ): Promise<void> {
+  let observation: WorkspaceBaselineResult | undefined;
+  if (context.workspaceChanges) {
+    try {
+      observation = await context.workspaceChanges.capture(runId, cwd,
+        agent ? context.resolveLocalExecutionCwd?.(agent) : undefined, signal);
+    } catch (error) {
+      observation = { attribution: "unavailable", reason: "git_inspection_failed" };
+      context.log({ level: "warn", event: "workspace_changes.capture_failed", runId, error: String(error) });
+    }
+  }
   const autoReview = context.autoReview;
   if (!autoReview) return;
   try {
     const mode = context.resolveAutoReviewMode
       ? await context.resolveAutoReviewMode(cwd)
       : "off";
-    await autoReview.captureBaseline({ sessionId, runId, cwd, mode });
+    await autoReview.captureBaseline({ sessionId, runId, cwd, mode, ...(observation ? { observation } : {}) });
   } catch (error) {
     context.log({
       level: "error",
@@ -39,6 +52,14 @@ export async function reviewAutoReview(context: AutoReviewContext, input: {
   agent: Awaited<ReturnType<AgentPool["acquireSession"]>>;
   signal: AbortSignal;
 }): Promise<void> {
+  let changes: WorkspaceChangeResult | undefined;
+  if (context.workspaceChanges) {
+    try { changes = await context.workspaceChanges.settle(input.runId, input.signal); }
+    catch (error) {
+      changes = { attribution: "unavailable", reason: "git_inspection_failed" };
+      context.log({ level: "warn", event: "workspace_changes.settle_failed", runId: input.runId, error: String(error) });
+    }
+  }
   const autoReview = context.autoReview;
   if (!autoReview) return;
   try {
@@ -52,6 +73,7 @@ export async function reviewAutoReview(context: AutoReviewContext, input: {
         cwd: input.cwd,
         agent: input.agent,
         signal: input.signal,
+        ...(changes ? { changes } : {}),
       });
     } else {
       autoReview.settleUnreviewedRun({

@@ -100,6 +100,7 @@ function ComposerAttachmentCard({
           viewer && attachment.assetId
             ? () =>
                 viewer.openImage({
+                  kind: "attachment",
                   assetId: attachment.assetId!,
                   name: attachment.displayName,
                   draftId: attachment.draftId,

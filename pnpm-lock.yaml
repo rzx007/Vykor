@@ -61,6 +61,11 @@ catalogs:
 overrides:
   '@types/react': ^19.2.0
 
+patchedDependencies:
+  '@annotorious/annotorious@3.9.3':
+    hash: 6afcadaad88f1a79750e1c3d1ff3cbeac16a5516e2f45970199389af92a8707d
+    path: patches/@annotorious__annotorious@3.9.3.patch
+
 importers:
 
   .:
@@ -246,7 +251,7 @@ importers:
     devDependencies:
       '@annotorious/annotorious':
         specifier: 3.9.3
-        version: 3.9.3
+        version: 3.9.3(patch_hash=6afcadaad88f1a79750e1c3d1ff3cbeac16a5516e2f45970199389af92a8707d)
       '@base-ui/react':
         specifier: ^1.7.0
         version: 1.7.0(@types/react@19.2.17)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -9137,7 +9142,7 @@ packages:
 
 snapshots:
 
-  '@annotorious/annotorious@3.9.3':
+  '@annotorious/annotorious@3.9.3(patch_hash=6afcadaad88f1a79750e1c3d1ff3cbeac16a5516e2f45970199389af92a8707d)':
     dependencies:
       '@annotorious/core': 3.9.3
       dequal: 2.0.3

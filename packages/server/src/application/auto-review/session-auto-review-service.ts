@@ -22,6 +22,7 @@ import type {
   GitRunBaseline,
   GitRunChangeInspector,
   GitRunChangeSet,
+  GitRunChangeUnavailable,
 } from "./git-run-change-inspector.js";
 
 export const AUTO_REVIEW_EVENT_TYPE = "session.auto_review.updated";
@@ -58,6 +59,7 @@ export interface CaptureBaselineInput {
   runId: string;
   cwd: string;
   mode: AutoReviewMode;
+  observation?: GitRunBaseline | GitRunChangeUnavailable;
 }
 
 export interface ReviewCompletedRunInput {
@@ -68,6 +70,7 @@ export interface ReviewCompletedRunInput {
   cwd: string;
   agent: VykorAgent;
   signal: AbortSignal;
+  changes?: GitRunChangeSet | GitRunChangeUnavailable;
 }
 
 interface BaselineEntry {
@@ -118,7 +121,7 @@ export class SessionAutoReviewService {
       return;
     }
     try {
-      const captured = await this.options.inspector.capture(input.cwd);
+      const captured = input.observation ?? await this.options.inspector.capture(input.cwd);
       if (isUnavailable(captured)) {
         this.transition(input.sessionId, input.runId, {
           mode: input.mode,
@@ -174,7 +177,7 @@ export class SessionAutoReviewService {
         else signal.addEventListener("abort", onAbort, { once: true });
       });
       const compared = signal.aborted ? "interrupted" : await Promise.race([
-        this.options.inspector.compare(input.cwd, entry.baseline),
+        input.changes ?? this.options.inspector.compare(input.cwd, entry.baseline),
         interrupted,
       ]);
       if (onAbort) signal.removeEventListener("abort", onAbort);

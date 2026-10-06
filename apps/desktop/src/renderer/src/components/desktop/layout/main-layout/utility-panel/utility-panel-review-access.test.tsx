@@ -19,9 +19,19 @@ vi.mock("@renderer/components/desktop/tools/review-tool", async () => {
 import { UtilityPanel } from "./utility-panel"
 import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { PluginUiCard } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-card"
-import { instance, snapshot, sourcePart } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
+import {
+  instance,
+  snapshot,
+  sourcePart,
+} from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
 import { utilityToolOrder } from "./utility-panel-tabs"
 import { readUtilityPanelRuntimeState } from "./utility-panel-repository"
+import { imageSourceKey } from "@renderer/components/desktop/image-viewer/image-source"
+
+// 图片编辑器自身另有集成测试；这里验证真实 panel 的标签和会话缓存。
+vi.mock("@renderer/components/desktop/image-viewer/image-viewer-panel", () => ({
+  ImageViewerPanel: () => null,
+}))
 
 const initialStoreState = useDesktopSessionStore.getState()
 let mountedRoot: Root | null = null
@@ -115,42 +125,119 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it("deduplicates an attachment image by identity and removes it through the normal tab close action", async () => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = "session:image-tabs"
+    const source = { kind: "attachment" as const, assetId: "one", name: "image.png" }
+    const container = mountPanel(scopeId, { imageOpenRequest: { id: 1, source } })
+    await settle()
+    const renderRequest = (id: number) =>
+      mountedRoot!.render(
+        createElement(UtilityPanel, {
+          scopeId,
+          open: true,
+          maximized: false,
+          onToggleMaximized: vi.fn(),
+          onClose: vi.fn(),
+          fileOpenRequest: null,
+          reviewOpenRequest: null,
+          terminalOpenRequest: null,
+          toolOpenRequest: null,
+          imageOpenRequest: { id, source },
+          onOpenFile: vi.fn(),
+          onOpenReview: vi.fn(),
+          onOpenTerminal: vi.fn(),
+        })
+      )
+    await act(async () => renderRequest(2))
+    await settle()
+    expect(readUtilityPanelRuntimeState(scopeId)!.tabs).toEqual([
+      { id: imageSourceKey(source), tool: "image", title: "image.png", imageSource: source },
+    ])
+    expect(container.querySelector(".utility-tab-strip")?.textContent).toContain("image.png")
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="关闭标签"]')!.click()
+    )
+    await settle()
+    expect(readUtilityPanelRuntimeState(scopeId)!.tabs).toEqual([])
+  })
   it("opens only a concrete plugin instance and closes its display without dismissing business", async () => {
     installProbe(async () => ({ isRepository: true, rootPath: null }))
     useOutsideProjectSession("D:/repo-one")
     const actualInstance = { ...instance, sessionId: "s1" }
     const actualPart = { ...sourcePart, sessionId: "s1", metadata: { pluginUi: actualInstance } }
-    useDesktopSessionStore.setState(state => ({ sessionView: { ...state.sessionView!, parts: [actualPart] } }))
-    const hostState = { snapshot, plugin: { id: "example.ui", version: "1" }, title: "检查结果",
-      availability: { code: "available", canRender: true, canInvoke: true }, surfaces: instance.surfaces, actions: [] }
-    const unmount = vi.fn(async () => {}), dismiss = vi.fn()
-    Object.assign(window.desktop, { pluginUi: {
-      capabilities: async () => ({ available: true }),
-      mount: async () => ({ mountId: "20000000-0000-4000-8000-000000000001",
-        url: "vykor-plugin-ui://frame/20000000-0000-4000-8000-000000000001", state: hostState }),
-      getState: async () => hostState, onRevoked: () => () => {}, unmount, dismiss,
-    } })
+    useDesktopSessionStore.setState((state) => ({
+      sessionView: { ...state.sessionView!, parts: [actualPart] },
+    }))
+    const hostState = {
+      snapshot,
+      plugin: { id: "example.ui", version: "1" },
+      title: "检查结果",
+      availability: { code: "available", canRender: true, canInvoke: true },
+      surfaces: instance.surfaces,
+      actions: [],
+    }
+    const unmount = vi.fn(async () => {}),
+      dismiss = vi.fn()
+    Object.assign(window.desktop, {
+      pluginUi: {
+        capabilities: async () => ({ available: true }),
+        mount: async () => ({
+          mountId: "20000000-0000-4000-8000-000000000001",
+          url: "vykor-plugin-ui://frame/20000000-0000-4000-8000-000000000001",
+          state: hostState,
+        }),
+        getState: async () => hostState,
+        onRevoked: () => () => {},
+        unmount,
+        dismiss,
+      },
+    })
     const container = mountPanel("session:plugin-ui")
     const panel = createElement(UtilityPanel, {
-      scopeId: "session:plugin-ui", open: true, maximized: false, onToggleMaximized: vi.fn(), onClose: vi.fn(),
-      fileOpenRequest: null, reviewOpenRequest: null, terminalOpenRequest: null, toolOpenRequest: null,
-      onOpenFile: vi.fn(), onOpenReview: vi.fn(), onOpenTerminal: vi.fn(),
+      scopeId: "session:plugin-ui",
+      open: true,
+      maximized: false,
+      onToggleMaximized: vi.fn(),
+      onClose: vi.fn(),
+      fileOpenRequest: null,
+      reviewOpenRequest: null,
+      terminalOpenRequest: null,
+      toolOpenRequest: null,
+      onOpenFile: vi.fn(),
+      onOpenReview: vi.fn(),
+      onOpenTerminal: vi.fn(),
     })
-    await act(async () => mountedRoot!.render(createElement(PluginUiProvider, {
-      onOpenSidebar: () => {},
-      children: [createElement(PluginUiCard, { key: "card", instance: actualInstance, call: actualPart }),
-        createElement("div", { key: "panel" }, panel)],
-    })))
+    await act(async () =>
+      mountedRoot!.render(
+        createElement(PluginUiProvider, {
+          onOpenSidebar: () => {},
+          children: [
+            createElement(PluginUiCard, {
+              key: "card",
+              instance: actualInstance,
+              call: actualPart,
+            }),
+            createElement("div", { key: "panel" }, panel),
+          ],
+        })
+      )
+    )
     expect(utilityToolOrder).not.toContain("plugin-ui")
     expect(container.querySelector("iframe")).toBeNull()
     await act(async () => {
-      const button = [...container.querySelectorAll("button")].find(button => button.textContent === "在侧栏打开")
+      const button = [...container.querySelectorAll("button")].find(
+        (button) => button.textContent === "在侧栏打开"
+      )
       button!.click()
     })
     await settle()
     expect(container.querySelector("aside iframe")).not.toBeNull()
     expect(container.querySelector(".utility-tab-strip")?.textContent).toContain("检查结果")
-    await act(async () => (container.querySelector('button[aria-label="关闭标签"]') as HTMLButtonElement).click())
+    await act(async () =>
+      (container.querySelector('button[aria-label="关闭标签"]') as HTMLButtonElement).click()
+    )
     expect(container.querySelector("iframe")).toBeNull()
     expect(unmount).toHaveBeenCalledTimes(1)
     expect(dismiss).not.toHaveBeenCalled()

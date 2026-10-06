@@ -404,6 +404,8 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionCompact, input),
     getGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalGet]["args"][0]) =>
       invoke(IpcChannels.sessionGoalGet, input),
+    getMessagePart: (input: IpcInvokeMap[typeof IpcChannels.sessionMessagePartGet]["args"][0]) =>
+      invoke(IpcChannels.sessionMessagePartGet, input),
     createGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalCreate]["args"][0]) =>
       invoke(IpcChannels.sessionGoalCreate, input),
     updateGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalUpdate]["args"][0]) =>

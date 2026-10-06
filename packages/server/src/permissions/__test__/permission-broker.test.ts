@@ -30,6 +30,39 @@ function withBroker(
 }
 
 describe("StorePermissionBroker", () => {
+  it.each(["approved", "denied"] as const)("does not rewrite a %s decision or emit another event for repeated replies", async status => {
+    await withBroker(async ({ broker, store, changes }) => {
+      const waiting = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
+      const pending = store.permissions.list({ status: "pending" })[0]!;
+      const decided = broker.reply({ requestId: pending.id, status, decision: "once", clientId: "first-client" });
+      await expect(waiting).resolves.toEqual({ status, decision: "once" });
+      const events = store.conversations.listEvents();
+      const broadcasts = changes.length;
+
+      expect(() => broker.reply({ requestId: pending.id, status, decision: "once", clientId: "retry-client" })).toThrow(/already resolved/);
+      expect(() => broker.reply({ requestId: pending.id, status: status === "approved" ? "denied" : "approved" })).toThrow(/already resolved/);
+      expect(store.permissions.get(pending.id)).toEqual(decided);
+      expect(store.conversations.listEvents()).toEqual(events);
+      expect(changes).toHaveLength(broadcasts);
+    });
+  });
+
+  it("rejects a late approval after cancellation without changing the expired request", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const controller = new AbortController();
+      const waiting = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write", signal: controller.signal });
+      const pending = store.permissions.list({ status: "pending" })[0]!;
+      controller.abort();
+      await expect(waiting).resolves.toMatchObject({ status: "expired" });
+      const expired = store.permissions.get(pending.id);
+      const events = store.conversations.listEvents();
+
+      expect(() => broker.reply({ requestId: pending.id, status: "approved", decision: "session" })).toThrow(/already resolved/);
+      expect(store.permissions.get(pending.id)).toEqual(expired);
+      expect(store.conversations.listEvents()).toEqual(events);
+    });
+  });
+
   it("works with the permission repository and narrow session and event queries", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vk-permission-broker-narrow-"));
     const store = new SessionStore({ path: join(dir, "store.db") });

@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest"
 
-import { routeChangedFileClick, toProjectRelativePath } from "./workspace-open-path"
+import { isAbsoluteFileInRepository, routeChangedFileClick, toProjectRelativePath } from "./workspace-open-path"
+
+describe("stored repository membership", () => {
+  it.each([
+    ["D:/repo/../outside/result.txt", "D:/repo", false],
+    ["d:\\REPO\\..\\outside\\result.txt", "D:/repo", false],
+    ["../outside/result.txt", "D:/repo", false],
+    ["src/result.txt", "D:/repo", false],
+    ["D:/repo/src/../result.txt", "d:\\REPO", true],
+    ["\\\\?\\D:\\repo\\result.txt", "D:/Repo", true],
+    ["D:/repo-other/result.txt", "D:/repo", false],
+    ["/work/repo/../outside/result.txt", "/work/repo", false],
+    ["/work/repo/src/../result.txt", "/work/repo", true],
+    ["/work/Repo/result.txt", "/work/repo", false],
+    ["/work/repo/name/file.txt", "/work/repo\\name", false],
+    ["/work/repo\\name/file.txt", "/work/repo\\name", true],
+    ["/outside/..\\repo/result.txt", "/repo", false],
+    ["/repo?name/../../outside/result.txt", "/repo", false],
+  ])("resolves %s against %s without assuming a relative cwd", (path, root, inside) => {
+    expect(isAbsoluteFileInRepository(path as string, root as string)).toBe(inside)
+  })
+})
 
 const project = "E:/code/vykor"
 

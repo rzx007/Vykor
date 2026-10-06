@@ -25,7 +25,7 @@ import type {
 
 export interface SyncEventsClient {
   sessions: {
-    getState(sessionId: string, options?: { signal?: AbortSignal }): Promise<SessionStateSnapshot>;
+    getState(sessionId: string, options?: { signal?: AbortSignal; partView?: "summary" }): Promise<SessionStateSnapshot>;
   };
   events: {
     list(options?: ListEventsOptions & { signal?: AbortSignal }): Promise<SessionEventRecord[]>;
@@ -61,12 +61,12 @@ export async function* syncEvents(
   let state = createInitialClientState();
   if (options.sessionId) {
     const sessionId = options.sessionId;
-    const snapshot = await client.sessions.getState(sessionId, { signal: options.signal });
+    const snapshot = await client.sessions.getState(sessionId, { signal: options.signal, partView: options.partView });
     state = applySessionSnapshot(state, snapshot);
     yield { state, source: "snapshot" };
 
     yield* liveWithReconnect(client, state, options, snapshot.cursor, async (current) => {
-      const refreshed = await client.sessions.getState(sessionId, { signal: options.signal });
+      const refreshed = await client.sessions.getState(sessionId, { signal: options.signal, partView: options.partView });
       const next = applySessionSnapshot(current, refreshed);
       return { state: next, cursor: refreshed.cursor };
     });
@@ -74,6 +74,7 @@ export async function* syncEvents(
   }
   const replay = await client.events.list({
     cursor: options.cursor,
+    partView: options.partView,
     sessionId: options.sessionId,
     signal: options.signal,
   });
@@ -126,6 +127,7 @@ async function* liveWithReconnect(
     try {
       for await (const event of client.events.stream({
         cursor,
+        partView: options.partView,
         sessionId: options.sessionId,
         signal: options.signal,
         transportReconnect: false,
@@ -135,6 +137,7 @@ async function* liveWithReconnect(
         if (event.seq > state.lastSeq + 1 && !options.sessionId) {
           const gap = await client.events.list({
             cursor: state.lastSeq,
+            partView: options.partView,
             signal: options.signal,
           });
           for (const missed of gap) {

@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
+import { terminateProcessTree } from "@vykor/sandbox";
 
 import type { AutoReviewReason } from "@vykor/protocol";
 
@@ -9,14 +10,12 @@ import {
   decodeTrimmed,
   isUnmergedStatus,
   mapStatus,
-  normalizePath,
   parseIndex,
   parseNameStatus,
   parseNumstat,
   parseStatus,
   sameDirtyMap,
   sortFiles,
-  toGitPath,
   uniquePaths,
   type RepoState,
 } from "./git-change-parsing.js";
@@ -37,7 +36,8 @@ export interface GitRunResult {
 
 /** 可注入的 Git 调用面，便于确定性测试与替换。所有命令一律使用参数数组。 */
 export interface GitExecutor {
-  exec(args: string[], cwd: string): Promise<GitRunResult>;
+  /** Abort-aware hosts settle only after their owned subprocess has closed. */
+  exec(args: string[], cwd: string, signal?: AbortSignal): Promise<GitRunResult>;
 }
 
 export interface GitDirtyEntry {
@@ -66,44 +66,87 @@ export interface GitRunChangeUnavailable {
 }
 
 export interface GitRunChangeInspector {
-  capture(cwd: string): Promise<GitRunBaseline | GitRunChangeUnavailable>;
+  /** Injected hosts must honor cancellation and clean up before settling. */
+  capture(cwd: string, signal?: AbortSignal): Promise<GitRunBaseline | GitRunChangeUnavailable>;
   compare(
     cwd: string,
     baseline: GitRunBaseline,
+    signal?: AbortSignal,
   ): Promise<GitRunChangeSet | GitRunChangeUnavailable>;
 }
 
 export function createExecFileGitExecutor(): GitExecutor {
   return {
-    exec(args, cwd) {
-      return new Promise<GitRunResult>((resolve) => {
-        execFile(
-          "git",
-          args,
-          {
-            cwd,
-            windowsHide: true,
-            timeout: GIT_INSPECTION_TIMEOUT_MS,
-            maxBuffer: GIT_MAX_BUFFER_BYTES,
-            encoding: "buffer",
-          },
-          (error, stdout, stderr) => {
-            const code =
-              typeof (error as { code?: unknown } | null)?.code === "number"
-                ? ((error as { code: number }).code)
-                : error
-                  ? 1
-                  : 0;
-            resolve({
-              stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? ""),
-              stderr: Buffer.isBuffer(stderr) ? stderr.toString("utf8") : String(stderr ?? ""),
-              code,
-            });
-          },
-        );
-      });
+    async exec(args, cwd, signal) {
+      signal?.throwIfAborted();
+      // Names originate in Git -z records, so []/wildcards/magic are literal filenames.
+      const configArgs = ["--literal-pathspecs", "-c", "core.fsmonitor=false"];
+      if (args[0] === "status" || args[0] === "diff") {
+        // Git status/diff can invoke clean/process filters themselves. Read names only,
+        // never configuration values, then disable those programs at this single boundary.
+        const filters = await execGitCommand([...configArgs, "config", "--null", "--name-only", "--get-regexp", "^filter\\..*\\.(clean|smudge|process|required)$"], cwd, signal);
+        signal?.throwIfAborted();
+        if (filters.code !== 0 && filters.code !== 1) return filters;
+        const sections = new Set(filters.stdout.toString("utf8").split("\0").filter(Boolean).map((key) => key.slice(0, key.lastIndexOf("."))));
+        for (const section of sections) configArgs.push("-c", `${section}.clean=`, "-c", `${section}.smudge=`, "-c", `${section}.process=`, "-c", `${section}.required=false`);
+      }
+      const commandArgs = args[0] === "diff" ? ["diff", "--no-ext-diff", "--no-textconv", ...args.slice(1)]
+        : args[0] === "hash-object" ? ["hash-object", "--no-filters", ...args.slice(1)] : args;
+      const result = await execGitCommand([...configArgs, ...commandArgs], cwd, signal);
+      signal?.throwIfAborted();
+      return result;
     },
   };
+}
+
+function execGitCommand(args: string[], cwd: string, signal?: AbortSignal): Promise<GitRunResult> {
+  return new Promise<GitRunResult>((resolve, reject) => {
+    let closed = false;
+    let exitCode = 1;
+    let stopping: Promise<boolean> | undefined;
+    let inspectionError: Error | undefined;
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    // spawn supports a POSIX process group; execFile does not. Limits and aborts
+    // stay with this owner so no built-in stop can kill a launcher before its tree.
+    const child = spawn("git", args, {
+      cwd, windowsHide: true, detached: process.platform !== "win32", stdio: "pipe",
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    });
+    const finish = async () => {
+      if (!closed) return;
+      await stopping;
+      clearTimeout(commandTimer);
+      signal?.removeEventListener("abort", stop);
+      if (inspectionError) { reject(inspectionError); return; }
+      resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr).toString("utf8"), code: exitCode });
+    };
+    const stop = () => {
+      if (closed) return;
+      stopping ??= terminateProcessTree(child);
+      void stopping.then(finish);
+    };
+    const commandTimer = setTimeout(() => { inspectionError = new Error("Git inspection timed out"); stop(); }, GIT_INSPECTION_TIMEOUT_MS);
+    const collect = (chunk: Buffer, output: Buffer[], channel: "stdout" | "stderr") => {
+      if (channel === "stdout") stdoutBytes += chunk.length;
+      else stderrBytes += chunk.length;
+      if (stdoutBytes > GIT_MAX_BUFFER_BYTES || stderrBytes > GIT_MAX_BUFFER_BYTES) {
+        inspectionError = new Error("Git inspection output exceeds buffer limit");
+        stop();
+        child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy();
+        return;
+      }
+      output.push(chunk);
+    };
+    child.stdout.on("data", (chunk: Buffer) => collect(chunk, stdout, "stdout"));
+    child.stderr.on("data", (chunk: Buffer) => collect(chunk, stderr, "stderr"));
+    child.once("error", (error) => { inspectionError = error; });
+    child.once("close", (code) => { exitCode = code ?? 1; closed = true; void finish(); });
+    signal?.addEventListener("abort", stop, { once: true });
+    if (signal?.aborted) stop();
+  });
 }
 
 export function createGitRunChangeInspector(
@@ -120,10 +163,13 @@ interface CollectedEntries {
 class DefaultGitRunChangeInspector implements GitRunChangeInspector {
   constructor(private readonly executor: GitExecutor) {}
 
-  async capture(cwd: string): Promise<GitRunBaseline | GitRunChangeUnavailable> {
+  async capture(cwd: string, signal?: AbortSignal): Promise<GitRunBaseline | GitRunChangeUnavailable> {
+    if (signal) return this.scoped(signal).capture(cwd);
     const first = await readRepoState(this.executor, cwd);
     if (first === "no-repo") return unavailable("not_git_repository");
     if (!first) return unavailable("git_inspection_failed");
+    // Porcelain/index paths are repository-relative, even when the Run cwd is nested.
+    cwd = first.root;
 
     const paths = first.entries.map((entry) => entry.path);
     const collected = await this.collect(first, cwd, paths);
@@ -143,10 +189,13 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
   async compare(
     cwd: string,
     baseline: GitRunBaseline,
+    signal?: AbortSignal,
   ): Promise<GitRunChangeSet | GitRunChangeUnavailable> {
+    if (signal) return this.scoped(signal).compare(cwd, baseline);
     const first = await readRepoState(this.executor, cwd);
     if (!first || first === "no-repo") return unavailable("git_inspection_failed");
     if (first.root !== baseline.repositoryRoot) return unavailable("git_inspection_failed");
+    cwd = first.root;
 
     const currentPaths = first.entries.map((entry) => entry.path);
     const relevant = uniquePaths([...Object.keys(baseline.dirty), ...currentPaths]);
@@ -197,6 +246,15 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     return result;
   }
 
+  private scoped(signal: AbortSignal): DefaultGitRunChangeInspector {
+    return new DefaultGitRunChangeInspector({ exec: async (args, cwd) => {
+      signal.throwIfAborted();
+      const result = await this.executor.exec(args, cwd, signal);
+      signal.throwIfAborted();
+      return result;
+    } });
+  }
+
   private async buildWorktreeChangeSet(
     cwd: string,
     state: RepoState,
@@ -220,8 +278,8 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
       const info = nameStatus.get(path);
       const status = info ? mapStatus(info.code) : "unknown";
       files.push({
-        path: normalizePath(path),
-        ...(info?.oldPath ? { oldPath: normalizePath(info.oldPath) } : {}),
+        path,
+        ...(info?.oldPath ? { oldPath: info.oldPath } : {}),
         status,
         lines: numstat.get(path) ?? 0,
       });
@@ -234,7 +292,7 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     }
 
     for (const path of untrackedPaths) {
-      files.push({ path: normalizePath(path), status: "added", lines: await this.countUntrackedLines(cwd, path) });
+      files.push({ path, status: "added", lines: await this.countUntrackedLines(cwd, path) });
       const text = await this.readDiffText(cwd, [
         "diff",
         "--no-index",
@@ -275,8 +333,8 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     const files: AutoReviewChangeFile[] = [];
     for (const [path, info] of nameStatus) {
       files.push({
-        path: normalizePath(path),
-        ...(info.oldPath ? { oldPath: normalizePath(info.oldPath) } : {}),
+        path,
+        ...(info.oldPath ? { oldPath: info.oldPath } : {}),
         status: mapStatus(info.code),
         lines: numstat.get(path) ?? 0,
       });
@@ -394,7 +452,7 @@ async function hashWorktree(
   cwd: string,
   path: string,
 ): Promise<string | "missing"> {
-  const result = await executor.exec(["hash-object", "--", toGitPath(path)], cwd);
+  const result = await executor.exec(["hash-object", "--", path], cwd);
   if (result.code !== 0) return "missing";
   const value = result.stdout.toString("utf8").trim();
   return HASH_PATTERN.test(value) ? value : "missing";
@@ -406,8 +464,13 @@ async function readRepoState(
 ): Promise<RepoState | "no-repo" | undefined> {
   const root = await executor.exec(["rev-parse", "--show-toplevel"], cwd);
   if (root.code !== 0) return "no-repo";
-  const rootPath = decodeTrimmed(root.stdout);
-  if (rootPath === undefined) return undefined;
+  let rootPath: string;
+  try {
+    // rev-parse appends LF; spaces and backslashes belong to the returned path.
+    rootPath = new TextDecoder("utf-8", { fatal: true }).decode(root.stdout).replace(/\n$/, "");
+  } catch { return undefined; }
+  if (!rootPath) return undefined;
+  cwd = rootPath;
 
   const head = await executor.exec(["rev-parse", "HEAD"], cwd);
   if (head.code !== 0) return undefined;
@@ -431,7 +494,8 @@ async function readRepoState(
   for (const entry of entries) statusByPath.set(entry.path, entry.status);
 
   return {
-    root: normalizePath(rootPath),
+    // Git already emits its separators; a POSIX backslash is a filename character.
+    root: rootPath,
     head: headValue,
     statusRaw: status.stdout,
     entries,

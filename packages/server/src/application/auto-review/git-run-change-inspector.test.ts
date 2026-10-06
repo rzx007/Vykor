@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   createGitRunChangeInspector,
+  createExecFileGitExecutor,
   type GitExecutor,
   type GitRunBaseline,
   type GitRunChangeSet,
@@ -121,6 +122,14 @@ describe("git run change inspector (real repositories)", () => {
     rmSync(repo, { recursive: true, force: true });
   });
 
+  it("cancels a real Git process waiting on stdin and closes it before returning", async () => {
+    const controller = new AbortController();
+    const pending = createExecFileGitExecutor().exec(["hash-object", "--stdin"], repo, controller.signal);
+    const timer = setTimeout(() => controller.abort(), 50);
+    try { await expect(pending).rejects.toMatchObject({ name: "AbortError" }); }
+    finally { clearTimeout(timer); }
+  });
+
   it("attributes newly modified and untracked files to the run", async () => {
     write("packages/x.ts", "export const x = 1;\n");
     commit("init");
@@ -156,6 +165,21 @@ describe("git run change inspector (real repositories)", () => {
     expect((delta as GitRunChangeSet).files).toEqual([
       { path: "__proto__", status: "added", lines: expect.any(Number) },
     ]);
+  });
+
+  it("does not include an existing dirty sibling through a Git glob pathspec", async () => {
+    write("a[1].txt", "target before\n");
+    write("a1.txt", "sibling before\n");
+    commit("init");
+    write("a1.txt", "PREEXISTING_SIBLING_BODY\n");
+    const inspector = createGitRunChangeInspector();
+    const baseline = await inspector.capture(repo) as GitRunBaseline;
+    expect(baseline.repositoryRoot).toBe(git(["rev-parse", "--show-toplevel"]).trim());
+    write("a[1].txt", "TARGET_CHANGED_BODY\n");
+    const changes = await inspector.compare(repo, baseline) as GitRunChangeSet;
+    expect(changes.files.map(file => file.path)).toEqual(["a[1].txt"]);
+    expect(changes.patch).toContain("TARGET_CHANGED_BODY");
+    expect(changes.patch).not.toContain("PREEXISTING_SIBLING_BODY");
   });
 
   it.each([".env", "private.pem", ".npmrc"])(
@@ -340,6 +364,40 @@ describe("git run change inspector (real repositories)", () => {
 });
 
 describe("git run change inspector (injected executor)", () => {
+  it.each([String.raw`/work/repo\name`, "/work/repo ", "/work/ repo "])("uses the exact Git-returned repository root for later commands: %s", async (root) => {
+    const delegate = fakeExecutor({ root, head: "a" });
+    const inspector = createGitRunChangeInspector({
+      exec: async (args, cwd) => cwd === root ? delegate.exec(args, cwd) : bad(),
+    });
+    const baseline = await inspector.capture(root);
+    expect(baseline).toEqual({ repositoryRoot: root, head: "a", dirty: {} });
+    expect(await inspector.compare(root, baseline as GitRunBaseline)).toMatchObject({ attribution: "complete", files: [] });
+  });
+
+  it("hashes the literal path returned by Git instead of a slash-named sibling", async () => {
+    const path = String.raw`dir\a.txt`;
+    const inspector = createGitRunChangeInspector(fakeExecutor({
+      root: "/repo", head: "a", status: statusRecord("??", path),
+      worktree: { [path]: FAKE_HASH_A, "dir/a.txt": FAKE_HASH_B },
+    }));
+    const baseline = await inspector.capture("/repo") as GitRunBaseline;
+    expect(baseline.dirty[path]?.worktreeHash).toBe(FAKE_HASH_A);
+  });
+
+  it("preserves literal backslashes in Git rename identities", async () => {
+    const config: FakeConfig = { root: "/repo", head: "a" };
+    const inspector = createGitRunChangeInspector(fakeExecutor(config));
+    const baseline = await inspector.capture("/repo") as GitRunBaseline;
+    const oldPath = String.raw`old\name.txt`;
+    const path = String.raw`new\name.txt`;
+    config.status = statusRecord("R ", path, oldPath);
+    config.worktree = { [path]: FAKE_HASH_A };
+    config.nameStatus = Buffer.from(`R100\0${oldPath}\0${path}\0`);
+    config.numstat = Buffer.from(`1\t1\t${path}\0`);
+    const changes = await inspector.compare("/repo", baseline) as GitRunChangeSet;
+    expect(changes.files).toEqual([{ path, oldPath, status: "renamed", lines: 2 }]);
+  });
+
   it("reports a non-git workspace without falling back to a full diff", async () => {
     const inspector = createGitRunChangeInspector(fakeExecutor({}));
     expect(await inspector.capture("/repo")).toEqual({

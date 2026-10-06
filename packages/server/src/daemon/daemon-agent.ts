@@ -66,6 +66,14 @@ export type LoadDaemonAgent = (
   context: LoadDaemonAgentContext,
 ) => Promise<VykorAgent>;
 
+// Evidence from the warm Agent's actual construction, not settings re-read later.
+// Host Git cannot enforce the Agent's path-read policy; only explicitly disabled
+// sandboxing permits repository-wide observation. Unknown/restricted policy fails closed.
+const localAgentWorkspaces = new WeakMap<VykorAgent, string>();
+export function readDaemonAgentLocalWorkspace(agent: VykorAgent): string | undefined {
+  return localAgentWorkspaces.get(agent);
+}
+
 export interface ResolveDaemonToolsContext {
   session: SessionRecord;
   settings?: Settings;
@@ -291,6 +299,14 @@ export function createDaemonAgentLoader(
         })();
         await sinkBinding;
         sinkBinding = undefined;
+      }
+      if (!options.createAgent && settings?.sandbox?.enabled === false) {
+        if (executionEnvironment?.workspace.kind === "local" &&
+          executionEnvironment.workspace.hostRoot === executionEnvironment.workspace.executionRoot) {
+          localAgentWorkspaces.set(agent, executionEnvironment.workspace.executionRoot);
+        } else if (!executionEnvironment && settings?.agentEnvironment?.kind !== "wsl") {
+          localAgentWorkspaces.set(agent, session.cwd);
+        }
       }
       return agent;
     } catch (error) {

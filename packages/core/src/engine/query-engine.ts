@@ -338,15 +338,6 @@ export class QueryEngine implements IQueryEngine {
       if (turnCount >= maxTurnsLimit() && !forceFinalResponse) {
         throw new MaxTurnsExceeded(maxTurnsLimit());
       }
-      const runSystemPrompt = requestConfiguration.systemPrompt
-        ?? (options.execution?.capabilityView && this.options.systemPromptForRun
-          ? await this.options.systemPromptForRun(options.execution.capabilityView)
-          : this.systemPrompt);
-      this.lastRunPrompt = { systemPrompt: runSystemPrompt };
-      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
-      const turnSystemPrompt = contribution?.systemGuidance
-        ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
-        : baseSystemPrompt;
       this.compactService.setClient(
         this.createCompactClient(requestConfiguration.client, requestConfiguration.model, options.execution),
       );
@@ -394,6 +385,19 @@ export class QueryEngine implements IQueryEngine {
       const tools = forcedFinalTurn
         ? []
         : visibleTools.filter((tool) => !trajectoryControl.hiddenTools.includes(tool.name));
+      const runSystemPrompt = requestConfiguration.systemPromptForTools
+        ? await requestConfiguration.systemPromptForTools(tools)
+        : requestConfiguration.systemPrompt
+          ?? (this.options.systemPromptForTools
+            ? await this.options.systemPromptForTools(tools, options.execution?.capabilityView)
+            : options.execution?.capabilityView && this.options.systemPromptForRun
+              ? await this.options.systemPromptForRun(options.execution.capabilityView)
+              : this.systemPrompt);
+      this.lastRunPrompt = { systemPrompt: runSystemPrompt };
+      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
+      const turnSystemPrompt = contribution?.systemGuidance
+        ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
+        : baseSystemPrompt;
       const recoverySystem = forcedFinalTurn
         ? appendSystemGuidance(
             turnSystemPrompt,

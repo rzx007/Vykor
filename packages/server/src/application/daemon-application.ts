@@ -82,6 +82,7 @@ import { assembleSessionRunServices } from "./session/session-run-assembly.js";
 import { assembleSessionRunExecutor } from "./session/session-run-executor-assembly.js";
 import { SessionAutoReviewService } from "./auto-review/session-auto-review-service.js";
 import { createGitRunChangeInspector } from "./auto-review/git-run-change-inspector.js";
+import { SessionWorkspaceChanges } from "./session/session-workspace-changes.js";
 import { createSessionRuntimeDiscovery } from "./session/session-runtime-discovery.js";
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
@@ -736,10 +737,15 @@ export class DaemonApplication implements DurableAgentApplication {
         });
       });
 
+      const gitInspector = createGitRunChangeInspector();
+      const workspaceChanges = new SessionWorkspaceChanges({
+        session: store, events: this.eventPublisher, inspector: gitInspector,
+        log: (entry) => options.log({ level: "warn", event: "workspace_changes.failed", runId: String(entry.runId), error: String(entry.error) }),
+      });
       const autoReview = new SessionAutoReviewService({
         session: store,
         events: this.eventPublisher,
-        inspector: createGitRunChangeInspector(),
+        inspector: gitInspector,
         hasUserWork: (sessionId) => this.runControl.hasUserWork(sessionId),
         log: (entry) => {
           options.log({
@@ -757,7 +763,7 @@ export class DaemonApplication implements DurableAgentApplication {
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
-        resolveSessionSettings, autoReview, pluginUi: this.pluginUi,
+        resolveSessionSettings, autoReview, workspaceChanges, pluginUi: this.pluginUi,
       });
       const runExecutor = runExecution.executor;
       const materializeSteerInput = runExecution.materializeSteerInput;
@@ -997,7 +1003,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverPluginUiActions: () => this.pluginUi.recover(),
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
-        failIncompleteReviewsOnStartup: () => autoReview.failIncompleteReviewsOnStartup(),
+        failIncompleteReviewsOnStartup: () => { workspaceChanges.failIncompleteOnStartup(); return autoReview.failIncompleteReviewsOnStartup(); },
         pauseActiveGoals: () => { store.goals.pauseActiveGoalsOnStartup(); },
         terminalizeUnownedInputs: () => { store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON); },
         expirePendingPermissions: () => { store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON); },

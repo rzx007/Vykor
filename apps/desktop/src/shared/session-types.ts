@@ -13,6 +13,11 @@ export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/cli
 export interface GetDesktopSessionGoalInput {
   sessionId: string
 }
+export interface GetDesktopMessagePartInput {
+  sessionId: string
+  messageId: string
+  partId: string
+}
 export interface CreateDesktopSessionGoalInput extends CreateSessionGoalInput {
   sessionId: string
 }
@@ -114,6 +119,7 @@ interface DesktopSessionPartBase {
   toolName?: string
   input?: Record<string, unknown>
   output?: unknown
+  bodyView?: import("@vykor/client").SessionMessagePartRecord["bodyView"]
   isError?: boolean
   metadata: Record<string, unknown>
   createdAt: number

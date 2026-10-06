@@ -26,7 +26,8 @@ vi.mock("@vykor/agent-runtime", () => ({
   }),
 }));
 
-import { createDaemonAgentLoader } from "../daemon-agent.js";
+import { createDaemonAgentLoader, readDaemonAgentLocalWorkspace } from "../daemon-agent.js";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { getCoordinatorUserContext } from "@vykor/coordinator";
 import { createDefaultNodeAgentWithInternals } from "../../../../agent-runtime/src/default-agent.js";
 import { AgentPool } from "../../application/agent/agent-pool.js";
@@ -54,6 +55,22 @@ const session = {
 describe("createDaemonAgentLoader", () => {
   it("returns no loader when the daemon has no Agent configuration", () => {
     expect(createDaemonAgentLoader({})).toBeUndefined();
+  });
+
+  it("retains the warm default Agent's local execution evidence and rejects WSL/custom Agents", async () => {
+    const local = { loadHistory: vi.fn(), close: vi.fn() } as any;
+    vi.mocked(createDefaultNodeAgent).mockResolvedValueOnce(local);
+    const settings = { model: "offline", agentEnvironment: { kind: "native" }, sandbox: { enabled: false } } as any;
+    await createDaemonAgentLoader({ settings })!({ session, history: [], parts: [] });
+    settings.agentEnvironment.kind = "wsl";
+    expect(readDaemonAgentLocalWorkspace(local)).toBe("/repo");
+    const wsl = { loadHistory: vi.fn(), close: vi.fn() } as any;
+    vi.mocked(createDefaultNodeAgent).mockResolvedValueOnce(wsl);
+    await createDaemonAgentLoader({ settings })!({ session, history: [], parts: [] });
+    expect(readDaemonAgentLocalWorkspace(wsl)).toBeUndefined();
+    const custom = { loadHistory: vi.fn(), close: vi.fn() } as any;
+    await createDaemonAgentLoader({ createAgent: async () => custom })!({ session, history: [], parts: [] });
+    expect(readDaemonAgentLocalWorkspace(custom)).toBeUndefined();
   });
 
   it("passes a projectless cwd into the desktop-managed Agent environment", async () => {

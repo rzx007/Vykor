@@ -25,6 +25,26 @@ export function routeChangedFileClick(
   return "preview"
 }
 
+/** Membership for deduplicating stored observations, not permissive UI routing.
+ * Relative tool paths have an unknown execution cwd, so keep their original facts.
+ */
+export function isAbsoluteFileInRepository(path: string, repositoryRoot: string): boolean {
+  const windows = /^[A-Za-z]:[\\/]/.test(repositoryRoot) || repositoryRoot.startsWith("\\\\") || repositoryRoot.startsWith("//")
+  const root = windows ? stripExtendedPrefix(repositoryRoot.replace(/\\/g, "/")) : repositoryRoot
+  const file = windows ? stripExtendedPrefix(path.replace(/\\/g, "/")) : path
+  if (windows ? !isWindowsAbsolutePath(file) : !root.startsWith("/") || !file.startsWith("/") || file.startsWith("//")) return false
+  try {
+    // URL resolves dot segments; encode each segment so %, ? and # stay filename data.
+    const normalize = (value: string): string => {
+      const resolved = new URL(`file:///${value.split("/").map(encodeURIComponent).join("/")}`).pathname.replace(/\/+$/, "")
+      return windows ? resolved.toLowerCase() : resolved
+    }
+    const resolvedRoot = normalize(root)
+    const resolvedFile = normalize(file)
+    return resolvedFile === resolvedRoot || resolvedFile.startsWith(`${resolvedRoot}/`)
+  } catch { return false }
+}
+
 function isReviewablePath(path: string, projectPath: string | undefined): boolean {
   const normalizedPath = stripExtendedPrefix(
     path.trim().replace(/:(\d+)(?::\d+)?$/, "").replace(/\\/g, "/")

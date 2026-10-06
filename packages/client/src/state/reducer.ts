@@ -68,6 +68,9 @@ export function applySessionSnapshot(
 ): VykorClientState {
   const knownCursor = state.snapshotCursorBySession[snapshot.session.id] ?? 0;
   if (snapshot.cursor < knownCursor) return state;
+  // A cached snapshot must not undo a newer live update from this same session.
+  if (Object.values(state.eventsBySeq).some(event =>
+    event.sessionId === snapshot.session.id && event.seq > snapshot.cursor)) return state;
 
   const partsByMessageId: SessionBucket["partsByMessageId"] = {};
   for (const part of snapshot.parts) {

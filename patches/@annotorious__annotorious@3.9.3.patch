@@ -1,0 +1,26 @@
+diff --git a/dist/annotorious.es.js b/dist/annotorious.es.js
+index 51ee54c4d42e6f40c6fe2b472ed1068d75fe404f..81a74afe8f95088dda1409bd78f2667eb232d497 100644
+--- a/dist/annotorious.es.js
++++ b/dist/annotorious.es.js
+@@ -7254,7 +7254,7 @@ const Jr = () => {
+     o.autoSave
+   ), c = document.createElement("DIV");
+   c.style.position = "relative", c.style.display = "inline-block", n.style.display = "block", n.parentNode.insertBefore(c, n), c.appendChild(n);
+-  const d = ol(r);
++  const d = ol(r, c);
+   let u = ni();
+   to(n, c, o.theme);
+   const h = new Gr({
+diff --git a/src/Annotorious.ts b/src/Annotorious.ts
+index 7db100e7863b3676fb7944803e915999da898be4..7c7821ec7b625d52aaa43d4e39b6aa8d6bd3a461 100644
+--- a/src/Annotorious.ts
++++ b/src/Annotorious.ts
+@@ -83,7 +83,7 @@ export const createImageAnnotator = <I extends Annotation = ImageAnnotation, E e
+   img.parentNode!.insertBefore(container, img);
+   container.appendChild(img);
+ 
+-  const keyboardCommands = initKeyboardCommands(undoStack);
++  const keyboardCommands = initKeyboardCommands(undoStack, container);
+ 
+   let currentUser: User = createAnonymousGuest();
+ 

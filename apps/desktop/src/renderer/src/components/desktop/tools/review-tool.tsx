@@ -38,7 +38,7 @@ export function ReviewTool({
 }): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
-  const selectedProjectPath = selectedProject?.path
+  const selectedProjectPath = openRequest?.rootPath ?? selectedProject?.path
   const [loadState, setLoadState] = useState<LoadState>("idle")
   const [diffState, setDiffState] = useState<DiffState>("idle")
   const [reviewRange, setReviewRange] = useState<ReviewRange>(openRequest?.scope ?? "last-turn")
@@ -176,6 +176,7 @@ export function ReviewTool({
   return (
     <section className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/45 px-3">
+        {openRequest?.rootPath ? <span className="text-xs text-ui-muted" title={selectedProjectPath}>当前工作区差异</span> : null}
         <div className="min-w-0 flex-1">
           <ReviewRangeSummary
             changes={changes}

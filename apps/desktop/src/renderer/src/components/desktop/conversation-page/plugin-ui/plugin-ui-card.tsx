@@ -7,6 +7,7 @@ import { toolOutputText } from "../message/message-content"
 import { toolCallStatus } from "../message/message-render-model"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { usePluginUiHost } from "./plugin-ui-provider"
+import { useToolDetails } from "../message/use-tool-details"
 
 export function PluginUiCard({
   instance,
@@ -19,13 +20,17 @@ export function PluginUiCard({
 }) {
   const host = usePluginUiHost()
   const [message, setMessage] = useState("")
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const outputPreview = (result?.output != null ? result : call).bodyView?.output === "preview"
+  const details = useToolDetails(call, result, detailsOpen && outputPreview)
   const controller = useRef<AbortController | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
   const display = host?.displays.find(
     (display) =>
       display.instance.instanceId === instance.instanceId && display.surface === "tool-result"
   )
-  const text = toolOutputText(result?.output ?? call.output) ?? result?.text ?? call.text
+  const text =
+    toolOutputText(details.result?.output ?? details.call.output) ?? result?.text ?? call.text
   const failed = toolCallStatus(call, result) === "failed"
   const activeAction = instance.activeActionRunId
   const canDismiss =
@@ -79,11 +84,27 @@ export function PluginUiCard({
                     : "等待操作")}
         </span>
       </header>
-      {text && (
+      {text && outputPreview ? (
+        <details
+          className="px-4 pb-4 text-xs"
+          onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer text-muted-foreground">
+            {details.preview ? "结果预览 · 查看完整结果" : "完整结果"}
+          </summary>
+          {details.preview ? (
+            <p role="status" className="py-2 text-muted-foreground">
+              {details.error ??
+                (detailsOpen ? "正在加载完整详情；当前仅显示预览。" : "当前仅显示预览。")}
+            </p>
+          ) : null}
+          <pre className="max-h-64 overflow-auto pt-2 break-all whitespace-pre-wrap">{text}</pre>
+        </details>
+      ) : text ? (
         <pre className="max-h-64 overflow-auto px-4 pb-4 text-xs break-all whitespace-pre-wrap">
           {text}
         </pre>
-      )}
+      ) : null}
       {display && <PluginUiFrame key={display.key} display={display} />}
       {host?.available && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-3">

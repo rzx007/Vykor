@@ -123,7 +123,9 @@ describe("one complete file workflow", () => {
       expect(ends[2]?.result).toMatchObject({ executionState: "completed" });
       expect(ends[2]?.result.isError).not.toBe(true);
       expect(requests).toHaveLength(4);
-      expect(requests[2]!.messages.find(message => message.role === "tool" && message.tool_call_id === "bad-edit")).toBeDefined();
+      const feedback = requests[2]!.messages.find(message => message.role === "tool" && message.tool_call_id === "bad-edit");
+      expect(feedback).toBeDefined();
+      if (fault !== "missing new_string") expect(feedback!.content).toContain("const todo = 10099;");
       expect(await readFile(file, "utf8")).toBe(corrected);
     } finally { vi.restoreAllMocks(); await rm(dir, { recursive: true, force: true }); }
   });

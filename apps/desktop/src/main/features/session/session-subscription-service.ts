@@ -112,6 +112,7 @@ export class SessionSubscriptionService {
       subscription,
       async () => {
         return syncEvents(client, {
+          partView: "summary",
           sessionId,
           signal: controller.signal,
         })[Symbol.asyncIterator]()
@@ -152,6 +153,7 @@ export class SessionSubscriptionService {
       subscription,
       async () => {
         return syncEvents(client, {
+          partView: "summary",
           sessionId,
           signal: controller.signal,
         })[Symbol.asyncIterator]()
@@ -214,7 +216,7 @@ export class SessionSubscriptionService {
       await pumpSubscription<SyncEventUpdate>({
         initialIterator: iterator,
         createIterator: () =>
-          syncEvents(client, { sessionId, signal: controller.signal })[Symbol.asyncIterator](),
+          syncEvents(client, { sessionId, signal: controller.signal, partView: "summary" })[Symbol.asyncIterator](),
         isActive: () =>
           !controller.signal.aborted &&
           !webContents.isDestroyed() &&

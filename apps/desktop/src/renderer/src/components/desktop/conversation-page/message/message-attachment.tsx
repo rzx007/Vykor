@@ -55,7 +55,13 @@ export function MessageAttachment({
         fill={fill}
         onOpen={
           viewer
-            ? () => viewer.openImage({ assetId: part.assetId, name: part.displayName, readOnly })
+            ? () =>
+                viewer.openImage({
+                  kind: "attachment",
+                  assetId: part.assetId,
+                  name: part.displayName,
+                  readOnly,
+                })
             : undefined
         }
         actionsClassName="pointer-events-none opacity-0 transition-opacity duration-150 group-hover/attachment:pointer-events-auto group-hover/attachment:opacity-100 group-focus-within/attachment:pointer-events-auto group-focus-within/attachment:opacity-100"

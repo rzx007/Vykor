@@ -126,4 +126,8 @@ export class SessionQueryService {
   ): SessionMessagePartRecord[] {
     return this.store.listMessageParts(sessionId, input);
   }
+
+  getMessagePart(sessionId: string, messageId: string, partId: string): SessionMessagePartRecord | undefined {
+    return this.store.listMessageParts(sessionId, { messageId }).find(part => part.id === partId);
+  }
 }

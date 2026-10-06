@@ -5,6 +5,7 @@ import { cn } from "@renderer/lib/utils"
 import type { DesktopAttachmentSessionPart, DesktopSessionPart } from "@shared/session-types"
 
 import { MessageAttachment } from "./message-attachment"
+import { useToolDetails } from "./use-tool-details"
 
 import {
   formatValue,
@@ -52,6 +53,12 @@ export function ImageGenerationMessage({
 }): React.JSX.Element | null {
   const running = call.status === "pending" || call.status === "running"
   const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const details = useToolDetails(
+    call,
+    undefined,
+    detailsOpen && call.status === "failed" && call.bodyView?.output === "preview"
+  )
 
   useEffect(() => {
     if (!running) return
@@ -75,7 +82,12 @@ export function ImageGenerationMessage({
         icon={<AlertCircle className="size-4 text-amber-600/80 dark:text-amber-400/80" />}
         title="这次没有生成出图片"
         tone="error"
-        detail={formatValue(call.output)}
+        detail={formatValue(details.call.output)}
+        preview={call.bodyView?.output === "preview" && details.preview}
+        detailMessage={
+          details.error ?? (detailsOpen ? "正在加载完整详情；当前仅显示预览。" : "当前仅显示预览。")
+        }
+        onDetailToggle={setDetailsOpen}
       />
     )
   }
@@ -226,11 +238,17 @@ function ImageGenerationStatusCard({
   title,
   tone = "default",
   detail,
+  preview,
+  detailMessage,
+  onDetailToggle,
 }: {
   icon: React.ReactNode
   title: string
   tone?: "default" | "warning" | "error"
   detail?: string
+  preview?: boolean
+  detailMessage?: string
+  onDetailToggle?: (open: boolean) => void
 }): React.JSX.Element {
   const normalizedDetail = detail?.trim()
   const statusRowClassName = "flex w-fit items-center gap-2 py-1.5"
@@ -242,7 +260,7 @@ function ImageGenerationStatusCard({
       aria-label={tone === "error" ? "图片生成失败" : "图片生成状态"}
     >
       {tone === "error" && normalizedDetail ? (
-        <details className="group">
+        <details className="group" onToggle={(event) => onDetailToggle?.(event.currentTarget.open)}>
           <summary
             data-image-generation-status-row
             aria-live="polite"
@@ -254,9 +272,14 @@ function ImageGenerationStatusCard({
           >
             {icon}
             <span className="font-medium">{title}</span>
-            <span className="text-ui-muted">详情</span>
+            <span className="text-ui-muted">{preview ? "详情（预览）" : "详情"}</span>
             <ChevronRight className="size-3.5 text-ui-muted transition-transform group-open:rotate-90" />
           </summary>
+          {preview ? (
+            <p role="status" className="mt-1 ml-6 text-ui-muted">
+              {detailMessage}
+            </p>
+          ) : null}
           <pre className="text-ui-caption mt-1 ml-6 max-h-40 overflow-auto rounded-lg bg-muted/40 px-3 py-2 leading-relaxed whitespace-pre-wrap text-ui-muted">
             {normalizedDetail}
           </pre>

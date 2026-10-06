@@ -49,7 +49,9 @@ export function buildAgentTranscript(
     if (message.role === "user") {
       const text = textFromParts(messageParts);
       if (text.trim()) {
-        output.push({ type: "user", content: text });
+        output.push({ type: "user", content: text,
+          ...(messageParts.some((part) => part.type === "text" && part.metadata.compactRole === "boundary") ? { compactRole: "boundary" as const } : {}),
+        });
       } else if (attachments.length > 0) {
         output.push({ type: "user", content: attachmentOnlyUserPlaceholder(attachments) });
       }
@@ -82,6 +84,7 @@ export function buildAgentTranscript(
       output.push({
         type: "assistant",
         content: text,
+        ...(messageParts.some((part) => part.type === "text" && part.metadata.compactRole === "summary") ? { compactRole: "summary" as const } : {}),
         ...(phase ? { phase } : {}),
         ...(toolUses.length > 0 ? { toolUses } : {}),
         ...(reasoning ? { reasoning } : {}),
@@ -129,7 +132,9 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
     if (message.type === "user") {
       output.push({
         role: "user",
-        parts: [{ type: "text", status: "completed", text: userContentToText(message.content) }],
+        parts: [{ type: "text", status: "completed", text: userContentToText(message.content),
+          ...(message.compactRole === "boundary" ? { metadata: { compactRole: "boundary" } } : {}),
+        }],
       });
       continue;
     }
@@ -182,7 +187,10 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
           type: "text",
           status: "completed",
           text: message.content,
-          ...(message.phase ? { metadata: { phase: message.phase } } : {}),
+          ...(message.phase || message.compactRole === "summary" ? { metadata: {
+            ...(message.phase ? { phase: message.phase } : {}),
+            ...(message.compactRole === "summary" ? { compactRole: "summary" } : {}),
+          } } : {}),
         });
       }
       for (const toolUse of message.toolUses ?? []) {

@@ -4,6 +4,10 @@ import type { GroupImperativeHandle, Layout, PanelImperativeHandle } from "react
 import { beginPanelToggleTransition } from "../panel-toggle-transition"
 import type { DesktopGitDiffScope, DesktopGitReviewRequest } from "@shared/git-types"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
+import type {
+  ImageOpenRequest,
+  ImageSource,
+} from "@renderer/components/desktop/image-viewer/image-source"
 import {
   moveUtilityPanelScope,
   patchUtilityPanelViewState,
@@ -65,12 +69,14 @@ export type UtilityPanelController = {
   terminalOpenRequest: Omit<ScopedTerminalRequest, "scopeId"> | null
   toolOpenRequest: Omit<ScopedToolRequest, "scopeId"> | null
   reviewOpenRequest: Omit<ScopedReviewRequest, "scopeId"> | null
+  imageOpenRequest: ImageOpenRequest | null
   restore: () => void
   collapse: () => void
   toggle: () => void
   toggleMaximized: () => void
   openFile: (path: string, line?: number) => void
-  openReview: (path?: string, scope?: DesktopGitDiffScope) => void
+  openImage: (source: ImageSource) => void
+  openReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   openTerminal: (terminalId: string) => void
   openTool: (tool: UtilityToolRequest, taskId?: string) => void
   handleLayoutChanged: (layout: Layout) => void
@@ -116,6 +122,9 @@ export function useUtilityPanelController({
   const [terminalRequest, setTerminalRequest] = useState<ScopedTerminalRequest | null>(null)
   const [toolRequest, setToolRequest] = useState<ScopedToolRequest | null>(null)
   const [reviewRequest, setReviewRequest] = useState<ScopedReviewRequest | null>(null)
+  const [imageRequest, setImageRequest] = useState<(ImageOpenRequest & { scopeId: string }) | null>(
+    null
+  )
 
   const toggleTransitionCancelRef = useRef<(() => void) | null>(null)
   const maximizedRef = useRef(maximized)
@@ -315,10 +324,18 @@ export function useUtilityPanelController({
     [restore]
   )
 
-  const openReview = useCallback(
-    (path?: string, scope?: DesktopGitDiffScope): void => {
+  const openImage = useCallback(
+    (source: ImageSource): void => {
       restore()
-      setReviewRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, path, scope })
+      setImageRequest({ id: ++toolRequestSequence, scopeId: activeScopeIdRef.current, source })
+    },
+    [restore]
+  )
+
+  const openReview = useCallback(
+    (path?: string, scope?: DesktopGitDiffScope, rootPath?: string): void => {
+      restore()
+      setReviewRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, path, scope, rootPath })
     },
     [restore]
   )
@@ -422,11 +439,13 @@ export function useUtilityPanelController({
     terminalOpenRequest: terminalRequest?.scopeId === scopeId ? terminalRequest : null,
     toolOpenRequest: toolRequest?.scopeId === scopeId ? toolRequest : null,
     reviewOpenRequest: reviewRequest?.scopeId === scopeId ? reviewRequest : null,
+    imageOpenRequest: imageRequest?.scopeId === scopeId ? imageRequest : null,
     restore,
     collapse,
     toggle,
     toggleMaximized,
     openFile,
+    openImage,
     openReview,
     openTerminal,
     openTool,

@@ -300,7 +300,7 @@ function descriptorHostLauncher(descriptor: ShellDescriptor): HostShellLauncher 
 export const shellTool: ToolDefinition = createShellTool();
 
 export function createShellDescription(shell?: ShellDescriptor): string {
-  const background = "For long-running commands such as dev servers, watchers, installs, builds, migrations, docker compose, or commands likely to take more than a brief moment, use BackgroundShellCreate and then JobWait or JobRead.";
+  const background = "For long-running commands such as dev servers, watchers, installs, builds, migrations, docker compose, or commands likely to take more than a brief moment, use background execution when its tool and visible job controls are available, then follow the returned handle. Do not claim completion without evidence.";
   const powershellQuoting = "This tool already runs PowerShell: execute scripts directly. If another powershell/pwsh process is needed, use a single-quoted -Command script or a script block; double-quoted scripts expand $variables in the outer shell. A here-string opener (@' or @\") must be followed by a newline before any content; put its matching terminator ('@ or \"@) on its own line.";
   if (!shell) return `Execute a short-lived command using the execution environment's resolved shell. ${background}`;
   if (shell.dialect === "windows-powershell") {

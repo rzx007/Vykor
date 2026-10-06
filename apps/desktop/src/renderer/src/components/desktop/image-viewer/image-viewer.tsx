@@ -47,7 +47,7 @@ export function ImageViewer({
   url?: string
   name: string
   mediaType?: string
-  onClose: () => void
+  onClose?: () => void
   onFeedback?: (
     marked: Blob,
     regions: ImageRegion[],
@@ -69,7 +69,7 @@ export function ImageViewer({
     bytes,
     url,
     name,
-    drawing,
+    drawing && Boolean(onFeedback),
     mediaType
   )
   const selected = annotation.regions.find((region) => region.id === annotation.selectedId)
@@ -180,15 +180,14 @@ export function ImageViewer({
 
   return (
     <section
-      className="image-annotation-viewer relative h-full min-h-0 overflow-hidden rounded-2xl bg-muted/40 text-foreground select-none"
+      className="image-annotation-viewer relative h-full min-h-0 overflow-hidden bg-muted/40 text-foreground select-none"
       aria-label="图片查看与批注"
-      onKeyDown={(event) => {
+      onKeyDownCapture={(event) => {
         const editing = (event.target as HTMLElement).closest(
           "textarea,input,[contenteditable=true]"
         )
         const modifier = event.ctrlKey || event.metaKey
         if (editing) {
-          if (modifier && ["z", "y"].includes(event.key.toLowerCase())) event.stopPropagation()
           if (modifier && event.key === "Enter" && selected && comment.trim()) {
             event.preventDefault()
             event.stopPropagation()
@@ -277,7 +276,7 @@ export function ImageViewer({
           className="flex h-9 max-w-64 min-w-0 items-center gap-2 rounded-full bg-popover px-3 text-[13px] text-popover-foreground shadow-control"
         >
           <FileImage className="shrink-0" />
-          <span className="truncate">{name}</span>
+          <span className="truncate">图片</span>
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
           <Popover>
@@ -363,17 +362,19 @@ export function ImageViewer({
               <Download />
             </IconAction>
           </ButtonGroup>
-          <Button
-            variant="control"
-            shape="circle"
-            size="icon"
-            className="size-9"
-            aria-label="关闭图片查看器"
-            title="关闭"
-            onClick={onClose}
-          >
-            <X />
-          </Button>
+          {onClose && (
+            <Button
+              variant="control"
+              shape="circle"
+              size="icon"
+              className="size-9"
+              aria-label="关闭图片查看器"
+              title="关闭"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          )}
         </div>
       </header>
 

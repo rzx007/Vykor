@@ -30,6 +30,7 @@ import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { ContextUsageCache } from "../context-usage-cache.js";
 import type { SessionContextUsageAgent } from "../assemble-session-context-usage.js";
 import { captureAutoReviewBaseline, reviewAutoReview, settleUnreviewedAutoReview } from "./run-auto-review.js";
+import type { SessionWorkspaceChanges } from "./session-workspace-changes.js";
 
 const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
@@ -73,6 +74,8 @@ export interface SessionRunExecutorContext {
     "captureBaseline" | "reviewCompletedRun" | "settleUnreviewedRun"
   >;
   resolveAutoReviewMode?(cwd: string): Promise<AutoReviewMode>;
+  workspaceChanges?: Pick<SessionWorkspaceChanges, "capture" | "settle">;
+  resolveLocalExecutionCwd?(agent: Awaited<ReturnType<AgentPool["acquireSession"]>>): string | undefined;
   postRunMaintenance?: Pick<SessionPostRunMaintenance, "run">;
   attachmentResources?: Pick<SessionAttachmentResources, "materializeRun">;
   attachmentOcrAvailable?: boolean;
@@ -245,7 +248,7 @@ export class SessionRunExecutor {
       }
 
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
-      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd);
+      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
@@ -477,6 +480,10 @@ export class SessionRunExecutor {
       // Failed / interrupted terminal: drop stale usage; next usage() may reassemble.
       this.context.contextUsageCache?.invalidate(sessionId);
     } finally {
+      // Also observe partial effects after a failed/interrupting submit or result.
+      // Terminal timestamps were already recorded by the Run owner.
+      try { await this.context.workspaceChanges?.settle(runId, workContext.signal); }
+      catch (error) { this.context.log({ level: "warn", event: "workspace_changes.settle_failed", runId, error: String(error) }); }
       this.context.pluginUi?.releaseRunView(runId);
       watchdog?.dispose();
       if (cleanupAttachmentResources) {

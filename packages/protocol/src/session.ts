@@ -133,6 +133,12 @@ export interface SessionMessagePartRecord {
   toolName?: string;
   input?: Record<string, unknown>;
   output?: unknown;
+  /** Opt-in wire view only; preview bodies must be read from the scoped detail API. */
+  bodyView?: {
+    input: "full" | "preview" | "unavailable";
+    output: "full" | "preview" | "unavailable";
+    outputReferences?: string[];
+  };
   isError?: boolean;
   assetId?: string;
   intent?: AttachmentIntent;

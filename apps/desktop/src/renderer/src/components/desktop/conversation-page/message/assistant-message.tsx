@@ -8,6 +8,8 @@ import {
   TerminalSquare,
 } from "lucide-react"
 import { useEffect, useId, useMemo, useState } from "react"
+import type { WorkspaceChangesMetadata } from "@vykor/client"
+import type { DesktopGitDiffScope } from "@shared/git-types"
 import { Streamdown } from "streamdown"
 
 import { Button } from "@renderer/components/ui/button"
@@ -20,7 +22,7 @@ import {
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
-import { routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
+import { isAbsoluteFileInRepository, routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
 
 import {
   buildAssistantContent,
@@ -45,6 +47,7 @@ import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
+import { useToolDetails } from "./use-tool-details"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
@@ -65,6 +68,8 @@ const streamingTextAnimation = {
 
 export function AssistantMessage({
   parts,
+  observations,
+  showObservations = true,
   streaming,
   initialPartIds,
   tasks = emptyAgentTasks,
@@ -75,6 +80,8 @@ export function AssistantMessage({
   onOpenTerminal,
 }: {
   parts: DesktopSessionPart[]
+  observations?: WorkspaceChangesMetadata[]
+  showObservations?: boolean
   streaming: boolean
   /** 打开聊天时已有的内容，不重复播放入场。 */
   initialPartIds?: ReadonlySet<string>
@@ -82,12 +89,23 @@ export function AssistantMessage({
   onOpenAgents?: (taskId?: string) => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
-  onOpenReview: (path?: string) => void
+  onOpenReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   onOpenTerminal: (terminalId: string) => void
 }): React.JSX.Element {
   const units = useMemo(() => buildAssistantContent(parts), [parts])
   const blocks = useMemo(() => groupToolUnits(units), [units])
   const changedFiles = useMemo(() => collectChangedFiles(parts), [parts])
+  const fileIdentityLimits = parts.flatMap(part => {
+    if (part.bodyView?.input !== "preview" || part.status !== "completed" || part.toolName !== "ApplyPatch") return []
+    const facts = part.metadata.changedFiles as { files?: unknown[]; fileCount?: number; truncated?: boolean } | undefined
+    return facts?.truncated === true && Array.isArray(facts.files) && Number.isSafeInteger(facts.fileCount)
+      ? [{ id: part.id, shown: facts.files.length, total: facts.fileCount }] : []
+  })
+  const settledObservations = observations?.filter((observation) => observation.status !== "captured") ?? []
+  const toolFiles = settledObservations.length > 0
+    ? changedFiles.filter((file) => !settledObservations.some((observation) =>
+      observation.repositoryRoot && isAbsoluteFileInRepository(file.path, observation.repositoryRoot)))
+    : changedFiles
   if (parts.length === 0) return <span className="text-xs text-ui-muted">正在生成回复...</span>
 
   return (
@@ -212,14 +230,23 @@ export function AssistantMessage({
         )
       })}
 
-      {!streaming && isTurnComplete(parts) && changedFiles.length > 0 ? (
+      {!streaming && showObservations ? settledObservations.map((observation, index) => (
+        observation.status === "unavailable" ? (
+          <p key={index} className="text-xs text-ui-muted">运行期间变更无法确认：{workspaceChangeReason(observation.reason)}</p>
+        ) : (
+          <ChangedFilesSummary key={index} files={observation.files.map((file) => ({ path: file.path, additions: 0, deletions: 0, hasStats: false }))}
+            observation={observation} canOpenReview={canOpenReview} onOpenFile={onOpenFile} onOpenReview={onOpenReview} />
+        )
+      )) : null}
+      {!streaming && isTurnComplete(parts) && toolFiles.length > 0 ? (
         <ChangedFilesSummary
-          files={changedFiles}
+          files={toolFiles}
           canOpenReview={canOpenReview}
           onOpenFile={onOpenFile}
           onOpenReview={onOpenReview}
         />
       ) : null}
+      {!streaming ? fileIdentityLimits.map(limit => <p key={limit.id} className="text-xs text-ui-muted">工具文件列表仅显示 {limit.shown} / {limit.total} 个文件。</p>) : null}
     </div>
   )
 }
@@ -517,7 +544,6 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
             const calling = isToolInFlight(tool)
-            const output = tool.result?.output ?? tool.call.output
             const input = tool.call.input
             const parseError =
               tool.result?.metadata.toolInputError ?? tool.call.metadata.toolInputError
@@ -528,6 +554,8 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
               summary.detail ??
               (unparsedInput
                 ? "查看详情"
+                : tool.call.bodyView?.input === "preview"
+                  ? "查看参数"
                 : input === undefined
                   ? "参数尚未提供"
                   : Object.keys(input).length === 0
@@ -567,33 +595,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                 </button>
                 {active ? (
                   <div className="mb-2 overflow-hidden rounded-md border bg-muted/30">
-                    <div className="border-b px-3 py-1.5 text-xs">
-                      {toolDisplayName(tool.call, tool.result)}
-                    </div>
-                    <div className="px-3 pt-2 text-xs font-medium">参数</div>
-                    {unparsedInput ? (
-                      <p className="px-3 py-2 text-xs text-ui-muted">
-                        {import.meta.env.DEV
-                          ? "参数解析失败，请查看下方错误结果。"
-                          : "没有记录可展示的参数。"}
-                      </p>
-                    ) : input === undefined ? (
-                      <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
-                    ) : (
-                      <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-                        {formatValue(input)}
-                      </pre>
-                    )}
-                    <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
-                    {output === undefined ? (
-                      <p className="px-3 py-2 text-xs text-ui-muted">
-                        {calling ? "等待工具返回结果" : "没有记录结果"}
-                      </p>
-                    ) : (
-                      <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-                        {formatValue(output)}
-                      </pre>
-                    )}
+                    <ToolDetails tool={tool} calling={calling} />
                   </div>
                 ) : null}
               </div>
@@ -605,19 +607,41 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   )
 }
 
+function ToolDetails({ tool, calling }: { tool: ToolUnit; calling: boolean }): React.JSX.Element {
+  const { call, result } = tool
+  const { call: fullCall, result: fullResult, preview, error } = useToolDetails(call, result, true)
+  const input = fullCall.input
+  const output = fullResult?.output ?? fullCall.output
+  const unparsedInput = Boolean((fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) && (input === undefined || Object.keys(input).length === 0))
+  return <>
+    <div className="border-b px-3 py-1.5 text-xs">{toolDisplayName(call, result)}</div>
+    {preview ? <p role="status" className="px-3 py-2 text-xs text-ui-muted">{error ?? "正在加载完整详情；当前仅显示预览。"}</p> : null}
+    <div className="px-3 pt-2 text-xs font-medium">参数</div>
+    {unparsedInput ? <p className="px-3 py-2 text-xs text-ui-muted">{import.meta.env.DEV ? "参数解析失败，请查看下方错误结果。" : "没有记录可展示的参数。"}</p>
+      : input === undefined ? <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
+        : <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">{formatValue(input)}</pre>}
+    <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
+    {output === undefined ? <p className="px-3 py-2 text-xs text-ui-muted">{calling ? "等待工具返回结果" : "没有记录结果"}</p>
+      : <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">{formatValue(output)}</pre>}
+    {preview && fullCall.bodyView?.outputReferences?.length ? <p className="px-3 py-2 text-xs text-ui-muted">{fullCall.bodyView.outputReferences.join("\n")}</p> : null}
+  </>
+}
+
 export function ChangedFilesSummary({
   files,
+  observation,
   canOpenReview,
   onOpenFile,
   onOpenReview,
 }: {
   files: ChangedFile[]
+  observation?: WorkspaceChangesMetadata
   canOpenReview: boolean
   onOpenFile: (path: string, line?: number) => void
-  onOpenReview: (path?: string) => void
+  onOpenReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
 }): React.JSX.Element {
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
-  const selectedProjectPath = workspaceProject?.path
+  const selectedProjectPath = observation?.repositoryRoot ?? workspaceProject?.path
   const [expanded, setExpanded] = useState(false)
   const [gitStatsByPath, setGitStatsByPath] = useState<Record<string, ChangedFileStats>>({})
   const fileKey = useMemo(
@@ -636,7 +660,7 @@ export function ChangedFilesSummary({
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
-      if (!canOpenReview || !selectedProjectPath || files.length === 0) {
+      if (observation || !canOpenReview || !selectedProjectPath || files.length === 0) {
         setGitStatsByPath({})
         return
       }
@@ -667,18 +691,18 @@ export function ChangedFilesSummary({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [canOpenReview, fileKey, files.length, selectedProjectPath])
+  }, [canOpenReview, fileKey, files.length, selectedProjectPath, observation])
 
   const filesWithStats = useMemo(
     () =>
       files.map((file) => {
-        const stats =
+        const stats = observation ? undefined :
           gitStatsByPath[
             normalizeReviewPath(toProjectRelativePath(file.path, selectedProjectPath) ?? file.path)
           ]
         return stats ? { ...file, ...stats, hasStats: true } : file
       }),
-    [files, gitStatsByPath, selectedProjectPath]
+    [files, gitStatsByPath, selectedProjectPath, observation]
   )
   const visible = expanded ? filesWithStats : filesWithStats.slice(0, 3)
   const hasStats = filesWithStats.some((file) => file.hasStats)
@@ -693,7 +717,10 @@ export function ChangedFilesSummary({
           <FileCode2 className="size-[18px]" strokeWidth={1.7} />
         </span>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">已编辑 {files.length} 个文件</h3>
+          <h3 className="text-sm font-semibold text-foreground">{observation ? `运行期间变更：仓库内 ${observation.fileCount} 个文件` : `已编辑 ${files.length} 个文件`}</h3>
+          {observation ? <p className="mt-0.5 text-xs text-ui-muted">
+            {observation.totalLines} 行变化{observation.truncated ? " · 摘要已截断" : ""} · 点击查看当前工作区差异
+          </p> : null}
           {hasStats ? (
             <p className="mt-0.5">
               <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>{" "}
@@ -709,13 +736,13 @@ export function ChangedFilesSummary({
             type="button"
             onClick={() =>
               routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
-                ? onOpenReview(file.path)
-                : onOpenFile(file.path)
+                ? observation ? onOpenReview(file.path, "uncommitted", selectedProjectPath) : onOpenReview(file.path)
+                : onOpenFile(observation && selectedProjectPath ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}` : file.path)
             }
             className="flex h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
           >
             <span className="min-w-0 flex-1 truncate text-sm text-ui-muted">{file.path}</span>
-            {file.hasStats ? (
+            {observation ? <span className="text-xs text-ui-muted">{observation.files.find((stored) => stored.path === file.path)?.lines ?? 0} 行变化</span> : file.hasStats ? (
               <LineStats additions={file.additions} deletions={file.deletions} />
             ) : null}
           </button>
@@ -732,6 +759,21 @@ export function ChangedFilesSummary({
       ) : null}
     </section>
   )
+}
+
+function workspaceChangeReason(reason: WorkspaceChangesMetadata["reason"]): string {
+  switch (reason) {
+    case "preexisting_dirty_overlap": return "已有未提交文件在本轮又发生变化"
+    case "concurrent_run_overlap": return "同一仓库有其他运行重叠"
+    case "not_git_repository": return "当前目录不是 Git 仓库"
+    case "execution_environment_unavailable": return "无法安全检查本轮的执行环境"
+    case "observation_budget_exceeded": return "观察超过时间预算"
+    case "observation_cancelled": return "观察已取消"
+    case "sensitive_content_path": return "涉及敏感文件，未读取差异"
+    case "non_linear_head_change": case "post_commit_worktree_changed": return "Git 提交或工作区状态无法安全比较"
+    case "daemon_restarted": return "服务重启，基线已丢失"
+    default: return "Git 检查失败"
+  }
 }
 
 function LineStats({

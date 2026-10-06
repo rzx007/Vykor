@@ -53,12 +53,12 @@ export function FileImagePreview({
         className="max-h-full max-w-full object-contain"
         onError={() => setFailedImage({ bytes, mediaType })}
       />
-      {viewer && (
+      {viewer && path && (
         <button
           type="button"
           aria-label={`查看图片 ${name}`}
           className="absolute inset-0 cursor-zoom-in rounded outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          onClick={() => viewer.openImage({ bytes, mediaType, name, path })}
+          onClick={() => viewer.openImage({ kind: "file", bytes, mediaType, name, path })}
         />
       )}
     </div>

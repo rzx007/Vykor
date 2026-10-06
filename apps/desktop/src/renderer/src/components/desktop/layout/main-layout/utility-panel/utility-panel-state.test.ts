@@ -176,4 +176,36 @@ describe("utility panel state", () => {
     expect(handled.handledFileRequestId).toBe(42)
     expect(initialState.tabs).toEqual([])
   })
+
+  it("moves image descriptors with a new session draft without sharing another session's images", () => {
+    const draftScope = "draft:image-move"
+    const sessionScope = "session:image-move"
+    const otherScope = "session:image-other"
+    const source = {
+      kind: "memory" as const,
+      id: "capture-1",
+      name: "截图.png",
+      bytes: new ArrayBuffer(2),
+      mediaType: "image/png",
+    }
+    const imageState = {
+      ...defaultUtilityPanelRuntimeState(),
+      tabs: [
+        {
+          id: "image:memory:capture-1",
+          tool: "image" as const,
+          title: "截图.png",
+          imageSource: source,
+        },
+      ],
+      activeTabId: "image:memory:capture-1",
+    }
+    const other = defaultUtilityPanelRuntimeState()
+    writeUtilityPanelRuntimeState(draftScope, imageState)
+    writeUtilityPanelRuntimeState(otherScope, other)
+    moveUtilityPanelScope(draftScope, sessionScope, {})
+    expect(readUtilityPanelRuntimeState(sessionScope)!.tabs[0]!.imageSource).toBe(source)
+    expect(readUtilityPanelRuntimeState(otherScope)).toBe(other)
+    expect(readUtilityPanelRuntimeState(draftScope)).toBeUndefined()
+  })
 })

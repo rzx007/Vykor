@@ -173,6 +173,7 @@ export interface ListMessagesOptions {
 
 /** `GET /sessions/:id/parts` 查询参数。 */
 export interface ListClientMessagePartsOptions {
+  partView?: "summary";
   cursor?: number;
   afterSeq?: number;
   messageId?: string;
@@ -181,6 +182,7 @@ export interface ListClientMessagePartsOptions {
 
 /** `GET /events` 查询参数。 */
 export interface ListEventsOptions {
+  partView?: "summary";
   cursor?: number;
   afterSeq?: number;
   sessionId?: string;

@@ -50,8 +50,8 @@ describe("BackgroundShellCreate", () => {
   it("is discoverable for long-running bash or shell commands", () => {
     expect(backgroundShellCreateTool.description).toMatch(/long-running/i);
     expect(backgroundShellCreateTool.description).toMatch(/bash|shell/i);
-    expect(backgroundShellCreateTool.description).toContain("JobWait");
-    expect(backgroundShellCreateTool.description).toContain("JobRead");
+    expect(backgroundShellCreateTool.description).toContain("visible job controls");
+    expect(backgroundShellCreateTool.description).toContain("Do not claim");
   });
 
   it("exposes only background-shell inputs", () => {

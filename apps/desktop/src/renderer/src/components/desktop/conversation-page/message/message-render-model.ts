@@ -192,6 +192,14 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
     const executionState = toolExecutionState(part, result)
     if (executionState === "not_started" || executionState === "unknown") continue
     if (toolCallStatus(part, result) !== "completed") continue
+    if (part.bodyView?.input === "preview" && collectPaths(part.input).length === 0) {
+      const facts = recordValue(result?.metadata.changedFiles ?? part.metadata.changedFiles)
+      if (Array.isArray(facts?.files)) for (const file of facts.files) {
+        const identity = recordValue(file)
+        if (typeof identity?.path === "string") addChange(changes, identity.path, 0, 0, false)
+      }
+      continue
+    }
     const patch = findPatch(part.input)
     if (patch) collectPatchChanges(patch, changes)
     for (const path of collectPaths(part.input)) addChange(changes, path, 0, 0, false)

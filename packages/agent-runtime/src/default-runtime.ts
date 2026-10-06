@@ -1,4 +1,4 @@
-import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient } from "@vykor/core";
+import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient, ToolDefinition } from "@vykor/core";
 import {
   DEFAULT_OUTPUT_TOKEN_MAX,
   QueryEngine,
@@ -230,8 +230,10 @@ export async function createVykorRuntime(
       workStyle: settings.workStyle,
       fastMode: configuration.fastMode ?? settings.fastMode,
     },
-  ) =>
-    buildRuntimeSystemPrompt({
+    tools: readonly ToolDefinition[] = toolRegistry.getAll(),
+  ) => {
+    const names = new Set(tools.map((tool) => tool.name));
+    return buildRuntimeSystemPrompt({
       customPrompt: promptSettings.systemPrompt,
       cwd: hostCwd,
       environmentInfo: options.executionEnvironment?.info,
@@ -240,10 +242,26 @@ export async function createVykorRuntime(
       fastMode: promptSettings.fastMode,
       effort,
       passes: settings.passes,
-      includeBackgroundShell,
-      includeDelegation,
-      skillsList,
+      includeBackgroundShell: ["BackgroundShellCreate", "JobWait", "JobRead"].every((name) => names.has(name)),
+      includeDelegation: ["Agent", "JobWait", "JobRead", "JobSend", "JobCancel"].every((name) => names.has(name)),
+      skillsList: names.has("Skill") ? skillsList : undefined,
     });
+  };
+  const createPromptBuilder = (
+    view: RunCapabilityView | undefined,
+    customPrompt: string | undefined,
+    effort = configuration.effort ?? settings.effort,
+    promptSettings?: Parameters<typeof buildSystemPrompt>[2],
+  ) => async (tools: readonly ToolDefinition[]) => {
+    const prompt = customPrompt ?? await buildSystemPrompt(
+      (view ? [...view.skills.values()].map((binding) => binding.definition)
+        : options.skillRegistry?.getNonPluginSkills())?.filter((skill) => !skill.disableModelInvocation),
+      effort, promptSettings, tools,
+    );
+    if (!tools.some((tool) => tool.name === "Agent") || !view?.agents.size) return prompt;
+    const agents = [...view.agents].map(([name, { definition }]) => JSON.stringify({ name, description: definition.description }));
+    return `${prompt}\n\n# Available agents\nUse Agent with subagentType set to one of these names:\n${agents.join("\n")}`;
+  };
   const systemPrompt = configuration.systemPrompt ?? await buildSystemPrompt(
     options.skillRegistry?.getNonPluginSkills().filter((skill) => !skill.disableModelInvocation),
   );
@@ -271,12 +289,9 @@ export async function createVykorRuntime(
       const settingsPrompt = Object.prototype.hasOwnProperty.call(
         snapshot.configuration, "settingsPrompt",
       ) ? snapshot.configuration.settingsPrompt : settings.systemPrompt;
-      const prompt = sessionPrompt?.trim() ? sessionPrompt : await buildSystemPrompt(
-        input.capabilityView
-          ? [...input.capabilityView.skills.values()].map((binding) => binding.definition)
-              .filter((skill) => !skill.disableModelInvocation)
-          : options.skillRegistry?.getNonPluginSkills()
-              .filter((skill) => !skill.disableModelInvocation),
+      const systemPromptForTools = createPromptBuilder(
+        input.capabilityView,
+        sessionPrompt?.trim() ? sessionPrompt : undefined,
         effort,
         {
           systemPrompt: settingsPrompt,
@@ -284,13 +299,6 @@ export async function createVykorRuntime(
           fastMode: snapshot.configuration.fastMode ?? configuration.fastMode ?? settings.fastMode,
         },
       );
-      const agents = input.capabilityView
-        ? [...input.capabilityView.agents].map(([name, { definition }]) =>
-            JSON.stringify({ name, description: definition.description }))
-        : [];
-      const systemPromptForRequest = agents.length
-        ? `${prompt}\n\n# Available agents\nUse Agent with subagentType set to one of these names:\n${agents.join("\n")}`
-        : prompt;
       const clientKey = JSON.stringify([
         requestConfiguration.provider,
         requestConfiguration.baseUrl,
@@ -327,7 +335,7 @@ export async function createVykorRuntime(
         revision: snapshot.revision,
         ...snapshot.configuration,
         client: resolvedClient!,
-        systemPrompt: systemPromptForRequest,
+        systemPromptForTools,
         maxOutputTokens,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(contextWindow ? { contextWindow } : {}),
@@ -348,14 +356,7 @@ export async function createVykorRuntime(
     executionEnvironment: options.executionEnvironment,
     skillRegistry: options.skillRegistry,
     ...(resolveRequestConfiguration ? { resolveRequestConfiguration } : {}),
-    systemPromptForRun: async (view: RunCapabilityView) => {
-      const prompt = configuration.systemPrompt ?? await buildSystemPrompt(
-        [...view.skills.values()].map((binding) => binding.definition).filter((skill) => !skill.disableModelInvocation),
-      );
-      if (view.agents.size === 0) return prompt;
-      const agents = [...view.agents].map(([name, { definition }]) => JSON.stringify({ name, description: definition.description }));
-      return `${prompt}\n\n# Available agents\nUse Agent with subagentType set to one of these names:\n${agents.join("\n")}`;
-    },
+    systemPromptForTools: (tools: readonly ToolDefinition[], view?: RunCapabilityView) => createPromptBuilder(view, configuration.systemPrompt)(tools),
   };
 
   const queryEngine = new QueryEngine(

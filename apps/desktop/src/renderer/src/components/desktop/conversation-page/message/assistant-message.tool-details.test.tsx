@@ -11,6 +11,10 @@ vi.mock("@renderer/stores/desktop-session", async (importOriginal) => {
 
 import { AssistantMessage } from "./assistant-message"
 import { TooltipProvider } from "@renderer/components/ui/tooltip"
+import { sourcePart as pluginSource } from "../plugin-ui/plugin-ui-fixtures.test-support"
+import { summarizePart } from "../../../../../../../../../packages/server/src/http/part-wire-view.js"
+import { buildAssistantContent } from "./message-render-model"
+import { useToolDetails } from "./use-tool-details"
 
 let container: HTMLDivElement
 let root: Root
@@ -24,6 +28,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   act(() => root.unmount())
   container.remove()
   delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -77,6 +82,173 @@ function click(text: string) {
 }
 
 describe("tool parameter and result display", () => {
+  it("keeps preview semantics when a separate legacy Plugin UI result has null output", async () => {
+    const full = { ...pluginSource, output: "CANONICAL_PLUGIN_BODY" }
+    const getMessagePart = vi.fn().mockResolvedValue(full)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    render([{ ...pluginSource, output: "PLUGIN_PREVIEW", bodyView: { input: "unavailable", output: "preview" } }, { ...pluginSource, id: "legacy-result", seq: 2, type: "tool_result", output: null, metadata: {} }])
+    expect(container.textContent).toContain("结果预览")
+    const details = container.querySelector("details")!
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); })
+    expect(container.textContent).toContain("CANONICAL_PLUGIN_BODY")
+    expect(getMessagePart).toHaveBeenCalledTimes(1)
+  })
+  it("reads only canonical bodies while live status and metadata stay owned by the current part", async () => {
+    const source = part("Write", {}, { status: "failed", isError: true, metadata: { fact: "CURRENT_FACT" }, bodyView: { input: "preview", output: "unavailable" } })
+    const getMessagePart = vi.fn().mockResolvedValue({ ...source, status: "completed", isError: false, metadata: { fact: "OLD_FACT" }, input: { content: "CANONICAL_BODY" }, output: "CANONICAL_OUTPUT" })
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    function Probe() {
+      const detail = useToolDetails(source, undefined, true)
+      return <p>{detail.call.status} {String(detail.call.isError)} {String(detail.call.metadata.fact)} {String(detail.call.input?.content ?? "")} {String(detail.call.output ?? "")}</p>
+    }
+    await act(async () => { root.render(<Probe />) })
+    expect(container.textContent).toContain("failed true CURRENT_FACT")
+    expect(container.textContent).toContain("CANONICAL_BODY")
+    expect(container.textContent).toContain("CANONICAL_OUTPUT")
+    expect(container.textContent).not.toContain("OLD_FACT")
+  })
+  it("keeps the existing Agent task button linked after summarizing a legal long description", () => {
+    const description = "a".repeat(5000)
+    const summary = summarizePart(part("Agent", { description }, { output: { content: [{ type: "text", text: JSON.stringify({ kind: "job", action: "created", jobKind: "agent", jobId: "task-real", label: description }) }] } }) as any) as DesktopSessionPart
+    const openAgents = vi.fn()
+    act(() => root.render(<TooltipProvider><AssistantMessage parts={[summary]} tasks={[{ id: "task-real", sessionId: "s1", childSessionId: "child-real", type: "agent", status: "running", description, cwd: "/repo", metadata: {}, createdAt: 1, updatedAt: 1 }]} streaming={false} onOpenAgents={openAgents} onOpenFile={vi.fn()} canOpenReview={false} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} /></TooltipProvider>))
+    const button = container.querySelector<HTMLButtonElement>("[data-agent-activity]")!
+    expect(button.disabled).toBe(false)
+    act(() => button.click())
+    expect(openAgents).toHaveBeenCalledWith("task-real")
+    expect(container.textContent).toContain("运行中")
+  })
+  it("uses the retained ImageGeneration ratio for its placeholder and generated gallery", () => {
+    const summary = summarizePart(part("ImageGeneration", { prompt: "p".repeat(5000), ratio: "16:9" }, { status: "running" }) as any) as DesktopSessionPart
+    render([summary], true)
+    expect(container.querySelector('[data-image-ratio="16:9"]')).not.toBeNull()
+    const attachment: DesktopSessionPart = { id: "image", sessionId: "s1", messageId: "m1", seq: 2, type: "attachment", status: "completed", assetId: "image-asset", intent: "tool_resource", displayName: "image.png", mediaType: "image/png", sizeBytes: 1, metadata: { source: "image_generation", toolUseId: summary.toolUseId }, createdAt: 1, updatedAt: 2 }
+    expect(buildAssistantContent([{ ...summary, status: "completed" }, attachment]).find(unit => unit.type === "generated_attachments")).toMatchObject({ ratio: "16:9" })
+  })
+  it.each(["plugin", "image"] as const)("states unavailable %s detail without disguising the remaining preview", async kind => {
+    const getMessagePart = vi.fn().mockRejectedValue(new Error("404 unavailable"))
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const preview = kind === "plugin" ? { ...pluginSource, output: "REMAINING_PREVIEW", bodyView: { input: "unavailable", output: "preview" } } as DesktopSessionPart
+      : part("ImageGeneration", {}, { status: "failed", output: "REMAINING_PREVIEW", bodyView: { input: "full", output: "preview" } })
+    render([preview])
+    const details = container.querySelector("details")!
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); })
+    expect(container.textContent).toContain("完整详情不可用")
+    expect(container.textContent).toContain("REMAINING_PREVIEW")
+    expect(getMessagePart).toHaveBeenCalledTimes(1)
+  })
+  it.each(["session", "part"] as const)("ignores a late detail after a %s identity switch", async changed => {
+    let resolveOld!: (value: DesktopSessionPart) => void
+    const full = part("Write", { content: "OLD_SCOPE_BODY" })
+    const next = { ...full, sessionId: changed === "session" ? "s2" : full.sessionId, id: changed === "part" ? "part-2" : full.id, input: { content: "NEW_SCOPE_BODY" } }
+    const getMessagePart = vi.fn().mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve })).mockResolvedValueOnce(next)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const preview = { ...full, input: { file_path: "a.ts" }, bodyView: { input: "preview", output: "unavailable" } } as DesktopSessionPart
+    render([preview]); click("写入")
+    await act(async () => { render([{ ...next, input: preview.input, bodyView: preview.bodyView }]); })
+    if (changed === "part") await act(async () => { click("写入"); })
+    await act(async () => { resolveOld(full); })
+    expect(container.textContent).toContain("NEW_SCOPE_BODY")
+    expect(container.textContent).not.toContain("OLD_SCOPE_BODY")
+  })
+  it("ignores a late response after the detail is unmounted and reopened", async () => {
+    let resolveOld!: (value: DesktopSessionPart) => void
+    const full = part("Write", { content: "UNMOUNTED_BODY" })
+    const getMessagePart = vi.fn().mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve })).mockResolvedValueOnce({ ...full, input: { content: "REOPENED_BODY" } })
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const preview = { ...full, input: { file_path: "a.ts" }, bodyView: { input: "preview", output: "unavailable" } } as DesktopSessionPart
+    render([preview]); click("写入")
+    render([])
+    render([preview])
+    await act(async () => { click("写入"); resolveOld(full); })
+    expect(container.textContent).toContain("REOPENED_BODY")
+    expect(container.textContent).not.toContain("UNMOUNTED_BODY")
+  })
+  it("marks Plugin UI result text as preview and reads the canonical body only on expansion", async () => {
+    const full = { ...pluginSource, output: { content: [{ type: "text", text: "PLUGIN_FULL_BODY" }] } }
+    const getMessagePart = vi.fn().mockResolvedValue(full)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    render([{ ...pluginSource, output: { content: [{ type: "text", text: "PLUGIN_PREVIEW" }] }, bodyView: { input: "unavailable", output: "preview" } }])
+    expect(container.textContent).toContain("结果预览")
+    expect(getMessagePart).not.toHaveBeenCalled()
+    const details = container.querySelector("details")!
+    expect(details).not.toBeNull()
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); })
+    expect(container.textContent).toContain("PLUGIN_FULL_BODY")
+    expect(getMessagePart).toHaveBeenCalledWith({ sessionId: "session", messageId: "message", partId: "part" })
+  })
+  it("marks previewed image failure output and reads it only when its existing details open", async () => {
+    const full = part("ImageGeneration", { ratio: "16:9" }, { status: "failed", output: "IMAGE_COMPLETE_ERROR" })
+    const getMessagePart = vi.fn().mockResolvedValue(full)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    render([{ ...full, output: "IMAGE_PREVIEW", bodyView: { input: "full", output: "preview" } }])
+    expect(container.textContent).toContain("预览")
+    expect(getMessagePart).not.toHaveBeenCalled()
+    const details = container.querySelector("details")!
+    await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); })
+    expect(container.textContent).toContain("IMAGE_COMPLETE_ERROR")
+    expect(getMessagePart).toHaveBeenCalledTimes(1)
+  })
+  it.each(["completed", "failed"] as const)("invalidates loaded details for a same-timestamp %s result", async status => {
+    const running = part("Write", { content: "FULL_INPUT" }, { status: "running", output: undefined })
+    const finished = { ...running, status, isError: status === "failed", output: { content: [{ type: "text", text: "NEW_TERMINAL_RESULT" }] } }
+    const getMessagePart = vi.fn().mockResolvedValueOnce(running).mockResolvedValueOnce(finished)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const summary = { ...running, input: { file_path: "a.ts" }, bodyView: { input: "preview", output: "unavailable" } } as DesktopSessionPart
+    render([summary])
+    await act(async () => { click("写入"); })
+    expect(container.textContent).toContain("FULL_INPUT")
+    await act(async () => { render([{ ...finished, input: summary.input, bodyView: { input: "preview", output: "full" } } as DesktopSessionPart]); })
+    expect(container.textContent).toContain("NEW_TERMINAL_RESULT")
+    expect(getMessagePart).toHaveBeenCalledTimes(2)
+  })
+  it("discards a late running result when completion shares its timestamp", async () => {
+    let resolveRunning!: (part: DesktopSessionPart) => void
+    const running = part("Write", { content: "STALE_RUNNING" }, { status: "running", output: undefined })
+    const completed = { ...running, status: "completed" as const, input: { content: "CURRENT_INPUT" }, output: "CURRENT_RESULT" }
+    const getMessagePart = vi.fn().mockReturnValueOnce(new Promise(resolve => { resolveRunning = resolve })).mockResolvedValueOnce(completed)
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const summary = { ...running, input: { file_path: "a.ts" }, bodyView: { input: "preview", output: "unavailable" } } as DesktopSessionPart
+    render([summary]); click("写入")
+    await act(async () => { render([{ ...completed, input: summary.input, bodyView: { input: "preview", output: "full" } } as DesktopSessionPart]); })
+    await act(async () => { resolveRunning(running); })
+    expect(container.textContent).toContain("CURRENT_RESULT")
+    expect(container.textContent).not.toContain("STALE_RUNNING")
+  })
+  it("states bounded executed file identities without claiming the shown count is the total", () => {
+    render([part("ApplyPatch", {}, { bodyView: { input: "preview", output: "full" }, output: { content: [{ type: "text", text: "applied" }] }, metadata: { executionState: "completed", changedFiles: { files: [{ path: "a.ts", operation: "update" }], fileCount: 40, truncated: true } } } as any)])
+    expect(container.textContent).toContain("工具文件列表仅显示 1 / 40 个文件")
+    expect(container.textContent).toContain("a.ts")
+  })
+  it("loads full previewed arguments only after expansion and states unavailable detail", async () => {
+    const getMessagePart = vi.fn().mockResolvedValue(part("Write", { content: "FULL_WRITE_BODY" }));
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } });
+    render([part("Write", { file_path: "sample.ts" }, { bodyView: { input: "preview", output: "unavailable" } } as any)]);
+    expect(getMessagePart).not.toHaveBeenCalled();
+    await act(async () => { click("写入"); });
+    expect(container.textContent).toContain("FULL_WRITE_BODY");
+    expect(getMessagePart).toHaveBeenCalledWith({ sessionId: "s1", messageId: "m1", partId: "tool-1" });
+    getMessagePart.mockRejectedValue(new Error("expired"));
+    click("写入");
+    await act(async () => { click("写入"); });
+    expect(container.textContent).toContain("完整详情不可用");
+    expect(container.textContent).not.toContain("FULL_WRITE_BODY");
+    vi.unstubAllGlobals();
+  });
+  it("ignores an older detail request after switching the expanded part's revision", async () => {
+    let resolveOld!: (value: DesktopSessionPart) => void
+    const older = new Promise<DesktopSessionPart>(resolve => { resolveOld = resolve })
+    const getMessagePart = vi.fn().mockReturnValueOnce(older).mockResolvedValueOnce(part("Write", { content: "CURRENT_FULL_BODY" }, { updatedAt: 3 }))
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    const summary = part("Write", { file_path: "sample.ts" }, { bodyView: { input: "preview", output: "unavailable" } } as any)
+    render([summary])
+    click("写入")
+    await act(async () => { render([{ ...summary, updatedAt: 3 }]); })
+    expect(container.textContent).toContain("CURRENT_FULL_BODY")
+    await act(async () => { resolveOld(part("Write", { content: "STALE_FULL_BODY" })); })
+    expect(container.textContent).not.toContain("STALE_FULL_BODY")
+    expect(container.textContent).toContain("CURRENT_FULL_BODY")
+  })
   it("keeps execution and permission feedback visible in production", () => {
     vi.stubEnv("DEV", false)
     render([

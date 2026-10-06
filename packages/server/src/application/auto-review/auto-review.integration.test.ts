@@ -18,6 +18,7 @@ import {
   type GitRunChangeSet,
 } from "./git-run-change-inspector.js";
 import { AUTO_REVIEW_EVENT_TYPE, SessionAutoReviewService } from "./session-auto-review-service.js";
+import { SessionWorkspaceChanges } from "../session/session-workspace-changes.js";
 
 const MARKER = "AUTO_REVIEW_SECRET_MARKER";
 
@@ -133,15 +134,22 @@ describe("risk-based auto review integration", () => {
   it("records disabled for mode off without starting a child", async () => {
     const runId = createRun();
     const svc = service();
-    await svc.captureBaseline({ sessionId, runId, cwd: repo, mode: "off" });
+    const observation = new SessionWorkspaceChanges({ session: store,
+      events: new SessionEventPublisher(store.conversations, { broadcastSince: () => undefined, broadcastEvent: () => undefined }),
+      inspector: createGitRunChangeInspector() });
+    const baseline = await observation.capture(runId, repo, repo);
+    await svc.captureBaseline({ sessionId, runId, cwd: repo, mode: "off", observation: baseline });
+    const changes = await observation.settle(runId);
     const harness = fakeAgent({ status: "completed", output: okOutput() });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-off", runId, traceId: "trace-1", cwd: repo,
       agent: harness.agent, signal: new AbortController().signal,
+      changes,
     });
     expect(review).toMatchObject({ status: "disabled", mode: "off", riskLevel: "none" });
     expect(harness.calls).toHaveLength(0);
     expect(meta(runId)).toMatchObject({ status: "disabled", mode: "off" });
+    expect(store.runs.getRun(runId)?.metadata.workspaceChanges).toMatchObject({ status: "complete", fileCount: 0 });
   });
 
   it("skips a documentation-only change", async () => {

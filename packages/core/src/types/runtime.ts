@@ -63,6 +63,8 @@ export type QueryRequestConfiguration = {
   reasoningEffort?: string;
   client: StreamingMessageClient;
   systemPrompt?: string;
+  /** Internal request snapshot builder; receives the exact tools sent to the model. */
+  systemPromptForTools?: (tools: readonly import("./tools").ToolDefinition[]) => Promise<string>;
   contextWindow?: number;
   maxOutputTokens?: number;
 };
@@ -342,6 +344,8 @@ export interface QueryEngineOptions {
   trustedToolOverrides?: ReadonlyMap<string, import("./tools").ToolDefinition>;
   /** Host-provided Run prompt. With a View, takes precedence over systemPrompt/setSystemPrompt(). */
   systemPromptForRun?: (view: RunCapabilityView) => Promise<string>;
+  /** Builds capability guidance after finalization and trajectory tool filtering. */
+  systemPromptForTools?: (tools: readonly import("./tools").ToolDefinition[], view?: RunCapabilityView) => Promise<string>;
   maxTurns?: number;
   /** Runtime working directory used for all tool execution in this engine. */
   cwd?: string;

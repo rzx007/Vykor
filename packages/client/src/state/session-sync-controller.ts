@@ -128,16 +128,20 @@ export class SessionSyncController {
     let cursor = this.initialCursor;
     let attempt = 0;
 
+    const refreshSession = async (sessionId: string): Promise<void> => {
+      const snapshot = await this.client.sessions.getState(sessionId, { signal });
+      if (signal.aborted) return;
+      this.state = applySessionSnapshot(this.state, snapshot);
+      cursor = Math.max(cursor, snapshot.cursor, this.state.lastSeq);
+      this.setStatus("connected");
+      this.emitUpdate({ state: this.state, source: "snapshot" });
+    };
+
     try {
       this.setStatus("connecting");
 
       if (this.sessionId) {
-        const snapshot = await this.client.sessions.getState(this.sessionId, { signal });
-        if (signal.aborted) return;
-        this.state = applySessionSnapshot(this.state, snapshot);
-        cursor = Math.max(cursor, snapshot.cursor, this.state.lastSeq);
-        this.setStatus("connected");
-        this.emitUpdate({ state: this.state, source: "snapshot" });
+        await refreshSession(this.sessionId);
       } else {
         const replay = await this.client.events.list({
           cursor,
@@ -155,6 +159,11 @@ export class SessionSyncController {
 
       while (!signal.aborted) {
         try {
+          // Transient updates cannot be recovered from durable event replay alone.
+          if (this.sessionId && attempt > 0) {
+            await refreshSession(this.sessionId);
+            if (signal.aborted) return;
+          }
           for await (const event of this.client.events.stream({
             cursor,
             sessionId: this.sessionId,

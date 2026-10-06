@@ -28,7 +28,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(maximized: boolean, initialLayout: Layout, groupElement: HTMLDivElement | null = null) {
+function mount(
+  maximized: boolean,
+  initialLayout: Layout,
+  groupElement: HTMLDivElement | null = null
+) {
   writeUtilityPanelViewStates({
     "session:chat": { open: true, maximized, layout: { conversation: 60, utility: 40 } },
   })
@@ -85,8 +89,28 @@ function mount(maximized: boolean, initialLayout: Layout, groupElement: HTMLDivE
     toggle: () => act(() => controller.toggleMaximized()),
     layout: () => layout,
     controller: () => controller,
+    switchSession: (id: string) =>
+      act(() => {
+        options.activeSessionId = id
+        root.render(<Workspace />)
+      }),
   }
 }
+
+it("opens image requests in the originating scope and keeps successive requests unique", () => {
+  const workspace = mount(false, { conversation: 100, utility: 0 })
+  const source = { kind: "attachment" as const, assetId: "image-one", name: "image.png" }
+  act(() => workspace.controller().openImage(source))
+  const first = workspace.controller().imageOpenRequest!
+  expect(workspace.controller().open).toBe(true)
+  expect(first.source).toEqual(source)
+  act(() => workspace.controller().openImage(source))
+  expect(workspace.controller().imageOpenRequest!.id).toBeGreaterThan(first.id)
+  workspace.switchSession("other-chat")
+  expect(workspace.controller().imageOpenRequest).toBeNull()
+  workspace.switchSession("chat")
+  expect(workspace.controller().imageOpenRequest!.source).toEqual(source)
+})
 
 it("restores the saved split after reopening an already maximized workbench", () => {
   const workspace = mount(true, { conversation: 0, utility: 100 })

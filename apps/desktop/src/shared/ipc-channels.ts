@@ -228,6 +228,7 @@ export const IpcChannels = {
   sessionListContextPlugins: "session:list-context-plugins",
   sessionCompact: "session:compact",
   sessionGoalGet: "session:goal:get",
+  sessionMessagePartGet: "session:message-part:get",
   sessionGoalCreate: "session:goal:create",
   sessionGoalUpdate: "session:goal:update",
   sessionGoalAction: "session:goal:action",
@@ -653,6 +654,10 @@ export interface IpcInvokeMap {
   [IpcChannels.sessionGoalGet]: {
     args: [input: GetDesktopSessionGoalInput]
     result: SessionGoal | null
+  }
+  [IpcChannels.sessionMessagePartGet]: {
+    args: [input: import("./session-types").GetDesktopMessagePartInput]
+    result: import("./session-types").DesktopSessionPart
   }
   [IpcChannels.sessionGoalCreate]: {
     args: [input: CreateDesktopSessionGoalInput]

@@ -10,6 +10,7 @@ import { createDefaultModelService } from "../default-services/model-service.js"
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { SessionRunExecutor, type SessionRunExecutorContext } from "./session-run-executor.js";
+import { readDaemonAgentLocalWorkspace } from "../../daemon/daemon-agent.js";
 
 export interface SessionRunExecutorAssemblyOptions extends Omit<SessionRunExecutorContext,
   "data" | "attachments" | "resolveSkillCatalog" | "routeAttachments" | "resolveCapabilities"
@@ -53,6 +54,7 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
     attachments: options.store.attachments,
     resolveSkillCatalog,
     resolveAutoReviewMode,
+    resolveLocalExecutionCwd: options.resolveLocalExecutionCwd ?? readDaemonAgentLocalWorkspace,
     routeAttachments: (input) => attachmentRouter.route(input),
     resolveCapabilities: async (session) => {
       const settings = await options.resolveSessionSettings(session.cwd);

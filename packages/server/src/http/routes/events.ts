@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { summarizePartEvent } from "../part-wire-view.js";
 
 import type { SessionEventRecord } from "@vykor/protocol";
 
@@ -36,7 +37,7 @@ export class HttpEventHub {
             afterSeq: readCursor(c),
             sessionId: c.req.query("sessionId") ?? undefined,
             limit: readLimit(c.req.query("limit")),
-          }),
+          }).map(event => c.req.query("partView") === "summary" ? summarizePartEvent(event) : event),
         }),
       )
       .get("/stream", (c) => {
@@ -61,7 +62,7 @@ export class HttpEventHub {
             );
             heartbeat.unref?.();
             client.heartbeat = heartbeat;
-            void this.pump(client, subscription.stream).finally(() => {
+            void this.pump(client, subscription.stream, c.req.query("partView") === "summary").finally(() => {
               c.req.raw.signal.removeEventListener("abort", requestAbort);
             });
           },
@@ -88,12 +89,13 @@ export class HttpEventHub {
   private async pump(
     client: HttpEventClient,
     stream: AsyncIterable<SessionEventRecord>,
+    summary: boolean,
   ): Promise<void> {
     try {
       for await (const event of stream) {
         client.controller.enqueue(
           this.encoder.encode(
-            `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+            `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(summary ? summarizePartEvent(event) : event)}\n\n`,
           ),
         );
       }

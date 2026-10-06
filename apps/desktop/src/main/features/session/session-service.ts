@@ -221,6 +221,14 @@ export class DesktopSessionService {
     return await this.operations.getGoal(client, input)
   }
 
+  async getMessagePart(input: import("../../../shared/session-types").GetDesktopMessagePartInput): Promise<import("../../../shared/session-types").DesktopSessionPart> {
+    const client = await this.getClient()
+    for (const value of [input.sessionId, input.messageId, input.partId]) {
+      if (typeof value !== "string" || !value.trim()) throw new Error("会话、消息和内容 ID 不能为空。")
+    }
+    return await client.sessions.getMessagePart(input.sessionId, input.messageId, input.partId) as import("../../../shared/session-types").DesktopSessionPart
+  }
+
   async createGoal(input: CreateDesktopSessionGoalInput): Promise<SessionGoal> {
     const client = await this.getClient()
     return await this.operations.createGoal(client, input)

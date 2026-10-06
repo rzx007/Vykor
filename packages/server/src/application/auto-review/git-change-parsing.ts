@@ -135,9 +135,7 @@ export function assemblePatch(chunks: Array<{ path: string; text: string }>): {
   patch: string;
   truncated: boolean;
 } {
-  const sorted = [...chunks].sort((left, right) =>
-    normalizePath(left.path).localeCompare(normalizePath(right.path)),
-  );
+  const sorted = [...chunks].sort((left, right) => left.path.localeCompare(right.path));
   const parts: Buffer[] = [];
   let size = 0;
   let truncated = false;
@@ -233,14 +231,6 @@ export function decodeTrimmed(buffer: Buffer): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-export function toGitPath(path: string): string {
-  return path.replace(/\\/g, "/");
-}
-
-export function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/");
 }
 
 export function uniquePaths(paths: string[]): string[] {

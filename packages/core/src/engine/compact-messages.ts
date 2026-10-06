@@ -3,6 +3,7 @@ import type { CompactTrigger } from "./compact-types";
 import { boundaryFallsInsideToolGroup as historyBoundaryFallsInsideToolGroup } from "../utils/message-history";
 import { estimateTokens as estimateTextTokens } from "../utils/token-counter";
 import { toolFeedbackFields } from "./tool-result-feedback";
+import { appendContinuityExcerpts, splitOwnedContinuity } from "./compact-continuity";
 
 /** Token 估算的保守膨胀系数，降低低估导致超窗的风险。 */
 const TOKEN_ESTIMATION_PADDING = 4 / 3;
@@ -159,10 +160,13 @@ export function simpleCompactMessages(messages: Message[], keepRecent: number): 
   const compactedCount = older.length;
   const toolResultCount = older.filter((m) => m.type === "tool_result").length;
   const retainedFacts: string[] = [];
-  let remaining = 950; // Leave room for the omission marker within a 1,000-character budget.
+  const pairedIds = new Set(older.flatMap((message) => message.type === "assistant" ? (message.toolUses ?? []).map((call) => call.id) : []));
+  let remaining = 900; // Reserve the omission marker and empty continuity seal within 1,000 characters.
   let omitted = false;
   for (const message of older.slice().reverse()) {
     if (message.type !== "tool_result") continue;
+    // Matched observations are carried once by the bounded source capsule below.
+    if (pairedIds.has(message.toolUseId)) continue;
     const facts = toolFactsText(message);
     if (!facts) continue;
     if (facts.length + 1 > remaining) {
@@ -176,7 +180,7 @@ export function simpleCompactMessages(messages: Message[], keepRecent: number): 
 
   const summary: Message = {
     type: "assistant",
-    content: [`[Conversation compacted: ${compactedCount} messages summarized (${toolResultCount} tool results removed). ${recent.length} recent messages preserved.]`, ...retainedFacts].join("\n"),
+    content: appendContinuityExcerpts([`[Conversation compacted: ${compactedCount} messages summarized (${toolResultCount} tool results removed). ${recent.length} recent messages preserved.]`, ...retainedFacts].join("\n"), older),
     compactRole: "summary",
   };
 
@@ -218,7 +222,8 @@ export function tryContextCollapseMessages(messages: Message[], keepRecent: numb
     }
     // assistant：content 为字符串
     if (msg.type === "assistant") {
-      const collapsed = collapseText(msg.content);
+      const owned = splitOwnedContinuity(msg);
+      const collapsed = owned ? `${collapseText(owned.text)}\n${owned.container}` : collapseText(msg.content);
       if (collapsed !== msg.content) changed = true;
       return { ...msg, content: collapsed } as Message;
     }

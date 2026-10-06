@@ -84,6 +84,10 @@ export const sessionIpcContribution: IpcContribution = {
           ),
       },
       {
+        channel: IpcChannels.sessionMessagePartGet,
+        handler: (_event, input) => desktopSessionService.getMessagePart(input as import("../../../shared/session-types").GetDesktopMessagePartInput),
+      },
+      {
         channel: IpcChannels.sessionGoalCreate,
         handler: (_event, input) =>
           desktopSessionService.createGoal(

@@ -34,3 +34,6 @@ onlyBuiltDependencies:
 
 overrides:
   '@types/react': ^19.2.0
+
+patchedDependencies:
+  '@annotorious/annotorious@3.9.3': patches/@annotorious__annotorious@3.9.3.patch

@@ -426,6 +426,7 @@ export type DesktopAPI = {
     listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>
     compact: (input: CompactDesktopSessionInput) => Promise<DesktopCompactSessionResult>
     getGoal: (input: GetDesktopSessionGoalInput) => Promise<SessionGoal | null>
+    getMessagePart: (input: import("./session-types").GetDesktopMessagePartInput) => Promise<import("./session-types").DesktopSessionPart>
     createGoal: (input: CreateDesktopSessionGoalInput) => Promise<SessionGoal>
     updateGoal: (input: UpdateDesktopSessionGoalInput) => Promise<SessionGoal>
     goalAction: (input: DesktopSessionGoalActionInput) => Promise<SessionGoal>

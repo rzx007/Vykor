@@ -5,7 +5,7 @@ import { createShellDescription } from "../shell/index.js";
 export function createBackgroundShellTool(shell?: ShellDescriptor): ToolDefinition {
 return {
   name: "BackgroundShellCreate",
-  description: `Start a detached background command for long-running work. ${createShellDescription(shell)} Returns a jobId; use JobWait for bounded progress, JobRead for output snapshots, and JobCancel to stop it.`,
+  description: `Start a detached background command for long-running work. ${createShellDescription(shell)} Returns a jobId; when visible job controls are available, use them with this handle. Do not claim the command completed without evidence.`,
   inputSchema: {
     type: "object",
     properties: {

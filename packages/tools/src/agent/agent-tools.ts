@@ -13,8 +13,8 @@ export const agentTool: ToolDefinition = {
   description:
     "Spawn an in-process child-agent job for one independently deliverable scope. Give it a " +
     "`scope` (the files, modules, or assertion categories it owns) and an `expectedResult` " +
-    "(the expected result you need back), then track it with JobWait, JobRead, JobSend, and " +
-    "JobCancel using the returned jobId.",
+    "(the expected result you need back). When visible job controls are available, use them " +
+    "with the returned jobId. Do not claim the job completed without evidence.",
   inputSchema: {
     type: "object",
     properties: {

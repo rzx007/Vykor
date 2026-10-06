@@ -67,6 +67,37 @@ describe("session event reducer", () => {
     expect(stale.buckets.s1?.session?.title).toBe("newer");
   });
 
+  it("does not revive a completed run from a snapshot older than its live terminal event", () => {
+    const running: SessionRunRecord = {
+      id: "r1", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 7,
+    };
+    const initial = applySessionSnapshot(createInitialClientState(), {
+      cursor: 7, session: session("s1", 7), inputs: [], messages: [], parts: [], runs: [running], permissions: [],
+    });
+    const completed = applyEvent(initial, event(9, "session.run.updated", {
+      run: { ...running, status: "completed", updatedAt: 9 },
+    }));
+    const stale = applySessionSnapshot(completed, {
+      cursor: 8, session: session("s1", 8), inputs: [], messages: [], parts: [], runs: [running], permissions: [],
+    });
+
+    expect(stale.buckets.s1?.runs.r1?.status).toBe("completed");
+    expect(stale.lastSeq).toBe(9);
+  });
+
+  it("accepts a session snapshot despite a newer event from a different session", () => {
+    const other = applyEvent(createInitialClientState(), event(9, "session.updated", {
+      session: session("s2", 9),
+    }, "s2"));
+    const hydrated = applySessionSnapshot(other, {
+      cursor: 8, session: session("s1", 8), inputs: [], messages: [], parts: [], runs: [], permissions: [],
+    });
+
+    expect(hydrated.buckets.s1?.session?.id).toBe("s1");
+    expect(hydrated.buckets.s2?.session?.id).toBe("s2");
+    expect(hydrated.lastSeq).toBe(9);
+  });
+
   it("keeps the newest complete input attachment record regardless of snapshot/event arrival order", () => {
     const older: SessionInputRecord = {
       id: "input-1", sessionId: "s1", seq: 1, delivery: "queue", content: "look",

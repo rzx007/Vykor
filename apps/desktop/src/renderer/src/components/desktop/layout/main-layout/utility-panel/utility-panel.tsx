@@ -12,8 +12,14 @@ import {
 } from "@renderer/components/desktop/tools/file-viewer"
 import { SideChatPanel, destroySideChat } from "@renderer/components/desktop/tools/side-chat-panel"
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@renderer/components/ui/alert-dialog"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
@@ -46,6 +52,11 @@ import {
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
 import { usePluginUiHost } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
+import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
+import {
+  imageSourceKey,
+  type ImageOpenRequest,
+} from "@renderer/components/desktop/image-viewer/image-source"
 
 type UtilityPanelProps = {
   scopeId: string
@@ -57,6 +68,7 @@ type UtilityPanelProps = {
   reviewOpenRequest: DesktopGitReviewRequest | null
   terminalOpenRequest: { id: number; terminalId: string } | null
   toolOpenRequest: { id: number; tool: UtilityToolRequest; taskId?: string } | null
+  imageOpenRequest?: ImageOpenRequest | null
   onOpenFile: (path: string, line?: number) => void
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
@@ -75,6 +87,7 @@ export function UtilityPanel({
   reviewOpenRequest,
   terminalOpenRequest,
   toolOpenRequest,
+  imageOpenRequest,
   onOpenFile,
   onOpenReview,
   onOpenTerminal,
@@ -100,6 +113,7 @@ export function UtilityPanel({
       terminalMounted,
       handledFileRequestId,
       handledToolRequestId,
+      handledImageRequestId,
     },
     fileTabsRef,
     setTabs,
@@ -112,15 +126,38 @@ export function UtilityPanel({
     setTerminalMounted,
     setHandledFileRequestId,
     setHandledToolRequestId,
+    setHandledImageRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
+
+  useEffect(() => {
+    if (!imageOpenRequest || handledImageRequestId === imageOpenRequest.id) return
+    const timer = window.setTimeout(() => {
+      const source = imageOpenRequest.source
+      const id = imageSourceKey(source)
+      const imageTab: UtilityTab = { id, tool: "image", title: source.name, imageSource: source }
+      setTabs((current) =>
+        current.some((tab) => tab.id === id)
+          ? current.map((tab) => (tab.id === id ? imageTab : tab))
+          : [...current, imageTab]
+      )
+      setActiveTabId(id)
+      setHandledImageRequestId(imageOpenRequest.id)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [imageOpenRequest, handledImageRequestId, setTabs, setActiveTabId, setHandledImageRequestId])
   const [pendingSideChatClose, setPendingSideChatClose] = useState<{
-    tabIds: string[]; preferredActiveTabId?: string; sourceId: string; scopeId: string
+    tabIds: string[]
+    preferredActiveTabId?: string
+    sourceId: string
+    scopeId: string
   } | null>(null)
   const [sideChatCloseError, setSideChatCloseError] = useState<string | null>(null)
   const [closingSideChat, setClosingSideChat] = useState(false)
   const closeInProgress = useRef(false)
-  const latestCloseTabs = useRef<((tabIds: string[], preferredActiveTabId?: string) => void) | null>(null)
+  const latestCloseTabs = useRef<
+    ((tabIds: string[], preferredActiveTabId?: string) => void) | null
+  >(null)
   const terminalCommandSequenceRef = useRef(0)
   const handledReviewRequestRef = useRef<number | null>(null)
   const [persistedFileTabs, setPersistedFileTabs] = useState<PersistedFileTabsByScope>(
@@ -420,7 +457,10 @@ export function UtilityPanel({
 
   const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
     if (closeInProgress.current) return
-    if (activeSessionId && tabs.some((tab) => tab.tool === "side-chat" && tabIds.includes(tab.id))) {
+    if (
+      activeSessionId &&
+      tabs.some((tab) => tab.tool === "side-chat" && tabIds.includes(tab.id))
+    ) {
       setSideChatCloseError(null)
       setPendingSideChatClose({ tabIds, preferredActiveTabId, sourceId: activeSessionId, scopeId })
       return
@@ -442,12 +482,18 @@ export function UtilityPanel({
     setSideChatCloseError(null)
     try {
       await destroySideChat(request.sourceId)
-      if (closeContext.current.scopeId === request.scopeId && closeContext.current.activeSessionId === request.sourceId) {
+      if (
+        closeContext.current.scopeId === request.scopeId &&
+        closeContext.current.activeSessionId === request.sourceId
+      ) {
         latestCloseTabs.current?.(request.tabIds, request.preferredActiveTabId)
         setPendingSideChatClose(null)
       }
     } catch (cause) {
-      if (closeContext.current.scopeId === request.scopeId && closeContext.current.activeSessionId === request.sourceId)
+      if (
+        closeContext.current.scopeId === request.scopeId &&
+        closeContext.current.activeSessionId === request.sourceId
+      )
         setSideChatCloseError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       closeInProgress.current = false
@@ -643,9 +689,12 @@ export function UtilityPanel({
       )}
     >
       <div className="flex h-full min-w-[320px] flex-col">
-        <AlertDialog open={pendingSideChatClose !== null} onOpenChange={(nextOpen) => {
-          if (!nextOpen && !closeInProgress.current) setPendingSideChatClose(null)
-        }}>
+        <AlertDialog
+          open={pendingSideChatClose !== null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !closeInProgress.current) setPendingSideChatClose(null)
+          }}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>关闭并销毁侧边聊天？</AlertDialogTitle>
@@ -653,10 +702,18 @@ export function UtilityPanel({
                 将停止此临时聊天的运行，并清除消息和草稿，关闭后无法恢复。主聊天不受影响；附件、工作流和已保存的长期记忆仍保留。
               </AlertDialogDescription>
             </AlertDialogHeader>
-            {sideChatCloseError ? <Alert variant="destructive"><AlertDescription>{sideChatCloseError}</AlertDescription></Alert> : null}
+            {sideChatCloseError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{sideChatCloseError}</AlertDescription>
+              </Alert>
+            ) : null}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={closingSideChat}>取消</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" disabled={closingSideChat} onClick={() => void confirmSideChatClose()}>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={closingSideChat}
+                onClick={() => void confirmSideChatClose()}
+              >
                 {closingSideChat ? "正在销毁…" : "关闭并销毁"}
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -681,6 +738,9 @@ export function UtilityPanel({
         />
 
         <div className="relative min-h-0 flex-1 bg-conversation">
+          {open && activeTab?.tool === "image" && activeTab.imageSource && (
+            <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />
+          )}
           {open && activeTab?.tool === "plugin-ui" && pluginSidebar && (
             <PluginUiFrame key={pluginSidebar.key} display={pluginSidebar} />
           )}
@@ -732,11 +792,16 @@ export function UtilityPanel({
           )}
           {activeTab?.tool === "review" && <ReviewTool openRequest={reviewOpenRequest} />}
           {activeSessionId && tabs.some((tab) => tab.tool === "side-chat") ? (
-            <SideChatPanel key={`side-chat:${activeSessionId}`} sourceId={activeSessionId}
+            <SideChatPanel
+              key={`side-chat:${activeSessionId}`}
+              sourceId={activeSessionId}
               active={open && activeTab?.tool === "side-chat"}
               focusRequest={toolOpenRequest?.tool === "side-chat" ? toolOpenRequest.id : undefined}
-              onOpenFile={onOpenFile} canOpenReview={activeWorkspaceIsGit === true}
-              onOpenReview={onOpenReview} onOpenTerminal={onOpenTerminal} />
+              onOpenFile={onOpenFile}
+              canOpenReview={activeWorkspaceIsGit === true}
+              onOpenReview={onOpenReview}
+              onOpenTerminal={onOpenTerminal}
+            />
           ) : null}
           {tabs.some((tab) => tab.tool === "agents") ? (
             <AgentsTool

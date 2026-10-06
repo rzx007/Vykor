@@ -6,7 +6,7 @@ export type ConversationPaneProps = {
   onTogglePanel: () => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
-  onOpenReview: (path?: string, scope?: DesktopGitDiffScope) => void
+  onOpenReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   onOpenTerminal: (terminalId: string) => void
   onOpenAgents: (taskId?: string) => void
 }

@@ -27,6 +27,7 @@ export class EventResource {
     options: EventSyncOptions & { transportReconnect?: boolean } = {},
   ): AsyncIterable<SessionEventRecord> {
     const query = {
+      partView: options.partView,
       cursor: options.cursor,
       sessionId: options.sessionId,
     };

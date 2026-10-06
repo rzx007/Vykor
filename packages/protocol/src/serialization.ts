@@ -256,6 +256,12 @@ function validatePart(value: unknown, path: string): SessionMessagePartRecord {
   enumField(item, "status", path, ["pending", "running", "completed", "failed", "interrupted"] as const);
   for (const field of ["text", "toolUseId", "toolName"] as const) optionalString(item, field, path);
   optionalRecord(item, "input", path);
+  if (item.bodyView !== undefined) {
+    const view = object(item.bodyView, `${path}.bodyView`);
+    for (const field of ["input", "output"] as const) enumField(view, field, `${path}.bodyView`, ["full", "preview", "unavailable"] as const);
+    if (view.outputReferences !== undefined && (!Array.isArray(view.outputReferences) || !view.outputReferences.every(ref => typeof ref === "string")))
+      throw new ProtocolDataError(`${path}.bodyView.outputReferences must be strings`, `${path}.bodyView.outputReferences`);
+  }
   if (item.isError !== undefined && typeof item.isError !== "boolean") {
     throw new ProtocolDataError(`${path}.isError must be a boolean`, `${path}.isError`);
   }

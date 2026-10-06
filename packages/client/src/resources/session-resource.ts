@@ -174,10 +174,10 @@ export class SessionResource {
   /** `GET /sessions/:id/state` - atomic attach snapshot plus SSE cursor. */
   async getState(
     sessionId: string,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; partView?: "summary" } = {},
   ): Promise<SessionStateSnapshot> {
     const response = await this.transport.request<unknown>(
-      `/sessions/${encodeURIComponent(sessionId)}/state`,
+      this.transport.path(`/sessions/${encodeURIComponent(sessionId)}/state`, { partView: options.partView }),
       {
         signal: options.signal,
       },
@@ -209,6 +209,15 @@ export class SessionResource {
       { signal },
     );
     return response.parts;
+  }
+
+  /** Read full canonical content for one part in its session/message scope. */
+  async getMessagePart(sessionId: string, messageId: string, partId: string, options: { signal?: AbortSignal } = {}): Promise<SessionMessagePartRecord> {
+    const response = await this.transport.request<{ part: SessionMessagePartRecord }>(
+      `/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/parts/${encodeURIComponent(partId)}`,
+      options,
+    );
+    return response.part;
   }
 
   /** `POST /sessions/:id/prompts` — 提交用户输入并触发/排队一次 run。 */

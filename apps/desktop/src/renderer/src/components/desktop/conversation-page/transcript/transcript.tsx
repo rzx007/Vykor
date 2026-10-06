@@ -1,5 +1,9 @@
 import { Fragment, useMemo, useState } from "react"
-import { readSessionModelRetryState, readSessionModelUsage } from "@vykor/client"
+import {
+  readSessionModelRetryState,
+  readSessionModelUsage,
+  readWorkspaceChangesMetadata,
+} from "@vykor/client"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionInput } from "@shared/session-types"
 
@@ -205,6 +209,13 @@ export function ConversationTranscript({
                 >
                   <AssistantMessage
                     parts={item.parts}
+                    observations={runs
+                      .filter((run) => entry.turn.runIds.includes(run.id))
+                      .flatMap((run) => {
+                        const result = readWorkspaceChangesMetadata(run.metadata.workspaceChanges)
+                        return result ? [result] : []
+                      })}
+                    showObservations={item.key === lastAssistantKey}
                     streaming={item.streaming}
                     initialPartIds={initialPartIds}
                     tasks={tasks}

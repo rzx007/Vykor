@@ -36,6 +36,7 @@ export interface VykorClientState {
 
 /** `syncEvents` / `streamEvents` 的过滤与取消选项。 */
 export interface EventSyncOptions {
+  partView?: "summary";
   sessionId?: string;
   cursor?: number;
   signal?: AbortSignal;

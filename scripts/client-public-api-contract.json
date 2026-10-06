@@ -653,6 +653,10 @@
       "kind": "type-export"
     },
     {
+      "name": "SearchSessionsOptions",
+      "kind": "type-export"
+    },
+    {
       "name": "ServerCapabilities",
       "kind": "type-export"
     },
@@ -726,6 +730,10 @@
     },
     {
       "name": "SessionRuntimeConfigPatch",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionSearchResult",
       "kind": "type-export"
     },
     {
