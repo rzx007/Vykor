@@ -678,14 +678,25 @@ describe("SessionGoalService durable lifecycle", () => {
         wait: { kind: "external", handleId: "build-run" },
         autoTurnsUsed: 0,
       });
+      const waiting = store.goals.getGoal(goal.id);
+      const originalRuns = store.runs.listRuns("s1");
+      // Three unchanged program checks must retain the handle and durable state
+      // without admitting another model Run.
+      await vi.advanceTimersByTimeAsync(7_000);
+      expect(store.goals.getGoal(goal.id)).toEqual(waiting);
+      expect(store.runs.listRuns("s1")).toEqual(originalRuns);
+      expect(turns).toBe(1);
       check = "completed";
-      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(8_000);
       await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
       expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "waiting_user",
         autoTurnsUsed: 1,
       });
       expect(turns).toBe(2);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(turns).toBe(2);
+      expect(store.runs.listRuns("s1")).toHaveLength(2);
     } finally {
       vi.useRealTimers();
     }

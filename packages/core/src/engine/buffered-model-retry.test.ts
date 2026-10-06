@@ -20,6 +20,30 @@ async function collect(
 }
 
 describe("streamBufferedModelWithRetry", () => {
+  it.each(["max_tokens", "length"])("rejects a %s stop without delivering partial helper output or retrying", async (stopReason) => {
+    let calls = 0;
+    const delivered: StreamEvent[] = [];
+    const finished: ModelAttemptFinishedEvent[] = [];
+    const client = {
+      streamMessage: async function* (): AsyncIterable<StreamEvent> {
+        calls++;
+        yield { type: "usage", usage: { inputTokens: 7, outputTokens: 3 } };
+        yield { type: "text_delta", delta: "unfinished summary" };
+        yield { type: "complete", stopReason };
+      },
+    };
+    await expect((async () => {
+      for await (const event of streamBufferedModelWithRetry(
+        client as never,
+        { model: "m", messages: [{ type: "user", content: "summarize" }], tools: [] },
+        { onAttemptFinished: (event) => finished.push(event) },
+      )) delivered.push(event);
+    })()).rejects.toMatchObject({ info: { kind: "stream_incomplete", phase: "stream", retryable: false } });
+    expect(delivered).toEqual([]);
+    expect(calls).toBe(1);
+    expect(finished).toEqual([expect.objectContaining({ status: "failed", usageStatus: "partial", usage: { inputTokens: 7, outputTokens: 3 } })]);
+  });
+
   it("delivers only the successful attempt and drops the failed prefix", async () => {
     vi.useFakeTimers();
     try {

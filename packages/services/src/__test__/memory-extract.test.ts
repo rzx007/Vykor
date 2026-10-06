@@ -84,6 +84,39 @@ describe("extractMemoriesFromTurn", () => {
     { role: "assistant", content: "noted" },
   ];
 
+  it("does not persist even parseable records when helper output was length-limited", async () => {
+    const manager = new MemoryManager();
+    let calls = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(params): AsyncIterable<StreamEvent> {
+        calls++;
+        expect(params.tools).toEqual([]);
+        expect(params.messages).toHaveLength(1);
+        expect(params.maxTokens).toBe(2048);
+        yield { type: "text_delta", delta: '{"memories":[{"title":"Storage","body":"Use SQLite for session state"}]}' };
+        yield { type: "complete", stopReason: "max_tokens" };
+      },
+    };
+    await expect(extractMemoriesFromTurn({ apiClient: client, model: "m", messages, manager }))
+      .rejects.toMatchObject({ info: { kind: "stream_incomplete", retryable: false } });
+    expect(await manager.getAll()).toEqual([]);
+    expect(calls).toBe(1);
+  });
+
+  it.each([
+    { title: { invented: "title" }, body: "Use SQLite" },
+    { title: "Storage", body: { invented: "body" } },
+    { title: 42, body: "Use SQLite" },
+    { title: "Storage", body: 42 },
+  ])("does not turn invalid title/body types into stored text: %j", async (record) => {
+    const manager = new MemoryManager();
+    const result = await extractMemoriesFromTurn({
+      apiClient: fakeClient(JSON.stringify({ memories: [record] })), model: "m", messages, manager,
+    });
+    expect(result).toMatchObject({ skipped: true, records: [], writtenIds: [] });
+    expect(await manager.getAll()).toEqual([]);
+  });
+
   it("continues after a credential candidate in the exported extraction helper", async () => {
     const manager = new MemoryManager();
     const result = await extractMemoriesFromTurn({

@@ -77,8 +77,9 @@ export function parseMemoryExtractionRecords(
     .flatMap((candidate): MemoryExtractionRecord[] => {
       if (!candidate || typeof candidate !== "object") return [];
       const row = candidate as Record<string, unknown>;
-      const title = String(row.title ?? "").trim();
-      const body = String(row.body ?? "").trim();
+      if (typeof row.title !== "string" || typeof row.body !== "string") return [];
+      const title = row.title.trim();
+      const body = row.body.trim();
       if (!title || !body) return [];
       return [
         {

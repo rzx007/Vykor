@@ -62,6 +62,12 @@ export async function* streamBufferedModelWithRetry(
           continue;
         }
         if (event.type === "complete") {
+          if (event.stopReason === "max_tokens" || event.stopReason === "length") {
+            throw new ModelRequestFailure(
+              "辅助模型输出达到长度上限，未返回完整结果",
+              { kind: "stream_incomplete", phase: "stream", retryable: false },
+            );
+          }
           completeSeen = true;
           buffered.push(event);
           continue;
