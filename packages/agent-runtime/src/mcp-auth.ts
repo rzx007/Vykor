@@ -5,79 +5,93 @@ import type {
   Settings,
   IToolRegistry,
 } from "@vykor/core";
-import { updateSettings } from "@vykor/core";
-import { McpClientManager, resolveTransportKind } from "@vykor/mcp";
+import { loadMcpServerConfigSnapshot, saveMcpServerConfig, ToolRegistry } from "@vykor/core";
+import { McpClientManager, resolveTransportKind, type McpConnectionActivation } from "@vykor/mcp";
 
 export interface CreateMcpAuthHostOptions {
   settings: Settings;
   mcpManager: McpClientManager;
   toolRegistry: IToolRegistry;
+  cwd?: string;
   persistSettings?: (settings: Settings) => Promise<void>;
 }
 
 export function createMcpAuthHost(options: CreateMcpAuthHostOptions): McpAuthHost {
   const persistSettings = options.persistSettings;
+  let queue: Promise<unknown> = Promise.resolve();
   return {
     async configure(input) {
-      const existing = options.settings.mcpServers?.[input.serverName]
-        ?? options.mcpManager.getConnection(input.serverName)?.config;
-      if (!existing) {
-        throw new Error(`MCP server is not configured: ${input.serverName}`);
-      }
+      const run = queue.then(async () => {
+        const sourceSnapshot = persistSettings ? undefined : await loadMcpServerConfigSnapshot(input.serverName, { projectRoot: options.cwd });
+        const existing = sourceSnapshot?.config ?? options.settings.mcpServers?.[input.serverName]
+          ?? options.mcpManager.getConnection(input.serverName)?.config;
+        if (!existing) {
+          throw new Error(`MCP server is not configured: ${input.serverName}`);
+        }
 
-      const nextConfig = applyMcpAuthConfig(input.serverName, existing, input);
-      const nextSettings: Settings = {
-        ...options.settings,
-        mcpServers: {
-          ...(options.settings.mcpServers ?? {}),
-          [input.serverName]: nextConfig,
-        },
-      };
-
-      if (persistSettings) {
-        await persistSettings(nextSettings);
-        Object.assign(options.settings, nextSettings);
-      } else {
-        const persisted = await updateSettings((latest) => ({
-          ...latest,
+        const nextConfig = applyMcpAuthConfig(input.serverName, existing, input);
+        const nextSettings: Settings = {
+          ...options.settings,
           mcpServers: {
-            ...(latest.mcpServers ?? {}),
+            ...(options.settings.mcpServers ?? {}),
             [input.serverName]: nextConfig,
           },
-        }));
-        Object.assign(options.settings, persisted);
-      }
+        };
 
-      let prepared;
-      try {
-        prepared = await options.mcpManager.prepareConnection(input.serverName, nextConfig);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`Saved MCP auth for ${input.serverName}, but reconnect failed: ${detail}`);
-      }
+        let prepared;
+        try {
+          prepared = await options.mcpManager.prepareConnection(input.serverName, nextConfig);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(`MCP auth reconnect failed: ${detail}. Auth was not saved for ${input.serverName}.`);
+        }
 
-      const activation = options.mcpManager.activatePreparedConnection(prepared, (tools) => {
-        options.toolRegistry.replaceBySource(
-          { kind: "mcp", id: input.serverName },
-          tools,
-        );
+        let activation: McpConnectionActivation | undefined;
+        const commit = () => {
+          activation = options.mcpManager.activatePreparedConnection(prepared, (tools) => {
+            options.toolRegistry.replaceBySource({ kind: "mcp", id: input.serverName }, tools);
+          });
+          if (!activation.committed) throw activation.error;
+        };
+
+        try {
+          // Check replacement conflicts before persisting or publishing any live state.
+          const validation = new ToolRegistry();
+          for (const tool of options.toolRegistry.getAll()) {
+            validation.register(tool, options.toolRegistry.inspect(tool.name)?.source);
+          }
+          validation.replaceBySource({ kind: "mcp", id: input.serverName }, prepared.tools);
+          if (persistSettings) {
+            await persistSettings(nextSettings);
+            try { commit(); }
+            catch (error) {
+              try { await persistSettings(options.settings); }
+              catch (rollbackError) { throw new AggregateError([error, rollbackError], "MCP activation failed and its saved config could not be restored."); }
+              throw error;
+            }
+          } else {
+            await saveMcpServerConfig(input.serverName, nextConfig, { projectRoot: options.cwd, expected: sourceSnapshot, commit });
+          }
+        } catch (error) {
+          if (activation && !activation.committed) await activation.discardPrepared().catch(() => undefined);
+          else await prepared.client.close().catch(() => undefined);
+          throw error;
+        }
+        options.settings.mcpServers = { ...options.settings.mcpServers, [input.serverName]: nextConfig };
+
+        let cleanupWarning = "";
+        try {
+          if (activation?.committed) await activation.closePrevious();
+        } catch {
+          cleanupWarning = " The previous connection could not be closed.";
+        }
+
+        return {
+          message: `Saved MCP auth for ${input.serverName} and reconnected it (mode=${input.mode}).${cleanupWarning}`,
+        };
       });
-
-      if (!activation.committed) {
-        await activation.discardPrepared().catch(() => undefined);
-        throw activation.error;
-      }
-
-      let cleanupWarning = "";
-      try {
-        await activation.closePrevious();
-      } catch {
-        cleanupWarning = " The previous connection could not be closed.";
-      }
-
-      return {
-        message: `Saved MCP auth for ${input.serverName} and reconnected it (mode=${input.mode}).${cleanupWarning}`,
-      };
+      queue = run.catch(() => undefined);
+      return run;
     },
   };
 }

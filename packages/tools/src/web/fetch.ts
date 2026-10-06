@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "@vykor/core";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
+import { sandboxNetworkGuard } from "./sandbox-network.js";
 import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebFetchFormat, WebRuntimeLike } from "./types.js";
 
@@ -26,6 +27,8 @@ export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime):
       required: ["url"],
     },
     async execute(input, context) {
+      const blocked = sandboxNetworkGuard(context);
+      if (blocked) return blocked;
       const url = input.url as string;
       const maxChars = (input.maxChars as number) ?? 12000;
       const format = (input.format as WebFetchFormat) ?? "text";

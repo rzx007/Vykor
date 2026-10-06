@@ -16,11 +16,12 @@ export async function resolveApiKey(
   options: ApiKeyResolutionOptions = {},
   storage: CredentialStorage = new CredentialStorage(),
 ): Promise<string> {
-  const explicit = options.apiKey ?? settings.apiKey;
-  if (explicit) return explicit;
+  if (options.apiKey) return options.apiKey;
 
   const model = options.model ?? settings.model;
   const providerName = options.provider ?? settings.provider;
+  const namedCustomProvider = !!providerName && providerName !== "codex" && !findByName(providerName);
+  if (!namedCustomProvider && settings.apiKey) return settings.apiKey;
   if (providerName) {
     if (providerName === "codex") {
       try {
@@ -33,6 +34,7 @@ export async function resolveApiKey(
     if (stored) return stored;
     const provider = findByName(providerName);
     if (provider?.envKey && process.env[provider.envKey]) return process.env[provider.envKey]!;
+    if (namedCustomProvider) return "";
   }
 
   const detected = detectProvider(model, undefined, options.baseUrl ?? settings.baseUrl);

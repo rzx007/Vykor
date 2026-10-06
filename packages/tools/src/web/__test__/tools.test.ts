@@ -9,6 +9,23 @@ import {
 } from "../types.js";
 
 describe("web tools", () => {
+  it.each([{ enabled: false, mode: "none" }, { enabled: true, mode: "bridge" }, { enabled: true, mode: "host" }, { enabled: true, mode: "proxy" }] as const)("allows normal web traffic for sandbox %j", async policy => {
+    const web = runtime({ async search() { return { provider: "fixture", sources: [] }; }, async fetch() { return { provider: "fixture", url: "https://example.com", status: 200, statusText: "OK", ok: true, contentType: "text/plain", body: "ok", truncated: false }; } });
+    const context = { cwd: process.cwd(), settings: { model: "m", apiFormat: "openai" as const, maxTurns: 1, permission: { mode: "default" as const }, sandbox: { enabled: policy.enabled, network: { mode: policy.mode } } } };
+    expect(await createWebFetchTool(web).execute({ url: "https://example.com" }, context)).toMatchObject({ executionState: "completed" });
+    expect(await createWebSearchTool(web).execute({ query: "fixture" }, context)).toMatchObject({ executionState: "completed" });
+  });
+  it.each(["fetch", "search"] as const)("blocks host %s before network access when sandbox network is none", async (kind) => {
+    let requests = 0;
+    const web = runtime({
+      async fetch() { requests++; throw new Error("unexpected network access"); },
+      async search() { requests++; throw new Error("unexpected network access"); },
+    });
+    const tool = kind === "fetch" ? createWebFetchTool(web) : createWebSearchTool(web);
+    const result = await tool.execute({ url: "https://private.example", query: "secret" }, { cwd: process.cwd(), settings: { model: "m", apiFormat: "openai", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: true, network: { mode: "none" } } } });
+    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(requests).toBe(0);
+  });
   it("records an empty search as completed without copying the query into its summary", async () => {
     const result = await createWebSearchTool(runtime({ async search() { return { provider: "test", sources: [] }; } }))
       .execute({ query: "secret-query" }, { cwd: process.cwd() });

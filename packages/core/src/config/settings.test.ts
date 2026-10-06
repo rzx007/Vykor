@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadSettings, resolveOutputTokenCap, saveProjectSettings, saveSettings, withMcpServerOAuthScopes } from "./settings.js";
+import { loadMcpServerConfigSnapshot, loadSettings, resolveOutputTokenCap, saveMcpServerConfig, saveProjectSettings, saveSettings, withMcpServerOAuthScopes } from "./settings.js";
 
 describe("daemon settings", () => {
   const forbidden = JSON.parse(readFileSync(new URL("../../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
@@ -34,6 +34,71 @@ describe("daemon settings", () => {
     expect((await loadSettings()).daemon).toEqual({ autoStart: false });
     expect((await loadSettings()).plugins).toEqual({ enabled: true, uiEnabled: true });
     expect((await loadSettings()).workStyle).toBe("practical");
+  });
+
+  it.each(["user", "project"] as const)("never writes transient apiKey to %s settings", async (scope) => {
+    const projectRoot = join(configDir, "key-project");
+    const settings = { ...(await loadSettings()), apiKey: "fixture-transient", outputStyle: "fixture-style" };
+    if (scope === "user") await saveSettings(settings);
+    else await saveProjectSettings(settings, projectRoot);
+    const saved = JSON.parse(readFileSync(scope === "user" ? join(configDir, "settings.json") : join(projectRoot, ".vykor", "settings.json"), "utf8"));
+    expect(saved.apiKey).toBeUndefined();
+    expect(saved.outputStyle).toBe("fixture-style");
+    expect(settings.apiKey).toBe("fixture-transient");
+  });
+
+  it.each(["project", "global", "missing"] as const)("restores %s durable config when the synchronous MCP swap fails", async scope => {
+    const projectRoot = join(configDir, "rollback-project");
+    const projectConfigDir = join(projectRoot, ".vykor");
+    mkdirSync(projectConfigDir, { recursive: true });
+    const path = scope === "project" ? join(projectConfigDir, "settings.json") : join(configDir, "settings.json");
+    const before = { effort: "high", mcpServers: { remote: { type: "http" as const, url: "https://mcp.example", headers: { Authorization: "Bearer old" } }, other: { type: "stdio" as const, command: "node" } } };
+    if (scope !== "missing") writeFileSync(path, JSON.stringify(before));
+    await expect(saveMcpServerConfig("remote", { type: "http", url: "https://mcp.example", headers: { Authorization: "Bearer new" } }, {
+      projectRoot, commit: () => { throw new Error("registry changed during save"); },
+    })).rejects.toThrow("registry changed during save");
+    if (scope === "missing") expect(readdirSync(configDir)).not.toContain("settings.json");
+    else expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(before);
+  });
+
+  it.each(["project", "global"] as const)("allows unrelated %s settings updates and equivalent target key order", async scope => {
+    const projectRoot = join(configDir, "snapshot-project");
+    mkdirSync(join(projectRoot, ".vykor"), { recursive: true });
+    const path = scope === "project" ? join(projectRoot, ".vykor", "settings.json") : join(configDir, "settings.json");
+    writeFileSync(path, JSON.stringify({ mcpServers: { remote: { type: "http", url: "https://mcp.example", headers: { "X-A": "1", "X-B": "2" } } } }));
+    const snapshot = await loadMcpServerConfigSnapshot("remote", { projectRoot });
+    writeFileSync(path, JSON.stringify({ effort: "high", mcpServers: { other: { type: "stdio", command: "added" }, remote: { headers: { "X-B": "2", "X-A": "1" }, url: "https://mcp.example", type: "http" } } }));
+    let commits = 0;
+    await expect(saveMcpServerConfig("remote", { type: "http", url: "https://mcp.example", headers: { Authorization: "Bearer updated" } }, { projectRoot, expected: snapshot, commit: () => { commits++; } })).resolves.toBe(scope);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ effort: "high", mcpServers: { other: { command: "added" }, remote: { headers: { Authorization: "Bearer updated" } } } });
+    expect(commits).toBe(1);
+  });
+
+  it.each(["target", "empty", "only-other"] as const)("rejects a new project %s list without changing the captured global source", async kind => {
+    const projectRoot = join(configDir, "new-override-project");
+    mkdirSync(join(projectRoot, ".vykor"), { recursive: true });
+    const globalPath = join(configDir, "settings.json");
+    const projectPath = join(projectRoot, ".vykor", "settings.json");
+    const config = { type: "http" as const, url: "https://mcp.example" };
+    writeFileSync(globalPath, JSON.stringify({ mcpServers: { remote: config } }));
+    const snapshot = await loadMcpServerConfigSnapshot("remote", { projectRoot });
+    writeFileSync(projectPath, JSON.stringify({ mcpServers: kind === "empty" ? {} : kind === "only-other" ? { other: config } : { remote: config } }));
+    const beforeGlobal = readFileSync(globalPath, "utf8");
+    const beforeProject = readFileSync(projectPath, "utf8");
+    let commits = 0;
+    await expect(saveMcpServerConfig("remote", { ...config, headers: { Authorization: "Bearer stale" } }, { projectRoot, expected: snapshot, commit: () => { commits++; } })).rejects.toMatchObject({ code: "settings_conflict", field: "mcpServers.remote" });
+    expect(readFileSync(globalPath, "utf8")).toBe(beforeGlobal);
+    expect(readFileSync(projectPath, "utf8")).toBe(beforeProject);
+    expect(commits).toBe(0);
+  });
+
+  it.each([{}, { other: { type: "stdio" as const, command: "node" } }])("captures a declared project MCP list as the effective source even without the target: %j", async mcpServers => {
+    const projectRoot = join(configDir, "declared-project-list");
+    mkdirSync(join(projectRoot, ".vykor"), { recursive: true });
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ mcpServers: { remote: { type: "http", url: "https://global.example" } } }));
+    writeFileSync(join(projectRoot, ".vykor", "settings.json"), JSON.stringify({ mcpServers }));
+    expect((await loadSettings(undefined, { includeProject: true, projectRoot })).mcpServers?.remote).toBeUndefined();
+    expect(await loadMcpServerConfigSnapshot("remote", { projectRoot })).toEqual({ scope: "project", config: undefined });
   });
 
   it("loads an explicit efficient work style", async () => {

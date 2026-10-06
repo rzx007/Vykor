@@ -300,6 +300,7 @@ export async function installRuntimeIntegrations(
   runtime.queryEngine.setMcpManager(mcpManager);
   runtime.queryEngine.setMcpAuth(
     createMcpAuthHost({
+      cwd: options.cwd,
       settings: options.settings,
       mcpManager,
       toolRegistry: getInternalToolRegistry(runtime.toolRegistry),

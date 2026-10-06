@@ -131,6 +131,18 @@ describe("CredentialStorage", () => {
     expect(key).toBe("sk-ant-test123");
   });
 
+  it("preserves other instances' writes when storing and clearing credentials", async () => {
+    const second = new CredentialStorage(join(tempDir, "credentials.json"));
+    await storage.listStoredProviders();
+    await second.storeApiKey("openai", "fixture-openai");
+    await storage.storeApiKey("anthropic", "fixture-anthropic");
+    expect(await new CredentialStorage(join(tempDir, "credentials.json")).loadApiKey("openai")).toBe("fixture-openai");
+    await second.clearProviderCredentials("openai");
+    const fresh = new CredentialStorage(join(tempDir, "credentials.json"));
+    expect(await fresh.loadApiKey("anthropic")).toBe("fixture-anthropic");
+    expect(await fresh.loadApiKey("openai")).toBeUndefined();
+  });
+
   it("returns undefined for missing provider", async () => {
     const key = await storage.loadApiKey("nonexistent");
     expect(key).toBeUndefined();

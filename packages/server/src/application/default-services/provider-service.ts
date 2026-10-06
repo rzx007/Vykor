@@ -395,8 +395,8 @@ function normalizeProviderHeaders(
 function normalizeCustomProvider(
   input: CustomProviderInput,
 ): CustomProviderSettings {
-  const id = input.id?.trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(id)) {
+  const id = typeof input.id === "string" ? input.id.trim().toLowerCase() : "";
+  if (!id || !/^[a-z0-9][a-z0-9_-]*$/.test(id)) {
     throw new ProviderMutationError(
       400,
       "供应商 ID 只能包含小写字母、数字、连字符或下划线。",

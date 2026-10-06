@@ -243,6 +243,9 @@ export {
   saveSettings,
   loadProjectSettings,
   saveProjectSettings,
+  saveMcpServerConfig,
+  loadMcpServerConfigSnapshot,
+  type McpServerConfigSnapshot,
   withMcpServerOAuthScopes,
 } from "./config/settings";
 export {

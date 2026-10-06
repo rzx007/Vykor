@@ -1,7 +1,9 @@
-import { readFile, mkdir } from "node:fs/promises";
-import type { Settings } from "../index";
+import { readFile, mkdir, unlink } from "node:fs/promises";
+import { isDeepStrictEqual } from "node:util";
+import type { McpServerConfig, Settings } from "../index";
 import { getConfigDir, getConfigFilePath, getProjectConfigDir, getProjectSettingsFilePath } from "./paths";
 import { writeJsonFileAtomically } from "./atomic-json-write.js";
+import { SettingsConflictError, withSettingsFileLock } from "./settings-mutation.js";
 
 export const DEFAULT_OUTPUT_TOKEN_MAX = 32_000;
 
@@ -174,7 +176,8 @@ export async function saveSettings(settings: Settings): Promise<void> {
   // 确保配置目录存在，若不存在则递归创建
   await mkdir(configDir, { recursive: true });
 
-  await writeJsonFileAtomically(configPath, settings);
+  const { apiKey: _apiKey, ...persisted } = settings;
+  await writeJsonFileAtomically(configPath, persisted);
 }
 
 /**
@@ -212,7 +215,82 @@ export async function saveProjectSettings(
   const configDir = getProjectConfigDir(projectRoot);
   const configPath = getProjectSettingsFilePath(projectRoot);
   await mkdir(configDir, { recursive: true });
-  await writeJsonFileAtomically(configPath, settings);
+  const { apiKey: _apiKey, ...persisted } = settings;
+  await writeJsonFileAtomically(configPath, persisted);
+}
+
+export interface McpServerConfigSnapshot {
+  scope: "project" | "global";
+  config?: McpServerConfig;
+}
+
+/** Capture the original durable source and target before preparing authentication. */
+export async function loadMcpServerConfigSnapshot(
+  serverName: string,
+  options: { projectRoot?: string } = {},
+): Promise<McpServerConfigSnapshot> {
+  const project = await loadProjectSettings(options.projectRoot);
+  if (project && Object.hasOwn(project, "mcpServers")) {
+    return { scope: "project", config: project.mcpServers?.[serverName] };
+  }
+  return { scope: "global", config: (await loadFromFile())?.mcpServers?.[serverName] };
+}
+
+/** Patch only the server's original settings file, preserving other durable fields. */
+export async function saveMcpServerConfig(
+  serverName: string,
+  config: McpServerConfig,
+  options: { projectRoot?: string; expected?: McpServerConfigSnapshot; commit?: () => void } = {},
+): Promise<"project" | "global"> {
+  const projectPath = getProjectSettingsFilePath(options.projectRoot);
+  await mkdir(getProjectConfigDir(options.projectRoot), { recursive: true });
+  return withSettingsFileLock<"project" | "global">(async () => {
+    const project = await loadProjectSettings(options.projectRoot);
+    if (options.expected?.scope === "project" && (!project || !Object.hasOwn(project, "mcpServers"))) {
+      throw new SettingsConflictError(`mcpServers.${serverName}`);
+    }
+    if (project && Object.hasOwn(project, "mcpServers")) {
+      assertMcpServerConfigUnchanged(serverName, { scope: "project", config: project.mcpServers?.[serverName] }, options.expected);
+      await saveProjectSettings({ ...project, mcpServers: { ...project.mcpServers, [serverName]: config } }, options.projectRoot);
+      await commitSavedMcpConfig(projectPath, project, options.commit);
+      return "project";
+    }
+    return withSettingsFileLock<"global">(async () => {
+      const global = await loadFromFile();
+      assertMcpServerConfigUnchanged(serverName, { scope: "global", config: global?.mcpServers?.[serverName] }, options.expected);
+      await saveSettings({ ...global, mcpServers: { ...global?.mcpServers, [serverName]: config } } as Settings);
+      await commitSavedMcpConfig(getConfigFilePath(), global, options.commit);
+      return "global";
+    });
+  }, { lockPath: `${projectPath}.lock` });
+}
+
+function assertMcpServerConfigUnchanged(
+  serverName: string,
+  current: McpServerConfigSnapshot,
+  expected?: McpServerConfigSnapshot,
+): void {
+  if (expected && !isDeepStrictEqual(current, expected)) {
+    throw new SettingsConflictError(`mcpServers.${serverName}`);
+  }
+}
+
+async function commitSavedMcpConfig(
+  path: string,
+  previous: Partial<Settings> | null,
+  commit?: () => void,
+): Promise<void> {
+  try {
+    commit?.();
+  } catch (error) {
+    try {
+      if (previous) await writeJsonFileAtomically(path, previous);
+      else await unlink(path);
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], "MCP activation failed and its saved config could not be restored.");
+    }
+    throw error;
+  }
 }
 
 function loadFromEnv(): SettingsPatch {

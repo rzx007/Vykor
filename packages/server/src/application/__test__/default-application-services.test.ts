@@ -36,6 +36,12 @@ afterEach(() => {
 });
 
 describe("default daemon application services", () => {
+  it.each([undefined, null, 42, {}, "", " ", "bad id"])("rejects invalid custom provider id %s before saving", async (id) => {
+    const ref = { current: { model: "m", apiFormat: "openai", maxTurns: 50, permission: { mode: "default" } } as never };
+    const providers = createDefaultProviderService(ref);
+    await expect(providers.create!({ id, displayName: "Private", baseUrl: "https://private.example/v1", apiFormat: "openai", models: [{ id: "m" }] } as never)).rejects.toMatchObject({ status: 400 });
+    expect((ref.current as { customProviders?: unknown }).customProviders).toBeUndefined();
+  });
   it("shows profile status and initializes missing personal prompt files", async () => {
     const profile = createDefaultProfileService();
     expect((await profile.status()).report).toContain("SOUL.md: missing");

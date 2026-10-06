@@ -983,6 +983,29 @@ export class QueryEngine implements IQueryEngine {
       setPlanMode: this.options.setPlanMode,
       ...(requestConfiguration ? { requestConfiguration } : {}),
       toolRegistry: toolRegistryView(toolRegistry),
+      ...(toolUse.name === "McpToolCall" ? {
+        callMcpTool: async (name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal; deadlineAt?: number }) => {
+          if (!name.startsWith("mcp__") || toolRegistry.inspect(name)?.source.kind !== "mcp") {
+            return { content: [{ type: "text" as const, text: `Unknown or disallowed MCP tool: ${name}` }], isError: true, failureKind: "policy" as const, executionState: "not_started" as const };
+          }
+          const innerSignal = AbortSignal.any([...(signal ? [signal] : []), ...(options?.signal ? [options.signal] : [])]);
+          const innerExecution = execution ? { ...execution, emit: async (event: Parameters<AgentExecutionContext["emit"]>[0]) => {
+            // The delegated target is not an additional model-issued tool part.
+            if (event.type === "domain.event" && event.data.name === "tool.lifecycle") return;
+            await execution.emit(event);
+          } } : undefined;
+          const { results, failure } = await executeCheckedTools({
+            toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
+            toolRegistry, messages: [], permissionChecker: this.permissionChecker,
+            hookExecutor: this.hookExecutor, signal: innerSignal, execution: innerExecution,
+            timeoutMs: options?.deadlineAt === undefined ? this.options.toolTimeoutMs : Math.max(1, options.deadlineAt - Date.now()),
+            createToolContext: (call, attemptId) => this.createToolContext(call, attemptId, toolRegistry, innerSignal, innerExecution, requestConfiguration),
+            isTrustedSummary: () => false,
+          });
+          if (failure) throw failure.error;
+          return results[0]!;
+        },
+      } : {}),
       capabilityView: execution?.capabilityView,
       skillRegistry: this.skillRegistry,
       // Global MCP meta APIs bypass captured tools; Runs with a View fail closed.

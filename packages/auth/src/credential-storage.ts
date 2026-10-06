@@ -17,7 +17,7 @@ export class CredentialStorage {
   }
 
   async storeCredential(provider: string, key: string, value: string): Promise<void> {
-    const data = await this.load();
+    const data = await this.load(true);
     if (!data[provider]) data[provider] = {};
     data[provider]![key] = value;
     await this.save(data);
@@ -29,7 +29,7 @@ export class CredentialStorage {
   }
 
   async clearProviderCredentials(provider: string): Promise<void> {
-    const data = await this.load();
+    const data = await this.load(true);
     if (data[provider]) {
       delete data[provider];
       await this.save(data);
@@ -53,8 +53,8 @@ export class CredentialStorage {
     return this.filePath;
   }
 
-  private async load(): Promise<CredentialData> {
-    if (this.cache) return this.cache;
+  private async load(refresh = false): Promise<CredentialData> {
+    if (this.cache && !refresh) return this.cache;
     try {
       await access(this.filePath);
       const raw = await readFile(this.filePath, "utf-8");

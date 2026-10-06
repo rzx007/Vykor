@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "@vykor/core";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
+import { sandboxNetworkGuard } from "./sandbox-network.js";
 import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebRuntimeLike } from "./types.js";
 
@@ -25,6 +26,8 @@ export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime)
       required: ["query"],
     },
     async execute(input, context) {
+      const blocked = sandboxNetworkGuard(context);
+      if (blocked) return blocked;
       const query = input.query as string;
       const maxResults = (input.maxResults as number) ?? 5;
       const searchUrl = input.searchUrl as string | undefined;

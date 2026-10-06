@@ -18,20 +18,19 @@ export const mcpToolCallTool: ToolDefinition = {
     required: ["serverName", "toolName"],
   },
   async execute(input, context) {
-    const mgr = mcpManagerFrom(context);
-    if (!mgr) {
-      return { content: [{ type: "text", text: "MCP manager not available in context" }], isError: true };
+    const qualifiedName = `mcp__${String(input.serverName ?? "")}__${String(input.toolName ?? "")}`;
+    if (!context.callMcpTool) {
+      return { content: [{ type: "text", text: `Checked MCP invocation is unavailable: ${qualifiedName}` }], isError: true, failureKind: "policy", executionState: "not_started" };
     }
     try {
-      const result = await mgr.callTool(
-        input.serverName as string,
-        input.toolName as string,
+      return await context.callMcpTool(
+        qualifiedName,
         (input.args as Record<string, unknown>) ?? {},
-        context.abortSignal,
+        { signal: context.abortSignal, deadlineAt: context.deadlineAt },
       );
-      return { content: [{ type: "text", text: result.content }], isError: result.isError };
     } catch (err) {
-      return { content: [{ type: "text", text: (err as Error).message }], isError: true };
+      if (context.abortSignal?.aborted) throw err;
+      return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], isError: true, failureKind: "unknown_outcome", executionState: "unknown" };
     }
   },
 };

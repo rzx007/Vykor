@@ -86,6 +86,17 @@ describe("resolveApiKey", () => {
       storage,
     )).resolves.toBe(token);
   });
+
+  it("never borrows transient, detected, or env keys for a named custom endpoint", async () => {
+    const settings = { ...BASE_SETTINGS, provider: "private-gateway", baseUrl: "https://private.example/v1", apiKey: "fixture-transient" };
+    await storage.storeApiKey("anthropic", "fixture-anthropic");
+    process.env.ANTHROPIC_API_KEY = "fixture-env";
+    expect(await resolveApiKey(settings, {}, storage)).toBe("");
+    expect(await resolveApiKey({ ...settings, apiKey: undefined }, {}, storage)).toBe("");
+    expect(await resolveApiKey(settings, { apiKey: "fixture-explicit" }, storage)).toBe("fixture-explicit");
+    await storage.storeApiKey("private-gateway", "fixture-private");
+    expect(await resolveApiKey(settings, {}, storage)).toBe("fixture-private");
+  });
 });
 
 function makeJwt(payload: Record<string, unknown>): string {

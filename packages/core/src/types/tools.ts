@@ -102,8 +102,14 @@ export interface ToolContext {
   };
   /** Actual tools available to the current QueryEngine after host injection and allow/deny filtering. */
   toolRegistry?: ToolRegistryView;
+  /** MCP proxy only: invoke one captured MCP tool through ordinary authorization. */
+  callMcpTool?: (
+    name: string,
+    input: Record<string, unknown>,
+    options?: { signal?: AbortSignal; deadlineAt?: number },
+  ) => Promise<ToolResult>;
   skillRegistry?: unknown;
-  /** MCP 客户端管理器，供 McpToolCall / ListMcpResources / ReadMcpResource 元工具使用。 */
+  /** MCP 客户端管理器，供 ListMcpResources / ReadMcpResource 元工具使用。 */
   mcpManager?: unknown;
   /** Host-owned MCP auth updater. It saves config and reconnects the live MCP manager. */
   mcpAuth?: McpAuthHost;
