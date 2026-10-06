@@ -23,6 +23,15 @@ export function globToRegex(pattern: string): RegExp {
 
 export const MAX_LINE_BYTES = 64 * 1024;
 
+export function matchesGlob(path: string, pattern: string): boolean {
+  const brace = /\{([^{}]*,[^{}]*)\}/.exec(pattern);
+  if (brace) {
+    return brace[1]!.split(",").some((choice) => matchesGlob(path,
+      pattern.slice(0, brace.index) + choice + pattern.slice(brace.index + brace[0].length)));
+  }
+  return globToRegex(pattern).test(path) || (!pattern.includes("/") && globToRegex(`**/${pattern}`).test(path));
+}
+
 export function findRipgrep(): string | null {
   const finder = process.platform === "win32" ? "where" : "which";
   try {
@@ -51,11 +60,10 @@ export function grepArgs(basePath: string, pattern: string, options: GrepOptions
 }
 
 export function filterGlobOutput(stdout: string, pattern: string, limit: number): string[] {
-  const matchesPattern = globToRegex(pattern);
   return stdout
     .split(/\r?\n/)
     .map((line) => normalizeRgPath(line.trim()))
-    .filter((line) => line && matchesPattern.test(line.replace(/\\/g, "/")))
+    .filter((line) => line && matchesGlob(line.replace(/\\/g, "/"), pattern))
     .slice(0, limit);
 }
 

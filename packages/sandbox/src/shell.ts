@@ -12,6 +12,8 @@ import type { SandboxPolicy } from "./types.js";
 
 export interface CreateShellProcessOptions {
   cwd: string;
+  /** Project root used to resolve settings and relative sandbox filesystem rules. */
+  workspaceRoot?: string;
   sessionId?: string;
   settings?: Settings;
   policy?: SandboxPolicy;
@@ -34,11 +36,12 @@ export async function createProcess(
 ): Promise<ChildProcess> {
   if (argv.length === 0 || !argv[0]) throw new Error("createProcess requires a non-empty argv");
   const settings = options.settings ?? await loadSettings(undefined, {
-    projectRoot: options.cwd,
+    projectRoot: options.workspaceRoot ?? options.cwd,
     includeProject: true,
   });
   const policy = options.policy ?? resolveSandboxPolicy({
     cwd: options.cwd,
+    workspaceRoot: options.workspaceRoot,
     sessionId: options.sessionId,
     settings,
   });
@@ -59,11 +62,12 @@ export async function createShellProcess(
   options: CreateShellProcessOptions,
 ): Promise<ChildProcess> {
   const settings = options.settings ?? await loadSettings(undefined, {
-    projectRoot: options.cwd,
+    projectRoot: options.workspaceRoot ?? options.cwd,
     includeProject: true,
   });
   const policy = options.policy ?? resolveSandboxPolicy({
     cwd: options.cwd,
+    workspaceRoot: options.workspaceRoot,
     sessionId: options.sessionId,
     settings,
   });
@@ -107,7 +111,17 @@ async function createResolvedProcess(
     return spawnLocal();
   }
 
-  const wrapped = await wrapCommandForSrt(hostArgv, policy.config);
+  const root = policy.scope.workspaceRoot;
+  const rulePaths = (rules: string[]) => rules.map((rule) => resolve(root, rule));
+  const wrapped = await wrapCommandForSrt(hostArgv, {
+    ...policy.config,
+    filesystem: {
+      allowRead: rulePaths([...policy.filesystem.allowRead, ...policy.filesystem.extraAllowedRoots]),
+      denyRead: rulePaths(policy.filesystem.denyRead),
+      allowWrite: rulePaths([...policy.filesystem.allowWrite, ...policy.filesystem.extraAllowedRoots]),
+      denyWrite: rulePaths(policy.filesystem.denyWrite),
+    },
+  });
   const child = spawnHost(wrapped.argv, options);
   const cleanup = () => void wrapped.cleanup();
   child.once("close", cleanup);

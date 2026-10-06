@@ -29,6 +29,8 @@ export interface EffectiveEnvironmentInfo {
   hostOs: string;
   executionOs: string;
   shell: string;
+  /** User account's default shell when known; shellDescriptor identifies the actual executor. */
+  userShell?: string;
   shellDialect: "powershell" | "cmd" | "posix";
   pathStyle: "windows" | "posix";
   cwd: string;

@@ -34,6 +34,8 @@ export interface AgentBackgroundShellHost {
     sessionId: string;
     command: string;
     description: string;
+    /** Working directory inside the acquired execution environment. */
+    executionCwd?: string;
     settings?: Settings;
     shellDescriptor?: ShellDescriptor;
   }): Promise<{

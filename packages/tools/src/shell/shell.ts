@@ -49,21 +49,23 @@ export function createShellTool(
           const requestedCwd = typeof input.workdir === "string" && input.workdir.trim()
             ? input.workdir.trim()
             : context.cwd;
-          const backgroundCwd = context.environment
-            ? context.environment.paths.toHostPath(requestedCwd)
-            : requestedCwd;
-          if (!backgroundCwd) {
-            throw new Error(`Background shell workdir is outside the mounted execution roots: ${requestedCwd}`);
+          const resolvedCwd = context.environment
+            ? await context.environment.paths.resolve(requestedCwd, "execute")
+            : undefined;
+          if (resolvedCwd && resolvedCwd.mountPurpose !== "workspace") {
+            return workdirDenied(resolvedCwd.executionPath);
           }
+          const backgroundCwd = context.environment?.workspace.hostRoot ?? requestedCwd;
           if (context.abortSignal?.aborted) return interruptedBeforeStart();
           const created = await context.backgroundShell!.create({
             requestId: `tool:${context.toolCallId}`,
             command,
             description: summarizeCommand(command),
             cwd: backgroundCwd,
+            ...(resolvedCwd ? { executionCwd: resolvedCwd.executionPath } : {}),
             sessionId: context.sessionId!,
             settings: context.settings,
-            ...(shell ? { shellDescriptor: shell } : {}),
+            ...(descriptor ? { shellDescriptor: descriptor } : {}),
           });
           return {
             content: [{
@@ -165,6 +167,7 @@ async function executeInEnvironment(
     ? input.workdir.trim()
     : environment.workspace.executionRoot;
   const resolved = await environment.paths.resolve(rawWorkdir, "execute");
+  if (resolved.mountPurpose !== "workspace") return workdirDenied(resolved.executionPath);
 
   const timeoutMs = typeof input.timeout === "number" ? input.timeout : 120_000;
   const controller = new AbortController();
@@ -348,6 +351,11 @@ function interruptedBeforeStart(): ToolResult {
     content: [{ type: "text", text: "Shell interrupted before the command started." }],
     isError: true, failureKind: "interrupted", executionState: "not_started",
   };
+}
+
+function workdirDenied(path: string): ToolResult {
+  return { content: [{ type: "text", text: `Shell workdir is outside the workspace: ${path}` }],
+    isError: true, failureKind: "policy", executionState: "not_started" };
 }
 
 export function diagnoseShellDialectMismatch(

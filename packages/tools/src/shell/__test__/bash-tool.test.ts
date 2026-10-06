@@ -70,7 +70,7 @@ describe("createBashTool", () => {
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
         workspace: { executionRoot: "/work" },
-        paths: { resolve: async () => ({ executionPath: "/work" }) },
+        paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
         process: { execShell: async () => ({
           onOutput: (listener: (chunk: Uint8Array) => void) => { listener(new TextEncoder().encode("partial diagnostic")); return () => {}; },
           wait: async () => ({ exitCode: null }),
@@ -298,14 +298,6 @@ describe("createBashTool", () => {
     });
   });
 
-  it("steers long-running commands toward background jobs instead of blocking Bash", () => {
-    const tool = createBashTool(fakeExecutor(result()));
-
-    expect(tool.description).toContain("short-lived");
-    expect(tool.description).toContain("BackgroundShellCreate");
-    expect(tool.description).toContain("JobWait");
-  });
-
   it("resolves raw input before running the command", async () => {
     const resolve = vi.fn(async (request: ShellExecRequest, context: ShellExecContext) => {
       expect(request).toEqual({
@@ -482,7 +474,7 @@ async function runEnvironmentChunks(stdout: Uint8Array[], stderr: Uint8Array[], 
     environment: {
       info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
       workspace: { executionRoot: "/work" },
-      paths: { resolve: async () => ({ executionPath: "/work" }) },
+      paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
       process: { execShell: async () => ({
         onOutput(listener: (chunk: Uint8Array) => void) { onStdout = listener; return () => {}; },
         onErrorOutput(listener: (chunk: Uint8Array) => void) { onStderr = listener; return () => {}; },

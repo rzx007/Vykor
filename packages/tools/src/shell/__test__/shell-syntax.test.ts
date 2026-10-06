@@ -53,7 +53,7 @@ describe("Shell interpreter and startup boundaries", () => {
     context.abortSignal = controller.signal;
     context.environment!.paths.resolve = async () => {
       controller.abort();
-      return { executionPath: "/fixture" } as any;
+      return { executionPath: "/fixture", mountPurpose: "workspace", mountMode: "rw" };
     };
     const result = await createShellTool().execute({ command: "Write-Output 1" }, context);
     expect(result).toMatchObject({ failureKind: "interrupted", executionState: "not_started" });
@@ -127,6 +127,6 @@ function processResult(output: string, exitCode = 0) {
 function environmentContext(execShell: (command: string, options: { cwd: string; signal: AbortSignal }) => Promise<unknown>): ToolContext {
   return { cwd: "/fixture", environment: {
     info: { shellDescriptor: powershell }, workspace: { executionRoot: "/fixture" },
-    paths: { resolve: async (path: string) => ({ executionPath: path }) }, process: { execShell },
+    paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) }, process: { execShell },
   } } as unknown as ToolContext;
 }

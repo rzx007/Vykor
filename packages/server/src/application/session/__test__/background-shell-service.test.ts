@@ -9,6 +9,7 @@ import { SessionExecutionProjector } from "../session-execution-projector.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 import { BackgroundShellService } from "../background-shell-service.js";
+import { createWslPathResolver, hostPathToWslPath } from "@vykor/sandbox";
 
 let testConfigDir: string;
 let previousConfigDir: string | undefined;
@@ -115,6 +116,110 @@ function createTaskService(options: {
 }
 
 describe("BackgroundShellService", () => {
+  it("combines a delayed WSL startup retry with real durable ownership and executionCwd", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-wsl-start-cwd-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
+    const binding = { kind: "wsl" as const, hostRoot: dir, executionRoot: hostPathToWslPath(dir) };
+    const executionCwd = `${binding.executionRoot}/sub`;
+    const gate = new DaemonOperationGate();
+    let releaseAcquire!: (value: any) => void;
+    let finishProcess!: (value: { exitCode: number }) => void;
+    let launches = 0;
+    let releases = 0;
+    const acquired = new Promise<any>((resolve) => { releaseAcquire = resolve; });
+    const waited = new Promise<{ exitCode: number }>((resolve) => { finishProcess = resolve; });
+    const projector = new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); },
+      events: { checkpoint: () => 0, publishSince: () => {} }, traceIdForRun: () => "", log: () => {} });
+    const service = new BackgroundShellService({ operationGate: gate, store: {
+      getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store),
+      reserveSessionTask: store.reserveSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store),
+      transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store),
+    } as any, executionProjector: projector, events: { checkpoint: () => 0, publishSince: () => {} },
+      getDetachedProcessSupervisor: () => manager, acquireEnvironment: () => acquired });
+    try {
+      store.sessions.create({ id: "wsl-session", cwd: dir, model: "test" });
+      const input = { requestId: "same-cwd-start", sessionId: "wsl-session", command: "pwd", executionCwd,
+        settings: { model: "test", sandbox: { enabled: false }, permission: { mode: "full_auto" } } as any };
+      const first = service.create(input);
+      const retry = service.create(input);
+      await Promise.resolve(); await Promise.resolve();
+      expect(manager.listExecutions()).toEqual([]);
+      expect(gate.tryEnterBarrier({ kind: "global" }, () => true)).toBeUndefined();
+      releaseAcquire({ workspace: binding, paths: createWslPathResolver(binding), release: async () => { releases++; },
+        process: { async execShell(command: string, options: { cwd: string }) {
+          launches++;
+          if (command !== "pwd") throw new Error("Unexpected process command");
+          return { write() {}, end() {}, onOutput(listener: (chunk: Uint8Array) => void) { listener(Buffer.from(options.cwd)); return () => {}; },
+            wait: () => waited, async signal() { finishProcess({ exitCode: 0 }); } };
+        }, async execProcess() { throw new Error("Unexpected argv process"); } },
+      });
+      const [a, b] = await Promise.all([first, retry]);
+      expect(a.execution.id).toBe(b.execution.id);
+      expect(launches).toBe(1);
+      expect(a.execution.cwd).toBe(dir);
+      await vi.waitFor(() => expect(manager.readOutput(a.execution.id)).toBe(executionCwd));
+      await expect(service.create({ ...input, executionCwd: `${binding.executionRoot}/other` })).rejects.toMatchObject({ status: 409 });
+      const barrier = gate.tryEnterBarrier({ kind: "global" }, () => true);
+      expect(barrier).toBeDefined(); barrier?.release();
+      finishProcess({ exitCode: 0 });
+      await vi.waitFor(() => expect(releases).toBe(1));
+      expect(store.getSessionTask(a.execution.id)?.status).toBe("completed");
+    } finally { finishProcess({ exitCode: 0 }); await manager.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("does not silently ignore an executionCwd without an environment owner", async () => {
+    const { service, store, manager } = createTaskService();
+    await expect(service.create({ requestId: "unowned", sessionId: "s1", command: "pwd", executionCwd: "/repo/sub" }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(store.reserveSessionTask).not.toHaveBeenCalled();
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+  });
+  it("passes a WSL execution subdirectory to the acquired executor without changing host ownership", async () => {
+    const binding = { kind: "wsl" as const, hostRoot: "D:\\repo", executionRoot: "/mnt/d/repo" };
+    const launched: string[] = [];
+    const release = vi.fn(async () => {});
+    const { service, store, manager, listeners } = createTaskService({ acquireEnvironment: async () => ({
+      release, workspace: binding, paths: createWslPathResolver(binding), process: {
+        async execShell(_command: string, options: { cwd: string }) { launched.push(options.cwd); return { wait: async () => ({ exitCode: 0 }) }; },
+        async execProcess(_argv: string[], options: { cwd: string }) { launched.push(options.cwd); return { wait: async () => ({ exitCode: 0 }) }; },
+      },
+    }) });
+    store.getSession.mockReturnValue({ id: "s1", cwd: "D:\\repo", status: "running" });
+    const started = await service.create({ requestId: "subdir", sessionId: "s1", command: "npm dev", executionCwd: "/mnt/d/repo/sub" } as any);
+    const input = manager.startShellExecution.mock.calls[0]![0];
+    await input.processExecutor.execShell("pwd", { cwd: "D:\\repo" });
+    await input.processExecutor.execProcess(["pwd"], { cwd: "D:\\repo" });
+    expect(launched).toEqual(["/mnt/d/repo/sub", "/mnt/d/repo/sub"]);
+    expect(input.cwd).toBe("D:\\repo");
+    expect(release).not.toHaveBeenCalled();
+    for (const listener of listeners) listener({ ...started.execution, status: "completed" });
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce());
+  });
+
+  it("includes executionCwd in retry conflict checks", async () => {
+    const { service, store, manager } = createTaskService({ acquireEnvironment: async () => ({
+      release: async () => {}, workspace: { executionRoot: "/repo" },
+      paths: { resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace" }) },
+      process: { execShell() {}, execProcess() {} },
+    }) });
+    const input = { requestId: "cwd-conflict", sessionId: "s1", command: "npm dev", executionCwd: "/repo/one" };
+    await service.create(input as any);
+    store.reserveSessionTask.mockReturnValue({ task: store.getSessionTask(), created: false });
+    await expect(service.create({ ...input, executionCwd: "/repo/two" } as any)).rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an execution directory outside the acquired workspace and releases the lease", async () => {
+    const release = vi.fn(async () => {});
+    const binding = { kind: "wsl" as const, hostRoot: "D:\\repo", executionRoot: "/mnt/d/repo" };
+    const { service, manager, store } = createTaskService({ acquireEnvironment: async () => ({ release,
+      workspace: binding, paths: createWslPathResolver(binding), process: { execShell() {}, execProcess() {} } }) });
+    await expect(service.create({ requestId: "outside", sessionId: "s1", command: "pwd", executionCwd: "/home/alex" } as any))
+      .rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+    expect(store.getSessionTask().status).toBe("failed");
+    expect(release).toHaveBeenCalledOnce();
+  });
   it.each(["start", "failure", "cancel"])("joins complete environment acquisition on retry: %s", async (outcome) => {
     const dir = mkdtempSync(join(tmpdir(), "oh-shell-env-retry-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
@@ -142,7 +247,9 @@ describe("BackgroundShellService", () => {
       const id = store.listSessionTasks("s1")[0]!.id;
       if (outcome === "cancel") store.transitionPendingSessionTask(id, { status: "stopped" });
       if (outcome === "failure") rejectAcquire(new Error("environment denied"));
-      else releaseAcquire({ release: async () => { releases += 1; }, workspace: { executionRoot: dir }, process: {
+      else releaseAcquire({ release: async () => { releases += 1; }, workspace: { executionRoot: dir }, paths: {
+        resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace", mountMode: "rw" }),
+      }, process: {
         execShell: async (_command: string, options: { cwd: string }) => {
           launches.push(options.cwd);
           const child = spawn(process.execPath, ["-e", "process.stdout.write('environment output');setInterval(() => {}, 1000)"], { cwd: options.cwd, windowsHide: true });
@@ -169,6 +276,7 @@ describe("BackgroundShellService", () => {
     const acquireEnvironment = vi.fn(async () => ({
       release,
       workspace: { executionRoot: "/mnt/d/repo" },
+      paths: { resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace", mountMode: "rw" }) },
       process: {
         execShell: vi.fn(),
         execProcess: vi.fn(),

@@ -195,6 +195,7 @@ export class BackgroundShellService {
     settings?: Settings;
     origin?: "http" | "tool";
     shellDescriptor?: ShellDescriptor;
+    executionCwd?: string;
   }): Promise<{ execution: DetachedProcessExecution | SessionExecutionRecord; created: boolean }> {
     const scope = this.resolveScope(input, { requireActiveSession: true });
     const lease = scope.sessionId ? this.context.operationGate?.enter({ sessionId: scope.sessionId, cwd: scope.cwd }) : undefined;
@@ -206,6 +207,9 @@ export class BackgroundShellService {
     input: Parameters<BackgroundShellService["create"]>[0],
     scope: TaskScope,
   ): ReturnType<BackgroundShellService["create"]> {
+    if (input.executionCwd !== undefined && (!scope.sessionId || !this.context.acquireEnvironment)) {
+      throw new BackgroundShellError(400, "executionCwd requires an acquired session environment");
+    }
     const requestId = input.requestId.trim();
     if (!requestId) throw new BackgroundShellError(400, "requestId is required");
     const command = input.command.trim();
@@ -228,6 +232,7 @@ export class BackgroundShellService {
       command,
       description,
       settings: input.settings,
+      executionCwd: input.executionCwd,
     });
     let eventCursor = this.context.events.checkpoint();
     const reservation = this.context.store.reserveSessionTask({
@@ -268,7 +273,7 @@ export class BackgroundShellService {
   }
 
   private async startReservedShell(
-    input: { settings?: Settings; shellDescriptor?: ShellDescriptor },
+    input: { settings?: Settings; shellDescriptor?: ShellDescriptor; executionCwd?: string },
     scope: TaskScope & { sessionId: string },
     manager: ProcessSupervisor,
     taskId: string,
@@ -283,6 +288,7 @@ export class BackgroundShellService {
     eventCursor = this.context.events.checkpoint();
     let task: DetachedProcessExecution;
     let environmentLease: ExecutionEnvironmentHandle | undefined;
+    let executionCwd: string | undefined;
     try {
       if (this.context.acquireEnvironment) {
         const session = this.context.store.getSession(scope.sessionId);
@@ -300,6 +306,13 @@ export class BackgroundShellService {
         )) {
           throw new BackgroundShellError(409, "Background shell no longer matches the owning session shell.");
         }
+        const resolvedCwd = await environmentLease.paths.resolve(
+          input.executionCwd ?? environmentLease.workspace.executionRoot, "execute",
+        );
+        if (resolvedCwd.mountPurpose !== "workspace") {
+          throw new BackgroundShellError(409, "Background shell execution cwd is outside the workspace");
+        }
+        executionCwd = resolvedCwd.executionPath;
       }
       task = await manager.startShellExecution({
         id: taskId,
@@ -309,7 +322,7 @@ export class BackgroundShellService {
         sessionId: scope.sessionId,
         ...(input.settings ? { settings: input.settings } : {}),
         ...(environmentLease ? {
-          processExecutor: bindEnvironmentProcessExecutor(environmentLease),
+          processExecutor: bindEnvironmentProcessExecutor(environmentLease, executionCwd),
         } : {}),
       });
     } catch (error) {
@@ -432,8 +445,7 @@ export class BackgroundShellService {
   }
 }
 
-function bindEnvironmentProcessExecutor(environment: ExecutionEnvironmentHandle) {
-  const cwd = environment.workspace.executionRoot;
+function bindEnvironmentProcessExecutor(environment: ExecutionEnvironmentHandle, cwd = environment.workspace.executionRoot) {
   return {
     execShell: (command: string, options = {}) =>
       environment.process.execShell(command, { ...options, cwd }),
@@ -458,6 +470,7 @@ function shellRequestFingerprint(input: {
   command: string;
   description: string;
   settings?: Settings;
+  executionCwd?: string;
 }): string {
   return createHash("sha256").update(stableJson(input)).digest("hex");
 }

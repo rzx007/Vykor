@@ -89,6 +89,7 @@ export async function loadSettings(
   options: { projectRoot?: string; includeProject?: boolean } = {},
 ): Promise<Settings> {
   assertPluginUiEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
+  assertAgentEnvironment(cliOverrides?.agentEnvironment, "CLI overrides");
   // 从环境变量加载配置
   const envSettings = loadFromEnv();
   // 从配置文件异步加载配置
@@ -131,6 +132,7 @@ export async function loadSettings(
     ...envSettings.agentEnvironment,
     ...cliOverrides?.agentEnvironment,
   } as NonNullable<Settings["agentEnvironment"]>;
+  assertAgentEnvironmentKind(merged.agentEnvironment.kind, "CLI/effective settings");
   merged.terminal = {
     ...DEFAULT_SETTINGS.terminal,
     ...fileSettings?.terminal,
@@ -314,7 +316,8 @@ function loadFromEnv(): SettingsPatch {
   if (process.env.VYKOR_MAX_TURNS !== undefined) result.maxTurns = parseInt(process.env.VYKOR_MAX_TURNS, 10);
   const sandbox = buildSandboxEnvOverrides();
   if (sandbox !== undefined) result.sandbox = sandbox;
-  if (process.env.VYKOR_AGENT_ENVIRONMENT === "native" || process.env.VYKOR_AGENT_ENVIRONMENT === "wsl") {
+  if (process.env.VYKOR_AGENT_ENVIRONMENT !== undefined) {
+    assertAgentEnvironmentKind(process.env.VYKOR_AGENT_ENVIRONMENT, "VYKOR_AGENT_ENVIRONMENT");
     result.agentEnvironment = { kind: process.env.VYKOR_AGENT_ENVIRONMENT };
   }
 
@@ -467,6 +470,7 @@ function validateSettingsFields(
     "srt",
   ], configPath);
   assertNestedFields(settings, "agentEnvironment", ["kind"], configPath);
+  assertAgentEnvironment(settings.agentEnvironment, configPath);
   const sandbox = recordValue(settings.sandbox);
   if (sandbox) {
     assertNestedFields(sandbox, "filesystem", [
@@ -534,6 +538,20 @@ function validateSettingsFields(
       }
     }
   }
+}
+
+function assertAgentEnvironmentKind(kind: unknown, source: string): asserts kind is "native" | "wsl" | undefined {
+  if (kind !== undefined && kind !== "native" && kind !== "wsl") {
+    throw new SettingsFileError("settings.agentEnvironment.kind", source);
+  }
+}
+
+function assertAgentEnvironment(value: unknown, source: string): void {
+  if (value === undefined) return;
+  const environment = recordValue(value);
+  if (!environment) throw new SettingsFileError("settings.agentEnvironment", source);
+  if (environment.kind === undefined) throw new SettingsFileError("settings.agentEnvironment.kind", source);
+  assertAgentEnvironmentKind(environment.kind, source);
 }
 
 function assertPluginUiEnabled(value: unknown, configPath: string): void {

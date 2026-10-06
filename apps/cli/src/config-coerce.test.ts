@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { buildSettingsPatch, coerceConfigValue } from "./config-coerce.js";
 
 describe("config coerce helpers", () => {
+  it("accepts only supported agent execution environments", () => {
+    expect(coerceConfigValue("agentEnvironment.kind", "native")).toBe("native");
+    expect(coerceConfigValue("agentEnvironment.kind", "wsl")).toBe("wsl");
+    expect(coerceConfigValue("agentEnvironment.kind", "docker")).toBeUndefined();
+  });
   it("coerces booleans and nested memory keys", () => {
     expect(coerceConfigValue("fastMode", "on")).toBe(true);
     expect(coerceConfigValue("memory.enabled", "false")).toBe(false);

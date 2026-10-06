@@ -56,7 +56,7 @@ describe("fileWriteTool safety", () => {
       }
       const result = await fileWriteTool.execute({ file_path: target, content: "new" }, {
         cwd: dir,
-        environment: { files: new RacingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) } },
+        environment: { workspace: { kind: "local", hostRoot: dir, executionRoot: dir }, files: new RacingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) } },
       } as never);
       expect(result.isError).toBe(true);
       expect(await readFile(target, "utf8")).toBe("competitor");
@@ -77,7 +77,7 @@ describe("fileWriteTool safety", () => {
       }
       const result = await fileWriteTool.execute({ file_path: file, content: "replacement" }, {
         cwd: dir,
-        environment: { files: new ConcurrentFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) } },
+        environment: { workspace: { kind: "local", hostRoot: dir, executionRoot: dir }, files: new ConcurrentFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) } },
       } as never);
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
       expect(await readFile(file, "utf8")).toBe("user's new content");
@@ -118,6 +118,7 @@ describe("fileWriteTool safety", () => {
       const result = await fileWriteTool.execute({ file_path: file, content: "created across modules" }, {
         cwd: dir,
         environment: {
+          workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
           files: new duplicate.HostFileOperations(),
           paths: { resolve: async (path: string) => ({ executionPath: resolve(dir, path), mountMode: "rw" }) },
         },
@@ -136,6 +137,7 @@ describe("fileWriteTool safety", () => {
       const result = await fileWriteTool.execute({ file_path: file, content: "must not write" }, {
         cwd: dir,
         environment: {
+          workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
           files: new DeniedFiles(),
           paths: { resolve: async (path: string) => ({ executionPath: resolve(dir, path), mountMode: "rw" }) },
         },
@@ -166,7 +168,8 @@ describe("fileWriteTool safety", () => {
         }
       }
       const result = await fileWriteTool.execute({ file_path: file, content: "new" }, { cwd: dir, environment: {
-        files: new PartialFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
+        workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
+        files: new PartialFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) },
       } } as never);
       expect(result).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown" });
       expect(await readFile(file, "utf8")).toBe("new");

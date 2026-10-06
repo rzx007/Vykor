@@ -124,7 +124,7 @@ describe("foreground Shell log consumption", () => {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
-        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work" }) },
+        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
         process: { execShell: async () => ({
           onOutput(listener: (chunk: Uint8Array) => void) {
             const bytes = new TextEncoder().encode(stdout);
@@ -166,7 +166,7 @@ describe("foreground Shell log consumption", () => {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
-        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work" }) },
+        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
         process: { execShell: async () => { launches++; return {
           onOutput(listener: (chunk: Uint8Array) => void) { const bytes = new TextEncoder().encode(report); listener(bytes.subarray(0, 7002)); listener(bytes.subarray(7002)); return () => {}; },
           wait: async () => ({ exitCode: 0 }),
@@ -265,7 +265,7 @@ describe("foreground Shell log consumption", () => {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
-        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work" }) },
+        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
         process: { execShell: async () => ({
           onOutput(listener: (chunk: Uint8Array) => void) { listener(new TextEncoder().encode("z".repeat(13000) + "PARTIAL_END")); return () => {}; },
           wait: async () => { throw new Error("wait failed"); },
@@ -289,7 +289,7 @@ describe("foreground Shell log consumption", () => {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs, abortSignal: controller.signal,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
-        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work" }) },
+        workspace: { executionRoot: "/work" }, paths: { resolve: async () => ({ executionPath: "/work", mountPurpose: "workspace", mountMode: "rw" }) },
         process: { execShell: async () => { launches++; throw new Error("must not launch"); } },
       } as any,
     });

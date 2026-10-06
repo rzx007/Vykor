@@ -36,6 +36,13 @@ async function inNativeEnvironment(run: (context: ToolContext, files: HostFileOp
 }
 
 describe("Native environment file policy", () => {
+  it("keeps relative sandbox rules anchored at the workspace for a subdirectory caller", async () => {
+    await inNativeEnvironment(async context => {
+      const subdirectory = join(context.cwd, "sub");
+      await expect(sandboxPathError("visible.txt", subdirectory, "read", context.settings, context.environment)).resolves.toBeUndefined();
+      await expect(sandboxPathError("secret.txt", subdirectory, "read", context.settings, context.environment)).resolves.toContain("denied by sandbox rule secret.txt");
+    });
+  });
   it("applies configuration policy after real Native path resolution", async () => {
     await inNativeEnvironment(async context => {
       expect(context.environment?.info.kind).toBe("local");

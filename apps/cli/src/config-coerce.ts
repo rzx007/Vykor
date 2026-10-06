@@ -2,6 +2,8 @@
 
 export function coerceConfigValue(key: string, value: string): unknown {
   switch (key) {
+    case "agentEnvironment.kind":
+      return value === "native" || value === "wsl" ? value : undefined;
     case "model":
     case "apiFormat":
     case "baseUrl":

@@ -12,7 +12,7 @@ import {
   filterGlobOutput,
   filterGrepOutput,
   findRipgrep,
-  globToRegex,
+  matchesGlob,
   grepArgs,
   runHostProcess,
 } from "./host-search.js";
@@ -337,21 +337,34 @@ export class WslFileOperations implements FileOperations {
   }
 
   async glob(basePath: string, pattern: string, limit: number): Promise<string[]> {
-    const files = await this.collectFiles(basePath, limit * 10);
-    const matches = globToRegex(pattern);
-    return files.filter((path) => matches.test(path)).slice(0, limit);
+    if (limit <= 0) return [];
+    const args = ["--files", "--hidden"];
+    for (const directory of SKIP_DIRS) args.push("--glob", `!${directory}/**`);
+    args.push(".");
+    const ripgrep = await this.run(wslRipgrepArgv(args), undefined, false, basePath);
+    if (ripgrep.exitCode === 0 || ripgrep.exitCode === 1) return filterGlobOutput(ripgrep.output, pattern, limit);
+    const files = await this.collectFiles(basePath);
+    return files.filter((path) => matchesGlob(path, pattern)).slice(0, limit);
   }
 
   async grep(basePath: string, pattern: string, options: GrepOptions): Promise<string[]> {
-    const files = await this.collectFiles(basePath, options.limit * 20);
-    const include = options.include ? globToRegex(options.include) : undefined;
+    if (options.limit <= 0) return [];
+    const args = ["--hidden", "--no-heading", "--line-number", "--color", "never"];
+    if (!options.caseSensitive) args.push("-i");
+    if (options.include) args.push("--glob", options.include);
+    for (const directory of SKIP_DIRS) args.push("--glob", `!${directory}/**`);
+    args.push("--", pattern, ".");
+    const ripgrep = await this.run(wslRipgrepArgv(args), undefined, false, basePath);
+    if (ripgrep.exitCode === 0 || ripgrep.exitCode === 1) return filterGrepOutput(ripgrep.output, options.limit);
+    const files = await this.collectFiles(basePath);
     const expression = new RegExp(pattern, options.caseSensitive ? "" : "i");
     const results: string[] = [];
     for (const file of files) {
-      if (include && !include.test(file)) continue;
+      if (options.include && !matchesGlob(file, options.include)) continue;
       const content = await this.readText(posix.join(basePath, file)).catch(() => "");
       if (content.includes("\0")) continue;
       for (const [index, line] of content.split("\n").entries()) {
+        if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES) continue;
         if (!expression.test(line)) continue;
         results.push(`${file}:${index + 1}:${line}`);
         if (results.length >= options.limit) return results;
@@ -360,24 +373,25 @@ export class WslFileOperations implements FileOperations {
     return results;
   }
 
-  private async collectFiles(basePath: string, limit: number): Promise<string[]> {
+  private async collectFiles(basePath: string): Promise<string[]> {
     const result = await this.run([
       "/usr/bin/find", basePath, "-type", "f", "-printf", "%P\\0",
     ]);
     if (result.exitCode !== 0) return [];
     return result.output.split("\0").filter((path) => {
       if (!path) return false;
-      return !path.split("/").some((part) => part.startsWith(".") || SKIP_DIRS.has(part));
-    }).slice(0, limit);
+      return !path.split("/").some((part) => SKIP_DIRS.has(part));
+    });
   }
 
   private async run(
     argv: string[],
     stdin?: Uint8Array,
     binary = false,
+    cwd = this.environment.workspace.executionRoot,
   ): Promise<{ exitCode: number; output: string; bytes: Uint8Array }> {
     const process = await this.environment.process.execProcess(argv, {
-      cwd: this.environment.workspace.executionRoot,
+      cwd,
     });
     const chunks: Uint8Array[] = [];
     const errors: Uint8Array[] = [];
@@ -425,7 +439,6 @@ export async function walkGlob(
   operations: FileOperations = new HostFileOperations(),
 ): Promise<string[]> {
   const results: string[] = [];
-  const regex = globToRegex(pattern);
 
   const st = await operations.stat(dir).catch(() => null);
   if (!st || !st.isDirectory) return results;
@@ -447,7 +460,7 @@ export async function walkGlob(
       } else {
         const rel = relative(dir, fullPath);
         const normalized = rel.split(/[\\/]/).join("/");
-        if (regex.test(normalized)) results.push(rel);
+        if (matchesGlob(normalized, pattern)) results.push(rel);
       }
     }
   }
@@ -466,7 +479,6 @@ export async function fallbackGrep(
 ): Promise<string[]> {
   const flags = caseSensitive ? "" : "i";
   const regex = new RegExp(pattern, flags);
-  const includeRegex = include ? globToRegex(include) : null;
   const results: string[] = [];
 
   const matchLines = (content: string, displayPath: string): boolean => {
@@ -491,7 +503,7 @@ export async function fallbackGrep(
         await walk(fullPath);
         if (results.length >= limit) return;
       } else {
-        if (includeRegex && !includeRegex.test(entry.name)) continue;
+        if (include && !matchesGlob(relative(basePath, fullPath).replaceAll("\\", "/"), include)) continue;
         try {
           const content = await operations.readText(fullPath);
           if (content.includes("\0")) continue;
@@ -513,6 +525,12 @@ export async function fallbackGrep(
   }
 
   return results;
+}
+
+function wslRipgrepArgv(args: string[]): string[] {
+  return ["/bin/sh", "-c",
+    'rg_path=$(command -v rg) || exit 127; case "$rg_path" in /mnt/*|*.exe) exit 127;; esac; exec "$rg_path" "$@"',
+    "vykor-rg", ...args];
 }
 
 const SKIP_DIRS = new Set([

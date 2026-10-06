@@ -36,6 +36,36 @@ describe("daemon settings", () => {
     expect((await loadSettings()).workStyle).toBe("practical");
   });
 
+  it.each(["docker", "", null, 12])("rejects invalid saved agent environment %j", async (kind) => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ agentEnvironment: { kind } }));
+    await expect(loadSettings()).rejects.toThrow(/agentEnvironment.kind/);
+  });
+
+  it.each([null, "native", [], {}].map(agentEnvironment => ({ agentEnvironment })))("rejects malformed saved and CLI agent environment $agentEnvironment", async ({ agentEnvironment }) => {
+    await expect(loadSettings({ agentEnvironment } as any)).rejects.toThrow(/agentEnvironment/);
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ agentEnvironment }));
+    await expect(loadSettings()).rejects.toThrow(/agentEnvironment/);
+  });
+
+  it("rejects an unsupported direct CLI kind", async () => {
+    await expect(loadSettings({ agentEnvironment: { kind: "docker" as any } })).rejects.toThrow(/agentEnvironment.kind/);
+  });
+
+  it("rejects unsupported environment variables and CLI overrides", async () => {
+    const previous = process.env.VYKOR_AGENT_ENVIRONMENT;
+    try {
+      process.env.VYKOR_AGENT_ENVIRONMENT = "docker";
+      await expect(loadSettings()).rejects.toThrow(/VYKOR_AGENT_ENVIRONMENT/);
+      delete process.env.VYKOR_AGENT_ENVIRONMENT;
+      await expect(loadSettings({ agentEnvironment: { kind: "docker" as any } })).rejects.toThrow(/agentEnvironment.kind/);
+      expect((await loadSettings({ agentEnvironment: { kind: "native" } })).agentEnvironment?.kind).toBe("native");
+      expect((await loadSettings({ agentEnvironment: { kind: "wsl" } })).agentEnvironment?.kind).toBe("wsl");
+    } finally {
+      if (previous === undefined) delete process.env.VYKOR_AGENT_ENVIRONMENT;
+      else process.env.VYKOR_AGENT_ENVIRONMENT = previous;
+    }
+  });
+
   it.each(["user", "project"] as const)("never writes transient apiKey to %s settings", async (scope) => {
     const projectRoot = join(configDir, "key-project");
     const settings = { ...(await loadSettings()), apiKey: "fixture-transient", outputStyle: "fixture-style" };

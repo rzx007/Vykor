@@ -25,6 +25,13 @@ export class WslEnvironmentUnavailableError extends Error {
 export interface WslProbeResult {
   exitCode: number;
   stderr: string;
+  homeDir?: string;
+  shell?: string;
+}
+
+export interface WslEnvironmentFacts {
+  homeDir: string;
+  shell?: string;
 }
 
 export async function preflightWsl(
@@ -32,7 +39,7 @@ export async function preflightWsl(
     platform?: NodeJS.Platform;
     run?: () => Promise<WslProbeResult>;
   } = {},
-): Promise<void> {
+): Promise<WslEnvironmentFacts> {
   if ((dependencies.platform ?? process.platform) !== "win32") {
     throw new WslEnvironmentUnavailableError("WSL is only available on Windows");
   }
@@ -42,6 +49,12 @@ export async function preflightWsl(
       result.stderr.trim() || "WSL or its default distribution is unavailable",
     );
   }
+  const homeDir = result.homeDir?.trim();
+  if (!homeDir || !posix.isAbsolute(homeDir)) {
+    throw new WslEnvironmentUnavailableError("WSL did not return a valid HOME directory");
+  }
+  const shell = result.shell?.trim();
+  return { homeDir, ...(shell ? { shell } : {}) };
 }
 
 export function hostPathToWslPath(path: string): string {
@@ -163,7 +176,7 @@ shift
 child_pid=$!
 while kill -0 "$child_pid" 2>/dev/null; do
   if [ -f "$cancel_file" ]; then
-    kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null
+    /bin/kill -TERM -- "-$child_pid" 2>/dev/null || /bin/kill -TERM "$child_pid" 2>/dev/null
     wait "$child_pid" 2>/dev/null
     rm -f -- "$cancel_file"
     exit 143
@@ -178,11 +191,15 @@ exit "$status"
 
 async function defaultWslProbe(): Promise<WslProbeResult> {
   try {
-    await execFileAsync("wsl.exe", ["--exec", "/bin/sh", "-c", "exit 0"], {
+    const { stdout } = await execFileAsync("wsl.exe", ["--exec", "/bin/sh", "-c",
+      'home=$HOME; if [ -z "$home" ]; then home=$(getent passwd "$(id -u)" | cut -d: -f6); fi; printf "%s\\n%s\\n" "$home" "$SHELL"',
+    ], {
       timeout: 10_000,
       windowsHide: true,
+      encoding: "utf8",
     });
-    return { exitCode: 0, stderr: "" };
+    const [homeDir, shell] = String(stdout).split(/\r?\n/);
+    return { exitCode: 0, stderr: "", homeDir, shell };
   } catch (error) {
     const detail = error as { code?: number | string; stderr?: string | Buffer; message?: string };
     return {

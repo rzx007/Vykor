@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { realpath } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Settings } from "@vykor/core";
 import type {
   EnvironmentFileSystem,
@@ -16,7 +16,7 @@ import type { ResolvedExecutionEnvironmentConfig } from "./execution-config.js";
 import { signalProcessTree } from "./process-control.js";
 import { createProcess, createShellProcess, resolveHostShellLauncher, resolveShellDescriptor } from "./shell.js";
 import type { ShellDescriptor } from "@vykor/environment";
-import { createWslPathResolver, preflightWsl, spawnWslProcess } from "./wsl-environment.js";
+import { createWslPathResolver, preflightWsl, spawnWslProcess, type WslEnvironmentFacts } from "./wsl-environment.js";
 
 export interface CreateExecutionEnvironmentInput {
   config: ResolvedExecutionEnvironmentConfig;
@@ -39,10 +39,14 @@ export async function createExecutionEnvironment(
   dependencies: CreateExecutionEnvironmentDependencies = {},
 ): Promise<ExecutionEnvironmentHandle> {
   input.onEvent?.("preflight");
+  const kind = input.config.kind;
+  if (kind !== "local" && kind !== "wsl") {
+    throw new Error(`Unsupported execution environment: ${String(kind)}`);
+  }
   if (input.config.kind === "wsl") {
-    await (dependencies.preflightWsl ?? preflightWsl)();
+    const facts = await (dependencies.preflightWsl ?? preflightWsl)();
     input.onEvent?.("probe");
-    const handle = createWslHandle(input, dependencies);
+    const handle = createWslHandle(input, dependencies, facts);
     input.onEvent?.("ready");
     return handle;
   }
@@ -52,7 +56,7 @@ export async function createExecutionEnvironment(
   return handle;
 }
 
-function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: CreateExecutionEnvironmentDependencies): ExecutionEnvironmentHandle {
+function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: CreateExecutionEnvironmentDependencies, facts: WslEnvironmentFacts): ExecutionEnvironmentHandle {
   const process = createWslProcessExecutor(input, dependencies);
   const paths = createWslPathResolver(input.binding, process);
   const shellDescriptor: ShellDescriptor = {
@@ -64,7 +68,7 @@ function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: C
     info: {
       kind: "wsl", hostOs: "Windows", executionOs: "Linux", shell: "/bin/sh",
       shellDialect: "posix", pathStyle: "posix", cwd: input.binding.executionRoot,
-      homeDir: "/home", tempDir: "/tmp",
+      homeDir: facts.homeDir, ...(facts.shell ? { userShell: facts.shell } : {}), tempDir: "/tmp",
       mounts: [{ path: input.binding.executionRoot, mode: "rw", purpose: "workspace" }],
       networkMode: "host", limitations: ["WSL filesystem project roots are not supported yet"],
       shellDescriptor,
@@ -128,13 +132,13 @@ function createLocalProcessExecutor(input: CreateExecutionEnvironmentInput, depe
   return {
     async execShell(command, options = {}) {
       return adaptChildProcess(await (dependencies.createShellProcess ?? createShellProcess)(command, {
-        cwd: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
+        cwd: options.cwd ?? input.binding.hostRoot, workspaceRoot: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
         env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"], shellDescriptor,
       }));
     },
     async execProcess(argv, options = {}) {
       return adaptChildProcess(await (dependencies.createProcess ?? createProcess)(argv, {
-        cwd: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
+        cwd: options.cwd ?? input.binding.hostRoot, workspaceRoot: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
         env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"],
       }));
     },
@@ -183,7 +187,9 @@ function createLocalPathResolver(binding: WorkspaceBinding): EnvironmentPathReso
     canonicalize: (path) => realpath(isAbsolute(path) ? path : resolve(binding.executionRoot, path)),
     async resolve(path) {
       const executionPath = isAbsolute(path) ? resolve(path) : resolve(binding.executionRoot, path);
-      return { executionPath, hostPath: executionPath, mountPurpose: "workspace", mountMode: "rw" };
+      const rel = relative(binding.executionRoot, executionPath);
+      const inWorkspace = rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+      return { executionPath, hostPath: executionPath, mountPurpose: inWorkspace ? "workspace" : "unmounted", ...(inWorkspace ? { mountMode: "rw" as const } : {}) };
     },
     presentHostPath: (path) => resolve(path), toHostPath: (path) => resolve(path),
   };

@@ -10,6 +10,14 @@ import {
 } from "./wsl-environment.js";
 
 describe("WSL environment", () => {
+  it("returns actual distribution home and default shell facts", async () => {
+    await expect(preflightWsl({ platform: "win32", run: async () => ({ exitCode: 0, stderr: "", homeDir: "/home/alex", shell: "/bin/zsh" }) }))
+      .resolves.toEqual({ homeDir: "/home/alex", shell: "/bin/zsh" });
+  });
+  it("does not invent a HOME and allows an unknown user default shell", async () => {
+    await expect(preflightWsl({ platform: "win32", run: async () => ({ exitCode: 0, stderr: "" }) })).rejects.toThrow(/HOME/);
+    await expect(preflightWsl({ platform: "win32", run: async () => ({ exitCode: 0, stderr: "", homeDir: "/root" }) })).resolves.toEqual({ homeDir: "/root" });
+  });
   it("maps Windows drive paths to WSL and back", () => {
     expect(hostPathToWslPath("D:\\Code Space\\vk")).toBe("/mnt/d/Code Space/vk");
     expect(wslPathToHostPath("/mnt/d/Code Space/vk")).toBe("D:\\Code Space\\vk");

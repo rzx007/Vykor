@@ -42,7 +42,7 @@ export async function sandboxPathError(
   if (environment?.info?.kind === "wsl" && settings.sandbox?.enabled) {
     return "Sandbox: WSL cannot currently be combined with the configured local sandbox";
   }
-  const result = await sandboxPathDecision(filePath, cwd, operation, settings);
+  const result = await sandboxPathDecision(filePath, environment?.workspace.hostRoot ?? cwd, operation, settings);
   if (!result) return undefined;
   return result.allowed ? undefined : `Sandbox: ${result.reason}`;
 }

@@ -40,6 +40,7 @@ export async function startVykorDaemon(
   const startupAgentEnvironment = settingsRef.current.agentEnvironment;
   return await startVykorServer({
     ...options,
+    executionSurface: options.executionSurface ?? "desktop_managed",
     channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
     settings: settingsRef.current,
     getSettings: () => settingsRef.current,

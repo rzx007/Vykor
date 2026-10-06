@@ -538,6 +538,7 @@ export class DaemonApplication implements DurableAgentApplication {
                   description: input.description,
                   settings: input.settings,
                   shellDescriptor: input.shellDescriptor,
+                  executionCwd: input.executionCwd,
                   origin: "tool",
                 });
                 return { jobId: execution.id, label: execution.description };
