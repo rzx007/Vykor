@@ -28,6 +28,7 @@ describe("fileReadTool", () => {
         async readBytes(path: string) { await rm(path); return super.readBytes(path); }
       }
       const result = await fileReadTool.execute({ file_path: file }, { cwd: dir, environment: {
+        workspace: { hostRoot: dir },
         files: new DisappearingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
       } } as never);
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
@@ -541,7 +542,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "missing.txt");
       const result = await fileReadTool.execute({ file_path: file }, { cwd: dir,
         settings: { model: "fixture", apiFormat: "openai", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: false } },
-        environment: { files: new HostFileOperations(), paths: { resolve: async (path: string) => {
+        environment: { workspace: { hostRoot: dir }, files: new HostFileOperations(), paths: { resolve: async (path: string) => {
           if (path === dir) throw new Error("optional parent inspection failed");
           return { executionPath: path, mountMode: "rw" };
         } } },
