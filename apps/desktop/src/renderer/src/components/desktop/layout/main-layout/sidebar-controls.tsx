@@ -53,7 +53,6 @@ export function SidebarSectionHeader({
   actionLabel,
   onAction,
   className,
-  summary,
   running = false,
 }: {
   title: string
@@ -62,7 +61,6 @@ export function SidebarSectionHeader({
   actionLabel?: string
   onAction?: () => void
   className?: string
-  summary?: React.ReactNode
   running?: boolean
 }): React.JSX.Element {
   return (
@@ -80,16 +78,6 @@ export function SidebarSectionHeader({
             aria-label={`${title}，有会话正在运行`}
             className="ml-auto size-3 motion-reduce:animate-none"
           />
-        ) : null}
-        {!expanded && summary !== undefined && summary !== null ? (
-          <span
-            className={cn(
-              "text-xs tabular-nums text-sidebar-muted/70",
-              !running && "ml-auto"
-            )}
-          >
-            {summary}
-          </span>
         ) : null}
         <ChevronDown
           className={cn(

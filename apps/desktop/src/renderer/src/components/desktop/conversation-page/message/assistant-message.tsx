@@ -48,6 +48,7 @@ import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 import { useToolDetails } from "./use-tool-details"
+import { ReadImagePreview, readImagePath } from "./read-image-preview"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
@@ -436,6 +437,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   const groupTooltipId = useId()
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [expandedImages, setExpandedImages] = useState<ReadonlySet<string>>(new Set())
   const grouped = tools.length > 1
   const active = tools.some(isToolInFlight)
   const activityLabel = toolGroupActivityLabel(tools)
@@ -543,7 +545,8 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                 </Tooltip>
               )
             const summary = summarizeToolCall(tool.call)
-            const active = activeId === tool.id
+            const imagePath = readImagePath(tool.call)
+            const active = imagePath ? expandedImages.has(tool.id) : activeId === tool.id
             const calling = isToolInFlight(tool)
             const input = tool.call.input
             const parseError =
@@ -568,7 +571,13 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveId(active ? null : tool.id)
+                    if (imagePath) setExpandedImages(previous => {
+                      const next = new Set(previous)
+                      if (active) next.delete(tool.id)
+                      else next.add(tool.id)
+                      return next
+                    })
+                    else setActiveId(active ? null : tool.id)
                     // 单行详情已打开时，随后归组仍保留当前展开状态。
                     if (!grouped) setOpen(!active)
                   }}
@@ -614,7 +623,10 @@ function ToolDetails({ tool, calling }: { tool: ToolUnit; calling: boolean }): R
   const input = fullCall.input
   const output = fullResult?.output ?? fullCall.output
   const unparsedInput = Boolean((fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) && (input === undefined || Object.keys(input).length === 0))
+  const imagePath = readImagePath(fullCall)
+  const imagePart = fullResult?.output != null ? fullResult : fullCall
   return <>
+    {imagePath ? <ReadImagePreview part={imagePart} path={imagePath} calling={calling} /> : null}
     <div className="border-b px-3 py-1.5 text-xs">{toolDisplayName(call, result)}</div>
     {preview ? <p role="status" className="px-3 py-2 text-xs text-ui-muted">{error ?? "正在加载完整详情；当前仅显示预览。"}</p> : null}
     <div className="px-3 pt-2 text-xs font-medium">参数</div>

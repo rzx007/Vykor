@@ -358,7 +358,6 @@ export function Sidebar({
               <SidebarSectionHeader
                 title="项目"
                 expanded={sectionExpansion.projects}
-                summary={projects.length}
                 running={runningProject}
                 onToggle={() => toggleSection("projects")}
               />
@@ -423,7 +422,6 @@ export function Sidebar({
                   <SidebarSectionHeader
                     title="IM 会话"
                     expanded={sectionExpansion.im}
-                    summary={imGroups.reduce((total, group) => total + group.sessions.length, 0)}
                     running={runningIm}
                     onToggle={() => toggleSection("im")}
                     className="mt-4"
@@ -460,7 +458,6 @@ export function Sidebar({
               <SidebarSectionHeader
                 title="最近"
                 expanded={sectionExpansion.recent}
-                summary={recentSessions.length}
                 running={runningRecent}
                 onToggle={() => toggleSection("recent")}
                 actionLabel="新建最近会话"

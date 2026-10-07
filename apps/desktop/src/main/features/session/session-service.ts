@@ -65,6 +65,7 @@ import {
 } from "./outside-project-workspace"
 import { isChannelSessionMetadata } from "../../../shared/channel-types"
 import { workspaceService } from "../workspace/workspace-service"
+import { readToolImagePreview } from "./read-tool-image-preview"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { browserAgentService } from "../browser/browser-agent-service"
@@ -228,6 +229,14 @@ export class DesktopSessionService {
       if (typeof value !== "string" || !value.trim()) throw new Error("会话、消息和内容 ID 不能为空。")
     }
     return await client.sessions.getMessagePart(input.sessionId, input.messageId, input.partId) as import("../../../shared/session-types").DesktopSessionPart
+  }
+
+  async readToolImagePreview(input: import("../../../shared/session-types").GetDesktopMessagePartInput): Promise<import("../../../shared/attachment-types").DesktopAttachmentPreview> {
+    const part = await this.getMessagePart(input)
+    const url = this.connection.getDaemonStatus().url
+    if (!url || !["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname))
+      throw new Error("远程后台的本地图片暂不支持预览")
+    return await readToolImagePreview(part)
   }
 
   async createGoal(input: CreateDesktopSessionGoalInput): Promise<SessionGoal> {

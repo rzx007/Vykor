@@ -239,6 +239,7 @@ export const IpcChannels = {
   sessionCompact: "session:compact",
   sessionGoalGet: "session:goal:get",
   sessionMessagePartGet: "session:message-part:get",
+  sessionToolImagePreview: "session:tool-image:preview",
   sessionGoalCreate: "session:goal:create",
   sessionGoalUpdate: "session:goal:update",
   sessionGoalAction: "session:goal:action",
@@ -693,6 +694,10 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
   [IpcChannels.sessionMessagePartGet]: {
     args: [input: import("./session-types").GetDesktopMessagePartInput]
     result: import("./session-types").DesktopSessionPart
+  }
+  [IpcChannels.sessionToolImagePreview]: {
+    args: [input: import("./session-types").GetDesktopMessagePartInput]
+    result: import("./attachment-types").DesktopAttachmentPreview
   }
   [IpcChannels.sessionGoalCreate]: {
     args: [input: CreateDesktopSessionGoalInput]
