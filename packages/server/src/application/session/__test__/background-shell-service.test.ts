@@ -9,7 +9,7 @@ import { SessionExecutionProjector } from "../session-execution-projector.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 import { BackgroundShellService } from "../background-shell-service.js";
-import { createWslPathResolver, hostPathToWslPath } from "@vykor/sandbox";
+import { createWslPathResolver } from "@vykor/sandbox";
 
 let testConfigDir: string;
 let previousConfigDir: string | undefined;
@@ -120,9 +120,10 @@ describe("BackgroundShellService", () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-wsl-start-cwd-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
-    // The WSL workspace is simulated; local temporary files only hold durable state.
-    const hostRoot = "D:\\project";
-    const binding = { kind: "wsl" as const, hostRoot, executionRoot: hostPathToWslPath(hostRoot) };
+    // Persist a host-native absolute cwd on every OS. The acquired executor and
+    // its WSL mount are simulated, so the execution root is independent of it.
+    const hostRoot = dir;
+    const binding = { kind: "wsl" as const, hostRoot, executionRoot: "/mnt/d/project" };
     const executionCwd = `${binding.executionRoot}/sub`;
     const gate = new DaemonOperationGate();
     let releaseAcquire!: (value: any) => void;
