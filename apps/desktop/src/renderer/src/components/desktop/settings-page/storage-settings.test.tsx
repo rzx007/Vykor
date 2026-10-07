@@ -68,6 +68,12 @@ describe("storage settings reading order and safety", () => {
   })
   it("still requires confirmation before enabling irreversible cleanup", async () => {
     container.querySelector<HTMLDetailsElement>("#storage-retention")!.open = true
+    expect(container.querySelector('[aria-label="自动保留天数"]')).toBeNull()
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "设置并启用")!
+        .click()
+    )
     await act(async () =>
       [...container.querySelectorAll("button")]
         .find((button) => button.textContent === "保存并启用")!
@@ -80,6 +86,24 @@ describe("storage settings reading order and safety", () => {
         .find((button) => button.textContent === "取消")!
         .click()
     )
+    expect(updateStoragePolicy).not.toHaveBeenCalled()
+  })
+  it("does not enable cleanup just by opening or cancelling its setup form", async () => {
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "设置并启用")!
+        .click()
+    )
+    expect(container.querySelector<HTMLInputElement>('[aria-label="自动保留天数"]')?.value).toBe(
+      "90"
+    )
+    expect(updateStoragePolicy).not.toHaveBeenCalled()
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "取消设置")!
+        .click()
+    )
+    expect(container.querySelector('[aria-label="自动保留天数"]')).toBeNull()
     expect(updateStoragePolicy).not.toHaveBeenCalled()
   })
 })

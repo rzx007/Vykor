@@ -7,6 +7,7 @@ import type { DiagnosticFilter, DiagnosticLog, DiagnosticReport, MaintenanceBack
 import { desktopSessionService } from "../session/session-service"
 import { createDesktopDaemonAutoStartController } from "../daemon-autostart/daemon-autostart-service"
 import { getDesktopPreferences } from "./desktop-preferences"
+import { filterDiagnosticLogRecords } from "../../../shared/diagnostic-log-filter"
 
 /** Export only explicit operational fields; arbitrary log/error payloads never cross this boundary. */
 export function redactDiagnosticLog(value: unknown): DiagnosticLog | null {
@@ -57,6 +58,7 @@ export class MaintenanceSettingsService {
   diagnosticDetails() { return this.request<{ expiresAt: number | null }>("/maintenance/diagnostics/details") }
   updateDiagnosticDetails(minutes: number) { return this.request<{ expiresAt: number | null }>("/maintenance/diagnostics/details", { minutes }) }
   private diagnosisController: AbortController | null = null
+  private diagnosisRequestId: string | null = null
   private lastDiagnostics: DiagnosticReport | null = null
   async request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const registry = maintenanceRegistry()
@@ -77,10 +79,16 @@ export class MaintenanceSettingsService {
   async switchData(directory: string) { await desktopSessionService.switchDataDirectory(directory, { stopActive: false, storePath: join(directory, "sessions.db") }) }
   async reconnect() { await desktopSessionService.refreshDaemonClient() }
   async restart() { await desktopSessionService.restartDaemon({ stopActive: false }) }
-  cancelDiagnosis() { this.diagnosisController?.abort() }
-  async diagnose(): Promise<DiagnosticReport> {
+  cancelDiagnosis(input?: { requestId: string }) {
+    const requestId = readDiagnosisRequestId(input)
+    if (requestId && requestId !== this.diagnosisRequestId) return
+    this.diagnosisController?.abort()
+  }
+  async diagnose(input?: { requestId: string }): Promise<DiagnosticReport> {
+    const requestId = readDiagnosisRequestId(input)
     this.cancelDiagnosis()
     const controller = new AbortController(); this.diagnosisController = controller
+    this.diagnosisRequestId = requestId
     const timeout = setTimeout(() => controller.abort(new Error("timeout")), 15_000)
     let registry: ReturnType<typeof readDaemonRegistry>
     try { registry = maintenanceRegistry() } catch { registry = undefined }
@@ -109,17 +117,17 @@ export class MaintenanceSettingsService {
         const environment = await this.request<{ kind: string; distribution?: string; checks: Array<{ name: string; status: "ok" | "warning" | "failed"; detail: string }> }>("/maintenance/environment", undefined, controller.signal)
         report.checks.push({ id: "environment", name: "实际默认执行环境", status: "success", detail: `${environment.kind}${environment.distribution ? ` / ${environment.distribution}` : ""}` })
         environment.checks.forEach((check, index) => report.checks.push({ id: `environment-${index}`, name: check.name, status: check.status === "ok" ? "success" : check.status, detail: check.detail }))
-      } catch { report.checks.push({ id: "environment", name: "Shell 与 Git 环境", status: controller.signal.aborted ? "cancelled" : "failed", detail: "实际环境检查不可用；请打开运行环境页检查。" }); report.missing.push("Shell 与 Git 环境") }
-      try { const residency = await withDiagnosticCancellation(createDesktopDaemonAutoStartController().snapshot(), controller.signal); report.checks.push({ id: "residency", name: "系统常驻服务", status: "success", detail: residency.enabled ? "常驻已启用" : "常驻未启用" }) } catch { report.checks.push({ id: "residency", name: "系统常驻服务", status: controller.signal.aborted ? "cancelled" : "failed", detail: "无法查询宿主服务状态或检查已取消" }) }
+      } catch { report.checks.push({ id: "environment", name: "Shell 与 Git 环境", status: diagnosisFailureStatus(controller.signal), detail: "实际环境检查未完成；可在运行环境页重新检查。" }); report.missing.push("Shell 与 Git 环境") }
+      try { const residency = await withDiagnosticCancellation(createDesktopDaemonAutoStartController().snapshot(), controller.signal); report.checks.push({ id: "residency", name: "系统常驻服务", status: "success", detail: residency.enabled ? "常驻已启用" : "常驻未启用" }) } catch { report.checks.push({ id: "residency", name: "系统常驻服务", status: diagnosisFailureStatus(controller.signal), detail: "未取得系统常驻服务状态" }) }
       try { const result = await this.request<{ logs: unknown[] }>("/maintenance/logs", undefined, controller.signal); report.logs = result.logs.map(redactDiagnosticLog).filter((log): log is DiagnosticLog => log !== null).reverse() } catch { report.missing.push("当前服务运行日志") }
       const fileLogs = await withDiagnosticCancellation(this.readLogs(controller.signal), controller.signal).catch(() => [])
       report.logs = [...report.logs, ...fileLogs].slice(0, 1000)
       try { report.activeWork = await this.request<NonNullable<DiagnosticReport["activeWork"]>>("/maintenance/restart-preview", undefined, controller.signal) } catch { report.missing.push("活动任务与终端清单") }
       try { const errors = await this.request<{ errors: unknown[] }>("/maintenance/errors", undefined, controller.signal); report.logs = [...errors.errors.map(redactDiagnosticLog).filter((log): log is DiagnosticLog => log !== null), ...report.logs].sort((a, b) => b.time - a.time).slice(0, 1000) } catch { report.missing.push("持久运行错误") }
       if (!report.logs.length) report.missing.push("磁盘结构化日志未提供或为空")
-      this.lastDiagnostics = report
+      if (this.diagnosisController === controller) this.lastDiagnostics = report
       return report
-    } finally { clearTimeout(timeout); if (this.diagnosisController === controller) this.diagnosisController = null }
+    } finally { clearTimeout(timeout); if (this.diagnosisController === controller) { this.diagnosisController = null; this.diagnosisRequestId = null } }
   }
   private async readLogs(signal: AbortSignal): Promise<DiagnosticLog[]> {
     if (signal.aborted) return []
@@ -147,9 +155,10 @@ export class MaintenanceSettingsService {
     if (!["diagnostics", "logs"].includes(kind)) throw new Error("诊断导出类型无效")
     const report = this.lastDiagnostics ?? await this.diagnose()
     const details = await this.diagnosticDetails().catch(() => ({ expiresAt: null }))
-    const logs = report.logs.filter(row => (!filter.from || row.time >= filter.from) && (!filter.level || row.level === filter.level) && (!filter.module || row.module === filter.module) && (!filter.runId || row.runId === filter.runId)).map(row => { if (details.expiresAt) return row; const { toolName: _tool, method: _method, requestId: _request, ...basic } = row; return basic })
+    const logs = filterDiagnosticLogRecords(report.logs, filter).map(row => { if (details.expiresAt && details.expiresAt > Date.now()) return row; const { toolName: _tool, method: _method, requestId: _request, ...basic } = row; return basic })
+    const { query: _query, ...exportFilter } = filter
     const checks = report.checks.map(check => ({ ...check, detail: check.detail.replace(/[A-Za-z]:[\\/][^\s，；]+/g, "<path>").replace(/(?:^|\s)\/[^\s，；]+/g, " <path>") }))
-    return this.saveExport(`vykor-${kind}.json`, JSON.stringify(kind === "logs" ? { version: 1, filter, logs } : { version: 1, ...report, checks, target: report.target ? new URL(report.target).origin : null, logs, includes: ["版本与平台", "只读检查结果", "最多1000条脱敏运行日志"], excludes: ["消息", "源码", "用户指令", "凭据", "机密变量", "绝对路径"] }, null, 2))
+    return this.saveExport(`vykor-${kind}.json`, JSON.stringify(kind === "logs" ? { version: 1, filter: exportFilter, logs } : { version: 1, ...report, checks, target: report.target ? new URL(report.target).origin : null, logs, includes: ["版本与平台", "只读检查结果", "最多1000条脱敏运行日志"], excludes: ["消息", "源码", "用户指令", "凭据", "机密变量", "绝对路径"] }, null, 2))
   }
   private async saveExport(name: string, content: string) { const choice = await dialog.showSaveDialog({ defaultPath: name }); if (choice.canceled || !choice.filePath) return null; await writeFile(choice.filePath, content, { encoding: "utf-8", mode: 0o600 }); return choice.filePath }
 }
@@ -159,3 +168,13 @@ function withDiagnosticCancellation<T>(work: Promise<T>, signal: AbortSignal): P
   return new Promise((resolve, reject) => { const aborted = () => reject(signal.reason); signal.addEventListener("abort", aborted, { once: true }); work.then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted)) })
 }
 function maintenanceRegistry() { try { return readDaemonRegistry() } catch { throw new Error("后台注册记录无法读取；请重新连接或在诊断页检查服务状态。") } }
+function readDiagnosisRequestId(input?: { requestId: string }): string | null {
+  if (input === undefined) return null
+  if (!input || typeof input.requestId !== "string" || !/^[\w-]{1,80}$/.test(input.requestId))
+    throw new Error("检查标识无效。")
+  return input.requestId
+}
+function diagnosisFailureStatus(signal: AbortSignal): "failed" | "timeout" | "cancelled" {
+  return !signal.aborted ? "failed"
+    : signal.reason instanceof Error && signal.reason.message === "timeout" ? "timeout" : "cancelled"
+}

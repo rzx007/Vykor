@@ -1,4 +1,5 @@
-import { SettingsGroup } from "./settings-group"
+import { toast } from "@renderer/lib/toast"
+import { SettingsGroup, SettingsRow } from "./settings-group"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
@@ -23,7 +24,6 @@ export function UsageSettings() {
   const [to, setTo] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [feedback, setFeedback] = useState("")
   const sequence = useRef(0)
   const [price, setPrice] = useState<Omit<UsagePrice, "adoptedAt">>({
     provider: "",
@@ -41,6 +41,7 @@ export function UsageSettings() {
   const [amountBudget, setAmountBudget] = useState("")
   const [budgetCurrency, setBudgetCurrency] = useState("USD")
   const budgetInitialized = useRef(false)
+  const [budgetEditing, setBudgetEditing] = useState(false)
   function activeFilter(): UsageFilter {
     const start = new Date()
     start.setHours(0, 0, 0, 0)
@@ -93,7 +94,11 @@ export function UsageSettings() {
     setBusy(true)
     try {
       const result = await work()
-      setFeedback(typeof result === "string" ? `已保存到 ${result}` : message)
+      if (typeof result === "string") toast.success("导出完成", result)
+      else if (message) {
+        if (result === null) toast.info(message)
+        else toast.success(message)
+      }
       setError("")
       await load()
     } catch (error) {
@@ -178,11 +183,6 @@ export function UsageSettings() {
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error} {report ? "仍显示上次读取结果。" : ""}
-          </p>
-        ) : null}
-        {feedback ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {feedback}
           </p>
         ) : null}
       </section>
@@ -417,84 +417,116 @@ export function UsageSettings() {
               ))}
             </details>
           </SettingsGroup>
-          <SettingsGroup title="预算提醒" id="usage-budget">
-            <p className="text-xs text-muted-foreground">
-              按本月已知用量提醒，不停止任务。已保存：
-              {report.settings.budget.enabled ? "开启" : "关闭"}；Token{" "}
-              {report.settings.budget.tokens ?? "未设置"}，{report.settings.budget.currency}{" "}
-              {report.settings.budget.amount ?? "未设置"}。
+          <SettingsGroup title="预算提醒" id="usage-budget" separated>
+            <p className="py-3 text-xs text-muted-foreground">
+              {report.settings.budget.enabled
+                ? "按本月已知用量提醒，不停止任务。"
+                : "已关闭。启用后按本月用量提醒，不停止任务。"}
             </p>
-            <div className="settings-filter-grid">
-              <label className="flex min-w-0 flex-col gap-2 text-sm">
-                提醒币种
-                <Input
-                  placeholder="例如 USD"
-                  value={budgetCurrency}
-                  onChange={(event) => setBudgetCurrency(event.target.value.toUpperCase())}
-                  maxLength={3}
+            {report.settings.budget.enabled || budgetEditing ? (
+              <>
+                <SettingsRow
+                  title="提醒币种"
+                  labelFor="usage-budget-currency"
+                  control={
+                    <Input
+                      id="usage-budget-currency"
+                      className="w-28"
+                      placeholder="例如 USD"
+                      value={budgetCurrency}
+                      disabled={busy}
+                      onChange={(event) => setBudgetCurrency(event.target.value.toUpperCase())}
+                      maxLength={3}
+                    />
+                  }
                 />
-              </label>
-              <label className="flex min-w-0 flex-col gap-2 text-sm">
-                Token 阈值
-                <Input
-                  placeholder="留空不提醒"
-                  type="number"
-                  min="1"
-                  value={tokenBudget}
-                  onChange={(event) => setTokenBudget(event.target.value)}
+                <SettingsRow
+                  title="Token 阈值"
+                  labelFor="usage-token-budget"
+                  control={
+                    <Input
+                      id="usage-token-budget"
+                      className="w-36"
+                      placeholder="留空不提醒"
+                      type="number"
+                      min="1"
+                      value={tokenBudget}
+                      disabled={busy}
+                      onChange={(event) => setTokenBudget(event.target.value)}
+                    />
+                  }
                 />
-              </label>
-              <label className="flex min-w-0 flex-col gap-2 text-sm">
-                估算费用阈值（{budgetCurrency}）
-                <Input
-                  placeholder="留空不提醒"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={amountBudget}
-                  onChange={(event) => setAmountBudget(event.target.value)}
+                <SettingsRow
+                  title={`估算费用阈值（${budgetCurrency}）`}
+                  labelFor="usage-amount-budget"
+                  control={
+                    <Input
+                      id="usage-amount-budget"
+                      className="w-36"
+                      placeholder="留空不提醒"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={amountBudget}
+                      disabled={busy}
+                      onChange={(event) => setAmountBudget(event.target.value)}
+                    />
+                  }
                 />
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  void act(
-                    () =>
-                      maintenanceApi().budget({
-                        enabled: true,
-                        tokens: tokenBudget ? Number(tokenBudget) : null,
-                        amount: amountBudget ? Number(amountBudget) : null,
-                        currency: budgetCurrency,
-                        expected: report.settings.budget,
-                      }),
-                    "预算提醒已保存"
-                  )
-                }
-              >
-                启用并保存
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={() =>
-                  void act(
-                    () =>
-                      maintenanceApi().budget({
-                        ...report.settings.budget,
-                        enabled: false,
-                        expected: report.settings.budget,
-                      }),
-                    "预算提醒已关闭"
-                  )
-                }
-              >
-                关闭提醒
-              </Button>
-            </div>
+                <div className="flex justify-end gap-2 py-3">
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(async () => {
+                        await maintenanceApi().budget({
+                          enabled: true,
+                          tokens: tokenBudget ? Number(tokenBudget) : null,
+                          amount: amountBudget ? Number(amountBudget) : null,
+                          currency: budgetCurrency,
+                          expected: report.settings.budget,
+                        })
+                        setBudgetEditing(false)
+                      }, "预算提醒已保存")
+                    }
+                  >
+                    启用并保存
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(
+                        async () => {
+                          if (report.settings.budget.enabled)
+                            await maintenanceApi().budget({
+                              ...report.settings.budget,
+                              enabled: false,
+                              expected: report.settings.budget,
+                            })
+                          setBudgetEditing(false)
+                        },
+                        report.settings.budget.enabled ? "预算提醒已关闭" : ""
+                      )
+                    }
+                  >
+                    {report.settings.budget.enabled ? "关闭提醒" : "取消设置"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-end py-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setBudgetEditing(true)}
+                >
+                  设置并启用
+                </Button>
+              </div>
+            )}
           </SettingsGroup>
         </>
       ) : null}

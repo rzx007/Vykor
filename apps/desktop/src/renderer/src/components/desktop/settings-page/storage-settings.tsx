@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useEffect, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { Link } from "@tanstack/react-router"
@@ -25,13 +26,13 @@ import { errorMessage } from "./settings-error-message"
 import { formatBytes } from "./attachment-storage-format"
 import { Badge } from "@renderer/components/ui/badge"
 import { Input } from "@renderer/components/ui/input"
+import { SettingsRow } from "./settings-group"
 import { StorageSpaceOverview, StorageRestoreSteps } from "./storage-visuals"
 
 export function StorageSettings() {
   const [report, setReport] = useState<StorageReport | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [feedback, setFeedback] = useState("")
   const [source, setSource] = useState("")
   const [target, setTarget] = useState("")
   const [backup, setBackup] = useState<MaintenanceBackupResult | null>(null)
@@ -46,6 +47,7 @@ export function StorageSettings() {
   const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null)
   const [audits, setAudits] = useState<Record<string, unknown>[]>([])
   const [policy, setPolicy] = useState<StorageRetentionPolicy | null>(null)
+  const [retentionEditing, setRetentionEditing] = useState(false)
   const [confirmation, setConfirmation] = useState<{
     title: string
     detail: string
@@ -55,7 +57,7 @@ export function StorageSettings() {
     setBusy(true)
     try {
       await work()
-      setFeedback(message)
+      if (message) toast.success(message)
       setError("")
     } catch (error) {
       setError(errorMessage(error))
@@ -70,11 +72,14 @@ export function StorageSettings() {
     setSource(directory)
     setBackup(result)
   }
-  async function scan() {
-    await act(async () => setReport(await maintenanceApi().storage()), "空间统计已刷新")
+  async function scan(notify = true) {
+    await act(
+      async () => setReport(await maintenanceApi().storage()),
+      notify ? "空间统计已刷新" : ""
+    )
   }
   useEffect(() => {
-    void scan()
+    void scan(false)
     void Promise.resolve()
       .then(() => maintenanceApi().cleanupAudits())
       .then((result) => setAudits(result.audits))
@@ -115,11 +120,7 @@ export function StorageSettings() {
             {report ? " 当前仍显示上次扫描结果。" : ""}
           </p>
         ) : null}
-        {feedback ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {feedback}
-          </p>
-        ) : null}
+
         {!report ? (
           <p role="status" className="text-sm">
             {busy ? "正在扫描应用数据…" : "未取得空间统计"}
@@ -159,62 +160,86 @@ export function StorageSettings() {
                 ；上次执行{" "}
                 {policy.lastRunAt ? new Date(policy.lastRunAt).toLocaleString() : "尚未执行"}
               </p>
-              <label className="flex min-w-0 flex-col gap-2 text-sm">
-                保留天数
-                <Input
-                  aria-label="自动保留天数"
-                  type="number"
-                  min="1"
-                  max="36500"
-                  className="w-32"
-                  placeholder="默认 90 天"
-                  value={days}
-                  onChange={(event) => setDays(event.target.value)}
-                />
-              </label>
-              <div className="flex gap-2">
+              {policy.enabled || retentionEditing ? (
+                <>
+                  <SettingsRow
+                    title="保留天数"
+                    labelFor="storage-retention-days"
+                    control={
+                      <Input
+                        id="storage-retention-days"
+                        aria-label="自动保留天数"
+                        type="number"
+                        min="1"
+                        max="36500"
+                        className="w-28"
+                        placeholder="默认 90 天"
+                        value={days}
+                        disabled={busy}
+                        onChange={(event) => setDays(event.target.value)}
+                      />
+                    }
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || !Number.isSafeInteger(Number(days)) || Number(days) < 1}
+                      onClick={() =>
+                        setConfirmation({
+                          title: "启用历史会话自动清理？",
+                          detail: `桌面运行时，超过 ${days} 天的非活动会话及子会话将被自动删除，无法撤销；活动、待批准和待收束记录保留。请先备份需要保留的内容。`,
+                          apply: async () => {
+                            setPolicy(
+                              await maintenanceApi().updateStoragePolicy({
+                                enabled: true,
+                                days: Number(days),
+                                expected: { enabled: policy.enabled, days: policy.days },
+                              })
+                            )
+                            setRetentionEditing(false)
+                          },
+                        })
+                      }
+                    >
+                      保存并启用
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!policy.enabled) {
+                          setRetentionEditing(false)
+                          return
+                        }
+                        void act(async () => {
+                          setPolicy(
+                            await maintenanceApi().updateStoragePolicy({
+                              enabled: false,
+                              days: policy.days,
+                              expected: { enabled: policy.enabled, days: policy.days },
+                            })
+                          )
+                          setRetentionEditing(false)
+                        }, "自动清理已关闭")
+                      }}
+                    >
+                      {policy.enabled ? "关闭自动清理" : "取消设置"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={busy || !Number.isSafeInteger(Number(days)) || Number(days) < 1}
-                  onClick={() =>
-                    setConfirmation({
-                      title: "启用历史会话自动清理？",
-                      detail: `桌面运行时，超过 ${days} 天的非活动会话及子会话将被自动删除，无法撤销；活动、待批准和待收束记录保留。请先备份需要保留的内容。`,
-                      apply: async () =>
-                        setPolicy(
-                          await maintenanceApi().updateStoragePolicy({
-                            enabled: true,
-                            days: Number(days),
-                            expected: { enabled: policy.enabled, days: policy.days },
-                          })
-                        ),
-                    })
-                  }
+                  className="self-start"
+                  disabled={busy}
+                  onClick={() => setRetentionEditing(true)}
                 >
-                  保存并启用
+                  设置并启用
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy || !policy.enabled}
-                  onClick={() =>
-                    void act(
-                      async () =>
-                        setPolicy(
-                          await maintenanceApi().updateStoragePolicy({
-                            enabled: false,
-                            days: policy.days,
-                            expected: { enabled: policy.enabled, days: policy.days },
-                          })
-                        ),
-                      "自动清理已关闭"
-                    )
-                  }
-                >
-                  关闭自动清理
-                </Button>
-              </div>
+              )}
             </>
           ) : (
             <p className="text-xs text-muted-foreground">保留策略读取失败，未启用自动清理。</p>

@@ -2,7 +2,8 @@
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { setToastDispatcher } from "@renderer/lib/toast"
 
 import { getShortcut, setShortcutBinding } from "../desktop-shortcuts"
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
@@ -10,8 +11,11 @@ import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
 describe("KeyboardShortcutsSettings", () => {
   let container: HTMLDivElement
   let root: Root
+  const showToast = vi.fn(() => "shortcut-toast")
 
   beforeEach(() => {
+    showToast.mockClear()
+    setToastDispatcher({ showToast, updateToast: vi.fn(), dismissToast: vi.fn() })
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
@@ -21,9 +25,22 @@ describe("KeyboardShortcutsSettings", () => {
   })
 
   afterEach(() => {
+    setToastDispatcher(null)
     act(() => root.unmount())
     container.remove()
     setShortcutBinding("toggleSidebar", "$mod+b", "B")
+  })
+  it("clears and restores the binding with shared toast feedback", () => {
+    act(() => root.render(<KeyboardShortcutsSettings />))
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[aria-label="清除切换侧边栏快捷键"]')!.click()
+    )
+    expect(getShortcut("toggleSidebar").bindings).toEqual([])
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ status: "success" }))
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[aria-label="恢复默认切换侧边栏快捷键"]')!.click()
+    )
+    expect(getShortcut("toggleSidebar").bindings).toEqual(["$mod+b"])
   })
 
   it("searches the existing commands without offering add or delete actions", () => {

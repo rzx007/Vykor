@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Switch } from "@renderer/components/ui/switch"
@@ -22,7 +23,6 @@ export function NotificationSettings() {
   const [snapshot, setSnapshot] = useState<NotificationSettingsSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState("")
   const locked = useRef(false)
   const mounted = useRef(true)
 
@@ -31,7 +31,6 @@ export function NotificationSettings() {
     locked.current = true
     setBusy(true)
     setError(null)
-    setFeedback("")
     try {
       await operation()
     } catch (failure) {
@@ -67,11 +66,7 @@ export function NotificationSettings() {
           {error}
         </p>
       ) : null}
-      {feedback ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {feedback}
-        </p>
-      ) : null}
+
       {!snapshot ? (
         <>
           <Skeleton className="h-36" />
@@ -97,37 +92,39 @@ export function NotificationSettings() {
                           expectedMode: snapshot.mode,
                         })
                       )
-                      setFeedback("通知模式已保存。")
+                      toast.success("通知模式已保存。")
                     })
                   }
                 />
               }
             />
-            {events.map((event) => (
-              <SettingsRow
-                key={event.id}
-                title={event.label}
-                description={event.detail}
-                control={
-                  <Switch
-                    checked={snapshot.events[event.id]}
-                    aria-label={`${event.label}系统通知`}
-                    disabled={busy}
-                    onCheckedChange={(enabled) =>
-                      void run(async () => {
-                        setSnapshot(
-                          await window.desktop.notificationSettings.updateEvents({
-                            events: { ...snapshot.events, [event.id]: enabled },
-                            expectedEvents: snapshot.events,
+            {snapshot.mode !== "never"
+              ? events.map((event) => (
+                  <SettingsRow
+                    key={event.id}
+                    title={event.label}
+                    description={event.detail}
+                    control={
+                      <Switch
+                        checked={snapshot.events[event.id]}
+                        aria-label={`${event.label}系统通知`}
+                        disabled={busy}
+                        onCheckedChange={(enabled) =>
+                          void run(async () => {
+                            setSnapshot(
+                              await window.desktop.notificationSettings.updateEvents({
+                                events: { ...snapshot.events, [event.id]: enabled },
+                                expectedEvents: snapshot.events,
+                              })
+                            )
+                            toast.success("通知事件偏好已保存。")
                           })
-                        )
-                        setFeedback("通知事件偏好已保存。")
-                      })
+                        }
+                      />
                     }
                   />
-                }
-              />
-            ))}
+                ))
+              : null}
           </div>
           <p className="border-t py-3 text-xs text-muted-foreground">
             通知只显示任务状态，点击可打开对应会话。
@@ -166,7 +163,8 @@ export function NotificationSettings() {
                       void run(async () => {
                         const result = await window.desktop.notificationSettings.test()
                         if (result.status === "failed") setError(result.detail)
-                        else setFeedback(result.detail)
+                        else if (result.status === "shown") toast.success(result.detail)
+                        else toast.info(result.detail)
                       })
                     }
                   >

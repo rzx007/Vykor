@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
@@ -65,7 +66,6 @@ export function TaskLimitControl() {
   const [value, setValue] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
   useEffect(() => {
     let alive = true
     if (typeof window.desktop.configurationSettings.limits !== "function") {
@@ -97,7 +97,6 @@ export function TaskLimitControl() {
     }
     setBusy(true)
     setError("")
-    setNotice("")
     try {
       const next = await window.desktop.configurationSettings.updateLimits({
         maxTurns: Number(value),
@@ -105,7 +104,7 @@ export function TaskLimitControl() {
       })
       setSnapshot(next)
       setValue(String(next.maxTurns))
-      setNotice("已保存，后续任务生效。")
+      toast.success("已保存，后续任务生效。")
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -116,7 +115,6 @@ export function TaskLimitControl() {
     if (busy || typeof window.desktop.configurationSettings.limits !== "function") return
     setBusy(true)
     setError("")
-    setNotice("")
     try {
       const next = await window.desktop.configurationSettings.limits()
       setSnapshot(next)
@@ -164,10 +162,6 @@ export function TaskLimitControl() {
         </div>
       ) : snapshot?.reason ? (
         <p className="max-w-72 text-right text-xs text-muted-foreground">{snapshot.reason}</p>
-      ) : notice ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {notice}
-        </p>
       ) : null}
     </div>
   )

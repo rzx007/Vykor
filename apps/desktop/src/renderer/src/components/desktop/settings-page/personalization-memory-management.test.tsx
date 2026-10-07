@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { PersonalizationManagementSnapshot } from "@shared/personalization-management-types"
+import { setToastDispatcher } from "@renderer/lib/toast"
 vi.mock("@renderer/stores/desktop-session", () => ({
   useDesktopSessionStore: (select: (state: unknown) => unknown) =>
     select({ projects: [{ id: "project", name: "Project" }] }),
@@ -30,6 +31,7 @@ vi.mock("@renderer/components/ui/select", () => ({
   SelectTrigger: () => null,
   SelectValue: () => null,
   SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SelectGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
   SelectItem: ({ value, children }: { value: string; children: ReactNode }) => (
     <option value={value}>{children}</option>
   ),
@@ -40,6 +42,13 @@ let root: Root
 let stored: PersonalizationManagementSnapshot
 const updateEntry = vi.fn()
 const removeEntry = vi.fn()
+const showToast = vi.fn(() => "test-toast")
+const updateConfiguration = vi.fn(
+  async (input: { value: PersonalizationManagementSnapshot["effective"] }) => {
+    stored.effective = input.value
+    return structuredClone(stored)
+  }
+)
 beforeEach(() => {
   ;(
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -67,6 +76,9 @@ beforeEach(() => {
   }
   updateEntry.mockReset()
   removeEntry.mockReset()
+  updateConfiguration.mockClear()
+  showToast.mockClear()
+  setToastDispatcher({ showToast, updateToast: vi.fn(), dismissToast: vi.fn() })
   Object.defineProperty(window, "desktop", {
     configurable: true,
     value: {
@@ -74,6 +86,7 @@ beforeEach(() => {
         snapshot: vi.fn(async () => structuredClone(stored)),
         updateEntry,
         removeEntry,
+        updateConfiguration,
       },
     },
   })
@@ -82,10 +95,34 @@ beforeEach(() => {
   root = createRoot(container)
 })
 afterEach(() => {
+  setToastDispatcher(null)
   act(() => root.unmount())
   container.remove()
   delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
     .IS_REACT_ACT_ENVIRONMENT
+})
+it("shows consolidation fields only while long-term memory and automatic consolidation are enabled", async () => {
+  await act(async () => root.render(<PersonalizationMemoryManagement />))
+  expect(container.querySelector("#memory-dream-hours")).toBeNull()
+  expect(container.textContent).not.toContain("保存整理门槛")
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('[aria-label="自动整理记忆"]')!.click()
+  )
+  expect(container.querySelector<HTMLInputElement>("#memory-dream-hours")?.value).toBe("24")
+  expect(container.querySelector<HTMLInputElement>("#memory-dream-sessions")?.value).toBe("5")
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('[aria-label="项目长期记忆"]')!.click()
+  )
+  expect(container.querySelector("#memory-dream-hours")).toBeNull()
+  expect(stored.effective.autoDreamMinHours).toBe(24)
+  expect(stored.effective.autoDreamMinSessions).toBe(5)
+})
+it("sends an explicit reload result through the shared toast dispatcher", async () => {
+  await act(async () => root.render(<PersonalizationMemoryManagement />))
+  expect(showToast).not.toHaveBeenCalled()
+  await act(async () => button("重新读取").click())
+  expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ status: "success" }))
+  expect(container.textContent).not.toContain("记忆已重新读取")
 })
 function button(text: string) {
   return [...document.querySelectorAll<HTMLButtonElement>("button")].find(

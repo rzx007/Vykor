@@ -25,4 +25,30 @@ describe("maintenance export boundary", () => {
     expect(csv).toContain("\"'=malicious()\""); expect(csv).toContain('"unknown","","0","",""')
     expect(csv).not.toContain("apiKey")
   })
+  it("does not let cleanup from an old page cancel a newer diagnosis", async () => {
+    const service = new MaintenanceSettingsService()
+    const responses: Record<string, unknown> = {
+      "/health": { ok: true, version: "1.0" },
+      "/maintenance/readiness": { phase: "ready", accepting: true },
+      "/capabilities": { protocol: { version: CURRENT_PROTOCOL_VERSION } },
+      "/maintenance/storage/health": { writable: true, availableBytes: 1024 },
+      "/auth": { auth: { storedProviders: ["test"] } },
+      "/mcp/oauth/status": { servers: [] },
+      "/maintenance/environment": { kind: "native", checks: [] },
+      "/maintenance/logs": { logs: [] },
+      "/maintenance/errors": { errors: [] },
+      "/maintenance/restart-preview": { runs: [], tasks: [], terminals: [] },
+    }
+    vi.spyOn(service, "request").mockImplementation(async (path, _body, signal) => {
+      await Promise.resolve()
+      if (signal?.aborted) throw signal.reason
+      return (responses[path] ?? {}) as never
+    })
+    const old = service.diagnose({ requestId: "old-page" })
+    const current = service.diagnose({ requestId: "current-page" })
+    service.cancelDiagnosis({ requestId: "old-page" })
+    const [, report] = await Promise.all([old, current])
+    expect(report.checks.find((check) => check.id === "health")?.status).toBe("success")
+    expect(report.checks.some((check) => check.status === "cancelled")).toBe(false)
+  })
 })

@@ -1,5 +1,7 @@
+import { toast } from "@renderer/lib/toast"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { MemoryEntryRecord } from "@vykor/client"
+import { SettingsGroup, SettingsRow } from "./settings-group"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Textarea } from "@renderer/components/ui/textarea"
@@ -10,6 +12,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  SelectGroup,
 } from "@renderer/components/ui/select"
 import {
   AlertDialog,
@@ -58,7 +61,6 @@ export function PersonalizationMemoryManagement() {
   const [hours, setHours] = useState("")
   const [sessions, setSessions] = useState("")
   const [error, setError] = useState("")
-  const [feedback, setFeedback] = useState("")
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<MemoryEntryRecord | null>(null)
@@ -99,10 +101,9 @@ export function PersonalizationMemoryManagement() {
     locked.current = true
     setBusy(true)
     setError("")
-    setFeedback("")
     try {
       await operation()
-      setFeedback(message)
+      if (message) toast.success(message)
       return true
     } catch (failure) {
       setError(errorMessage(failure))
@@ -157,16 +158,20 @@ export function PersonalizationMemoryManagement() {
           disabled={busy || editing}
           onValueChange={(value) => setProjectId(value && value !== "global" ? value : undefined)}
         >
-          <SelectTrigger>
-            <SelectValue />
+          <SelectTrigger className="min-w-36">
+            <SelectValue>
+              {projectId ? projects.find((project) => project.id === projectId)?.name : "用户默认"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="global">用户默认</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectItem value="global">用户默认</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       </label>
@@ -175,80 +180,88 @@ export function PersonalizationMemoryManagement() {
           {error}
         </p>
       )}
-      {feedback && (
-        <p role="status" className="text-xs text-muted-foreground">
-          {feedback}
-        </p>
-      )}
+
       {!snapshot ? (
         <p role="status" className="text-sm text-muted-foreground">
           {error ? "记忆配置尚未读取。" : "正在读取记忆配置…"}
         </p>
       ) : (
         <>
-          {toggles.map(({ key, label, description }) => (
-            <label
-              key={key}
-              className="flex items-center justify-between gap-5 border-b border-border/60 py-3"
-            >
-              <span>
-                <span className="block text-sm font-medium">{label}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {description} 当前来源：{snapshot.sources[key]}。
-                </span>
-              </span>
-              <Switch
-                aria-label={label}
-                checked={snapshot.effective[key]}
-                disabled={
-                  busy ||
-                  ((key === "autoExtractEnabled" || key === "autoDreamEnabled") &&
-                    !snapshot.effective.enabled)
-                }
-                onCheckedChange={(value) => configure({ [key]: value })}
-              />
-            </label>
-          ))}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-2 text-sm">
-              整理最短间隔（小时）
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={hours}
-                disabled={busy}
-                onChange={(event) => setHours(event.target.value)}
-              />
-            </label>
-            <label className="space-y-2 text-sm">
-              累计会话门槛
-              <Input
-                type="number"
-                min="1"
-                step="1"
-                value={sessions}
-                disabled={busy}
-                onChange={(event) => setSessions(event.target.value)}
-              />
-            </label>
-          </div>
-          <Button
-            className="self-start"
-            disabled={
-              busy ||
-              (hours === String(snapshot.effective.autoDreamMinHours) &&
-                sessions === String(snapshot.effective.autoDreamMinSessions))
-            }
-            onClick={() =>
-              configure({
-                autoDreamMinHours: Number(hours),
-                autoDreamMinSessions: Number(sessions),
-              })
-            }
-          >
-            保存整理门槛
-          </Button>
+          <SettingsGroup title="记忆偏好" separated>
+            {toggles
+              .filter(
+                ({ key }) =>
+                  snapshot.effective.enabled || key === "enabled" || key === "sessionMemoryEnabled"
+              )
+              .map(({ key, label, description }) => (
+                <SettingsRow
+                  key={key}
+                  title={label}
+                  description={`${description} 当前来源：${snapshot.sources[key] ?? "用户默认"}。`}
+                  control={
+                    <Switch
+                      aria-label={label}
+                      checked={snapshot.effective[key]}
+                      disabled={busy}
+                      onCheckedChange={(value) => configure({ [key]: value })}
+                    />
+                  }
+                />
+              ))}
+            {snapshot.effective.enabled && snapshot.effective.autoDreamEnabled ? (
+              <>
+                <SettingsRow
+                  title="整理最短间隔（小时）"
+                  labelFor="memory-dream-hours"
+                  control={
+                    <Input
+                      id="memory-dream-hours"
+                      className="w-28"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={hours}
+                      disabled={busy}
+                      onChange={(event) => setHours(event.target.value)}
+                    />
+                  }
+                />
+                <SettingsRow
+                  title="累计会话门槛"
+                  labelFor="memory-dream-sessions"
+                  control={
+                    <Input
+                      id="memory-dream-sessions"
+                      className="w-28"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={sessions}
+                      disabled={busy}
+                      onChange={(event) => setSessions(event.target.value)}
+                    />
+                  }
+                />
+                <div className="flex justify-end py-3">
+                  <Button
+                    disabled={
+                      busy ||
+                      (hours === String(snapshot.effective.autoDreamMinHours) &&
+                        sessions === String(snapshot.effective.autoDreamMinSessions))
+                    }
+                    onClick={() =>
+                      configure({
+                        autoDreamMinHours: Number(hours),
+                        autoDreamMinSessions: Number(sessions),
+                      })
+                    }
+                  >
+                    保存整理门槛
+                  </Button>
+                </div>
+              </>
+            ) : null}
+          </SettingsGroup>
           {projectId && snapshot.configured && (
             <Button
               variant="ghost"
@@ -271,13 +284,9 @@ export function PersonalizationMemoryManagement() {
               移除项目覆盖
             </Button>
           )}
-          <p className="text-xs text-muted-foreground">
-            不影响 SOUL.md、USER.md 或环境信息。
-          </p>
+          <p className="text-xs text-muted-foreground">不影响 SOUL.md、USER.md 或环境信息。</p>
           {!projectId ? (
-            <p className="text-sm text-muted-foreground">
-              请选择项目。
-            </p>
+            <p className="text-sm text-muted-foreground">请选择项目。</p>
           ) : (
             <>
               <div className="space-y-2">

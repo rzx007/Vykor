@@ -20,7 +20,6 @@ export function PermissionApprovalsDialog({
   open,
   onOpenChange,
   error,
-  feedback,
   onRevoke,
 }: {
   snapshot: DesktopPermissionSettingsSnapshot
@@ -28,7 +27,6 @@ export function PermissionApprovalsDialog({
   open: boolean
   onOpenChange(open: boolean): void
   error: string | null
-  feedback: string
   onRevoke(input: RevokeDesktopApprovalInput): void
 }) {
   const approvalCount = snapshot.toolApprovals.length + snapshot.browserApprovals.length
@@ -53,11 +51,6 @@ export function PermissionApprovalsDialog({
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error}
-          </p>
-        ) : null}
-        {feedback ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {feedback}
           </p>
         ) : null}
         <div className="max-h-80 divide-y divide-border overflow-y-auto">

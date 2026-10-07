@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { SettingsGroup, SettingsRow } from "./settings-group"
 import { useEffect, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
@@ -41,7 +42,6 @@ export function TerminalSettings() {
   const [shells, setShells] = useState<DesktopDetectedTerminalShell[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState("")
   const [custom, setCustom] = useState(false)
   const [executable, setExecutable] = useState("")
   const [argumentsText, setArgumentsText] = useState("[]")
@@ -103,7 +103,6 @@ export function TerminalSettings() {
     locked.current = true
     setBusy(true)
     setError(null)
-    setFeedback("")
     try {
       const next = await window.desktop.terminalSettings.update({
         settings,
@@ -112,7 +111,7 @@ export function TerminalSettings() {
       })
       setSnapshot(next)
       if (startup) acceptStartup(next)
-      setFeedback(
+      toast.success(
         startup || shellId !== snapshot.defaultTerminalShellId
           ? "已保存，新终端生效。"
           : "已保存，立即生效。"
@@ -220,11 +219,7 @@ export function TerminalSettings() {
           {error}
         </p>
       )}
-      {feedback && (
-        <p role="status" className="text-xs text-muted-foreground">
-          {feedback}
-        </p>
-      )}
+
       {snapshot.shellError && (
         <p role="alert" className="text-sm text-destructive">
           {snapshot.shellError}

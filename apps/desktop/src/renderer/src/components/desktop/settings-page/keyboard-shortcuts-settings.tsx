@@ -1,4 +1,5 @@
-import { Pencil, RotateCcw, Search } from "lucide-react"
+import { toast } from "@renderer/lib/toast"
+import { Eraser, Pencil, RotateCcw, Search } from "lucide-react"
 import { useState, useSyncExternalStore } from "react"
 
 import {
@@ -11,6 +12,7 @@ import {
   subscribeShortcutChanges,
   type DesktopShortcutId,
 } from "../desktop-shortcuts"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { Kbd } from "@renderer/components/ui/kbd"
 import { Button } from "@renderer/components/ui/button"
 
@@ -72,11 +74,23 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
   const [editing, setEditing] = useState<DesktopShortcutId | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isMac = navigator.platform.toLowerCase().includes("mac")
-  const [feedback, setFeedback] = useState("")
-  function resultMessage(result: "updated" | "conflict" | "invalid" | "reserved" | "storage_error") {
-    if (result === "updated") { setError(null); setFeedback("快捷键已保存并更新实际绑定。"); return true }
-    setFeedback("")
-    setError(result === "conflict" ? "这个组合在应用内已被其他操作使用；恢复全部默认可解除自定义冲突。" : result === "reserved" ? "这个组合用于系统、编辑器或终端的正常操作，请选择其他组合。" : result === "storage_error" ? "快捷键无法保存，已保留最后成功绑定。" : "无法使用这个按键组合。")
+  function resultMessage(
+    result: "updated" | "conflict" | "invalid" | "reserved" | "storage_error"
+  ) {
+    if (result === "updated") {
+      setError(null)
+      toast.success("快捷键已保存并更新实际绑定。")
+      return true
+    }
+    setError(
+      result === "conflict"
+        ? "这个组合在应用内已被其他操作使用；恢复全部默认可解除自定义冲突。"
+        : result === "reserved"
+          ? "这个组合用于系统、编辑器或终端的正常操作，请选择其他组合。"
+          : result === "storage_error"
+            ? "快捷键无法保存，已保留最后成功绑定。"
+            : "无法使用这个按键组合。"
+    )
     return false
   }
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -93,9 +107,22 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
     .filter((group) => group.shortcuts.length > 0)
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">应用内快捷键。编辑器、终端和浏览器的原生按键保持各自行为；输入法组合时不触发应用操作。{isMac ? "使用 ⌘；系统保留的组合不可改。" : "使用 Ctrl；系统保留的组合不可改。"}</p><Button variant="ghost" onClick={() => resultMessage(resetAllShortcutBindings())}><RotateCcw data-icon="inline-start" />恢复全部默认</Button></div>
-      {error && !editing && <p role="alert" className="text-sm text-destructive">{error}</p>}{feedback && <p role="status" className="text-xs text-muted-foreground">{feedback}</p>}
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          应用内快捷键。编辑器、终端和浏览器的原生按键保持各自行为；输入法组合时不触发应用操作。
+          {isMac ? "使用 ⌘；系统保留的组合不可改。" : "使用 Ctrl；系统保留的组合不可改。"}
+        </p>
+        <Button variant="ghost" onClick={() => resultMessage(resetAllShortcutBindings())}>
+          <RotateCcw data-icon="inline-start" />
+          恢复全部默认
+        </Button>
+      </div>
+      {error && !editing && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="relative">
         <Search
           aria-hidden="true"
@@ -115,13 +142,13 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
         <p className="py-12 text-center text-sm text-muted-foreground">没有找到匹配的快捷键</p>
       ) : (
         visibleGroups.map((group) => (
-          <section key={group.title} aria-label={group.title} className="space-y-3">
+          <section key={group.title} aria-label={group.title} className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-foreground">{group.title}</h2>
             <div className="divide-y divide-border/70 rounded-xl border border-border/70 bg-background px-5">
               {group.shortcuts.map((shortcut) => (
                 <div
                   key={shortcut.id}
-                  className="grid min-h-19 grid-cols-1 gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center sm:gap-6"
+                  className="grid min-h-19 grid-cols-1 gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center sm:gap-6"
                 >
                   <div className="min-w-0">
                     <h3 className="text-sm font-medium text-foreground">{shortcut.title}</h3>
@@ -176,20 +203,47 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
                         <Kbd className="h-7 max-w-full min-w-0 rounded-full px-2.5 text-xs font-normal">
                           {shortcutLabel(shortcut.id, isMac)}
                         </Kbd>
-                        <button
-                          type="button"
-                          aria-label={`修改${shortcut.title}快捷键`}
-                          title={`修改${shortcut.title}快捷键`}
-                          onClick={() => {
-                            setEditing(shortcut.id)
-                            setError(null)
-                          }}
-                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        >
-                          <Pencil className="size-4" aria-hidden="true" />
-                        </button>
-                        <Button type="button" size="sm" variant="ghost" aria-label={`清除${shortcut.title}快捷键`} onClick={() => resultMessage(clearShortcutBinding(shortcut.id))}>清除</Button>
-                        <Button type="button" size="icon-sm" variant="ghost" aria-label={`恢复默认${shortcut.title}快捷键`} onClick={() => resultMessage(resetShortcutBinding(shortcut.id))}><RotateCcw /></Button>
+                        {[
+                          {
+                            label: `修改${shortcut.title}快捷键`,
+                            hint: "修改快捷键",
+                            icon: Pencil,
+                            onClick: () => {
+                              setEditing(shortcut.id)
+                              setError(null)
+                            },
+                          },
+                          {
+                            label: `清除${shortcut.title}快捷键`,
+                            hint: "清除快捷键",
+                            icon: Eraser,
+                            onClick: () => resultMessage(clearShortcutBinding(shortcut.id)),
+                          },
+                          {
+                            label: `恢复默认${shortcut.title}快捷键`,
+                            hint: "恢复默认",
+                            icon: RotateCcw,
+                            onClick: () => resultMessage(resetShortcutBinding(shortcut.id)),
+                          },
+                        ].map(({ label, hint, icon: Icon, onClick }) => (
+                          <Tooltip key={label}>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  shape="circle"
+                                  variant="ghost"
+                                  aria-label={label}
+                                  onClick={onClick}
+                                />
+                              }
+                            >
+                              <Icon aria-hidden="true" />
+                            </TooltipTrigger>
+                            <TooltipContent>{hint}</TooltipContent>
+                          </Tooltip>
+                        ))}
                       </>
                     )}
                   </div>

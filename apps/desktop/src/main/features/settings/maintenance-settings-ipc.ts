@@ -21,7 +21,7 @@ export const maintenanceSettingsIpcContribution: IpcContribution = { id: "mainte
   { channel: channels.verifyBackup, handler: (_event, source) => service.verifyBackup(source as string) },
   { channel: channels.restore, handler: (_event, input) => service.restore(input as Parameters<typeof service.restore>[0]) },
   { channel: channels.switchData, handler: (_event, directory) => service.switchData(directory as string) },
-  { channel: channels.diagnose, handler: () => service.diagnose() }, { channel: channels.cancelDiagnosis, handler: () => service.cancelDiagnosis() },
+  { channel: channels.diagnose, handler: (_event, input) => service.diagnose(input as Parameters<typeof service.diagnose>[0]) }, { channel: channels.cancelDiagnosis, handler: (_event, input) => service.cancelDiagnosis(input as Parameters<typeof service.cancelDiagnosis>[0]) },
   { channel: channels.exportDiagnostics, handler: (_event, filter, kind) => service.exportDiagnostics(filter as DiagnosticFilter, kind as "diagnostics" | "logs") },
   { channel: channels.reconnect, handler: () => service.reconnect() }, { channel: channels.restart, handler: () => service.restart() },
 ] } }

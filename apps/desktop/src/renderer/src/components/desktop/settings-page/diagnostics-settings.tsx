@@ -1,8 +1,9 @@
-import { SettingsGroup } from "./settings-group"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
+import { LoaderCircle } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
+import { Switch } from "@renderer/components/ui/switch"
+import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -13,316 +14,351 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@renderer/components/ui/alert-dialog"
-import type { DiagnosticFilter, DiagnosticReport } from "@shared/maintenance-settings-types"
+import type { DiagnosticCheck, DiagnosticReport } from "@shared/maintenance-settings-types"
+import { toast } from "@renderer/lib/toast"
 import { maintenanceApi } from "./usage-settings"
+import { SettingsGroup, SettingsRow, SettingsFoldout, SettingsSelect } from "./settings-group"
+import { SettingsStatus, type SettingsStatusTone } from "./settings-status"
+import { diagnosisSummary } from "./diagnostics-presentation"
+import { DiagnosticsLogViewer } from "./diagnostics-log-viewer"
 import { errorMessage } from "./settings-error-message"
 
+const checkStates: Record<DiagnosticCheck["status"], { tone: SettingsStatusTone; label: string }> =
+  {
+    success: { tone: "success", label: "通过" },
+    failed: { tone: "error", label: "需要处理" },
+    warning: { tone: "warning", label: "建议检查" },
+    timeout: { tone: "warning", label: "检查超时" },
+    cancelled: { tone: "neutral", label: "已取消" },
+    unsupported: { tone: "neutral", label: "不支持" },
+  }
 export function DiagnosticsSettings() {
   const [report, setReport] = useState<DiagnosticReport | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [working, setWorking] = useState(false)
   const [error, setError] = useState("")
-  const [feedback, setFeedback] = useState("")
-  const [filter, setFilter] = useState<DiagnosticFilter>({})
   const [restartOpen, setRestartOpen] = useState(false)
   const [detailsExpiry, setDetailsExpiry] = useState<number | null>(null)
+  const [detailsReady, setDetailsReady] = useState(false)
+  const [duration, setDuration] = useState("15")
+  const [now, setNow] = useState(Date.now)
+  const mounted = useRef(false),
+    requestId = useRef<string | null>(null),
+    locked = useRef(false)
+  const busy = checking || working
   async function act(work: () => Promise<unknown>, message: string) {
-    setBusy(true)
+    if (locked.current || checking) return
+    locked.current = true
+    setWorking(true)
+    setError("")
     try {
       const result = await work()
-      setFeedback(typeof result === "string" ? `已导出到 ${result}` : message)
-      setError("")
-    } catch (error) {
-      setError(errorMessage(error))
+      if (!mounted.current) return
+      if (typeof result === "string") toast.success("导出完成", result)
+      else if (message) {
+        if (result === null) toast.info(message)
+        else toast.success(message)
+      }
+    } catch (failure) {
+      if (mounted.current) setError(errorMessage(failure))
     } finally {
-      setBusy(false)
+      locked.current = false
+      if (mounted.current) setWorking(false)
     }
   }
-  async function diagnose() {
-    await act(async () => setReport(await maintenanceApi().diagnose()), "检查结束；各项状态如下")
+  async function diagnose(notify = true): Promise<DiagnosticReport | null> {
+    if (locked.current) return null
+    const id = crypto.randomUUID()
+    requestId.current = id
+    setChecking(true)
+    setError("")
+    try {
+      const next = await maintenanceApi().diagnose({ requestId: id })
+      if (!mounted.current || requestId.current !== id) return null
+      setReport(next)
+      if (notify) {
+        const summary = diagnosisSummary(next.checks)
+        if (summary.tone === "success") toast.success(summary.title)
+        else toast.info(summary.title)
+      }
+      return next
+    } catch (failure) {
+      if (mounted.current && requestId.current === id) setError(errorMessage(failure))
+      return null
+    } finally {
+      if (mounted.current && requestId.current === id) setChecking(false)
+    }
+  }
+  async function readDetails() {
+    try {
+      const value = await maintenanceApi().diagnosticDetails()
+      if (mounted.current) {
+        setDetailsExpiry(value.expiresAt)
+        setDetailsReady(true)
+        setNow(Date.now())
+      }
+    } catch {
+      if (mounted.current) setDetailsReady(false)
+    }
   }
   useEffect(() => {
-    void diagnose()
-    const readDetails = () =>
-      Promise.resolve()
-        .then(() => maintenanceApi().diagnosticDetails())
-        .then((value) => setDetailsExpiry(value.expiresAt))
-        .catch(() => {})
+    mounted.current = true
+    void diagnose(false)
     void readDetails()
-    const timer = setInterval(() => {
-      void readDetails()
-    }, 15_000)
+    const timer = setInterval(() => void readDetails(), 15_000)
     return () => {
+      mounted.current = false
       clearInterval(timer)
-      void Promise.resolve()
-        .then(() => maintenanceApi().cancelDiagnosis())
-        .catch(() => {})
+      const owned = requestId.current
+      requestId.current = null
+      if (owned)
+        void Promise.resolve()
+          .then(() => maintenanceApi().cancelDiagnosis({ requestId: owned }))
+          .catch(() => {})
     }
   }, [])
-  const logs = (report?.logs ?? [])
-    .filter(
-      (row) =>
-        (!filter.from || row.time >= filter.from) &&
-        (!filter.level || row.level === filter.level) &&
-        (!filter.module || row.module === filter.module) &&
-        (!filter.runId || row.runId === filter.runId)
+  const summary = diagnosisSummary(report?.checks ?? [])
+  const issues = (report?.checks ?? [])
+    .filter((item) => ["failed", "warning", "timeout"].includes(item.status))
+    .sort((a, b) => Number(b.status === "failed") - Number(a.status === "failed"))
+  const passed = (report?.checks ?? []).filter((item) => item.status === "success")
+  const unconfirmed = (report?.checks ?? []).filter((item) =>
+    ["cancelled", "unsupported"].includes(item.status)
+  )
+  const detailed = detailsExpiry !== null && detailsExpiry > now
+  function checkRow(check: DiagnosticCheck, actionable = false) {
+    const section = check.id.startsWith("environment")
+      ? "runtime"
+      : check.id === "auth"
+        ? "providers"
+        : check.id === "storage"
+          ? "storage"
+          : null
+    return (
+      <div key={check.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-medium">{check.name}</h3>
+            <SettingsStatus tone={checkStates[check.status].tone}>
+              {checkStates[check.status].label}
+            </SettingsStatus>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{check.detail}</p>
+        </div>
+        {actionable && section ? (
+          <Link
+            to="/settings/$section"
+            params={{ section }}
+            className="self-center text-xs underline underline-offset-4"
+          >
+            打开相关设置
+          </Link>
+        ) : null}
+      </div>
     )
-    .map((log) => {
-      if (detailsExpiry && detailsExpiry > Date.now()) return log
-      const { requestId: _request, toolName: _tool, method: _method, ...basic } = log
-      return basic
-    })
+  }
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup title="服务检查" id="diagnostics-status">
-        <p className="text-xs text-muted-foreground">
-          只读检查，不调用模型或发送消息；单项最长 15 秒，可取消。
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={busy} onClick={() => void diagnose()}>
-            重新检查
-          </Button>
-          {busy ? (
+    <div className="flex flex-col gap-8" aria-busy={busy}>
+      <SettingsGroup
+        title="检查概览"
+        id="diagnostics-status"
+        action={
+          <div className="flex flex-wrap gap-2">
+            {checking ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const id = requestId.current
+                  if (id)
+                    void maintenanceApi()
+                      .cancelDiagnosis({ requestId: id })
+                      .catch((failure) => setError(errorMessage(failure)))
+                }}
+              >
+                取消检查
+              </Button>
+            ) : (
+              <Button size="sm" disabled={busy} onClick={() => void diagnose()}>
+                重新检查
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => void maintenanceApi().cancelDiagnosis()}
+              disabled={busy || !report}
+              onClick={() =>
+                void act(() => maintenanceApi().exportDiagnostics({}, "diagnostics"), "导出已取消")
+              }
             >
-              取消检查
+              导出诊断包
             </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => void act(() => maintenanceApi().reconnect(), "已重新连接后台服务")}
-          >
-            重新连接
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              void act(async () => {
-                setReport(await maintenanceApi().diagnose())
-                setRestartOpen(true)
-              }, "重启前清单已刷新")
-            }
-          >
-            重启后台服务
-          </Button>
-        </div>
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-        {feedback ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {feedback}
-          </p>
-        ) : null}
-        {!report ? (
-          <p role="status" className="text-sm">
-            {busy ? "正在检查…" : "尚无检查结果"}
-          </p>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground">
-              桌面 {report.desktopVersion} · {report.platform} / {report.architecture} · 连接{" "}
-              {report.target ?? "未连接"} · {new Date(report.checkedAt).toLocaleString()}
-            </p>
-            <div className="divide-y">
-              {report.checks.map((check) => (
-                <div key={check.id} className="py-3 text-sm">
-                  <div className="flex justify-between">
-                    <span>{check.name}</span>
-                    <span
-                      className={
-                        check.status === "failed" ? "text-destructive" : "text-muted-foreground"
-                      }
-                    >
-                      {
-                        {
-                          success: "成功",
-                          warning: "警告",
-                          failed: "失败",
-                          unsupported: "不支持",
-                          timeout: "超时",
-                          cancelled: "已取消",
-                        }[check.status]
-                      }
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{check.detail}</p>
-                </div>
-              ))}
-            </div>
-            {report.missing.length ? (
-              <p className="text-xs text-muted-foreground">未取得：{report.missing.join("、")}</p>
-            ) : null}
-          </>
-        )}
-      </SettingsGroup>
-      <SettingsGroup title="运行日志" id="diagnostics-logs">
-        <div className="settings-filter-grid">
-          <label className="flex min-w-0 flex-col gap-2 text-sm">
-            时间
-            <select
-              className="h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm"
-              onChange={(event) =>
-                setFilter((previous) => ({
-                  ...previous,
-                  from: event.target.value
-                    ? Date.now() - Number(event.target.value) * 86400000
-                    : undefined,
-                }))
-              }
-            >
-              <option value="">全部已读取</option>
-              <option value="1">最近 24 小时</option>
-              <option value="7">最近 7 天</option>
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-col gap-2 text-sm">
-            级别
-            <select
-              className="h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm"
-              value={filter.level ?? ""}
-              onChange={(event) =>
-                setFilter((previous) => ({ ...previous, level: event.target.value }))
-              }
-            >
-              <option value="">全部</option>
-              {["debug", "info", "warn", "error"].map((level) => (
-                <option key={level}>{level}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-col gap-2 text-sm">
-            模块
-            <Input
-              placeholder="模块名称"
-              value={filter.module ?? ""}
-              onChange={(event) =>
-                setFilter((previous) => ({ ...previous, module: event.target.value }))
-              }
-            />
-          </label>
-          <label className="flex min-w-0 flex-col gap-2 text-sm">
-            关联任务 ID
-            <Input
-              placeholder="输入任务 ID"
-              value={filter.runId ?? ""}
-              onChange={(event) =>
-                setFilter((previous) => ({ ...previous, runId: event.target.value }))
-              }
-            />
-          </label>
-        </div>
-        {!logs.length ? (
-          <p className="text-sm text-muted-foreground">当前筛选暂无日志。</p>
-        ) : (
-          <div className="max-h-96 divide-y overflow-auto">
-            {logs.map((log, index) => (
-              <div
-                key={`${log.time}:${index}`}
-                className="flex items-start justify-between gap-3 py-2 text-xs"
-              >
-                <div>
-                  {log.time ? new Date(log.time).toLocaleString() : "未记录时间"} · {log.level} ·{" "}
-                  {log.event}
-                  <p className="text-muted-foreground">
-                    {log.runId ?? log.traceId ?? ""}
-                    {log.sessionId ? (
-                      <Link
-                        className="ml-2 underline"
-                        to="/conversation/$sessionId"
-                        params={{ sessionId: log.sessionId }}
-                      >
-                        打开关联会话
-                      </Link>
-                    ) : null}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    void act(() => navigator.clipboard.writeText(JSON.stringify(log)), "日志已复制")
-                  }
-                >
-                  复制
-                </Button>
-              </div>
-            ))}
           </div>
+        }
+      >
+        {checking ? (
+          <div role="status" className="flex items-center gap-2 text-sm font-medium">
+            <LoaderCircle
+              aria-hidden="true"
+              className="size-4 animate-spin motion-reduce:animate-none"
+            />
+            正在检查{report ? "，下方保留上次结果" : ""}
+          </div>
+        ) : (
+          <SettingsStatus tone={report ? summary.tone : "neutral"}>
+            {report ? summary.title : "尚未取得检查结果"}
+          </SettingsStatus>
         )}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() =>
-            void act(() => maintenanceApi().exportDiagnostics(filter, "logs"), "导出已取消")
-          }
-        >
-          导出筛选结果
-        </Button>
-      </SettingsGroup>
-      <SettingsGroup title="临时详细日志" id="diagnostics-details">
-        <p className="text-xs text-muted-foreground">
-          显示请求标识、工具名和 HTTP 方法，不含消息或机密；到期或重启后关闭。
-          {detailsExpiry ? ` 到期 ${new Date(detailsExpiry).toLocaleString()}` : " 当前关闭。"}
+        <p className="mt-2 text-xs text-muted-foreground">
+          {report
+            ? `通过 ${summary.passed} · 需处理 ${summary.failed} · 提示 ${summary.warnings} · 未完成 ${summary.incomplete} · ${new Date(report.checkedAt).toLocaleString()}`
+            : "只读检查，不调用模型或发送消息。整轮检查最长 15 秒。"}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {[15, 30, 60].map((minutes) => (
+        {error ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {issues.length ? (
+          <div className="mt-4 divide-y divide-border">
+            {issues.map((item) => checkRow(item, true))}
+          </div>
+        ) : null}
+        {report && !checking && summary.incomplete ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            未完成的检查无法用于判断服务是否正常，可重新检查。
+          </p>
+        ) : null}
+        {passed.length ? (
+          <div className="mt-3">
+            <SettingsFoldout title={`已通过检查（${passed.length}）`}>
+              {passed.map((item) => checkRow(item))}
+            </SettingsFoldout>
+          </div>
+        ) : null}
+        {unconfirmed.length ? (
+          <div className="mt-3">
+            <SettingsFoldout title={`未确认的检查（${unconfirmed.length}）`}>
+              {unconfirmed.map((item) => checkRow(item))}
+            </SettingsFoldout>
+          </div>
+        ) : null}
+      </SettingsGroup>
+      <DiagnosticsLogViewer
+        report={report}
+        busy={busy}
+        detailsExpiry={detailsExpiry}
+        onExport={(filter) =>
+          void act(() => maintenanceApi().exportDiagnostics(filter, "logs"), "导出已取消")
+        }
+        onCopy={(content) => void act(() => navigator.clipboard.writeText(content), "日志已复制")}
+      />
+      <SettingsFoldout title="高级排查" id="diagnostics-advanced">
+        <SettingsGroup title="连接与后台服务">
+          <div className="flex flex-wrap gap-2">
             <Button
-              key={minutes}
-              size="sm"
               variant="outline"
               disabled={busy}
-              onClick={() =>
-                void act(async () => {
-                  setDetailsExpiry(
-                    (await maintenanceApi().updateDiagnosticDetails(minutes)).expiresAt
-                  )
-                  setReport(await maintenanceApi().diagnose())
-                }, "临时详细日志已开启")
-              }
+              onClick={() => void act(() => maintenanceApi().reconnect(), "已重新连接后台服务")}
             >
-              开启 {minutes} 分钟
+              重新连接
             </Button>
-          ))}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy || detailsExpiry === null}
-            onClick={() =>
-              void act(async () => {
-                setDetailsExpiry((await maintenanceApi().updateDiagnosticDetails(0)).expiresAt)
-                setReport(await maintenanceApi().diagnose())
-              }, "详细运行信息已关闭")
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                void diagnose(false).then((next) => {
+                  if (next && mounted.current) {
+                    if (next.activeWork) setRestartOpen(true)
+                    else setError("未取得活动任务清单，无法安全重启。请重新检查。")
+                  }
+                })
+              }}
+            >
+              重启后台服务
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            重启前检查活动任务与终端，不会续跑旧任务。
+          </p>
+        </SettingsGroup>
+        <SettingsGroup title="临时详细日志" id="diagnostics-details" separated>
+          <SettingsRow
+            title="详细运行字段"
+            description={
+              !detailsReady
+                ? "暂未读取到设置状态。"
+                : detailed
+                  ? `到期：${new Date(detailsExpiry!).toLocaleTimeString()}。不含消息或机密。`
+                  : "已关闭。开启后显示请求标识、工具名和 HTTP 方法。"
             }
-          >
-            立即关闭
-          </Button>
-        </div>
-      </SettingsGroup>
-      <SettingsGroup title="诊断包" id="diagnostics-export">
-        <p className="text-xs text-muted-foreground">
-          导出版本、检查结果和脱敏日志，不含消息、源码、指令、凭据或绝对路径。
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() =>
-            void act(() => maintenanceApi().exportDiagnostics(filter, "diagnostics"), "导出已取消")
-          }
-        >
-          导出诊断包
-        </Button>
-      </SettingsGroup>
+            control={
+              <Switch
+                aria-label="详细运行字段"
+                checked={detailed}
+                disabled={busy || !detailsReady}
+                onCheckedChange={(enabled) =>
+                  void act(
+                    async () => {
+                      const value = await maintenanceApi().updateDiagnosticDetails(
+                        enabled ? Number(duration) : 0
+                      )
+                      setDetailsExpiry(value.expiresAt)
+                      setNow(Date.now())
+                    },
+                    enabled ? "临时详细日志已开启" : "详细运行信息已关闭"
+                  )
+                }
+              />
+            }
+          />
+          {detailed ? (
+            <SettingsRow
+              title="有效时长"
+              control={
+                <SettingsSelect
+                  label="详细日志时长"
+                  value={duration}
+                  options={[15, 30, 60].map((minutes) => ({
+                    value: String(minutes),
+                    label: `${minutes} 分钟`,
+                  }))}
+                  disabled={busy}
+                  onChange={(minutes) =>
+                    void act(async () => {
+                      const value = await maintenanceApi().updateDiagnosticDetails(Number(minutes))
+                      setDuration(minutes)
+                      setDetailsExpiry(value.expiresAt)
+                    }, "有效时长已更新")
+                  }
+                />
+              }
+            />
+          ) : null}
+        </SettingsGroup>
+        {report ? (
+          <SettingsGroup title="环境与读取详情">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
+              <dt>桌面版本</dt>
+              <dd>{report.desktopVersion}</dd>
+              <dt>系统</dt>
+              <dd>
+                {report.platform} / {report.architecture}
+              </dd>
+              <dt>连接地址</dt>
+              <dd className="break-all">{report.target ?? "未连接"}</dd>
+            </dl>
+            {report.missing.length ? (
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                未读取的信息：{report.missing.join("、")}
+              </p>
+            ) : null}
+            <p className="mt-3 text-xs text-muted-foreground">
+              诊断包包含检查结果和脱敏运行日志，不含消息、源码、指令、凭据或绝对路径。
+            </p>
+          </SettingsGroup>
+        ) : null}
+      </SettingsFoldout>
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -333,41 +369,40 @@ export function DiagnosticsSettings() {
             {report?.activeWork ? (
               <div className="flex flex-col gap-2 text-xs text-muted-foreground">
                 <p>
-                  当前活动运行 {report.activeWork.runs.length}，后台任务{" "}
-                  {report.activeWork.tasks.length}，终端 {report.activeWork.terminals.length}
-                  。未结束时不可重启。
+                  活动运行 {report.activeWork.runs.length}，后台任务{" "}
+                  {report.activeWork.tasks.length}，终端 {report.activeWork.terminals.length}。
                 </p>
                 {[...report.activeWork.runs, ...report.activeWork.tasks].map((work) => (
-                  <p key={work.id}>
-                    {work.id} · {work.status} ·{" "}
-                    <Link
-                      className="underline"
-                      to="/conversation/$sessionId"
-                      params={{ sessionId: work.sessionId }}
-                    >
-                      前往会话收尾
-                    </Link>
-                  </p>
-                ))}
-                {report.activeWork.terminals.map((terminal) => (
-                  <p key={terminal.id}>
-                    终端 {terminal.id} · {terminal.status}
-                  </p>
+                  <Link
+                    key={work.id}
+                    to="/conversation/$sessionId"
+                    params={{ sessionId: work.sessionId }}
+                    className="underline"
+                  >
+                    {work.id} · {work.status} · 打开对话
+                  </Link>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-destructive">
-                未获取活动清单；后台将再次检查，未结束时拒绝重启。
-              </p>
-            )}
+            ) : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                setRestartOpen(false)
-                void act(() => maintenanceApi().restart(), "后台服务已重启")
-              }}
+              disabled={
+                busy ||
+                !report?.activeWork ||
+                Boolean(
+                  report.activeWork.runs.length +
+                  report.activeWork.tasks.length +
+                  report.activeWork.terminals.length
+                )
+              }
+              onClick={() =>
+                void act(async () => {
+                  await maintenanceApi().restart()
+                  setRestartOpen(false)
+                }, "后台服务已安全重启")
+              }
             >
               确认重启
             </AlertDialogAction>

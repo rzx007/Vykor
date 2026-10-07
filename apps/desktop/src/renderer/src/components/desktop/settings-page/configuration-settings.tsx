@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useState } from "react"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { Button } from "@renderer/components/ui/button"
@@ -19,12 +20,10 @@ export function ConfigurationSettings({ onImported }: { onImported?: () => void 
   const [importGroups, setImportGroups] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
   async function run(operation: () => Promise<void>) {
     if (busy) return
     setBusy(true)
     setError("")
-    setNotice("")
     try {
       await operation()
     } catch (failure) {
@@ -40,11 +39,7 @@ export function ConfigurationSettings({ onImported }: { onImported?: () => void 
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      {notice ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {notice}
-        </p>
-      ) : null}
+
       <section aria-labelledby="configuration-transfer-heading" className="flex flex-col gap-4">
         <h3 id="configuration-transfer-heading" className="text-sm font-medium">
           配置导入和导出
@@ -76,7 +71,7 @@ export function ConfigurationSettings({ onImported }: { onImported?: () => void 
             onClick={() =>
               void run(async () => {
                 const path = await window.desktop.configurationSettings.exportFile(selected)
-                if (path) setNotice(`已导出到 ${path}`)
+                if (path) toast.success(`已导出到 ${path}`)
               })
             }
           >
@@ -140,7 +135,7 @@ export function ConfigurationSettings({ onImported }: { onImported?: () => void 
                     })
                     setPreview(null)
                     onImported?.()
-                    setNotice("已导入，请重新读取设置；运行环境需重启后台。")
+                    toast.success("已导入，请重新读取设置；运行环境需重启后台。")
                   })
                 }
               >

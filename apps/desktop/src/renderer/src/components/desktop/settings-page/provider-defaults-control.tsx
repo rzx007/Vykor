@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useEffect, useState } from "react"
 import { Brain, Image, Sparkles } from "lucide-react"
 import {
@@ -44,7 +45,6 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState("")
   function accept(next: ProviderDefaultsSnapshot) {
     const model = next.models.find(
       (item) => item.providerName === next.provider && item.id === next.model
@@ -102,7 +102,6 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
         draft?.effort && model?.reasoningEfforts?.includes(draft.effort) ? draft.effort : null,
     })
     setError(null)
-    setFeedback("")
   }
   function chooseModel(id: string) {
     if (!draft || busy) return
@@ -114,13 +113,11 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
       effort: draft.effort && model.reasoningEfforts?.includes(draft.effort) ? draft.effort : null,
     })
     setError(null)
-    setFeedback("")
   }
   async function save() {
     if (!snapshot || !draft || !selected || !dirty || busy) return
     setBusy(true)
     setError(null)
-    setFeedback("")
     try {
       if (sameModel && !snapshot.disabled) {
         accept(
@@ -143,7 +140,7 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
         accept(await window.desktop.providerDefaults.snapshot())
       }
       await onChanged()
-      setFeedback("默认设置已更新，新对话就用它。")
+      toast.success("默认设置已更新，新对话就用它。")
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -160,11 +157,7 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
           {error}
         </p>
       ) : null}
-      {feedback ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {feedback}
-        </p>
-      ) : null}
+
       {!snapshot || !draft ? (
         error ? (
           <Button
@@ -316,7 +309,6 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
                     if (typeof value === "string") {
                       setDraft({ ...draft, effort: value === "_default" ? null : value })
                       setError(null)
-                      setFeedback("")
                     }
                   }}
                   className="flex max-w-full flex-wrap justify-start"

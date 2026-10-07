@@ -4,7 +4,8 @@ export interface MaintenanceBackupResult { path: string; manifest: MaintenanceBa
 export interface DiagnosticCheck { id: string; name: string; status: "success" | "warning" | "failed" | "unsupported" | "timeout" | "cancelled"; detail: string }
 export interface DiagnosticLog { time: number; level: string; module: string; event: string; runId?: string; sessionId?: string; traceId?: string; status?: string; durationMs?: number; requestId?: string; toolName?: string; method?: string }
 export interface DiagnosticReport { checkedAt: number; desktopVersion: string; platform: string; architecture: string; target: string | null; checks: DiagnosticCheck[]; logs: DiagnosticLog[]; missing: string[]; activeWork?: { runs: Array<{ id: string; sessionId: string; status: string }>; tasks: Array<{ id: string; sessionId: string; status: string }>; terminals: Array<{ id: string; status: string }> } }
-export interface DiagnosticFilter { from?: number; level?: string; module?: string; runId?: string }
+export interface DiagnosticFilter { from?: number; level?: string; module?: string; runId?: string; query?: string }
+export interface DiagnosisRequest { requestId: string }
 export const MaintenanceSettingsChannels = {
   usage: "settings:maintenance:usage", price: "settings:maintenance:price", budget: "settings:maintenance:budget", exportUsage: "settings:maintenance:export-usage",
   storage: "settings:maintenance:storage", openDirectory: "settings:maintenance:open-directory", chooseDirectory: "settings:maintenance:choose-directory",
@@ -32,8 +33,8 @@ export interface MaintenanceSettingsIpcMap {
   [MaintenanceSettingsChannels.verifyBackup]: { args: [string]; result: MaintenanceBackupResult }
   [MaintenanceSettingsChannels.restore]: { args: [{ source: string; target: string }]; result: MaintenanceBackupResult }
   [MaintenanceSettingsChannels.switchData]: { args: [string]; result: void }
-  [MaintenanceSettingsChannels.diagnose]: { args: []; result: DiagnosticReport }
-  [MaintenanceSettingsChannels.cancelDiagnosis]: { args: []; result: void }
+  [MaintenanceSettingsChannels.diagnose]: { args: [input?: DiagnosisRequest]; result: DiagnosticReport }
+  [MaintenanceSettingsChannels.cancelDiagnosis]: { args: [input?: DiagnosisRequest]; result: void }
   [MaintenanceSettingsChannels.exportDiagnostics]: { args: [DiagnosticFilter, "diagnostics" | "logs"]; result: string | null }
   [MaintenanceSettingsChannels.reconnect]: { args: []; result: void }
   [MaintenanceSettingsChannels.restart]: { args: []; result: void }
@@ -57,8 +58,8 @@ export interface MaintenanceSettingsAPI {
   verifyBackup(source: string): Promise<MaintenanceBackupResult>
   restore(input: { source: string; target: string }): Promise<MaintenanceBackupResult>
   switchData(directory: string): Promise<void>
-  diagnose(): Promise<DiagnosticReport>
-  cancelDiagnosis(): Promise<void>
+  diagnose(input?: DiagnosisRequest): Promise<DiagnosticReport>
+  cancelDiagnosis(input?: DiagnosisRequest): Promise<void>
   exportDiagnostics(filter: DiagnosticFilter, kind: "diagnostics" | "logs"): Promise<string | null>
   reconnect(): Promise<void>
   restart(): Promise<void>

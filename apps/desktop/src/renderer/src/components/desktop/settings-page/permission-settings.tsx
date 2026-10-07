@@ -1,3 +1,4 @@
+import { toast } from "@renderer/lib/toast"
 import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
@@ -26,7 +27,6 @@ export function PermissionSettings() {
   const [snapshot, setSnapshot] = useState<DesktopPermissionSettingsSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState("")
   const [revision, setRevision] = useState(0)
   const [approvalsOpen, setApprovalsOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<{
@@ -58,7 +58,6 @@ export function PermissionSettings() {
     locked.current = true
     setBusy(true)
     setError(null)
-    setFeedback("")
     try {
       await operation()
     } catch (failure) {
@@ -72,7 +71,7 @@ export function PermissionSettings() {
   function accept(value: DesktopPermissionSettingsSnapshot, message: string) {
     if (!mounted.current) return
     setSnapshot(value)
-    setFeedback(message)
+    if (message) toast.success(message)
   }
 
   function changeProtection(enabled: boolean) {
@@ -201,7 +200,7 @@ export function PermissionSettings() {
                         setSnapshot((current) =>
                           current ? { ...current, browserDeveloperMode: enabled } : current
                         )
-                        setFeedback("浏览器诊断已保存。")
+                        toast.success("浏览器诊断已保存。")
                       }
                     })
                   }
@@ -224,7 +223,6 @@ export function PermissionSettings() {
                   disabled={busy}
                   onClick={() => {
                     setError(null)
-                    setFeedback("")
                     setApprovalsOpen(true)
                   }}
                 >
@@ -242,7 +240,6 @@ export function PermissionSettings() {
             open={approvalsOpen}
             onOpenChange={setApprovalsOpen}
             error={error}
-            feedback={feedback}
             onRevoke={revoke}
           />
         </>
@@ -257,11 +254,7 @@ export function PermissionSettings() {
           重新读取
         </Button>
       )}
-      {feedback && !approvalsOpen ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {feedback}
-        </p>
-      ) : null}
+
       <AlertDialog
         open={confirmation !== null}
         onOpenChange={(open) => {
