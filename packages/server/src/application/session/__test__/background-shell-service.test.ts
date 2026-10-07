@@ -120,7 +120,9 @@ describe("BackgroundShellService", () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-wsl-start-cwd-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
-    const binding = { kind: "wsl" as const, hostRoot: dir, executionRoot: hostPathToWslPath(dir) };
+    // The WSL workspace is simulated; local temporary files only hold durable state.
+    const hostRoot = "D:\\project";
+    const binding = { kind: "wsl" as const, hostRoot, executionRoot: hostPathToWslPath(hostRoot) };
     const executionCwd = `${binding.executionRoot}/sub`;
     const gate = new DaemonOperationGate();
     let releaseAcquire!: (value: any) => void;
@@ -138,7 +140,7 @@ describe("BackgroundShellService", () => {
     } as any, executionProjector: projector, events: { checkpoint: () => 0, publishSince: () => {} },
       getDetachedProcessSupervisor: () => manager, acquireEnvironment: () => acquired });
     try {
-      store.sessions.create({ id: "wsl-session", cwd: dir, model: "test" });
+      store.sessions.create({ id: "wsl-session", cwd: hostRoot, model: "test" });
       const input = { requestId: "same-cwd-start", sessionId: "wsl-session", command: "pwd", executionCwd,
         settings: { model: "test", sandbox: { enabled: false }, permission: { mode: "full_auto" } } as any };
       const first = service.create(input);
@@ -157,7 +159,7 @@ describe("BackgroundShellService", () => {
       const [a, b] = await Promise.all([first, retry]);
       expect(a.execution.id).toBe(b.execution.id);
       expect(launches).toBe(1);
-      expect(a.execution.cwd).toBe(dir);
+      expect(a.execution.cwd).toBe(hostRoot);
       await vi.waitFor(() => expect(manager.readOutput(a.execution.id)).toBe(executionCwd));
       await expect(service.create({ ...input, executionCwd: `${binding.executionRoot}/other` })).rejects.toMatchObject({ status: 409 });
       const barrier = gate.tryEnterBarrier({ kind: "global" }, () => true);

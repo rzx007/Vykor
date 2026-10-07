@@ -16,7 +16,7 @@ import { checkRuntimeEnvironment, validateRuntimeEnvironmentConfig } from "./run
 beforeEach(() => { run.mockReset(); run.mockImplementation(async (_file, args: string[]) => ({ stdout: args.some(arg => arg.includes("vykor-shell-ready")) ? "vykor-shell-ready" : "version" })); });
 describe("real WSL shell command validation", () => {
   it("checks POSIX command execution, not unsupported sh --version", async () => {
-    const report = await checkRuntimeEnvironment({ cwd: "D:\\project", config: { kind: "wsl", distribution: "Test" } });
+    const report = await checkRuntimeEnvironment({ cwd: process.cwd(), config: { kind: "wsl", distribution: "Test" } });
     expect(report.find(item => item.name === "Shell")).toMatchObject({ status: "ok", detail: "/bin/sh" });
     expect(run.mock.calls.some(([, args]) => args.includes("/bin/sh") && args.includes("--version"))).toBe(false);
     expect(run.mock.calls.some(([, args]) => args.includes("--distribution") && args.includes("Test") && args.includes("-lc"))).toBe(true);
