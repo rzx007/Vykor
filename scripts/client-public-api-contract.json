@@ -988,6 +988,66 @@
     {
       "name": "SessionModelUsageSummary",
       "kind": "type-export"
+    },
+    {
+      "name": "CleanupCandidate",
+      "kind": "type-export"
+    },
+    {
+      "name": "CleanupPreview",
+      "kind": "type-export"
+    },
+    {
+      "name": "CleanupResult",
+      "kind": "type-export"
+    },
+    {
+      "name": "ClearMemoryInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "MaintenanceBackupManifest",
+      "kind": "type-export"
+    },
+    {
+      "name": "MemoryRevision",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageCategory",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageReport",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageRetentionPolicy",
+      "kind": "type-export"
+    },
+    {
+      "name": "UpdateMemoryEntryInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageFilter",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsagePrice",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageReport",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageRequest",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageSettings",
+      "kind": "type-export"
     }
   ]
 }
