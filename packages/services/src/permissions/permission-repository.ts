@@ -7,6 +7,7 @@ import type {
   ReplyPermissionInput,
 } from "@vykor/protocol";
 
+import { atomicWrite } from "../database/atomic-write.js";
 import type { PermissionRepositoryOptions } from "./permission-records.js";
 
 export class PermissionRepository {
@@ -36,6 +37,7 @@ export class PermissionRepository {
         createdAt: timestamp,
         updatedAt: timestamp,
       };
+      this.options.storage.rollback?.capture(this.options.storage.state.permissions, id);
       this.options.storage.state.permissions[id] = request;
       this.options.storage.mutations.permissions.add(id);
       this.emit("permission.asked", request);
@@ -96,10 +98,11 @@ export class PermissionRepository {
     if (request.status !== "pending") {
       throw new Error(`Permission request already resolved: ${input.requestId}`);
     }
+    this.options.storage.rollback?.capture(this.options.storage.state.permissions, request.id);
     request.status = input.status;
     if (input.decision !== undefined) request.decision = input.decision;
     if (input.clientId !== undefined) request.decidedByClientId = input.clientId;
-    if (input.answer !== undefined) request.payload.answer = input.answer;
+    if (input.answer !== undefined) request.payload = { ...request.payload, answer: input.answer };
     request.updatedAt = Date.now();
     this.options.storage.mutations.permissions.add(request.id);
     this.emit("permission.replied", request);
@@ -107,7 +110,7 @@ export class PermissionRepository {
   }
 
   private write<T>(work: () => T): T {
-    return this.options.storage.atomic(() => {
+    return atomicWrite(this.options.storage, () => {
       this.options.storage.assertWritable();
       return work();
     });

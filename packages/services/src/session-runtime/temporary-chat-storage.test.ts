@@ -3,8 +3,55 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SessionStore } from "./store.js";
+import type { StorageContext } from "../database/storage-context.js";
+import { TransactionJournal } from "../database/transaction-journal.js";
 
 describe("temporary chat storage", () => {
+  it("restores rejected temporary deltas in both live records and memory using only the journal", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vykor-memory-journal-delta-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.sessions.create({ id: "temporary", cwd: directory, model: "m", storage: "memory" });
+      store.conversations.createMessage({ id: "message", sessionId: "temporary", role: "assistant" });
+      store.conversations.upsertMessagePart({ id: "part", sessionId: "temporary", messageId: "message", type: "text", text: "" });
+      const delta = { sessionId: "temporary", messageId: "message", partId: "part", field: "text" as const };
+      store.incrementalOutput.appendMessagePartDelta({ ...delta, delta: "accepted" });
+      const storage = (store as unknown as { storage: StorageContext }).storage;
+      const acceptedPart = structuredClone(storage.state.parts.part);
+      const acceptedMessage = structuredClone(storage.state.messages.message);
+      const acceptedSession = structuredClone(storage.state.sessions.temporary);
+      storage.rollback = new TransactionJournal();
+      store.incrementalOutput.appendMessagePartDelta({ ...delta, delta: " rejected" });
+      expect(storage.chatPersistence!.snapshot().parts.part!.text).toBe("accepted rejected");
+      storage.rollback.rollback();
+      storage.rollback = undefined;
+      expect(storage.state.parts.part).toEqual(acceptedPart);
+      expect(storage.state.messages.message).toEqual(acceptedMessage);
+      expect(storage.state.sessions.temporary).toEqual(acceptedSession);
+      expect(storage.chatPersistence!.snapshot().parts.part).toEqual(acceptedPart);
+      expect(storage.chatPersistence!.snapshot().messages.message).toEqual(acceptedMessage);
+      expect(storage.chatPersistence!.snapshot().sessions.temporary).toEqual(acceptedSession);
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("routes deleted sessions from journal history and gives a current record precedence", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vykor-memory-journal-routing-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const formal = store.sessions.create({ id: "formal", cwd: directory, model: "m" });
+      const storage = (store as unknown as { storage: StorageContext }).storage;
+      storage.state.sessions.unpersisted = { ...formal, id: "unpersisted", storage: "memory" };
+      storage.rollback = new TransactionJournal();
+      storage.rollback.capture(storage.state.sessions, "unpersisted");
+      delete storage.state.sessions.unpersisted;
+      expect(storage.chatPersistence!.isTemporary("unpersisted")).toBe(true);
+      storage.state.sessions.unpersisted = { ...formal, id: "unpersisted", storage: "sqlite" };
+      expect(storage.chatPersistence!.isTemporary("unpersisted")).toBe(false);
+      storage.rollback.rollback();
+      storage.rollback = undefined;
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("keeps retained temporary event IDs unique", () => {
     const directory = mkdtempSync(join(tmpdir(), "vykor-memory-event-id-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });

@@ -14,6 +14,7 @@ import type {
   UpsertMessagePartInput,
 } from "@vykor/protocol";
 
+import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   type DurableEventRegistry,
@@ -71,65 +72,70 @@ export class ConversationRepository {
       type: input.type,
       schemaVersion: prepared.schemaVersion,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-      payload: prepared.payload,
+      payload: structuredClone(prepared.payload),
       createdAt: now(),
     };
     if (retain) {
+      this.storage.rollback?.captureEvents(this.storage.state);
       this.storage.state.events.push(event);
       this.storage.mutations.events.add(event.id);
     }
-    return event;
+    return retain ? structuredClone(event) : event;
   }
 
   appendEvent(input: AppendEventInput): SessionEventRecord {
-    if (input.sessionId) assertSession(this.storage.state, input.sessionId);
-    const event = this.appendEventInMemory(input);
-    this.saveChanges?.();
-    return clone(event);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      if (input.sessionId) assertSession(this.storage.state, input.sessionId);
+      const event = this.appendEventInMemory(input);
+      return clone(event);
+    }, this.saveChanges);
   }
 
   createMessage(input: CreateMessageInput): SessionMessageRecord {
-    const session = assertSession(this.storage.state, input.sessionId);
-    const run = input.runId ? this.storage.state.runs[input.runId] : undefined;
-    const prompt = input.inputId ? this.storage.state.inputs[input.inputId] : undefined;
-    if (run && run.sessionId !== session.id) throw new Error(`Session run ${run.id} does not belong to session ${session.id}`);
-    if (prompt && prompt.sessionId !== session.id) throw new Error(`Session input ${prompt.id} does not belong to session ${session.id}`);
-    const id = input.id ?? randomUUID();
-    if (this.storage.state.messages[id])
-      throw new Error(`Session message already exists: ${id}`);
-    const timestamp = now();
-    const row: SessionMessageRecord = {
-      id,
-      sessionId: input.sessionId,
-      seq: maxSeq(this.storage.state.messages, input.sessionId) + 1,
-      role: input.role,
-      ...(input.runId ? { runId: input.runId } : {}),
-      ...(input.inputId ? { inputId: input.inputId } : {}),
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.storage.state.messages[id] = row;
-    session.updatedAt = timestamp;
-    this.storage.mutations.messages.add(id);
-    this.storage.mutations.sessions.add(input.sessionId);
-    this.appendEventInMemory({
-      type: "session.message.created",
-      sessionId: input.sessionId,
-      payload: { message: row },
-    });
-    this.saveChanges?.();
-    return clone(row);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const session = assertSession(this.storage.state, input.sessionId);
+      const run = input.runId ? this.storage.state.runs[input.runId] : undefined;
+      const prompt = input.inputId ? this.storage.state.inputs[input.inputId] : undefined;
+      if (run && run.sessionId !== session.id) throw new Error(`Session run ${run.id} does not belong to session ${session.id}`);
+      if (prompt && prompt.sessionId !== session.id) throw new Error(`Session input ${prompt.id} does not belong to session ${session.id}`);
+      const id = input.id ?? randomUUID();
+      if (this.storage.state.messages[id])
+        throw new Error(`Session message already exists: ${id}`);
+      const timestamp = now();
+      const row: SessionMessageRecord = {
+        id,
+        sessionId: input.sessionId,
+        seq: maxSeq(this.storage.state.messages, input.sessionId) + 1,
+        role: input.role,
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.inputId ? { inputId: input.inputId } : {}),
+        metadata: input.metadata ?? {},
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.storage.rollback?.capture(this.storage.state.messages, id);
+      this.storage.state.messages[id] = row;
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
+      session.updatedAt = timestamp;
+      this.storage.mutations.messages.add(id);
+      this.storage.mutations.sessions.add(input.sessionId);
+      this.appendEventInMemory({
+        type: "session.message.created",
+        sessionId: input.sessionId,
+        payload: { message: row },
+      });
+      return clone(row);
+    }, this.saveChanges);
   }
 
   upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord {
-    if (input.assetId || (input.id && this.storage.state.parts[input.id]?.assetId)) {
-      return this.storage.atomic(() => this.upsertMessagePartWork(input));
-    }
-    return this.upsertMessagePartWork(input);
+    return atomicWrite(this.storage, () => this.upsertMessagePartWork(input), this.saveChanges);
   }
 
   private upsertMessagePartWork(input: UpsertMessagePartInput): SessionMessagePartRecord {
+    this.storage.assertWritable();
     const session = assertSession(this.storage.state, input.sessionId);
     const message = assertMessage(this.storage.state, input.messageId);
     if (message.sessionId !== input.sessionId) {
@@ -224,8 +230,11 @@ export class ConversationRepository {
         };
 
     if (row.assetId) this.recordAttachmentSource?.(row.assetId, session.id);
+    this.storage.rollback?.capture(this.storage.state.parts, id);
     this.storage.state.parts[id] = row;
+    this.storage.rollback?.capture(this.storage.state.messages, message.id);
     message.updatedAt = timestamp;
+    this.storage.rollback?.capture(this.storage.state.sessions, session.id);
     session.updatedAt = timestamp;
     this.storage.mutations.parts.add(id);
     this.storage.mutations.messages.add(message.id);
@@ -235,7 +244,6 @@ export class ConversationRepository {
       sessionId: input.sessionId,
       payload: { part: clone(row) },
     });
-    this.saveChanges?.();
     return clone(row);
   }
 
@@ -331,7 +339,7 @@ export class ConversationRepository {
           event.sessionId === options.sessionId,
       );
     }
-    events = events.sort((a, b) => a.seq - b.seq);
+    events = [...events].sort((a, b) => a.seq - b.seq);
     if (options.limit !== undefined) events = events.slice(0, options.limit);
     return clone(events);
   }

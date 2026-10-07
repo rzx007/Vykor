@@ -6,6 +6,7 @@ import {
 } from "./mutation-buffer.js";
 import type { StorageContext } from "./storage-context.js";
 import { assertSynchronousCommit } from "./chat-persistence.js";
+import { TransactionJournal } from "./transaction-journal.js";
 
 export interface TransactionCoordinatorHooks {
   beforeFlush?: () => void;
@@ -76,15 +77,15 @@ export class TransactionCoordinator {
       }
     }
 
-    const previousState = structuredClone(this.storage.state);
-    const previousMemory = this.storage.chatPersistence?.snapshot();
-    const previousControls = this.storage.temporaryControls?.snapshot();
-    const previousTransactionState = this.storage.transactionState;
-    this.storage.transactionState = previousState;
+    this.storage.assertWritable();
     const previousDeltaCheckpoint = this.storage.deltaCheckpoint.snapshot();
     const previousEventSequence = this.storage.eventSequence.snapshot();
     const previousMutations = cloneMutationBuffer(this.storage.mutations);
     const previousSaveRequested = this.saveRequested;
+    const previousJournal = this.storage.rollback;
+    const journal = new TransactionJournal();
+    journal.captureEvents(this.storage.state);
+    this.storage.rollback = journal;
 
     this.depth = 1;
     this.saveRequested = false;
@@ -92,7 +93,6 @@ export class TransactionCoordinator {
     this.rollbackCallbacks = [];
 
     let persisted = false;
-    let completed = false;
 
     let result: T;
     try {
@@ -113,43 +113,44 @@ export class TransactionCoordinator {
         return value;
       })();
     } catch (error) {
-      Object.assign(this.storage.state, previousState);
-      if (previousMemory) this.storage.chatPersistence?.restore(previousMemory);
-      if (previousControls)
-        this.storage.temporaryControls?.restore(previousControls);
-      this.storage.transactionState = previousTransactionState;
-      this.storage.eventSequence.restore(previousEventSequence);
-      this.storage.deltaCheckpoint.restore(previousDeltaCheckpoint);
-      restoreMutationBuffer(this.storage.mutations, previousMutations);
+      this.storage.rollback = previousJournal;
       this.saveRequested = previousSaveRequested;
       this.deferredCallbacks = [];
       this.depth = 0;
+      const callbacks = this.rollbackCallbacks;
+      this.rollbackCallbacks = [];
       const rollbackErrors: unknown[] = [];
-      for (const callback of this.rollbackCallbacks.reverse()) {
+      for (const restore of [
+        () => journal.rollback(),
+        () => this.storage.eventSequence.restore(previousEventSequence),
+        () => this.storage.deltaCheckpoint.restore(previousDeltaCheckpoint),
+        () => restoreMutationBuffer(this.storage.mutations, previousMutations),
+        ...callbacks.reverse(),
+      ]) {
         try {
-          callback();
+          restore();
         } catch (rollbackError) {
           rollbackErrors.push(rollbackError);
         }
-      }
-      this.rollbackCallbacks = [];
-      if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
-        this.storage.deltaCheckpoint.schedule();
       }
       if (rollbackErrors.length)
         throw new AggregateError(
           [error, ...rollbackErrors],
           "Transaction rollback failed",
+          { cause: error },
         );
       throw error;
     }
 
+    this.storage.rollback = previousJournal;
+    journal.clear();
+    this.depth = 0;
+    this.saveRequested = previousSaveRequested;
+    this.rollbackCallbacks = [];
     if (persisted) {
       this.storage.deltaCheckpoint.clear();
       clearMutationBuffer(this.storage.mutations);
     }
-    completed = true;
-    this.rollbackCallbacks = [];
 
     try {
       const callbacks = this.deferredCallbacks;
@@ -157,11 +158,8 @@ export class TransactionCoordinator {
       for (const callback of callbacks) callback();
       return result;
     } finally {
-      this.depth = 0;
-      this.storage.transactionState = previousTransactionState;
-      this.saveRequested = previousSaveRequested;
       if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
-        if (completed && this.storage.deltaCheckpoint.reachedThreshold()) {
+        if (this.storage.deltaCheckpoint.reachedThreshold()) {
           this.flushDeltasFn?.();
         } else {
           this.storage.deltaCheckpoint.schedule();

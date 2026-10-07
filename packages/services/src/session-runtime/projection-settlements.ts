@@ -63,6 +63,7 @@ export function createProjectionSettlement(
     if (!temporaryControls) {
       throw new Error("Temporary control records not initialized");
     }
+    temporaryControls.capture(temporaryControls.settlements, id);
     temporaryControls.settlements.set(id, row);
     return projectionSettlementFromRow(row);
   }
@@ -126,6 +127,7 @@ export function markProjectionSettlementRetrying(
   const temporaryRow = temporaryControls?.settlements.get(id);
   if (temporaryRow) {
     if (temporaryRow.status === "pending" || temporaryRow.status === "retrying") {
+      temporaryControls!.capture(temporaryControls!.settlements, id);
       temporaryControls!.settlements.set(id, {
         ...temporaryRow,
         status: "retrying",
@@ -175,6 +177,7 @@ export function failProjectionSettlement(
   const temporaryRow = temporaryControls?.settlements.get(id);
   if (temporaryRow) {
     if (temporaryRow.status !== "resolved" && temporaryRow.status !== "abandoned") {
+      temporaryControls!.capture(temporaryControls!.settlements, id);
       temporaryControls!.settlements.set(id, { ...temporaryRow, ...changes });
     }
     return getProjectionSettlement(database, id, temporaryControls)!;
@@ -209,6 +212,7 @@ export function resolveProjectionSettlement(
   const temporaryRow = temporaryControls?.settlements.get(id);
   if (temporaryRow) {
     if (temporaryRow.status !== "abandoned") {
+      temporaryControls!.capture(temporaryControls!.settlements, id);
       temporaryControls!.settlements.set(id, {
         ...temporaryRow,
         ...changes,
@@ -246,6 +250,7 @@ export function abandonProjectionSettlement(
   const temporaryRow = temporaryControls?.settlements.get(id);
   if (temporaryRow) {
     if (temporaryRow.status !== "resolved") {
+      temporaryControls!.capture(temporaryControls!.settlements, id);
       temporaryControls!.settlements.set(id, { ...temporaryRow, ...changes });
     }
     return getProjectionSettlement(database, id, temporaryControls)!;

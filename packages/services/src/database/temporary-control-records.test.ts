@@ -17,6 +17,7 @@ import {
 import { SessionStore } from "../session-runtime/store.js";
 import type { StorageContext } from "./storage-context.js";
 import { TemporaryControlRecords } from "./temporary-control-records.js";
+import { TransactionJournal } from "./transaction-journal.js";
 
 function withTemporaryRepository(
   test: (repository: GoalRepository, storage: StorageContext, store: SessionStore) => void,
@@ -45,6 +46,73 @@ const settlementInput = {
 };
 
 describe("temporary control records", () => {
+  const goalWrites: Array<[string, (repository: GoalRepository) => void]> = [
+    ["insert goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, status: "completed" }); repository.insertGoal({ id: "added", sessionId: "temporary", objective: "next", maxAutoTurns: 2 }); }],
+    ["revise goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, objective: "changed" }); }],
+    ["begin request", (repository) => { repository.beginRequest({ requestId: "added", sessionId: "temporary", fingerprint: "new" }); }],
+    ["settle request", (repository) => { repository.settleRequest("request", { status: "completed", result: { value: "changed" } }); }],
+    ["upsert assessment", (repository) => { repository.recordAssessment({ goalId: "goal", revision: 0, runId: "run", assessment: { verifiedSignatures: ["changed"] } }); }],
+    ["record continuation", (repository) => { repository.recordContinuation({ goalId: "goal", revision: 0, previousRunId: "other", inputId: "input", runId: "next" }); }],
+    ["mark continuation", (repository) => { repository.markContinuation("run", "dispatched"); }],
+    ["cancel continuations", (repository) => { repository.cancelPendingContinuations(); }],
+    ["clear current run", (repository) => { repository.clearCurrentRun("goal"); }],
+    ["bind current run", (repository) => { repository.bindCurrentRun("goal", 0, "next", true); }],
+  ];
+
+  function seedControls(repository: GoalRepository, storage: StorageContext): void {
+    repository.insertGoal({ id: "goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
+    repository.bindCurrentRun("goal", 0, "run", false);
+    repository.beginRequest({ requestId: "request", sessionId: "temporary", fingerprint: "same" });
+    repository.recordAssessment({ goalId: "goal", revision: 0, runId: "run", assessment: { verifiedSignatures: ["saved"] } });
+    repository.recordContinuation({ goalId: "goal", revision: 0, previousRunId: "previous", inputId: "input", runId: "run" });
+    createProjectionSettlement(storage.database.orm, settlementInput, storage.temporaryControls, "memory");
+  }
+
+  it.each(goalWrites)("restores journaled %s without a control snapshot restore", (_name, write) => {
+    withTemporaryRepository((repository, storage) => {
+      seedControls(repository, storage);
+      const original = storage.temporaryControls!.snapshot();
+      storage.rollback = new TransactionJournal();
+      write(repository);
+      storage.rollback.rollback();
+      storage.rollback = undefined;
+      expect(storage.temporaryControls!.snapshot()).toEqual(original);
+    });
+  });
+
+  const settlementWrites: Array<[string, (storage: StorageContext) => void]> = [
+    ["create", (storage) => { createProjectionSettlement(storage.database.orm, { ...settlementInput, id: "added", eventSequence: 3 }, storage.temporaryControls, "memory"); }],
+    ["retry", (storage) => { markProjectionSettlementRetrying(storage.database.orm, settlementInput.id, storage.temporaryControls); }],
+    ["fail", (storage) => { failProjectionSettlement(storage.database.orm, settlementInput.id, "failed", 123, storage.temporaryControls); }],
+    ["resolve", (storage) => { resolveProjectionSettlement(storage.database.orm, settlementInput.id, storage.temporaryControls); }],
+    ["abandon", (storage) => { abandonProjectionSettlement(storage.database.orm, settlementInput.id, "abandoned", storage.temporaryControls); }],
+  ];
+
+  it.each(settlementWrites)("restores a journaled settlement %s without a control snapshot restore", (_name, write) => {
+    withTemporaryRepository((repository, storage) => {
+      seedControls(repository, storage);
+      const original = storage.temporaryControls!.snapshot();
+      storage.rollback = new TransactionJournal();
+      write(storage);
+      storage.rollback.rollback();
+      storage.rollback = undefined;
+      expect(storage.temporaryControls!.snapshot()).toEqual(original);
+    });
+  });
+
+  it("restores all five control maps after deletion and recreation of the same goal key", () => {
+    withTemporaryRepository((repository, storage) => {
+      seedControls(repository, storage);
+      const original = storage.temporaryControls!.snapshot();
+      storage.rollback = new TransactionJournal();
+      storage.temporaryControls!.deleteSession("temporary");
+      repository.insertGoal({ id: "goal", sessionId: "temporary", objective: "recreated", maxAutoTurns: 1 });
+      storage.rollback.rollback();
+      storage.rollback = undefined;
+      expect(storage.temporaryControls!.snapshot()).toEqual(original);
+    });
+  });
+
   it("routes the public goal and settlement operations by the actual session storage", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-temporary-control-integration-"));
     const path = join(directory, "sessions.db");

@@ -108,7 +108,9 @@ describe("ProjectRepository mutations", () => {
         if (timing === "before owner check") takeOver();
         else storage.assertWritable = () => {
           assertWritable();
-          takeOver();
+          // Inject only after SQLite established the transaction's read snapshot;
+          // the coordinator also checks ownership before opening the transaction.
+          if (storage.database.connection.inTransaction) takeOver();
         };
 
         expect(() => write(first, project.id, projectPath)).toThrow(

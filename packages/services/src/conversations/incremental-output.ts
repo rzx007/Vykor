@@ -27,6 +27,7 @@ export class IncrementalOutput {
         previousStatus: run.status,
       },
     });
+    storage.rollback?.capture(storage.state.runs, run.id);
     run.metadata = { ...run.metadata, toolGeneration };
     run.updatedAt = updatedAt;
     return event;
@@ -43,6 +44,9 @@ export class IncrementalOutput {
     }
     const event = this.options.appendTransientEvent({ type: "session.message.part.delta", sessionId: input.sessionId, payload: { ...input } });
     const timestamp = now();
+    storage.rollback?.capture(storage.state.parts, part.id);
+    storage.rollback?.capture(storage.state.messages, message.id);
+    storage.rollback?.capture(storage.state.sessions, session.id);
     part.text = `${part.text ?? ""}${input.delta}`;
     part.updatedAt = timestamp;
     message.updatedAt = timestamp;

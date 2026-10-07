@@ -5,6 +5,7 @@ import type {
   sessionGoalRequests,
   sessionGoals,
 } from "../session-runtime/schema.js";
+import type { TransactionJournal } from "./transaction-journal.js";
 
 export interface TemporaryControlSnapshot {
   goals: Map<string, typeof sessionGoals.$inferSelect>;
@@ -21,6 +22,12 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
   readonly assessments: TemporaryControlSnapshot["assessments"] = new Map();
   readonly continuations: TemporaryControlSnapshot["continuations"] = new Map();
   readonly settlements: TemporaryControlSnapshot["settlements"] = new Map();
+
+  constructor(private readonly journal?: () => TransactionJournal | undefined) {}
+
+  capture<K, V>(map: Map<K, V>, key: K): void {
+    this.journal?.()?.captureMap(map, key);
+  }
 
   snapshot(): TemporaryControlSnapshot {
     return structuredClone({
@@ -47,18 +54,33 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
         .filter((row) => row.sessionId === sessionId)
         .map((row) => row.id),
     );
-    for (const id of goalIds) this.goals.delete(id);
+    for (const id of goalIds) {
+      this.capture(this.goals, id);
+      this.goals.delete(id);
+    }
     for (const [id, row] of this.requests) {
-      if (row.sessionId === sessionId) this.requests.delete(id);
+      if (row.sessionId === sessionId) {
+        this.capture(this.requests, id);
+        this.requests.delete(id);
+      }
     }
     for (const [id, row] of this.assessments) {
-      if (goalIds.has(row.goalId)) this.assessments.delete(id);
+      if (goalIds.has(row.goalId)) {
+        this.capture(this.assessments, id);
+        this.assessments.delete(id);
+      }
     }
     for (const [id, row] of this.continuations) {
-      if (goalIds.has(row.goalId)) this.continuations.delete(id);
+      if (goalIds.has(row.goalId)) {
+        this.capture(this.continuations, id);
+        this.continuations.delete(id);
+      }
     }
     for (const [id, row] of this.settlements) {
-      if (row.rootSessionId === sessionId) this.settlements.delete(id);
+      if (row.rootSessionId === sessionId) {
+        this.capture(this.settlements, id);
+        this.settlements.delete(id);
+      }
     }
   }
 }

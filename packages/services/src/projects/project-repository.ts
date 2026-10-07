@@ -205,6 +205,7 @@ export class ProjectRepository {
         if (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative)) continue;
         const cwd = resolve(path, cwdRelative);
         if (session.cwd === cwd) continue;
+        this.storage.rollback?.capture(this.storage.state.sessions, session.id);
         session.cwd = cwd;
         session.cwdRelative = cwdRelative;
         session.updatedAt = timestamp;

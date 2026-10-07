@@ -305,6 +305,7 @@ export class ConversationTransactions {
         metadata,
         createdAt: timestamp,
       };
+      this.storage.rollback?.capture(this.storage.state.inputs, id);
       this.storage.state.inputs[id] = row;
       this.storage.mutations.inputs.add(id);
       this.testHooks?.afterInputWrite?.();
@@ -312,10 +313,12 @@ export class ConversationTransactions {
       for (let i = 0; i < attachments.length; i++) {
         this.testHooks?.duringAttachmentReference?.(i);
         const reference = attachments[i]!;
+        this.storage.rollback?.capture(this.storage.state.inputAttachments, reference.id);
         this.storage.state.inputAttachments[reference.id] = reference;
         this.storage.mutations.inputAttachments.add(reference.id);
       }
 
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
       session.updatedAt = timestamp;
       if (seq === 1 && isPlaceholderSessionTitle(session.title)) {
         const title = formatSessionTitle(content);
@@ -429,12 +432,14 @@ export class ConversationTransactions {
 
       for (const [id, message] of Object.entries(this.storage.state.messages)) {
         if (message.sessionId !== input.sessionId) continue;
+        this.storage.rollback?.capture(this.storage.state.messages, id);
         delete this.storage.state.messages[id];
         this.storage.mutations.messages.delete(id);
         this.storage.mutations.deletedMessages.add(id);
       }
       for (const [id, part] of Object.entries(this.storage.state.parts)) {
         if (part.sessionId !== input.sessionId) continue;
+        this.storage.rollback?.capture(this.storage.state.parts, id);
         delete this.storage.state.parts[id];
         this.storage.mutations.parts.delete(id);
         this.storage.mutations.deletedParts.add(id);
@@ -456,6 +461,7 @@ export class ConversationTransactions {
           createdAt: timestamp,
           updatedAt: timestamp,
         };
+        this.storage.rollback?.capture(this.storage.state.messages, messageId);
         this.storage.state.messages[messageId] = message;
         this.storage.mutations.messages.add(messageId);
         messages.push(message);
@@ -490,12 +496,14 @@ export class ConversationTransactions {
             updatedAt: timestamp,
           };
           if (part.assetId) this.options.recordAttachmentSource?.(part.assetId, input.sessionId);
+          this.storage.rollback?.capture(this.storage.state.parts, partId);
           this.storage.state.parts[partId] = part;
           this.storage.mutations.parts.add(partId);
           parts.push(part);
         }
       }
 
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
       session.updatedAt = timestamp;
       this.storage.mutations.sessions.add(input.sessionId);
       this.conversations.appendEventInMemory({
@@ -566,34 +574,40 @@ export class ConversationTransactions {
 
       for (const [id, part] of Object.entries(this.storage.state.parts)) {
         if (!removedMessageIds.has(part.messageId)) continue;
+        this.storage.rollback?.capture(this.storage.state.parts, id);
         delete this.storage.state.parts[id];
         this.storage.mutations.parts.delete(id);
         this.storage.mutations.deletedParts.add(id);
         this.storage.deltaCheckpoint.delete(id);
       }
       for (const message of removedMessages) {
+        this.storage.rollback?.capture(this.storage.state.messages, message.id);
         delete this.storage.state.messages[message.id];
         this.storage.mutations.messages.delete(message.id);
         this.storage.mutations.deletedMessages.add(message.id);
       }
       for (const [id, reference] of Object.entries(this.storage.state.inputAttachments)) {
         if (!removedInputIds.has(reference.inputId)) continue;
+        this.storage.rollback?.capture(this.storage.state.inputAttachments, id);
         delete this.storage.state.inputAttachments[id];
         this.storage.mutations.inputAttachments.delete(id);
         this.storage.mutations.deletedInputAttachments.add(id);
       }
       for (const [id, attempt] of Object.entries(this.storage.state.attempts)) {
         if (!removedRunIds.has(attempt.runId)) continue;
+        this.storage.rollback?.capture(this.storage.state.attempts, id);
         delete this.storage.state.attempts[id];
         this.storage.mutations.attempts.delete(id);
         this.storage.mutations.deletedAttempts.add(id);
       }
       for (const run of removedRuns) {
+        this.storage.rollback?.capture(this.storage.state.runs, run.id);
         delete this.storage.state.runs[run.id];
         this.storage.mutations.runs.delete(run.id);
         this.storage.mutations.deletedRuns.add(run.id);
       }
       for (const candidate of removedInputs) {
+        this.storage.rollback?.capture(this.storage.state.inputs, candidate.id);
         delete this.storage.state.inputs[candidate.id];
         this.storage.mutations.inputs.delete(candidate.id);
         this.storage.mutations.deletedInputs.add(candidate.id);
@@ -621,6 +635,7 @@ export class ConversationTransactions {
     const hasActiveRun = Object.values(this.storage.state.runs).some(
       (run) => run.sessionId === session.id && (run.status === "pending" || run.status === "running"),
     );
+    this.storage.rollback?.capture(this.storage.state.sessions, session.id);
     session.status = hasActiveRun ? "running" : "idle";
   }
 

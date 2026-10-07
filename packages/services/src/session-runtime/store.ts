@@ -274,7 +274,7 @@ export class SessionStore {
         hooks: options.transactionHooks,
       });
       this.storage.chatPersistence = new ChatPersistenceRouter(this.storage);
-      this.storage.temporaryControls = new TemporaryControlRecords();
+      this.storage.temporaryControls = new TemporaryControlRecords(() => this.storage.rollback);
       this.projects = new ProjectRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.notes = new NoteRepository(this.storage);
@@ -760,12 +760,6 @@ export class SessionStore {
     session.status = hasActiveRun ? "running" : "idle";
   }
 
-  private load(): SessionState {
-    const state = new SqliteChatPersistence(this.databaseKernel).load(this.eventRegistry);
-    this.eventSequence = DurableEventSequence.load(this.orm, state);
-    return state;
-  }
-
   private get databaseKernel(): SessionDatabase {
     return this.storage.database;
   }
@@ -782,24 +776,12 @@ export class SessionStore {
     return this.storage.state;
   }
 
-  private set state(value: SessionState) {
-    this.storage.state = value;
-  }
-
   private get mutations(): MutationBuffer {
     return this.storage.mutations;
   }
 
-  private set mutations(value: MutationBuffer) {
-    this.storage.mutations = value;
-  }
-
   private get eventSequence(): DurableEventSequence {
     return this.storage.eventSequence;
-  }
-
-  private set eventSequence(value: DurableEventSequence) {
-    this.storage.eventSequence = value;
   }
 
   private get deltaCheckpoint(): DeltaCheckpoint {
@@ -815,17 +797,9 @@ export class SessionStore {
     }
     // The preceding event save may already have committed all pending changes.
     if (!hasPendingMutations(this.mutations) && this.deltaCheckpoint.dirtyPartIds().length === 0) return;
-    try {
-      this.coordinator.atomic(() => {
-        this.coordinator.requestSave();
-      });
-    } catch (error) {
-      this.state = this.load();
-      this.storage.chatPersistence?.restoreTemporaryState(this.state);
-      this.deltaCheckpoint.clear();
-      this.mutations = createMutationBuffer();
-      throw error;
-    }
+    this.coordinator.atomic(() => {
+      this.coordinator.requestSave();
+    });
   }
 
   private assertCurrentOwner(): void {

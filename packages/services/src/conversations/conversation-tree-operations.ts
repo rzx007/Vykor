@@ -138,30 +138,35 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
     assertSynchronousCommit(context.storage.chatPersistence.deleteSessions(sessionIds));
 
     for (const id of sessionIds) {
+      context.storage.rollback?.capture(context.storage.state.sessions, id);
       delete context.storage.state.sessions[id];
       context.storage.mutations.sessions.delete(id);
     }
     context.testHooks?.duringDeleteMemory?.();
     for (const [id, row] of Object.entries(context.storage.state.inputs)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.inputs, id);
       delete context.storage.state.inputs[id];
       context.storage.mutations.inputs.delete(id);
       context.storage.mutations.deletedInputs.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.inputAttachments)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.inputAttachments, id);
       delete context.storage.state.inputAttachments[id];
       context.storage.mutations.inputAttachments.delete(id);
       context.storage.mutations.deletedInputAttachments.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.messages)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.messages, id);
       delete context.storage.state.messages[id];
       context.storage.mutations.messages.delete(id);
       context.storage.mutations.deletedMessages.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.parts)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.parts, id);
       delete context.storage.state.parts[id];
       context.storage.mutations.parts.delete(id);
       context.storage.mutations.deletedParts.delete(id);
@@ -169,23 +174,27 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
     }
     for (const [id, row] of Object.entries(context.storage.state.runs)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.runs, id);
       delete context.storage.state.runs[id];
       context.storage.mutations.runs.delete(id);
       context.storage.mutations.deletedRuns.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.attempts)) {
       if (!runIds.has(row.runId)) continue;
+      context.storage.rollback?.capture(context.storage.state.attempts, id);
       delete context.storage.state.attempts[id];
       context.storage.mutations.attempts.delete(id);
       context.storage.mutations.deletedAttempts.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.tasks)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.tasks, id);
       delete context.storage.state.tasks[id];
       context.storage.mutations.tasks.delete(id);
     }
     for (const [id, row] of Object.entries(context.storage.state.permissions)) {
       if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.permissions, id);
       delete context.storage.state.permissions[id];
       context.storage.mutations.permissions.delete(id);
     }
@@ -194,6 +203,7 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
         .filter((event) => event.sessionId && sessionIdSet.has(event.sessionId))
         .map(({ id }) => id),
     );
+    context.storage.rollback?.captureEvents(context.storage.state);
     context.storage.state.events = context.storage.state.events.filter(
       (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
     );

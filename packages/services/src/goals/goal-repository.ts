@@ -102,6 +102,7 @@ export class GoalRepository {
       if (this.getCurrentGoal(input.sessionId)) {
         throw new Error(`Session already has an open goal: ${input.sessionId}`);
       }
+      this.temporaryRecords().capture(this.temporaryRecords().goals, id);
       this.temporaryRecords().goals.set(id, row);
       return this.getGoal(id)!;
     }
@@ -178,6 +179,7 @@ export class GoalRepository {
       ) {
         throw new Error(`Session already has an open goal: ${current.sessionId}`);
       }
+      this.temporaryRecords().capture(this.temporaryRecords().goals, id);
       this.temporaryRecords().goals.set(id, { ...temporaryRow, ...changes });
       return this.getGoal(id)!;
     }
@@ -231,6 +233,7 @@ export class GoalRepository {
       updatedAt: timestamp,
     };
     if (this.isTemporary(input.sessionId)) {
+      this.temporaryRecords().capture(this.temporaryRecords().requests, input.requestId);
       this.temporaryRecords().requests.set(input.requestId, row);
       return this.getRequest(input.requestId)!;
     }
@@ -259,6 +262,7 @@ export class GoalRepository {
     };
     const temporaryRow = this.temporary?.requests.get(requestId);
     if (temporaryRow) {
+      this.temporaryRecords().capture(this.temporaryRecords().requests, requestId);
       this.temporaryRecords().requests.set(requestId, { ...temporaryRow, ...changes });
       return this.getRequest(requestId)!;
     }
@@ -293,6 +297,7 @@ export class GoalRepository {
         row.goalId === input.goalId &&
         row.revision === input.revision && row.runId === input.runId,
       );
+      records.capture(records.assessments, existing?.id ?? row.id);
       records.assessments.set(
         existing?.id ?? row.id,
         existing ? { ...existing, assessmentJson } : row,
@@ -355,6 +360,7 @@ export class GoalRepository {
         row.goalId === input.goalId &&
         row.revision === input.revision && row.previousRunId === input.previousRunId,
       )) return false;
+      records.capture(records.continuations, row.id);
       records.continuations.set(row.id, row);
       return true;
     }
@@ -378,6 +384,7 @@ export class GoalRepository {
     let updatedTemporary = false;
     for (const [id, row] of records ?? []) {
       if (row.runId === runId) {
+        this.temporary!.capture(records!, id);
         records!.set(id, { ...row, status, updatedAt: Date.now() });
         updatedTemporary = true;
       }
@@ -422,6 +429,7 @@ export class GoalRepository {
     const records = this.temporary?.continuations;
     for (const [id, row] of records ?? []) {
       if (row.status === "pending") {
+        this.temporary!.capture(records!, id);
         records!.set(id, { ...row, status: "cancelled", updatedAt: Date.now() });
       }
     }
@@ -445,6 +453,7 @@ export class GoalRepository {
   clearCurrentRun(id: string): void {
     const temporaryRow = this.temporary?.goals.get(id);
     if (temporaryRow) {
+      this.temporary!.capture(this.temporary!.goals, id);
       this.temporary!.goals.set(id, { ...temporaryRow, currentRunId: null, updatedAt: Date.now() });
       return;
     }
@@ -464,6 +473,7 @@ export class GoalRepository {
     const temporaryRow = this.temporary?.goals.get(goalId);
     if (temporaryRow) {
       if (temporaryRow.revision === revision) {
+        this.temporary!.capture(this.temporary!.goals, goalId);
         this.temporary!.goals.set(goalId, {
           ...temporaryRow,
           currentRunId: runId,

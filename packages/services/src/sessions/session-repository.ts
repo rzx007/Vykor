@@ -11,6 +11,7 @@ import type {
   UpdateSessionInput,
 } from "@vykor/protocol";
 
+import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   assertMutableSession,
@@ -50,109 +51,121 @@ export class SessionRepository {
   }
 
   create(input: CreateSessionInput): SessionRecord {
-    const id = input.id ?? randomUUID();
-    if (this.storage.state.sessions[id])
-      throw new Error(`Session already exists: ${id}`);
-    const timestamp = now();
-    const parent = input.parentId ? this.storage.state.sessions[input.parentId] : undefined;
-    if (parent?.storage === "memory" && input.storage === "sqlite") {
-      throw new Error("A temporary chat cannot own a persistent child chat");
-    }
-    const storage = input.storage ?? parent?.storage ?? "sqlite";
-    const projectId =
-      input.projectId ??
-      (input.parentId
-        ? this.storage.state.sessions[input.parentId]?.projectId
-        : undefined);
-    const project = projectId
-      ? this.projects?.get(projectId)
-      : this.projects?.inspect(input.cwd);
-    if (!project) throw new Error(`Project not found: ${projectId}`);
-    const cwd = resolve(input.cwd);
-    const cwdRelative = relative(project.path, cwd);
-    if (!input.parentId && (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative))) {
-      throw new Error("Session cwd must be within the project directory");
-    }
-    const session: SessionRecord = {
-      id,
-      ...(input.parentId ? { parentId: input.parentId } : {}),
-      projectId: project.id,
-      cwd,
-      cwdRelative,
-      title: input.title ?? "",
-      model: input.model,
-      ...(input.agent ? { agent: input.agent } : {}),
-      status: "idle",
-      ...(storage === "memory" ? { storage: "memory" as const } : {}),
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.storage.state.sessions[id] = session;
-    this.storage.mutations.sessions.add(id);
-    this.appendEvent?.({
-      type: "session.created",
-      sessionId: id,
-      payload: { session },
-    });
-    this.saveChanges?.();
-    return clone(session);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const id = input.id ?? randomUUID();
+      if (this.storage.state.sessions[id])
+        throw new Error(`Session already exists: ${id}`);
+      const timestamp = now();
+      const parent = input.parentId ? this.storage.state.sessions[input.parentId] : undefined;
+      if (parent?.storage === "memory" && input.storage === "sqlite") {
+        throw new Error("A temporary chat cannot own a persistent child chat");
+      }
+      const storage = input.storage ?? parent?.storage ?? "sqlite";
+      const projectId =
+        input.projectId ??
+        (input.parentId
+          ? this.storage.state.sessions[input.parentId]?.projectId
+          : undefined);
+      const project = projectId
+        ? this.projects?.get(projectId)
+        : this.projects?.inspect(input.cwd);
+      if (!project) throw new Error(`Project not found: ${projectId}`);
+      const cwd = resolve(input.cwd);
+      const cwdRelative = relative(project.path, cwd);
+      if (!input.parentId && (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative))) {
+        throw new Error("Session cwd must be within the project directory");
+      }
+      const session: SessionRecord = {
+        id,
+        ...(input.parentId ? { parentId: input.parentId } : {}),
+        projectId: project.id,
+        cwd,
+        cwdRelative,
+        title: input.title ?? "",
+        model: input.model,
+        ...(input.agent ? { agent: input.agent } : {}),
+        status: "idle",
+        ...(storage === "memory" ? { storage: "memory" as const } : {}),
+        metadata: input.metadata ?? {},
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.storage.rollback?.capture(this.storage.state.sessions, id);
+      this.storage.state.sessions[id] = session;
+      this.storage.mutations.sessions.add(id);
+      this.appendEvent?.({
+        type: "session.created",
+        sessionId: id,
+        payload: { session },
+      });
+      return clone(session);
+    }, this.saveChanges);
   }
 
   update(sessionId: string, input: UpdateSessionInput): SessionRecord {
-    const session = assertSession(this.storage.state, sessionId);
-    assertMutableSession(session);
-    const timestamp = now();
-    if (input.title !== undefined) session.title = input.title;
-    if (input.model !== undefined) session.model = input.model;
-    if (input.agent !== undefined) {
-      if (input.agent === null) delete session.agent;
-      else session.agent = input.agent;
-    }
-    if (input.metadata !== undefined) session.metadata = input.metadata;
-    session.updatedAt = timestamp;
-    this.storage.mutations.sessions.add(sessionId);
-    this.appendEvent?.({
-      type: "session.updated",
-      sessionId,
-      payload: { session: clone(session) },
-    });
-    this.saveChanges?.();
-    return clone(session);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const session = assertSession(this.storage.state, sessionId);
+      assertMutableSession(session);
+      const timestamp = now();
+      this.storage.rollback?.capture(this.storage.state.sessions, sessionId);
+      if (input.title !== undefined) session.title = input.title;
+      if (input.model !== undefined) session.model = input.model;
+      if (input.agent !== undefined) {
+        if (input.agent === null) delete session.agent;
+        else session.agent = input.agent;
+      }
+      if (input.metadata !== undefined) session.metadata = input.metadata;
+      session.updatedAt = timestamp;
+      this.storage.mutations.sessions.add(sessionId);
+      this.appendEvent?.({
+        type: "session.updated",
+        sessionId,
+        payload: { session: clone(session) },
+      });
+      return clone(session);
+    }, this.saveChanges);
   }
 
   beginArchive(sessionId: string): SessionRecord {
     const session = assertSession(this.storage.state, sessionId);
     if (session.status === "archived" || session.status === "closing")
       return clone(session);
-    const timestamp = now();
-    session.status = "closing";
-    session.updatedAt = timestamp;
-    this.storage.mutations.sessions.add(sessionId);
-    this.appendEvent?.({
-      type: "session.closing",
-      sessionId,
-      payload: { sessionId },
-    });
-    this.saveChanges?.();
-    return clone(session);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const timestamp = now();
+      this.storage.rollback?.capture(this.storage.state.sessions, sessionId);
+      session.status = "closing";
+      session.updatedAt = timestamp;
+      this.storage.mutations.sessions.add(sessionId);
+      this.appendEvent?.({
+        type: "session.closing",
+        sessionId,
+        payload: { sessionId },
+      });
+      return clone(session);
+    }, this.saveChanges);
   }
 
   archive(sessionId: string): SessionRecord {
     const session = assertSession(this.storage.state, sessionId);
     if (session.status === "archived") return clone(session);
-    const timestamp = now();
-    session.status = "archived";
-    session.updatedAt = timestamp;
-    session.archivedAt = timestamp;
-    this.storage.mutations.sessions.add(sessionId);
-    this.appendEvent?.({
-      type: "session.archived",
-      sessionId,
-      payload: { sessionId },
-    });
-    this.saveChanges?.();
-    return clone(session);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const timestamp = now();
+      this.storage.rollback?.capture(this.storage.state.sessions, sessionId);
+      session.status = "archived";
+      session.updatedAt = timestamp;
+      session.archivedAt = timestamp;
+      this.storage.mutations.sessions.add(sessionId);
+      this.appendEvent?.({
+        type: "session.archived",
+        sessionId,
+        payload: { sessionId },
+      });
+      return clone(session);
+    }, this.saveChanges);
   }
 
   get(sessionId: string): SessionRecord | undefined {

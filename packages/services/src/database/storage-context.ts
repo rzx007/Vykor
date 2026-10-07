@@ -6,6 +6,7 @@ import type { SessionDatabase } from "./session-database.js";
 import type { TransactionCoordinator } from "./transaction-coordinator.js";
 import type { ChatStoragePersistence } from "./chat-persistence.js";
 import type { TemporaryControlRecords } from "./temporary-control-records.js";
+import type { TransactionJournal } from "./transaction-journal.js";
 
 export interface StorageContext {
   database: SessionDatabase;
@@ -16,7 +17,7 @@ export interface StorageContext {
   coordinator?: TransactionCoordinator;
   chatPersistence?: ChatStoragePersistence;
   temporaryControls?: TemporaryControlRecords;
-  transactionState?: SessionState;
+  rollback?: TransactionJournal;
   atomic<T>(work: () => T): T;
   deferUntilCommit?(callback: () => void): void;
   assertWritable(): void;

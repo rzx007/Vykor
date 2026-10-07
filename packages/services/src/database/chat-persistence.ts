@@ -4,6 +4,7 @@ import { createMutationBuffer, type MutationBuffer } from "./mutation-buffer.js"
 import type { StorageContext } from "./storage-context.js";
 import { SqliteChatPersistence } from "./sqlite-chat-persistence.js";
 import type { DurableEventRegistry } from "../session-runtime/event-registry.js";
+import type { TransactionJournal } from "./transaction-journal.js";
 
 const tables = ["sessions", "inputs", "inputAttachments", "messages", "parts", "runs", "attempts", "tasks", "permissions"] as const;
 type ChatTable = typeof tables[number];
@@ -43,6 +44,8 @@ export interface ChatStoragePersistence {
 export class MemoryChatPersistence implements ChatPersistence {
   private records = emptyState();
 
+  constructor(private readonly journal?: () => TransactionJournal | undefined) {}
+
   snapshot(): SessionState { return structuredClone(this.records); }
   load(): SessionState { return this.snapshot(); }
   restore(snapshot: SessionState): void { this.records = structuredClone(snapshot); }
@@ -53,19 +56,27 @@ export class MemoryChatPersistence implements ChatPersistence {
       const target = this.records[table] as Record<string, unknown>;
       for (const id of changes[table]) {
         const value = state[table][id];
-        if (value) target[id] = structuredClone(value);
+        if (value) {
+          this.journal?.()?.capture(target, id);
+          target[id] = structuredClone(value);
+        }
       }
     }
     for (const [mutation, table] of Object.entries(deletions)) {
-      for (const id of changes[mutation as keyof typeof deletions]) delete this.records[table][id];
+      for (const id of changes[mutation as keyof typeof deletions]) {
+        this.journal?.()?.capture(this.records[table], id);
+        delete this.records[table][id];
+      }
     }
     const eventIds = new Set(this.records.events.map((event) => event.id));
     for (const event of state.events) {
       if (!changes.events.has(event.id)) continue;
       if (eventIds.has(event.id)) throw new Error(`Session event already exists: ${event.id}`);
+      this.journal?.()?.captureEvents(this.records);
       this.records.events.push(structuredClone(event));
       eventIds.add(event.id);
     }
+    this.journal?.()?.capture(this.records, "nextEventSeq");
     this.records.nextEventSeq = state.nextEventSeq;
   }
 
@@ -73,11 +84,18 @@ export class MemoryChatPersistence implements ChatPersistence {
     for (const id of partIds) {
       const part = state.parts[id];
       if (!part) continue;
+      this.journal?.()?.capture(this.records.parts, id);
       this.records.parts[id] = structuredClone(part);
       const message = state.messages[part.messageId];
       const session = state.sessions[part.sessionId];
-      if (message) this.records.messages[message.id] = structuredClone(message);
-      if (session) this.records.sessions[session.id] = structuredClone(session);
+      if (message) {
+        this.journal?.()?.capture(this.records.messages, message.id);
+        this.records.messages[message.id] = structuredClone(message);
+      }
+      if (session) {
+        this.journal?.()?.capture(this.records.sessions, session.id);
+        this.records.sessions[session.id] = structuredClone(session);
+      }
     }
   }
 
@@ -88,19 +106,22 @@ export class MemoryChatPersistence implements ChatPersistence {
       for (const [id, value] of Object.entries(this.records[table])) {
         const row = value as { id: string; sessionId?: string; runId?: string };
         if ((table === "sessions" && ids.has(id)) || (row.sessionId && ids.has(row.sessionId)) || (table === "attempts" && row.runId && runs.has(row.runId))) {
+          this.journal?.()?.capture(this.records[table], id);
           delete this.records[table][id];
         }
       }
     }
+    this.journal?.()?.captureEvents(this.records);
     this.records.events = this.records.events.filter((row) => !row.sessionId || !ids.has(row.sessionId));
   }
 }
 
 export class ChatPersistenceRouter implements ChatStoragePersistence {
-  readonly memory = new MemoryChatPersistence();
+  readonly memory: MemoryChatPersistence;
   private readonly sqlite: ChatPersistence;
 
   constructor(private readonly storage: StorageContext) {
+    this.memory = new MemoryChatPersistence(() => this.storage.rollback);
     this.sqlite = new SqliteChatPersistence(storage.database);
   }
 
@@ -108,17 +129,20 @@ export class ChatPersistenceRouter implements ChatStoragePersistence {
   restore(snapshot: SessionState): void { this.memory.restore(snapshot); }
 
   isTemporary(sessionId: string): boolean {
-    const session = this.storage.state.sessions[sessionId] ?? this.storage.transactionState?.sessions[sessionId];
+    const session = this.storage.state.sessions[sessionId]
+      ?? this.storage.rollback?.previous(this.storage.state.sessions, sessionId);
     return session?.storage === "memory" || this.memory.owns("sessions", sessionId);
   }
 
   private rowIsTemporary(table: ChatTable, id: string): boolean {
-    const row = (this.storage.state[table][id] ?? this.storage.transactionState?.[table][id]) as
+    const row = (this.storage.state[table][id]
+      ?? this.storage.rollback?.previous(this.storage.state[table], id)) as
       { sessionId?: string; runId?: string } | undefined;
     if (table === "sessions") return this.isTemporary(id);
     if (row?.sessionId) return this.isTemporary(row.sessionId);
     if (row?.runId) {
-      const run = this.storage.state.runs[row.runId] ?? this.storage.transactionState?.runs[row.runId];
+      const run = this.storage.state.runs[row.runId]
+        ?? this.storage.rollback?.previous(this.storage.state.runs, row.runId);
       if (run) return this.isTemporary(run.sessionId);
     }
     return this.memory.owns(table, id);

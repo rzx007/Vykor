@@ -16,6 +16,7 @@ import type {
   UpdateSessionTaskInput,
 } from "@vykor/protocol";
 
+import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   assertMutableSession,
@@ -54,168 +55,183 @@ export class RunRepository {
         run.sessionId === session.id &&
         (run.status === "pending" || run.status === "running"),
     );
+    this.storage.rollback?.capture(this.storage.state.sessions, session.id);
     session.status = hasActiveRun ? "running" : "idle";
   }
 
   createRun(input: CreateRunInput): SessionRunRecord {
-    const session = assertSession(this.storage.state, input.sessionId);
-    assertMutableSession(session);
-    if (input.inputId && !this.storage.state.inputs[input.inputId]) {
-      throw new Error(`Session input not found: ${input.inputId}`);
-    }
-    if (
-      input.inputId &&
-      this.storage.state.inputs[input.inputId]!.sessionId !== input.sessionId
-    ) {
-      throw new Error(
-        `Session input does not belong to session: ${input.inputId}`,
-      );
-    }
-    const id = input.id ?? randomUUID();
-    if (this.storage.state.runs[id])
-      throw new Error(`Session run already exists: ${id}`);
-    const timestamp = now();
-    const run: SessionRunRecord = {
-      id,
-      sessionId: input.sessionId,
-      ...(input.inputId ? { inputId: input.inputId } : {}),
-      status: "pending",
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.storage.state.runs[id] = run;
-    this.refreshSessionStatus(session);
-    session.updatedAt = timestamp;
-    this.storage.mutations.runs.add(id);
-    this.storage.mutations.sessions.add(session.id);
-    this.appendEvent?.({
-      type: "session.run.created",
-      sessionId: input.sessionId,
-      payload: { run },
-    });
-    this.saveChanges?.();
-    return clone(run);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const session = assertSession(this.storage.state, input.sessionId);
+      assertMutableSession(session);
+      if (input.inputId && !this.storage.state.inputs[input.inputId]) {
+        throw new Error(`Session input not found: ${input.inputId}`);
+      }
+      if (
+        input.inputId &&
+        this.storage.state.inputs[input.inputId]!.sessionId !== input.sessionId
+      ) {
+        throw new Error(
+          `Session input does not belong to session: ${input.inputId}`,
+        );
+      }
+      const id = input.id ?? randomUUID();
+      if (this.storage.state.runs[id])
+        throw new Error(`Session run already exists: ${id}`);
+      const timestamp = now();
+      const run: SessionRunRecord = {
+        id,
+        sessionId: input.sessionId,
+        ...(input.inputId ? { inputId: input.inputId } : {}),
+        status: "pending",
+        metadata: input.metadata ?? {},
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.storage.rollback?.capture(this.storage.state.runs, id);
+      this.storage.state.runs[id] = run;
+      this.refreshSessionStatus(session);
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
+      session.updatedAt = timestamp;
+      this.storage.mutations.runs.add(id);
+      this.storage.mutations.sessions.add(session.id);
+      this.appendEvent?.({
+        type: "session.run.created",
+        sessionId: input.sessionId,
+        payload: { run },
+      });
+      return clone(run);
+    }, this.saveChanges);
   }
 
   updateRun(runId: string, input: UpdateRunInput): SessionRunRecord {
-    const run = this.storage.state.runs[runId];
-    if (!run) throw new Error(`Session run not found: ${runId}`);
-    const session = assertSession(this.storage.state, run.sessionId);
-    const timestamp = now();
-    const previous = run.status;
-    if (input.status) {
-      if (isTerminalRunStatus(previous) && input.status !== previous) {
-        throw new Error(`Session run is already terminal: ${runId}`);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const run = this.storage.state.runs[runId];
+      if (!run) throw new Error(`Session run not found: ${runId}`);
+      const session = assertSession(this.storage.state, run.sessionId);
+      const timestamp = now();
+      this.storage.rollback?.capture(this.storage.state.runs, runId);
+      const previous = run.status;
+      if (input.status) {
+        if (isTerminalRunStatus(previous) && input.status !== previous) {
+          throw new Error(`Session run is already terminal: ${runId}`);
+        }
+        run.status = input.status;
+        if (input.status === "running" && previous !== "running") {
+          run.startedAt = timestamp;
+          delete run.finishedAt;
+          delete run.error;
+        }
+        if (["completed", "failed", "interrupted"].includes(input.status))
+          run.finishedAt ??= timestamp;
       }
-      run.status = input.status;
-      if (input.status === "running" && previous !== "running") {
-        run.startedAt = timestamp;
-        delete run.finishedAt;
-        delete run.error;
-      }
-      if (["completed", "failed", "interrupted"].includes(input.status))
-        run.finishedAt ??= timestamp;
-    }
-    if (input.error !== undefined) run.error = input.error;
-    if (input.metadata) run.metadata = { ...run.metadata, ...input.metadata };
-    run.updatedAt = timestamp;
-    this.refreshSessionStatus(session);
-    session.updatedAt = timestamp;
-    this.storage.mutations.runs.add(runId);
-    this.storage.mutations.sessions.add(session.id);
-    this.appendEvent?.({
-      type: "session.run.updated",
-      sessionId: run.sessionId,
-      payload: { run, previousStatus: previous },
-    });
-    this.saveChanges?.();
-    return clone(run);
+      if (input.error !== undefined) run.error = input.error;
+      if (input.metadata) run.metadata = { ...run.metadata, ...input.metadata };
+      run.updatedAt = timestamp;
+      this.refreshSessionStatus(session);
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
+      session.updatedAt = timestamp;
+      this.storage.mutations.runs.add(runId);
+      this.storage.mutations.sessions.add(session.id);
+      this.appendEvent?.({
+        type: "session.run.updated",
+        sessionId: run.sessionId,
+        payload: { run, previousStatus: previous },
+      });
+      return clone(run);
+    }, this.saveChanges);
   }
 
   createRunAttempt(input: CreateRunAttemptInput): SessionRunAttemptRecord {
-    const run = this.storage.state.runs[input.runId];
-    if (!run) throw new Error(`Session run not found: ${input.runId}`);
-    if (isTerminalRunStatus(run.status))
-      throw new Error(`Session run is already terminal: ${input.runId}`);
-    const attempts = Object.values(this.storage.state.attempts).filter(
-      (attempt) => attempt.runId === input.runId,
-    );
-    const sequence =
-      input.sequence ??
-      attempts.reduce((max, attempt) => Math.max(max, attempt.sequence), 0) + 1;
-    if (attempts.some((attempt) => attempt.sequence === sequence)) {
-      throw new Error(
-        `Session run attempt sequence already exists: ${input.runId}/${sequence}`,
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const run = this.storage.state.runs[input.runId];
+      if (!run) throw new Error(`Session run not found: ${input.runId}`);
+      if (isTerminalRunStatus(run.status))
+        throw new Error(`Session run is already terminal: ${input.runId}`);
+      const attempts = Object.values(this.storage.state.attempts).filter(
+        (attempt) => attempt.runId === input.runId,
       );
-    }
-    const id = input.id ?? `attempt_${randomUUID()}`;
-    if (this.storage.state.attempts[id])
-      throw new Error(`Session run attempt already exists: ${id}`);
-    const timestamp = now();
-    const attempt: SessionRunAttemptRecord = {
-      id,
-      runId: input.runId,
-      sequence,
-      status: "pending",
-      ...(input.provider ? { provider: input.provider } : {}),
-      ...(input.model ? { model: input.model } : {}),
-      ...(input.retryReason ? { retryReason: input.retryReason } : {}),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.storage.state.attempts[id] = attempt;
-    this.storage.mutations.attempts.add(id);
-    this.appendEvent?.({
-      type: "session.run_attempt.created",
-      sessionId: run.sessionId,
-      payload: { attempt },
-    });
-    this.saveChanges?.();
-    return clone(attempt);
+      const sequence =
+        input.sequence ??
+        attempts.reduce((max, attempt) => Math.max(max, attempt.sequence), 0) + 1;
+      if (attempts.some((attempt) => attempt.sequence === sequence)) {
+        throw new Error(
+          `Session run attempt sequence already exists: ${input.runId}/${sequence}`,
+        );
+      }
+      const id = input.id ?? `attempt_${randomUUID()}`;
+      if (this.storage.state.attempts[id])
+        throw new Error(`Session run attempt already exists: ${id}`);
+      const timestamp = now();
+      const attempt: SessionRunAttemptRecord = {
+        id,
+        runId: input.runId,
+        sequence,
+        status: "pending",
+        ...(input.provider ? { provider: input.provider } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.retryReason ? { retryReason: input.retryReason } : {}),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.storage.rollback?.capture(this.storage.state.attempts, id);
+      this.storage.state.attempts[id] = attempt;
+      this.storage.mutations.attempts.add(id);
+      this.appendEvent?.({
+        type: "session.run_attempt.created",
+        sessionId: run.sessionId,
+        payload: { attempt },
+      });
+      return clone(attempt);
+    }, this.saveChanges);
   }
 
   updateRunAttempt(
     attemptId: string,
     input: UpdateRunAttemptInput,
   ): SessionRunAttemptRecord {
-    const attempt = this.storage.state.attempts[attemptId];
-    if (!attempt)
-      throw new Error(`Session run attempt not found: ${attemptId}`);
-    const run = this.storage.state.runs[attempt.runId];
-    if (!run) throw new Error(`Session run not found: ${attempt.runId}`);
-    const previous = attempt.status;
-    const timestamp = now();
-    if (input.status) {
-      if (isTerminalAttemptStatus(previous) && input.status !== previous) {
-        throw new Error(
-          `Session run attempt is already terminal: ${attemptId}`,
-        );
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const attempt = this.storage.state.attempts[attemptId];
+      if (!attempt)
+        throw new Error(`Session run attempt not found: ${attemptId}`);
+      const run = this.storage.state.runs[attempt.runId];
+      if (!run) throw new Error(`Session run not found: ${attempt.runId}`);
+      this.storage.rollback?.capture(this.storage.state.attempts, attemptId);
+      const previous = attempt.status;
+      const timestamp = now();
+      if (input.status) {
+        if (isTerminalAttemptStatus(previous) && input.status !== previous) {
+          throw new Error(
+            `Session run attempt is already terminal: ${attemptId}`,
+          );
+        }
+        attempt.status = input.status;
+        if (input.status === "running" && previous !== "running") {
+          attempt.startedAt = timestamp;
+          delete attempt.finishedAt;
+          delete attempt.error;
+          delete attempt.errorKind;
+        }
+        if (isTerminalAttemptStatus(input.status)) attempt.finishedAt = timestamp;
       }
-      attempt.status = input.status;
-      if (input.status === "running" && previous !== "running") {
-        attempt.startedAt = timestamp;
-        delete attempt.finishedAt;
-        delete attempt.error;
-        delete attempt.errorKind;
-      }
-      if (isTerminalAttemptStatus(input.status)) attempt.finishedAt = timestamp;
-    }
-    if (input.errorKind !== undefined) attempt.errorKind = input.errorKind;
-    if (input.error !== undefined) attempt.error = input.error;
-    if (input.inputTokens !== undefined)
-      attempt.inputTokens = input.inputTokens;
-    if (input.outputTokens !== undefined)
-      attempt.outputTokens = input.outputTokens;
-    attempt.updatedAt = timestamp;
-    this.storage.mutations.attempts.add(attemptId);
-    this.appendEvent?.({
-      type: "session.run_attempt.updated",
-      sessionId: run.sessionId,
-      payload: { attempt, previousStatus: previous },
-    });
-    this.saveChanges?.();
-    return clone(attempt);
+      if (input.errorKind !== undefined) attempt.errorKind = input.errorKind;
+      if (input.error !== undefined) attempt.error = input.error;
+      if (input.inputTokens !== undefined)
+        attempt.inputTokens = input.inputTokens;
+      if (input.outputTokens !== undefined)
+        attempt.outputTokens = input.outputTokens;
+      attempt.updatedAt = timestamp;
+      this.storage.mutations.attempts.add(attemptId);
+      this.appendEvent?.({
+        type: "session.run_attempt.updated",
+        sessionId: run.sessionId,
+        payload: { attempt, previousStatus: previous },
+      });
+      return clone(attempt);
+    }, this.saveChanges);
   }
 
   getRun(runId: string): SessionRunRecord | undefined {
@@ -310,80 +326,84 @@ export class RunRepository {
   }
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
-    const session = assertSession(this.storage.state, input.sessionId);
-    if (
-      (input.requestNamespace === undefined) !==
-      (input.requestId === undefined)
-    ) {
-      throw new Error(
-        "Session task requestNamespace and requestId must be provided together",
-      );
-    }
-    if (input.requestNamespace && input.requestId) {
-      const existing = Object.values(this.storage.state.tasks).find(
-        (task) =>
-          task.sessionId === input.sessionId &&
-          task.requestNamespace === input.requestNamespace &&
-          task.requestId === input.requestId,
-      );
-      if (existing)
-        throw new Error(`Session task request already exists: ${existing.id}`);
-    }
-    const id = input.id ?? randomUUID();
-    if (this.storage.state.tasks[id])
-      throw new Error(`Session task already exists: ${id}`);
-    if (input.childSessionId) {
-      const child = assertSession(this.storage.state, input.childSessionId);
-      if (child.parentId !== input.sessionId) {
-        throw new Error(
-          `Child session does not belong to task session: ${input.childSessionId}`,
-        );
-      }
-    }
-    if (input.runId) {
-      const run = this.storage.state.runs[input.runId];
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const session = assertSession(this.storage.state, input.sessionId);
       if (
-        !run ||
-        (run.sessionId !== input.childSessionId &&
-          run.sessionId !== input.sessionId)
+        (input.requestNamespace === undefined) !==
+        (input.requestId === undefined)
       ) {
         throw new Error(
-          `Task run does not belong to task session: ${input.runId}`,
+          "Session task requestNamespace and requestId must be provided together",
         );
       }
-    }
-    const timestamp = now();
-    const task: SessionExecutionRecord = {
-      id,
-      sessionId: input.sessionId,
-      ...(input.requestNamespace
-        ? { requestNamespace: input.requestNamespace }
-        : {}),
-      ...(input.requestId ? { requestId: input.requestId } : {}),
-      ...(input.childSessionId ? { childSessionId: input.childSessionId } : {}),
-      ...(input.runId ? { runId: input.runId } : {}),
-      type: input.type,
-      status: input.status ?? "running",
-      description: input.description,
-      cwd: resolve(input.cwd),
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      ...((input.status ?? "running") === "running"
-        ? { startedAt: timestamp }
-        : {}),
-      updatedAt: timestamp,
-    };
-    this.storage.state.tasks[id] = task;
-    session.updatedAt = timestamp;
-    this.storage.mutations.tasks.add(id);
-    this.storage.mutations.sessions.add(session.id);
-    this.appendEvent?.({
-      type: "session.task.created",
-      sessionId: task.sessionId,
-      payload: { task },
-    });
-    this.saveChanges?.();
-    return clone(task);
+      if (input.requestNamespace && input.requestId) {
+        const existing = Object.values(this.storage.state.tasks).find(
+          (task) =>
+            task.sessionId === input.sessionId &&
+            task.requestNamespace === input.requestNamespace &&
+            task.requestId === input.requestId,
+        );
+        if (existing)
+          throw new Error(`Session task request already exists: ${existing.id}`);
+      }
+      const id = input.id ?? randomUUID();
+      if (this.storage.state.tasks[id])
+        throw new Error(`Session task already exists: ${id}`);
+      if (input.childSessionId) {
+        const child = assertSession(this.storage.state, input.childSessionId);
+        if (child.parentId !== input.sessionId) {
+          throw new Error(
+            `Child session does not belong to task session: ${input.childSessionId}`,
+          );
+        }
+      }
+      if (input.runId) {
+        const run = this.storage.state.runs[input.runId];
+        if (
+          !run ||
+          (run.sessionId !== input.childSessionId &&
+            run.sessionId !== input.sessionId)
+        ) {
+          throw new Error(
+            `Task run does not belong to task session: ${input.runId}`,
+          );
+        }
+      }
+      const timestamp = now();
+      const task: SessionExecutionRecord = {
+        id,
+        sessionId: input.sessionId,
+        ...(input.requestNamespace
+          ? { requestNamespace: input.requestNamespace }
+          : {}),
+        ...(input.requestId ? { requestId: input.requestId } : {}),
+        ...(input.childSessionId ? { childSessionId: input.childSessionId } : {}),
+        ...(input.runId ? { runId: input.runId } : {}),
+        type: input.type,
+        status: input.status ?? "running",
+        description: input.description,
+        cwd: resolve(input.cwd),
+        metadata: input.metadata ?? {},
+        createdAt: timestamp,
+        ...((input.status ?? "running") === "running"
+          ? { startedAt: timestamp }
+          : {}),
+        updatedAt: timestamp,
+      };
+      this.storage.rollback?.capture(this.storage.state.tasks, id);
+      this.storage.state.tasks[id] = task;
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
+      session.updatedAt = timestamp;
+      this.storage.mutations.tasks.add(id);
+      this.storage.mutations.sessions.add(session.id);
+      this.appendEvent?.({
+        type: "session.task.created",
+        sessionId: task.sessionId,
+        payload: { task },
+      });
+      return clone(task);
+    }, this.saveChanges);
   }
 
   /** Atomically reserves one durable task for a producer request. */
@@ -407,10 +427,10 @@ export class RunRepository {
   }
 
   /**
-   * Confirms or fails an admitted task only while it is still pending.
-   * The check and update are synchronous so a concurrent stop cannot be
-   * overwritten by a stale process-start result.
-   */
+    * Confirms or fails an admitted task only while it is still pending.
+    * The check and update are synchronous so a concurrent stop cannot be
+    * overwritten by a stale process-start result.
+    */
   transitionPendingSessionTask(
     taskId: string,
     input: UpdateSessionTaskInput,
@@ -427,52 +447,56 @@ export class RunRepository {
     taskId: string,
     input: UpdateSessionTaskInput,
   ): SessionExecutionRecord {
-    const task = this.storage.state.tasks[taskId];
-    if (!task) throw new Error(`Session task not found: ${taskId}`);
-    const session = assertSession(this.storage.state, task.sessionId);
-    if (input.runId !== undefined) {
-      const run = this.storage.state.runs[input.runId];
-      if (
-        !run ||
-        (run.sessionId !== task.sessionId &&
-          run.sessionId !== task.childSessionId)
-      ) {
-        throw new Error(`Task run does not belong to task: ${input.runId}`);
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const task = this.storage.state.tasks[taskId];
+      if (!task) throw new Error(`Session task not found: ${taskId}`);
+      const session = assertSession(this.storage.state, task.sessionId);
+      this.storage.rollback?.capture(this.storage.state.tasks, taskId);
+      if (input.runId !== undefined) {
+        const run = this.storage.state.runs[input.runId];
+        if (
+          !run ||
+          (run.sessionId !== task.sessionId &&
+            run.sessionId !== task.childSessionId)
+        ) {
+          throw new Error(`Task run does not belong to task: ${input.runId}`);
+        }
+        task.runId = input.runId;
       }
-      task.runId = input.runId;
-    }
-    const timestamp = now();
-    // Waiters compare updatedAt against the value they last observed. Two
-    // updates inside the same millisecond must still be distinguishable, so
-    // the cursor is strictly monotonic per task.
-    const updatedAt = Math.max(timestamp, task.updatedAt + 1);
-    const previousStatus = task.status;
-    if (input.status) {
-      task.status = input.status;
-      if (input.status === "running" && previousStatus !== "running") {
-        task.startedAt = timestamp;
-        delete task.finishedAt;
-        delete task.output;
-        delete task.error;
+      const timestamp = now();
+      // Waiters compare updatedAt against the value they last observed. Two
+      // updates inside the same millisecond must still be distinguishable, so
+      // the cursor is strictly monotonic per task.
+      const updatedAt = Math.max(timestamp, task.updatedAt + 1);
+      const previousStatus = task.status;
+      if (input.status) {
+        task.status = input.status;
+        if (input.status === "running" && previousStatus !== "running") {
+          task.startedAt = timestamp;
+          delete task.finishedAt;
+          delete task.output;
+          delete task.error;
+        }
+        if (
+          ["completed", "failed", "stopped", "interrupted"].includes(input.status)
+        )
+          task.finishedAt ??= timestamp;
       }
-      if (
-        ["completed", "failed", "stopped", "interrupted"].includes(input.status)
-      )
-        task.finishedAt ??= timestamp;
-    }
-    if (input.output !== undefined) task.output = input.output;
-    if (input.error !== undefined) task.error = input.error;
-    if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
-    task.updatedAt = updatedAt;
-    session.updatedAt = timestamp;
-    this.storage.mutations.tasks.add(taskId);
-    this.storage.mutations.sessions.add(session.id);
-    this.appendEvent?.({
-      type: "session.task.updated",
-      sessionId: task.sessionId,
-      payload: { task, previousStatus },
-    });
-    this.saveChanges?.();
-    return clone(task);
+      if (input.output !== undefined) task.output = input.output;
+      if (input.error !== undefined) task.error = input.error;
+      if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
+      task.updatedAt = updatedAt;
+      this.storage.rollback?.capture(this.storage.state.sessions, session.id);
+      session.updatedAt = timestamp;
+      this.storage.mutations.tasks.add(taskId);
+      this.storage.mutations.sessions.add(session.id);
+      this.appendEvent?.({
+        type: "session.task.updated",
+        sessionId: task.sessionId,
+        payload: { task, previousStatus },
+      });
+      return clone(task);
+    }, this.saveChanges);
   }
 }

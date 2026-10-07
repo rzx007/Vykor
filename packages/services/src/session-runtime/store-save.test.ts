@@ -22,14 +22,14 @@ function withStore(test: (store: SessionStore, storage: StorageContext, path: st
 }
 
 describe("SessionStore saves", () => {
-  it.each(["session", "run"] as const)("persists a standalone %s update with only one full-state backup", (kind) => {
+  it.each(["session", "run"] as const)("persists a standalone %s update without a full-state backup", (kind) => {
     withStore((store, storage, path) => {
       store.runs.createRun({ id: "run", sessionId: "session" });
       const clone = vi.spyOn(globalThis, "structuredClone");
       try {
         if (kind === "session") store.sessions.update("session", { title: "updated title" });
         else store.runs.updateRun("run", { status: "running" });
-        expect(clone.mock.calls.filter(([value]) => value === storage.state)).toHaveLength(1);
+        expect(clone.mock.calls.filter(([value]) => value === storage.state)).toHaveLength(0);
       } finally {
         clone.mockRestore();
       }
