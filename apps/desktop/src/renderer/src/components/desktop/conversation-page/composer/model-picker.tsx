@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router"
 import { ChevronDown, Search, Settings2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -219,6 +220,7 @@ export function ModelPicker({
   modelLabel: string
   onSelectModel: (model: DesktopModel) => void
 }): React.JSX.Element {
+  const navigate = useNavigate()
   const [query, setQuery] = useState("")
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
   const [dialogQuery, setDialogQuery] = useState("")
@@ -333,10 +335,14 @@ export function ModelPicker({
           </ScrollArea>
           <div className="mt-1 pt-1">
             <Separator className="mb-1" />
-            <PickerMenuItem disabled title="模型管理将在后续版本接入" onClick={() => undefined}>
+            <PickerMenuItem
+              onClick={() => {
+                onOpenChange(false)
+                void navigate({ to: "/settings/$section", params: { section: "providers" } })
+              }}
+            >
               <Settings2 />
               <span>模型管理</span>
-              <span className="text-ui-caption ml-auto text-muted-foreground">即将支持</span>
             </PickerMenuItem>
           </div>
         </PopoverContent>
