@@ -147,6 +147,31 @@ export function Sidebar({
     const session = sessions.find((item) => item.id === activeSessionId)
     return session ? normalizePath(session.cwd) : null
   }, [activeSessionId, sessions])
+  const runningSessionIds = useMemo(
+    () =>
+      new Set(
+        sessions
+          .filter(
+            (session) =>
+              activity.sessions[session.id]?.executionState === "running" ||
+              (!activity.sessions[session.id] && session.status === "running")
+          )
+          .map((session) => session.id)
+      ),
+    [activity.sessions, sessions]
+  )
+  const runningProject = projects.some((project) =>
+    sessions.some(
+      (session) =>
+        session.projectId === project.id &&
+        !isChannelSession(session) &&
+        runningSessionIds.has(session.id)
+    )
+  )
+  const runningIm = imGroups.some((group) =>
+    group.sessions.some((session) => runningSessionIds.has(session.id))
+  )
+  const runningRecent = recentSessions.some((session) => runningSessionIds.has(session.id))
 
   const notify = (): void => {
     void window.desktop.tray.notify({
@@ -334,6 +359,7 @@ export function Sidebar({
                 title="项目"
                 expanded={sectionExpansion.projects}
                 summary={projects.length}
+                running={runningProject}
                 onToggle={() => toggleSection("projects")}
               />
               <AnimatePresence initial={false}>
@@ -361,13 +387,17 @@ export function Sidebar({
                             ? activeProjectPath === path
                             : index === 0
                           const expanded = projectExpansion[path] ?? defaultExpanded
+                          const projectSessions = sessions.filter(
+                            (session) =>
+                              samePath(session.cwd, project.path) && !isChannelSession(session)
+                          )
                           return (
                             <ProjectGroup
                               key={project.path}
                               project={project}
-                              sessions={sessions.filter(
-                                (session) =>
-                                  samePath(session.cwd, project.path) && !isChannelSession(session)
+                              sessions={projectSessions}
+                              running={projectSessions.some((session) =>
+                                runningSessionIds.has(session.id)
                               )}
                               activeSessionId={activeSessionId}
                               expanded={expanded}
@@ -394,6 +424,7 @@ export function Sidebar({
                     title="IM 会话"
                     expanded={sectionExpansion.im}
                     summary={imGroups.reduce((total, group) => total + group.sessions.length, 0)}
+                    running={runningIm}
                     onToggle={() => toggleSection("im")}
                     className="mt-4"
                   />
@@ -430,6 +461,7 @@ export function Sidebar({
                 title="最近"
                 expanded={sectionExpansion.recent}
                 summary={recentSessions.length}
+                running={runningRecent}
                 onToggle={() => toggleSection("recent")}
                 actionLabel="新建最近会话"
                 onAction={beginRecentNewConversation}

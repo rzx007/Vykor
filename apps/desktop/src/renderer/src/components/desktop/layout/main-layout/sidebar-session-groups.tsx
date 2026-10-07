@@ -163,6 +163,7 @@ export function ProjectGroup({
   sessions,
   activeSessionId,
   expanded,
+  running,
   onToggle,
   projectActions,
   actions,
@@ -171,6 +172,7 @@ export function ProjectGroup({
   sessions: DesktopSessionRecord[]
   activeSessionId: string | null
   expanded: boolean
+  running: boolean
   onToggle: () => void
   projectActions: ProjectActions
   actions: SessionActions
@@ -203,8 +205,20 @@ export function ProjectGroup({
               <FolderClosed className="size-3.75 shrink-0 text-sidebar-muted" strokeWidth={1.7} />
             )}
             <span className="truncate">{project.name}</span>
+            {!expanded && running ? (
+              <Spinner
+                role="img"
+                aria-label={`${project.name}，有会话正在运行`}
+                className="ml-auto size-3 motion-reduce:animate-none"
+              />
+            ) : null}
             {!expanded && sessions.length > 0 ? (
-              <span className={cn("text-ui-caption shrink-0 text-sidebar-muted", project.pinnedAt ? "" : "ml-auto")}>
+              <span
+                className={cn(
+                  "text-ui-caption shrink-0 text-sidebar-muted",
+                  !running && !project.pinnedAt && "ml-auto"
+                )}
+              >
                 {sessions.length}
               </span>
             ) : null}
@@ -214,7 +228,12 @@ export function ProjectGroup({
               </span>
             ) : null}
             {project.pinnedAt ? (
-              <Pin className="ml-auto size-3 shrink-0 text-sidebar-muted" />
+              <Pin
+                className={cn(
+                  "size-3 shrink-0 text-sidebar-muted",
+                  !running && sessions.length === 0 && "ml-auto"
+                )}
+              />
             ) : null}
           </button>
           <DropdownMenuTrigger

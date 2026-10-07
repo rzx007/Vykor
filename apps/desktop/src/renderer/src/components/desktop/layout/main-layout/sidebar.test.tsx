@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { createActivityState } from "@renderer/stores/desktop-session/activity-state"
+import type { DesktopSessionRecord } from "@shared/session-types"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "./sidebar-section-expansion"
 import { Sidebar } from "./sidebar"
 import { SessionRow } from "./sidebar-session-groups"
@@ -315,6 +316,88 @@ describe("Sidebar collapsible sections and empty states", () => {
     await act(async () => projectRow.click())
     expect(projectRow.getAttribute("aria-label")).toContain("1 个对话")
     expect(projectRow.textContent).toContain("1")
+  })
+
+  it("keeps running indicators visible when sections and project rows are collapsed", async () => {
+    const project = {
+      id: "project-1",
+      name: "项目 A",
+      path: "/workspace/project-a",
+      lastOpenedAt: 1,
+      available: true,
+    }
+    const projectSession = {
+      id: "project-session",
+      projectId: project.id,
+      workspaceMode: "project" as const,
+      cwd: project.path,
+      title: "项目运行中",
+      model: "m",
+      status: "idle" as const,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const recentSession = {
+      id: "recent-session",
+      workspaceMode: "outside_project" as const,
+      cwd: "/workspace/outside",
+      title: "最近运行中",
+      model: "m",
+      status: "idle" as const,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const running = (session: DesktopSessionRecord) => ({
+      session,
+      executionState: "running" as const,
+      attentionState: "read" as const,
+      activitySeq: 1,
+      updatedAt: 1,
+    })
+    useDesktopSessionStore.setState({
+      projects: [project],
+      sessions: [projectSession, recentSession],
+      activity: {
+        ...createActivityState(),
+        sessions: {
+          [projectSession.id]: running(projectSession),
+          [recentSession.id]: running(recentSession),
+        },
+      },
+    })
+    await act(async () =>
+      root.render(
+        <Sidebar
+          open
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+
+    const projectSection = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("项目")
+    )!
+    const recentSection = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("最近")
+    )!
+    await act(async () => {
+      projectSection.click()
+      recentSection.click()
+    })
+    expect(container.querySelector('[aria-label="项目，有会话正在运行"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="最近，有会话正在运行"]')).not.toBeNull()
+
+    await act(async () => projectSection.click())
+    const projectRow = container.querySelector<HTMLButtonElement>(
+      'button[title="/workspace/project-a"]'
+    )!
+    await act(async () => projectRow.click())
+    expect(container.querySelector('[aria-label="项目 A，有会话正在运行"]')).not.toBeNull()
   })
 
   function channelSession() {

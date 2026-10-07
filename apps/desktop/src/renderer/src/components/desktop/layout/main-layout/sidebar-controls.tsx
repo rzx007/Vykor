@@ -54,6 +54,7 @@ export function SidebarSectionHeader({
   onAction,
   className,
   summary,
+  running = false,
 }: {
   title: string
   expanded: boolean
@@ -62,6 +63,7 @@ export function SidebarSectionHeader({
   onAction?: () => void
   className?: string
   summary?: React.ReactNode
+  running?: boolean
 }): React.JSX.Element {
   return (
     <div className={cn("group/section flex h-7 w-full items-center px-2.5", className)}>
@@ -72,8 +74,22 @@ export function SidebarSectionHeader({
         className="text-ui-small flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span>{title}</span>
+        {!expanded && running ? (
+          <Spinner
+            role="img"
+            aria-label={`${title}，有会话正在运行`}
+            className="ml-auto size-3 motion-reduce:animate-none"
+          />
+        ) : null}
         {!expanded && summary !== undefined && summary !== null ? (
-          <span className="ml-auto text-xs tabular-nums text-sidebar-muted/70">{summary}</span>
+          <span
+            className={cn(
+              "text-xs tabular-nums text-sidebar-muted/70",
+              !running && "ml-auto"
+            )}
+          >
+            {summary}
+          </span>
         ) : null}
         <ChevronDown
           className={cn(
