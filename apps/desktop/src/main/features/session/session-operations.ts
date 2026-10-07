@@ -60,7 +60,6 @@ import {
   resolveRequiredPath,
 } from "./session-operation-input"
 import { app } from "electron"
-import { gitSettingsService } from "../settings/git-settings-service"
 import { getGitPreferences } from "../settings/git-settings-storage"
 
 export type SessionOperationsClient = Pick<
@@ -200,6 +199,7 @@ export class SessionOperations {
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
+    const { gitSettingsService } = await import("../settings/git-settings-service")
     const branch = requireGitBranchName(await gitSettingsService.uniqueBranch(path, input.branch))
     await execGit(path, ["check-ref-format", "--branch", branch])
     await execGit(path, ["switch", "-c", branch])
@@ -222,7 +222,9 @@ export class SessionOperations {
       ? resolveRequiredPath(input.cwd)
       : await allocateOutsideProjectWorkspace(app.getPath("documents"))
     const settingsRoot = cwd
-    const worktree = projectId && location === "worktree" ? await gitSettingsService.createTaskWorktree(projectId, cwd) : null
+    const gitSettingsService = projectId && location === "worktree"
+      ? (await import("../settings/git-settings-service")).gitSettingsService : null
+    const worktree = gitSettingsService ? await gitSettingsService.createTaskWorktree(projectId!, cwd) : null
     if (worktree) cwd = worktree.path
     let createdSessionId: string | undefined
 
@@ -247,12 +249,12 @@ export class SessionOperations {
         },
       })
       createdSessionId = session.id
-      if (worktree) await gitSettingsService.bindTaskWorktree(worktree.id, session.id)
+      if (worktree) await gitSettingsService!.bindTaskWorktree(worktree.id, session.id)
       return toDesktopSessionRecord(session)
     } catch (error) {
       if (worktree) {
         if (createdSessionId) await client.sessions.archive(createdSessionId)
-        await gitSettingsService.discardUnboundWorktree(worktree.id)
+        await gitSettingsService!.discardUnboundWorktree(worktree.id)
       }
       if (!projectId) await removeEmptyOutsideProjectWorkspace(cwd)
       throw error

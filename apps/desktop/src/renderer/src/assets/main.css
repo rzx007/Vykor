@@ -9,6 +9,84 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Settings share a readable column, grouped cards and compact right-aligned controls. */
+.settings-page-shell {
+  container: settings / inline-size;
+}
+
+.settings-content-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+}
+
+.settings-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem 1.5rem;
+}
+
+.settings-form-row > :is(input, textarea, [data-slot="select-trigger"]) {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-form-row > [data-slot="field-description"] {
+  grid-column: 1 / -1;
+}
+
+.settings-variable-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.settings-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-panel {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--card);
+  padding: 1.25rem;
+}
+
+@container settings (min-width: 40rem) {
+  .settings-content-column {
+    padding-inline: 2.5rem;
+  }
+
+  .settings-form-row {
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
+    align-items: center;
+  }
+
+  .settings-form-row > [data-slot="field-description"] {
+    grid-column: 2;
+  }
+
+  .settings-variable-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
 /* 采用 beUI Project Folder 示例的整张纸色，而不是给中性卡片轻微染色。 */
 :root {
   --note-sand: var(--color-amber-100);

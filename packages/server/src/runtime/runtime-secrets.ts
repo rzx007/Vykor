@@ -1,14 +1,22 @@
 import { CredentialStorage } from "@vykor/auth";
 import { getConfigDir, SettingsConflictError, withSettingsFileLock } from "@vykor/core";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
+/** Atomic replacement changes this file identity; no secret contents leave storage. */
+export async function runtimeSecretsRevision(): Promise<string> {
+  try {
+    const info = await stat(join(getConfigDir(), "runtime-environment-secrets.json"), { bigint: true });
+    return [info.dev, info.ino, info.mtimeNs, info.ctimeNs, info.size].join(":");
+  } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing"; throw error; }
+}
 
 export async function loadRuntimeSecrets(scope: string, names: string[]): Promise<Record<string, string>> {
   const path = join(getConfigDir(), "runtime-environment-secrets.json");
   try { const raw = JSON.parse(await readFile(path, "utf8")); if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("机密环境变量文件格式无效。"); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const storage = new CredentialStorage(path);
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = Object.create(null);
   for (const name of names) {
     const value = await storage.loadCredential(scope, name);
     if (value !== undefined) env[name] = value;
@@ -16,10 +24,11 @@ export async function loadRuntimeSecrets(scope: string, names: string[]): Promis
   return env;
 }
 
-export async function saveRuntimeSecrets(scope: string, values: Record<string, string | null>, expected?: Record<string, string | null>): Promise<void> {
+export async function saveRuntimeSecrets(scope: string, values: Record<string, string | null>, expected?: Record<string, string | null>, expectedRevision?: string): Promise<void> {
   const path = join(getConfigDir(), "runtime-environment-secrets.json");
   await mkdir(getConfigDir(), { recursive: true });
   await withSettingsFileLock(async () => {
+    if (expectedRevision !== undefined && await runtimeSecretsRevision() !== expectedRevision) throw new SettingsConflictError("runtimeSecret");
     try { await writeFile(path, "{}", { encoding: "utf8", flag: "wx", mode: 0o600 }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     await chmod(path, 0o600);

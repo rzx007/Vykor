@@ -32,22 +32,22 @@ const toggles = [
   {
     key: "enabled",
     label: "项目长期记忆",
-    description: "后续任务读取长期记忆；关闭后停止读取、自动提取和整理，已有内容保留。",
+    description: "关闭后停止读取、提取和整理，已有内容保留。",
   },
   {
     key: "autoExtractEnabled",
     label: "自动提取记忆",
-    description: "从成功任务中提取用户提供的稳定信息，受长期记忆主开关约束。",
+    description: "从成功任务提取长期信息，需开启长期记忆。",
   },
   {
     key: "sessionMemoryEnabled",
     label: "会话连续性记忆",
-    description: "保存任务焦点和近期摘要，供会话压缩后继续工作，与长期记忆独立。",
+    description: "保存近期摘要，便于压缩后继续；独立于长期记忆。",
   },
   {
     key: "autoDreamEnabled",
     label: "自动整理记忆",
-    description: "达到间隔和会话数量门槛后执行后台模型整理任务，产生真实用量。",
+    description: "达到门槛后调用模型整理，会产生用量。",
   },
 ] as const
 
@@ -123,7 +123,7 @@ export function PersonalizationMemoryManagement() {
             expected: snapshot.configured,
           })
         ),
-      "记忆设置已保存，后续请求和任务采用新设置。"
+      "已保存，后续任务生效。"
     )
   }
   const current = snapshot?.entries.find((entry) => entry.id === selected?.id)
@@ -272,11 +272,11 @@ export function PersonalizationMemoryManagement() {
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            这些开关不控制 SOUL.md、USER.md 或环境事实。会话连续性摘要与永久项目记忆分开管理。
+            不影响 SOUL.md、USER.md 或环境信息。
           </p>
           {!projectId ? (
             <p className="text-sm text-muted-foreground">
-              请选择项目，查看记忆、指令来源和整理记录。
+              请选择项目。
             </p>
           ) : (
             <>
@@ -468,7 +468,7 @@ export function PersonalizationMemoryManagement() {
                   {changed && (
                     <div className="space-y-2">
                       <p className="text-xs text-destructive">
-                        其他任务已修改记忆。草稿已保留，请比较最新内容。
+                        记忆已被修改，草稿保留；请对比最新内容。
                       </p>
                       <Textarea aria-label="最新项目记忆内容" readOnly value={current.content} />
                       <Button variant="ghost" disabled={busy} onClick={() => setSelected(current)}>
@@ -504,7 +504,7 @@ export function PersonalizationMemoryManagement() {
                               )
                               setSelected(null)
                               setEditing(false)
-                            }, "记忆已保存，后续请求采用已保存的记忆配置。")
+                            }, "记忆已保存，后续请求生效。")
                           }
                         >
                           保存记忆

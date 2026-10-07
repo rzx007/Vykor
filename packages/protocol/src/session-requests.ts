@@ -32,6 +32,13 @@ export interface UpdateSessionInput {
   metadata?: Record<string, unknown>;
 }
 
+/** Narrow maintenance input: clear only a matching, already-removed worktree binding. */
+export interface ClearSessionWorktreeBindingInput {
+  id: string;
+  path: string;
+  branch: string;
+}
+
 export interface AdmitPromptInput {
   id?: string;
   sessionId: string;

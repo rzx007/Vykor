@@ -64,8 +64,9 @@ describe("SessionPostRunMaintenance", () => {
   it("excludes temporary sessions from a durable session's automatic dream", async () => {
     const store = createStore();
     store.listSessions.mockReturnValue([
-      { id: "durable", updatedAt: 30 },
-      { id: "temporary", storage: "memory", updatedAt: 30 },
+      { id: "durable", cwd: "/repo", updatedAt: 30 },
+      { id: "temporary", cwd: "/repo", storage: "memory", updatedAt: 30 },
+      { id: "other-project", cwd: "/elsewhere", updatedAt: 30 },
     ] as any);
     const autoDream = vi.fn();
     const maintenance = new SessionPostRunMaintenance({

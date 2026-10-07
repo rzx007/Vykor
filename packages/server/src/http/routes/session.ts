@@ -4,6 +4,7 @@ import {
   parseCreateSessionRequest,
   parseForkSessionRequest,
   parseUpdateSessionRequest,
+  parseClearSessionWorktreeBindingRequest,
 } from "@vykor/protocol";
 
 import {
@@ -39,6 +40,7 @@ export interface SessionRoutesContext {
     | "deleteSessionTree"
     | "forkSession"
     | "updateSession"
+    | "clearWorktreeBinding"
   >;
   interactions: Pick<SessionInteractionService, "warmSession">;
   traces: Pick<RequestTraceRegistry, "get">;
@@ -117,6 +119,13 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
           sessionMutationErrorStatus(error),
         );
       }
+    })
+    .post("/:sessionId/worktree-cleared", async (c) => {
+      let input;
+      try { input = parseClearSessionWorktreeBindingRequest(await readJson(c)); }
+      catch (error) { return protocolValidationErrorResponse(error); }
+      try { return jsonResponse({ session: await context.commands.clearWorktreeBinding(c.req.param("sessionId"), input) }); }
+      catch (error) { return applicationErrorResponse(error, sessionMutationErrorStatus(error)); }
     })
     .get("/:sessionId/state", (c) => {
       const sessionId = c.req.param("sessionId");

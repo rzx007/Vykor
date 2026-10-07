@@ -8,6 +8,7 @@
 import type { PluginInfo } from "./extension-types.js";
 import type { MemoryEntryRecord } from "@vykor/protocol";
 export type { MemoryEntryRecord, MemoryRevision, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
+export type { ClearSessionWorktreeBindingInput } from "@vykor/protocol";
 export type * from "./attachment-types.js";
 export type * from "./extension-types.js";
 export type * from "./sync-types.js";

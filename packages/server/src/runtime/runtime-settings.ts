@@ -2,43 +2,72 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { getProjectConfigDir, getProjectSettingsFilePath, loadProjectSettings, loadSettings, parseAgentEnvironmentSettings,
-  saveProjectSettings, SettingsConflictError, updateSettings, withSettingsFileLock, type AgentEnvironmentSettings } from "@vykor/core";
+  saveProjectSettings, SettingsConflictError, updateSettings, withSettingsFileLock, mergeAgentEnvironmentSettings, type AgentEnvironmentSettings } from "@vykor/core";
 import { hostPathToWslPath, preflightWsl, resolveShellDescriptor } from "@vykor/sandbox";
-import { loadRuntimeSecrets, saveRuntimeSecrets } from "./runtime-secrets.js";
+import { loadRuntimeSecrets, runtimeSecretsRevision, saveRuntimeSecrets } from "./runtime-secrets.js";
 
 const exec = promisify(execFile);
 export function environmentFingerprint(config: AgentEnvironmentSettings): string {
-  return createHash("sha256").update(JSON.stringify(config)).digest("hex");
+  const canonical = { kind: config.kind,
+    ...(config.distribution ? { distribution: config.distribution } : {}),
+    ...(config.shell ? { shell: { executable: config.shell.executable, ...(config.shell.args ? { args: config.shell.args } : {}) } } : {}),
+    ...(Object.keys(config.env ?? {}).length ? { env: Object.fromEntries(Object.entries(config.env!).sort(([a], [b]) => a.localeCompare(b))) } : {}),
+    ...(config.secretEnv?.length ? { secretEnv: [...config.secretEnv].sort() } : {}) };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-export async function inspectRuntimeEnvironment(input: { cwd?: string; activeDefault?: AgentEnvironmentSettings } = {}) {
-  const user = (await loadSettings()).agentEnvironment ?? { kind: "native" as const };
+export async function inspectRuntimeEnvironment(input: { cwd?: string; activeDefault?: AgentEnvironmentSettings; kindOverride?: "native" | "wsl" } = {}) {
+  const user = (await loadSettings(undefined, { includeEnvironment: false })).agentEnvironment ?? { kind: "native" as const };
   const project = input.cwd ? (await loadProjectSettings(input.cwd))?.agentEnvironment : undefined;
   const base = input.activeDefault ?? user;
-  const effective: AgentEnvironmentSettings = { ...base, ...project,
-    env: { ...base.env, ...project?.env }, secretEnv: [...new Set([...(base.secretEnv ?? []), ...(project?.secretEnv ?? [])])] };
-  return { userConfig: user, projectConfig: project ?? null, effective, activeDefault: base,
-    source: project ? "当前项目" : "用户默认", restartRequired: environmentFingerprint(base) !== environmentFingerprint(user),
-    wslSupported: process.platform === "win32", inheritedVariableNames: Object.keys(process.env).sort() };
+  const effective = mergeAgentEnvironmentSettings(base, project, input.kindOverride ? { kind: input.kindOverride } : undefined);
+  const savedDefault = mergeAgentEnvironmentSettings(user, input.kindOverride ? { kind: input.kindOverride } : undefined);
+  const activeDefault = mergeAgentEnvironmentSettings(base, input.kindOverride ? { kind: input.kindOverride } : undefined);
+  return { userConfig: user, projectConfig: project ?? null, effective, activeDefault,
+    source: input.kindOverride ? "启动环境变量覆盖" : project ? "当前项目" : "用户默认", restartRequired: environmentFingerprint(activeDefault) !== environmentFingerprint(savedDefault),
+    wslSupported: process.platform === "win32", inheritedVariableNames: Object.keys(process.env).sort(), secretRevision: await runtimeSecretsRevision() };
+}
+
+export async function validateRuntimeEnvironmentConfig(config: AgentEnvironmentSettings, cwd?: string, sandboxEnabled?: boolean) {
+  parseAgentEnvironmentSettings(config);
+  if (config.kind === "wsl") {
+    const settings = await loadSettings(undefined, { includeProject: Boolean(cwd), projectRoot: cwd });
+    if (sandboxEnabled ?? settings.sandbox?.enabled) throw new Error("WSL 与 SRT 隔离目前不能同时启用，请先关闭对应访问隔离。");
+    if (cwd) hostPathToWslPath(cwd);
+    await preflightWsl({ distribution: config.distribution });
+    await checkWslCommandShell(config, cwd);
+  } else if (config.shell) await resolveShellDescriptor({ configuredExecutable: config.shell.executable, tempDir: tmpdir() });
+}
+
+async function checkWslCommandShell(config: AgentEnvironmentSettings, cwd?: string, signal?: AbortSignal) {
+  const command = config.shell?.executable ?? "/bin/sh";
+  const { stdout } = await exec("wsl.exe", [
+    ...(config.distribution ? ["--distribution", config.distribution] : []),
+    ...(cwd ? ["--cd", hostPathToWslPath(cwd)] : []),
+    "--exec", command, ...(config.shell?.args.length ? config.shell.args : ["-lc"]), "printf '%s' vykor-shell-ready",
+  ], { windowsHide: true, timeout: 10_000, signal });
+  if (!stdout.includes("vykor-shell-ready")) throw new Error("所选 WSL 命令 Shell 或启动参数无法执行命令。");
+  return command;
 }
 
 export async function saveRuntimeEnvironment(input: { cwd?: string; config: AgentEnvironmentSettings | null;
-  expected: AgentEnvironmentSettings | null; secrets?: Record<string, string | null> }) {
+  expected: AgentEnvironmentSettings | null; secrets?: Record<string, string | null>; expectedSecretRevision?: string }) {
   const config = input.config === null ? null : parseAgentEnvironmentSettings(input.config);
   if (!input.cwd && !config) throw new Error("用户默认运行环境不能移除。");
   if (input.cwd && !isAbsolute(input.cwd)) throw new Error("请选择完整项目目录。");
   const scope = input.cwd ? resolve(input.cwd) : "global";
   const secretNames = config?.secretEnv ?? [];
   const supplied = { ...await loadRuntimeSecrets("global", secretNames), ...await loadRuntimeSecrets(scope, secretNames), ...input.secrets };
-  if (secretNames.some(name => supplied[name] === undefined || supplied[name] === null)) throw new Error("新机密变量尚未配置，请填写值后保存。");
+  if (secretNames.some(name => !Object.hasOwn(supplied, name) || supplied[name] === undefined || supplied[name] === null)) throw new Error("新机密变量尚未配置，请填写值后保存。");
   let previousSecrets: Record<string, string> = {}, secretsChanged = false;
   const writeSecrets = async () => {
-    if (!input.secrets) return;
+    if (!input.secrets || !Object.keys(input.secrets).length) return;
+    if (typeof input.expectedSecretRevision !== "string") throw new Error("请重新读取机密变量状态后保存。");
     previousSecrets = await loadRuntimeSecrets(scope, Object.keys(input.secrets));
-    await saveRuntimeSecrets(scope, input.secrets);
+    await saveRuntimeSecrets(scope, input.secrets, undefined, input.expectedSecretRevision);
     secretsChanged = true;
   };
   const restoreSecrets = async () => {
@@ -46,15 +75,10 @@ export async function saveRuntimeEnvironment(input: { cwd?: string; config: Agen
   };
   if (config) {
     if (Object.keys(config.env ?? {}).some(key => /TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|CREDENTIAL/i.test(key))) throw new Error("可能包含机密的变量必须标记为机密后保存。");
-    if (config.kind === "wsl") {
-      const effectiveSettings = await loadSettings(undefined, { includeProject: Boolean(input.cwd), projectRoot: input.cwd });
-      if (effectiveSettings.sandbox?.enabled) throw new Error("WSL 与 SRT 隔离目前不能同时启用，请先关闭对应访问隔离。");
-      if (input.cwd) hostPathToWslPath(input.cwd);
-      await preflightWsl({ distribution: config.distribution });
-    } else if (config.shell) await resolveShellDescriptor({ configuredExecutable: config.shell.executable, tempDir: tmpdir() });
+    await validateRuntimeEnvironmentConfig(config, input.cwd);
   }
   const unchanged = (current: AgentEnvironmentSettings | null) => {
-    if (JSON.stringify(current) !== JSON.stringify(input.expected)) throw new SettingsConflictError("agentEnvironment");
+    if (!isDeepStrictEqual(current, input.expected)) throw new SettingsConflictError("agentEnvironment");
   };
   if (input.cwd) {
     await mkdir(getProjectConfigDir(input.cwd), { recursive: true });
@@ -71,7 +95,7 @@ export async function saveRuntimeEnvironment(input: { cwd?: string; config: Agen
       unchanged(latest.agentEnvironment ?? null);
       await writeSecrets();
       return { ...latest, agentEnvironment: config! };
-    }); } catch (error) { await restoreSecrets(); throw error; }
+    }, { includeEnvironment: false }); } catch (error) { await restoreSecrets(); throw error; }
   }
 }
 
@@ -93,9 +117,11 @@ export async function checkRuntimeEnvironment(input: { cwd: string; config: Agen
     const dist = config.distribution ? ["--distribution", config.distribution] : [];
     await exec("wsl.exe", [...dist, "--cd", cwd, "--exec", "/bin/test", "-d", cwd], { windowsHide: true, timeout: 10_000, signal: input.signal });
     checks.push({ name: "项目目录", status: "ok", detail: cwd });
-    for (const [name, command, args] of [["Shell", config.shell?.executable ?? "/bin/sh", ["--version"]], ["Git", "git", ["--version"]], ["Node.js", "node", ["--version"]], ["Python", "python3", ["--version"]]] as const) {
+    try { checks.push({ name: "Shell", status: "ok", detail: await checkWslCommandShell(config, input.cwd, input.signal) }); }
+    catch { input.signal?.throwIfAborted(); checks.push({ name: "Shell", status: "failed", detail: "命令 Shell 或启动参数无法执行命令" }); }
+    for (const [name, command, args] of [["Git", "git", ["--version"]], ["Node.js", "node", ["--version"]], ["Python", "python3", ["--version"]]] as const) {
       try { const { stdout } = await exec("wsl.exe", [...dist, "--cd", cwd, "--exec", command, ...args], { windowsHide: true, timeout: 10_000, signal: input.signal }); checks.push({ name, status: "ok", detail: stdout.trim().slice(0, 300) || command }); }
-      catch { input.signal?.throwIfAborted(); checks.push({ name, status: name === "Shell" ? "failed" : "warning", detail: "无法启动或未安装" }); }
+      catch { input.signal?.throwIfAborted(); checks.push({ name, status: "warning", detail: "无法启动或未安装" }); }
     }
   } else {
     const shell = await resolveShellDescriptor({ configuredExecutable: config.shell?.executable, tempDir: tmpdir() });

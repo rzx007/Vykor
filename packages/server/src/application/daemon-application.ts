@@ -891,6 +891,7 @@ export class DaemonApplication implements DurableAgentApplication {
           createSession: (input) => store.sessions.create(input),
           getSession: (id) => store.sessions.get(id),
           updateSession: (id, input) => store.sessions.update(id, input),
+          clearWorktreeBinding: (id, input) => store.sessions.clearWorktreeBinding(id, input),
           archiveSession: (id) => store.sessions.archive(id),
           beginArchive: (id) => store.sessions.beginArchive(id),
           listChildSessions: (id, input) => store.sessions.listChildren(id, input),

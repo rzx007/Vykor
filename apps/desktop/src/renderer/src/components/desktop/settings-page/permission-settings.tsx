@@ -1,3 +1,4 @@
+import { SettingsGroup } from "./settings-group"
 import { useEffect, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
@@ -13,7 +14,6 @@ import {
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@renderer/components/ui/field"
-import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Switch } from "@renderer/components/ui/switch"
 import type {
@@ -94,7 +94,7 @@ export function PermissionSettings() {
         permission,
         expectedPermission,
       })
-      accept(next, "权限设置已保存。新会话采用默认批准方式，规则由后续任务读取。", "rules")
+      accept(next, "已保存，新会话采用批准方式，后续任务采用规则。", "rules")
       try {
         await useDesktopSessionStore.getState().refreshBootstrap()
       } catch {
@@ -103,8 +103,7 @@ export function PermissionSettings() {
     }
     if (permission.mode === "full_auto" && expectedPermission.mode !== "full_auto") {
       setConfirmation({
-        description:
-          "新会话将自动批准工具操作，仍遵守禁止规则和宿主访问边界。操作执行前将不再逐项询问。",
+        description: "新会话不再逐项询问，仍遵守禁止规则和访问边界。",
         apply,
       })
     } else void run(apply)
@@ -121,20 +120,18 @@ export function PermissionSettings() {
           sandbox,
           expectedSandbox,
         }),
-        "访问边界已保存，后续启动的任务采用新配置。",
+        "已保存，后续任务生效。",
         "isolation"
       )
     setConfirmation({
-      description:
-        "将修改后续命令进程的文件和网络边界。请核对允许目录、域名规则及隔离不可用时的策略；已有任务保持当前状态。",
+      description: "将修改后续命令的访问范围；已有任务不变。请核对目录、域名和隔离策略。",
       apply,
     })
   }
 
   function revoke(input: RevokeDesktopApprovalInput) {
     setConfirmation({
-      description:
-        "撤销后，后续相关操作需要重新取得批准。已经完成的操作不会回滚；浏览器诊断捕获会停止。",
+      description: "后续操作需重新批准，已完成操作不回滚；浏览器捕获将停止。",
       apply: async () =>
         accept(await window.desktop.permissionSettings.revoke(input), "授权已撤销。"),
     })
@@ -157,9 +154,7 @@ export function PermissionSettings() {
         </Alert>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          编辑用户默认设置。项目和当前会话的单独选择可能覆盖默认值。
-        </p>
+        <p className="text-sm text-muted-foreground">用户默认值，可被项目或会话覆盖。</p>
         <Button
           variant="ghost"
           disabled={busy}
@@ -190,7 +185,6 @@ export function PermissionSettings() {
             onSave={saveRules}
             defaultCwd={useDesktopSessionStore.getState().selectedProject?.path ?? ""}
           />
-          <Separator />
           <PermissionIsolationEditor
             key={`isolation-${isolationRevision}`}
             sandbox={snapshot.sandbox}
@@ -199,17 +193,11 @@ export function PermissionSettings() {
             busy={busy}
             onSave={saveIsolation}
           />
-          <Separator />
-          <section aria-labelledby="permission-browser-heading" className="flex flex-col gap-4">
-            <h2 id="permission-browser-heading" className="text-base font-semibold">
-              浏览器
-            </h2>
+          <SettingsGroup title="浏览器" id="permission-browser-heading">
             <Field orientation="horizontal">
               <FieldContent>
                 <FieldLabel htmlFor="browser-developer-mode">浏览器开发者模式</FieldLabel>
-                <FieldDescription>
-                  允许请求页面结构、控制台和网络诊断。每次检查仍需单独批准；关闭后立即停止捕获。
-                </FieldDescription>
+                <FieldDescription>每次页面诊断需单独批准，关闭后立即停止捕获。</FieldDescription>
               </FieldContent>
               <Switch
                 id="browser-developer-mode"
@@ -229,14 +217,10 @@ export function PermissionSettings() {
                 }
               />
             </Field>
-          </section>
-          <Separator />
-          <section aria-labelledby="permission-approvals-heading" className="flex flex-col gap-4">
-            <h2 id="permission-approvals-heading" className="text-base font-semibold">
-              已保存授权
-            </h2>
+          </SettingsGroup>
+          <SettingsGroup title="已保存授权" id="permission-approvals-heading">
             <p className="text-sm text-muted-foreground">
-              会话工具授权由后台服务保存；浏览器站点授权仅保留在当前应用运行期间。单次批准不作为可复用授权列出。
+              工具授权由后台保存；站点授权仅本次运行有效。单次批准不列出。
             </p>
             {snapshot.toolApprovals.length === 0 && snapshot.browserApprovals.length === 0 ? (
               <p className="text-sm text-muted-foreground">暂无可复用的工具或浏览器授权。</p>
@@ -281,7 +265,7 @@ export function PermissionSettings() {
             <Link to="/plugins" className="text-sm underline underline-offset-4">
               在插件管理中查看和重新审核插件权限
             </Link>
-          </section>
+          </SettingsGroup>
         </>
       ) : null}
       <AlertDialog

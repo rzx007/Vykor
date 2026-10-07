@@ -1,5 +1,6 @@
 import {
   updateSettings,
+  loadSettings,
   SettingsConflictError,
   type Settings,
 } from "@vykor/core";
@@ -61,22 +62,21 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export async function saveSettingsAndRefreshRef(
   ref: DaemonSettingsRef,
-  next: Settings,
-  expected?: { permission?: unknown; sandbox?: unknown },
-  patch?: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  expected?: { permission?: unknown; sandbox?: unknown; autoReviewMode?: "off" | "risk_based"; maxTurns?: number },
 ): Promise<void> {
-  // `next` is the daemon's full desired state (built from its in-memory ref).
-  // Writing it under the cross-process lock serializes against CLI / Desktop /
-  // OAuth writers, and spreading `latest` first keeps any top-level key that a
-  // concurrent writer added but this daemon snapshot does not manage.
-  const merged = await updateSettings((latest) => {
+  // Persist only the requested fields against durable defaults. Launch overrides
+  // remain effective in the daemon, but must never become unrelated file edits.
+  await updateSettings(async (latest) => {
+    if (expected?.maxTurns !== undefined && latest.maxTurns !== expected.maxTurns) throw new SettingsConflictError("maxTurns");
     if (expected?.permission !== undefined && !isDeepStrictEqual(latest.permission, expected.permission)) {
       throw new SettingsConflictError("permission");
     }
-    if (expected?.sandbox !== undefined && !isDeepStrictEqual(normalizeSandboxConfig(latest.sandbox), normalizeSandboxConfig(expected.sandbox as Settings["sandbox"]))) {
+    if (expected?.autoReviewMode !== undefined && (latest.autoReview?.mode ?? "off") !== expected.autoReviewMode) throw new SettingsConflictError("autoReview");
+    if (expected?.sandbox !== undefined && !isDeepStrictEqual(normalizeSandboxConfig((await loadSettings()).sandbox), normalizeSandboxConfig(expected.sandbox as Settings["sandbox"]))) {
       throw new SettingsConflictError("sandbox");
     }
-    return patch ? mergeSettingsPatch(latest, patch) : { ...latest, ...next };
-  });
-  ref.current = merged;
+    return mergeSettingsPatch(latest, patch);
+  }, { includeEnvironment: false });
+  ref.current = ref.reload ? await ref.reload() : await loadSettings();
 }

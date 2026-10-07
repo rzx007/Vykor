@@ -89,7 +89,7 @@ export type {
   PermissionChecker as IPermissionChecker,
 } from "./types/permissions";
 export { parsePermissionSettings } from "./config/permission-settings.js";
-export { parseAgentEnvironmentSettings } from "./config/agent-environment-settings.js";
+export { parseAgentEnvironmentSettings, mergeAgentEnvironmentSettings } from "./config/agent-environment-settings.js";
 
 export type {
   HookEvent,

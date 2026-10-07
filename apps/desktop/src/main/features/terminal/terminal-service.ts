@@ -25,6 +25,10 @@ interface TerminalSubscription {
 class DesktopTerminalService {
   private readonly subscriptions = new Map<number, TerminalSubscription>()
 
+  constructor() {
+    desktopSessionService.onDaemonInvalidated(() => { void this.dispose() })
+  }
+
   async create(
     webContents: WebContents,
     input: TerminalCreateRequest
@@ -113,6 +117,10 @@ class DesktopTerminalService {
     } catch (error) {
       if (!controller.signal.aborted && !webContents.isDestroyed()) {
         console.error("[terminal] event stream failed", error)
+      }
+    } finally {
+      if (this.subscriptions.get(webContents.id)?.controller === controller) {
+        this.subscriptions.delete(webContents.id)
       }
     }
   }

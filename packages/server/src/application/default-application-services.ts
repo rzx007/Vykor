@@ -77,6 +77,7 @@ export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeD
 }
 
 function createDefaultAgentEnvironmentService(activeDefault?: AgentEnvironmentSettings) {
+  const override = process.env.VYKOR_AGENT_ENVIRONMENT;
   let cached: { expiresAt: number; wsl: boolean } | undefined;
   let inFlight: Promise<boolean> | undefined;
   const probe = async (): Promise<boolean> => {
@@ -93,6 +94,7 @@ function createDefaultAgentEnvironmentService(activeDefault?: AgentEnvironmentSe
   };
   return {
     active: () => activeDefault,
+    kindOverride: () => override === "native" || override === "wsl" ? override : undefined,
     async capabilities() {
       return { native: true as const, wsl: await probe(), ...(activeDefault ? { activeDefault: {
         kind: activeDefault.kind, ...(activeDefault.distribution ? { distribution: activeDefault.distribution } : {}),

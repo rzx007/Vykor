@@ -26,6 +26,7 @@ it("marks a new session as following the default effort only when effort is not 
     updatedAt: 1,
   }))
   const client = {
+    system: { getSettings: async () => ({}) },
     providers: { listModels: async () => [{
       name: "provider-a",
       models: [{ id: "model-a", providerName: "provider-a" }],

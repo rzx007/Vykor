@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryRoutes } from "./memory.js";
 describe("memory editing routes", () => {
-  it("uses the cwd mutation barrier and versions before accepting an edit", async () => {
+  it("protects shared worktree memory with the global barrier before accepting an edit", async () => {
     const update = vi.fn(async (input) => ({
       id: input.id,
       content: input.content,
@@ -15,7 +15,7 @@ describe("memory editing routes", () => {
     const close = vi.fn(async () => {});
     const routes = createMemoryRoutes({
       memoryService: { update, clear } as any,
-      control: { acquireCwdMutation: barrier, closeRuntimesForCwd: close },
+      control: { acquireGlobalMutation: barrier, closeAllRuntimes: close },
     });
     const request = {
       cwd: "/project",
@@ -31,9 +31,10 @@ describe("memory editing routes", () => {
         })
       ).status,
     ).toBe(200);
-    expect(barrier).toHaveBeenCalledWith("/project");
+    expect(barrier).toHaveBeenCalledWith();
     expect(update).toHaveBeenCalledWith({ ...request, id: "mem-id" });
-    expect(close).toHaveBeenCalledWith("/project");
+    expect(close).toHaveBeenCalledWith();
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(update.mock.invocationCallOrder[0]!);
     expect(release).toHaveBeenCalledTimes(1);
     barrier.mockReturnValueOnce(undefined as any);
     expect(

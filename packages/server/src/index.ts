@@ -144,7 +144,7 @@ export {
   validateIsolationConfiguration,
 } from "./permissions/settings-management.js";
 export { loadRuntimeSecrets, saveRuntimeSecrets } from "./runtime/runtime-secrets.js";
-export { inspectRuntimeEnvironment, saveRuntimeEnvironment, listRuntimeDistributions, checkRuntimeEnvironment } from "./runtime/runtime-settings.js";
+export { inspectRuntimeEnvironment, saveRuntimeEnvironment, listRuntimeDistributions, checkRuntimeEnvironment, validateRuntimeEnvironmentConfig } from "./runtime/runtime-settings.js";
 export { exportPortableSettings, importPortableSettings, parsePortableSettings } from "./settings-transfer.js";
 export { inspectPersonalizationSettings, saveMemoryConfiguration } from "./personalization-settings.js";
 export { createDesktopGitWorktree } from "./desktop-git-workspaces.js";

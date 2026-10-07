@@ -13,6 +13,7 @@ vi.mock("@renderer/components/desktop/layout/main-layout", () => ({
 vi.mock("@renderer/components/desktop/layout/settings-layout", () => ({
   SettingsLayout: () => null,
 }))
+vi.mock("@renderer/components/desktop/settings-page/settings-content", () => ({ SettingsContent: () => null }))
 
 vi.mock("@renderer/components/desktop/pet-page", () => ({
   PetWindow: () => null,

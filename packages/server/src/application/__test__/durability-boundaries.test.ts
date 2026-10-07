@@ -260,7 +260,7 @@ describe("durable application long-running boundaries", () => {
 
   it("refuses to create an attachment backup when a ready blob is missing", async () => {
     const dir = temporaryDirectory();
-    const store = new SessionStore({ path: join(dir, "sessions.db") });
+    const store = new SessionStore({ path: join(dir, "source", "sessions.db") });
     try {
       store.attachments.createImportingAttachment({
         id: "att-missing",

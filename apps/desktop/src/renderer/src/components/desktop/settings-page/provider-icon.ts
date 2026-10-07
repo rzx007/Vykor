@@ -12,6 +12,7 @@ export interface ProviderBrandIcons<T> {
   mistral: T
   moonshot: T
   openAI: T
+  openCode: T
   openRouter: T
   siliconCloud: T
   stepfun: T
@@ -37,6 +38,9 @@ export function createProviderBrandIconResolver<T>(
     ["mistral", icons.mistral],
     ["moonshot", icons.moonshot],
     ["openai", icons.openAI],
+    ["opencode", icons.openCode],
+    ["opencode-go", icons.openCode],
+    ["opencode-zen", icons.openCode],
     ["openrouter", icons.openRouter],
     ["siliconflow", icons.siliconCloud],
     ["stepfun", icons.stepfun],
@@ -49,5 +53,11 @@ export function createProviderBrandIconResolver<T>(
     ["zai-coding-plan", icons.zhiPu],
   ])
 
-  return (provider) => iconsByProvider.get(provider.trim().toLowerCase())
+  return (provider) =>
+    iconsByProvider.get(
+      provider
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_]+/g, "-")
+    )
 }

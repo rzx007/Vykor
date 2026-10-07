@@ -13,7 +13,7 @@ export interface MemoryRoutesContext {
   memoryService?: MemoryService;
   control: Pick<
     DaemonControlService,
-    "acquireCwdMutation" | "closeRuntimesForCwd"
+    "acquireGlobalMutation" | "closeAllRuntimes"
   >;
 }
 
@@ -55,23 +55,23 @@ export function createMemoryRoutes(context: MemoryRoutesContext): Hono {
       if (typeof body.content !== "string" || !body.content.trim()) {
         return errorResponse(400, "content is required");
       }
-      const lease = context.control.acquireCwdMutation(body.cwd);
+      const lease = context.control.acquireGlobalMutation();
       if (!lease) {
         return errorResponse(
           409,
-          "Cannot update memory while session runs are active for this cwd",
+          "Cannot update memory while tasks or memory extraction are active",
         );
       }
       const tags = Array.isArray(body.tags)
         ? body.tags.filter((tag): tag is string => typeof tag === "string")
         : undefined;
       try {
+        await context.control.closeAllRuntimes();
         const entry = await context.memoryService.add({
           cwd: body.cwd,
           content: body.content,
           tags,
         });
-        await context.control.closeRuntimesForCwd(body.cwd);
         return jsonResponse({ entry }, 201);
       } catch (error) {
         return applicationErrorResponse(error);
@@ -86,14 +86,15 @@ export function createMemoryRoutes(context: MemoryRoutesContext): Hono {
       const entryId = c.req.param("entryId");
       if (!cwd) return errorResponse(400, "cwd is required");
       if (!entryId) return errorResponse(400, "entryId is required");
-      const lease = context.control.acquireCwdMutation(cwd);
+      const lease = context.control.acquireGlobalMutation();
       if (!lease) {
         return errorResponse(
           409,
-          "Cannot update memory while session runs are active for this cwd",
+          "Cannot update memory while tasks or memory extraction are active",
         );
       }
       try {
+        await context.control.closeAllRuntimes();
         const deleted = await context.memoryService.remove({
           cwd,
           id: entryId,
@@ -101,7 +102,6 @@ export function createMemoryRoutes(context: MemoryRoutesContext): Hono {
         });
         if (!deleted)
           return errorResponse(404, `Memory entry not found: ${entryId}`);
-        await context.control.closeRuntimesForCwd(cwd);
         return jsonResponse({ deleted: true, id: entryId });
       } catch (error) {
         return applicationErrorResponse(error);
@@ -123,14 +123,14 @@ export function createMemoryRoutes(context: MemoryRoutesContext): Hono {
           400,
           "cwd, content and expectedRevision are required",
         );
-      const lease = context.control.acquireCwdMutation(body.cwd);
+      const lease = context.control.acquireGlobalMutation();
       if (!lease)
         return errorResponse(
           409,
-          "Cannot edit memory while tasks or memory extraction are active for this cwd",
+          "Cannot edit memory while tasks or memory extraction are active",
         );
       try {
-        await context.control.closeRuntimesForCwd(body.cwd);
+        await context.control.closeAllRuntimes();
         const entry = await context.memoryService.update({
           cwd: body.cwd,
           id: c.req.param("entryId"),
@@ -160,14 +160,14 @@ export function createMemoryRoutes(context: MemoryRoutesContext): Hono {
         )
       )
         return errorResponse(400, "cwd and versioned entry list are required");
-      const lease = context.control.acquireCwdMutation(body.cwd);
+      const lease = context.control.acquireGlobalMutation();
       if (!lease)
         return errorResponse(
           409,
-          "Cannot clear memory while tasks or extraction are active for this cwd",
+          "Cannot clear memory while tasks or extraction are active",
         );
       try {
-        await context.control.closeRuntimesForCwd(body.cwd);
+        await context.control.closeAllRuntimes();
         return jsonResponse(
           await context.memoryService.clear({
             cwd: body.cwd,

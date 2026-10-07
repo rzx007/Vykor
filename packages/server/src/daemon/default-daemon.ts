@@ -1,5 +1,5 @@
 import { ChannelConfigStore } from "@vykor/auth";
-import { loadSettings, loadProjectSettings } from "@vykor/core";
+import { loadSettings, loadProjectSettings, mergeAgentEnvironmentSettings } from "@vykor/core";
 
 import {
   createDefaultApplicationServices,
@@ -38,6 +38,7 @@ export async function startVykorDaemon(
     },
   };
   const startupAgentEnvironment = settingsRef.current.agentEnvironment;
+  const kindOverride = process.env.VYKOR_AGENT_ENVIRONMENT === "native" || process.env.VYKOR_AGENT_ENVIRONMENT === "wsl" ? process.env.VYKOR_AGENT_ENVIRONMENT : undefined;
   return await startVykorServer({
     ...options,
     executionSurface: options.executionSurface ?? "desktop_managed",
@@ -50,11 +51,8 @@ export async function startVykorDaemon(
         projectRoot: cwd,
       });
       const project = (await loadProjectSettings(cwd))?.agentEnvironment;
-      return { ...effective, agentEnvironment: {
-        ...startupAgentEnvironment!, ...project,
-        env: { ...startupAgentEnvironment?.env, ...project?.env },
-        secretEnv: [...new Set([...(startupAgentEnvironment?.secretEnv ?? []), ...(project?.secretEnv ?? [])])],
-      } };
+      return { ...effective, agentEnvironment: mergeAgentEnvironmentSettings(startupAgentEnvironment,
+        project, kindOverride ? { kind: kindOverride } : undefined) };
     },
     services: {
       commandCatalog: createDefaultCommandCatalog(() => settingsRef.current),

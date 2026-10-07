@@ -18,7 +18,7 @@ export function createSessionEnvironmentAcquirer(_input?: unknown) {
     const secretNames = settings.agentEnvironment?.secretEnv ?? [];
     const secretEnv = { ...await loadRuntimeSecrets("global", secretNames),
       ...await loadRuntimeSecrets(resolve(sessionSettingsRoot(session)), secretNames) };
-    if (secretNames.some(name => secretEnv[name] === undefined)) throw new Error("任务所需的机密环境变量尚未配置。");
+    if (secretNames.some(name => !Object.hasOwn(secretEnv, name) || secretEnv[name] === undefined)) throw new Error("任务所需的机密环境变量尚未配置。");
     const base = await createExecutionEnvironment({
       config,
       settings,

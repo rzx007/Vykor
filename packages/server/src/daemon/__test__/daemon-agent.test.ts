@@ -32,6 +32,7 @@ import { getCoordinatorUserContext } from "@vykor/coordinator";
 import { createDefaultNodeAgentWithInternals } from "../../../../agent-runtime/src/default-agent.js";
 import { AgentPool } from "../../application/agent/agent-pool.js";
 import { SessionCommandService } from "../../application/session/session-command-service.js";
+import { resolve } from "node:path";
 import { DaemonOperationGate } from "../../application/control/daemon-operation-gate.js";
 
 const session = {
@@ -53,6 +54,16 @@ const session = {
 } as any;
 
 describe("createDaemonAgentLoader", () => {
+  it("executes a task in its worktree while loading settings and memory from the owning project", async () => {
+    const root = resolve("/owning-project");
+    const cwd = resolve("/tasks/worktree");
+    const getSettingsForCwd = vi.fn(async () => ({ model: "default-model" } as any));
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn(async () => {}) }) as any);
+    const loader = createDaemonAgentLoader({ getSettingsForCwd, createAgent })!;
+    await loader({ session: { ...session, cwd, metadata: { ...session.metadata, desktop: { settingsRoot: root, worktree: { id: "tree", path: cwd, branch: "task/tree" } } } }, history: [], parts: [] });
+    expect(getSettingsForCwd).toHaveBeenCalledWith(root);
+    expect(createAgent.mock.calls[0]![0].options).toMatchObject({ cwd, memoryRoot: root });
+  });
   it("returns no loader when the daemon has no Agent configuration", () => {
     expect(createDaemonAgentLoader({})).toBeUndefined();
   });

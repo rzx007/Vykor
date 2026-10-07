@@ -39,7 +39,8 @@ vi.mock("react-resizable-panels", () => ({
   usePanelRef: () => ({ current: null }),
 }))
 
-vi.mock("@renderer/components/desktop/settings-page/settings-navigation", () => ({
+vi.mock("@renderer/components/desktop/settings-page/settings-navigation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@renderer/components/desktop/settings-page/settings-navigation")>(),
   defaultSettingsSection: "general",
 }))
 vi.mock("@renderer/components/desktop/open-with", () => ({ OpenWithSplitButton: () => null }))

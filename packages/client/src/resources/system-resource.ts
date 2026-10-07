@@ -36,6 +36,12 @@ export interface FactReplacementResult {
   cacheWarning?: string;
 }
 
+export interface DaemonRestartPreview {
+  runs: Array<{ id: string; sessionId: string; status: string }>
+  tasks: Array<{ id: string; sessionId: string; status: string }>
+  terminals: Array<{ id: string; status: string }>
+}
+
 export class SystemResource {
   constructor(private readonly transport: HttpTransport) {}
 
@@ -60,6 +66,14 @@ export class SystemResource {
       { signal: options.signal },
     );
     return response.settings;
+  }
+
+  async getRestartPreview(options: { signal?: AbortSignal } = {}): Promise<DaemonRestartPreview> {
+    return this.transport.request<DaemonRestartPreview>("/maintenance/restart-preview", { signal: options.signal });
+  }
+
+  async prepareRestart(options: { signal?: AbortSignal } = {}): Promise<{ prepared: true }> {
+    return this.transport.request<{ prepared: true }>("/maintenance/prepare-restart", { method: "POST", signal: options.signal });
   }
 
   /** `PATCH /settings` */

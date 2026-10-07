@@ -1,11 +1,4 @@
-import {
-  AlertCircle,
-  HardDrive,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-} from "lucide-react"
+import { AlertCircle, HardDrive, RefreshCw, ShieldCheck, Sparkles, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import type {
@@ -26,11 +19,7 @@ import {
   AlertDialogTitle,
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@renderer/components/ui/card"
+import { Card, CardContent, CardHeader } from "@renderer/components/ui/card"
 import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { toast } from "@renderer/lib/toast"
@@ -40,7 +29,12 @@ import {
   formatBytes,
   groupStorageIssues,
 } from "./attachment-storage-format"
-import { MaintenanceRow, StorageHealth, StorageOverview, type Operation } from "./attachment-storage-view"
+import {
+  MaintenanceRow,
+  StorageHealth,
+  StorageOverview,
+  type Operation,
+} from "./attachment-storage-view"
 
 type Feedback = {
   tone: "default" | "destructive"
@@ -250,7 +244,7 @@ export function AttachmentStorageSettings(): React.JSX.Element {
             <MaintenanceRow
               icon={<ShieldCheck />}
               title="安全修复"
-              description="清除过期占用标记，并移除没有任何附件记录引用的孤立文件。不会删除仍被对话引用的附件。"
+              description="清除过期占用和孤立文件，保留对话引用的附件。"
               action={
                 <Button
                   type="button"
@@ -272,7 +266,7 @@ export function AttachmentStorageSettings(): React.JSX.Element {
             <MaintenanceRow
               icon={<Trash2 />}
               title="清理无用附件"
-              description="只处理已经标记删除、超过保留期、没有引用且没有任务正在使用的数据。执行前会再次确认。"
+              description="仅清理已标记删除、过保留期、无引用且未使用的附件。"
               action={
                 <Button
                   type="button"

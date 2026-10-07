@@ -19,7 +19,9 @@ import type { StorageRetentionPolicy } from "@vykor/protocol";
 import type { DaemonTerminalService } from "../../terminal/daemon-terminal-service.js";
 import { parsePortableSettings } from "../../settings-transfer.js";
 
-export function createMaintenanceRoutes(context: { store: SessionStore; control: DaemonControlService; commands?: SessionCommandService; terminals?: DaemonTerminalService; settings?: SettingsService; readiness?: () => { phase: string; accepting: boolean } | undefined; logs?: () => unknown[] }) {
+export function createMaintenanceRoutes(context: { store: SessionStore; control: DaemonControlService; commands?: SessionCommandService; terminals?: DaemonTerminalService; settings?: SettingsService; readiness?: () => { phase: string; accepting: boolean } | undefined; logs?: () => unknown[]; closeApplication?: () => Promise<void> }) {
+  // Injected applications can omit disk storage; never create files merely to mount HTTP routes.
+  if (typeof context.store.path !== "string") return new Hono().all("/maintenance/*", () => errorResponse(501, "当前后台未提供持久存储维护。"));
   const cleanup = context.commands ? new MaintenanceCleanupService(context.store, context.control, context.commands, context.terminals) : null;
   let detailedUntil = 0;
   const policyPath = join(dirname(context.store.path), "storage-policy.json");
@@ -50,6 +52,14 @@ export function createMaintenanceRoutes(context: { store: SessionStore; control:
     renameSync(temporary, configPath);
     return value;
   }
+  async function restartPreview() {
+    const sessions = context.store.sessions.list({ includeArchived: true });
+    const active = (status: string) => status === "pending" || status === "running" || status === "stopping";
+    const runs = sessions.flatMap(session => context.store.runs.listRuns(session.id)).filter(run => active(run.status)).map(run => ({ id: run.id, sessionId: run.sessionId, status: run.status }));
+    const tasks = sessions.flatMap(session => context.store.listSessionTasks(session.id)).filter(task => active(task.status)).map(task => ({ id: task.id, sessionId: task.sessionId, status: task.status }));
+    const terminals = (await context.terminals?.list() ?? []).filter(terminal => active(terminal.status)).map(terminal => ({ id: terminal.id, status: terminal.status }));
+    return { runs, tasks, terminals };
+  }
   return new Hono()
     .use("/maintenance/*", async (c, next) => { const state = context.readiness?.(); if (c.req.method !== "GET" && c.req.path !== "/maintenance/usage" && state && (state.phase !== "ready" || !state.accepting)) return errorResponse(409, "后台尚未就绪或已停止准入，拒绝维护写操作"); await next(); })
     .get("/maintenance/readiness", () => jsonResponse(context.readiness?.() ?? { phase: "unknown", accepting: false }))
@@ -59,13 +69,20 @@ export function createMaintenanceRoutes(context: { store: SessionStore; control:
       const space = await statfs(root).catch(() => null);
       return jsonResponse({ writable, availableBytes: space ? space.bavail * space.bsize : null, logsDirectory: getLogsDir() });
     } catch (error) { return fail(error); } })
-    .get("/maintenance/restart-preview", async () => {
-      const sessions = context.store.sessions.list({ includeArchived: true });
-      const active = (status: string) => status === "pending" || status === "running" || status === "stopping";
-      const runs = sessions.flatMap(session => context.store.runs.listRuns(session.id)).filter(run => active(run.status)).map(run => ({ id: run.id, sessionId: run.sessionId, status: run.status }));
-      const tasks = sessions.flatMap(session => context.store.listSessionTasks(session.id)).filter(task => active(task.status)).map(task => ({ id: task.id, sessionId: task.sessionId, status: task.status }));
-      const terminals = (await context.terminals?.list() ?? []).filter(terminal => active(terminal.status)).map(terminal => ({ id: terminal.id, status: terminal.status }));
-      return jsonResponse({ runs, tasks, terminals });
+    .get("/maintenance/restart-preview", async () => jsonResponse(await restartPreview()))
+    .post("/maintenance/prepare-restart", async () => {
+      if (!context.closeApplication) return errorResponse(501, "后台未提供安全重启接口");
+      const lease = context.control.acquireGlobalMutation();
+      if (!lease) return errorResponse(409, "仍有运行或尚未收尾的任务，不能准备重启");
+      try {
+        const preview = await restartPreview();
+        if (preview.runs.length || preview.tasks.length || preview.terminals.length) return errorResponse(409, "任务、后台任务或终端尚未结束，请收尾后重试");
+        // closeApplication closes admission synchronously; its drain waits for this lease.
+        const closing = context.closeApplication();
+        lease.release();
+        await closing;
+        return jsonResponse({ prepared: true });
+      } catch (error) { return fail(error); } finally { lease.release(); }
     })
     .get("/maintenance/cleanup/policy", () => { try { return jsonResponse(readPolicy()); } catch (error) { return fail(error); } })
     .post("/maintenance/cleanup/policy", async c => { try {

@@ -1,3 +1,4 @@
+import { SettingsGroup } from "./settings-group"
 import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@renderer/components/ui/field"
@@ -34,6 +35,7 @@ export function SettingsListInput({
   id,
   label,
   description,
+  placeholder = "每行一项，留空不设置",
   value,
   disabled,
   onChange,
@@ -41,6 +43,7 @@ export function SettingsListInput({
   id: string
   label: string
   description: string
+  placeholder?: string
   value: string[]
   disabled: boolean
   onChange(value: string[]): void
@@ -57,12 +60,13 @@ export function SettingsListInput({
         disabled={disabled}
         value={text}
         rows={3}
+        placeholder={placeholder}
         onChange={(event) => {
           setText(event.target.value)
           onChange(readSettingLines(event.target.value))
         }}
       />
-      <FieldDescription>{description}每行一项，留空表示不设置。</FieldDescription>
+      <FieldDescription>{description}</FieldDescription>
     </Field>
   )
 }
@@ -94,11 +98,7 @@ export function PermissionRulesEditor({
   const lists = [
     ["deniedTools", "禁止使用的工具", "禁止规则优先于自动批准。"],
     ["autoApproveTools", "自动通过的工具", "手动批准模式下也可通过，仍遵守禁止规则。"],
-    [
-      "allowedTools",
-      "工具允许列表",
-      "限制名单外工具；手动批准模式的自动通过列表可以额外放行，禁止规则始终有效。",
-    ],
+    ["allowedTools", "工具允许列表", "手动模式的自动通过列表可放行名单外工具，禁止规则优先。"],
     ["deniedCommands", "禁止的命令", "支持 * 匹配任意内容、? 匹配一个字符。"],
   ] as const
 
@@ -125,7 +125,7 @@ export function PermissionRulesEditor({
 
   return (
     <div className="flex flex-col gap-8">
-      <FieldGroup>
+      <FieldGroup className="settings-panel">
         <Field data-disabled={busy}>
           <FieldLabel htmlFor="permission-mode">新会话默认批准方式</FieldLabel>
           <Select
@@ -149,7 +149,7 @@ export function PermissionRulesEditor({
             </SelectContent>
           </Select>
           <FieldDescription>
-            保存后用于新会话。已有会话保留自己的批准方式；只读计划不允许编辑和有副作用的命令。
+            新会话生效，已有会话不变；只读计划禁止写入和有副作用的命令。
           </FieldDescription>
         </Field>
         {lists.map(([key, label, description]) => (
@@ -166,8 +166,7 @@ export function PermissionRulesEditor({
         <Field>
           <FieldLabel>文件路径规则</FieldLabel>
           <FieldDescription>
-            同一路径采用第一条匹配规则，按从上到下的顺序检查；独立目标中任何一项被禁止都会拦截。路径支持
-            * 和 ?。这不等于命令进程的系统级隔离。
+            从上到下取首条匹配，任一目标被禁止则拦截。支持 * 和 ?；不等于系统隔离。
           </FieldDescription>
           {(draft.pathRules ?? []).map((rule, index) => (
             <div key={index} className="flex flex-wrap items-center gap-2">
@@ -274,12 +273,9 @@ export function PermissionRulesEditor({
           恢复默认规则
         </Button>
       </div>
-      <section aria-labelledby="permission-check-heading" className="flex flex-col gap-4">
-        <h2 id="permission-check-heading" className="text-base font-semibold">
-          检查规则
-        </h2>
+      <SettingsGroup title="检查规则" id="permission-check-heading">
         <p className="text-sm text-muted-foreground">
-          使用上方草稿检查工具批准规则，不执行命令、不读取文件。此结果不包含项目覆盖、插件工具来源或系统隔离判断。
+          仅检查草稿，不执行命令或读取文件；不含项目、插件及系统隔离规则。
         </p>
         <FieldGroup>
           {[
@@ -314,7 +310,7 @@ export function PermissionRulesEditor({
             {decision}
           </p>
         ) : null}
-      </section>
+      </SettingsGroup>
     </div>
   )
 }

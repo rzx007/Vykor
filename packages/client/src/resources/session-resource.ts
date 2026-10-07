@@ -9,8 +9,9 @@ import type {
   UpdateSessionGoalInput,
   SearchSessionsOptions,
   SessionSearchResult,
+  ClearSessionWorktreeBindingInput,
 } from "@vykor/protocol";
-import { decodeSessionStateSnapshot } from "@vykor/protocol";
+import { decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {
   AdmitClientPromptInput,
@@ -122,6 +123,12 @@ export class SessionResource {
       },
     );
     return response.session;
+  }
+
+  /** Clear only an archived session's matching binding after its directory was removed. */
+  async clearWorktreeBinding(sessionId: string, input: ClearSessionWorktreeBindingInput, options: { signal?: AbortSignal } = {}): Promise<SessionRecord> {
+    const response = await this.transport.request<{ session: SessionRecord }>(`/sessions/${encodeURIComponent(sessionId)}/worktree-cleared`, { method: "POST", body: input, signal: options.signal });
+    return decodeClearedSessionWorktreeBinding(response.session, sessionId);
   }
 
   /** `POST /sessions/:id/fork` */

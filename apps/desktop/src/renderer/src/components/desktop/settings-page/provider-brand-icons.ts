@@ -13,6 +13,7 @@ import MinimaxColor from "@lobehub/icons/es/Minimax/components/Color"
 import MistralColor from "@lobehub/icons/es/Mistral/components/Color"
 import MoonshotMono from "@lobehub/icons/es/Moonshot/components/Mono"
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono"
+import OpenCodeMono from "@lobehub/icons/es/OpenCode/components/Mono"
 import OpenRouterColor from "@lobehub/icons/es/OpenRouter/components/Color"
 import SiliconCloudColor from "@lobehub/icons/es/SiliconCloud/components/Color"
 import StepfunMono from "@lobehub/icons/es/Stepfun/components/Mono"
@@ -38,6 +39,7 @@ export const resolveProviderBrandIcon = createProviderBrandIconResolver<Provider
   mistral: MistralColor,
   moonshot: MoonshotMono,
   openAI: OpenAIMono,
+  openCode: OpenCodeMono,
   openRouter: OpenRouterColor,
   siliconCloud: SiliconCloudColor,
   stepfun: StepfunMono,

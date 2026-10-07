@@ -1,9 +1,30 @@
-import { Link2, LoaderCircle, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react"
+import {
+  KeyRound,
+  Link2,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Unplug,
+} from "lucide-react"
+import { useRef, useState } from "react"
+import {
+  OverflowActions,
+  type OverflowActionItem,
+} from "@renderer/components/motion/overflow-actions"
 import type * as React from "react"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@renderer/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
 import { Input } from "@renderer/components/ui/input"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
@@ -74,7 +95,7 @@ export function ProviderListCard({
       <CardContent className="px-0">
         <ProviderGroup
           label="已配置"
-          description="检测到认证或本地配置；测试通过才标为已验证。凭据值不会返回页面。"
+          description="已找到连接信息，测试后确认是否可用。"
           providers={connectedProviders}
           verified={verified}
           onTest={onTest}
@@ -88,7 +109,7 @@ export function ProviderListCard({
         <Separator />
         <ProviderGroup
           label="可连接"
-          description="选择模型服务并保存 API 密钥。"
+          description="选择一个服务，接入它的模型。"
           providers={availableProviders}
           verified={verified}
           onTest={onTest}
@@ -162,7 +183,9 @@ export function MoreProvidersDialog({
       <DialogContent className="flex max-h-[min(38rem,calc(100vh-2rem))] flex-col gap-3 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>更多供应商</DialogTitle>
-          <DialogDescription>保存 API Key 时会请求服务的模型列表接口验证；上游可能按自己的规则收费。</DialogDescription>
+          <DialogDescription>
+            保存 API Key 时会请求服务的模型列表接口验证；上游可能按自己的规则收费。
+          </DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search
@@ -299,6 +322,56 @@ function ProviderRow({
   verification?: { model: string; checkedAt: number }
   onTest: () => void
 }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const actions: OverflowActionItem[] = []
+  const name = providerDisplayName(provider)
+  if (provider.connected)
+    actions.push({
+      id: "test",
+      label: provider.name === "codex" ? "暂不支持独立测试" : "测试连接",
+      icon: <Link2 className="size-4" aria-hidden="true" />,
+      disabled: locked || !provider.models.length || provider.name === "codex",
+      onClick: onTest,
+      ariaLabel: `测试 ${name} 连接`,
+    })
+  if (provider.credentialSource === "credentials")
+    actions.push({
+      id: "credentials",
+      label: "更新密钥",
+      icon: <KeyRound className="size-4" aria-hidden="true" />,
+      disabled: locked,
+      onClick: onConnect,
+      ariaLabel: `更新 ${name} 密钥`,
+    })
+  if (provider.credentialSource === "credentials" && !provider.custom)
+    actions.push({
+      id: "disconnect",
+      label: "断开",
+      icon: <Unplug className="size-4" aria-hidden="true" />,
+      disabled: locked,
+      onClick: onDisconnect,
+      ariaLabel: `断开 ${name}`,
+    })
+  if (provider.custom)
+    actions.push(
+      {
+        id: "edit",
+        label: "编辑",
+        icon: <Pencil className="size-4" aria-hidden="true" />,
+        disabled: locked,
+        onClick: onEditCustom,
+        ariaLabel: `编辑 ${provider.displayName}`,
+      },
+      {
+        id: "delete",
+        label: "删除",
+        icon: <Trash2 className="size-4 text-destructive" aria-hidden="true" />,
+        disabled: locked,
+        onClick: onRemoveCustom,
+        ariaLabel: `删除 ${provider.displayName}`,
+      }
+    )
   return (
     <div className="flex min-h-16 flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -312,7 +385,13 @@ function ProviderRow({
               </Badge>
             ) : null}
             {provider.active ? <Badge variant="outline">默认连接</Badge> : null}
-            {provider.connected ? <span className="text-xs text-muted-foreground">{verification ? `已验证模型列表 · ${new Date(verification.checkedAt).toLocaleTimeString()}` : "已配置，未验证"}</span> : null}
+            {provider.connected ? (
+              <span className="text-xs text-muted-foreground">
+                {verification
+                  ? `已验证模型列表 · ${new Date(verification.checkedAt).toLocaleTimeString()}`
+                  : "已配置，未验证"}
+              </span>
+            ) : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {providerDescriptions[provider.name] ??
@@ -324,47 +403,62 @@ function ProviderRow({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1.5">
-        {provider.connected && <Button type="button" size="sm" variant="ghost" disabled={locked || !provider.models.length || provider.name === "codex"} title={provider.name === "codex" ? "订阅适配器未提供独立模型列表验证接口" : !provider.models.length ? "供应商没有列出可测试模型" : "向服务发送模型列表请求，不发送任务正文"} onClick={onTest}>测试连接</Button>}
-        {provider.credentialSource === "credentials" ? (
-          <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onConnect}>
-            {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
-            {busy ? "保存中..." : "更新密钥"}
-          </Button>
-        ) : !provider.connected ? (
-          <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onConnect}>
+      <div
+        ref={actionsRef}
+        className="flex max-w-full shrink-0 items-center justify-end gap-2"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && expanded) {
+            setExpanded(false)
+            actionsRef.current?.querySelector<HTMLButtonElement>("button[aria-expanded]")?.focus()
+            event.stopPropagation()
+          }
+        }}
+      >
+        {busy ? (
+          <LoaderCircle
+            className="size-4 animate-spin text-muted-foreground"
+            aria-label={`正在处理 ${name}`}
+          />
+        ) : null}
+        {!provider.connected && provider.credentialSource !== "credentials" ? (
+          <Button
+            type="button"
+            size="icon-sm"
+            shape="circle"
+            variant="outline"
+            title={`连接 ${name}`}
+            aria-label={`连接 ${name}`}
+            disabled={locked}
+            onClick={onConnect}
+          >
             <Link2 data-icon="inline-start" />
-            连接
           </Button>
         ) : null}
-        {provider.credentialSource === "credentials" && !provider.custom ? (
-          <Button type="button" size="sm" variant="ghost" disabled={locked} onClick={onDisconnect}>
-            断开
-          </Button>
-        ) : null}
-        {provider.custom ? (
-          <>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`编辑 ${provider.displayName}`}
-              disabled={locked}
-              onClick={onEditCustom}
-            >
-              <Pencil data-icon="inline-start" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`删除 ${provider.displayName}`}
-              disabled={locked}
-              onClick={onRemoveCustom}
-            >
-              <Trash2 data-icon="inline-start" />
-            </Button>
-          </>
+        {actions.length ? (
+          <OverflowActions
+            primaryActions={actions.filter(
+              (action) => action.id === "test" || action.id === "credentials"
+            )}
+            overflowActions={actions.filter(
+              (action) => action.id !== "test" && action.id !== "credentials"
+            )}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
+            collapseOnAction
+            size="sm"
+            openLabel={`更多 ${name} 操作`}
+            closeLabel={`收起 ${name} 操作`}
+            className="max-w-full overflow-x-auto"
+            classNames={{
+              action: "w-8 gap-0 px-0 disabled:pointer-events-auto",
+              label: "sr-only",
+              toggle: cn(
+                "bg-muted text-muted-foreground hover:text-foreground",
+                !actions.some((action) => action.id !== "test" && action.id !== "credentials") &&
+                  "hidden"
+              ),
+            }}
+          />
         ) : null}
       </div>
     </div>

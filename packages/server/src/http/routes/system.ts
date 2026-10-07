@@ -29,6 +29,7 @@ import { settingsPatchRuntimeImpact } from "../../application/default-services/s
 import type { SessionPluginUiService } from "../../application/session/session-plugin-ui-service.js";
 
 export interface SystemRoutesContext {
+  restartPreparedHealth?: () => (VykorServerHealth & { ready: false; accepting: false; restartPrepared: true }) | undefined;
   memoryManagementReady?: boolean;
   pluginUiReady?: boolean;
   pluginUiLifecycleReady?: boolean;
@@ -85,6 +86,8 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               retention: 1,
               permissionApprovals: 1,
               maintenanceSettings: 1,
+              gitWorktreeBindings: 1,
+              safeRestart: 1,
               attachments: 1,
               pluginCapabilities: 1,
               ...(context.pluginUiReady ? { pluginUi: 1 } : {}),
@@ -110,6 +113,8 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
       ),
     )
     .get("/health", () => {
+      const prepared = context.restartPreparedHealth?.();
+      if (prepared) return jsonResponse(prepared);
       const snapshot = context.control.runtimeSnapshot();
       return jsonResponse({
         ok: true,

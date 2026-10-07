@@ -405,6 +405,8 @@ export const desktopAPI = {
     openDirectory: input => invoke(PersonalizationManagementChannels.openDirectory, input),
   },
   configurationSettings: {
+    limits: () => invoke(ConfigurationSettingsChannels.limits),
+    updateLimits: input => invoke(ConfigurationSettingsChannels.updateLimits, input),
     review: () => invoke(ConfigurationSettingsChannels.review),
     updateReview: input => invoke(ConfigurationSettingsChannels.updateReview, input),
     exportFile: categories => invoke(ConfigurationSettingsChannels.exportFile, categories),
@@ -569,6 +571,16 @@ export const desktopAPI = {
         listener(value)
       ipcRenderer.on(IpcEvents.sessionDaemonStatusChanged, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionDaemonStatusChanged, wrapped)
+    },
+    onDataDirectoryChanged: listener => {
+      const wrapped = () => listener()
+      ipcRenderer.on(IpcEvents.sessionDataDirectoryChanged, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.sessionDataDirectoryChanged, wrapped)
+    },
+    onDaemonRestarted: listener => {
+      const wrapped = () => listener()
+      ipcRenderer.on(IpcEvents.sessionDaemonRestarted, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.sessionDaemonRestarted, wrapped)
     },
     onUpdated: (
       listener: (value: IpcInvokeMap[typeof IpcChannels.sessionOpen]["result"]) => void

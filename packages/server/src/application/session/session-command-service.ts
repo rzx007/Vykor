@@ -7,6 +7,7 @@ import type {
   SessionMessageRole,
   SessionRecord,
   UpsertMessagePartInput,
+  ClearSessionWorktreeBindingInput,
 } from "@vykor/protocol";
 import {
   changedSessionRuntimeKeys,
@@ -30,12 +31,19 @@ export interface UpdateSessionCommand {
 export interface SessionCommandStoreOperations {
   createSession(input: CreateSessionInput): SessionRecord;
   getSession(sessionId: string): SessionRecord | null | undefined;
-  updateSession(sessionId: string, input: {
-    title?: string;
-    model?: string;
-    agent?: string | null;
-    metadata?: Record<string, unknown>;
-  }): SessionRecord;
+  updateSession(
+    sessionId: string,
+    input: {
+      title?: string;
+      model?: string;
+      agent?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+  ): SessionRecord;
+  clearWorktreeBinding?(
+    sessionId: string,
+    input: ClearSessionWorktreeBindingInput,
+  ): SessionRecord;
   archiveSession(sessionId: string): SessionRecord;
   beginArchive(sessionId: string): SessionRecord;
   listChildSessions(sessionId: string, options?: { includeArchived?: boolean }): SessionRecord[];
@@ -61,7 +69,10 @@ export interface SessionCommandTransactions {
 export interface SessionCommandRuntimeControl {
   closeAgent(sessionId: string): Promise<void>;
   hasActiveWorkForSession(sessionId: string): boolean;
-  interruptSession(sessionId: string): { activeRunId?: string; queuedRunIds: string[] };
+  interruptSession(sessionId: string): {
+    activeRunId?: string;
+    queuedRunIds: string[];
+  };
   waitForRuns(runIds: string[]): Promise<void>;
   hasRunWork(sessionId: string): boolean;
   interruptLiveChild(sessionId: string, reason: string): Promise<boolean>;
@@ -73,7 +84,11 @@ export interface SessionCommandOperationGate {
   tryEnterBarrier(
     target: { kind: "session"; sessionId: string; cwd: string },
     predicate: () => boolean,
-    descriptor?: { operationId: string; operationName: string; startedAt: number },
+    descriptor?: {
+      operationId: string;
+      operationName: string;
+      startedAt: number;
+    },
   ): { release(): void } | null | undefined;
 }
 
@@ -99,16 +114,16 @@ export interface SessionCommandServiceOptions {
 }
 
 const LIVE_REQUEST_CONFIGURATION_KEYS = new Set([
+  "model", "provider", "baseUrl", "apiFormat", "effort",
+  "maxTurns",
+  "systemPrompt",
+]);
+const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
   "model",
   "provider",
   "baseUrl",
   "apiFormat",
   "effort",
-  "maxTurns",
-  "systemPrompt",
-]);
-const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
-  "model", "provider", "baseUrl", "apiFormat", "effort",
 ]);
 
 function isLiveRequestConfigurationChange(
@@ -119,7 +134,10 @@ function isLiveRequestConfigurationChange(
   const before = readSessionRuntimeConfig(session);
   const after = readSessionRuntimeConfig({ ...session, metadata });
   const changed = changedSessionRuntimeKeys(before, after);
-  return changed.length > 0 && changed.every((key) => LIVE_REQUEST_CONFIGURATION_KEYS.has(key));
+  return (
+    changed.length > 0 &&
+    changed.every((key) => LIVE_REQUEST_CONFIGURATION_KEYS.has(key))
+  );
 }
 
 function readRuntimeMetadata(
@@ -221,9 +239,17 @@ export class SessionCommandService {
   forkSession(sessionId: string, input: ForkSessionCommand = {}): SessionRecord {
     this.assertReady();
     const source = this.options.sessions.getSession(sessionId);
-    if (!source) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    if (input.copyHistory === false && (input.beforeMessageId !== undefined || input.afterMessageId !== undefined)) {
-      throw new SessionApplicationError(400, "copyHistory=false cannot select a fork point");
+    if (!source)
+      throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
+    if (
+      input.copyHistory === false &&
+      (input.beforeMessageId !== undefined ||
+        input.afterMessageId !== undefined)
+    ) {
+      throw new SessionApplicationError(
+        400,
+        "copyHistory=false cannot select a fork point",
+      );
     }
 
     const before = this.options.events.checkpoint();
@@ -274,7 +300,59 @@ export class SessionCommandService {
       { kind: "cwd", cwd: session.cwd, sessionId }, () => this.enqueueUpdateSession(sessionId, input));
     return this.enqueueUpdateSession(sessionId, input);
   }
-  private async enqueueUpdateSession(sessionId: string, input: UpdateSessionCommand): Promise<SessionRecord> {
+
+  async clearWorktreeBinding(
+    sessionId: string,
+    input: ClearSessionWorktreeBindingInput,
+  ): Promise<SessionRecord> {
+    this.assertReady();
+    const session = this.options.sessions.getSession(sessionId);
+    if (!session) throw new SessionApplicationError(404, "Session not found");
+    if (!this.options.sessions.clearWorktreeBinding)
+      throw new SessionApplicationError(
+        500,
+        "Worktree binding maintenance is unavailable",
+      );
+    const lease = this.options.operationGate.tryEnterBarrier(
+      { kind: "session", sessionId, cwd: session.cwd },
+      () =>
+        !this.options.runtimeControl.hasLiveChild(sessionId) &&
+        !this.options.runtimeControl.hasRunWork(sessionId) &&
+        !this.options.runtimeControl.hasActiveWorkForSession(sessionId),
+      {
+        operationId: randomUUID(),
+        operationName: "刷新已清理的工作目录绑定",
+        startedAt: Date.now(),
+      },
+    );
+    if (!lease)
+      throw new SessionApplicationError(
+        409,
+        "Cannot clear a worktree binding while session work is active",
+      );
+    try {
+      const checkpoint = this.options.events.checkpoint();
+      const result = this.options.sessions.clearWorktreeBinding(
+        sessionId,
+        input,
+      );
+      this.options.events.publishSince(checkpoint);
+      return result;
+    } catch (error) {
+      if ((error as { code?: string })?.code === "worktree_binding_conflict")
+        throw new SessionApplicationError(
+          409,
+          error instanceof Error ? error.message : String(error),
+        );
+      throw error;
+    } finally {
+      lease.release();
+    }
+  }
+  private async enqueueUpdateSession(
+    sessionId: string,
+    input: UpdateSessionCommand,
+  ): Promise<SessionRecord> {
     const previous = this.updateQueues.get(sessionId) ?? Promise.resolve();
     const update = previous.then(
       () => this.updateSessionWork(sessionId, input),

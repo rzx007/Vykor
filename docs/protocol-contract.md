@@ -50,6 +50,8 @@ Feature 用于同一基本协议下的能力选择。例如客户端使用 Workf
 
 会话授权管理是同一基础协议下的附加能力，`features.permissionApprovals = 1`。`GET /permissions/approvals` 返回当前可复用的会话工具授权；`POST /permissions/:requestId/revoke` 撤销所选当前授权，返回持久撤销记录。撤销保留原批准记录，后续调用重新询问；单次批准不能通过此入口撤销为另一种决定。
 
+已清理工作目录的绑定维护使用附加能力 `features.gitWorktreeBindings = 1`。`POST /sessions/:sessionId/worktree-cleared` 仅接收原绑定 `{id, path, branch}`，要求会话已归档、绑定匹配且目录确实不存在（`ENOENT`）。它只移除 `metadata.desktop.worktree`，保留 `settingsRoot` 和其余元数据，持久保存并发布会话更新；已无绑定时幂等。普通归档会话编辑仍被禁止。客户端检查返回的会话身份、归档状态和绑定已移除；目录已删但更新失败时保留待刷新记录，重试只更新绑定。
+
 项目记忆管理使用附加能力 `features.memoryManagement = 1`。记忆记录增加可选 `revision`（持久内容与元数据的 SHA-256 指纹）；`PATCH /memory/:entryId` 必须携带 `cwd`、`content` 和 `expectedRevision`，`DELETE /memory/:entryId` 可携带查询参数 `expectedRevision`，`POST /memory/clear` 必须携带该项目所有当前条目的 `expectedEntries: [{id, revision}]`。修改前检查项目任务和版本，冲突保持原内容；后台未提供此能力时，客户端不发起编辑或清空请求。
 
 设置编辑可提交 `expectedPermission` 或 `expectedSandbox`，分别表示打开编辑器时读取的原值。服务在已有配置文件锁内比较原值，冲突时不保存；比较字段不写入配置。客户端遇到变化应重新读取再编辑。

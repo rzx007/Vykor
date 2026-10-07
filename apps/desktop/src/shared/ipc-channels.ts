@@ -407,6 +407,8 @@ export const IpcEvents = {
   activityUpdated: "activity:updated",
   sessionAuxUpdated: "session:aux-updated",
   sessionDaemonStatusChanged: "session:daemon-status-changed",
+  sessionDataDirectoryChanged: "session:data-directory-changed",
+  sessionDaemonRestarted: "session:daemon-restarted",
   attachmentUploadEvent: "attachment:upload-event",
   terminalData: "terminal:data",
   terminalStatus: "terminal:status",

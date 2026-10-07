@@ -43,6 +43,7 @@ import {
   errorResponse,
   normalizeAllowedOrigins,
   type JsonRecord,
+  type VykorServerHealth,
 } from "./support.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { createAttachmentRoutes } from "./routes/attachment.js";
@@ -158,6 +159,7 @@ export class VykorHttpServer {
   private listener?: Listener;
   private listenResult?: ListenResult;
   private closePromise?: Promise<void>;
+  private restartPreparedHealth?: VykorServerHealth & { ready: false; accepting: false; restartPrepared: true };
 
   constructor(options: VykorServerOptions = {}) {
     this.app = new Hono();
@@ -338,6 +340,7 @@ export class VykorHttpServer {
     this.app.route(
       "/",
       createSystemRoutes({
+        restartPreparedHealth: () => this.restartPreparedHealth,
         memoryManagementReady: Boolean(this.services.memory?.update && this.services.memory?.clear),
         version: this.version,
         commandCatalog: this.services.commandCatalog,
@@ -353,7 +356,16 @@ export class VykorHttpServer {
         pluginUi: this.application.pluginUi,
       }),
     );
-    this.app.route("/", createMaintenanceRoutes({ store: this.store, control: this.application.control, commands: this.application.commands, terminals: this.application.terminals, settings: this.services.settings, readiness: () => this.application.diagnosticState, logs: () => this.maintenanceLogs }));
+    this.app.route("/", createMaintenanceRoutes({ store: this.store, control: this.application.control, commands: this.application.commands, terminals: this.application.terminals, settings: this.services.settings, readiness: () => this.application.diagnosticState, logs: () => this.maintenanceLogs,
+      closeApplication: () => {
+        const snapshot = this.application.control.runtimeSnapshot();
+        this.restartPreparedHealth = { ok: true, ...(this.version ? { version: this.version } : {}),
+          startedAt: snapshot.startedAt, uptimeMs: snapshot.uptimeMs, sessionCount: snapshot.sessions.total,
+          activeRunCount: snapshot.coordinator.activeRunCount, queuedRunCount: snapshot.coordinator.queuedRunCount,
+          ready: false, accepting: false, restartPrepared: true };
+        return this.application.close();
+      },
+    }));
     this.app.route(
       "/attachments",
       createAttachmentRoutes(this.application.attachments),

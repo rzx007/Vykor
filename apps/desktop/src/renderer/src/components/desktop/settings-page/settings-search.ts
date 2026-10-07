@@ -2,6 +2,13 @@ import { settingsSectionLabel } from "./settings-navigation"
 
 export interface SettingSearchResult { section: string; label: string; title: string; target?: string }
 const entries: Array<[string, string, string, string?]> = [
+  ["general", "默认模型", "供应商 默认 新对话 思考方式", "provider-defaults-heading"],
+  ["general", "默认批准方式", "权限 手动 自动 只读计划", "general-permission-mode"],
+  ["general", "系统通知", "提醒 完成 失败 焦点"],
+  ["general", "界面主题", "浅色 深色 跟随系统"],
+  ["general", "开发习惯", "默认 终端 Shell 本机 WSL 运行环境"],
+  ["general", "任务轮数上限", "高级 maxTurns 推进 模型请求", "general-max-turns"],
+  ["general", "浏览器开发者模式", "高级 页面诊断 DOM", "general-browser-developer"],
   ["general", "工作风格", "务实 高效 沟通"], ["general", "思考过程展示", "推理 展开 隐藏"],
   ["general", "后台持续运行", "daemon 自启动 常驻 登录 恢复"], ["general", "默认文件打开应用", "编辑器 文件 打开目标"],
   ["general", "完成后自动检查", "风险 只读审查 autoReview", "auto-review-mode"], ["general", "配置导入和导出", "备份 偏好 JSON", "configuration-transfer-heading"],

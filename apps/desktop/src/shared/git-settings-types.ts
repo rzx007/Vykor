@@ -59,6 +59,7 @@ export interface ManagedGitWorktree {
   preserved: boolean
   disposable: boolean
   cleanupAllowed: boolean
+  directoryRemoved?: boolean
   reason?: string
 }
 export interface GitSettingsSnapshot {

@@ -14,7 +14,24 @@ import {
   getPluginSourcesDir,
   getProjectConfigDir,
   getProjectMemoryDir,
+  resolvePaths,
 } from "./paths";
+
+it("refreshes cached data paths without relocating configuration or credentials", () => {
+  const previous = process.env.VYKOR_DATA_DIR;
+  try {
+    delete process.env.VYKOR_DATA_DIR;
+    const original = resolvePaths();
+    process.env.VYKOR_DATA_DIR = resolve("/temporary/restored-data");
+    const restored = resolvePaths();
+    expect(restored.dataDir).toBe(process.env.VYKOR_DATA_DIR);
+    expect(restored.configFilePath).toBe(original.configFilePath);
+    expect(restored.credentialsFilePath).toBe(original.credentialsFilePath);
+    expect(restored.logsDir).toBe(join(restored.dataDir, "logs"));
+    delete process.env.VYKOR_DATA_DIR;
+    expect(resolvePaths().dataDir).toBe(original.dataDir);
+  } finally { if (previous === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previous; }
+});
 
 describe("project config directory", () => {
   it("uses .vykor as the project-level directory name", () => {

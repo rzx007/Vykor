@@ -50,7 +50,7 @@ export const maintenanceSettingsNavigation: SettingsNavigationItem[] = [
   { label: "诊断与日志", slug: "diagnostics", icon: Activity },
 ]
 
-const settingsNavigation = [
+export const settingsNavigation = [
   ...personalSettingsNavigation,
   ...agentSettingsNavigation,
   ...integrationSettingsNavigation,

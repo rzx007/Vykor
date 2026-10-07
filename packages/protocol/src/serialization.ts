@@ -8,6 +8,7 @@ import type {
   SessionRunAttemptRecord,
   SessionRunRecord,
   SessionStateSnapshot,
+  SessionRecord,
 } from "./session.js";
 import type { AttachmentIntent } from "./attachment.js";
 import type { JobReadResult, JobSnapshot, JobWaitResult } from "./job.js";
@@ -387,6 +388,19 @@ export function decodeSessionStateSnapshot(value: unknown): SessionStateSnapshot
   if (snapshot.tasks !== undefined) arrayField(snapshot, "tasks", "snapshot", validateTask);
   arrayField(snapshot, "permissions", "snapshot", validatePermission);
   return snapshot as unknown as SessionStateSnapshot;
+}
+
+/** Validate the persisted acknowledgement for the narrow archived-worktree cleanup operation. */
+export function decodeClearedSessionWorktreeBinding(value: unknown, expectedSessionId: string): SessionRecord {
+  const session = validateSession(value, "session");
+  if (session.id !== expectedSessionId || session.status !== "archived") throw new ProtocolDataError("Cleared worktree acknowledgement must refer to the expected archived session", "session");
+  const metadata = session.metadata as Record<string, unknown>;
+  const desktop = metadata.desktop;
+  if (desktop !== undefined && desktop !== null) {
+    const fields = object(desktop, "session.metadata.desktop");
+    if (fields.worktree !== undefined && fields.worktree !== null) throw new ProtocolDataError("The worktree binding was not cleared", "session.metadata.desktop.worktree");
+  }
+  return session as unknown as SessionRecord;
 }
 
 export function deserializeSessionStateSnapshot(text: string): SessionStateSnapshot {

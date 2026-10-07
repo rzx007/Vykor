@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { getDataDir, getLogsDir } from "@vykor/core";
 import type { SessionStore } from "@vykor/services";
@@ -84,7 +84,14 @@ export class MaintenanceCleanupService {
   }
   private tree(id: string): string[] { return [id, ...this.store.sessions.listChildren(id, { includeArchived: true }).flatMap(child => this.tree(child.id))]; }
   private protection(ids: string[]): string | null {
-    if (ids.some(id => { const session = this.store.sessions.get(id); const desktop = session?.metadata?.desktop as Record<string, unknown> | undefined; return Boolean(desktop?.worktree); })) return "仍绑定独立工作目录；请先在 Git 设置中安全清理独立工作目录";
+    if (ids.some(id => {
+      const desktop = this.store.sessions.get(id)?.metadata?.desktop as Record<string, unknown> | undefined;
+      if (!desktop?.worktree) return false;
+      const path = (desktop.worktree as Record<string, unknown>).path;
+      if (typeof path !== "string" || !isAbsolute(path)) return true;
+      try { statSync(path); return true; }
+      catch (error) { return (error as NodeJS.ErrnoException).code !== "ENOENT"; }
+    })) return "仍绑定独立工作目录；请先在 Git 设置中安全清理独立工作目录";
     if (this.control.hasAnyActiveRuns() || this.control.runtimeSnapshot().coordinator.queuedRunCount > 0) return "后台仍有活动或排队任务，请收尾后重试";
     if (ids.some(id => this.store.runs.listRuns(id).some(run => run.status === "pending" || run.status === "running"))) return "包含活动或排队运行记录";
     if (ids.some(id => this.store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"))) return "包含活动子任务或后台任务";

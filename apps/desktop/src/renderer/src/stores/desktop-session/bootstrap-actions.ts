@@ -14,6 +14,7 @@ import {
 import { resolveInitialProject, sessionProvider, sortSessions } from "./helpers"
 import { clearPersistedActiveSessionId, readPersistedActiveSessionId } from "./persistence"
 import type { BootstrapActions, DesktopSessionState, DesktopStoreContext } from "./types"
+import { createInitialState } from "./initial-state"
 
 export function createBootstrapActions(context: DesktopStoreContext): BootstrapActions {
   const { get, set } = context
@@ -140,9 +141,21 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
 }
 
 export function attachDesktopDaemonStatusEvents(context: DesktopStoreContext): () => void {
-  return window.desktop.sessions.onDaemonStatusChanged((daemonStatus) => {
+  const detachStatus = window.desktop.sessions.onDaemonStatusChanged((daemonStatus) => {
     context.set({ daemonStatus })
   })
+  const detachData = window.desktop.sessions.onDataDirectoryChanged(() => {
+    clearPersistedActiveSessionId()
+    context.set({ ...createInitialState(), loadStatus: "loading" })
+    void context.get().refreshBootstrap().then(() => context.set({ loadStatus: "ready" }), () => context.set({ loadStatus: "error" }))
+  })
+  const detachRestart = window.desktop.sessions.onDaemonRestarted(() => {
+    void context.get().refreshBootstrap().then(
+      () => context.get().resyncActiveSessionSnapshot(),
+      () => undefined
+    )
+  })
+  return () => { detachStatus(); detachData(); detachRestart() }
 }
 
 export function applyBootstrapData(

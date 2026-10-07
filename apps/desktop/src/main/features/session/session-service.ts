@@ -55,6 +55,7 @@ import type {
   SessionGoal,
 } from "../../../shared/session-types"
 import { resolveDesktopAttachmentSupport } from "../../../shared/attachment-types"
+import { IpcEvents } from "../../../shared/ipc-channels"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
 import {
@@ -88,6 +89,10 @@ export class DesktopSessionService {
     (ownerId, sessionIds) => this.subscriptions.closeDeletedSessions(ownerId, sessionIds)
   )
   readonly operations = new SessionOperations()
+
+  constructor() {
+    this.connection.onInvalidated(() => this.subscriptions.clearAll())
+  }
 
   async listSessions(): Promise<DesktopSessionLists> {
     const client = await this.getClient()
@@ -471,6 +476,9 @@ export class DesktopSessionService {
   daemonClient(): Promise<VykorClient> {
     return this.connection.getClient()
   }
+  onDaemonInvalidated(listener: () => void): () => void {
+    return this.connection.onInvalidated(listener)
+  }
 
   async refreshDaemonClient(): Promise<VykorClient> {
     this.subscriptions.clearAll()
@@ -480,15 +488,35 @@ export class DesktopSessionService {
   }
 
   async restartDaemon(options: { stopActive?: boolean } = {}): Promise<void> {
-    this.subscriptions.clearAll()
     const client = await this.connection.restart(options)
     await this.activitySubscriptions.replaceClient(client)
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDaemonRestarted)
+    }
   }
 
   async switchDataDirectory(directory: string, options: { stopActive?: boolean; storePath?: string } = {}): Promise<void> {
-    this.subscriptions.clearAll()
-    const client = await this.connection.switchDataDirectory(directory, options)
-    await this.activitySubscriptions.replaceClient(client)
+    let invalidated = false
+    const detach = this.connection.onInvalidated(() => { invalidated = true })
+    try {
+      const client = await this.connection.switchDataDirectory(directory, options)
+      await this.activitySubscriptions.replaceClient(client)
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDataDirectoryChanged)
+      }
+    } catch (error) {
+      // A failed switch can have restarted the original database during rollback.
+      // Keep its UI selection, but reconnect subscriptions to that recovered client.
+      if (invalidated && this.connection.getDaemonStatus().phase === "ready") {
+        await (async () => {
+          await this.activitySubscriptions.replaceClient(await this.connection.getClient())
+          for (const window of BrowserWindow.getAllWindows()) {
+            if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDaemonRestarted)
+          }
+        })().catch(() => undefined)
+      }
+      throw error
+    } finally { detach() }
   }
 
   get clientPromise(): Promise<VykorClient> | null {

@@ -13,6 +13,7 @@ import type {
   ScheduledStopPolicy,
   UpdateScheduledTaskInput,
   UpdateSessionInput,
+  ClearSessionWorktreeBindingInput,
 } from "./session.js";
 import type { AttachmentIntent } from "./attachment.js";
 import {
@@ -240,6 +241,14 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
     ...(rawAgent !== undefined ? { agent: rawAgent as string | null } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
   };
+}
+
+export function parseClearSessionWorktreeBindingRequest(value: unknown): ClearSessionWorktreeBindingInput {
+  const body = record(value);
+  for (const key of Object.keys(body)) if (!["id", "path", "branch"].includes(key)) throw new ProtocolValidationError("Only the expected worktree binding may be supplied", key);
+  const result = { id: requiredString(body, "id"), path: requiredString(body, "path"), branch: requiredString(body, "branch") };
+  for (const [key, text] of Object.entries(result)) if (!text.trim() || text.length > 4096 || text.includes("\0")) throw new ProtocolValidationError("Expected worktree binding field is invalid", key);
+  return result;
 }
 
 export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {

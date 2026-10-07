@@ -124,10 +124,10 @@ async function reclaimIfStale(
  */
 export async function updateSettings(
   change: (current: Settings) => Settings | Promise<Settings>,
-  options?: SettingsLockOptions,
+  options?: SettingsLockOptions & { includeEnvironment?: boolean },
 ): Promise<Settings> {
   return withSettingsFileLock(async () => {
-    const current = await loadSettings();
+    const current = await loadSettings(undefined, { includeEnvironment: options?.includeEnvironment });
     const next = await change(current);
     await saveSettings(next);
     return next;

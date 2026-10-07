@@ -489,6 +489,8 @@ export type DesktopAPI = {
     archive: (sessionId: string) => Promise<DesktopSessionRecord>
     delete: (sessionId: string) => Promise<string[]>
     onDaemonStatusChanged: (listener: (value: DesktopDaemonStatus) => void) => () => void
+    onDataDirectoryChanged: (listener: () => void) => () => void
+    onDaemonRestarted: (listener: () => void) => () => void
     onUpdated: (listener: (value: DesktopSessionView) => void) => () => void
     onAuxUpdated: (listener: (value: DesktopAuxSessionUpdate) => void) => () => void
   }

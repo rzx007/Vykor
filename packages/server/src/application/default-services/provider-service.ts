@@ -50,8 +50,7 @@ export function createDefaultProviderService(
     providers: CustomProviderSettings[],
     patch: Partial<Settings> = {},
   ): Promise<void> => {
-    const next = { ...ref.current, ...patch, customProviders: providers };
-    await saveSettingsAndRefreshRef(ref, next);
+    await saveSettingsAndRefreshRef(ref, { ...patch, customProviders: providers });
   };
 
   const saveWithCredentials = async (provider: string, changes: Record<string, string | null>, providers: CustomProviderSettings[], patch: Partial<Settings> = {}) => {

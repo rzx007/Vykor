@@ -79,7 +79,7 @@ export function PersonalizationSettings(): React.JSX.Element {
         <div className="mx-auto mt-12 max-w-3xl">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">Vykor 自定义指令</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            为使用全局默认设置的聊天提供额外指令和背景信息。项目或会话设置可覆盖它。
+            默认指令，可被项目或会话设置覆盖。
           </p>
           <Textarea
             aria-label="自定义指令内容"
@@ -99,10 +99,10 @@ export function PersonalizationSettings(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-12 px-6 py-12 sm:px-10">
+    <div className="settings-content-column">
       <header className="flex flex-col gap-2">
         <h1 className="font-heading text-xl font-semibold tracking-tight">个性化</h1>
-        <p className="text-sm text-muted-foreground">管理 Vykor 的额外指令和项目长期记忆。</p>
+        <p className="text-sm text-muted-foreground">设置默认指令和项目记忆。</p>
       </header>
 
       <PersonalizationMemoryManagement />
@@ -132,7 +132,7 @@ export function PersonalizationSettings(): React.JSX.Element {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Vykor</span>
                 <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  为使用全局默认设置的聊天提供额外指令。项目设置可进一步补充。
+                  默认指令，项目设置可补充。
                 </span>
               </span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

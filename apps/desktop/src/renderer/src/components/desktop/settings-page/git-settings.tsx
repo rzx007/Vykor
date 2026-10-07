@@ -1,3 +1,4 @@
+import { SettingsGroup } from "./settings-group"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
@@ -16,6 +17,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -84,15 +86,13 @@ export function GitSettings() {
       })
       setSnapshot({ ...snapshot, preferences })
       setDraft(preferences)
-    }, "Git 偏好已保存。差异偏好用于新打开的差异面板，任务位置和分支前缀用于后续新建任务。")
+    }, "已保存，新差异面板和任务生效。")
   }
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 p-6">
+    <div className="settings-content-column">
       <header>
         <h1 className="text-xl font-semibold">Git</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          检查实际使用的 Git、提交身份与独立工作目录。暂存和提交继续在项目中完成。
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">暂存和提交在项目中完成。</p>
       </header>
       {error && (
         <Alert variant="destructive">
@@ -109,30 +109,34 @@ export function GitSettings() {
           {feedback}
         </p>
       )}
-      <section className="space-y-4" data-setting-id="git-detection">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">实际 Git 环境</h2>
+      <SettingsGroup
+        title="实际 Git 环境"
+        data-setting-id="git-detection"
+        action={
           <Button variant="ghost" disabled={busy} onClick={() => void run(reload, "检测完成。")}>
             重新检测
           </Button>
-        </div>
-        <label className="flex items-center gap-4 text-sm">
-          明确选择项目
+        }
+      >
+        <label className="settings-form-row text-sm">
+          所选项目
           <Select
             value={projectId ?? "global"}
             onValueChange={(value) => setProjectId(value && value !== "global" ? value : undefined)}
             disabled={busy}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="global">用户默认 / 不选择项目</SelectItem>
-              {projects.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.name}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectItem value="global">用户默认 / 不选择项目</SelectItem>
+                {projects.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </label>
@@ -154,12 +158,11 @@ export function GitSettings() {
             ))}
           </>
         )}
-      </section>
+      </SettingsGroup>
       {snapshot && draft && (
         <>
-          <section className="space-y-5" data-setting-id="git-identity">
-            <h2 className="text-[15px] font-semibold">提交身份</h2>
-            <label className="flex items-center gap-4 text-sm">
+          <SettingsGroup title="提交身份" data-setting-id="git-identity">
+            <label className="settings-form-row text-sm">
               编辑所在环境
               <Select
                 value={environment}
@@ -168,17 +171,19 @@ export function GitSettings() {
                 }}
                 disabled={busy}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="native">本机 Git</SelectItem>
-                  <SelectItem value="wsl">WSL Git</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="native">本机 Git</SelectItem>
+                    <SelectItem value="wsl">WSL Git</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </label>
             <p className="text-xs text-muted-foreground">
-              姓名和邮箱保存到 Git 配置；项目身份优先于用户全局身份。环境变量仍可覆盖配置。
+              项目身份优先于全局身份；环境变量仍可覆盖。
             </p>
             <IdentityEditor
               key={`global-${environment}-${projectId}`}
@@ -197,7 +202,7 @@ export function GitSettings() {
                     expectedEmail: expected.configuredEmail,
                   })
                   setSnapshot(next)
-                }, "用户全局提交身份已保存。项目覆盖保持独立。")
+                }, "全局身份已保存。")
               }
             />
             {projectId ? (
@@ -219,16 +224,15 @@ export function GitSettings() {
                         expectedEmail: expected.configuredEmail,
                       })
                       setSnapshot(next)
-                    }, "选定项目提交身份已保存。用户全局身份保持独立。")
+                    }, "项目身份已保存。")
                   }
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">当前环境中项目不是可用的 Git 仓库。</p>
               )
             ) : null}
-          </section>
-          <section className="space-y-4" data-setting-id="git-diff">
-            <h2 className="text-[15px] font-semibold">差异显示</h2>
+          </SettingsGroup>
+          <SettingsGroup title="差异显示" data-setting-id="git-diff">
             <label className="flex items-center justify-between text-sm">
               新打开面板的默认范围
               <Select
@@ -239,13 +243,15 @@ export function GitSettings() {
                     void preference({ defaultScope: value })
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="uncommitted">全部未提交</SelectItem>
-                  <SelectItem value="staged">仅已暂存</SelectItem>
-                  <SelectItem value="unstaged">仅未暂存</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="uncommitted">全部未提交</SelectItem>
+                    <SelectItem value="staged">仅已暂存</SelectItem>
+                    <SelectItem value="unstaged">仅未暂存</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </label>
@@ -258,12 +264,14 @@ export function GitSettings() {
                   if (value === "unified" || value === "split") void preference({ viewMode: value })
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unified">统一视图</SelectItem>
-                  <SelectItem value="split">左右对照</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="unified">统一视图</SelectItem>
+                    <SelectItem value="split">左右对照</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </label>
@@ -275,17 +283,16 @@ export function GitSettings() {
                 onCheckedChange={(value) => void preference({ ignoreWhitespace: value })}
               />
             </label>
-            <p className="text-xs text-muted-foreground">仅影响查看，不修改文件或提交内容。</p>
-          </section>
-          <section className="space-y-4" data-setting-id="git-worktrees">
-            <h2 className="text-[15px] font-semibold">分支与独立工作目录</h2>
+            <p className="text-xs text-muted-foreground">仅影响显示。</p>
+          </SettingsGroup>
+          <SettingsGroup title="分支与独立工作目录" data-setting-id="git-worktrees">
             <p className="text-xs text-muted-foreground">
-              Git worktree
-              是同一仓库的另一份工作目录，让任务在不同分支执行。会话创建时也可明确选择；创建失败会停止创建，不会改为当前目录。
+              独立目录让任务在不同分支执行；创建失败不会改用原目录。
             </p>
-            <label className="block space-y-2 text-sm">
+            <label className="settings-form-row text-sm">
               新建分支前缀
               <Input
+                placeholder="例如 task/"
                 value={draft.branchPrefix}
                 disabled={busy}
                 onChange={(event) => setDraft({ ...draft, branchPrefix: event.target.value })}
@@ -307,12 +314,14 @@ export function GitSettings() {
                     void preference({ defaultTaskLocation: value })
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="current">当前目录</SelectItem>
-                  <SelectItem value="worktree">独立工作目录</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="current">当前目录</SelectItem>
+                    <SelectItem value="worktree">独立工作目录</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </label>
@@ -358,7 +367,7 @@ export function GitSettings() {
               />
             </label>
             <p className="text-xs text-muted-foreground">
-              只清理由 Vykor 创建、任务已结束、无未提交改动，且成果已保留或明确允许删除的目录。
+              仅清理 Vykor 创建、任务已结束且无未提交改动的目录；成果须已保留或明确放弃。
             </p>
             {snapshot.worktrees.length === 0 ? (
               <p className="text-sm text-muted-foreground">没有 Vykor 管理的独立工作目录。</p>
@@ -405,7 +414,9 @@ export function GitSettings() {
                       disabled={busy || !item.cleanupAllowed}
                       onClick={() =>
                         setConfirmation({
-                          text: `清理 ${item.path}？已确认任务结束、没有未提交改动，${item.preserved ? "成果已保留" : "已明确允许删除"}。Git 分支保留。`,
+                          text: item.directoryRemoved
+                            ? `${item.path} 已经清理，重试只刷新会话绑定；不会删除目录或 Git 分支。`
+                            : `清理 ${item.path}？已确认任务结束、没有未提交改动，${item.preserved ? "成果已保留" : "已明确允许删除"}。Git 分支保留。`,
                           apply: async () => {
                             await window.desktop.gitSettings.cleanup({ id: item.id })
                             await reload()
@@ -413,13 +424,13 @@ export function GitSettings() {
                         })
                       }
                     >
-                      清理目录
+                      {item.directoryRemoved ? "刷新绑定" : "清理目录"}
                     </Button>
                   </div>
                 </div>
               ))
             )}
-          </section>
+          </SettingsGroup>
         </>
       )}
       <AlertDialog
@@ -478,23 +489,25 @@ function IdentityEditor({
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   return (
-    <div className="space-y-2 text-sm">
+    <div className="flex flex-col gap-3 text-sm">
       <p className="font-medium">{label}</p>
       {identity ? (
         editing ? (
           <>
-            <label className="block space-y-1">
+            <label className="settings-form-row">
               提交姓名
               <Input
+                placeholder="提交时显示的姓名"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 disabled={busy}
               />
             </label>
-            <label className="block space-y-1">
+            <label className="settings-form-row">
               提交邮箱
               <Input
                 type="email"
+                placeholder="name@example.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={busy}

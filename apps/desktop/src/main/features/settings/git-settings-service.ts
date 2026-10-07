@@ -1,6 +1,16 @@
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdir, open, readFile, readdir, realpath, rename, stat, unlink } from "node:fs/promises"
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  stat,
+  unlink,
+} from "node:fs/promises"
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { homedir } from "node:os"
 import { promisify } from "node:util"
@@ -26,6 +36,16 @@ import {
 import { desktopRuntimeSettingsService } from "./runtime-settings-service"
 
 const exec = promisify(execFile)
+type GitCleanupRecord = GitWorktreeRecord & { directoryRemovedAt?: number }
+async function directoryMissing(path: string) {
+  try {
+    await lstat(path)
+    return false
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true
+    throw error
+  }
+}
 interface Environment {
   kind: "native" | "wsl"
   distribution?: string
@@ -590,61 +610,81 @@ export class GitSettingsService {
         let preserved = false
         let bytes: number | null = null
         let reason = "目录状态尚未验证"
+        let directoryRemoved = false
         try {
           const environment = recordEnvironment(record)
+          directoryRemoved = await directoryMissing(record.path)
           const state = record.sessionId
-            ? await client.sessions.getState(record.sessionId)
+            ? await client.sessions.getState(record.sessionId).catch((error) => {
+                if (directoryRemoved && (error as { status?: number }).status === 404)
+                  return undefined
+                throw error
+              })
             : undefined
           const snapshot = state
-          active =
-            !snapshot ||
-            snapshot.session.status !== "archived" ||
-            snapshot.runs.some((run) => ["pending", "running"].includes(run.status)) ||
-            (snapshot.tasks ?? []).some((task) => ["pending", "running"].includes(task.status))
-          const root = await realpath(record.projectPath)
-          const path = await realpath(record.path)
-          if (isInsideGitDirectory(root, path)) throw new Error("目录位于项目内容中，禁止清理")
-          const registered = await git(["worktree", "list", "--porcelain"], root, environment)
-          const branch = (await git(["symbolic-ref", "--short", "HEAD"], path, environment)).trim()
-          const actualPath = await gitPath(path, environment)
-          if (
-            !registered
-              .replace(/\\/g, "/")
-              .includes(`worktree ${actualPath.replace(/\\/g, "/")}\n`) ||
-            branch !== record.branch
-          )
-            throw new Error("工作目录或分支已改变，禁止清理")
-          dirty =
-            (
-              await git(["status", "--porcelain", "--untracked-files=all"], path, environment)
-            ).trim() !== ""
-          const head = (await git(["rev-parse", "HEAD"], path, environment)).trim()
-          const otherBranches = (
-            await git(
-              [
-                "for-each-ref",
-                `--contains=${head}`,
-                "--format=%(refname:short)",
-                "refs/heads",
-                "refs/remotes",
-              ],
-              root,
-              environment
+          active = snapshot
+            ? snapshot.session.status !== "archived" ||
+              snapshot.runs.some((run) => ["pending", "running"].includes(run.status)) ||
+              (snapshot.tasks ?? []).some((task) => ["pending", "running"].includes(task.status))
+            : !directoryRemoved
+          if (directoryRemoved) {
+            dirty = false
+            bytes = 0
+            verified = true
+            preserved = typeof (record as GitCleanupRecord).directoryRemovedAt === "number"
+            reason = active
+              ? "目录已不存在，但会话尚未结束，暂不刷新绑定"
+              : "目录已清理，会话绑定待刷新；重试只更新绑定"
+          } else {
+            if ((record as GitCleanupRecord).directoryRemovedAt)
+              throw new Error("已清理的目录重新出现，无法确认归属，保留绑定")
+            const root = await realpath(record.projectPath)
+            const path = await realpath(record.path)
+            if (isInsideGitDirectory(root, path)) throw new Error("目录位于项目内容中，禁止清理")
+            const registered = await git(["worktree", "list", "--porcelain"], root, environment)
+            const branch = (
+              await git(["symbolic-ref", "--short", "HEAD"], path, environment)
+            ).trim()
+            const actualPath = await gitPath(path, environment)
+            if (
+              !registered
+                .replace(/\\/g, "/")
+                .includes(`worktree ${actualPath.replace(/\\/g, "/")}\n`) ||
+              branch !== record.branch
             )
-          )
-            .trim()
-            .split(/\r?\n/)
-            .filter((value) => value && value !== record.branch)
-          preserved = head === record.baseCommit || otherBranches.length > 0
-          bytes = await directoryBytes(path)
-          verified = true
-          reason = active
-            ? "会话尚未归档或任务未结束；归档后才能清理"
-            : dirty
-              ? "包含未提交改动"
-              : !preserved && !record.disposable
-                ? "成果尚未合并或明确允许删除"
-                : "可以安全清理"
+              throw new Error("工作目录或分支已改变，禁止清理")
+            dirty =
+              (
+                await git(["status", "--porcelain", "--untracked-files=all"], path, environment)
+              ).trim() !== ""
+            const head = (await git(["rev-parse", "HEAD"], path, environment)).trim()
+            const otherBranches = (
+              await git(
+                [
+                  "for-each-ref",
+                  `--contains=${head}`,
+                  "--format=%(refname:short)",
+                  "refs/heads",
+                  "refs/remotes",
+                ],
+                root,
+                environment
+              )
+            )
+              .trim()
+              .split(/\r?\n/)
+              .filter((value) => value && value !== record.branch)
+            preserved = head === record.baseCommit || otherBranches.length > 0
+            bytes = await directoryBytes(path)
+            verified = true
+            reason = active
+              ? "会话尚未归档或任务未结束；归档后才能清理"
+              : dirty
+                ? "包含未提交改动"
+                : !preserved && !record.disposable
+                  ? "成果尚未合并或明确允许删除"
+                  : "可以安全清理"
+          }
         } catch (error) {
           reason = message(error)
         }
@@ -655,13 +695,16 @@ export class GitSettingsService {
           dirty,
           preserved,
           bytes,
-          cleanupAllowed: worktreeCleanupAllowed({
-            active,
-            dirty,
-            preserved,
-            disposable: record.disposable,
-            verified,
-          }),
+          directoryRemoved,
+          cleanupAllowed: directoryRemoved
+            ? verified && !active
+            : worktreeCleanupAllowed({
+                active,
+                dirty,
+                preserved,
+                disposable: record.disposable,
+                verified,
+              }),
           reason,
         }
       })
@@ -671,17 +714,71 @@ export class GitSettingsService {
     if (!input || typeof input.id !== "string" || this.cleaning.has(input.id))
       throw new Error("该目录正在清理或输入无效。")
     this.cleaning.add(input.id)
+    let removed = false
     try {
       const item = (await this.worktrees()).find((entry) => entry.id === input.id)
       if (!item?.cleanupAllowed) throw new Error(item?.reason ?? "这不是 Vykor 管理的工作目录。")
       const record = getGitSettings().worktrees.find((record) => record.id === item.id)!
-      const environment = recordEnvironment(record)
-      await git(
-        ["worktree", "remove", "--", await gitPath(item.path, environment)],
-        item.projectPath,
-        environment
+      removed = item.directoryRemoved === true
+      const client = await desktopSessionService.daemonClient()
+      if (
+        record.sessionId &&
+        ((await client.protocol.capabilities()).features.gitWorktreeBindings ?? 0) < 1
       )
+        throw new Error("后台尚不支持已清理目录的会话绑定维护，请更新后台后重试。")
+      const environment = recordEnvironment(record)
+      const missing = await directoryMissing(record.path)
+      if (item.directoryRemoved && !missing)
+        throw new Error("目录重新出现，无法确认归属，不能刷新绑定。")
+      removed = missing
+      if (!removed) {
+        await git(
+          ["worktree", "remove", "--", await gitPath(item.path, environment)],
+          item.projectPath,
+          environment
+        )
+        removed = true
+      }
+      updateGitWorktrees((records) =>
+        records.map((entry) =>
+          entry.id === record.id
+            ? {
+                ...entry,
+                directoryRemovedAt: (entry as GitCleanupRecord).directoryRemovedAt ?? Date.now(),
+              }
+            : entry
+        )
+      )
+      if (record.sessionId) {
+        try {
+          const updated = await client.sessions.clearWorktreeBinding(record.sessionId, {
+            id: record.id,
+            path: record.path,
+            branch: record.branch,
+          })
+          const desktop = updated?.metadata?.desktop as Record<string, unknown> | undefined
+          if (!updated?.metadata || desktop?.worktree)
+            throw new Error("后台没有确认已清除工作目录绑定。")
+        } catch (error) {
+          if ((error as { status?: number }).status !== 404) throw error
+          // A missing archived session is already detached; distinguish it from an absent endpoint.
+          let absent = false
+          try {
+            await client.sessions.get(record.sessionId)
+          } catch (check) {
+            if ((check as { status?: number }).status === 404) absent = true
+            else throw check
+          }
+          if (!absent) throw error
+        }
+      }
       updateGitWorktrees((records) => records.filter((entry) => entry.id !== item.id))
+    } catch (error) {
+      if (removed)
+        throw new Error(
+          `目录已清理，但会话绑定或本机记录刷新失败；可重新读取后点击“刷新绑定”重试：${message(error)}`
+        )
+      throw error
     } finally {
       this.cleaning.delete(input.id)
     }

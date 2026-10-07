@@ -15,11 +15,12 @@ export interface RuntimeSettingsSnapshot {
   wslSupported: boolean
   inheritedVariableNames: string[]
   distributions: string[]
+  secretRevision: string
 }
 export const RuntimeSettingsChannels = { snapshot: "runtime-settings:snapshot", save: "runtime-settings:save", check: "runtime-settings:check", restart: "runtime-settings:restart" } as const
 export interface RuntimeSettingsAPI {
   snapshot(input?: { cwd?: string }): Promise<RuntimeSettingsSnapshot>
-  save(input: { cwd?: string; config: RuntimeEnvironmentConfig | null; expected: RuntimeEnvironmentConfig | null; secrets?: Record<string, string | null> }): Promise<RuntimeSettingsSnapshot>
+  save(input: { cwd?: string; config: RuntimeEnvironmentConfig | null; expected: RuntimeEnvironmentConfig | null; secrets?: Record<string, string | null>; expectedSecretRevision?: string }): Promise<RuntimeSettingsSnapshot>
   check(input: { cwd: string; config: RuntimeEnvironmentConfig }): Promise<Array<{ name: string; status: "ok" | "warning" | "failed"; detail: string }>>
   restart(input?: { stopActive?: boolean }): Promise<RuntimeSettingsSnapshot>
 }

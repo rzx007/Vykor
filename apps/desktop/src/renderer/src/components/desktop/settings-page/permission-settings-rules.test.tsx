@@ -57,6 +57,28 @@ describe("PermissionRulesEditor", () => {
     )
     expect(input.value).toBe("Write")
   })
+  it("keeps labels and safety guidance visible when format help becomes a placeholder", async () => {
+    await act(async () =>
+      root.render(
+        <PermissionRulesEditor
+          permission={{ mode: "default", deniedTools: ["Write"] }}
+          busy={false}
+          onSave={vi.fn()}
+        />
+      )
+    )
+    const input = container.querySelector<HTMLTextAreaElement>("#permissions-deniedTools")!
+    expect(input.placeholder).toBe("每行一项，留空不设置")
+    expect(container.querySelector('label[for="permissions-deniedTools"]')?.textContent).toBe(
+      "禁止使用的工具"
+    )
+    expect(container.textContent).toContain("禁止规则优先于自动批准。")
+    expect(container.textContent).not.toContain("每行一项，留空表示不设置。")
+    await change(input, "Shell")
+    expect(container.querySelector('label[for="permissions-deniedTools"]')?.textContent).toBe(
+      "禁止使用的工具"
+    )
+  })
   it("keeps the original edit baseline when another section refreshes the snapshot", async () => {
     const save = vi.fn()
     const original = { mode: "default" as const, deniedTools: ["Write"] }

@@ -1,4 +1,5 @@
-import { loadSettings, parsePermissionSettings, parseAgentEnvironmentSettings, updateSettings, type Settings } from "@vykor/core";
+import { loadSettings, parsePermissionSettings, parseAgentEnvironmentSettings, SettingsConflictError, updateSettings, type Settings } from "@vykor/core";
+import { isDeepStrictEqual } from "node:util";
 
 export const SETTINGS_TRANSFER_GROUPS = {
   general: ["workStyle", "showReasoning", "maxTurns", "autoReview"],
@@ -29,6 +30,7 @@ export function parsePortableSettings(value: unknown): PortableSettings {
       if (!review || typeof review !== "object" || Object.keys(review).some(key => key !== "mode") || (review.mode !== "off" && review.mode !== "risk_based")) throw new Error("完成后检查设置无效。");
     }
     for (const key of ["model", "provider", "effort", "systemPrompt"]) if (raw[key] !== undefined && typeof raw[key] !== "string") throw new Error(`${key} 必须是文本。`);
+    for (const key of ["model", "provider"]) if (typeof raw[key] === "string" && !raw[key].trim()) throw new Error(`${key} 不能为空。`);
     if (raw.memory !== undefined) {
       const memory = raw.memory as Record<string, unknown>;
       const flags = ["enabled", "sessionMemoryEnabled", "autoExtractEnabled", "autoDreamEnabled"];
@@ -41,7 +43,7 @@ export function parsePortableSettings(value: unknown): PortableSettings {
 }
 
 export async function exportPortableSettings(): Promise<PortableSettings> {
-  const settings = await loadSettings();
+  const settings = await loadSettings(undefined, { includeEnvironment: false });
   const groups: PortableSettings["groups"] = {};
   for (const [category, fields] of Object.entries(SETTINGS_TRANSFER_GROUPS)) {
     const group: Record<string, unknown> = {};
@@ -57,10 +59,26 @@ export async function exportPortableSettings(): Promise<PortableSettings> {
   return { version: 1, groups };
 }
 
-export async function importPortableSettings(value: unknown, selected: string[]): Promise<void> {
+export async function importPortableSettings(value: unknown, selected: string[], expected: PortableSettings,
+  expectedValidation?: Partial<Pick<Settings, "sandbox" | "customProviders">>): Promise<Settings> {
   const file = parsePortableSettings(value);
   if (!selected.length || selected.some(category => !Object.hasOwn(file.groups, category))) throw new Error("请选择文件中存在的设置分类。");
-  await updateSettings(current => {
+  return await updateSettings(current => {
+    for (const field of ["sandbox", "customProviders"] as const) {
+      if (expectedValidation && Object.hasOwn(expectedValidation, field) && !isDeepStrictEqual(current[field], expectedValidation[field])) throw new SettingsConflictError(field);
+    }
+    for (const category of selected) {
+      const target = file.groups[category as keyof typeof file.groups]!;
+      const baseline = expected.groups[category as keyof typeof expected.groups];
+      for (const key of Object.keys(target)) {
+        let present: unknown = current[key as keyof Settings];
+        if (key === "agentEnvironment" && current.agentEnvironment) {
+          const { env: _env, secretEnv: _secretEnv, ...ordinary } = current.agentEnvironment;
+          present = ordinary;
+        }
+        if (!isDeepStrictEqual(present, baseline?.[key])) throw new SettingsConflictError(key);
+      }
+    }
     const patch = Object.assign({}, ...selected.map(category => file.groups[category as keyof typeof file.groups])) as Partial<Settings>;
     return { ...current, ...patch,
       modelDisabled: patch.modelDisabled ?? (patch.model ? false : current.modelDisabled),
@@ -68,5 +86,5 @@ export async function importPortableSettings(value: unknown, selected: string[])
       memory: patch.memory ? { ...current.memory, ...patch.memory } : current.memory,
       agentEnvironment: patch.agentEnvironment ? { ...current.agentEnvironment, ...patch.agentEnvironment } : current.agentEnvironment,
     };
-  });
+  }, { includeEnvironment: false });
 }

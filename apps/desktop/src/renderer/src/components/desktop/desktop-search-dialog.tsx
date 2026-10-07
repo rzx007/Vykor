@@ -11,26 +11,11 @@ import {
 import { channelConnectorLabel } from "@shared/channel-types"
 import type { DesktopSessionSearchResult } from "@shared/session-types"
 import { useOnOpen } from "@renderer/lib/hooks/use-on-open"
-import {
-  codingSettingsNavigation,
-  integrationSettingsNavigation,
-  personalSettingsNavigation,
-} from "./settings-page/settings-navigation"
+import { settingsNavigation } from "./settings-page/settings-navigation"
 import { getShortcutRevision, shortcutLabel, subscribeShortcutChanges } from "./desktop-shortcuts"
 
 const GROUP_ORDER = ["聊天", "已归档聊天", "聊天内容", "快捷操作", "设置"]
 const INITIAL_LIMITS = { 聊天: 9, 已归档聊天: 0 }
-const AVAILABLE_SETTINGS = new Set([
-  "general",
-  "notifications",
-  "profile",
-  "appearance",
-  "providers",
-  "personalization",
-  "keyboard",
-  "connections",
-  "storage",
-])
 
 export function DesktopSearchDialog({
   open,
@@ -170,12 +155,7 @@ export function DesktopSearchDialog({
         onSelect: onSearchFiles,
       },
     ]
-    const settings: CommandItem[] = [
-      ...personalSettingsNavigation,
-      ...integrationSettingsNavigation,
-      ...codingSettingsNavigation,
-    ]
-      .filter((item) => AVAILABLE_SETTINGS.has(item.slug))
+    const settings: CommandItem[] = settingsNavigation
       .map((item) => ({
         id: "setting:" + item.slug,
         label: item.label,

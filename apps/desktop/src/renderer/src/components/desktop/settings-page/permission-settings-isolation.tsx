@@ -1,3 +1,4 @@
+import { SettingsGroup } from "./settings-group"
 import { useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -36,13 +37,9 @@ export function PermissionIsolationEditor({
     ["extraAllowedRoots", "额外允许目录"],
   ] as const
   return (
-    <section aria-labelledby="permission-isolation-heading" className="flex flex-col gap-5">
-      <h2 id="permission-isolation-heading" className="text-base font-semibold">
-        文件和网络边界
-      </h2>
+    <SettingsGroup title="文件和网络边界" id="permission-isolation-heading">
       <p className="text-sm text-muted-foreground">
-        SRT 为本机命令进程增加访问限制。WSL
-        本身不是安全隔离；这里只检查配置和依赖可用性，不代表已有进程采用了新配置。
+        SRT 限制本机命令的访问范围；WSL 不等于安全隔离。
       </p>
       {!available ? (
         <p role="status" className="text-sm">
@@ -53,7 +50,7 @@ export function PermissionIsolationEditor({
         <Field orientation="horizontal" data-disabled={busy || (!available && !draft.enabled)}>
           <FieldContent>
             <FieldLabel htmlFor="isolation-enabled">启用本机隔离</FieldLabel>
-            <FieldDescription>新任务启动时采用。更改不会中断已有任务。</FieldDescription>
+            <FieldDescription>下次任务生效，当前任务不变。</FieldDescription>
           </FieldContent>
           <Switch
             id="isolation-enabled"
@@ -86,6 +83,7 @@ export function PermissionIsolationEditor({
           <FieldLabel htmlFor="isolation-command">SRT 可执行文件</FieldLabel>
           <Input
             id="isolation-command"
+            placeholder="srt 或可执行文件完整路径"
             disabled={busy}
             value={draft.srt.runtimeCommand}
             onChange={(event) =>
@@ -101,6 +99,7 @@ export function PermissionIsolationEditor({
             value={draft.filesystem[key]}
             disabled={busy}
             description="相对目录按任务工作目录解析。"
+            placeholder={"每行一个目录，例如：\n.\n./src"}
             onChange={(value) =>
               setDraft((current) => ({
                 ...current,
@@ -122,15 +121,13 @@ export function PermissionIsolationEditor({
             value={draft.network[key]}
             disabled={busy}
             description="按运行工具支持的域名规则限制。"
+            placeholder={"每行一个域名，例如：\nexample.com"}
             onChange={(value) =>
               setDraft((current) => ({ ...current, network: { ...current.network, [key]: value } }))
             }
           />
         ))}
-        <p className="text-sm text-muted-foreground">
-          启用隔离后，SRT
-          使用上方域名允许和禁止列表限制命令访问网络。关闭隔离时，这些列表不会限制命令进程。
-        </p>
+        <p className="text-sm text-muted-foreground">域名规则仅在启用隔离时生效。</p>
       </FieldGroup>
       <div className="flex gap-2">
         <Button disabled={busy || !dirty} onClick={() => onSave(draft, baseline)}>
@@ -140,6 +137,6 @@ export function PermissionIsolationEditor({
           取消修改
         </Button>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

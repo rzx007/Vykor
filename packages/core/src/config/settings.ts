@@ -5,7 +5,7 @@ import { getConfigDir, getConfigFilePath, getProjectConfigDir, getProjectSetting
 import { writeJsonFileAtomically } from "./atomic-json-write.js";
 import { SettingsConflictError, withSettingsFileLock } from "./settings-mutation.js";
 import { parsePermissionSettings } from "./permission-settings.js";
-import { parseAgentEnvironmentSettings } from "./agent-environment-settings.js";
+import { parseAgentEnvironmentSettings, mergeAgentEnvironmentSettings } from "./agent-environment-settings.js";
 
 export const DEFAULT_OUTPUT_TOKEN_MAX = 32_000;
 
@@ -88,12 +88,12 @@ type SettingsPatch = Partial<Omit<Settings, "sandbox" | "terminal" | "daemon" | 
  */
 export async function loadSettings(
   cliOverrides?: Partial<Settings>,
-  options: { projectRoot?: string; includeProject?: boolean } = {},
+  options: { projectRoot?: string; includeProject?: boolean; includeEnvironment?: boolean } = {},
 ): Promise<Settings> {
   assertPluginUiEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
   assertAgentEnvironment(cliOverrides?.agentEnvironment, "CLI overrides");
   // 从环境变量加载配置
-  const envSettings = loadFromEnv();
+  const envSettings = options.includeEnvironment === false ? {} : loadFromEnv();
   // 从配置文件异步加载配置
   const fileSettings = await loadFromFile();
   const projectSettings = options.includeProject
@@ -108,14 +108,8 @@ export async function loadSettings(
     ...envSettings,
     ...cliOverrides,
   } as Settings;
-  merged.agentEnvironment = {
-    ...DEFAULT_SETTINGS.agentEnvironment!, ...fileSettings?.agentEnvironment, ...projectSettings?.agentEnvironment,
-    ...envSettings.agentEnvironment, ...cliOverrides?.agentEnvironment,
-    env: { ...fileSettings?.agentEnvironment?.env, ...projectSettings?.agentEnvironment?.env,
-      ...envSettings.agentEnvironment?.env, ...cliOverrides?.agentEnvironment?.env },
-    secretEnv: [...new Set([...(fileSettings?.agentEnvironment?.secretEnv ?? []), ...(projectSettings?.agentEnvironment?.secretEnv ?? []),
-      ...(envSettings.agentEnvironment?.secretEnv ?? []), ...(cliOverrides?.agentEnvironment?.secretEnv ?? [])])],
-  };
+  merged.agentEnvironment = mergeAgentEnvironmentSettings(DEFAULT_SETTINGS.agentEnvironment,
+    fileSettings?.agentEnvironment, projectSettings?.agentEnvironment, envSettings.agentEnvironment, cliOverrides?.agentEnvironment);
   merged.memory = {
     ...DEFAULT_SETTINGS.memory,
     ...fileSettings?.memory,
@@ -136,12 +130,6 @@ export async function loadSettings(
     envSettings.sandbox,
     cliOverrides?.sandbox,
   );
-  merged.agentEnvironment = {
-    ...DEFAULT_SETTINGS.agentEnvironment,
-    ...fileSettings?.agentEnvironment,
-    ...envSettings.agentEnvironment,
-    ...cliOverrides?.agentEnvironment,
-  } as NonNullable<Settings["agentEnvironment"]>;
   assertAgentEnvironmentKind(merged.agentEnvironment.kind, "CLI/effective settings");
   merged.terminal = {
     ...DEFAULT_SETTINGS.terminal,

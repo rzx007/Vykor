@@ -18,6 +18,7 @@ export {
 export {
   ProtocolClient,
 } from "./protocol/index.js";
+export type { DaemonRestartPreview } from "./resources/system-resource.js";
 export {
   SystemResource,
   ProviderResource,
@@ -175,6 +176,7 @@ export type {
   MemoryRevision,
   UpdateMemoryEntryInput,
   ClearMemoryInput,
+  ClearSessionWorktreeBindingInput,
   MemoryListResponse,
   ModelInfo,
   ModelProviderInfo,

@@ -401,8 +401,8 @@ describe("system routes", () => {
 });
 
 describe("memory routes", () => {
-  it("adds memory and closes runtimes for the cwd", async () => {
-    const closeRuntimesForCwd = vi.fn();
+  it("adds memory after closing runtimes sharing the project's memory", async () => {
+    const closeAllRuntimes = vi.fn();
     const app = createMemoryRoutes({
       memoryService: {
         add: async (input) => ({ id: "m1", ...input }),
@@ -410,7 +410,7 @@ describe("memory routes", () => {
         get: async () => undefined,
         remove: async () => false,
       },
-      control: daemonControl({ closeRuntimesForCwd }),
+      control: daemonControl({ closeAllRuntimes }),
     });
 
     const response = await app.request("/", {
@@ -424,7 +424,7 @@ describe("memory routes", () => {
     });
 
     expect(response.status).toBe(201);
-    expect(closeRuntimesForCwd).toHaveBeenCalledWith("/repo");
+    expect(closeAllRuntimes).toHaveBeenCalledWith();
   });
 });
 

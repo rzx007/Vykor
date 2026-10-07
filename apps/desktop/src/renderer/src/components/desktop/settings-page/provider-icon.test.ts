@@ -16,6 +16,7 @@ const icons = {
   mistral: Symbol("Mistral"),
   moonshot: Symbol("Moonshot"),
   openAI: Symbol("OpenAI"),
+  openCode: Symbol("OpenCode"),
   openRouter: Symbol("OpenRouter"),
   siliconCloud: Symbol("SiliconCloud"),
   stepfun: Symbol("Stepfun"),
@@ -43,6 +44,22 @@ describe("resolveProviderBrandIcon", () => {
   it("normalizes provider IDs before matching", () => {
     expect(resolveProviderBrandIcon("  OpenAI  ")).toBe(icons.openAI)
   })
+  it.each([
+    "opencode",
+    "opencode-go",
+    "opencode-zen",
+    "OpenCode Go",
+    "OpenCode Zen",
+    "  OPENCODE_ZEN  ",
+  ])("matches %s to the OpenCode brand", (provider) => {
+    expect(resolveProviderBrandIcon(provider)).toBe(icons.openCode)
+  })
+  it.each(["opencode-proxy", "my-opencode-gateway"])(
+    "does not guess the brand of a custom gateway %s",
+    (provider) => {
+      expect(resolveProviderBrandIcon(provider)).toBeUndefined()
+    }
+  )
 
   it("leaves unmatched custom providers for the generic fallback", () => {
     expect(resolveProviderBrandIcon("office-gateway")).toBeUndefined()

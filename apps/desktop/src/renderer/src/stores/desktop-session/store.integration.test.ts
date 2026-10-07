@@ -38,6 +38,8 @@ describe("desktop session store event lifecycle", () => {
         sessions: {
           onUpdated: () => () => undefined,
           onDaemonStatusChanged: () => () => undefined,
+          onDataDirectoryChanged: () => () => undefined,
+          onDaemonRestarted: () => () => undefined,
         },
         activity: {
           open,
@@ -100,7 +102,7 @@ describe("desktop session store event lifecycle", () => {
     }
     vi.stubGlobal("window", {
       desktop: {
-        sessions: { onUpdated, onDaemonStatusChanged },
+        sessions: { onUpdated, onDaemonStatusChanged, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined },
         attachments: { onUploadEvent },
       },
     })
@@ -156,7 +158,7 @@ describe("desktop session store event lifecycle", () => {
     })
     const onDaemonStatusChanged = vi.fn(() => () => undefined)
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 2))
-    vi.stubGlobal("window", { desktop: { sessions: { onUpdated, onDaemonStatusChanged, open } } })
+    vi.stubGlobal("window", { desktop: { sessions: { onUpdated, onDaemonStatusChanged, open, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1", 1),
@@ -181,7 +183,7 @@ describe("desktop session store event lifecycle", () => {
     })
     const getGoal = vi.fn(async () => null)
     vi.stubGlobal("window", {
-      desktop: { sessions: { onUpdated, onDaemonStatusChanged: () => () => undefined, getGoal } },
+      desktop: { sessions: { onUpdated, onDaemonStatusChanged: () => () => undefined, getGoal, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
 

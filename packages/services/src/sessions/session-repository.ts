@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { lstatSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import type {
@@ -9,6 +10,7 @@ import type {
   SessionEventRecord,
   SessionRecord,
   UpdateSessionInput,
+  ClearSessionWorktreeBindingInput,
 } from "@vykor/protocol";
 
 import { atomicWrite } from "../database/atomic-write.js";
@@ -28,6 +30,10 @@ export interface SessionRepositoryOptions {
   };
   appendEvent?: (input: AppendEventInput) => SessionEventRecord;
   save?: () => void;
+}
+
+class SessionWorktreeBindingError extends Error {
+  readonly code = "worktree_binding_conflict";
 }
 
 export class SessionRepository {
@@ -73,7 +79,12 @@ export class SessionRepository {
       if (!project) throw new Error(`Project not found: ${projectId}`);
       const cwd = resolve(input.cwd);
       const cwdRelative = relative(project.path, cwd);
-      if (!input.parentId && (cwdRelative === ".." || cwdRelative.startsWith(`..${sep}`) || isAbsolute(cwdRelative))) {
+      if (
+        !input.parentId &&
+        (cwdRelative === ".." ||
+          cwdRelative.startsWith(`..${sep}`) ||
+          isAbsolute(cwdRelative))
+      ) {
         throw new Error("Session cwd must be within the project directory");
       }
       const session: SessionRecord = {
@@ -118,6 +129,76 @@ export class SessionRepository {
       }
       if (input.metadata !== undefined) session.metadata = input.metadata;
       session.updatedAt = timestamp;
+      this.storage.mutations.sessions.add(sessionId);
+      this.appendEvent?.({
+        type: "session.updated",
+        sessionId,
+        payload: { session: clone(session) },
+      });
+      return clone(session);
+    }, this.saveChanges);
+  }
+
+  /** This maintenance exception never unlocks ordinary edits to archived sessions. */
+  clearWorktreeBinding(
+    sessionId: string,
+    expected: ClearSessionWorktreeBindingInput,
+  ): SessionRecord {
+    const session = assertSession(this.storage.state, sessionId);
+    if (session.status !== "archived")
+      throw new SessionWorktreeBindingError(
+        "Only archived session worktree bindings can be cleared",
+      );
+    const desktop = session.metadata.desktop;
+    if (desktop === undefined || desktop === null) return clone(session);
+    if (typeof desktop !== "object" || Array.isArray(desktop))
+      throw new SessionWorktreeBindingError(
+        "Worktree binding metadata cannot be verified",
+      );
+    const fields = desktop as Record<string, unknown>;
+    const current = fields.worktree;
+    if (current === undefined || current === null) return clone(session);
+    if (typeof current !== "object" || Array.isArray(current))
+      throw new SessionWorktreeBindingError(
+        "Worktree binding metadata cannot be verified",
+      );
+    const binding = current as Record<string, unknown>;
+    if (
+      binding.id !== expected.id ||
+      binding.path !== expected.path ||
+      binding.branch !== expected.branch
+    )
+      throw new SessionWorktreeBindingError(
+        "Worktree binding changed; refresh before clearing it",
+      );
+    if (
+      typeof expected.path !== "string" ||
+      !isAbsolute(expected.path) ||
+      expected.path.includes("\0")
+    )
+      throw new SessionWorktreeBindingError(
+        "Worktree directory is not a verified absolute path",
+      );
+    let missing = false;
+    try {
+      lstatSync(expected.path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw new SessionWorktreeBindingError(
+          "Cannot verify that the worktree directory was removed",
+        );
+      missing = true;
+    }
+    if (!missing)
+      throw new SessionWorktreeBindingError(
+        "Worktree directory still exists; retain its session binding",
+      );
+    return atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      this.storage.rollback?.capture(this.storage.state.sessions, sessionId);
+      const { worktree: _worktree, ...retained } = fields;
+      session.metadata = { ...session.metadata, desktop: retained };
+      session.updatedAt = now();
       this.storage.mutations.sessions.add(sessionId);
       this.appendEvent?.({
         type: "session.updated",

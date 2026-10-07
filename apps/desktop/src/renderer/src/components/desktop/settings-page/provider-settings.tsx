@@ -261,10 +261,10 @@ export function ProviderSettings(): React.JSX.Element {
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <h2 id="provider-heading" className="font-heading text-base tracking-tight">
-              供应商
+              模型连接
             </h2>
             <p className="text-xs leading-5 text-muted-foreground">
-              统一管理 API 密钥、本地服务和自动检测到的开发工具订阅。
+              接入你常用的模型服务。
             </p>
           </div>
           <Tooltip>
