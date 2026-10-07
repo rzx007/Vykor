@@ -76,7 +76,15 @@ ${transport.probeScript}`;
     const log = join(root, "kill.log").replaceAll("\\", "/");
     writeFileSync(marker, "cancel");
     const controller = new AbortController();
-    spawnWslProcess({ argv: ["echo", "ok"], cwd: "/mnt/d/repo/sub", signal: controller.signal });
+    const originalTmpdir = process.env.TMPDIR;
+    try {
+      if (process.platform !== "win32") process.env.TMPDIR = "C:/Temp";
+      spawnWslProcess({ argv: ["echo", "ok"], cwd: "/mnt/d/repo/sub", signal: controller.signal });
+    } finally {
+      if (originalTmpdir === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = originalTmpdir;
+    }
+    expect(transport.argv[7]).toMatch(/^\/mnt\/[a-z]\/.+\/vykor-wsl-cancel-/i);
     expect(transport.argv.slice(0, 5)).toEqual(["--cd", "/mnt/d/repo/sub", "--exec", "/bin/sh", "-c"]);
     // The transport commands are replaced with deterministic boundary doubles.
     // A shell builtin rejects the group flags; the external kill accepts them.
