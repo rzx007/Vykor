@@ -261,6 +261,62 @@ describe("Sidebar collapsible sections and empty states", () => {
     })
   })
 
+  it("keeps compact counts visible when project and recent sections are collapsed", async () => {
+    const project = {
+      id: "project-1",
+      name: "项目 A",
+      path: "/workspace/project-a",
+      lastOpenedAt: 1,
+      available: true,
+    }
+    const session = {
+      id: "session-1",
+      projectId: project.id,
+      workspaceMode: "project" as const,
+      cwd: project.path,
+      title: "项目对话",
+      model: "m",
+      status: "idle" as const,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    useDesktopSessionStore.setState({ projects: [project], sessions: [session] })
+    await act(async () =>
+      root.render(
+        <Sidebar
+          open
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+
+    const projectSection = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("项目")
+    )!
+    const recentSection = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("最近")
+    )!
+    await act(async () => {
+      projectSection.click()
+      recentSection.click()
+    })
+
+    expect(projectSection.textContent).toContain("1")
+    expect(recentSection.textContent).toContain("0")
+
+    await act(async () => projectSection.click())
+    const projectRow = container.querySelector<HTMLButtonElement>(
+      'button[title="/workspace/project-a"]'
+    )!
+    await act(async () => projectRow.click())
+    expect(projectRow.getAttribute("aria-label")).toContain("1 个对话")
+    expect(projectRow.textContent).toContain("1")
+  })
+
   function channelSession() {
     return {
       id: "channel-1",

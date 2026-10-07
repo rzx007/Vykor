@@ -53,6 +53,7 @@ export function SidebarSectionHeader({
   actionLabel,
   onAction,
   className,
+  summary,
 }: {
   title: string
   expanded: boolean
@@ -60,6 +61,7 @@ export function SidebarSectionHeader({
   actionLabel?: string
   onAction?: () => void
   className?: string
+  summary?: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className={cn("group/section flex h-7 w-full items-center px-2.5", className)}>
@@ -70,6 +72,9 @@ export function SidebarSectionHeader({
         className="text-ui-small flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span>{title}</span>
+        {!expanded && summary !== undefined && summary !== null ? (
+          <span className="ml-auto text-xs tabular-nums text-sidebar-muted/70">{summary}</span>
+        ) : null}
         <ChevronDown
           className={cn(
             "size-3.5 shrink-0 text-sidebar-muted/50 opacity-0 transition-all duration-200 group-hover/section:opacity-100 group-focus-visible/section:opacity-100",

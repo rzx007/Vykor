@@ -194,6 +194,7 @@ export function ProjectGroup({
             title={project.path}
             aria-expanded={expanded}
             onClick={onToggle}
+            aria-label={`${project.name}${!expanded && sessions.length > 0 ? `，${sessions.length} 个对话` : ""}`}
             className="text-ui-small flex h-7.5 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 pr-8 text-left font-[450] text-sidebar-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {expanded ? (
@@ -202,6 +203,11 @@ export function ProjectGroup({
               <FolderClosed className="size-3.75 shrink-0 text-sidebar-muted" strokeWidth={1.7} />
             )}
             <span className="truncate">{project.name}</span>
+            {!expanded && sessions.length > 0 ? (
+              <span className={cn("text-ui-caption shrink-0 text-sidebar-muted", project.pinnedAt ? "" : "ml-auto")}>
+                {sessions.length}
+              </span>
+            ) : null}
             {!project.available ? (
               <span className="text-ui-caption shrink-0 font-normal text-amber-600">
                 目录不可用

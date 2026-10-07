@@ -333,6 +333,7 @@ export function Sidebar({
               <SidebarSectionHeader
                 title="项目"
                 expanded={sectionExpansion.projects}
+                summary={projects.length}
                 onToggle={() => toggleSection("projects")}
               />
               <AnimatePresence initial={false}>
@@ -392,6 +393,7 @@ export function Sidebar({
                   <SidebarSectionHeader
                     title="IM 会话"
                     expanded={sectionExpansion.im}
+                    summary={imGroups.reduce((total, group) => total + group.sessions.length, 0)}
                     onToggle={() => toggleSection("im")}
                     className="mt-4"
                   />
@@ -427,6 +429,7 @@ export function Sidebar({
               <SidebarSectionHeader
                 title="最近"
                 expanded={sectionExpansion.recent}
+                summary={recentSessions.length}
                 onToggle={() => toggleSection("recent")}
                 actionLabel="新建最近会话"
                 onAction={beginRecentNewConversation}
