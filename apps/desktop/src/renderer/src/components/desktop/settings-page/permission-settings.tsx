@@ -1,6 +1,4 @@
-import { SettingsGroup } from "./settings-group"
 import { useEffect, useRef, useState } from "react"
-import { Link } from "@tanstack/react-router"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
   AlertDialog,
@@ -13,29 +11,28 @@ import {
   AlertDialogCancel,
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
-import { Field, FieldContent, FieldDescription, FieldLabel } from "@renderer/components/ui/field"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Switch } from "@renderer/components/ui/switch"
 import type {
-  DesktopPermissionRules,
   DesktopPermissionSettingsSnapshot,
-  DesktopIsolationSettings,
   RevokeDesktopApprovalInput,
 } from "@shared/permission-settings-types"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { DefaultPermissionControl } from "./general-quick-controls"
+import { SettingsGroup, SettingsRow } from "./settings-group"
+import { PermissionApprovalsDialog } from "./permission-approvals-dialog"
 import { errorMessage } from "./settings-error-message"
-import { PermissionRulesEditor } from "./permission-settings-rules"
-import { PermissionIsolationEditor } from "./permission-settings-isolation"
 
 export function PermissionSettings() {
   const [snapshot, setSnapshot] = useState<DesktopPermissionSettingsSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState("")
-  const [rulesRevision, setRulesRevision] = useState(0)
-  const [isolationRevision, setIsolationRevision] = useState(0)
+  const [revision, setRevision] = useState(0)
+  const [approvalsOpen, setApprovalsOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<{
+    title: string
     description: string
+    action: string
     apply(): Promise<void>
   } | null>(null)
   const locked = useRef(false)
@@ -43,14 +40,14 @@ export function PermissionSettings() {
 
   useEffect(() => {
     mounted.current = true
-    void window.desktop.permissionSettings
-      .snapshot()
-      .then((value) => {
+    void window.desktop.permissionSettings.snapshot().then(
+      (value) => {
         if (mounted.current) setSnapshot(value)
-      })
-      .catch((failure) => {
+      },
+      (failure) => {
         if (mounted.current) setError(errorMessage(failure))
-      })
+      }
+    )
     return () => {
       mounted.current = false
     }
@@ -72,66 +69,45 @@ export function PermissionSettings() {
     }
   }
 
-  function accept(
-    value: DesktopPermissionSettingsSnapshot,
-    message: string,
-    reset: "rules" | "isolation" | "all" | "none" = "none"
-  ) {
+  function accept(value: DesktopPermissionSettingsSnapshot, message: string) {
     if (!mounted.current) return
     setSnapshot(value)
-    if (reset === "rules" || reset === "all") setRulesRevision((current) => current + 1)
-    if (reset === "isolation" || reset === "all") setIsolationRevision((current) => current + 1)
     setFeedback(message)
   }
 
-  function saveRules(
-    permission: DesktopPermissionRules,
-    expectedPermission: DesktopPermissionRules
-  ) {
-    if (!snapshot) return
-    const apply = async () => {
-      const next = await window.desktop.permissionSettings.update({
-        permission,
-        expectedPermission,
-      })
-      accept(next, "已保存，新会话采用批准方式，后续任务采用规则。", "rules")
-      try {
-        await useDesktopSessionStore.getState().refreshBootstrap()
-      } catch {
-        if (mounted.current) setError("权限设置已保存，但会话默认值刷新失败。请重新打开应用。")
-      }
-    }
-    if (permission.mode === "full_auto" && expectedPermission.mode !== "full_auto") {
-      setConfirmation({
-        description: "新会话不再逐项询问，仍遵守禁止规则和访问边界。",
-        apply,
-      })
-    } else void run(apply)
-  }
-
-  function saveIsolation(
-    sandbox: DesktopIsolationSettings,
-    expectedSandbox: DesktopIsolationSettings
-  ) {
-    if (!snapshot) return
-    const apply = async () =>
-      accept(
-        await window.desktop.permissionSettings.updateIsolation({
-          sandbox,
-          expectedSandbox,
-        }),
-        "已保存，后续任务生效。",
-        "isolation"
-      )
+  function changeProtection(enabled: boolean) {
+    if (!snapshot || busy) return
+    const expectedSandbox = snapshot.sandbox
     setConfirmation({
-      description: "将修改后续命令的访问范围；已有任务不变。请核对目录、域名和隔离策略。",
-      apply,
+      title: enabled ? "开启文件与网络保护？" : "关闭文件与网络保护？",
+      description: enabled
+        ? "后续命令按已有访问规则运行；无法提供保护时停止执行。已有任务不变。"
+        : "后续命令不再使用这层保护，批准方式和已有规则不变。已有任务不受影响。",
+      action: enabled ? "开启保护" : "关闭保护",
+      apply: async () =>
+        accept(
+          await window.desktop.permissionSettings.updateIsolation({
+            sandbox: {
+              ...expectedSandbox,
+              enabled,
+              // 无法提供保护时停止执行，不能悄悄放开访问。
+              ...(enabled ? { failIfUnavailable: true } : {}),
+            },
+            expectedSandbox,
+          }),
+          "已保存，后续任务生效。"
+        ),
     })
   }
 
   function revoke(input: RevokeDesktopApprovalInput) {
     setConfirmation({
-      description: "后续操作需重新批准，已完成操作不回滚；浏览器捕获将停止。",
+      title: "撤销这项授权？",
+      description:
+        input.kind === "browser"
+          ? "停止当前页面捕获，后续诊断需要重新批准。"
+          : "此对话后续工具调用会重新检查权限，已完成操作不会撤回。",
+      action: "确认撤销",
       apply: async () =>
         accept(await window.desktop.permissionSettings.revoke(input), "授权已撤销。"),
     })
@@ -139,134 +115,152 @@ export function PermissionSettings() {
 
   if (!snapshot && !error)
     return (
-      <div aria-label="正在读取权限设置" className="flex flex-col gap-5">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div aria-label="正在读取权限设置" className="flex flex-col gap-3">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-60 w-full" />
       </div>
     )
 
+  const approvalCount = snapshot
+    ? snapshot.toolApprovals.length + snapshot.browserApprovals.length
+    : 0
+  const hasCustomRules =
+    snapshot &&
+    Object.entries(snapshot.permission).some(
+      ([key, value]) => key !== "mode" && Array.isArray(value) && value.length > 0
+    )
+  const protectionDescription = snapshot?.isolationAvailable
+    ? "按已有规则限制命令访问；后续任务生效。"
+    : snapshot?.sandbox.enabled
+      ? snapshot.sandbox.failIfUnavailable
+        ? "当前环境无法提供保护，命令将停止执行。"
+        : "已保存开启，但当前环境无法提供保护。"
+      : "当前运行环境暂不支持。"
+
   return (
     <div className="flex flex-col gap-8" aria-busy={busy}>
-      {error ? (
+      {error && !approvalsOpen ? (
         <Alert variant="destructive">
           <AlertTitle>权限设置需要处理</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">用户默认值，可被项目或会话覆盖。</p>
+      {snapshot ? (
+        <>
+          <SettingsGroup
+            title="批准与访问"
+            id="permission-basic-heading"
+            separated
+            action={
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    accept(await window.desktop.permissionSettings.snapshot(), "已重新读取。")
+                    if (mounted.current) setRevision((current) => current + 1)
+                  })
+                }
+              >
+                重新读取
+              </Button>
+            }
+          >
+            <SettingsRow
+              title="默认批准方式"
+              labelFor="general-permission-mode"
+              description="用于新对话，已有对话保持原设置。"
+              control={<DefaultPermissionControl key={revision} disabled={busy} />}
+            />
+            <SettingsRow
+              title="文件与网络保护"
+              labelFor="permission-protection"
+              description={protectionDescription}
+              control={
+                <Switch
+                  id="permission-protection"
+                  checked={snapshot.sandbox.enabled}
+                  disabled={busy || (!snapshot.isolationAvailable && !snapshot.sandbox.enabled)}
+                  onCheckedChange={changeProtection}
+                />
+              }
+            />
+            <SettingsRow
+              title="浏览器诊断"
+              labelFor="browser-developer-mode"
+              description="允许请求页面诊断，每次仍需批准；关闭即停止捕获。"
+              control={
+                <Switch
+                  id="browser-developer-mode"
+                  checked={snapshot.browserDeveloperMode}
+                  disabled={busy}
+                  onCheckedChange={(enabled) =>
+                    void run(async () => {
+                      await window.desktop.settings.updateBrowserDeveloperMode({ enabled })
+                      if (mounted.current) {
+                        setSnapshot((current) =>
+                          current ? { ...current, browserDeveloperMode: enabled } : current
+                        )
+                        setFeedback("浏览器诊断已保存。")
+                      }
+                    })
+                  }
+                />
+              }
+            />
+          </SettingsGroup>
+          <SettingsGroup title="授权管理" separated>
+            <SettingsRow
+              title="已保存授权"
+              description={
+                approvalCount
+                  ? `${approvalCount} 项授权可查看或撤销。`
+                  : "暂无可撤销的工具或站点授权。"
+              }
+              control={
+                <Button
+                  id="permission-approvals-heading"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setError(null)
+                    setFeedback("")
+                    setApprovalsOpen(true)
+                  }}
+                >
+                  管理授权
+                </Button>
+              }
+            />
+          </SettingsGroup>
+          {hasCustomRules ? (
+            <p className="text-xs text-muted-foreground">已有自定义规则继续生效。</p>
+          ) : null}
+          <PermissionApprovalsDialog
+            snapshot={snapshot}
+            busy={busy}
+            open={approvalsOpen}
+            onOpenChange={setApprovalsOpen}
+            error={error}
+            feedback={feedback}
+            onRevoke={revoke}
+          />
+        </>
+      ) : (
         <Button
-          variant="ghost"
+          variant="outline"
           disabled={busy}
           onClick={() =>
-            void run(async () =>
-              accept(
-                await window.desktop.permissionSettings.snapshot(),
-                "已重新读取权限设置。",
-                "all"
-              )
-            )
+            void run(async () => accept(await window.desktop.permissionSettings.snapshot(), ""))
           }
         >
           重新读取
         </Button>
-      </div>
-      {feedback ? (
-        <p role="status" className="text-sm text-muted-foreground">
+      )}
+      {feedback && !approvalsOpen ? (
+        <p role="status" className="text-xs text-muted-foreground">
           {feedback}
         </p>
-      ) : null}
-      {snapshot ? (
-        <>
-          <PermissionRulesEditor
-            key={`rules-${rulesRevision}`}
-            permission={snapshot.permission}
-            busy={busy}
-            onSave={saveRules}
-            defaultCwd={useDesktopSessionStore.getState().selectedProject?.path ?? ""}
-          />
-          <PermissionIsolationEditor
-            key={`isolation-${isolationRevision}`}
-            sandbox={snapshot.sandbox}
-            available={snapshot.isolationAvailable}
-            reason={snapshot.isolationReason}
-            busy={busy}
-            onSave={saveIsolation}
-          />
-          <SettingsGroup title="浏览器" id="permission-browser-heading">
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldLabel htmlFor="browser-developer-mode">浏览器开发者模式</FieldLabel>
-                <FieldDescription>每次页面诊断需单独批准，关闭后立即停止捕获。</FieldDescription>
-              </FieldContent>
-              <Switch
-                id="browser-developer-mode"
-                checked={snapshot.browserDeveloperMode}
-                disabled={busy}
-                onCheckedChange={(enabled) =>
-                  void run(async () => {
-                    await window.desktop.settings.updateBrowserDeveloperMode({ enabled })
-                    // Do not reset unrelated rule drafts when toggling this independent preference.
-                    if (mounted.current) {
-                      setSnapshot((current) =>
-                        current ? { ...current, browserDeveloperMode: enabled } : current
-                      )
-                      setFeedback("浏览器开发者模式已保存。")
-                    }
-                  })
-                }
-              />
-            </Field>
-          </SettingsGroup>
-          <SettingsGroup title="已保存授权" id="permission-approvals-heading">
-            <p className="text-sm text-muted-foreground">
-              工具授权由后台保存；站点授权仅本次运行有效。单次批准不列出。
-            </p>
-            {snapshot.toolApprovals.length === 0 && snapshot.browserApprovals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无可复用的工具或浏览器授权。</p>
-            ) : null}
-            {snapshot.toolApprovals.map((approval) => (
-              <div key={approval.id} className="flex items-center gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm">{approval.toolName}</p>
-                  <p className="text-xs break-all text-muted-foreground">
-                    会话 {approval.sessionId} · 仅本会话及允许继承的子任务
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => revoke({ kind: "tool", id: approval.id })}
-                >
-                  撤销
-                </Button>
-              </div>
-            ))}
-            {snapshot.browserApprovals.map((approval) => (
-              <div
-                key={`${approval.sessionId}:${approval.origin}`}
-                className="flex items-center gap-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm break-all">{approval.origin}</p>
-                  <p className="text-xs break-all text-muted-foreground">
-                    会话 {approval.sessionId} · 当前应用运行期间
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => revoke({ kind: "browser", ...approval })}
-                >
-                  撤销
-                </Button>
-              </div>
-            ))}
-            <Link to="/plugins" className="text-sm underline underline-offset-4">
-              在插件管理中查看和重新审核插件权限
-            </Link>
-          </SettingsGroup>
-        </>
       ) : null}
       <AlertDialog
         open={confirmation !== null}
@@ -276,7 +270,7 @@ export function PermissionSettings() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认权限变更</AlertDialogTitle>
+            <AlertDialogTitle>{confirmation?.title}</AlertDialogTitle>
             <AlertDialogDescription>{confirmation?.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -289,7 +283,7 @@ export function PermissionSettings() {
                 if (action) void run(action)
               }}
             >
-              确认变更
+              {confirmation?.action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

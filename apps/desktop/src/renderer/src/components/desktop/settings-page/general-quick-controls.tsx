@@ -112,7 +112,7 @@ export function NotificationModeControl() {
   )
 }
 
-export function DefaultPermissionControl() {
+export function DefaultPermissionControl({ disabled = false }: { disabled?: boolean } = {}) {
   const [permission, setPermission] = useState<DesktopPermissionRules | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -133,7 +133,7 @@ export function DefaultPermissionControl() {
     }
   }, [])
   async function save(mode: DesktopPermissionRules["mode"]) {
-    if (!permission || locked.current || mode === permission.mode) return
+    if (!permission || disabled || locked.current || mode === permission.mode) return
     locked.current = true
     setBusy(true)
     setError("")
@@ -169,7 +169,7 @@ export function DefaultPermissionControl() {
         <SelectTrigger
           id="general-permission-mode"
           aria-label="默认批准方式"
-          disabled={!permission || busy}
+          disabled={disabled || !permission || busy}
           className="min-w-36"
         >
           <SelectValue>
@@ -203,7 +203,7 @@ export function DefaultPermissionControl() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={() => void save("full_auto")}>
+            <AlertDialogAction disabled={disabled || busy} onClick={() => void save("full_auto")}>
               启用自动批准
             </AlertDialogAction>
           </AlertDialogFooter>
