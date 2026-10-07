@@ -89,6 +89,7 @@ export function createStartSessionAction(
         workspaceMode === "project" && selectedProject
           ? {
               projectId: selectedProject.id,
+              ...(options?.taskLocation ? { taskLocation: options.taskLocation } : {}),
               cwd: selectedProject.path,
               model,
               ...(provider ? { provider } : {}),

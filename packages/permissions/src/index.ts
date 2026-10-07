@@ -16,6 +16,7 @@ export type {
   PermissionSettings,
   PathRuleConfig,
 };
+export { parsePermissionSettings } from "@vykor/core";
 
 /**
  * 只读工具集：swarm worker（teammate）对这些工具自动放行，无需父进程开 full_auto。
@@ -108,10 +109,6 @@ export class PermissionChecker implements IPermissionChecker {
     inputSchema?: Record<string, unknown>,
   ): Promise<PermissionDecision> {
     toolName = canonicalToolName(toolName);
-    if (this.mode === "full_auto") {
-      return { action: "allow", reason: "Full auto mode" };
-    }
-
     const pathNames = TOOL_PATH_NAMES.filter(name => Object.hasOwn(input, name));
     const composedSchema = ["anyOf", "oneOf", "allOf", "$ref"].some(key => key in (inputSchema ?? {}));
     const properties = inputSchema?.properties;
@@ -168,21 +165,7 @@ export class PermissionChecker implements IPermissionChecker {
       }
     }
 
-    if (this.autoApproveTools.size > 0 && this.autoApproveTools.has(toolName)) {
-      return { action: "allow", reason: `Tool '${toolName}' is auto-approved` };
-    }
-
-    if (this.allowedTools.size > 0 && !this.allowedTools.has(toolName)) {
-      return {
-        action: "deny",
-        reason: `Tool '${toolName}' is not in allowed list`,
-      };
-    }
-
-    if (pathAllowReason !== null) {
-      return { action: "allow", reason: pathAllowReason };
-    }
-
+    let matchedRule: PermissionDecision | undefined;
     for (const rule of this.rules) {
       if (rule.tool && rule.tool !== toolName) continue;
       const pathPattern = rule.pathPattern;
@@ -201,11 +184,23 @@ export class PermissionChecker implements IPermissionChecker {
       ) {
         continue;
       }
-      return {
+      const decision: PermissionDecision = {
         action: rule.action,
         reason: `Matched rule for tool: ${rule.tool ?? "*"}`,
       };
+      if (decision.action === "deny") return decision;
+      matchedRule ??= decision;
     }
+
+    if (this.mode !== "full_auto" && this.autoApproveTools.size > 0 && this.autoApproveTools.has(toolName)) {
+      return { action: "allow", reason: `Tool '${toolName}' is auto-approved` };
+    }
+    if (this.allowedTools.size > 0 && !this.allowedTools.has(toolName)) {
+      return { action: "deny", reason: `Tool '${toolName}' is not in allowed list` };
+    }
+    if (this.mode === "full_auto") return { action: "allow", reason: "Full auto mode" };
+    if (pathAllowReason !== null) return { action: "allow", reason: pathAllowReason };
+    if (matchedRule) return matchedRule;
 
     if (
       !this.untrustedToolNames.has(toolName) &&
@@ -301,7 +296,7 @@ function matchPathPattern(pattern: string, value: string, cwd: string | undefine
 
 function matchPattern(pattern: string, value: string): boolean {
   const regex = new RegExp(
-    "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
+    "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
   );
   return regex.test(value);
 }

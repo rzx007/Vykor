@@ -123,13 +123,13 @@ describe("PermissionChecker", () => {
       .resolves.toMatchObject({ action: "deny" });
   });
 
-  it("keeps identical path aliases compatible and full_auto unchanged", async () => {
+  it("keeps identical aliases compatible but rejects conflicting paths in full_auto", async () => {
     const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["Write"] });
     await expect(checker.checkTool("Write", { path: "same.txt", file_path: "same.txt", filePath: "same.txt" }))
       .resolves.toMatchObject({ action: "allow" });
     checker.setMode("full_auto");
     await expect(checker.checkTool("Write", { path: "public.txt", file_path: "private.txt" }))
-      .resolves.toMatchObject({ action: "allow" });
+      .resolves.toMatchObject({ action: "deny" });
   });
 
   it("treats POSIX cwd paths in the execution namespace", async () => {
@@ -296,16 +296,29 @@ describe("autoApproveTools (swarm worker read-only auto-approval)", () => {
     expect(result.action).toBe("deny");
   });
 
-  it("full_auto still short-circuits before autoApprove", async () => {
+  it("keeps denied tools ahead of full_auto approval", async () => {
     const checker = new PermissionChecker({
       mode: "full_auto",
       deniedTools: ["Read"],
       autoApproveTools: ["Read"],
     });
-    // full_auto is checked first, so even a denied+auto-approved tool allows.
     const result = await checker.checkTool("Read", { path: "/foo" });
-    expect(result.action).toBe("allow");
-    expect(result.reason).toBe("Full auto mode");
+    expect(result.action).toBe("deny");
+  });
+
+  it("keeps command and path deny rules in full_auto", async () => {
+    const checker = new PermissionChecker({ mode: "full_auto", cwd: "/workspace", pathStyle: "posix",
+      deniedCommands: ["rm -rf*"], pathRules: [{ pattern: "*.env", allow: false }] });
+    await expect(checker.checkTool("Shell", { command: "rm -rf data" })).resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("Read", { path: "secrets.env" })).resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("Write", { path: "app.ts" })).resolves.toMatchObject({ action: "allow" });
+  });
+
+  it("does not bypass explicit deny rules or tool ceilings in full_auto", async () => {
+    const checker = new PermissionChecker({ mode: "full_auto", allowedTools: ["Read"],
+      rules: [{ tool: "Read", action: "deny" }] });
+    await expect(checker.checkTool("Read", {})).resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("Write", {})).resolves.toMatchObject({ action: "deny" });
   });
 
   it("autoApprove放行 even when an allowedTools whitelist is set (order correct)", async () => {

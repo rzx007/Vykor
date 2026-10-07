@@ -170,6 +170,15 @@ describe("BrowserAgentService click actions", () => {
     service.setActiveTab(7, "browser-tab-1")
   })
 
+  it("asks again after a saved site approval is revoked", async () => {
+    await inspect(service)
+    expect(service.listOriginApprovals()).toEqual([{ sessionId: "session-1", origin: "http://127.0.0.1:8080" }])
+    service.revokeOriginApproval("session-1", "http://127.0.0.1:8080")
+    expect(service.listOriginApprovals()).toEqual([])
+    await expect(service.execute({ action: { action: "inspect" }, sessionId: "session-1", cwd: "D:/workspace",
+      includeScreenshot: false, approve: async () => false })).rejects.toThrow("not approved")
+  })
+
   it("clicks an ordinary button whose DOM changes without navigation", async () => {
     page.clickBehavior = (current) => {
       current.pageText = "ordinary button clicked"

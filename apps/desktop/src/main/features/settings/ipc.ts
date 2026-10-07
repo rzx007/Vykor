@@ -13,11 +13,19 @@ import type {
 } from "../../../shared/settings-types"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSettingsService } from "./settings-service"
+import { desktopPermissionSettingsService } from "./permission-settings-service"
+import type { CheckDesktopPermissionInput, DesktopIsolationSettings, RevokeDesktopApprovalInput,
+  UpdateDesktopPermissionSettingsInput } from "../../../shared/permission-settings-types"
 
 export const settingsIpcContribution: IpcContribution = {
   id: "settings",
   register() {
     return [
+      { channel: IpcChannels.permissionSettingsSnapshot, handler: () => desktopPermissionSettingsService.snapshot() },
+      { channel: IpcChannels.permissionSettingsUpdate, handler: (_event, input) => desktopPermissionSettingsService.update(input as UpdateDesktopPermissionSettingsInput) },
+      { channel: IpcChannels.permissionSettingsUpdateIsolation, handler: (_event, input) => desktopPermissionSettingsService.updateIsolation(input as { sandbox: DesktopIsolationSettings; expectedSandbox: DesktopIsolationSettings }) },
+      { channel: IpcChannels.permissionSettingsCheck, handler: (_event, input) => desktopPermissionSettingsService.check(input as CheckDesktopPermissionInput) },
+      { channel: IpcChannels.permissionSettingsRevoke, handler: (_event, input) => desktopPermissionSettingsService.revoke(input as RevokeDesktopApprovalInput) },
       {
         channel: IpcChannels.settingsSnapshot,
         handler: () => desktopSettingsService.snapshot(),

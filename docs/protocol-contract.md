@@ -48,6 +48,12 @@ Feature 用于同一基本协议下的能力选择。例如客户端使用 Workf
 
 ## 请求解码
 
+会话授权管理是同一基础协议下的附加能力，`features.permissionApprovals = 1`。`GET /permissions/approvals` 返回当前可复用的会话工具授权；`POST /permissions/:requestId/revoke` 撤销所选当前授权，返回持久撤销记录。撤销保留原批准记录，后续调用重新询问；单次批准不能通过此入口撤销为另一种决定。
+
+项目记忆管理使用附加能力 `features.memoryManagement = 1`。记忆记录增加可选 `revision`（持久内容与元数据的 SHA-256 指纹）；`PATCH /memory/:entryId` 必须携带 `cwd`、`content` 和 `expectedRevision`，`DELETE /memory/:entryId` 可携带查询参数 `expectedRevision`，`POST /memory/clear` 必须携带该项目所有当前条目的 `expectedEntries: [{id, revision}]`。修改前检查项目任务和版本，冲突保持原内容；后台未提供此能力时，客户端不发起编辑或清空请求。
+
+设置编辑可提交 `expectedPermission` 或 `expectedSandbox`，分别表示打开编辑器时读取的原值。服务在已有配置文件锁内比较原值，冲突时不保存；比较字段不写入配置。客户端遇到变化应重新读取再编辑。
+
 HTTP route 必须通过 `@vykor/protocol` 的 request decoder 读取 JSON。规则是：
 
 - body 必须是 JSON object；

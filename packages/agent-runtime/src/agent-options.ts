@@ -41,6 +41,8 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Host-owned project identity for memory, independent from a task worktree cwd. */
+  memoryRoot?: string;
   client?: StreamingMessageClient;
   apiKey?: string;
   apiFormat?: Settings["apiFormat"];

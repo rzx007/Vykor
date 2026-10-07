@@ -23,6 +23,8 @@ export interface CredentialValidationInput {
   apiKey: string;
   baseUrl?: string;
   headers?: Record<string, string>;
+  model?: string;
+  signal?: AbortSignal;
 }
 
 export async function validateProviderCredential(
@@ -64,6 +66,7 @@ async function validateOpenAICompatibleCredential(
         "User-Agent": VALIDATION_USER_AGENT,
         ...(expandedHeaders ?? {}),
       },
+      signal: input.signal ?? AbortSignal.timeout(15000),
     });
   } catch (error) {
     throw validationNetworkError(input.providerDisplayName, error);
@@ -72,6 +75,7 @@ async function validateOpenAICompatibleCredential(
     input.providerDisplayName,
     response,
     "OpenAI 兼容 /models",
+    input.model,
   );
 }
 
@@ -89,6 +93,7 @@ async function validateGeminiCredential(
         "x-goog-api-key": input.apiKey,
         "User-Agent": VALIDATION_USER_AGENT,
       },
+      signal: input.signal ?? AbortSignal.timeout(15000),
     });
   } catch (error) {
     throw validationNetworkError(input.providerDisplayName, error);
@@ -97,6 +102,7 @@ async function validateGeminiCredential(
     input.providerDisplayName,
     response,
     "Gemini 原生 /models",
+    input.model,
   );
 }
 
@@ -116,6 +122,7 @@ async function validateAnthropicCredential(
         "anthropic-version": "2023-06-01",
         "User-Agent": VALIDATION_USER_AGENT,
       },
+      signal: input.signal ?? AbortSignal.timeout(15000),
     });
   } catch (error) {
     throw validationNetworkError(input.providerDisplayName, error);
@@ -124,6 +131,7 @@ async function validateAnthropicCredential(
     input.providerDisplayName,
     response,
     "Anthropic /models",
+    input.model,
   );
 }
 
@@ -164,43 +172,37 @@ async function assertValidationResponse(
   providerDisplayName: string,
   response: Response,
   endpointLabel: string,
+  model?: string,
 ): Promise<void> {
-  if (response.ok) return;
-  const detail = await safeValidationErrorDetail(response);
+  if (response.ok) {
+    if (model) {
+      const body = await response.json().catch(() => null) as { data?: Array<{ id?: string }>; models?: Array<{ name?: string }> } | null;
+      const listed = body?.data?.map((item) => item.id) ?? body?.models?.map((item) => item.name?.replace(/^models\//, ""));
+      if (!listed?.includes(model)) throw new Error("模型不支持：所选模型未在服务返回的模型列表中，或服务没有返回可识别的列表。");
+    }
+    return;
+  }
   if (response.status === 401 || response.status === 403) {
     throw new Error(
-      `${providerDisplayName} API 密钥无效，或当前密钥没有访问权限。` +
-        (detail ? ` ${detail}` : ""),
+      `${providerDisplayName} API 密钥无效，或当前密钥没有访问权限。`,
     );
   }
   if (response.status === 404) {
     throw new Error(
-      `${providerDisplayName} 凭证校验失败：验证接口 ${endpointLabel} 不可用，请检查 Base URL 或上游兼容性。` +
-        (detail ? ` ${detail}` : ""),
+      `${providerDisplayName} 凭证校验失败：验证接口 ${endpointLabel} 不可用，请检查 Base URL 或上游兼容性。`,
     );
   }
   throw new Error(
-    `${providerDisplayName} 凭证校验失败（HTTP ${response.status}）。` +
-      (detail ? ` ${detail}` : ""),
+    `${providerDisplayName} 凭证校验失败（HTTP ${response.status}）。`,
   );
-}
-
-async function safeValidationErrorDetail(response: Response): Promise<string> {
-  try {
-    const text = (await response.text()).replace(/\s+/g, " ").trim();
-    if (!text) return "";
-    return text.length > 180 ? `${text.slice(0, 180)}...` : text;
-  } catch {
-    return "";
-  }
 }
 
 function validationNetworkError(
   providerDisplayName: string,
   error: unknown,
 ): Error {
-  const message = error instanceof Error ? error.message : String(error);
+  const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
   return new Error(
-    `无法连接 ${providerDisplayName} 的校验接口，请检查网络、Base URL 或代理设置。${message ? ` ${message}` : ""}`,
+    `无法连接 ${providerDisplayName} 的校验接口，请检查网络、Base URL 或代理设置。${timeout ? "请求已超时或取消。" : ""}`,
   );
 }

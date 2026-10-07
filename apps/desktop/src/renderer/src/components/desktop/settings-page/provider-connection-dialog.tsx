@@ -25,6 +25,7 @@ import { headersFromRows, rowsFromHeaders, type RequestHeaderRow } from "./reque
 export interface ProviderConnectionSubmitValue {
   apiKey: string
   headers?: Record<string, string>
+  secretHeaders?: Record<string, string | null>
 }
 
 interface ProviderConnectionDialogProps {
@@ -57,7 +58,7 @@ export function ProviderConnectionDialog({
     setAdvancedOpen(false)
     setHeaderError(null)
     if (provider.source === "catalog") {
-      setHeaderRows(rowsFromHeaders(provider.headers))
+      setHeaderRows(rowsFromHeaders(provider.headers, provider.secretHeaderNames))
       setHeadersDirty(false)
       nextRowId.current = Object.keys(provider.headers ?? {}).length + 1
     } else {
@@ -75,7 +76,7 @@ export function ProviderConnectionDialog({
 
   const submit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
-    if (!provider || !apiKey.trim() || busy) return
+    if (!provider || (!apiKey.trim() && !(isCatalog && provider.connected && headersDirty)) || busy) return
 
     const value: ProviderConnectionSubmitValue = {
       apiKey: apiKey.trim(),
@@ -83,12 +84,13 @@ export function ProviderConnectionDialog({
 
     if (isCatalog) {
       if (headersDirty) {
-        const result = headersFromRows(headerRows)
+        const result = headersFromRows(headerRows, provider.secretHeaderNames)
         if (!result.ok) {
           setHeaderError(result.message)
           return
         }
         value.headers = result.headers
+        if (result.secretHeaders) value.secretHeaders = result.secretHeaders
       }
     }
 
@@ -103,7 +105,7 @@ export function ProviderConnectionDialog({
           <DialogHeader>
             <DialogTitle>连接 {provider?.displayName}</DialogTitle>
             <DialogDescription>
-              API 密钥会由 Vykor 认证服务保存到本地凭证文件，不会写入普通设置。
+              保存时会向服务请求模型列表验证，可能按上游规则收费。API 密钥和机密请求头单独保存到宿主凭据，不写入普通设置。
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
@@ -163,9 +165,9 @@ export function ProviderConnectionDialog({
                 </Button>
               }
             />
-            <Button type="submit" disabled={!apiKey.trim() || busy}>
+            <Button type="submit" disabled={(!apiKey.trim() && !(isCatalog && provider?.connected && headersDirty)) || busy}>
               {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
-              {busy ? "连接中..." : "连接"}
+              {busy ? "保存中..." : isCatalog && provider?.connected && !apiKey.trim() ? "保存请求头" : "连接"}
             </Button>
           </DialogFooter>
         </form>

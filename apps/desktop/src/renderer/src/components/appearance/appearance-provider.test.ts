@@ -229,6 +229,19 @@ describe("AppearanceProvider", () => {
     expect(latest?.saveState.status).toBe("saved")
   })
 
+  it("saves a category update in one write and keeps every old field if that write fails", async () => {
+    await renderProvider()
+    const writes = vi.spyOn(Storage.prototype, "setItem")
+    act(() => { latest!.patchPreferences({ uiFontSize: 16, codeFontSize: 18 }) })
+    expect(writes).toHaveBeenCalledTimes(1)
+    expect(latest!.preferences).toMatchObject({ uiFontSize: 16, codeFontSize: 18 })
+    writes.mockImplementation(() => { throw new Error("disk full") })
+    let accepted = true
+    act(() => { accepted = latest!.patchPreferences({ uiFontSize: 13, codeFontSize: 14 }) })
+    expect(accepted).toBe(false)
+    expect(latest!.preferences).toMatchObject({ uiFontSize: 16, codeFontSize: 18 })
+  })
+
   it("keeps the current preferences when persistence fails", async () => {
     await renderProvider()
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {

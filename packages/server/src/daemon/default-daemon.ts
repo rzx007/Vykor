@@ -1,5 +1,5 @@
 import { ChannelConfigStore } from "@vykor/auth";
-import { loadSettings } from "@vykor/core";
+import { loadSettings, loadProjectSettings } from "@vykor/core";
 
 import {
   createDefaultApplicationServices,
@@ -44,16 +44,21 @@ export async function startVykorDaemon(
     channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
     settings: settingsRef.current,
     getSettings: () => settingsRef.current,
-    getSettingsForCwd: async (cwd) => ({
-      ...(await loadSettings(undefined, {
+    getSettingsForCwd: async (cwd) => {
+      const effective = await loadSettings(undefined, {
         includeProject: true,
         projectRoot: cwd,
-      })),
-      agentEnvironment: startupAgentEnvironment,
-    }),
+      });
+      const project = (await loadProjectSettings(cwd))?.agentEnvironment;
+      return { ...effective, agentEnvironment: {
+        ...startupAgentEnvironment!, ...project,
+        env: { ...startupAgentEnvironment?.env, ...project?.env },
+        secretEnv: [...new Set([...(startupAgentEnvironment?.secretEnv ?? []), ...(project?.secretEnv ?? [])])],
+      } };
+    },
     services: {
       commandCatalog: createDefaultCommandCatalog(() => settingsRef.current),
-      ...createDefaultApplicationServices(settingsRef),
+      ...createDefaultApplicationServices(settingsRef, startupAgentEnvironment),
     },
   });
 }

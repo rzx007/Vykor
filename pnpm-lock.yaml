@@ -1017,6 +1017,9 @@ importers:
       '@vykor/personalization':
         specifier: workspace:*
         version: link:../personalization
+      '@vykor/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@vykor/plugin-sources':
         specifier: workspace:*
         version: link:../plugin-sources

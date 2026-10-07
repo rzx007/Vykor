@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -64,6 +65,7 @@ export async function createApplicationBackup(input: {
   sources?: BackupSourceDirectories;
 }): Promise<ApplicationBackupManifest> {
   const destination = resolve(input.destination);
+  assertDestinationOutsideSource(destination, dirname(input.store.path));
   if (existsSync(destination) && readdirSync(destination).length > 0) {
     throw new Error(`Backup destination is not empty: ${destination}`);
   }
@@ -255,13 +257,21 @@ function assertDestinationOutsideSource(
   destination: string,
   source: string,
 ): void {
-  const sourceRoot = resolve(source);
-  const nested = relative(sourceRoot, destination);
+  const sourceRoot = canonicalBackupPath(source);
+  const nested = relative(sourceRoot, canonicalBackupPath(destination));
   if (nested === "" || (!nested.startsWith("..") && !isAbsolute(nested))) {
     throw new Error(
       `Backup destination cannot be inside a source directory: ${destination}`,
     );
   }
+}
+
+/** Resolve existing ancestors too, so a directory alias cannot bypass containment guards. */
+export function canonicalBackupPath(path: string): string {
+  const absolute = resolve(path);
+  if (existsSync(absolute)) return realpathSync(absolute);
+  const parent = dirname(absolute);
+  return parent === absolute ? absolute : join(canonicalBackupPath(parent), basename(absolute));
 }
 
 interface RestoreTarget {
@@ -338,7 +348,7 @@ function validateRestoreTargetLayout(
       throw new Error(`Restore targets must be distinct: ${target.finalPath}`);
     }
     unique.add(normalized);
-    const fromSource = relative(source, target.finalPath);
+    const fromSource = relative(canonicalBackupPath(source), canonicalBackupPath(target.finalPath));
     if (
       fromSource === "" ||
       (!fromSource.startsWith("..") && !isAbsolute(fromSource))
@@ -493,6 +503,14 @@ function checksumsFor(
       .digest("hex");
   }
   return checksums;
+}
+
+export function verifyApplicationBackup(source: string): ApplicationBackupManifest {
+  const root = resolve(source);
+  const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf-8")) as ApplicationBackupManifest;
+  if (![1, 2, 3].includes(manifest.version) || manifest.database !== "database.sqlite" || !isDirectoryManifest(manifest.directories)) throw new Error("Unsupported backup manifest");
+  verifyChecksums(root);
+  return manifest;
 }
 
 function verifyChecksums(root: string): void {

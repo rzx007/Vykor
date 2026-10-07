@@ -146,6 +146,7 @@
 
 ### 产品界面
 
+- [桌面设置完整需求](./desktop-settings-requirements.md)：按页面定义权限、终端、Git、运行环境及其余设置的完整功能、保存生效规则和验收标准，供逐页实现。
 - [Product Surface Integration](./product-surface-integration.md)：各种上层产品共同使用 Application 的规则。
 - [输入框能力需求](./composer-capabilities-requirements.md)：`@`、`+`、Slash、Skill、附件与上下文选择的当前契约。
 - [会话目标设计](./session-goals-design.md)：目标输入、持久状态、自动续跑、验收与恢复规则。

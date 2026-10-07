@@ -78,6 +78,10 @@ export interface TerminalSettings {
 
 export interface AgentEnvironmentSettings {
   kind: "native" | "wsl";
+  distribution?: string;
+  shell?: { executable: string; args: string[] };
+  env?: Record<string, string>;
+  secretEnv?: string[];
 }
 
 export interface PathRuleConfig {
@@ -125,6 +129,7 @@ export interface CustomProviderSettings {
   apiFormat: "openai";
   models: CustomProviderModelSettings[];
   headers?: Record<string, string>;
+  secretHeaderNames?: string[];
   source?: "models.dev";
 }
 
@@ -134,6 +139,7 @@ export type WorkStyle = "practical" | "efficient";
 export interface Settings {
   apiKey?: string;
   model: string;
+  modelDisabled?: boolean;
   apiFormat: "anthropic" | "openai";
   outputTokenMax?: number;
   baseUrl?: string;

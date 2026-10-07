@@ -1,4 +1,5 @@
 import { getProjectMemoryDir, type Settings } from "@vykor/core";
+import { sessionSettingsRoot } from "../../runtime/session-settings-root.js";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";
 import type { SessionStore } from "@vykor/services";
@@ -51,13 +52,14 @@ export class SessionPostRunMaintenance {
     if (!session || session.storage === "memory" || run?.status !== "completed") return;
 
     const messages = transcriptMessages(this.context.data, sessionId);
+    const memoryRoot = sessionSettingsRoot(session);
 
     await this.bestEffort("session.personalization.extract_failed", sessionId, runId, async () => {
       const update = this.context.personalizationUpdater ?? updateRulesFromSession;
-      update(messages, session.cwd, sessionId);
+      update(messages, memoryRoot, sessionId);
     });
 
-    const settings = await this.context.getSettings(session.cwd);
+    const settings = await this.context.getSettings(memoryRoot);
     if (!settings) return;
 
     if (settings.memory?.sessionMemoryEnabled !== false) {
@@ -66,8 +68,8 @@ export class SessionPostRunMaintenance {
         const goal = typeof goalId === "string"
           ? this.context.data.goals.getGoal(goalId)?.objective
           : undefined;
-        if (goal) this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId, goal);
-        else this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId);
+        if (goal) this.context.sessionMemoryWriter?.(memoryRoot, messages, sessionId, goal);
+        else this.context.sessionMemoryWriter?.(memoryRoot, messages, sessionId);
       });
     }
 
@@ -81,14 +83,15 @@ export class SessionPostRunMaintenance {
 
     if (settings.memory?.autoDreamEnabled) {
       await this.bestEffort("session.memory.auto_dream_failed", sessionId, runId, async () => {
-        const memoryDir = getProjectMemoryDir(session.cwd);
+        const memoryDir = getProjectMemoryDir(memoryRoot);
         const lastAtMs = (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;
         const recentSessionIds = this.context.data.sessions
-          .list({ cwd: session.cwd, includeArchived: true })
+          .list({ includeArchived: true })
+          .filter(candidate => sessionSettingsRoot(candidate) === memoryRoot)
           .filter((candidate) => candidate.storage !== "memory" && candidate.updatedAt > lastAtMs)
           .map((candidate) => candidate.id);
         await this.context.autoDream?.({
-          cwd: session.cwd,
+          cwd: memoryRoot,
           settings,
           memoryDir,
           currentSessionId: sessionId,

@@ -7,6 +7,8 @@ export interface DesktopProviderModel {
   id: string
   label: string
   imageInputSupport?: DesktopInputSupport
+  contextWindow?: number
+  reasoningEfforts?: string[]
 }
 
 export interface DesktopProviderInfo {
@@ -24,6 +26,7 @@ export interface DesktopProviderInfo {
   baseUrl?: string
   apiFormat?: "openai"
   headers?: Record<string, string>
+  secretHeaderNames?: string[]
 }
 
 export interface DesktopProviderSnapshot {
@@ -36,12 +39,14 @@ export interface ConnectDesktopProviderInput {
   provider: string
   apiKey: string
   headers?: Record<string, string>
+  secretHeaders?: Record<string, string | null>
   setActive?: boolean
 }
 
 export interface UpdateDesktopCatalogProviderHeadersInput {
   provider: string
   headers: Record<string, string>
+  secretHeaders?: Record<string, string | null>
 }
 
 export interface ActivateDesktopProviderInput {
@@ -51,6 +56,8 @@ export interface ActivateDesktopProviderInput {
 
 export interface DisconnectDesktopProviderInput {
   provider: string
+  replacement?: { provider: string; model: string }
+  disableDefault?: boolean
 }
 
 export interface DesktopCustomProviderInput {
@@ -65,6 +72,7 @@ export interface DesktopCustomProviderInput {
     imageInputSupport?: DesktopInputSupport
   }>
   headers?: Record<string, string>
+  secretHeaders?: Record<string, string | null>
 }
 
 export interface CreateDesktopCustomProviderInput extends DesktopCustomProviderInput {
@@ -78,4 +86,6 @@ export interface UpdateDesktopCustomProviderInput {
 
 export interface RemoveDesktopCustomProviderInput {
   provider: string
+  replacement?: { provider: string; model: string }
+  disableDefault?: boolean
 }

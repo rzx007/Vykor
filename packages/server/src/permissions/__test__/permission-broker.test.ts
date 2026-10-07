@@ -30,6 +30,36 @@ function withBroker(
 }
 
 describe("StorePermissionBroker", () => {
+  it("revokes session approvals durably without rewriting the original decision", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const first = broker.ask({ sessionId: "s1", toolName: "Write" });
+      const original = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: original.id, status: "approved", decision: "session" });
+      await first;
+      expect(broker.listApprovals()).toHaveLength(1);
+      broker.revokeApproval(original.id);
+      expect(store.permissions.get(original.id)?.status).toBe("approved");
+      expect(broker.listApprovals()).toHaveLength(0);
+      const recreated = new StorePermissionBroker({ permissions: store.permissions,
+        getSession: id => store.sessions.get(id), latestEventSeq: () => store.conversations.latestEventSeq() });
+      const next = recreated.ask({ sessionId: "s1", toolName: "Write" });
+      const request = store.permissions.list({ status: "pending" })[0]!;
+      expect(request.payload.reusedApprovalRequestId).toBeUndefined();
+      recreated.reply({ requestId: request.id, status: "denied" });
+      await expect(next).resolves.toMatchObject({ status: "denied" });
+    });
+  });
+  it("does not let a stale editor revoke a newer session approval", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const waiting = broker.ask({ sessionId: "s1", toolName: "Write" });
+      const original = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: original.id, status: "approved", decision: "session" });
+      await waiting;
+      await broker.ask({ sessionId: "s1", toolName: "Write" });
+      expect(() => broker.revokeApproval(original.id)).toThrow("no longer current");
+      expect(broker.listApprovals()).toHaveLength(1);
+    });
+  });
   it.each(["approved", "denied"] as const)("does not rewrite a %s decision or emit another event for repeated replies", async status => {
     await withBroker(async ({ broker, store, changes }) => {
       const waiting = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });

@@ -52,6 +52,7 @@ it("opens the notification's chat from settings and releases the click listener"
   Object.defineProperty(window, "desktop", {
     configurable: true,
     value: {
+      notificationSettings: { resolveSession: async (sessionId: string) => ({ id: sessionId }) },
       tray: {
         onNotificationClick(listener: (sessionId: string) => void) {
           onClick = listener
@@ -70,6 +71,19 @@ it("opens the notification's chat from settings and releases the click listener"
   act(() => root.unmount())
   expect(detach).toHaveBeenCalledOnce()
   root = createRoot(container)
+  delete (window as unknown as { desktop?: unknown }).desktop
+})
+
+it("keeps settings open when a notification's session has been deleted", async () => {
+  let onClick: ((sessionId: string) => void) | undefined
+  Object.defineProperty(window, "desktop", { configurable: true, value: {
+    notificationSettings: { resolveSession: async () => null },
+    tray: { onNotificationClick(listener: (id: string) => void) { onClick = listener; return () => {} } },
+  } })
+  const router = await mountRouter("/settings/general")
+  await act(async () => { onClick!("deleted-session"); await new Promise((resolve) => setTimeout(resolve, 20)) })
+  expect(router.state.location.pathname).toBe("/settings/general")
+  expect(document.body.textContent).toContain("通知对应的会话已删除")
   delete (window as unknown as { desktop?: unknown }).desktop
 })
 

@@ -75,6 +75,8 @@ export class LocalTerminalProvider implements TerminalProvider {
       : createHostTerminalTarget({
           cwd: resolvedCwd,
           shell: input.shell?.trim() || resolveDefaultShell().command,
+          shellArgs: input.shellArgs,
+          env: input.env,
         });
     try {
       await requireDirectory(target.hostCwd);
@@ -117,6 +119,8 @@ export class LocalTerminalProvider implements TerminalProvider {
       scope: input.scope,
       ...(scopeInfo.projectId ? { projectId: scopeInfo.projectId } : {}),
       runtime: input.runtime,
+      ...(target.environmentKind ? { environmentKind: target.environmentKind } : {}),
+      ...(target.distribution ? { distribution: target.distribution } : {}),
       source: input.source ?? "user",
       ...(scopeInfo.sessionId ? { sessionId: scopeInfo.sessionId } : {}),
       status: "running",

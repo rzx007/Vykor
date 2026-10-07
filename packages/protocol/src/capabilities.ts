@@ -28,6 +28,7 @@ export interface McpOAuthCapabilities {
 export interface AgentEnvironmentCapabilities {
   native: true;
   wsl: boolean;
+  activeDefault?: { kind: "native" | "wsl"; distribution?: string; fingerprint: string };
 }
 
 export type AttachmentUploadMode = "single" | "resumable";
@@ -101,7 +102,9 @@ function parseAgentEnvironmentCapabilities(
       "agentEnvironments must contain native=true and a boolean wsl value",
     );
   }
-  return { native: true, wsl: value.wsl };
+  const active = value.activeDefault;
+  if (active !== undefined && (!isRecord(active) || (active.kind !== "native" && active.kind !== "wsl") || typeof active.fingerprint !== "string" || (active.distribution !== undefined && typeof active.distribution !== "string"))) throw new Error("agentEnvironments.activeDefault is invalid");
+  return { native: true, wsl: value.wsl, ...(active ? { activeDefault: active as unknown as NonNullable<AgentEnvironmentCapabilities["activeDefault"]> } : {}) };
 }
 
 export function checkProtocolCompatibility(

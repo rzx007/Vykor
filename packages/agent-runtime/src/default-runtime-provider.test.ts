@@ -47,6 +47,14 @@ function customProviderSettings(
 }
 
 describe("resolveApiClient request header templates", () => {
+  it("resolves secret headers from host credentials only at the request client boundary", async () => {
+    const settings = customProviderSettings("gateway", { "X-Session": "{{sessionId}}" })
+    settings.customProviders![0].secretHeaderNames = ["X-Access-Token"]
+    const storage = { loadCredential: async (_provider: string, key: string) => key === "header:x-access-token" ? "host-secret" : undefined, loadApiKey: async () => "api-key" }
+    const client = await resolveApiClient(settings, {}, storage as never, "session-1")
+    expect(readDefaultHeaders(client)).toMatchObject({ "X-Access-Token": "host-secret", "X-Session": "session-1" })
+    expect(JSON.stringify(settings)).not.toContain("host-secret")
+  })
   it("does not carry the old provider URL into a new provider", async () => {
     const client = await resolveApiClient(
       {

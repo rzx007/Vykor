@@ -29,6 +29,61 @@ function emptyStream(): AsyncIterable<SessionEventRecord> {
 }
 
 describe("syncEvents reconnect", () => {
+  it("keeps ordered session updates without accumulating event bodies or replaying duplicates", async () => {
+    const updated = (seq: number): SessionEventRecord => ({
+      id: `e${seq}`, seq, type: "session.updated", schemaVersion: 1,
+      sessionId: "s1", payload: { session: { ...snapshot(1).session, title: `title-${seq}` } }, createdAt: seq,
+    })
+    const client = {
+      sessions: { getState: async () => snapshot(1) },
+      events: { list: async () => [], stream: async function* () {
+        for (let seq = 2; seq <= 2001; seq++) yield updated(seq)
+        yield updated(2001)
+        yield updated(2)
+        yield updated(2002)
+      } },
+    }
+    let liveUpdates = 0
+    let retainedEvents = 0
+    for await (const update of syncEvents(client, { sessionId: "s1" })) {
+      retainedEvents = Math.max(retainedEvents, Object.keys(update.state.eventsBySeq).length)
+      if (update.source === "live") liveUpdates++
+      if (update.state.lastSeq === 2002) {
+        expect(update.state.buckets.s1?.session?.title).toBe("title-2002")
+        break
+      }
+    }
+    expect(liveUpdates).toBe(2001)
+    expect(retainedEvents).toBe(0)
+  })
+
+  it("preserves live state when a reconnect snapshot is behind the ordered stream", async () => {
+    let snapshots = 0
+    let streams = 0
+    const cursors: Array<number | "latest" | undefined> = []
+    const client = {
+      sessions: { getState: async () => snapshot(++snapshots === 1 ? 1 : 2) },
+      events: { list: async () => [], stream: async function* (options?: { cursor?: number | "latest" }) {
+        cursors.push(options?.cursor)
+        if (++streams === 1) {
+          yield { id: "e5", seq: 5, type: "session.updated", schemaVersion: 1,
+            sessionId: "s1", payload: { session: { ...snapshot(1).session, title: "latest" } }, createdAt: 5 } satisfies SessionEventRecord
+        } else {
+          yield { id: "e6", seq: 6, type: "session.updated", schemaVersion: 1,
+            sessionId: "s1", payload: { session: { ...snapshot(1).session, title: "resumed" } }, createdAt: 6 } satisfies SessionEventRecord
+        }
+      } },
+    }
+    for await (const update of syncEvents(client, { sessionId: "s1", reconnectDelayMs: () => 0 })) {
+      if (update.source === "snapshot" && snapshots === 2) {
+        expect(update.state.buckets.s1?.session?.title).toBe("latest")
+        expect(update.state.eventsBySeq).toEqual({})
+      }
+      if (update.state.lastSeq === 6) break
+    }
+    expect(cursors).toEqual([1, 5])
+  })
+
   it("lets a global consumer use a lightweight reducer without changing replay boundaries", async () => {
     const record = { id: "e1", seq: 1, type: "session.message.created", schemaVersion: 1,
       sessionId: "s1", payload: { message: { id: "m1", sessionId: "s1", role: "assistant", content: "large transcript" } }, createdAt: 1 } satisfies SessionEventRecord

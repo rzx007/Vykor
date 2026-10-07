@@ -66,6 +66,7 @@ import { createSessionGoalRoutes } from "./routes/session-goal.js";
 import { createSessionPluginUiRoutes } from "./routes/session-plugin-ui.js";
 import { createSessionUtilityRoutes } from "./routes/session-utility.js";
 import { createSystemRoutes } from "./routes/system.js";
+import { createMaintenanceRoutes } from "./routes/maintenance.js";
 import { RequestTraceRegistry } from "./control/request-trace-registry.js";
 import {
   createTerminalRoutes,
@@ -146,6 +147,7 @@ export class VykorHttpServer {
   private readonly services: VykorServerServices;
   private readonly version?: string;
   private readonly logger: StructuredLogger;
+  private readonly maintenanceLogs: Array<ObservabilityEvent & { timestamp: string }> = [];
   private readonly eventHub: HttpEventHub;
   readonly application: DurableAgentApplication;
   private readonly ownsApplication: boolean;
@@ -336,6 +338,7 @@ export class VykorHttpServer {
     this.app.route(
       "/",
       createSystemRoutes({
+        memoryManagementReady: Boolean(this.services.memory?.update && this.services.memory?.clear),
         version: this.version,
         commandCatalog: this.services.commandCatalog,
         settingsService: this.services.settings,
@@ -350,6 +353,7 @@ export class VykorHttpServer {
         pluginUi: this.application.pluginUi,
       }),
     );
+    this.app.route("/", createMaintenanceRoutes({ store: this.store, control: this.application.control, commands: this.application.commands, terminals: this.application.terminals, settings: this.services.settings, readiness: () => this.application.diagnosticState, logs: () => this.maintenanceLogs }));
     this.app.route(
       "/attachments",
       createAttachmentRoutes(this.application.attachments),
@@ -470,6 +474,8 @@ export class VykorHttpServer {
   }
 
   private log(event: ObservabilityEvent): void {
+    this.maintenanceLogs.push({ ...event, timestamp: new Date().toISOString() });
+    if (this.maintenanceLogs.length > 1000) this.maintenanceLogs.shift();
     this.logger(event);
   }
 }

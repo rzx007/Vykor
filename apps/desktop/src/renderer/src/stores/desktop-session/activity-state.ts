@@ -26,6 +26,7 @@ export interface ActivityState {
 
 export interface ActivityNotification {
   seq: number
+  eventId: string
 
   sessionId?: string
 
@@ -116,6 +117,7 @@ function sessionNotice(activity: DesktopSessionActivity): ActivityNotification {
 
   return {
     seq: activity.activitySeq,
+    eventId: `session:${activity.session.id}:${activity.runId ?? activity.updatedAt}:${activity.permissionId ?? ""}:${status}`,
     sessionId: activity.session.id,
     status,
 
@@ -206,7 +208,7 @@ export function applyActivityUpdate(
       transition &&
       !activity.session.parentId &&
       !activity.session.metadata["scheduledTask"] &&
-      isResult(activity.executionState) &&
+      isResult(activity.executionState) && activity.executionState !== "interrupted" &&
       activity.activitySeq > state.lastNotifiedCursor &&
       (activity.executionState === "needs_input" ||
         previous?.executionState === "running" ||
@@ -214,7 +216,7 @@ export function applyActivityUpdate(
     ) {
       const notice = sessionNotice(activity)
       sounds.push(notice)
-      if (!active || activity.executionState === "needs_input") notifications.push(notice)
+      notifications.push(notice)
     }
   }
 
@@ -232,11 +234,12 @@ export function applyActivityUpdate(
       update.delivery === "live" &&
       activity.run.unread &&
       (!previous || previous.executionState !== activity.executionState) &&
-      isResult(activity.executionState) &&
+      isResult(activity.executionState) && activity.executionState !== "interrupted" &&
       activity.activitySeq > state.lastNotifiedCursor
     ) {
       const notice: ActivityNotification = {
         seq: activity.activitySeq,
+        eventId: `scheduled:${activity.run.id}:${activity.executionState}`,
         taskId: activity.taskId,
         status: activity.executionState,
 

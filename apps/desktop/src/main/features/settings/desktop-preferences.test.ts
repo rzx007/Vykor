@@ -29,6 +29,16 @@ describe("desktop preferences", () => {
     )
   })
 
+  it("preserves terminal settings through unrelated preference saves and process reloads", async () => {
+    const { patchDesktopPreferences } = await import("./desktop-preferences")
+    const terminal = { version: 1 as const, fontMode: "independent" as const, fontFamily: "Consolas", fontSize: 17, scrollback: 10000, cursorStyle: "bar" as const, cursorBlink: false, confirmMultilinePaste: true, customShell: { executable: "C:\\shell.exe", args: ["--profile", "two words"] }, wslShell: "", wslShellArgs: [], environment: [] }
+    patchDesktopPreferences({ defaultTerminalShellId: "powershell", terminal })
+    patchDesktopPreferences({ notificationMode: "never" })
+    vi.resetModules()
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences()).toMatchObject({ defaultTerminalShellId: "powershell", terminal })
+  })
+
   it("persists sound switches independently of notification mode and other preferences", async () => {
     const { getDesktopPreferences, patchDesktopPreferences } = await import("./desktop-preferences")
     patchDesktopPreferences({ notificationMode: "never", defaultOpenerId: "vscode" })

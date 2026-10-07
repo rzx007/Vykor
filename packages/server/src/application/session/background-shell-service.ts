@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { sessionSettingsRoot } from "../../runtime/session-settings-root.js";
 
 import type { Settings } from "@vykor/core";
 import type {
@@ -299,7 +300,7 @@ export class BackgroundShellService {
       if (this.context.acquireEnvironment) {
         const session = this.sessions.getSession(scope.sessionId);
         if (!session) throw new BackgroundShellError(404, "Session not found");
-        const settings = input.settings ?? await this.context.getSettingsForCwd?.(scope.cwd);
+        const settings = input.settings ?? await this.context.getSettingsForCwd?.(sessionSettingsRoot(session));
         if (!settings) throw new BackgroundShellError(400, "Background shell settings are required");
         environmentLease = await this.context.acquireEnvironment(
           session,

@@ -98,6 +98,57 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("does not rebuild owner snapshots for each text delta while delivering the complete coalesced text", async () => {
+    vi.useFakeTimers()
+    const client = {
+      sessions: { getState: async () => snapshot(1) },
+      events: {
+        list: async () => [],
+        stream: async function* (options: { signal: AbortSignal }) {
+          for (let seq = 2; seq <= 101; seq++) {
+            yield {
+              id: `delta-${seq}`,
+              seq,
+              type: "session.message.part.delta",
+              schemaVersion: 1,
+              sessionId: "s1",
+              createdAt: seq,
+              payload: {
+                sessionId: "s1",
+                messageId: "m1",
+                partId: "p1",
+                field: "text",
+                delta: "x",
+              },
+            } satisfies SessionEventRecord
+          }
+          await new Promise<void>((resolve) => {
+            if (options.signal.aborted) resolve()
+            else options.signal.addEventListener("abort", () => resolve(), { once: true })
+          })
+        },
+      },
+    }
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+    let observed = 0
+    service.onOwnerSnapshot(() => {
+      observed++
+    })
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(1)
+      expect(observed).toBe(1)
+      expect(sent).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(sent).toHaveLength(1)
+      expect((sent[0]!.payload as DesktopSessionView).parts[0]?.text).toBe("x".repeat(100))
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
   it("observes a lifecycle generation before the renderer's coalesced update", async () => {
     vi.useFakeTimers()
     const client = clientWithStream(async function* () {

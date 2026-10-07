@@ -14,6 +14,7 @@ export interface SessionChildExecutionBridge {
     onStop(): Promise<void>;
   }): { id: string };
   bindChildExecutionRun(taskId: string, runId: string): Promise<void>;
+  releaseChildExecution(taskId: string): void;
   completeChildExecution(
     taskId: string,
     input: {
@@ -38,6 +39,7 @@ export interface ExecutionInfo {
 type DurableTaskStatus = "pending" | "running" | "completed" | "failed" | "stopped" | "interrupted";
 
 export interface ChildAgentRegistry {
+  releaseChildExecution(taskId: string): void;
   beginExecution(taskId: string): ExecutionInfo;
   completeExecution(
     taskId: string,
@@ -99,6 +101,7 @@ export class SessionExecutionProjector {
   createBridge(session: { id: string; cwd: string }): SessionChildExecutionBridge {
     const registry = this.context.getChildAgentExecutionRegistry({ cwd: session.cwd, sessionId: session.id });
     return {
+      releaseChildExecution: (taskId) => registry.releaseChildExecution(taskId),
       registerChildExecution: (input) => {
         const before = this.context.events.checkpoint();
         this.context.store.createSessionTask({

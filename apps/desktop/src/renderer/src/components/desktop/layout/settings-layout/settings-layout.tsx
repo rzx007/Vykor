@@ -185,10 +185,11 @@ export function SettingsLayout(): React.JSX.Element {
           >
             <SettingsSidebar
               selectedSection={selectedSection}
-              onSelectSection={(nextSection) =>
+              onSelectSection={(nextSection, target) =>
                 void navigate({
                   to: "/settings/$section",
                   params: { section: settingsSectionSlug(nextSection) },
+                  hash: target ?? "",
                 })
               }
               onClose={openCurrentConversation}

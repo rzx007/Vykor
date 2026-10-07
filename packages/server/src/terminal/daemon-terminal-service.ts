@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 
 import type { Settings } from "@vykor/core";
 import type {
@@ -204,7 +205,7 @@ export class DaemonTerminalService {
       cwd: resolved.cwd,
       ...(resolved.projectId ? { projectId: resolved.projectId } : {}),
     } as SessionRecord);
-    const settings = await this.options.getSettingsForCwd(resolved.cwd);
+    const settings = await this.options.getSettingsForCwd(resolved.session ? sessionSettingsRoot(resolved.session) : resolved.cwd);
     const lease = await this.options.acquireEnvironment(
       session,
       settings,
@@ -215,6 +216,8 @@ export class DaemonTerminalService {
         cwd: lease.workspace.executionRoot,
         shell: input.shell,
         owner: { kind: "terminal", id: terminalId },
+        shellArgs: input.shellArgs,
+        env: input.env,
         cols: input.cols,
         rows: input.rows,
       });

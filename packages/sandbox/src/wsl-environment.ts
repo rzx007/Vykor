@@ -38,12 +38,13 @@ export async function preflightWsl(
   dependencies: {
     platform?: NodeJS.Platform;
     run?: () => Promise<WslProbeResult>;
+    distribution?: string;
   } = {},
 ): Promise<WslEnvironmentFacts> {
   if ((dependencies.platform ?? process.platform) !== "win32") {
     throw new WslEnvironmentUnavailableError("WSL is only available on Windows");
   }
-  const result = await (dependencies.run ?? defaultWslProbe)();
+  const result = await (dependencies.run ?? (() => defaultWslProbe(dependencies.distribution)))();
   if (result.exitCode !== 0) {
     throw new WslEnvironmentUnavailableError(
       result.stderr.trim() || "WSL or its default distribution is unavailable",
@@ -135,6 +136,7 @@ export function spawnWslProcess(input: {
   env?: Record<string, string>;
   stdio?: import("node:child_process").StdioOptions;
   signal?: AbortSignal;
+  distribution?: string;
 }): ChildProcess {
   if (input.argv.length === 0) throw new Error("WSL process requires a non-empty argv");
   const envArgs = Object.entries(input.env ?? {}).map(([key, value]) => `${key}=${value}`);
@@ -145,7 +147,7 @@ export function spawnWslProcess(input: {
   const supervisedArgv = cancelHostPath
     ? ["/bin/sh", "-c", WSL_CANCEL_SUPERVISOR, "vykor-wsl", hostPathToWslPath(cancelHostPath), ...executionArgv]
     : executionArgv;
-  const child = spawn("wsl.exe", ["--cd", input.cwd, "--exec", ...supervisedArgv], {
+  const child = spawn("wsl.exe", [...(input.distribution ? ["--distribution", input.distribution] : []), "--cd", input.cwd, "--exec", ...supervisedArgv], {
     windowsHide: true,
     stdio: input.stdio ?? ["pipe", "pipe", "pipe"],
   });
@@ -189,9 +191,9 @@ rm -f -- "$cancel_file"
 exit "$status"
 `;
 
-async function defaultWslProbe(): Promise<WslProbeResult> {
+async function defaultWslProbe(distribution?: string): Promise<WslProbeResult> {
   try {
-    const { stdout } = await execFileAsync("wsl.exe", ["--exec", "/bin/sh", "-c",
+    const { stdout } = await execFileAsync("wsl.exe", [...(distribution ? ["--distribution", distribution] : []), "--exec", "/bin/sh", "-c",
       'home=$HOME; if [ -z "$home" ]; then home=$(getent passwd "$(id -u)" | cut -d: -f6); fi; printf "%s\\n%s\\n" "$home" "$SHELL"',
     ], {
       timeout: 10_000,

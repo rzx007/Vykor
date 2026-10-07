@@ -8,6 +8,9 @@ import {
 
 import type { SettingsService } from "../settings-api.js";
 import type { AgentEnvironmentCapabilities } from "@vykor/protocol";
+import { parsePermissionSettings } from "@vykor/core";
+import { validateIsolationConfiguration } from "../../permissions/settings-management.js";
+import { normalizeSandboxConfig } from "@vykor/sandbox";
 import { catalogProviderModelIds } from "./catalog-provider-mapping.js";
 import {
   mergeSettingsPatch,
@@ -41,6 +44,9 @@ const SOFT_RUNTIME_INVALIDATE_KEYS = new Set([
   "workStyle",
   "systemPrompt",
   "memory",
+  "permission",
+  "sandbox",
+  "runtimeEnvironmentChanged",
 ]);
 
 export type SettingsRuntimeImpact = "restart" | "invalidate" | "none";
@@ -48,6 +54,7 @@ export type SettingsRuntimeImpact = "restart" | "invalidate" | "none";
 export interface AgentEnvironmentService {
   capabilities(): Promise<AgentEnvironmentCapabilities>;
   validate(kind: "native" | "wsl"): Promise<void>;
+  active?(): import("@vykor/core").AgentEnvironmentSettings | undefined;
 }
 
 export function settingsPatchRuntimeImpact(
@@ -83,9 +90,12 @@ export function createDefaultSettingsService(
         }
       : {}),
     async get() {
-      return sanitizeSettings(await readCurrentSettings(ref));
+      return { ...sanitizeSettings(await readCurrentSettings(ref)),
+        ...(options.agentEnvironment?.active?.() ? { runtimeEnvironmentActive: options.agentEnvironment.active() } : {}) };
     },
-    async patch(patch) {
+    async patch(input) {
+      const { expectedPermission, expectedSandbox, runtimeEnvironmentChanged, ...patch } = input;
+      if (runtimeEnvironmentChanged !== undefined && typeof runtimeEnvironmentChanged !== "boolean") throw new Error("运行环境刷新标记无效。");
       await readCurrentSettings(ref);
       assertCurrentEnvironmentPatch(patch);
       if (
@@ -109,6 +119,13 @@ export function createDefaultSettingsService(
       }
 
       const next = mergeSettingsPatch(ref.current, effectivePatch);
+      if (effectivePatch.permission !== undefined && !isRecord(effectivePatch.permission)) throw new Error("权限设置必须是对象。");
+      if (effectivePatch.permission !== undefined) next.permission = parsePermissionSettings(next.permission);
+      if (effectivePatch.sandbox !== undefined) {
+        if (!isRecord(effectivePatch.sandbox)) throw new Error("隔离设置必须是对象。");
+        const { backend: _backend, ...sandbox } = normalizeSandboxConfig(next.sandbox);
+        next.sandbox = validateIsolationConfiguration(sandbox);
+      }
       const environmentKind = readAgentEnvironmentKind(effectivePatch);
       if (environmentKind && options.agentEnvironment) {
         await options.agentEnvironment.validate(environmentKind);
@@ -136,8 +153,13 @@ export function createDefaultSettingsService(
       if (effectivePatch.provider === "auto") {
         delete next.provider;
       }
-      await saveSettingsAndRefreshRef(ref, next);
-      const impact = settingsPatchRuntimeImpact(effectivePatch);
+      const checkedEdit = expectedPermission !== undefined || expectedSandbox !== undefined;
+      await saveSettingsAndRefreshRef(ref, next, checkedEdit ? {
+        ...(expectedPermission !== undefined ? { permission: parsePermissionSettings(expectedPermission) } : {}),
+        ...(expectedSandbox !== undefined ? { sandbox: expectedSandbox } : {}),
+      } : undefined, checkedEdit ? effectivePatch : undefined);
+      const normalImpact = settingsPatchRuntimeImpact(effectivePatch);
+      const impact = normalImpact === "none" && runtimeEnvironmentChanged ? "invalidate" : normalImpact;
       return {
         settings: sanitizeSettings(next),
         restartRuntimes: impact === "restart",

@@ -12,7 +12,6 @@ import {
 } from "../../terminal/index.js";
 import {
   applicationErrorResponse,
-  errorResponse,
   jsonResponse,
   readJson,
   SSE_HEADERS,
@@ -120,6 +119,8 @@ export function createTerminalRoutes(
           rows: numberValue(body.rows, 24),
           name: optionalText(body.name),
           shell: optionalText(body.shell),
+          shellArgs: readShellArgs(body.shellArgs),
+          env: readTerminalEnvironment(body.env),
           cwd: optionalText(body.cwd),
           source: readSource(body.source) ?? "user",
         });
@@ -191,6 +192,20 @@ export function createTerminalRoutes(
         return terminalError(error, 404);
       }
     });
+}
+
+function readShellArgs(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 100 || !value.every((arg) => typeof arg === "string" && arg.length <= 4096 && !arg.includes("\0"))) throw new DaemonTerminalError(400, "shellArgs must be a list of separate string arguments.");
+  return value;
+}
+
+function readTerminalEnvironment(value: unknown): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length > 100) throw new DaemonTerminalError(400, "env must be a terminal environment object.");
+  const entries = Object.entries(value);
+  if (!entries.every(([name, entry]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && typeof entry === "string" && entry.length <= 32768 && !entry.includes("\0"))) throw new DaemonTerminalError(400, "Invalid terminal environment name or value.");
+  return Object.fromEntries(entries);
 }
 
 function readTerminalScope(value: unknown): {

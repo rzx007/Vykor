@@ -42,6 +42,52 @@ function event(seq: number, schemaVersion = 1): SessionEventRecord {
 }
 
 describe("SessionSyncController", () => {
+  it("hydrates a session snapshot behind an unrelated cached session's cursor", async () => {
+    const cached = snapshot(20, "other session");
+    cached.session = { ...cached.session, id: "s2" };
+    const initialState = applySessionSnapshot(createInitialClientState(), cached);
+    const cursors: Array<number | "latest" | undefined> = [];
+    const client = {
+      sessions: { getState: async () => snapshot(10, "target session") },
+      events: { list: async () => [], stream: async function* (options?: { cursor?: number | "latest" }) {
+        cursors.push(options?.cursor);
+        controller.abort();
+      } },
+    };
+    const controller = new SessionSyncController({ client, sessionId: "s1", initialState });
+    await controller.start();
+
+    expect(controller.currentState.buckets.s1?.session?.title).toBe("target session");
+    expect(controller.currentState.buckets.s2?.session?.title).toBe("other session");
+    expect(cursors).toEqual([20]);
+  });
+
+  it("does not retain session event bodies or fetch gaps belonging to other sessions", async () => {
+    let gapRequests = 0;
+    let liveUpdates = 0;
+    const client = {
+      sessions: { getState: async () => snapshot(1, "initial") },
+      events: {
+        list: async () => { gapRequests++; return []; },
+        stream: async function* () {
+          for (let seq = 3; seq <= 4001; seq += 2) {
+            yield { ...event(seq), payload: { session: session(`title-${seq}`) } };
+          }
+          yield { ...event(3), payload: { session: session("duplicate") } };
+          controller.abort();
+        },
+      },
+    };
+    const controller = new SessionSyncController({ client, sessionId: "s1",
+      onUpdate: update => { if (update.source === "live") liveUpdates++; } });
+    await controller.start();
+
+    expect(controller.currentState.buckets.s1?.session?.title).toBe("title-4001");
+    expect(liveUpdates).toBe(2000);
+    expect(gapRequests).toBe(0);
+    expect(controller.currentState.eventsBySeq).toEqual({});
+  });
+
   it.each(["clean end", "stream error", "snapshot error"])("refreshes session state before resuming after %s", async failure => {
     let snapshots = 0;
     const streamCursors: Array<number | "latest" | undefined> = [];

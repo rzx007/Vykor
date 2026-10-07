@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest"
 import { headersFromRows, rowsFromHeaders } from "./request-header-form"
 
 describe("headersFromRows", () => {
+  it("keeps secret values out of ordinary settings and emits explicit removals", () => {
+    expect(headersFromRows([
+      { key: "1", name: "X-Token", value: "new-secret", secret: true },
+      { key: "2", name: "X-Session", value: "{{sessionId}}" },
+    ], ["Old-Token"])).toEqual({ ok: true, headers: { "X-Session": "{{sessionId}}" }, secretHeaders: { "Old-Token": null, "X-Token": "new-secret" } })
+    expect(headersFromRows(rowsFromHeaders(undefined, ["X-Token"]), ["X-Token"])).toEqual({ ok: true, headers: {} })
+  })
   it("preserves template text and reports incomplete rows", () => {
     expect(headersFromRows([{ key: "1", name: " X-Session ", value: " {{sessionId}} " }])).toEqual({
       ok: true,

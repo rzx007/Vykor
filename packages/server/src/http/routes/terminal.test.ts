@@ -37,6 +37,19 @@ describe("TerminalHttpEventHub", () => {
 });
 
 describe("Terminal routes", () => {
+  it.each([
+    { shellArgs: "--login; echo unsafe" },
+    { shellArgs: ["ok", 123] },
+    { env: { "BAD=NAME": "x" } },
+    { env: { TOKEN: 123 } },
+  ])("rejects malformed terminal startup values before process creation: %s", async (options) => {
+    const create = vi.fn()
+    const terminals = { create, subscribe: () => () => {} } as unknown as DaemonTerminalService
+    const app = createTerminalRoutes(terminals, new TerminalHttpEventHub(terminals))
+    const response = await app.request("/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scope: { kind: "project", projectId: "p1" }, runtime: "local", ...options }) })
+    expect(response.status).toBe(400)
+    expect(create).not.toHaveBeenCalled()
+  })
   it("forwards sandbox terminal create options to the daemon service", async () => {
     const create = vi.fn(async (input: TerminalCreateRequest): Promise<TerminalSessionInfo> => ({
       id: "terminal-1",
@@ -67,7 +80,9 @@ describe("Terminal routes", () => {
         cols: 120,
         rows: 32,
         name: "Sandbox",
-        shell: "/bin/sh -i",
+        shell: "/bin/sh",
+        shellArgs: ["-i", "two words"],
+        env: { VYKOR_TERMINAL_ONLY: "terminal" },
         cwd: "/repo/apps/web",
         source: "agent",
       }),
@@ -80,7 +95,9 @@ describe("Terminal routes", () => {
       cols: 120,
       rows: 32,
       name: "Sandbox",
-      shell: "/bin/sh -i",
+      shell: "/bin/sh",
+      shellArgs: ["-i", "two words"],
+      env: { VYKOR_TERMINAL_ONLY: "terminal" },
       cwd: "/repo/apps/web",
       source: "agent",
     });

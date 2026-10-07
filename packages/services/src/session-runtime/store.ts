@@ -82,6 +82,7 @@ import { DeltaCheckpoint } from "../database/delta-checkpoint.js";
 import {
   cloneMutationBuffer,
   createMutationBuffer,
+  hasPendingMutations,
   type MutationBuffer,
 } from "../database/mutation-buffer.js";
 import type { StorageContext } from "../database/storage-context.js";
@@ -812,6 +813,8 @@ export class SessionStore {
       this.coordinator.requestSave();
       return;
     }
+    // The preceding event save may already have committed all pending changes.
+    if (!hasPendingMutations(this.mutations) && this.deltaCheckpoint.dirtyPartIds().length === 0) return;
     try {
       this.coordinator.atomic(() => {
         this.coordinator.requestSave();

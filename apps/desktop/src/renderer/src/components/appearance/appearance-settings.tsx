@@ -90,6 +90,7 @@ export function AppearanceSettings(): React.JSX.Element {
     fontAvailability,
     saveState,
     setPreference,
+    patchPreferences,
     setWindowMaterial,
     resetAppearance,
   } = useAppearance()
@@ -131,6 +132,7 @@ export function AppearanceSettings(): React.JSX.Element {
       </div>
 
       <AppearanceSection title="模式">
+        <Button variant="ghost" className="self-end" onClick={() => setPreference("theme", DEFAULT_APPEARANCE_PREFERENCES.theme)}>恢复默认主题</Button>
         <FieldGroup>
           <Field>
             <FieldLabel className="sr-only">主题</FieldLabel>
@@ -227,6 +229,7 @@ export function AppearanceSettings(): React.JSX.Element {
       ) : null}
 
       <AppearanceSection title="颜色">
+        <Button variant="ghost" className="self-end" onClick={() => patchPreferences({ accent: DEFAULT_APPEARANCE_PREFERENCES.accent, colors: DEFAULT_APPEARANCE_PREFERENCES.colors })}>恢复默认颜色</Button>
         <FieldGroup>
           <Field orientation="responsive">
             <FieldContent>
@@ -297,6 +300,7 @@ export function AppearanceSettings(): React.JSX.Element {
       </AppearanceSection>
 
       <AppearanceSection title="字体">
+        <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => patchPreferences({ uiFont: DEFAULT_APPEARANCE_PREFERENCES.uiFont, codeFont: DEFAULT_APPEARANCE_PREFERENCES.codeFont })}>恢复默认字体</Button><Button variant="ghost" onClick={() => patchPreferences({ uiFontSize: DEFAULT_APPEARANCE_PREFERENCES.uiFontSize, codeFontSize: DEFAULT_APPEARANCE_PREFERENCES.codeFontSize })}>恢复默认字号</Button></div>
         <FieldGroup>
           <FontSelect
             label="界面字体"
@@ -305,6 +309,7 @@ export function AppearanceSettings(): React.JSX.Element {
             options={UI_FONT_OPTIONS}
             availability={fontAvailability}
             onChange={(value) => setPreference("uiFont", value)}
+            onReset={() => setPreference("uiFont", DEFAULT_APPEARANCE_PREFERENCES.uiFont)}
           />
           <Separator />
           <FontSelect
@@ -314,6 +319,7 @@ export function AppearanceSettings(): React.JSX.Element {
             options={CODE_FONT_OPTIONS}
             availability={fontAvailability}
             onChange={(value) => setPreference("codeFont", value)}
+            onReset={() => setPreference("codeFont", DEFAULT_APPEARANCE_PREFERENCES.codeFont)}
           />
           <Separator />
           <FontSizeControl
@@ -321,6 +327,7 @@ export function AppearanceSettings(): React.JSX.Element {
             value={preferences.uiFontSize}
             range={UI_FONT_SIZE_RANGE}
             onChange={(value) => setPreference("uiFontSize", value)}
+            onReset={() => setPreference("uiFontSize", DEFAULT_APPEARANCE_PREFERENCES.uiFontSize)}
           />
           <Separator />
           <FontSizeControl
@@ -328,11 +335,13 @@ export function AppearanceSettings(): React.JSX.Element {
             value={preferences.codeFontSize}
             range={CODE_FONT_SIZE_RANGE}
             onChange={(value) => setPreference("codeFontSize", value)}
+            onReset={() => setPreference("codeFontSize", DEFAULT_APPEARANCE_PREFERENCES.codeFontSize)}
           />
         </FieldGroup>
       </AppearanceSection>
 
       <AppearanceSection title="动效">
+        <Button variant="ghost" className="self-end" onClick={() => setPreference("reducedMotion", DEFAULT_APPEARANCE_PREFERENCES.reducedMotion)}>恢复默认动效</Button>
         <FieldGroup>
           <Field orientation="responsive">
             <FieldContent>
@@ -478,6 +487,7 @@ function FontSelect<Id extends UiFontId | CodeFontId>({
   options,
   availability,
   onChange,
+  onReset,
 }: {
   label: string
   description: string
@@ -485,6 +495,7 @@ function FontSelect<Id extends UiFontId | CodeFontId>({
   options: readonly AppearanceFontOption<Id>[]
   availability: Readonly<Record<string, boolean>>
   onChange: (value: Id) => void
+  onReset: () => boolean
 }): React.JSX.Element {
   const items = options.map((option) => ({ label: option.label, value: option.id }))
   const selected = options.find((option) => option.id === value)
@@ -494,6 +505,7 @@ function FontSelect<Id extends UiFontId | CodeFontId>({
       <FieldContent>
         <FieldTitle>{label}</FieldTitle>
         <FieldDescription>{description}</FieldDescription>
+        <Button variant="ghost" size="sm" onClick={onReset} aria-label={`恢复默认${label}`}>恢复默认</Button>
       </FieldContent>
       <Select
         items={items}
@@ -541,11 +553,13 @@ function FontSizeControl({
   value,
   range,
   onChange,
+  onReset,
 }: {
   label: string
   value: number
   range: { min: number; max: number }
   onChange: (value: number) => void
+  onReset: () => boolean
 }): React.JSX.Element {
   const commit = (next: number | readonly number[]): void => {
     const candidate = Array.isArray(next) ? next[0] : next
@@ -560,6 +574,7 @@ function FontSizeControl({
         <FieldDescription>
           范围 {range.min}–{range.max} px。
         </FieldDescription>
+        <Button variant="ghost" size="sm" onClick={onReset} aria-label={`恢复默认${label}`}>恢复默认</Button>
       </FieldContent>
       <div className="flex w-full max-w-72 items-center gap-3">
         <Slider

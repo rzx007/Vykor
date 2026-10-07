@@ -152,7 +152,7 @@ export async function resolveDefaultAgentCapabilities(
       ? false
       : undefined,
     async () => createAgentMemoryRuntime(
-      options.cwd,
+      options.configuration.memoryRoot ?? options.cwd,
       options.settings.memory?.maxFiles ?? 10,
       options.sessionId,
     ),

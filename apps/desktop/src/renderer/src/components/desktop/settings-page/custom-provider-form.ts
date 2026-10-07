@@ -17,6 +17,7 @@ export interface CustomProviderFormState {
   apiKey: string
   models: CustomProviderModelRow[]
   headers: CustomProviderHeaderRow[]
+  secretHeaderNames?: string[]
 }
 
 export type CustomProviderFormValidation =
@@ -61,7 +62,7 @@ export function validateCustomProviderForm(
   if (new Set(models.map((model) => model.id)).size !== models.length) {
     return { ok: false, field: "models", message: "模型 ID 不能重复。" }
   }
-  const headersResult = headersFromRows(form.headers)
+  const headersResult = headersFromRows(form.headers, form.secretHeaderNames)
   if (!headersResult.ok) {
     return { ok: false, field: "headers", message: headersResult.message }
   }
@@ -76,6 +77,7 @@ export function validateCustomProviderForm(
       ...(apiKey ? { apiKey } : {}),
       models,
       ...(Object.keys(headersResult.headers).length > 0 ? { headers: headersResult.headers } : {}),
+      ...(headersResult.secretHeaders ? { secretHeaders: headersResult.secretHeaders } : {}),
     },
   }
 }

@@ -1,4 +1,6 @@
 import { app, BrowserWindow } from "electron"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs"
+import { isAbsolute, join, relative, resolve } from "node:path"
 import { VykorClient } from "@vykor/client"
 import { type BrowserHost, type VykorHttpServer } from "@vykor/server"
 import {
@@ -31,6 +33,7 @@ import { buildOutsideProjectRoot } from "./outside-project-workspace"
 const DEFAULT_VERIFY_TIMEOUT_MS = 10_000
 
 export interface DaemonConnectionServiceOptions {
+  dataLocationPath?: string
   /** Process liveness check; injectable for tests. Defaults to `process.kill(pid, 0)`. */
   pidAlive?: (pid: number) => boolean
   /** How long to wait for a registered daemon to answer before giving up. */
@@ -56,6 +59,9 @@ export class DaemonConnectionService {
   private readonly stopNonDesktopDaemon: (registry: DaemonRegistry) => Promise<void>
   private readonly reconcileDesktopService: (registry: DaemonRegistry) => Promise<void>
   private readonly browserHost?: BrowserHost
+  private dataLocation: { directory: string; storePath?: string } | null = null
+  private restarting = false
+  private readonly dataLocationPath: () => string
 
   constructor(options: DaemonConnectionServiceOptions = {}) {
     this.pidAlive = options.pidAlive ?? isPidAlive
@@ -64,6 +70,7 @@ export class DaemonConnectionService {
     this.stopNonDesktopDaemon = options.stopNonDesktopDaemon ?? stopNonDesktopDaemon
     this.reconcileDesktopService = options.reconcileDesktopService ?? reconcileDesktopManagedService
     this.browserHost = options.browserHost
+    this.dataLocationPath = () => options.dataLocationPath ?? join(app.getPath("userData"), "runtime-data-location.json")
   }
 
   getDaemonStatus(): DesktopDaemonStatus {
@@ -86,6 +93,77 @@ export class DaemonConnectionService {
     this.invalidateClient()
     this.clientPromise = null
     return this.getClient()
+  }
+
+  async restart(options: { stopActive?: boolean } = {}): Promise<VykorClient> {
+    if (this.restarting) throw new Error("后台服务正在重启，请稍候。")
+    this.restarting = true
+    try {
+      const client = await this.getClient()
+      const health = await client.protocol.health()
+      const terminals = await client.terminals.list()
+      if ((health.activeRunCount > 0 || health.queuedRunCount > 0 || terminals.length > 0) && !options.stopActive) {
+        throw new Error("仍有运行或排队的任务、终端。请等待它们结束，或明确选择停止后重启。")
+      }
+      if (options.stopActive) {
+        const sessions = await client.sessions.list()
+        for (const session of sessions) await client.sessions.interrupt(session.id)
+        for (const terminal of terminals) await client.terminals.close(terminal.id)
+      }
+      if (this.embeddedServer) await this.dispose()
+      else {
+        const registry = readDaemonRegistry()
+        if (!registry || !isDesktopManagedRegistry(registry)) throw new Error("当前连接不属于本机桌面托管服务，不能在这里重启。")
+        await this.reconcileDesktopService(registry)
+        this.invalidateClient(); this.clientPromise = null
+        return this.getClient()
+      }
+      return this.getClient()
+    } finally { this.restarting = false }
+  }
+
+  async switchDataDirectory(directory: string, options: { stopActive?: boolean; storePath?: string } = {}): Promise<VykorClient> {
+    if (!isAbsolute(directory)) throw new Error("数据目录必须是完整路径。")
+    const target = resolve(directory)
+    const storePath = resolve(options.storePath ?? join(target, "session-runtime", "sessions.db"))
+    const offset = relative(target, storePath)
+    if (offset.startsWith("..") || isAbsolute(offset)) throw new Error("数据库必须位于所选数据目录内。")
+    if (!existsSync(storePath)) throw new Error("请先恢复并校验目标数据库，再切换数据目录。")
+    if (!this.embeddedServer) throw new Error("切换数据需要使用应用内置后台服务。请先关闭系统常驻服务并重新打开应用。")
+    const previous = this.dataLocation
+    const previousEnv = process.env.VYKOR_DATA_DIR
+    const previousStore = this.embeddedServer.store.path
+    const client = await this.getClient()
+    const health = await client.protocol.health()
+    const terminals = await client.terminals.list()
+    if ((health.activeRunCount > 0 || health.queuedRunCount > 0 || terminals.length > 0) && !options.stopActive) throw new Error("任务或终端尚未结束，不能切换数据目录。")
+    if (options.stopActive) {
+      for (const session of await client.sessions.list()) await client.sessions.interrupt(session.id)
+      for (const terminal of terminals) await client.terminals.close(terminal.id)
+    }
+    await this.dispose()
+    this.dataLocation = { directory: target, storePath }
+    process.env.VYKOR_DATA_DIR = target
+    try {
+      const next = await this.getClient()
+      this.saveDataLocation()
+      return next
+    } catch (error) {
+      await this.dispose()
+      this.dataLocation = previous ?? (previousEnv ? { directory: previousEnv, storePath: previousStore } : null)
+      if (previousEnv === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previousEnv
+      await this.getClient()
+      throw new Error(`数据切换失败，已恢复原数据位置：${errorMessage(error)}`)
+    }
+  }
+
+  private saveDataLocation(): void {
+    const target = this.dataLocationPath()
+    const root = resolve(target, "..")
+    mkdirSync(root, { recursive: true })
+    const temporary = `${target}.${process.pid}.tmp`
+    writeFileSync(temporary, JSON.stringify({ version: 1, location: this.dataLocation }), "utf8")
+    renameSync(temporary, target)
   }
 
   async dispose(): Promise<void> {
@@ -192,6 +270,13 @@ export class DaemonConnectionService {
     try {
       this.setDaemonStatus("starting", "正在启动内置 daemon")
       const token = createBearerToken()
+      if (!this.dataLocation) {
+        try {
+          const saved = JSON.parse(readFileSync(this.dataLocationPath(), "utf8"))
+          if (saved.version === 1 && saved.location && isAbsolute(saved.location.directory) && (!saved.location.storePath || isAbsolute(saved.location.storePath))) this.dataLocation = saved.location
+        } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error }
+      }
+      if (this.dataLocation) process.env.VYKOR_DATA_DIR = this.dataLocation.directory
       const { server, listen } = await startVykorDaemon({
         host: "127.0.0.1",
         port: 0,
@@ -199,6 +284,7 @@ export class DaemonConnectionService {
         version: app.getVersion(),
         executionSurface: "desktop_managed",
         outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
+        ...(this.dataLocation?.storePath ? { storePath: this.dataLocation.storePath } : {}),
         ...(this.browserHost ? { browserHost: this.browserHost } : {}),
       })
       this.embeddedServer = server

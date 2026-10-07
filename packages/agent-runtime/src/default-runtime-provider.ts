@@ -19,6 +19,7 @@ export interface CustomProviderRuntimeConfig {
   backendType: "openai_compat";
   baseURL: string;
   headers?: Record<string, string>;
+  secretHeaderNames?: string[];
 }
 
 export function resolveCustomProviderRuntime(
@@ -32,6 +33,7 @@ export function resolveCustomProviderRuntime(
     backendType: "openai_compat",
     baseURL: provider.baseUrl,
     ...(provider.headers ? { headers: provider.headers } : {}),
+    ...(provider.secretHeaderNames ? { secretHeaderNames: provider.secretHeaderNames } : {}),
   };
 }
 
@@ -66,8 +68,14 @@ export async function resolveApiClient(
     ? resolveProviderScopedBaseUrl(rawBaseURL, providerName)
     : rawBaseURL;
   const runtimeModel = resolveRuntimeModel(settings, configuration ?? {});
-  const requestHeaders = customProvider?.headers
-    ? expandRequestHeaderTemplates(customProvider.headers, {
+  const secretHeaders: Record<string, string> = {};
+  for (const name of customProvider?.secretHeaderNames ?? []) {
+    const value = await resolvedStorage.loadCredential(providerName!, `header:${name.toLowerCase()}`);
+    if (value === undefined) throw new Error(`机密请求头 ${name} 的凭据不可用，请重新配置。`);
+    secretHeaders[name] = value;
+  }
+  const requestHeaders = customProvider && (customProvider.headers || Object.keys(secretHeaders).length)
+    ? expandRequestHeaderTemplates({ ...customProvider.headers, ...secretHeaders }, {
         sessionId,
         userAgent: VYKOR_USER_AGENT,
       })

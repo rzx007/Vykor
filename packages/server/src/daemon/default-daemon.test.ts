@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vykor/auth", () => ({ ChannelConfigStore: class {} }));
-vi.mock("@vykor/core", () => ({ loadSettings: async () => ({ model: "fixture", agentEnvironment: { kind: "wsl" } }) }));
+vi.mock("@vykor/core", () => ({ loadSettings: async () => ({ model: "fixture", agentEnvironment: { kind: "wsl" } }), loadProjectSettings: async () => null }));
 vi.mock("../application/default-application-services.js", () => ({ createDefaultApplicationServices: () => ({}) }));
 vi.mock("../commands/default-command-catalog.js", () => ({ createDefaultCommandCatalog: () => ({}) }));
 vi.mock("../http/server.js", () => ({ startVykorServer: async (options: any) => options }));

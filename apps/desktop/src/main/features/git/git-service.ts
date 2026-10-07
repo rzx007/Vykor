@@ -35,7 +35,10 @@ class GitService {
   async changes(input: DesktopGitChangesInput): Promise<DesktopGitChangesResult> {
     const rootPath = await resolveDirectory(input.rootPath)
     const scope = normalizeDiffScope(input.scope)
-    const diffArgs = diffArgsForScope(scope)
+    const diffArgs = [
+      ...diffArgsForScope(scope),
+      ...(input.ignoreWhitespace === true ? ["--ignore-all-space"] : []),
+    ]
     const [numstatOutput, nameStatusOutput, untrackedOutput] = await Promise.all([
       runGit(rootPath, ["diff", "--numstat", ...diffArgs, "--", "."]),
       runGit(rootPath, ["diff", "--name-status", ...diffArgs, "--", "."]),
@@ -66,7 +69,11 @@ class GitService {
         .map((path) => toUntrackedFile(rootPath, path))
     )
 
-    const files = [...trackedFiles, ...untrackedFiles].sort((left, right) =>
+    const visibleTracked =
+      input.ignoreWhitespace === true
+        ? trackedFiles.filter((file) => statsByPath.has(file.path))
+        : trackedFiles
+    const files = [...visibleTracked, ...untrackedFiles].sort((left, right) =>
       left.path.localeCompare(right.path)
     )
     const totalAdditions = files.reduce((total, file) => total + (file.additions ?? 0), 0)
@@ -89,7 +96,13 @@ class GitService {
 
       const patch = await runGit(
         rootPath,
-        ["diff", ...diffArgsForScope(scope), "--", path],
+        [
+          "diff",
+          ...diffArgsForScope(scope),
+          ...(input.ignoreWhitespace === true ? ["--ignore-all-space"] : []),
+          "--",
+          path,
+        ],
         maxPatchBuffer
       )
       return {
@@ -167,7 +180,13 @@ function normalizeRequestedPath(rootPath: string, value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("文件路径不能为空。")
   const normalized = normalizeGitPath(value.trim())
   const relativePath = relative(rootPath, resolve(rootPath, normalized))
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath) || isAbsolute(normalized)) {
+  if (
+    !relativePath ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath) ||
+    isAbsolute(normalized)
+  ) {
     throw new Error("文件必须位于当前项目目录内。")
   }
   return normalizeGitPath(relativePath)

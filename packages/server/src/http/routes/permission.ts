@@ -15,12 +15,25 @@ import {
 } from "../support.js";
 
 export interface PermissionRoutesContext {
-  permissions: Pick<StorePermissionBroker, "listRequests" | "reply">;
+  permissions: Pick<StorePermissionBroker, "listRequests" | "reply"> & Partial<Pick<StorePermissionBroker, "listApprovals" | "revokeApproval">>;
   traces: Pick<RequestTraceRegistry, "get">;
 }
 
 export function createPermissionRoutes(context: PermissionRoutesContext): Hono {
   return new Hono()
+    .get("/approvals", () => {
+      if (!context.permissions.listApprovals) return errorResponse(501, "Approval management is unavailable");
+      return jsonResponse({ requests: context.permissions.listApprovals() });
+    })
+    .post("/:requestId/revoke", (c) => {
+      if (!context.permissions.revokeApproval) return errorResponse(501, "Approval management is unavailable");
+      try {
+        return jsonResponse({ request: context.permissions.revokeApproval(c.req.param("requestId")) });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return errorResponse(message.includes("not found") ? 404 : 409, message);
+      }
+    })
     .get("/", (c) => {
       let status: HttpPermissionStatus | undefined;
       try {

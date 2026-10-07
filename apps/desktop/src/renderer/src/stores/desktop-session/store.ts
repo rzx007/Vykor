@@ -107,12 +107,11 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
             if (settings.notificationMode === "never") return
             return Promise.all(
               notifications.map((notification) => {
-                if (notification.taskId && notification.taskId === get().selectedScheduledTaskId)
-                  return
                 return window.desktop.tray.notify({
                   title: notification.title,
                   body: notification.body,
                   silent: true,
+                  ...(notification.status === "completed" || notification.status === "failed" || notification.status === "needs_input" ? { eventStatus: notification.status, eventId: notification.eventId } : {}),
                   ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
                   ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
                 })

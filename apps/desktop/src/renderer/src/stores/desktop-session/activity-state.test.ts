@@ -40,6 +40,13 @@ const update = (
 ): DesktopActivityUpdate => ({ cursor, delivery, sessions, scheduled })
 
 describe("Activity state", () => {
+  it("does not alert or play failed sounds for a user-cancelled run", () => {
+    const initial = applyActivityUpdate(createActivityState(), update(1, "baseline", [session("other", "running", 1)]), null).state
+    const result = applyActivityUpdate(initial, update(2, "live", [session("other", "interrupted", 2)]), null)
+    expect(result.notifications).toEqual([])
+    expect(result.sounds).toEqual([])
+    expect(result.state.sessions.other.executionState).toBe("interrupted")
+  })
   it("alerts when a run fails while waiting for permission", () => {
     const initial = applyActivityUpdate(
       createActivityState(),
@@ -52,7 +59,7 @@ describe("Activity state", () => {
       "current"
     )
     expect(result.sounds).toMatchObject([{ status: "failed" }])
-    expect(result.notifications).toEqual([])
+    expect(result.notifications).toMatchObject([{ sessionId: "current", status: "failed" }])
   })
 
   it("does not notify an older pending approval again when another approval is resolved", () => {
@@ -123,7 +130,7 @@ describe("Activity state", () => {
     expect(result.notifications).toHaveLength(1)
   })
 
-  it("keeps the current conversation read and does not notify, including always mode", () => {
+  it("keeps the current conversation read while offering its failure to native focus filtering", () => {
     const initial = applyActivityUpdate(
       createActivityState(),
       update(1, "baseline", [session("current", "running", 1)]),
@@ -135,7 +142,7 @@ describe("Activity state", () => {
       "current"
     )
     expect(result.state.sessions.current.attentionState).toBe("read")
-    expect(result.notifications).toHaveLength(0)
+    expect(result.notifications).toMatchObject([{ sessionId: "current", status: "failed" }])
   })
 
   it("shows a new pending permission above a running run", () => {

@@ -18,6 +18,7 @@ function createContext() {
 
 function createTaskManager(overrides: Partial<ChildAgentRegistry & DetachedProcessRuntime> = {}): ChildAgentRegistry & DetachedProcessRuntime {
   return {
+    releaseChildExecution: vi.fn(),
     beginExecution: vi.fn(),
     completeExecution: vi.fn(),
     listExecutions: vi.fn(() => []),

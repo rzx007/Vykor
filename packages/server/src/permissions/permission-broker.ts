@@ -172,13 +172,37 @@ export class StorePermissionBroker implements PermissionBroker {
     return this.permissions.list(input);
   }
 
+  listApprovals(): PermissionRequestRecord[] {
+    const latest = new Map<string, PermissionRequestRecord>();
+    for (const request of this.permissions.list()) {
+      if ((request.status === "approved" && request.decision === "session") || request.decision === "revoked") {
+        latest.set(JSON.stringify([request.sessionId, request.toolName]), request);
+      }
+    }
+    return [...latest.values()].filter(request => request.status === "approved" && this.getSession(request.sessionId));
+  }
+
+  revokeApproval(requestId: string): PermissionRequestRecord {
+    const request = this.permissions.get(requestId);
+    if (!request) throw new Error("Permission request not found");
+    if (!this.listApprovals().some(approval => approval.id === requestId)) throw new Error("Permission approval is no longer current");
+    const previousEventSeq = this.latestEventSeq();
+    // Keep the original audit intact. A durable denial marker stops later reuse.
+    const marker = this.permissions.create({ sessionId: request.sessionId, toolName: request.toolName,
+      payload: { revokedApprovalRequestId: request.id } });
+    const revoked = this.permissions.reply({ requestId: marker.id, status: "denied", decision: "revoked" });
+    this.notify(previousEventSeq);
+    return revoked;
+  }
+
   private findSessionApproval(sessionId: string, toolName: string): PermissionRequestRecord | undefined {
     if (toolName === "AskUser") return undefined;
     for (const candidateId of this.sessionLineage(sessionId)) {
       const approval = this.permissions
-        .list({ sessionId: candidateId, toolName, status: "approved" })
-        .filter((request) => request.decision === "session")
+        .list({ sessionId: candidateId, toolName })
+        .filter((request) => (request.status === "approved" && request.decision === "session") || request.decision === "revoked")
         .at(-1);
+      if (approval?.decision === "revoked") return undefined;
       if (approval) return approval;
     }
     return undefined;

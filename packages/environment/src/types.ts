@@ -84,6 +84,8 @@ export interface EnvironmentProcessExecutor {
 export interface EnvironmentTerminalPrepareOptions {
   cwd?: string;
   shell?: string;
+  shellArgs?: string[];
+  env?: Record<string, string>;
   owner?: EnvironmentExecutionOwner;
   cols: number;
   rows: number;
@@ -95,6 +97,8 @@ export interface EnvironmentPtyTarget {
   hostCwd: string;
   executionCwd: string;
   shell: string;
+  environmentKind?: "native" | "wsl";
+  distribution?: string;
   env?: Record<string, string>;
   resize?(cols: number, rows: number): Promise<void>;
   signal(signal: "interrupt" | "terminate"): Promise<void>;

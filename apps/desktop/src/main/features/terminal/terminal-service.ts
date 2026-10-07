@@ -11,10 +11,10 @@ import type {
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { getDesktopPreferences } from "../settings/desktop-preferences"
-import { applyPreferredTerminalShell } from "./apply-preferred-shell"
 import { listDetectedTerminalShells, resolvePreferredTerminalShell } from "./detect-shells"
 import { desktopSessionService } from "../session/session-service"
-import { desktopSettingsService } from "../settings/settings-service"
+import { desktopRuntimeSettingsService } from "../settings/runtime-settings-service"
+import { desktopTerminalSettingsService, terminalShellFileError } from "../settings/terminal-settings-service"
 
 type TerminalClient = Pick<VykorClient, "terminals">
 
@@ -30,16 +30,32 @@ class DesktopTerminalService {
     input: TerminalCreateRequest
   ): Promise<TerminalSessionInfo> {
     this.ensureSubscription(webContents)
-    const preferred = resolvePreferredTerminalShell(
-      getDesktopPreferences().defaultTerminalShellId ?? null,
-      listDetectedTerminalShells()
-    )
-    const settings = await desktopSettingsService.snapshot()
-    const next = applyPreferredTerminalShell(
-      input,
-      preferred,
-      settings.agentEnvironment === "native"
-    )
+    const preferences = getDesktopPreferences()
+    const client = await desktopSessionService.daemonClient()
+    const session = input.scope.kind === "session" ? await client.sessions.get(input.scope.sessionId) : null
+    const cwd = session?.cwd ?? (await client.projects.list()).find((project) => project.id === (input.scope.kind === "project" ? input.scope.projectId : ""))?.path
+    if (!cwd) throw new Error("终端项目目录不可用。")
+    const desktopMetadata = session?.metadata?.desktop as { settingsRoot?: unknown } | undefined
+    const settingsRoot = typeof desktopMetadata?.settingsRoot === "string" ? desktopMetadata.settingsRoot : cwd
+    const native = input.runtime === "local" || (await desktopRuntimeSettingsService.snapshot({ cwd: settingsRoot })).effective.kind === "native"
+    const terminalSettings = preferences.terminal
+    let shell = input.shell
+    let shellArgs = input.shellArgs
+    if (!shell?.trim()) {
+      if (native && terminalSettings?.customShell) {
+        const error = terminalShellFileError(terminalSettings.customShell.executable)
+        if (error) throw new Error(error)
+        shell = terminalSettings.customShell.executable
+        shellArgs = terminalSettings.customShell.args
+      } else if (native) {
+        shell = resolvePreferredTerminalShell(preferences.defaultTerminalShellId, listDetectedTerminalShells())
+        if (preferences.defaultTerminalShellId && !shell) throw new Error("已保存的 Shell 不可用，请在终端设置中重新选择。")
+      } else if (terminalSettings?.wslShell) {
+        shell = terminalSettings.wslShell
+        shellArgs = terminalSettings.wslShellArgs
+      }
+    }
+    const next = { ...input, shell, shellArgs, env: { ...desktopTerminalSettingsService.launchEnvironment(), ...input.env } }
     return await withDaemonRetry((client) => client.terminals.create(next))
   }
 

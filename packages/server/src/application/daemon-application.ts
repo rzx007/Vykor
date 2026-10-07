@@ -163,6 +163,7 @@ export interface DaemonApplicationOptions {
  * daemon 对外暴露的能力面。HTTP 路由只调这些，不自己造 Agent、不自己写会话记录。
  */
 export interface DurableAgentApplication {
+  readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
   readonly pluginUi?: SessionPluginUiService;
   readonly store: SessionStore;
   readonly notes: NoteRepository;
@@ -252,6 +253,7 @@ export class DaemonApplication implements DurableAgentApplication {
   private readonly startupRecovery: Promise<void>;
   private closePromise?: Promise<void>;
   private readyState: "starting" | "ready" | "failed" | "closing" | "closed" = "starting";
+  get diagnosticState() { return { phase: this.readyState, accepting: this.readyState === "ready" && this.operationGate.accepting }; }
   private ownerLease: ApplicationOwnerLease;
   private readonly ownerHeartbeat: ReturnType<typeof setInterval>;
 

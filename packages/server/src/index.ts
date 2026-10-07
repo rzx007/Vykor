@@ -112,6 +112,9 @@ export type {
   AgentRunScope,
 } from "@vykor/core";
 export { estimateCostUsd } from "./shared/index.js";
+export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport } from "./application/maintenance/usage-settings.js";
+export type { StorageCategory, StorageReport } from "./application/maintenance/storage-settings.js";
+export type { CleanupCandidate, CleanupPreview, CleanupResult } from "./application/maintenance/cleanup-settings.js";
 export {
   APPLICATION_ERROR_HTTP_STATUS,
   ApplicationError,
@@ -134,6 +137,18 @@ export {
   PermissionController,
   type PermissionControllerWaitInput,
 } from "./permissions/index.js";
+export {
+  inspectPermissionConfiguration,
+  checkPermissionConfiguration,
+  validatePermissionConfiguration,
+  validateIsolationConfiguration,
+} from "./permissions/settings-management.js";
+export { loadRuntimeSecrets, saveRuntimeSecrets } from "./runtime/runtime-secrets.js";
+export { inspectRuntimeEnvironment, saveRuntimeEnvironment, listRuntimeDistributions, checkRuntimeEnvironment } from "./runtime/runtime-settings.js";
+export { exportPortableSettings, importPortableSettings, parsePortableSettings } from "./settings-transfer.js";
+export { inspectPersonalizationSettings, saveMemoryConfiguration } from "./personalization-settings.js";
+export { createDesktopGitWorktree } from "./desktop-git-workspaces.js";
+export { testStoredProviderConnection, storedProviderConnectionFingerprint } from "./provider-connection-test.js";
 export {
   StorePermissionBroker,
   type ListPermissionRequestsInput,

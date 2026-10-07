@@ -4,6 +4,8 @@ import type { McpServerConfig, Settings } from "../index";
 import { getConfigDir, getConfigFilePath, getProjectConfigDir, getProjectSettingsFilePath } from "./paths";
 import { writeJsonFileAtomically } from "./atomic-json-write.js";
 import { SettingsConflictError, withSettingsFileLock } from "./settings-mutation.js";
+import { parsePermissionSettings } from "./permission-settings.js";
+import { parseAgentEnvironmentSettings } from "./agent-environment-settings.js";
 
 export const DEFAULT_OUTPUT_TOKEN_MAX = 32_000;
 
@@ -106,6 +108,14 @@ export async function loadSettings(
     ...envSettings,
     ...cliOverrides,
   } as Settings;
+  merged.agentEnvironment = {
+    ...DEFAULT_SETTINGS.agentEnvironment!, ...fileSettings?.agentEnvironment, ...projectSettings?.agentEnvironment,
+    ...envSettings.agentEnvironment, ...cliOverrides?.agentEnvironment,
+    env: { ...fileSettings?.agentEnvironment?.env, ...projectSettings?.agentEnvironment?.env,
+      ...envSettings.agentEnvironment?.env, ...cliOverrides?.agentEnvironment?.env },
+    secretEnv: [...new Set([...(fileSettings?.agentEnvironment?.secretEnv ?? []), ...(projectSettings?.agentEnvironment?.secretEnv ?? []),
+      ...(envSettings.agentEnvironment?.secretEnv ?? []), ...(cliOverrides?.agentEnvironment?.secretEnv ?? [])])],
+  };
   merged.memory = {
     ...DEFAULT_SETTINGS.memory,
     ...fileSettings?.memory,
@@ -410,6 +420,7 @@ export class SettingsFileError extends Error {
 const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "apiKey",
   "model",
+  "modelDisabled",
   "apiFormat",
   "outputTokenMax",
   "baseUrl",
@@ -443,6 +454,7 @@ function validateSettingsFields(
   configPath: string,
 ): void {
   assertKnownFields(settings, TOP_LEVEL_SETTINGS_FIELDS, "settings", configPath);
+  if (settings.modelDisabled !== undefined && typeof settings.modelDisabled !== "boolean") throw new SettingsFileError("settings.modelDisabled", configPath);
   assertNestedFields(settings, "permission", [
     "mode",
     "allowedTools",
@@ -451,6 +463,7 @@ function validateSettingsFields(
     "deniedCommands",
     "autoApproveTools",
   ], configPath);
+  if (settings.permission !== undefined) parsePermissionSettings(settings.permission);
   assertNestedFields(settings, "memory", [
     "enabled",
     "maxFiles",
@@ -469,7 +482,7 @@ function validateSettingsFields(
     "network",
     "srt",
   ], configPath);
-  assertNestedFields(settings, "agentEnvironment", ["kind"], configPath);
+  assertNestedFields(settings, "agentEnvironment", ["kind", "distribution", "shell", "env", "secretEnv"], configPath);
   assertAgentEnvironment(settings.agentEnvironment, configPath);
   const sandbox = recordValue(settings.sandbox);
   if (sandbox) {
@@ -552,6 +565,7 @@ function assertAgentEnvironment(value: unknown, source: string): void {
   if (!environment) throw new SettingsFileError("settings.agentEnvironment", source);
   if (environment.kind === undefined) throw new SettingsFileError("settings.agentEnvironment.kind", source);
   assertAgentEnvironmentKind(environment.kind, source);
+  parseAgentEnvironmentSettings(environment);
 }
 
 function assertPluginUiEnabled(value: unknown, configPath: string): void {

@@ -14,6 +14,7 @@ export interface DesktopGitReviewRequest {
 export interface DesktopGitChangesInput {
   rootPath: string
   scope?: DesktopGitDiffScope
+  ignoreWhitespace?: boolean
 }
 
 export interface DesktopGitChangedFile {
@@ -37,6 +38,7 @@ export interface DesktopGitFileDiffInput {
   path: string
   status?: DesktopGitFileStatus
   scope?: DesktopGitDiffScope
+  ignoreWhitespace?: boolean
 }
 
 export interface DesktopGitFileDiffResult {

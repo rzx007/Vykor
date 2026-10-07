@@ -22,7 +22,7 @@ export const permissionModeOptions: PermissionModeOption[] = [
   {
     value: "full_auto",
     label: "自动批准",
-    description: "尽量自动放行工具操作。",
+    description: "自动批准工具操作，仍遵守禁止规则和访问边界。",
   },
 ]
 

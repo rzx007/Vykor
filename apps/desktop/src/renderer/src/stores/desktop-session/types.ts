@@ -26,6 +26,7 @@ import type { ProjectDetailsCoordinator } from "./project-details-coordinator"
 export type LoadStatus = "idle" | "loading" | "ready" | "error"
 
 export interface SubmitPromptOptions {
+  taskLocation?: "current" | "worktree"
   document?: ComposerDocument
   attachments?: readonly DesktopAttachmentDraft[]
   target?: { sessionId: string; view: DesktopSessionView | null }

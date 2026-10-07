@@ -1,4 +1,14 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
+import { GitSettingsChannels, type GitSettingsIpcMap } from "./git-settings-types"
+import { MaintenanceSettingsChannels, type MaintenanceSettingsIpcMap } from "./maintenance-settings-types"
+import { RuntimeSettingsChannels, type RuntimeSettingsIpcMap } from "./runtime-settings-types"
+import { NotificationSettingsChannels, type NotificationSettingsIpcMap } from "./notification-settings-types"
+import { PersonalizationManagementChannels, type PersonalizationManagementIpcMap } from "./personalization-management-types"
+import { ConfigurationSettingsChannels, type ConfigurationSettingsIpcMap } from "./configuration-settings-types"
+import { ProviderDefaultsChannels, type ProviderDefaultsIpcMap } from "./provider-defaults-types"
+import type { CheckDesktopPermissionInput, DesktopIsolationSettings, DesktopPermissionSettingsSnapshot,
+  RevokeDesktopApprovalInput, UpdateDesktopPermissionSettingsInput } from "./permission-settings-types"
 import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
 import type {
   CreateDesktopSessionInput,
@@ -366,6 +376,11 @@ export const IpcChannels = {
   skillRemove: "skill:remove",
 
   settingsSnapshot: "settings:snapshot",
+  permissionSettingsSnapshot: "settings:permissions:snapshot",
+  permissionSettingsUpdate: "settings:permissions:update",
+  permissionSettingsUpdateIsolation: "settings:permissions:update-isolation",
+  permissionSettingsCheck: "settings:permissions:check",
+  permissionSettingsRevoke: "settings:permissions:revoke",
   settingsUpdateCustomInstructions: "settings:update-custom-instructions",
   settingsUpdateMemorySettings: "settings:update-memory-settings",
   settingsUpdateWorkStyle: "settings:update-work-style",
@@ -401,6 +416,14 @@ export const IpcEvents = {
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
+  | (typeof TerminalSettingsChannels)[keyof typeof TerminalSettingsChannels]
+  | (typeof GitSettingsChannels)[keyof typeof GitSettingsChannels]
+  | (typeof MaintenanceSettingsChannels)[keyof typeof MaintenanceSettingsChannels]
+  | (typeof RuntimeSettingsChannels)[keyof typeof RuntimeSettingsChannels]
+  | (typeof NotificationSettingsChannels)[keyof typeof NotificationSettingsChannels]
+  | (typeof PersonalizationManagementChannels)[keyof typeof PersonalizationManagementChannels]
+  | (typeof ConfigurationSettingsChannels)[keyof typeof ConfigurationSettingsChannels]
+  | (typeof ProviderDefaultsChannels)[keyof typeof ProviderDefaultsChannels]
 
 export interface DesktopAppInfo {
   name: string
@@ -421,6 +444,8 @@ export interface TrayNotificationOptions {
   silent?: boolean
   showWhenFocused?: boolean
   sessionId?: string
+  eventId?: string
+  eventStatus?: "completed" | "failed" | "needs_input"
 }
 
 export interface PetPosition {
@@ -435,7 +460,7 @@ export interface PetState {
   position: PetPosition | null
 }
 
-export interface IpcInvokeMap {
+export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap, MaintenanceSettingsIpcMap, RuntimeSettingsIpcMap, NotificationSettingsIpcMap, PersonalizationManagementIpcMap, ConfigurationSettingsIpcMap, ProviderDefaultsIpcMap {
   [IpcChannels.pluginUiCapabilities]: {
     args: []
     result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>>
@@ -512,6 +537,14 @@ export interface IpcInvokeMap {
   [IpcChannels.petSetIgnoreMouseEvents]: { args: [value: boolean]; result: PetState }
 
   [IpcChannels.settingsSnapshot]: { args: []; result: DesktopSettingsSnapshot }
+  [IpcChannels.permissionSettingsSnapshot]: { args: []; result: DesktopPermissionSettingsSnapshot }
+  [IpcChannels.permissionSettingsUpdate]: { args: [input: UpdateDesktopPermissionSettingsInput]; result: DesktopPermissionSettingsSnapshot }
+  [IpcChannels.permissionSettingsUpdateIsolation]: {
+    args: [input: { sandbox: DesktopIsolationSettings; expectedSandbox: DesktopIsolationSettings }]
+    result: DesktopPermissionSettingsSnapshot
+  }
+  [IpcChannels.permissionSettingsCheck]: { args: [input: CheckDesktopPermissionInput]; result: { action: "allow" | "deny" | "ask"; reason?: string } }
+  [IpcChannels.permissionSettingsRevoke]: { args: [input: RevokeDesktopApprovalInput]; result: DesktopPermissionSettingsSnapshot }
   [IpcChannels.settingsUpdateCustomInstructions]: {
     args: [input: UpdateDesktopCustomInstructionsInput]
     result: DesktopSettingsSnapshot

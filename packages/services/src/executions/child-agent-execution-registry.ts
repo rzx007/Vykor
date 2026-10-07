@@ -91,6 +91,11 @@ export class ChildAgentExecutionRegistry {
     return this.executions.get(executionId);
   }
 
+  /** Detach a closed child without discarding its completed output or wait result. */
+  releaseChildExecution(executionId: string): void {
+    this.callbacks.delete(executionId);
+  }
+
   listExecutions(status?: string): ChildAgentExecution[] {
     const all = [...this.executions.values()].sort((a, b) => b.createdAt - a.createdAt);
     return status ? all.filter((execution) => execution.status === status) : all;

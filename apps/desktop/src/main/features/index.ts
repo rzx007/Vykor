@@ -14,6 +14,14 @@ import { sessionIpcContribution } from "./session/ipc"
 import { scheduleIpcContribution } from "./schedule/ipc"
 import { noteIpcContribution } from "./notes/ipc"
 import { settingsIpcContribution } from "./settings/ipc"
+import { terminalSettingsIpcContribution } from "./settings/terminal-settings-ipc"
+import { gitSettingsIpcContribution } from "./settings/git-settings-ipc"
+import { maintenanceSettingsIpcContribution } from "./settings/maintenance-settings-ipc"
+import { runtimeSettingsIpcContribution } from "./settings/runtime-settings-ipc"
+import { notificationSettingsIpcContribution } from "./settings/notification-settings-ipc"
+import { personalizationManagementIpcContribution } from "./settings/personalization-management-ipc"
+import { configurationSettingsIpcContribution } from "./settings/configuration-settings-ipc"
+import { providerDefaultsIpcContribution } from "./provider/provider-defaults-ipc"
 import { skillIpcContribution } from "./skill/ipc"
 import { terminalIpcContribution } from "./terminal/ipc"
 import { trayIpcContribution } from "./tray/ipc"
@@ -39,6 +47,14 @@ export const allIpcContributions: IpcContribution[] = [
   scheduleIpcContribution,
   noteIpcContribution,
   settingsIpcContribution,
+  terminalSettingsIpcContribution,
+  gitSettingsIpcContribution,
+  maintenanceSettingsIpcContribution,
+  runtimeSettingsIpcContribution,
+  notificationSettingsIpcContribution,
+  personalizationManagementIpcContribution,
+  configurationSettingsIpcContribution,
+  providerDefaultsIpcContribution,
   terminalIpcContribution,
   workspaceIpcContribution,
 ]

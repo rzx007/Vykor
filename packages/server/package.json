@@ -35,6 +35,7 @@
     "@vykor/output-styles": "workspace:*",
     "@vykor/plugin-sources": "workspace:*",
     "@vykor/personalization": "workspace:*",
+    "@vykor/permissions": "workspace:*",
     "@vykor/plugins": "workspace:*",
     "@vykor/protocol": "workspace:*",
     "@vykor/sandbox": "workspace:*",

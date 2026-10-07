@@ -5,6 +5,37 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { PersonalizationSettings } from "./personalization-settings"
+vi.mock("@renderer/stores/desktop-session", () => ({
+  useDesktopSessionStore: (select: (state: unknown) => unknown) => select({ projects: [] }),
+}))
+const memoryConfiguration = {
+  managementAvailable: true,
+  effective: {
+    enabled: true,
+    autoExtractEnabled: true,
+    sessionMemoryEnabled: true,
+    autoDreamEnabled: false,
+    autoDreamMinHours: 24,
+    autoDreamMinSessions: 5,
+  },
+  configured: {
+    enabled: true,
+    autoExtractEnabled: true,
+    sessionMemoryEnabled: true,
+    autoDreamEnabled: false,
+    autoDreamMinHours: 24,
+    autoDreamMinSessions: 5,
+  },
+  sources: {
+    enabled: "用户默认",
+    autoExtractEnabled: "用户默认",
+    sessionMemoryEnabled: "用户默认",
+    autoDreamEnabled: "用户默认",
+  },
+  rules: [],
+  entries: [],
+  consolidation: { lastConsolidatedAt: null, status: "unknown" },
+}
 
 const snapshot = {
   workStyle: "practical",
@@ -28,10 +59,13 @@ describe("PersonalizationSettings", () => {
     ...snapshot,
     customInstructions: content,
   }))
-  const updateMemorySettings = vi.fn(async ({ enabled }: { enabled: boolean }) => ({
-    ...snapshot,
-    memoryEnabled: enabled,
-  }))
+  const updateMemorySettings = vi.fn(
+    async ({ value }: { value: typeof memoryConfiguration.effective }) => ({
+      ...memoryConfiguration,
+      effective: value,
+      configured: value,
+    })
+  )
 
   beforeEach(() => {
     ;(
@@ -43,6 +77,10 @@ describe("PersonalizationSettings", () => {
     Object.defineProperty(window, "desktop", {
       configurable: true,
       value: {
+        personalizationManagement: {
+          snapshot: vi.fn(async () => memoryConfiguration),
+          updateConfiguration: updateMemorySettings,
+        },
         settings: {
           snapshot: vi.fn(async () => snapshot),
           updateCustomInstructions,
@@ -63,7 +101,11 @@ describe("PersonalizationSettings", () => {
     const toggle = container.querySelector<HTMLElement>('[aria-label="项目长期记忆"]')!
     expect(toggle.getAttribute("aria-checked")).toBe("true")
     await act(async () => toggle.click())
-    expect(updateMemorySettings).toHaveBeenCalledWith({ enabled: false })
+    expect(updateMemorySettings).toHaveBeenCalledWith({
+      projectId: undefined,
+      value: { ...memoryConfiguration.effective, enabled: false },
+      expected: memoryConfiguration.configured,
+    })
   })
 
   it("opens the current custom instructions and saves the edited text", async () => {

@@ -2,7 +2,7 @@
  * SystemResource: 系统配置、命令、上下文、记忆、Dream 与环境设定资源。
  */
 
-import type { PluginCatalogEntry } from "@vykor/protocol";
+import type { PluginCatalogEntry, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {
   CommandCatalogEntry,
@@ -153,13 +153,22 @@ export class SystemResource {
   /** `DELETE /memory/:id?cwd=` */
   async removeMemory(
     entryId: string,
-    options: { cwd: string; signal?: AbortSignal },
+    options: { cwd: string; signal?: AbortSignal; expectedRevision?: string },
   ): Promise<void> {
-    const { signal, cwd } = options;
+    const { signal, cwd, expectedRevision } = options;
     await this.transport.request<{ deleted: boolean }>(
-      this.transport.path(`/memory/${encodeURIComponent(entryId)}`, { cwd }),
+      this.transport.path(`/memory/${encodeURIComponent(entryId)}`, { cwd, expectedRevision }),
       { method: "DELETE", signal },
     );
+  }
+
+  async updateMemory(input: UpdateMemoryEntryInput, options: { signal?: AbortSignal } = {}): Promise<MemoryEntryRecord> {
+    const { id, ...body } = input;
+    const result = await this.transport.request<{ entry: MemoryEntryRecord }>(`/memory/${encodeURIComponent(id)}`, { method: "PATCH", body, signal: options.signal });
+    return result.entry;
+  }
+  async clearMemory(input: ClearMemoryInput, options: { signal?: AbortSignal } = {}): Promise<{ deleted: number }> {
+    return this.transport.request<{ deleted: number }>("/memory/clear", { method: "POST", body: input, signal: options.signal });
   }
 
   /** `GET /context/plugins?cwd=` — safe plugin picker metadata. */

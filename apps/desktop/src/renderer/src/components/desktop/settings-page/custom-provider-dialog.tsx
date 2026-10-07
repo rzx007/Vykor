@@ -80,7 +80,7 @@ export function CustomProviderDialog({
               {provider ? `编辑 ${provider.displayName}` : "添加自定义供应商"}
             </DialogTitle>
             <DialogDescription>
-              配置 OpenAI 兼容接口。API 密钥单独保存在本地凭证中，普通设置只保存连接信息。
+              配置 OpenAI 兼容接口。API 密钥和机密请求头单独保存到宿主凭据；提交新密钥时会请求模型列表验证，可能按上游规则收费。
             </DialogDescription>
           </DialogHeader>
 
@@ -323,6 +323,7 @@ function initialForm(provider?: DesktopProviderInfo): CustomProviderFormState {
             imageInputSupport: "unknown",
           },
         ],
-    headers: rowsFromHeaders(provider?.headers),
+    headers: rowsFromHeaders(provider?.headers, provider?.secretHeaderNames),
+    secretHeaderNames: provider?.secretHeaderNames,
   }
 }

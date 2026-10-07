@@ -25,6 +25,8 @@ export interface CreateExecutionEnvironmentInput {
   sessionId: string;
   userSkillsRoot: string;
   onEvent?: (event: "preflight" | "probe" | "ready") => void;
+  /** Host-resolved secrets; never included in environment facts or model metadata. */
+  env?: Record<string, string>;
 }
 
 export interface CreateExecutionEnvironmentDependencies {
@@ -44,7 +46,7 @@ export async function createExecutionEnvironment(
     throw new Error(`Unsupported execution environment: ${String(kind)}`);
   }
   if (input.config.kind === "wsl") {
-    const facts = await (dependencies.preflightWsl ?? preflightWsl)();
+    const facts = await (dependencies.preflightWsl ?? preflightWsl)({ distribution: input.settings.agentEnvironment?.distribution });
     input.onEvent?.("probe");
     const handle = createWslHandle(input, dependencies, facts);
     input.onEvent?.("ready");
@@ -60,13 +62,13 @@ function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: C
   const process = createWslProcessExecutor(input, dependencies);
   const paths = createWslPathResolver(input.binding, process);
   const shellDescriptor: ShellDescriptor = {
-    family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: ["-lc"],
+    family: "posix", dialect: "posix-sh", executable: input.settings.agentEnvironment?.shell?.executable ?? "/bin/sh", argsPrefix: input.settings.agentEnvironment?.shell?.args.length ? input.settings.agentEnvironment.shell.args : ["-lc"],
     displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp",
     capabilities: { conditionalAndOr: true, supportsLoginShell: true },
   };
   return {
     info: {
-      kind: "wsl", hostOs: "Windows", executionOs: "Linux", shell: "/bin/sh",
+      kind: "wsl", hostOs: "Windows", executionOs: "Linux", shell: shellDescriptor.executable,
       shellDialect: "posix", pathStyle: "posix", cwd: input.binding.executionRoot,
       homeDir: facts.homeDir, ...(facts.shell ? { userShell: facts.shell } : {}), tempDir: "/tmp",
       mounts: [{ path: input.binding.executionRoot, mode: "rw", purpose: "workspace" }],
@@ -78,9 +80,14 @@ function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: C
     terminal: {
       async prepare(options) {
         const cwd = (await paths.resolve(options.cwd ?? input.binding.executionRoot, "execute")).executionPath;
+        const distribution = input.settings.agentEnvironment?.distribution;
+        const shell = options.shell?.trim();
+        const env = { ...input.settings.agentEnvironment?.env, ...input.env, ...options.env };
+        const args = [...(distribution ? ["--distribution", distribution] : []), "--cd", cwd];
+        if (shell || Object.keys(env).length) args.push("--exec", "/usr/bin/env", ...Object.entries(env).map(([key, value]) => `${key}=${value}`), shell || facts.shell || "/bin/sh", ...(options.shellArgs ?? ["-i"]));
         return {
-          command: "wsl.exe", args: ["--cd", cwd], hostCwd: input.binding.hostRoot,
-          executionCwd: cwd, shell: "default", async signal() {}, async close() {},
+          command: "wsl.exe", args, hostCwd: input.binding.hostRoot,
+          executionCwd: cwd, shell: shell || facts.shell || "/bin/sh", environmentKind: "wsl", ...(distribution ? { distribution } : {}), async signal() {}, async close() {},
         };
       },
     },
@@ -90,18 +97,21 @@ function createWslHandle(input: CreateExecutionEnvironmentInput, dependencies: C
 
 function createWslProcessExecutor(input: CreateExecutionEnvironmentInput, dependencies: CreateExecutionEnvironmentDependencies): EnvironmentProcessExecutor {
   const run = dependencies.spawnWslProcess ?? spawnWslProcess;
+  const environment = input.settings.agentEnvironment;
   return {
     async execShell(command, options = {}) {
-      return adaptChildProcess(run({ argv: ["/bin/sh", "-lc", command], cwd: options.cwd ?? input.binding.executionRoot, env: options.env, signal: options.signal }));
+      return adaptChildProcess(run({ argv: [environment?.shell?.executable ?? "/bin/sh", ...(environment?.shell?.args.length ? environment.shell.args : ["-lc"]), command], cwd: options.cwd ?? input.binding.executionRoot,
+        distribution: environment?.distribution, env: { ...environment?.env, ...input.env, ...options.env }, signal: options.signal }));
     },
     async execProcess(argv, options = {}) {
-      return adaptChildProcess(run({ argv, cwd: options.cwd ?? input.binding.executionRoot, env: options.env, signal: options.signal }));
+      return adaptChildProcess(run({ argv, cwd: options.cwd ?? input.binding.executionRoot, distribution: environment?.distribution, env: { ...environment?.env, ...input.env, ...options.env }, signal: options.signal }));
     },
   };
 }
 
 async function createLocalHandle(input: CreateExecutionEnvironmentInput, dependencies: CreateExecutionEnvironmentDependencies): Promise<ExecutionEnvironmentHandle> {
-  const shellDescriptor = await resolveShellDescriptor({ platform: platform(), tempDir: tmpdir() });
+  const shellDescriptor = await resolveShellDescriptor({ platform: platform(), tempDir: tmpdir(), configuredExecutable: input.settings.agentEnvironment?.shell?.executable });
+  if (input.settings.agentEnvironment?.shell?.args.length) shellDescriptor.argsPrefix = [...input.settings.agentEnvironment.shell.args];
   return {
     info: {
       kind: "local", hostOs: hostOsName(), executionOs: hostOsName(),
@@ -124,7 +134,7 @@ function createLocalTerminalFactory(input: CreateExecutionEnvironmentInput): Env
   return { async prepare(options) {
     const launcher = resolveHostShellLauncher();
     const command = options.shell?.trim() || input.settings.terminal?.localShell || (launcher.kind === "posix-sh" ? "/bin/sh" : launcher.bin);
-    return { command, args: [], hostCwd: options.cwd ?? input.binding.hostRoot, executionCwd: options.cwd ?? input.binding.executionRoot, shell: command, async signal() {}, async close() {} };
+    return { command, args: options.shellArgs ?? [], env: { ...input.settings.agentEnvironment?.env, ...input.env, ...options.env }, hostCwd: options.cwd ?? input.binding.hostRoot, executionCwd: options.cwd ?? input.binding.executionRoot, shell: command, environmentKind: "native", async signal() {}, async close() {} };
   } };
 }
 
@@ -133,13 +143,13 @@ function createLocalProcessExecutor(input: CreateExecutionEnvironmentInput, depe
     async execShell(command, options = {}) {
       return adaptChildProcess(await (dependencies.createShellProcess ?? createShellProcess)(command, {
         cwd: options.cwd ?? input.binding.hostRoot, workspaceRoot: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
-        env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"], shellDescriptor,
+        env: { ...input.settings.agentEnvironment?.env, ...input.env, ...options.env }, signal: options.signal, stdio: ["pipe", "pipe", "pipe"], shellDescriptor,
       }));
     },
     async execProcess(argv, options = {}) {
       return adaptChildProcess(await (dependencies.createProcess ?? createProcess)(argv, {
         cwd: options.cwd ?? input.binding.hostRoot, workspaceRoot: input.binding.hostRoot, sessionId: input.sessionId, settings: input.settings,
-        env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"],
+        env: { ...input.settings.agentEnvironment?.env, ...input.env, ...options.env }, signal: options.signal, stdio: ["pipe", "pipe", "pipe"],
       }));
     },
   };

@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import { markStartupOverlayReady } from "@renderer/startup-overlay"
+import { toast } from "@renderer/lib/toast"
 
 import { DesktopSessionEventBridge } from "@renderer/components/desktop/desktop-session-event-bridge"
 import { shouldAttachDesktopSessionEvents } from "@renderer/components/desktop/desktop-session-event-bridge-path"
@@ -25,7 +26,10 @@ function DesktopRoot(): React.JSX.Element {
   useEffect(() => {
     if (!sessionEventsEnabled) return
     return window.desktop?.tray?.onNotificationClick?.((sessionId) => {
-      void navigate({ to: "/conversation/$sessionId", params: { sessionId } })
+      void window.desktop.notificationSettings.resolveSession(sessionId).then((session) => {
+        if (!session) { toast.info("通知对应的会话已删除。", "原会话不可用，未打开其他任务。"); return undefined }
+        return navigate({ to: "/conversation/$sessionId", params: { sessionId: session.id } })
+      }).catch(() => toast.error("无法打开通知对应的会话。", "请检查后台连接后重试。"))
     })
   }, [navigate, sessionEventsEnabled])
 

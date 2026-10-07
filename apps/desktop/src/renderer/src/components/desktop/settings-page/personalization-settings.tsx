@@ -3,15 +3,11 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent } from "@renderer/components/ui/card"
-import { Separator } from "@renderer/components/ui/separator"
-import { Switch } from "@renderer/components/ui/switch"
 import { Textarea } from "@renderer/components/ui/textarea"
-import type {
-  DesktopSettingsSnapshot,
-  UpdateDesktopMemorySettingsInput,
-} from "@shared/settings-types"
+import type { DesktopSettingsSnapshot } from "@shared/settings-types"
 
 import { errorMessage } from "./settings-error-message"
+import { PersonalizationMemoryManagement } from "./personalization-memory-management"
 
 export function PersonalizationSettings(): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<DesktopSettingsSnapshot | null>(null)
@@ -38,17 +34,6 @@ export function PersonalizationSettings(): React.JSX.Element {
       cancelled = true
     }
   }, [])
-
-  const updateMemory = (patch: UpdateDesktopMemorySettingsInput): void => {
-    if (saving) return
-    setSaving(true)
-    setError(null)
-    void window.desktop.settings
-      .updateMemorySettings(patch)
-      .then(setSnapshot)
-      .catch((saveError: unknown) => setError(errorMessage(saveError)))
-      .finally(() => setSaving(false))
-  }
 
   const closeEditor = (): void => {
     setDraft(snapshot?.customInstructions ?? "")
@@ -120,57 +105,14 @@ export function PersonalizationSettings(): React.JSX.Element {
         <p className="text-sm text-muted-foreground">管理 Vykor 的额外指令和项目长期记忆。</p>
       </header>
 
-      <section aria-labelledby="personalization-memory" className="flex flex-col gap-4">
-        <div>
-          <h2 id="personalization-memory" className="text-base font-semibold">
-            项目长期记忆
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">相关记忆保存在本机，按项目检索。</p>
-        </div>
-        <Card className="py-0">
-          <CardContent className="px-5">
-            <div className="flex min-h-18 items-center justify-between gap-5 py-4">
-              <div className="min-w-0">
-                <h3 className="text-sm font-medium">启用项目长期记忆</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  在聊天中使用相关项目记忆。关闭后不再提取新记忆，已有记忆不会删除。
-                </p>
-              </div>
-              <Switch
-                aria-label="项目长期记忆"
-                checked={snapshot?.memoryEnabled ?? false}
-                disabled={loading || saving || !snapshot}
-                onCheckedChange={(enabled) => updateMemory({ enabled })}
-              />
-            </div>
-            <Separator />
-            <div className="flex min-h-18 items-center justify-between gap-5 py-4">
-              <div className="min-w-0">
-                <h3 className="text-sm font-medium">自动提取记忆</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  在任务成功结束后，从用户明确提供的稳定信息中提取项目记忆。
-                </p>
-              </div>
-              <Switch
-                aria-label="自动提取记忆"
-                checked={snapshot?.autoExtractEnabled ?? false}
-                disabled={loading || saving || !snapshot?.memoryEnabled}
-                onCheckedChange={(autoExtractEnabled) => updateMemory({ autoExtractEnabled })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-        <p className="text-xs text-muted-foreground">
-          这两个开关不控制 SOUL.md、USER.md、环境事实或会话检查点。
-        </p>
+      <PersonalizationMemoryManagement />
+
+      <section aria-labelledby="personalization-instructions" className="flex flex-col gap-4">
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         ) : null}
-      </section>
-
-      <section aria-labelledby="personalization-instructions" className="flex flex-col gap-4">
         <h2 id="personalization-instructions" className="text-base font-semibold">
           自定义指令
         </h2>

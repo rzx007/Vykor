@@ -56,6 +56,7 @@ describe("AppearanceSettings", () => {
       },
       saveState: { status: "idle" },
       setPreference,
+      patchPreferences: vi.fn(() => true),
       setWindowMaterial,
       resetAppearance,
     })

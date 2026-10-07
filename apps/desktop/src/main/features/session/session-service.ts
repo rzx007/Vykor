@@ -139,13 +139,9 @@ export class DesktopSessionService {
       model: settings["model"],
       provider: settings["provider"],
     })
-    const defaultModel = runtimeSnapshot.defaultModel
+    const defaultModel = settings.modelDisabled === true ? null : runtimeSnapshot.defaultModel ?? null
     const defaultProvider = runtimeSnapshot.defaultProvider
     const defaultPermissionMode = readSettingsPermissionMode(settings)
-
-    if (!defaultModel) {
-      throw new Error("没有找到可用模型，请先在 Vykor 设置中配置模型。")
-    }
 
     const documentsPath = app.getPath("documents")
     const channelSessionCwds = new Set(
@@ -374,8 +370,15 @@ export class DesktopSessionService {
     const model = requireString(input.model, "模型")
     const client = await this.getClient()
     const provider = await resolveProviderForModel(client, model, input.provider)
+    if (input.effort !== undefined && typeof input.effort !== "string") throw new Error("推理强度必须是文本。")
+    if (input.effort) {
+      const known = (await client.providers.listModels()).flatMap(item => item.models).find(item => item.id === model && (!provider || item.providerName === provider))
+      if (!known?.reasoningEfforts?.includes(input.effort)) throw new Error("所选模型不支持这一推理强度。")
+    }
     await client.system.patchSettings({
       model,
+      modelDisabled: false,
+      ...(input.effort !== undefined ? { effort: input.effort } : {}),
       ...(provider ? { provider } : {}),
     })
     return await this.bootstrap()
@@ -440,7 +443,10 @@ export class DesktopSessionService {
       this.closeSession(webContentsId)
     }
     const client = await this.getClient()
-    return toDesktopSessionRecord(await client.sessions.archive(sessionId))
+    const session = toDesktopSessionRecord(await client.sessions.archive(sessionId))
+    const { gitSettingsService } = await import("../settings/git-settings-service")
+    await gitSettingsService.autoCleanup().catch(() => console.warn("[git] 自动清理未完成，可在 Git 设置中重新检查。"))
+    return session
   }
 
   async deleteSession(webContentsId: number, sessionIdInput: string): Promise<string[]> {
@@ -471,6 +477,18 @@ export class DesktopSessionService {
     const client = await this.connection.refreshClient()
     await this.activitySubscriptions.replaceClient(client)
     return client
+  }
+
+  async restartDaemon(options: { stopActive?: boolean } = {}): Promise<void> {
+    this.subscriptions.clearAll()
+    const client = await this.connection.restart(options)
+    await this.activitySubscriptions.replaceClient(client)
+  }
+
+  async switchDataDirectory(directory: string, options: { stopActive?: boolean; storePath?: string } = {}): Promise<void> {
+    this.subscriptions.clearAll()
+    const client = await this.connection.switchDataDirectory(directory, options)
+    await this.activitySubscriptions.replaceClient(client)
   }
 
   get clientPromise(): Promise<VykorClient> | null {

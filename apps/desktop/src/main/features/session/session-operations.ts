@@ -60,6 +60,8 @@ import {
   resolveRequiredPath,
 } from "./session-operation-input"
 import { app } from "electron"
+import { gitSettingsService } from "../settings/git-settings-service"
+import { getGitPreferences } from "../settings/git-settings-storage"
 
 export type SessionOperationsClient = Pick<
   VykorClient,
@@ -198,7 +200,7 @@ export class SessionOperations {
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
-    const branch = requireGitBranchName(input.branch)
+    const branch = requireGitBranchName(await gitSettingsService.uniqueBranch(path, input.branch))
     await execGit(path, ["check-ref-format", "--branch", branch])
     await execGit(path, ["switch", "-c", branch])
     return await this.inspectProject(await this.getEphemeralClient(path), path)
@@ -209,12 +211,20 @@ export class SessionOperations {
     input: CreateDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const model = requireString(input.model, "模型")
+    if ((await client.system.getSettings()).modelDisabled === true) throw new Error("默认模型已停用。请先在模型供应商设置中选择可用的默认模型。")
     const permissionMode = normalizePermissionMode(input.permissionMode)
     const provider = await resolveProviderForModel(client, model, input.provider)
     const projectId = input.projectId ? requireString(input.projectId, "Project ID") : undefined
-    const cwd = projectId
+    const location = input.taskLocation ?? (projectId ? getGitPreferences().defaultTaskLocation : "current")
+    if (location !== "current" && location !== "worktree") throw new Error("未知任务工作位置。")
+    if (!projectId && location === "worktree") throw new Error("独立工作目录需要一个 Git 项目。")
+    let cwd = projectId
       ? resolveRequiredPath(input.cwd)
       : await allocateOutsideProjectWorkspace(app.getPath("documents"))
+    const settingsRoot = cwd
+    const worktree = projectId && location === "worktree" ? await gitSettingsService.createTaskWorktree(projectId, cwd) : null
+    if (worktree) cwd = worktree.path
+    let createdSessionId: string | undefined
 
     try {
       const session = await client.sessions.create({
@@ -224,6 +234,7 @@ export class SessionOperations {
         title: "",
         metadata: {
           ...(!projectId ? { desktop: { workspaceMode: "outside_project" } } : {}),
+          ...(worktree ? { desktop: { settingsRoot, worktree: { id: worktree.id, path: worktree.path, branch: worktree.branch } } } : {}),
           runtimeDefaultFields: input.effort?.trim()
             ? ["maxTurns", "systemPrompt"]
             : ["effort", "maxTurns", "systemPrompt"],
@@ -235,8 +246,14 @@ export class SessionOperations {
           },
         },
       })
+      createdSessionId = session.id
+      if (worktree) await gitSettingsService.bindTaskWorktree(worktree.id, session.id)
       return toDesktopSessionRecord(session)
     } catch (error) {
+      if (worktree) {
+        if (createdSessionId) await client.sessions.archive(createdSessionId)
+        await gitSettingsService.discardUnboundWorktree(worktree.id)
+      }
       if (!projectId) await removeEmptyOutsideProjectWorkspace(cwd)
       throw error
     }

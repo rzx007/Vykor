@@ -56,53 +56,17 @@ export function AgentsTool({
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
 }): React.JSX.Element {
-  const tasks = useDesktopSessionStore((state) => state.sessionView?.tasks ?? emptyTasks)
+  const tasks = useDesktopSessionStore((state) =>
+    active ? (state.sessionView?.tasks ?? emptyTasks) : emptyTasks
+  )
   const groups = useMemo(() => groupAgentTasks(tasks), [tasks])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
-  const [childView, setChildView] = useState<DesktopSessionView | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const requestVersionRef = useRef(0)
-  const selectedChildSessionIdRef = useRef<string | null>(null)
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
   const handledOpenRequestRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    return window.desktop.sessions.onAuxUpdated((update) => {
-      if (
-        !matchesAgentSessionUpdate(detailsSubscriptionId, selectedChildSessionIdRef.current, update)
-      )
-        return
-      setChildView(update.view)
-    })
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      void window.desktop.sessions.closeAux({ subscriptionId: detailsSubscriptionId })
-    }
-  }, [])
-
-  const openTask = useCallback(async (task: DesktopSessionTask): Promise<void> => {
+  const openTask = useCallback((task: DesktopSessionTask): void => {
     if (!task.childSessionId) return
-    const requestVersion = requestVersionRef.current + 1
-    requestVersionRef.current = requestVersion
-    selectedChildSessionIdRef.current = task.childSessionId
     setSelectedTaskId(task.id)
-    setChildView(null)
-    setLoading(true)
-    setError(null)
-    try {
-      const view = await window.desktop.sessions.openAux({
-        subscriptionId: detailsSubscriptionId,
-        sessionId: task.childSessionId,
-      })
-      if (requestVersionRef.current === requestVersion) setChildView(view)
-    } catch (cause) {
-      if (requestVersionRef.current === requestVersion) setError(errorMessage(cause))
-    } finally {
-      if (requestVersionRef.current === requestVersion) setLoading(false)
-    }
   }, [])
 
   useEffect(() => {
@@ -117,13 +81,7 @@ export function AgentsTool({
   }, [active, openRequest, tasks, openTask])
 
   const showList = (): void => {
-    requestVersionRef.current += 1
-    selectedChildSessionIdRef.current = null
     setSelectedTaskId(null)
-    setChildView(null)
-    setLoading(false)
-    setError(null)
-    void window.desktop.sessions.closeAux({ subscriptionId: detailsSubscriptionId })
   }
 
   return (
@@ -131,21 +89,21 @@ export function AgentsTool({
       aria-label="子智能体"
       className={cn("size-full min-h-0 bg-conversation", active ? "flex flex-col" : "hidden")}
     >
-      {selectedTaskId ? (
-        <AgentDetails
-          task={selectedTask}
-          view={childView}
-          loading={loading}
-          error={error}
-          onBack={showList}
-          onOpenFile={onOpenFile}
-          canOpenReview={canOpenReview}
-          onOpenReview={onOpenReview}
-          onOpenTerminal={onOpenTerminal}
-        />
-      ) : (
-        <AgentTaskList active={groups.active} completed={groups.completed} onOpen={openTask} />
-      )}
+      {active ? (
+        selectedTaskId ? (
+          <AgentDetails
+            key={selectedTask?.childSessionId ?? selectedTaskId}
+            task={selectedTask}
+            onBack={showList}
+            onOpenFile={onOpenFile}
+            canOpenReview={canOpenReview}
+            onOpenReview={onOpenReview}
+            onOpenTerminal={onOpenTerminal}
+          />
+        ) : (
+          <AgentTaskList active={groups.active} completed={groups.completed} onOpen={openTask} />
+        )
+      ) : null}
     </section>
   )
 }
@@ -250,9 +208,6 @@ function AgentTaskItem({
 
 function AgentDetails({
   task,
-  view,
-  loading,
-  error,
   onBack,
   onOpenFile,
   canOpenReview,
@@ -260,15 +215,51 @@ function AgentDetails({
   onOpenTerminal,
 }: {
   task?: DesktopSessionTask
-  view: DesktopSessionView | null
-  loading: boolean
-  error: string | null
   onBack: () => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
 }): React.JSX.Element {
+  const childSessionId = task?.childSessionId
+  const [view, setView] = useState<DesktopSessionView | null>(null)
+  const [loading, setLoading] = useState(Boolean(childSessionId))
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!childSessionId) return
+    let disposed = false
+    const unsubscribe = window.desktop.sessions.onAuxUpdated((update) => {
+      if (disposed || !matchesAgentSessionUpdate(detailsSubscriptionId, childSessionId, update))
+        return
+      setView(update.view)
+    })
+    void window.desktop.sessions
+      .openAux({
+        subscriptionId: detailsSubscriptionId,
+        sessionId: childSessionId,
+      })
+      .then(
+        (next) => {
+          if (disposed) return
+          setView(next)
+          setLoading(false)
+        },
+        (cause) => {
+          if (disposed) return
+          setError(errorMessage(cause))
+          setLoading(false)
+        }
+      )
+    return () => {
+      disposed = true
+      unsubscribe()
+      void window.desktop.sessions
+        .closeAux({ subscriptionId: detailsSubscriptionId })
+        .catch(() => {})
+    }
+  }, [childSessionId])
+
   const running = Boolean(
     view?.runs.some((run) => run.status === "pending" || run.status === "running")
   )

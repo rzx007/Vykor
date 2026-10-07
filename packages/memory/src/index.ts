@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, unlink, rename } from "node:fs/promises";
 import { detectCredentialValue } from "./sensitive-content.js";
 import {
   DEFAULT_MEMORY_SCOPE,
@@ -496,15 +496,22 @@ export class MemoryManager {
     await mkdir(this.storageDir, { recursive: true });
     const filePath = join(this.storageDir, `${entry.id}.md`);
     const rendered = renderMemoryFile(entryToMetadata(entry), entry.content);
-    await writeFile(filePath, rendered, "utf-8");
+    const temporary = `${filePath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    try {
+      await writeFile(temporary, rendered, "utf-8");
+      await rename(temporary, filePath);
+    } catch (error) {
+      await unlink(temporary).catch(() => {});
+      throw error;
+    }
   }
 
   private async removeEntryFile(id: string): Promise<void> {
     if (!this.storageDir) return;
     try {
       await unlink(join(this.storageDir, `${id}.md`));
-    } catch {
-      // file may not exist
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
 

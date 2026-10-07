@@ -85,19 +85,54 @@ describe("gitService.isRepository", () => {
 })
 
 describe("gitService.fileDiff path containment", () => {
+  it("ignores whitespace only for display and applies staged/unstaged scopes", async () => {
+    await execFileAsync("git", ["config", "user.name", "Git Test"], { cwd: repoRoot })
+    await execFileAsync("git", ["config", "user.email", "git@example.com"], { cwd: repoRoot })
+    await writeFile(join(repoRoot, "spaces.txt"), "hello world\n")
+    await execFileAsync("git", ["add", "spaces.txt"], { cwd: repoRoot })
+    await execFileAsync("git", ["commit", "-m", "base"], { cwd: repoRoot })
+    await writeFile(join(repoRoot, "spaces.txt"), "hello   world\n")
+    expect(
+      (await gitService.changes({ rootPath: repoRoot, ignoreWhitespace: true })).files
+    ).toEqual([])
+    expect(
+      (
+        await gitService.fileDiff({
+          rootPath: repoRoot,
+          path: "spaces.txt",
+          ignoreWhitespace: true,
+        })
+      ).patch
+    ).toBe("(no diff)")
+    expect((await gitService.fileDiff({ rootPath: repoRoot, path: "spaces.txt" })).patch).toContain(
+      "+hello   world"
+    )
+    await execFileAsync("git", ["add", "spaces.txt"], { cwd: repoRoot })
+    expect((await gitService.changes({ rootPath: repoRoot, scope: "staged" })).files).toHaveLength(
+      1
+    )
+    expect(
+      (await gitService.changes({ rootPath: repoRoot, scope: "unstaged" })).files
+    ).toHaveLength(0)
+  })
   it.each(["src/../../readme.txt", "src/./../../readme.txt", "src\\..\\..\\readme.txt"])(
     "rejects an untracked file outside the supplied project root: %s",
     async (path) => {
       const { mkdir } = await import("node:fs/promises")
       const projectRoot = join(plainDir, "project")
       await mkdir(join(projectRoot, "src"), { recursive: true })
-      await expect(gitService.fileDiff({ rootPath: projectRoot, path, status: "untracked" }))
-        .rejects.toThrow(/项目目录内/)
+      await expect(
+        gitService.fileDiff({ rootPath: projectRoot, path, status: "untracked" })
+      ).rejects.toThrow(/项目目录内/)
     }
   )
 
   it("reads a normalized project file from the saved root", async () => {
-    const result = await gitService.fileDiff({ rootPath: plainDir, path: "nested/../readme.txt", status: "untracked" })
+    const result = await gitService.fileDiff({
+      rootPath: plainDir,
+      path: "nested/../readme.txt",
+      status: "untracked",
+    })
     expect(result.path).toBe("readme.txt")
     expect(result.binary).toBe(false)
     expect(result.patch).toContain("+not a repo")

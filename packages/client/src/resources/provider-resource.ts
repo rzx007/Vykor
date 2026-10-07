@@ -71,13 +71,13 @@ export class ProviderResource {
   async updateCatalogProviderHeaders(
     id: string,
     headers: Record<string, string>,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; secretHeaders?: Record<string, string | null> } = {},
   ): Promise<ProviderInfo> {
     const response = await this.transport.request<{ provider: ProviderInfo }>(
       `/providers/catalog/${encodeURIComponent(id)}`,
       {
         method: "PATCH",
-        body: { headers },
+        body: { headers, ...(options.secretHeaders ? { secretHeaders: options.secretHeaders } : {}) },
         signal: options.signal,
       },
     );

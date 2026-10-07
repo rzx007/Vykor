@@ -1,10 +1,22 @@
 import type { AgentEvent } from "@vykor/core";
-import { describe, expect, it, vi } from "vitest";
+import type { SessionEventRecord } from "@vykor/protocol";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { SessionStore } from "@vykor/services";
+import { ChildAgentExecutionRegistry } from "@vykor/services/executions";
+import { SessionExecutionProjector } from "../../session/session-execution-projector.js";
 
 import {
   DaemonAgentEventProjector,
   type DaemonAgentEventProjectorContext,
 } from "../daemon-agent-event-projector.js";
+
+const compactionCleanup: Array<() => void> = [];
+afterEach(() => {
+  for (const close of compactionCleanup.splice(0).reverse()) close();
+});
 
 function projectorStore(flat: Record<string, any>) {
   return {
@@ -63,6 +75,51 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("releases child callbacks on close while keeping completed task results readable", async () => {
+    const registry = new ChildAgentExecutionRegistry();
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } },
+    }]]);
+    const tasks = new Map<string, any>();
+    const send = vi.fn(async () => {});
+    const events = { checkpoint: () => 0, publish: () => {}, publishSince: () => {} };
+    const executionProjector = new SessionExecutionProjector({
+      store: {
+        createSessionTask: input => { tasks.set(input.id, { ...input, status: "pending" }); },
+        getSessionTask: id => tasks.get(id),
+        updateSessionTask: (id, patch) => Object.assign(tasks.get(id), patch),
+      },
+      getChildAgentExecutionRegistry: () => registry,
+      events, traceIdForRun: () => "trace", log: () => {},
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: { children: { get: () => ({ send }) } } as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        getSessionTask: (id: string) => tasks.get(id),
+      }),
+      transcriptProjection: {} as any, executionProjector,
+      liveChildren: { register() {}, unregister() {} }, events, log() {},
+    });
+    await projector.apply(event("child.created", {
+      childId: "child-1", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "review", prompt: "inspect", agent: "review", cwd: "/repo" },
+    }, { sessionId: "parent", childId: "child-1" }));
+    await registry.completeExecution("child-1", { status: "completed", output: "first result" });
+    await registry.writeInput("child-1", "follow up");
+    expect(send).toHaveBeenCalledWith({ content: "follow up" });
+
+    await projector.apply(event("child.closed", {
+      childId: "child-1", sessionId: "child-session", result: { status: "completed", output: "done" },
+    }, { sessionId: "parent", childId: "child-1" }));
+
+    await expect(registry.writeInput("child-1", "late follow up")).rejects.toThrow("Child Agent callbacks not found");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(tasks.get("child-1")).toMatchObject({ status: "completed", output: "done" });
+    await expect(registry.awaitExecution("child-1")).resolves.toMatchObject({ status: "completed" });
+  });
+
   it("persists the applied parent model for a new child while the target has changed", async () => {
     const sessions = new Map<string, any>([["parent", {
       id: "parent", cwd: "/repo", model: "model-b",
@@ -255,6 +312,7 @@ describe("DaemonAgentEventProjector", () => {
       executionProjector: { createBridge: () => ({
         registerChildExecution: (input: any) => { task = { ...input, status: "pending" }; return task; },
         bindChildExecutionRun: async (_id: string, runId: string) => { task.runId = runId; },
+        releaseChildExecution: () => {},
         completeChildExecution: async (_id: string, result: any) => Object.assign(task, result),
       }) } as any,
       liveChildren: { register: () => {}, unregister: () => {} },
@@ -454,6 +512,7 @@ describe("DaemonAgentEventProjector", () => {
           return { id: input.id };
         },
         bindChildExecutionRun: async () => {},
+        releaseChildExecution: () => {},
         completeChildExecution,
       }) } as any,
       liveChildren: { register: () => {}, unregister: () => {} },
@@ -968,6 +1027,7 @@ describe("DaemonAgentEventProjector", () => {
         tasks.set(task.id, task);
         return task;
       }),
+      releaseChildExecution: vi.fn(),
       completeChildExecution,
     };
     const liveChildren = {
@@ -1014,6 +1074,7 @@ describe("DaemonAgentEventProjector", () => {
       status: "failed",
       output: "route conflict",
     });
+    expect(bridge.releaseChildExecution).toHaveBeenCalledWith("child-bad");
     expect(archiveSession).toHaveBeenCalledWith("child-session-bad");
     expect(sessions.get("child-session-bad")?.status).toBe("archived");
   });
@@ -1310,7 +1371,7 @@ describe("DaemonAgentEventProjector", () => {
       sessionId: "child-session",
       parentSessionId: "parent",
       taskId: "child-1",
-      bridge: { completeChildExecution },
+      bridge: { completeChildExecution, releaseChildExecution: vi.fn() },
     });
 
     const closed = event(
@@ -1476,6 +1537,79 @@ describe("DaemonAgentEventProjector", () => {
     await projector.apply(domainEvent);
     expect(appendEvent).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    ["compact_start", "started", "正在压缩上下文"],
+    ["compact_end", "completed", "已压缩上下文"],
+    ["compact_failed", "failed", "上下文压缩失败"],
+  ])("commits the %s notice and domain event together before publishing", async (phase, presentationPhase, text) => {
+    const h = compactionHarness();
+    const compaction = event("domain.event", {
+      name: "context_compaction", payload: { phase },
+    }, { sessionId: h.sessionId });
+
+    await h.projector.apply(compaction);
+
+    const committed = h.readCommitted();
+    expect(h.commitCount()).toBe(1);
+    expect(committed.messages).toHaveLength(1);
+    expect(committed.messages[0]).toMatchObject({
+      role: "system", metadata: { presentation: { kind: "context_compaction", phase: presentationPhase } },
+    });
+    expect(committed.parts).toHaveLength(1);
+    expect(committed.parts[0]).toMatchObject({
+      messageId: committed.messages[0].id, type: "text", status: "completed", text,
+    });
+    expect(committed.events.map(record => record.type)).toEqual([
+      "session.message.created", "session.message.part.updated", "agent.domain.event",
+    ]);
+    expect(committed.events[2].payload).toEqual({
+      frameworkEventId: compaction.id, name: "context_compaction", payload: { phase },
+    });
+    expect(h.published).toEqual(committed.events);
+  });
+
+  it("rolls back a compaction notice when commit fails and retries without publishing partial records", async () => {
+    const h = compactionHarness();
+    const compaction = event("domain.event", {
+      name: "context_compaction", payload: { phase: "compact_end" },
+    }, { sessionId: h.sessionId });
+    h.rejectNextCommit();
+
+    await expect(h.projector.apply(compaction)).rejects.toThrow("commit failed");
+
+    expect(h.readCommitted()).toEqual({ messages: [], parts: [], events: [] });
+    expect(h.store.conversations.listMessages(h.sessionId)).toEqual([]);
+    expect(h.store.conversations.listMessageParts(h.sessionId)).toEqual([]);
+    expect(h.published).toEqual([]);
+
+    await h.projector.apply(compaction);
+
+    const committed = h.readCommitted();
+    expect(h.commitCount()).toBe(2);
+    expect(committed.messages).toHaveLength(1);
+    expect(committed.parts).toHaveLength(1);
+    expect(committed.events).toHaveLength(3);
+    expect(h.published).toEqual(committed.events);
+  });
+
+  it("does not duplicate a compaction notice when its durable domain event is replayed", async () => {
+    const h = compactionHarness();
+    const compaction = event("domain.event", {
+      name: "context_compaction", payload: { phase: "compact_start" },
+    }, { sessionId: h.sessionId });
+    await h.projector.apply(compaction);
+    const committed = h.readCommitted();
+
+    // Simulate durable projection succeeding just before settlement resolution failed.
+    (h.projector as any).lastAppliedSequence = 0;
+    await h.projector.apply(compaction);
+
+    expect(h.readCommitted()).toEqual(committed);
+    expect(h.commitCount()).toBe(1);
+    expect(h.published).toEqual(committed.events);
+  });
+
   it("persists a retry wait on run metadata and keeps the run running", async () => {
     const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
     const updateRun = vi.fn((_id: string, patch: any) => {
@@ -1613,6 +1747,51 @@ describe("DaemonAgentEventProjector", () => {
     expect(run.metadata.modelRetry).toBeNull();
   });
 });
+
+function compactionHarness() {
+  const directory = mkdtempSync(join(tmpdir(), "vykor-compaction-"));
+  compactionCleanup.push(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, "session.db");
+  let sessionId: string | undefined;
+  let commitCount = 0;
+  let rejectNextCommit = false;
+  const store = new SessionStore({ path, transactionHooks: { beforeCommit() {
+    if (!sessionId) return;
+    commitCount += 1;
+    if (rejectNextCommit && store.conversations.listEvents({ sessionId }).some(record => record.type === "agent.domain.event")) {
+      rejectNextCommit = false;
+      throw new Error("commit failed");
+    }
+  } } });
+  compactionCleanup.push(() => store.close());
+  sessionId = store.sessions.create({ cwd: directory, model: "test" }).id;
+  const initialSeq = store.conversations.latestEventSeq();
+  const readCommitted = () => {
+    const reader = new SessionStore({ path });
+    try {
+      return {
+        messages: reader.conversations.listMessages(sessionId!),
+        parts: reader.conversations.listMessageParts(sessionId!),
+        events: reader.conversations.listEvents({ sessionId, afterSeq: initialSeq }),
+      };
+    } finally { reader.close(); }
+  };
+  const published: SessionEventRecord[] = [];
+  const projector = new DaemonAgentEventProjector({
+    rootAgent: {} as any, store, transcriptProjection: {} as any,
+    executionProjector: {} as any, liveChildren: { register() {}, unregister() {} },
+    events: {
+      checkpoint: () => store.conversations.latestEventSeq(),
+      publish: record => { published.push(record); },
+      publishSince: afterSeq => {
+        published.push(...readCommitted().events.filter(record => record.seq > afterSeq));
+      },
+    },
+    log() {},
+  });
+  return { projector, store, sessionId, published, readCommitted,
+    commitCount: () => commitCount, rejectNextCommit: () => { rejectNextCommit = true; } };
+}
 
 let sequence = 0;
 

@@ -25,6 +25,8 @@ export function useDesktopShortcuts(actions: DesktopShortcutActions): void {
       if (!(id in actionsRef.current)) continue
       for (const binding of getShortcut(id).bindings) {
         keybindings[binding] = (event) => {
+          const target = event.target as Element | null
+          if (event.defaultPrevented || target?.closest?.(".desktop-terminal, [contenteditable='true'], .monaco-editor")) return
           event.preventDefault()
           actionsRef.current[id]?.()
         }
@@ -33,7 +35,7 @@ export function useDesktopShortcuts(actions: DesktopShortcutActions): void {
 
     return tinykeys(window, keybindings, {
       // These are application commands, so they remain active while the composer is focused.
-      ignore: (event) => event.repeat || event.isComposing,
+      ignore: (event) => event.repeat || event.isComposing || event.defaultPrevented,
     })
   }, [revision])
 }

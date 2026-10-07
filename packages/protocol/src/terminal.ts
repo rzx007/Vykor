@@ -16,6 +16,9 @@ export interface TerminalCreateRequest {
   rows: number;
   name?: string;
   shell?: string;
+  shellArgs?: string[];
+  /** 仅此终端子进程的覆盖值，不修改智能体或系统环境。 */
+  env?: Record<string, string>;
   cwd?: string;
   source?: TerminalSource;
 }
@@ -27,6 +30,8 @@ export interface TerminalSessionInfo {
   scope: TerminalScope;
   projectId?: string;
   runtime: TerminalRuntime;
+  environmentKind?: "native" | "wsl";
+  distribution?: string;
   source: TerminalSource;
   sessionId?: string;
   status: TerminalSessionStatus;

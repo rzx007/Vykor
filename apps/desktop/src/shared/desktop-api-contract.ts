@@ -1,4 +1,12 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { TerminalSettingsAPI } from "./terminal-settings-types"
+import type { GitSettingsAPI } from "./git-settings-types"
+import type { MaintenanceSettingsAPI } from "./maintenance-settings-types"
+import type { RuntimeSettingsAPI } from "./runtime-settings-types"
+import type { NotificationSettingsAPI } from "./notification-settings-types"
+import type { PersonalizationManagementAPI } from "./personalization-management-types"
+import type { ConfigurationSettingsAPI } from "./configuration-settings-types"
+import type { ProviderDefaultsAPI } from "./provider-defaults-types"
 import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
 import type {
   DesktopAppInfo,
@@ -183,6 +191,14 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  terminalSettings: TerminalSettingsAPI
+  gitSettings: GitSettingsAPI
+  maintenance: MaintenanceSettingsAPI
+  runtimeSettings: RuntimeSettingsAPI
+  notificationSettings: NotificationSettingsAPI
+  personalizationManagement: PersonalizationManagementAPI
+  configurationSettings: ConfigurationSettingsAPI
+  providerDefaults: ProviderDefaultsAPI
   pluginUi: DesktopPluginUiAPI
   activity: {
     open: () => Promise<DesktopActivityUpdate>
@@ -387,6 +403,13 @@ export type DesktopAPI = {
     updateDefaultTerminalShell: (
       input: UpdateDesktopDefaultTerminalShellInput
     ) => Promise<DesktopSettingsSnapshot>
+  }
+  permissionSettings: {
+    snapshot: () => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsSnapshot]["result"]>
+    update: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["result"]>
+    updateIsolation: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["result"]>
+    check: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["result"]>
+    revoke: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["result"]>
   }
   daemonAutoStart: {
     snapshot: () => Promise<DesktopDaemonAutoStartSnapshot>

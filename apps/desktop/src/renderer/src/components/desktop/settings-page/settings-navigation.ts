@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
   TerminalSquare,
+  Activity,
 } from "lucide-react"
 
 export type SettingsNavigationItem = {
@@ -26,11 +27,13 @@ export const personalSettingsNavigation: SettingsNavigationItem[] = [
   { label: "通知", slug: "notifications", icon: Bell },
   { label: "个人资料", slug: "profile", icon: CircleUserRound },
   { label: "外观", slug: "appearance", icon: Palette },
-  { label: "供应商", slug: "providers", icon: BrainCircuit },
+  { label: "键盘快捷键", slug: "keyboard", icon: Keyboard },
+]
+export const agentSettingsNavigation: SettingsNavigationItem[] = [
+  { label: "模型供应商", slug: "providers", icon: BrainCircuit },
   { label: "权限", slug: "permissions", icon: ShieldCheck },
   { label: "个性化", slug: "personalization", icon: Sparkles },
-  { label: "键盘快捷键", slug: "keyboard", icon: Keyboard },
-  { label: "使用情况和计费", slug: "billing", icon: CreditCard },
+  { label: "用量与费用", slug: "billing", icon: CreditCard },
 ]
 
 export const integrationSettingsNavigation: SettingsNavigationItem[] = [
@@ -41,13 +44,18 @@ export const codingSettingsNavigation: SettingsNavigationItem[] = [
   { label: "终端", slug: "terminal", icon: TerminalSquare },
   { label: "Git", slug: "git", icon: GitBranch },
   { label: "运行环境", slug: "runtime", icon: Code2 },
+]
+export const maintenanceSettingsNavigation: SettingsNavigationItem[] = [
   { label: "存储", slug: "storage", icon: HardDrive },
+  { label: "诊断与日志", slug: "diagnostics", icon: Activity },
 ]
 
 const settingsNavigation = [
   ...personalSettingsNavigation,
+  ...agentSettingsNavigation,
   ...integrationSettingsNavigation,
   ...codingSettingsNavigation,
+  ...maintenanceSettingsNavigation,
 ]
 
 export const defaultSettingsSection = "general"

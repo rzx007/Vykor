@@ -50,6 +50,8 @@ export function ProviderListCard({
   onAddCustom,
   onEditCustom,
   onRemoveCustom,
+  verified,
+  onTest,
 }: {
   connectedProviders: DesktopProviderInfo[]
   availableProviders: DesktopProviderInfo[]
@@ -61,6 +63,8 @@ export function ProviderListCard({
   onAddCustom: () => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
+  verified: Record<string, { model: string; checkedAt: number }>
+  onTest: (provider: DesktopProviderInfo) => void
 }): React.JSX.Element {
   return (
     <Card className="py-0 shadow-xs">
@@ -69,9 +73,11 @@ export function ProviderListCard({
       </CardHeader>
       <CardContent className="px-0">
         <ProviderGroup
-          label="已连接"
-          description="凭证仅显示来源，不会在页面中返回密钥内容。"
+          label="已配置"
+          description="检测到认证或本地配置；测试通过才标为已验证。凭据值不会返回页面。"
           providers={connectedProviders}
+          verified={verified}
+          onTest={onTest}
           emptyText="还没有检测到已连接的供应商。"
           busyProvider={busyProvider}
           onConnect={onConnect}
@@ -84,6 +90,8 @@ export function ProviderListCard({
           label="可连接"
           description="选择模型服务并保存 API 密钥。"
           providers={availableProviders}
+          verified={verified}
+          onTest={onTest}
           emptyText="所有内置供应商都已连接。"
           busyProvider={busyProvider}
           onConnect={onConnect}
@@ -154,7 +162,7 @@ export function MoreProvidersDialog({
       <DialogContent className="flex max-h-[min(38rem,calc(100vh-2rem))] flex-col gap-3 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>更多供应商</DialogTitle>
-          <DialogDescription>选择供应商后填写 API Key，验证通过后才会保存。</DialogDescription>
+          <DialogDescription>保存 API Key 时会请求服务的模型列表接口验证；上游可能按自己的规则收费。</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search
@@ -220,6 +228,8 @@ function ProviderGroup({
   onDisconnect,
   onEditCustom,
   onRemoveCustom,
+  verified,
+  onTest,
 }: {
   label: string
   description: string
@@ -230,6 +240,8 @@ function ProviderGroup({
   onDisconnect: (provider: DesktopProviderInfo) => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
+  verified: Record<string, { model: string; checkedAt: number }>
+  onTest: (provider: DesktopProviderInfo) => void
 }): React.JSX.Element {
   return (
     <div>
@@ -255,6 +267,8 @@ function ProviderGroup({
                 onDisconnect={() => onDisconnect(provider)}
                 onEditCustom={() => onEditCustom(provider)}
                 onRemoveCustom={() => onRemoveCustom(provider)}
+                verification={verified[provider.name]}
+                onTest={() => onTest(provider)}
               />
             </div>
           ))
@@ -272,6 +286,8 @@ function ProviderRow({
   onDisconnect,
   onEditCustom,
   onRemoveCustom,
+  verification,
+  onTest,
 }: {
   provider: DesktopProviderInfo
   busy: boolean
@@ -280,6 +296,8 @@ function ProviderRow({
   onDisconnect: () => void
   onEditCustom: () => void
   onRemoveCustom: () => void
+  verification?: { model: string; checkedAt: number }
+  onTest: () => void
 }): React.JSX.Element {
   return (
     <div className="flex min-h-16 flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-center">
@@ -293,7 +311,8 @@ function ProviderRow({
                 {sourceLabel(provider.credentialSource, provider.credentialLabel)}
               </Badge>
             ) : null}
-            {provider.active ? <Badge variant="outline">旧默认连接</Badge> : null}
+            {provider.active ? <Badge variant="outline">默认连接</Badge> : null}
+            {provider.connected ? <span className="text-xs text-muted-foreground">{verification ? `已验证模型列表 · ${new Date(verification.checkedAt).toLocaleTimeString()}` : "已配置，未验证"}</span> : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {providerDescriptions[provider.name] ??
@@ -306,6 +325,7 @@ function ProviderRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1.5">
+        {provider.connected && <Button type="button" size="sm" variant="ghost" disabled={locked || !provider.models.length || provider.name === "codex"} title={provider.name === "codex" ? "订阅适配器未提供独立模型列表验证接口" : !provider.models.length ? "供应商没有列出可测试模型" : "向服务发送模型列表请求，不发送任务正文"} onClick={onTest}>测试连接</Button>}
         {provider.credentialSource === "credentials" ? (
           <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onConnect}>
             {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}

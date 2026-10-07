@@ -1,3 +1,4 @@
+import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 import {
   createDefaultNodeAgent,
   type VykorAgent,
@@ -155,7 +156,8 @@ export function createDaemonAgentLoader(
     return undefined;
 
   return async ({ session, history, parts }) => {
-    const settings = await resolveSettingsForSession(options, session.cwd);
+    const settingsRoot = sessionSettingsRoot(session);
+    const settings = await resolveSettingsForSession(options, settingsRoot);
     if (!options.createAgent && !settings)
       throw new Error("Agent settings are not configured");
 
@@ -190,7 +192,7 @@ export function createDaemonAgentLoader(
       session,
       settings,
       getSession: options.getSession,
-      getSettingsForCwd: options.getSettingsForCwd,
+      getSettingsForCwd: options.getSettingsForCwd ? () => options.getSettingsForCwd!(settingsRoot) : undefined,
       onSettingsReloadError: options.onSettingsReloadError,
     });
     let declaredEfforts: string[] | undefined;
@@ -210,6 +212,7 @@ export function createDaemonAgentLoader(
     const agentOptions: VykorAgentOptions = {
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
+      memoryRoot: settingsRoot,
       sessionId: session.id,
       ...(options.mcpRuntimeRegistry ? { mcpRuntimeRegistry: options.mcpRuntimeRegistry } : {}),
       ...(options.executionSurface ? { executionSurface: options.executionSurface } : {}),
@@ -223,7 +226,7 @@ export function createDaemonAgentLoader(
             session: childSession,
             settings,
             getSession: options.getSession,
-            getSettingsForCwd: options.getSettingsForCwd,
+            getSettingsForCwd: options.getSettingsForCwd ? () => options.getSettingsForCwd!(sessionSettingsRoot(childSession)) : undefined,
             onSettingsReloadError: options.onSettingsReloadError,
           }) : undefined;
         },

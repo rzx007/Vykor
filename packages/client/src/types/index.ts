@@ -6,6 +6,8 @@
  */
 
 import type { PluginInfo } from "./extension-types.js";
+import type { MemoryEntryRecord } from "@vykor/protocol";
+export type { MemoryEntryRecord, MemoryRevision, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
 export type * from "./attachment-types.js";
 export type * from "./extension-types.js";
 export type * from "./sync-types.js";
@@ -288,11 +290,13 @@ export interface CustomProviderInput {
     imageInputSupport?: "native" | "unsupported" | "unknown";
   }>;
   headers?: Record<string, string>;
+  secretHeaders?: Record<string, string | null>;
 }
 
 export interface ConnectCatalogProviderInput {
   apiKey: string;
   headers?: Record<string, string>;
+  secretHeaders?: Record<string, string | null>;
 }
 
 export interface UpdateCatalogProviderHeadersInput {
@@ -338,19 +342,6 @@ export interface McpRuntimeSyncResult {
   status: McpRuntimeStatus;
   affectedRuntimes: number;
   failures: Array<{ runtimeId: string; message: string }>;
-}
-
-export interface MemoryEntryRecord {
-  id: string;
-  content: string;
-  tags?: string[];
-  source?: {
-    type: "user_message" | "manual_remember";
-    sessionId?: string;
-    messageSha256?: string;
-  };
-  createdAt: number;
-  updatedAt: number;
 }
 
 export interface MemoryListResponse {

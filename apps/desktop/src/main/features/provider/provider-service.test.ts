@@ -387,21 +387,31 @@ describe("DesktopProviderService catalog headers", () => {
     })
   })
 
-  it("detaches an old default provider before disconnecting its credential", async () => {
+  it("requires explicit default disabling before disconnecting the current credential", async () => {
     daemon.system.getSettings.mockResolvedValue({ provider: "openai" })
     daemon.system.patchSettings.mockResolvedValue({})
-    await service.disconnect({ provider: "openai" })
-    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ provider: "auto" })
+    await expect(service.disconnect({ provider: "openai" })).rejects.toThrow("默认连接")
+    expect(daemon.auth.logout).not.toHaveBeenCalled()
+    await service.disconnect({ provider: "openai", disableDefault: true })
+    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ modelDisabled: true })
     expect(daemon.auth.logout).toHaveBeenCalledWith({ provider: "openai" })
   })
 
-  it("detaches an old default custom provider before removing its connection", async () => {
+  it("disables new defaults explicitly while preserving provider attribution before removing a custom connection", async () => {
     daemon.system.getSettings.mockResolvedValue({ provider: "office-gateway" })
     daemon.system.patchSettings.mockResolvedValue({})
     daemon.providers.removeCustomProvider.mockResolvedValue({})
-    await service.removeCustom({ provider: "office-gateway" })
-    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ provider: "auto" })
+    await service.removeCustom({ provider: "office-gateway", disableDefault: true })
+    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ modelDisabled: true })
     expect(daemon.providers.removeCustomProvider).toHaveBeenCalledWith("office-gateway")
+  })
+
+  it("restores the prior default when connection removal fails", async () => {
+    daemon.system.getSettings.mockResolvedValue({ provider: "openai", model: "gpt", effort: "high" })
+    daemon.auth.logout.mockRejectedValueOnce(new Error("active task"))
+    await expect(service.disconnect({ provider: "openai", disableDefault: true })).rejects.toThrow("active task")
+    expect(daemon.system.patchSettings).toHaveBeenNthCalledWith(1, { modelDisabled: true })
+    expect(daemon.system.patchSettings).toHaveBeenLastCalledWith({ provider: "openai", model: "gpt", effort: "high", modelDisabled: false })
   })
 
 

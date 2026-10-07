@@ -11,6 +11,16 @@ const emptyResult = (rootPath: string) => ({
 })
 
 describe("queryGitChanges", () => {
+  it("keeps whitespace preferences in separate cache entries", async () => {
+    const changes = vi.fn(({ rootPath }: DesktopGitChangesInput) =>
+      Promise.resolve(emptyResult(rootPath))
+    )
+    Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+    await queryGitChanges({ rootPath: "D:/repo", ignoreWhitespace: false })
+    await queryGitChanges({ rootPath: "D:/repo", ignoreWhitespace: true })
+    expect(changes).toHaveBeenCalledTimes(2)
+    expect(changes.mock.calls[1]?.[0].ignoreWhitespace).toBe(true)
+  })
   afterEach(() => {
     resetGitChangesQueryCacheForTests()
     vi.useRealTimers()

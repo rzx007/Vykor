@@ -1,4 +1,6 @@
-import { app, Menu, nativeImage, Notification, Tray, type BrowserWindow } from "electron"
+import { app, BrowserWindow, Menu, nativeImage, Notification, Tray } from "electron"
+import { getDesktopPreferences, patchDesktopPreferences } from "../settings/desktop-preferences"
+import { normalizeNotificationEvents } from "../../../shared/notification-settings-types"
 
 import type { AppContext } from "../../core/app-context"
 import { quitApp } from "../../core/services/lifecycle"
@@ -68,21 +70,27 @@ export function sendTrayNotification(
   options: TrayNotificationOptions,
   getMainWindow: () => BrowserWindow | null
 ): void {
+  const preferences = getDesktopPreferences()
+  if (options.eventStatus) {
+    if (!normalizeNotificationEvents(preferences.notificationEvents)[options.eventStatus] || preferences.notificationMode === "never") return
+    if (options.eventId && preferences.notifiedEventIds?.includes(options.eventId)) return
+    // ponytail: cap this ledger at 1,000; the persisted activity cursor protects older replays.
+    if (options.eventId) patchDesktopPreferences({ notifiedEventIds: [...(preferences.notifiedEventIds ?? []), options.eventId].slice(-1000) })
+  }
   const mainWindow = getMainWindow()
+  const focusedWindow = BrowserWindow.getFocusedWindow?.()
   const focused = Boolean(
-    mainWindow &&
-    !mainWindow.isDestroyed() &&
-    mainWindow.isVisible() &&
-    !mainWindow.isMinimized() &&
-    mainWindow.isFocused()
+    focusedWindow
+      ? !focusedWindow.isDestroyed() && focusedWindow.isVisible() && !focusedWindow.isMinimized()
+      : mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()
   )
   if (!focused) noteUnfocusedAttention(getMainWindow)
-  if (focused && !options.showWhenFocused) return
+  if (focused && !(options.eventStatus ? preferences.notificationMode === "always" : options.showWhenFocused)) return
   if (!Notification.isSupported()) return
 
   const notification = new Notification({
     title: options.title,
-    body: options.body,
+    body: options.eventStatus ? options.eventStatus === "completed" ? "任务已完成。" : options.eventStatus === "failed" ? "任务运行失败。" : "任务正在等待你处理。" : options.body,
     silent: options.silent,
   })
   notification.on("click", () => {

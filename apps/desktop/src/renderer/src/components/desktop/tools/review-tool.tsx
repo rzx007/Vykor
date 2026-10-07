@@ -41,17 +41,39 @@ export function ReviewTool({
   const selectedProjectPath = openRequest?.rootPath ?? selectedProject?.path
   const [loadState, setLoadState] = useState<LoadState>("idle")
   const [diffState, setDiffState] = useState<DiffState>("idle")
-  const [reviewRange, setReviewRange] = useState<ReviewRange>(openRequest?.scope ?? "last-turn")
+  const [reviewRange, setReviewRange] = useState<ReviewRange>(openRequest?.scope ?? "uncommitted")
   const [changes, setChanges] = useState<DesktopGitChangesResult | null>(null)
   const [activePath, setActivePath] = useState<string | null>(null)
   const [patch, setPatch] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("unified")
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false)
+  const [preferenceError, setPreferenceError] = useState<string | null>(null)
   const { resolvedTheme: themeType } = useAppearance()
   const handledOpenRequestRef = useRef<number | null>(null)
   const changesRequestVersionRef = useRef(0)
   const lastTurnFilePaths = useMemo(() => collectLastTurnFilePaths(sessionView), [sessionView])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!window.desktop.gitSettings) return
+    void window.desktop.gitSettings
+      .readPreferences()
+      .then((preferences) => {
+        if (cancelled) return
+        if (!openRequest?.scope) setReviewRange(preferences.defaultScope)
+        setDiffViewMode(preferences.viewMode)
+        setIgnoreWhitespace(preferences.ignoreWhitespace)
+        setPreferenceError(null)
+      })
+      .catch((failure: unknown) => {
+        if (!cancelled) setPreferenceError(errorMessage(failure))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [openRequest?.id, openRequest?.scope])
 
   const loadChanges = useCallback(
     async ({ force = false }: { force?: boolean } = {}): Promise<void> => {
@@ -69,6 +91,7 @@ export function ReviewTool({
           {
             rootPath: selectedProjectPath,
             scope: gitScopeForRange(reviewRange),
+            ...(ignoreWhitespace ? { ignoreWhitespace: true } : {}),
           },
           { force }
         )
@@ -90,7 +113,7 @@ export function ReviewTool({
         setLoadState("error")
       }
     },
-    [lastTurnFilePaths, reviewRange, selectedProjectPath]
+    [ignoreWhitespace, lastTurnFilePaths, reviewRange, selectedProjectPath]
   )
 
   useEffect(() => {
@@ -142,6 +165,7 @@ export function ReviewTool({
           path: activePath,
           status: activeFile?.status,
           scope: gitScopeForRange(reviewRange),
+          ...(ignoreWhitespace ? { ignoreWhitespace: true } : {}),
         })
         .then((result) => {
           if (cancelled) return
@@ -160,7 +184,7 @@ export function ReviewTool({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [activeFile?.status, activePath, reviewRange, selectedProjectPath])
+  }, [activeFile?.status, activePath, ignoreWhitespace, reviewRange, selectedProjectPath])
 
   if (!selectedProjectPath) {
     return (
@@ -175,8 +199,17 @@ export function ReviewTool({
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-background">
+      {preferenceError && (
+        <p className="px-3 py-1 text-xs text-destructive">
+          Git 显示偏好读取失败，保留当前显示选择：{preferenceError}
+        </p>
+      )}
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/45 px-3">
-        {openRequest?.rootPath ? <span className="text-xs text-ui-muted" title={selectedProjectPath}>当前工作区差异</span> : null}
+        {openRequest?.rootPath ? (
+          <span className="text-xs text-ui-muted" title={selectedProjectPath}>
+            当前工作区差异
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1">
           <ReviewRangeSummary
             changes={changes}

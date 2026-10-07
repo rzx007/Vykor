@@ -1,4 +1,5 @@
-import type { PluginUiInventory } from "@vykor/protocol";
+import type { PluginUiInventory, MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
+export type { MemoryEntryRecord } from "@vykor/protocol";
 
 /**
  * Injectable daemon settings / provider surfaces.
@@ -48,11 +49,13 @@ export interface CustomProviderInput {
   apiKey?: string;
   models: CustomProviderModelInput[];
   headers?: Record<string, string>;
+  secretHeaders?: Record<string, string | null>;
 }
 
 export interface ConnectCatalogProviderInput {
   apiKey: string;
   headers?: Record<string, string>;
+  secretHeaders?: Record<string, string | null>;
 }
 
 export interface ProviderService {
@@ -70,6 +73,7 @@ export interface ProviderService {
   updateCatalogHeaders?(
     id: string,
     headers: Record<string, string>,
+    secretHeaders?: Record<string, string | null>,
   ): Promise<ProviderInfo> | ProviderInfo;
   disconnectCatalog?(id: string): Promise<void> | void;
 }
@@ -118,19 +122,6 @@ export interface HookInfo {
   origin: "settings" | "runtime";
 }
 
-export interface MemoryEntryRecord {
-  id: string;
-  content: string;
-  tags?: string[];
-  source?: {
-    type: "user_message" | "manual_remember";
-    sessionId?: string;
-    messageSha256?: string;
-  };
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface MemoryService {
   list(input: {
     cwd: string;
@@ -146,7 +137,9 @@ export interface MemoryService {
     content: string;
     tags?: string[];
   }): Promise<MemoryEntryRecord> | MemoryEntryRecord;
-  remove(input: { cwd: string; id: string }): Promise<boolean> | boolean;
+  remove(input: { cwd: string; id: string; expectedRevision?: string }): Promise<boolean> | boolean;
+  update?(input: UpdateMemoryEntryInput): Promise<MemoryEntryRecord> | MemoryEntryRecord;
+  clear?(input: ClearMemoryInput): Promise<{ deleted: number }> | { deleted: number };
 }
 
 export interface AuthStatus {

@@ -3,6 +3,8 @@ export function errorMessage(error: unknown): string {
   if (raw.includes("Cannot update daemon settings while session runs are active")) {
     return "当前有任务正在运行。请等待任务结束或停止任务后，再修改该设置。"
   }
+  if (raw.includes("Settings field changed concurrently")) return "设置已被其他入口修改。请重新读取后保存。"
+  if (raw.includes("Permission approval is no longer current")) return "授权状态已经变化。请重新读取授权列表。"
   if (/authorization was saved .* failed to reconnect/i.test(raw)) {
     return "授权已保存，但 MCP 重连失败。可稍后重试或查看 MCP 状态。"
   }

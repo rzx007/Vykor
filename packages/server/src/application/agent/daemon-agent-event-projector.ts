@@ -173,7 +173,7 @@ export class DaemonAgentEventProjector {
       case "usage.updated":
         this.projectUsage(event);
         return;
-      case "domain.event":
+      case "domain.event": {
         if (event.data.name === "tool.generation.progress") {
           this.projectToolGeneration(event);
           return;
@@ -195,29 +195,33 @@ export class DaemonAgentEventProjector {
             } catch { /* Invalid or unbound suggestions cannot change the durable goal. */ }
           }
         }
+        let beforeAppend: (() => void) | undefined;
         if (event.data.name === "context_compaction") {
           const phase = event.data.payload?.phase;
           if (phase === "compact_start" || phase === "compact_end" || phase === "compact_failed") {
             const presentationPhase = phase === "compact_start" ? "started" : phase === "compact_end" ? "completed" : "failed";
-            const message = this.context.store.conversations.createMessage({
-              sessionId: event.context.sessionId,
-              role: "system",
-              metadata: { presentation: { kind: "context_compaction", phase: presentationPhase } },
-            });
-            this.context.store.conversations.upsertMessagePart({
-              sessionId: event.context.sessionId,
-              messageId: message.id,
-              type: "text",
-              status: "completed",
-              text: presentationPhase === "started" ? "正在压缩上下文" : presentationPhase === "completed" ? "已压缩上下文" : "上下文压缩失败",
-            });
+            beforeAppend = () => {
+              const message = this.context.store.conversations.createMessage({
+                sessionId: event.context.sessionId,
+                role: "system",
+                metadata: { presentation: { kind: "context_compaction", phase: presentationPhase } },
+              });
+              this.context.store.conversations.upsertMessagePart({
+                sessionId: event.context.sessionId,
+                messageId: message.id,
+                type: "text",
+                status: "completed",
+                text: presentationPhase === "started" ? "正在压缩上下文" : presentationPhase === "completed" ? "已压缩上下文" : "上下文压缩失败",
+              });
+            };
           }
         }
         this.appendRuntimeEvent(event, {
           name: event.data.name,
           payload: event.data.payload ?? {},
-        }, "agent.domain.event");
+        }, "agent.domain.event", beforeAppend);
         return;
+      }
       case "permission.requested":
       case "permission.resolved":
         this.appendRuntimeEvent(event, { ...event.data });
@@ -270,6 +274,7 @@ export class DaemonAgentEventProjector {
         agent: spawn.agent,
         metadata: patchSessionRuntimeMetadata({
           ...spawn.metadata,
+          ...(parent.metadata.desktop ? { desktop: parent.metadata.desktop } : {}),
           team: spawn.team ?? "default",
           isolate: spawn.isolate,
           childId,
@@ -574,6 +579,15 @@ export class DaemonAgentEventProjector {
             event.data.generationId,
             event.data.attempt,
           );
+          const started = this.context.store.conversations.listEvents({ sessionId: run.sessionId }).some(candidate =>
+            candidate.type === "session.model.attempt.started" && candidate.payload.runId === runId && candidate.payload.generationId === event.data.generationId && candidate.payload.attempt === event.data.attempt);
+          if (!started) {
+            const attempt = this.context.store.runs.listRunAttempts(runId).filter(candidate => candidate.status === "pending" || candidate.status === "running").at(-1);
+            this.context.store.conversations.appendEvent({ type: "session.model.attempt.started", sessionId: run.sessionId, payload: {
+              runId, generationId: event.data.generationId, attempt: event.data.attempt,
+              ...(attempt?.provider ? { provider: attempt.provider } : {}), ...(attempt?.model ? { model: attempt.model } : {}),
+            } });
+          }
         }
         this.clearToolGeneration(runId);
         const run = this.context.store.runs.getRun(runId);
@@ -832,18 +846,31 @@ export class DaemonAgentEventProjector {
     }
   }
 
-  private appendRuntimeEvent(event: AgentEvent, payload?: Record<string, unknown>, type = `agent.${event.type}`): void {
+  private appendRuntimeEvent(
+    event: AgentEvent,
+    payload?: Record<string, unknown>,
+    type = `agent.${event.type}`,
+    beforeAppend?: () => void,
+  ): void {
     if (
       this.context.store.conversations.listEvents({ sessionId: event.context.sessionId }).some(
         (candidate) => candidate.type === type && candidate.payload.frameworkEventId === event.id,
       )
     ) return;
-    const before = this.context.events.checkpoint();
-    this.context.store.conversations.appendEvent({
+    const append = () => this.context.store.conversations.appendEvent({
       type,
       sessionId: event.context.sessionId,
       payload: { frameworkEventId: event.id, ...payload },
     });
+    if (beforeAppend) {
+      this.projectAtomicEvent(() => {
+        beforeAppend();
+        append();
+      });
+      return;
+    }
+    const before = this.context.events.checkpoint();
+    append();
     this.context.events.publishSince(before);
   }
 
@@ -913,9 +940,12 @@ export class DaemonAgentEventProjector {
 
     const task = this.context.store.getSessionTask(childId);
     const parent = this.context.store.sessions.get(event.context.sessionId);
-    if (task && parent && (task.status === "pending" || task.status === "running")) {
+    if (task && parent) {
       const bridge = this.context.executionProjector.createBridge({ id: parent.id, cwd: parent.cwd });
-      await bridge.completeChildExecution(task.id, { status: "failed", output: message });
+      bridge.releaseChildExecution(task.id);
+      if (task.status === "pending" || task.status === "running") {
+        await bridge.completeChildExecution(task.id, { status: "failed", output: message });
+      }
     }
 
     const child = this.context.store.sessions.get(childSessionId);
@@ -1078,6 +1108,7 @@ export class DaemonAgentEventProjector {
   ): Promise<void> {
     this.context.liveChildren.unregister(event.data.sessionId, event.data.childId);
     if (state) {
+      state.bridge.releaseChildExecution(state.taskId);
       if (!state.runId && event.data.result.status === "failed") {
         const inputId = `input_startup_${state.childId}`;
         const runId = `run_startup_${state.childId}`;

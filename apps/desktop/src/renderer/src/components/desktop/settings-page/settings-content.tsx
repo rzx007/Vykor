@@ -1,7 +1,5 @@
-import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -21,10 +19,18 @@ import {
 import { Separator } from "@renderer/components/ui/separator"
 import { Switch } from "@renderer/components/ui/switch"
 import { ProviderSettings } from "./provider-settings"
-import { AttachmentStorageSettings } from "./attachment-storage-settings"
-import { RuntimeSettingControl } from "./runtime-setting-control"
+import { PermissionSettings } from "./permission-settings"
+import { StorageSettings } from "./storage-settings"
+import { UsageSettings } from "./usage-settings"
+import { DiagnosticsSettings } from "./diagnostics-settings"
+import { TerminalSettings } from "./terminal-settings"
+import { GitSettings } from "./git-settings"
+import { RuntimeSettings } from "./runtime-settings"
+import { ConfigurationSettings } from "./configuration-settings"
+import { NotificationSettings } from "./notification-settings"
+import { Link, useRouterState } from "@tanstack/react-router"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { DefaultOpenerControl } from "./default-opener-control"
-import { DefaultTerminalShellControl } from "./default-terminal-shell-control"
 import { errorMessage } from "./settings-error-message"
 import { DaemonAutoStartControl } from "./daemon-autostart-control"
 import { AppearanceSettings } from "@renderer/components/appearance/appearance-settings"
@@ -32,84 +38,66 @@ import { ConnectionsSettings } from "./connections-settings"
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
 import { ProfileSettings } from "./profile-settings"
 import { PersonalizationSettings } from "./personalization-settings"
-import { NotificationSoundSettings } from "./notification-sound-settings"
-import { isDesktopNotificationMode, isDesktopWorkStyle } from "@shared/settings-types"
-import type { DesktopNotificationMode, DesktopWorkStyle } from "@shared/settings-types"
+import { isDesktopWorkStyle } from "@shared/settings-types"
+import type { DesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopAppInfo } from "@shared/ipc-channels"
 
 type SettingsContentProps = {
   selectedSection: string
 }
 
+const pages: Record<string, () => React.JSX.Element> = {
+  常规: GeneralSettings, 通知: NotificationSettings, 个人资料: ProfileSettings, 外观: AppearanceSettings,
+  模型供应商: ProviderSettings, 权限: PermissionSettings, 个性化: PersonalizationSettings,
+  键盘快捷键: KeyboardShortcutsSettings, 用量与费用: UsageSettings, 连接: ConnectionsSettings,
+  终端: TerminalSettings, Git: GitSettings, 运行环境: RuntimeSettings, 存储: StorageSettings, 诊断与日志: DiagnosticsSettings,
+}
+const descriptions: Record<string, string> = {
+  常规: "调整默认工作方式、后台运行和配置。",
+  外观: "调整当前设备的主题、颜色、字体和动效。",
+  模型供应商: "管理模型连接、默认模型和实际支持的请求偏好。",
+  权限: "管理批准方式、工具规则、访问边界和已保存授权。",
+  键盘快捷键: "搜索、修改和恢复常用操作的按键组合。",
+  用量与费用: "查看真实请求用量、统计完整性和费用依据。",
+  连接: "管理消息渠道及其使用权限。",
+  运行环境: "查看实际执行位置，配置项目环境和命令设置。",
+  存储: "查看空间占用，维护、备份和恢复应用数据。",
+  诊断与日志: "检查后台服务、环境和连接，查看并导出诊断信息。",
+}
 export function SettingsContent({ selectedSection }: SettingsContentProps): React.JSX.Element {
-  if (selectedSection === "个性化") {
-    return (
-      <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
-        <PersonalizationSettings />
-      </ScrollArea>
-    )
-  }
-
-  if (selectedSection === "个人资料") {
-    return (
-      <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
-        <ProfileSettings />
-      </ScrollArea>
-    )
-  }
-
+  const target = useRouterState({ select: state => state.location.hash })
+  useEffect(() => {
+    if (!target) return
+    let observer: MutationObserver | undefined
+    const reveal = () => {
+      const element = document.getElementById(target)
+      if (!element) return false
+      const row = element.closest('[data-slot="field"]') ?? element
+      row.scrollIntoView({ block: "center", behavior: "auto" })
+      const control = element.matches('input:not([type="hidden"]),button,textarea,select') ? element : row.querySelector<HTMLElement>('button,[role="switch"],textarea,select,input:not([type="hidden"])')
+      ;(control as HTMLElement | null)?.focus({ preventScroll: true })
+      observer?.disconnect()
+      return true
+    }
+    if (reveal()) return
+    observer = new MutationObserver(reveal)
+    observer.observe(document.body, { childList: true, subtree: true })
+    const timeout = setTimeout(() => observer?.disconnect(), 10_000)
+    return () => { clearTimeout(timeout); observer?.disconnect() }
+  }, [target, selectedSection])
+  const Page = pages[selectedSection]
+  const ownHeading = ["个人资料", "个性化", "通知", "终端", "Git"].includes(selectedSection)
   return (
     <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-10 py-16 lg:px-16">
-        <header className="flex flex-col gap-2">
-          <h1 className="font-heading text-xl tracking-tight">{selectedSection}</h1>
-          <p className="text-sm text-muted-foreground">
-            {selectedSection === "常规"
-              ? "调整 Vykor 的默认工作方式。工作风格会保存到全局配置，并用于后续任务。"
-              : selectedSection === "通知"
-                ? "设置系统通知和音效。选择音效时会自动试听，更改后自动保存。"
-                : selectedSection === "供应商"
-                  ? "连接模型服务和开发工具订阅，选择 Vykor 默认使用的供应商。"
-                  : selectedSection === "外观"
-                    ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
-                    : selectedSection === "连接"
-                      ? "把 Vykor 接到你常用的聊天工具，在熟悉的地方继续对话。"
-                      : selectedSection === "键盘快捷键"
-                        ? "查找并修改常用操作的按键组合。按下 Esc 可取消录入。"
-                        : selectedSection === "存储"
-                          ? "查看并维护当前设备上的对话附件存储。"
-                          : `${selectedSection}页面将在后续迭代中接入。`}
-          </p>
-        </header>
-
-        {selectedSection === "常规" ? (
-          <GeneralSettings />
-        ) : selectedSection === "通知" ? (
-          <NotificationSettings />
-        ) : selectedSection === "供应商" ? (
-          <ProviderSettings />
-        ) : selectedSection === "外观" ? (
-          <AppearanceSettings />
-        ) : selectedSection === "存储" ? (
-          <AttachmentStorageSettings />
-        ) : selectedSection === "连接" ? (
-          <ConnectionsSettings />
-        ) : selectedSection === "键盘快捷键" ? (
-          <KeyboardShortcutsSettings />
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>{selectedSection}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-                <SlidersHorizontal className="size-8" strokeWidth={1.5} />
-                <p className="text-sm">这一页先保留导航与布局，具体设置项后续再补。</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {ownHeading && Page ? <Page /> : (
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-12 sm:px-10 lg:px-16">
+          <header className="flex flex-col gap-2">
+            <h1 className="font-heading text-xl tracking-tight">{selectedSection}</h1>
+            <p className="text-sm text-muted-foreground">{descriptions[selectedSection] ?? "查看和调整应用设置。"}</p>
+          </header>
+          {Page ? <Page /> : <p className="text-sm text-muted-foreground">未找到此设置页面。</p>}
+        </div>
+      )}
     </ScrollArea>
   )
 }
@@ -132,32 +120,6 @@ function GeneralSettings(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-10">
-      <SettingsSection title="权限">
-        <SettingRow
-          title="默认权限"
-          description="允许智能体读取和编辑当前工作区中的文件；需要访问工作区之外的位置时再向你请求。"
-          control={<Switch aria-label="默认权限" defaultChecked />}
-        />
-        <Separator />
-        <SettingRow
-          title="自动审核"
-          description="在执行工具之前自动判断风险，遇到敏感操作仍会请求你的确认。"
-          control={<Switch aria-label="自动审核" defaultChecked />}
-        />
-        <Separator />
-        <SettingRow
-          title="完整访问权限"
-          description="允许智能体在无需逐次批准的情况下访问工作区外的文件和网络。"
-          control={<Switch aria-label="完整访问权限" />}
-        />
-        <Separator />
-        <SettingRow
-          title="开发者模式"
-          description="允许智能体在当前浏览器标签页上请求 DOM、计算样式、控制台和网络排障。默认关闭；开启后每次检查仍会单独请求你的批准。"
-          control={<BrowserDeveloperModeControl />}
-        />
-      </SettingsSection>
-
       <SettingsSection title="常规">
         <SettingRow
           title="工作风格"
@@ -183,51 +145,7 @@ function GeneralSettings(): React.JSX.Element {
           control={<DefaultOpenerControl />}
         />
         <Separator />
-        <SettingRow
-          title="运行环境"
-          description="选择智能体的命令、脚本、文件工具和终端在本机还是 WSL 中运行。WSL 仅在 Windows 上可用，更改会在重启后生效。"
-          control={<RuntimeSettingControl />}
-        />
-        <Separator />
-        <SettingRow
-          title="集成终端 Shell"
-          description="本机环境使用这里选择的 Shell；WSL 环境使用 Linux 发行版的默认 Shell。"
-          control={<DefaultTerminalShellControl />}
-        />
-        <Separator />
-        <SettingRow
-          title="界面语言"
-          description="Vykor 桌面应用使用的语言"
-          control={<SettingSelect label="简体中文" />}
-        />
-        <Separator />
-        <SettingRow
-          title="桌面宠物"
-          description="启动应用时显示桌面宠物"
-          control={<Switch aria-label="桌面宠物" defaultChecked />}
-        />
-        <Separator />
-        <SettingRow
-          title="运行速度"
-          description="选择智能体执行任务时的默认速度"
-          control={<SettingSelect label="标准" />}
-        />
-        <Separator />
-        <SettingRow
-          title="提示词建议"
-          description="根据当前项目和对话内容建议下一步操作"
-          control={<Switch aria-label="提示词建议" />}
-        />
-        <Separator />
-        <SettingRow
-          title="导入设置"
-          description="从已有的 Vykor 配置中恢复偏好"
-          control={
-            <Button variant="secondary" size="sm">
-              再次导入
-            </Button>
-          }
-        />
+        <SettingRow title="默认模型" description="在模型供应商中调整默认模型和支持的推理强度。" control={<DefaultModelLink />} />
         <Separator />
         <SettingRow
           title="关于 Vykor"
@@ -239,6 +157,8 @@ function GeneralSettings(): React.JSX.Element {
           }
         />
       </SettingsSection>
+
+      <ConfigurationSettings />
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent>
@@ -258,30 +178,9 @@ function GeneralSettings(): React.JSX.Element {
   )
 }
 
-const notificationModeLabels = {
-  never: "从不",
-  when_unfocused: "仅失去焦点时",
-  always: "始终",
-} satisfies Record<DesktopNotificationMode, string>
-
-function NotificationSettings(): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-10">
-      <SettingsSection title="系统通知">
-        <SettingRow
-          title="通知显示"
-          description="选择任务完成、失败或需要你处理时是否发送系统通知。"
-          control={<NotificationModeControl />}
-        />
-      </SettingsSection>
-      <SettingsSection title="音效">
-        <NotificationSoundSettings />
-      </SettingsSection>
-      <p className="text-xs text-muted-foreground">
-        音效独立于系统通知，查看当前会话时也会播放。选择“无声音”可关闭对应音效。
-      </p>
-    </div>
-  )
+function DefaultModelLink(): React.JSX.Element {
+  const model = useDesktopSessionStore(state => state.defaultModel)
+  return <Link to="/settings/$section" params={{ section: "providers" }} className="text-sm underline underline-offset-4">{model ?? "选择默认模型"}</Link>
 }
 
 function WorkStyleControl(): React.JSX.Element {
@@ -408,131 +307,6 @@ export function ReasoningVisibilityControl(): React.JSX.Element {
   )
 }
 
-function BrowserDeveloperModeControl(): React.JSX.Element {
-  const [enabled, setEnabled] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void window.desktop.settings
-      .snapshot()
-      .then((snapshot) => {
-        if (!cancelled) setEnabled(snapshot.browserDeveloperMode)
-      })
-      .catch((loadError: unknown) => {
-        if (!cancelled) setError(errorMessage(loadError))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const update = (next: boolean): void => {
-    if (saving || next === enabled) return
-    const previous = enabled
-    setEnabled(next)
-    setSaving(true)
-    setError(null)
-    void window.desktop.settings
-      .updateBrowserDeveloperMode({ enabled: next })
-      .then((snapshot) => setEnabled(snapshot.browserDeveloperMode))
-      .catch((saveError: unknown) => {
-        setEnabled(previous)
-        setError(errorMessage(saveError))
-      })
-      .finally(() => setSaving(false))
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1.5">
-      <Switch
-        aria-label="开发者模式"
-        checked={enabled}
-        disabled={loading || saving}
-        onCheckedChange={update}
-      />
-      {error ? (
-        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function NotificationModeControl(): React.JSX.Element {
-  const [mode, setMode] = useState<DesktopNotificationMode>("when_unfocused")
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void window.desktop.settings
-      .snapshot()
-      .then((snapshot) => {
-        if (!cancelled) setMode(snapshot.notificationMode)
-      })
-      .catch((loadError: unknown) => {
-        if (!cancelled) setError(errorMessage(loadError))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const update = (nextMode: DesktopNotificationMode): void => {
-    if (saving || nextMode === mode) return
-    const previous = mode
-    setMode(nextMode)
-    setSaving(true)
-    setError(null)
-    void window.desktop.settings
-      .updateNotificationMode({ notificationMode: nextMode })
-      .then((snapshot) => setMode(snapshot.notificationMode))
-      .catch((saveError: unknown) => {
-        setMode(previous)
-        setError(errorMessage(saveError))
-      })
-      .finally(() => setSaving(false))
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1.5">
-      <Select
-        value={mode}
-        onValueChange={(value) => {
-          if (isDesktopNotificationMode(value)) update(value)
-        }}
-      >
-        <SelectTrigger aria-label="通知" disabled={loading || saving} className="min-w-36">
-          <SelectValue>{notificationModeLabels[mode]}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectItem value="never">从不</SelectItem>
-            <SelectItem value="when_unfocused">仅失去焦点时</SelectItem>
-            <SelectItem value="always">始终</SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-      {error ? (
-        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
 function SettingsSection({
   title,
   children,
@@ -545,12 +319,7 @@ function SettingsSection({
       <h2 id={`settings-${title}`} className="font-heading text-lg font-semibold">
         {title}
       </h2>
-      <Card className="py-0">
-        <CardHeader className="sr-only">
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="px-5">{children}</CardContent>
-      </Card>
+      <div>{children}</div>
     </section>
   )
 }
@@ -572,21 +341,5 @@ function SettingRow({
       </div>
       <div className="shrink-0">{control}</div>
     </div>
-  )
-}
-
-function SettingSelect({
-  icon,
-  label,
-}: {
-  icon?: React.ReactNode
-  label: string
-}): React.JSX.Element {
-  return (
-    <Button type="button" variant="outline" size="sm" className="min-w-28 justify-between">
-      {icon}
-      <span>{label}</span>
-      <ChevronDown data-icon="inline-end" />
-    </Button>
   )
 }

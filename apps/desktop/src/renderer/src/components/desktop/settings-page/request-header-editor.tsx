@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { FieldDescription, FieldLegend, FieldSet } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
+import { Switch } from "@renderer/components/ui/switch"
 import { REQUEST_HEADER_DESCRIPTION, type RequestHeaderRow } from "./request-header-form"
 
 interface RequestHeaderEditorProps {
@@ -35,7 +36,7 @@ export function RequestHeaderEditor({
       {rows.length > 0 ? (
         <div className="flex flex-col gap-3">
           {rows.map((header, index) => (
-            <div key={header.key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+            <div key={header.key} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2">
               <Input
                 value={header.name}
                 aria-label={`请求头 ${index + 1} 名称`}
@@ -51,6 +52,7 @@ export function RequestHeaderEditor({
               />
               <Input
                 value={header.value}
+                type={header.secret ? "password" : "text"}
                 aria-label={`请求头 ${index + 1} 值`}
                 aria-invalid={invalidMessage ? true : undefined}
                 onChange={(event) =>
@@ -60,8 +62,9 @@ export function RequestHeaderEditor({
                     )
                   )
                 }
-                placeholder="value 或 {{sessionId}}"
+                placeholder={header.secret && header.savedSecretName === header.name ? "已保存；留空保留" : "value 或 {{sessionId}}"}
               />
+              <label className="flex items-center gap-1 text-xs"><Switch checked={header.secret ?? false} aria-label={`请求头 ${index + 1} 机密值`} onCheckedChange={(secret) => onChange(rows.map((item) => item.key === header.key ? { ...item, secret } : item))} />机密</label>
               <Button
                 type="button"
                 variant="ghost"

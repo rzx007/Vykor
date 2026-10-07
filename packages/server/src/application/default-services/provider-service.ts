@@ -20,6 +20,7 @@ import type {
 } from "../settings-api.js";
 import { validateProviderCredential } from "./credential-validation.js";
 import { readCatalogProvider } from "./catalog-provider-mapping.js";
+import { prepareSecretProviderHeaders } from "./provider-secret-headers.js";
 import {
   readCurrentSettings,
   saveSettingsAndRefreshRef,
@@ -51,6 +52,20 @@ export function createDefaultProviderService(
   ): Promise<void> => {
     const next = { ...ref.current, ...patch, customProviders: providers };
     await saveSettingsAndRefreshRef(ref, next);
+  };
+
+  const saveWithCredentials = async (provider: string, changes: Record<string, string | null>, providers: CustomProviderSettings[], patch: Partial<Settings> = {}) => {
+    const previous: Record<string, string | null> = {};
+    for (const key of Object.keys(changes)) previous[key] = (await storage.loadCredential(provider, key)) ?? null;
+    if (Object.keys(changes).length) await storage.updateCredentials(provider, changes);
+    try { await saveCustomProviders(providers, patch); }
+    catch (error) {
+      if (Object.keys(changes).length) {
+        try { await storage.updateCredentials(provider, previous); }
+        catch { throw new Error("供应商设置保存失败，凭据回退也失败；请重新检查此连接。机密内容未返回。") }
+      }
+      throw error;
+    }
   };
 
   return {
@@ -112,6 +127,8 @@ export function createDefaultProviderService(
     async create(input) {
       const current = await readCurrentSettings(ref);
       const provider = normalizeCustomProvider(input);
+      const secrets = await prepareSecretProviderHeaders(storage, provider.id, [], input.secretHeaders);
+      if (secrets.names.length) provider.secretHeaderNames = secrets.names;
       if (findByName(provider.id)) {
         throw new ProviderMutationError(
           400,
@@ -131,12 +148,10 @@ export function createDefaultProviderService(
           backendType: "openai_compat",
           apiKey: input.apiKey.trim(),
           baseUrl: provider.baseUrl,
-          headers: provider.headers,
+          headers: { ...provider.headers, ...secrets.headers },
         });
       }
-      await saveCustomProviders([...(current.customProviders ?? []), provider]);
-      if (input.apiKey?.trim())
-        await storage.storeApiKey(provider.id, input.apiKey.trim());
+      await saveWithCredentials(provider.id, { ...secrets.changes, ...(input.apiKey?.trim() ? { api_key: input.apiKey.trim() } : {}) }, [...(current.customProviders ?? []), provider]);
       return await rowForCustomProvider(provider, current.provider ?? "auto");
     },
     async update(id, input) {
@@ -158,6 +173,8 @@ export function createDefaultProviderService(
         );
       }
       const provider = normalizeCustomProvider({ ...input, id: normalizedId });
+      const secrets = await prepareSecretProviderHeaders(storage, provider.id, current.customProviders?.[index]?.secretHeaderNames, input.secretHeaders);
+      if (secrets.names.length) provider.secretHeaderNames = secrets.names;
       const nextProviders = [...(current.customProviders ?? [])];
       nextProviders[index] = provider;
       if (input.apiKey?.trim()) {
@@ -167,26 +184,24 @@ export function createDefaultProviderService(
           backendType: "openai_compat",
           apiKey: input.apiKey.trim(),
           baseUrl: provider.baseUrl,
-          headers: provider.headers,
+          headers: { ...provider.headers, ...secrets.headers },
         });
       }
       const currentModelStillAvailable = provider.models.some(
         (model) => model.id === current.model,
       );
-      await saveCustomProviders(
+      await saveWithCredentials(provider.id, { ...secrets.changes, ...(input.apiKey?.trim() ? { api_key: input.apiKey.trim() } : {}) },
         nextProviders,
         current.provider === provider.id && !currentModelStillAvailable
           ? { model: provider.models[0]!.id }
           : {},
       );
-      if (input.apiKey?.trim())
-        await storage.storeApiKey(provider.id, input.apiKey.trim());
       return await rowForCustomProvider(provider, current.provider ?? "auto");
     },
     async remove(id) {
       const current = await readCurrentSettings(ref);
       const normalizedId = id.trim().toLowerCase();
-      if (current.provider === normalizedId) {
+      if (current.provider === normalizedId && current.modelDisabled !== true) {
         throw new ProviderMutationError(
           409,
           "该供应商正在使用中。请先切换到其他供应商，再删除。",
@@ -237,13 +252,14 @@ export function createDefaultProviderService(
         );
       }
       const headers = resolveCatalogHeaders(input, existing?.headers);
+      const secrets = await prepareSecretProviderHeaders(storage, provider.id, existing?.secretHeaderNames, input.secretHeaders);
       await validateProviderCredential({
         providerName: provider.id,
         providerDisplayName: provider.displayName,
         backendType: "openai_compat",
         apiKey: credential,
         baseUrl: provider.baseUrl,
-        headers,
+        headers: { ...headers, ...secrets.headers },
       });
       const settingsProvider: CustomProviderSettings = {
         id: provider.id,
@@ -253,18 +269,18 @@ export function createDefaultProviderService(
         models: provider.models,
         source: "models.dev",
         ...(headers ? { headers } : {}),
+        ...(secrets.names.length ? { secretHeaderNames: secrets.names } : {}),
       };
       const providers = (current.customProviders ?? []).filter(
         (item) => item.id !== normalizedId,
       );
-      await saveCustomProviders([...providers, settingsProvider]);
-      await storage.storeApiKey(provider.id, credential);
+      await saveWithCredentials(provider.id, { ...secrets.changes, api_key: credential }, [...providers, settingsProvider]);
       return await rowForCustomProvider(
         settingsProvider,
         current.provider ?? "auto",
       );
     },
-    async updateCatalogHeaders(id, headers) {
+    async updateCatalogHeaders(id, headers, secretHeaders) {
       const current = await readCurrentSettings(ref);
       const normalizedId = id.trim().toLowerCase();
       const index =
@@ -279,6 +295,7 @@ export function createDefaultProviderService(
         );
       }
       const normalizedHeaders = normalizeProviderHeaders(headers);
+      const secrets = await prepareSecretProviderHeaders(storage, normalizedId, existing.secretHeaderNames, secretHeaders);
       const nextProvider: CustomProviderSettings = {
         id: existing.id,
         displayName: existing.displayName,
@@ -286,11 +303,12 @@ export function createDefaultProviderService(
         apiFormat: existing.apiFormat,
         models: existing.models,
         source: "models.dev",
+        ...(secrets.names.length ? { secretHeaderNames: secrets.names } : {}),
         ...(normalizedHeaders ? { headers: normalizedHeaders } : {}),
       };
       const nextProviders = [...(current.customProviders ?? [])];
       nextProviders[index] = nextProvider;
-      await saveCustomProviders(nextProviders);
+      await saveWithCredentials(normalizedId, secrets.changes, nextProviders);
       return await rowForCustomProvider(
         nextProvider,
         current.provider ?? "auto",
@@ -299,7 +317,7 @@ export function createDefaultProviderService(
     async disconnectCatalog(id) {
       const normalizedId = id.trim().toLowerCase();
       const current = await readCurrentSettings(ref);
-      if (current.provider === normalizedId) {
+      if (current.provider === normalizedId && current.modelDisabled !== true) {
         throw new ProviderMutationError(
           409,
           "该供应商正在使用中。请先切换到其他供应商，再断开连接。",

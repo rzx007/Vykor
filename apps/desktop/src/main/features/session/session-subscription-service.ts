@@ -230,7 +230,8 @@ export class SessionSubscriptionService {
             coalescer.dispose()
             return
           }
-          if (slot === primarySubscriptionSlot)
+          // Text deltas do not change plugin UI ownership; their full view is built by the coalescer.
+          if (slot === primarySubscriptionSlot && update.event?.type !== "session.message.part.delta")
             for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(update.state, sessionId, update.source))
           if (update.source === "reconnecting") {
             coalescer.flushNow(update.state, "reconnecting")

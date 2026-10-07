@@ -13,6 +13,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { cn } from "@renderer/lib/utils"
 import { Button } from "@renderer/components/ui/button"
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@renderer/components/ui/alert-dialog"
+import { DEFAULT_TERMINAL_SETTINGS, type TerminalSettings } from "@shared/terminal-settings-types"
+import { terminalDisplayOptions, pasteTerminalText } from "./terminal-preferences"
 import {
   selectActiveWorkspaceProject,
   selectActiveSessionRecord,
@@ -109,6 +112,57 @@ export function TerminalTool({
   const [error, setError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null)
   const [agentEnvironment, setAgentEnvironment] = useState<DesktopAgentEnvironment>("native")
+  const [terminalSettings, setTerminalSettings] = useState<TerminalSettings>(DEFAULT_TERMINAL_SETTINGS)
+  const terminalSettingsRef = useRef(terminalSettings)
+  const [pasteConfirmation, setPasteConfirmation] = useState<{ lines: number; preview: string } | null>(null)
+  const pasteResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
+  terminalSettingsRef.current = terminalSettings
+
+  const settlePaste = useCallback((confirmed: boolean) => {
+    const resolve = pasteResolverRef.current
+    pasteResolverRef.current = null
+    setPasteConfirmation(null)
+    resolve?.(confirmed)
+  }, [])
+
+  const pasteText = useCallback(async (text: string) => {
+    const record = activeRecordRef.current
+    if (record?.status !== "running" || pasteResolverRef.current) return
+    await pasteTerminalText(text, terminalSettingsRef.current.confirmMultilinePaste,
+      (preview) => new Promise<boolean>((resolve) => {
+        pasteResolverRef.current = resolve
+        setPasteConfirmation(preview)
+      }),
+      (value) => {
+        if (activeRecordRef.current?.id === record.id && activeRecordRef.current.status === "running") terminalRef.current?.paste(value)
+      })
+    terminalRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.desktop.terminalSettings.snapshot().then((snapshot) => {
+      if (!cancelled) setTerminalSettings(snapshot.settings)
+    }).catch((caught) => { if (!cancelled) setError(errorMessage(caught)) })
+    const unsubscribe = window.desktop.terminalSettings.onChanged((snapshot) => setTerminalSettings(snapshot.settings))
+    return () => { cancelled = true; unsubscribe(); pasteResolverRef.current?.(false); pasteResolverRef.current = null }
+  }, [])
+
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (!terminal) return
+    const update = () => {
+      terminal.options.theme = getXtermTheme()
+      Object.assign(terminal.options, terminalDisplayOptions(terminalSettings,
+        getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace",
+        document.documentElement.dataset.reducedMotion === "true"))
+      fitAndResize()
+    }
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-reduced-motion"] })
+    return () => observer.disconnect()
+  }, [terminalSettings, terminalReady])
 
   const visibleRecords = useCallback(
     (nextRecords: DesktopTerminalRecord[]): DesktopTerminalRecord[] =>
@@ -119,9 +173,9 @@ export function TerminalTool({
   const activeRecord = useMemo(
     () =>
       records.find(
-        (record) => record.id === activeTerminalId && recordBelongsToSession(record, activeSession)
+        (record) => record.id === activeTerminalId && recordBelongsToSession(record, activeSession ?? { id: "", projectId: selectedProject?.id })
       ) ?? null,
-    [activeSession, activeTerminalId, records]
+    [activeSession, activeTerminalId, records, selectedProject?.id]
   )
 
   useEffect(() => {
@@ -129,8 +183,8 @@ export function TerminalTool({
   }, [records])
 
   useEffect(() => {
-    selectedProjectIdRef.current = activeSession?.id ?? null
-  }, [activeSession?.id])
+    selectedProjectIdRef.current = activeSession?.id ?? selectedProject?.id ?? null
+  }, [activeSession?.id, selectedProject?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -190,10 +244,16 @@ export function TerminalTool({
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(new WebLinksAddon((_event, uri) => openTerminalWebLink(uri)))
     terminal.open(container)
+    const handlePaste = (event: ClipboardEvent) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      void pasteText(event.clipboardData?.getData("text/plain") ?? "")
+    }
+    container.addEventListener("paste", handlePaste, true)
     terminal.onData((data) => {
       const record = activeRecordRef.current
       if (record?.status === "running") {
-        void window.desktop.terminal.write({ terminalId: record.id, data })
+        void window.desktop.terminal.write({ terminalId: record.id, data }).catch((caught) => setError(errorMessage(caught)))
       }
     })
 
@@ -218,6 +278,7 @@ export function TerminalTool({
 
     return () => {
       observer.disconnect()
+      container.removeEventListener("paste", handlePaste, true)
       themeObserver.disconnect()
       if (resizeFrameRef.current) window.cancelAnimationFrame(resizeFrameRef.current)
       resizeFrameRef.current = null
@@ -228,7 +289,7 @@ export function TerminalTool({
       terminalRef.current = null
       fitAddonRef.current = null
     }
-  }, [fitAndResize])
+  }, [fitAndResize, pasteText])
 
   const createTerminal = useCallback(
     async (
@@ -237,7 +298,7 @@ export function TerminalTool({
     ): Promise<void> => {
       const project = selectedProject
       const terminal = terminalRef.current
-      if (!project?.available || !activeSession || !terminal || creatingRef.current) return
+      if (!project?.available || !terminal || creatingRef.current) return
 
       creatingRef.current = true
       setCreating(true)
@@ -245,8 +306,8 @@ export function TerminalTool({
       fitAndResize()
 
       const currentRecords = knownRecords ?? recordsRef.current
-      const target = resolveTerminalCreateTarget({ session: activeSession })
-      const name = preferredName ?? nextTerminalName(currentRecords, activeSession.id)
+      const target = activeSession ? resolveTerminalCreateTarget({ session: activeSession }) : { runtime: "environment" as const, scope: { kind: "project" as const, projectId: project.id } }
+      const name = preferredName ?? (activeSession ? nextTerminalName(currentRecords, activeSession.id) : "Terminal")
 
       try {
         const nextRecord = await window.desktop.terminal.create(
@@ -261,7 +322,7 @@ export function TerminalTool({
           ...current.filter((record) => record.id !== nextRecord.id),
           nextRecord,
         ])
-        if (selectedProjectIdRef.current === activeSession.id) {
+        if (selectedProjectIdRef.current === (activeSession?.id ?? project.id)) {
           setActiveTerminalId(nextRecord.id)
           onSessionUpsertRef.current(toTabInfo(nextRecord), true)
           onActiveTerminalChangeRef.current(nextRecord.id)
@@ -283,7 +344,7 @@ export function TerminalTool({
 
   useEffect(() => {
     if (!terminalReady || !active) return
-    if (!selectedProject?.available || !activeSession) return
+    if (!selectedProject?.available) return
 
     let cancelled = false
     void window.desktop.terminal
@@ -496,7 +557,7 @@ export function TerminalTool({
       }
     }
 
-    if (!selectedProject?.available || !activeSession) {
+    if (!selectedProject?.available) {
       onCommandSettledRef.current(command.id)
       return
     }
@@ -509,7 +570,7 @@ export function TerminalTool({
         const nextVisibleRecords = visibleRecords(nextRecords)
         setRecords(nextVisibleRecords)
         const currentProjectRecords = nextVisibleRecords.filter(
-          (record) => recordBelongsToSession(record, activeSession)
+          (record) => recordBelongsToSession(record, activeSession ?? { id: "", projectId: selectedProject.id })
         )
         if (currentProjectRecords.length === 0) {
           await createTerminal(undefined, nextRecords)
@@ -590,9 +651,10 @@ export function TerminalTool({
     setContextMenu(null)
     const record = activeRecordRef.current
     if (record?.status !== "running") return
-    const text = await window.desktop.clipboard.readText()
-    if (text) await window.desktop.terminal.write({ terminalId: record.id, data: text })
-    terminalRef.current?.focus()
+    try {
+      const text = await window.desktop.clipboard.readText()
+      await pasteText(text)
+    } catch (caught) { setError(errorMessage(caught)) }
   }
 
   const clearFromMenu = (): void => {
@@ -620,6 +682,22 @@ export function TerminalTool({
         !active && "pointer-events-none opacity-0"
       )}
     >
+      {activeRecord && <p className="px-3 pt-1 text-ui-caption text-ui-muted" title={`${activeRecord.shell} · ${activeRecord.cwd}`}>
+        {activeRecord.shell} · {activeRecord.environmentKind === "wsl" ? `WSL${activeRecord.distribution ? ` · ${activeRecord.distribution}` : ""}` : activeRecord.environmentKind === "native" || activeRecord.runtime === "local" ? "本机" : "运行环境信息未返回"} · {activeRecord.cwd}
+      </p>}
+      <AlertDialog open={pasteConfirmation !== null} onOpenChange={(open) => { if (!open) settlePaste(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认粘贴 {pasteConfirmation?.lines} 行内容</AlertDialogTitle>
+            <AlertDialogDescription>多行内容可能立即执行命令。确认后才会发送到当前终端。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">{pasteConfirmation?.preview}</pre>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => settlePaste(false)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => settlePaste(true)}>确认粘贴</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="relative min-h-0 flex-1 bg-background/55">
         <div
           ref={containerRef}
@@ -641,21 +719,19 @@ export function TerminalTool({
           />
         )}
 
-        {(!activeSession || !selectedProject || !selectedProject.available) && (
+        {(!selectedProject || !selectedProject.available) && (
           <div className="absolute inset-0 grid place-items-center bg-conversation/90 px-8 text-center backdrop-blur-sm">
             <div className="max-w-sm">
               <Folder className="mx-auto mb-3 size-9 text-ui-muted" strokeWidth={1.6} />
               <h2 className="text-base font-semibold text-ui-foreground">
-                {!activeSession ? "未选择会话" : selectedProject ? "项目目录不可用" : "未选择项目"}
+                {selectedProject ? "项目目录不可用" : "未选择项目"}
               </h2>
               <p className="text-ui-small mt-2 leading-6 text-ui-muted">
-                {!activeSession
-                  ? "打开一个会话后，终端会使用该会话的可信工作目录。"
-                  : selectedProject
+                {selectedProject
                   ? "当前项目目录可能已被移动，请重新绑定目录后再启动终端。"
                   : "选择项目后，终端会在项目目录中启动。"}
               </p>
-              {activeSession && selectedProject && (
+              {selectedProject && (
                 <Button
                   type="button"
                   className="mt-4"
@@ -668,7 +744,7 @@ export function TerminalTool({
           </div>
         )}
 
-        {activeSession && selectedProject?.available && !activeRecord && !creating && (
+        {selectedProject?.available && !activeRecord && !creating && (
           <div className="absolute inset-0 grid place-items-center bg-conversation/84 px-8 text-center backdrop-blur-sm">
             <div>
               <SquareTerminal className="mx-auto mb-3 size-9 text-ui-muted" strokeWidth={1.6} />

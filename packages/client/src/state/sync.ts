@@ -14,6 +14,7 @@ import {
   createInitialClientState,
   UnsupportedSessionEventSchemaVersionError,
 } from "./reducer.js";
+import { applySessionStreamEvent, applySessionStreamSnapshot } from "./session-stream-state.js";
 import type {
   EventSyncOptions,
   ListEventsOptions,
@@ -67,9 +68,9 @@ export async function* syncEvents(
 
     yield* liveWithReconnect(client, state, options, snapshot.cursor, async (current) => {
       const refreshed = await client.sessions.getState(sessionId, { signal: options.signal, partView: options.partView });
-      const next = applySessionSnapshot(current, refreshed);
+      const next = applySessionStreamSnapshot(current, refreshed);
       return { state: next, cursor: refreshed.cursor };
-    });
+    }, applySessionStreamEvent);
     return;
   }
   const replay = await client.events.list({

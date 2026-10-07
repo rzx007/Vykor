@@ -39,6 +39,7 @@ export {
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
+export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
 export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
 export {
   PLUGIN_UI_BRIDGE_LIMITS, PluginUiBridgeError, decodePluginUiBridgeMessage, encodePluginUiBridgeMessage,
@@ -171,6 +172,9 @@ export type {
   McpRuntimeStatus,
   McpRuntimeSyncResult,
   MemoryEntryRecord,
+  MemoryRevision,
+  UpdateMemoryEntryInput,
+  ClearMemoryInput,
   MemoryListResponse,
   ModelInfo,
   ModelProviderInfo,

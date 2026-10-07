@@ -26,9 +26,9 @@ let _cached: ResolvedPaths | undefined;
 export function resolvePaths(projectRoot?: string): ResolvedPaths {
   const configDir =
     process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
-  if (_cached && !projectRoot && _cached.configDir === configDir) return _cached;
+  const dataDir = process.env.VYKOR_DATA_DIR ?? join(configDir, "data");
+  if (_cached && !projectRoot && _cached.configDir === configDir && _cached.dataDir === dataDir) return _cached;
 
-  const dataDir = join(configDir, "data");
   const projectRootResolved = projectRoot ?? process.cwd();
 
   const paths: ResolvedPaths = {

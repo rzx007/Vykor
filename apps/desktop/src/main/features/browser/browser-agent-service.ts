@@ -63,6 +63,17 @@ export class BrowserAgentService implements BrowserHost {
   private activeTabId: string | null = null
   private targetSequence = 0
   private openTabRequestHandler?: () => void
+
+  listOriginApprovals(): Array<{ sessionId: string; origin: string }> {
+    return [...this.approvedOrigins].flatMap(([sessionId, origins]) =>
+      [...origins].map(origin => ({ sessionId, origin })))
+  }
+
+  revokeOriginApproval(sessionId: string, origin: string): void {
+    this.approvedOrigins.get(sessionId)?.delete(origin)
+    // An inspection queued before revocation must not retain its site access.
+    this.stopDeveloperDiagnostics()
+  }
   private readonly activeTabWaiters = new Set<(tabId: string) => void>()
   // ponytail: serialize browser operations globally; use per-tab queues only if throughput becomes a measured bottleneck.
   private operationQueue: Promise<void> = Promise.resolve()

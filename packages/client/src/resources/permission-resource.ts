@@ -8,6 +8,17 @@ import type {
 export class PermissionResource {
   constructor(private readonly transport: HttpTransport) {}
 
+  async listApprovals(): Promise<PermissionRequestRecord[]> {
+    const response = await this.transport.request<{ requests: PermissionRequestRecord[] }>("/permissions/approvals");
+    return response.requests;
+  }
+
+  async revokeApproval(requestId: string): Promise<PermissionRequestRecord> {
+    const response = await this.transport.request<{ request: PermissionRequestRecord }>(
+      `/permissions/${encodeURIComponent(requestId)}/revoke`, { method: "POST" });
+    return response.request;
+  }
+
   /** `GET /permissions` */
   async list(
     options: ListPermissionsOptions & { signal?: AbortSignal } = {},

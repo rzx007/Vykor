@@ -197,6 +197,8 @@ describe("Desktop Activity store", () => {
           body: `${view.session.title} 正在等待处理。`,
           sessionId: "current",
           silent: true,
+          eventStatus: "needs_input",
+          eventId: "session:current:1:p1:needs_input",
           ...(notificationMode === "always" ? { showWhenFocused: true } : {}),
         })
     }

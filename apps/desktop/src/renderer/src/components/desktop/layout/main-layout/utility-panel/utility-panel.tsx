@@ -808,7 +808,7 @@ export function UtilityPanel({
             <AgentsTool
               key={`agents:${activeSessionId ?? "no-session"}`}
               openRequest={toolOpenRequest?.tool === "agents" ? toolOpenRequest : null}
-              active={activeTab?.tool === "agents"}
+              active={open && activeTab?.tool === "agents"}
               onOpenFile={onOpenFile}
               canOpenReview={activeWorkspaceIsGit === true}
               onOpenReview={onOpenReview}

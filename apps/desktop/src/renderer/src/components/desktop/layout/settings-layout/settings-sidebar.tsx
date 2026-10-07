@@ -1,9 +1,13 @@
 import { ArrowLeft, Search } from "lucide-react"
+import { useState } from "react"
+import { searchSettings } from "@renderer/components/desktop/settings-page/settings-search"
 
 import {
   codingSettingsNavigation,
   integrationSettingsNavigation,
   personalSettingsNavigation,
+  agentSettingsNavigation,
+  maintenanceSettingsNavigation,
   type SettingsNavigationItem,
 } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
@@ -15,7 +19,7 @@ import { cn } from "@renderer/lib/utils"
 type SettingsSidebarProps = {
   onClose: () => void
   selectedSection: string
-  onSelectSection: (section: string) => void
+  onSelectSection: (section: string, target?: string) => void
 }
 
 export function SettingsSidebar({
@@ -23,6 +27,10 @@ export function SettingsSidebar({
   selectedSection,
   onSelectSection,
 }: SettingsSidebarProps): React.JSX.Element {
+  const [query, setQuery] = useState("")
+  const [activeResult, setActiveResult] = useState(0)
+  const results = searchSettings(query)
+  const openResult = (index: number) => { const result = results[index]; if (result) { onSelectSection(result.label, result.target); setQuery(""); setActiveResult(0) } }
   return (
     <aside
       data-settings-sidebar
@@ -47,17 +55,33 @@ export function SettingsSidebar({
         <Input
           aria-label="搜索设置"
           placeholder="搜索设置..."
+          value={query}
+          role="combobox"
+          aria-expanded={Boolean(query.trim())}
+          aria-controls="settings-search-results"
+          aria-activedescendant={results[activeResult] ? `settings-result-${activeResult}` : undefined}
+          onChange={event => { setQuery(event.target.value); setActiveResult(0) }}
+          onKeyDown={event => {
+            if (event.key === "Escape") { setQuery(""); setActiveResult(0); return }
+            if (!query.trim()) return
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setActiveResult(current => Math.max(0, Math.min(results.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)))) }
+            if (event.key === "Enter") { event.preventDefault(); openResult(activeResult) }
+          }}
           className="h-9 rounded-full bg-background pl-9 shadow-none"
         />
       </div>
 
       <ScrollArea horizontal={false} className="min-h-0 flex-1 px-2">
+        {query.trim() ? <div>
+          {results.length ? <div id="settings-search-results" role="listbox" aria-label="设置搜索结果" className="flex flex-col gap-1">{results.map((result, index) => <button key={`${result.section}:${result.title}`} id={`settings-result-${index}`} role="option" aria-selected={activeResult === index} onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveResult(index)} onClick={() => openResult(index)} className={cn("flex flex-col gap-1 rounded-md px-3 py-2 text-left text-sm hover:bg-sidebar-accent", activeResult === index && "bg-sidebar-selected")}><span>{result.title}</span><span className="text-xs text-sidebar-muted">{result.label}</span></button>)}</div> : <p role="status" className="px-3 py-2 text-sm text-sidebar-muted">没有找到设置，请换一个关键词。</p>}
+        </div> : <>
         <SettingsNavigationGroup
-          label="个人"
+          label="应用"
           items={personalSettingsNavigation}
           selectedSection={selectedSection}
           onSelect={onSelectSection}
         />
+        <SettingsNavigationGroup label="智能体" items={agentSettingsNavigation} selectedSection={selectedSection} onSelect={onSelectSection} />
         <SettingsNavigationGroup
           label="集成"
           items={integrationSettingsNavigation}
@@ -70,6 +94,8 @@ export function SettingsSidebar({
           selectedSection={selectedSection}
           onSelect={onSelectSection}
         />
+        <SettingsNavigationGroup label="维护" items={maintenanceSettingsNavigation} selectedSection={selectedSection} onSelect={onSelectSection} />
+        </>}
       </ScrollArea>
 
       <div className="flex items-center gap-2 border-t border-sidebar-border px-2 pt-3">

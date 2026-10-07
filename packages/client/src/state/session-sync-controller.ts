@@ -12,6 +12,7 @@ import {
   createInitialClientState,
   UnsupportedSessionEventSchemaVersionError,
 } from "./reducer.js";
+import { applySessionStreamEvent, applySessionStreamSnapshot } from "./session-stream-state.js";
 import type { SyncEventsClient } from "./sync.js";
 import type {
   VykorClientState,
@@ -131,7 +132,11 @@ export class SessionSyncController {
     const refreshSession = async (sessionId: string): Promise<void> => {
       const snapshot = await this.client.sessions.getState(sessionId, { signal });
       if (signal.aborted) return;
-      this.state = applySessionSnapshot(this.state, snapshot);
+      // The initial cache may include newer cursors from unrelated sessions.
+      const next = this.status === "connecting"
+        ? applySessionSnapshot(this.state, snapshot)
+        : applySessionStreamSnapshot(this.state, snapshot);
+      this.state = Object.keys(next.eventsBySeq).length ? { ...next, eventsBySeq: {} } : next;
       cursor = Math.max(cursor, snapshot.cursor, this.state.lastSeq);
       this.setStatus("connected");
       this.emitUpdate({ state: this.state, source: "snapshot" });
@@ -174,7 +179,7 @@ export class SessionSyncController {
             attempt = 0;
             this.setStatus("connected");
 
-            if (event.seq > cursor + 1) {
+            if (event.seq > cursor + 1 && !this.sessionId) {
               const gap = await this.client.events.list({
                 cursor,
                 sessionId: this.sessionId,
@@ -192,7 +197,9 @@ export class SessionSyncController {
             }
 
             const before = this.state;
-            this.state = applyEvent(this.state, event);
+            this.state = this.sessionId
+              ? applySessionStreamEvent(this.state, event)
+              : applyEvent(this.state, event);
             cursor = Math.max(cursor, this.state.lastSeq);
             if (this.state !== before) {
               this.emitUpdate({ event, state: this.state, source: "live" });

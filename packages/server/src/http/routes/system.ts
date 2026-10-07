@@ -29,6 +29,7 @@ import { settingsPatchRuntimeImpact } from "../../application/default-services/s
 import type { SessionPluginUiService } from "../../application/session/session-plugin-ui-service.js";
 
 export interface SystemRoutesContext {
+  memoryManagementReady?: boolean;
   pluginUiReady?: boolean;
   pluginUiLifecycleReady?: boolean;
   pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
@@ -82,12 +83,15 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               durableChannels: 1,
               backup: 1,
               retention: 1,
+              permissionApprovals: 1,
+              maintenanceSettings: 1,
               attachments: 1,
               pluginCapabilities: 1,
               ...(context.pluginUiReady ? { pluginUi: 1 } : {}),
               ...(context.pluginUiReady && context.pluginUiLifecycleReady ? { pluginUiLifecycle: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
+              ...(context.memoryManagementReady ? { memoryManagement: 1 } : {}),
             },
             attachments: {
               limits: context.attachmentLimits ?? DEFAULT_ATTACHMENT_LIMITS,
@@ -255,8 +259,8 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           return jsonResponse({ settings: result.settings });
         } catch (error) {
           return errorResponse(
-            400,
-            error instanceof Error ? error.message : String(error),
+            error instanceof Error && "code" in error && error.code === "settings_conflict" ? 409 : 400,
+            error instanceof Error && "code" in error && error.code === "settings_conflict" ? "权限或访问边界已被其他入口修改。请重新读取后保存。" : error instanceof Error ? error.message : String(error),
           );
         }
       }
@@ -269,8 +273,8 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         return jsonResponse({ settings: result.settings });
       } catch (error) {
         return errorResponse(
-          400,
-          error instanceof Error ? error.message : String(error),
+          error instanceof Error && "code" in error && error.code === "settings_conflict" ? 409 : 400,
+          error instanceof Error && "code" in error && error.code === "settings_conflict" ? "权限或访问边界已被其他入口修改。请重新读取后保存。" : error instanceof Error ? error.message : String(error),
         );
       } finally {
         lease.release();
@@ -328,12 +332,14 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         const body = (await readJson(c)) as {
           apiKey?: unknown;
           headers?: unknown;
+          secretHeaders?: unknown;
         };
         const input = {
           apiKey: typeof body.apiKey === "string" ? body.apiKey : "",
           ...("headers" in body
             ? { headers: body.headers as Record<string, string> }
             : {}),
+          ...("secretHeaders" in body ? { secretHeaders: body.secretHeaders as Record<string, string | null> } : {}),
         };
         const provider = await context.providerService.connectCatalog(
           c.req.param("id"),
@@ -361,13 +367,14 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           "Cannot update providers while session runs are active",
         );
       try {
-        const body = (await readJson(c)) as { headers?: unknown };
+        const body = (await readJson(c)) as { headers?: unknown; secretHeaders?: unknown };
         if (!("headers" in body)) {
           return errorResponse(400, "Request body must include headers");
         }
         const provider = await context.providerService.updateCatalogHeaders(
           c.req.param("id"),
           (body.headers ?? {}) as Record<string, string>,
+          ...((body.secretHeaders !== undefined ? [body.secretHeaders as Record<string, string | null>] : []) as [Record<string, string | null>?]),
         );
         await context.control.closeAllRuntimes();
         return jsonResponse({ provider });

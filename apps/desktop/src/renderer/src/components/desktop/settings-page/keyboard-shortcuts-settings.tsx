@@ -1,14 +1,18 @@
-import { Pencil, Search } from "lucide-react"
+import { Pencil, RotateCcw, Search } from "lucide-react"
 import { useState, useSyncExternalStore } from "react"
 
 import {
   getShortcutRevision,
+  clearShortcutBinding,
+  resetShortcutBinding,
+  resetAllShortcutBindings,
   setShortcutBinding,
   shortcutLabel,
   subscribeShortcutChanges,
   type DesktopShortcutId,
 } from "../desktop-shortcuts"
 import { Kbd } from "@renderer/components/ui/kbd"
+import { Button } from "@renderer/components/ui/button"
 
 const groups: Array<{
   title: string
@@ -50,6 +54,7 @@ const groups: Array<{
 ]
 
 function capturedShortcut(event: React.KeyboardEvent<HTMLInputElement>, isMac: boolean) {
+  if (event.nativeEvent.isComposing) return null
   if (event.key === "Escape") return "cancel" as const
   if (!event.code || /^(Control|Meta|Shift|Alt)/.test(event.code)) return null
   if (!(isMac ? event.metaKey : event.ctrlKey)) return null
@@ -67,6 +72,13 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
   const [editing, setEditing] = useState<DesktopShortcutId | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isMac = navigator.platform.toLowerCase().includes("mac")
+  const [feedback, setFeedback] = useState("")
+  function resultMessage(result: "updated" | "conflict" | "invalid" | "reserved" | "storage_error") {
+    if (result === "updated") { setError(null); setFeedback("快捷键已保存并更新实际绑定。"); return true }
+    setFeedback("")
+    setError(result === "conflict" ? "这个组合在应用内已被其他操作使用；恢复全部默认可解除自定义冲突。" : result === "reserved" ? "这个组合用于系统、编辑器或终端的正常操作，请选择其他组合。" : result === "storage_error" ? "快捷键无法保存，已保留最后成功绑定。" : "无法使用这个按键组合。")
+    return false
+  }
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const visibleGroups = groups
     .map((group) => ({
@@ -82,6 +94,8 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">应用内快捷键。编辑器、终端和浏览器的原生按键保持各自行为；输入法组合时不触发应用操作。{isMac ? "使用 ⌘；系统保留的组合不可改。" : "使用 Ctrl；系统保留的组合不可改。"}</p><Button variant="ghost" onClick={() => resultMessage(resetAllShortcutBindings())}><RotateCcw data-icon="inline-start" />恢复全部默认</Button></div>
+      {error && !editing && <p role="alert" className="text-sm text-destructive">{error}</p>}{feedback && <p role="status" className="text-xs text-muted-foreground">{feedback}</p>}
       <div className="relative">
         <Search
           aria-hidden="true"
@@ -146,15 +160,9 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
                               captured.binding,
                               captured.keys
                             )
-                            if (result === "updated") {
+                            if (resultMessage(result)) {
                               setEditing(null)
-                              setError(null)
-                            } else
-                              setError(
-                                result === "conflict"
-                                  ? "这个组合已被其他操作使用"
-                                  : "无法使用这个按键组合"
-                              )
+                            }
                           }}
                         />
                         {error ? (
@@ -180,6 +188,8 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
                         >
                           <Pencil className="size-4" aria-hidden="true" />
                         </button>
+                        <Button type="button" size="sm" variant="ghost" aria-label={`清除${shortcut.title}快捷键`} onClick={() => resultMessage(clearShortcutBinding(shortcut.id))}>清除</Button>
+                        <Button type="button" size="icon-sm" variant="ghost" aria-label={`恢复默认${shortcut.title}快捷键`} onClick={() => resultMessage(resetShortcutBinding(shortcut.id))}><RotateCcw /></Button>
                       </>
                     )}
                   </div>

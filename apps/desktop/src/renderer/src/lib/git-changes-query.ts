@@ -30,7 +30,7 @@ export function normalizedRootPath(rootPath: string): string {
 }
 
 function queryKey(input: DesktopGitChangesInput): string {
-  return `${normalizedRootPath(input.rootPath)}\u0000${normalizedScope(input.scope)}`
+  return `${normalizedRootPath(input.rootPath)}\u0000${normalizedScope(input.scope)}\u0000${input.ignoreWhitespace === true}`
 }
 
 export function queryGitChanges(

@@ -49,6 +49,7 @@ export type AppearanceContextValue = {
     key: K,
     value: AppearancePreferences[K]
   ) => boolean
+  patchPreferences: (patch: Partial<Omit<AppearancePreferences, "version">>) => boolean
   setWindowMaterial: (preference: DesktopWindowMaterialPreference) => void
   resetAppearance: () => boolean
 }
@@ -160,6 +161,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     [persistPreferences]
   )
 
+  const patchPreferences = useCallback<AppearanceContextValue["patchPreferences"]>(
+    (patch) => persistPreferences(parseAppearancePreferences(JSON.stringify({ ...preferencesRef.current, ...patch, version: 1 }))),
+    [persistPreferences]
+  )
+
   const setWindowMaterial = useCallback((preference: DesktopWindowMaterialPreference): void => {
     const previous = windowMaterialRef.current
     // 乐观更新：开关立刻反映选择，原生材质等主进程返回权威状态后再变。
@@ -267,6 +273,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       fontAvailability,
       saveState,
       setPreference,
+      patchPreferences,
       setWindowMaterial,
       resetAppearance,
     }),
@@ -278,6 +285,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       resolvedTheme,
       saveState,
       setPreference,
+      patchPreferences,
       setWindowMaterial,
       windowMaterial,
     ]

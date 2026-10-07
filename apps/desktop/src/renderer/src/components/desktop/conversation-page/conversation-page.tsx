@@ -12,6 +12,7 @@ import {
   MessageScrollerViewport,
 } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { cn } from "@renderer/lib/utils"
 import {
   areDesktopAttachmentsSendable,
@@ -94,6 +95,7 @@ function ConversationPane({
   onOpenAgents,
 }: ConversationPaneProps): React.JSX.Element {
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
+  const [taskLocation, setTaskLocation] = useState<"default" | "current" | "worktree">("default")
   const [skillCommandSnapshot, setSkillCommandSnapshot] = useState<{
     cwd: string
     commands: import("@shared/session-types").DesktopCommandCatalogEntry[]
@@ -121,6 +123,7 @@ function ConversationPane({
   const selectedEffort = useDesktopSessionStore((state) => state.selectedEffort)
   const workspaceMode = useDesktopSessionStore((state) => state.workspaceMode)
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
+  useEffect(() => setTaskLocation("default"), [selectedProject?.id])
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
   const branch = useDesktopSessionStore((state) => state.branch)
@@ -224,7 +227,7 @@ function ConversationPane({
       if (hasSession) {
         await sendMessage(content, { document: draft, attachments })
       } else {
-        await startSession(content, { document: draft, attachments })
+        await startSession(content, { document: draft, attachments, ...(taskLocation !== "default" ? { taskLocation } : {}) })
       }
     } catch (error) {
       if (goalMode)
@@ -754,6 +757,13 @@ function ConversationPane({
                 onCancel={(inputId, queuedRunId) => void cancelQueuedPrompt(inputId, queuedRunId)}
                 onDismissLocal={dismissPromptSubmission}
               />
+              {!hasSession && selectedProject && !goalMode ? <div className="mb-3 flex flex-wrap items-center gap-3">
+                <label htmlFor="new-task-location" className="text-sm text-muted-foreground">任务工作位置</label>
+                <Select items={[{ value: "default", label: "按 Git 设置" }, { value: "current", label: "当前目录" }, { value: "worktree", label: "独立工作目录" }]} value={taskLocation} onValueChange={value => { if (value === "default" || value === "current" || value === "worktree") setTaskLocation(value) }}>
+                  <SelectTrigger id="new-task-location" disabled={sending} className="w-auto"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectGroup><SelectItem value="default">按 Git 设置</SelectItem><SelectItem value="current">当前目录</SelectItem><SelectItem value="worktree" disabled={!selectedProjectGit}>独立工作目录</SelectItem></SelectGroup></SelectContent>
+                </Select>
+              </div> : null}
               <Composer
                 key={composerScope}
                 id="message-composer"

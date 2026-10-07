@@ -17,6 +17,7 @@ import type {
 const emptySessionRuntime = createEmptySessionRuntime()
 const durableSessionLists = new WeakMap<DesktopSessionRecord[], DesktopSessionRecord[]>()
 const outsideWorkspaceProjects = new WeakMap<DesktopSessionRecord, DesktopProject>()
+const taskWorkspaceProjects = new WeakMap<DesktopSessionRecord, { project: DesktopProject | null; workspace: DesktopProject }>()
 let cachedOutsideDraftRoot: string | null = null
 let cachedOutsideDraftWorkspace: DesktopProject | null = null
 const permissionReplyStatesByOperations = new WeakMap<
@@ -165,6 +166,15 @@ export function selectActiveWorkspaceProject(state: DesktopSessionState): Deskto
     if (cached) return cached
     const workspace = projectFromSession(activeSession)
     outsideWorkspaceProjects.set(activeSession, workspace)
+    return workspace
+  }
+  const desktop = activeSession?.metadata?.desktop as { worktree?: unknown } | undefined
+  if (activeSession && desktop?.worktree) {
+    const project = state.projects.find(item => item.id === activeSession.projectId) ?? state.selectedProject
+    const cached = taskWorkspaceProjects.get(activeSession)
+    if (cached?.project === project) return cached.workspace
+    const workspace = { ...(project ?? projectFromSession(activeSession)), path: activeSession.cwd }
+    taskWorkspaceProjects.set(activeSession, { project, workspace })
     return workspace
   }
   if (state.selectedProject) return state.selectedProject

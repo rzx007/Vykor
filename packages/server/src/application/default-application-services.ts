@@ -1,4 +1,6 @@
 import type { AgentPersonaService } from "./settings-api.js";
+import type { AgentEnvironmentSettings } from "@vykor/core";
+import { createHash } from "node:crypto";
 import { preflightWsl } from "@vykor/sandbox";
 import {
   createDefaultAuthService,
@@ -53,10 +55,10 @@ export function createDefaultAgentPersonaService(): AgentPersonaService {
 }
 
 /** Complete resource-service set installed by the opinionated daemon application. */
-export function createDefaultApplicationServices(ref: DaemonSettingsRef) {
+export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeDefault?: AgentEnvironmentSettings) {
   return {
     settings: createDefaultSettingsService(ref, {
-      agentEnvironment: createDefaultAgentEnvironmentService(),
+      agentEnvironment: createDefaultAgentEnvironmentService(activeDefault ?? ref.current.agentEnvironment),
     }),
     provider: createDefaultProviderService(ref),
     model: createDefaultModelService(ref),
@@ -74,7 +76,7 @@ export function createDefaultApplicationServices(ref: DaemonSettingsRef) {
   };
 }
 
-function createDefaultAgentEnvironmentService() {
+function createDefaultAgentEnvironmentService(activeDefault?: AgentEnvironmentSettings) {
   let cached: { expiresAt: number; wsl: boolean } | undefined;
   let inFlight: Promise<boolean> | undefined;
   const probe = async (): Promise<boolean> => {
@@ -90,8 +92,12 @@ function createDefaultAgentEnvironmentService() {
     return wsl;
   };
   return {
+    active: () => activeDefault,
     async capabilities() {
-      return { native: true as const, wsl: await probe() };
+      return { native: true as const, wsl: await probe(), ...(activeDefault ? { activeDefault: {
+        kind: activeDefault.kind, ...(activeDefault.distribution ? { distribution: activeDefault.distribution } : {}),
+        fingerprint: createHash("sha256").update(JSON.stringify(activeDefault)).digest("hex"),
+      } } : {}) };
     },
     async validate(kind: "native" | "wsl") {
       if (kind === "native") return;

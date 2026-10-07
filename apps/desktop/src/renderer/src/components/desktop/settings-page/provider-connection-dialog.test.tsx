@@ -40,7 +40,7 @@ describe("ProviderConnectionDialog", () => {
 
     expect(document.body.textContent).toContain("{{sessionId}}")
     expect(document.body.textContent).toContain("{{userAgent}}")
-    expect(document.body.textContent).toContain("明文写入 settings.json")
+    expect(document.body.textContent).toContain("机密值单独保存到宿主凭据")
   })
 
   it("submits headers with the api key for catalog providers", async () => {
@@ -78,6 +78,16 @@ describe("ProviderConnectionDialog", () => {
       headers: { "X-Session": "{{sessionId}}" },
     })
     expect(document.body.textContent).not.toContain("设为当前供应商")
+  })
+
+  it("allows an existing catalog connection to update headers without resubmitting its API key", async () => {
+    const onSubmit = vi.fn()
+    await renderDialog({ provider: { ...catalogProvider, connected: true, headers: { "X-Session": "old" } }, onSubmit })
+    await act(async () => { findButton("高级选项")?.dispatchEvent(new MouseEvent("click", { bubbles: true })) })
+    await act(async () => { setInputValue(document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 值"]')!, "new") })
+    expect(findButton("保存请求头")?.disabled).toBe(false)
+    await act(async () => { document.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })) })
+    expect(onSubmit).toHaveBeenCalledWith({ apiKey: "", headers: { "X-Session": "new" } })
   })
 
   it("uses headersDirty three-state semantics for catalog reconnect", async () => {

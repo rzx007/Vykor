@@ -58,6 +58,42 @@ afterEach(() => {
     .IS_REACT_ACT_ENVIRONMENT
 })
 
+it("uses saved default range, whitespace and view preferences in the real review panel", async () => {
+  Object.defineProperty(window.desktop, "gitSettings", {
+    value: {
+      readPreferences: vi.fn(async () => ({
+        defaultScope: "staged",
+        ignoreWhitespace: true,
+        viewMode: "split",
+      })),
+    },
+  })
+  mocks.queryGitChanges.mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [{ path: "manual.ts", status: "modified", additions: 1, deletions: 1, binary: false }],
+    totalAdditions: 1,
+    totalDeletions: 1,
+  })
+  await act(async () => {
+    root.render(<ReviewTool />)
+    await Promise.resolve()
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 30))
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 30))
+  })
+  expect(mocks.queryGitChanges).toHaveBeenCalledWith(
+    { rootPath: "D:/repo", scope: "staged", ignoreWhitespace: true },
+    { force: false }
+  )
+  expect(window.desktop.git.fileDiff).toHaveBeenCalledWith(
+    expect.objectContaining({ scope: "staged", ignoreWhitespace: true })
+  )
+  expect(container.querySelector('[aria-label="切换到统一 diff"]')).not.toBeNull()
+})
+
 it("forces a fresh query from the refresh button and keeps errors visible", async () => {
   mocks.queryGitChanges.mockResolvedValue({
     rootPath: "D:/repo",
@@ -143,12 +179,32 @@ it("loads changes for an outside-project session instead of showing the empty st
 })
 
 it("uses the recorded Run repository for current changes and patch even when another project is selected", async () => {
-  mocks.queryGitChanges.mockResolvedValue({ rootPath: "D:/recorded", files: [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }], totalAdditions: 12, totalDeletions: 3 })
-  await act(async () => { root.render(<ReviewTool openRequest={{ id: 7, scope: "uncommitted", rootPath: "D:/recorded", path: "manual.ts" }} />) })
-  await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 20)) })
-  await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 20)) })
-  expect(mocks.queryGitChanges).toHaveBeenCalledWith({ rootPath: "D:/recorded", scope: "uncommitted" }, { force: false })
-  expect(window.desktop.git.fileDiff).toHaveBeenCalledWith(expect.objectContaining({ rootPath: "D:/recorded", path: "manual.ts", scope: "uncommitted" }))
+  mocks.queryGitChanges.mockResolvedValue({
+    rootPath: "D:/recorded",
+    files: [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }],
+    totalAdditions: 12,
+    totalDeletions: 3,
+  })
+  await act(async () => {
+    root.render(
+      <ReviewTool
+        openRequest={{ id: 7, scope: "uncommitted", rootPath: "D:/recorded", path: "manual.ts" }}
+      />
+    )
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  })
+  expect(mocks.queryGitChanges).toHaveBeenCalledWith(
+    { rootPath: "D:/recorded", scope: "uncommitted" },
+    { force: false }
+  )
+  expect(window.desktop.git.fileDiff).toHaveBeenCalledWith(
+    expect.objectContaining({ rootPath: "D:/recorded", path: "manual.ts", scope: "uncommitted" })
+  )
   expect(container.textContent).toContain("当前工作区差异")
 })
 
@@ -172,12 +228,24 @@ it("opens the work summary's uncommitted range instead of filtering it to the la
 })
 
 it("switches an already mounted review panel to the summary's requested range", async () => {
-  mocks.queryGitChanges.mockResolvedValue({
+  Object.defineProperty(window.desktop, "gitSettings", {
+    value: {
+      readPreferences: vi.fn(async () => ({
+        defaultScope: "staged",
+        ignoreWhitespace: false,
+        viewMode: "unified",
+      })),
+    },
+  })
+  mocks.queryGitChanges.mockImplementation(async ({ scope }) => ({
     rootPath: "D:/repo",
-    files: [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }],
+    files:
+      scope === "staged"
+        ? []
+        : [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }],
     totalAdditions: 12,
     totalDeletions: 3,
-  })
+  }))
   await act(async () => {
     root.render(<ReviewTool />)
   })

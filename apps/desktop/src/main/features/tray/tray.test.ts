@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { show, noteUnfocusedAttention, notifications } = vi.hoisted(() => ({
+const { show, noteUnfocusedAttention, notifications, preferences, getFocusedWindow } = vi.hoisted(() => ({
   show: vi.fn(),
   noteUnfocusedAttention: vi.fn(),
-  notifications: [] as { click?: () => void }[],
+  notifications: [] as { click?: () => void; options?: unknown }[],
+  preferences: { notificationMode: "when_unfocused" as "when_unfocused" | "always" | "never", notificationEvents: { completed: true, failed: true, needs_input: true }, notifiedEventIds: [] as string[] },
+  getFocusedWindow: vi.fn(() => null as unknown),
+}))
+
+vi.mock("../settings/desktop-preferences", () => ({
+  getDesktopPreferences: () => preferences,
+  patchDesktopPreferences: (patch: unknown) => Object.assign(preferences, patch),
 }))
 
 vi.mock("electron", () => ({
   app: { getName: vi.fn(() => "Vykor") },
-  BrowserWindow: {},
+  BrowserWindow: { getFocusedWindow },
   Menu: {},
   nativeImage: {},
   Notification: class {
@@ -38,6 +45,29 @@ describe("sendTrayNotification", () => {
     show.mockClear()
     noteUnfocusedAttention.mockClear()
     notifications.length = 0
+    preferences.notificationMode = "when_unfocused"
+    preferences.notificationEvents = { completed: true, failed: true, needs_input: true }
+    preferences.notifiedEventIds = []
+    getFocusedWindow.mockReturnValue(null)
+  })
+
+  it("treats a focused settings window as focused application state", () => {
+    getFocusedWindow.mockReturnValue({ isDestroyed: () => false, isVisible: () => true, isMinimized: () => false })
+    sendTrayNotification({ title: "Vykor", body: "任务已完成。" }, () => null)
+    expect(show).not.toHaveBeenCalled()
+    expect(noteUnfocusedAttention).not.toHaveBeenCalled()
+  })
+
+  it("respects each event switch and deduplicates delivered task events", () => {
+    preferences.notificationEvents.failed = false
+    sendTrayNotification({ title: "Vykor", body: "SECRET command", eventStatus: "failed", eventId: "f1" }, () => null)
+    expect(show).not.toHaveBeenCalled()
+    const options = { title: "Vykor", body: "SECRET command", eventStatus: "completed" as const, eventId: "c1" }
+    sendTrayNotification(options, () => null)
+    sendTrayNotification(options, () => null)
+    expect(show).toHaveBeenCalledOnce()
+    expect(notifications[0].options).toMatchObject({ body: "任务已完成。" })
+    expect(preferences.notifiedEventIds).toEqual(["c1"])
   })
 
   it("increments attention when a notification arrives while the main window is unfocused", () => {

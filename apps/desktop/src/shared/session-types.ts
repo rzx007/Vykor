@@ -216,7 +216,7 @@ export interface DesktopBootstrapData {
   sessions: DesktopSessionRecord[]
   archivedSessions: DesktopSessionRecord[]
   models: DesktopModel[]
-  defaultModel: string
+  defaultModel: string | null
   defaultProvider?: string
   defaultPermissionMode: DesktopPermissionMode
   attachments: DesktopAttachmentSupport
@@ -310,6 +310,7 @@ interface CreateDesktopSessionBaseInput {
   provider?: string
   permissionMode?: DesktopPermissionMode
   effort?: string
+  taskLocation?: "current" | "worktree"
 }
 
 export type CreateDesktopSessionInput = CreateDesktopSessionBaseInput &
@@ -401,6 +402,7 @@ export interface ReplyDesktopPermissionInput {
 export interface SetDefaultDesktopModelInput {
   model: string
   provider?: string
+  effort?: string
 }
 
 export interface SetDefaultDesktopPermissionModeInput {

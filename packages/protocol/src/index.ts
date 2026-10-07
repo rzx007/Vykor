@@ -1,4 +1,5 @@
 export * from "./session.js";
+export * from "./maintenance.js";
 export * from "./runtime-config.js";
 export * from "./requests.js";
 export * from "./job.js";
@@ -18,3 +19,4 @@ export * from "./plugin-ui.js";
 export * from "./plugin-ui-requests.js";
 export * from "./plugin-ui-bridge.js";
 export * from "./notes.js";
+export * from "./memory.js";

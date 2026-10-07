@@ -1,4 +1,5 @@
-import { readFile, writeFile, mkdir, access } from "node:fs/promises";
+import { readFile, writeFile, mkdir, access, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
@@ -17,23 +18,30 @@ export class CredentialStorage {
   }
 
   async storeCredential(provider: string, key: string, value: string): Promise<void> {
-    const data = await this.load(true);
-    if (!data[provider]) data[provider] = {};
-    data[provider]![key] = value;
-    await this.save(data);
+    await this.updateCredentials(provider, { [key]: value });
   }
 
   async loadCredential(provider: string, key: string): Promise<string | undefined> {
     const data = await this.load();
-    return data[provider]?.[key];
+    return Object.hasOwn(data, provider) && Object.hasOwn(data[provider]!, key) ? data[provider]![key] : undefined;
   }
 
   async clearProviderCredentials(provider: string): Promise<void> {
     const data = await this.load(true);
-    if (data[provider]) {
+    if (Object.hasOwn(data, provider)) {
       delete data[provider];
       await this.save(data);
     }
+  }
+
+  async updateCredentials(provider: string, values: Record<string, string | null>): Promise<void> {
+    const data = await this.load(true);
+    const entries: Record<string, string> = Object.assign(Object.create(null), Object.hasOwn(data, provider) ? data[provider] : {});
+    for (const [key, value] of Object.entries(values)) {
+      if (value === null) delete entries[key]; else entries[key] = value;
+    }
+    if (Object.keys(entries).length) Object.defineProperty(data, provider, { value: entries, configurable: true, writable: true, enumerable: true }); else delete data[provider];
+    await this.save(data);
   }
 
   async listStoredProviders(): Promise<string[]> {
@@ -58,9 +66,12 @@ export class CredentialStorage {
     try {
       await access(this.filePath);
       const raw = await readFile(this.filePath, "utf-8");
-      this.cache = JSON.parse(raw) as CredentialData;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.values(parsed).some(entries => !entries || typeof entries !== "object" || Array.isArray(entries) || Object.values(entries).some(value => typeof value !== "string"))) throw new Error("Credential file has an invalid format");
+      this.cache = parsed as CredentialData;
       return this.cache;
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       this.cache = {};
       return this.cache;
     }
@@ -69,8 +80,16 @@ export class CredentialStorage {
   private async save(data: CredentialData): Promise<void> {
     const dir = dirname(this.filePath);
     await mkdir(dir, { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
-    this.cache = data;
+    const temporary = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, JSON.stringify(data, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+      await rename(temporary, this.filePath);
+      this.cache = data;
+    } catch (error) {
+      this.cache = null;
+      await rm(temporary, { force: true });
+      throw error;
+    }
   }
 }
 
