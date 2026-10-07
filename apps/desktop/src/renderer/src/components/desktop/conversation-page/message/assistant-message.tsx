@@ -232,7 +232,8 @@ export function AssistantMessage({
 
       {!streaming && showObservations ? settledObservations.map((observation, index) => (
         observation.status === "unavailable" ? (
-          <p key={index} className="text-xs text-ui-muted">运行期间变更无法确认：{workspaceChangeReason(observation.reason)}</p>
+          observation.reason === "not_git_repository" ? null :
+            <p key={index} className="text-xs text-ui-muted">运行期间变更无法确认：{workspaceChangeReason(observation.reason)}</p>
         ) : (
           <ChangedFilesSummary key={index} files={observation.files.map((file) => ({ path: file.path, additions: 0, deletions: 0, hasStats: false }))}
             observation={observation} canOpenReview={canOpenReview} onOpenFile={onOpenFile} onOpenReview={onOpenReview} />
@@ -639,7 +640,7 @@ export function ChangedFilesSummary({
   canOpenReview: boolean
   onOpenFile: (path: string, line?: number) => void
   onOpenReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectPath = observation?.repositoryRoot ?? workspaceProject?.path
   const [expanded, setExpanded] = useState(false)
@@ -709,6 +710,8 @@ export function ChangedFilesSummary({
   const statsFiles = hasStats ? filesWithStats.filter((file) => file.hasStats) : filesWithStats
   const additions = statsFiles.reduce((total, file) => total + file.additions, 0)
   const deletions = statsFiles.reduce((total, file) => total + file.deletions, 0)
+
+  if ((observation?.fileCount ?? files.length) === 0) return null
 
   return (
     <section className="text-ui-small overflow-hidden rounded-lg border bg-transparent">

@@ -112,7 +112,7 @@ it("preserves an outside-repository Write when the repository observation is emp
   await act(async () => { root.render(<AssistantMessage parts={[part]} streaming={false}
     observations={[{ version: 1, status: "complete", repositoryRoot: "D:/repo", files: [], fileCount: 0, totalLines: 0, truncated: false }]}
     canOpenReview onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
-  expect(container.textContent).toContain("仓库内 0 个文件")
+  expect(container.textContent).not.toContain("仓库内 0 个文件")
   expect(container.textContent).toContain("D:/outside/result.txt")
   expect(container.textContent).toContain("已编辑 1 个文件")
 })
@@ -126,9 +126,30 @@ it.each(["D:/repo/../outside/result.txt", "d:\\REPO\\..\\outside\\result.txt", "
   await act(async () => { root.render(<AssistantMessage parts={[part]} streaming={false}
     observations={[{ version: 1, status: "complete", repositoryRoot: "D:/repo", files: [], fileCount: 0, totalLines: 0, truncated: false }]}
     canOpenReview onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
-  expect(container.textContent).toContain("仓库内 0 个文件")
+  expect(container.textContent).not.toContain("仓库内 0 个文件")
   expect(container.textContent).toContain("已编辑 1 个文件")
   expect(container.textContent).toContain(path)
+})
+
+it("hides an empty observation after a reply finishes", async () => {
+  const part = { id: "text", sessionId: "s", messageId: "m", seq: 1, type: "text" as const,
+    text: "done", status: "completed" as const, metadata: {}, createdAt: 1, updatedAt: 2 }
+  await act(async () => { root.render(<AssistantMessage parts={[part]} streaming={false}
+    observations={[{ version: 1, status: "complete", repositoryRoot: "D:/repo", files: [], fileCount: 0, totalLines: 0, truncated: false }]}
+    canOpenReview onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
+  expect(container.textContent).toContain("done")
+  expect(container.querySelector("section")).toBeNull()
+})
+
+it("hides an empty tool summary but preserves an observed nonzero count with a truncated file list", async () => {
+  const props = { files: [], canOpenReview: true, onOpenFile: vi.fn(), onOpenReview: vi.fn() }
+  await act(async () => { root.render(<ChangedFilesSummary {...props} />) })
+  expect(container.querySelector("section")).toBeNull()
+
+  await act(async () => { root.render(<ChangedFilesSummary {...props}
+    observation={{ version: 1, status: "complete", repositoryRoot: "D:/repo", files: [], fileCount: 2, totalLines: 7, truncated: true }} />) })
+  expect(container.textContent).toContain("仓库内 2 个文件")
+  expect(container.textContent).toContain("摘要已截断")
 })
 
 it("shows a Shell-only Run's observed file despite having no file-tool parts", async () => {
@@ -140,6 +161,29 @@ it("shows a Shell-only Run's observed file despite having no file-tool parts", a
     canOpenReview onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
   expect(container.textContent).toContain("shell-output.txt")
   expect(container.textContent).toContain("运行期间变更")
+})
+
+it("does not warn when a finished reply's directory is not a Git repository", async () => {
+  const part = { id: "text", sessionId: "s", messageId: "m", seq: 1, type: "text" as const,
+    text: "done", status: "completed" as const, metadata: {}, createdAt: 1, updatedAt: 2 }
+  await act(async () => { root.render(<AssistantMessage parts={[part]} streaming={false}
+    observations={[{ version: 1, status: "unavailable", reason: "not_git_repository", files: [], fileCount: 0, totalLines: 0, truncated: false }]}
+    canOpenReview={false} onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
+  expect(container.textContent).toContain("done")
+  expect(container.textContent).not.toContain("运行期间变更无法确认")
+  expect(container.querySelector("section")).toBeNull()
+})
+
+it("preserves actual file-tool changes without warning in a non-Git directory", async () => {
+  const part = { id: "write", sessionId: "s", messageId: "m", seq: 1, type: "tool" as const,
+    toolName: "Write", toolUseId: "write", status: "completed" as const,
+    input: { file_path: "D:/scratch/result.txt", content: "result" }, metadata: { executionState: "completed" }, createdAt: 1, updatedAt: 2 }
+  await act(async () => { root.render(<AssistantMessage parts={[part]} streaming={false}
+    observations={[{ version: 1, status: "unavailable", reason: "not_git_repository", files: [], fileCount: 0, totalLines: 0, truncated: false }]}
+    canOpenReview={false} onOpenFile={vi.fn()} onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} />) })
+  expect(container.textContent).not.toContain("运行期间变更无法确认")
+  expect(container.textContent).toContain("已编辑 1 个文件")
+  expect(container.textContent).toContain("D:/scratch/result.txt")
 })
 
 it("shows unavailable attribution without claiming a successful empty summary", async () => {
