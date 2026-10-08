@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react"
+import { Fragment, useMemo, useRef, useState } from "react"
 import {
   readSessionModelRetryState,
   readSessionModelUsage,
@@ -29,6 +29,7 @@ import type {
   DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
+import type { ConversationEntry } from "../message/conversation-turn-model"
 import { AssistantMessageActions, MessageBlock } from "../message/message-block"
 import { RunErrorNotice } from "../message/run-error-notice"
 import { ContentEntrance } from "../message/content-entrance"
@@ -68,30 +69,28 @@ export function ConversationTranscript({
   tasks?: import("@shared/session-types").DesktopSessionTask[]
   onOpenAgents?: (taskId?: string) => void
 }): React.JSX.Element {
-  // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
-  const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
-  const visibleParts = useMemo(
-    () => visibleTranscriptParts(parts, showReasoning),
-    [parts, showReasoning]
+  const modelCache = useRef<TranscriptModelCache | null>(null)
+  const {
+    entries,
+    streamingPart,
+    activityLabel,
+    activeRun,
+    activeRunGrouped,
+  } = useTranscriptModel(modelCache, { messages, parts, runs, running, showReasoning })
+  const lastTurn = useMemo(
+    () => [...entries].reverse().find((entry) => entry.type === "turn"),
+    [entries]
   )
-  const presentation = useMemo(
+  const lastUserMessage = useMemo(
     () =>
-      running
-        ? withToolGenerationPresentation(runs, messages, visibleParts)
-        : { messages, parts: visibleParts },
-    [running, runs, messages, visibleParts]
+      [...entries]
+        .reverse()
+        .flatMap((entry) =>
+          entry.type === "turn" && entry.turn.userMessage ? [entry.turn.userMessage] : []
+        )[0],
+    [entries]
   )
-  const entries = useMemo(
-    () => buildConversationEntries(presentation.messages, presentation.parts, runs),
-    [presentation, runs]
-  )
-  const lastTurn = [...entries].reverse().find((entry) => entry.type === "turn")
-  const lastUserMessage = [...entries]
-    .reverse()
-    .flatMap((entry) =>
-      entry.type === "turn" && entry.turn.userMessage ? [entry.turn.userMessage] : []
-    )[0]
-  const noticeRuns = selectRunNotices(runs)
+  const noticeRuns = useMemo(() => selectRunNotices(runs), [runs])
   const modelRetry = useMemo(() => {
     for (const run of runs) {
       if (run.status !== "running" && run.status !== "pending") continue
@@ -100,17 +99,24 @@ export function ConversationTranscript({
     }
     return undefined
   }, [runs])
-  const activityLabel = useMemo(
-    () => conversationActivityLabel(runs, messages, visibleParts),
-    [runs, messages, visibleParts]
-  )
-  const activeRun =
-    runs.find((run) => run.status === "running") ?? runs.find((run) => run.status === "pending")
-  const activeRunGrouped = Boolean(
-    activeRun &&
-    entries.some((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
-  )
   const runningLabel = modelRetry ? "等待重试" : (activityLabel ?? "进行中")
+  const turnPlansById = useMemo(() => {
+    const plans = new Map<string, ReturnType<typeof planTurnBlocks>>()
+    for (const entry of entries) {
+      if (entry.type === "turn") {
+        plans.set(
+          entry.turn.id,
+          planTurnBlocks(entry.turn, {
+            streaming: running && entry === lastTurn,
+          })
+        )
+      }
+    }
+    return plans
+  }, [entries, lastTurn, running])
+
+  // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
+  const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
 
   if (messages.length === 0 && !running && noticeRuns.length === 0) {
     return (
@@ -162,9 +168,11 @@ export function ConversationTranscript({
             entry.turn.runIds.includes(run.id) &&
             readSessionModelUsage(run.metadata)?.incomplete
         )
-        const turnPlan = planTurnBlocks(entry.turn, {
-          streaming: running && entry === lastTurn,
-        })
+        const cachedPlan = turnPlansById.get(entry.turn.id) ?? []
+        const turnPlan =
+          streamingPart && entry === lastTurn
+            ? replacePlannedPart(cachedPlan, streamingPart)
+            : cachedPlan
         const lastAssistantKey = [...turnPlan]
           .reverse()
           .find((item) => item.kind === "assistant")?.key
@@ -288,4 +296,168 @@ export function ConversationTranscript({
       ) : null}
     </>
   )
+}
+
+interface TranscriptModelCache {
+  messages: DesktopSessionMessage[]
+  parts: DesktopSessionPart[]
+  runs: DesktopSessionRun[]
+  running: boolean
+  showReasoning: boolean
+  visibleParts: DesktopSessionPart[]
+  entries: ConversationEntry[]
+  visiblePartIds: Set<string>
+  lastAssistantMessageId?: string
+  activityLabel?: string
+  activeRun?: DesktopSessionRun
+  activeRunGrouped: boolean
+}
+
+type TranscriptModelInput = Pick<
+  TranscriptModelCache,
+  "messages" | "parts" | "runs" | "running" | "showReasoning"
+>
+
+function useTranscriptModel(
+  cacheRef: React.MutableRefObject<TranscriptModelCache | null>,
+  input: TranscriptModelInput
+): {
+  entries: ConversationEntry[]
+  streamingPart?: DesktopSessionPart
+  activityLabel?: string
+  activeRun?: DesktopSessionRun
+  activeRunGrouped: boolean
+} {
+  const previous = cacheRef.current
+  if (
+    previous &&
+    previous.running === input.running &&
+    previous.showReasoning === input.showReasoning &&
+    sameReferences(previous.messages, input.messages) &&
+    sameReferences(previous.runs, input.runs)
+  ) {
+    const updatedPart = findSingleTextAppend(previous.parts, input.parts)
+    const canReuse =
+      updatedPart === null ||
+      (updatedPart !== undefined &&
+        previous.lastAssistantMessageId === updatedPart.messageId &&
+        (previous.visiblePartIds.has(updatedPart.id) ||
+          (updatedPart.type === "reasoning" && !input.showReasoning)))
+    if (canReuse) {
+      cacheRef.current = {
+        ...input,
+        visibleParts: previous.visibleParts,
+        entries: previous.entries,
+        visiblePartIds: previous.visiblePartIds,
+        lastAssistantMessageId: previous.lastAssistantMessageId,
+        activityLabel: previous.activityLabel,
+        activeRun: previous.activeRun,
+        activeRunGrouped: previous.activeRunGrouped,
+      }
+      return {
+        entries: previous.entries,
+        activityLabel: previous.activityLabel,
+        activeRun: previous.activeRun,
+        activeRunGrouped: previous.activeRunGrouped,
+        streamingPart:
+          updatedPart && previous.visiblePartIds.has(updatedPart.id)
+            ? updatedPart
+            : undefined,
+      }
+    }
+  }
+
+  const visibleParts = visibleTranscriptParts(input.parts, input.showReasoning)
+  const presentation = input.running
+    ? withToolGenerationPresentation(input.runs, input.messages, visibleParts)
+    : { messages: input.messages, parts: visibleParts }
+  const entries = buildConversationEntries(presentation.messages, presentation.parts, input.runs)
+  const activityLabel = conversationActivityLabel(input.runs, input.messages, visibleParts)
+  const activeRun =
+    input.runs.find((run) => run.status === "running") ??
+    input.runs.find((run) => run.status === "pending")
+  const activeRunGrouped = Boolean(
+    activeRun &&
+    entries.some((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
+  )
+  cacheRef.current = {
+    ...input,
+    visibleParts,
+    entries,
+    visiblePartIds: new Set(visibleParts.map((part) => part.id)),
+    lastAssistantMessageId: findLastAssistantMessageId(entries),
+    activityLabel,
+    activeRun,
+    activeRunGrouped,
+  }
+  return { entries, activityLabel, activeRun, activeRunGrouped }
+}
+
+function findSingleTextAppend(
+  previous: DesktopSessionPart[],
+  next: DesktopSessionPart[]
+): DesktopSessionPart | null | undefined {
+  if (previous.length !== next.length) return undefined
+  let updated: DesktopSessionPart | undefined
+  for (let index = 0; index < previous.length; index++) {
+    const before = previous[index]!
+    const after = next[index]!
+    if (before === after) continue
+    if (updated || !isTextAppend(before, after)) return undefined
+    updated = after
+  }
+  return updated ?? null
+}
+
+function isTextAppend(previous: DesktopSessionPart, next: DesktopSessionPart): boolean {
+  if (
+    (next.type !== "text" && next.type !== "reasoning") ||
+    previous.type !== next.type ||
+    previous.id !== next.id ||
+    previous.sessionId !== next.sessionId ||
+    previous.messageId !== next.messageId ||
+    previous.seq !== next.seq ||
+    previous.status !== next.status ||
+    previous.toolUseId !== next.toolUseId ||
+    previous.toolName !== next.toolName ||
+    previous.input !== next.input ||
+    previous.output !== next.output ||
+    previous.bodyView !== next.bodyView ||
+    previous.isError !== next.isError ||
+    previous.metadata !== next.metadata ||
+    previous.createdAt !== next.createdAt
+  )
+    return false
+  const previousText = previous.text ?? ""
+  return typeof next.text === "string" && next.text.startsWith(previousText)
+}
+
+function findLastAssistantMessageId(entries: ConversationEntry[]): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]!
+    if (entry.type !== "turn") continue
+    const id = entry.turn.assistantMessages.at(-1)?.id
+    if (id) return id
+  }
+  return undefined
+}
+
+function sameReferences<T>(previous: readonly T[], next: readonly T[]): boolean {
+  if (previous === next) return true
+  if (previous.length !== next.length) return false
+  return previous.every((item, index) => item === next[index])
+}
+
+function replacePlannedPart(
+  plan: ReturnType<typeof planTurnBlocks>,
+  part: DesktopSessionPart
+): ReturnType<typeof planTurnBlocks> {
+  return plan.map((item) => {
+    if (item.kind !== "assistant" || item.messageId !== part.messageId) return item
+    const index = item.parts.findIndex((candidate) => candidate.id === part.id)
+    if (index < 0) return item
+    const parts = [...item.parts]
+    parts[index] = part
+    return { ...item, parts }
+  })
 }

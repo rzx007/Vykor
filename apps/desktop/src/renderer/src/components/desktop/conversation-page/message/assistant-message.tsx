@@ -7,7 +7,7 @@ import {
   Pencil,
   TerminalSquare,
 } from "lucide-react"
-import { useEffect, useId, useMemo, useState } from "react"
+import { memo, useEffect, useId, useMemo, useState } from "react"
 import type { WorkspaceChangesMetadata } from "@vykor/client"
 import type { DesktopGitDiffScope } from "@shared/git-types"
 import { Streamdown } from "streamdown"
@@ -22,7 +22,11 @@ import {
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
-import { isAbsoluteFileInRepository, routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
+import {
+  isAbsoluteFileInRepository,
+  routeChangedFileClick,
+  toProjectRelativePath,
+} from "@shared/workspace-open-path"
 
 import {
   buildAssistantContent,
@@ -66,19 +70,7 @@ const streamingTextAnimation = {
   stagger: 0,
 } as const
 
-export function AssistantMessage({
-  parts,
-  observations,
-  showObservations = true,
-  streaming,
-  initialPartIds,
-  tasks = emptyAgentTasks,
-  onOpenAgents,
-  onOpenFile,
-  canOpenReview,
-  onOpenReview,
-  onOpenTerminal,
-}: {
+type AssistantMessageProps = {
   parts: DesktopSessionPart[]
   observations?: WorkspaceChangesMetadata[]
   showObservations?: boolean
@@ -91,21 +83,52 @@ export function AssistantMessage({
   canOpenReview: boolean
   onOpenReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   onOpenTerminal: (terminalId: string) => void
-}): React.JSX.Element {
+}
+
+export const AssistantMessage = memo(function AssistantMessage({
+  parts,
+  observations,
+  showObservations = true,
+  streaming,
+  initialPartIds,
+  tasks = emptyAgentTasks,
+  onOpenAgents,
+  onOpenFile,
+  canOpenReview,
+  onOpenReview,
+  onOpenTerminal,
+}: AssistantMessageProps): React.JSX.Element {
   const units = useMemo(() => buildAssistantContent(parts), [parts])
   const blocks = useMemo(() => groupToolUnits(units), [units])
   const changedFiles = useMemo(() => collectChangedFiles(parts), [parts])
-  const fileIdentityLimits = parts.flatMap(part => {
-    if (part.bodyView?.input !== "preview" || part.status !== "completed" || part.toolName !== "ApplyPatch") return []
-    const facts = part.metadata.changedFiles as { files?: unknown[]; fileCount?: number; truncated?: boolean } | undefined
-    return facts?.truncated === true && Array.isArray(facts.files) && Number.isSafeInteger(facts.fileCount)
-      ? [{ id: part.id, shown: facts.files.length, total: facts.fileCount }] : []
+  const fileIdentityLimits = parts.flatMap((part) => {
+    if (
+      part.bodyView?.input !== "preview" ||
+      part.status !== "completed" ||
+      part.toolName !== "ApplyPatch"
+    )
+      return []
+    const facts = part.metadata.changedFiles as
+      { files?: unknown[]; fileCount?: number; truncated?: boolean } | undefined
+    return facts?.truncated === true &&
+      Array.isArray(facts.files) &&
+      Number.isSafeInteger(facts.fileCount)
+      ? [{ id: part.id, shown: facts.files.length, total: facts.fileCount }]
+      : []
   })
-  const settledObservations = observations?.filter((observation) => observation.status !== "captured") ?? []
-  const toolFiles = settledObservations.length > 0
-    ? changedFiles.filter((file) => !settledObservations.some((observation) =>
-      observation.repositoryRoot && isAbsoluteFileInRepository(file.path, observation.repositoryRoot)))
-    : changedFiles
+  const settledObservations =
+    observations?.filter((observation) => observation.status !== "captured") ?? []
+  const toolFiles =
+    settledObservations.length > 0
+      ? changedFiles.filter(
+          (file) =>
+            !settledObservations.some(
+              (observation) =>
+                observation.repositoryRoot &&
+                isAbsoluteFileInRepository(file.path, observation.repositoryRoot)
+            )
+        )
+      : changedFiles
   if (parts.length === 0) return <span className="text-xs text-ui-muted">正在生成回复...</span>
 
   return (
@@ -230,15 +253,31 @@ export function AssistantMessage({
         )
       })}
 
-      {!streaming && showObservations ? settledObservations.map((observation, index) => (
-        observation.status === "unavailable" ? (
-          observation.reason === "not_git_repository" ? null :
-            <p key={index} className="text-xs text-ui-muted">运行期间变更无法确认：{workspaceChangeReason(observation.reason)}</p>
-        ) : (
-          <ChangedFilesSummary key={index} files={observation.files.map((file) => ({ path: file.path, additions: 0, deletions: 0, hasStats: false }))}
-            observation={observation} canOpenReview={canOpenReview} onOpenFile={onOpenFile} onOpenReview={onOpenReview} />
-        )
-      )) : null}
+      {!streaming && showObservations
+        ? settledObservations.map((observation, index) =>
+            observation.status === "unavailable" ? (
+              observation.reason === "not_git_repository" ? null : (
+                <p key={index} className="text-xs text-ui-muted">
+                  运行期间变更无法确认：{workspaceChangeReason(observation.reason)}
+                </p>
+              )
+            ) : (
+              <ChangedFilesSummary
+                key={index}
+                files={observation.files.map((file) => ({
+                  path: file.path,
+                  additions: 0,
+                  deletions: 0,
+                  hasStats: false,
+                }))}
+                observation={observation}
+                canOpenReview={canOpenReview}
+                onOpenFile={onOpenFile}
+                onOpenReview={onOpenReview}
+              />
+            )
+          )
+        : null}
       {!streaming && isTurnComplete(parts) && toolFiles.length > 0 ? (
         <ChangedFilesSummary
           files={toolFiles}
@@ -247,9 +286,46 @@ export function AssistantMessage({
           onOpenReview={onOpenReview}
         />
       ) : null}
-      {!streaming ? fileIdentityLimits.map(limit => <p key={limit.id} className="text-xs text-ui-muted">工具文件列表仅显示 {limit.shown} / {limit.total} 个文件。</p>) : null}
+      {!streaming
+        ? fileIdentityLimits.map((limit) => (
+            <p key={limit.id} className="text-xs text-ui-muted">
+              工具文件列表仅显示 {limit.shown} / {limit.total} 个文件。
+            </p>
+          ))
+        : null}
     </div>
   )
+}, areAssistantMessagePropsEqual)
+
+function areAssistantMessagePropsEqual(
+  previous: AssistantMessageProps,
+  next: AssistantMessageProps
+): boolean {
+  const previousShowsObservations = previous.showObservations ?? true
+  const nextShowsObservations = next.showObservations ?? true
+
+  return (
+    previous.streaming === next.streaming &&
+    previousShowsObservations === nextShowsObservations &&
+    previous.initialPartIds === next.initialPartIds &&
+    previous.onOpenAgents === next.onOpenAgents &&
+    previous.onOpenFile === next.onOpenFile &&
+    previous.canOpenReview === next.canOpenReview &&
+    previous.onOpenReview === next.onOpenReview &&
+    previous.onOpenTerminal === next.onOpenTerminal &&
+    sameReferences(previous.parts, next.parts) &&
+    sameReferences(previous.tasks ?? emptyAgentTasks, next.tasks ?? emptyAgentTasks) &&
+    (!previousShowsObservations || sameReferences(previous.observations, next.observations))
+  )
+}
+
+function sameReferences<T>(
+  previous: readonly T[] | undefined,
+  next: readonly T[] | undefined
+): boolean {
+  if (previous === next) return true
+  if (!previous || !next || previous.length !== next.length) return false
+  return previous.every((item, index) => item === next[index])
 }
 
 function AssistantMarkdown({
@@ -423,9 +499,11 @@ function ToolGenerationIcon({ toolName }: { toolName?: string }): React.JSX.Elem
   return (
     <LoaderCircle
       role="img"
-      aria-label={toolName === "Write" || toolName === "Edit"
-        ? "正在生成文件内容，尚未开始执行"
-        : "正在生成工具参数，尚未开始执行"}
+      aria-label={
+        toolName === "Write" || toolName === "Edit"
+          ? "正在生成文件内容，尚未开始执行"
+          : "正在生成工具参数，尚未开始执行"
+      }
       className="size-3.5 shrink-0 text-ui-muted motion-safe:animate-spin"
       strokeWidth={1.7}
     />
@@ -493,7 +571,11 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
             }
           >
             {!open && generatingTools.length ? (
-              <ToolGenerationIcon toolName={generatingTools.length === 1 ? generatingTools[0]?.call.toolName : undefined} />
+              <ToolGenerationIcon
+                toolName={
+                  generatingTools.length === 1 ? generatingTools[0]?.call.toolName : undefined
+                }
+              />
             ) : (
               <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
             )}
@@ -557,11 +639,11 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                 ? "查看详情"
                 : tool.call.bodyView?.input === "preview"
                   ? "查看参数"
-                : input === undefined
-                  ? "参数尚未提供"
-                  : Object.keys(input).length === 0
-                    ? "无参数"
-                    : "查看参数")
+                  : input === undefined
+                    ? "参数尚未提供"
+                    : Object.keys(input).length === 0
+                      ? "无参数"
+                      : "查看参数")
             const statusText = toolActivityLabel(tool.call, tool.result)
             return (
               <div key={tool.id}>
@@ -613,19 +695,47 @@ function ToolDetails({ tool, calling }: { tool: ToolUnit; calling: boolean }): R
   const { call: fullCall, result: fullResult, preview, error } = useToolDetails(call, result, true)
   const input = fullCall.input
   const output = fullResult?.output ?? fullCall.output
-  const unparsedInput = Boolean((fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) && (input === undefined || Object.keys(input).length === 0))
-  return <>
-    <div className="border-b px-3 py-1.5 text-xs">{toolDisplayName(call, result)}</div>
-    {preview ? <p role="status" className="px-3 py-2 text-xs text-ui-muted">{error ?? "正在加载完整详情；当前仅显示预览。"}</p> : null}
-    <div className="px-3 pt-2 text-xs font-medium">参数</div>
-    {unparsedInput ? <p className="px-3 py-2 text-xs text-ui-muted">{import.meta.env.DEV ? "参数解析失败，请查看下方错误结果。" : "没有记录可展示的参数。"}</p>
-      : input === undefined ? <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
-        : <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">{formatValue(input)}</pre>}
-    <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
-    {output === undefined ? <p className="px-3 py-2 text-xs text-ui-muted">{calling ? "等待工具返回结果" : "没有记录结果"}</p>
-      : <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">{formatValue(output)}</pre>}
-    {preview && fullCall.bodyView?.outputReferences?.length ? <p className="px-3 py-2 text-xs text-ui-muted">{fullCall.bodyView.outputReferences.join("\n")}</p> : null}
-  </>
+  const unparsedInput = Boolean(
+    (fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) &&
+    (input === undefined || Object.keys(input).length === 0)
+  )
+  return (
+    <>
+      <div className="border-b px-3 py-1.5 text-xs">{toolDisplayName(call, result)}</div>
+      {preview ? (
+        <p role="status" className="px-3 py-2 text-xs text-ui-muted">
+          {error ?? "正在加载完整详情；当前仅显示预览。"}
+        </p>
+      ) : null}
+      <div className="px-3 pt-2 text-xs font-medium">参数</div>
+      {unparsedInput ? (
+        <p className="px-3 py-2 text-xs text-ui-muted">
+          {import.meta.env.DEV ? "参数解析失败，请查看下方错误结果。" : "没有记录可展示的参数。"}
+        </p>
+      ) : input === undefined ? (
+        <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
+      ) : (
+        <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+          {formatValue(input)}
+        </pre>
+      )}
+      <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
+      {output === undefined ? (
+        <p className="px-3 py-2 text-xs text-ui-muted">
+          {calling ? "等待工具返回结果" : "没有记录结果"}
+        </p>
+      ) : (
+        <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+          {formatValue(output)}
+        </pre>
+      )}
+      {preview && fullCall.bodyView?.outputReferences?.length ? (
+        <p className="px-3 py-2 text-xs text-ui-muted">
+          {fullCall.bodyView.outputReferences.join("\n")}
+        </p>
+      ) : null}
+    </>
+  )
 }
 
 export function ChangedFilesSummary({
@@ -697,10 +807,13 @@ export function ChangedFilesSummary({
   const filesWithStats = useMemo(
     () =>
       files.map((file) => {
-        const stats = observation ? undefined :
-          gitStatsByPath[
-            normalizeReviewPath(toProjectRelativePath(file.path, selectedProjectPath) ?? file.path)
-          ]
+        const stats = observation
+          ? undefined
+          : gitStatsByPath[
+              normalizeReviewPath(
+                toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
+              )
+            ]
         return stats ? { ...file, ...stats, hasStats: true } : file
       }),
     [files, gitStatsByPath, selectedProjectPath, observation]
@@ -720,10 +833,17 @@ export function ChangedFilesSummary({
           <FileCode2 className="size-[18px]" strokeWidth={1.7} />
         </span>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">{observation ? `运行期间变更：仓库内 ${observation.fileCount} 个文件` : `已编辑 ${files.length} 个文件`}</h3>
-          {observation ? <p className="mt-0.5 text-xs text-ui-muted">
-            {observation.totalLines} 行变化{observation.truncated ? " · 摘要已截断" : ""} · 点击查看当前工作区差异
-          </p> : null}
+          <h3 className="text-sm font-semibold text-foreground">
+            {observation
+              ? `运行期间变更：仓库内 ${observation.fileCount} 个文件`
+              : `已编辑 ${files.length} 个文件`}
+          </h3>
+          {observation ? (
+            <p className="mt-0.5 text-xs text-ui-muted">
+              {observation.totalLines} 行变化{observation.truncated ? " · 摘要已截断" : ""} ·
+              点击查看当前工作区差异
+            </p>
+          ) : null}
           {hasStats ? (
             <p className="mt-0.5">
               <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>{" "}
@@ -739,13 +859,23 @@ export function ChangedFilesSummary({
             type="button"
             onClick={() =>
               routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
-                ? observation ? onOpenReview(file.path, "uncommitted", selectedProjectPath) : onOpenReview(file.path)
-                : onOpenFile(observation && selectedProjectPath ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}` : file.path)
+                ? observation
+                  ? onOpenReview(file.path, "uncommitted", selectedProjectPath)
+                  : onOpenReview(file.path)
+                : onOpenFile(
+                    observation && selectedProjectPath
+                      ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}`
+                      : file.path
+                  )
             }
             className="flex h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
           >
             <span className="min-w-0 flex-1 truncate text-sm text-ui-muted">{file.path}</span>
-            {observation ? <span className="text-xs text-ui-muted">{observation.files.find((stored) => stored.path === file.path)?.lines ?? 0} 行变化</span> : file.hasStats ? (
+            {observation ? (
+              <span className="text-xs text-ui-muted">
+                {observation.files.find((stored) => stored.path === file.path)?.lines ?? 0} 行变化
+              </span>
+            ) : file.hasStats ? (
               <LineStats additions={file.additions} deletions={file.deletions} />
             ) : null}
           </button>
@@ -766,16 +896,27 @@ export function ChangedFilesSummary({
 
 function workspaceChangeReason(reason: WorkspaceChangesMetadata["reason"]): string {
   switch (reason) {
-    case "preexisting_dirty_overlap": return "已有未提交文件在本轮又发生变化"
-    case "concurrent_run_overlap": return "同一仓库有其他运行重叠"
-    case "not_git_repository": return "当前目录不是 Git 仓库"
-    case "execution_environment_unavailable": return "无法安全检查本轮的执行环境"
-    case "observation_budget_exceeded": return "观察超过时间预算"
-    case "observation_cancelled": return "观察已取消"
-    case "sensitive_content_path": return "涉及敏感文件，未读取差异"
-    case "non_linear_head_change": case "post_commit_worktree_changed": return "Git 提交或工作区状态无法安全比较"
-    case "daemon_restarted": return "服务重启，基线已丢失"
-    default: return "Git 检查失败"
+    case "preexisting_dirty_overlap":
+      return "已有未提交文件在本轮又发生变化"
+    case "concurrent_run_overlap":
+      return "同一仓库有其他运行重叠"
+    case "not_git_repository":
+      return "当前目录不是 Git 仓库"
+    case "execution_environment_unavailable":
+      return "无法安全检查本轮的执行环境"
+    case "observation_budget_exceeded":
+      return "观察超过时间预算"
+    case "observation_cancelled":
+      return "观察已取消"
+    case "sensitive_content_path":
+      return "涉及敏感文件，未读取差异"
+    case "non_linear_head_change":
+    case "post_commit_worktree_changed":
+      return "Git 提交或工作区状态无法安全比较"
+    case "daemon_restarted":
+      return "服务重启，基线已丢失"
+    default:
+      return "Git 检查失败"
   }
 }
 

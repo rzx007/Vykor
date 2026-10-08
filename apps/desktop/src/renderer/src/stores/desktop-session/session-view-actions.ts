@@ -1,3 +1,5 @@
+import { shallow } from "zustand/shallow"
+
 import {
   isPlaceholderTitle,
   sessionEffort,
@@ -80,7 +82,9 @@ export function createApplySessionUpdate(
         sessions:
           session.status === "archived"
             ? state.sessions.filter((item) => item.id !== session.id)
-            : upsertSession(state.sessions, session),
+            : knownSession && shallow(knownSession, session)
+              ? state.sessions
+              : upsertSession(state.sessions, session),
 
         archivedSessions:
           session.status === "archived"

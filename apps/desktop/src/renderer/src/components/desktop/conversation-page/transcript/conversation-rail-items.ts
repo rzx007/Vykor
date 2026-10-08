@@ -1,4 +1,5 @@
 import type { ConversationEntry } from "../message/conversation-turn-model"
+import type { DesktopSessionPart } from "@shared/session-types"
 import { messageTextContent } from "../message/message-content"
 
 export interface ConversationRailItem {
@@ -50,6 +51,16 @@ export function buildConversationRailItems(entries: ConversationEntry[]): Conver
     })
   }
   return items
+}
+
+export function updateConversationRailReply(
+  item: ConversationRailItem,
+  assistantParts: DesktopSessionPart[]
+): ConversationRailItem {
+  return {
+    ...item,
+    reply: truncate(normalizeText(messageTextContent(assistantParts)), MAX_REPLY_LENGTH),
+  }
 }
 
 export function shouldShowConversationRail(itemCount: number, containerWidth: number): boolean {
