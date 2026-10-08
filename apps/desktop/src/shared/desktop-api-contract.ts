@@ -450,6 +450,7 @@ export type DesktopAPI = {
     compact: (input: CompactDesktopSessionInput) => Promise<DesktopCompactSessionResult>
     getGoal: (input: GetDesktopSessionGoalInput) => Promise<SessionGoal | null>
     getMessagePart: (input: import("./session-types").GetDesktopMessagePartInput) => Promise<import("./session-types").DesktopSessionPart>
+    readToolImagePreview: (input: import("./session-types").GetDesktopMessagePartInput) => Promise<import("./attachment-types").DesktopAttachmentPreview>
     createGoal: (input: CreateDesktopSessionGoalInput) => Promise<SessionGoal>
     updateGoal: (input: UpdateDesktopSessionGoalInput) => Promise<SessionGoal>
     goalAction: (input: DesktopSessionGoalActionInput) => Promise<SessionGoal>

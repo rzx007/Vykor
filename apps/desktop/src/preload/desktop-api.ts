@@ -502,6 +502,8 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionGoalGet, input),
     getMessagePart: (input: IpcInvokeMap[typeof IpcChannels.sessionMessagePartGet]["args"][0]) =>
       invoke(IpcChannels.sessionMessagePartGet, input),
+    readToolImagePreview: (input: IpcInvokeMap[typeof IpcChannels.sessionToolImagePreview]["args"][0]) =>
+      invoke(IpcChannels.sessionToolImagePreview, input),
     createGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalCreate]["args"][0]) =>
       invoke(IpcChannels.sessionGoalCreate, input),
     updateGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalUpdate]["args"][0]) =>

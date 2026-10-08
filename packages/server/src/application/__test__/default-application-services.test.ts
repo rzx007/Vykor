@@ -11,6 +11,7 @@ vi.mock("@vykor/services", () => ({
 }));
 
 import { CredentialStorage } from "@vykor/auth";
+import { saveSettings } from "@vykor/core";
 
 import {
   createDefaultAgentPersonaService,
@@ -374,6 +375,7 @@ describe("default daemon application services", () => {
     };
     const settings = createDefaultSettingsService(ref);
 
+    await saveSettings(ref.current);
     const result = await settings.patch({ provider: "office-gateway" });
 
     expect(ref.current.provider).toBe("office-gateway");

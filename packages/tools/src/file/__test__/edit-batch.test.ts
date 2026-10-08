@@ -75,6 +75,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       const preview = await computeFileChange("Edit", input);
       expect(preview?.after).toBe("FIRST\nSECOND\n");
       const result = await fileEditTool.execute(input, { cwd: dir, settings, environment: {
+        workspace: { hostRoot: dir },
         files: new CountingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
       } } as never);
       expect(result.isError).toBeFalsy();

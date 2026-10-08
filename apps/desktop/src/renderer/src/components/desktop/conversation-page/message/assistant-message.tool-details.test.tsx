@@ -15,6 +15,9 @@ import { sourcePart as pluginSource } from "../plugin-ui/plugin-ui-fixtures.test
 import { summarizePart } from "../../../../../../../../../packages/server/src/http/part-wire-view.js"
 import { buildAssistantContent } from "./message-render-model"
 import { useToolDetails } from "./use-tool-details"
+import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
+
+const openReadImage = vi.fn()
 
 let container: HTMLDivElement
 let root: Root
@@ -27,9 +30,10 @@ beforeEach(() => {
   root = createRoot(container)
 })
 afterEach(() => {
+  act(() => root.unmount())
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
-  act(() => root.unmount())
+  openReadImage.mockClear()
   container.remove()
   delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
     .IS_REACT_ACT_ENVIRONMENT
@@ -60,14 +64,14 @@ function part(
 function render(parts: DesktopSessionPart[], streaming = false) {
   act(() =>
     root.render(
-      <TooltipProvider><AssistantMessage
+      <ImageViewerProvider onOpenImage={openReadImage}><TooltipProvider><AssistantMessage
         parts={parts}
         streaming={streaming}
         onOpenFile={vi.fn()}
         canOpenReview={false}
         onOpenReview={vi.fn()}
         onOpenTerminal={vi.fn()}
-      /></TooltipProvider>
+      /></TooltipProvider></ImageViewerProvider>
     )
   )
 }
@@ -80,6 +84,63 @@ function click(text: string) {
   act(() => button!.click())
   return button!
 }
+
+describe("Read image previews", () => {
+  it("uses the canonical Read record when a legacy result has a null body", async () => {
+    const readToolImagePreview = vi.fn().mockResolvedValue({ bytes: new ArrayBuffer(8), mediaType: "image/png" })
+    vi.stubGlobal("desktop", { sessions: { readToolImagePreview } })
+    vi.stubGlobal("URL", { createObjectURL: vi.fn().mockReturnValue("blob:legacy"), revokeObjectURL: vi.fn() })
+    const call = part("Read", { file_path: "legacy.png" }, { output: { content: [{ type: "image", source: { type: "file", path: "legacy.png", mediaType: "image/png" } }] } })
+    const result = { ...call, id: "legacy-result", type: "tool_result", seq: 2, output: null } as DesktopSessionPart
+    render([call, result])
+    await act(async () => click("读取文件"))
+    expect(readToolImagePreview).toHaveBeenCalledWith({ sessionId: call.sessionId, messageId: call.messageId, partId: call.id })
+  })
+  it("loads on expansion, keeps two previews open, and opens the existing viewer", async () => {
+    const readToolImagePreview = vi.fn().mockResolvedValue({ bytes: new ArrayBuffer(8), mediaType: "image/png" })
+    vi.stubGlobal("desktop", { sessions: { readToolImagePreview } })
+    vi.stubGlobal("URL", { createObjectURL: vi.fn().mockReturnValue("blob:preview"), revokeObjectURL: vi.fn() })
+    const first = part("Read", { file_path: "C:\\Temp\\first.png" })
+    const second = { ...part("Read", { file_path: "second.png" }), id: "read-2", seq: 2 }
+    render([first, second])
+    expect(readToolImagePreview).not.toHaveBeenCalled()
+    act(() => click("工具查看"))
+    await act(async () => click("first.png"))
+    expect(readToolImagePreview).toHaveBeenCalledWith({ sessionId: first.sessionId, messageId: first.messageId, partId: first.id })
+    expect(container.querySelector('img[alt="first.png"]')).not.toBeNull()
+    await act(async () => { click("second.png") })
+    expect(container.querySelectorAll("img")).toHaveLength(2)
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="查看图片 first.png"]')!.click())
+    expect(openReadImage).toHaveBeenCalledWith(expect.objectContaining({ kind: "file", path: "C:\\Temp\\first.png", mediaType: "image/png" }))
+    act(() => click("first.png"))
+    expect(container.querySelector('img[alt="first.png"]')).toBeNull()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview")
+  })
+  it("shows read failures and can retry", async () => {
+    const readToolImagePreview = vi.fn().mockRejectedValueOnce(new Error("图片文件已不存在")).mockResolvedValueOnce({ bytes: new ArrayBuffer(8), mediaType: "image/png" })
+    vi.stubGlobal("desktop", { sessions: { readToolImagePreview } })
+    vi.stubGlobal("URL", { createObjectURL: vi.fn().mockReturnValue("blob:retry"), revokeObjectURL: vi.fn() })
+    render([part("Read", { file_path: "missing.png" })])
+    await act(async () => click("读取文件"))
+    expect(container.textContent).toContain("图片文件已不存在")
+    await act(async () => click("重试"))
+    expect(container.querySelector('img[alt="missing.png"]')).not.toBeNull()
+  })
+  it("ignores a response after collapse", async () => {
+    let resolvePreview!: (preview: unknown) => void
+    const readToolImagePreview = vi.fn().mockReturnValue(new Promise(resolve => { resolvePreview = resolve }))
+    const createObjectURL = vi.fn()
+    vi.stubGlobal("desktop", { sessions: { readToolImagePreview } })
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL: vi.fn() })
+    render([part("Read", { file_path: "late.png" })])
+    await act(async () => click("读取文件"))
+    expect(readToolImagePreview).toHaveBeenCalledTimes(1)
+    act(() => click("读取文件"))
+    await act(async () => resolvePreview({ bytes: new ArrayBuffer(8), mediaType: "image/png" }))
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(container.querySelector("img")).toBeNull()
+  })
+})
 
 describe("tool parameter and result display", () => {
   it("keeps preview semantics when a separate legacy Plugin UI result has null output", async () => {

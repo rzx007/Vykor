@@ -88,6 +88,10 @@ export const sessionIpcContribution: IpcContribution = {
         handler: (_event, input) => desktopSessionService.getMessagePart(input as import("../../../shared/session-types").GetDesktopMessagePartInput),
       },
       {
+        channel: IpcChannels.sessionToolImagePreview,
+        handler: (_event, input) => desktopSessionService.readToolImagePreview(input as import("../../../shared/session-types").GetDesktopMessagePartInput),
+      },
+      {
         channel: IpcChannels.sessionGoalCreate,
         handler: (_event, input) =>
           desktopSessionService.createGoal(

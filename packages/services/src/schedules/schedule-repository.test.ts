@@ -82,7 +82,7 @@ describe("ScheduleRepository", () => {
   ];
 
   describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
-    it.each(writes)("rejects %s without changing tasks or runs", (_name, write) => {
+    it.each(writes)("rejects %s without changing tasks or runs", (name, write) => {
       const directory = mkdtempSync(join(tmpdir(), "vk-schedule-owner-"));
       const path = join(directory, "sessions.db");
       const first = new SessionStore({ path });
@@ -95,6 +95,7 @@ describe("ScheduleRepository", () => {
         first.schedules.createRun({ ...runInput, id: "run" });
         const tasks = second.schedules.listTasks();
         const runs = second.schedules.listRuns();
+        const events = second.conversations.listEvents();
         const takeOver = () => second.acquireApplicationOwner({ ownerId: "second", pid: 2, now: 2_000, staleAfterMs: 1_000 });
         if (timing === "before owner check") takeOver();
         else storage.assertWritable = () => {
@@ -102,11 +103,20 @@ describe("ScheduleRepository", () => {
           takeOver();
         };
 
+        // Task create/update check ownership inside the SQLite transaction. The
+        // other writes also check before opening it, then detect takeover on
+        // their second ownership check before any SQL mutation.
+        const checksInsideTransactionOnly = [
+          "createTask", "updateTask", "createScheduledTask", "updateScheduledTask",
+        ].includes(name);
         expect(() => write(first)).toThrow(
-          timing === "before owner check" ? ApplicationOwnerConflictError : "database is locked",
+          timing === "after owner check" && checksInsideTransactionOnly
+            ? "database is locked"
+            : ApplicationOwnerConflictError,
         );
         expect(second.schedules.listTasks()).toEqual(tasks);
         expect(second.schedules.listRuns()).toEqual(runs);
+        expect(second.conversations.listEvents()).toEqual(events);
       } finally {
         storage.assertWritable = assertWritable;
         first.close();

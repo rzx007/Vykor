@@ -262,7 +262,7 @@ describe("Sidebar collapsible sections and empty states", () => {
     })
   })
 
-  it("keeps compact counts visible when project and recent sections are collapsed", async () => {
+  it("shows names without counts when project and recent sections are collapsed", async () => {
     const project = {
       id: "project-1",
       name: "项目 A",
@@ -306,16 +306,16 @@ describe("Sidebar collapsible sections and empty states", () => {
       recentSection.click()
     })
 
-    expect(projectSection.textContent).toContain("1")
-    expect(recentSection.textContent).toContain("0")
+    expect(projectSection.textContent).toBe("项目")
+    expect(recentSection.textContent).toBe("最近")
 
     await act(async () => projectSection.click())
     const projectRow = container.querySelector<HTMLButtonElement>(
       'button[title="/workspace/project-a"]'
     )!
     await act(async () => projectRow.click())
-    expect(projectRow.getAttribute("aria-label")).toContain("1 个对话")
-    expect(projectRow.textContent).toContain("1")
+    expect(projectRow.getAttribute("aria-label")).toBe("项目 A")
+    expect(projectRow.textContent).toBe("项目 A")
   })
 
   it("keeps running indicators visible when sections and project rows are collapsed", async () => {
