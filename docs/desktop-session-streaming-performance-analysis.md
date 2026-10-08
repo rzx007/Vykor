@@ -1,5 +1,7 @@
 # Desktop 会话流式输出传输性能分析
 
+> 状态：当前性能分析记录；结论基于源码静态追踪，不代表运行时性能测量。
+
 **分析日期：** 2026-10-08  
 **范围：** Desktop 会话事件从 daemon 经主进程到 Renderer 的传输与状态更新。  
 **证据类型：** 当前检出源码静态追踪；尚未采集本机运行时性能记录。
@@ -25,15 +27,15 @@
 
 ### T3 Code
 
-T3 的 Desktop/Web 客户端通过 WebSocket RPC 消费线程事件，不经 Electron 主进程逐条转发。默认 `paragraph` 流式模式会等待完整段落或代码块边界，并限制同一消息的频繁更新；发出的 assistant 文本事件仍包含当前已准备好的累计文本前缀。对照源码位于本机 T3 仓库 `D:\code\personal-project\t3code`：`apps/server/src/orchestration-v2/assistantStreaming.ts`、`apps/server/src/ws.ts`。
+T3 的 Desktop/Web 客户端通过 WebSocket RPC 消费线程事件，不经 Electron 主进程逐条转发。默认 `paragraph` 流式模式会等待完整段落或代码块边界，并限制同一消息的频繁更新；发出的 assistant 文本事件仍包含当前已准备好的累计文本前缀。对照源码文件：`assistantStreaming.ts`、`ws.ts`。
 
 这说明其分块显示同时受传输和产品流式策略影响。它的段落节奏不适合作为本项目的默认改动，因为我们现有界面以更细的文本增量显示。
 
 ### ZCode
 
-ZCode Desktop 通过 MessagePort RPC 连接 Renderer 和窗口级 Host。主进程创建并移交端口；文本事件不需要每次经过主进程的 IPC handler。对照源码位于本机 ZCode 仓库 `D:\code\personal-project\ZCode`：`packages/desktop/src/main/desktopHostProcess.ts`、`packages/desktop/src/renderer/src/main.tsx`。
+ZCode Desktop 通过 MessagePort RPC 连接 Renderer 和窗口级 Host。主进程创建并移交端口；文本事件不需要每次经过主进程的 IPC handler。对照源码文件：`desktopHostProcess.ts`、`main.tsx`。
 
-ZCode 将模型 `text_delta` 编码成带目标行 ID 的 `row.delta`，载荷只携带新增文字；相邻同一行的追加会合并。Desktop `continuous` profile 默认每 30ms 刷出增量帧，快照留给首次同步和恢复。对照源码位于该仓的 `apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/product-projection.ts`、`packages/shared/src/zcode-protocol-v4/coalesce.ts` 和 `packages/shared/src/zcode-protocol-v4/core.ts`。
+ZCode 将模型 `text_delta` 编码成带目标行 ID 的 `row.delta`，载荷只携带新增文字；相邻同一行的追加会合并。Desktop `continuous` profile 默认每 30ms 刷出增量帧，快照留给首次同步和恢复。对照源码文件：`product-projection.ts`、`coalesce.ts` 和 `core.ts`。
 
 对本项目最可复用的经验是**保留 IPC 边界，缩小高频消息载荷**。改变传输协议比去掉 Electron IPC 更直接地针对当前全量视图路径。
 
