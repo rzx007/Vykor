@@ -330,7 +330,7 @@ export function Composer({
             side="top"
             align="start"
             sideOffset={8}
-            className="w-56 gap-0 rounded-xl p-1.5 shadow-lg ring-1 ring-black/10"
+            className="w-max max-w-[20rem] min-w-56 gap-0 rounded-xl p-1.5 shadow-lg ring-1 ring-black/10"
           >
             <PermissionModeMenu
               selected={permissionMode}

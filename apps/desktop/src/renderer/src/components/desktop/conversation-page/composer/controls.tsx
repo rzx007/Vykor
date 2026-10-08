@@ -46,7 +46,7 @@ export function PermissionModeMenu({
           aria-checked={selected === mode.value}
           onClick={() => onSelect(mode.value)}
           className={cn(
-            "h-auto w-full items-start justify-start gap-2 px-2 py-2 text-left font-normal",
+            "h-auto w-full items-start justify-start gap-2 px-2 py-2 text-left font-normal whitespace-normal",
             selected === mode.value && "bg-muted"
           )}
         >
