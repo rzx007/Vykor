@@ -17,7 +17,10 @@ const pendingCleanups = new WeakMap<HTMLElement, () => void>()
  * Calling this again for the same element replaces the previous pending transition;
  * the returned cancel is idempotent and a no-op when a newer transition superseded it.
  */
-export function beginPanelToggleTransition(groupElement: HTMLElement | null): () => void {
+export function beginPanelToggleTransition(
+  groupElement: HTMLElement | null,
+  onComplete?: () => void
+): () => void {
   if (!groupElement) {
     return () => {}
   }
@@ -52,6 +55,7 @@ export function beginPanelToggleTransition(groupElement: HTMLElement | null): ()
       pendingCleanups.delete(element)
     }
     element.removeAttribute(PANEL_ANIMATING_ATTRIBUTE)
+    onComplete?.()
   }, PANEL_TOGGLE_TRANSITION_MS)
 
   pendingCleanups.set(element, cancel)

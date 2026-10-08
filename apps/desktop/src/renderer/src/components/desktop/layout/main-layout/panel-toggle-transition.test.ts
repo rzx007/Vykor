@@ -20,6 +20,18 @@ describe("beginPanelToggleTransition", () => {
     expect(group.hasAttribute("data-panel-animating")).toBe(false)
   })
 
+  it("runs a completion callback after the transition window", () => {
+    vi.useFakeTimers()
+    const group = document.createElement("div")
+    const onComplete = vi.fn()
+
+    beginPanelToggleTransition(group, onComplete)
+
+    expect(onComplete).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(240)
+    expect(onComplete).toHaveBeenCalledOnce()
+  })
+
   it("cancel removes the attribute immediately, clears the timer, and is idempotent", () => {
     vi.useFakeTimers()
     const group = document.createElement("div")

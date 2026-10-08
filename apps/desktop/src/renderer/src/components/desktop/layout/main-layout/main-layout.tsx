@@ -80,6 +80,12 @@ export function MainLayout(): React.JSX.Element {
   const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
   const [sidebarDefaultSizePx] = useState(resolveSidebarDefaultWidthPx)
   const [sidebarMasked, setSidebarMasked] = useState(false)
+  const syncSidebarContentWidth = useCallback((): void => {
+    const size = sidebarPanelRef.current?.getSize()
+    if (size && size.inPixels > 1) {
+      contentRef.current?.style.setProperty("--sidebar-content-width", `${size.inPixels}px`)
+    }
+  }, [sidebarPanelRef])
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
   const collapseSidebar = useCallback((): void => {
@@ -138,16 +144,19 @@ export function MainLayout(): React.JSX.Element {
       return
     }
 
-    sidebarTransitionCancelRef.current?.()
-    sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
     const collapsing = !panel.isCollapsed()
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(
+      outerGroupElementRef.current,
+      collapsing ? undefined : syncSidebarContentWidth
+    )
     setSidebarMasked(collapsing)
     if (collapsing) {
       panel.collapse()
     } else {
       panel.expand()
     }
-  }, [sidebarPanelRef])
+  }, [sidebarPanelRef, syncSidebarContentWidth])
 
   const openConversationRoute = useCallback(
     (destination: string | null | undefined): void => {
