@@ -291,7 +291,10 @@ export function MainLayout(): React.JSX.Element {
             setSidebarOpen((current) => (current === nextOpen ? current : nextOpen))
           }}
         >
-          <div className="relative h-full" style={{ width: "var(--sidebar-content-width)" }}>
+          <div
+            className="relative h-full shrink-0"
+            style={{ width: "var(--sidebar-content-width)" }}
+          >
             {sidebar}
             <div
               aria-hidden="true"
