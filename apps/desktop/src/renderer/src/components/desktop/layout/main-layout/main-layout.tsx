@@ -106,6 +106,19 @@ export function MainLayout(): React.JSX.Element {
     groupElementRef: innerGroupElementRef,
     onCollapseSidebar: collapseSidebar,
   })
+  const {
+    collapse: collapseUtilityPanel,
+    fileOpenRequest,
+    handleLayoutChanged: handleUtilityLayoutChanged,
+    handlePanelResize: handleUtilityPanelResize,
+    imageOpenRequest,
+    instanceKey: utilityPanelInstanceKey,
+    reviewOpenRequest,
+    scopeId: utilityPanelScopeId,
+    terminalOpenRequest,
+    toggleMaximized: toggleUtilityMaximized,
+    toolOpenRequest,
+  } = utilityPanel
   const panelOpen = utilityPanel.open
   const utilityMaximized = utilityPanel.maximized
   const visiblePanelLayout = utilityPanel.visibleLayout
@@ -320,80 +333,112 @@ export function MainLayout(): React.JSX.Element {
     </div>
   )
 
-  const renderConversationWorkspace = (): React.JSX.Element => (
-    <Group
-      id="desktop-workspace"
-      groupRef={workspaceGroupRef}
-      elementRef={innerGroupElementRef}
-      orientation="horizontal"
-      className="relative h-full min-h-0 w-full"
-      resizeTargetMinimumSize={resizeTargetMinimumSize}
-      defaultLayout={
-        utilityMaximized
-          ? { conversation: 0, utility: 100 }
-          : panelOpen
-            ? visiblePanelLayout
-            : collapsedWorkspaceLayout
-      }
-      onLayoutChanged={utilityPanel.handleLayoutChanged}
-    >
-      <Panel
-        id="conversation"
-        panelRef={conversationPanelRef}
-        defaultSize="100%"
-        minSize={utilityMaximized ? 0 : conversationMinimumWidth}
-        collapsedSize={0}
-        collapsible
-        className="h-full min-h-0 overflow-hidden"
+  const renderConversationWorkspace = useCallback(
+    (): React.JSX.Element => (
+      <Group
+        id="desktop-workspace"
+        groupRef={workspaceGroupRef}
+        elementRef={innerGroupElementRef}
+        orientation="horizontal"
+        className="relative h-full min-h-0 w-full"
+        resizeTargetMinimumSize={resizeTargetMinimumSize}
+        defaultLayout={
+          utilityMaximized
+            ? { conversation: 0, utility: 100 }
+            : panelOpen
+              ? visiblePanelLayout
+              : collapsedWorkspaceLayout
+        }
+        onLayoutChanged={handleUtilityLayoutChanged}
       >
-        <ConversationPane
-          panelOpen={panelOpen}
-          onTogglePanel={togglePanel}
-          onOpenFile={openWorkspaceFile}
-          canOpenReview={activeWorkspaceIsGit === true}
-          onOpenReview={requestOpenReview}
-          onOpenTerminal={openTerminal}
-          onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
+        <Panel
+          id="conversation"
+          panelRef={conversationPanelRef}
+          defaultSize="100%"
+          minSize={utilityMaximized ? 0 : conversationMinimumWidth}
+          collapsedSize={0}
+          collapsible
+          className="h-full min-h-0 overflow-hidden"
+        >
+          <ConversationPane
+            panelOpen={panelOpen}
+            onTogglePanel={togglePanel}
+            onOpenFile={openWorkspaceFile}
+            canOpenReview={activeWorkspaceIsGit === true}
+            onOpenReview={requestOpenReview}
+            onOpenTerminal={openTerminal}
+            onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
+          />
+        </Panel>
+        {!utilityMaximized && <PanelResizeHandle label="调整工具面板宽度" />}
+        <Panel
+          id="utility"
+          panelRef={utilityPanelRef}
+          defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
+          minSize={utilityMinimumWidth}
+          maxSize={utilityMaximized ? "100%" : "70%"}
+          collapsedSize={0}
+          collapsible
+          disabled={!panelOpen}
+          groupResizeBehavior="preserve-pixel-size"
+          className="h-full min-h-0 overflow-hidden"
+          onResize={(size) => {
+            handleUtilityPanelResize(size.inPixels)
+          }}
+        >
+          <UtilityPanel
+            key={utilityPanelInstanceKey}
+            scopeId={utilityPanelScopeId}
+            open={panelOpen}
+            maximized={utilityMaximized}
+            onToggleMaximized={toggleUtilityMaximized}
+            onClose={collapseUtilityPanel}
+            fileOpenRequest={fileOpenRequest}
+            reviewOpenRequest={reviewOpenRequest}
+            terminalOpenRequest={terminalOpenRequest}
+            toolOpenRequest={toolOpenRequest}
+            imageOpenRequest={imageOpenRequest}
+            onOpenFile={openWorkspaceFile}
+            onOpenReview={requestOpenReview}
+            onOpenTerminal={openTerminal}
+          />
+        </Panel>
+        <ConversationStatus
+          visible={panelOpen && utilityMaximized}
+          onRestore={toggleUtilityMaximized}
         />
-      </Panel>
-      {!utilityMaximized && <PanelResizeHandle label="调整工具面板宽度" />}
-      <Panel
-        id="utility"
-        panelRef={utilityPanelRef}
-        defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
-        minSize={utilityMinimumWidth}
-        maxSize={utilityMaximized ? "100%" : "70%"}
-        collapsedSize={0}
-        collapsible
-        disabled={!panelOpen}
-        groupResizeBehavior="preserve-pixel-size"
-        className="h-full min-h-0 overflow-hidden"
-        onResize={(size) => {
-          utilityPanel.handlePanelResize(size.inPixels)
-        }}
-      >
-        <UtilityPanel
-          key={utilityPanel.instanceKey}
-          scopeId={utilityPanel.scopeId}
-          open={panelOpen}
-          maximized={utilityMaximized}
-          onToggleMaximized={utilityPanel.toggleMaximized}
-          onClose={utilityPanel.collapse}
-          fileOpenRequest={utilityPanel.fileOpenRequest}
-          reviewOpenRequest={utilityPanel.reviewOpenRequest}
-          terminalOpenRequest={utilityPanel.terminalOpenRequest}
-          toolOpenRequest={utilityPanel.toolOpenRequest}
-          imageOpenRequest={utilityPanel.imageOpenRequest}
-          onOpenFile={openWorkspaceFile}
-          onOpenReview={requestOpenReview}
-          onOpenTerminal={openTerminal}
-        />
-      </Panel>
-      <ConversationStatus
-        visible={panelOpen && utilityMaximized}
-        onRestore={utilityPanel.toggleMaximized}
-      />
-    </Group>
+      </Group>
+    ),
+    [
+      activeWorkspaceIsGit,
+      conversationPanelRef,
+      innerGroupElementRef,
+      openTerminal,
+      openWorkspaceFile,
+      openUtilityTool,
+      panelOpen,
+      requestOpenReview,
+      togglePanel,
+      utilityMaximized,
+      collapseUtilityPanel,
+      fileOpenRequest,
+      handleUtilityLayoutChanged,
+      handleUtilityPanelResize,
+      imageOpenRequest,
+      utilityPanelInstanceKey,
+      reviewOpenRequest,
+      utilityPanelScopeId,
+      terminalOpenRequest,
+      toggleUtilityMaximized,
+      toolOpenRequest,
+      utilityPanelRef,
+      visiblePanelLayout,
+      workspaceGroupRef,
+    ]
+  )
+  const conversationWorkspace = useMemo(
+    () => renderConversationWorkspace(),
+    [renderConversationWorkspace]
   )
 
   return (
@@ -437,7 +482,7 @@ export function MainLayout(): React.JSX.Element {
           ) : null}
           <MainLayoutContext.Provider
             value={{
-              conversationWorkspace: renderConversationWorkspace(),
+              conversationWorkspace,
               startNewConversation: startNewConversationRoute,
               openSideChat: (sourceId, text) => {
                 if (sourceId !== activeSessionId) return

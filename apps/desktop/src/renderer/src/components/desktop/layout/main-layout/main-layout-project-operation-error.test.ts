@@ -12,12 +12,18 @@ import {
 
 import type { DesktopOperation, DesktopSessionState } from "@renderer/stores/desktop-session/types"
 
+const outletWorkspace = vi.hoisted(() => ({ last: null as unknown }))
+
 vi.mock("@tanstack/react-router", async () => {
   const { useContext } = await import("react")
   const { MainLayoutContext } = await import("./main-layout-context")
 
   return {
-    Outlet: () => useContext(MainLayoutContext)?.conversationWorkspace ?? null,
+    Outlet: () => {
+      const workspace = useContext(MainLayoutContext)?.conversationWorkspace ?? null
+      outletWorkspace.last = workspace
+      return workspace
+    },
     useNavigate: () => vi.fn(),
     useMatchRoute: () => () => false,
     useRouter: () => ({
@@ -32,17 +38,25 @@ vi.mock("@tanstack/react-router", async () => {
   }
 })
 
-vi.mock("react-resizable-panels", () => ({
-  Group: ({ children }: { children?: React.ReactNode }) => children,
-  Panel: ({ children }: { children?: React.ReactNode }) => children,
-  useGroupRef: () => ({ current: null }),
-  usePanelRef: () => ({ current: null }),
-}))
+vi.mock("react-resizable-panels", async () => {
+  const { useRef } = await import("react")
+  return {
+    Group: ({ children }: { children?: React.ReactNode }) => children,
+    Panel: ({ children }: { children?: React.ReactNode }) => children,
+    useGroupRef: () => useRef(null),
+    usePanelRef: () => useRef(null),
+  }
+})
 
-vi.mock("@renderer/components/desktop/settings-page/settings-navigation", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@renderer/components/desktop/settings-page/settings-navigation")>(),
-  defaultSettingsSection: "general",
-}))
+vi.mock(
+  "@renderer/components/desktop/settings-page/settings-navigation",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("@renderer/components/desktop/settings-page/settings-navigation")
+    >()),
+    defaultSettingsSection: "general",
+  })
+)
 vi.mock("@renderer/components/desktop/open-with", () => ({ OpenWithSplitButton: () => null }))
 vi.mock("@renderer/components/appearance/appearance-provider", () => ({
   useAppearance: () => ({
@@ -59,7 +73,13 @@ vi.mock("@renderer/components/ui/panel-resize-handle", () => ({
 vi.mock("@renderer/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children?: React.ReactNode }) => children,
 }))
-vi.mock("@renderer/components/desktop/layout/title-bar", () => ({ TitleBar: () => null }))
+vi.mock("@renderer/components/desktop/layout/title-bar", async () => {
+  const { createElement } = await import("react")
+  return {
+    TitleBar: ({ onToggleSidebar }: { onToggleSidebar: () => void }) =>
+      createElement("button", { "data-testid": "sidebar-toggle", onClick: onToggleSidebar }),
+  }
+})
 vi.mock("@renderer/components/desktop/layout/use-desktop-window-chrome", () => ({
   useDesktopWindowChrome: () => ({
     isMaximized: false,
@@ -325,6 +345,21 @@ describe("maximized workbench chat status integration", () => {
       )
     })
     expect(container.querySelector('[aria-label="当前会话状态"]')).toBeNull()
+  })
+})
+
+describe("sidebar toggle rendering", () => {
+  it("keeps the conversation workspace element when only the sidebar state changes", () => {
+    outletWorkspace.last = null
+    const container = mountLayout(stateWith({}))
+    const workspaceBeforeToggle = outletWorkspace.last
+    expect(workspaceBeforeToggle).not.toBeNull()
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-toggle']")!.click()
+    })
+
+    expect(outletWorkspace.last).toBe(workspaceBeforeToggle)
   })
 })
 
