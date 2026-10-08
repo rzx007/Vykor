@@ -20,6 +20,13 @@ import {
   FieldSet,
 } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { Separator } from "@renderer/components/ui/separator"
 import type { DesktopCustomProviderInput, DesktopProviderInfo } from "@shared/provider-types"
 import { type CustomProviderFormState, validateCustomProviderForm } from "./custom-provider-form"
@@ -227,29 +234,35 @@ export function CustomProviderDialog({
                       }
                       placeholder="显示名称（可选）"
                     />
-                    <select
+                    <Select
                       value={model.imageInputSupport}
-                      aria-label={`模型 ${index + 1} 图片输入能力`}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                      onChange={(event) =>
+                      onValueChange={(value) => {
+                        if (typeof value !== "string") return
                         setForm((current) => ({
                           ...current,
                           models: current.models.map((item) =>
                             item.key === model.key
                               ? {
                                   ...item,
-                                  imageInputSupport: event.target.value as
-                                    "native" | "unsupported" | "unknown",
+                                  imageInputSupport: value as "native" | "unsupported" | "unknown",
                                 }
                               : item
                           ),
                         }))
-                      }
+                      }}
                     >
-                      <option value="unknown">图片能力未知</option>
-                      <option value="native">支持图片</option>
-                      <option value="unsupported">不支持图片</option>
-                    </select>
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label={`模型 ${index + 1} 图片输入能力`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unknown">图片能力未知</SelectItem>
+                        <SelectItem value="native">支持图片</SelectItem>
+                        <SelectItem value="unsupported">不支持图片</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       type="button"
                       variant="ghost"
