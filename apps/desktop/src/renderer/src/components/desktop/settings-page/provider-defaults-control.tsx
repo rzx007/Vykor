@@ -142,7 +142,9 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
       await onChanged()
       toast.success("默认设置已更新，新对话就用它。")
     } catch (failure) {
-      setError(errorMessage(failure))
+      const message = errorMessage(failure)
+      if (message.startsWith("当前有任务正在运行")) toast.error(message)
+      else setError(message)
     } finally {
       setBusy(false)
     }

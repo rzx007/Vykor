@@ -3,6 +3,8 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ProviderDefaultsSnapshot } from "@shared/provider-defaults-types"
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock("@renderer/lib/toast", () => ({ toast: { error: toastError } }))
 vi.mock("@renderer/stores/desktop-session", () => ({
   useDesktopSessionStore: { setState: vi.fn() },
 }))
@@ -103,6 +105,16 @@ describe("friendly model defaults", () => {
     await act(async () => button("保存").click())
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("重新读取")
     expect(button("深入思考").getAttribute("aria-pressed")).toBe("true")
+    expect(container.textContent).toContain("待保存")
+  })
+  it("shows an active-work save warning as the shared toast", async () => {
+    const message = "当前有任务正在运行。请等待任务结束或停止任务后，再修改该设置。"
+    updateEffort.mockRejectedValue(new Error(message))
+    await render()
+    await act(async () => button("深入思考").click())
+    await act(async () => button("保存").click())
+    expect(toastError).toHaveBeenCalledWith(message)
+    expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(container.textContent).toContain("待保存")
   })
   it("does not show a working effort control when the model has no declared tiers", async () => {
