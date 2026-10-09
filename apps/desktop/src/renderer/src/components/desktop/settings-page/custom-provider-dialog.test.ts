@@ -61,7 +61,7 @@ describe("CustomProviderDialog credentials", () => {
 
     expect(input?.value).toBe("")
     expect(input?.readOnly).toBe(false)
-    expect(document.body.textContent).toContain("输入新的 API 密钥")
+    expect(input?.placeholder).toContain("输入新的 API 密钥")
   })
 
   it("shows template guidance and echoes saved header templates", async () => {
@@ -83,8 +83,11 @@ describe("CustomProviderDialog credentials", () => {
       )
     })
 
-    expect(document.body.textContent).toContain("{{sessionId}}")
-    expect(document.body.textContent).toContain("{{userAgent}}")
+    // 模板说明收在问号图标的 tooltip 里；值本身通过输入框和 placeholder 回显。
+    expect(document.querySelector('[aria-label="请求头说明"]')).not.toBeNull()
+    expect(
+      document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 值"]')?.placeholder
+    ).toContain("{{sessionId}}")
     expect(document.querySelector('[aria-label="请求头 1 机密值"]')).not.toBeNull()
     expect(
       document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 名称"]')?.value

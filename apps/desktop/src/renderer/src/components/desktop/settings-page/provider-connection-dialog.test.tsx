@@ -32,15 +32,15 @@ describe("ProviderConnectionDialog", () => {
     await renderDialog({ provider: catalogProvider })
 
     expect(document.body.textContent).toContain("高级选项")
-    expect(document.body.textContent).not.toContain("{{sessionId}}")
+    expect(document.querySelector('[aria-label="请求头说明"]')).toBeNull()
 
     await act(async () => {
       findButton("高级选项")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     })
 
-    expect(document.body.textContent).toContain("{{sessionId}}")
-    expect(document.body.textContent).toContain("{{userAgent}}")
-    expect(document.body.textContent).toContain("机密值单独保存到宿主凭据")
+    // 说明文字收在问号图标的 tooltip 里，这里只断言入口随高级选项一起出现。
+    expect(document.querySelector('[aria-label="请求头说明"]')).not.toBeNull()
+    expect(document.body.textContent).toContain("请求头（可选）")
   })
 
   it("submits headers with the api key for catalog providers", async () => {

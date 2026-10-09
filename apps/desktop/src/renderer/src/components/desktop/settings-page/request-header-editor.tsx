@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { FieldDescription, FieldLegend, FieldSet } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
 import { Switch } from "@renderer/components/ui/switch"
+import { FieldHelp } from "./field-help"
 import { REQUEST_HEADER_DESCRIPTION, type RequestHeaderRow } from "./request-header-form"
 
 interface RequestHeaderEditorProps {
@@ -24,15 +25,16 @@ export function RequestHeaderEditor({
   return (
     <FieldSet data-invalid={invalidMessage ? true : undefined}>
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <FieldLegend>{legend}</FieldLegend>
-          <FieldDescription>{invalidMessage ?? REQUEST_HEADER_DESCRIPTION}</FieldDescription>
+        <div className="flex items-center gap-2">
+          <FieldLegend className="mb-0">{legend}</FieldLegend>
+          <FieldHelp label="请求头说明">{REQUEST_HEADER_DESCRIPTION}</FieldHelp>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={onAddRow}>
           <Plus data-icon="inline-start" />
           添加请求头
         </Button>
       </div>
+      {invalidMessage ? <FieldDescription>{invalidMessage}</FieldDescription> : null}
       {rows.length > 0 ? (
         <div className="flex flex-col gap-3">
           {rows.map((header, index) => (

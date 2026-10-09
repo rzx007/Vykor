@@ -6,6 +6,9 @@ export interface CustomProviderModelRow {
   id: string
   displayName: string
   imageInputSupport: DesktopInputSupport
+  /** 以字符串保存，空串表示"交给服务端按模型 id 自动匹配"。 */
+  contextWindow: string
+  maxOutputTokens: string
 }
 
 export type CustomProviderHeaderRow = RequestHeaderRow
@@ -23,6 +26,17 @@ export interface CustomProviderFormState {
 export type CustomProviderFormValidation =
   | { ok: true; value: DesktopCustomProviderInput }
   | { ok: false; field: "id" | "displayName" | "baseUrl" | "models" | "headers"; message: string }
+
+type ModelLimitParse = { kind: "blank" } | { kind: "ok"; value: number } | { kind: "invalid" }
+
+/** 留空表示自动匹配；填了就必须是大于 0 的整数。 */
+function parseModelLimit(raw: string): ModelLimitParse {
+  const trimmed = raw.trim()
+  if (!trimmed) return { kind: "blank" }
+  if (!/^\d+$/.test(trimmed)) return { kind: "invalid" }
+  const value = Number(trimmed)
+  return Number.isSafeInteger(value) && value > 0 ? { kind: "ok", value } : { kind: "invalid" }
+}
 
 export function validateCustomProviderForm(
   form: CustomProviderFormState
@@ -55,12 +69,25 @@ export function validateCustomProviderForm(
     id: model.id.trim(),
     displayName: model.displayName.trim() || model.id.trim(),
     imageInputSupport: model.imageInputSupport,
+    contextWindow: parseModelLimit(model.contextWindow),
+    maxOutputTokens: parseModelLimit(model.maxOutputTokens),
   }))
   if (models.some((model) => !model.id)) {
     return { ok: false, field: "models", message: "模型 ID 不能为空。" }
   }
   if (new Set(models.map((model) => model.id)).size !== models.length) {
     return { ok: false, field: "models", message: "模型 ID 不能重复。" }
+  }
+  if (
+    models.some(
+      (model) => model.contextWindow.kind === "invalid" || model.maxOutputTokens.kind === "invalid"
+    )
+  ) {
+    return {
+      ok: false,
+      field: "models",
+      message: "上下文窗口和最大输出要填大于 0 的整数，留空表示自动匹配。",
+    }
   }
   const headersResult = headersFromRows(form.headers, form.secretHeaderNames)
   if (!headersResult.ok) {
@@ -75,7 +102,11 @@ export function validateCustomProviderForm(
       baseUrl,
       apiFormat: "openai",
       ...(apiKey ? { apiKey } : {}),
-      models,
+      models: models.map(({ contextWindow, maxOutputTokens, ...model }) => ({
+        ...model,
+        ...(contextWindow.kind === "ok" ? { contextWindow: contextWindow.value } : {}),
+        ...(maxOutputTokens.kind === "ok" ? { maxOutputTokens: maxOutputTokens.value } : {}),
+      })),
       ...(Object.keys(headersResult.headers).length > 0 ? { headers: headersResult.headers } : {}),
       ...(headersResult.secretHeaders ? { secretHeaders: headersResult.secretHeaders } : {}),
     },
