@@ -9,6 +9,11 @@ import { ScopedOperationError } from "../../session/scoped-operation-errors"
 import { composerDocumentFromLexical, restoreComposerDocument } from "../composer-lexical-document"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useNavigate: () => vi.fn(),
+}))
+
 let container: HTMLDivElement
 let root: Root
 const plugin = {
@@ -78,7 +83,15 @@ it("uses the 20KB or 5000-character long-paste threshold", () => {
   expect(shouldPasteAsTextAttachment("a".repeat(5_000))).toBe(true)
 })
 it("shows plugin selection in a default build", async () => {
-  await render()
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+  try {
+    await render()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Warning: useRouter must be used inside a <RouterProvider> component!")
+    )
+  } finally {
+    warn.mockRestore()
+  }
   await act(async () => plus().click())
   expect(pluginOption()?.textContent).toContain("检查代码质量")
 })

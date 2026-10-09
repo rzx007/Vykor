@@ -28,6 +28,12 @@ import {
   type UtilityPanelController,
 } from "../layout/main-layout/utility-panel/use-utility-panel-controller"
 import { getNearestEditorFromDOMNode, PASTE_COMMAND } from "lexical"
+
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useNavigate: () => vi.fn(),
+}))
+
 vi.hoisted(() => {
   // The native terminal's import probes Canvas; no terminal is used in these tests.
   HTMLCanvasElement.prototype.getContext = (() =>

@@ -7,6 +7,11 @@ import { Composer } from "../composer"
 import type { ComposerPickerItem } from "../composer-picker"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useNavigate: () => vi.fn(),
+}))
+
 let root: Root
 let container: HTMLDivElement
 const onCommand = vi.fn(async () => {})
