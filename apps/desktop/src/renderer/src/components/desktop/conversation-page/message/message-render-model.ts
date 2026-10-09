@@ -250,7 +250,7 @@ const toolPhaseLabels: Record<string, string> = {
   preparing: "正在准备工具",
   waiting_permission: "等待你的确认",
   queued: "等待前一个工具",
-  running: "",
+  running: "正在执行工具",
   completed: "工具已返回，等待本轮结果",
   failed: "工具失败，等待本轮结果",
   unknown: "结果不确定",
