@@ -130,7 +130,7 @@ html[data-window-shell="translucent"] body {
 运行：
 
 ```powershell
-pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/components/appearance/apply-startup-theme.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/apply-startup-theme.test.ts
 ```
 
 预期：所有相关 renderer 测试通过；opaque 状态不会匹配新的 CSS 规则。运行期降低透明度时仍回退 opaque 的既有主进程断言由下列测试覆盖：
