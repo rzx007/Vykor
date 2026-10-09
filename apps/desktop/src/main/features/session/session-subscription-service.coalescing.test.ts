@@ -335,6 +335,7 @@ describe("SessionSubscriptionService coalescing", () => {
       expect(recovery.kind).toBe("snapshot")
       expect(recovery.generation).toBeGreaterThan(failedDelivery.generation)
       if (recovery.kind !== "snapshot") throw new Error("expected application recovery snapshot")
+      expect(recovery.view.syncStatus).toBe("connected")
       expect(recovery.view.parts[0]?.text).toBe("authoritative")
     } finally {
       service.clearAll()
@@ -503,6 +504,7 @@ describe("SessionSubscriptionService coalescing", () => {
       const recovery = sent[1]!.payload as DesktopSessionUpdate
       expect(recovery.kind).toBe("snapshot")
       if (recovery.kind !== "snapshot") throw new Error("expected structural recovery snapshot")
+      expect(recovery.view.syncStatus).toBe("connected")
       expect(recovery.view.cursor).toBe(3)
       expect(recovery.view.session.title).toBe("latest title")
       expect(recovery.view.parts[0]?.text).toBe("x")

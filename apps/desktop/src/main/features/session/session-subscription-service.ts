@@ -62,6 +62,7 @@ interface LiveDeliveryState {
   pendingBytes: number
   pendingReady: boolean
   snapshotRequired: boolean
+  reconnecting: boolean
   latestState: VykorClientState | null
   requestSnapshot(): void
 }
@@ -76,7 +77,9 @@ export class SessionSubscriptionService {
   private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
   private readonly invalidationListeners = new Set<(ownerId: number) => void>()
   private readonly primaryOwners = new Set<number>()
-  private readonly snapshotListeners = new Set<(ownerId: number, view: DesktopSessionView) => void>()
+  private readonly snapshotListeners = new Set<
+    (ownerId: number, view: DesktopSessionView) => void
+  >()
   private readonly sessionUpdateIntervalMs: number
   private nextGeneration = 1
   private nextDeliveryId = 1
@@ -93,16 +96,22 @@ export class SessionSubscriptionService {
 
   getOwnerSessionId(ownerId: number): string | undefined {
     const subscription = this.subscriptions.get(ownerId, primarySubscriptionSlot)
-    return subscription && !subscription.controller.signal.aborted ? subscription.sessionId : undefined
+    return subscription && !subscription.controller.signal.aborted
+      ? subscription.sessionId
+      : undefined
   }
 
   onOwnerInvalidated(listener: (ownerId: number) => void): () => void {
     this.invalidationListeners.add(listener)
-    return () => { this.invalidationListeners.delete(listener) }
+    return () => {
+      this.invalidationListeners.delete(listener)
+    }
   }
   onOwnerSnapshot(listener: (ownerId: number, view: DesktopSessionView) => void): () => void {
     this.snapshotListeners.add(listener)
-    return () => { this.snapshotListeners.delete(listener) }
+    return () => {
+      this.snapshotListeners.delete(listener)
+    }
   }
 
   closeDeletedSessions(webContentsId: number, sessionIds: readonly string[]): void {
@@ -122,10 +131,7 @@ export class SessionSubscriptionService {
     this.subscriptions.delete(webContentsId, auxiliarySubscriptionSlot(subscriptionId))
   }
 
-  acknowledgeUpdate(
-    ownerId: number,
-    ack: DesktopSessionUpdateAck
-  ): DesktopSessionUpdateAckResult {
+  acknowledgeUpdate(ownerId: number, ack: DesktopSessionUpdateAck): DesktopSessionUpdateAckResult {
     if (!isValidUpdateAck(ack)) return { accepted: false }
     const live = this.findLiveDelivery(ownerId, ack.subscriptionId)
     if (!live) return { accepted: false }
@@ -188,7 +194,7 @@ export class SessionSubscriptionService {
       live.pendingDeltas = []
       live.pendingBytes = 0
       live.snapshotRequired = false
-      this.dispatchSnapshot(live, "reconnecting")
+      this.dispatchSnapshot(live, live.reconnecting ? "reconnecting" : "snapshot")
       return
     }
     if (live.pendingDeltas.length === 0) {
@@ -213,10 +219,7 @@ export class SessionSubscriptionService {
     return `delivery-${this.nextDeliveryId++}`
   }
 
-  private dispatchSnapshot(
-    live: LiveDeliveryState,
-    source: SyncEventUpdate["source"]
-  ): void {
+  private dispatchSnapshot(live: LiveDeliveryState, source: SyncEventUpdate["source"]): void {
     const state = live.latestState
     if (!state || !state.buckets[live.sessionId]?.session) return
     let view: DesktopSessionView
@@ -239,7 +242,8 @@ export class SessionSubscriptionService {
     if (
       live.webContents.isDestroyed() ||
       !this.subscriptions.isCurrent(live.ownerId, live.slot, live.subscription)
-    ) return
+    )
+      return
     live.inFlight = update
     try {
       if (live.slot === primarySubscriptionSlot) {
@@ -362,7 +366,9 @@ export class SessionSubscriptionService {
     if (!subscription || subscription.controller !== controller) return
     let windowDeltas: DesktopSessionPartDelta[] = []
     let windowBytes = 0
-    let coalescer!: ReturnType<typeof createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>>
+    let coalescer!: ReturnType<
+      typeof createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>
+    >
     const live: LiveDeliveryState = {
       ownerId: webContents.id,
       slot,
@@ -378,6 +384,7 @@ export class SessionSubscriptionService {
       pendingBytes: 0,
       pendingReady: false,
       snapshotRequired: false,
+      reconnecting: false,
       latestState: null,
       requestSnapshot: () => undefined,
     }
@@ -400,7 +407,7 @@ export class SessionSubscriptionService {
       live.snapshotRequired = false
       live.pendingReady = false
       clearDeltaBuffers()
-      coalescer.flushNow(live.latestState, "reconnecting")
+      coalescer.flushNow(live.latestState, live.reconnecting ? "reconnecting" : "snapshot")
     }
 
     coalescer = createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>({
@@ -451,7 +458,9 @@ export class SessionSubscriptionService {
       await pumpSubscription<SyncEventUpdate>({
         initialIterator: iterator,
         createIterator: () =>
-          syncEvents(client, { sessionId, signal: controller.signal, partView: "summary" })[Symbol.asyncIterator](),
+          syncEvents(client, { sessionId, signal: controller.signal, partView: "summary" })[
+            Symbol.asyncIterator
+          ](),
         isActive: () =>
           !controller.signal.aborted &&
           !webContents.isDestroyed() &&
@@ -466,6 +475,7 @@ export class SessionSubscriptionService {
             return
           }
           live.latestState = update.state
+          live.reconnecting = update.source === "reconnecting"
           const delta = toDesktopSessionPartDelta(update, sessionId)
           if (delta && !live.snapshotRequired) {
             windowDeltas.push(delta)
@@ -480,7 +490,10 @@ export class SessionSubscriptionService {
             requireSnapshot()
             if (slot === primarySubscriptionSlot)
               for (const listener of this.snapshotListeners)
-                listener(webContents.id, toDesktopSessionView(update.state, sessionId, update.source))
+                listener(
+                  webContents.id,
+                  toDesktopSessionView(update.state, sessionId, update.source)
+                )
           }
           if (update.source === "reconnecting") {
             requireSnapshot()
@@ -490,8 +503,10 @@ export class SessionSubscriptionService {
           coalescer.queue(update.state, update.source)
         },
         onReconnecting: (last) => {
+          live.reconnecting = true
           if (slot === primarySubscriptionSlot)
-            for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
+            for (const listener of this.snapshotListeners)
+              listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
           live.latestState = last.state
           requireSnapshot()
           coalescer.flushNow(last.state, "reconnecting")
@@ -529,7 +544,8 @@ function toDesktopSessionPartDelta(
     typeof partId !== "string" ||
     (field !== "text" && field !== "reasoning") ||
     typeof delta !== "string"
-  ) return null
+  )
+    return null
   const part = update.state.buckets[sessionId]?.partsByMessageId[messageId]?.find(
     (candidate) => candidate.id === partId
   )
