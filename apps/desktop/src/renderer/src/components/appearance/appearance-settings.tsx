@@ -108,6 +108,7 @@ export function AppearanceSettings(): React.JSX.Element {
       [resolvedTheme]: { ...palette, [key]: value },
     })
   const isWindows = typeof window !== "undefined" && window.electron?.process?.platform === "win32"
+  const isMac = typeof window !== "undefined" && window.electron?.process?.platform === "darwin"
   const glassStrength = preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength
   const commitSingle = <T extends string>(
     values: readonly T[],
@@ -189,7 +190,7 @@ export function AppearanceSettings(): React.JSX.Element {
                 ))}
               </ToggleGroup>
             </Field>
-            {isWindows ? (
+            {isWindows || isMac ? (
               <Field orientation="responsive" data-disabled={windowMaterial.active !== "glass"}>
                 <FieldContent>
                   <FieldTitle>透光强度</FieldTitle>
