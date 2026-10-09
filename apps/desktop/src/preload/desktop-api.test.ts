@@ -52,6 +52,35 @@ describe("desktop activity preload bridge", () => {
   })
 })
 
+describe("desktop session update preload bridge", () => {
+  it("acknowledges updates and requests a resync over fixed channels", async () => {
+    const sessions = Reflect.get(desktopAPI, "sessions") as Record<string, unknown> | undefined
+    const acknowledge = sessions && Reflect.get(sessions, "acknowledgeUpdate")
+    const requestResync = sessions && Reflect.get(sessions, "requestUpdateResync")
+    expect(acknowledge).toBeTypeOf("function")
+    expect(requestResync).toBeTypeOf("function")
+    if (typeof acknowledge !== "function" || typeof requestResync !== "function") return
+
+    const ack = {
+      subscriptionId: "primary",
+      generation: 1,
+      deliveryId: "d1",
+      result: "applied",
+    }
+    const resync = {
+      subscriptionId: "primary",
+      generation: 1,
+      deliveryId: "d1",
+      lastAppliedDeliveryId: "d1",
+    }
+    await acknowledge(ack)
+    await requestResync(resync)
+
+    expect(electron.invoke).toHaveBeenCalledWith("session:update-ack", ack)
+    expect(electron.invoke).toHaveBeenCalledWith("session:update-resync", resync)
+  })
+})
+
 describe("desktop attachment preload bridge", () => {
   it("turns dropped File objects into paths inside preload and does not expose those paths back", async () => {
     const files = [{ name: "report.pdf" }, { name: "missing.png" }] as unknown as File[]

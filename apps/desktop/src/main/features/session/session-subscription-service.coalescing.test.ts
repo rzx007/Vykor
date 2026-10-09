@@ -11,7 +11,12 @@ import type { SessionEventRecord, SessionStateSnapshot } from "@vykor/client"
 import { SessionSubscriptionService } from "./session-subscription-service"
 import { visibleTranscriptParts } from "../../../renderer/src/components/desktop/conversation-page/transcript/transcript-visibility"
 import { isToolGenerationPresentation, withToolGenerationPresentation } from "../../../renderer/src/components/desktop/conversation-page/message/tool-generation-presentation"
-import type { DesktopSessionView } from "../../../shared/session-types"
+import type {
+  DesktopSessionUpdate,
+  DesktopSessionUpdateAck,
+  DesktopSessionResyncRequest,
+  DesktopSessionView,
+} from "../../../shared/session-types"
 import { OpenAICompatibleClient } from "../../../../../../packages/api/src/providers/openai"
 import { QueryEngine } from "../../../../../../packages/core/src/engine/query-engine"
 import { ToolRegistry } from "../../../../../../packages/core/src/engine/tool-registry"
@@ -142,7 +147,365 @@ describe("SessionSubscriptionService coalescing", () => {
       expect(sent).toHaveLength(0)
       await vi.advanceTimersByTimeAsync(50)
       expect(sent).toHaveLength(1)
-      expect((sent[0]!.payload as DesktopSessionView).parts[0]?.text).toBe("x".repeat(100))
+      const update = sent[0]!.payload as DesktopSessionUpdate
+      expect(update.kind).toBe("part-delta")
+      if (update.kind !== "part-delta") throw new Error("expected part delta delivery")
+      expect(update.deltas).toHaveLength(100)
+      expect(update.deltas[0]).toMatchObject({ baseLength: 0, delta: "x", seq: 2 })
+      expect(update.deltas.at(-1)).toMatchObject({ baseLength: 99, delta: "x", seq: 101 })
+      expect(observed).toBe(1)
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("keeps one live delivery in flight until the renderer acknowledges it", async () => {
+    vi.useFakeTimers()
+    let releaseNext!: () => void
+    const nextEvent = new Promise<void>((resolve) => { releaseNext = resolve })
+    const client = clientWithStream(async function* () {
+      const createDelta = (seq: number, delta: string): SessionEventRecord => ({
+        id: `delta-${seq}`,
+        seq,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: seq,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta,
+        },
+      })
+      yield createDelta(2, "a")
+      await nextEvent
+      yield createDelta(3, "b")
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(sent).toHaveLength(1)
+
+      releaseNext()
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(sent).toHaveLength(1)
+
+      const first = sent[0]!.payload as DesktopSessionUpdate
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        result: "unknown",
+      } as never)).toEqual({ accepted: false })
+      const ack: DesktopSessionUpdateAck = {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        result: "applied",
+      }
+      expect(service.acknowledgeUpdate(contents.id, {
+        ...ack,
+        subscriptionId: "primary:stale",
+      })).toEqual({ accepted: false })
+      expect(service.acknowledgeUpdate(contents.id + 1, ack)).toEqual({ accepted: false })
+      expect(service.acknowledgeUpdate(contents.id, ack)).toEqual({ accepted: true })
+      expect(sent).toHaveLength(2)
+      const second = sent[1]!.payload as DesktopSessionUpdate
+      expect(second.kind).toBe("part-delta")
+      if (second.kind !== "part-delta") throw new Error("expected buffered delta delivery")
+      expect(second.deltas).toMatchObject([{ baseLength: 1, delta: "b", seq: 3 }])
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: second.subscriptionId,
+        generation: second.generation,
+        deliveryId: second.deliveryId,
+        result: "applied",
+      })).toEqual({ accepted: true })
+      const duplicateWatchdogRequest: DesktopSessionResyncRequest = {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        lastAppliedDeliveryId: first.deliveryId,
+      }
+      expect(service.requestUpdateResync(contents.id, duplicateWatchdogRequest)).toEqual({
+        accepted: true,
+      })
+      expect(sent).toHaveLength(2)
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("supersedes a timed-out delivery with the latest snapshot and rejects its late ACK", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield {
+        id: "delta-2",
+        seq: 2,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: 2,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta: "latest",
+        },
+      } satisfies SessionEventRecord
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+      const timedOut = sent[0]!.payload as DesktopSessionUpdate
+      const request: DesktopSessionResyncRequest = {
+        subscriptionId: timedOut.subscriptionId,
+        generation: timedOut.generation,
+        deliveryId: timedOut.deliveryId,
+        lastAppliedDeliveryId: null,
+      }
+      expect(service.requestUpdateResync(contents.id, request)).toEqual({ accepted: true })
+      expect(sent).toHaveLength(2)
+      const recovery = sent[1]!.payload as DesktopSessionUpdate
+      expect(recovery.kind).toBe("snapshot")
+      expect(recovery.generation).toBeGreaterThan(timedOut.generation)
+      if (recovery.kind !== "snapshot") throw new Error("expected recovery snapshot")
+      expect(recovery.view.parts[0]?.text).toBe("latest")
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: timedOut.subscriptionId,
+        generation: timedOut.generation,
+        deliveryId: timedOut.deliveryId,
+        result: "applied",
+      })).toEqual({ accepted: false })
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("replaces an update after the renderer reports that it could not apply it", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield {
+        id: "delta-2",
+        seq: 2,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: 2,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta: "authoritative",
+        },
+      } satisfies SessionEventRecord
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      const failedDelivery = sent[0]!.payload as DesktopSessionUpdate
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: failedDelivery.subscriptionId,
+        generation: failedDelivery.generation,
+        deliveryId: failedDelivery.deliveryId,
+        result: "resync-required",
+      })).toEqual({ accepted: true })
+      const recovery = sent[1]!.payload as DesktopSessionUpdate
+      expect(recovery.kind).toBe("snapshot")
+      expect(recovery.generation).toBeGreaterThan(failedDelivery.generation)
+      if (recovery.kind !== "snapshot") throw new Error("expected application recovery snapshot")
+      expect(recovery.view.parts[0]?.text).toBe("authoritative")
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("replaces an oversized pending delta batch with one latest snapshot", async () => {
+    vi.useFakeTimers()
+    let releaseBurst!: () => void
+    const burst = new Promise<void>((resolve) => { releaseBurst = resolve })
+    const client = clientWithStream(async function* () {
+      const createDelta = (seq: number): SessionEventRecord => ({
+        id: `delta-${seq}`,
+        seq,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: seq,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta: "x",
+        },
+      })
+      yield createDelta(2)
+      await burst
+      for (let seq = 3; seq <= 503; seq++) yield createDelta(seq)
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      const first = sent[0]!.payload as DesktopSessionUpdate
+      expect(first.kind).toBe("part-delta")
+
+      releaseBurst()
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        result: "applied",
+      })).toEqual({ accepted: true })
+
+      expect(sent).toHaveLength(2)
+      const recovery = sent[1]!.payload as DesktopSessionUpdate
+      expect(recovery.kind).toBe("snapshot")
+      if (recovery.kind !== "snapshot") throw new Error("expected overflow recovery snapshot")
+      expect(recovery.view.cursor).toBe(503)
+      expect(recovery.view.parts[0]?.text).toBe("x".repeat(502))
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("replaces pending deltas above the byte budget with a latest snapshot", async () => {
+    vi.useFakeTimers()
+    let releaseLargeDelta!: () => void
+    const largeDelta = new Promise<void>((resolve) => { releaseLargeDelta = resolve })
+    const client = clientWithStream(async function* () {
+      const createDelta = (seq: number, delta: string): SessionEventRecord => ({
+        id: `delta-${seq}`,
+        seq,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: seq,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta,
+        },
+      })
+      yield createDelta(2, "x")
+      await largeDelta
+      yield createDelta(3, "y".repeat(1024 * 1024))
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      const first = sent[0]!.payload as DesktopSessionUpdate
+      releaseLargeDelta()
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        result: "applied",
+      })).toEqual({ accepted: true })
+
+      const recovery = sent[1]!.payload as DesktopSessionUpdate
+      expect(recovery.kind).toBe("snapshot")
+      if (recovery.kind !== "snapshot") throw new Error("expected byte-limit snapshot")
+      expect(recovery.view.parts[0]?.text?.length).toBe(1024 * 1024 + 1)
+      expect(recovery.view.cursor).toBe(3)
+    } finally {
+      service.clearAll()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("discards pending deltas when a structural update arrives and recovers latest state", async () => {
+    vi.useFakeTimers()
+    let releaseStructure!: () => void
+    const structure = new Promise<void>((resolve) => { releaseStructure = resolve })
+    const client = clientWithStream(async function* () {
+      yield {
+        id: "delta-2",
+        seq: 2,
+        type: "session.message.part.delta",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: 2,
+        payload: {
+          sessionId: "s1",
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta: "x",
+        },
+      } satisfies SessionEventRecord
+      await structure
+      yield {
+        id: "session-3",
+        seq: 3,
+        type: "session.updated",
+        schemaVersion: 1,
+        sessionId: "s1",
+        createdAt: 3,
+        payload: { session: { ...session, title: "latest title", updatedAt: 3 } },
+      } satisfies SessionEventRecord
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      const first = sent[0]!.payload as DesktopSessionUpdate
+      releaseStructure()
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+      expect(service.acknowledgeUpdate(contents.id, {
+        subscriptionId: first.subscriptionId,
+        generation: first.generation,
+        deliveryId: first.deliveryId,
+        result: "applied",
+      })).toEqual({ accepted: true })
+
+      const recovery = sent[1]!.payload as DesktopSessionUpdate
+      expect(recovery.kind).toBe("snapshot")
+      if (recovery.kind !== "snapshot") throw new Error("expected structural recovery snapshot")
+      expect(recovery.view.cursor).toBe(3)
+      expect(recovery.view.session.title).toBe("latest title")
+      expect(recovery.view.parts[0]?.text).toBe("x")
     } finally {
       service.clearAll()
       await vi.advanceTimersByTimeAsync(0)
@@ -217,11 +580,20 @@ describe("SessionSubscriptionService coalescing", () => {
       }
       const sent: DesktopSessionView[] = []
       const contents = { id: 78, once: vi.fn(), isDestroyed: () => false,
-        send: vi.fn((channel: string, view: DesktopSessionView) => {
+        send: vi.fn((channel: string, payload: DesktopSessionUpdate) => {
           if (channel !== "session:updated") return
-          sent.push(view)
-          if (view.runs.some(run => Array.isArray(run.metadata.toolGeneration) &&
-            run.metadata.toolGeneration.some(entry => entry.toolName === "Write"))) notifyGenerationView(view)
+          if (payload.kind === "snapshot") {
+            const view = payload.view
+            sent.push(view)
+            if (view.runs.some(run => Array.isArray(run.metadata.toolGeneration) &&
+              run.metadata.toolGeneration.some(entry => entry.toolName === "Write"))) notifyGenerationView(view)
+          }
+          service?.acknowledgeUpdate(78, {
+            subscriptionId: payload.subscriptionId,
+            generation: payload.generation,
+            deliveryId: payload.deliveryId,
+            result: "applied",
+          })
         }),
       }
       service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
@@ -344,7 +716,9 @@ describe("SessionSubscriptionService coalescing", () => {
       await service.openSession(client as never, contents as never, "s1")
       await vi.advanceTimersByTimeAsync(51)
       expect(sent).toHaveLength(1)
-      const view = sent[0]!.payload as DesktopSessionView
+      const update = sent[0]!.payload as DesktopSessionUpdate
+      if (update.kind !== "snapshot") throw new Error("expected snapshot delivery")
+      const view = update.view
       expect(visibleTranscriptParts(view.parts, true).map(p => p.text)).toEqual(["answer"])
       expect(view.runs[0]?.metadata).toMatchObject({ modelRetry: null, modelUsage: { incomplete: true } })
     } finally { service.clearAll() }
@@ -367,7 +741,10 @@ describe("SessionSubscriptionService coalescing", () => {
     await vi.advanceTimersByTimeAsync(50)
     expect(sent).toHaveLength(1)
     expect(sent[0]!.channel).toBe("session:updated")
-    expect((sent[0]!.payload as { cursor: number }).cursor).toBe(4)
+    expect((sent[0]!.payload as DesktopSessionUpdate)).toMatchObject({
+      kind: "snapshot",
+      view: { cursor: 4 },
+    })
 
     service.clearAll()
   })
@@ -386,7 +763,10 @@ describe("SessionSubscriptionService coalescing", () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(sent).toHaveLength(1)
-    expect((sent[0]!.payload as { syncStatus: string }).syncStatus).toBe("reconnecting")
+    expect((sent[0]!.payload as DesktopSessionUpdate)).toMatchObject({
+      kind: "snapshot",
+      view: { syncStatus: "reconnecting" },
+    })
 
     service.clearAll()
   })

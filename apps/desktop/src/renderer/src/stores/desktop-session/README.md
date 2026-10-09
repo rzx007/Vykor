@@ -107,6 +107,8 @@ renderer 只有一处订阅入口：`store.ts` 的 `attachDesktopSessionEvents`�
 - 打开会话 `openSession` 在验证 generation 与 operation 所有权后，仅将初次权威 snapshot 与项目工作区原子写入，随后由 `applySessionUpdate` 负责后续所有增量对账；
 - Notification 监听器（`notification-observer.ts`）纯粹作为只读观察者消费状态变更，不二次分发或重新应用事件。
 
+高频文本更新走独立的轻量路径：Renderer 用 `applySessionPartDeltas` 校验会话、part 与文本偏移，只替换目标 part 和 cursor，不运行快照的 runtime 对账、项目刷新或 goal 刷新。每条主/辅投递在同步写入本地 view 后发送 ACK（消费确认）；主进程每订阅只保留一条在途更新，并将未确认期间的待发文本增量限制为 500 项或 1 MiB。结构变化、缓冲超限、应用失败或 5 秒内未确认时，以当前最新完整快照恢复。辅助会话在自己的 view ref 中应用同一 reducer，ACK/watchdog 随订阅卸载清理。
+
 打开会话的流程如下：
 
 1. **入口 → 标记所有者。** 路由或侧边栏调用 `openSession(sessionId)`；它推进导航代次，在该会话 runtime 写 `open-session` operation，并先把该 ID 设为 active。

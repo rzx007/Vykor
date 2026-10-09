@@ -132,9 +132,12 @@ describe("active session subscription after deletion", () => {
         "session:aux-updated",
         expect.objectContaining({
           subscriptionId: "side-B",
-          view: expect.objectContaining({
-            cursor: 2,
-            session: expect.objectContaining({ id: "B", title: "side still streaming" }),
+          update: expect.objectContaining({
+            kind: "snapshot",
+            view: expect.objectContaining({
+              cursor: 2,
+              session: expect.objectContaining({ id: "B", title: "side still streaming" }),
+            }),
           }),
         })
       )

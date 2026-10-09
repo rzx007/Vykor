@@ -19,7 +19,10 @@ import { createQueuedPromptActions } from "./queued-prompt-actions"
 import { createSessionActions } from "./session-actions"
 import { createGoalActions } from "./goal-actions"
 import { createApplySessionUpdate } from "./session-view-actions"
+import { applySessionPartDeltas } from "./session-view-state"
+import { createSessionUpdateDeliveryAcknowledger } from "./session-update-delivery"
 import type { DesktopSessionState } from "./types"
+import type { DesktopSessionUpdate } from "@shared/session-types"
 
 const selectedProjectGitRefreshScheduler = createSelectedProjectGitRefreshScheduler(
   (options) => useDesktopSessionStore.getState().refreshSelectedProjectGit(options),
@@ -136,10 +139,59 @@ export function attachDesktopSessionEvents(): () => void {
       get: useDesktopSessionStore.getState,
       projectDetailsCoordinator,
     })
-    detachDesktopSessionUpdates = window.desktop.sessions.onUpdated((view) => {
-      useDesktopSessionStore.getState().applySessionUpdate(view)
-      goalRefreshScheduler.schedule(view.session.id)
+    const acknowledger = createSessionUpdateDeliveryAcknowledger(window.desktop.sessions)
+    let activeSubscriptionId: string | null = null
+    let activeGeneration = 0
+    const unsubscribe = window.desktop.sessions.onUpdated((update: DesktopSessionUpdate) => {
+      if (
+        activeSubscriptionId !== null &&
+        update.subscriptionId !== activeSubscriptionId &&
+        update.generation < activeGeneration
+      ) return
+      if (
+        activeSubscriptionId === update.subscriptionId &&
+        update.generation < activeGeneration
+      ) return
+      if (
+        activeSubscriptionId === update.subscriptionId &&
+        update.generation > activeGeneration &&
+        update.kind !== "snapshot"
+      ) {
+        acknowledger.acknowledge(update, "resync-required")
+        return
+      }
+
+      if (update.kind === "snapshot") {
+        activeSubscriptionId = update.subscriptionId
+        activeGeneration = update.generation
+        useDesktopSessionStore.getState().applySessionUpdate(update.view)
+        goalRefreshScheduler.schedule(update.view.session.id)
+        acknowledger.acknowledge(update, "applied")
+        return
+      }
+
+      const state = useDesktopSessionStore.getState()
+      if (
+        state.activeSessionId !== update.sessionId ||
+        state.sessionView?.session.id !== update.sessionId
+      ) {
+        acknowledger.acknowledge(update, "resync-required")
+        return
+      }
+      const result = applySessionPartDeltas(state.sessionView, update)
+      if (result.kind === "resync-required") {
+        acknowledger.acknowledge(update, "resync-required")
+        return
+      }
+      activeSubscriptionId = update.subscriptionId
+      activeGeneration = update.generation
+      useDesktopSessionStore.setState({ sessionView: result.view })
+      acknowledger.acknowledge(update, "applied")
     })
+    detachDesktopSessionUpdates = () => {
+      unsubscribe()
+      acknowledger.dispose()
+    }
     if (typeof window.desktop.activity?.onUpdated === "function") {
       const generation = ++activityAttachGeneration
       detachDesktopActivity = window.desktop.activity.onUpdated((update) => {

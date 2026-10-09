@@ -291,6 +291,52 @@ export interface DesktopSessionView {
   permissions: DesktopPermissionRequest[]
 }
 
+export interface DesktopSessionPartDelta {
+  seq: number
+  messageId: string
+  partId: string
+  field: "text" | "reasoning"
+  delta: string
+  baseLength: number
+  createdAt: number
+  partSeq?: number
+}
+
+export type DesktopSessionUpdate =
+  | {
+      kind: "snapshot"
+      subscriptionId: string
+      generation: number
+      deliveryId: string
+      view: DesktopSessionView
+    }
+  | {
+      kind: "part-delta"
+      subscriptionId: string
+      generation: number
+      deliveryId: string
+      sessionId: string
+      deltas: DesktopSessionPartDelta[]
+    }
+
+export interface DesktopSessionUpdateAck {
+  subscriptionId: string
+  generation: number
+  deliveryId: string
+  result: "applied" | "resync-required"
+}
+
+export interface DesktopSessionUpdateAckResult {
+  accepted: boolean
+}
+
+export interface DesktopSessionResyncRequest {
+  subscriptionId: string
+  generation: number
+  deliveryId: string
+  lastAppliedDeliveryId: string | null
+}
+
 export interface OpenDesktopAuxSessionInput {
   subscriptionId: string
   sessionId: string
@@ -302,7 +348,7 @@ export interface CloseDesktopAuxSessionInput {
 
 export interface DesktopAuxSessionUpdate {
   subscriptionId: string
-  view: DesktopSessionView
+  update: DesktopSessionUpdate
 }
 
 interface CreateDesktopSessionBaseInput {

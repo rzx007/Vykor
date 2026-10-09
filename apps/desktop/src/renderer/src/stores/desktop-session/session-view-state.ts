@@ -1,9 +1,101 @@
-import type { DesktopSessionView } from "@shared/session-types"
+import type {
+  DesktopSessionPart,
+  DesktopSessionPartDelta,
+  DesktopSessionView,
+} from "@shared/session-types"
 import {
   reconcilePendingPromptSubmissions,
   reconcileQueuedPromptActions,
 } from "./pending-prompt-state"
 import type { DesktopOperation, DesktopSessionRuntime } from "./types"
+
+export type ApplySessionPartDeltasResult =
+  | { kind: "applied"; view: DesktopSessionView }
+  | { kind: "resync-required" }
+
+export function applySessionPartDeltas(
+  view: DesktopSessionView,
+  update: { sessionId: string; deltas: readonly DesktopSessionPartDelta[] }
+): ApplySessionPartDeltasResult {
+  if (update.sessionId !== view.session.id) return { kind: "resync-required" }
+
+  let parts: DesktopSessionPart[] | null = null
+  let cursor = view.cursor
+  let previousSeq = Number.NEGATIVE_INFINITY
+  let addedPart = false
+
+  for (const delta of update.deltas) {
+    if (
+      !Number.isSafeInteger(delta.seq) ||
+      delta.seq <= previousSeq ||
+      !Number.isSafeInteger(delta.baseLength) ||
+      delta.baseLength < 0 ||
+      !Number.isFinite(delta.createdAt) ||
+      typeof delta.delta !== "string" ||
+      (delta.field !== "text" && delta.field !== "reasoning")
+    ) {
+      return { kind: "resync-required" }
+    }
+    previousSeq = delta.seq
+    if (delta.seq <= cursor) continue
+
+    const message = view.messages.find((candidate) => candidate.id === delta.messageId)
+    if (!message || message.sessionId !== update.sessionId) return { kind: "resync-required" }
+
+    const currentParts = parts ?? view.parts
+    const partIndex = currentParts.findIndex((candidate) => candidate.id === delta.partId)
+    if (partIndex < 0) {
+      if (
+        delta.baseLength !== 0 ||
+        delta.partSeq === undefined ||
+        !Number.isSafeInteger(delta.partSeq) ||
+        delta.partSeq < 0
+      ) {
+        return { kind: "resync-required" }
+      }
+      if (parts === null) parts = [...view.parts]
+      parts.push({
+        id: delta.partId,
+        sessionId: update.sessionId,
+        messageId: delta.messageId,
+        seq: delta.partSeq,
+        type: delta.field,
+        status: "running",
+        text: delta.delta,
+        metadata: {},
+        createdAt: delta.createdAt,
+        updatedAt: delta.createdAt,
+      })
+      addedPart = true
+    } else {
+      const part = currentParts[partIndex]
+      if (
+        !part ||
+        part.sessionId !== update.sessionId ||
+        part.messageId !== delta.messageId ||
+        part.type !== delta.field ||
+        typeof part.text !== "string" ||
+        part.text.length !== delta.baseLength
+      ) {
+        return { kind: "resync-required" }
+      }
+      if (parts === null) parts = [...view.parts]
+      parts[partIndex] = {
+        ...part,
+        text: part.text + delta.delta,
+        updatedAt: delta.createdAt,
+      }
+    }
+    cursor = delta.seq
+  }
+
+  if (parts === null) return { kind: "applied", view }
+  if (addedPart) parts.sort((left, right) => left.seq - right.seq)
+  return {
+    kind: "applied",
+    view: { ...view, parts, cursor, syncStatus: "connected" },
+  }
+}
 
 export function acceptActiveSessionView(
   activeSessionId: string | null,

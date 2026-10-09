@@ -61,6 +61,8 @@ import {
   selectPermissionReplyPending,
 } from "@renderer/stores/desktop-session/selectors"
 import { areDesktopAttachmentsSendable } from "@shared/attachment-types"
+import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session-view-state"
+import { createSessionUpdateDeliveryAcknowledger } from "@renderer/stores/desktop-session/session-update-delivery"
 import type {
   DesktopSessionView,
   DesktopSessionRecord,
@@ -403,8 +405,12 @@ export function SideChatPanel({
           checking = false
         })
     }
-    const accept = (next: DesktopSessionView, snapshot = false): void => {
-      if (disposed) return
+    const accept = (
+      next: DesktopSessionView,
+      snapshot = false,
+      reconcileRuntime = true
+    ): boolean => {
+      if (disposed) return false
       if (
         next.session.id === sourceId ||
         next.session.id !== targetId ||
@@ -417,18 +423,57 @@ export function SideChatPanel({
           setView(null)
           setLoadError("侧边聊天的来源不匹配，未发送消息。")
         }
-        return
+        return false
       }
-      if (acceptedView.current && next.cursor < acceptedView.current.cursor) return
+      if (acceptedView.current && next.cursor < acceptedView.current.cursor) return true
       bindValidatedTarget(sourceId, targetId)
       acceptedView.current = next
-      useDesktopSessionStore.getState().applySessionUpdate(next)
+      if (reconcileRuntime) useDesktopSessionStore.getState().applySessionUpdate(next)
       setView(next)
       setLoadError(null)
       if (next.syncStatus === "reconnecting") checkTarget()
+      return true
     }
+    const acknowledger = createSessionUpdateDeliveryAcknowledger(window.desktop.sessions)
+    let currentGeneration = 0
     const unsubscribe = window.desktop.sessions.onAuxUpdated((update) => {
-      if (update.subscriptionId === subscriptionId) accept(update.view)
+      if (update.subscriptionId !== subscriptionId) return
+      const delivery = update.update
+      if (delivery.subscriptionId !== subscriptionId) {
+        acknowledger.acknowledge(
+          { ...delivery, subscriptionId: update.subscriptionId },
+          "resync-required"
+        )
+        return
+      }
+      if (delivery.generation < currentGeneration) return
+      if (delivery.kind === "snapshot") {
+        currentGeneration = delivery.generation
+        acknowledger.acknowledge(
+          delivery,
+          accept(delivery.view) ? "applied" : "resync-required"
+        )
+        return
+      }
+      if (delivery.generation > currentGeneration && currentGeneration !== 0) {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      const current = acceptedView.current
+      if (!current || delivery.sessionId !== targetId || current.session.id !== targetId) {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      const result = applySessionPartDeltas(current, delivery)
+      if (result.kind === "resync-required") {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      currentGeneration = delivery.generation
+      acknowledger.acknowledge(
+        delivery,
+        accept(result.view, false, false) ? "applied" : "resync-required"
+      )
     })
     void window.desktop.sessions.openAux({ subscriptionId, sessionId: targetId }).then(
       (next) => accept(next, true),
@@ -445,6 +490,7 @@ export function SideChatPanel({
     return () => {
       disposed = true
       unsubscribe()
+      acknowledger.dispose()
       void window.desktop.sessions.closeAux({ subscriptionId }).catch(() => {})
       if (checking)
         void window.desktop.sessions

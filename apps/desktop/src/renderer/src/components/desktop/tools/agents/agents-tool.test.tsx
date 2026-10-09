@@ -5,12 +5,18 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { AgentsTool } from "./agents-tool"
-import type { DesktopAuxSessionUpdate, DesktopSessionView } from "@shared/session-types"
+import type {
+  DesktopAuxSessionUpdate,
+  DesktopSessionUpdate,
+  DesktopSessionView,
+} from "@shared/session-types"
 
 let root: Root
 let container: HTMLDivElement
 const openAux = vi.fn<() => Promise<DesktopSessionView>>()
 const closeAux = vi.fn(async () => undefined)
+const acknowledgeUpdate = vi.fn(async () => ({ accepted: true }))
+const requestUpdateResync = vi.fn(async () => ({ accepted: true }))
 const auxListeners = new Set<(update: DesktopAuxSessionUpdate) => void>()
 const callbacks = {
   onOpenFile: vi.fn(),
@@ -24,6 +30,8 @@ beforeEach(() => {
   openAux.mockReset()
   openAux.mockImplementation(() => new Promise<never>(() => {}))
   closeAux.mockClear()
+  acknowledgeUpdate.mockReset().mockResolvedValue({ accepted: true })
+  requestUpdateResync.mockReset().mockResolvedValue({ accepted: true })
   auxListeners.clear()
   Object.defineProperty(window, "desktop", {
     configurable: true,
@@ -37,6 +45,8 @@ beforeEach(() => {
         },
         openAux,
         closeAux,
+        acknowledgeUpdate,
+        requestUpdateResync,
       },
     },
   })
@@ -88,6 +98,67 @@ it("opens the requested agent's existing detail subscription once and allows ret
   })
   expect(container.querySelector('[aria-label="返回子智能体列表"]')).toBeNull()
   expect(openAux).toHaveBeenCalledTimes(1)
+})
+
+it("applies and acknowledges a child-session part delta", async () => {
+  const initial = emptySessionView("child-1", 1)
+  initial.messages.push({
+    id: "message-1",
+    sessionId: "child-1",
+    seq: 1,
+    role: "assistant",
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  initial.parts.push({
+    id: "part-1",
+    sessionId: "child-1",
+    messageId: "message-1",
+    seq: 1,
+    type: "text",
+    status: "running",
+    text: "hello",
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  openAux.mockResolvedValueOnce(initial)
+  await act(async () => {
+    root.render(<AgentsTool {...callbacks} active openRequest={{ id: 10, taskId: "task-1" }} />)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  })
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)) })
+  expect(auxListeners.size).toBe(1)
+  const update: DesktopSessionUpdate = {
+    kind: "part-delta",
+    subscriptionId: "agents:details",
+    generation: 1,
+    deliveryId: "child-delivery-1",
+    sessionId: "child-1",
+    deltas: [{
+      seq: 2,
+      messageId: "message-1",
+      partId: "part-1",
+      field: "text",
+      delta: " world",
+      baseLength: 5,
+      createdAt: 2,
+    }],
+  }
+  await act(async () =>
+    auxListeners.forEach((listener) =>
+      listener({ subscriptionId: "agents:details", update })
+    )
+  )
+
+  expect(acknowledgeUpdate).toHaveBeenCalledWith({
+    subscriptionId: "agents:details",
+    generation: 1,
+    deliveryId: "child-delivery-1",
+    result: "applied",
+  })
+  expect(container.textContent).toContain("hello world")
 })
 
 it("releases hidden agent details and reopens the selected child when visible again", async () => {

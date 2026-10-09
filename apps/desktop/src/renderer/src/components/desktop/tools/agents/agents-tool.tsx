@@ -31,6 +31,8 @@ import {
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session-view-state"
+import { createSessionUpdateDeliveryAcknowledger } from "@renderer/stores/desktop-session/session-update-delivery"
 import type { DesktopSessionTask, DesktopSessionView } from "@shared/session-types"
 import {
   agentTaskStatusLabel,
@@ -223,16 +225,52 @@ function AgentDetails({
 }): React.JSX.Element {
   const childSessionId = task?.childSessionId
   const [view, setView] = useState<DesktopSessionView | null>(null)
+  const viewRef = useRef<DesktopSessionView | null>(null)
   const [loading, setLoading] = useState(Boolean(childSessionId))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!childSessionId) return
     let disposed = false
+    viewRef.current = null
+    const acknowledger = createSessionUpdateDeliveryAcknowledger(window.desktop.sessions)
+    let currentGeneration = 0
     const unsubscribe = window.desktop.sessions.onAuxUpdated((update) => {
-      if (disposed || !matchesAgentSessionUpdate(detailsSubscriptionId, childSessionId, update))
+      if (disposed || update.subscriptionId !== detailsSubscriptionId) return
+      const delivery = update.update
+      if (!matchesAgentSessionUpdate(detailsSubscriptionId, childSessionId, update)) {
+        acknowledger.acknowledge(
+          { ...delivery, subscriptionId: update.subscriptionId },
+          "resync-required"
+        )
         return
-      setView(update.view)
+      }
+      if (delivery.generation < currentGeneration) return
+      if (delivery.kind === "snapshot") {
+        currentGeneration = delivery.generation
+        viewRef.current = delivery.view
+        setView(delivery.view)
+        acknowledger.acknowledge(delivery, "applied")
+        return
+      }
+      if (delivery.generation > currentGeneration && currentGeneration !== 0) {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      const current = viewRef.current
+      if (!current) {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      const result = applySessionPartDeltas(current, delivery)
+      if (result.kind === "resync-required") {
+        acknowledger.acknowledge(delivery, "resync-required")
+        return
+      }
+      currentGeneration = delivery.generation
+      viewRef.current = result.view
+      setView(result.view)
+      acknowledger.acknowledge(delivery, "applied")
     })
     void window.desktop.sessions
       .openAux({
@@ -242,6 +280,7 @@ function AgentDetails({
       .then(
         (next) => {
           if (disposed) return
+          viewRef.current = next
           setView(next)
           setLoading(false)
         },
@@ -254,6 +293,7 @@ function AgentDetails({
     return () => {
       disposed = true
       unsubscribe()
+      acknowledger.dispose()
       void window.desktop.sessions
         .closeAux({ subscriptionId: detailsSubscriptionId })
         .catch(() => {})

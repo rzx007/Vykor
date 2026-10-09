@@ -3,6 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { emptySessionView, resetDesktopSessionStore } from "./store-test-fixtures"
 import { attachDesktopSessionEvents, useDesktopSessionStore } from "./store"
 import { createActivityState } from "./activity-state"
+import { createEmptySessionRuntime } from "./operation-state"
+import type { DesktopSessionUpdate } from "@shared/session-types"
+
+function snapshotUpdate(view: ReturnType<typeof emptySessionView>): DesktopSessionUpdate {
+  return {
+    kind: "snapshot",
+    subscriptionId: "primary:test",
+    generation: 1,
+    deliveryId: `snapshot-${view.cursor}`,
+    view,
+  }
+}
 
 beforeEach(() => {
   resetDesktopSessionStore()
@@ -23,6 +35,129 @@ describe("desktop session store composition", () => {
 })
 
 describe("desktop session store event lifecycle", () => {
+  it("applies session part deltas without running snapshot reconciliation", async () => {
+    vi.useFakeTimers()
+    const listeners = new Set<(update: DesktopSessionUpdate) => void>()
+    const acknowledgeUpdate = vi.fn(async () => ({ accepted: true }))
+    const getGoal = vi.fn(async () => null)
+    const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
+    vi.stubGlobal("window", {
+      desktop: {
+        sessions: {
+          onUpdated: (listener: (update: DesktopSessionUpdate) => void) => {
+            listeners.add(listener)
+            return () => listeners.delete(listener)
+          },
+          onDaemonStatusChanged: () => () => undefined,
+          onDataDirectoryChanged: () => () => undefined,
+          onDaemonRestarted: () => () => undefined,
+          acknowledgeUpdate,
+          requestUpdateResync: vi.fn(async () => ({ accepted: true })),
+          getGoal,
+          open,
+        },
+      },
+    })
+    const view = emptySessionView("session-1", 1)
+    view.messages.push({
+      id: "message-1",
+      sessionId: "session-1",
+      seq: 1,
+      role: "assistant",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    view.parts.push({
+      id: "part-1",
+      sessionId: "session-1",
+      messageId: "message-1",
+      seq: 1,
+      type: "text",
+      status: "running",
+      text: "hello",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const sessionsBefore = [view.session]
+    const runtimesBefore = { "session-1": createEmptySessionRuntime() }
+    useDesktopSessionStore.setState({
+      activeSessionId: null,
+      sessionView: null,
+      sessions: sessionsBefore,
+    })
+    const cleanup = attachDesktopSessionEvents()
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-1",
+      sessionView: view,
+      sessionRuntimes: runtimesBefore,
+    })
+
+    try {
+      const update: DesktopSessionUpdate = {
+        kind: "part-delta",
+        subscriptionId: "primary:1",
+        generation: 1,
+        deliveryId: "delivery-1",
+        sessionId: "session-1",
+        deltas: [{
+          seq: 2,
+          messageId: "message-1",
+          partId: "part-1",
+          field: "text",
+          delta: " world",
+          baseLength: 5,
+          createdAt: 2,
+        }],
+      }
+      listeners.forEach((listener) => listener(update))
+      await Promise.resolve()
+
+      expect(useDesktopSessionStore.getState().sessionView?.parts[0]?.text).toBe("hello world")
+      expect(useDesktopSessionStore.getState().sessionView?.cursor).toBe(2)
+      expect(useDesktopSessionStore.getState().sessions).toBe(sessionsBefore)
+      expect(useDesktopSessionStore.getState().sessionRuntimes["session-1"]).toBe(
+        runtimesBefore["session-1"]
+      )
+      expect(open).not.toHaveBeenCalled()
+      expect(acknowledgeUpdate).toHaveBeenCalledWith({
+        subscriptionId: "primary:1",
+        generation: 1,
+        deliveryId: "delivery-1",
+        result: "applied",
+      })
+      listeners.forEach((listener) => listener({
+        ...update,
+        generation: 0,
+        deliveryId: "stale-generation",
+        deltas: [{ ...update.deltas[0]!, seq: 3, delta: "stale", baseLength: 11 }],
+      }))
+      expect(acknowledgeUpdate).toHaveBeenCalledTimes(1)
+      expect(useDesktopSessionStore.getState().sessionView?.parts[0]?.text).toBe("hello world")
+      const mismatchedUpdate: DesktopSessionUpdate = {
+        ...update,
+        deliveryId: "delivery-2",
+        deltas: [{ ...update.deltas[0]!, seq: 3, delta: "!", baseLength: 0, createdAt: 3 }],
+      }
+      listeners.forEach((listener) => listener(mismatchedUpdate))
+      await Promise.resolve()
+      expect(useDesktopSessionStore.getState().sessionView?.parts[0]?.text).toBe("hello world")
+      expect(useDesktopSessionStore.getState().sessionView?.cursor).toBe(2)
+      expect(acknowledgeUpdate).toHaveBeenLastCalledWith({
+        subscriptionId: "primary:1",
+        generation: 1,
+        deliveryId: "delivery-2",
+        result: "resync-required",
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(getGoal).not.toHaveBeenCalled()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+
   it("shares one Activity listener under two mounted bridges and removes it on final detach", async () => {
     const listeners = new Set<
       (value: import("@shared/activity-types").DesktopActivityUpdate) => void
@@ -66,14 +201,14 @@ describe("desktop session store event lifecycle", () => {
   })
 
   it("shares subscriptions until the last cleanup and can attach again", () => {
-    const sessionSubscribers = new Set<(view: ReturnType<typeof emptySessionView>) => void>()
+    const sessionSubscribers = new Set<(update: DesktopSessionUpdate) => void>()
     const daemonSubscribers = new Set<
       (status: { phase: "ready"; message: string; updatedAt: number }) => void
     >()
     const unsubscribeSession = vi.fn()
     const unsubscribeDaemon = vi.fn()
     const unsubscribeAttachment = vi.fn()
-    const onUpdated = vi.fn((listener: (view: ReturnType<typeof emptySessionView>) => void) => {
+    const onUpdated = vi.fn((listener: (update: DesktopSessionUpdate) => void) => {
       sessionSubscribers.add(listener)
       return () => {
         unsubscribeSession()
@@ -91,7 +226,8 @@ describe("desktop session store event lifecycle", () => {
     )
     const onUploadEvent = vi.fn(() => unsubscribeAttachment)
     const publishSession = (view: ReturnType<typeof emptySessionView>): void => {
-      sessionSubscribers.forEach((listener) => listener(view))
+      const update = snapshotUpdate(view)
+      sessionSubscribers.forEach((listener) => listener(update))
     }
     const publishDaemon = (status: {
       phase: "ready"
@@ -102,7 +238,14 @@ describe("desktop session store event lifecycle", () => {
     }
     vi.stubGlobal("window", {
       desktop: {
-        sessions: { onUpdated, onDaemonStatusChanged, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined },
+        sessions: {
+          onUpdated,
+          onDaemonStatusChanged,
+          onDataDirectoryChanged: () => () => undefined,
+          onDaemonRestarted: () => () => undefined,
+          acknowledgeUpdate: vi.fn(async () => ({ accepted: true })),
+          requestUpdateResync: vi.fn(async () => ({ accepted: true })),
+        },
         attachments: { onUploadEvent },
       },
     })
@@ -151,14 +294,19 @@ describe("desktop session store event lifecycle", () => {
   })
 
   it("resnapshots the active session after the final listener reattaches", async () => {
-    const sessionSubscribers = new Set<(view: ReturnType<typeof emptySessionView>) => void>()
-    const onUpdated = vi.fn((listener: (view: ReturnType<typeof emptySessionView>) => void) => {
+    const sessionSubscribers = new Set<(update: DesktopSessionUpdate) => void>()
+    const onUpdated = vi.fn((listener: (update: DesktopSessionUpdate) => void) => {
       sessionSubscribers.add(listener)
       return () => sessionSubscribers.delete(listener)
     })
     const onDaemonStatusChanged = vi.fn(() => () => undefined)
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 2))
-    vi.stubGlobal("window", { desktop: { sessions: { onUpdated, onDaemonStatusChanged, open, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined } } })
+    vi.stubGlobal("window", { desktop: { sessions: {
+      onUpdated, onDaemonStatusChanged, open,
+      acknowledgeUpdate: vi.fn(async () => ({ accepted: true })),
+      requestUpdateResync: vi.fn(async () => ({ accepted: true })),
+      onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined,
+    } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1", 1),
@@ -176,21 +324,31 @@ describe("desktop session store event lifecycle", () => {
 
   it("debounces goal refreshes across a burst of session updates", async () => {
     vi.useFakeTimers()
-    const sessionSubscribers = new Set<(view: ReturnType<typeof emptySessionView>) => void>()
-    const onUpdated = vi.fn((listener: (view: ReturnType<typeof emptySessionView>) => void) => {
+    const sessionSubscribers = new Set<(update: DesktopSessionUpdate) => void>()
+    const onUpdated = vi.fn((listener: (update: DesktopSessionUpdate) => void) => {
       sessionSubscribers.add(listener)
       return () => sessionSubscribers.delete(listener)
     })
     const getGoal = vi.fn(async () => null)
     vi.stubGlobal("window", {
-      desktop: { sessions: { onUpdated, onDaemonStatusChanged: () => () => undefined, getGoal, onDataDirectoryChanged: () => () => undefined, onDaemonRestarted: () => () => undefined } },
+      desktop: { sessions: {
+        onUpdated,
+        onDaemonStatusChanged: () => () => undefined,
+        getGoal,
+        acknowledgeUpdate: vi.fn(async () => ({ accepted: true })),
+        requestUpdateResync: vi.fn(async () => ({ accepted: true })),
+        onDataDirectoryChanged: () => () => undefined,
+        onDaemonRestarted: () => () => undefined,
+      } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
 
     const cleanup = attachDesktopSessionEvents()
     try {
       for (const cursor of [2, 3, 4]) {
-        sessionSubscribers.forEach((listener) => listener(emptySessionView("session-1", cursor)))
+        sessionSubscribers.forEach((listener) =>
+          listener(snapshotUpdate(emptySessionView("session-1", cursor)))
+        )
       }
       expect(getGoal).not.toHaveBeenCalled()
 

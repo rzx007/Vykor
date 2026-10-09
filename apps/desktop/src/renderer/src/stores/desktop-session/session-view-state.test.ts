@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import type { DesktopSessionView } from "@shared/session-types"
+import type { DesktopSessionPartDelta, DesktopSessionView } from "@shared/session-types"
 import { createEmptySessionRuntime } from "./operation-state"
 import { acceptActiveSessionView, reconcileRuntimeWithView } from "./session-view-state"
+import * as sessionViewState from "./session-view-state"
 
 function emptySessionView(sessionId: string, cursor = 0): DesktopSessionView {
   return {
@@ -27,7 +28,239 @@ function emptySessionView(sessionId: string, cursor = 0): DesktopSessionView {
   }
 }
 
+interface TestPartDelta {
+  seq: number
+  messageId: string
+  partId: string
+  field: string
+  delta: string
+  baseLength: number
+  createdAt: number
+  partSeq?: number
+}
+
+function viewWithTextPart(text: string): DesktopSessionView {
+  const view = emptySessionView("s1", 7)
+  view.messages.push(
+    {
+      id: "m1",
+      sessionId: "s1",
+      seq: 1,
+      role: "assistant",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    {
+      id: "m2",
+      sessionId: "s1",
+      seq: 2,
+      role: "assistant",
+      metadata: {},
+      createdAt: 2,
+      updatedAt: 2,
+    }
+  )
+  view.parts.push({
+    id: "p1",
+    sessionId: "s1",
+    messageId: "m1",
+    seq: 1,
+    type: "text",
+    status: "running",
+    text,
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  return view
+}
+
+function applyDeltas(view: DesktopSessionView, sessionId: string, deltas: TestPartDelta[]) {
+  const reducer = Reflect.get(sessionViewState, "applySessionPartDeltas")
+  if (typeof reducer !== "function") throw new Error("session delta reducer is not implemented")
+  return reducer(view, { sessionId, deltas: deltas as DesktopSessionPartDelta[] })
+}
+
 describe("desktop session view state", () => {
+  it("exposes a session delta reducer", () => {
+    expect(Reflect.get(sessionViewState, "applySessionPartDeltas")).toBeTypeOf("function")
+  })
+
+  it("appends a delta and preserves unchanged entity references", () => {
+    const view = viewWithTextPart("hello")
+    const untouchedMessage = view.messages[1]
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: " world",
+        baseLength: 5,
+        createdAt: 8,
+      },
+    ])
+
+    expect(result.kind).toBe("applied")
+    if (result.kind !== "applied") throw new Error("expected delta to apply")
+    expect(result.view.parts[0]?.text).toBe("hello world")
+    expect(result.view.messages[1]).toBe(untouchedMessage)
+    expect(result.view.cursor).toBe(8)
+  })
+
+  it("creates a new reasoning part at its supplied part sequence", () => {
+    const view = viewWithTextPart("hello")
+    const result = applyDeltas(view, "s1", [{
+      seq: 8,
+      messageId: "m2",
+      partId: "p2",
+      field: "reasoning",
+      delta: "thinking",
+      baseLength: 0,
+      partSeq: 2,
+      createdAt: 8,
+    }])
+
+    expect(result.kind).toBe("applied")
+    if (result.kind !== "applied") throw new Error("expected delta to apply")
+    expect(result.view.parts).toHaveLength(2)
+    expect(result.view.parts[1]).toMatchObject({
+      id: "p2",
+      messageId: "m2",
+      seq: 2,
+      type: "reasoning",
+      text: "thinking",
+    })
+  })
+
+  it("uses JavaScript UTF-16 code-unit offsets for Unicode text", () => {
+    const view = viewWithTextPart("😀")
+    const result = applyDeltas(view, "s1", [{
+      seq: 8,
+      messageId: "m1",
+      partId: "p1",
+      field: "text",
+      delta: "!",
+      baseLength: 2,
+      createdAt: 8,
+    }])
+
+    expect(result.kind).toBe("applied")
+    if (result.kind !== "applied") throw new Error("expected delta to apply")
+    expect(result.view.parts[0]?.text).toBe("😀!")
+  })
+
+  it("ignores a delta already covered by the view cursor", () => {
+    const view = viewWithTextPart("hello")
+    const result = applyDeltas(view, "s1", [{
+      seq: 7,
+      messageId: "m1",
+      partId: "p1",
+      field: "text",
+      delta: "duplicate",
+      baseLength: 5,
+      createdAt: 8,
+    }])
+
+    expect(result).toEqual({ kind: "applied", view })
+  })
+
+  it("rejects a mismatched offset without partially applying the batch", () => {
+    const view = viewWithTextPart("hello")
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "!",
+        baseLength: 0,
+        createdAt: 8,
+      },
+    ])
+
+    expect(result.kind).toBe("resync-required")
+    expect(view.parts[0]?.text).toBe("hello")
+    expect(view.cursor).toBe(7)
+  })
+
+  it("does not partially apply a batch when a later delta is invalid", () => {
+    const view = viewWithTextPart("hello")
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "!",
+        baseLength: 5,
+        createdAt: 8,
+      },
+      {
+        seq: 9,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "?",
+        baseLength: 0,
+        createdAt: 9,
+      },
+    ])
+
+    expect(result.kind).toBe("resync-required")
+    expect(view.parts[0]?.text).toBe("hello")
+    expect(view.cursor).toBe(7)
+  })
+
+  it("requires a snapshot when a delta refers to a missing message", () => {
+    const result = applyDeltas(viewWithTextPart("hello"), "s1", [{
+      seq: 8,
+      messageId: "missing",
+      partId: "p2",
+      field: "text",
+      delta: "text",
+      baseLength: 0,
+      partSeq: 2,
+      createdAt: 8,
+    }])
+
+    expect(result.kind).toBe("resync-required")
+  })
+
+  it("requires a snapshot when the update session does not match the view", () => {
+    const result = applyDeltas(viewWithTextPart("hello"), "other-session", [{
+      seq: 8,
+      messageId: "m1",
+      partId: "p1",
+      field: "text",
+      delta: "!",
+      baseLength: 5,
+      createdAt: 8,
+    }])
+
+    expect(result.kind).toBe("resync-required")
+  })
+
+  it("requires a recognized field before creating a part", () => {
+    const view = viewWithTextPart("hello")
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p2",
+        field: "tool",
+        delta: "output",
+        baseLength: 0,
+        partSeq: 2,
+        createdAt: 8,
+      },
+    ])
+
+    expect(result.kind).toBe("resync-required")
+    expect(view.parts).toHaveLength(1)
+  })
+
   it("does not replace a newer active view with an older cursor", () => {
     const current = emptySessionView("s1", 5)
     const incoming = emptySessionView("s1", 4)

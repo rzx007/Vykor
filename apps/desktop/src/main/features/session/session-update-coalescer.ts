@@ -14,12 +14,12 @@ export interface SessionUpdateCoalescer<TState, TSource> {
 }
 
 /**
- * Fixed-window throttle for full-snapshot session updates.
+ * Fixed-window throttle for session updates.
  *
  * The first `queue` opens a window; later enqueues within it only replace the
  * pending state. When the window elapses the latest state is delivered once,
- * after which the next enqueue opens a new window. Each delivery is a full
- * snapshot, so dropping intermediate frames loses no data.
+ * after which the next enqueue opens a new window. Callers can use the
+ * delivered state to construct either a delta batch or a recovery snapshot.
  */
 export function createSessionUpdateCoalescer<TState, TSource>(
   options: SessionUpdateCoalescerOptions<TState, TSource>

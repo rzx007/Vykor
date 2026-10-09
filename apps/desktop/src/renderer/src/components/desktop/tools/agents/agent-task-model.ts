@@ -34,9 +34,13 @@ export function matchesAgentSessionUpdate(
   expectedSessionId: string | null,
   update: DesktopAuxSessionUpdate
 ): boolean {
+  const sessionId =
+    update.update.kind === "snapshot"
+      ? update.update.view.session.id
+      : update.update.sessionId
   return Boolean(
     expectedSessionId &&
     update.subscriptionId === expectedSubscriptionId &&
-    update.view.session.id === expectedSessionId
+    sessionId === expectedSessionId
   )
 }

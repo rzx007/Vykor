@@ -14,7 +14,12 @@ import type {
   CloseDesktopAuxSessionInput,
   DesktopAuxSessionUpdate,
   DesktopSessionPart,
+  DesktopSessionPartDelta,
   DesktopSessionRecord,
+  DesktopSessionResyncRequest,
+  DesktopSessionUpdate,
+  DesktopSessionUpdateAck,
+  DesktopSessionUpdateAckResult,
   DesktopSessionView,
   DesktopStandardSessionPart,
   OpenDesktopAuxSessionInput,
@@ -22,7 +27,11 @@ import type {
 import { isOutsideProjectWorkspacePath } from "./outside-project-workspace"
 import { pumpSubscription } from "./session-subscription-pump"
 import { createSessionUpdateCoalescer } from "./session-update-coalescer"
-import { reserveSubscriptionSnapshot, SessionSubscriptionRegistry } from "./session-subscriptions"
+import {
+  reserveSubscriptionSnapshot,
+  SessionSubscriptionRegistry,
+  type SessionSubscription,
+} from "./session-subscriptions"
 import { app } from "electron"
 
 const primarySubscriptionSlot = "primary"
@@ -30,7 +39,7 @@ const defaultSessionUpdateIntervalMs = 50
 type SessionSubscriptionClient = Parameters<typeof syncEvents>[0]
 
 export interface SessionSubscriptionServiceOptions {
-  /** Coalescing window (ms) for full session updates pushed to the renderer. */
+  /** Coalescing window (ms) for session updates pushed to the renderer. */
   sessionUpdateIntervalMs?: number
 }
 
@@ -38,12 +47,40 @@ function auxiliarySubscriptionSlot(subscriptionId: string): string {
   return `aux:${subscriptionId}`
 }
 
+interface LiveDeliveryState {
+  ownerId: number
+  slot: string
+  sessionId: string
+  webContents: WebContents
+  subscription: SessionSubscription
+  subscriptionId: string
+  generation: number
+  inFlight: DesktopSessionUpdate | null
+  recentlyAckedDeliveryIds: Set<string>
+  ackedDeliveryOrder: string[]
+  pendingDeltas: DesktopSessionPartDelta[]
+  pendingBytes: number
+  pendingReady: boolean
+  snapshotRequired: boolean
+  latestState: VykorClientState | null
+  requestSnapshot(): void
+}
+
+const maxPendingDeltas = 500
+const maxPendingDeltaBytes = 1024 * 1024
+// Covers more than the five-second watchdog window at the default 50 ms cadence.
+const maxRememberedAcknowledgements = 128
+
 export class SessionSubscriptionService {
   private readonly subscriptions = new SessionSubscriptionRegistry()
+  private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
   private readonly invalidationListeners = new Set<(ownerId: number) => void>()
   private readonly primaryOwners = new Set<number>()
   private readonly snapshotListeners = new Set<(ownerId: number, view: DesktopSessionView) => void>()
   private readonly sessionUpdateIntervalMs: number
+  private nextGeneration = 1
+  private nextDeliveryId = 1
+  private nextPrimarySubscriptionId = 1
 
   constructor(options: SessionSubscriptionServiceOptions = {}) {
     this.sessionUpdateIntervalMs = options.sessionUpdateIntervalMs ?? defaultSessionUpdateIntervalMs
@@ -85,6 +122,142 @@ export class SessionSubscriptionService {
     this.subscriptions.delete(webContentsId, auxiliarySubscriptionSlot(subscriptionId))
   }
 
+  acknowledgeUpdate(
+    ownerId: number,
+    ack: DesktopSessionUpdateAck
+  ): DesktopSessionUpdateAckResult {
+    if (!isValidUpdateAck(ack)) return { accepted: false }
+    const live = this.findLiveDelivery(ownerId, ack.subscriptionId)
+    if (!live) return { accepted: false }
+    const inFlight = live.inFlight
+    if (
+      !inFlight ||
+      inFlight.generation !== ack.generation ||
+      inFlight.deliveryId !== ack.deliveryId
+    ) {
+      return { accepted: false }
+    }
+
+    live.inFlight = null
+    live.recentlyAckedDeliveryIds.add(ack.deliveryId)
+    live.ackedDeliveryOrder.push(ack.deliveryId)
+    if (live.ackedDeliveryOrder.length > maxRememberedAcknowledgements) {
+      const expired = live.ackedDeliveryOrder.shift()
+      if (expired) live.recentlyAckedDeliveryIds.delete(expired)
+    }
+    if (ack.result === "resync-required") {
+      live.requestSnapshot()
+    } else if (live.pendingReady) {
+      this.deliverPending(live)
+    }
+    return { accepted: true }
+  }
+
+  requestUpdateResync(
+    ownerId: number,
+    request: DesktopSessionResyncRequest
+  ): DesktopSessionUpdateAckResult {
+    if (!isValidResyncRequest(request)) return { accepted: false }
+    const live = this.findLiveDelivery(ownerId, request.subscriptionId)
+    if (!live) return { accepted: false }
+    if (live.recentlyAckedDeliveryIds.has(request.deliveryId)) return { accepted: true }
+    if (
+      live.generation !== request.generation ||
+      live.inFlight?.deliveryId !== request.deliveryId
+    ) {
+      return { accepted: false }
+    }
+
+    live.requestSnapshot()
+    return { accepted: true }
+  }
+
+  private findLiveDelivery(ownerId: number, subscriptionId: string): LiveDeliveryState | undefined {
+    const primary = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    const primaryDelivery = primary && this.liveDeliveries.get(primary)
+    if (primaryDelivery?.subscriptionId === subscriptionId) return primaryDelivery
+
+    const auxiliary = this.subscriptions.get(ownerId, auxiliarySubscriptionSlot(subscriptionId))
+    const auxiliaryDelivery = auxiliary && this.liveDeliveries.get(auxiliary)
+    return auxiliaryDelivery?.subscriptionId === subscriptionId ? auxiliaryDelivery : undefined
+  }
+
+  private deliverPending(live: LiveDeliveryState): void {
+    if (live.snapshotRequired) {
+      live.pendingReady = false
+      live.pendingDeltas = []
+      live.pendingBytes = 0
+      live.snapshotRequired = false
+      this.dispatchSnapshot(live, "reconnecting")
+      return
+    }
+    if (live.pendingDeltas.length === 0) {
+      live.pendingReady = false
+      return
+    }
+    const deltas = live.pendingDeltas
+    live.pendingDeltas = []
+    live.pendingBytes = 0
+    live.pendingReady = false
+    this.dispatchUpdate(live, {
+      kind: "part-delta",
+      subscriptionId: live.subscriptionId,
+      generation: live.generation,
+      deliveryId: this.createDeliveryId(),
+      sessionId: live.sessionId,
+      deltas,
+    })
+  }
+
+  private createDeliveryId(): string {
+    return `delivery-${this.nextDeliveryId++}`
+  }
+
+  private dispatchSnapshot(
+    live: LiveDeliveryState,
+    source: SyncEventUpdate["source"]
+  ): void {
+    const state = live.latestState
+    if (!state || !state.buckets[live.sessionId]?.session) return
+    let view: DesktopSessionView
+    try {
+      view = toDesktopSessionView(state, live.sessionId, source)
+    } catch (error) {
+      console.error(`[session] failed to build recovery snapshot for ${live.sessionId}`, error)
+      return
+    }
+    this.dispatchUpdate(live, {
+      kind: "snapshot",
+      subscriptionId: live.subscriptionId,
+      generation: live.generation,
+      deliveryId: this.createDeliveryId(),
+      view,
+    })
+  }
+
+  private dispatchUpdate(live: LiveDeliveryState, update: DesktopSessionUpdate): void {
+    if (
+      live.webContents.isDestroyed() ||
+      !this.subscriptions.isCurrent(live.ownerId, live.slot, live.subscription)
+    ) return
+    live.inFlight = update
+    try {
+      if (live.slot === primarySubscriptionSlot) {
+        live.webContents.send(IpcEvents.sessionUpdated, update)
+      } else {
+        const payload: DesktopAuxSessionUpdate = {
+          subscriptionId: update.subscriptionId,
+          update,
+        }
+        live.webContents.send(IpcEvents.sessionAuxUpdated, payload)
+      }
+    } catch (error) {
+      live.inFlight = null
+      live.snapshotRequired = true
+      console.error(`[session] failed to send update for owner ${live.ownerId}`, error)
+    }
+  }
+
   clearAll(): void {
     for (const ownerId of this.primaryOwners)
       for (const listener of this.invalidationListeners) listener(ownerId)
@@ -102,6 +275,7 @@ export class SessionSubscriptionService {
     for (const listener of this.invalidationListeners) listener(webContents.id)
 
     const controller = new AbortController()
+    const subscriptionId = `primary:${this.nextPrimarySubscriptionId++}`
     const subscription = { controller, sessionId }
     this.primaryOwners.add(webContents.id)
     webContents.once("destroyed", () => this.closeSession(webContents.id))
@@ -127,7 +301,8 @@ export class SessionSubscriptionService {
         primarySubscriptionSlot,
         sessionId,
         controller,
-        iterator
+        iterator,
+        subscriptionId
       )
     }, 0)
 
@@ -181,34 +356,94 @@ export class SessionSubscriptionService {
     sessionId: string,
     controller: AbortController,
     iterator: AsyncIterator<SyncEventUpdate>,
-    auxiliarySubscriptionId?: string
+    subscriptionId: string
   ): Promise<void> {
     const subscription = this.subscriptions.get(webContents.id, slot)
-    const deliver = (view: DesktopSessionView): void => {
-      if (webContents.isDestroyed()) return
-      if (!subscription || !this.subscriptions.isCurrent(webContents.id, slot, subscription)) return
-      try {
-        if (auxiliarySubscriptionId) {
-          const payload: DesktopAuxSessionUpdate = { subscriptionId: auxiliarySubscriptionId, view }
-          webContents.send(IpcEvents.sessionAuxUpdated, payload)
-          return
-        }
-        webContents.send(IpcEvents.sessionUpdated, view)
-      } catch {
-        // The window can be torn down between the guard above and the send.
-      }
+    if (!subscription || subscription.controller !== controller) return
+    let windowDeltas: DesktopSessionPartDelta[] = []
+    let windowBytes = 0
+    let coalescer!: ReturnType<typeof createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>>
+    const live: LiveDeliveryState = {
+      ownerId: webContents.id,
+      slot,
+      sessionId,
+      webContents,
+      subscription,
+      subscriptionId,
+      generation: this.nextGeneration++,
+      inFlight: null,
+      recentlyAckedDeliveryIds: new Set(),
+      ackedDeliveryOrder: [],
+      pendingDeltas: [],
+      pendingBytes: 0,
+      pendingReady: false,
+      snapshotRequired: false,
+      latestState: null,
+      requestSnapshot: () => undefined,
     }
-    const coalescer = createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>({
+    this.liveDeliveries.set(subscription, live)
+
+    const clearDeltaBuffers = (): void => {
+      windowDeltas = []
+      windowBytes = 0
+      live.pendingDeltas = []
+      live.pendingBytes = 0
+    }
+    const requireSnapshot = (): void => {
+      live.snapshotRequired = true
+      clearDeltaBuffers()
+    }
+    live.requestSnapshot = () => {
+      if (!live.latestState) return
+      live.generation = this.nextGeneration++
+      live.inFlight = null
+      live.snapshotRequired = false
+      live.pendingReady = false
+      clearDeltaBuffers()
+      coalescer.flushNow(live.latestState, "reconnecting")
+    }
+
+    coalescer = createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>({
       delayMs: this.sessionUpdateIntervalMs,
       deliver: (state, source) => {
+        live.latestState = state
         if (!state.buckets[sessionId]?.session) return
-        let view: DesktopSessionView
-        try {
-          view = toDesktopSessionView(state, sessionId, source)
-        } catch {
+        const deltas = windowDeltas
+        const requiresSnapshotNow = live.snapshotRequired || source === "reconnecting"
+        windowDeltas = []
+        windowBytes = 0
+
+        if (live.inFlight) {
+          if (requiresSnapshotNow) {
+            requireSnapshot()
+          } else {
+            live.pendingDeltas.push(...deltas)
+            live.pendingBytes += deltas.reduce((total, delta) => total + deltaByteLength(delta), 0)
+            if (
+              live.pendingDeltas.length > maxPendingDeltas ||
+              live.pendingBytes > maxPendingDeltaBytes
+            ) {
+              requireSnapshot()
+            }
+          }
+          live.pendingReady = true
           return
         }
-        deliver(view)
+
+        if (requiresSnapshotNow || deltas.length === 0) {
+          live.snapshotRequired = false
+          clearDeltaBuffers()
+          this.dispatchSnapshot(live, source)
+          return
+        }
+        this.dispatchUpdate(live, {
+          kind: "part-delta",
+          subscriptionId,
+          generation: live.generation,
+          deliveryId: this.createDeliveryId(),
+          sessionId,
+          deltas,
+        })
       },
     })
 
@@ -230,10 +465,25 @@ export class SessionSubscriptionService {
             coalescer.dispose()
             return
           }
-          // Text deltas do not change plugin UI ownership; their full view is built by the coalescer.
-          if (slot === primarySubscriptionSlot && update.event?.type !== "session.message.part.delta")
-            for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(update.state, sessionId, update.source))
+          live.latestState = update.state
+          const delta = toDesktopSessionPartDelta(update, sessionId)
+          if (delta && !live.snapshotRequired) {
+            windowDeltas.push(delta)
+            windowBytes += deltaByteLength(delta)
+            if (
+              windowDeltas.length + live.pendingDeltas.length > maxPendingDeltas ||
+              windowBytes + live.pendingBytes > maxPendingDeltaBytes
+            ) {
+              requireSnapshot()
+            }
+          } else if (!delta) {
+            requireSnapshot()
+            if (slot === primarySubscriptionSlot)
+              for (const listener of this.snapshotListeners)
+                listener(webContents.id, toDesktopSessionView(update.state, sessionId, update.source))
+          }
           if (update.source === "reconnecting") {
+            requireSnapshot()
             coalescer.flushNow(update.state, "reconnecting")
             return
           }
@@ -242,6 +492,8 @@ export class SessionSubscriptionService {
         onReconnecting: (last) => {
           if (slot === primarySubscriptionSlot)
             for (const listener of this.snapshotListeners) listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
+          live.latestState = last.state
+          requireSnapshot()
           coalescer.flushNow(last.state, "reconnecting")
         },
         onError: (error) => {
@@ -252,8 +504,78 @@ export class SessionSubscriptionService {
       })
     } finally {
       coalescer.dispose()
+      live.inFlight = null
+      clearDeltaBuffers()
     }
   }
+}
+
+function toDesktopSessionPartDelta(
+  update: SyncEventUpdate,
+  sessionId: string
+): DesktopSessionPartDelta | null {
+  const event = update.event
+  if (!event || event.type !== "session.message.part.delta") return null
+  const payload = event.payload
+  const eventSessionId = payload.sessionId
+  const messageId = payload.messageId
+  const partId = payload.partId
+  const field = payload.field
+  const delta = payload.delta
+  if (
+    (event.sessionId !== undefined && event.sessionId !== sessionId) ||
+    (eventSessionId !== undefined && eventSessionId !== sessionId) ||
+    typeof messageId !== "string" ||
+    typeof partId !== "string" ||
+    (field !== "text" && field !== "reasoning") ||
+    typeof delta !== "string"
+  ) return null
+  const part = update.state.buckets[sessionId]?.partsByMessageId[messageId]?.find(
+    (candidate) => candidate.id === partId
+  )
+  if (!part || typeof part.text !== "string") return null
+  const baseLength = part.text.length - delta.length
+  if (baseLength < 0) return null
+  return {
+    seq: event.seq,
+    messageId,
+    partId,
+    field,
+    delta,
+    baseLength,
+    partSeq: part.seq,
+    createdAt: event.createdAt,
+  }
+}
+
+function deltaByteLength(delta: DesktopSessionPartDelta): number {
+  return Buffer.byteLength(JSON.stringify(delta), "utf8")
+}
+
+function isValidUpdateAck(value: DesktopSessionUpdateAck): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof value.subscriptionId === "string" &&
+    value.subscriptionId.length > 0 &&
+    Number.isSafeInteger(value.generation) &&
+    typeof value.deliveryId === "string" &&
+    value.deliveryId.length > 0 &&
+    (value.result === "applied" || value.result === "resync-required")
+  )
+}
+
+function isValidResyncRequest(value: DesktopSessionResyncRequest): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof value.subscriptionId === "string" &&
+    value.subscriptionId.length > 0 &&
+    Number.isSafeInteger(value.generation) &&
+    typeof value.deliveryId === "string" &&
+    value.deliveryId.length > 0 &&
+    (value.lastAppliedDeliveryId === null || typeof value.lastAppliedDeliveryId === "string")
+  )
 }
 
 function requireString(value: unknown, label: string): string {

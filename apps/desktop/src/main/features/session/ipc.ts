@@ -2,6 +2,8 @@ import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
   CheckoutDesktopProjectBranchInput,
   CloseDesktopAuxSessionInput,
+  DesktopSessionResyncRequest,
+  DesktopSessionUpdateAck,
   CreateDesktopProjectBranchInput,
   CreateDesktopSessionInput,
   EditLatestDesktopPromptInput,
@@ -168,6 +170,22 @@ export const sessionIpcContribution: IpcContribution = {
             event.sender.id,
             input as CloseDesktopAuxSessionInput
           ),
+      },
+      {
+          channel: IpcChannels.sessionUpdateAck,
+          handler: (event, ack) =>
+            desktopSessionService.acknowledgeSessionUpdate(
+              event.sender.id,
+              ack as DesktopSessionUpdateAck
+            ),
+      },
+      {
+          channel: IpcChannels.sessionUpdateResync,
+          handler: (event, request) =>
+            desktopSessionService.requestSessionUpdateResync(
+              event.sender.id,
+              request as DesktopSessionResyncRequest
+            ),
       },
       {
         channel: IpcChannels.sessionFork,

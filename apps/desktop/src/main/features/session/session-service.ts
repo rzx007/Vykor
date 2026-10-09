@@ -29,6 +29,9 @@ import type {
   DesktopSessionSearchResult,
   SearchSessionsOptions,
   DesktopSessionView,
+  DesktopSessionUpdateAck,
+  DesktopSessionUpdateAckResult,
+  DesktopSessionResyncRequest,
   EditLatestDesktopPromptInput,
   ForkDesktopSessionInput,
   InterruptDesktopSessionInput,
@@ -322,6 +325,20 @@ export class DesktopSessionService {
   async openSession(webContents: WebContents, sessionIdInput: string): Promise<DesktopSessionView> {
     const client = await this.getClient()
     return await this.subscriptions.openSession(client, webContents, sessionIdInput)
+  }
+
+  acknowledgeSessionUpdate(
+    ownerId: number,
+    ack: DesktopSessionUpdateAck
+  ): DesktopSessionUpdateAckResult {
+    return this.subscriptions.acknowledgeUpdate(ownerId, ack)
+  }
+
+  requestSessionUpdateResync(
+    ownerId: number,
+    request: DesktopSessionResyncRequest
+  ): DesktopSessionUpdateAckResult {
+    return this.subscriptions.requestUpdateResync(ownerId, request)
   }
 
   async openActivity(webContents: WebContents): Promise<DesktopActivityUpdate> {

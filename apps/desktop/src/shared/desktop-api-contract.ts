@@ -33,6 +33,10 @@ import type {
   DesktopSessionSearchResult,
   SearchSessionsOptions,
   DesktopSessionView,
+  DesktopSessionUpdate,
+  DesktopSessionUpdateAck,
+  DesktopSessionUpdateAckResult,
+  DesktopSessionResyncRequest,
   CloseDesktopAuxSessionInput,
   EditLatestDesktopPromptInput,
   ForkDesktopSessionInput,
@@ -467,6 +471,12 @@ export type DesktopAPI = {
     open: (sessionId: string) => Promise<DesktopSessionView>
     openAux: (input: OpenDesktopAuxSessionInput) => Promise<DesktopSessionView>
     closeAux: (input: CloseDesktopAuxSessionInput) => Promise<void>
+    acknowledgeUpdate: (
+      ack: DesktopSessionUpdateAck
+    ) => Promise<DesktopSessionUpdateAckResult>
+    requestUpdateResync: (
+      request: DesktopSessionResyncRequest
+    ) => Promise<DesktopSessionUpdateAckResult>
     fork: (input: ForkDesktopSessionInput) => Promise<DesktopSessionRecord>
     close: () => Promise<void>
     sendPrompt: (input: SendDesktopPromptInput) => Promise<void>
@@ -492,7 +502,7 @@ export type DesktopAPI = {
     onDaemonStatusChanged: (listener: (value: DesktopDaemonStatus) => void) => () => void
     onDataDirectoryChanged: (listener: () => void) => () => void
     onDaemonRestarted: (listener: () => void) => () => void
-    onUpdated: (listener: (value: DesktopSessionView) => void) => () => void
+    onUpdated: (listener: (value: DesktopSessionUpdate) => void) => () => void
     onAuxUpdated: (listener: (value: DesktopAuxSessionUpdate) => void) => () => void
   }
 }

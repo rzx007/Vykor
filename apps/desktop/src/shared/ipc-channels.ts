@@ -26,6 +26,9 @@ import type {
   DesktopSessionSearchResult,
   SearchSessionsOptions,
   DesktopSessionView,
+  DesktopSessionUpdateAck,
+  DesktopSessionUpdateAckResult,
+  DesktopSessionResyncRequest,
   CloseDesktopAuxSessionInput,
   EditLatestDesktopPromptInput,
   ForkDesktopSessionInput,
@@ -254,6 +257,8 @@ export const IpcChannels = {
   sessionOpen: "session:open",
   sessionAuxOpen: "session:aux-open",
   sessionAuxClose: "session:aux-close",
+  sessionUpdateAck: "session:update-ack",
+  sessionUpdateResync: "session:update-resync",
   sessionFork: "session:fork",
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
@@ -747,6 +752,14 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
     result: DesktopSessionView
   }
   [IpcChannels.sessionAuxClose]: { args: [input: CloseDesktopAuxSessionInput]; result: void }
+  [IpcChannels.sessionUpdateAck]: {
+    args: [ack: DesktopSessionUpdateAck]
+    result: DesktopSessionUpdateAckResult
+  }
+  [IpcChannels.sessionUpdateResync]: {
+    args: [request: DesktopSessionResyncRequest]
+    result: DesktopSessionUpdateAckResult
+  }
   [IpcChannels.sessionFork]: {
     args: [input: ForkDesktopSessionInput]
     result: DesktopSessionRecord

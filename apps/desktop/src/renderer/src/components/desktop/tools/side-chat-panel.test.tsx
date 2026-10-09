@@ -10,7 +10,11 @@ import {
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { selectDraftText } from "@renderer/stores/desktop-session/composer-draft-state"
 import { MainLayoutContext } from "../layout/main-layout/main-layout-context"
-import type { DesktopAuxSessionUpdate, DesktopSessionView } from "@shared/session-types"
+import type {
+  DesktopAuxSessionUpdate,
+  DesktopSessionUpdate,
+  DesktopSessionView,
+} from "@shared/session-types"
 import { SideChatPanel, appendSideChatQuote, sideChatTargets } from "./side-chat-panel"
 import { SideChatSelectionActions } from "./side-chat-selection-actions"
 import { UtilityPanel } from "../layout/main-layout/utility-panel/utility-panel"
@@ -33,6 +37,7 @@ vi.hoisted(() => {
 let root: Root
 let container: HTMLDivElement
 let listeners: Set<(update: DesktopAuxSessionUpdate) => void>
+let deliveryId = 0
 const sideView = (source = "main", cursor = 0): DesktopSessionView => ({
   ...emptySessionView(`side-${source}`, cursor),
   session: { ...emptySessionView(`side-${source}`).session, parentId: source, storage: "memory" },
@@ -45,6 +50,8 @@ const sendPrompt = vi.fn(async (_input: unknown): Promise<void> => undefined)
 const interrupt = vi.fn(async (_input: unknown) => undefined)
 const replyPermission = vi.fn(async (_input: unknown) => undefined)
 const closeAux = vi.fn(async (_input: unknown) => undefined)
+const acknowledgeUpdate = vi.fn(async () => ({ accepted: true }))
+const requestUpdateResync = vi.fn(async () => ({ accepted: true }))
 const deleteSession = vi.fn(async (sessionId: string) => [sessionId])
 const callbacks = {
   onOpenFile: () => {},
@@ -89,11 +96,14 @@ beforeEach(() => {
   localStorage.clear()
   sideChatTargets.clear()
   listeners = new Set()
+  deliveryId = 0
   vi.clearAllMocks()
   fork.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
   openAux.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId.replace("side-", "")))
   sendPrompt.mockReset().mockImplementation(async () => undefined)
   replyPermission.mockReset().mockImplementation(async () => undefined)
+  acknowledgeUpdate.mockReset().mockResolvedValue({ accepted: true })
+  requestUpdateResync.mockReset().mockResolvedValue({ accepted: true })
   deleteSession.mockReset().mockImplementation(async (sessionId) => [sessionId])
   window.scrollBy = () => {}
   writeUtilityPanelRuntimeState("session:side-chat-close", {
@@ -108,6 +118,8 @@ beforeEach(() => {
         fork,
         openAux,
         closeAux,
+        acknowledgeUpdate,
+        requestUpdateResync,
         delete: deleteSession,
         sendPrompt,
         interrupt,
@@ -190,7 +202,16 @@ async function emit(
   view: DesktopSessionView,
   subscriptionId = openAux.mock.calls.at(-1)![0].subscriptionId
 ) {
-  await act(async () => listeners.forEach((listener) => listener({ subscriptionId, view })))
+  const update: DesktopSessionUpdate = {
+    kind: "snapshot",
+    subscriptionId,
+    generation: 1,
+    deliveryId: `delivery-${++deliveryId}`,
+    view,
+  }
+  await act(async () =>
+    listeners.forEach((listener) => listener({ subscriptionId, update }))
+  )
 }
 
 it("opening and quoting uses the side draft without creating a session or changing the main draft", async () => {
@@ -596,6 +617,7 @@ it("accepts only its target and subscription without cursor rollback, reconciles
   draft("main", "hello")
   await mount()
   await submit()
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
   const running: DesktopSessionView = {
     ...sideView("main", 4),
     runs: [
@@ -621,6 +643,68 @@ it("accepts only its target and subscription without cursor rollback, reconciles
   await mount("main", false)
   expect(closeAux).toHaveBeenCalled()
   expect(interrupt).toHaveBeenCalledTimes(1)
+})
+
+it("applies an auxiliary part delta and acknowledges it after updating the displayed view", async () => {
+  const initial = sideView("main", 1)
+  initial.messages.push({
+    id: "message-1",
+    sessionId: "side-main",
+    seq: 1,
+    role: "assistant",
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  initial.parts.push({
+    id: "part-1",
+    sessionId: "side-main",
+    messageId: "message-1",
+    seq: 1,
+    type: "text",
+    status: "running",
+    text: "hello",
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  openAux.mockResolvedValueOnce(initial)
+  draft("main", "question")
+  await mount()
+  await submit()
+  await act(async () => { await Promise.resolve() })
+  const subscriptionId = openAux.mock.calls.at(-1)![0].subscriptionId
+  const runtimeBeforeDelta =
+    useDesktopSessionStore.getState().sessionRuntimes["side-main"]
+  expect(runtimeBeforeDelta).toBeDefined()
+  const update: DesktopSessionUpdate = {
+    kind: "part-delta",
+    subscriptionId,
+    generation: 1,
+    deliveryId: "side-delivery-1",
+    sessionId: "side-main",
+    deltas: [{
+      seq: 2,
+      messageId: "message-1",
+      partId: "part-1",
+      field: "text",
+      delta: " world",
+      baseLength: 5,
+      createdAt: 2,
+    }],
+  }
+  await act(async () =>
+    listeners.forEach((listener) => listener({ subscriptionId, update }))
+  )
+
+  expect(container.textContent).toContain("hello world")
+  expect(useDesktopSessionStore.getState().sessionRuntimes["side-main"]).toBe(runtimeBeforeDelta)
+  expect(acknowledgeUpdate).toHaveBeenCalledWith({
+    subscriptionId,
+    generation: 1,
+    deliveryId: "side-delivery-1",
+    result: "applied",
+  })
 })
 
 it("rejects a late open snapshot after a newer event", async () => {

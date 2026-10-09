@@ -16,7 +16,11 @@ import {
   type TrayNotificationOptions,
 } from "../shared/ipc-channels"
 import type { DesktopTerminalEvent } from "../shared/terminal-types"
-import type { DesktopAuxSessionUpdate, DesktopDaemonStatus } from "../shared/session-types"
+import type {
+  DesktopAuxSessionUpdate,
+  DesktopDaemonStatus,
+  DesktopSessionUpdate,
+} from "../shared/session-types"
 import type { DesktopAPI } from "../shared/desktop-api-contract"
 import type { DesktopAttachmentUploadEvent } from "../shared/attachment-types"
 import type { DesktopUpdateState } from "../shared/update-types"
@@ -530,6 +534,11 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionAuxOpen, input),
     closeAux: (input: IpcInvokeMap[typeof IpcChannels.sessionAuxClose]["args"][0]) =>
       invoke(IpcChannels.sessionAuxClose, input),
+    acknowledgeUpdate: (ack: IpcInvokeMap[typeof IpcChannels.sessionUpdateAck]["args"][0]) =>
+      invoke(IpcChannels.sessionUpdateAck, ack),
+    requestUpdateResync: (
+      request: IpcInvokeMap[typeof IpcChannels.sessionUpdateResync]["args"][0]
+    ) => invoke(IpcChannels.sessionUpdateResync, request),
     fork: (input: IpcInvokeMap[typeof IpcChannels.sessionFork]["args"][0]) =>
       invoke(IpcChannels.sessionFork, input),
     close: () => invoke(IpcChannels.sessionClose),
@@ -585,11 +594,11 @@ export const desktopAPI = {
       return () => ipcRenderer.removeListener(IpcEvents.sessionDaemonRestarted, wrapped)
     },
     onUpdated: (
-      listener: (value: IpcInvokeMap[typeof IpcChannels.sessionOpen]["result"]) => void
+      listener: (value: DesktopSessionUpdate) => void
     ): (() => void) => {
       const wrapped = (
         _event: Electron.IpcRendererEvent,
-        value: IpcInvokeMap[typeof IpcChannels.sessionOpen]["result"]
+        value: DesktopSessionUpdate
       ): void => listener(value)
       ipcRenderer.on(IpcEvents.sessionUpdated, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionUpdated, wrapped)

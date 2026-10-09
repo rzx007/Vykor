@@ -58,7 +58,13 @@ describe("matchesAgentSessionUpdate", () => {
   function update(subscriptionId: string, sessionId: string): DesktopAuxSessionUpdate {
     return {
       subscriptionId,
-      view: { session: { id: sessionId } } as DesktopSessionView,
+      update: {
+        kind: "snapshot",
+        subscriptionId,
+        generation: 1,
+        deliveryId: "delivery-1",
+        view: { session: { id: sessionId } } as DesktopSessionView,
+      },
     }
   }
 
@@ -79,5 +85,23 @@ describe("matchesAgentSessionUpdate", () => {
     expect(
       matchesAgentSessionUpdate("agents:details", "child", update("agents:details", "child"))
     ).toBe(true)
+  })
+
+  it("matches a delta using its session ID", () => {
+    const snapshot = update("agents:details", "child")
+    const delta: DesktopAuxSessionUpdate = {
+      subscriptionId: "agents:details",
+      update: {
+        kind: "part-delta",
+        subscriptionId: "agents:details",
+        generation: 2,
+        deliveryId: "delivery-2",
+        sessionId: "child",
+        deltas: [],
+      },
+    }
+    expect(matchesAgentSessionUpdate("agents:details", "child", delta)).toBe(true)
+    expect(matchesAgentSessionUpdate("agents:details", "other", delta)).toBe(false)
+    expect(matchesAgentSessionUpdate("agents:details", "child", snapshot)).toBe(true)
   })
 })
