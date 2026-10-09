@@ -441,11 +441,8 @@ html[data-window-shell="transparent"] {
 }
 
 html[data-window-shell="translucent"] {
-  --shell: color-mix(in oklab, var(--shell-solid) 60%, transparent);
-}
-
-html.dark[data-window-shell="translucent"] {
-  --shell: color-mix(in oklab, var(--shell-solid) 64%, transparent);
+  --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%));
+  --shell: color-mix(in oklab, var(--shell-solid) var(--window-glass-tint-opacity), transparent);
 }
 
 /* Windows 在原生 Acrylic 上只铺一层雾面底色；其它平台保留原有材质。 */
@@ -521,6 +518,10 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
     font-size: var(--ui-font-size);
     font-weight: 450;
     letter-spacing: 0;
+  }
+
+  html[data-window-shell="translucent"] body {
+    background: transparent;
   }
 
   html:has([data-pet-window]),
