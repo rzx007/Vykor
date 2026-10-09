@@ -39,6 +39,10 @@ export interface CustomProviderModelInput {
   id: string;
   displayName: string;
   imageInputSupport?: InputSupport;
+  /** 用户自填的上下文窗口（tokens）；留空则由服务端按模型 id 查目录。 */
+  contextWindow?: number;
+  /** 用户自填的最大输出（tokens）；留空则由服务端按模型 id 查目录。 */
+  maxOutputTokens?: number;
 }
 
 export interface CustomProviderInput {

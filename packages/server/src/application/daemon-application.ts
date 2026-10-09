@@ -34,10 +34,9 @@ import {
 import { AttachmentService } from "./attachments/attachment-service.js";
 import { createDaemonAttachmentServices } from "./attachments/daemon-attachment-services.js";
 import {
-  catalogModelContextWindow,
-  catalogModelOutputLimit,
   catalogModelReasoningEfforts,
 } from "./default-services/catalog-provider-mapping.js";
+import { resolveModelLimit } from "./default-services/model-limit-resolution.js";
 import { validateRequestSelection } from "./session/request-selection-validation.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
@@ -486,6 +485,10 @@ export class DaemonApplication implements DurableAgentApplication {
         attachments: this.attachments,
       });
 
+      // 每会话创建 Agent 时用来解析上下文/输出上限：先看自定义供应商里用户填的值，
+      // 再按 provider 精确命中模型目录，最后对自定义模型按模型 id 模糊匹配。
+      const readLimitSettings = () => options.getSettings?.() ?? options.settings;
+
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
       const loadAgent = createDaemonAgentLoader({
         executionSurface: options.executionSurface,
@@ -506,11 +509,21 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         resolveModelContextWindow: async ({ provider, model }) => {
           if (!provider) return undefined;
-          return catalogModelContextWindow(await this.modelCatalog.load(), provider, model);
+          return resolveModelLimit("context", {
+            catalog: await this.modelCatalog.load(),
+            customProviders: readLimitSettings()?.customProviders,
+            provider,
+            model,
+          });
         },
         resolveModelOutputLimit: async ({ provider, model }) => {
           if (!provider) return undefined;
-          return catalogModelOutputLimit(await this.modelCatalog.load(), provider, model);
+          return resolveModelLimit("output", {
+            catalog: await this.modelCatalog.load(),
+            customProviders: readLimitSettings()?.customProviders,
+            provider,
+            model,
+          });
         },
         createAgent: options.createAgent,
         mcpRuntimeRegistry: this.mcpRuntimes,

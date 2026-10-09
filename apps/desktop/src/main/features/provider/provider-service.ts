@@ -1,9 +1,4 @@
-import type {
-  AuthStatus,
-  ModelProviderInfo,
-  VykorClient,
-  ProviderInfo,
-} from "@vykor/client"
+import type { AuthStatus, ModelProviderInfo, VykorClient, ProviderInfo } from "@vykor/client"
 
 import type {
   ActivateDesktopProviderInput,
@@ -86,7 +81,10 @@ export class DesktopProviderService {
       try {
         if (catalogProvider) await client.providers.disconnectCatalogProvider(provider)
         else await client.auth.logout({ provider })
-      } catch (error) { await rollbackDefaultRemoval(client, settings, defaultChanged); throw error }
+      } catch (error) {
+        await rollbackDefaultRemoval(client, settings, defaultChanged)
+        throw error
+      }
     })
     return await this.snapshot()
   }
@@ -98,7 +96,11 @@ export class DesktopProviderService {
     if (!provider) throw new Error("请选择要更新的目录供应商。")
 
     await withDaemonRetry((client) =>
-      input.secretHeaders === undefined ? client.providers.updateCatalogProviderHeaders(provider, input.headers) : client.providers.updateCatalogProviderHeaders(provider, input.headers, { secretHeaders: input.secretHeaders })
+      input.secretHeaders === undefined
+        ? client.providers.updateCatalogProviderHeaders(provider, input.headers)
+        : client.providers.updateCatalogProviderHeaders(provider, input.headers, {
+            secretHeaders: input.secretHeaders,
+          })
     )
     return await this.snapshot()
   }
@@ -114,7 +116,9 @@ export class DesktopProviderService {
   }
 
   async updateCustom(input: UpdateDesktopCustomProviderInput): Promise<DesktopProviderSnapshot> {
-    await withDaemonRetry((client) => client.providers.updateCustomProvider(input.provider, input.value))
+    await withDaemonRetry((client) =>
+      client.providers.updateCustomProvider(input.provider, input.value)
+    )
     return await this.snapshot()
   }
 
@@ -122,8 +126,12 @@ export class DesktopProviderService {
     await withDaemonRetry(async (client) => {
       const settings = await client.system.getSettings()
       const defaultChanged = await prepareDefaultRemoval(client, input.provider, settings, input)
-      try { await client.providers.removeCustomProvider(input.provider) }
-      catch (error) { await rollbackDefaultRemoval(client, settings, defaultChanged); throw error }
+      try {
+        await client.providers.removeCustomProvider(input.provider)
+      } catch (error) {
+        await rollbackDefaultRemoval(client, settings, defaultChanged)
+        throw error
+      }
     })
     return await this.snapshot()
   }
@@ -142,25 +150,38 @@ export function buildDesktopProviderSnapshot(input: {
     model: input.settings.model,
     provider: input.settings.provider,
   })
-  const activeProvider = input.settings.modelDisabled === true ? undefined : runtimeSnapshot.defaultProvider
-  const activeModel = input.settings.modelDisabled === true ? undefined : runtimeSnapshot.defaultModel
+  const activeProvider =
+    input.settings.modelDisabled === true ? undefined : runtimeSnapshot.defaultProvider
+  const activeModel =
+    input.settings.modelDisabled === true ? undefined : runtimeSnapshot.defaultModel
   const stored = new Set(input.auth.storedProviders)
   const envByProvider = new Map(input.auth.envProviders.map((item) => [item.name, item.envKey]))
   const modelsByProvider = new Map(input.models.map((item) => [item.name, item.models]))
   const customByProvider = customProviderSettings(input.settings)
 
   const providers = input.providers.map((provider): DesktopProviderInfo => {
-    const source = resolveCredentialSource(provider, input.auth, stored, envByProvider, customByProvider)
+    const source = resolveCredentialSource(
+      provider,
+      input.auth,
+      stored,
+      envByProvider,
+      customByProvider
+    )
     const custom = customByProvider.get(provider.name)
-    const models = (modelsByProvider.get(provider.name) ?? []).map((model) => ({
-      id: model.id,
-      label: model.label,
-      ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
-      ...(model.reasoningEfforts ? { reasoningEfforts: model.reasoningEfforts } : {}),
-      ...(model.inputCapabilities
-        ? { imageInputSupport: model.inputCapabilities.image }
-        : {}),
-    }))
+    const models = (modelsByProvider.get(provider.name) ?? []).map((model) => {
+      const declaredLimits = customByProvider
+        .get(provider.name)
+        ?.declaredLimitsByModel?.get(model.id)
+      return {
+        id: model.id,
+        label: model.label,
+        ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+        ...(model.outputLimit ? { maxOutputTokens: model.outputLimit } : {}),
+        ...(declaredLimits ? { declaredLimits } : {}),
+        ...(model.reasoningEfforts ? { reasoningEfforts: model.reasoningEfforts } : {}),
+        ...(model.inputCapabilities ? { imageInputSupport: model.inputCapabilities.image } : {}),
+      }
+    })
     return {
       name: provider.name,
       displayName: provider.displayName,
@@ -198,8 +219,7 @@ function resolveCredentialSource(
 ): DesktopProviderCredentialSource {
   if (provider.name === "codex") return auth.codex.configured ? "subscription" : "none"
   if (provider.source === "catalog") {
-    return stored.has(provider.name) &&
-      customByProvider.get(provider.name)?.source === "models.dev"
+    return stored.has(provider.name) && customByProvider.get(provider.name)?.source === "models.dev"
       ? "credentials"
       : "none"
   }
@@ -217,6 +237,38 @@ interface CustomProviderSettingView {
   source?: string
   headers?: Record<string, string>
   secretHeaderNames?: string[]
+  /** 用户在模型里自己填的上下文窗口/最大输出，按模型 id 索引。 */
+  declaredLimitsByModel?: Map<string, { contextWindow?: number; maxOutputTokens?: number }>
+}
+
+function declaredLimitsByModel(
+  value: unknown
+): Map<string, { contextWindow?: number; maxOutputTokens?: number }> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const entries = value.flatMap(
+    (item): Array<[string, { contextWindow?: number; maxOutputTokens?: number }]> => {
+      if (!item || typeof item !== "object") return []
+      const record = item as Record<string, unknown>
+      if (typeof record.id !== "string" || !record.id) return []
+      const contextWindow = positiveInteger(record.contextWindow)
+      const maxOutputTokens = positiveInteger(record.maxOutputTokens)
+      if (contextWindow === undefined && maxOutputTokens === undefined) return []
+      return [
+        [
+          record.id,
+          {
+            ...(contextWindow !== undefined ? { contextWindow } : {}),
+            ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+          },
+        ],
+      ]
+    }
+  )
+  return entries.length ? new Map(entries) : undefined
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
 function customProviderSettings(
@@ -245,7 +297,16 @@ function customProviderSettings(
           apiFormat: "openai",
           ...(typeof record.source === "string" ? { source: record.source } : {}),
           ...(headers ? { headers } : {}),
-          ...(Array.isArray(record.secretHeaderNames) ? { secretHeaderNames: record.secretHeaderNames.filter((value): value is string => typeof value === "string") } : {}),
+          ...(Array.isArray(record.secretHeaderNames)
+            ? {
+                secretHeaderNames: record.secretHeaderNames.filter(
+                  (value): value is string => typeof value === "string"
+                ),
+              }
+            : {}),
+          ...(declaredLimitsByModel(record.models)
+            ? { declaredLimitsByModel: declaredLimitsByModel(record.models) }
+            : {}),
         },
       ],
     ]
@@ -271,30 +332,59 @@ function normalizeProviderName(value: string): string {
   return value.trim().toLowerCase()
 }
 
-async function prepareDefaultRemoval(client: ProviderClient, provider: string, settings: Record<string, unknown>, input: { replacement?: { provider: string; model: string }; disableDefault?: boolean }) {
+async function prepareDefaultRemoval(
+  client: ProviderClient,
+  provider: string,
+  settings: Record<string, unknown>,
+  input: { replacement?: { provider: string; model: string }; disableDefault?: boolean }
+) {
   if (settings.modelDisabled === true) return false
   const modelProviders = await client.providers.listModels()
-  if (settings.provider !== provider && resolveDesktopRuntimeSnapshot(modelProviders.flatMap((item) => item.models), settings).defaultProvider !== provider) return false
+  if (
+    settings.provider !== provider &&
+    resolveDesktopRuntimeSnapshot(
+      modelProviders.flatMap((item) => item.models),
+      settings
+    ).defaultProvider !== provider
+  )
+    return false
   if (input.replacement) {
     if (input.replacement.provider === provider) throw new Error("替代默认模型必须来自其他供应商。")
     const models = modelProviders.flatMap((item) => item.models)
-    if (!models.some((item) => item.providerName === input.replacement!.provider && item.id === input.replacement!.model)) throw new Error("替代默认模型不可用，请重新选择。")
+    if (
+      !models.some(
+        (item) =>
+          item.providerName === input.replacement!.provider && item.id === input.replacement!.model
+      )
+    )
+      throw new Error("替代默认模型不可用，请重新选择。")
     await client.system.patchSettings({ ...input.replacement, effort: "", modelDisabled: false })
   } else if (input.disableDefault === true) {
     await client.system.patchSettings({ modelDisabled: true })
-  } else throw new Error("这是当前默认连接。请明确选择替代默认模型，或确认关闭新任务默认模型后再移除。")
+  } else
+    throw new Error("这是当前默认连接。请明确选择替代默认模型，或确认关闭新任务默认模型后再移除。")
   return true
 }
 
-async function rollbackDefaultRemoval(client: ProviderClient, settings: Record<string, unknown>, changed: boolean) {
+async function rollbackDefaultRemoval(
+  client: ProviderClient,
+  settings: Record<string, unknown>,
+  changed: boolean
+) {
   if (!changed) return
-  try { await client.system.patchSettings({ provider: settings.provider ?? "auto", model: settings.model, effort: settings.effort ?? "", modelDisabled: settings.modelDisabled === true }) }
-  catch { throw new Error("连接移除失败，默认模型回退也失败。请重新读取供应商与默认模型状态后重试。") }
+  try {
+    await client.system.patchSettings({
+      provider: settings.provider ?? "auto",
+      model: settings.model,
+      effort: settings.effort ?? "",
+      modelDisabled: settings.modelDisabled === true,
+    })
+  } catch {
+    throw new Error("连接移除失败，默认模型回退也失败。请重新读取供应商与默认模型状态后重试。")
+  }
 }
 
-async function withDaemonRetry<T>(
-  operation: (client: ProviderClient) => Promise<T>
-): Promise<T> {
+async function withDaemonRetry<T>(operation: (client: ProviderClient) => Promise<T>): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())
   } catch (error) {

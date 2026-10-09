@@ -409,6 +409,17 @@ function normalizeProviderHeaders(
   }
 }
 
+function normalizeModelLimit(
+  value: number | undefined,
+  label: string,
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new ProviderMutationError(400, `${label}必须是大于 0 的整数。`);
+  }
+  return value;
+}
+
 function normalizeCustomProvider(
   input: CustomProviderInput,
 ): CustomProviderSettings {
@@ -438,13 +449,19 @@ function normalizeCustomProvider(
   if (!Array.isArray(input.models) || input.models.length === 0) {
     throw new ProviderMutationError(400, "请至少添加一个模型。");
   }
-  const models = input.models.map((model) => ({
-    id: model.id?.trim(),
-    displayName: model.displayName?.trim() || model.id?.trim(),
-    ...(model.imageInputSupport
-      ? { imageInputSupport: model.imageInputSupport }
-      : {}),
-  }));
+  const models = input.models.map((model) => {
+    const contextWindow = normalizeModelLimit(model.contextWindow, "上下文窗口");
+    const maxOutputTokens = normalizeModelLimit(model.maxOutputTokens, "最大输出");
+    return {
+      id: model.id?.trim(),
+      displayName: model.displayName?.trim() || model.id?.trim(),
+      ...(model.imageInputSupport
+        ? { imageInputSupport: model.imageInputSupport }
+        : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+    };
+  });
   if (models.some((model) => !model.id)) {
     throw new ProviderMutationError(400, "模型 ID 不能为空。");
   }

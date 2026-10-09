@@ -289,6 +289,10 @@ export interface CustomProviderInput {
     id: string;
     displayName: string;
     imageInputSupport?: "native" | "unsupported" | "unknown";
+    /** 用户自填的上下文窗口（tokens）；留空时服务端按模型 id 查目录。 */
+    contextWindow?: number;
+    /** 用户自填的最大输出（tokens）；留空时服务端按模型 id 查目录。 */
+    maxOutputTokens?: number;
   }>;
   headers?: Record<string, string>;
   secretHeaders?: Record<string, string | null>;

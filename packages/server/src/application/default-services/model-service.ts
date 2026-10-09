@@ -17,6 +17,7 @@ import {
   readCatalogProvider,
   reasoningEffortsFromModel,
 } from "./catalog-provider-mapping.js";
+import { resolveModelLimit } from "./model-limit-resolution.js";
 import {
   modelInputCapabilities,
   normalizeInputSupport,
@@ -60,28 +61,46 @@ export function createDefaultModelService(
           provider.source === "models.dev"
             ? indexCatalogModels(catalog, provider.id)
             : undefined;
+        const limitInput = (providerId: string, modelId: string) => ({
+          catalog,
+          customProviders: current?.customProviders,
+          provider: providerId,
+          model: modelId,
+        });
         result.push({
           name: provider.id,
           displayName: provider.displayName,
           models: provider.models.map((model) => {
             const catalogModel = catalogModels?.get(model.id);
-            if (catalogModel) {
-              return toModelInfo(
-                provider.id,
-                provider.displayName,
-                model.id,
-                catalogModel,
-              );
-            }
+            const contextWindow = resolveModelLimit(
+              "context",
+              limitInput(provider.id, model.id),
+            );
+            const outputLimit = resolveModelLimit(
+              "output",
+              limitInput(provider.id, model.id),
+            );
+            const base: ModelInfo = catalogModel
+              ? toModelInfo(
+                  provider.id,
+                  provider.displayName,
+                  model.id,
+                  catalogModel,
+                )
+              : {
+                  id: model.id,
+                  label: model.displayName,
+                  provider: provider.displayName,
+                  providerName: provider.id,
+                  status: "active",
+                  inputCapabilities: {
+                    image: normalizeInputSupport(model.imageInputSupport),
+                  },
+                };
             return {
-              id: model.id,
-              label: model.displayName,
-              provider: provider.displayName,
-              providerName: provider.id,
-              status: "active" as const,
-              inputCapabilities: {
-                image: normalizeInputSupport(model.imageInputSupport),
-              },
+              ...base,
+              ...(contextWindow !== undefined ? { contextWindow } : {}),
+              ...(outputLimit !== undefined ? { outputLimit } : {}),
             };
           }),
         });

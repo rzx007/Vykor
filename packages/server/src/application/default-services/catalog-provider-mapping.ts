@@ -73,7 +73,7 @@ export function catalogModelEntry(
   return entry?.[1];
 }
 
-function positiveLimit(value: number | undefined): number | undefined {
+export function positiveLimit(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? value
     : undefined;
@@ -93,6 +93,42 @@ export function catalogModelOutputLimit(
   modelId: string,
 ): number | undefined {
   return positiveLimit(catalogModelEntry(catalog, providerName, modelId)?.limit?.output);
+}
+
+/**
+ * 跨供应商匹配模型时使用的比较键：忽略大小写和连字符，
+ * 让 `gpt-4o`、`GPT-4O`、`gpt4o` 视为同一个模型。
+ */
+function modelIdKey(value: string): string {
+  return value.replace(/-/g, "").toLowerCase();
+}
+
+/**
+ * 按模型 id 在整个目录里找第一个命中的模型（先到先得，忽略大小写和连字符）。
+ *
+ * 用途：自定义供应商本身不在目录里，它的模型仍然可以借用同名模型
+ * （例如 `claude-sonnet-4-5`）的上下文窗口和最大输出。
+ * 已弃用（deprecated）和预览期（alpha）的条目会跳过，
+ * 与 catalogProviderModelIds 对目录的过滤口径保持一致。
+ */
+export function findCatalogModelById(
+  catalog: ModelsDevCatalog,
+  modelId: string,
+): ModelsDevModel | undefined {
+  const target = modelIdKey(modelId.trim());
+  if (!target) return undefined;
+  for (const provider of Object.values(catalog)) {
+    if (!provider?.models) continue;
+    for (const [key, model] of Object.entries(provider.models)) {
+      if (model.status === "deprecated" || model.status === "alpha") continue;
+      const id =
+        typeof model.id === "string" && model.id.trim() ? model.id.trim() : key;
+      if (modelIdKey(id) === target || modelIdKey(key) === target) {
+        return model;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function catalogModelReasoningEfforts(

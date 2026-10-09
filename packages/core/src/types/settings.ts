@@ -120,6 +120,13 @@ export interface CustomProviderModelSettings {
   displayName: string;
   /** Missing persisted values are read conservatively as unknown. */
   imageInputSupport?: InputSupport;
+  /**
+   * 用户自填的上下文窗口（tokens）。填了就优先用它；留空才去模型目录按
+   * 模型 id 匹配，都匹配不到再退回默认值。
+   */
+  contextWindow?: number;
+  /** 用户自填的最大输出（tokens），优先级同 contextWindow。 */
+  maxOutputTokens?: number;
 }
 
 export interface CustomProviderSettings {
