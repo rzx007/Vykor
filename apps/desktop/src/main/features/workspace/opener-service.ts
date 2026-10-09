@@ -3,9 +3,10 @@ import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { promisify } from "node:util"
-import { app, shell } from "electron"
+import { shell } from "electron"
 
 import type { WorkspaceOpener } from "../../../shared/workspace-types"
+import { readIconDataUrl } from "./opener-icon"
 import { resolveSpawnInvocation } from "./resolve-spawn-invocation"
 import { resolveWorkspaceOpenTarget } from "./workspace-path"
 import { workspaceService } from "./workspace-service"
@@ -319,17 +320,6 @@ async function whichCommand(bin: string, args: string[]): Promise<string | null>
       .map((line) => line.trim())
       .find(Boolean)
     return any && existsSync(any) ? any : null
-  } catch {
-    return null
-  }
-}
-
-async function readIconDataUrl(path: string | null): Promise<string | null> {
-  if (!path) return null
-  try {
-    const image = await app.getFileIcon(path, { size: "normal" })
-    if (image.isEmpty()) return null
-    return image.toDataURL()
   } catch {
     return null
   }
