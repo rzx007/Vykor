@@ -310,7 +310,7 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).not.toContain("STALE_FULL_BODY")
     expect(container.textContent).toContain("CURRENT_FULL_BODY")
   })
-  it("keeps execution and permission feedback visible in production", () => {
+  it("keeps permission feedback visible without a redundant running label in production", () => {
     vi.stubEnv("DEV", false)
     render([
       part(
@@ -327,7 +327,7 @@ describe("tool parameter and result display", () => {
         { status: "running", metadata: { toolProgress: { phase: "running" } } }
       ),
     ])
-    expect(container.textContent).toContain("正在执行工具")
+    expect(container.textContent).not.toContain("正在执行工具")
   })
   it.each([true, false])(
     "shows diagnostic tool states only in dev=%s while preserving raw results",

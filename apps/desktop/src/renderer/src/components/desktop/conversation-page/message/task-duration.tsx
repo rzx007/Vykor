@@ -41,7 +41,7 @@ export function TaskDuration({
 }): React.JSX.Element | null {
   if (!timing) return null
   const active = timing.status === "running" || timing.status === "pending"
-  const status = timing.status === "pending" ? "等待执行" : label || "进行中"
+  const status = timing.status === "pending" ? "等待执行" : (label ?? "进行中")
   const finishedLabel =
     timing.status === "interrupted"
       ? "已中断 · 运行了"

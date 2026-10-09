@@ -250,7 +250,7 @@ const toolPhaseLabels: Record<string, string> = {
   preparing: "正在准备工具",
   waiting_permission: "等待你的确认",
   queued: "等待前一个工具",
-  running: "正在执行工具",
+  running: "",
   completed: "工具已返回，等待本轮结果",
   failed: "工具失败，等待本轮结果",
   unknown: "结果不确定",
@@ -271,7 +271,7 @@ export function toolActivityLabel(
   if (!import.meta.env.DEV && (phase === "failed" || phase === "unknown")) return undefined
   return (
     (typeof phase === "string" ? toolPhaseLabels[phase] : undefined) ??
-    (status === "pending" ? "等待执行" : "运行中")
+    (status === "pending" ? "等待执行" : "")
   )
 }
 
@@ -331,7 +331,7 @@ export function conversationActivityLabel(
     .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
   const toolLabel = toolGroupActivityLabel(tools)
   if (toolLabel === "准备中") return "正在处理"
-  if (toolLabel) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
+  if (toolLabel !== undefined) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
   const generating = activeRuns
     .flatMap((run) =>
       Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : []

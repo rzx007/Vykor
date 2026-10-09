@@ -52,3 +52,9 @@ it("does not invent elapsed time or run a clock for queued work", () => {
   expect(container.textContent).toBe("等待执行")
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it("keeps the running indicator without showing a redundant status label", () => {
+  act(() => root.render(<TaskDuration timing={{ status: "running" }} label="" />))
+  expect(container.querySelector('[role="status"]')).not.toBeNull()
+  expect(container.textContent).toBe("")
+})

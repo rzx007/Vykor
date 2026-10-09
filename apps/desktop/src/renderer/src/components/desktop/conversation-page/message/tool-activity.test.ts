@@ -115,12 +115,15 @@ describe("real tool activity labels", () => {
     ["preparing", "正在准备工具"],
     ["waiting_permission", "等待你的确认"],
     ["queued", "等待前一个工具"],
-    ["running", "正在执行工具"],
+    ["running", ""],
     ["completed", "工具已返回，等待本轮结果"],
     ["unknown", "结果不确定"],
-  ])("uses %s instead of waiting for the model", (phase, want) => {
+  ])("uses the expected activity label for %s", (phase, want) => {
     const tool = { ...part, metadata: { toolProgress: { phase } } }
     expect(conversationActivityLabel([run], [message], [tool])).toBe(want)
+  })
+  it("leaves the default label blank while a tool is running", () => {
+    expect(toolActivityLabel(part)).toBe("")
   })
   it("ignores terminal part metadata and tools from older runs", () => {
     const tool = { ...part, metadata: { toolProgress: { phase: "running" } } }
