@@ -124,20 +124,17 @@ export function ScheduledPage({
     return Math.round(Math.min(maxWidth, Math.max(listWidthStore.minPx, width)))
   }, [])
 
-  const handleListResizeStart = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>): void => {
-      if (event.pointerType === "mouse" && event.button !== 0) return
-      listResizeRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startWidthPx: listWidthRef.current,
-      }
-      setIsResizingList(true)
-      event.currentTarget.setPointerCapture(event.pointerId)
-      event.preventDefault()
-    },
-    []
-  )
+  const handleListResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    listResizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidthPx: listWidthRef.current,
+    }
+    setIsResizingList(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    event.preventDefault()
+  }, [])
 
   const handleListResizeMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>): void => {

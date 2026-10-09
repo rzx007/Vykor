@@ -57,35 +57,32 @@ export function DetailPanel({
         <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            shape="circle"
             onClick={onRunNow}
             disabled={busy !== null}
             title="立即运行任务"
-            className="h-8 gap-1.5 rounded-lg px-2.5 text-xs font-medium"
+            aria-label="立即运行任务"
           >
-            {isRunning ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <Play className="size-3.5 fill-current" />
-            )}
-            <span>立即运行</span>
+            {isRunning ? <Spinner className="size-3.5" /> : <Play />}
           </Button>
           {canToggle ? (
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
+              shape="circle"
               onClick={onToggle}
               disabled={busy !== null}
               title={task.status === "active" ? "暂停任务" : "继续任务"}
               aria-label={task.status === "active" ? "暂停任务" : "继续任务"}
-              className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground"
             >
               {busy === "toggle" ? (
                 <Spinner className="size-3.5" />
               ) : task.status === "active" ? (
-                <CirclePause className="size-4" />
+                <CirclePause />
               ) : (
-                <CirclePlay className="size-4" />
+                <CirclePlay />
               )}
             </Button>
           ) : null}
@@ -99,13 +96,14 @@ export function DetailPanel({
           />
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
+            shape="circle"
             onClick={onBack}
             title="关闭详情"
             aria-label="关闭详情"
-            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground"
           >
-            <X className="size-4" />
+            <X />
           </Button>
         </div>
       </div>

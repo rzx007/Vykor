@@ -1,5 +1,6 @@
 import { CirclePause, CirclePlay, MoreHorizontal, Pencil, Play, Trash2 } from "lucide-react"
 
+import { Button } from "@renderer/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,12 +32,10 @@ export function TaskActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon" shape="circle" />}
         aria-label={`${task.name}的更多操作`}
         title="更多操作"
-        className={cn(
-          "grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted data-[popup-open]:text-foreground [&_svg]:size-4",
-          triggerClassName
-        )}
+        className={cn("text-muted-foreground", triggerClassName)}
       >
         <MoreHorizontal />
       </DropdownMenuTrigger>

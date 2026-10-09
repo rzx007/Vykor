@@ -256,13 +256,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
       {!streaming && showObservations
         ? settledObservations.map((observation, index) =>
-            observation.status === "unavailable" ? (
-              observation.reason === "not_git_repository" ? null : (
-                <p key={index} className="text-xs text-ui-muted">
-                  运行期间变更无法确认：{workspaceChangeReason(observation.reason)}
-                </p>
-              )
-            ) : (
+            observation.status === "unavailable" ? null : (
               <ChangedFilesSummary
                 key={index}
                 files={observation.files.map((file) => ({
@@ -905,32 +899,6 @@ export function ChangedFilesSummary({
       ) : null}
     </section>
   )
-}
-
-function workspaceChangeReason(reason: WorkspaceChangesMetadata["reason"]): string {
-  switch (reason) {
-    case "preexisting_dirty_overlap":
-      return "已有未提交文件在本轮又发生变化"
-    case "concurrent_run_overlap":
-      return "同一仓库有其他运行重叠"
-    case "not_git_repository":
-      return "当前目录不是 Git 仓库"
-    case "execution_environment_unavailable":
-      return "无法安全检查本轮的执行环境"
-    case "observation_budget_exceeded":
-      return "观察超过时间预算"
-    case "observation_cancelled":
-      return "观察已取消"
-    case "sensitive_content_path":
-      return "涉及敏感文件，未读取差异"
-    case "non_linear_head_change":
-    case "post_commit_worktree_changed":
-      return "Git 提交或工作区状态无法安全比较"
-    case "daemon_restarted":
-      return "服务重启，基线已丢失"
-    default:
-      return "Git 检查失败"
-  }
 }
 
 function LineStats({

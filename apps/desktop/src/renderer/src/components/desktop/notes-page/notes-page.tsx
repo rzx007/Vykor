@@ -143,7 +143,6 @@ export function NotesPage(): React.JSX.Element {
         </div>
         <Button
           shape="pill"
-          size="sm"
           aria-label="新建便签"
           disabled={notes.status === "loading"}
           onClick={createNote}
