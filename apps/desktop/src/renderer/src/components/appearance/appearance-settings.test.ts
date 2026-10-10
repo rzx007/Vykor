@@ -374,6 +374,19 @@ describe("AppearanceSettings", () => {
     expect(container.textContent).toContain("开启透明磨玻璃后可调节")
   })
 
+  it("hides the whole window section on Linux", async () => {
+    Object.defineProperty(window, "electron", {
+      configurable: true,
+      value: { process: { platform: "linux" } },
+    })
+    await renderSettings()
+
+    expect(container.querySelector('[aria-label="透明磨玻璃窗口背景"]')).toBeNull()
+    expect(container.querySelector('[aria-label="不透明窗口背景"]')).toBeNull()
+    expect(container.textContent).not.toContain("窗口背景")
+    expect(container.textContent).not.toContain("透光强度")
+  })
+
   it("hides the whole window section when the entry has no material snapshot", async () => {
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,

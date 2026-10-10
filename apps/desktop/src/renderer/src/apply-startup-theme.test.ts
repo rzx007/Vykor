@@ -111,7 +111,7 @@ describe("applyWindowMaterialToRoot", () => {
     expect(root.dataset.windowShell).toBe("translucent")
   })
 
-  it("Windows / Linux 玻璃写 glass/transparent", () => {
+  it("Windows 玻璃写 glass/transparent", () => {
     setSnapshot({
       preference: "glass",
       active: "glass",

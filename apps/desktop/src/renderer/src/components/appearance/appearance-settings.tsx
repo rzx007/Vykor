@@ -109,6 +109,8 @@ export function AppearanceSettings(): React.JSX.Element {
     })
   const isWindows = typeof window !== "undefined" && window.electron?.process?.platform === "win32"
   const isMac = typeof window !== "undefined" && window.electron?.process?.platform === "darwin"
+  // Linux 没有系统提供的窗口材质，主进程永远解析成不透明档，所以干脆不展示这一组设置。
+  const isLinux = typeof window !== "undefined" && window.electron?.process?.platform === "linux"
   const glassStrength = preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength
   const commitSingle = <T extends string>(
     values: readonly T[],
@@ -165,7 +167,7 @@ export function AppearanceSettings(): React.JSX.Element {
         </FieldGroup>
       </AppearanceSection>
 
-      {windowMaterial ? (
+      {windowMaterial && !isLinux ? (
         <AppearanceSection title="窗口">
           <FieldGroup>
             <Field orientation="responsive">

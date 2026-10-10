@@ -26,8 +26,14 @@ export const WINDOWS_WINDOW_MATERIAL = "acrylic" as const
 
 export const MACOS_WINDOW_VIBRANCY = "under-window" as const
 
+/**
+ * 只有 macOS（vibrancy）和 Windows（backgroundMaterial）有系统提供的窗口材质。
+ * Linux 刻意不算：它没有可移植的原生材质，只能靠「透明窗口 + 用户自己开合成器模糊」，
+ * 而 KWin/GNOME 等默认不开，实际观感就是窗口漏成透明或黑底。所以 Linux 直接判为不支持，
+ * 由 resolveWindowMaterialState 降级到不透明档（外观页也因此不展示该设置项）。
+ */
 export function supportsNativeWindowMaterial(platform: NodeJS.Platform): boolean {
-  return platform === "darwin" || platform === "win32" || platform === "linux"
+  return platform === "darwin" || platform === "win32"
 }
 
 export function resolveWindowMaterialState(input: {
@@ -59,7 +65,8 @@ export function resolveWindowMaterialState(input: {
     active: "glass",
     unavailableReason: null,
     // macOS 的 vibrancy 是稳定材质，外壳再叠一层半透明染色；
-    // Windows/Linux 保持透明宿主；renderer 按平台控制透光底色，Windows 可叠加雾面染色。
+    // Windows 保持透明宿主，由 DWM 的 Acrylic 出材质，renderer 再按透光强度铺一层雾面底色。
+    // 走到这里只可能是 darwin / win32：Linux 已在上面按「平台不支持」降级成不透明档。
     shell: input.platform === "darwin" ? "translucent" : "transparent",
   }
 }
@@ -106,14 +113,14 @@ export function mainWindowMaterialOptions(input: {
   }
 
   if (input.platform === "linux") {
-    // Linux 没有可移植的原生材质，只能靠透明窗口 + 桌面合成器自带模糊（KWin 等，需用户开启）。
-    // 这里两档位都无条件透明：transparent 是构造期选项、运行期改不了，
-    // 若在不透明档位用不透明窗口，用户之后切回玻璃就必须重启；而 renderer 在不透明档位会自己铺满底色，
-    // 所以「始终透明」两档位都正确。hasShadow: false 是因为部分窗口管理器会给 frameless 窗口画外侧阴影/描边，
+    // Linux 永远走不透明档（supportsNativeWindowMaterial 不含 linux），窗口直接给主题底色：
+    // 窗口不透明，外壳就不可能漏成透明。
+    // transparent 是构造期选项、运行期改不了；既然 Linux 已经不可能切回玻璃档，
+    // 这里也不再打开它——透明窗口反而是「漏底/黑底」这类问题的根源。
+    // hasShadow: false 是因为部分窗口管理器会给 frameless 窗口画外侧阴影/描边，
     // 看起来像窗口外缘多了一条黑线。renderer 圆角本仓库没有做，因此不涉及「透明底把圆角填成直角黑底」。
     return {
-      backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
-      transparent: true,
+      backgroundColor: opaqueBackground,
       hasShadow: false,
     }
   }
@@ -123,9 +130,8 @@ export function mainWindowMaterialOptions(input: {
 }
 
 /**
- * 运行期切换材质。Linux 的 transparent 只能构造期指定，这里刻意什么都不做：
- * 窗口始终是透明底，外壳观感完全由 renderer 的 data-window-shell 负责
- * （把底色改成不透明反而会在透明窗口上产生无法预测的结果）。
+ * 运行期切换材质。Linux 不参与：窗口构造期就给的是不透明主题底色，
+ * 而且 Linux 上材质永远解析成不透明档（外观页也不展示该设置项），这里刻意什么都不做。
  */
 export function applyMainWindowMaterial(
   win: BrowserWindow,
@@ -158,5 +164,5 @@ export function applyMainWindowMaterial(
     return
   }
 
-  // Linux：不碰底色与材质，只由 renderer 的 data-window-shell 决定观感。
+  // Linux：窗口构造期就是不透明底色，这里不碰底色与材质。
 }

@@ -7,11 +7,10 @@ export type DesktopWindowMaterialUnavailableReason = "unsupported-platform" | "r
 
 /**
  * renderer 外壳（`--shell`）该用什么底：
- * - "solid"：不透明档，token 保持原值；
+ * - "solid"：不透明档，token 保持原值；Linux 永远是这一档（系统不提供原生材质）；
  * - "translucent"：玻璃 + macOS，vibrancy 之上再叠一层半透明染色；
- * - "transparent"：玻璃 + Windows/Linux，保留透明宿主，让原生材质在页面透光处可见。
+ * - "transparent"：玻璃 + Windows，保留透明宿主，让原生 Acrylic 在页面透光处可见。
  *   Windows 的雾面底色由 renderer 的透光强度控制；主题不一致时保留更厚底色以保证可读性。
- *   Linux 继续沿用合成器模糊与原有主题补色。
  */
 export type DesktopWindowMaterialShell = "solid" | "translucent" | "transparent"
 

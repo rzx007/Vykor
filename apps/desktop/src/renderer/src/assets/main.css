@@ -419,7 +419,7 @@
 }
 
 /* 玻璃档的外壳模式由主进程决定（D7）：
-   - transparent：Windows/Linux，把外壳完全让出来，Acrylic / 合成器模糊才透得出来；
+   - transparent：Windows，把外壳完全让出来，Acrylic 才透得出来（Linux 不参与，它永远是不透明档）；
    - translucent：macOS，vibrancy 之上再叠一层半透明染色。
    不透明档不匹配任何规则，保持上面 :root / .dark 的实色 token。 */
 html[data-window-shell="transparent"] {

@@ -11,10 +11,10 @@ import {
 } from "./window-material"
 
 describe("supportsNativeWindowMaterial", () => {
-  it("只在 darwin / win32 / linux 上为真", () => {
+  it("只在 darwin / win32 上为真（Linux 没有原生材质，刻意排除）", () => {
     expect(supportsNativeWindowMaterial("darwin")).toBe(true)
     expect(supportsNativeWindowMaterial("win32")).toBe(true)
-    expect(supportsNativeWindowMaterial("linux")).toBe(true)
+    expect(supportsNativeWindowMaterial("linux")).toBe(false)
     expect(supportsNativeWindowMaterial("freebsd")).toBe(false)
   })
 })
@@ -65,7 +65,7 @@ describe("resolveWindowMaterialState", () => {
     })
   })
 
-  it("Linux 玻璃生效时外壳同样是全透明", () => {
+  it("Linux 玻璃降级为不透明（系统不提供原生材质）", () => {
     expect(
       resolveWindowMaterialState({
         platform: "linux",
@@ -74,9 +74,9 @@ describe("resolveWindowMaterialState", () => {
       })
     ).toEqual({
       preference: "glass",
-      active: "glass",
-      unavailableReason: null,
-      shell: "transparent",
+      active: "opaque",
+      unavailableReason: "unsupported-platform",
+      shell: "solid",
     })
   })
 
@@ -162,19 +162,13 @@ describe("mainWindowMaterialOptions", () => {
     ).toEqual({ backgroundColor: "#f4f7f9" })
   })
 
-  it("Linux 无条件透明无阴影（运行期无法重建窗口，两档位都靠 renderer 铺底）", () => {
-    const expected = {
-      backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
-      transparent: true,
-      hasShadow: false,
-    }
-
+  it("Linux 两档位都用主题底色 + 无阴影（窗口不再透明，漏底问题随之消失）", () => {
     expect(
-      mainWindowMaterialOptions({ platform: "linux", state: glass, useDarkColors: false })
-    ).toEqual(expected)
+      mainWindowMaterialOptions({ platform: "linux", state: opaque, useDarkColors: false })
+    ).toEqual({ backgroundColor: "#f4f7f9", hasShadow: false })
     expect(
       mainWindowMaterialOptions({ platform: "linux", state: opaque, useDarkColors: true })
-    ).toEqual(expected)
+    ).toEqual({ backgroundColor: "#20242a", hasShadow: false })
   })
 
   it("玻璃被系统降级时只用主题底色，不带任何材质属性", () => {
@@ -272,7 +266,7 @@ describe("applyMainWindowMaterial", () => {
     expect(degradedWin.setBackgroundMaterial).toHaveBeenCalledWith("none")
   })
 
-  it("Linux：不碰底色、vibrancy 与材质，观感交给 renderer", () => {
+  it("Linux：不碰底色、vibrancy 与材质（窗口构造期已是不透明底）", () => {
     const win = createFakeWindow()
 
     applyMainWindowMaterial(win as unknown as BrowserWindow, {
