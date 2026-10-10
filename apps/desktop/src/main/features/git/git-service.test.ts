@@ -150,3 +150,43 @@ describe("gitService.fileDiff path containment", () => {
     if (expected.stdout) expect(changes.files.some((file) => file.path === path)).toBe(true)
   })
 })
+
+describe("gitService with non-ASCII file names", () => {
+  const chineseName = "Rome-App-的-UI-在哪里渲染.html"
+
+  it("lists a modified file with a real (unescaped) Chinese path", async () => {
+    await writeFile(join(repoRoot, chineseName), "<!doctype html>\n", "utf8")
+    await execFileAsync("git", ["add", chineseName], { cwd: repoRoot })
+    await execFileAsync("git", ["commit", "-m", "add chinese page"], { cwd: repoRoot })
+    await writeFile(join(repoRoot, chineseName), "<!doctype html>\n渲染\n", "utf8")
+
+    const changes = await gitService.changes({ rootPath: repoRoot })
+    const file = changes.files.find((entry) => entry.path === chineseName)
+
+    expect(file).toBeDefined()
+    expect(file?.path).not.toContain("\\")
+    expect(file?.status).toBe("modified")
+  })
+
+  it("reads the diff of a Chinese-named file instead of throwing ENOENT", async () => {
+    const result = await gitService.fileDiff({ rootPath: repoRoot, path: chineseName })
+
+    expect(result.path).toBe(chineseName)
+    expect(result.binary).toBe(false)
+    expect(result.patch).toContain("+渲染")
+  })
+
+  it("reads an untracked Chinese-named file at its real path", async () => {
+    const untrackedName = "新建-中文-文件.txt"
+    await writeFile(join(repoRoot, untrackedName), "hello 中文\n", "utf8")
+
+    const result = await gitService.fileDiff({
+      rootPath: repoRoot,
+      path: untrackedName,
+      status: "untracked",
+    })
+
+    expect(result.path).toBe(untrackedName)
+    expect(result.patch).toContain("+hello 中文")
+  })
+})

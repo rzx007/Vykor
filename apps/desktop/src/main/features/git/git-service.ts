@@ -19,6 +19,10 @@ const execAsync = promisify(execFile)
 const maxPatchBuffer = 8 * 1024 * 1024
 const maxUntrackedStatBytes = 1_250_000
 const textDecoder = new TextDecoder("utf-8", { fatal: false })
+const textEncoder = new TextEncoder()
+// 默认 core.quotepath=true 会把非 ASCII 路径转义成 "Rome-App-\347\232\204..." 这种形式，
+// 直接当路径用会导致 stat/diff 找不到文件。关闭转义让 git 原样输出 UTF-8 路径。
+const gitConfigArgs = ["-c", "core.quotepath=false"]
 
 class GitService {
   async isRepository(input: DesktopGitIsRepositoryInput): Promise<DesktopGitIsRepositoryResult> {
@@ -194,7 +198,7 @@ function normalizeRequestedPath(rootPath: string, value: unknown): string {
 
 async function runGit(cwd: string, args: string[], maxBuffer = 1024 * 1024): Promise<string> {
   try {
-    const { stdout } = await execAsync("git", args, {
+    const { stdout } = await execAsync("git", [...gitConfigArgs, ...args], {
       cwd,
       maxBuffer,
       windowsHide: true,
@@ -268,7 +272,45 @@ function parseRenamePath(value: string): string {
 }
 
 function normalizeGitPath(value: string): string {
-  return value.replace(/\\/g, "/").replace(/^"|"$/g, "")
+  return decodeGitQuotedPath(value).replace(/\\/g, "/")
+}
+
+// git 在路径含 "、\ 或控制字符时仍会输出 "..." 形式的 C 转义（如 \347\232\204），
+// 这里按字节还原再按 UTF-8 解码，避免中文等非 ASCII 文件名被当成转义字面量。
+function decodeGitQuotedPath(value: string): string {
+  if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) return value
+  const inner = value.slice(1, -1)
+  const bytes: number[] = []
+  for (let index = 0; index < inner.length; index += 1) {
+    const char = inner[index]
+    if (char !== "\\") {
+      for (const byte of textEncoder.encode(char)) bytes.push(byte)
+      continue
+    }
+    const octal = /^[0-7]{1,3}/.exec(inner.slice(index + 1))
+    if (octal) {
+      bytes.push(Number.parseInt(octal[0], 8) & 0xff)
+      index += octal[0].length
+      continue
+    }
+    const escaped = inner[index + 1]
+    if (escaped === undefined) break
+    bytes.push(escapeBytes[escaped] ?? textEncoder.encode(escaped)[0])
+    index += 1
+  }
+  return textDecoder.decode(Uint8Array.from(bytes))
+}
+
+const escapeBytes: Record<string, number> = {
+  a: 7,
+  b: 8,
+  f: 12,
+  n: 10,
+  r: 13,
+  t: 9,
+  v: 11,
+  "\\": 92,
+  '"': 34,
 }
 
 function isBinaryPatch(patch: string): boolean {
