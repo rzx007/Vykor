@@ -15,6 +15,12 @@ import {
 } from "./git-run-change-inspector.js";
 
 const NUL = Buffer.from([0]);
+/** 捕获时每条文件记录都带行的拆分，具体数值由夹具内容决定。 */
+const statShape = {
+  lines: expect.any(Number),
+  additions: expect.any(Number),
+  deletions: expect.any(Number),
+};
 
 function ok(value: string | Buffer): GitRunResult {
   return {
@@ -147,8 +153,8 @@ describe("git run change inspector (real repositories)", () => {
     expect(delta.baseHead).toBe(baseline.head);
     expect(delta.head).toBe(baseline.head);
     expect(delta.files).toEqual([
-      { path: "packages/x.ts", status: "modified", lines: expect.any(Number) },
-      { path: "packages/y.ts", status: "added", lines: expect.any(Number) },
+      { path: "packages/x.ts", status: "modified", ...statShape },
+      { path: "packages/y.ts", status: "added", ...statShape },
     ]);
     expect(delta.patch).toContain("diff --git");
   });
@@ -163,7 +169,7 @@ describe("git run change inspector (real repositories)", () => {
     const delta = await inspector.compare(repo, baseline);
     expect(delta).toMatchObject({ attribution: "complete" });
     expect((delta as GitRunChangeSet).files).toEqual([
-      { path: "__proto__", status: "added", lines: expect.any(Number) },
+      { path: "__proto__", status: "added", ...statShape },
     ]);
   });
 
@@ -235,7 +241,7 @@ describe("git run change inspector (real repositories)", () => {
 
     expect(delta.attribution).toBe("complete");
     expect(delta.files).toEqual([
-      { path: "b.txt", status: "modified", lines: expect.any(Number) },
+      { path: "b.txt", status: "modified", ...statShape },
     ]);
   });
 
@@ -268,7 +274,7 @@ describe("git run change inspector (real repositories)", () => {
     expect(delta).toMatchObject({ attribution: "complete", baseHead: baseline.head });
     expect(delta.head).not.toBe(delta.baseHead);
     expect(delta.files).toEqual([
-      { path: "packages/x.ts", status: "modified", lines: expect.any(Number) },
+      { path: "packages/x.ts", status: "modified", ...statShape },
     ]);
   });
 
@@ -317,8 +323,8 @@ describe("git run change inspector (real repositories)", () => {
     const delta = (await inspector.compare(repo, baseline)) as GitRunChangeSet;
 
     expect(delta.files).toEqual([
-      { path: "b.txt", status: "deleted", lines: expect.any(Number) },
-      { path: "renamed.txt", oldPath: "a.txt", status: "renamed", lines: expect.any(Number) },
+      { path: "b.txt", status: "deleted", ...statShape },
+      { path: "renamed.txt", oldPath: "a.txt", status: "renamed", ...statShape },
     ]);
   });
 
@@ -333,7 +339,7 @@ describe("git run change inspector (real repositories)", () => {
     const delta = (await inspector.compare(repo, baseline)) as GitRunChangeSet;
 
     expect(delta.files).toEqual([
-      { path: "docs/my file.md", status: "modified", lines: expect.any(Number) },
+      { path: "docs/my file.md", status: "modified", ...statShape },
     ]);
   });
 
@@ -395,7 +401,9 @@ describe("git run change inspector (injected executor)", () => {
     config.nameStatus = Buffer.from(`R100\0${oldPath}\0${path}\0`);
     config.numstat = Buffer.from(`1\t1\t${path}\0`);
     const changes = await inspector.compare("/repo", baseline) as GitRunChangeSet;
-    expect(changes.files).toEqual([{ path, oldPath, status: "renamed", lines: 2 }]);
+    expect(changes.files).toEqual([
+      { path, oldPath, status: "renamed", lines: 2, additions: 1, deletions: 1 },
+    ]);
   });
 
   it("reports a non-git workspace without falling back to a full diff", async () => {

@@ -544,7 +544,13 @@ function writePart(path: string) {
 }
 
 function completeObservation(
-  files: { path: string; status: "modified"; lines: number }[],
+  files: {
+    path: string
+    status: "modified"
+    lines: number
+    additions?: number
+    deletions?: number
+  }[],
   fileCount = files.length
 ) {
   return {
@@ -626,6 +632,73 @@ it("hides the review action when every changed file is outside the repository", 
   expect(container.textContent).toContain("已编辑 1 个文件")
   expect(container.textContent).toContain("D:/outside/result.txt")
   expect(container.textContent).not.toContain("查看变更")
+})
+
+it("keeps the recorded add/delete split after the change is committed", async () => {
+  const changes = vi.fn().mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
+  })
+  Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+
+  await act(async () => {
+    root.render(
+      <ChangedFilesSummary
+        files={[{ path: "src/a.ts", additions: 0, deletions: 0, hasStats: false }]}
+        observation={completeObservation([
+          { path: "src/a.ts", status: "modified", lines: 7, additions: 5, deletions: 2 },
+        ])}
+        canOpenReview
+        onOpenFile={vi.fn()}
+        onOpenReview={vi.fn()}
+      />
+    )
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await Promise.resolve()
+  })
+
+  expect(rowButton(container, "src/a.ts").textContent).toContain("+5")
+  expect(rowButton(container, "src/a.ts").textContent).toContain("-2")
+  expect(container.textContent).not.toContain("行变化")
+  expect(changes).not.toHaveBeenCalled()
+})
+
+it("shows no line numbers for a recorded change with no textual diff", async () => {
+  const changes = vi.fn().mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
+  })
+  Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+
+  await act(async () => {
+    root.render(
+      <ChangedFilesSummary
+        files={[{ path: "assets/logo.png", additions: 0, deletions: 0, hasStats: false }]}
+        observation={completeObservation([
+          { path: "assets/logo.png", status: "modified", lines: 0, additions: 0, deletions: 0 },
+        ])}
+        canOpenReview
+        onOpenFile={vi.fn()}
+        onOpenReview={vi.fn()}
+      />
+    )
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await Promise.resolve()
+  })
+
+  expect(container.textContent).toContain("已编辑 1 个文件")
+  expect(container.textContent).toContain("assets/logo.png")
+  expect(container.textContent).not.toContain("+0")
+  expect(container.textContent).not.toContain("-0")
+  expect(container.textContent).not.toContain("行变化")
 })
 
 it("opens the recorded repository's workspace diff from the review action", async () => {

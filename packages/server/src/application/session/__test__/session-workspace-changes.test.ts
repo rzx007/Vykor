@@ -62,7 +62,8 @@ describe("read-only Run workspace observation", () => {
     } as any);
     await executor.execute({ sessionId, runId, inputId: input.id }, { signal: new AbortController().signal, registerHandle: async () => {} });
     expect(metadata(runId)).toMatchObject({ status: "complete", fileCount: 2, totalLines: 2, files: [
-      { path: "shell.txt", status: "added", lines: 1 }, { path: "written.txt", status: "added", lines: 1 },
+      { path: "shell.txt", status: "added", lines: 1, additions: 1, deletions: 0 },
+      { path: "written.txt", status: "added", lines: 1, additions: 1, deletions: 0 },
     ] });
     expect(childCalls).toBe(0);
     if (reviewWired) expect(store.runs.getRun(runId)?.metadata.autoReview).toMatchObject({ status: "disabled", mode: "off" });
@@ -77,7 +78,9 @@ describe("read-only Run workspace observation", () => {
     store.runs.updateRun(id, { status: "completed" });
     const finishedAt = store.runs.getRun(id)?.finishedAt;
     await svc.settle(id);
-    expect(metadata(id)).toMatchObject({ status: "complete", fileCount: 1, totalLines: 3 });
+    expect(metadata(id)).toMatchObject({ status: "complete", fileCount: 1, totalLines: 3, files: [
+      { path: "base.txt", status: "modified", lines: 3, additions: 2, deletions: 1 },
+    ] });
     expect(JSON.stringify(store.runs.getRun(id)?.metadata)).not.toContain("new-secret-body");
     expect(store.runs.getRun(id)?.finishedAt).toBe(finishedAt);
     expect(store.runs.getRun(id)?.status).toBe("completed");

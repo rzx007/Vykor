@@ -17,4 +17,11 @@ describe("bounded workspace changes", () => {
   it("keeps unavailability distinct from a successful empty repository observation", () => {
     expect(readWorkspaceChangesMetadata({ version: 1, status: "unavailable", reason: "concurrent_run_overlap", files: [], fileCount: 0, totalLines: 0, truncated: false })?.status).toBe("unavailable");
   });
+  it("round-trips the add/delete split and rejects an inconsistent one", () => {
+    const split = { ...summary, files: [{ path: "src/a.ts", status: "modified", lines: 7, additions: 5, deletions: 2 }] };
+    expect(readWorkspaceChangesMetadata(split)).toEqual(split);
+    expect(readWorkspaceChangesMetadata({ ...split, files: [{ path: "src/a.ts", status: "modified", lines: 7, additions: 5, deletions: 3 }] })).toBeUndefined();
+    expect(readWorkspaceChangesMetadata({ ...split, files: [{ path: "src/a.ts", status: "modified", lines: 7, additions: 5 }] })).toBeUndefined();
+    expect(readWorkspaceChangesMetadata({ ...split, files: [{ path: "src/a.ts", status: "modified", lines: 7, additions: -1, deletions: 8 }] })).toBeUndefined();
+  });
 });

@@ -8,6 +8,8 @@ export interface AutoReviewChangeFile {
   oldPath?: string;
   status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
   lines: number;
+  additions?: number;
+  deletions?: number;
 }
 
 export interface AutoReviewChangeSet {

@@ -13,6 +13,9 @@ export interface WorkspaceChangeFile {
   oldPath?: string;
   status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
   lines: number;
+  /** 捕获时的增删拆分（lines = additions + deletions）。旧记录没有该字段，读取时按缺失处理。 */
+  additions?: number;
+  deletions?: number;
 }
 
 export interface WorkspaceChangesMetadata {
@@ -40,9 +43,11 @@ export function readWorkspaceChangesMetadata(value: unknown): WorkspaceChangesMe
     if (!record(file) || !relativePath(file.path) || paths.has(file.path) ||
       (file.oldPath !== undefined && !relativePath(file.oldPath)) || !count(file.lines) ||
       typeof file.status !== "string" || !["added", "modified", "deleted", "renamed", "copied", "unknown"].includes(file.status)) return undefined;
+    if (!lineSplit(file)) return undefined;
     paths.add(file.path);
     files.push({ path: file.path, status: file.status as WorkspaceChangeFile["status"], lines: file.lines,
-      ...(typeof file.oldPath === "string" ? { oldPath: file.oldPath } : {}) });
+      ...(typeof file.oldPath === "string" ? { oldPath: file.oldPath } : {}),
+      ...(typeof file.additions === "number" ? { additions: file.additions, deletions: file.deletions as number } : {}) });
   }
   if (value.fileCount < files.length || (!value.truncated && value.fileCount !== files.length) ||
     files.reduce((sum, file) => sum + file.lines, 0) > value.totalLines) return undefined;
@@ -57,6 +62,11 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function count(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
+/** 增删必须成对出现且与总行数一致；两者都缺失表示旧记录，仍可读。 */
+function lineSplit(file: Record<string, unknown>): boolean {
+  if (file.additions === undefined && file.deletions === undefined) return true;
+  return count(file.additions) && count(file.deletions) && file.additions + file.deletions === file.lines;
+}
 function textPath(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= WORKSPACE_CHANGE_MAX_PATH_LENGTH && !/[\u0000-\u001f\u007f]/.test(value);
 }

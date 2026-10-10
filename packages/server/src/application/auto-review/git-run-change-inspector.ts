@@ -17,6 +17,7 @@ import {
   sameDirtyMap,
   sortFiles,
   uniquePaths,
+  type NumstatEntry,
   type RepoState,
 } from "./git-change-parsing.js";
 
@@ -277,11 +278,14 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     for (const path of trackedPaths) {
       const info = nameStatus.get(path);
       const status = info ? mapStatus(info.code) : "unknown";
+      const stat = numstat.get(path);
       files.push({
         path,
         ...(info?.oldPath ? { oldPath: info.oldPath } : {}),
         status,
-        lines: numstat.get(path) ?? 0,
+        lines: stat ? stat.additions + stat.deletions : 0,
+        additions: stat?.additions ?? 0,
+        deletions: stat?.deletions ?? 0,
       });
       const diffArgs = info?.oldPath
         ? ["diff", "--binary", "--no-color", "HEAD", "--", info.oldPath, path]
@@ -292,7 +296,14 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     }
 
     for (const path of untrackedPaths) {
-      files.push({ path, status: "added", lines: await this.countUntrackedLines(cwd, path) });
+      const stat = await this.countUntrackedLines(cwd, path);
+      files.push({
+        path,
+        status: "added",
+        lines: stat.additions + stat.deletions,
+        additions: stat.additions,
+        deletions: stat.deletions,
+      });
       const text = await this.readDiffText(cwd, [
         "diff",
         "--no-index",
@@ -332,11 +343,14 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
 
     const files: AutoReviewChangeFile[] = [];
     for (const [path, info] of nameStatus) {
+      const stat = numstat.get(path);
       files.push({
         path,
         ...(info.oldPath ? { oldPath: info.oldPath } : {}),
         status: mapStatus(info.code),
-        lines: numstat.get(path) ?? 0,
+        lines: stat ? stat.additions + stat.deletions : 0,
+        additions: stat?.additions ?? 0,
+        deletions: stat?.deletions ?? 0,
       });
     }
 
@@ -395,7 +409,7 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     return parseNameStatus(result.stdout);
   }
 
-  private async readNumstat(cwd: string, range: string[]): Promise<Map<string, number> | undefined> {
+  private async readNumstat(cwd: string, range: string[]): Promise<Map<string, NumstatEntry> | undefined> {
     const result = await this.executor.exec(
       ["diff", "--numstat", "-z", "--no-color", ...range],
       cwd,
@@ -410,13 +424,13 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     return result.stdout.toString("utf8");
   }
 
-  private async countUntrackedLines(cwd: string, path: string): Promise<number> {
+  private async countUntrackedLines(cwd: string, path: string): Promise<NumstatEntry> {
     const result = await this.executor.exec(
       ["diff", "--no-index", "--numstat", "-z", "--no-color", "--", "/dev/null", path],
       cwd,
     );
     const parsed = parseNumstat(result.stdout);
-    return parsed?.get(path) ?? 0;
+    return parsed?.get(path) ?? { additions: 0, deletions: 0 };
   }
 }
 

@@ -766,11 +766,26 @@ export function ChangedFilesSummary({
         .join("\n"),
     [mergedFiles, selectedProjectPath]
   )
+  // 运行期已记录增删拆分的文件直接用它，提交后仍能显示 +/-。
+  const observedStats = useMemo(() => {
+    const stats = new Map<string, ChangedFileStats>()
+    for (const file of observation?.files ?? []) {
+      if (file.additions === undefined || file.deletions === undefined) continue
+      stats.set(changedFilePathKey(file.path, selectedProjectPath), {
+        additions: file.additions,
+        deletions: file.deletions,
+      })
+    }
+    return stats
+  }, [observation, selectedProjectPath])
+  const needsGitStats = mergedFiles.some(
+    (file) => !observedStats.has(changedFilePathKey(file.path, selectedProjectPath))
+  )
 
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
-      if (!canOpenReview || !selectedProjectPath || mergedFiles.length === 0) {
+      if (!canOpenReview || !selectedProjectPath || !needsGitStats) {
         setGitStatsByPath({})
         return
       }
@@ -801,19 +816,32 @@ export function ChangedFilesSummary({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [canOpenReview, fileKey, mergedFiles.length, selectedProjectPath])
+  }, [canOpenReview, fileKey, needsGitStats, selectedProjectPath])
+
+  const observedPaths = useMemo(
+    () =>
+      new Set(
+        (observation?.files ?? []).map((file) => changedFilePathKey(file.path, selectedProjectPath))
+      ),
+    [observation, selectedProjectPath]
+  )
 
   const filesWithStats = useMemo(
     () =>
       mergedFiles.map((file) => {
-        const stats = gitStatsByPath[changedFilePathKey(file.path, selectedProjectPath)]
-        return stats ? { ...file, ...stats, hasStats: true } : file
+        const key = changedFilePathKey(file.path, selectedProjectPath)
+        const stats = observedStats.get(key) ?? gitStatsByPath[key]
+        // 二进制、仅改权限等没有文本行变化的改动不显示 +/-。
+        if (!stats || (stats.additions === 0 && stats.deletions === 0)) return file
+        return { ...file, ...stats, hasStats: true }
       }),
-    [mergedFiles, gitStatsByPath, selectedProjectPath]
+    [mergedFiles, observedStats, gitStatsByPath, selectedProjectPath]
   )
+  // 只在运行期没有记录拆分时，才回退显示记录的总行数。
   const storedLinesByPath = useMemo(() => {
     const lines = new Map<string, number>()
     for (const file of observation?.files ?? []) {
+      if (file.additions !== undefined && file.deletions !== undefined) continue
       lines.set(changedFilePathKey(file.path, selectedProjectPath), file.lines)
     }
     return lines
@@ -828,7 +856,7 @@ export function ChangedFilesSummary({
     (file) => routeChangedFileClick(file.path, selectedProjectPath, true) === "review"
   )
   const observedListed = filesWithStats.filter((file) =>
-    storedLinesByPath.has(changedFilePathKey(file.path, selectedProjectPath))
+    observedPaths.has(changedFilePathKey(file.path, selectedProjectPath))
   ).length
   const totalCount =
     filesWithStats.length + Math.max(0, (observation?.fileCount ?? 0) - observedListed)

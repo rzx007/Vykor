@@ -103,9 +103,14 @@ export function parseNameStatus(
   return map;
 }
 
-export function parseNumstat(buffer: Buffer): Map<string, number> | undefined {
+export interface NumstatEntry {
+  additions: number;
+  deletions: number;
+}
+
+export function parseNumstat(buffer: Buffer): Map<string, NumstatEntry> | undefined {
   const records = splitNul(buffer);
-  const map = new Map<string, number>();
+  const map = new Map<string, NumstatEntry>();
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index]!;
     const parts = record.toString("latin1").split("\t");
@@ -113,18 +118,22 @@ export function parseNumstat(buffer: Buffer): Map<string, number> | undefined {
     const added = parts[0]!;
     const deleted = parts[1]!;
     const inlinePath = parts.slice(2).join("\t");
-    const lineCount = (isBinaryCount(added) ? 0 : Number(added)) + (isBinaryCount(deleted) ? 0 : Number(deleted));
+    const entry: NumstatEntry = {
+      additions: isBinaryCount(added) ? 0 : Number(added),
+      deletions: isBinaryCount(deleted) ? 0 : Number(deleted),
+    };
+    if (!Number.isSafeInteger(entry.additions) || !Number.isSafeInteger(entry.deletions)) return undefined;
     if (inlinePath.length > 0) {
       const path = decodeField(Buffer.from(inlinePath, "latin1"));
       if (path === undefined) return undefined;
-      map.set(path, lineCount);
+      map.set(path, entry);
     } else {
       const oldPath = records[index + 1];
       const newPath = records[index + 2];
       if (oldPath === undefined || newPath === undefined) return undefined;
       const decoded = decodeField(newPath);
       if (decoded === undefined) return undefined;
-      map.set(decoded, lineCount);
+      map.set(decoded, entry);
       index += 2;
     }
   }
