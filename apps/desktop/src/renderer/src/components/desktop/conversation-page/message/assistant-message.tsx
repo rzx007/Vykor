@@ -119,17 +119,25 @@ export const AssistantMessage = memo(function AssistantMessage({
   })
   const settledObservations =
     observations?.filter((observation) => observation.status !== "captured") ?? []
+  // 单个卡片同时承载「运行期观测到的仓库改动」和「仓库外被编辑的文件」。
+  const observation = settledObservations.find((entry) => entry.status === "complete")
+  const observedFiles: ChangedFile[] = (observation?.files ?? []).map((file) => ({
+    path: file.path,
+    additions: 0,
+    deletions: 0,
+    hasStats: false,
+  }))
   const toolFiles =
     settledObservations.length > 0
       ? changedFiles.filter(
           (file) =>
             !settledObservations.some(
-              (observation) =>
-                observation.repositoryRoot &&
-                isAbsoluteFileInRepository(file.path, observation.repositoryRoot)
+              (entry) =>
+                entry.repositoryRoot && isAbsoluteFileInRepository(file.path, entry.repositoryRoot)
             )
         )
       : changedFiles
+  const changedFileList = [...observedFiles, ...toolFiles]
   if (parts.length === 0) return <span className="text-xs text-ui-muted">正在生成回复...</span>
 
   return (
@@ -254,28 +262,10 @@ export const AssistantMessage = memo(function AssistantMessage({
         )
       })}
 
-      {!streaming && showObservations
-        ? settledObservations.map((observation, index) =>
-            observation.status === "unavailable" ? null : (
-              <ChangedFilesSummary
-                key={index}
-                files={observation.files.map((file) => ({
-                  path: file.path,
-                  additions: 0,
-                  deletions: 0,
-                  hasStats: false,
-                }))}
-                observation={observation}
-                canOpenReview={canOpenReview}
-                onOpenFile={onOpenFile}
-                onOpenReview={onOpenReview}
-              />
-            )
-          )
-        : null}
-      {!streaming && isTurnComplete(parts) && toolFiles.length > 0 ? (
+      {!streaming && showObservations && isTurnComplete(parts) && changedFileList.length > 0 ? (
         <ChangedFilesSummary
-          files={toolFiles}
+          files={changedFileList}
+          observation={observation}
           canOpenReview={canOpenReview}
           onOpenFile={onOpenFile}
           onOpenReview={onOpenReview}
@@ -762,23 +752,25 @@ export function ChangedFilesSummary({
   const selectedProjectPath = observation?.repositoryRoot ?? workspaceProject?.path
   const [expanded, setExpanded] = useState(false)
   const [gitStatsByPath, setGitStatsByPath] = useState<Record<string, ChangedFileStats>>({})
+  const mergedFiles = useMemo(
+    () => mergeChangedFileLists(files, selectedProjectPath),
+    [files, selectedProjectPath]
+  )
   const fileKey = useMemo(
     () =>
-      files
+      mergedFiles
         .map((file) => {
-          const path = normalizeReviewPath(
-            toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
-          )
+          const path = changedFilePathKey(file.path, selectedProjectPath)
           return `${path}:${file.additions}:${file.deletions}:${file.hasStats ? "stats" : "patch"}`
         })
         .join("\n"),
-    [files, selectedProjectPath]
+    [mergedFiles, selectedProjectPath]
   )
 
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
-      if (observation || !canOpenReview || !selectedProjectPath || files.length === 0) {
+      if (!canOpenReview || !selectedProjectPath || mergedFiles.length === 0) {
         setGitStatsByPath({})
         return
       }
@@ -809,29 +801,39 @@ export function ChangedFilesSummary({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [canOpenReview, fileKey, files.length, selectedProjectPath, observation])
+  }, [canOpenReview, fileKey, mergedFiles.length, selectedProjectPath])
 
   const filesWithStats = useMemo(
     () =>
-      files.map((file) => {
-        const stats = observation
-          ? undefined
-          : gitStatsByPath[
-              normalizeReviewPath(
-                toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
-              )
-            ]
+      mergedFiles.map((file) => {
+        const stats = gitStatsByPath[changedFilePathKey(file.path, selectedProjectPath)]
         return stats ? { ...file, ...stats, hasStats: true } : file
       }),
-    [files, gitStatsByPath, selectedProjectPath, observation]
+    [mergedFiles, gitStatsByPath, selectedProjectPath]
   )
+  const storedLinesByPath = useMemo(() => {
+    const lines = new Map<string, number>()
+    for (const file of observation?.files ?? []) {
+      lines.set(changedFilePathKey(file.path, selectedProjectPath), file.lines)
+    }
+    return lines
+  }, [observation, selectedProjectPath])
+
   const visible = expanded ? filesWithStats : filesWithStats.slice(0, 3)
-  const hasStats = filesWithStats.some((file) => file.hasStats)
-  const statsFiles = hasStats ? filesWithStats.filter((file) => file.hasStats) : filesWithStats
+  const statsFiles = filesWithStats.filter((file) => file.hasStats)
   const additions = statsFiles.reduce((total, file) => total + file.additions, 0)
   const deletions = statsFiles.reduce((total, file) => total + file.deletions, 0)
+  // 只有仓库内文件能进入 diff 审阅；全是仓库外文件时不提供入口。
+  const hasReviewableFile = filesWithStats.some(
+    (file) => routeChangedFileClick(file.path, selectedProjectPath, true) === "review"
+  )
+  const observedListed = filesWithStats.filter((file) =>
+    storedLinesByPath.has(changedFilePathKey(file.path, selectedProjectPath))
+  ).length
+  const totalCount =
+    filesWithStats.length + Math.max(0, (observation?.fileCount ?? 0) - observedListed)
 
-  if ((observation?.fileCount ?? files.length) === 0) return null
+  if (totalCount === 0) return null
 
   return (
     <section className="text-ui-small overflow-hidden rounded-lg border bg-transparent">
@@ -839,62 +841,71 @@ export function ChangedFilesSummary({
         <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted/75 text-ui-muted">
           <FileCode2 className="size-[18px]" strokeWidth={1.7} />
         </span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">
-            {observation
-              ? `运行期间变更：仓库内 ${observation.fileCount} 个文件`
-              : `已编辑 ${files.length} 个文件`}
+            已编辑 {totalCount} 个文件
+            {observation?.truncated ? (
+              <span className="font-normal text-ui-muted"> · 摘要已截断</span>
+            ) : null}
           </h3>
-          {observation ? (
-            <p className="mt-0.5 text-xs text-ui-muted">
-              {observation.totalLines} 行变化{observation.truncated ? " · 摘要已截断" : ""} ·
-              点击查看当前工作区差异
-            </p>
-          ) : null}
-          {hasStats ? (
-            <p className="mt-0.5">
-              <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>{" "}
-              <span className="text-red-500">-{deletions}</span>
+          {statsFiles.length > 0 ? (
+            <p className="mt-0.5 font-mono tabular-nums">
+              <span className="text-diff-addition">+{additions}</span>{" "}
+              <span className="text-destructive">-{deletions}</span>
             </p>
           ) : null}
         </div>
+        {canOpenReview && selectedProjectPath && hasReviewableFile ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            shape="pill"
+            onClick={() => onOpenReview(undefined, "uncommitted", selectedProjectPath)}
+          >
+            查看变更
+          </Button>
+        ) : null}
       </header>
       <div className="border-t">
-        {visible.map((file) => (
-          <button
-            key={file.path}
-            type="button"
-            onClick={() =>
-              routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
-                ? observation
-                  ? onOpenReview(file.path, "uncommitted", selectedProjectPath)
-                  : onOpenReview(file.path)
-                : onOpenFile(
-                    observation && selectedProjectPath
-                      ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}`
-                      : file.path
-                  )
-            }
-            className="flex h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-          >
-            <span className="min-w-0 flex-1 truncate text-sm text-ui-muted">{file.path}</span>
-            {observation ? (
-              <span className="text-xs text-ui-muted">
-                {observation.files.find((stored) => stored.path === file.path)?.lines ?? 0} 行变化
-              </span>
-            ) : file.hasStats ? (
-              <LineStats additions={file.additions} deletions={file.deletions} />
-            ) : null}
-          </button>
-        ))}
+        {visible.map((file) => {
+          const storedLines = storedLinesByPath.get(
+            changedFilePathKey(file.path, selectedProjectPath)
+          )
+          return (
+            <button
+              key={file.path}
+              type="button"
+              onClick={() =>
+                routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
+                  ? observation
+                    ? onOpenReview(file.path, "uncommitted", observation.repositoryRoot)
+                    : onOpenReview(file.path)
+                  : onOpenFile(
+                      selectedProjectPath && !isAbsoluteChangedPath(file.path)
+                        ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}`
+                        : file.path
+                    )
+              }
+              className="flex h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm text-ui-muted">{file.path}</span>
+              {file.hasStats ? (
+                <LineStats additions={file.additions} deletions={file.deletions} />
+              ) : storedLines !== undefined ? (
+                <span className="shrink-0 text-xs text-ui-muted">{storedLines} 行变化</span>
+              ) : null}
+            </button>
+          )
+        })}
       </div>
-      {!expanded && files.length > 3 ? (
+      {!expanded && filesWithStats.length > 3 ? (
         <button
           type="button"
           onClick={() => setExpanded(true)}
           className="flex h-9 items-center gap-2 px-3 font-medium text-ui-muted hover:text-foreground"
         >
-          再显示 {files.length - 3} 个文件 <ChevronDown className="size-3.5" />
+          再显示 {filesWithStats.length - 3} 个文件 <ChevronDown className="size-3.5" />
         </button>
       ) : null}
     </section>
@@ -910,12 +921,43 @@ function LineStats({
 }): React.JSX.Element {
   return (
     <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">
-      <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>
-      <span className="ml-1 text-red-500">-{deletions}</span>
+      <span className="text-diff-addition">+{additions}</span>
+      <span className="ml-1 text-destructive">-{deletions}</span>
     </span>
   )
 }
 
 function normalizeReviewPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").toLocaleLowerCase()
+}
+
+function changedFilePathKey(path: string, projectPath: string | undefined): string {
+  return normalizeReviewPath(toProjectRelativePath(path, projectPath) ?? path)
+}
+
+/** 同一文件可能既出现在运行期观测里，又出现在工具入参里；按路径合并并保留行数统计。 */
+function mergeChangedFileLists(
+  files: ChangedFile[],
+  projectPath: string | undefined
+): ChangedFile[] {
+  const merged = new Map<string, ChangedFile>()
+  for (const file of files) {
+    const key = changedFilePathKey(file.path, projectPath)
+    const existing = merged.get(key)
+    if (!existing) {
+      merged.set(key, file)
+      continue
+    }
+    merged.set(key, {
+      path: existing.path,
+      additions: existing.hasStats ? existing.additions : file.additions,
+      deletions: existing.hasStats ? existing.deletions : file.deletions,
+      hasStats: existing.hasStats || file.hasStats,
+    })
+  }
+  return [...merged.values()]
+}
+
+function isAbsoluteChangedPath(path: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith("\\\\") || path.startsWith("/")
 }

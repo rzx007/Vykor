@@ -20,6 +20,14 @@ import { AssistantMessage, ChangedFilesSummary } from "./assistant-message"
 let container: HTMLDivElement
 let root: Root
 
+function rowButton(scope: HTMLElement, text: string): HTMLButtonElement {
+  const button = [...scope.querySelectorAll("button")].find((entry) =>
+    entry.textContent?.includes(text)
+  )
+  if (!button) throw new Error(`no button containing ${text}`)
+  return button
+}
+
 beforeEach(() => {
   store.state = { selectedProject: { path: "D:/repo" } }
   ;(
@@ -83,7 +91,7 @@ it("shares one git request across changed-file summaries", async () => {
   expect(container.textContent?.match(/-2/g)).toHaveLength(4)
 })
 
-it("keeps stored Run line counts and opens the recorded repository's current diff", async () => {
+it("falls back to stored Run line counts and opens the recorded repository's current diff", async () => {
   const changes = vi.fn().mockResolvedValue({
     rootPath: "D:/other",
     files: [],
@@ -110,14 +118,17 @@ it("keeps stored Run line counts and opens the recorded repository's current dif
         onOpenReview={onOpenReview}
       />
     )
-    await new Promise((resolve) => window.setTimeout(resolve, 10))
   })
-  expect(container.textContent).toContain("运行期间变更")
-  expect(container.textContent).toContain("7 行变化")
-  expect(container.textContent).toContain("当前工作区差异")
-  expect(changes).not.toHaveBeenCalled()
   await act(async () => {
-    container.querySelector<HTMLButtonElement>("button")!.click()
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await Promise.resolve()
+  })
+  expect(container.textContent).toContain("已编辑 1 个文件")
+  expect(container.textContent).toContain("7 行变化")
+  expect(container.textContent).toContain("查看变更")
+  expect(changes).toHaveBeenCalledWith({ rootPath: "D:/recorded", scope: "uncommitted" })
+  await act(async () => {
+    rowButton(container, "src/a.ts").click()
   })
   expect(onOpenReview).toHaveBeenCalledWith("src/a.ts", "uncommitted", "D:/recorded")
 })
@@ -284,7 +295,7 @@ it("hides an empty tool summary but preserves an observed nonzero count with a t
       />
     )
   })
-  expect(container.textContent).toContain("仓库内 2 个文件")
+  expect(container.textContent).toContain("已编辑 2 个文件")
   expect(container.textContent).toContain("摘要已截断")
 })
 
@@ -327,7 +338,7 @@ it("shows a Shell-only Run's observed file despite having no file-tool parts", a
     )
   })
   expect(container.textContent).toContain("shell-output.txt")
-  expect(container.textContent).toContain("运行期间变更")
+  expect(container.textContent).toContain("已编辑 1 个文件")
 })
 
 it("does not warn when a finished reply's directory is not a Git repository", async () => {
@@ -513,4 +524,134 @@ it("queries git stats for an outside-project session instead of clearing them", 
   expect(changes).toHaveBeenCalledWith({ rootPath: "D:/repo", scope: "uncommitted" })
   expect(container.textContent).toContain("+4")
   expect(container.textContent).toContain("-2")
+})
+
+function writePart(path: string) {
+  return {
+    id: "write",
+    sessionId: "s",
+    messageId: "m",
+    seq: 1,
+    type: "tool" as const,
+    toolName: "Write",
+    toolUseId: "write",
+    status: "completed" as const,
+    input: { file_path: path, content: "result" },
+    metadata: { executionState: "completed" },
+    createdAt: 1,
+    updatedAt: 2,
+  }
+}
+
+function completeObservation(
+  files: { path: string; status: "modified"; lines: number }[],
+  fileCount = files.length
+) {
+  return {
+    version: 1 as const,
+    status: "complete" as const,
+    repositoryRoot: "D:/repo",
+    files,
+    fileCount,
+    totalLines: files.reduce((total, file) => total + file.lines, 0),
+    truncated: fileCount !== files.length,
+  }
+}
+
+function changedFilesSections(scope: HTMLElement): HTMLElement[] {
+  return [...scope.querySelectorAll("section")].filter((entry) =>
+    entry.textContent?.includes("已编辑")
+  )
+}
+
+it("merges repository observations and outside-repo edits into one card", async () => {
+  const changes = vi.fn().mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [{ path: "src/a.ts", status: "modified", additions: 4, deletions: 2, binary: false }],
+    totalAdditions: 4,
+    totalDeletions: 2,
+  })
+  Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+
+  await act(async () => {
+    root.render(
+      <AssistantMessage
+        parts={[writePart("D:/outside/result.txt")]}
+        streaming={false}
+        observations={[completeObservation([{ path: "src/a.ts", status: "modified", lines: 7 }])]}
+        canOpenReview
+        onOpenFile={vi.fn()}
+        onOpenReview={vi.fn()}
+        onOpenTerminal={vi.fn()}
+      />
+    )
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    await Promise.resolve()
+  })
+
+  const sections = changedFilesSections(container)
+  expect(sections).toHaveLength(1)
+  expect(sections[0]!.textContent).toContain("已编辑 2 个文件")
+  expect(sections[0]!.textContent).toContain("src/a.ts")
+  expect(sections[0]!.textContent).toContain("D:/outside/result.txt")
+  expect(rowButton(container, "src/a.ts").textContent).toContain("+4")
+  expect(rowButton(container, "D:/outside/result.txt").textContent).not.toMatch(/[+-]\d/)
+})
+
+it("hides the review action when every changed file is outside the repository", async () => {
+  const changes = vi.fn().mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
+  })
+  Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+
+  await act(async () => {
+    root.render(
+      <AssistantMessage
+        parts={[writePart("D:/outside/result.txt")]}
+        streaming={false}
+        observations={[completeObservation([])]}
+        canOpenReview
+        onOpenFile={vi.fn()}
+        onOpenReview={vi.fn()}
+        onOpenTerminal={vi.fn()}
+      />
+    )
+  })
+
+  expect(container.textContent).toContain("已编辑 1 个文件")
+  expect(container.textContent).toContain("D:/outside/result.txt")
+  expect(container.textContent).not.toContain("查看变更")
+})
+
+it("opens the recorded repository's workspace diff from the review action", async () => {
+  const changes = vi.fn().mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
+  })
+  Object.defineProperty(window, "desktop", { configurable: true, value: { git: { changes } } })
+  const onOpenReview = vi.fn()
+
+  await act(async () => {
+    root.render(
+      <ChangedFilesSummary
+        files={[{ path: "src/a.ts", additions: 0, deletions: 0, hasStats: false }]}
+        observation={completeObservation([{ path: "src/a.ts", status: "modified", lines: 7 }])}
+        canOpenReview
+        onOpenFile={vi.fn()}
+        onOpenReview={onOpenReview}
+      />
+    )
+  })
+
+  await act(async () => {
+    rowButton(container, "查看变更").click()
+  })
+  expect(onOpenReview).toHaveBeenCalledWith(undefined, "uncommitted", "D:/repo")
 })
