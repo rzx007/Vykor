@@ -1,6 +1,10 @@
-/** 只识别直接启动的常见服务；不猜测脚本、引号内文本或复合命令。 */
+/** 识别直接启动，或先切目录再启动的常见服务；不猜测任意脚本。 */
 export function isPersistentServiceCommand(command: string): boolean {
-  const text = command.trim().toLowerCase();
+  let text = command.trim().toLowerCase();
+  // 这里只用于识别，启动时仍传递原命令，保留路径、引号和输出规则。
+  const changeDirectory = /^(?:cd(?:\s+\/d)?|set-location(?:\s+-(?:path|literalpath))?)\s+(?:"[^"]*"|'[^']*'|[^\s;&|'"<>]+)\s*(?:;|&&|\r?\n)\s*/;
+  while (changeDirectory.test(text)) text = text.replace(changeDirectory, "");
+  text = text.replace(/\s+2>&1\s*$/, "");
   if (/[;&|\r\n]/.test(text)) return false;
   if (/(?:^|\s)(?:--help|--version|-h)(?:\s|$)/.test(text)) return false;
   if (/^docker(?:\s+compose|-compose)\s+up\b/.test(text)) {

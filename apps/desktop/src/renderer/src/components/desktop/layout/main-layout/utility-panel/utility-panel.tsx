@@ -114,6 +114,7 @@ export function UtilityPanel({
       handledFileRequestId,
       handledToolRequestId,
       handledImageRequestId,
+      handledTerminalRequestId,
     },
     fileTabsRef,
     setTabs,
@@ -127,6 +128,7 @@ export function UtilityPanel({
     setHandledFileRequestId,
     setHandledToolRequestId,
     setHandledImageRequestId,
+    setHandledTerminalRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
 
@@ -199,8 +201,9 @@ export function UtilityPanel({
     if (!open && pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
   }, [open, pluginSidebar?.key])
   const terminalCommand = terminalCommands[0] ?? null
+  const pendingTerminalOpenRequest = terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
   const pendingTerminal =
-    Boolean(terminalOpenRequest) ||
+    Boolean(pendingTerminalOpenRequest) ||
     terminalCommands.some((command) => command.type === "ensure" || command.type === "create")
 
   useEffect(() => {
@@ -230,10 +233,10 @@ export function UtilityPanel({
   ])
 
   useEffect(() => {
-    if (!terminalOpenRequest) return
+    if (!pendingTerminalOpenRequest) return
     const timer = window.setTimeout(() => setTerminalMounted(true), 0)
     return () => window.clearTimeout(timer)
-  }, [setTerminalMounted, terminalOpenRequest])
+  }, [setTerminalMounted, pendingTerminalOpenRequest])
 
   useEffect(() => {
     if (activeWorkspaceIsGit !== true) return
@@ -778,7 +781,8 @@ export function UtilityPanel({
             <TerminalTool
               active={activeTab?.tool === "terminal"}
               activeTerminalId={activeTab?.terminalId ?? null}
-              openRequest={terminalOpenRequest}
+              openRequest={pendingTerminalOpenRequest}
+              onOpenRequestSettled={setHandledTerminalRequestId}
               command={terminalCommand}
               onSessionUpsert={upsertTerminalTab}
               onSessionRemove={removeTerminalTab}

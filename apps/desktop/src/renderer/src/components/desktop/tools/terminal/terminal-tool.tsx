@@ -64,6 +64,7 @@ export function TerminalTool({
   onSessionsHydrate,
   onActiveTerminalChange,
   onCommandSettled,
+  onOpenRequestSettled,
 }: {
   active: boolean
   activeTerminalId: string | null
@@ -74,6 +75,7 @@ export function TerminalTool({
   onSessionsHydrate: (sessions: TerminalSessionTabInfo[]) => void
   onActiveTerminalChange: (terminalId: string | null) => void
   onCommandSettled: (commandId: number) => void
+  onOpenRequestSettled?: (requestId: number) => void
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<XTermTerminal | null>(null)
@@ -95,12 +97,14 @@ export function TerminalTool({
   const onSessionsHydrateRef = useRef(onSessionsHydrate)
   const onActiveTerminalChangeRef = useRef(onActiveTerminalChange)
   const onCommandSettledRef = useRef(onCommandSettled)
+  const onOpenRequestSettledRef = useRef(onOpenRequestSettled)
 
   onSessionUpsertRef.current = onSessionUpsert
   onSessionRemoveRef.current = onSessionRemove
   onSessionsHydrateRef.current = onSessionsHydrate
   onActiveTerminalChangeRef.current = onActiveTerminalChange
   onCommandSettledRef.current = onCommandSettled
+  onOpenRequestSettledRef.current = onOpenRequestSettled
 
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
@@ -379,6 +383,9 @@ export function TerminalTool({
       })
       .catch((caught) => {
         if (!cancelled) setError(errorMessage(caught))
+      })
+      .finally(() => {
+        if (!cancelled) onOpenRequestSettledRef.current?.(openRequest.id)
       })
     return () => {
       cancelled = true

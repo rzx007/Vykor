@@ -9,7 +9,14 @@ const terminal = {
 } as const;
 
 describe("service terminal routing", () => {
-  it.each(["pnpm dev", "npm run dev -- --host", "python -m http.server 8080", "uvicorn app:app --reload", "npx vite", "tsc --watch"])("starts %s in a visible terminal", async command => {
+  it.each([
+    "pnpm dev", "npm run dev -- --host", "python -m http.server 8080", "uvicorn app:app --reload", "npx vite", "tsc --watch",
+    "Set-Location E:\\code\\tobias-quill; npm run dev 2>&1",
+    "Set-Location -LiteralPath 'E:\\code\\my project'; npm run dev 2>&1",
+    'cd "./my project" && pnpm dev',
+    "cd sub\nnpm run dev",
+    "npm run dev 2>&1",
+  ])("starts %s in a visible terminal", async command => {
     const create = vi.fn(async () => ({ jobId: "background", label: "job" }));
     const open = vi.fn(async (input) => ({ ...terminal, command: input.command }));
     const result = await createShellTool().execute({ command }, {
@@ -20,17 +27,21 @@ describe("service terminal routing", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("routes an explicit background service through the same terminal", async () => {
+  it.each(["pnpm dev", "Set-Location E:\\code\\tobias-quill; npm run dev 2>&1"])("routes an explicit background service through the same terminal: %s", async command => {
     const create = vi.fn(async () => ({ jobId: "background", label: "job" }));
     const open = vi.fn(async (input) => ({ ...terminal, name: input.name, command: input.command }));
-    const result = await backgroundShellCreateTool.execute({ command: "pnpm dev", description: "site preview" }, {
+    const result = await backgroundShellCreateTool.execute({ command, description: "site preview" }, {
       cwd: "/repo", sessionId: "s1", toolCallId: "call", terminal: { open }, backgroundShell: { create },
     });
-    expect(JSON.parse((result.content[0] as any).text)).toMatchObject({ kind: "terminal", terminal: { name: "site preview", command: "pnpm dev" } });
+    expect(JSON.parse((result.content[0] as any).text)).toMatchObject({ kind: "terminal", terminal: { name: "site preview", command } });
     expect(create).not.toHaveBeenCalled();
   });
 
-  it.each(["npm install", "pnpm build", "pnpm test", "docker compose up -d", "npx vite build", "vite --version", "next build", "uvicorn --help", "echo 'npm run dev'"])("keeps finite or unrelated work out of service terminals: %s", async command => {
+  it.each([
+    "npm install", "pnpm build", "pnpm test", "docker compose up -d", "npx vite build", "vite --version", "next build", "uvicorn --help", "echo 'npm run dev'",
+    "Set-Location E:\\code\\project; npm run build 2>&1", 'echo "cd sub; npm run dev 2>&1"',
+    "Write-Output 'npm run dev'; npm install", "npm run dev &", "npm run dev | Out-File server.log",
+  ])("keeps finite or unrelated work out of service terminals: %s", async command => {
     const open = vi.fn(async () => terminal);
     const create = vi.fn(async () => ({ jobId: "background", label: "job" }));
     await backgroundShellCreateTool.execute({ command, description: "task" }, {

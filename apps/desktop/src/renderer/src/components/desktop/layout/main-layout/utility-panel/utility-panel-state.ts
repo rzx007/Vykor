@@ -25,6 +25,7 @@ export type UtilityPanelRuntimeState = {
   handledFileRequestId: number | null
   handledToolRequestId: number | null
   handledImageRequestId?: number | null
+  handledTerminalRequestId?: number | null
 }
 
 export type PersistedFileTabsByScope = Record<
