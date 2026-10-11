@@ -7,8 +7,18 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { DesktopNote } from "@shared/note-types"
 
 vi.mock("@renderer/components/ui/scroll-area", () => ({
-  ScrollArea: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
+  ScrollArea: ({
+    children,
+    className,
+    "aria-label": ariaLabel,
+  }: {
+    children?: React.ReactNode
+    className?: string
+    "aria-label"?: string
+  }) => (
+    <div className={className} aria-label={ariaLabel}>
+      {children}
+    </div>
   ),
 }))
 
