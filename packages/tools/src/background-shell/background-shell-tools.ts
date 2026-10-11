@@ -1,6 +1,8 @@
 import type { ToolDefinition } from "@vykor/core";
 import type { ShellDescriptor } from "@vykor/environment";
 import { createShellDescription } from "../shell/index.js";
+import { terminalOpenTool } from "../terminal/terminal-tools.js";
+import { isPersistentServiceCommand } from "../terminal/service-command.js";
 
 export function createBackgroundShellTool(shell?: ShellDescriptor): ToolDefinition {
 return {
@@ -30,6 +32,9 @@ return {
     if ("error" in description) return failed(description.error);
     const command = readRequiredString(input.command, "command");
     if ("error" in command) return failed(command.error);
+    if (context.terminal && context.sessionId && isPersistentServiceCommand(command.value)) {
+      return terminalOpenTool.execute({ command: command.value, name: description.value }, context);
+    }
     if (!context.sessionId) return { ...failed("Background shell jobs require a durable session."), failureKind: "configuration" as const };
     if (!context.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
     if (!context.toolCallId) return { ...failed("Background shell request identity is not configured."), failureKind: "configuration" as const };

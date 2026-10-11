@@ -22,6 +22,7 @@ import type {
 } from "@vykor/terminal";
 import {
   LocalTerminalProvider,
+  terminalCommandArgs,
   type LocalTerminalProviderOptions,
 } from "@vykor/terminal-node";
 import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
@@ -157,6 +158,7 @@ export class DaemonTerminalService {
         rows: input.rows ?? 30,
         name: input.name ?? "Agent terminal",
         shell: input.shell,
+        command: input.command,
         cwd: input.cwd,
         source: "agent",
       }),
@@ -212,11 +214,12 @@ export class DaemonTerminalService {
       { kind: "terminal", id: terminalId },
     );
     try {
+      const shell = input.shell ?? (input.command ? lease.info.shellDescriptor.executable : undefined);
       const target = await lease.terminal.prepare({
         cwd: lease.workspace.executionRoot,
-        shell: input.shell,
+        shell,
         owner: { kind: "terminal", id: terminalId },
-        shellArgs: input.shellArgs,
+        shellArgs: input.command ? terminalCommandArgs(shell!, input.command) : input.shellArgs,
         env: input.env,
         cols: input.cols,
         rows: input.rows,

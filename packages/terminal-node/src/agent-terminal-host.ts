@@ -146,6 +146,7 @@ function createRequest(
     rows: input.rows ?? 30,
     name: input.name ?? "Agent terminal",
     ...(input.shell !== undefined ? { shell: input.shell } : {}),
+    ...(input.command !== undefined ? { command: input.command } : {}),
     cwd: input.cwd,
     source: "agent",
   };

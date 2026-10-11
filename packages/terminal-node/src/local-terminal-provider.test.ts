@@ -5,6 +5,29 @@ import { LocalTerminalProvider } from "./local-terminal-provider";
 import { TerminalOutputStore } from "./terminal-output-store";
 
 describe("LocalTerminalProvider", () => {
+  it.each([
+    ["/bin/bash", ["-lc", "npm run dev"]],
+    ["C:\\Windows\\System32\\cmd.exe", ["/d", "/s", "/c", "npm run dev"]],
+    ["pwsh.exe", ["-NoLogo", "-NoProfile", "-Command", "npm run dev"]],
+  ])("runs a command directly in %s and reports its exit", async (shell, args) => {
+    let onExit: ((event: { exitCode: number }) => void) | undefined;
+    const spawnPty = vi.fn(() => ({
+      write() {}, resize() {}, kill() {},
+      onData() { return { dispose() {} }; },
+      onExit(listener: typeof onExit) { onExit = listener; return { dispose() {} }; },
+    } as any));
+    const provider = new LocalTerminalProvider({ resolveCwd: async () => process.cwd(), spawnPty });
+    const terminal = await provider.create({
+      scope: { kind: "session", sessionId: "s1" }, runtime: "local", cols: 80, rows: 24,
+      shell: shell as string, command: "npm run dev", source: "agent",
+    });
+    expect(spawnPty).toHaveBeenCalledWith(shell, args, expect.any(Object));
+    expect(terminal).toMatchObject({ command: "npm run dev", status: "running" });
+    onExit?.({ exitCode: 1 });
+    expect(await provider.list()).toEqual([expect.objectContaining({ command: "npm run dev", status: "failed", exitCode: 1 })]);
+    await provider.dispose();
+  });
+
   it("releases an environment target when cwd validation fails", async () => {
     const close = vi.fn(async () => {});
     const provider = new LocalTerminalProvider({

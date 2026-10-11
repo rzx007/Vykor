@@ -3,7 +3,6 @@ import {
   ChevronDown,
   FileCode2,
   LoaderCircle,
-  PanelRightOpen,
   Pencil,
   TerminalSquare,
 } from "lucide-react"
@@ -54,6 +53,7 @@ import { isToolGenerationPresentation } from "./tool-generation-presentation"
 import { useToolDetails } from "./use-tool-details"
 import { ReadImagePreview, readImagePath } from "./read-image-preview"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
+import { TerminalActivityCard, type TerminalActivityInfo } from "./terminal-activity-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
 const diagnosticToolLabels = new Set(["失败", "已中断", "结果不确定", "工具失败，等待本轮结果"])
@@ -162,8 +162,8 @@ export const AssistantMessage = memo(function AssistantMessage({
               animate={streaming && Boolean(initialPartIds && !initialPartIds.has(block.tool.id))}
             >
               <TerminalActivityCard
-                payload={block.payload}
-                active={isTerminalActivityActive(block, streaming && index === blocks.length - 1)}
+                terminal={block.payload.terminal!}
+                active={isToolInFlight(block.tool)}
                 onOpenTerminal={onOpenTerminal}
               />
             </ContentEntrance>
@@ -363,14 +363,6 @@ function isToolInFlight(tool: ToolUnit): boolean {
   return isToolActivityActive(tool.call, tool.result)
 }
 
-function isTerminalActivityActive(
-  block: Extract<ContentBlock, { type: "terminal" }>,
-  isLiveTail: boolean
-): boolean {
-  if (isToolInFlight(block.tool)) return true
-  return isLiveTail && block.payload.terminal?.status === "running"
-}
-
 function groupToolUnits(units: AssistantContentUnit[]): ContentBlock[] {
   const blocks: ContentBlock[] = []
   for (const unit of units) {
@@ -393,55 +385,7 @@ function groupToolUnits(units: AssistantContentUnit[]): ContentBlock[] {
 type TerminalToolPayload = {
   kind: "terminal"
   action: string
-  terminal?: {
-    id: string
-    name: string
-    cwd: string
-    shell: string
-    status: "running" | "stopping" | "completed" | "killed" | "failed"
-  }
-}
-
-function TerminalActivityCard({
-  payload,
-  active,
-  onOpenTerminal,
-}: {
-  payload: TerminalToolPayload
-  active: boolean
-  onOpenTerminal: (terminalId: string) => void
-}): React.JSX.Element | null {
-  const terminal = payload.terminal
-  if (!terminal) return null
-  return (
-    <section className="text-ui-small overflow-hidden rounded-lg border border-border/80 bg-muted/18 shadow-sm">
-      <div className="flex min-h-16 items-center gap-3 px-3.5 py-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-ui-muted">
-          <TerminalSquare className="size-[18px]" strokeWidth={1.7} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                terminal.status === "running" ? "bg-emerald-500" : "bg-ui-muted/60"
-              )}
-            />
-            <h3 className={cn("truncate font-semibold text-foreground", active && "shimmer")}>
-              {terminal.name}
-            </h3>
-          </div>
-          <p className="mt-0.5 truncate text-xs text-ui-muted" title={terminal.cwd}>
-            {terminal.cwd}
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => onOpenTerminal(terminal.id)}>
-          <PanelRightOpen data-icon="inline-start" />
-          打开终端
-        </Button>
-      </div>
-    </section>
-  )
+  terminal?: TerminalActivityInfo
 }
 
 function parseTerminalToolPayload(value: unknown): TerminalToolPayload | null {

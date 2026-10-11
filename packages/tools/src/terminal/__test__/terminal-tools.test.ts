@@ -27,6 +27,13 @@ const terminal: TerminalSessionInfo = {
 };
 
 describe("persistent terminal tools", () => {
+  it("starts a named command terminal and returns its job handle", async () => {
+    const open = vi.fn(async (input) => ({ ...terminal, command: input.command }));
+    const result = await terminalOpenTool.execute({ name: "preview", command: "npm run dev" }, createContext({ open }));
+    expect(parseResult(result)).toMatchObject({ kind: "terminal", action: "open", terminal: { command: "npm run dev" }, jobId: "terminal-1" });
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev" }));
+  });
+
   it("opens a terminal scoped to the current durable session and cwd", async () => {
     const open = vi.fn(async () => terminal);
     const context = createContext({ open });

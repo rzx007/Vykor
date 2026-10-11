@@ -6,6 +6,14 @@ export interface ShellInfo {
   args: string[];
 }
 
+/** 使用命令模式，退出状态对应命令进程，而不是空闲的交互 shell。 */
+export function terminalCommandArgs(shell: string, command: string): string[] {
+  const name = shell.split(/[\\/]/).pop()?.replace(/\.exe$/i, "").toLowerCase();
+  if (name === "powershell" || name === "pwsh") return ["-NoLogo", "-NoProfile", "-Command", command];
+  if (name === "cmd") return ["/d", "/s", "/c", command];
+  return ["-lc", command];
+}
+
 export function resolveDefaultShell(
   platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,

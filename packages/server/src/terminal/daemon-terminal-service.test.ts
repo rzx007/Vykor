@@ -3,6 +3,30 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonTerminalService } from "./daemon-terminal-service.js";
 
 describe("DaemonTerminalService scoped environments", () => {
+  it("runs service commands inside the environment shell, not the WSL launcher", async () => {
+    const session = { id: "service-session", cwd: process.cwd() } as any;
+    const pty = fakePty();
+    const prepare = vi.fn(async (input) => ({
+      command: "wsl.exe", args: ["--exec", input.shell, ...input.shellArgs],
+      hostCwd: process.cwd(), executionCwd: "/workspace", shell: input.shell,
+      signal: async () => {}, close: async () => {},
+    }));
+    const service = new DaemonTerminalService({ getProject: () => undefined, getSession: () => session }, {
+      getSettingsForCwd: async () => ({} as any),
+      acquireEnvironment: async () => ({
+        info: { shellDescriptor: { executable: "/bin/sh" } }, workspace: { executionRoot: "/workspace" },
+        terminal: { prepare }, release: async () => {},
+      } as any),
+      spawnPty: () => pty.value,
+    });
+    const terminal = await service.createAgentHost(session).open({ sessionId: session.id, cwd: session.cwd, command: "npm run dev" });
+    expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ shell: "/bin/sh", shellArgs: ["-lc", "npm run dev"] }));
+    expect(terminal).toMatchObject({ command: "npm run dev", status: "running" });
+    await service.close(terminal.id);
+    expect(await service.get(terminal.id)).toMatchObject({ status: "killed" });
+    await service.dispose();
+  });
+
   it("does not acquire an environment or spawn a PTY when the session disappears during create", async () => {
     const session = { id: "race-session", cwd: process.cwd(), projectId: "race-project" } as any;
     let sessionReads = 0;

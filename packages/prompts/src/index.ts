@@ -50,7 +50,7 @@ const DEFAULT_IDENTITY =
   "You are Vykor, an open-source AI coding assistant CLI. You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.";
 
 const LONG_RUNNING_SHELL_GUIDANCE =
-  " - Use Shell only for short-lived commands. For long-running shell commands such as dev servers, watchers, installs, builds, migrations, docker compose, or anything likely to keep running, use BackgroundShellCreate, then follow progress with JobWait or JobRead.";
+  " - Use Shell only for short-lived commands. Start persistent services such as dev servers and watchers with TerminalOpen(command, name) when available so the user can see output and stop them in the terminal. Run the service in the foreground of that terminal; do not detach it with nohup, shell backgrounding, or Start-Process. Follow the returned jobId with JobRead or JobWait to verify readiness, JobSend for input, and JobCancel to stop it. For finite long-running work such as installs, builds, and migrations, use BackgroundShellCreate and follow progress with JobWait or JobRead. When terminals are unavailable, use BackgroundShellCreate for services. At handoff, mention any services left running and their terminal entry; do not stop them unless requested.";
 
 const INVARIANT_GUIDANCE = `Use reliable sources for URLs and references. Do not invent links or citations.
 

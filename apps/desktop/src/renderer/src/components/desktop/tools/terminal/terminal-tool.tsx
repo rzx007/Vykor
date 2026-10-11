@@ -32,7 +32,7 @@ import { userTerminalCreateInput } from "./user-terminal-create-input"
 import { getXtermTheme } from "./xterm-theme"
 import { resolveTerminalCreateTarget } from "./terminal-runtime-model"
 import { TerminalContextMenu, type TerminalContextMenuState } from "./terminal-context-menu"
-import { clampContextMenuPosition, nextTerminalName, recordBelongsToSession, terminalErrorMessage as errorMessage, toTabInfo, type TerminalSessionTabInfo } from "./terminal-display"
+import { clampContextMenuPosition, nextTerminalName, recordBelongsToSession, terminalStatusLabel, terminalErrorMessage as errorMessage, toTabInfo, type TerminalSessionTabInfo } from "./terminal-display"
 
 export type { TerminalSessionTabInfo } from "./terminal-display"
 
@@ -617,11 +617,31 @@ export function TerminalTool({
 
     try {
       await window.desktop.terminal.kill(record.id)
-      await createTerminal(record.name, remaining)
+      if (record.command) {
+        const restarted = await window.desktop.terminal.create({
+          scope: record.scope, runtime: record.runtime, source: record.source,
+          name: record.name, shell: record.shell, command: record.command, cols: record.cols, rows: record.rows,
+        })
+        setRecords(current => [...current.filter(item => item.id !== record.id), restarted])
+        const ownerId = record.scope.kind === "session" ? record.scope.sessionId : record.scope.projectId
+        if (selectedProjectIdRef.current === ownerId) {
+          setActiveTerminalId(restarted.id)
+          onSessionUpsertRef.current(toTabInfo(restarted), true)
+          onActiveTerminalChangeRef.current(restarted.id)
+        }
+      } else await createTerminal(record.name, remaining)
     } catch (caught) {
       setError(errorMessage(caught))
     }
   }
+
+  useEffect(() => {
+    for (const record of records) {
+      if (record.command && recordBelongsToSession(record, activeSession ?? { id: "", projectId: selectedProject?.id })) {
+        onSessionUpsertRef.current(toTabInfo(record), false)
+      }
+    }
+  }, [records, activeSession, selectedProject?.id])
 
   const clearTerminal = (): void => {
     const record = activeRecordRef.current
@@ -683,7 +703,7 @@ export function TerminalTool({
       )}
     >
       {activeRecord && <p className="px-3 pt-1 text-ui-caption text-ui-muted" title={`${activeRecord.shell} · ${activeRecord.cwd}`}>
-        {activeRecord.shell} · {activeRecord.environmentKind === "wsl" ? `WSL${activeRecord.distribution ? ` · ${activeRecord.distribution}` : ""}` : activeRecord.environmentKind === "native" || activeRecord.runtime === "local" ? "本机" : "运行环境信息未返回"} · {activeRecord.cwd}
+        {activeRecord.command ? `${activeRecord.name} · ${terminalStatusLabel(activeRecord.status)} · ${activeRecord.command}` : activeRecord.shell} · {activeRecord.environmentKind === "wsl" ? `WSL${activeRecord.distribution ? ` · ${activeRecord.distribution}` : ""}` : activeRecord.environmentKind === "native" || activeRecord.runtime === "local" ? "本机" : "运行环境信息未返回"} · {activeRecord.cwd}
       </p>}
       <AlertDialog open={pasteConfirmation !== null} onOpenChange={(open) => { if (!open) settlePaste(false) }}>
         <AlertDialogContent>

@@ -39,6 +39,7 @@ export interface AgentTerminalOpenRequest {
   cols?: number;
   rows?: number;
   shell?: string;
+  command?: string;
 }
 
 /** Host-owned Terminal producer. Observation and control use AgentJobHost. */

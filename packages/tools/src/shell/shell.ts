@@ -1,4 +1,5 @@
 import type { ShellOutputLogStatus, ToolDefinition, ToolResult } from "@vykor/core";
+import { resolve } from "node:path";
 import {
   shellResultMetadata,
   type ShellDescriptor,
@@ -11,6 +12,8 @@ import {
 import { defaultShellExecutor } from "./executor.js";
 import { createBoundedOutputCollector, DEFAULT_MAX_OUTPUT_CHARS, formatOutput } from "./output.js";
 import type { ShellExecutor } from "./types.js";
+import { terminalOpenTool } from "../terminal/terminal-tools.js";
+import { isPersistentServiceCommand } from "../terminal/service-command.js";
 
 export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
 
@@ -43,6 +46,18 @@ export function createShellTool(
       const command = typeof input.command === "string" ? input.command.trim() : "";
       const descriptor = context.environment?.info.shellDescriptor ?? shell;
       const hasExplicitTimeout = input.timeout !== undefined;
+      if (command && !hasExplicitTimeout && context.terminal && context.sessionId && isPersistentServiceCommand(command)) {
+        const workdir = typeof input.workdir === "string" ? input.workdir.trim() : "";
+        const resolvedWorkdir = workdir && context.environment ? await context.environment.paths.resolve(workdir, "execute") : undefined;
+        if (resolvedWorkdir && resolvedWorkdir.mountPurpose !== "workspace") return workdirDenied(resolvedWorkdir.executionPath);
+        const atSessionRoot = resolvedWorkdir ? resolvedWorkdir.executionPath === context.environment!.workspace.executionRoot
+          : !workdir || resolve(context.cwd, workdir) === resolve(context.cwd);
+        if (!atSessionRoot) {
+          return { content: [{ type: "text", text: "Use TerminalOpen with command for this service. Include a shell-appropriate cd to the requested subdirectory in command; terminals are scoped to the session directory." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
+        }
+        if (context.abortSignal?.aborted) return interruptedBeforeStart();
+        return terminalOpenTool.execute({ command, name: summarizeCommand(command) }, context);
+      }
       const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context));
       if (background) {
         try {
@@ -303,7 +318,7 @@ function descriptorHostLauncher(descriptor: ShellDescriptor): HostShellLauncher 
 export const shellTool: ToolDefinition = createShellTool();
 
 export function createShellDescription(shell?: ShellDescriptor): string {
-  const background = "For long-running commands such as dev servers, watchers, installs, builds, migrations, docker compose, or commands likely to take more than a brief moment, use background execution when its tool and visible job controls are available, then follow the returned handle. Do not claim completion without evidence.";
+  const background = "For persistent services such as dev servers and watchers, use TerminalOpen with command when available, then inspect with JobRead/JobWait and stop with JobCancel. For finite long-running work such as installs, builds, and migrations, use BackgroundShellCreate, then follow the returned handle. Do not claim completion or service readiness without evidence.";
   const powershellQuoting = "This tool already runs PowerShell: execute scripts directly. If another powershell/pwsh process is needed, use a single-quoted -Command script or a script block; double-quoted scripts expand $variables in the outer shell. A here-string opener (@' or @\") must be followed by a newline before any content; put its matching terminator ('@ or \"@) on its own line.";
   if (!shell) return `Execute a short-lived command using the execution environment's resolved shell. ${background}`;
   if (shell.dialect === "windows-powershell") {

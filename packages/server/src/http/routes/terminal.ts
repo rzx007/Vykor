@@ -120,6 +120,7 @@ export function createTerminalRoutes(
           name: optionalText(body.name),
           shell: optionalText(body.shell),
           shellArgs: readShellArgs(body.shellArgs),
+          command: optionalText(body.command),
           env: readTerminalEnvironment(body.env),
           cwd: optionalText(body.cwd),
           source: readSource(body.source) ?? "user",

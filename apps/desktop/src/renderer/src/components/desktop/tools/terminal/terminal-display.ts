@@ -49,8 +49,12 @@ function shellName(shell: string): string {
 export function toTabInfo(record: DesktopTerminalRecord): TerminalSessionTabInfo {
   return {
     id: record.id,
-    title: `${shellName(record.shell)}:${record.cwd}`,
+    title: record.command ? `${record.name} · ${terminalStatusLabel(record.status)}` : `${shellName(record.shell)}:${record.cwd}`,
   }
+}
+
+export function terminalStatusLabel(status: DesktopTerminalRecord["status"]): string {
+  return { running: "运行中", stopping: "停止中", completed: "已结束", killed: "已停止", failed: "异常退出" }[status]
 }
 
 export function terminalErrorMessage(error: unknown): string {

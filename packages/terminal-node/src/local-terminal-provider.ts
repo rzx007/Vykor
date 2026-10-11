@@ -21,7 +21,7 @@ import {
 import type { IPty } from "node-pty";
 
 import { OutputBuffer } from "./output-buffer";
-import { createTerminalEnv, resolveDefaultShell } from "./shell";
+import { createTerminalEnv, resolveDefaultShell, terminalCommandArgs } from "./shell";
 import { TerminalOutputStore } from "./terminal-output-store";
 import { createHostTerminalTarget } from "./environment-terminal-target.js";
 
@@ -59,6 +59,9 @@ export class LocalTerminalProvider implements TerminalProvider {
   constructor(private readonly options: LocalTerminalProviderOptions) {}
 
   async create(input: TerminalCreateRequest): Promise<TerminalSessionInfo> {
+    if (input.command !== undefined && (!input.command.trim() || input.shellArgs !== undefined)) {
+      throw new Error("Terminal command must be non-empty and cannot be combined with shellArgs.");
+    }
     const id = randomUUID();
     const resolvedCwd = await this.options.resolveCwd(input);
     const resolvedInfo = this.options.resolveSessionInfo?.(input) ?? (
@@ -75,7 +78,7 @@ export class LocalTerminalProvider implements TerminalProvider {
       : createHostTerminalTarget({
           cwd: resolvedCwd,
           shell: input.shell?.trim() || resolveDefaultShell().command,
-          shellArgs: input.shellArgs,
+          shellArgs: input.command ? terminalCommandArgs(input.shell?.trim() || resolveDefaultShell().command, input.command) : input.shellArgs,
           env: input.env,
         });
     try {
@@ -126,6 +129,7 @@ export class LocalTerminalProvider implements TerminalProvider {
       status: "running",
       cwd: target.executionCwd,
       shell: target.shell,
+      ...(input.command ? { command: input.command } : {}),
       cols: clampDimension(input.cols),
       rows: clampDimension(input.rows),
       createdAt: new Date().toISOString(),

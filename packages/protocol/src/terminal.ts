@@ -17,6 +17,8 @@ export interface TerminalCreateRequest {
   name?: string;
   shell?: string;
   shellArgs?: string[];
+  /** 直接运行命令；命令退出后终端结束，不保留空闲 shell。 */
+  command?: string;
   /** 仅此终端子进程的覆盖值，不修改智能体或系统环境。 */
   env?: Record<string, string>;
   cwd?: string;
@@ -37,6 +39,7 @@ export interface TerminalSessionInfo {
   status: TerminalSessionStatus;
   cwd: string;
   shell: string;
+  command?: string;
   cols: number;
   rows: number;
   createdAt: string;

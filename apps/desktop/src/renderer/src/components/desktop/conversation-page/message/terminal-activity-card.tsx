@@ -1,0 +1,154 @@
+import { CircleStop, PanelRightOpen, TerminalSquare } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import type { DesktopTerminalRecord } from "@shared/terminal-types"
+import { Button } from "@renderer/components/ui/button"
+import { cn } from "@renderer/lib/utils"
+import { terminalStatusLabel, terminalErrorMessage } from "../../tools/terminal/terminal-display"
+
+export type TerminalActivityInfo = Pick<
+  DesktopTerminalRecord,
+  "id" | "name" | "cwd" | "shell" | "status" | "command"
+>
+
+export function TerminalActivityCard({
+  terminal,
+  active,
+  onOpenTerminal,
+}: {
+  terminal: TerminalActivityInfo
+  active: boolean
+  onOpenTerminal: (terminalId: string) => void
+}): React.JSX.Element {
+  const [current, setCurrent] = useState<TerminalActivityInfo | null>(null)
+  const [availability, setAvailability] = useState<"checking" | "ready" | "missing" | "error">(
+    "checking"
+  )
+  const [stopping, setStopping] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const initialTerminalRef = useRef(terminal)
+  const refreshRef = useRef(() => {})
+  initialTerminalRef.current = terminal
+  const terminalId = terminal.id
+
+  useEffect(() => {
+    let disposed = false
+    let revision = 0
+    setCurrent(null)
+    setAvailability("checking")
+    setError(null)
+    const refresh = () => {
+      const requestRevision = ++revision
+      void window.desktop.terminal
+        .list()
+        .then((records) => {
+          if (disposed || requestRevision !== revision) return
+          const record = records.find((item) => item.id === terminalId) ?? null
+          setCurrent(record)
+          setAvailability(record ? "ready" : "missing")
+          setError(null)
+        })
+        .catch((caught) => {
+          if (disposed || requestRevision !== revision) return
+          setAvailability("error")
+          setError(terminalErrorMessage(caught))
+        })
+    }
+    const unsubscribe = window.desktop.terminal.onEvent((event) => {
+      if (event.terminalId !== terminalId || (event.type !== "exit" && event.type !== "status"))
+        return
+      revision += 1
+      setAvailability("ready")
+      setCurrent((record) => {
+        const previous = record ?? initialTerminalRef.current
+        const status =
+          event.type === "status"
+            ? event.status
+            : previous.status === "stopping" || previous.status === "killed"
+              ? "killed"
+              : event.exitCode === 0
+                ? "completed"
+                : "failed"
+        return { ...previous, status }
+      })
+    })
+    refreshRef.current = refresh
+    refresh()
+    window.addEventListener("focus", refresh)
+    return () => {
+      disposed = true
+      unsubscribe()
+      window.removeEventListener("focus", refresh)
+    }
+  }, [terminalId])
+
+  const info = current ?? terminal
+  const running = availability === "ready" && info.status === "running"
+  const label =
+    availability === "checking"
+      ? "查询状态…"
+      : availability === "missing"
+        ? "终端已不可用"
+        : availability === "error"
+          ? "状态查询失败"
+          : terminalStatusLabel(info.status)
+  const stop = async () => {
+    setStopping(true)
+    setError(null)
+    try {
+      await window.desktop.terminal.kill(terminal.id)
+      refreshRef.current()
+    } catch (caught) {
+      setError(terminalErrorMessage(caught))
+    } finally {
+      setStopping(false)
+    }
+  }
+  return (
+    <section className="text-ui-small overflow-hidden rounded-lg border border-border/80 bg-muted/18 shadow-sm">
+      <div className="flex min-h-16 items-center gap-3 px-3.5 py-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-ui-muted">
+          <TerminalSquare className="size-[18px]" strokeWidth={1.7} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                running ? "bg-primary" : "bg-ui-muted/60"
+              )}
+            />
+            <h3 className={cn("truncate font-semibold text-foreground", active && "shimmer")}>
+              {info.name}
+            </h3>
+            <span className="shrink-0 text-xs text-ui-muted" role="status">
+              {label}
+            </span>
+          </div>
+          <p className="mt-0.5 truncate text-xs text-ui-muted" title={info.command ?? info.cwd}>
+            {info.command ?? info.cwd}
+          </p>
+          {error && (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+        {running && (
+          <Button type="button" variant="ghost" disabled={stopping} onClick={() => void stop()}>
+            <CircleStop data-icon="inline-start" />
+            {info.command ? "停止服务" : "停止终端"}
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={availability !== "ready"}
+          onClick={() => onOpenTerminal(terminal.id)}
+        >
+          <PanelRightOpen data-icon="inline-start" />
+          打开终端
+        </Button>
+      </div>
+    </section>
+  )
+}

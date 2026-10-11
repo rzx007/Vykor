@@ -7,10 +7,11 @@ import type {
 export const terminalOpenTool: ToolDefinition = {
   name: "TerminalOpen",
   description:
-    "Open a persistent interactive terminal in this session's working directory. Prefer Shell for a single non-interactive command; use this for long-running or interactive processes.",
+    "Open a visible terminal in this session's working directory. For dev servers and watchers, provide command to run the service directly: its exit then updates terminal status. Do not daemonize the command or detach its child process. Use JobRead/JobWait to inspect output, JobSend for input, and JobCancel to stop it, with the returned jobId. Without command, opens an interactive shell. Prefer Shell for short commands and BackgroundShellCreate for finite builds or installs.",
   inputSchema: {
     type: "object",
     properties: {
+      command: { type: "string", description: "Service command to run in the session directory. For a subdirectory, include the shell-appropriate cd in the command. Omit to open an interactive shell." },
       name: {
         type: "string",
         description: "Short label shown in the terminal panel",
@@ -29,20 +30,26 @@ export const terminalOpenTool: ToolDefinition = {
     },
   },
   async execute(input, context) {
+    if (context.abortSignal?.aborted) return { ...failed("Terminal interrupted before starting."), failureKind: "interrupted", executionState: "not_started" };
+    if (input.command !== undefined && (typeof input.command !== "string" || !input.command.trim())) {
+      return { ...failed("command must be a non-empty string."), failureKind: "invalid_input", executionState: "not_started" };
+    }
     const resolved = resolveHost(context);
     if ("content" in resolved) return resolved;
+    const command = optionalString(input.command);
     try {
       const terminal = await resolved.host.open({
         sessionId: resolved.sessionId,
         cwd: context.cwd,
-        name: optionalString(input.name),
+        name: optionalString(input.name) ?? (command ? command.slice(0, 80) : undefined),
         cols: optionalNumber(input.cols),
         rows: optionalNumber(input.rows),
         shell: optionalString(input.shell),
+        ...(command ? { command } : {}),
       });
-      return terminalResult("open", { terminal });
+      return { ...terminalResult("open", { terminal, jobId: terminal.id }), executionState: "completed", compactSummary: `TerminalOpen completed: jobId=${terminal.id}` };
     } catch (error) {
-      return failed(error);
+      return { ...failed(error), failureKind: "unknown_outcome", executionState: "unknown" };
     }
   },
 };
