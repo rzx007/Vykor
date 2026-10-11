@@ -21,6 +21,7 @@ import type { NoteAppearance } from "./note-appearance"
 import { Textarea } from "@renderer/components/ui/textarea"
 import type { NoteView } from "./note-model"
 import type { NoteSaveStatus } from "./note-save-coordinator"
+import { notePaperClasses } from "./note-paper"
 
 // 使用 beUI morphing-modal 相同的布局方式，但不创建弹窗或替换输入框。
 const MotionCard = motion.create(Card)
@@ -69,7 +70,10 @@ export function NoteEditor({
       layoutDependency={`${selected?.draftId ?? "draft"}:${expanded}:${Boolean(error)}`}
       transition={transition}
       data-note-color={selected?.color ?? "default"}
-      className="note-paper min-w-0 gap-0 py-0 focus-within:ring-2 focus-within:ring-ring"
+      className={cn(
+        "note-paper min-w-0 gap-0 py-0 focus-within:ring-2 focus-within:ring-ring",
+        notePaperClasses
+      )}
     >
       <motion.div layout={reduced ? false : "position"} transition={transition}>
         <CardHeader className="flex h-14 flex-row items-center gap-2">

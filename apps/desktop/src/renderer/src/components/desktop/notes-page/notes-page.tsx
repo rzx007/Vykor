@@ -94,9 +94,9 @@ export function NotesPage(): React.JSX.Element {
     setExpanded(false)
     setMode("desk")
   }
-  const list = (all = false): React.JSX.Element => (
+  const list = (): React.JSX.Element => (
     <NoteList
-      notes={all || notes.query ? notes.visibleNotes : notes.visibleNotes.slice(0, 4)}
+      notes={notes.visibleNotes}
       selectedKey={notes.selectedKey}
       query={notes.query}
       loading={notes.status === "loading"}
@@ -209,7 +209,14 @@ export function NotesPage(): React.JSX.Element {
                       收纳夹 · {papers.length}
                     </Button>
                   </div>
-                  {list()}
+                  <ScrollArea
+                    horizontal={false}
+                    aria-label="滚动查看便签"
+                    className="h-[min(65vh,640px)] min-h-64"
+                    contentClassName="px-2 pt-4 pb-6"
+                  >
+                    {list()}
+                  </ScrollArea>
                 </aside>
               ) : null}
             </div>
@@ -248,7 +255,7 @@ export function NotesPage(): React.JSX.Element {
                       <div className="max-w-sm">
                         <NoteSearch query={notes.query} onChange={notes.setQuery} />
                       </div>
-                      {list(true)}
+                      {list()}
                     </div>
                   }
                 />
@@ -260,7 +267,7 @@ export function NotesPage(): React.JSX.Element {
                       : "纸片收好了，想用时再取出来。"}
                 </p>
               </div>
-              {notes.query ? <div className="w-full">{list(true)}</div> : null}
+              {notes.query ? <div className="w-full">{list()}</div> : null}
               <Button variant="ghost" shape="pill" onClick={createNote}>
                 <CirclePlus data-icon="inline-start" />
                 再记一句

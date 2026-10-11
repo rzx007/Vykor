@@ -381,6 +381,10 @@ describe("NotesPage", () => {
       updatedAt: index + 1,
     }))
     await renderPage(records)
+    expect(
+      container.querySelectorAll('[aria-label="便签列表"] button[aria-label^="打开便签："]')
+    ).toHaveLength(7)
+    expect(container.querySelector('[aria-label="滚动查看便签"]')).not.toBeNull()
     await act(async () => {
       ;(container.querySelector('button[aria-label="收纳形态"]') as HTMLButtonElement).click()
     })

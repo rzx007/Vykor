@@ -15,6 +15,7 @@ import { cn } from "@renderer/lib/utils"
 import { describeNote, type NoteView } from "./note-model"
 import { NoteActions } from "./note-actions"
 import type { NoteAppearance } from "./note-appearance"
+import { notePaperClasses } from "./note-paper"
 
 const noteTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "numeric",
@@ -67,7 +68,7 @@ export function NoteList({
           ) : null}
         </Empty>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] items-start gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] items-start gap-x-5 gap-y-7 pt-3">
           {notes.map((note, index) => {
             const { title, preview } = describeNote(note.content)
             return (
@@ -77,20 +78,35 @@ export function NoteList({
                   data-note-id={note.draftId}
                   data-note-color={note.color ?? "default"}
                   className={cn(
-                    "note-paper group relative aspect-[3/4] w-full min-w-0",
+                    "note-paper group/note aspect-square w-full min-w-0 -rotate-1",
+                    notePaperClasses,
                     note.draftId === selectedKey && "ring-2 ring-ring"
                   )}
                 >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 56"
+                    className="pointer-events-none absolute -top-3 right-5 z-10 h-10 w-[18px] rotate-[5deg] overflow-visible text-(--note-ink) drop-shadow-[1px_1px_0_rgba(255,255,255,0.45)]"
+                    fill="none"
+                  >
+                    <path
+                      d="M17 5.25C17 2.35 14.65 0 11.75 0C7.85 0 5 3.15 5 7.5V43.5C5 47.15 7.85 50 11.25 50C14.65 50 17 47.15 17 43.5V17.25C17 14.65 15.2 12.75 13 12.75C11.2 12.75 9.75 14.1 9.75 16V37.5"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                   <button
                     type="button"
                     aria-label={"打开便签：" + title}
                     aria-current={note.draftId === selectedKey ? "true" : undefined}
                     onClick={() => onSelect(note.draftId)}
-                    className="absolute inset-0 rounded-xl text-left outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    className="absolute inset-0 rounded-sm text-left outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   />
-                  <CardHeader className="pointer-events-none relative">
-                    <CardTitle className="line-clamp-2 pr-8 break-words">{title}</CardTitle>
-                    <div className="pointer-events-auto absolute top-0 right-2">
+                  <CardHeader className="pointer-events-none relative pt-6">
+                    <CardTitle className="line-clamp-2 break-words">{title}</CardTitle>
+                    <div className="pointer-events-none absolute top-0 left-2 opacity-0 transition-opacity group-focus-within/note:pointer-events-auto group-focus-within/note:opacity-100 group-hover/note:pointer-events-auto group-hover/note:opacity-100 has-[[aria-expanded=true]]:pointer-events-auto has-[[aria-expanded=true]]:opacity-100 motion-reduce:transition-none [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100">
                       <NoteActions
                         note={note}
                         label={"便签操作：" + title}
