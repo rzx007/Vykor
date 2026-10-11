@@ -59,7 +59,7 @@ export function ConversationTranscript({
   running: boolean
   canEditLastUserMessage: boolean
   onEditLastUserMessage: (sourceMessageId: string, document: ComposerDocument) => void
-  onCopyAssistantMessage: (content: string) => void
+  onCopyAssistantMessage: (content: string) => void | Promise<void>
   onForkAssistantMessage?: (messageId: string) => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
@@ -70,13 +70,10 @@ export function ConversationTranscript({
   onOpenAgents?: (taskId?: string) => void
 }): React.JSX.Element {
   const modelCache = useRef<TranscriptModelCache | null>(null)
-  const {
-    entries,
-    streamingPart,
-    activityLabel,
-    activeRun,
-    activeRunGrouped,
-  } = useTranscriptModel(modelCache, { messages, parts, runs, running, showReasoning })
+  const { entries, streamingPart, activityLabel, activeRun, activeRunGrouped } = useTranscriptModel(
+    modelCache,
+    { messages, parts, runs, running, showReasoning }
+  )
   const lastTurn = useMemo(
     () => [...entries].reverse().find((entry) => entry.type === "turn"),
     [entries]
@@ -360,9 +357,7 @@ function useTranscriptModel(
         activeRun: previous.activeRun,
         activeRunGrouped: previous.activeRunGrouped,
         streamingPart:
-          updatedPart && previous.visiblePartIds.has(updatedPart.id)
-            ? updatedPart
-            : undefined,
+          updatedPart && previous.visiblePartIds.has(updatedPart.id) ? updatedPart : undefined,
       }
     }
   }

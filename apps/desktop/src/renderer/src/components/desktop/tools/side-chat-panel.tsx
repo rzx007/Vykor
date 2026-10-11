@@ -449,10 +449,7 @@ export function SideChatPanel({
       if (delivery.generation < currentGeneration) return
       if (delivery.kind === "snapshot") {
         currentGeneration = delivery.generation
-        acknowledger.acknowledge(
-          delivery,
-          accept(delivery.view) ? "applied" : "resync-required"
-        )
+        acknowledger.acknowledge(delivery, accept(delivery.view) ? "applied" : "resync-required")
         return
       }
       if (delivery.generation > currentGeneration && currentGeneration !== 0) {
@@ -659,9 +656,7 @@ export function SideChatPanel({
                   running={running}
                   canEditLastUserMessage={false}
                   onEditLastUserMessage={() => {}}
-                  onCopyAssistantMessage={(content) =>
-                    void window.desktop.clipboard.writeText(content)
-                  }
+                  onCopyAssistantMessage={(content) => window.desktop.clipboard.writeText(content)}
                   showReasoning={showReasoning}
                   onOpenFile={onOpenFile}
                   canOpenReview={canOpenReview}
