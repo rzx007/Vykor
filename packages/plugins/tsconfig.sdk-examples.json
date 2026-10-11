@@ -9,5 +9,5 @@
       "@vykor/plugins/sdk": ["./src/sdk.ts"]
     }
   },
-  "include": ["../../examples/plugins/text-inspector/tools/**/*.mjs"]
+  "include": ["../../examples/plugins/text-inspector/tools/**/*.mjs", "../../plugins/knowledge-work/tools/**/*.mjs"]
 }

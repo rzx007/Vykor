@@ -138,9 +138,13 @@
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
 - [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
 - [插件 UI 完整规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与[A4 验证记录](./superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)：定义与授权、持久实例、受控工具操作、Desktop 隔离卡片/侧栏和正式参考插件；用户人工验收与发布另行进行。
+- [插件 UI 固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)、[设计审查记录](./superpowers/reviews/2026-10-11-native-plugin-ui-continuity-design-review.md)与[实施计划](./superpowers/plans/2026-10-11-native-plugin-ui-continuity.md)：每组件固定内联或侧栏，暂时隐藏保留挂载，不读取或缓存插件表单；规划统一外观和用户明确加入输入框/提交给助手。设计已审查修订，功能尚未实施。
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop 本地插件包导入、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [插件机制现状调研报告](./plugin-mechanism-report.md)：按当前代码逐段说明 manifest 契约、安装快照、发现与激活、Native Tool 子进程、权限三层、Run 级可见性与管理面，并列出未覆盖的缺口与容易误判的代码事实。
+- [Rome Apps 详细分析报告](./rome-apps-analysis-report.md)：按本地源码说明 app 声明、构建安装、服务端执行、Web 页面、工作区与聊天内联交互，区分安全和历史状态边界，并给出 OHS 内联与侧栏的借鉴建议。
+- [Orkas 内置智能体调研](./orkas-builtin-agents-integration-research.md)：记录内置资源、依赖与能力范围，研究与写作插件已完成第一版接入，其他能力保留为集成建议。
+- [Codex Goal 本地实现调研](./codex-goal-implementation-research.md)：基于指定本地安装版本分析目标状态、继续执行和用量控制，并记录本项目的改进建议。
 - [Slash Commands](./slash-commands.md) 与 [Slash Command Flow](./slash-commands-flow.md)：当前命令清单、三层分流和执行入口。
 - [Skills Flow](./skills-flow.md) 与 [Skill Prompt Flow](./skill-prompt-flow.md)：Skill 的发现、可见性，以及结构化 Skill 输入从发送到 Run 收尾。
 

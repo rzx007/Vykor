@@ -187,12 +187,15 @@ export function PluginManager({
       destructive: true,
     })
   }
-  async function importArchive(): Promise<void> {
+  async function importArchive(bundledPlugin?: "knowledge-work"): Promise<void> {
     if (!api || lock.current) return
     lock.current = true
     setBusy(true)
     try {
-      applyImportResult(await api.importArchive({ cwd: projectPath }))
+      applyImportResult(await api.importArchive({
+        cwd: projectPath,
+        ...(bundledPlugin ? { bundledPlugin } : {}),
+      }))
     } catch {
       if (mounted.current) reportFeedback("导入插件失败，请重试。", { destructive: true })
     } finally {
@@ -327,6 +330,7 @@ export function PluginManager({
   const matches = (...values: (string | undefined)[]): boolean =>
     values.join(" ").toLocaleLowerCase().includes(normalizedQuery)
   const plugins = snapshot?.plugins ?? []
+  const knowledgeWorkInstalled = plugins.some(plugin => plugin.identity.id === "vykor.knowledge-work")
   const visiblePlugins = plugins.filter(
     (plugin) =>
       matches(
@@ -345,6 +349,25 @@ export function PluginManager({
           <CircleAlert />
           <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
         </Alert>
+      ) : null}
+      {!loading && !knowledgeWorkInstalled && matches("研究与写作", "knowledge-work") ? (
+        <section className="flex items-center justify-between gap-4" aria-label="内置研究与写作">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-medium">研究与写作</h2>
+            <p className="text-xs leading-5 text-muted-foreground">
+              应用内置。整理网页和资料，生成带来源的报告、文章，并继续修改。
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            shape="pill"
+            disabled={busy || !api}
+            aria-label="添加研究与写作"
+            onClick={() => void importArchive("knowledge-work")}
+          >
+            添加
+          </Button>
+        </section>
       ) : null}
       <section className="flex flex-col gap-4" aria-labelledby="plugin-installed-title">
         <div className="flex items-center justify-between gap-3">

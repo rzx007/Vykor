@@ -189,6 +189,31 @@ describe("PluginManager archive import", () => {
     expect(host.textContent).not.toContain("添加插件配置")
   })
 
+  it("installs the included research and writing pack only after an explicit click", async () => {
+    const installed = plugin({
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
+    })
+    api().importArchive.mockResolvedValue({
+      status: "installed", pluginName: "研究与写作", snapshot: { ...snapshot, plugins: [installed] },
+    })
+    await render()
+    expect(api().importArchive).not.toHaveBeenCalled()
+    await click("添加研究与写作")
+    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "knowledge-work" })
+    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
+  })
+
+  it("does not reinstall an included plugin that the user has disabled", async () => {
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
+      enabled: false,
+    })] })
+    await render()
+    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(api().importArchive).not.toHaveBeenCalled()
+  })
+
   it("explains UI permissions and component counts in the host approval dialog", async () => {
     api().importArchive.mockResolvedValue({
       status: "approval-required",

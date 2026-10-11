@@ -61,8 +61,13 @@ export function createPluginIpcContribution(service: PluginIpcService): IpcContr
         },
         {
           channel: IpcChannels.pluginImportArchive,
-          handler: (event, input) =>
-            service.importArchive(event.sender, { cwd: (input as DesktopPluginArchiveImportInput).cwd }),
+          handler: (event, input) => {
+            const value = input as DesktopPluginArchiveImportInput
+            return service.importArchive(event.sender, {
+              cwd: value.cwd,
+              ...(value.bundledPlugin !== undefined ? { bundledPlugin: value.bundledPlugin } : {}),
+            })
+          },
         },
         {
           channel: IpcChannels.pluginConfirmArchive,

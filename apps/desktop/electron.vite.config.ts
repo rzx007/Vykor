@@ -7,11 +7,12 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
 import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-selector-plugin"
+import { packageKnowledgeWorkPlugin } from "./scripts/package-bundled-plugin"
 
-function copySessionMigrations(): Plugin {
+function copyRuntimeResources(): Plugin {
   return {
-    name: "copy-session-migrations",
-    writeBundle(options) {
+    name: "copy-runtime-resources",
+    async writeBundle(options) {
       const outputDirectory = resolve(options.dir ?? "out/main")
       const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations")
       rmSync(migrationsDirectory, { recursive: true, force: true })
@@ -23,6 +24,10 @@ function copySessionMigrations(): Plugin {
       cpSync(
         resolve("../../packages/agent-runtime/src/native-tools/host-entry.mjs"),
         resolve(outputDirectory, "host-entry.mjs")
+      )
+      await packageKnowledgeWorkPlugin(
+        resolve("../../plugins/knowledge-work"),
+        resolve(outputDirectory, "../bundled-plugins")
       )
     },
   }
@@ -36,7 +41,7 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [copySessionMigrations(), browserAnnotationSelectorPlugin()],
+    plugins: [copyRuntimeResources(), browserAnnotationSelectorPlugin()],
     build: {
       externalizeDeps: {
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树

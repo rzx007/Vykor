@@ -1,4 +1,4 @@
-import { resolve } from "node:path"
+import { join, resolve } from "node:path"
 
 import type { PluginInfo } from "@vykor/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -19,6 +19,7 @@ const daemon = vi.hoisted(() => {
 })
 
 const electron = vi.hoisted(() => ({
+  app: { isPackaged: false, getAppPath: () => "C:/desktop" },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
 }))
@@ -55,6 +56,7 @@ const examplePlugin: PluginInfo = {
 describe("DesktopPluginService", () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    electron.app.isPackaged = false
     daemon.plugins.list.mockResolvedValue({ plugins: [examplePlugin], warnings: [] })
     daemon.plugins.enable.mockResolvedValue({ message: "enabled" })
     daemon.plugins.disable.mockResolvedValue({ message: "disabled" })
@@ -153,6 +155,52 @@ describe("DesktopPluginService", () => {
     expect(result).toEqual({ status: "installed", snapshot: expect.any(Object), pluginName: "archive-plugin" })
     expect(JSON.stringify(result)).not.toContain("C:/private")
     expect(JSON.stringify(result)).not.toContain("a".repeat(64))
+  })
+
+  it("installs the bundled plugin through archive verification without opening the picker", async () => {
+    const chooseArchive = vi.fn(async () => "C:/forged.zip")
+    const service = new DesktopPluginService({ chooseArchive })
+    const result = await service.importArchive({} as never, {
+      cwd: "C:/workspace", bundledPlugin: "knowledge-work",
+    })
+    expect(result.status).toBe("installed")
+    expect(chooseArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledWith({
+      cwd: resolve("C:/workspace"),
+      archivePath: join("C:/desktop", "out", "bundled-plugins", "knowledge-work.zip"),
+      expectedArchiveDigest: "a".repeat(64), approvedPermissions: [],
+    })
+  })
+
+  it("uses the unpacked resource archive in a packaged app", async () => {
+    electron.app.isPackaged = true
+    const original = Object.getOwnPropertyDescriptor(process, "resourcesPath")
+    Object.defineProperty(process, "resourcesPath", { configurable: true, value: "C:/app/resources" })
+    try {
+      const service = new DesktopPluginService()
+      const result = await service.importArchive({} as never, {
+        cwd: "C:/workspace", bundledPlugin: "knowledge-work",
+      })
+      expect(result.status).toBe("installed")
+      expect(daemon.plugins.installArchive).toHaveBeenCalledWith(expect.objectContaining({
+        archivePath: join("C:/app/resources", "bundled-plugins", "knowledge-work.zip"),
+      }))
+    } finally {
+      if (original) Object.defineProperty(process, "resourcesPath", original)
+      else delete (process as { resourcesPath?: string }).resourcesPath
+    }
+  })
+
+  it("rejects unknown bundled IDs before choosing or installing any archive", async () => {
+    const chooseArchive = vi.fn(async () => "C:/forged.zip")
+    const service = new DesktopPluginService({ chooseArchive })
+    const result = await service.importArchive({} as never, {
+      cwd: "C:/workspace", bundledPlugin: "../../forged",
+    } as never)
+    expect(result.status).toBe("failed")
+    expect(chooseArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.installArchive).not.toHaveBeenCalled()
   })
 
   it("reinstalls immediately when existing approval covers requested permissions", async () => {

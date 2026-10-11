@@ -15,6 +15,11 @@
       "cache": false,
       "persistent": true
     },
+    "@vykor/desktop#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/plugins/knowledge-work/**"],
+      "outputs": ["out/**"]
+    },
     "check-types": {
       "dependsOn": ["^build"]
     },
@@ -23,7 +28,7 @@
     },
     "@vykor/agent-runtime#test": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**", "$TURBO_ROOT$/plugins/knowledge-work/**"]
     },
     "@vykor/server#test": {
       "dependsOn": ["^build"],
@@ -39,6 +44,7 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/examples/plugins/text-inspector/**",
+        "$TURBO_ROOT$/plugins/knowledge-work/**",
         "$TURBO_ROOT$/packages/plugin-sources/src/**",
         "$TURBO_ROOT$/packages/plugins/src/**",
         "$TURBO_ROOT$/packages/server/src/application/default-services/plugin-service.ts",
@@ -49,7 +55,7 @@
     },
     "@vykor/plugins#check-types": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**", "$TURBO_ROOT$/plugins/knowledge-work/**"]
     },
     "clean": {
       "cache": false

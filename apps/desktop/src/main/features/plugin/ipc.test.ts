@@ -50,4 +50,17 @@ describe("plugin archive IPC", () => {
 
     expect(clearArchiveSelections).toHaveBeenCalledOnce()
   })
+
+  it("passes only a bundled ID and cwd while discarding a renderer-supplied archive path", async () => {
+    const service = { importArchive: vi.fn(async () => ({ status: "cancelled" as const })) }
+    const registrations = createPluginIpcContribution(service as never).register({} as never)
+    const handler = registrations.find(({ channel }) => channel === IpcChannels.pluginImportArchive)!
+    const sender = { id: 24 }
+    await handler.handler({ sender } as unknown as IpcMainInvokeEvent, {
+      cwd: "C:/workspace", bundledPlugin: "knowledge-work", archivePath: "C:/forged.zip",
+    })
+    expect(service.importArchive).toHaveBeenCalledWith(sender, {
+      cwd: "C:/workspace", bundledPlugin: "knowledge-work",
+    })
+  })
 })

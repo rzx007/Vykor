@@ -6,8 +6,12 @@ directories:
 # 不要用默认 **/*，否则会扫整个 apps/desktop（含源码和构建工具）。
 files:
   - out/**
+  - '!out/bundled-plugins/**'
   - resources/**
   - package.json
+extraResources:
+  - from: out/bundled-plugins
+    to: bundled-plugins
 asarUnpack:
   - resources/**
   - node_modules/@arcships/light-ocr/**

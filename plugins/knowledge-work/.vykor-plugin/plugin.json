@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "vykor.knowledge-work",
+  "name": "knowledge-work",
+  "displayName": "研究与写作",
+  "version": "1.0.0",
+  "description": "基于网页和用户资料生成可追溯的研究报告、完整稿件，并继续修改当前成果。",
+  "license": "MIT",
+  "keywords": ["research", "writing", "研究", "写作"],
+  "components": {
+    "agents": ["./agents"],
+    "skills": ["./skills"],
+    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }]
+  },
+  "permissions": {},
+  "runtime": { "engine": "node", "isolation": "process" }
+}

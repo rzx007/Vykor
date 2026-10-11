@@ -10,7 +10,9 @@ export interface DesktopPluginActionInput extends DesktopPluginContextInput {
   pluginId: string
 }
 
-export type DesktopPluginArchiveImportInput = DesktopPluginContextInput
+export interface DesktopPluginArchiveImportInput extends DesktopPluginContextInput {
+  bundledPlugin?: "knowledge-work"
+}
 
 export interface DesktopPluginGitImportInput extends DesktopPluginContextInput {
   url: string

@@ -1,0 +1,987 @@
+{
+  "research_date": "2026-10-11",
+  "orkas_commit": "eb5dde92cf397db57831d34a23823bc0b458d1bb",
+  "openharness_commit": "feb050a3992096e9f73b4a6dece2a59c8ad9aaf4",
+  "scope": "Local source inspection; no model, remote API, skill script, or media runtime execution",
+  "counts": {
+    "agents": 16,
+    "shared_skills": 22,
+    "private_skill_directories": 55.0,
+    "system_skills": 4
+  },
+  "agents": [
+    {
+      "id": "1040b336306f",
+      "name": "StockAnalyser",
+      "version": "1.1.13",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\agent.json",
+      "description": "研究 A 股、港股和美股，完成因子筛选、策略回测、组合风险分析与交易前校验，交付可追溯的分析看板、情景结论和订单草稿。适合“研究这只股票”“审查这个回测”“检查组合风险”；不负责非证券主题的通用调研或软件开发。触发词：股票、A股、港股、美股、行情、股价、基本面、技术面、选股、因子、回测、组合、风险、订单、模拟盘、Longbridge、AKShare",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command",
+        "web",
+        "connectors"
+      ],
+      "dependencies": [
+        {
+          "reference": "market-data",
+          "name": "market-data",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\market-data\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "security-research",
+          "name": "security-research",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\security-research\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "quant-lab",
+          "name": "quant-lab",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\quant-lab\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "portfolio-risk",
+          "name": "portfolio-risk",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\portfolio-risk\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "trade-control",
+          "name": "trade-control",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\trade-control\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "investment-report",
+          "name": "investment-report",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\1040b336306f\\skills\\investment-report\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "173d4235a431",
+      "name": "ContentWriter",
+      "version": "1.0.37",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\173d4235a431\\agent.json",
+      "description": "把目标、资料或草稿写成可发布的社媒成稿、文章、博客、newsletter、教程、案例和观点稿；支持结构重写、语气调整、去 AI 味与证据、引用审校。",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command",
+        "web"
+      ],
+      "dependencies": [
+        {
+          "reference": "9dfbd4e00c0d",
+          "name": "content-writer",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\9dfbd4e00c0d\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "5a1d43c2f28a",
+      "name": "ECommerceResearcher",
+      "version": "1.1.4",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\5a1d43c2f28a\\agent.json",
+      "description": "围绕商家的预算、目标市场和供应条件做电商选品，比较需求、竞品、单件贡献利润与供货风险，交付候选、淘汰理由和验证方案；不负责经营复盘、评论深度归因或文案制作；适合\"帮我选下一款商品\"\"比较这些商品能不能做\"\"验证类目机会\"；触发词：选品、类目机会、竞品、供应商、利润测算",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command",
+        "web"
+      ],
+      "dependencies": [
+        {
+          "reference": "272355bc883d",
+          "name": "ecommerce-product-research",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\272355bc883d\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "e8868f762c1d",
+          "name": "ecommerce-review-analysis",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e8868f762c1d\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "e7f5c0e6f1be",
+          "name": "social-data",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e7f5c0e6f1be\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "6743aa0797a2",
+          "name": "brand-research",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\6743aa0797a2\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "5f890bd72ac4",
+      "name": "VoiceStudio",
+      "version": "1.0.7",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\5f890bd72ac4\\agent.json",
+      "description": "制作和修改配音、多角色台词、长文朗读，完成录音转文字、字幕、音频剪辑与背景音乐混音，交付可试听音频或转写文本及可继续修改的项目；不负责视频画面的制作或修改。",
+      "tools": [
+        "workspace.read",
+        "workspace.write",
+        "workspace.execute.command",
+        "media.speech"
+      ],
+      "dependencies": [
+        {
+          "reference": "voice-project",
+          "name": "voice-project",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\5f890bd72ac4\\skills\\voice-project\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "78900d8758bc",
+      "name": "DeepResearcher",
+      "version": "1.0.65",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\78900d8758bc\\agent.json",
+      "description": "基于网页、学术来源和用户材料开展复杂主题的深度研究、行业与文献综述、趋势分析和说法核验；交付包含引用、置信度、矛盾证据和限制说明的可复核报告。",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command",
+        "web"
+      ],
+      "dependencies": [
+        {
+          "reference": "ee99fbb42964",
+          "name": "deep-research",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\ee99fbb42964\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "9be6fda271a5",
+          "name": "material-organizer",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\9be6fda271a5\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "e7f5c0e6f1be",
+          "name": "social-data",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e7f5c0e6f1be\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "6743aa0797a2",
+          "name": "brand-research",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\6743aa0797a2\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "79df9cc89f5f",
+      "name": "VideoStudio",
+      "version": "1.6.79",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\agent.json",
+      "description": "根据需求、参考图片或参考视频制作、复刻或编辑视频，支持解说、动画、生成素材、数字人和语义编辑；完成字幕、配音旁白、剪辑、高光、竖屏、本地化、混音与降噪，不负责仅交付音频或录音转文字的任务。",
+      "tools": [
+        "workspace.read",
+        "workspace.write",
+        "workspace.execute.command",
+        "media"
+      ],
+      "dependencies": [
+        {
+          "reference": "video-router",
+          "name": "video-router",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\video-router\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "gate-control",
+          "name": "gate-control",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\gate-control\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "frontend-design",
+          "name": "frontend-design",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\frontend-design\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "design-system-importer",
+          "name": "design-system-importer",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\design-system-importer\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "composition-design-review",
+          "name": "composition-design-review",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\composition-design-review\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "video-craft",
+          "name": "video-craft",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\video-craft\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-compose",
+          "name": "stage-compose",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-compose\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-edit",
+          "name": "stage-edit",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-edit\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-decide",
+          "name": "stage-decide",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-decide\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-generate",
+          "name": "stage-generate",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-generate\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-consistency",
+          "name": "stage-consistency",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-consistency\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-plan",
+          "name": "stage-plan",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-plan\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "stage-assemble",
+          "name": "stage-assemble",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\79df9cc89f5f\\skills\\stage-assemble\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "7e91cb9ec9e9",
+      "name": "PptMaker",
+      "version": "1.2.30",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\7e91cb9ec9e9\\agent.json",
+      "description": "将主题、提纲、文档、数据、参考图或已有 PPT 制作成原生可编辑的演示文稿，也支持大纲、修改与审查；遵循已有视觉参考，或根据受众和内容设计视觉方向，并检查渲染结果。",
+      "tools": [
+        "workspace.read",
+        "office.presentation"
+      ],
+      "dependencies": [
+        {
+          "reference": "ppt-router",
+          "name": "ppt-router",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\7e91cb9ec9e9\\skills\\ppt-router\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ppt-planner",
+          "name": "ppt-planner",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\7e91cb9ec9e9\\skills\\ppt-planner\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ppt-craft",
+          "name": "ppt-craft",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\7e91cb9ec9e9\\skills\\ppt-craft\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ppt-review",
+          "name": "ppt-review",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\7e91cb9ec9e9\\skills\\ppt-review\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "f283632103ba",
+          "name": "office-ppt",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\f283632103ba\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "814b61b027f0",
+      "name": "ImageStudio",
+      "version": "1.3.49",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\agent.json",
+      "description": "制作和修改海报、封面、社媒图、信息图、图表和概念图等静态视觉；排版与文字优先用 HTML/CSS/SVG 零调用制作，照片、角色、绘画、材质、混合画面和语义修改使用已配置的图片模型。",
+      "tools": [
+        "workspace.write",
+        "workspace.execute.command",
+        "media.image"
+      ],
+      "dependencies": [
+        {
+          "reference": "image-router",
+          "name": "image-router",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-router\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "image-craft",
+          "name": "image-craft",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-craft\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "image-canvas",
+          "name": "image-canvas",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-canvas\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "image-compose",
+          "name": "image-compose",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-compose\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "image-generate",
+          "name": "image-generate",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-generate\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "image-design-review",
+          "name": "image-design-review",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\814b61b027f0\\skills\\image-design-review\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "a19101ba698a",
+      "name": "OfficeWorker",
+      "version": "1.0.17",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\a19101ba698a\\agent.json",
+      "description": "创建、读取、编辑、检查和批量处理 Word/DOCX、Excel/XLSX、PowerPoint/PPTX、WPS 兼容文件与 PDF，支持 CSV 转换、公式、图表和格式整理；不负责从零创作高设计演示或以非办公工件为主的任务。",
+      "tools": [
+        "workspace.read",
+        "office"
+      ],
+      "dependencies": [
+        {
+          "reference": "c72c656eca12",
+          "name": "office-word",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\c72c656eca12\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "081c15ffbab4",
+          "name": "office-excel",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\081c15ffbab4\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "f283632103ba",
+          "name": "office-ppt",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\f283632103ba\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "f347f715469c",
+          "name": "wps",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\f347f715469c\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "36bd44ae956c",
+          "name": "pdf-editing",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\36bd44ae956c\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "a316881746f9",
+      "name": "ProductDeveloper",
+      "version": "1.0.14",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\a316881746f9\\agent.json",
+      "description": "将明确的需求、PRD、issue、bug 或设计稿落成仓库代码变更、测试与验证结果；支持技术方案、架构决策、重构、代码评审、性能排查和 CI/测试修复。",
+      "tools": [
+        "workspace.read",
+        "workspace.write",
+        "workspace.execute",
+        "workspace.artifact"
+      ],
+      "dependencies": [
+        {
+          "reference": "68fb048b85cb",
+          "name": "product-dev",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\68fb048b85cb\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "9b1241732f3a",
+          "name": "product-test",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\9b1241732f3a\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "fc125b9df078",
+          "name": "product-ui",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\fc125b9df078\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "88aca13869d9",
+          "name": "github",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\88aca13869d9\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "b1f384166705",
+          "name": "swiftui-dev",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\b1f384166705\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "a4930d19ba6c",
+      "name": "ECommerceReviewer",
+      "version": "1.1.1",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\a4930d19ba6c\\agent.json",
+      "description": "分析商品评论、评分、追评、竞品反馈、客服反馈和公开社媒口碑，交付带证据的 VOC 主题、差评根因和页面、客服、创意改进优先级；不负责选品机会判断或直接重写完整商品页；适合\"分析差评原因\"\"归纳客户之声\"\"比较竞品反馈\"；触发词：评论分析、VOC、差评根因、痛点聚类、竞品反馈、客服反馈",
+      "tools": [
+        "workspace.read",
+        "workspace.execute.command"
+      ],
+      "dependencies": [
+        {
+          "reference": "e8868f762c1d",
+          "name": "ecommerce-review-analysis",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e8868f762c1d\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "e7f5c0e6f1be",
+          "name": "social-data",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e7f5c0e6f1be\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "de52c67d49dd",
+          "name": "ecommerce-listing",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\de52c67d49dd\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "59d186285161",
+          "name": "ecommerce-creative",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\59d186285161\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "bc7e2a904d18",
+      "name": "ECommerceAnalyzer",
+      "version": "1.0.0",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bc7e2a904d18\\agent.json",
+      "description": "分析电商销售、贡献利润、广告、退款和库存数据，交付可复算指标、变化原因和行动优先级；不负责新品选品、评论归因或实际修改店铺；适合\"为什么店铺利润下滑\"\"对比渠道表现\"\"找库存风险\"；触发词：经营分析、利润、ROAS、退款、库存周转",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command"
+      ],
+      "dependencies": [
+        {
+          "reference": "c91a84e7b206",
+          "name": "ecommerce-analytics",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\c91a84e7b206\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "bcfcb4921dce",
+      "name": "UIDesigner",
+      "version": "1.3.39",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\agent.json",
+      "description": "负责 UI/UX、交互流程、视觉系统、可访问性设计与界面评审，根据需求、现有界面、截图或 Figma 参考交付设计稿与规范，默认以 HTML 呈现；不承接通用应用开发。仓库源码默认只读，仅在明确要求修改 UI 时编辑，否则提供文件级改动建议。",
+      "tools": [
+        "workspace.read",
+        "workspace.write",
+        "workspace.execute",
+        "workspace.artifact"
+      ],
+      "dependencies": [
+        {
+          "reference": "ui-design-executor",
+          "name": "ui-design-executor",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-design-executor\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-artifact-workspace",
+          "name": "ui-artifact-workspace",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-artifact-workspace\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-design-source",
+          "name": "ui-design-source",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-design-source\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-live-artifact",
+          "name": "ui-live-artifact",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-live-artifact\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-design-contract",
+          "name": "ui-design-contract",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-design-contract\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-reference-packs",
+          "name": "ui-reference-packs",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-reference-packs\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-design-system",
+          "name": "ui-design-system",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-design-system\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-controls-accessibility",
+          "name": "ui-controls-accessibility",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-controls-accessibility\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-taste",
+          "name": "ui-taste",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-taste\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-color",
+          "name": "ui-color",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-color\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-html-renderer",
+          "name": "ui-html-renderer",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-html-renderer\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-craft-checks",
+          "name": "ui-craft-checks",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-craft-checks\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "ui-design-review",
+          "name": "ui-design-review",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\bcfcb4921dce\\skills\\ui-design-review\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "e064dca9e1bd",
+      "name": "SeoGeoAgent",
+      "version": "1.0.53",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\agent.json",
+      "description": "诊断和优化网站 SEO/GEO，覆盖技术 SEO、收录、结构化数据、核心网页指标、内容质量与 AI 可引用性；交付评分、分级行动清单和看板，支持退化监控、本地仓库修复与复测、GEO 内容写作和外链或 guest post 报价评估。",
+      "tools": [
+        "workspace.read",
+        "workspace.write",
+        "workspace.execute.command",
+        "web",
+        "connectors"
+      ],
+      "dependencies": [
+        {
+          "reference": "seo-crawl",
+          "name": "seo-crawl",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-crawl\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-tech-audit",
+          "name": "seo-tech-audit",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-tech-audit\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-content",
+          "name": "seo-content",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-content\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-schema",
+          "name": "seo-schema",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-schema\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-cwv",
+          "name": "seo-cwv",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-cwv\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "geo-score",
+          "name": "geo-score",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\geo-score\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "geo-probe",
+          "name": "geo-probe",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\geo-probe\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-keywords",
+          "name": "seo-keywords",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-keywords\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-opportunity",
+          "name": "seo-opportunity",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-opportunity\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-monitor",
+          "name": "seo-monitor",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-monitor\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-report",
+          "name": "seo-report",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-report\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "seo-backlink-value",
+          "name": "seo-backlink-value",
+          "kind": "private",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e064dca9e1bd\\skills\\seo-backlink-value\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "e0f3a98c624b",
+      "name": "ECommerceOperator",
+      "version": "1.0.0",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\e0f3a98c624b\\agent.json",
+      "description": "根据商品与订单资料编制上架、价格、促销、库存和订单异常处理方案，仅通过实际可用的连接工具执行并核对逐项结果；不负责选品、文案创作或经营归因；适合\"准备这次促销\"\"更新这些库存设置\"\"处理订单异常\"；触发词：电商运营、商品维护、改价、促销、库存、订单异常",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "connectors"
+      ],
+      "dependencies": [
+        {
+          "reference": "d47b20f9a631",
+          "name": "ecommerce-operations",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\d47b20f9a631\\SKILL.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "fa3e1f2f9e07",
+      "name": "ECommerceWriter",
+      "version": "1.1.8",
+      "source": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\agents\\fa3e1f2f9e07\\agent.json",
+      "description": "将商品事实与已验证的客户洞察写成商品标题、卖点、详情页、FAQ、主图文案和视频脚本，适配平台、语言与品牌语气；不负责选品、评论深度分析、实际媒体生成或发布；适合\"写跨平台商品文案\"\"优化标题和详情页\"\"写商品视频脚本\"；触发词：电商文案、Listing、标题、卖点、详情页、A+、商品脚本",
+      "tools": [
+        "workspace.read",
+        "workspace.write.output",
+        "workspace.execute.command",
+        "web"
+      ],
+      "dependencies": [
+        {
+          "reference": "de52c67d49dd",
+          "name": "ecommerce-listing",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\de52c67d49dd\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "59d186285161",
+          "name": "ecommerce-creative",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\59d186285161\\SKILL.md",
+          "exists": true
+        },
+        {
+          "reference": "e8868f762c1d",
+          "name": "ecommerce-review-analysis",
+          "kind": "shared",
+          "path": "D:\\code\\personal-project\\Orkas\\resources\\builtin\\marketplace\\skills\\e8868f762c1d\\SKILL.md",
+          "exists": true
+        }
+      ]
+    }
+  ],
+  "shared_skills": [
+    {
+      "id": "081c15ffbab4",
+      "name": "office-excel",
+      "version": "1.0.15",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "08837be6032e",
+      "name": "data-analysis",
+      "version": "1.2.6",
+      "updated_at": "2026-09-05T17:05:00Z"
+    },
+    {
+      "id": "272355bc883d",
+      "name": "ecommerce-product-research",
+      "version": "1.1.10",
+      "updated_at": "2026-09-22T06:13:54Z"
+    },
+    {
+      "id": "36bd44ae956c",
+      "name": "pdf-editing",
+      "version": "1.0.8",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "59d186285161",
+      "name": "ecommerce-creative",
+      "version": "1.1.6",
+      "updated_at": "2026-09-22T06:13:54Z"
+    },
+    {
+      "id": "6743aa0797a2",
+      "name": "brand-research",
+      "version": "1.0.5",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "68fb048b85cb",
+      "name": "product-dev",
+      "version": "1.0.13",
+      "updated_at": "2026-09-18T14:46:49Z"
+    },
+    {
+      "id": "88aca13869d9",
+      "name": "github",
+      "version": "1.0.8",
+      "updated_at": "2026-08-16T08:43:12Z"
+    },
+    {
+      "id": "9b1241732f3a",
+      "name": "product-test",
+      "version": "1.0.6",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "9be6fda271a5",
+      "name": "material-organizer",
+      "version": "1.0.6",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "9dfbd4e00c0d",
+      "name": "content-writer",
+      "version": "1.0.53",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "b1f384166705",
+      "name": "swiftui-dev",
+      "version": "1.0.7",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "c72c656eca12",
+      "name": "office-word",
+      "version": "1.0.7",
+      "updated_at": "2026-09-08T03:37:56Z"
+    },
+    {
+      "id": "c91a84e7b206",
+      "name": "ecommerce-analytics",
+      "version": "1.0.2",
+      "updated_at": "2026-09-22T06:13:54Z"
+    },
+    {
+      "id": "d47b20f9a631",
+      "name": "ecommerce-operations",
+      "version": "1.0.4",
+      "updated_at": "2026-09-22T06:13:54Z"
+    },
+    {
+      "id": "de52c67d49dd",
+      "name": "ecommerce-listing",
+      "version": "1.2.17",
+      "updated_at": "2026-09-22T06:34:08Z"
+    },
+    {
+      "id": "e7f5c0e6f1be",
+      "name": "social-data",
+      "version": "1.0.9",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "e8868f762c1d",
+      "name": "ecommerce-review-analysis",
+      "version": "1.1.4",
+      "updated_at": "2026-09-22T06:13:54Z"
+    },
+    {
+      "id": "ee99fbb42964",
+      "name": "deep-research",
+      "version": "1.0.54",
+      "updated_at": "2026-09-18T15:56:38.375Z"
+    },
+    {
+      "id": "f283632103ba",
+      "name": "office-ppt",
+      "version": "1.0.8",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "f347f715469c",
+      "name": "wps",
+      "version": "1.0.7",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    },
+    {
+      "id": "fc125b9df078",
+      "name": "product-ui",
+      "version": "1.0.10",
+      "updated_at": "2026-09-15T09:12:53.592Z"
+    }
+  ],
+  "system_skills": [
+    {
+      "id": "agent-creator",
+      "update_at": 1790685144182
+    },
+    {
+      "id": "package-installer",
+      "update_at": 1789463573592
+    },
+    {
+      "id": "skill-creator",
+      "update_at": 1790685144182
+    },
+    {
+      "id": "web-app-sdk",
+      "update_at": 1790779866006
+    }
+  ]
+}

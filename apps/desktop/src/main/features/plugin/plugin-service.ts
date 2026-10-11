@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
-import { extname, resolve } from "node:path"
+import { extname, join, resolve } from "node:path"
 
 import type { VykorClient, PluginResource } from "@vykor/client"
-import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
+import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
   DesktopPluginActionInput,
@@ -93,7 +93,18 @@ export class DesktopPluginService {
     const cwd = normalizeCwd(input.cwd)
     let archivePath: string | null
     try {
-      archivePath = await this.chooseArchive(sender)
+      if (input.bundledPlugin !== undefined) {
+        if (input.bundledPlugin !== "knowledge-work") {
+          return archiveFailure("找不到这个内置插件。", [{ code: "plugin_bundled_unknown" }])
+        }
+        archivePath = join(
+          app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "out"),
+          "bundled-plugins",
+          "knowledge-work.zip"
+        )
+      } else {
+        archivePath = await this.chooseArchive(sender)
+      }
     } catch (error) {
       return archiveFailureFromError(error)
     }
