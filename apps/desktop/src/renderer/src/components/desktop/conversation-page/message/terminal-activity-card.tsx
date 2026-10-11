@@ -134,14 +134,25 @@ export function TerminalActivityCard({
           )}
         </div>
         {running && (
-          <Button type="button" variant="ghost" disabled={stopping} onClick={() => void stop()}>
+          <Button
+            type="button"
+            variant="control"
+            shape="pill"
+            size="lg"
+            className="h-9 gap-1.5"
+            disabled={stopping}
+            onClick={() => void stop()}
+          >
             <CircleStop data-icon="inline-start" />
             {info.command ? "停止服务" : "停止终端"}
           </Button>
         )}
         <Button
           type="button"
-          variant="outline"
+          variant="control"
+          shape="pill"
+          size="lg"
+          className="h-9 gap-1.5"
           disabled={availability !== "ready"}
           onClick={() => onOpenTerminal(terminal.id)}
         >
