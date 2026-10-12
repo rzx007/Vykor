@@ -660,7 +660,10 @@ export class QueryEngine implements IQueryEngine {
             isError: result.isError,
             ...toolFeedbackFields(result),
           });
-          deliveredResults.push(result);
+          // Keep the model-only result formatting out of host-facing events for
+          // retained plugin results. Ordinary results keep their existing
+          // feedback blocks for consumers that rely on execution details.
+          deliveredResults.push(rawResult.metadata?.toolResultReadable === true ? rawResult : result);
         }
         // Save the complete batch before a consumer can close this generator on delivery failure.
         for (const result of deliveredResults) yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
