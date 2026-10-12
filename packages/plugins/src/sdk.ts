@@ -9,6 +9,8 @@ export interface NativeToolPluginIdentity {
   name: string;
   version: string;
   root: string;
+  /** Stable per-plugin data directory, independent of the installed version and cwd. */
+  dataDir: string;
 }
 
 export interface NativeToolRegistrationContext {
@@ -22,6 +24,9 @@ export interface NativeToolInvocationContext {
   permissions: VykorPluginPermissions;
   cwd: string;
   sessionId?: string;
+  runId?: string;
+  /** Actual bounded result selected by toolResultInput; current Run only. */
+  readonly toolResult?: { toolUseId: string; toolName: string; content: ToolResult["content"]; isError?: boolean };
   /** Unix timestamp in milliseconds at which the call expires. */
   deadline: number;
   /** Host cancellation notification, for cooperative asynchronous work. */
@@ -33,6 +38,8 @@ export interface NativeToolDefinition {
   description: string;
   inputSchema: Record<string, unknown>;
   safeToRetry?: boolean;
+  /** Input property containing an earlier tool call ID; the host resolves it without model-supplied content. */
+  toolResultInput?: string;
   invoke(input: Record<string, unknown>, context: NativeToolInvocationContext): ToolResult | Promise<ToolResult>;
 }
 

@@ -330,7 +330,8 @@ export function PluginManager({
   const matches = (...values: (string | undefined)[]): boolean =>
     values.join(" ").toLocaleLowerCase().includes(normalizedQuery)
   const plugins = snapshot?.plugins ?? []
-  const knowledgeWorkInstalled = plugins.some(plugin => plugin.identity.id === "vykor.knowledge-work")
+  const knowledgeWork = plugins.find(plugin => plugin.identity.id === "vykor.knowledge-work")
+  const knowledgeWorkAction = !knowledgeWork ? "添加" : knowledgeWork.identity.version === "1.0.0" ? "更新" : null
   const visiblePlugins = plugins.filter(
     (plugin) =>
       matches(
@@ -350,7 +351,7 @@ export function PluginManager({
           <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
         </Alert>
       ) : null}
-      {!loading && !knowledgeWorkInstalled && matches("研究与写作", "knowledge-work") ? (
+      {!loading && knowledgeWorkAction && matches("研究与写作", "knowledge-work") ? (
         <section className="flex items-center justify-between gap-4" aria-label="内置研究与写作">
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-medium">研究与写作</h2>
@@ -362,10 +363,10 @@ export function PluginManager({
             variant="outline"
             shape="pill"
             disabled={busy || !api}
-            aria-label="添加研究与写作"
+            aria-label={`${knowledgeWorkAction}研究与写作`}
             onClick={() => void importArchive("knowledge-work")}
           >
-            添加
+            {knowledgeWorkAction}
           </Button>
         </section>
       ) : null}

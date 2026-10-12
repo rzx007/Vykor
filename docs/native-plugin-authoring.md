@@ -235,8 +235,8 @@ export const registerTools = (registration) => [{
 | 接口 | 当前传入的内容 |
 | --- | --- |
 | 注册上下文 | plugin、permissions、log(level, message) |
-| 调用上下文 | plugin、permissions、cwd、可选 sessionId、deadline、signal |
-| plugin | id、name、version、root；root 是实际安装快照或开发链接根目录 |
+| 调用上下文 | plugin、permissions、cwd、可选 sessionId/runId、deadline、signal；按 toolResultInput 提供实际 toolResult |
+| plugin | id、name、version、root、dataDir；root 是代码快照，dataDir 是稳定的插件持久数据目录 |
 | deadline | Unix 毫秒时间戳，表示本次调用截止时间 |
 | signal | AbortSignal，通知本次调用超时或被调用方取消 |
 
@@ -253,6 +253,16 @@ inputSchema 在调用前检查常用 JSON Schema 约束，包括对象字段、r
 异步工作应监听 `signal`，中止底层请求或等待并释放资源。只在长同步循环里读取 signal 不能及时接收进程间取消消息；同步任务必须有明确的工作量上限。调用超时、调用方主动取消分别返回 `tool_call_timeout`、`tool_call_cancelled`；插件长期不响应时宿主会结束进程。
 
 工具可通过注册日志接口记录调试信息；正文、凭据和完整输入不要写日志。宿主对 stdout、stderr 和插件日志消息设有大小限制，超出时截断或抑制；当前没有对 `ToolResult.content` 应用这些限额，工具应自行限制返回结果大小，不能依赖宿主自动截断。每次工具调用另有不包含完整参数正文的审计记录。
+
+## 插件持久数据与本轮工具结果
+
+宿主注入 `context.plugin.dataDir`，位置为 `~/.vykor/plugins/data/<plugin-id>`，与安装版本、代码快照和当前工作目录分开。插件按需创建目录并自行使用 Node 文件 API，保存格式、迁移及缓存清理由插件负责。普通更新与卸载不删除这些数据；此入口规范数据位置，不提供系统级文件沙箱，也不会隐式授予读写权限。
+
+原生工具可以声明 `toolResultInput: "tool_result_id"`，并在 inputSchema 定义该字符串字段。调用时宿主按编号取出本轮已经执行、且仍在当前可见工具范围内的实际结果，放入 `context.toolResult`；模型不能用参数正文替代它。上下文还提供可选 `runId`，用于插件记录本轮业务状态。
+
+工具结果编号在模型反馈中显示为 `Tool-Result-Id: <tool-call-id>`。此接口仅保留选中插件的本轮最近 16 项结果，单项最多 256000 字节、总量最多 1000000 字节；不截断后冒充完整结果，不跨 Run 或运行时重启读取。结果不存在、过大或已被淘汰时明确返回不可用，插件可重新取得结果或读取自己的持久数据。先执行取资料工具，再在后续调用导入；同一批并行工具未完成时不能读取其结果。
+
+平台没有自动为插件落盘、签名或建立第二份长期结果档案。需要持久保存时由插件显式导入或直接在自己的检索路径保存；插件记录不作为独立审计证据。原生工具的联网要求由入口的有效 network 权限推导，禁止联网时统一阻止这些入口的工具；纯计算工具应使用不请求网络权限的入口。
 
 ## 权限、配置和数据边界
 
@@ -277,7 +287,7 @@ Tool 的有效权限是条目请求与插件声明的匹配结果；只在插件
 
 当前 Node Tool 的隔离是进程和环境变量隔离，不是完整系统调用沙箱。permissions 不会自动变成文件读取 API，也不能拦截第三方代码直接调用 Node API。Node Tool 目前只在 local 环境激活；WSL 或远程场景不能沿用本地路径。
 
-当前没有统一的插件配置注入、密钥读取、持久数据访问 API。不要假定 daemon 的 API key 会继承到 Tool Host，不要依赖未公开环境变量，不要把配置或跨版本数据写回快照。数据目录的保留约定也不代表已经存在公开的数据 API。
+当前提供 dataDir 文件目录入口，尚无统一配置注入、密钥读取或通用数据库 API。不要假定 daemon 的 API key 会继承到 Tool Host，不要依赖未公开环境变量；配置和跨版本数据应写入 dataDir，不要写回代码快照。
 
 ## 其他四类组件
 

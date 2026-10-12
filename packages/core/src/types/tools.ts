@@ -87,6 +87,8 @@ export interface ToolContext {
   toolCallId?: string;
   /** Identity of this concrete execution attempt. */
   toolAttemptId?: string;
+  /** Current-Run, bounded actual results; never a persistent archive or model-provided body. */
+  readToolResult?: (toolUseId: string) => ToolExecutionResult | undefined;
   /** Lifetime of the owning session run; use for detached work that outlives this tool call. */
   runAbortSignal?: AbortSignal;
   /** Lifetime of this tool invocation, including its execution timeout. */

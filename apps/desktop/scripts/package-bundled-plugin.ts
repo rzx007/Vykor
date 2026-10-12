@@ -12,13 +12,13 @@ export async function packageKnowledgeWorkPlugin(
   async function addDirectory(directory: string, prefix = ""): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true })
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!prefix && entry.isDirectory() && entry.name === "test") continue
       const filePath = join(directory, entry.name)
       const archivePath = `${prefix}${entry.name}`
       if (entry.isDirectory()) await addDirectory(filePath, `${archivePath}/`)
       else if (entry.isFile()) {
         zip.file(archivePath, await readFile(filePath), { date, createFolders: false })
-      }
-      else throw new Error(`Bundled plugin contains an unsupported file: ${filePath}`)
+      } else throw new Error(`Bundled plugin contains an unsupported file: ${filePath}`)
     }
   }
   await addDirectory(sourceDirectory)

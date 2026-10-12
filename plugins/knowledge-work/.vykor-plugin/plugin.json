@@ -3,15 +3,19 @@
   "id": "vykor.knowledge-work",
   "name": "knowledge-work",
   "displayName": "研究与写作",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "基于网页和用户资料生成可追溯的研究报告、完整稿件，并继续修改当前成果。",
   "license": "MIT",
   "keywords": ["research", "writing", "研究", "写作"],
   "components": {
     "agents": ["./agents"],
     "skills": ["./skills"],
-    "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }]
+    "tools": [
+      { "entry": "./tools/index.mjs", "runtime": "node", "permissions": ["filesystem:read"] },
+      { "entry": "./tools/source-records.mjs", "runtime": "node", "permissions": ["filesystem:read", "filesystem:write"] },
+      { "entry": "./tools/academic.mjs", "runtime": "node", "permissions": ["filesystem:write", "network:export.arxiv.org", "network:api.openalex.org", "network:api.crossref.org", "network:api.semanticscholar.org", "network:eutils.ncbi.nlm.nih.gov"] }
+    ]
   },
-  "permissions": {},
+  "permissions": { "filesystem": ["read", "write"], "network": ["export.arxiv.org", "api.openalex.org", "api.crossref.org", "api.semanticscholar.org", "eutils.ncbi.nlm.nih.gov"] },
   "runtime": { "engine": "node", "isolation": "process" }
 }

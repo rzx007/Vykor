@@ -32,6 +32,8 @@ function validateDefinition(value, entryPath) {
     throw new Error(`Tool ${value.name} has an invalid inputSchema`);
   }
   if (typeof value.invoke !== "function") throw new Error(`Tool ${value.name} has no invoke function`);
+  if (value.toolResultInput !== undefined && (typeof value.toolResultInput !== "string" ||
+      !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(value.toolResultInput))) throw new Error("Invalid toolResultInput property");
 }
 
 async function registerTools(payload) {
@@ -59,11 +61,13 @@ async function registerTools(payload) {
       tools.set(definition.name, { definition, permissions: entry.permissions });
     }
   }
-  return [...tools.values()].map(({ definition }) => ({
+  return [...tools.values()].map(({ definition, permissions }) => ({
     name: definition.name,
     description: definition.description,
     inputSchema: definition.inputSchema,
+    execution: { domain: "control_plane", network: Boolean(permissions.network?.length) },
     ...(definition.safeToRetry === true ? { safeToRetry: true } : {}),
+    ...(definition.toolResultInput ? { toolResultInput: definition.toolResultInput } : {}),
   }));
 }
 

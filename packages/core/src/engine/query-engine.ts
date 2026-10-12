@@ -143,6 +143,8 @@ export interface SubmitMessageOptions {
 
 export class QueryEngine implements IQueryEngine {
   private messages: Message[] = [];
+  // Short-lived result access, not a second persistent transcript or plugin storage service.
+  private readonly recentToolResults = new Map<string, { runId: string; result: ToolExecutionResult; bytes: number }>();
   private compactService: CompactService;
   private costTracker: CostTracker;
   private systemPrompt: string | undefined;
@@ -933,7 +935,7 @@ export class QueryEngine implements IQueryEngine {
     toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<{ results: ToolExecutionResult[]; failure?: { error: unknown } }> {
-    return executeCheckedTools({
+    const outcome = await executeCheckedTools({
       toolUses, toolRegistry, messages: this.messages, permissionChecker: this.permissionChecker,
       hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
       internalTools, failedToolCalls,
@@ -942,6 +944,8 @@ export class QueryEngine implements IQueryEngine {
       ),
       isTrustedSummary: (toolUse, definition) => this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
     });
+    outcome.results = this.retainToolResults(outcome.results, execution);
+    return outcome;
   }
 
   /** Executes one captured tool without requesting a model or changing conversation history. */
@@ -960,7 +964,29 @@ export class QueryEngine implements IQueryEngine {
       isTrustedSummary: (call, definition) => this.isTrustedSummary(call, definition, toolRegistry, execution),
     });
     if (failure) throw failure.error;
-    return results[0]!;
+    return this.retainToolResults(results, execution)[0]!;
+  }
+
+  private retainToolResults(results: ToolExecutionResult[], execution?: AgentExecutionContext): ToolExecutionResult[] {
+    if (!execution) return results;
+    for (const [id, entry] of this.recentToolResults) if (entry.runId !== execution.scope.runId) this.recentToolResults.delete(id);
+    if (!execution.capabilityView?.pluginId) return results;
+    return results.map(result => {
+      this.recentToolResults.delete(result.toolUseId);
+      if (result.executionState === "not_started") return result;
+      const actual = { toolUseId: result.toolUseId, toolName: result.toolName, content: result.content, isError: result.isError };
+      let json: string;
+      try { json = JSON.stringify(actual); } catch { return result; }
+      const bytes = Buffer.byteLength(json);
+      if (bytes > 256_000) return result;
+      this.recentToolResults.set(result.toolUseId, { runId: execution.scope.runId, result: JSON.parse(json), bytes });
+      let size = [...this.recentToolResults.values()].reduce((total, entry) => total + entry.bytes, 0);
+      while (size > 1_000_000 || this.recentToolResults.size > 16) {
+        const id = this.recentToolResults.keys().next().value!;
+        size -= this.recentToolResults.get(id)!.bytes; this.recentToolResults.delete(id);
+      }
+      return { ...result, metadata: { ...result.metadata, toolResultReadable: true } };
+    });
   }
 
   private createToolContext(
@@ -978,6 +1004,12 @@ export class QueryEngine implements IQueryEngine {
       shellOutputLogs: this.options.shellOutputLogs,
       toolCallId: toolUse.id,
       toolAttemptId,
+      readToolResult: id => {
+        const entry = this.recentToolResults.get(id);
+        if (!execution || !entry || entry.runId !== execution.scope.runId ||
+            !execution.capabilityView?.tools.has(entry.result.toolName)) return undefined;
+        return structuredClone(entry.result);
+      },
       runAbortSignal: signal,
       settings: this.options.settings,
       setPlanMode: this.options.setPlanMode,

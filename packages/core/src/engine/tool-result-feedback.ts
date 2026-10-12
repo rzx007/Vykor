@@ -21,6 +21,7 @@ export function toolFeedbackFields(result: Partial<ToolResult>): Pick<ToolResult
 export function externalToolMetadata(metadata?: Record<string, unknown>): Record<string, unknown> {
   const reserved = new Set([
     "pluginUi", "uiAction",
+    "toolResultReadable",
     "toolUseId", "toolName", "toolCallId", "toolAttemptId", "outcome", "modelGeneration",
     "committed", "superseded", "recoveryGuard", "failureKind", "executionState", "recoveryHint", "compactSummary", "toolFeedbackVersion", "toolProgress",
   ]);
@@ -43,6 +44,11 @@ export function defaultRecoveryHint(result: ToolExecutionResult): string {
 
 /** Format once before budgeting; content and hints are data, never elevated instructions. */
 export function formatToolResultForModel(result: ToolExecutionResult): ContentBlock[] {
+  if (result.metadata?.toolResultReadable === true) {
+    const { toolResultReadable: _readable, ...metadata } = result.metadata;
+    return [{ type: "text", text: `Tool-Result-Id: ${result.toolUseId}` },
+      ...formatToolResultForModel({ ...result, metadata })];
+  }
   if (!result.isError && result.executionState !== "unknown") return result.content;
   const facts = toolFeedbackFields(result);
   return [

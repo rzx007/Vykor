@@ -83,6 +83,49 @@ function makeTool(
 }
 
 describe("tool execution feedback", () => {
+  it("retains a bounded large plugin result so later tools can read it by ID", async () => {
+    const registry = new ToolRegistry();
+    const largeTool = {
+      name: "LargeResult", description: "large result", inputSchema: { type: "object" },
+      execute: async () => ({ content: [{ type: "text" as const, text: "x".repeat(200_000) }] }),
+    } satisfies ToolDefinition;
+    const readTool = {
+      name: "ReadResult", description: "read result", inputSchema: { type: "object" },
+      execute: async (_input, context) => {
+        const large = context.readToolResult?.("large")?.content[0];
+        return { content: [{ type: "text" as const, text: String(large?.type === "text" ? large.text.length : "missing") }] };
+      },
+    } satisfies ToolDefinition;
+    registry.register(largeTool, { kind: "plugin", id: "native" });
+    registry.register(readTool, { kind: "plugin", id: "native" });
+    const requests: Message[][] = [];
+    let request = 0;
+    const client = { streamMessage: async function* (params: { messages: Message[] }) {
+      requests.push(structuredClone(params.messages));
+      request++;
+      if (request === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "large", name: "LargeResult", input: {} } };
+      if (request === 2) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "read", name: "ReadResult", input: {} } };
+      yield { type: "complete" as const, stopReason: request < 3 ? "tool_use" as const : "end_turn" as const };
+    } };
+    const execution = {
+      ...createExecutionContext(),
+      capabilityView: {
+        pluginId: "native",
+        tools: new Map([
+          ["LargeResult", { ownerPluginId: "native", definition: largeTool, source: { kind: "plugin" as const, id: "native" }, invoke: largeTool.execute }],
+          ["ReadResult", { ownerPluginId: "native", definition: readTool, source: { kind: "plugin" as const, id: "native" }, invoke: readTool.execute }],
+        ]),
+        skills: new Map(), mcpServers: new Map(), agents: new Map(),
+      },
+    } satisfies AgentExecutionContext;
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("read large output", { execution })) events.push(event);
+    const result = events.find(event => event.type === "tool_use_end" && event.toolUseId === "read");
+    expect(result?.type === "tool_use_end" && result.result.content.at(-1)).toEqual({ type: "text", text: "200000" });
+    expect(JSON.stringify(requests[1]?.find(message => message.type === "tool_result")?.content)).toContain("Tool-Result-Id: large");
+  });
+
   it("passes the optional Shell log host to the actual ToolContext", async () => {
     const registry = new ToolRegistry();
     const logs = { begin: () => undefined } as never;
@@ -2281,5 +2324,3 @@ describe("Integration: Steer follow-ups", () => {
     expect(assistant.content).toBe("");
   });
 });
-
-

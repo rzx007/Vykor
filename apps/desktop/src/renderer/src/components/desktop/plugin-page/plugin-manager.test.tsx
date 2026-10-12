@@ -191,7 +191,7 @@ describe("PluginManager archive import", () => {
 
   it("installs the included research and writing pack only after an explicit click", async () => {
     const installed = plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.1.0" },
     })
     api().importArchive.mockResolvedValue({
       status: "installed", pluginName: "研究与写作", snapshot: { ...snapshot, plugins: [installed] },
@@ -206,11 +206,51 @@ describe("PluginManager archive import", () => {
 
   it("does not reinstall an included plugin that the user has disabled", async () => {
     api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.1.0" },
       enabled: false,
     })] })
     await render()
     expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(api().importArchive).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])("updates the old bundled plugin only after a click and permission approval (enabled=%s)", async (enabled) => {
+    const installed = plugin({
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
+      enabled,
+    })
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
+    api().importArchive.mockResolvedValue({
+      status: "approval-required", selectionId: "knowledge-update", pluginName: "研究与写作",
+      requestedPermissions: ["network:api.openalex.org"],
+    })
+    api().confirmArchive.mockResolvedValue({
+      status: "installed", pluginName: "研究与写作",
+      snapshot: { ...snapshot, plugins: [{ ...installed, identity: { ...installed.identity, version: "1.1.0" } }] },
+    })
+    await render()
+    expect(host.querySelector('[aria-label="更新研究与写作"]')?.textContent).toBe("更新")
+    expect(api().importArchive).not.toHaveBeenCalled()
+    await click("更新研究与写作")
+    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "knowledge-work" })
+    expect(document.body.textContent).toContain("网络访问")
+    expect(api().confirmArchive).not.toHaveBeenCalled()
+    await click("安装")
+    expect(api().confirmArchive).toHaveBeenCalledWith({ cwd: "D:/project", selectionId: "knowledge-update" })
+    expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
+    expect(host.querySelector(`[aria-label="${enabled ? "禁用" : "启用"} 研究与写作"]`)).not.toBeNull()
+    expect(api().enable).not.toHaveBeenCalled()
+    expect(api().disable).not.toHaveBeenCalled()
+    expect(props.notify).toHaveBeenCalledWith("研究与写作 已安装或更新，将在下次对话中生效。")
+  })
+
+  it.each(["1.1.0", "2.0.0"])("does not offer a bundled downgrade for installed version %s", async (version) => {
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
+      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version },
+    })] })
+    await render()
+    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
     expect(api().importArchive).not.toHaveBeenCalled()
   })
 

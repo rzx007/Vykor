@@ -16,6 +16,7 @@ export async function activateNativePluginTools(
   plugin: LoadedNativePlugin,
   context: {
     cwd: string;
+    dataRoot?: string;
     environmentKind?: "local" | "wsl";
     toolRegistry: IToolRegistry;
     addCleanup(cleanup: () => Promise<void> | void, cleanupSync?: () => void): void;
@@ -61,6 +62,7 @@ export async function activateNativePluginTools(
     for (const name of toolNames.splice(0)) context.toolRegistry.unregister?.(name);
   };
   const host = new NativeToolHost(plugin, {
+    dataRoot: context.dataRoot,
     callTimeoutMs: context.callTimeoutMs,
     cancellationGraceMs: context.cancellationGraceMs,
     outputMaxBytes: context.outputMaxBytes,
@@ -102,15 +104,33 @@ export async function activateNativePluginTools(
             view.tools.get(definition.name)?.ownerPluginId !== plugin.manifest.id)) {
             return Promise.resolve({ isError: true, content: [{ type: "text" as const, text: "Native Tool is not available in this Run." }] });
           }
+          if (definition.execution?.network && (toolContext.environment?.info.networkMode === "none" ||
+            (toolContext.settings?.sandbox?.enabled && toolContext.settings.sandbox.network?.mode === "none"))) {
+            return Promise.resolve({
+              isError: true, failureKind: "policy" as const, executionState: "not_started" as const,
+              content: [{ type: "text" as const, text: "Tool requires network access, which is disabled in this Run." }],
+            });
+          }
           return guard.run(
             definition.name,
             definition.inputSchema,
             input,
             toolContext,
-            () => host.call(definition.name, input, {
-              cwd: toolContext.cwd || context.cwd,
-              ...(toolContext.sessionId ? { sessionId: toolContext.sessionId } : {}),
-            }, toolContext.abortSignal),
+            async () => {
+              const reference = definition.toolResultInput ? input[definition.toolResultInput] : undefined;
+              const referenced = typeof reference === "string" ? toolContext.readToolResult?.(reference) : undefined;
+              if (reference !== undefined && !referenced) return {
+                isError: true, failureKind: "precondition" as const, executionState: "not_started" as const,
+                content: [{ type: "text" as const, text: "Referenced tool result is unavailable in this Run. Fetch it again or use already saved plugin data." }],
+              };
+              return host.call(definition.name, input, {
+                cwd: toolContext.cwd || context.cwd,
+                ...(toolContext.sessionId ? { sessionId: toolContext.sessionId } : {}),
+                ...(toolContext.agent?.scope.runId ? { runId: toolContext.agent.scope.runId } : {}),
+                ...(referenced ? { toolResult: { toolUseId: referenced.toolUseId, toolName: referenced.toolName,
+                  content: referenced.content, isError: referenced.isError } } : {}),
+              }, toolContext.abortSignal);
+            },
           );
         },
       }, { kind: "plugin", id: plugin.manifest.id });

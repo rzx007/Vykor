@@ -7,10 +7,10 @@ import type {
 
 export type NativeToolRegistration = Pick<
   NativeToolDefinition,
-  "name" | "description" | "inputSchema" | "safeToRetry"
->;
+  "name" | "description" | "inputSchema" | "safeToRetry" | "toolResultInput"
+> & { execution: { domain: "control_plane"; network: boolean } };
 
-export type NativeToolCallContext = Pick<NativeToolInvocationContext, "cwd" | "sessionId" | "deadline">;
+export type NativeToolCallContext = Pick<NativeToolInvocationContext, "cwd" | "sessionId" | "runId" | "deadline" | "toolResult">;
 
 export interface NativeToolHostRequest {
   type: "request";

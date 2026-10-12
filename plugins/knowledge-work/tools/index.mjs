@@ -1,3 +1,8 @@
+import { budgetTools } from "./budget.mjs";
+import { compressionTools } from "./compress.mjs";
+import { writingTools } from "./writing.mjs";
+import { verifyResearch, renderResearchReport, normalizeCitationUrl } from "./citations.mjs";
+import { readResearchSources } from "./source-records.mjs";
 /** @typedef {{id:string, text:string, url?:string, path?:string, title?:string}} Source */
 /** @typedef {{sourceId:string, quote:string}} Evidence */
 /** @typedef {{id:string, text:string, evidence:Evidence[]}} Claim */
@@ -16,6 +21,7 @@ function normalized(text) { return text.replace(/\s+/gu, " ").trim(); }
 function check(input) {
   // Host schema bounds every collection/string. Repeat shape guards for direct callers.
   if (!Array.isArray(input.sources) || !Array.isArray(input.claims)) throw new TypeError("sources and claims must be arrays");
+  if (input.sources.some(source => source?.text?.length > 24000)) throw Object.assign(new TypeError("Legacy source text exceeds 24000 characters"), { code: "tool_input_invalid" });
   /** @type {Map<string,string>} */
   const sources = new Map();
   for (const raw of input.sources) {
@@ -60,31 +66,74 @@ function check(input) {
 /** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
 export const registerTools = () => [{
   name: "KnowledgeResearchCheck",
-  description: "核对传入来源 ID 与原句引用，报告缺失证据、未知来源和原句不匹配。只处理输入文本，不联网、不读写文件；通过不代表事实真实或证据语义上支持结论。",
+  description: "核对来源、原句和DOI归属，绑定比较表逐项证据并组装报告。op省略保留旧版输入对应检查；完整verify/references/report支持source_ref核对插件保存的检索正文。recorded_only要求实际来源记录；不判事实真伪或语义支持，不联网。",
   inputSchema: {
     type: "object", required: ["sources", "claims"], additionalProperties: false,
     properties: {
+      op: { type: "string", enum: ["verify", "references", "report"] },
+      recorded_only: { type: "boolean" },
+      title: { type: "string", maxLength: 500 }, analysis_markdown: { type: "string", maxLength: 50000 },
+      comparison: { type: "array", maxItems: 50, items: { type: "object", properties: {
+        candidate: { type: "string", maxLength: 2000 }, evidence_sources: { type: "array", maxItems: 24, items: { type: "string", maxLength: 2000 } },
+        field_claims: { type: "object" },
+      } } },
       sources: { type: "array", maxItems: 24, items: {
         type: "object", required: ["id", "text"], additionalProperties: false,
         properties: {
-          id: idSchema, text: { type: "string", maxLength: 24000 },
+          id: { type: "string", minLength: 1, maxLength: 2000 }, text: { type: "string", maxLength: 100000 },
           url: { type: "string", minLength: 1, maxLength: 2000 },
           path: { type: "string", minLength: 1, maxLength: 2000 },
-          title: { type: "string", maxLength: 500 },
+          title: { type: "string", maxLength: 60000 }, source_ref: { type: "string", minLength: 36, maxLength: 36 },
+          origin: { type: "string", maxLength: 40 },
+          authors: { type: "array", maxItems: 10, items: { type: "string", maxLength: 2000 } },
+          doi: { type: ["string", "null"], maxLength: 2000 }, date: { type: ["string", "null"], maxLength: 100 },
+          accessed_at: { type: "string", maxLength: 100 }, access_date: { type: "string", maxLength: 100 },
+          published_at: { type: ["string", "null"], maxLength: 100 }, publisher: { type: ["string", "null"], maxLength: 2000 },
+          venue: { type: ["string", "null"], maxLength: 2000 }, pmid: { type: ["string", "null"], maxLength: 100 },
+          source_type: { type: "string", maxLength: 100 }, source: { type: "string", maxLength: 100 },
+          limitation: { type: "string", maxLength: 4000 }, limitations: { type: "string", maxLength: 4000 },
+          text_truncated: { type: "boolean" },
         },
       } },
       claims: { type: "array", maxItems: 80, items: {
-        type: "object", required: ["id", "text", "evidence"], additionalProperties: false,
+        type: "object", required: ["id", "text"], additionalProperties: false,
         properties: {
           id: idSchema, text: { type: "string", minLength: 1, maxLength: 4000 },
           evidence: { type: "array", maxItems: 8, items: evidenceSchema },
+          citations: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false, properties: {
+            source: { type: "string", maxLength: 2000 }, url: { type: "string", maxLength: 2000 },
+            quote: { type: "string", maxLength: 4000 }, doi: { type: "string", maxLength: 2000 }, limitation: { type: "string", maxLength: 4000 },
+          } } }, limitation: { type: "string", maxLength: 4000 },
         },
       } },
     },
   },
   safeToRetry: true,
-  invoke(input, context) {
+  async invoke(input, context) {
     context.signal.throwIfAborted();
-    return { content: [{ type: "text", text: JSON.stringify(check(input)) }] };
+    if (!input.op) return { content: [{ type: "text", text: JSON.stringify(check(input)) }] };
+    const supplied = /** @type {Array<Record<string, any>>} */ (input.sources);
+    const refs = supplied.map(source => source.source_ref).filter(Boolean);
+    const records = refs.length ? await readResearchSources({ source_refs: refs }, context, true) : {
+      sources: /** @type {Array<Record<string,any>>} */ ([]), issues: /** @type {Array<Record<string,any>>} */ ([]),
+    };
+    const byRef = new Map(records.sources.map(source => [source.source_ref, source]));
+    const sources = supplied.map(source => {
+      const record = byRef.get(source.source_ref);
+      if (!source.source_ref) return source;
+      if (!record || (source.url && normalizeCitationUrl(source.url) !== normalizeCitationUrl(record.url))) {
+        if (record) records.issues.push({ source_ref: source.source_ref, code: "source_record_url_mismatch" });
+        return { ...source, invalid_source_ref: true };
+      }
+      // Caller aliases/limitations are allowed; source DOI and dates must come from saved retrieval metadata.
+      return { ...source, ...record, id: source.id, title: record.title ?? record.url,
+        doi: record.doi ?? null, date: record.date ?? null, published_at: record.published_at ?? null,
+        authors: record.authors ?? [], publisher: record.publisher ?? null, venue: record.venue ?? null, pmid: record.pmid ?? null };
+    });
+    const result = verifyResearch({ ...input, sources });
+    result.source_record_issues = records.issues;
+    if (input.op === "report") result.report_markdown = renderResearchReport(result, input);
+    const output = input.op === "references" ? { abstain: result.abstain, references: result.references, semanticVerification: result.semanticVerification } : result;
+    return { content: [{ type: "text", text: JSON.stringify(output) }] };
   },
-}];
+}, ...budgetTools, ...compressionTools, ...writingTools];

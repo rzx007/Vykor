@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import type { ToolResult } from "@vykor/core";
+import { getPluginDataDir, type ToolResult } from "@vykor/core";
+import { join } from "node:path";
 import type { LoadedNativePlugin } from "@vykor/plugins";
 import type {
   NativeToolCallContext,
@@ -29,6 +30,8 @@ interface PendingRequest {
 }
 
 export interface NativeToolHostOptions {
+  /** Host-owned data root; versioned code and persistent data never share a directory. */
+  dataRoot?: string;
   registrationTimeoutMs?: number;
   callTimeoutMs?: number;
   shutdownTimeoutMs?: number;
@@ -86,6 +89,7 @@ export class NativeToolHost {
           name: this.plugin.manifest.name,
           version: this.plugin.manifest.version,
           root: this.plugin.root,
+          dataDir: join(this.options.dataRoot ?? getPluginDataDir(), this.plugin.manifest.id),
         },
         entries: entries.map((entry) => ({ entryPath: entry.entryPath, permissions: entry.effectivePermissions })),
       };
