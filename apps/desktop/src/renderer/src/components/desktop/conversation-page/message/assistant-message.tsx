@@ -30,14 +30,12 @@ import {
 import {
   buildAssistantContent,
   collectChangedFiles,
-  formatValue,
   isTurnComplete,
   summarizeToolCall,
   toolCallStatus,
   toolActivityLabel,
   toolGroupActivityLabel,
   isToolActivityActive,
-  toolDisplayName,
   type AssistantContentUnit,
   type ChangedFile,
 } from "./message-render-model"
@@ -50,9 +48,10 @@ import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
-import { useToolDetails } from "./use-tool-details"
-import { ReadImagePreview, readImagePath } from "./read-image-preview"
-import { ShellToolDetails } from "./shell-tool-details"
+import { readImagePath } from "./read-image-preview"
+import { ToolDetails } from "./tool-details"
+import { ReadToolRow } from "./tool-details/read-tool-row"
+import { readFileReference } from "./tool-details/read-tool-model"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 import { TerminalActivityCard, type TerminalActivityInfo } from "./terminal-activity-card"
 
@@ -152,7 +151,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 streaming && Boolean(initialPartIds && !initialPartIds.has(block.tools[0]!.id))
               }
             >
-              <ToolActivityGroup tools={block.tools} />
+              <ToolActivityGroup tools={block.tools} onOpenFile={onOpenFile} />
             </ContentEntrance>
           )
         }
@@ -440,7 +439,13 @@ function ToolGenerationIcon({ toolName }: { toolName?: string }): React.JSX.Elem
   )
 }
 
-function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element {
+function ToolActivityGroup({
+  tools,
+  onOpenFile,
+}: {
+  tools: ToolUnit[]
+  onOpenFile: (path: string, line?: number) => void
+}): React.JSX.Element {
   const groupTooltipId = useId()
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -577,46 +582,70 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                       ? "无参数"
                       : "查看参数")
             const statusText = toolActivityLabel(tool.call, tool.result)
+            const file = readFileReference(tool.call, tool.result)
             return (
               <div key={tool.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (imagePath)
-                      setExpandedImages((previous) => {
-                        const next = new Set(previous)
-                        if (active) next.delete(tool.id)
-                        else next.add(tool.id)
-                        return next
-                      })
-                    else setActiveId(active ? null : tool.id)
-                    // 单行详情已打开时，随后归组仍保留当前展开状态。
-                    if (!grouped) setOpen(!active)
-                  }}
-                  aria-expanded={active}
-                  className={cn(
-                    "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    calling && "shimmer"
-                  )}
-                >
-                  <TerminalSquare className="size-3.5 shrink-0" strokeWidth={1.6} />
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="text-ui-foreground">{summary.name}</span>
-                    <span className="ml-1.5 text-ui-muted/80">{detail}</span>
-                  </span>
-                  {statusText ? (
-                    diagnosticToolLabels.has(statusText) ? (
-                      <ToolDiagnosticDot label={statusText} />
-                    ) : (
-                      <span className="shrink-0 text-xs text-ui-muted">{statusText}</span>
-                    )
-                  ) : null}
-                  <ChevronDown
-                    className={cn("size-3.5 shrink-0 transition-transform", active && "rotate-180")}
+                {file ? (
+                  <ReadToolRow
+                    call={tool.call}
+                    result={tool.result}
+                    file={file}
+                    active={active}
+                    calling={calling}
+                    onOpenFile={onOpenFile}
+                    onToggle={() => {
+                      setActiveId(active ? null : tool.id)
+                      if (!grouped) setOpen(!active)
+                    }}
                   />
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (imagePath)
+                        setExpandedImages((previous) => {
+                          const next = new Set(previous)
+                          if (active) next.delete(tool.id)
+                          else next.add(tool.id)
+                          return next
+                        })
+                      else setActiveId(active ? null : tool.id)
+                      // 单行详情已打开时，随后归组仍保留当前展开状态。
+                      if (!grouped) setOpen(!active)
+                    }}
+                    aria-expanded={active}
+                    className={cn(
+                      "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      calling && "shimmer"
+                    )}
+                  >
+                    <TerminalSquare className="size-3.5 shrink-0" strokeWidth={1.6} />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="text-ui-foreground">{summary.name}</span>
+                      <span className="ml-1.5 text-ui-muted/80">{detail}</span>
+                    </span>
+                    {statusText ? (
+                      diagnosticToolLabels.has(statusText) ? (
+                        <ToolDiagnosticDot label={statusText} />
+                      ) : (
+                        <span className="shrink-0 text-xs text-ui-muted">{statusText}</span>
+                      )
+                    ) : null}
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5 shrink-0 transition-transform",
+                        active && "rotate-180"
+                      )}
+                    />
+                  </button>
+                )}
                 {active ? (
                   <div className="mb-2 overflow-hidden rounded-md border bg-muted/30">
+                    {file ? (
+                      <p className="border-b px-3 py-2 text-xs text-ui-muted">
+                        当时的读取结果；文件面板显示当前内容。
+                      </p>
+                    ) : null}
                     <ToolDetails tool={tool} calling={calling} />
                   </div>
                 ) : null}
@@ -626,70 +655,6 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
         </div>
       ) : null}
     </section>
-  )
-}
-
-function ToolDetails({ tool, calling }: { tool: ToolUnit; calling: boolean }): React.JSX.Element {
-  const { call, result } = tool
-  const { call: fullCall, result: fullResult, preview, error } = useToolDetails(call, result, true)
-  const input = fullCall.input
-  const output = fullResult?.output ?? fullCall.output
-  const unparsedInput = Boolean(
-    (fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) &&
-    (input === undefined || Object.keys(input).length === 0)
-  )
-  const imagePath = readImagePath(fullCall)
-  const imagePart = fullResult?.output != null ? fullResult : fullCall
-  return (
-    <>
-      {imagePath ? <ReadImagePreview part={imagePart} path={imagePath} calling={calling} /> : null}
-      <div className="border-b px-3 py-1.5 text-xs">{toolDisplayName(call, result)}</div>
-      {preview ? (
-        <p role="status" className="px-3 py-2 text-xs text-ui-muted">
-          {error ?? "正在加载完整详情；当前仅显示预览。"}
-        </p>
-      ) : null}
-      {call.toolName === "Shell" ? (
-        <ShellToolDetails
-          input={input}
-          output={output}
-          calling={calling}
-          unparsedInput={unparsedInput}
-        />
-      ) : (
-        <>
-          <div className="px-3 pt-2 text-xs font-medium">参数</div>
-          {unparsedInput ? (
-            <p className="px-3 py-2 text-xs text-ui-muted">
-              {import.meta.env.DEV
-                ? "参数解析失败，请查看下方错误结果。"
-                : "没有记录可展示的参数。"}
-            </p>
-          ) : input === undefined ? (
-            <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
-          ) : (
-            <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-              {formatValue(input)}
-            </pre>
-          )}
-          <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
-          {output === undefined ? (
-            <p className="px-3 py-2 text-xs text-ui-muted">
-              {calling ? "等待工具返回结果" : "没有记录结果"}
-            </p>
-          ) : (
-            <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-              {formatValue(output)}
-            </pre>
-          )}
-        </>
-      )}
-      {preview && fullCall.bodyView?.outputReferences?.length ? (
-        <p className="px-3 py-2 text-xs text-ui-muted">
-          {fullCall.bodyView.outputReferences.join("\n")}
-        </p>
-      ) : null}
-    </>
   )
 }
 

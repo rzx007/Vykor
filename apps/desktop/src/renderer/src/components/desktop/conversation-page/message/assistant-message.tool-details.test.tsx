@@ -61,13 +61,13 @@ function part(
   } as DesktopSessionPart
 }
 
-function render(parts: DesktopSessionPart[], streaming = false) {
+function render(parts: DesktopSessionPart[], streaming = false, onOpenFile = vi.fn()) {
   act(() =>
     root.render(
       <ImageViewerProvider onOpenImage={openReadImage}><TooltipProvider><AssistantMessage
         parts={parts}
         streaming={streaming}
-        onOpenFile={vi.fn()}
+        onOpenFile={onOpenFile}
         canOpenReview={false}
         onOpenReview={vi.fn()}
         onOpenTerminal={vi.fn()}
@@ -420,7 +420,7 @@ describe("tool parameter and result display", () => {
     expect(firstButton.isConnected).toBe(true)
     expect(firstButton.getAttribute("aria-expanded")).toBe("true")
     expect(container.querySelector("pre")?.textContent).toContain("npm run test")
-    expect(container.textContent).toContain("读取文件")
+    expect(container.textContent).toContain("已读取")
   })
 
   it("collapses a new consecutive group when the first tool was not opened", () => {
@@ -454,7 +454,7 @@ describe("tool parameter and result display", () => {
     ])
     expect(container.textContent).toContain("接着检查结果")
     expect(container.textContent).toContain("运行命令")
-    expect(container.textContent).toContain("读取文件")
+    expect(container.textContent).toContain("已读取")
     expect(container.textContent).not.toMatch(/命令调用|工具查看/)
     expect(container.querySelectorAll("button[aria-expanded]")).toHaveLength(2)
   })
@@ -597,10 +597,8 @@ describe("tool parameter and result display", () => {
     expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
     act(() => heading!.click())
-    const read = [...group!.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
-      (button) => button.textContent?.includes("读取文件")
-    )
-    expect(read).toBeDefined()
+    const read = group!.querySelector<HTMLButtonElement>('[aria-label="查看读取结果"]')
+    expect(read).not.toBeNull()
     expect(group!.textContent).toContain("写入文件")
     expect(group!.textContent).not.toMatch(/准备中|9337|字符|生成参数/)
     expect(heading?.textContent).not.toContain("index.html")
@@ -735,6 +733,74 @@ describe("tool parameter and result display", () => {
     expect(blocks[0]).toContain('"arguments"')
     expect(blocks[0]).toContain('"old_string": "original"')
     expect(blocks[1]).toContain("old_string not found")
+  })
+
+  it("opens a read file at its starting line without loading historical details", () => {
+    const onOpenFile = vi.fn()
+    const getMessagePart = vi.fn()
+    vi.stubGlobal("desktop", { sessions: { getMessagePart } })
+    render([part("Read", { arguments: { file_path: "C:/workspace/source.ts", offset: 12 } }, {
+      output: "HISTORICAL_CONTENT", bodyView: { input: "full", output: "preview" },
+    })], false, onOpenFile)
+    expect(container.textContent).toContain("已读取")
+    expect(container.textContent).not.toContain("HISTORICAL_CONTENT")
+    click("source.ts")
+    expect(onOpenFile).toHaveBeenCalledWith("C:/workspace/source.ts", 12)
+    expect(getMessagePart).not.toHaveBeenCalled()
+    expect(container.querySelector('[aria-label="查看读取结果"]')?.getAttribute("aria-expanded")).toBe("false")
+  })
+
+  it("opens read history separately and distinguishes it from current file contents", () => {
+    const onOpenFile = vi.fn()
+    render([part("Read", { file_path: "C:/workspace/source.ts" }, { output: "HISTORICAL_CONTENT" })], false, onOpenFile)
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="查看读取结果"]')!.click())
+    expect(container.textContent).toContain("HISTORICAL_CONTENT")
+    expect(container.textContent).toContain("当时的读取结果")
+    expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  it("does not mark a failed Read as read in production", () => {
+    vi.stubEnv("DEV", false)
+    render([part("Read", { file_path: "C:/workspace/missing.ts" }, {
+      status: "failed", isError: true, output: "File not found",
+    })])
+    expect(container.textContent).not.toContain("已读取")
+    expect(container.textContent).toContain("读取失败")
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="查看读取结果"]')!.click())
+    expect(container.textContent).toContain("File not found")
+  })
+
+  it("keeps Read permission feedback visible beside the file link", () => {
+    vi.stubEnv("DEV", false)
+    render([part("Read", { file_path: "C:/workspace/private.ts" }, {
+      status: "pending", metadata: { toolProgress: { phase: "waiting_permission" } },
+    })], true)
+    expect(container.textContent).toContain("等待你的确认")
+    expect(container.textContent).not.toContain("已读取")
+  })
+
+  it.each([
+    ["C:/workspace/src", { content: [{ type: "text", text: "entry.ts" }], compactSummary: "Read completed: C:/workspace/src; entries=1-1; total=1" }],
+    ["shell-output://log-id", "Shell output: log"],
+  ])("keeps non-file Read %s expandable", (file_path, output) => {
+    const onOpenFile = vi.fn()
+    render([part("Read", { file_path }, { output })], false, onOpenFile)
+    click("读取文件")
+    expect(onOpenFile).not.toHaveBeenCalled()
+    expect(container.querySelector("pre")).not.toBeNull()
+  })
+
+  it("renders every text block and keeps mixed content and raw result accessible", () => {
+    const output = { content: [
+      { type: "text", text: "first\nline" },
+      { type: "image", source: { type: "file", path: "result.png", mediaType: "image/png" } },
+      { type: "text", text: "second block" },
+    ], executionState: "completed" }
+    render([part("Grep", { pattern: "needle" }, { output })])
+    click("Grep")
+    const blocks = [...container.querySelectorAll("[data-tool-output]")].map(element => element.textContent)
+    expect(blocks).toEqual(["first\nline", expect.stringContaining("result.png"), "second block"])
+    expect(container.querySelector("details")?.textContent).toContain("executionState")
   })
 
   it("shows Shell commands above plain-text output in its own scroll area", () => {

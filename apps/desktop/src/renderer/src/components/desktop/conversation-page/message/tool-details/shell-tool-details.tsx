@@ -1,5 +1,5 @@
-import { formatValue } from "./message-render-model"
-import { toolOutputText } from "./message-content"
+import { formatValue } from "../message-render-model"
+import { ToolResult } from "./tool-result"
 
 export function ShellToolDetails({
   input,
@@ -41,12 +41,9 @@ export function ShellToolDetails({
           {calling ? "等待工具返回结果" : "没有记录结果"}
         </p>
       ) : (
-        <pre
-          data-shell-output
-          className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 break-words whitespace-pre-wrap"
-        >
-          {toolOutputText(output) ?? formatValue(output)}
-        </pre>
+        <div data-shell-output className="max-h-56 overflow-auto">
+          <ToolResult output={output} calling={calling} showRaw={false} />
+        </div>
       )}
     </>
   )
