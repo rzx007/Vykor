@@ -221,12 +221,11 @@ function UserMessageBlock({
         ) : null}
         <MessageToolbar align="end" timestamp={timestamp}>
           {content.trim() ? (
-            <MessageActionButton
+            <CopyActionButton
               label="复制消息"
-              onClick={() => void window.desktop.clipboard.writeText(content)}
-            >
-              <Copy />
-            </MessageActionButton>
+              copiedLabel="已复制"
+              onCopy={() => window.desktop.clipboard.writeText(content)}
+            />
           ) : null}
           {canEdit ? (
             <MessageActionButton
@@ -341,16 +340,19 @@ export function AssistantMessageActions({
   message?: DesktopSessionMessage
   content: string
   disabled: boolean
-  onCopy: (content: string) => void
+  onCopy: (content: string) => void | Promise<void>
   onFork?: (messageId: string) => void
 }): React.JSX.Element | null {
   if (!message) return null
   return (
     <MessageToolbar align="start" timestamp={message.updatedAt}>
       {content.trim() ? (
-        <MessageActionButton label="复制回复" onClick={() => onCopy(content)} disabled={disabled}>
-          <Copy />
-        </MessageActionButton>
+        <CopyActionButton
+          label="复制回复"
+          copiedLabel="已复制"
+          disabled={disabled}
+          onCopy={() => onCopy(content)}
+        />
       ) : null}
       {onFork ? (
         <MessageActionButton
@@ -422,6 +424,38 @@ function MessageActionButton({
     >
       {children}
     </Button>
+  )
+}
+
+function CopyActionButton({
+  label,
+  copiedLabel,
+  disabled,
+  onCopy,
+}: {
+  label: string
+  copiedLabel: string
+  disabled?: boolean
+  onCopy: () => void | Promise<void>
+}): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await onCopy()
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      setCopied(false)
+    }
+  }
+  return (
+    <MessageActionButton
+      label={copied ? copiedLabel : label}
+      onClick={() => void handleCopy()}
+      disabled={disabled}
+    >
+      {copied ? <Check /> : <Copy />}
+    </MessageActionButton>
   )
 }
 

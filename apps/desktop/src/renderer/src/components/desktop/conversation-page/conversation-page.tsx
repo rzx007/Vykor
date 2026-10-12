@@ -642,7 +642,7 @@ function ConversationPane({
                         onEditLastUserMessage={(sourceMessageId, content) =>
                           void editLatestUserMessage(sourceMessageId, content)
                         }
-                        onCopyAssistantMessage={(content) => void copyAssistantMessage(content)}
+                        onCopyAssistantMessage={(content) => copyAssistantMessage(content)}
                         onForkAssistantMessage={(messageId) =>
                           void forkFromAssistantMessage(messageId)
                         }

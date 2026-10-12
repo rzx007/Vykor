@@ -368,9 +368,7 @@ function AgentDetails({
                   running={running}
                   canEditLastUserMessage={false}
                   onEditLastUserMessage={() => {}}
-                  onCopyAssistantMessage={(content) =>
-                    void window.desktop.clipboard.writeText(content)
-                  }
+                  onCopyAssistantMessage={(content) => window.desktop.clipboard.writeText(content)}
                   showReasoning={false}
                   onOpenFile={onOpenFile}
                   canOpenReview={canOpenReview}

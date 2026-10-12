@@ -96,10 +96,9 @@ export function SideChatSelectionActions({
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
-          shape="circle"
+          size="sm"
+          shape="pill"
           aria-label="复制选中内容"
-          title="复制选中内容"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             void copyConversationText(selection.text).then((copied) => {
@@ -108,6 +107,7 @@ export function SideChatSelectionActions({
           }}
         >
           <Copy />
+          复制内容
         </Button>
         <Button
           type="button"
