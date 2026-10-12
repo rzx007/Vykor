@@ -737,21 +737,33 @@ describe("tool parameter and result display", () => {
     expect(blocks[1]).toContain("old_string not found")
   })
 
-  it("keeps command parameters visible after a result has arrived", () => {
+  it("shows Shell commands above plain-text output in its own scroll area", () => {
     render([
       part(
         "Shell",
         { arguments: { command: "Get-ChildItem -Force" } },
         {
-          output: { content: [{ type: "text", text: "files listed" }] },
+          output: {
+            content: [{ type: "text", text: "files listed" }],
+            isError: false,
+          },
         }
       ),
     ])
-    expect(container.textContent).toContain("Get-ChildItem -Force")
     click("运行命令")
-    const blocks = [...container.querySelectorAll("pre")].map((element) => element.textContent)
-    expect(blocks[0]).toContain("Get-ChildItem -Force")
-    expect(blocks[1]).toContain("files listed")
+    const command = [...container.querySelectorAll("[data-shell-command]")][0]
+    const output = container.querySelector<HTMLElement>("[data-shell-output]")
+    expect(command).toBeDefined()
+    expect(output).not.toBeNull()
+    expect(command?.textContent).toContain("Get-ChildItem -Force")
+    expect(output?.textContent).toBe("files listed")
+    expect(
+      Boolean(command!.compareDocumentPosition(output!) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true)
+    expect(output!.className).toContain("overflow-auto")
+    expect(container.textContent).not.toContain('"content"')
+    expect(container.textContent).not.toContain("参数")
+    expect(container.textContent).not.toContain("结果")
   })
 
   it("shows the completed-file summary when a legacy edit's result has arrived", () => {
@@ -808,6 +820,6 @@ describe("tool parameter and result display", () => {
     expect(container.querySelector('[data-tool-diagnostic][aria-label="失败"]')).not.toBeNull()
     expect(container.querySelector(".shimmer")).toBeNull()
     expect(container.textContent).toContain("exit code 1")
-    expect(container.textContent).toContain('"command": "exit 1"')
+    expect(container.querySelector("[data-shell-command]")?.textContent).toBe("exit 1")
   })
 })

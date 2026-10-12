@@ -52,6 +52,7 @@ import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 import { useToolDetails } from "./use-tool-details"
 import { ReadImagePreview, readImagePath } from "./read-image-preview"
+import { ShellToolDetails } from "./shell-tool-details"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 import { TerminalActivityCard, type TerminalActivityInfo } from "./terminal-activity-card"
 
@@ -648,27 +649,40 @@ function ToolDetails({ tool, calling }: { tool: ToolUnit; calling: boolean }): R
           {error ?? "正在加载完整详情；当前仅显示预览。"}
         </p>
       ) : null}
-      <div className="px-3 pt-2 text-xs font-medium">参数</div>
-      {unparsedInput ? (
-        <p className="px-3 py-2 text-xs text-ui-muted">
-          {import.meta.env.DEV ? "参数解析失败，请查看下方错误结果。" : "没有记录可展示的参数。"}
-        </p>
-      ) : input === undefined ? (
-        <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
+      {call.toolName === "Shell" ? (
+        <ShellToolDetails
+          input={input}
+          output={output}
+          calling={calling}
+          unparsedInput={unparsedInput}
+        />
       ) : (
-        <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-          {formatValue(input)}
-        </pre>
-      )}
-      <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
-      {output === undefined ? (
-        <p className="px-3 py-2 text-xs text-ui-muted">
-          {calling ? "等待工具返回结果" : "没有记录结果"}
-        </p>
-      ) : (
-        <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-          {formatValue(output)}
-        </pre>
+        <>
+          <div className="px-3 pt-2 text-xs font-medium">参数</div>
+          {unparsedInput ? (
+            <p className="px-3 py-2 text-xs text-ui-muted">
+              {import.meta.env.DEV
+                ? "参数解析失败，请查看下方错误结果。"
+                : "没有记录可展示的参数。"}
+            </p>
+          ) : input === undefined ? (
+            <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
+          ) : (
+            <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+              {formatValue(input)}
+            </pre>
+          )}
+          <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
+          {output === undefined ? (
+            <p className="px-3 py-2 text-xs text-ui-muted">
+              {calling ? "等待工具返回结果" : "没有记录结果"}
+            </p>
+          ) : (
+            <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+              {formatValue(output)}
+            </pre>
+          )}
+        </>
       )}
       {preview && fullCall.bodyView?.outputReferences?.length ? (
         <p className="px-3 py-2 text-xs text-ui-muted">
