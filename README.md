@@ -32,6 +32,8 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 - pnpm >= 10
 - Bun >= 1.0（CLI 通过 Bun 构建/运行）
 
+构建前先确认 `node --version`、`pnpm --version` 和 `bun --version` 都能运行。CLI 和 Web 前端的构建都需要 Bun；安装后若命令找不到，请将 Bun 的安装目录加入 PATH，并重新打开终端。
+
 ### 安装
 
 ```bash
@@ -75,13 +77,10 @@ vk --tui "explain this project"
 ### 开发阶段运行
 
 ```bash
-# 方式一：pnpm link --global（推荐，需先 build）
+# 方式一：运行构建产物（在仓库根目录执行，需先 build）
 pnpm build
-cd apps/cli
-pnpm link --global
-vykor "hello"        # 任意目录可用（vk 等价）
-vykor --tui
-# 取消链接：pnpm unlink --global
+node apps/cli/dist/index.js "hello"
+node apps/cli/dist/index.js --tui
 
 # 方式二：Bun 直跑源码（改代码立刻生效，无需 build）
 bun apps/cli/src/index.ts "hello"
@@ -92,6 +91,22 @@ pnpm --filter @rzx/ohs dev   # = bun --watch src/index.ts
 ```
 
 开发阶段建议用 **方式二**（Bun 直跑源码，改了代码立刻生效），稳定后用方式一。
+
+需要在任意目录使用本地构建的 `vk` 时，可在 shell 配置文件中添加函数，把下面的路径替换成仓库的绝对路径。pnpm 10.30.2 不支持原先的 `pnpm link --global` 用法；不要通过补上 `.` 来尝试全局链接。
+
+```bash
+# Bash / Zsh：放入 ~/.bashrc 或 ~/.zshrc，再重新打开终端
+vk() { node "/absolute/path/to/vykor/apps/cli/dist/index.js" "$@"; }
+vykor() { vk "$@"; }
+```
+
+```powershell
+# PowerShell：放入 $PROFILE，再重新打开终端
+function vk { node 'D:\path\to\vykor\apps\cli\dist\index.js' @args }
+function vykor { vk @args }
+```
+
+移除上述函数即可取消本地命令。运行 TUI 仍需要 Bun 在 PATH 中。
 
 ### 常用开发命令
 
@@ -129,7 +144,7 @@ bun apps/cli/src/index.ts --tui
 vk [options] [prompt]
 
 Options:
-  --model <model>              模型名称（默认 minimax/minimax-m2.5:free）
+  --model <model>              模型名称（默认 minimax/minimax-m2.5）
   --provider <provider>        强制指定 provider
   --permission-mode <mode>     权限模式: default | plan | full_auto
   --max-turns <n>              最大 agent 轮次（默认 50）
@@ -725,7 +740,7 @@ vk sandbox check
 {
   "agentEnvironment": { "kind": "native" },
   "provider": "openrouter",
-  "model": "minimax/minimax-m2.5:free",
+  "model": "minimax/minimax-m2.5",
   "apiFormat": "openai",
   "maxTurns": 50,
   "effort": "medium",
@@ -757,6 +772,8 @@ vk sandbox check
 ```
 
 > MCP 配置必须显式写 `type`：`stdio` 需要 `command`，`http` / `sse` 需要 `url`。缺字段直接报错，不推断旧格式。HTTP/SSE 可用 `headers` 静态鉴权；Streamable HTTP 还可通过 `vk mcp login` 使用 OAuth。
+
+默认配置使用 OpenRouter 的 `minimax/minimax-m2.5`。该模型为付费模型，需要配置 OpenRouter API key 和账户余额；也可以先选择其他供应商或可用的免费模型。
 
 ### 设置 API Key
 

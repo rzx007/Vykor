@@ -18,7 +18,7 @@ export function resolveOutputTokenCap(catalogOutput: number | undefined, fallbac
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  model: "minimax/minimax-m2.5:free",
+  model: "minimax/minimax-m2.5",
   apiFormat: "openai",
   provider: "openrouter",
   outputTokenMax: DEFAULT_OUTPUT_TOKEN_MAX,

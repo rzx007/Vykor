@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ContextUsageSnapshot } from "@vykor/core";
 
 import { SessionApplicationError } from "../session-application-error.js";
+import { ContextUsageCache } from "../../context-usage-cache.js";
 import {
   SessionCommandService,
   type SessionCommandServiceOptions,
@@ -15,6 +17,12 @@ const session = {
   metadata: { runtime: { model: "gpt-test" } },
   createdAt: 1,
   updatedAt: 1,
+};
+
+const usageSnapshot: ContextUsageSnapshot = {
+  model: "gpt-test", contextWindow: 100_000, estimatedInputTokens: 100,
+  percentFull: 0.001, estimator: "heuristic_v1", buckets: [], tips: [],
+  computedAt: "2026-10-13T00:00:00.000Z", source: "session_cache",
 };
 
 function createService(overrides: {
@@ -67,9 +75,8 @@ function createService(overrides: {
     checkpoint: vi.fn(() => 42),
     publishSince: vi.fn(),
   };
-  const contextUsageCache = {
-    invalidate: vi.fn(),
-  };
+  const contextUsageCache = new ContextUsageCache();
+  vi.spyOn(contextUsageCache, "invalidate");
 
   const options: SessionCommandServiceOptions = {
     sessions,
@@ -377,6 +384,18 @@ describe("SessionCommandService", () => {
   });
 
   describe("archiveSessionTree", () => {
+    it("releases cached context usage after archiving a session", async () => {
+      const { service, contextUsageCache } = createService();
+      const cached = usageSnapshot;
+      contextUsageCache.set("s1", cached);
+      contextUsageCache.set("other", cached);
+
+      await service.archiveSessionTree("s1");
+
+      expect(contextUsageCache.get("s1")).toBeUndefined();
+      expect(contextUsageCache.get("other")).toBe(cached);
+    });
+
     it("returns immediately if session is already archived", async () => {
       const { service, sessions } = createService({
         sessionRecord: { ...session, status: "archived" },
@@ -425,6 +444,32 @@ describe("SessionCommandService", () => {
   });
 
   describe("deleteSessionTree", () => {
+    it("releases cached context usage for every deleted descendant", async () => {
+      const { service, sessions, contextUsageCache } = createService();
+      const child = { ...session, id: "child-1", parentId: "s1" };
+      sessions.listChildSessions.mockImplementation((id: string) => id === "s1" ? [child as any] : []);
+      sessions.deleteSessionTree.mockReturnValue(["s1", "child-1"]);
+      const cached = usageSnapshot;
+      for (const id of ["s1", "child-1", "other"]) contextUsageCache.set(id, cached);
+
+      await service.deleteSessionTree("s1");
+
+      expect(contextUsageCache.get("s1")).toBeUndefined();
+      expect(contextUsageCache.get("child-1")).toBeUndefined();
+      expect(contextUsageCache.get("other")).toBe(cached);
+    });
+
+    it("keeps context usage when durable deletion fails", async () => {
+      const { service, sessions, contextUsageCache } = createService();
+      const cached = usageSnapshot;
+      contextUsageCache.set("s1", cached);
+      sessions.deleteSessionTree.mockImplementation(() => { throw new Error("delete failed"); });
+
+      await expect(service.deleteSessionTree("s1")).rejects.toThrow("delete failed");
+
+      expect(contextUsageCache.get("s1")).toBe(cached);
+    });
+
     it("fails delete when session does not exist", async () => {
       const { service } = createService({ sessionRecord: null });
 

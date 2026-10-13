@@ -55,6 +55,7 @@ export function applyChildActivityEvent(record: ChildActivityRecord, event: Agen
       return;
     case "tool.completed": {
       const name = state.toolNames.get(event.data.toolUseId);
+      state.toolNames.delete(event.data.toolUseId);
       if (name) {
         snapshot.latestTool = {
           name,

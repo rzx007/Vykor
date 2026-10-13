@@ -12,7 +12,7 @@
     "dev:apps": "turbo dev --filter=@vykor/desktop",
     "build": "turbo build",
     "lint": "turbo lint",
-    "check-types": "turbo check-types",
+    "check-types": "turbo check-types --concurrency=2",
     "check-docs": "node scripts/check-docs.mjs",
     "check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/forbidden-compatibility-surfaces.test.mjs scripts/architecture-boundaries.test.mjs && pnpm --filter @vykor/client exec vitest run src/__test__/public-api.test.ts",
     "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate",

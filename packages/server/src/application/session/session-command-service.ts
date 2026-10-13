@@ -578,6 +578,7 @@ export class SessionCommandService {
       }
       const checkpoint = this.options.events.checkpoint();
       const deleted = this.options.sessions.deleteSessionTree(sessionId);
+      for (const id of deleted) this.options.contextUsageCache?.invalidate(id);
       this.options.events.publishSince(checkpoint);
       return deleted;
     } finally {
@@ -647,6 +648,7 @@ export class SessionCommandService {
       await this.options.runtimeControl.closeAgent(sessionId);
       const before = this.options.events.checkpoint();
       const session = this.options.sessions.archiveSession(sessionId);
+      this.options.contextUsageCache?.invalidate(sessionId);
       this.options.events.publishSince(before);
       return session;
     } finally {

@@ -104,15 +104,16 @@ function createTaskService(options: {
   };
   const broadcastSince = vi.fn();
   const checkpoint = vi.fn(() => 7);
+  const getDetachedProcessSupervisor = vi.fn(() => manager as any);
   const service = new BackgroundShellService({
     store: store as any,
     executionProjector: executionProjector as any,
-    getDetachedProcessSupervisor: () => manager as any,
+    getDetachedProcessSupervisor,
     events: { checkpoint, publishSince: broadcastSince },
     getSettingsForCwd: async () => ({ model: "test" } as any),
     acquireEnvironment: options.acquireEnvironment,
   });
-  return { service, store, executionProjector, manager, checkpoint, broadcastSince, listeners };
+  return { service, store, executionProjector, manager, checkpoint, broadcastSince, listeners, getDetachedProcessSupervisor };
 }
 
 describe("BackgroundShellService", () => {
@@ -312,6 +313,31 @@ describe("BackgroundShellService", () => {
       error: "runtime gone",
       metadata: { admissionPhase: "runtime_missing" },
     });
+  });
+
+  it("does not allocate process supervisors for sessions without tasks, including archived sessions", async () => {
+    const { service, store, getDetachedProcessSupervisor } = createTaskService();
+    store.listSessions.mockReturnValue([
+      { id: "s1", cwd: "/repo", status: "running" },
+      { id: "old", cwd: "/repo", status: "archived" },
+    ]);
+    store.listSessionTasks.mockReturnValue([]);
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(0);
+
+    expect(getDetachedProcessSupervisor).not.toHaveBeenCalled();
+  });
+
+  it("interrupts a missing child runtime without allocating a process supervisor", async () => {
+    const { service, store, getDetachedProcessSupervisor } = createTaskService();
+    store.listSessionTasks.mockReturnValue([{
+      ...store.getSessionTask(), type: "agent", metadata: {},
+    }]);
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(1);
+
+    expect(store.getSessionTask().status).toBe("interrupted");
+    expect(getDetachedProcessSupervisor).not.toHaveBeenCalled();
   });
 
   it("reattaches an active durable task when its runtime still exists", async () => {

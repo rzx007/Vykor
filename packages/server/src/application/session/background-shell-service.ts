@@ -135,16 +135,17 @@ export class BackgroundShellService {
     let reconciled = 0;
     const before = this.context.events.checkpoint();
     for (const session of this.sessions.listSessions({ includeArchived: true })) {
-      const manager = this.context.getDetachedProcessSupervisor({
-        cwd: session.cwd,
-        sessionId: session.id,
-      });
+      let manager: ProcessSupervisor | undefined;
       for (const task of this.tasks.listSessionTasks(session.id)) {
         const isDetached = task.type === "shell" || task.metadata.executionBackend === "detached_process";
-        const runtime = isDetached ? manager.getExecution(runtimeExecutionId(task)) : undefined;
+        if (isDetached) manager ??= this.context.getDetachedProcessSupervisor({
+          cwd: session.cwd,
+          sessionId: session.id,
+        });
+        const runtime = isDetached ? manager?.getExecution(runtimeExecutionId(task)) : undefined;
         const active = task.status === "pending" || task.status === "running";
         if (!active) {
-          if (runtime && (runtime.status === "pending" || runtime.status === "running")) {
+          if (manager && runtime && (runtime.status === "pending" || runtime.status === "running")) {
             try {
               await manager.stopExecution(runtime.id);
               this.tasks.updateSessionTask(task.id, {
@@ -162,7 +163,7 @@ export class BackgroundShellService {
           }
           continue;
         }
-        if (runtime) {
+        if (runtime && manager) {
           this.context.executionProjector.trackProcessExecution(manager, runtime.id);
           this.context.executionProjector.syncPersistentExecution(runtime, manager, task.id);
           this.tasks.updateSessionTask(task.id, {
