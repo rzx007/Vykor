@@ -218,12 +218,13 @@
   }
 }
 /* 与 components/appearance/appearance-fonts.ts 保持一致：
-   Inter 负责拉丁字符，Noto Sans SC 负责中文，后续系统字体用于缺字回退。 */
+   默认使用系统字体，中文优先使用平台字体；已保存的字体选择由 Provider 应用。 */
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans:
-    "Inter Variable", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
-    "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+    "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
+    "Source Han Sans SC", sans-serif;
   --font-mono:
     "Cascadia Code", "SFMono-Regular", Consolas, "Microsoft YaHei UI", "Microsoft YaHei",
     "Noto Sans CJK SC", monospace;
@@ -316,11 +317,14 @@
   --ui-font-size-display: calc(var(--ui-font-size) + 12px);
   /* 对话正文是阅读主体：字号与行高比控件更舒展，长篇中文更容易连续阅读。 */
   --chat-font-size: calc(var(--ui-font-size) + 2px);
-  --chat-line-height: 1.68;
+  --chat-line-height: 1.625;
+  --chat-paragraph-gap: 1em;
+  --chat-content-width: 48rem;
+  --chat-column-gutter: 1.5rem;
   --code-font-size: 13px;
   --code-line-height: 1.5;
-  --background: #fcfcfd;
-  --foreground: #1b1b1b;
+  --background: #ffffff;
+  --foreground: #1a1c1f;
   --surface-elevation-target: var(--foreground);
   --card: var(--background);
   --card-foreground: var(--foreground);
@@ -558,6 +562,31 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
     line-height: var(--chat-line-height);
   }
 
+  /* 消息、骨架、授权与输入区域共用阅读列，避免宽度改变时左右跳动。 */
+  .conversation-surface {
+    container: conversation / inline-size;
+  }
+
+  .conversation-content-column {
+    width: 100%;
+    max-width: calc(var(--chat-content-width) + 2 * var(--chat-column-gutter));
+    margin-inline: auto;
+    padding-inline: var(--chat-column-gutter);
+  }
+
+  .conversation-composer-column {
+    width: calc(100% - 2 * var(--chat-column-gutter));
+    max-width: var(--chat-content-width);
+    margin-inline: auto;
+  }
+
+  @container conversation (max-width: 40rem) {
+    .conversation-content-column,
+    .conversation-composer-column {
+      --chat-column-gutter: 1rem;
+    }
+  }
+
   .titlebar-drag {
     -webkit-app-region: drag;
   }
@@ -604,6 +633,11 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
     font-size: var(--chat-font-size);
     line-height: var(--chat-line-height);
     text-indent: 0;
+  }
+
+  /* 过程说明使用独立文字颜色，保持正文大小和可读行距。 */
+  .assistant-markdown[data-phase="commentary"] {
+    color: var(--ui-muted);
   }
 
   .desktop-streamdown {
@@ -708,6 +742,8 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
     font-size: 0.84em;
     /* font-weight: 300; */
     border: none;
+    box-decoration-break: clone;
+    overflow-wrap: anywhere;
   }
 
   /* Blockquote — no background, clean left border */
@@ -761,19 +797,19 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
 
   /* Assistant transcript — compact editorial rhythm without changing file previews */
   .assistant-markdown [data-streamdown="heading-1"] {
-    font-size: var(--ui-font-size-title);
+    font-size: calc(var(--chat-font-size) * 1.5);
     font-weight: 600;
     margin-block: 1rem 0.45rem;
   }
 
   .assistant-markdown [data-streamdown="heading-2"] {
-    font-size: var(--ui-font-size-xl);
+    font-size: calc(var(--chat-font-size) * 1.25);
     font-weight: 600;
     margin-block: 1rem 0.4rem;
   }
 
   .assistant-markdown [data-streamdown="heading-3"] {
-    font-size: var(--ui-font-size-lg);
+    font-size: calc(var(--chat-font-size) * 1.125);
     font-weight: 600;
     margin-block: 0.85rem 0.3rem;
   }
@@ -807,7 +843,7 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
   }
 
   .assistant-markdown [data-streamdown="paragraph"] + [data-streamdown="paragraph"] {
-    margin-top: 1em;
+    margin-top: var(--chat-paragraph-gap);
   }
 
   /* 技术回答中的行内代码要融入句子，避免变成一串细小、厚重的灰色标签。 */

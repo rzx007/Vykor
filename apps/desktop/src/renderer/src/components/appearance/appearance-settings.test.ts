@@ -140,8 +140,8 @@ describe("AppearanceSettings", () => {
     await renderSettings()
     const background = container.querySelector<HTMLInputElement>('[aria-label="自定义背景色"]')
     const foreground = container.querySelector<HTMLInputElement>('[aria-label="自定义前景色"]')
-    expect(background?.value).toBe("#FCFCFD")
-    expect(foreground?.value).toBe("#1B1B1B")
+    expect(background?.value).toBe("#FFFFFF")
+    expect(foreground?.value).toBe("#1A1C1F")
     act(() => {
       setInputValue(background, "#eff1f5")
       background?.dispatchEvent(new Event("input", { bubbles: true }))

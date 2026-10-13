@@ -35,7 +35,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
     light: { background: null, foreground: null },
     dark: { background: null, foreground: null },
   },
-  uiFont: "inter",
+  uiFont: "system",
   codeFont: "geist-mono",
   uiFontSize: 14,
   codeFontSize: 14,

@@ -28,7 +28,7 @@ describe("Markdown table styles", () => {
   })
 
   it("gives assistant Markdown a wider, compact reading layout", () => {
-    expect(conversationPage).toContain("max-w-190")
+    expect(conversationPage).toContain("conversation-content-column")
     expect(stylesheet).toMatch(
       /\.assistant-markdown \[data-streamdown="list-item"\]\s*\{[^}]*padding-block:\s*0;/s
     )
@@ -42,16 +42,16 @@ describe("Markdown table styles", () => {
 
   it("keeps the chat reading rhythm for the assistant transcript", () => {
     expect(stylesheet).toMatch(/--chat-font-size:\s*calc\(var\(--ui-font-size\) \+ 2px\);/)
-    expect(stylesheet).toMatch(/--chat-line-height:\s*1\.68;/)
+    expect(stylesheet).toMatch(/--chat-line-height:\s*1\.625;/)
     expect(stylesheet).toMatch(/--code-line-height:\s*1\.5;/)
     expect(stylesheet).toMatch(
-      /\.assistant-markdown \[data-streamdown="heading-2"\]\s*\{[^}]*font-size:\s*var\(--ui-font-size-xl\);[^}]*font-weight:\s*600;/s
+      /\.assistant-markdown \[data-streamdown="heading-2"\]\s*\{[^}]*font-size:\s*calc\(var\(--chat-font-size\) \* 1\.25\);[^}]*font-weight:\s*600;/s
     )
     expect(stylesheet).toMatch(
       /\.desktop-streamdown \[data-streamdown="strong"\]\s*\{[^}]*font-weight:\s*600;/s
     )
     expect(stylesheet).toMatch(
-      /\.assistant-markdown \[data-streamdown="paragraph"\]\s*\+\s*\[data-streamdown="paragraph"\]\s*\{[^}]*margin-top:\s*1em;/s
+      /\.assistant-markdown \[data-streamdown="paragraph"\]\s*\+\s*\[data-streamdown="paragraph"\]\s*\{[^}]*margin-top:\s*var\(--chat-paragraph-gap\);/s
     )
     expect(stylesheet).toMatch(
       /\.assistant-markdown \[data-streamdown="list-item"\]\s*\{[^}]*margin-block:\s*0\.45em;/s

@@ -640,12 +640,15 @@ export function SideChatPanel({
     <section
       ref={sectionRef}
       aria-label="侧边聊天"
-      className={cn("size-full min-h-0 flex-col bg-conversation", active ? "flex" : "hidden")}
+      className={cn(
+        "conversation-surface size-full min-h-0 flex-col bg-conversation",
+        active ? "flex" : "hidden"
+      )}
     >
       <MessageScrollerProvider autoScroll defaultScrollPosition="end">
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport onContextMenu={(event) => void openConversationTextMenu(event)}>
-            <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
+            <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 gap-6 pt-7 pb-5 text-content-foreground">
               {view || submissions.length ? (
                 <ConversationTranscript
                   inputs={view?.inputs ?? []}
@@ -682,7 +685,7 @@ export function SideChatPanel({
           <MessageScrollerButton title={status?.title} />
         </MessageScroller>
       </MessageScrollerProvider>
-      <div className="mx-auto mb-4 flex w-[min(760px,calc(100%-32px))] shrink-0 flex-col gap-2 px-px">
+      <div className="conversation-composer-column mb-4 flex shrink-0 flex-col gap-2">
         {view?.syncStatus === "reconnecting" ? (
           <p role="status" className="text-xs text-muted-foreground">
             正在重新连接聊天

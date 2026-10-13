@@ -10,7 +10,11 @@ import { MermaidDiagram } from "./mermaid-diagram"
 export function StreamdownCodeBlock({
   className,
   children,
-}: React.HTMLAttributes<HTMLElement> & ExtraProps): React.JSX.Element {
+  variant = "default",
+}: React.HTMLAttributes<HTMLElement> &
+  ExtraProps & {
+    variant?: "default" | "conversation"
+  }): React.JSX.Element {
   const isIncomplete = useIsCodeFenceIncomplete()
   const language = className?.match(/language-([^\s]+)/)?.[1] ?? ""
   const code = markdownNodeText(children).replace(/\n$/, "")
@@ -22,6 +26,7 @@ export function StreamdownCodeBlock({
   const codeType = language || "text"
   return (
     <CodeBlock
+      variant={variant}
       className="my-4"
       code={code}
       language={codeType}
@@ -29,6 +34,12 @@ export function StreamdownCodeBlock({
       showLineNumbers={false}
     />
   )
+}
+
+export function ConversationCodeBlock(
+  props: React.ComponentProps<typeof StreamdownCodeBlock>
+): React.JSX.Element {
+  return <StreamdownCodeBlock {...props} variant="conversation" />
 }
 
 export function FileButton({

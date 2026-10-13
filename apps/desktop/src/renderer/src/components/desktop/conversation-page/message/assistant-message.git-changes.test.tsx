@@ -46,6 +46,37 @@ afterEach(() => {
     .IS_REACT_ACT_ENVIRONMENT
 })
 
+it("keeps changed-file details collapsed until requested and lets them close again", async () => {
+  const onOpenFile = vi.fn()
+  await act(async () => {
+    root.render(
+      <ChangedFilesSummary
+        files={[
+          { path: "D:/outside/a.ts", additions: 0, deletions: 0, hasStats: false },
+          { path: "D:/outside/b.ts", additions: 0, deletions: 0, hasStats: false },
+          { path: "D:/outside/c.ts", additions: 0, deletions: 0, hasStats: false },
+          { path: "D:/outside/d.ts", additions: 0, deletions: 0, hasStats: false },
+        ]}
+        canOpenReview={false}
+        onOpenFile={onOpenFile}
+        onOpenReview={vi.fn()}
+      />
+    )
+  })
+
+  const details = container.querySelector("details")
+  expect(details).not.toBeNull()
+  expect(details!.open).toBe(false)
+  const summary = details!.querySelector("summary")!
+  expect(summary.textContent).toContain("已编辑 4 个文件")
+  await act(async () => summary.click())
+  expect(details!.open).toBe(true)
+  await act(async () => rowButton(details!, "D:/outside/d.ts").click())
+  expect(onOpenFile).toHaveBeenCalledWith("D:/outside/d.ts")
+  await act(async () => summary.click())
+  expect(details!.open).toBe(false)
+})
+
 it("shares one git request across changed-file summaries", async () => {
   const changes = vi.fn().mockResolvedValue({
     rootPath: "D:/repo",

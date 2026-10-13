@@ -187,7 +187,12 @@ export function applyActivityUpdate(
       (update.eventType === "session.message.created" &&
         Boolean(activity.session.metadata["externalConversation"]))
 
-    if (firstBaseline || active || (!previous && !significant && update.delivery !== "baseline")) {
+    if (
+      firstBaseline ||
+      (update.delivery === "baseline" && readSeqBySessionId[id] === undefined) ||
+      active ||
+      (!previous && !significant && update.delivery !== "baseline")
+    ) {
       readSeqBySessionId[id] = Math.max(readSeqBySessionId[id] ?? 0, activity.activitySeq)
     }
 

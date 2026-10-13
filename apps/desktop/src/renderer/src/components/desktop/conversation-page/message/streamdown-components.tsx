@@ -1,9 +1,10 @@
 import type { ComponentProps } from "react"
 import { Globe } from "lucide-react"
 import { Streamdown } from "streamdown"
+import { cn } from "@renderer/lib/utils"
 
 import { parseFileReference } from "./message-render-model"
-import { FileButton, StreamdownCodeBlock } from "./streamdown-renderers"
+import { ConversationCodeBlock, FileButton, StreamdownCodeBlock } from "./streamdown-renderers"
 
 const HTTP_LINK = /^https?:\/\//i
 
@@ -11,8 +12,10 @@ type StreamdownComponents = NonNullable<ComponentProps<typeof Streamdown>["compo
 
 export function createStreamdownComponents({
   onOpenFile,
+  codeBlockVariant = "default",
 }: {
   onOpenFile?: (path: string, line?: number) => void
+  codeBlockVariant?: "default" | "conversation"
 } = {}): StreamdownComponents {
   return {
     a: ({ href, children, ...props }) => {
@@ -34,14 +37,14 @@ export function createStreamdownComponents({
         </FileButton>
       )
     },
-    inlineCode: ({ children, ...props }) => {
+    inlineCode: ({ children, className, ...props }) => {
       return (
-        <code className="rounded-md bg-input/80 px-1.5 py-0.5 text-[0.87em]" {...props}>
+        <code {...props} data-streamdown="inline-code" className={cn("font-mono", className)}>
           {children}
         </code>
       )
     },
-    code: StreamdownCodeBlock,
+    code: codeBlockVariant === "conversation" ? ConversationCodeBlock : StreamdownCodeBlock,
   }
 }
 

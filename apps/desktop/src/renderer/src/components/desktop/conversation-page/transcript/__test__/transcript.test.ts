@@ -246,6 +246,47 @@ describe("visibleTranscriptParts", () => {
     expect(html).toContain("align-middle")
   })
 
+  it("keeps a collapsed long user message visually unified across its fade and action row", () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageBlock, {
+        message: {
+          id: "long-user-message",
+          sessionId: "session-1",
+          seq: 1,
+          role: "user",
+          metadata: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        parts: [
+          {
+            id: "long-user-message-text",
+            sessionId: "session-1",
+            messageId: "long-user-message",
+            seq: 1,
+            type: "text",
+            status: "completed",
+            text: "长提问内容 ".repeat(200),
+            metadata: {},
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+        streaming: false,
+        onOpenFile: () => undefined,
+        canOpenReview: false,
+        onOpenReview: () => undefined,
+        onOpenTerminal: () => undefined,
+      })
+    )
+
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain("bg-input/60")
+    expect(html).toContain("to-input/60")
+    expect(html).toContain("bg-input/30")
+    expect(html).not.toContain("gap-1 border-t border-border/40")
+  })
+
   it("keeps ordered text and skill display items for transcript rendering", () => {
     expect(
       renderUserItems([

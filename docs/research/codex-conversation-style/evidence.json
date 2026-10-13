@@ -1,0 +1,1604 @@
+{
+  "date": "2026-10-13",
+  "targetPackage": "OpenAI.Codex_26.1007.2314.0_x64__2p2nqsd0c76g0",
+  "archivePath": "C:/Program Files/WindowsApps/OpenAI.Codex_26.1007.2314.0_x64__2p2nqsd0c76g0/app/resources/app.asar",
+  "scope": {
+    "archiveMembers": 20988,
+    "extractedCssAndHtml": 320,
+    "cssRulesParsed": 20300,
+    "method": "ASAR header/offset inventory; byte-for-byte extraction; PostCSS inert parsing; literal JS source inspection; screenshot pixel sampling. No live computed styles or GUI actions.",
+    "limitations": [
+      "Default values and conditional selectors do not prove the screenshot active settings.",
+      "Screenshot pixels can differ from CSS px due to zoom/DPI; screenshot measurements are approximate.",
+      "Bundled font files do not prove active font use or Chinese glyph fallback.",
+      "REA HTML inventory does not analyze CSS. Focused JS analysis timed out and retains partial Evidence."
+    ]
+  },
+  "screenshots": {
+    "codex": {
+      "source": "C:\\Users\\ruanz\\AppData\\Local\\Temp\\codex-clipboard-1efb1ccb-add7-45ea-a76b-80a7f6c24e2d.png",
+      "size": [
+        1473,
+        1229
+      ],
+      "sha256": "850259c006473d6bdce9454e3796b42877c80cd5244ceaa15da7f5812ca20c99",
+      "regions": {
+        "sidebar": {
+          "box": [
+            0,
+            12,
+            318,
+            1229
+          ],
+          "commonColors": [
+            {
+              "hex": "#f9fbfd",
+              "count": 340304
+            },
+            {
+              "hex": "#eceff1",
+              "count": 7911
+            },
+            {
+              "hex": "#e7e8eb",
+              "count": 2525
+            },
+            {
+              "hex": "#3b3d40",
+              "count": 1817
+            },
+            {
+              "hex": "#c0c1c3",
+              "count": 1693
+            },
+            {
+              "hex": "#6b6d6f",
+              "count": 1454
+            }
+          ]
+        },
+        "main": {
+          "box": [
+            320,
+            70,
+            1440,
+            1180
+          ],
+          "commonColors": [
+            {
+              "hex": "#ffffff",
+              "count": 1101393
+            },
+            {
+              "hex": "#fefefe",
+              "count": 21183
+            },
+            {
+              "hex": "#e9e9e9",
+              "count": 7438
+            },
+            {
+              "hex": "#1a1c1f",
+              "count": 5631
+            },
+            {
+              "hex": "#343638",
+              "count": 4504
+            },
+            {
+              "hex": "#757678",
+              "count": 4133
+            }
+          ]
+        },
+        "body": {
+          "box": [
+            484,
+            100,
+            1290,
+            146
+          ],
+          "commonColors": [
+            {
+              "hex": "#ffffff",
+              "count": 22837
+            },
+            {
+              "hex": "#fefefe",
+              "count": 1349
+            },
+            {
+              "hex": "#e9eaea",
+              "count": 892
+            },
+            {
+              "hex": "#e9e9e9",
+              "count": 651
+            },
+            {
+              "hex": "#f4f4f4",
+              "count": 478
+            },
+            {
+              "hex": "#bababb",
+              "count": 417
+            }
+          ]
+        },
+        "activity": {
+          "box": [
+            484,
+            171,
+            710,
+            195
+          ],
+          "commonColors": [
+            {
+              "hex": "#ffffff",
+              "count": 4062
+            },
+            {
+              "hex": "#f2f2f2",
+              "count": 89
+            },
+            {
+              "hex": "#858688",
+              "count": 63
+            },
+            {
+              "hex": "#d2d3d3",
+              "count": 56
+            },
+            {
+              "hex": "#e3e3e4",
+              "count": 52
+            },
+            {
+              "hex": "#d6d6d7",
+              "count": 49
+            }
+          ]
+        },
+        "link": {
+          "box": [
+            605,
+            908,
+            835,
+            933
+          ],
+          "commonColors": [
+            {
+              "hex": "#ffffff",
+              "count": 3947
+            },
+            {
+              "hex": "#2858a4",
+              "count": 124
+            },
+            {
+              "hex": "#e8edf5",
+              "count": 69
+            },
+            {
+              "hex": "#f4f6fa",
+              "count": 57
+            },
+            {
+              "hex": "#5b7fb9",
+              "count": 54
+            },
+            {
+              "hex": "#d1dcec",
+              "count": 51
+            }
+          ]
+        },
+        "selected_sidebar": {
+          "box": [
+            4,
+            694,
+            307,
+            722
+          ],
+          "commonColors": [
+            {
+              "hex": "#eceff1",
+              "count": 6470
+            },
+            {
+              "hex": "#edeff1",
+              "count": 1011
+            },
+            {
+              "hex": "#e5e8e9",
+              "count": 89
+            },
+            {
+              "hex": "#b7b8bb",
+              "count": 85
+            },
+            {
+              "hex": "#dbdee0",
+              "count": 81
+            },
+            {
+              "hex": "#393b3e",
+              "count": 74
+            }
+          ]
+        }
+      }
+    },
+    "project": {
+      "source": "C:\\Users\\ruanz\\AppData\\Local\\Temp\\codex-clipboard-bb72040b-5da2-4a22-9e5f-63de220cf264.png",
+      "size": [
+        1020,
+        1120
+      ],
+      "sha256": "e760b6ef7b92647c2ad8a190b7dae3214859cf9d5468006d329243fd5555814a",
+      "regions": {
+        "canvas": {
+          "box": [
+            0,
+            0,
+            1020,
+            1120
+          ],
+          "commonColors": [
+            {
+              "hex": "#fcfcfd",
+              "count": 961006
+            },
+            {
+              "hex": "#f4f4f6",
+              "count": 47267
+            },
+            {
+              "hex": "#dcdcdd",
+              "count": 37102
+            },
+            {
+              "hex": "#1b1b1b",
+              "count": 11779
+            },
+            {
+              "hex": "#f5f5f6",
+              "count": 5075
+            }
+          ]
+        },
+        "text": {
+          "box": [
+            87,
+            214,
+            799,
+            314
+          ],
+          "commonColors": [
+            {
+              "hex": "#fcfcfd",
+              "count": 53365
+            },
+            {
+              "hex": "#dcdcdd",
+              "count": 4385
+            },
+            {
+              "hex": "#1b1b1b",
+              "count": 2195
+            },
+            {
+              "hex": "#e6e6e7",
+              "count": 870
+            },
+            {
+              "hex": "#939394",
+              "count": 471
+            }
+          ]
+        },
+        "inline_code": {
+          "box": [
+            527,
+            214,
+            619,
+            239
+          ],
+          "commonColors": [
+            {
+              "hex": "#dcdcdd",
+              "count": 1355
+            },
+            {
+              "hex": "#fcfcfd",
+              "count": 478
+            },
+            {
+              "hex": "#1b1b1b",
+              "count": 64
+            },
+            {
+              "hex": "#4b4b4b",
+              "count": 24
+            },
+            {
+              "hex": "#1c1c1c",
+              "count": 23
+            }
+          ]
+        },
+        "table_header": {
+          "box": [
+            87,
+            335,
+            799,
+            371
+          ],
+          "commonColors": [
+            {
+              "hex": "#f4f4f6",
+              "count": 23960
+            },
+            {
+              "hex": "#ededed",
+              "count": 712
+            },
+            {
+              "hex": "#323232",
+              "count": 223
+            },
+            {
+              "hex": "#e1e1e3",
+              "count": 53
+            },
+            {
+              "hex": "#4d4d4d",
+              "count": 50
+            }
+          ]
+        },
+        "file_card": {
+          "box": [
+            88,
+            888,
+            799,
+            1083
+          ],
+          "commonColors": [
+            {
+              "hex": "#fcfcfd",
+              "count": 127403
+            },
+            {
+              "hex": "#e6e6e6",
+              "count": 2275
+            },
+            {
+              "hex": "#f5f5f6",
+              "count": 1095
+            },
+            {
+              "hex": "#ebebec",
+              "count": 323
+            },
+            {
+              "hex": "#dadada",
+              "count": 305
+            }
+          ]
+        }
+      }
+    }
+  },
+  "cssEvidence": [
+    {
+      "id": "C01",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":root,:host",
+      "ancestors": [
+        "@layer theme"
+      ],
+      "ruleByteOffset": 114363,
+      "declarations": [
+        {
+          "property": "--font-sans",
+          "value": "var(--font-ui-family,var(--font-sans-default))",
+          "important": false,
+          "fragment": "--font-sans:var(--font-ui-family,var(--font-sans-default))",
+          "memberByteOffset": 114375,
+          "archiveByteOffset": 76847256
+        },
+        {
+          "property": "--font-mono",
+          "value": "var(--font-code-family,var(--font-mono-default))",
+          "important": false,
+          "fragment": "--font-mono:var(--font-code-family,var(--font-mono-default))",
+          "memberByteOffset": 114507,
+          "archiveByteOffset": 76847388
+        },
+        {
+          "property": "--spacing",
+          "value": ".25rem",
+          "important": false,
+          "fragment": "--spacing:.25rem",
+          "memberByteOffset": 115783,
+          "archiveByteOffset": 76848664
+        },
+        {
+          "property": "--text-sm",
+          "value": "12px",
+          "important": false,
+          "fragment": "--text-sm:12px",
+          "memberByteOffset": 116222,
+          "archiveByteOffset": 76849103
+        },
+        {
+          "property": "--text-base",
+          "value": "14px",
+          "important": false,
+          "fragment": "--text-base:14px",
+          "memberByteOffset": 116278,
+          "archiveByteOffset": 76849159
+        },
+        {
+          "property": "--leading-relaxed",
+          "value": "1.625",
+          "important": false,
+          "fragment": "--leading-relaxed:1.625",
+          "memberByteOffset": 116974,
+          "archiveByteOffset": 76849855
+        },
+        {
+          "property": "--icon-leading-size",
+          "value": "16px",
+          "important": false,
+          "fragment": "--icon-leading-size:16px",
+          "memberByteOffset": 119210,
+          "archiveByteOffset": 76852091
+        },
+        {
+          "property": "--font-sans-default",
+          "value": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+          "important": false,
+          "fragment": "--font-sans-default:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+          "memberByteOffset": 119500,
+          "archiveByteOffset": 76852381
+        },
+        {
+          "property": "--font-content",
+          "value": "var(--codex-content-font-family,var(--font-sans))",
+          "important": false,
+          "fragment": "--font-content:var(--codex-content-font-family,var(--font-sans))",
+          "memberByteOffset": 119578,
+          "archiveByteOffset": 76852459
+        },
+        {
+          "property": "--font-mono-default",
+          "value": "ui-monospace, \"SFMono-Regular\", \"SF Mono\", menlo, consolas, \"Liberation Mono\", monospace",
+          "important": false,
+          "fragment": "--font-mono-default:ui-monospace, \"SFMono-Regular\", \"SF Mono\", menlo, consolas, \"Liberation Mono\", monospace",
+          "memberByteOffset": 119702,
+          "archiveByteOffset": 76852583
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":where(:root:not([data-codex-window-type=extension])),:where(:root:not([data-codex-window-type=extension]) [data-theme])",
+      "ancestors": [
+        "@layer theme"
+      ],
+      "ruleByteOffset": 182847,
+      "declarations": [
+        {
+          "property": "--app-color-background-surface",
+          "value": "var(--lightningcss-light,var(--gray-fixed-0))var(--lightningcss-dark,var(--gray-fixed-900))",
+          "important": false,
+          "fragment": "--app-color-background-surface:var(--lightningcss-light,var(--gray-fixed-0))var(--lightningcss-dark,var(--gray-fixed-900))",
+          "memberByteOffset": 182968,
+          "archiveByteOffset": 76915849
+        },
+        {
+          "property": "--app-color-text-foreground",
+          "value": "var(--lightningcss-light,#1a1c1f)var(--lightningcss-dark,var(--gray-fixed-150))",
+          "important": false,
+          "fragment": "--app-color-text-foreground:var(--lightningcss-light,#1a1c1f)var(--lightningcss-dark,var(--gray-fixed-150))",
+          "memberByteOffset": 186928,
+          "archiveByteOffset": 76919809
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":where(:root:not([data-codex-window-type=extension])),:where(:root:not([data-codex-window-type=extension]) [data-theme])",
+      "ancestors": [
+        "@layer theme",
+        "@supports (color:color-mix(in lab, red, red))"
+      ],
+      "ruleByteOffset": 187363,
+      "declarations": [
+        {
+          "property": "--app-color-text-foreground-tertiary",
+          "value": "var(--lightningcss-light,color-mix(in oklab, var(--app-color-text-foreground) 50%, transparent))var(--lightningcss-dark,color-mix(in oklab, var(--gray-fixed-0) 50%, transparent))",
+          "important": false,
+          "fragment": "--app-color-text-foreground-tertiary:var(--lightningcss-light,color-mix(in oklab, var(--app-color-text-foreground) 50%, transparent))var(--lightningcss-dark,color-mix(in oklab, var(--gray-fixed-0) 50%, transparent))",
+          "memberByteOffset": 191708,
+          "archiveByteOffset": 76924589
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":where(:root,[data-theme])",
+      "ancestors": [
+        "@layer theme"
+      ],
+      "ruleByteOffset": 198613,
+      "declarations": [
+        {
+          "property": "--color-text",
+          "value": "var(--app-color-text-foreground)",
+          "important": false,
+          "fragment": "--color-text:var(--app-color-text-foreground)",
+          "memberByteOffset": 198640,
+          "archiveByteOffset": 76931521
+        },
+        {
+          "property": "--color-text-secondary",
+          "value": "var(--app-color-text-secondary,var(--app-color-text-foreground))",
+          "important": false,
+          "fragment": "--color-text-secondary:var(--app-color-text-secondary,var(--app-color-text-foreground))",
+          "memberByteOffset": 198827,
+          "archiveByteOffset": 76931708
+        },
+        {
+          "property": "--color-codex-description",
+          "value": "var(--app-color-text-foreground-tertiary)",
+          "important": false,
+          "fragment": "--color-codex-description:var(--app-color-text-foreground-tertiary)",
+          "memberByteOffset": 213915,
+          "archiveByteOffset": 76946796
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": "[data-codex-window-type=electron]",
+      "ancestors": [],
+      "ruleByteOffset": 1250786,
+      "declarations": [
+        {
+          "property": "--image-viewer-transparent-backdrop-filter",
+          "value": "blur(var(--blur-xs))",
+          "important": false,
+          "fragment": "--image-viewer-transparent-backdrop-filter:blur(var(--blur-xs))",
+          "memberByteOffset": 1250820,
+          "archiveByteOffset": 77983701
+        },
+        {
+          "property": "--text-sm",
+          "value": "13px",
+          "important": false,
+          "fragment": "--text-sm:13px",
+          "memberByteOffset": 1250884,
+          "archiveByteOffset": 77983765
+        },
+        {
+          "property": "--text-xs",
+          "value": "12px",
+          "important": false,
+          "fragment": "--text-xs:12px",
+          "memberByteOffset": 1250899,
+          "archiveByteOffset": 77983780
+        },
+        {
+          "property": "--font-weight-medium",
+          "value": "500",
+          "important": false,
+          "fragment": "--font-weight-medium:500",
+          "memberByteOffset": 1250914,
+          "archiveByteOffset": 77983795
+        },
+        {
+          "property": "--font-ui-weight",
+          "value": "430",
+          "important": false,
+          "fragment": "--font-ui-weight:430",
+          "memberByteOffset": 1250939,
+          "archiveByteOffset": 77983820
+        },
+        {
+          "property": "background",
+          "value": "0 0",
+          "important": false,
+          "fragment": "background:0 0",
+          "memberByteOffset": 1250960,
+          "archiveByteOffset": 77983841
+        },
+        {
+          "property": "overflow",
+          "value": "hidden",
+          "important": false,
+          "fragment": "overflow:hidden",
+          "memberByteOffset": 1250975,
+          "archiveByteOffset": 77983856
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":is([data-codex-window-type=browser],[data-codex-window-type=chrome-extension],[data-codex-window-type=electron]) body",
+      "ancestors": [],
+      "ruleByteOffset": 1250991,
+      "declarations": [
+        {
+          "property": "--padding-row-y",
+          "value": "calc(var(--spacing) * 1.25)",
+          "important": false,
+          "fragment": "--padding-row-y:calc(var(--spacing) * 1.25)",
+          "memberByteOffset": 1251110,
+          "archiveByteOffset": 77983991
+        },
+        {
+          "property": "--height-token-nav-row",
+          "value": "calc(var(--text-base) * 1.5 + var(--padding-row-y) * 2)",
+          "important": false,
+          "fragment": "--height-token-nav-row:calc(var(--text-base) * 1.5 + var(--padding-row-y) * 2)",
+          "memberByteOffset": 1251154,
+          "archiveByteOffset": 77984035
+        },
+        {
+          "property": "--padding-panel-base",
+          "value": "calc(var(--spacing) * 5)",
+          "important": false,
+          "fragment": "--padding-panel-base:calc(var(--spacing) * 5)",
+          "memberByteOffset": 1251233,
+          "archiveByteOffset": 77984114
+        },
+        {
+          "property": "--padding-panel",
+          "value": "var(--padding-panel-base)",
+          "important": false,
+          "fragment": "--padding-panel:var(--padding-panel-base)",
+          "memberByteOffset": 1251279,
+          "archiveByteOffset": 77984160
+        },
+        {
+          "property": "--thread-content-max-width",
+          "value": "48rem",
+          "important": false,
+          "fragment": "--thread-content-max-width:48rem",
+          "memberByteOffset": 1251321,
+          "archiveByteOffset": 77984202
+        },
+        {
+          "property": "--composer-adjacent-max-width",
+          "value": "calc(var(--thread-content-max-width) + var(--composer-inline-overhang) + var(--composer-inline-overhang) - var(--home-composer-inline-inset) - var(--home-composer-inline-inset))",
+          "important": false,
+          "fragment": "--composer-adjacent-max-width:calc(var(--thread-content-max-width) + var(--composer-inline-overhang) + var(--composer-inline-overhang) - var(--home-composer-inline-inset) - var(--home-composer-inline-inset))",
+          "memberByteOffset": 1251354,
+          "archiveByteOffset": 77984235
+        },
+        {
+          "property": "--markdown-wide-block-max-width",
+          "value": "56rem",
+          "important": false,
+          "fragment": "--markdown-wide-block-max-width:56rem",
+          "memberByteOffset": 1251562,
+          "archiveByteOffset": 77984443
+        },
+        {
+          "property": "--color-background-primary-soft-alpha",
+          "value": "var(--app-color-background-elevated-secondary)",
+          "important": false,
+          "fragment": "--color-background-primary-soft-alpha:var(--app-color-background-elevated-secondary)",
+          "memberByteOffset": 1251600,
+          "archiveByteOffset": 77984481
+        },
+        {
+          "property": "--font-code-family",
+          "value": "ui-monospace, \"SFMono-Regular\", \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace",
+          "important": false,
+          "fragment": "--font-code-family:ui-monospace, \"SFMono-Regular\", \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace",
+          "memberByteOffset": 1251685,
+          "archiveByteOffset": 77984566
+        },
+        {
+          "property": "--font-ui-size",
+          "value": "var(--text-base)",
+          "important": false,
+          "fragment": "--font-ui-size:var(--text-base)",
+          "memberByteOffset": 1251793,
+          "archiveByteOffset": 77984674
+        },
+        {
+          "property": "--font-code-size",
+          "value": "var(--text-sm)",
+          "important": false,
+          "fragment": "--font-code-size:var(--text-sm)",
+          "memberByteOffset": 1251825,
+          "archiveByteOffset": 77984706
+        },
+        {
+          "property": "--codex-chat-font-size-override",
+          "value": "var(--font-ui-size)",
+          "important": false,
+          "fragment": "--codex-chat-font-size-override:var(--font-ui-size)",
+          "memberByteOffset": 1251857,
+          "archiveByteOffset": 77984738
+        },
+        {
+          "property": "--codex-chat-code-font-size-override",
+          "value": "var(--font-code-size)",
+          "important": false,
+          "fragment": "--codex-chat-code-font-size-override:var(--font-code-size)",
+          "memberByteOffset": 1251909,
+          "archiveByteOffset": 77984790
+        },
+        {
+          "property": "--spacing-token-button-composer-sm",
+          "value": "calc(var(--spacing) * 7)",
+          "important": false,
+          "fragment": "--spacing-token-button-composer-sm:calc(var(--spacing) * 7)",
+          "memberByteOffset": 1251968,
+          "archiveByteOffset": 77984849
+        },
+        {
+          "property": "--text-heading-md",
+          "value": "18px",
+          "important": false,
+          "fragment": "--text-heading-md:18px",
+          "memberByteOffset": 1252028,
+          "archiveByteOffset": 77984909
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ":root",
+      "ancestors": [],
+      "ruleByteOffset": 1258038,
+      "declarations": [
+        {
+          "property": "--padding-toolbar",
+          "value": "calc(var(--spacing) * 4)",
+          "important": false,
+          "fragment": "--padding-toolbar:calc(var(--spacing) * 4)",
+          "memberByteOffset": 1258384,
+          "archiveByteOffset": 77991265
+        },
+        {
+          "property": "--codex-chat-font-size",
+          "value": "var(--codex-chat-font-size-override,var(--font-ui-size,13px))",
+          "important": false,
+          "fragment": "--codex-chat-font-size:var(--codex-chat-font-size-override,var(--font-ui-size,13px))",
+          "memberByteOffset": 1259347,
+          "archiveByteOffset": 77992228
+        },
+        {
+          "property": "--codex-chat-code-font-size",
+          "value": "var(--codex-chat-code-font-size-override,var(--font-code-size,12px))",
+          "important": false,
+          "fragment": "--codex-chat-code-font-size:var(--codex-chat-code-font-size-override,var(--font-code-size,12px))",
+          "memberByteOffset": 1259432,
+          "archiveByteOffset": 77992313
+        },
+        {
+          "property": "--conversation-item-gap",
+          "value": "16px",
+          "important": false,
+          "fragment": "--conversation-item-gap:16px",
+          "memberByteOffset": 1259529,
+          "archiveByteOffset": 77992410
+        },
+        {
+          "property": "--conversation-grouped-item-gap",
+          "value": "4px",
+          "important": false,
+          "fragment": "--conversation-grouped-item-gap:4px",
+          "memberByteOffset": 1259558,
+          "archiveByteOffset": 77992439
+        }
+      ]
+    },
+    {
+      "id": "C08",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 221438,
+      "declarations": [
+        {
+          "property": "--markdown-host-font-size",
+          "value": "var(--codex-chat-font-size)",
+          "important": false,
+          "fragment": "--markdown-host-font-size:var(--codex-chat-font-size)",
+          "memberByteOffset": 221461,
+          "archiveByteOffset": 54631628
+        },
+        {
+          "property": "--markdown-host-small-font-size",
+          "value": "var(--codex-chat-code-font-size)",
+          "important": false,
+          "fragment": "--markdown-host-small-font-size:var(--codex-chat-code-font-size)",
+          "memberByteOffset": 221515,
+          "archiveByteOffset": 54631682
+        },
+        {
+          "property": "--markdown-font-size",
+          "value": "var(--markdown-host-font-size)",
+          "important": false,
+          "fragment": "--markdown-font-size:var(--markdown-host-font-size)",
+          "memberByteOffset": 221580,
+          "archiveByteOffset": 54631747
+        },
+        {
+          "property": "--markdown-line-height",
+          "value": "calc(var(--markdown-font-size) * var(--leading-relaxed))",
+          "important": false,
+          "fragment": "--markdown-line-height:calc(var(--markdown-font-size) * var(--leading-relaxed))",
+          "memberByteOffset": 221632,
+          "archiveByteOffset": 54631799
+        },
+        {
+          "property": "--markdown-small-font-size",
+          "value": "max(var(--markdown-host-small-font-size), calc(var(--markdown-font-size) * .875))",
+          "important": false,
+          "fragment": "--markdown-small-font-size:max(var(--markdown-host-small-font-size), calc(var(--markdown-font-size) * .875))",
+          "memberByteOffset": 221712,
+          "archiveByteOffset": 54631879
+        },
+        {
+          "property": "--markdown-space",
+          "value": "calc(var(--markdown-font-size) / 4)",
+          "important": false,
+          "fragment": "--markdown-space:calc(var(--markdown-font-size) / 4)",
+          "memberByteOffset": 221821,
+          "archiveByteOffset": 54631988
+        },
+        {
+          "property": "--text-primary",
+          "value": "currentColor",
+          "important": false,
+          "fragment": "--text-primary:currentColor",
+          "memberByteOffset": 221874,
+          "archiveByteOffset": 54632041
+        },
+        {
+          "property": "--border-medium",
+          "value": "var(--color-border-strong)",
+          "important": false,
+          "fragment": "--border-medium:var(--color-border-strong)",
+          "memberByteOffset": 221902,
+          "archiveByteOffset": 54632069
+        },
+        {
+          "property": "--border-light",
+          "value": "var(--color-border-subtle)",
+          "important": false,
+          "fragment": "--border-light:var(--color-border-subtle)",
+          "memberByteOffset": 221945,
+          "archiveByteOffset": 54632112
+        },
+        {
+          "property": "--main-surface-secondary",
+          "value": "var(--color-surface-secondary)",
+          "important": false,
+          "fragment": "--main-surface-secondary:var(--color-surface-secondary)",
+          "memberByteOffset": 221987,
+          "archiveByteOffset": 54632154
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 222206,
+      "declarations": [
+        {
+          "property": "color",
+          "value": "var(--color-text)",
+          "important": false,
+          "fragment": "color:var(--color-text)",
+          "memberByteOffset": 222229,
+          "archiveByteOffset": 54632396
+        },
+        {
+          "property": "font-size",
+          "value": "var(--markdown-font-size)",
+          "important": false,
+          "fragment": "font-size:var(--markdown-font-size)",
+          "memberByteOffset": 222253,
+          "archiveByteOffset": 54632420
+        },
+        {
+          "property": "line-height",
+          "value": "var(--markdown-line-height)",
+          "important": false,
+          "fragment": "line-height:var(--markdown-line-height)",
+          "memberByteOffset": 222289,
+          "archiveByteOffset": 54632456
+        },
+        {
+          "property": "overflow-wrap",
+          "value": "anywhere",
+          "important": false,
+          "fragment": "overflow-wrap:anywhere",
+          "memberByteOffset": 222329,
+          "archiveByteOffset": 54632496
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2>:is(._Paragraph_63g8m_2,._VisualizationBlock_63g8m_2)+:is(._Paragraph_63g8m_2,._VisualizationBlock_63g8m_2)",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 218202,
+      "declarations": [
+        {
+          "property": "margin-block",
+          "value": "calc(var(--markdown-space) * 4)",
+          "important": false,
+          "fragment": "margin-block:calc(var(--markdown-space) * 4)",
+          "memberByteOffset": 218333,
+          "archiveByteOffset": 54628500
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2:not([data-markdown-text-tone=user-message])>._Paragraph_63g8m_2[data-markdown-han-text]:has(+._Paragraph_63g8m_2[data-markdown-han-text])",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 217874,
+      "declarations": [
+        {
+          "property": "margin-bottom",
+          "value": "var(--spacing)",
+          "important": false,
+          "fragment": "margin-bottom:var(--spacing)",
+          "memberByteOffset": 218035,
+          "archiveByteOffset": 54628202
+        }
+      ]
+    },
+    {
+      "id": "C12",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._Heading_63g8m_2:where(h1)",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 216663,
+      "declarations": [
+        {
+          "property": "margin",
+          "value": "calc(var(--markdown-space) * 4) 0 calc(var(--markdown-space) * 2)",
+          "important": false,
+          "fragment": "margin:calc(var(--markdown-space) * 4) 0 calc(var(--markdown-space) * 2)",
+          "memberByteOffset": 216691,
+          "archiveByteOffset": 54626858
+        },
+        {
+          "property": "font-size",
+          "value": "calc(var(--markdown-font-size) * 1.5)",
+          "important": false,
+          "fragment": "font-size:calc(var(--markdown-font-size) * 1.5)",
+          "memberByteOffset": 216764,
+          "archiveByteOffset": 54626931
+        },
+        {
+          "property": "line-height",
+          "value": "calc(var(--markdown-space) * 8)",
+          "important": false,
+          "fragment": "line-height:calc(var(--markdown-space) * 8)",
+          "memberByteOffset": 216812,
+          "archiveByteOffset": 54626979
+        }
+      ]
+    },
+    {
+      "id": "C13",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._Heading_63g8m_2:where(h2)",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 216856,
+      "declarations": [
+        {
+          "property": "margin",
+          "value": "calc(var(--markdown-space) * 4) 0 var(--markdown-space)",
+          "important": false,
+          "fragment": "margin:calc(var(--markdown-space) * 4) 0 var(--markdown-space)",
+          "memberByteOffset": 216884,
+          "archiveByteOffset": 54627051
+        },
+        {
+          "property": "font-size",
+          "value": "calc(var(--markdown-font-size) * 1.25)",
+          "important": false,
+          "fragment": "font-size:calc(var(--markdown-font-size) * 1.25)",
+          "memberByteOffset": 216947,
+          "archiveByteOffset": 54627114
+        },
+        {
+          "property": "line-height",
+          "value": "calc(var(--markdown-space) * 7)",
+          "important": false,
+          "fragment": "line-height:calc(var(--markdown-space) * 7)",
+          "memberByteOffset": 216996,
+          "archiveByteOffset": 54627163
+        }
+      ]
+    },
+    {
+      "id": "C14",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._Heading_63g8m_2:where(h3)",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 217040,
+      "declarations": [
+        {
+          "property": "margin",
+          "value": "calc(var(--markdown-space) * 4) 0 var(--markdown-space)",
+          "important": false,
+          "fragment": "margin:calc(var(--markdown-space) * 4) 0 var(--markdown-space)",
+          "memberByteOffset": 217068,
+          "archiveByteOffset": 54627235
+        },
+        {
+          "property": "font-size",
+          "value": "calc(var(--markdown-font-size) * 1.125)",
+          "important": false,
+          "fragment": "font-size:calc(var(--markdown-font-size) * 1.125)",
+          "memberByteOffset": 217131,
+          "archiveByteOffset": 54627298
+        },
+        {
+          "property": "line-height",
+          "value": "calc(var(--markdown-space) * 7)",
+          "important": false,
+          "fragment": "line-height:calc(var(--markdown-space) * 7)",
+          "memberByteOffset": 217181,
+          "archiveByteOffset": 54627348
+        }
+      ]
+    },
+    {
+      "id": "C15",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._InlineCode_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 228001,
+      "declarations": [
+        {
+          "property": "background",
+          "value": "var(--color-background-primary-ghost-hover)",
+          "important": false,
+          "fragment": "background:var(--color-background-primary-ghost-hover)",
+          "memberByteOffset": 228022,
+          "archiveByteOffset": 54638189
+        },
+        {
+          "property": "border-radius",
+          "value": "6px",
+          "important": false,
+          "fragment": "border-radius:6px",
+          "memberByteOffset": 228077,
+          "archiveByteOffset": 54638244
+        },
+        {
+          "property": "padding",
+          "value": "1px 6px",
+          "important": false,
+          "fragment": "padding:1px 6px",
+          "memberByteOffset": 228095,
+          "archiveByteOffset": 54638262
+        },
+        {
+          "property": "display",
+          "value": "inline",
+          "important": false,
+          "fragment": "display:inline",
+          "memberByteOffset": 228111,
+          "archiveByteOffset": 54638278
+        }
+      ]
+    },
+    {
+      "id": "C16",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._InlineCode_63g8m_2",
+      "ancestors": [
+        "@layer components",
+        "@supports (color:color-mix(in lab, red, red))"
+      ],
+      "ruleByteOffset": 228172,
+      "declarations": [
+        {
+          "property": "background",
+          "value": "color-mix(in srgb, var(--color-background-primary-ghost-hover) 60%, var(--color-text) 6%)",
+          "important": false,
+          "fragment": "background:color-mix(in srgb, var(--color-background-primary-ghost-hover) 60%, var(--color-text) 6%)",
+          "memberByteOffset": 228193,
+          "archiveByteOffset": 54638360
+        }
+      ]
+    },
+    {
+      "id": "C17",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._InlineCode_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 228295,
+      "declarations": [
+        {
+          "property": "-webkit-box-decoration-break",
+          "value": "clone",
+          "important": false,
+          "fragment": "-webkit-box-decoration-break:clone",
+          "memberByteOffset": 228316,
+          "archiveByteOffset": 54638483
+        },
+        {
+          "property": "box-decoration-break",
+          "value": "clone",
+          "important": false,
+          "fragment": "box-decoration-break:clone",
+          "memberByteOffset": 228324,
+          "archiveByteOffset": 54638491
+        },
+        {
+          "property": "font-family",
+          "value": "var(--font-mono)",
+          "important": false,
+          "fragment": "font-family:var(--font-mono)",
+          "memberByteOffset": 228378,
+          "archiveByteOffset": 54638545
+        },
+        {
+          "property": "overflow-wrap",
+          "value": "anywhere",
+          "important": false,
+          "fragment": "overflow-wrap:anywhere",
+          "memberByteOffset": 228407,
+          "archiveByteOffset": 54638574
+        },
+        {
+          "property": "word-break",
+          "value": "break-word",
+          "important": false,
+          "fragment": "word-break:break-word",
+          "memberByteOffset": 228430,
+          "archiveByteOffset": 54638597
+        },
+        {
+          "property": "font-size",
+          "value": ".92em",
+          "important": false,
+          "fragment": "font-size:.92em",
+          "memberByteOffset": 228452,
+          "archiveByteOffset": 54638619
+        }
+      ]
+    },
+    {
+      "id": "C18",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": "._CodeContent_snnl5_6",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 108687,
+      "declarations": [
+        {
+          "property": "line-height",
+          "value": "max(1.5em, calc(var(--spacing) * 5))",
+          "important": false,
+          "fragment": "line-height:max(1.5em, calc(var(--spacing) * 5))",
+          "memberByteOffset": 108709,
+          "archiveByteOffset": 76841590
+        }
+      ]
+    },
+    {
+      "id": "C19",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": "._CodeSurface_snnl5_22,._StickyActionBar_snnl5_10",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 108838,
+      "declarations": [
+        {
+          "property": "background-color",
+          "value": "var(--color-surface)",
+          "important": false,
+          "fragment": "background-color:var(--color-surface)",
+          "memberByteOffset": 108888,
+          "archiveByteOffset": 76841769
+        },
+        {
+          "property": "background-image",
+          "value": "linear-gradient(var(--color-background-secondary-soft-alpha), var(--color-background-secondary-soft-alpha))",
+          "important": false,
+          "fragment": "background-image:linear-gradient(var(--color-background-secondary-soft-alpha), var(--color-background-secondary-soft-alpha))",
+          "memberByteOffset": 108926,
+          "archiveByteOffset": 76841807
+        }
+      ]
+    },
+    {
+      "id": "C20",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._TableHeaderCell_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 227042,
+      "declarations": [
+        {
+          "property": "border-bottom",
+          "value": "1px solid var(--border-medium)",
+          "important": false,
+          "fragment": "border-bottom:1px solid var(--border-medium)",
+          "memberByteOffset": 227068,
+          "archiveByteOffset": 54637235
+        },
+        {
+          "property": "padding-top",
+          "value": "calc(var(--markdown-space) * 2)",
+          "important": false,
+          "fragment": "padding-top:calc(var(--markdown-space) * 2)",
+          "memberByteOffset": 227113,
+          "archiveByteOffset": 54637280
+        },
+        {
+          "property": "padding-bottom",
+          "value": "calc(var(--markdown-space) * 2)",
+          "important": false,
+          "fragment": "padding-bottom:calc(var(--markdown-space) * 2)",
+          "memberByteOffset": 227157,
+          "archiveByteOffset": 54637324
+        },
+        {
+          "property": "text-align",
+          "value": "start",
+          "important": false,
+          "fragment": "text-align:start",
+          "memberByteOffset": 227204,
+          "archiveByteOffset": 54637371
+        },
+        {
+          "property": "color",
+          "value": "var(--text-primary)",
+          "important": false,
+          "fragment": "color:var(--text-primary)",
+          "memberByteOffset": 227221,
+          "archiveByteOffset": 54637388
+        },
+        {
+          "property": "font-weight",
+          "value": "var(--font-weight-semibold)",
+          "important": false,
+          "fragment": "font-weight:var(--font-weight-semibold)",
+          "memberByteOffset": 227247,
+          "archiveByteOffset": 54637414
+        },
+        {
+          "property": "line-height",
+          "value": "calc(var(--markdown-space) * 4)",
+          "important": false,
+          "fragment": "line-height:calc(var(--markdown-space) * 4)",
+          "memberByteOffset": 227287,
+          "archiveByteOffset": 54637454
+        }
+      ]
+    },
+    {
+      "id": "C21",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": ".\\@max-thread-expanded\\/app-shell-main-content\\:\\[--thread-content-responsive-max-width\\:var\\(--thread-content-compact-max-width\\,inherit\\)\\]",
+      "ancestors": [
+        "@layer utilities",
+        "@container app-shell-main-content not (width>=53.5rem)"
+      ],
+      "ruleByteOffset": 991488,
+      "declarations": [
+        {
+          "property": "--thread-content-responsive-max-width",
+          "value": "var(--thread-content-compact-max-width,inherit)",
+          "important": false,
+          "fragment": "--thread-content-responsive-max-width:var(--thread-content-compact-max-width,inherit)",
+          "memberByteOffset": 991630,
+          "archiveByteOffset": 77724511
+        }
+      ]
+    },
+    {
+      "id": "C22",
+      "member": "webview/assets/app-shared-9a94b907ed47.css",
+      "sha256": "69f929f71947824fed18365d54c8aa0c975a856649339e585a50f6f547e215d7",
+      "selector": "b,strong",
+      "ancestors": [
+        "@layer base"
+      ],
+      "ruleByteOffset": 263348,
+      "declarations": [
+        {
+          "property": "font-weight",
+          "value": "var(--font-weight-semibold)",
+          "important": false,
+          "fragment": "font-weight:var(--font-weight-semibold)",
+          "memberByteOffset": 263357,
+          "archiveByteOffset": 76996238
+        }
+      ]
+    },
+    {
+      "id": "C23",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2[data-markdown-animated] :is(._FadeIn_63g8m_2,._HorizontalRule_63g8m_2,._ListItem_63g8m_2,._TableRow_63g8m_2,._Blockquote_63g8m_2,._ImageEnter_63g8m_2)",
+      "ancestors": [
+        "@layer components",
+        "@media (prefers-reduced-motion:reduce)"
+      ],
+      "ruleByteOffset": 231447,
+      "declarations": [
+        {
+          "property": "--duration",
+          "value": "0s",
+          "important": false,
+          "fragment": "--duration:0s",
+          "memberByteOffset": 231621,
+          "archiveByteOffset": 54641788
+        },
+        {
+          "property": "opacity",
+          "value": "1",
+          "important": false,
+          "fragment": "opacity:1",
+          "memberByteOffset": 231635,
+          "archiveByteOffset": 54641802
+        },
+        {
+          "property": "animation-duration",
+          "value": "0s",
+          "important": false,
+          "fragment": "animation-duration:0s",
+          "memberByteOffset": 231645,
+          "archiveByteOffset": 54641812
+        },
+        {
+          "property": "transform",
+          "value": "scale(1)",
+          "important": false,
+          "fragment": "transform:scale(1)",
+          "memberByteOffset": 231667,
+          "archiveByteOffset": 54641834
+        },
+        {
+          "property": "animation-delay",
+          "value": "0s",
+          "important": true,
+          "fragment": "animation-delay:0s",
+          "memberByteOffset": 231686,
+          "archiveByteOffset": 54641853
+        }
+      ]
+    },
+    {
+      "id": "C24",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._MarkdownRoot_63g8m_2 ._Table_63g8m_2,._MarkdownRoot_63g8m_2[data-markdown-text-style] ._Table_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 223869,
+      "declarations": [
+        {
+          "property": "font-size",
+          "value": "var(--markdown-small-font-size)",
+          "important": false,
+          "fragment": "font-size:var(--markdown-small-font-size)",
+          "memberByteOffset": 223973,
+          "archiveByteOffset": 54634140
+        }
+      ]
+    },
+    {
+      "id": "C25",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._Paragraph_63g8m_2,._Heading_63g8m_2,._ListItem_63g8m_2,._Table_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 216370,
+      "declarations": [
+        {
+          "property": "font-family",
+          "value": "var(--font-content)",
+          "important": false,
+          "fragment": "font-family:var(--font-content)",
+          "memberByteOffset": 216443,
+          "archiveByteOffset": 54626610
+        }
+      ]
+    },
+    {
+      "id": "C26",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "selector": "._List_63g8m_2",
+      "ancestors": [
+        "@layer components"
+      ],
+      "ruleByteOffset": 217553,
+      "declarations": [
+        {
+          "property": "margin",
+          "value": "0",
+          "important": false,
+          "fragment": "margin:0",
+          "memberByteOffset": 217568,
+          "archiveByteOffset": 54627735
+        },
+        {
+          "property": "padding-inline-start",
+          "value": "var(--markdown-line-height)",
+          "important": false,
+          "fragment": "padding-inline-start:var(--markdown-line-height)",
+          "memberByteOffset": 217577,
+          "archiveByteOffset": 54627744
+        },
+        {
+          "property": "list-style-position",
+          "value": "outside",
+          "important": false,
+          "fragment": "list-style-position:outside",
+          "memberByteOffset": 217626,
+          "archiveByteOffset": 54627793
+        }
+      ]
+    }
+  ],
+  "javascriptEvidence": [
+    {
+      "id": "J01",
+      "member": "webview/assets/app-shared-737655e1fb23.js",
+      "sha256": "a1daa891e89a395b8db399ff6eaa365f12a86880c3d8cf891caf4ccbcb9eebf5",
+      "memberByteOffset": 2023716,
+      "archiveByteOffset": 70581023,
+      "fragment": "sansFontSize:AN({agentAccess:`read-write`,default:14,description:`Base UI font size`,key:`sansFontSize`,schema:xu().min(aP.sans.min).max(aP.sans.max)}),codeFontSize:AN({agentAccess:`read-write`,default:12,description:`Code font size`,key:`codeFontSize`,schema:xu().min(aP.code.min).max(aP.code.max)}),useOpenAISans:AN({agentAccess:`hidden`,default:!0,description:`Whether enrolled ChatGPT Web accounts use OpenAI Sans`,key:`useOpenAISans`,schema:TN}),useFontSmoothing:AN({agentAccess:`read-write`,default:!0,description:`Whether font smoothing is enabled`,key:`useFontSmoothing`,schema:TN}),usePointerCursors:A"
+    },
+    {
+      "id": "J02",
+      "member": "webview/assets/app-initial-b8e1c8014bb4.js",
+      "sha256": "799331dde54905c4df5e360f23a9621141759e2c0acb230aeab909f9904b646f",
+      "memberByteOffset": 9049382,
+      "archiveByteOffset": 63714711,
+      "fragment": "D=E.fonts.ui??(h&&g?`OpenAI Sans`:null),O=E.fonts.codeFace!=null||E.fonts.uiFace!=null||E.fonts.contentFace!=null,k;t[6]!==p||t[7]!==f||t[8]!==r?(k=e=>{let{delta:t}=e,n=v"
+    },
+    {
+      "id": "J03",
+      "member": "webview/assets/app-initial-b8e1c8014bb4.js",
+      "sha256": "799331dde54905c4df5e360f23a9621141759e2c0acb230aeab909f9904b646f",
+      "memberByteOffset": 9050798,
+      "archiveByteOffset": 63716127,
+      "fragment": "let r=lm.sansFontSize.default,i=f+0,a=i/r,o={\"--font-code-family\":E.fonts.code==null?void 0:bVs(E.fonts.code,`--font-mono-default`),\"--font-ui-family\":D==null?void 0:bVs(D,`--font-sans-default`),\"--codex-content-font-family\":E.fonts.content==null?void 0:bVs(E.fonts.content,`--font-sans`),\"--font-ui-size\":`${i}px`};for(let[e,t]of Object.entries(OVs))o[e]=`${Math.round(t*a)}px`;o[`--cursor-interaction`]=_===!0?`pointer`:void 0,o[NVs]=e.dataset.codexOs===`darwin`&&m?`antialiased`:void 0,rg(e,o),rg(t,o),n={...n,...o}}let a=null;hVs()?(a=Mba(document,{light:S,dark:T},l,v?.effectiveTheme,v?.coloredUserMessages,y),n={...n,...a[l]}):e.dataset.theme=l"
+    },
+    {
+      "id": "J04",
+      "member": "webview/assets/app-initial-b8e1c8014bb4.js",
+      "sha256": "799331dde54905c4df5e360f23a9621141759e2c0acb230aeab909f9904b646f",
+      "memberByteOffset": 9635485,
+      "archiveByteOffset": 64300814,
+      "fragment": "case`chat-font-settings`:rg(document.documentElement,{\"--codex-chat-font-size-override\":typeof e.chatFontSize==`number`?`${e.chatFontSize}px`:void 0,\"--codex-chat-code-font-size-override\":typeof e.chatCodeFontSize==`number`?`${e.chatCodeFontSize}px`:void 0}),oPi(r);break bb460;case`workspace-root-options-updated`:f.invalidateQueries({queryKey:Io(`workspace-r"
+    },
+    {
+      "id": "J05",
+      "member": "webview/assets/app-initial-b8e1c8014bb4.js",
+      "sha256": "799331dde54905c4df5e360f23a9621141759e2c0acb230aeab909f9904b646f",
+      "memberByteOffset": 2420351,
+      "archiveByteOffset": 57085680,
+      "fragment": "JIn=`px-[var(--thread-body-inline-padding,var(--padding-toolbar))]`,YIn=ng(`[--thread-content-max-width:var(--thread-content-responsive-max-width,inherit)]`,`[--thread-body-max-width:calc(var(--thread-content-max-width)+var(--thread-body-inline-padding,0px)*2)]`,`mx-auto w-full max-w-(--thread-body-max-width)`,JIn)})))()}var ZIn,QIn,$In,eLn;function tLn(){return(tLn=e((()=>{ZIn=`_composer_hs61p_1`,QIn=`_paused_hs61p_13`,$In=`_uploads_hs61p_18`,eLn={composer:ZIn,paused:QIn,uploads:$In}})))()}var nLn,rLn;function iLn(){return(iLn=e((()=>{nLn=`_shell_151xi_3`,rLn={shell:nLn}})))()}function aLn(){return(aLn=e((()=>{}"
+    }
+  ],
+  "projectSnapshot": [
+    {
+      "file": "apps/desktop/src/renderer/src/assets/main.css",
+      "sha256": "f52243b6d261ab8e8ff2d4da22dc1604d5b2f0603838a7d978c5557811351451"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/appearance/appearance-fonts.ts",
+      "sha256": "f5bf3239c758486c38ed9a9a1fd2f5fdcad33ef4365d4f18f658c066ebcdb8e0"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/appearance/appearance-preferences.ts",
+      "sha256": "6e88f9d86f3fd784166746f66e177961930a095cb130075625c2caa8ffc73309"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/appearance/appearance-provider.tsx",
+      "sha256": "08295cf940abea4e518fd15abd78ddc88c7f7cdc6ca27333d14eccb21fea0232"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/appearance/appearance-colors.ts",
+      "sha256": "18cb7d5d536f87c461a60964395f3b542ddfb889109ef58a70eb32a948a48c05"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx",
+      "sha256": "3b3214c7228f34c5a1ef98fc09aff60ffb891cc095a0571dc48d234e96522ddf"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx",
+      "sha256": "2eedff64de8c6ff0622ee4e7b54132e5298cf3d2ac92012d20f2ed38462896ae"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-components.tsx",
+      "sha256": "8949b479b09f1d4cdbd243dde9afa1fca0d4f32dbd5d884e2a6785f0174dfb86"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.tsx",
+      "sha256": "c89617080c99bf5987a2ffa9e63986bfc6ecd2343f99cba56782b03f0ea32ae9"
+    },
+    {
+      "file": "apps/desktop/src/renderer/src/components/ui/code-block.tsx",
+      "sha256": "5bdac803bc946e8504a94b02fcbbac4c88c4b5fd96b29ec33a733f79826c6d0a"
+    }
+  ],
+  "rea": {
+    "htmlSummaryEvidenceId": "ev_5e02d2be95c60a8fcd3252e8a2d39a831a023aa0142542d1d43b98169357afc1",
+    "htmlParentEvidenceId": "ev_6a8ef0331fb27e3bde3afd3342ba75401ce9e84dacd069d2ddc34337d6986bdb",
+    "partialJsEvidenceId": "ev_ebc91444d54565949780d91dd95f7f80cb232814cca63996ce419eafc32cac6a",
+    "partialJsSummaryEvidenceId": "ev_48fd14c2b1e9d01b4a3a7e4134fc87b3c3a0523e543bcb1fef4826fd7100e740",
+    "partialJsReason": "20,000 ms source analysis timeout. 2 of 4 JS files parsed. Incomplete semantic/call-flow coverage; not used to prove runtime rendering."
+  }
+}

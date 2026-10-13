@@ -12,7 +12,14 @@ import {
   MessageScrollerViewport,
 } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { cn } from "@renderer/lib/utils"
 import {
   areDesktopAttachmentsSendable,
@@ -227,7 +234,11 @@ function ConversationPane({
       if (hasSession) {
         await sendMessage(content, { document: draft, attachments })
       } else {
-        await startSession(content, { document: draft, attachments, ...(taskLocation !== "default" ? { taskLocation } : {}) })
+        await startSession(content, {
+          document: draft,
+          attachments,
+          ...(taskLocation !== "default" ? { taskLocation } : {}),
+        })
       }
     } catch (error) {
       if (goalMode)
@@ -492,7 +503,7 @@ function ConversationPane({
   )
 
   return (
-    <section className="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation">
+    <section className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation">
       {hasSession ? (
         <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -628,7 +639,7 @@ function ConversationPane({
                   onContextMenu={(event) => void openConversationTextMenu(event)}
                   className="overflow-x-hidden"
                 >
-                  <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
+                  <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 gap-6 pt-7 pb-5 text-content-foreground">
                     {openingSession && !sessionView ? null : (
                       <ConversationTranscript
                         tasks={sessionView?.tasks}
@@ -684,7 +695,7 @@ function ConversationPane({
               role="region"
               aria-label="待处理的授权请求"
               className={cn(
-                "mx-auto mb-2 w-[min(760px,calc(100%-32px))] shrink-0 px-px",
+                "conversation-composer-column mb-2 shrink-0",
                 singleAskUserPrompt
                   ? "overflow-visible"
                   : "max-h-[min(18rem,35vh)] scrollbar-thin overflow-y-auto"
@@ -720,11 +731,11 @@ function ConversationPane({
           ) : null}
 
           {archived ? (
-            <div className="mx-auto mb-5 flex h-12 w-[min(760px,calc(100%-32px))] shrink-0 items-center justify-center rounded-lg border border-border bg-background/90 text-xs text-muted-foreground shadow-sm">
+            <div className="conversation-composer-column mb-5 flex h-12 shrink-0 items-center justify-center rounded-lg border border-border bg-background/90 text-xs text-muted-foreground shadow-sm">
               {"此会话已归档，只能查看历史内容"}
             </div>
           ) : (
-            <div className="mx-auto mb-5 flex w-[min(760px,calc(100%-32px))] shrink-0 flex-col gap-2">
+            <div className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2">
               {goal && goalComposer.dismissedGoalId !== goal.id ? (
                 <GoalBanner
                   key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}
@@ -757,13 +768,38 @@ function ConversationPane({
                 onCancel={(inputId, queuedRunId) => void cancelQueuedPrompt(inputId, queuedRunId)}
                 onDismissLocal={dismissPromptSubmission}
               />
-              {!hasSession && selectedProject && !goalMode ? <div className="mb-3 flex flex-wrap items-center gap-3">
-                <label htmlFor="new-task-location" className="text-sm text-muted-foreground">任务工作位置</label>
-                <Select items={[{ value: "default", label: "按 Git 设置" }, { value: "current", label: "当前目录" }, { value: "worktree", label: "独立工作目录" }]} value={taskLocation} onValueChange={value => { if (value === "default" || value === "current" || value === "worktree") setTaskLocation(value) }}>
-                  <SelectTrigger id="new-task-location" disabled={sending} className="w-auto"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectGroup><SelectItem value="default">按 Git 设置</SelectItem><SelectItem value="current">当前目录</SelectItem><SelectItem value="worktree" disabled={!selectedProjectGit}>独立工作目录</SelectItem></SelectGroup></SelectContent>
-                </Select>
-              </div> : null}
+              {!hasSession && selectedProject && !goalMode ? (
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <label htmlFor="new-task-location" className="text-sm text-muted-foreground">
+                    任务工作位置
+                  </label>
+                  <Select
+                    items={[
+                      { value: "default", label: "按 Git 设置" },
+                      { value: "current", label: "当前目录" },
+                      { value: "worktree", label: "独立工作目录" },
+                    ]}
+                    value={taskLocation}
+                    onValueChange={(value) => {
+                      if (value === "default" || value === "current" || value === "worktree")
+                        setTaskLocation(value)
+                    }}
+                  >
+                    <SelectTrigger id="new-task-location" disabled={sending} className="w-auto">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="default">按 Git 设置</SelectItem>
+                        <SelectItem value="current">当前目录</SelectItem>
+                        <SelectItem value="worktree" disabled={!selectedProjectGit}>
+                          独立工作目录
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               <Composer
                 key={composerScope}
                 id="message-composer"

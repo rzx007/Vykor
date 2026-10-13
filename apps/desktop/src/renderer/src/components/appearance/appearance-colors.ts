@@ -39,7 +39,7 @@ export type AppearanceColorTokens = {
 }
 
 export const APPEARANCE_SURFACES = {
-  light: { background: "#FCFCFD", foreground: "#1B1B1B" },
+  light: { background: "#FFFFFF", foreground: "#1A1C1F" },
   dark: { background: "#181818", foreground: "#F2F2F2" },
 } as const
 

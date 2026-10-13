@@ -1,4 +1,4 @@
-import { CircleStop, PanelRightOpen, TerminalSquare } from "lucide-react"
+import { ChevronDown, CircleStop, PanelRightOpen, TerminalSquare } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import type { DesktopTerminalRecord } from "@shared/terminal-types"
 import { Button } from "@renderer/components/ui/button"
@@ -103,8 +103,47 @@ export function TerminalActivityCard({
       setStopping(false)
     }
   }
+  const settled =
+    availability === "ready" &&
+    !active &&
+    !error &&
+    (info.status === "completed" || info.status === "killed")
+
+  if (settled) {
+    return (
+      <section className="text-ui-small flex items-start gap-2 text-ui-muted">
+        <details className="group/terminal min-w-0 flex-1">
+          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-md hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+            <TerminalSquare aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.75} />
+            <span className="min-w-0 flex-1 truncate">{info.name}</span>
+            <span className="shrink-0 text-xs" role="status">
+              {label}
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5 shrink-0 transition-transform group-open/terminal:rotate-180 motion-reduce:transition-none"
+            />
+          </summary>
+          <p className="mt-1 border-l border-border/70 pl-3 text-xs break-all">
+            {info.command ?? info.cwd}
+          </p>
+        </details>
+        <Button
+          type="button"
+          variant="ghost"
+          shape="pill"
+          size="sm"
+          className="h-8 shrink-0"
+          onClick={() => onOpenTerminal(terminal.id)}
+        >
+          <PanelRightOpen data-icon="inline-start" />
+          打开终端
+        </Button>
+      </section>
+    )
+  }
   return (
-    <section className="text-ui-small overflow-hidden rounded-lg border border-border/80 bg-muted/18 shadow-sm">
+    <section className="text-ui-small overflow-hidden rounded-lg border border-border/80 bg-muted/18">
       <div className="flex min-h-16 items-center gap-3 px-3.5 py-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-ui-muted">
           <TerminalSquare className="size-[18px]" strokeWidth={1.7} />

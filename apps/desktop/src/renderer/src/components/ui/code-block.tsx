@@ -26,6 +26,7 @@ function injectStyles(): void {
 // -- Types --
 
 interface CodeBlockProps {
+  variant?: "default" | "conversation"
   code: string
   language?: string
   filename?: string
@@ -55,7 +56,7 @@ function CopyBtn({ code }: { code: string }): React.JSX.Element {
       aria-label="Copy code"
       onClick={copy}
       className={cn(
-        "-mr-1 ml-auto flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium transition-colors",
+        "-mr-1 ml-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none",
         copied
           ? "text-emerald-600 dark:text-emerald-400"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -74,6 +75,7 @@ function CopyBtn({ code }: { code: string }): React.JSX.Element {
 // -- Internal code renderer --
 
 interface RendererProps {
+  conversation: boolean
   code: string
   language: string
   showLineNumbers: boolean
@@ -84,6 +86,7 @@ interface RendererProps {
 }
 
 function CodeRenderer({
+  conversation,
   code,
   language,
   showLineNumbers,
@@ -136,10 +139,11 @@ function CodeRenderer({
           line-height: var(--code-line-height) !important;
           white-space: pre;
           word-break: normal;
+          ${conversation ? "padding: 0.7rem 0.85rem 0.9rem !important;" : ""}
         }
       `,
     }),
-    [showLineNumbers, themeType]
+    [conversation, showLineNumbers, themeType]
   )
 
   useEffect(() => {
@@ -211,6 +215,7 @@ function hashCode(value: string): string {
 // -- CodeBlock --
 
 export function CodeBlock({
+  variant = "default",
   code,
   language = "tsx",
   filename,
@@ -223,12 +228,20 @@ export function CodeBlock({
 }: CodeBlockProps): React.JSX.Element {
   return (
     <div
+      data-streamdown={variant === "conversation" ? "code-block" : undefined}
       className={cn(
-        "w-full overflow-hidden rounded-xl border border-border bg-muted/40 shadow-sm",
+        "w-full overflow-hidden",
+        variant === "default" && "rounded-xl border border-border bg-muted/40 shadow-sm",
         className
       )}
     >
-      <div className="flex h-11 items-center gap-2 border-b border-border px-4 text-[12.5px]">
+      <div
+        data-streamdown={variant === "conversation" ? "code-block-header" : undefined}
+        className={cn(
+          "flex min-w-0 items-center gap-2",
+          variant === "default" && "h-11 border-b border-border px-4 text-[12.5px]"
+        )}
+      >
         <span className="inline-flex min-w-0 items-center gap-[7px]">
           <CodeXml className="size-[15px] shrink-0 text-muted-foreground" strokeWidth={1.8} />
           <span className="truncate font-mono leading-none text-foreground">
@@ -238,6 +251,7 @@ export function CodeBlock({
         <CopyBtn code={code} />
       </div>
       <CodeRenderer
+        conversation={variant === "conversation"}
         code={code}
         language={language}
         showLineNumbers={showLineNumbers}

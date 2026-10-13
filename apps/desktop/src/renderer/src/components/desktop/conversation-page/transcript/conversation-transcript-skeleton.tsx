@@ -15,7 +15,7 @@ export function ConversationTranscriptSkeletonOverlay({
         loading ? "opacity-100" : "opacity-0 **:data-[slot=skeleton]:animate-none"
       )}
     >
-      <div className="mx-auto w-full max-w-190 px-6 pt-7 pb-5 text-content-foreground">
+      <div className="conversation-content-column pt-7 pb-5 text-content-foreground">
         <ConversationTranscriptSkeleton />
       </div>
     </div>

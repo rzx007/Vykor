@@ -425,6 +425,18 @@ describe("Activity state", () => {
     expect(result.state.sessions.other.attentionState).toBe("unread")
   })
 
+  it("does not mark an untracked historical result unread on startup", () => {
+    const restored = createActivityState({ lastObservedCursor: 10 })
+    const result = applyActivityUpdate(
+      restored,
+      update(10, "baseline", [session("historical", "completed", 4)]),
+      null
+    )
+
+    expect(result.state.sessions.historical.attentionState).toBe("read")
+    expect(result.state.readSeqBySessionId.historical).toBe(4)
+  })
+
   it("retains a completed result even when a newer run is already running at restart", () => {
     const restored = createActivityState({
       lastObservedCursor: 1,

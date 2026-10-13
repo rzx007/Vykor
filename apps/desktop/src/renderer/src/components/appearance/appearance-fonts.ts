@@ -9,11 +9,11 @@ export type AppearanceFontOption<Id extends string> = {
 }
 
 /**
- * 中文回退链：只在前面的拉丁字体缺字时生效，保证各平台中文落到确定的字体上。
+ * 中文优先使用平台字体；只有本机缺字时才使用 Noto / 思源回退。
  * 与 assets/main.css 的 @theme 字体栈保持一致。
  */
 const CJK_SANS_FALLBACK =
-  '"Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
 const CJK_MONO_FALLBACK = '"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", monospace'
 
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
@@ -21,7 +21,7 @@ export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
     id: "system",
     label: "系统默认",
     source: "system-generic",
-    family: `"Segoe UI Variable Text", "Segoe UI", ${CJK_SANS_FALLBACK}`,
+    family: `-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", ${CJK_SANS_FALLBACK}`,
   },
   {
     id: "inter",
