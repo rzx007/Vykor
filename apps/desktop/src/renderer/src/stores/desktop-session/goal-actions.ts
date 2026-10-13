@@ -38,6 +38,37 @@ function goalErrorMessage(error: unknown): string {
   return operation ? `正在${operation}，请稍后重试。` : "系统正在维护，请稍后重试。"
 }
 
+type GoalSessionState = {
+  goalsBySession: Record<string, SessionGoal | null>
+  goalComposersByScope: Record<string, GoalComposerState>
+}
+
+/**
+ * 删除会话时回收与该会话绑定的目标状态。
+ *
+ * `goalsBySession` 直接以 sessionId 为键；`goalComposersByScope` 则以
+ * `session:<id>` 为键，目标模式下还有 `goal-ordinary:session:<id>` 变体。
+ * 两者都按「访问过的会话数」增长，删除会话时不清就会一直留着。
+ */
+export function forgetSessionGoals(
+  state: GoalSessionState,
+  deleted: ReadonlySet<string>
+): GoalSessionState {
+  const deletedScopes = new Set<string>()
+  for (const sessionId of deleted) {
+    deletedScopes.add(sessionComposerScope(sessionId))
+    deletedScopes.add(`goal-ordinary:${sessionComposerScope(sessionId)}`)
+  }
+  return {
+    goalsBySession: Object.fromEntries(
+      Object.entries(state.goalsBySession).filter(([sessionId]) => !deleted.has(sessionId))
+    ),
+    goalComposersByScope: Object.fromEntries(
+      Object.entries(state.goalComposersByScope).filter(([scope]) => !deletedScopes.has(scope))
+    ),
+  }
+}
+
 export function createGoalActions({ get, set }: DesktopStoreContext): GoalActions {
   const reads = new Map<string, Promise<void>>()
   const generations = new Map<string, number>()
