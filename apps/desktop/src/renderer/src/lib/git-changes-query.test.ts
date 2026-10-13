@@ -136,4 +136,27 @@ describe("queryGitChanges", () => {
     resolveRequest(emptyResult("D:/repo"))
     await Promise.all([first, second])
   })
+
+  it("caps the cache so switching projects and scopes cannot grow without bound", async () => {
+    vi.useFakeTimers()
+    const changes = vi.fn(({ rootPath }: DesktopGitChangesInput) =>
+      Promise.resolve(emptyResult(rootPath))
+    )
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { git: { changes } },
+    })
+
+    for (let index = 0; index < 30; index += 1)
+      await queryGitChanges({ rootPath: `D:/repo-${index}` })
+    expect(changes).toHaveBeenCalledTimes(30)
+
+    // 最早查询过的 root 已被淘汰，需要重新请求。
+    await queryGitChanges({ rootPath: "D:/repo-0" })
+    expect(changes).toHaveBeenCalledTimes(31)
+
+    // 最近查询过的 root 仍在缓存里，不应再发请求。
+    await queryGitChanges({ rootPath: "D:/repo-29" })
+    expect(changes).toHaveBeenCalledTimes(31)
+  })
 })
