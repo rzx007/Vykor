@@ -788,81 +788,82 @@ export function ChangedFilesSummary({
 
   if (totalCount === 0) return null
 
-  const hasReviewAction = canOpenReview && selectedProjectPath && hasReviewableFile
-
   return (
-    <section aria-label="文件编辑摘要" className="text-ui-small relative text-ui-muted">
-      <details
-        className="group/changed-files"
-        onToggle={(event) => setExpanded(event.currentTarget.open)}
-      >
-        <summary
-          className={cn(
-            "flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-md hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden",
-            hasReviewAction && "pr-24"
-          )}
-        >
-          <FileCode2 aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.75} />
-          <span className="min-w-0 flex-1 truncate">
+    <section
+      aria-label="文件编辑摘要"
+      className="text-ui-small overflow-hidden rounded-lg border bg-transparent"
+    >
+      <header className="flex min-h-15 items-center gap-3 px-4 py-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted/75 text-ui-muted">
+          <FileCode2 className="size-[18px]" strokeWidth={1.7} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-foreground">
             已编辑 {totalCount} 个文件
-            {observation?.truncated ? " · 摘要已截断" : null}
-          </span>
+            {observation?.truncated ? (
+              <span className="font-normal text-ui-muted"> · 摘要已截断</span>
+            ) : null}
+          </h3>
           {statsFiles.length > 0 ? (
-            <span className="shrink-0 font-mono tabular-nums">
+            <p className="mt-0.5 font-mono tabular-nums">
               <span className="text-diff-addition">+{additions}</span>{" "}
               <span className="text-destructive">-{deletions}</span>
-            </span>
+            </p>
           ) : null}
-          <ChevronDown
-            aria-hidden="true"
-            className="size-3.5 shrink-0 transition-transform group-open/changed-files:rotate-180 motion-reduce:transition-none"
-          />
-        </summary>
-        <div className="mt-1 max-h-80 space-y-0.5 overflow-y-auto border-l border-border/70 pl-3">
-          {(expanded ? filesWithStats : filesWithStats.slice(0, 3)).map((file) => {
-            const storedLines = storedLinesByPath.get(
-              changedFilePathKey(file.path, selectedProjectPath)
-            )
-            return (
-              <button
-                key={file.path}
-                type="button"
-                onClick={() =>
-                  routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
-                    ? observation
-                      ? onOpenReview(file.path, "uncommitted", observation.repositoryRoot)
-                      : onOpenReview(file.path)
-                    : onOpenFile(
-                        selectedProjectPath && !isAbsoluteChangedPath(file.path)
-                          ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}`
-                          : file.path
-                      )
-                }
-                title={file.path}
-                className="flex h-8 w-full items-center gap-3 rounded-md px-2 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset motion-reduce:transition-none"
-              >
-                <span className="min-w-0 flex-1 truncate">{file.path}</span>
-                {file.hasStats ? (
-                  <LineStats additions={file.additions} deletions={file.deletions} />
-                ) : storedLines !== undefined ? (
-                  <span className="shrink-0 text-xs text-ui-muted">{storedLines} 行变化</span>
-                ) : null}
-              </button>
-            )
-          })}
         </div>
-      </details>
-      {hasReviewAction ? (
-        <Button
+        {canOpenReview && selectedProjectPath && hasReviewableFile ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            shape="pill"
+            onClick={() => onOpenReview(undefined, "uncommitted", selectedProjectPath)}
+          >
+            查看变更
+          </Button>
+        ) : null}
+      </header>
+      <div className="border-t">
+        {(expanded ? filesWithStats : filesWithStats.slice(0, 3)).map((file) => {
+          const storedLines = storedLinesByPath.get(
+            changedFilePathKey(file.path, selectedProjectPath)
+          )
+          return (
+            <button
+              key={file.path}
+              type="button"
+              onClick={() =>
+                routeChangedFileClick(file.path, selectedProjectPath, canOpenReview) === "review"
+                  ? observation
+                    ? onOpenReview(file.path, "uncommitted", observation.repositoryRoot)
+                    : onOpenReview(file.path)
+                  : onOpenFile(
+                      selectedProjectPath && !isAbsoluteChangedPath(file.path)
+                        ? `${selectedProjectPath.replace(/[\\/]$/, "")}/${file.path}`
+                        : file.path
+                    )
+              }
+              title={file.path}
+              className="flex h-11 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm text-ui-muted">{file.path}</span>
+              {file.hasStats ? (
+                <LineStats additions={file.additions} deletions={file.deletions} />
+              ) : storedLines !== undefined ? (
+                <span className="shrink-0 text-xs text-ui-muted">{storedLines} 行变化</span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+      {!expanded && filesWithStats.length > 3 ? (
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          shape="pill"
-          className="absolute top-0 right-0 h-8"
-          onClick={() => onOpenReview(undefined, "uncommitted", selectedProjectPath)}
+          onClick={() => setExpanded(true)}
+          className="flex h-9 items-center gap-2 px-3 font-medium text-ui-muted hover:text-foreground"
         >
-          查看变更
-        </Button>
+          再显示 {filesWithStats.length - 3} 个文件 <ChevronDown className="size-3.5" />
+        </button>
       ) : null}
     </section>
   )

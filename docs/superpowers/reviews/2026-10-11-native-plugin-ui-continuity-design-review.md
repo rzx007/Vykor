@@ -1,6 +1,7 @@
 # Native Plugin UI 固定位置设计审查记录
 
 > 日期：2026-10-11
+> 修订：2026-10-13；下方第 1–3 节是先前审查记录，不代表新的无兼容方案已通过。当前状态见第 4 节。
 > 审查对象：[设计文档](../specs/2026-10-11-native-plugin-ui-continuity-design.md)
 > 审查方式：独立子代理 `review_ui_design` 只读核对现有代码，主代理修订后再做聚焦复核。
 > 本记录是设计审查，不是实现验收；本轮没有改运行代码、运行应用测试或提交代码。
@@ -44,3 +45,18 @@
 - 实例 GET 顶层可选 conversation 字段不进入旧 snapshot/instance；新 main 严格验证两个布尔值，缺失默认关闭。HTTP 组合层不让原实例服务反向依赖交接服务，POST 仍完整复查。
 
 实现时仍须以针对性测试验证上述判断，特别是容量竞争、隐藏与关闭的区别、SQLite 原子性、生命周期竞态、旧 SDK 兼容与真实 Electron 隔离。文档审查不替代这些证据。
+
+## 4. 2026-10-13：无兼容修订，独立复核待完成
+
+用户明确“不做兼容”，本次设计取消第 1–3 节中关于旧协议的安排：
+
+- 组件定义与实例使用单值 surface；不接受 surfaces 数组或字段别名，不保留旧实例宽读取。
+- SDK、桥接和宿主彻底移除 openSidebar；不保留旧消息的聚焦行为。
+- appearance 与 capabilities 必填进入 snapshot；取消独立 presentation 通道、opt-in、方法缺失 fallback 和旧字段补齐。
+- UI schemaVersion / 桥接 version 使用现行 2，daemon pluginUi: 2 精确匹配；只维护当前契约，不自动迁移或删除历史。
+- 实例 GET 的 conversation 必填；main 返回业务 snapshot，renderer 用实际外观与可见性组合出完整网页 snapshot，避免 main 读取 CSS 或提供硬编码主题。
+- 相同业务 revision 的样式/能力变化仍通知插件，但不重建本地表单；固定位置、隐藏保留、容量拒绝和交接安全规则不变。
+
+子代理两次复核请求均返回“Selected model is at capacity”，没有得到本轮审核意见。当前只有主代理的文档自检，不能记为独立审核通过。此前通过的兼容设计已被用户的新要求取代；无兼容设计完成独立复核并修订后，才能整体重写实施计划。
+
+本次没有修改运行代码，没有运行应用测试，也没有提交或推送。

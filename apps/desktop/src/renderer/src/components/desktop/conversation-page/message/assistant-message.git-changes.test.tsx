@@ -46,7 +46,7 @@ afterEach(() => {
     .IS_REACT_ACT_ENVIRONMENT
 })
 
-it("keeps changed-file details collapsed until requested and lets them close again", async () => {
+it("shows the changed-file card and its first files without collapsing the card", async () => {
   const onOpenFile = vi.fn()
   await act(async () => {
     root.render(
@@ -64,17 +64,19 @@ it("keeps changed-file details collapsed until requested and lets them close aga
     )
   })
 
-  const details = container.querySelector("details")
-  expect(details).not.toBeNull()
-  expect(details!.open).toBe(false)
-  const summary = details!.querySelector("summary")!
-  expect(summary.textContent).toContain("已编辑 4 个文件")
-  await act(async () => summary.click())
-  expect(details!.open).toBe(true)
-  await act(async () => rowButton(details!, "D:/outside/d.ts").click())
+  const card = container.querySelector('section[aria-label="文件编辑摘要"]')
+  expect(card).not.toBeNull()
+  expect(card!.querySelector("details")).toBeNull()
+  expect(card!.textContent).toContain("已编辑 4 个文件")
+  expect(card!.textContent).toContain("D:/outside/a.ts")
+  expect(card!.textContent).toContain("D:/outside/c.ts")
+  expect(card!.textContent).not.toContain("D:/outside/d.ts")
+  await act(async () => rowButton(card!, "D:/outside/c.ts").click())
+  expect(onOpenFile).toHaveBeenCalledWith("D:/outside/c.ts")
+  await act(async () => rowButton(card!, "再显示 1 个文件").click())
+  expect(card!.textContent).toContain("D:/outside/d.ts")
+  await act(async () => rowButton(card!, "D:/outside/d.ts").click())
   expect(onOpenFile).toHaveBeenCalledWith("D:/outside/d.ts")
-  await act(async () => summary.click())
-  expect(details!.open).toBe(false)
 })
 
 it("shares one git request across changed-file summaries", async () => {

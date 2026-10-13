@@ -1,7 +1,8 @@
 # Native Plugin UI：固定展示位置、统一外观与会话交接
 
 > 日期：2026-10-11
-> 状态：按用户确认的“每个组件固定一个位置”修订，已完成本轮子代理复核并修正其问题；本文不代表功能已经实现。
+> 修订：2026-10-13；用户明确“不做兼容”，本轮只维护一套现行契约。
+> 状态：无兼容方案已修订，等待本轮聚焦复核；此前的兼容设计不再适用。本文不代表功能已经实现。
 > 基线：OpenHarness `feb050a3`；本地 Rome 对照仓库 `3ddf88cb`。
 > 前置规格：[插件 UI 完整规格](./2026-10-02-native-plugin-ui-design.md)。本文是增量设计，不重做已经交付的 A1–A4。
 > 配套：[实施计划](../plans/2026-10-11-native-plugin-ui-continuity.md) · [设计审查记录](../reviews/2026-10-11-native-plugin-ui-continuity-design-review.md)。
@@ -17,6 +18,8 @@
 3. 用户可以把插件内容加入当前输入框，或者确认后作为一条普通消息提交给助手。
 
 不加入独立应用页面、直接启动插件任务、插件 HTTP API、数据库迁移、应用商店、第三种展示位置、跨组件路由、跨插件工具调用或新的模型运行系统。LSP 继续暂缓。转换后的插件仍按 Native Plugin 管理，没有专用 UI 运行路径。
+
+不保留旧 UI manifest、SDK、桥接或历史实例读取分支，不增加字段别名、自动转换或数据迁移。插件作者与 Desktop / daemon 使用同一现行契约；版本不匹配时明确拒绝，不继续提供部分 UI 能力。保留普通文字结果与安全错误展示，不因此删除会话历史。
 
 ## 2. 从 Rome 借什么，不借什么
 
@@ -47,8 +50,8 @@ Rome 的页面模块与宿主共享 JavaScript 环境，部分 iframe 也没有 
 
 | 现状 | 源码位置 | 增量变化 |
 | --- | --- | --- |
-| snapshot 只有浅色/深色与位置 | `packages/protocol/src/plugin-ui-bridge.ts` | 另加可选 presentation 信息，不向旧 snapshot 塞新字段 |
-| manifest 的 surfaces 允许两项 | `packages/plugins/src/components/ui-schema.ts` | 新组件定义只允许一项，不另建一套字段 |
+| snapshot 只有浅色/深色与位置 | `packages/protocol/src/plugin-ui-bridge.ts` | 直接加入必填 appearance / capabilities，不另建 presentation 通道 |
+| manifest 的 surfaces 允许两项 | `packages/plugins/src/components/ui-schema.ts` | 删除数组字段，直接使用单值 surface |
 | SDK 没有外观扩展或会话交接 | `packages/plugins/src/ui-sdk.ts` | 新增外观与主动交接 API，不增加读取表单的接口 |
 | 移动或容量淘汰会重建/卸载 iframe | Desktop `plugin-ui-provider.tsx`、`plugin-ui-frame.tsx`；main `document-store.ts` | 移除移动入口与自动淘汰；保持当前面板暂时隐藏时的挂载 |
 | 普通输入已支持持久 Input + Run 和去重 | Server `run-admission-service.ts`、`run-admission-work.ts` | 复用保存与派发，不让 UI 服务调用模型 |
@@ -88,68 +91,80 @@ Server 只抽取现有来源校验供交接服务调用，以及一个无插件�
 
 来源校验提供三个窄入口：`readConversationSource` 只读取并验证真实来源 Part；`prepareConversationSource` 复用安装、授权、摘要和维护检查，并按 draft/submit 判断可用性；`assertConversationSourceCurrent` 在异步准备结束后同步复查来源、revision、维护标记与插件代次。它们不允许写入或执行工具。
 
-交接可用性不能直接复用 `canInvoke`、`snapshot.readOnly` 或 `assertActionState`：draft 允许 open/resolved、不要求模型或 Native Host 成功启动；submit 要求 open 和可用模型，普通 Run 忙碌不阻止排队。两者都要求真实有效来源、已有 UI 授权与精确文件摘要，都拒绝 dismissed、归档/关闭会话、进行中或结果未知的 action。保留现有 UI 安装授权条件，不在本阶段另建权限类型。presentation 的两个交接能力也据此判断；旧工具 action 的限制不变。
+交接可用性不能直接复用 `canInvoke`、`snapshot.readOnly` 或 `assertActionState`：draft 允许 open/resolved、不要求模型或 Native Host 成功启动；submit 要求 open 和可用模型，普通 Run 忙碌不阻止排队。两者都要求真实有效来源、已有 UI 授权与精确文件摘要，都拒绝 dismissed、归档/关闭会话、进行中或结果未知的 action。保留现有 UI 安装授权条件，不在本阶段另建权限类型。snapshot 的两个交接能力也据此判断；工具 action 的限制不变。
 
-能力传递复用现有实例 GET：HTTP 组合层可在 `PluginUiInstanceResponse` 增加可选 `conversation: { draft: boolean; submit: boolean }`，由交接服务根据该次已验证的实例/availability 与模型配置事实计算。旧客户端忽略这个响应字段，旧 snapshot 不变；main 严格验证两个布尔值，缺失时默认关闭，再传入 HostState，renderer 结合 daemon 能力和可见性生成 presentation。该提示不是接收授权，POST 仍完整复查。不要为了按钮状态反复提交占位 prepare 请求，也不增加第四条能力路由或让原实例服务依赖交接服务。
+能力传递复用现有实例 GET：HTTP 组合层在 `PluginUiInstanceResponse` 增加必填 `conversation: { draft: boolean; submit: boolean }`，由交接服务根据该次已验证的实例/availability 与模型配置事实计算。main 严格验证两个布尔值，字段缺失或类型错误就是契约错误，不默认补齐；renderer 结合服务装配状态与可见性形成 snapshot.capabilities。该提示不是接收授权，POST 仍完整复查。不要为了按钮状态反复提交占位 prepare 请求，也不增加第四条能力路由或让原实例服务依赖交接服务。实施中的未装配模块显式返回两个 false，不以省略字段代表关闭。
+
+appearance 只能在 renderer 读取实际 CSS。Desktop 内部 `PluginUiHostState.snapshot` 使用 `Omit<PluginUiViewSnapshot, "appearance" | "capabilities">` 表示 main 返回的业务部分，HostState 另带必填 conversation；Frame 每次用当前外观、交接事实和可见性组合出完整 snapshot 再交给 bridge。main 不读取 DOM、不硬编码主题默认值；这只是内部接线类型，不是第二条网页协议或兼容解析器。
 
 ## 5. 外观与两种位置
 
 ### 5.1 每个组件固定一个位置
 
-沿用现有 manifest 的 `surfaces` 字段，但在组件定义中严格要求数组恰好包含一项。这样不增加字段别名、转换层或旧历史数据迁移。示例：
+组件定义直接使用必填单值 `surface`，不存在数组、默认位置或 `surfaces` 别名。UI manifest 使用 schemaVersion 2，完整文件示例：
 
 ```json
 {
-  "id": "text-inspector",
-  "title": "文本格式检查",
-  "entry": "./ui/panel.html",
-  "surfaces": ["session-sidebar"],
-  "actions": []
+  "schemaVersion": 2,
+  "components": [{
+    "id": "text-inspector",
+    "title": "文本格式检查",
+    "entry": "./ui/panel.html",
+    "surface": "session-sidebar",
+    "actions": []
+  }]
 }
 ```
 
-一个插件可以另外定义 `surfaces: ["tool-result"]` 的摘要组件。两者是独立组件，不是同一界面的两种布局，也不在本阶段增加组件之间跳转或共享未提交表单的机制。
+一个插件可以另外定义 `surface: "tool-result"` 的摘要组件。两者是独立组件，不是同一界面的两种布局，也不在本阶段增加组件之间跳转或共享未提交表单的机制。
 
-新加载的 Native UI manifest 声明零项、两项或未知位置时，返回可修复的校验错误，要求作者选择一个位置；不静默取第一项。已安装的单位置定义无需修改。旧的双位置定义需作者改为单位置并更新插件，期间保留文字结果与管理诊断，不继续提供双位置模式。此错误只使 UI 定义不可用，不以此拒绝整个插件的其他合法技能或工具。
+缺失 surface、使用数组/别名、未知位置或非现行 schemaVersion 时拒绝 UI 定义，提示作者按现行规范重新构建插件；不猜测、不转换、不接受旧的单位置数组。此错误只使 UI 定义不可用，不以此拒绝整个插件的其他合法技能或工具。
 
-持久化的 `PluginUiInstanceRecord` 保留现有读取形状，不批量重写会话历史或旧摘要。新实例只能来自单位置定义；挂载必须校验当前组件的唯一位置、实例记录及其摘要，不能仅凭历史记录中的数组或客户端请求放行另一位置。不匹配的旧实例显示文字结果，不自动重新绑定到修改后的组件。
+`PluginUiInstanceRecord` 同样改为必填单值 surface，严格读取现行 schemaVersion。挂载校验当前组件、实例位置和摘要，不能由客户端选另一位置。不匹配的记录报 UI 不可用并保留来源工具文字，不解析旧形状、不重写历史，也不将旧实例绑定到新定义。
 
 工具结果中的宿主卡片按声明提供“展开界面”或“打开面板”。右侧组件的卡片不是另一个内联 UI；它只保留结果摘要和打开入口。工具完成不自动展开或抢走当前右侧标签。重复打开同一实例只显示/聚焦原挂载，不重建 iframe。
 
-移除“移到侧栏 / 移回内联”入口。新 SDK 不再提供 `openSidebar` 公共方法；宿主只为已安装旧 SDK 保留同名消息的窄处理：来自可见、有效且固定为侧栏的挂载时，聚焦自身已打开的面板。内联组件调用它返回现有位置不支持错误，不打开其他组件、不移动挂载。
+移除“移到侧栏 / 移回内联”入口与 `openSidebar` SDK 方法、桥接方法和宿主处理器。任何此方法请求均按未知方法拒绝，不保留旧消息的聚焦或移动行为。打开/聚焦面板由宿主卡片入口负责。
 
 ### 5.2 宿主提供什么
 
 外观来源是当前 Desktop 已应用的语义变量与外观设置，不从插件 manifest 生成另一套主题。
 
-`PluginUiPresentation` 的核心形状：
+外观直接随 `PluginUiViewSnapshot` 初始化和更新，不提供 getPresentation / onPresentation 或单独的 presentation 通知。外观类型与 snapshot 的关键字段如下：
 
 ```ts
-interface PluginUiPresentation {
-  kind: "presentation";
-  appearance: {
-    theme: "light" | "dark";
-    colors: {
-      background: string; foreground: string; muted: string;
-      mutedForeground: string; primary: string; primaryForeground: string;
-      accent: string; border: string; destructive: string;
-    };
-    fontFamily: string; fontSizePx: number; reducedMotion: boolean;
+interface PluginUiAppearance {
+  theme: "light" | "dark";
+  colors: {
+    background: string; foreground: string; muted: string;
+    mutedForeground: string; primary: string; primaryForeground: string;
+    accent: string; border: string; destructive: string;
   };
+  fontFamily: string; fontSizePx: number; reducedMotion: boolean;
+}
+interface PluginUiViewSnapshot {
+  instanceId: string; revision: number; status: "open" | "resolved" | "dismissed";
+  data: Record<string, JsonValue>;
+  actions: Array<{ id: string; label: string; completion: "keep-open" | "resolve" }>;
+  readOnly: boolean; locale: string; surface: "tool-result" | "session-sidebar";
+  activeAction?: PluginUiActionReceipt;
+  lastAction?: { receipt: PluginUiActionReceipt;
+    executionState: "not_started" | "completed" | "unknown"; message: string };
+  appearance: PluginUiAppearance;
   capabilities: { draft: boolean; submit: boolean };
 }
 ```
 
 颜色采用宿主实际值，字体只提供 CSS 字体族与字号；iframe 无法访问宿主已加载的字体资源时使用系统字体，不声称字体文件完全一致。值严格限长，禁止 URL、CSS 规则片段与任意属性；SDK 逐个设置白名单变量，不拼接 `cssText`。
 
-现有包新增可选 `ui-styles.css`，作者可以在构建单文件 HTML 时内联它。它提供背景、文字、按钮、字段、列表、焦点等最小基础规则，使用 `--ohs-*` 变量。不引入 React 组件库、Tailwind 编译约定、插件专用设计系统或强制覆盖作者的所有 CSS。宿主可以统一默认值，不能保证旧插件立即采用它。
+现有包新增可选 `ui-styles.css`，作者可以在构建单文件 HTML 时内联它。它提供背景、文字、按钮、字段、列表、焦点等最小基础规则，使用 `--ohs-*` 变量。不引入 React 组件库、Tailwind 编译约定、插件专用设计系统或强制覆盖作者的所有 CSS。stylesheet 是作者的样式选择，不是旧协议兼容开关。删除 snapshot 顶层重复 theme 字段，只以 appearance.theme 为准。
 
 ### 5.3 展示规则
 
 - 宿主卡片已经显示组件标题，插件正文不重复大标题、插件名和操作状态。
 - 作者为紧凑摘要、关键列表和少量操作选择内联；为多字段编辑、持续筛选和长列表选择侧栏。宿主不替作者动态改变位置。
 - 切换右侧工具标签和折叠面板只暂时隐藏当前侧栏，不视为关闭插件显示。仅当前唯一的 sidebar display 保持挂载与原 key，隐藏时仍计入两帧限额。
-- 隐藏不等于挂载失效：snapshot 与已接收请求的回执继续同步；隐藏期间拒绝新 action、dismiss、交接以及旧 SDK 的聚焦请求，取消待确认请求，并在真正发送前复查可见性。已接收的操作不因隐藏而取消。容器使用 hidden/display:none 或 inert，不能仅用透明度阻止键盘焦点。
+- 隐藏不等于挂载失效：snapshot 与已接收请求的回执继续同步；隐藏期间拒绝新 action、dismiss 和交接，取消待确认请求，并在真正发送前复查可见性。已接收的操作不因隐藏而取消。容器使用 hidden/display:none 或 inert，不能仅用透明度阻止键盘焦点。
 - 同一 owner 最多两个 iframe、最多一个侧栏。打开其他侧栏或第三个界面时拒绝新打开并提示先关闭已有界面，保留已有 iframe；renderer 和 main 均不再自动替换或淘汰。无需读取表单、判断是否编辑过或增加草稿确认框架。
 - 不同实例的侧栏加载不再共用“后一次覆盖前一次”的 opening 身份；保留同实例过期加载检查。`document-store.register` 在任何写入或撤销前，同步检查同实例占用、侧栏占用和两帧容量；竞争失败只拒绝该请求，不影响其他加载或已挂载文档。拒绝时不改变原显示列表、活动标签与焦点，不增加新的协调框架。
 - 默认文字与控件遵守 `apps/desktop/DESIGN.md`；普通结果不叠大 Card、厚边框和阴影。
@@ -160,7 +175,7 @@ interface PluginUiPresentation {
 
 插件用自己的 DOM / JavaScript 状态维护勾选、筛选、输入文字和滚动位置，无需提供“读取当前草稿”的函数。宿主不增加 `captureViewState`、`setViewState`、捕获通知或表单缓存，也不读取 iframe DOM。
 
-`snapshot.data` 仍是已提交业务数据，来自后台 Part。未提交的本地表单不进入 SQLite、模型上下文、日志、安装目录或 `PluginUiInstanceRecord`。业务 revision 更新时，作者通过既有 snapshot 订阅处理新数据，不承诺自动合并旧表单。
+`snapshot.data` 仍是已提交业务数据，来自后台 Part。未提交的本地表单不进入 SQLite、模型上下文、日志、安装目录或 `PluginUiInstanceRecord`。业务 revision 更新时，作者通过 snapshot 订阅处理新数据，不承诺自动合并旧表单。相同 revision 的外观或能力更新只调整样式和按钮，不重建表单或清空输入；参考插件必须把这两类更新分开处理。
 
 | 操作 | iframe / 本地表单 | 后台业务记录 |
 | --- | --- | --- |
@@ -235,22 +250,30 @@ Server 的流程：
 
 生成的消息正文明确分成“用户说明”和“插件提供的数据”，实际插件/组件来源由后台填写。所有内容是普通用户输入中的外部数据，不提升为系统指令、不提取内嵌指令执行；正文按固定顺序序列化并受限额约束，确认预览与保存正文必须一致。
 
-## 8. 协议演进与旧插件
+## 8. 只维护现行协议
 
-继续使用已有桥接 envelope version 1 与 ready/init 格式。不要更改原 `getSnapshot` 的严格字段；已安装 SDK 对未知 snapshot 字段会报错。
+本阶段是破坏性更新，不协商旧形状，也不在当前解析器中接受多个版本。版本边界如下：
+
+| 契约 | 现行规则 |
+| --- | --- |
+| UI manifest、工具 UI proposal、持久实例与 UI action 关联记录 | schemaVersion 2；位置字段仅为 surface |
+| ready/init、桥接请求、响应与通知 | version 2；单一严格解析路径 |
+| daemon UI 基础能力 | pluginUi: 2；Desktop 在加载文档前要求精确匹配，不回落到 1 |
+| 新交接服务 | 装配后公布 pluginUiConversation: 1；实例响应的 conversation 字段始终必填 |
+
+上述改动只针对 Plugin UI，不改变 Native Plugin 根 manifest、全局 daemon 协议或数据库表结构。已有生命周期能力的检查与语义继续保留。宿主新写入的 pluginUiSubmission 使用现行 UI schemaVersion 2，没有旧回执读取分支。
 
 新增：
 
-- `getPresentation({})`：返回独立的 `kind: "presentation"` 对象，标明交接能力。只有调用成功后才向该端口推送 `presentation` 通知，不协商表单状态。
 - `requestConversation({ mode, expectedRevision, text, data })`：返回带 `kind: "conversation"` 的回执。draft 返回已加入标识；submit 返回宿主 requestId、inputId、runId、revision 与 Run 状态。
 
-SDK 的公共入口如下。创建 client 不接收草稿回调；原 snapshot、action、resize、dismiss 等方法保留，移除动态移动位置的公共方法：
+SDK 使用现行 snapshot 的必填字段。创建 client 不接收草稿回调；工具 action、resize、dismiss 等已有业务功能保留，但不是旧协议的实现分支：
 
 ```ts
 createPluginUiClient(): Promise<PluginUiClient>;
-// 以下方法加入现有 PluginUiClient。
-getPresentation(): Promise<PluginUiPresentation | null>;
-onPresentation(listener: (value: PluginUiPresentation) => void): () => void;
+getSnapshot(): Promise<PluginUiViewSnapshot>;
+onSnapshot(listener: (value: PluginUiViewSnapshot) => void): () => void;
+applyPluginUiAppearance(value: PluginUiAppearance, root?: HTMLElement): void;
 requestConversation(input: PluginUiConversationRequest): Promise<PluginUiConversationReceipt>;
 
 type PluginUiConversationReceipt =
@@ -260,13 +283,13 @@ type PluginUiConversationReceipt =
       status: "pending" | "running" | "completed" | "failed" | "interrupted" };
 ```
 
-作者在首次 getPresentation 成功后应用外观并订阅 onPresentation；订阅立即回放已有 presentation，后续外观或交接可用性更新收到新值。返回 null 仅表示宿主明确不支持该方法，其他超时或无效消息照常报错。receipt 的 instanceId 必须匹配本挂载；draft 的 revision 等于请求版本，submit 的 revision 等于成功接收后的新版本，不因晚到旧 snapshot 而回退。
+作者通过 getSnapshot / onSnapshot 读取业务数据、appearance 和 capabilities，在页面内部应用外观；applyPluginUiAppearance 是 SDK 导出的独立样式辅助函数，不是桥接请求或 PluginUiClient 方法。主题或可见性变化推送相同业务 revision 的新 snapshot，SDK 不得仅因 revision 相等就丢弃更新。无 opt-in、null fallback、可选字段补齐或方法缺失时继续运行的分支。receipt 的 instanceId 必须匹配本挂载；draft 的 revision 等于请求版本，submit 的 revision 等于成功接收后的新版本，不因晚到 snapshot 而回退。
 
 requestConversation 与 requestAction/dismiss 共用一次确认互斥、五分钟确认限额及 330 秒请求时限，取消与端口撤销语义一致，不能落入普通 30 秒请求时限。
 
-Bridge parser 增加明确分支与严格字段，而不是接受任意 result 对象。新 SDK 对老宿主明确返回的 method-not-supported 结果关闭可选能力，基础 snapshot/action 保持可用；不尝试替代写法或绕过旧错误。旧 SDK 从未 opt-in，不接收新通知。
+Bridge parser 对现行 snapshot、工具 action 回执和 conversation 回执使用明确分支与严格字段，而不是接受任意 result 对象。未知方法、旧 envelope、旧字段和缺失必填字段直接报契约错误；不尝试另一种写法。
 
-Daemon 独立公布 `pluginUiConversation: 1`，只有交接服务已装配时开启；不修改既有 `pluginUi: 1` 的含义。外观与当前面板的挂载保留不依赖 daemon 新能力，交接按钮在新 Desktop 连旧 daemon 时不可用。
+服务尚未装配、权限不足或模型未配置，可以在已匹配的现行协议中明确关闭业务能力；这不是跨版本降级。与 pluginUi: 2 不匹配的 daemon 直接拒绝整个 UI 挂载，提示更新，不仅仅隐藏交接按钮。
 
 后台新增三条有类型的路由：两个 POST 由有效 mount 所有权校验后的 Desktop main 调用；只读 GET 使用宿主已记录请求的 owner/来源绑定校验，不要求 mount 存活。
 
@@ -278,12 +301,12 @@ GET  /sessions/:sessionId/plugin-ui/:instanceId/conversation/submissions/:reques
 
 prepare 不产生持久记录；submit 请求额外带宿主 requestId；GET 仅查已接收事实。客户端添加三个对应方法。请求/回执类型放在小文件 `packages/protocol/src/plugin-ui-conversation.ts`，桥接文件只引用它，不承载业务规则。
 
-## 9. 错误与降级
+## 9. 错误与拒绝行为
 
 | 情况 | 行为 |
 | --- | --- |
-| 单位置旧插件、旧宿主或交接能力未开 | 保持基础 UI/action；不显示不可用的新提交操作 |
-| 双位置定义或请求错误位置 | 拒绝加载/挂载，给出选择单一位置的提示；保留文字结果 |
+| 非现行 manifest / SDK / daemon / UI 记录 | 明确拒绝，提示按现行规范更新；无旧读取、字段转换或部分 UI 运行 |
+| surface 缺失、数组/别名或请求错误位置 | 拒绝加载/挂载，给出单值字段提示；保留文字结果 |
 | 外观读取异常 | 使用 SDK 内置中性默认值；不让 UI 因主题失效而无法使用 |
 | 面板被占用或达到两帧上限 | 拒绝新打开，提示先关闭已有界面；不自动挤掉旧界面 |
 | revision 已变化 | 拒绝旧交接；通过 snapshot 读取业务数据，由插件处理本地表单 |
@@ -296,14 +319,14 @@ prepare 不产生持久记录；submit 请求额外带宿主 requestId；GET 仅
 | 数据库事务失败 | Input、Run、回执和 resolved 状态全部不提交 |
 | 已接收但派发/模型运行失败 | 保留原 Input/Run/回执，展示失败或中断，不自动重放 |
 
-错误采用现有 code/message 结构，新增 `plugin_ui_capacity_reached`、`plugin_ui_conversation_unavailable`；已有位置、revision、来源、生命周期和忙碌错误继续复用，不另造一套错误系统。
+错误采用现有 code/message 结构，新增 `plugin_ui_protocol_mismatch`、`plugin_ui_capacity_reached`、`plugin_ui_conversation_unavailable`；已有位置、revision、来源、生命周期和忙碌错误继续复用，不另造一套错误系统。
 
 ## 10. 验收与改动控制
 
 | 可观察结果 | 必须有的证据 |
 | --- | --- |
-| 外观实时变化，旧 snapshot 兼容 | protocol/SDK 严格解析与新旧端组合测试；外观白名单测试 |
-| 每个组件只有一个位置，宿主不提供移动入口 | manifest 单项校验、卡片入口、错误位置挂载及旧消息边界测试 |
+| 外观和可用性实时变化，只有现行协议可用 | protocol/SDK 严格必填字段与版本拒绝测试；相同 revision 更新和外观白名单测试 |
+| 每个组件只有一个位置，宿主不提供移动入口 | manifest 单值校验、卡片入口、错误位置挂载及未知 openSidebar 请求拒绝测试 |
 | 面板暂时隐藏后保留输入，明确关闭后重置 | provider / utility-panel 挂载身份与可见性测试；不需要草稿读取函数 |
 | 新打开不会悄悄卸载已有界面或顶掉其他加载 | renderer / main 面板占用、并发侧栏、后一次加载失败与第三帧竞争拒绝测试 |
 | 旧 mount、旧 revision 不污染新界面 | 端口迟到、显式重载与生命周期撤销测试 |
@@ -317,4 +340,4 @@ prepare 不产生持久记录；submit 请求额外带宿主 requestId；GET 仅
 
 交付按三个可分别验证的增量安排：固定位置与隐藏保留、统一外观、会话交接。前两项不依赖 Server 交接服务；第三项在完整端到端接通前保持能力关闭。更新现有文本检查参考插件与作者指南，不再创建一套 showcase 应用。
 
-本阶段不迁移旧历史数据，不改插件目录/安装/转换器，不自动发消息，不自动提交或 push。实现完成仍需用户查看样式；自动检查通过不替代人工视觉验收。
+本阶段不迁移或自动删除旧历史数据，不改插件目录/安装/转换器，不自动发消息，不自动提交或 push。格式不匹配的 UI 记录不可操作，来源文字仍保留。实现完成仍需用户查看样式；自动检查通过不替代人工视觉验收。
