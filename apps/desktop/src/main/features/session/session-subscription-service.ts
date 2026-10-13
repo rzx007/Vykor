@@ -77,6 +77,7 @@ export class SessionSubscriptionService {
   private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
   private readonly invalidationListeners = new Set<(ownerId: number) => void>()
   private readonly primaryOwners = new Set<number>()
+  private readonly ownerDestroyWatchers = new WeakSet<WebContents>()
   private readonly snapshotListeners = new Set<
     (ownerId: number, view: DesktopSessionView) => void
   >()
@@ -269,6 +270,20 @@ export class SessionSubscriptionService {
     this.subscriptions.clearAll()
   }
 
+  /**
+   * 每个 webContents 只注册一次 `destroyed` 回收钩子。
+   *
+   * 主窗口的关闭走的是 hide（见 main-window/window.ts），webContents 在整个应用
+   * 生命周期内都不会销毁，所以在这里无条件 `once` 会让监听器随「切换会话次数」
+   * 单调累积，并很快触发 Node 的 MaxListenersExceededWarning。用 WeakSet 记录
+   * 已挂过钩子的 webContents，既保证只注册一次，也不长期持有窗口对象。
+   */
+  private watchOwnerDestroyed(webContents: WebContents): void {
+    if (this.ownerDestroyWatchers.has(webContents)) return
+    this.ownerDestroyWatchers.add(webContents)
+    webContents.once("destroyed", () => this.closeSession(webContents.id))
+  }
+
   async openSession(
     client: SessionSubscriptionClient,
     webContents: WebContents,
@@ -282,7 +297,7 @@ export class SessionSubscriptionService {
     const subscriptionId = `primary:${this.nextPrimarySubscriptionId++}`
     const subscription = { controller, sessionId }
     this.primaryOwners.add(webContents.id)
-    webContents.once("destroyed", () => this.closeSession(webContents.id))
+    this.watchOwnerDestroyed(webContents)
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
       this.subscriptions,
       webContents.id,
