@@ -115,21 +115,27 @@ describe("AppearanceSettings", () => {
     })
   })
 
-  it("syncs custom color picker input to text field and commits preference", async () => {
+  it("opens the custom color picker and commits its selected color", async () => {
     await renderSettings()
-    const colorPicker = container.querySelector<HTMLInputElement>(
-      '[aria-label="自定义强调色选色板"]'
-    )
-    const textInput = container.querySelector<HTMLInputElement>('[aria-label="自定义强调色"]')
-    expect(colorPicker).not.toBeNull()
-    expect(textInput).not.toBeNull()
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="自定义强调色选色板"]')
+    expect(trigger).not.toBeNull()
+    expect(trigger?.className).toContain("border-0")
+    expect(trigger?.parentElement?.parentElement?.className).toContain("justify-center")
 
     act(() => {
-      setInputValue(colorPicker, "#7c3aed")
-      colorPicker?.dispatchEvent(new Event("change", { bubbles: true }))
+      trigger?.click()
     })
 
-    expect(textInput?.value).toBe("#7C3AED")
+    expect(
+      container.querySelector('[role="dialog"][aria-label="自定义强调色选择器"]')
+    ).not.toBeNull()
+    const pickerInput = container.querySelector<HTMLInputElement>('[aria-label="自定义强调色色值"]')
+    expect(pickerInput).not.toBeNull()
+    act(() => {
+      setInputValue(pickerInput, "7c3aed")
+      pickerInput?.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+
     expect(setPreference).toHaveBeenCalledWith("accent", {
       kind: "custom",
       value: "#7C3AED",

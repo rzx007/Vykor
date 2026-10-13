@@ -9,83 +9,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Settings share a readable column, grouped cards and compact right-aligned controls. */
-.settings-page-shell {
-  container: settings / inline-size;
-}
-
-.settings-content-column {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  width: 100%;
-  max-width: 56rem;
-  margin-inline: auto;
-  padding: 2rem 1.5rem;
-}
-
-.settings-form-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 0.5rem 1.5rem;
-}
-
-.settings-form-row > :is(input, textarea, [data-slot="select-trigger"]) {
-  width: 100%;
-  min-width: 0;
-}
-
-.settings-form-row > [data-slot="field-description"] {
-  grid-column: 1 / -1;
-}
-
-.settings-variable-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.75rem;
-}
-
-.settings-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: 1rem;
-  align-items: end;
-}
-
-.settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.settings-panel {
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 1.4);
-  background: var(--card);
-  padding: 1.25rem;
-}
-
-@container settings (min-width: 40rem) {
-  .settings-content-column {
-    padding-inline: 2.5rem;
-  }
-
-  .settings-form-row {
-    grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
-    align-items: center;
-  }
-
-  .settings-form-row > [data-slot="field-description"] {
-    grid-column: 2;
-  }
-
-  .settings-variable-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-    align-items: end;
-  }
-}
 
 /* 采用 beUI Project Folder 示例的整张纸色，而不是给中性卡片轻微染色。 */
 :root {
@@ -447,6 +370,19 @@ html[data-window-shell="transparent"] {
 html[data-window-shell="translucent"] {
   --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%));
   --shell: color-mix(in oklab, var(--shell-solid) var(--window-glass-tint-opacity), transparent);
+}
+
+html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) {
+  --sidebar-selected: color-mix(in oklab, var(--surface-elevation-target) 12%, transparent);
+}
+
+html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .bg-sidebar-selected {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--surface-elevation-target) 12%, transparent);
+}
+
+html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .bg-sidebar-selected > svg {
+  color: var(--sidebar-foreground);
 }
 
 /* Windows 在原生 Acrylic 上只铺一层雾面底色；其它平台保留原有材质。 */
@@ -1153,4 +1089,84 @@ html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
 
 .plus-menu-anticipating {
   animation: plus-menu-anticip var(--plus-menu-anticip-dur, 700ms) ease-out;
+}
+
+
+
+/* Settings share a readable column, grouped cards and compact right-aligned controls. */
+.settings-page-shell {
+  container: settings / inline-size;
+}
+
+.settings-content-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+}
+
+.settings-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem 1.5rem;
+}
+
+.settings-form-row > :is(input, textarea, [data-slot="select-trigger"]) {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-form-row > [data-slot="field-description"] {
+  grid-column: 1 / -1;
+}
+
+.settings-variable-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.settings-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-panel {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--card);
+  padding: 1.25rem;
+}
+
+@container settings (min-width: 40rem) {
+  .settings-content-column {
+    padding-inline: 2.5rem;
+  }
+
+  .settings-form-row {
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
+    align-items: center;
+  }
+
+  .settings-form-row > [data-slot="field-description"] {
+    grid-column: 2;
+  }
+
+  .settings-variable-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
 }

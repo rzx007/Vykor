@@ -2,6 +2,14 @@ import { RotateCcw } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import {
+  ColorPicker,
+  ColorPickerArea,
+  ColorPickerContent,
+  ColorPickerHexInput,
+  ColorPickerHue,
+  ColorPickerTrigger,
+} from "@renderer/components/motion/color-picker"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -416,23 +424,28 @@ function CustomColorField({
           <FieldError id={`${id}-error`}>请输入完整的六位颜色值，例如 #006AFF。</FieldError>
         ) : null}
       </FieldContent>
-      <div className="flex w-full max-w-52 items-center gap-2">
-        <label
-          htmlFor={`${id}-picker`}
-          className="relative flex size-7 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-          style={{ backgroundColor: normalizedCustomColor ?? initialColor }}
-          title="打开选色板"
+      <div className="flex w-full max-w-52 items-center justify-center gap-2">
+        <ColorPicker
+          aria-label={`${label}选择器`}
+          value={normalizedCustomColor ?? initialColor}
+          alpha={false}
+          onValueChange={handleCommit}
+          className="w-fit max-w-none flex-none gap-0"
         >
-          <input
-            id={`${id}-picker`}
-            type="color"
+          <ColorPickerTrigger
             aria-label={`${label}选色板`}
             aria-describedby={`${id}-description`}
-            className="absolute inset-0 size-full cursor-pointer opacity-0"
-            value={normalizedCustomColor ?? initialColor}
-            onChange={(event) => handleCommit(event.target.value.toUpperCase())}
-          />
-        </label>
+            title="打开选色板"
+            className="size-7 rounded-full border-0 bg-transparent p-0 hover:border-0 hover:bg-transparent"
+          >
+            <span className="sr-only">打开选色板</span>
+          </ColorPickerTrigger>
+          <ColorPickerContent aria-label={`${label}选择器`} align="end">
+            <ColorPickerArea label={`${label}饱和度和亮度`} />
+            <ColorPickerHue label={`${label}色相`} />
+            <ColorPickerHexInput aria-label={`${label}色值`} />
+          </ColorPickerContent>
+        </ColorPicker>
         <Input
           id={id}
           aria-label={label}
