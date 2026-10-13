@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,7 +137,14 @@ function checkLinks(file) {
     if (!target || target.startsWith("#") || /^(?:https?:|mailto:)/iu.test(target)) continue;
     const filePart = decodeURIComponent(target.split("#", 1)[0]);
     if (!filePart) continue;
+    // Research notes may cite an optional local checkout (for example Orkas or
+    // Rome) using a machine-specific path. Those sources are not part of this
+    // repository and cannot be validated in CI; repository-owned links still
+    // go through the normal existence and anchor checks below.
+    if (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/u.test(filePart)) continue;
     const resolved = resolve(dirname(file), filePart);
+    const fromRoot = relative(root, resolved);
+    if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) continue;
     if (!existsSync(resolved)) {
       const line = content.slice(0, match.index).split(/\r?\n/u).length;
       errors.push(`${display(file)}:${line}: 链接目标不存在：${target}`);
