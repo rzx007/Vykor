@@ -948,6 +948,44 @@ describe("desktop session actions", () => {
     expect(useDesktopSessionStore.getState().activeSessionId).toBeNull()
   })
 
+  it("drops goal state for the sessions that deleteSession removed", async () => {
+    const source = emptySessionView("session-a").session
+    const other = emptySessionView("session-b").session
+    const remove = vi.fn(async () => [source.id])
+    const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId))
+    vi.stubGlobal("window", { desktop: { sessions: { delete: remove, open } } })
+    resetNewConversationState()
+    const goalFor = (sessionId: string) => ({
+      id: `g-${sessionId}`,
+      sessionId,
+      objective: "测试目标",
+      revision: 0,
+      status: "active" as const,
+      maxAutoTurns: 20,
+      autoTurnsUsed: 0,
+      noProgressCount: 0,
+      evidence: [],
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const composer = { mode: false, busy: false, error: null, maxAutoTurns: 20 }
+    useDesktopSessionStore.setState({
+      sessions: [source, other],
+      activeSessionId: source.id,
+      goalsBySession: { [source.id]: goalFor(source.id), [other.id]: goalFor(other.id) },
+      goalComposersByScope: { [`session:${source.id}`]: composer, [`session:${other.id}`]: composer },
+    })
+
+    await useDesktopSessionStore.getState().deleteSession(source.id)
+
+    const state = useDesktopSessionStore.getState()
+    // 被删会话的目标状态要回收，其他会话的必须保留。
+    expect(state.goalsBySession[source.id]).toBeUndefined()
+    expect(state.goalsBySession[other.id]).toBeDefined()
+    expect(state.goalComposersByScope[`session:${source.id}`]).toBeUndefined()
+    expect(state.goalComposersByScope[`session:${other.id}`]).toBeDefined()
+  })
+
   it("does not restore fork navigation ownership after a current-session archive fails", async () => {
     const source = emptySessionView("session-a").session
     const forked = emptySessionView("session-fork").session

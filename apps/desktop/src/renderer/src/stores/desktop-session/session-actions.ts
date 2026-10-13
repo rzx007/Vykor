@@ -2,6 +2,7 @@ import { applyBootstrapData } from "./bootstrap-actions"
 import { forgetSessionActivity } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
 import { errorMessage } from "./error-state"
+import { forgetSessionGoals } from "./goal-actions"
 import {
   isSessionPinned,
   resolveSessionWorkspace,
@@ -491,6 +492,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         ...(isActive ? resolveSessionWorkspace(state.projects, existing) : {}),
         sessions: state.sessions.filter((session) => !deleted.has(session.id)),
         activity: forgetSessionActivity(state.activity, deleted),
+        ...forgetSessionGoals(state, deleted),
         archivedSessions: state.archivedSessions.filter((session) => !deleted.has(session.id)),
         activeSessionId: isActive ? null : state.activeSessionId,
         sessionView:

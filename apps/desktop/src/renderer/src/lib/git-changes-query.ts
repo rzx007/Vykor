@@ -6,6 +6,13 @@ import type {
 
 const defaultMaxAgeMs = 1_000
 
+/**
+ * 缓存条数上限。每条缓存都是一份完整的 git 变更结果（含 diff 正文），所以必须封顶：
+ * `maxAgeMs` 只用来判断「够不够新」，不会淘汰条目，反复切换项目或 diff scope
+ * 会让这个模块级 Map 一直增长。
+ */
+const maxCachedQueries = 20
+
 type CacheEntry = {
   inFlight?: Promise<DesktopGitChangesResult>
   result?: DesktopGitChangesResult
@@ -13,6 +20,19 @@ type CacheEntry = {
 }
 
 const entries = new Map<string, CacheEntry>()
+
+/** 写入缓存并维持 LRU 顺序，超出上限时淘汰最久未使用的条目。 */
+function rememberQuery(key: string, entry: CacheEntry): void {
+  // 先删后插：让该 key 变成 Map 中「最近使用」的一项。
+  entries.delete(key)
+  entries.set(key, entry)
+  while (entries.size > maxCachedQueries) {
+    // 正在飞行的请求要保留，否则同一 key 的并发调用会失去去重。
+    const evictable = [...entries.keys()].find((candidate) => !entries.get(candidate)?.inFlight)
+    if (evictable === undefined) break
+    entries.delete(evictable)
+  }
+}
 
 export type GitChangesQueryOptions = {
   force?: boolean
@@ -57,7 +77,7 @@ export function queryGitChanges(
   })
   const inFlight = request.then(
     (result) => {
-      entries.set(key, { result, completedAt: Date.now() })
+      rememberQuery(key, { result, completedAt: Date.now() })
       return result
     },
     (error: unknown) => {
@@ -65,7 +85,7 @@ export function queryGitChanges(
       throw error
     }
   )
-  entries.set(key, { ...current, inFlight })
+  rememberQuery(key, { ...current, inFlight })
   return inFlight
 }
 

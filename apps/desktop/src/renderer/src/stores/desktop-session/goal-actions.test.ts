@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { SessionGoal } from "@shared/session-types"
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
 import { useDesktopSessionStore } from "./store"
+import { emptyGoalComposer, forgetSessionGoals } from "./goal-actions"
 import { emptySessionView, resetDesktopSessionStore } from "./store-test-fixtures"
 import { composerDocument, selectComposerDocumentText } from "./composer-document"
 import {
@@ -277,5 +278,24 @@ describe("goal actions", () => {
       permissionMode: "default",
       effort: "high",
     })
+  })
+
+  it("forgets goal state for deleted sessions, including goal-mode composer scopes", () => {
+    const state = {
+      goalsBySession: { a: null, b: null },
+      goalComposersByScope: {
+        "session:a": emptyGoalComposer,
+        "goal-ordinary:session:a": emptyGoalComposer,
+        "session:b": emptyGoalComposer,
+      },
+    }
+
+    const next = forgetSessionGoals(state, new Set(["a"]))
+
+    expect(next.goalsBySession).not.toHaveProperty("a")
+    expect(next.goalsBySession).toHaveProperty("b")
+    expect(next.goalComposersByScope).not.toHaveProperty("session:a")
+    expect(next.goalComposersByScope).not.toHaveProperty("goal-ordinary:session:a")
+    expect(next.goalComposersByScope).toHaveProperty("session:b")
   })
 })
