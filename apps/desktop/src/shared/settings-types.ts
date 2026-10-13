@@ -145,7 +145,7 @@ export function buildDesktopSettingsSnapshot(
       : "when_unfocused",
     notificationSounds: normalizeNotificationSounds(preferences.notificationSounds),
     agentEnvironment: resolveDesktopAgentEnvironment(settings.agentEnvironment),
-    showReasoning: settings.showReasoning !== false,
+    showReasoning: settings.showReasoning === true,
     browserDeveloperMode: preferences.browserDeveloperMode === true,
     restartRequired: options.restartRequired ?? false,
     defaultOpenerId: normalizeDefaultOpenerId(preferences.defaultOpenerId),

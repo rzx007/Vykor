@@ -151,7 +151,7 @@ test("projects reasoning parts as their own items", () => {
     [reasoningPart("m1", 1, "先想"), part("m1", 2, "答案")],
   );
 
-  const items = bucketToTranscript(value);
+  const items = bucketToTranscript(value, { showReasoning: true });
   expect(items.map((item) => item.role)).toEqual(["reasoning", "assistant"]);
   expect(items[0]!.text).toBe("先想");
 });

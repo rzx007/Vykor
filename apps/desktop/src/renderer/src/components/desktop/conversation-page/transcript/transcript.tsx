@@ -48,7 +48,7 @@ export function ConversationTranscript({
   canOpenReview,
   onOpenReview,
   onOpenTerminal,
-  showReasoning = true,
+  showReasoning = false,
   tasks,
   onOpenAgents,
 }: {

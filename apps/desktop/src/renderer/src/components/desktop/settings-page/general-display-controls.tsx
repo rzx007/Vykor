@@ -80,7 +80,7 @@ export function WorkStyleControl(): React.JSX.Element {
 }
 
 export function ReasoningVisibilityControl(): React.JSX.Element {
-  const [enabled, setEnabled] = useState(true)
+  const [enabled, setEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

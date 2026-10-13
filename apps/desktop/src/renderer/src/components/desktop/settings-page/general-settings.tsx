@@ -67,7 +67,7 @@ export function GeneralSettings() {
           />
           <SettingsRow
             title="思考过程"
-            description="在对话中显示，可按需展开。"
+            description="默认关闭；开启后在对话中显示，可按需展开。"
             control={<ReasoningVisibilityControl />}
           />
           <SettingsRow

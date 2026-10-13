@@ -11,7 +11,7 @@
 一条 Assistant 消息按以下顺序渲染：
 
 1. 连续的文本 part 合并后交给 `Streamdown` 渲染。正在生成的最后一条消息使用 streaming 模式，历史消息使用 static 模式。
-2. reasoning part 显示为可展开的“思考过程”，默认收起。
+2. reasoning part 显示为可展开的“思考过程”，默认收起；设置页的开关默认关闭，开启后才渲染该部分。
 3. 同一个 `toolUseId` 的 tool 和 tool_result 合并为一条工具活动，避免输入和结果各占一个卡片。
 4. error part 使用明确但不过度抢眼的错误提示。
 5. 回合结束且发生文件写入时，在消息末尾展示“已编辑 N 个文件”。

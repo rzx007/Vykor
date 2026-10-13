@@ -13,7 +13,7 @@ const defaultSnapshot = {
     failed: "nope-03",
   },
   agentEnvironment: "native",
-  showReasoning: true,
+  showReasoning: false,
   browserDeveloperMode: false,
   wslSupported: false,
   restartRequired: false,

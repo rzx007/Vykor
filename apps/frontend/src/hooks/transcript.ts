@@ -152,7 +152,7 @@ export function bucketToTranscript(
   options: { showReasoning?: boolean } = {},
 ): TranscriptItem[] {
   const items = projectBucketToItems(bucket);
-  if (options.showReasoning === false) {
+  if (options.showReasoning !== true) {
     return items.filter((item) => item.role !== "reasoning");
   }
   return items;

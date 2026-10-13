@@ -12,7 +12,7 @@ export function useShowReasoning(): boolean {
         if (!cancelled) setShowReasoning(snapshot.showReasoning)
       })
       .catch(() => {
-        if (!cancelled) setShowReasoning(true)
+        if (!cancelled) setShowReasoning(false)
       })
     return () => {
       cancelled = true

@@ -171,7 +171,7 @@ export async function handleSettingsCommand(
   if (slash?.name === "/reasoning") {
     const arg = slash.args.trim().split(/\s+/).filter(Boolean)[0];
     const settings = await client.system.getSettings();
-    const current = settings.showReasoning !== false;
+    const current = settings.showReasoning === true;
     let next: boolean;
     if (arg === "on") next = true;
     else if (arg === "off") next = false;

@@ -76,7 +76,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     runId: string;
   } | null>(null);
   const [ready, setReady] = useState(false);
-  const [showReasoning, setShowReasoning] = useState(true);
+  const [showReasoning, setShowReasoning] = useState(false);
   const [globalSystemItems, setGlobalSystemItems] = useState<TranscriptItem[]>([]);
   const [systemItemsBySession, setSystemItemsBySession] = useState<Record<string, TranscriptItem[]>>({});
   const [commandCatalog, setCommandCatalog] = useState<CommandCatalogEntry[]>([]);
@@ -348,7 +348,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     const client = clientRef.current;
     if (!client) return;
     const settings = await client.system.getSettings();
-    setShowReasoning(settings.showReasoning !== false);
+    setShowReasoning(settings.showReasoning === true);
   }, []);
 
   const cacheFirstRead = useCallback(
@@ -487,7 +487,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
           client.system.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
         ]);
         const model = daemon.model ?? stringSetting(settings.model) ?? "default";
-        setShowReasoning(settings.showReasoning !== false);
+        setShowReasoning(settings.showReasoning === true);
         const provider = stringSetting(settings.provider);
         const baseUrl = stringSetting(settings.baseUrl);
         const apiFormat = settings.apiFormat === "anthropic" || settings.apiFormat === "openai" ? settings.apiFormat : undefined;

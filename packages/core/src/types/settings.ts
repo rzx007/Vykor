@@ -177,7 +177,7 @@ export interface Settings {
   passes?: number;
   /** Root-tree child-agent limits. Omitted fields use runtime defaults. */
   childBudget?: Partial<import("./runtime").AgentChildBudget>;
-  /** 是否在会话界面展示模型的思考过程，缺省视为 true。 */
+  /** 是否在会话界面展示模型的思考过程，缺省视为 false（关闭）。 */
   showReasoning?: boolean;
   verbose?: boolean;
 }
