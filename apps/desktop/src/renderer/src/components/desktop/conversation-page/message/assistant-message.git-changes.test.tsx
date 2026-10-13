@@ -64,7 +64,7 @@ it("shows the changed-file card and its first files without collapsing the card"
     )
   })
 
-  const card = container.querySelector('section[aria-label="文件编辑摘要"]')
+  const card = container.querySelector<HTMLElement>('section[aria-label="文件编辑摘要"]')
   expect(card).not.toBeNull()
   expect(card!.querySelector("details")).toBeNull()
   expect(card!.textContent).toContain("已编辑 4 个文件")
