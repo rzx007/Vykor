@@ -58,10 +58,18 @@ test("reports missing bundle outputs as skipped normally and failures in strict 
   const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-bundles-"));
   try {
     write(root, "apps/cli/build.ts", "cpSync('session-runtime/migrations', 'dist/migrations');\n");
-    write(root, "apps/desktop/electron.vite.config.ts", "// copy-session-migrations session-runtime/migrations\n");
+    write(root, "apps/desktop/electron.vite.config.ts", `
+      const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations");
+      cpSync(
+        resolve("../../packages/services/src/session-runtime/migrations"),
+        migrationsDirectory,
+        { recursive: true }
+      )
+    `);
     const ordinary = await verifyCleanSlate({ root });
     assert.ok(ordinary.skipped.some((item) => item.file === "apps/cli/dist/migrations"));
     assert.ok(ordinary.skipped.some((item) => item.file === "apps/desktop/out/session-runtime/migrations"));
+    assert.ok(!ordinary.some((item) => item.message === "Desktop build must copy the current migration chain"));
     assert.ok(!ordinary.some((item) => item.message.includes("built migration directory")));
 
     const strict = await verifyCleanSlate({ root, requireBuildArtifacts: true });
