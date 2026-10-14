@@ -96,7 +96,7 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 ## UI 定义与后台工具操作
 
 UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
-仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。Desktop 同时检查 backend 的 `pluginUi=1`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。A4 的正式参考插件见 [文本检查助手](../examples/plugins/text-inspector/README.md)，自动化桌面证据和未验证范围见 [A4 验证记录](superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)。自动化验证不等同用户人工验收或正式发布。
+仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。当前 Desktop 同时检查 backend 的 `pluginUi=2`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。A4 的正式参考插件见 [文本检查助手](../examples/plugins/text-inspector/README.md)，自动化桌面证据和未验证范围见 [A4 验证记录](superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)。自动化验证不等同用户人工验收或正式发布。
 下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
 
 Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
@@ -111,16 +111,16 @@ Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义
 }
 ```
 
-定义文件单独使用 schemaVersion 1。纯展示组件必须显式写 actions 空数组：
+定义文件和工具返回的 UI 建议单独使用 schemaVersion 2。纯展示组件必须显式写 actions 空数组：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "components": [{
     "id": "findings",
     "title": "检查结果",
     "entry": "./ui/findings.html",
-    "surfaces": ["tool-result", "session-sidebar"],
+    "surface": "session-sidebar",
     "actions": []
   }]
 }
@@ -141,7 +141,7 @@ entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/m
 ```js
 return {
   content: [{ type: "text", text: "发现 1 项问题" }],
-  metadata: { ui: { schemaVersion: 1, componentId: "findings", data: { count: 1 } } }
+  metadata: { ui: { schemaVersion: 2, componentId: "findings", data: { count: 1 } } }
 };
 ```
 
@@ -155,55 +155,23 @@ return {
 
 `dismiss` 只保存关闭状态，和取消运行分开；已经运行的动作不能通过 dismiss 撤销。当前会话忙、revision 过期、归档或实例终态时不能提交新动作。每次读取文档和动作准入都会核对实际安装、授权、启用状态和摘要；精确静态快照在 Native Host 暂不可用时可只读返回文档，但没有可调用动作。
 
-feature `pluginUi: 1` 只表示 daemon 已装配这些后台接口，不代表当前客户端能安全显示 UI。Desktop 还要求 `pluginUiLifecycle: 1` 和本地隔离能力；CLI/TUI 继续读取原文字，不等待界面。
+feature `pluginUi: 2` 只表示 daemon 已装配这些后台接口，不代表当前客户端能安全显示 UI。Desktop 还要求 `pluginUiLifecycle: 1` 和本地隔离能力；CLI/TUI 继续读取原文字，不等待界面。
 
 ### 编写浏览器界面
 
-UI 的入口、数据和操作走三条明确路径：manifest 声明组件及动作；Native 工具返回 `metadata.ui`，宿主保存到原工具结果；HTML 通过 SDK 读取快照，请求已声明动作。确认弹窗在主界面中，确认后才由后台校验参数并调用工具；结果保存在 SQLite，经过会话更新通知返回页面。
+每组件选一个固定 surface：tool-result 是结果内联卡片，session-sidebar 是会话侧栏。“固定”不代表自动或始终显示；由用户从工具结果打开，不在位置之间移动。只接受 UI schema/bridge 2，没有旧 surfaces/openSidebar 别名。
 
-`@vykor/plugins/ui-sdk` 和 Node 工具的类型入口 `@vykor/plugins/sdk` 不同：前者是需要提前打包的浏览器运行代码，后者仅用于工具类型检查。
+浏览器用 getSnapshot/onSnapshot 直接读取 appearance/capabilities，并调用 applyPluginUiAppearance 应用宿主的公共颜色、字体和减少动画设置。同 revision 的外观或能力更新保留本地输入；业务 revision 变化才重建结果。作者管理自己的表单；隐藏侧栏保留 iframe，关闭显示销毁并重置，宿主不缓存表单。
 
-```js
-import { createPluginUiClient } from "@vykor/plugins/ui-sdk";
+requestAction 只请求已声明的同插件 Native Tool，经宿主确认后执行。requestConversation 主动提供 { mode, expectedRevision, text, data }：draft 确认后加入输入框，submit 确认后建立普通 Input/Run 交给助手；实际提交不发送输入框已有草稿。插件没有宿主草稿 getter，也不能访问父 DOM。后台构造最终来源文本并持久保存普通会话结果；回执只代表当前受理/运行状态，不自动重试未知提交。
 
-async function start() {
-  const client = await createPluginUiClient();
-  const off = client.onSnapshot(snapshot => {
-    // 只用 textContent、value 等安全方式渲染插件自己的 JSON 数据。
-    // snapshot.readOnly 时禁用操作；用 revision 判断是否是新结果。
-    render(snapshot);
-  });
-  button.addEventListener("click", async () => {
-    try {
-      await client.requestAction("preview", { text, selected });
-      // 回执可能仅表示已受理，完成状态应以 onSnapshot 通知为准。
-    } catch (error) {
-      showError(error.code);
-    }
-  });
-  window.addEventListener("pagehide", () => { off(); client.dispose(); }, { once: true });
-}
-start();
-```
+交接 text 非空且最多 4096 Unicode 字符，data 为最多 JSON UTF-8 32 KiB 的有限对象；业务 snapshot.data 上限仍是 256 KiB。只发送用户实际选择的内容，超限明确提示，不能静默裁剪；失败/取消保留本地输入。按钮根据 snapshot.capabilities.draft/submit 显示，交接还要求 pluginUiConversation=1。
 
-以上是接口示意，`render`、`button`、`text` 等由插件实现；可直接运行的完整代码在参考插件 `ui/panel.mjs`。
+仓库浏览器入口为 @vykor/plugins/ui-sdk，工具类型入口为 @vykor/plugins/sdk。独立作者复制 [create-plugin 离线样例](../skills/create-plugin/assets/text-inspector/) 后仅需 Node：node scripts/build-ui.mjs。附带 SDK（全局 VykorPluginUi）与 stylesheet 在构建时内联成 HTML，不依赖 npm 发布或源码仓库。维护者通过 node examples/plugins/text-inspector/scripts/build-ui.mjs --export-author-assets 从当前源机械导出两份 SDK/CSS，再运行各自构建脚本；不要手改 bundle/HTML。
 
-SDK 提供：
+完整可运行的 getSnapshot/onSnapshot/applyPluginUiAppearance/requestConversation 例子、SDK 方法和边界见 [插件 UI 作者接口](../skills/create-plugin/references/plugin-ui.md)。Native preview 与主动交接共同使用的真实 panel 源码见 [文本检查样例](../examples/plugins/text-inspector/ui/panel.mjs)。UI 没有父 DOM、Node、preload、文件、网络、剪贴板或任意 IPC；不用 CDN、外部资源、手写协议或 innerHTML 渲染用户内容。
 
-| 方法 | 实际用途 |
-| --- | --- |
-| `getSnapshot()` / `onSnapshot(listener)` | 读取当前状态 / 立即接收当前状态并订阅更新 |
-| `requestAction(actionId, args)` | 请求宿主确认后执行本组件声明的工具；不是任意工具接口 |
-| `openSidebar()` | 把同一实例移到会话侧栏，不新建业务实例 |
-| `resize(height)` | 请求卡片高度，宿主限制在 160–640 px |
-| `dismiss()` | 经宿主确认结束交互，不撤销已执行的工具 |
-| `dispose()` | 页面卸载时关闭通信，不改变业务状态 |
-
-`onSnapshot` 返回取消订阅函数；快照还含主题、语言、显示位置、`activeAction` 和 `lastAction`。动作受理不代表完成，不能在收到 pending/running 回执时报告成功。unknown 表示工具可能已产生效果但结果不可确认，不自动重试。取消确认会返回 `plugin_ui_user_cancelled`；版本冲突时重新读取结果，让用户重新选择。
-
-先用已有构建工具将 HTML、CSS 和 SDK 合成单文件，再提交/打包生成文件。安装和校验不会执行构建。参考命令：`node examples/plugins/text-inspector/scripts/build-ui.mjs`；脚本会拒绝 Node 依赖，不新增样例运行依赖。
-
-UI 没有父页面 DOM、Node、preload、网络、文件、剪贴板或任意 IPC 权限；外部 script、CSS、字体和嵌套 frame 也不可用。不要从 CDN 加载资源，不要手写 MessagePort 协议，不要用 `innerHTML` 渲染输入。超出 UI 或动作参数限制时保留普通文字路径。完整范围见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)。
+当前设计见 [固定位置与会话交接](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)；[早期规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)保留历史交付事实。行为验证不等同用户查看样式或最终整合验收。
 
 ## Node Tool 的公开接口
 

@@ -1,5 +1,7 @@
 # 插件 UI 完整规格：工具结果卡片与会话侧栏
 
+> 当前契约以 [固定位置与会话交接设计](2026-10-11-native-plugin-ui-continuity-design.md) 为准：UI schema/bridge 2、单个 surface、appearance/capabilities 和 requestConversation。下文保留 A1–A4 的历史设计与交付事实，不作为旧字段兼容承诺。
+
 > 状态：A1–A3 已完成。A4 提供正式参考插件、作者指南与真实 Electron 自动化验收，具体证据见 [A4 验证记录](../reviews/2026-10-04-native-plugin-ui-a4-verification.md)。用户人工验收仍待完成，不能宣称首版已发布。2026-10-04 用户明确排除转换诊断；本阶段不修改或删除转换功能。
 > 日期：2026-10-02
 > 产品：OpenHarness；仓库包名和原生插件目录继续使用 Vykor / `@vykor/*` / `.vykor-plugin`。

@@ -138,7 +138,7 @@
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
 - [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
 - [插件 UI 完整规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与[A4 验证记录](./superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)：定义与授权、持久实例、受控工具操作、Desktop 隔离卡片/侧栏和正式参考插件；用户人工验收与发布另行进行。
-- [插件 UI 固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)、[设计审查记录](./superpowers/reviews/2026-10-11-native-plugin-ui-continuity-design-review.md)与[历史实施计划](./superpowers/plans/2026-10-11-native-plugin-ui-continuity.md)：每组件用单值 surface 固定内联或侧栏；外观直接进入 snapshot，不做旧 SDK、协议或数据兼容，不读取插件表单。2026-10-13 修订尚待独立复核，旧计划已失效，功能尚未实施。
+- [插件 UI 固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)、[设计审查记录](./superpowers/reviews/2026-10-11-native-plugin-ui-continuity-design-review.md)与[实施计划](./superpowers/plans/2026-10-11-native-plugin-ui-continuity.md)：每组件用单值 surface 固定内联或侧栏；外观直接进入 snapshot，requestConversation 主动交给普通会话。作者接口与 Node 离线样例见 [create-plugin](../skills/create-plugin/README.md)。实现、定向验收和预算调整见[实施复盘](./superpowers/reviews/2026-10-14-native-plugin-ui-continuity-retrospective.md)；完整 Electron 检查仍超时，不读取插件表单、不兼容旧字段。
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop 本地插件包导入、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [插件机制现状调研报告](./plugin-mechanism-report.md)：按当前代码逐段说明 manifest 契约、安装快照、发现与激活、Native Tool 子进程、权限三层、Run 级可见性与管理面，并列出未覆盖的缺口与容易误判的代码事实。
