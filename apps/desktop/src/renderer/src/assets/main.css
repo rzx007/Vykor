@@ -352,7 +352,7 @@
    - translucent：macOS，vibrancy 之上再叠一层半透明染色。
    不透明档不匹配任何规则，保持上面 :root / .dark 的实色 token。 */
 html[data-window-shell="transparent"] {
-  --shell: color-mix(in srgb, var(--shell-solid) 46%, transparent);
+  --shell: color-mix(in srgb, var(--shell-solid) 50%, transparent);
 }
 
 html[data-window-shell="translucent"] {
