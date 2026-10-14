@@ -191,6 +191,9 @@ export const IpcChannels = {
   pluginUiGetState: "plugin-ui:get-state",
   pluginUiInvokeAction: "plugin-ui:invoke-action",
   pluginUiGetAction: "plugin-ui:get-action",
+  pluginUiPrepareConversation: "plugin-ui:prepare-conversation",
+  pluginUiSubmitConversation: "plugin-ui:submit-conversation",
+  pluginUiGetConversationSubmission: "plugin-ui:get-conversation-submission",
   pluginUiDismiss: "plugin-ui:dismiss",
   pluginUiUnmount: "plugin-ui:unmount",
   appGetInfo: "app:get-info",
@@ -488,6 +491,18 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
   [IpcChannels.pluginUiGetAction]: {
     args: Parameters<DesktopPluginUiAPI["getAction"]>
     result: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>>
+  }
+  [IpcChannels.pluginUiPrepareConversation]: {
+    args: Parameters<DesktopPluginUiAPI["prepareConversation"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["prepareConversation"]>>
+  }
+  [IpcChannels.pluginUiSubmitConversation]: {
+    args: Parameters<DesktopPluginUiAPI["submitConversation"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["submitConversation"]>>
+  }
+  [IpcChannels.pluginUiGetConversationSubmission]: {
+    args: Parameters<DesktopPluginUiAPI["getConversationSubmission"]>
+    result: Awaited<ReturnType<DesktopPluginUiAPI["getConversationSubmission"]>>
   }
   [IpcChannels.pluginUiDismiss]: {
     args: Parameters<DesktopPluginUiAPI["dismiss"]>

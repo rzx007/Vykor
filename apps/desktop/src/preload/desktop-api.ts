@@ -1,5 +1,9 @@
 import { ipcRenderer, webUtils } from "electron"
-import { TerminalSettingsChannels, TerminalSettingsEvents, type TerminalSettingsSnapshot } from "../shared/terminal-settings-types"
+import {
+  TerminalSettingsChannels,
+  TerminalSettingsEvents,
+  type TerminalSettingsSnapshot,
+} from "../shared/terminal-settings-types"
 import { GitSettingsChannels } from "../shared/git-settings-types"
 import { MaintenanceSettingsChannels } from "../shared/maintenance-settings-types"
 import { RuntimeSettingsChannels } from "../shared/runtime-settings-types"
@@ -46,6 +50,15 @@ export const desktopAPI = {
       invoke(IpcChannels.pluginUiInvokeAction, input),
     getAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetAction]["args"][0]) =>
       invoke(IpcChannels.pluginUiGetAction, input),
+    prepareConversation: (
+      input: IpcInvokeMap[typeof IpcChannels.pluginUiPrepareConversation]["args"][0]
+    ) => invoke(IpcChannels.pluginUiPrepareConversation, input),
+    submitConversation: (
+      input: IpcInvokeMap[typeof IpcChannels.pluginUiSubmitConversation]["args"][0]
+    ) => invoke(IpcChannels.pluginUiSubmitConversation, input),
+    getConversationSubmission: (
+      input: IpcInvokeMap[typeof IpcChannels.pluginUiGetConversationSubmission]["args"][0]
+    ) => invoke(IpcChannels.pluginUiGetConversationSubmission, input),
     dismiss: (input: IpcInvokeMap[typeof IpcChannels.pluginUiDismiss]["args"][0]) =>
       invoke(IpcChannels.pluginUiDismiss, input),
     unmount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiUnmount]["args"][0]) =>
@@ -111,12 +124,14 @@ export const desktopAPI = {
       invoke(IpcChannels.browserTabUpdate, input),
     readAnnotations: (input: IpcInvokeMap[typeof IpcChannels.browserReadAnnotations]["args"][0]) =>
       invoke(IpcChannels.browserReadAnnotations, input),
-    setAnnotationMode: (input: IpcInvokeMap[typeof IpcChannels.browserSetAnnotationMode]["args"][0]) =>
-      invoke(IpcChannels.browserSetAnnotationMode, input),
+    setAnnotationMode: (
+      input: IpcInvokeMap[typeof IpcChannels.browserSetAnnotationMode]["args"][0]
+    ) => invoke(IpcChannels.browserSetAnnotationMode, input),
     focusAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserFocusAnnotation]["args"][0]) =>
       invoke(IpcChannels.browserFocusAnnotation, input),
-    removeAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserRemoveAnnotation]["args"][0]) =>
-      invoke(IpcChannels.browserRemoveAnnotation, input),
+    removeAnnotation: (
+      input: IpcInvokeMap[typeof IpcChannels.browserRemoveAnnotation]["args"][0]
+    ) => invoke(IpcChannels.browserRemoveAnnotation, input),
     addAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]) =>
       invoke(IpcChannels.browserAddAnnotation, input),
     onOpenRequest: (listener: () => void): (() => void) => {
@@ -368,91 +383,101 @@ export const desktopAPI = {
   },
   terminalSettings: {
     snapshot: () => invoke(TerminalSettingsChannels.terminalSettingsSnapshot),
-    update: input => invoke(TerminalSettingsChannels.terminalSettingsUpdate, input),
+    update: (input) => invoke(TerminalSettingsChannels.terminalSettingsUpdate, input),
     chooseShell: () => invoke(TerminalSettingsChannels.terminalSettingsChooseShell),
-    onChanged: listener => {
-      const wrapped = (_event: Electron.IpcRendererEvent, value: TerminalSettingsSnapshot) => listener(value)
+    onChanged: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, value: TerminalSettingsSnapshot) =>
+        listener(value)
       ipcRenderer.on(TerminalSettingsEvents.changed, wrapped)
       return () => ipcRenderer.removeListener(TerminalSettingsEvents.changed, wrapped)
     },
   },
   gitSettings: {
-    snapshot: input => invoke(GitSettingsChannels.snapshot, input),
+    snapshot: (input) => invoke(GitSettingsChannels.snapshot, input),
     readPreferences: () => invoke(GitSettingsChannels.readPreferences),
-    updatePreferences: input => invoke(GitSettingsChannels.preferences, input),
-    updateIdentity: input => invoke(GitSettingsChannels.identity, input),
-    cleanup: input => invoke(GitSettingsChannels.cleanup, input),
-    markDisposable: input => invoke(GitSettingsChannels.markDisposable, input),
+    updatePreferences: (input) => invoke(GitSettingsChannels.preferences, input),
+    updateIdentity: (input) => invoke(GitSettingsChannels.identity, input),
+    cleanup: (input) => invoke(GitSettingsChannels.cleanup, input),
+    markDisposable: (input) => invoke(GitSettingsChannels.markDisposable, input),
     chooseDirectory: () => invoke(GitSettingsChannels.chooseDirectory),
   },
   runtimeSettings: {
-    snapshot: input => invoke(RuntimeSettingsChannels.snapshot, input),
-    save: input => invoke(RuntimeSettingsChannels.save, input),
-    check: input => invoke(RuntimeSettingsChannels.check, input),
-    restart: input => invoke(RuntimeSettingsChannels.restart, input),
+    snapshot: (input) => invoke(RuntimeSettingsChannels.snapshot, input),
+    save: (input) => invoke(RuntimeSettingsChannels.save, input),
+    check: (input) => invoke(RuntimeSettingsChannels.check, input),
+    restart: (input) => invoke(RuntimeSettingsChannels.restart, input),
   },
   notificationSettings: {
     snapshot: () => invoke(NotificationSettingsChannels.snapshot),
-    updateMode: input => invoke(NotificationSettingsChannels.updateMode, input),
-    updateEvents: input => invoke(NotificationSettingsChannels.updateEvents, input),
+    updateMode: (input) => invoke(NotificationSettingsChannels.updateMode, input),
+    updateEvents: (input) => invoke(NotificationSettingsChannels.updateEvents, input),
     test: () => invoke(NotificationSettingsChannels.test),
     openSystemSettings: () => invoke(NotificationSettingsChannels.openSystemSettings),
-    resolveSession: sessionId => invoke(NotificationSettingsChannels.resolveSession, sessionId),
+    resolveSession: (sessionId) => invoke(NotificationSettingsChannels.resolveSession, sessionId),
   },
   personalizationManagement: {
-    snapshot: input => invoke(PersonalizationManagementChannels.snapshot, input),
-    updateConfiguration: input => invoke(PersonalizationManagementChannels.updateConfiguration, input),
-    updateEntry: input => invoke(PersonalizationManagementChannels.updateEntry, input),
-    removeEntry: input => invoke(PersonalizationManagementChannels.removeEntry, input),
-    clearEntries: input => invoke(PersonalizationManagementChannels.clearEntries, input),
-    openRule: input => invoke(PersonalizationManagementChannels.openRule, input),
-    openDirectory: input => invoke(PersonalizationManagementChannels.openDirectory, input),
+    snapshot: (input) => invoke(PersonalizationManagementChannels.snapshot, input),
+    updateConfiguration: (input) =>
+      invoke(PersonalizationManagementChannels.updateConfiguration, input),
+    updateEntry: (input) => invoke(PersonalizationManagementChannels.updateEntry, input),
+    removeEntry: (input) => invoke(PersonalizationManagementChannels.removeEntry, input),
+    clearEntries: (input) => invoke(PersonalizationManagementChannels.clearEntries, input),
+    openRule: (input) => invoke(PersonalizationManagementChannels.openRule, input),
+    openDirectory: (input) => invoke(PersonalizationManagementChannels.openDirectory, input),
   },
   configurationSettings: {
     limits: () => invoke(ConfigurationSettingsChannels.limits),
-    updateLimits: input => invoke(ConfigurationSettingsChannels.updateLimits, input),
+    updateLimits: (input) => invoke(ConfigurationSettingsChannels.updateLimits, input),
     review: () => invoke(ConfigurationSettingsChannels.review),
-    updateReview: input => invoke(ConfigurationSettingsChannels.updateReview, input),
-    exportFile: categories => invoke(ConfigurationSettingsChannels.exportFile, categories),
+    updateReview: (input) => invoke(ConfigurationSettingsChannels.updateReview, input),
+    exportFile: (categories) => invoke(ConfigurationSettingsChannels.exportFile, categories),
     previewImport: () => invoke(ConfigurationSettingsChannels.previewImport),
-    applyImport: input => invoke(ConfigurationSettingsChannels.applyImport, input),
+    applyImport: (input) => invoke(ConfigurationSettingsChannels.applyImport, input),
   },
   providerDefaults: {
     snapshot: () => invoke(ProviderDefaultsChannels.snapshot),
-    updateEffort: input => invoke(ProviderDefaultsChannels.updateEffort, input),
-    test: input => invoke(ProviderDefaultsChannels.test, input),
+    updateEffort: (input) => invoke(ProviderDefaultsChannels.updateEffort, input),
+    test: (input) => invoke(ProviderDefaultsChannels.test, input),
   },
   maintenance: {
-    usage: filter => invoke(MaintenanceSettingsChannels.usage, filter),
-    price: price => invoke(MaintenanceSettingsChannels.price, price),
-    budget: budget => invoke(MaintenanceSettingsChannels.budget, budget),
-    exportUsage: (filter, format) => invoke(MaintenanceSettingsChannels.exportUsage, filter, format),
+    usage: (filter) => invoke(MaintenanceSettingsChannels.usage, filter),
+    price: (price) => invoke(MaintenanceSettingsChannels.price, price),
+    budget: (budget) => invoke(MaintenanceSettingsChannels.budget, budget),
+    exportUsage: (filter, format) =>
+      invoke(MaintenanceSettingsChannels.exportUsage, filter, format),
     storage: () => invoke(MaintenanceSettingsChannels.storage),
     openDirectory: () => invoke(MaintenanceSettingsChannels.openDirectory),
     chooseDirectory: () => invoke(MaintenanceSettingsChannels.chooseDirectory),
-    backup: input => invoke(MaintenanceSettingsChannels.backup, input),
-    verifyBackup: source => invoke(MaintenanceSettingsChannels.verifyBackup, source),
-    restore: input => invoke(MaintenanceSettingsChannels.restore, input),
-    switchData: directory => invoke(MaintenanceSettingsChannels.switchData, directory),
+    backup: (input) => invoke(MaintenanceSettingsChannels.backup, input),
+    verifyBackup: (source) => invoke(MaintenanceSettingsChannels.verifyBackup, source),
+    restore: (input) => invoke(MaintenanceSettingsChannels.restore, input),
+    switchData: (directory) => invoke(MaintenanceSettingsChannels.switchData, directory),
     diagnose: (input) => invoke(MaintenanceSettingsChannels.diagnose, input),
     cancelDiagnosis: (input) => invoke(MaintenanceSettingsChannels.cancelDiagnosis, input),
-    exportDiagnostics: (filter, kind) => invoke(MaintenanceSettingsChannels.exportDiagnostics, filter, kind),
+    exportDiagnostics: (filter, kind) =>
+      invoke(MaintenanceSettingsChannels.exportDiagnostics, filter, kind),
     reconnect: () => invoke(MaintenanceSettingsChannels.reconnect),
     restart: () => invoke(MaintenanceSettingsChannels.restart),
-    cleanupPreview: input => invoke(MaintenanceSettingsChannels.cleanupPreview, input),
-    cleanupExecute: input => invoke(MaintenanceSettingsChannels.cleanupExecute, input),
+    cleanupPreview: (input) => invoke(MaintenanceSettingsChannels.cleanupPreview, input),
+    cleanupExecute: (input) => invoke(MaintenanceSettingsChannels.cleanupExecute, input),
     cleanupAudits: () => invoke(MaintenanceSettingsChannels.cleanupAudits),
     diagnosticDetails: () => invoke(MaintenanceSettingsChannels.diagnosticDetails),
-    updateDiagnosticDetails: minutes => invoke(MaintenanceSettingsChannels.updateDiagnosticDetails, minutes),
+    updateDiagnosticDetails: (minutes) =>
+      invoke(MaintenanceSettingsChannels.updateDiagnosticDetails, minutes),
     storagePolicy: () => invoke(MaintenanceSettingsChannels.storagePolicy),
-    updateStoragePolicy: input => invoke(MaintenanceSettingsChannels.updateStoragePolicy, input),
+    updateStoragePolicy: (input) => invoke(MaintenanceSettingsChannels.updateStoragePolicy, input),
   },
   permissionSettings: {
     snapshot: () => invoke(IpcChannels.permissionSettingsSnapshot),
-    update: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["args"][0]) => invoke(IpcChannels.permissionSettingsUpdate, input),
-    updateIsolation: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["args"][0]) => invoke(IpcChannels.permissionSettingsUpdateIsolation, input),
-    check: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["args"][0]) => invoke(IpcChannels.permissionSettingsCheck, input),
-    revoke: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["args"][0]) => invoke(IpcChannels.permissionSettingsRevoke, input),
+    update: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["args"][0]) =>
+      invoke(IpcChannels.permissionSettingsUpdate, input),
+    updateIsolation: (
+      input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["args"][0]
+    ) => invoke(IpcChannels.permissionSettingsUpdateIsolation, input),
+    check: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["args"][0]) =>
+      invoke(IpcChannels.permissionSettingsCheck, input),
+    revoke: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["args"][0]) =>
+      invoke(IpcChannels.permissionSettingsRevoke, input),
   },
   daemonAutoStart: {
     snapshot: () => invoke(IpcChannels.daemonAutoStartSnapshot),
@@ -506,8 +531,9 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionGoalGet, input),
     getMessagePart: (input: IpcInvokeMap[typeof IpcChannels.sessionMessagePartGet]["args"][0]) =>
       invoke(IpcChannels.sessionMessagePartGet, input),
-    readToolImagePreview: (input: IpcInvokeMap[typeof IpcChannels.sessionToolImagePreview]["args"][0]) =>
-      invoke(IpcChannels.sessionToolImagePreview, input),
+    readToolImagePreview: (
+      input: IpcInvokeMap[typeof IpcChannels.sessionToolImagePreview]["args"][0]
+    ) => invoke(IpcChannels.sessionToolImagePreview, input),
     createGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalCreate]["args"][0]) =>
       invoke(IpcChannels.sessionGoalCreate, input),
     updateGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalUpdate]["args"][0]) =>
@@ -583,23 +609,19 @@ export const desktopAPI = {
       ipcRenderer.on(IpcEvents.sessionDaemonStatusChanged, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionDaemonStatusChanged, wrapped)
     },
-    onDataDirectoryChanged: listener => {
+    onDataDirectoryChanged: (listener) => {
       const wrapped = () => listener()
       ipcRenderer.on(IpcEvents.sessionDataDirectoryChanged, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionDataDirectoryChanged, wrapped)
     },
-    onDaemonRestarted: listener => {
+    onDaemonRestarted: (listener) => {
       const wrapped = () => listener()
       ipcRenderer.on(IpcEvents.sessionDaemonRestarted, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionDaemonRestarted, wrapped)
     },
-    onUpdated: (
-      listener: (value: DesktopSessionUpdate) => void
-    ): (() => void) => {
-      const wrapped = (
-        _event: Electron.IpcRendererEvent,
-        value: DesktopSessionUpdate
-      ): void => listener(value)
+    onUpdated: (listener: (value: DesktopSessionUpdate) => void): (() => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, value: DesktopSessionUpdate): void =>
+        listener(value)
       ipcRenderer.on(IpcEvents.sessionUpdated, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.sessionUpdated, wrapped)
     },

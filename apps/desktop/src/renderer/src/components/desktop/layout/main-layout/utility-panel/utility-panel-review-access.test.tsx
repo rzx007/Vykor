@@ -34,6 +34,10 @@ vi.mock("@renderer/components/desktop/image-viewer/image-viewer-panel", () => ({
 }))
 
 const initialStoreState = useDesktopSessionStore.getState()
+vi.hoisted(() => {
+  // Importing the native terminal probes Canvas; this suite does not use a terminal.
+  HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext
+})
 let mountedRoot: Root | null = null
 let mountedContainer: HTMLDivElement | null = null
 
@@ -165,7 +169,7 @@ describe("UtilityPanel review tool access", () => {
   it("opens only a concrete plugin instance and closes its display without dismissing business", async () => {
     installProbe(async () => ({ isRepository: true, rootPath: null }))
     useOutsideProjectSession("D:/repo-one")
-    const actualInstance = { ...instance, sessionId: "s1" }
+    const actualInstance = { ...instance, sessionId: "s1", surface: "session-sidebar" as const }
     const actualPart = { ...sourcePart, sessionId: "s1", metadata: { pluginUi: actualInstance } }
     useDesktopSessionStore.setState((state) => ({
       sessionView: { ...state.sessionView!, parts: [actualPart] },
@@ -175,7 +179,7 @@ describe("UtilityPanel review tool access", () => {
       plugin: { id: "example.ui", version: "1" },
       title: "检查结果",
       availability: { code: "available", canRender: true, canInvoke: true },
-      surfaces: instance.surfaces,
+      conversation: { draft: false, submit: false },
       actions: [],
     }
     const unmount = vi.fn(async () => {}),

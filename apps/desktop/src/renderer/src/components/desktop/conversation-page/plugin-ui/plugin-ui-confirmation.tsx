@@ -9,13 +9,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@renderer/components/ui/alert-dialog"
-import type { JsonValue, PluginUiInstanceRecord } from "@vykor/client"
+import type { JsonValue, PluginUiInstanceRecord, PluginUiConversationPrepared } from "@vykor/client"
 export interface PluginUiConfirmationDetails {
   instance: PluginUiInstanceRecord
   label: string
   toolName?: string
   args: Record<string, JsonValue>
   dismiss?: boolean
+  conversation?: PluginUiConversationPrepared
 }
 export function PluginUiConfirmation({
   details,
@@ -34,7 +35,13 @@ export function PluginUiConfirmation({
     >
       <AlertDialogContent initialFocus={cancelButton} className="max-h-[80vh] overflow-y-auto">
         <AlertDialogHeader>
-          <AlertDialogTitle>{details?.dismiss ? "取消此次交互" : "确认插件操作"}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {details?.conversation
+              ? "确认插件内容"
+              : details?.dismiss
+                ? "取消此次交互"
+                : "确认插件操作"}
+          </AlertDialogTitle>
           <AlertDialogDescription>
             {details?.instance.pluginId} · {details?.instance.pluginVersion}
           </AlertDialogDescription>
@@ -46,7 +53,7 @@ export function PluginUiConfirmation({
           )}
           {!details?.dismiss && (
             <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs break-all whitespace-pre-wrap">
-              {JSON.stringify(details?.args, null, 2)}
+              {details?.conversation?.promptText ?? JSON.stringify(details?.args, null, 2)}
             </pre>
           )}
           {details?.dismiss && (
@@ -63,7 +70,13 @@ export function PluginUiConfirmation({
             variant={details?.dismiss ? "destructive" : "default"}
             onClick={() => decide(true)}
           >
-            {details?.dismiss ? "确认取消" : "确认执行"}
+            {details?.conversation
+              ? details.conversation.mode === "draft"
+                ? "确认加入输入框"
+                : "确认交给助手"
+              : details?.dismiss
+                ? "确认取消"
+                : "确认执行"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

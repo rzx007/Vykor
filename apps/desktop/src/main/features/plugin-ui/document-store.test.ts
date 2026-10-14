@@ -81,3 +81,24 @@ it("bounds HTML and verifies bytes rather than trusting a caller-supplied digest
   expect(() => f.store.register({ ...base, html: "different", sha256: "b".repeat(64) })).toThrow("plugin_ui_invalid_document");
   expect(() => f.store.register({ ...base, html: "中".repeat(700_000), sha256: "b".repeat(64) })).toThrow("plugin_ui_payload_too_large");
 });
+
+it("reuses a live instance and refuses full capacity without revoking documents", () => {
+  const f = fixture();
+  const html = f.html, connection = {};
+  const base = { ownerId: 42, connection, sessionId: "session", componentDigest: "a".repeat(64),
+    surface: "tool-result" as const, html, sha256: createHash("sha256").update(html).digest("hex") };
+  const second = f.store.register({ ...base, instanceId: "second" });
+  expect(f.store.register({ ...base, instanceId: "second" })).toEqual(second);
+  expect(() => f.store.register({ ...base, instanceId: "third" })).toThrow("plugin_ui_capacity_reached");
+  expect(f.store.owns(f.mounted.mountId, 42)).toBe(true);
+  expect(f.store.owns(second.mountId, 42)).toBe(true);
+});
+
+it("refuses an occupied panel without retiring its iframe", () => {
+  const f = fixture(), html = f.html;
+  const base = { ownerId: 42, connection: {}, sessionId: "session", componentDigest: "a".repeat(64),
+    surface: "session-sidebar" as const, html, sha256: createHash("sha256").update(html).digest("hex") };
+  const panel = f.store.register({ ...base, instanceId: "panel" });
+  expect(() => f.store.register({ ...base, instanceId: "other" })).toThrow("plugin_ui_panel_occupied");
+  expect(f.store.owns(panel.mountId, 42)).toBe(true);
+});

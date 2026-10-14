@@ -197,11 +197,9 @@ export function UtilityPanel({
   useEffect(() => {
     if (pluginTab) setActiveTabId(pluginTab.id)
   }, [pluginSidebar, setActiveTabId])
-  useEffect(() => {
-    if (!open && pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
-  }, [open, pluginSidebar?.key])
   const terminalCommand = terminalCommands[0] ?? null
-  const pendingTerminalOpenRequest = terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
+  const pendingTerminalOpenRequest =
+    terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
   const pendingTerminal =
     Boolean(pendingTerminalOpenRequest) ||
     terminalCommands.some((command) => command.type === "ensure" || command.type === "create")
@@ -359,6 +357,7 @@ export function UtilityPanel({
       setActiveTabId,
       setFileProjectPath,
       setTabs,
+      setTerminalCommands,
       setTerminalMounted,
     ]
   )
@@ -735,7 +734,6 @@ export function UtilityPanel({
           onCloseTabsToRight={closeTabsToRight}
           onToggleMaximized={onToggleMaximized}
           onClosePanel={() => {
-            if (pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
             onClose()
           }}
         />
@@ -744,8 +742,18 @@ export function UtilityPanel({
           {open && activeTab?.tool === "image" && activeTab.imageSource && (
             <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />
           )}
-          {open && activeTab?.tool === "plugin-ui" && pluginSidebar && (
-            <PluginUiFrame key={pluginSidebar.key} display={pluginSidebar} />
+          {pluginSidebar && (
+            <div
+              hidden={!open || activeTab?.id !== pluginTab?.id}
+              inert={!open || activeTab?.id !== pluginTab?.id}
+              className="h-full"
+            >
+              <PluginUiFrame
+                key={pluginSidebar.instance.instanceId}
+                display={pluginSidebar}
+                visible={open && activeTab?.id === pluginTab?.id}
+              />
+            </div>
           )}
           {!activeTab && !pendingTerminal && (
             <EmptyUtilityPanelState availableTools={availableTools} onAdd={addTab} />

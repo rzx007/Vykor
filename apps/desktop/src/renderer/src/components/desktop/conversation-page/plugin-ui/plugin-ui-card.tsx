@@ -105,16 +105,16 @@ export function PluginUiCard({
           {text}
         </pre>
       ) : null}
-      {display && <PluginUiFrame key={display.key} display={display} />}
+      {display && <PluginUiFrame key={instance.instanceId} display={display} />}
       {host?.available && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-3">
-          {instance.surfaces.includes("tool-result") &&
+          {instance.surface === "tool-result" &&
             (display ? (
               <Button
                 variant="ghost"
                 size="sm"
                 shape="pill"
-                title="只收起界面，结果保留，可重新打开"
+                title="关闭后输入不保留；结果保留，可重新打开"
                 onClick={() => host.close(instance.instanceId)}
               >
                 <X data-icon="inline-start" />
@@ -131,12 +131,12 @@ export function PluginUiCard({
                 打开交互
               </Button>
             ))}
-          {instance.surfaces.includes("session-sidebar") && (
+          {instance.surface === "session-sidebar" && (
             <Button
               variant="ghost"
               size="sm"
               shape="pill"
-              title="只改变显示位置，不执行插件工具"
+              title="在插件声明的侧栏位置打开；关闭标签或重新加载后输入不保留"
               onClick={(event) => host.open(instance, "session-sidebar", event.currentTarget)}
             >
               <PanelRightOpen data-icon="inline-start" />

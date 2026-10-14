@@ -37,7 +37,7 @@ beforeEach(() => {
       plugin: { id: "example.ui", version: "1" },
       title: "检查结果",
       availability: { code: "available", canRender: true, canInvoke: true },
-      surfaces: instance.surfaces,
+      conversation: { draft: false, submit: false },
       actions: [{ id: "apply", label: "应用", toolName: "Inspect", completion: "keep-open" }],
     })),
     dismiss: vi.fn(async () => ({ ...instance, status: "dismissed", revision: 2 })),
@@ -93,7 +93,7 @@ it("does not show a card-opening button for a sidebar-only component", async () 
   await act(async () =>
     root.render(
       <PluginUiProvider onOpenSidebar={() => {}}>
-        <PluginUiCard instance={{ ...instance, surfaces: ["session-sidebar"] }} call={sourcePart} />
+        <PluginUiCard instance={{ ...instance, surface: "session-sidebar" }} call={sourcePart} />
       </PluginUiProvider>
     )
   )
@@ -123,7 +123,7 @@ it("cancels a pending confirmation when the source part disappears", async () =>
   expect(document.body.textContent).not.toContain("确认取消")
   expect(api.dismiss).not.toHaveBeenCalled()
 })
-it.each(["tool-result", "session-sidebar"] as const)(
+it.each(["tool-result"] as const)(
   "opens %s on the first click without competing mounts during effect replay",
   async (surface) => {
     vi.stubGlobal("MessageChannel", MessageChannel)
@@ -205,14 +205,14 @@ async function connectedFrame() {
   window.dispatchEvent(
     new MessageEvent("message", {
       source: frame.contentWindow,
-      data: { version: 1, type: "plugin-ui-ready" },
+      data: { version: 2, type: "plugin-ui-ready" },
     })
   )
   const send = async (id: string) => {
     await act(async () => {
       port.postMessage(
         JSON.stringify({
-          version: 1,
+          version: 2,
           mountId,
           id,
           method: "requestAction",
@@ -347,7 +347,7 @@ it("looks up the original request after a submission timeout, without another ad
   ])
   vi.useRealTimers()
 })
-it("limits the window to two displays and moves an instance to a single sidebar", async () => {
+it("rejects a third display and refuses an undeclared position", async () => {
   const sources = [
     instance,
     { ...instance, instanceId: "10000000-0000-4000-8000-000000000002", sourcePartId: "part2" },
@@ -396,15 +396,13 @@ it("limits the window to two displays and moves an instance to a single sidebar"
   await click("card0")
   await click("card1")
   await click("card2")
-  expect(container.querySelector("output")?.textContent).not.toContain(sources[0].instanceId)
+  expect(container.querySelector("output")?.textContent).toContain(sources[0].instanceId)
   expect(container.querySelector("output")?.textContent?.split(",")).toHaveLength(2)
   await click("side1")
   expect(container.querySelector("output")?.textContent).toContain(
-    sources[1].instanceId + ":session-sidebar"
-  )
-  expect(container.querySelector("output")?.textContent).not.toContain(
     sources[1].instanceId + ":tool-result"
   )
+  expect(container.querySelector("output")?.textContent).not.toContain("session-sidebar")
   await click("side2")
-  expect(container.querySelector("output")?.textContent?.match(/session-sidebar/g)).toHaveLength(1)
+  expect(container.querySelector("output")?.textContent).not.toContain("session-sidebar")
 })

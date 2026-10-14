@@ -9,10 +9,10 @@ import { DesktopPluginUiService } from "./plugin-ui-service";
 const instanceId = "10000000-0000-4000-8000-000000000001";
 const requestId = "30000000-0000-4000-8000-000000000001";
 const instance: PluginUiInstanceRecord = {
-  schemaVersion: 1, instanceId, sessionId: "session", sourceRunId: "source", sourcePartId: "part",
+  schemaVersion: 2, instanceId, sessionId: "session", sourceRunId: "source", sourcePartId: "part",
   sourceToolUseId: "use", sourceToolName: "Inspect", pluginId: "example.ui", pluginVersion: "1",
   pluginDigest: "a".repeat(64), componentId: "card", componentDigest: "b".repeat(64),
-  title: "检查结果", surfaces: ["tool-result", "session-sidebar"], status: "open", revision: 1,
+  title: "检查结果", surface: "tool-result", status: "open", revision: 1,
   data: { count: 1 }, createdAt: 1, updatedAt: 1,
 };
 const ownerView = (generation: string, present = true) => ({ cursor: 1, syncStatus: "connected",
@@ -20,25 +20,34 @@ const ownerView = (generation: string, present = true) => ({ cursor: 1, syncStat
   parts: present ? [{ id: "part", metadata: { pluginUi: instance } }] : [], runs: [],
 });
 const otherInstance = { ...instance, instanceId: "10000000-0000-4000-8000-000000000002", sourcePartId: "other-part" };
-function fixture() {
+function fixture(surface: "tool-result" | "session-sidebar" = "tool-result") {
   let currentSession: string | undefined = "session";
   let lifecycle = true;
+  let pluginUiVersion = 2;
+  let conversation: unknown = { draft: false, submit: false };
+  let failDocument = false;
+  let documentReads = 0;
+  const instances = [instance, otherInstance, { ...instance, instanceId: "10000000-0000-4000-8000-000000000003", sourcePartId: "third-part" }]
+    .map(item => ({ ...item, surface }));
   let releaseDocument: (() => void) | undefined;
   let enteredDocument!: () => void;
   const documentEntered = new Promise<void>(resolve => { enteredDocument = resolve; });
   let holdDocument = false;
   let drift = false; let documentRead = false;
   let changeGeneration = false;
+  let changeSurface = false;
   const submissions: unknown[] = [];
   const html = "<p>private verified document</p>";
   const client = new VykorClient({ baseUrl: "http://127.0.0.1:4000", fetch: async (url, options) => {
     const path = new URL(String(url)).pathname;
     let body: unknown;
     if (path === "/capabilities") body = { serverVersion: "test", protocol: { version: 5 },
-      features: { pluginUi: 1, ...(lifecycle ? { pluginUiLifecycle: 1 } : {}) } };
+      features: { pluginUi: pluginUiVersion, ...(lifecycle ? { pluginUiLifecycle: 1 } : {}) } };
     else if (path.endsWith("/document")) {
       documentRead = true;
+      documentReads++;
       enteredDocument();
+      if (failDocument) { failDocument = false; throw new Error("document unavailable"); }
       if (holdDocument) {
         holdDocument = false;
         await new Promise<void>(resolve => { releaseDocument = resolve; });
@@ -53,9 +62,10 @@ function fixture() {
       body = { receipt: { instanceId, requestId, runId: "ui_run_once", revision: 2, status: "pending" } };
     } else if (path.endsWith("/dismiss")) { submissions.push("dismiss"); body = { instance: { ...instance, status: "dismissed", revision: 2 } }; }
     else {
-      const current = path.endsWith("/" + otherInstance.instanceId) ? otherInstance : instance;
-      body = { instance: drift && documentRead ? { ...current, componentDigest: "c".repeat(64) } : current,
-      availability: { code: "available", canRender: true, canInvoke: true },
+      const current = instances.find(item => path.endsWith("/" + item.instanceId)) ?? instances[0]!;
+      body = { instance: drift && documentRead ? { ...current, componentDigest: "c".repeat(64) }
+        : changeSurface && documentRead ? { ...current, surface: "session-sidebar" } : current,
+      conversation, availability: { code: "available", canRender: true, canInvoke: true },
       actions: [{ id: "apply", label: "应用", toolName: "Inspect", inputSchema: {}, completion: "keep-open" }] };
     }
     return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
@@ -71,9 +81,14 @@ function fixture() {
   return { service, documents, owner, submissions, html, documentEntered,
     setSession: (id?: string) => { currentSession = id; service.invalidateOwner(42); },
     withoutLifecycle: () => { lifecycle = false; },
+    version: (value: number) => { pluginUiVersion = value; },
+    conversation: (value: unknown) => { conversation = value; },
+    failDocument: () => { failDocument = true; },
+    documentReads: () => documentReads,
     holdDocument: () => { holdDocument = true; },
     driftDocument: () => { drift = true; },
     changeGeneration: () => { changeGeneration = true; },
+    changeSurface: () => { changeSurface = true; },
     navigateOwner: () => { ownerUrl = "https://foreign.invalid/"; },
     releaseDocument: () => releaseDocument?.() };
 }
@@ -93,30 +108,50 @@ it("mounts only verified current data and invokes the declared action with the o
   expect(f.documents.owns(mount.mountId, 42)).toBe(false);
   expect(f.submissions).toHaveLength(1);
 });
-it.each([
-  ["tool-result", "tool-result"], ["session-sidebar", "session-sidebar"],
-  ["tool-result", "session-sidebar"], ["session-sidebar", "tool-result"],
-] as const)(
-  "does not let a delayed %s load revoke the newer %s display", async (surface, nextSurface) => {
-    const f = fixture(); f.holdDocument();
-    const first = f.service.mount(42, { sessionId: "session", instanceId, surface });
-    const rejected = expect(first).rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
-    await f.documentEntered;
-    const current = await f.service.mount(42, { sessionId: "session", instanceId, surface: nextSurface });
-    f.releaseDocument();
-    await rejected;
-    expect(f.documents.owns(current.mountId, 42)).toBe(true);
-    expect(f.documents.allowNavigation(42, 99, current.url, false)).toBe(true);
-  }
-);
-it("keeps the newest sidebar when a different instance's earlier load returns late", async () => {
-  const f = fixture(); f.holdDocument();
+it("rejects a wrong surface before reading the document", async () => {
+ const f=fixture(); await expect(f.service.mount(42,{sessionId:"session",instanceId,surface:"session-sidebar"})).rejects.toMatchObject({code:"plugin_ui_surface_not_supported"});
+});
+it("repeated mount keeps its document URL", async () => {
+ const f=fixture(), one=await f.service.mount(42,{sessionId:"session",instanceId,surface:"tool-result"});
+ const two=await f.service.mount(42,{sessionId:"session",instanceId,surface:"tool-result"});
+ expect(two.mountId).toBe(one.mountId); expect(two.url).toBe(one.url); expect(f.documents.owns(one.mountId,42)).toBe(true);
+ expect(f.documentReads()).toBe(1);
+});
+it("does not cancel the earlier panel when a later different panel fails to load", async () => {
+  const f = fixture("session-sidebar"); f.holdDocument();
   const first = f.service.mount(42, { sessionId: "session", instanceId, surface: "session-sidebar" });
-  const rejected = expect(first).rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  await f.documentEntered; f.failDocument();
+  await expect(f.service.mount(42, { sessionId: "session", instanceId: otherInstance.instanceId, surface: "session-sidebar" })).rejects.toMatchObject({ code: "plugin_ui_unavailable" });
+  f.releaseDocument(); const mounted = await first;
+  expect(f.documents.owns(mounted.mountId, 42)).toBe(true);
+});
+it("admits only one of two concurrent panels without revoking the winner", async () => {
+  const f = fixture("session-sidebar"); f.holdDocument();
+  const first = f.service.mount(42, { sessionId: "session", instanceId, surface: "session-sidebar" });
+  const rejected = expect(first).rejects.toMatchObject({ code: "plugin_ui_panel_occupied" });
   await f.documentEntered;
-  const current = await f.service.mount(42, { sessionId: "session", instanceId: otherInstance.instanceId, surface: "session-sidebar" });
+  const second = await f.service.mount(42, { sessionId: "session", instanceId: otherInstance.instanceId, surface: "session-sidebar" });
   f.releaseDocument(); await rejected;
-  expect(f.documents.owns(current.mountId, 42)).toBe(true);
+  expect(f.documents.owns(second.mountId, 42)).toBe(true);
+});
+it("two concurrent new frames fill only the last free slot", async () => {
+  const f = fixture();
+  const original = await f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" });
+  const results = await Promise.allSettled([otherInstance.instanceId, "10000000-0000-4000-8000-000000000003"].map(id =>
+    f.service.mount(42, { sessionId: "session", instanceId: id, surface: "tool-result" })));
+  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+  expect(results.filter(result => result.status === "rejected")).toEqual([{ status: "rejected", reason: expect.objectContaining({ code: "plugin_ui_capacity_reached" }) }]);
+  expect(f.documents.owns(original.mountId, 42)).toBe(true);
+});
+it.each([1, 3])("rejects pluginUi capability %s before document loading", async version => {
+  const f = fixture(); f.version(version);
+  await expect(f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" })).rejects.toMatchObject({ code: "plugin_ui_protocol_mismatch" });
+  expect(f.documentReads()).toBe(0);
+});
+it.each([undefined, {}, { draft: false }, { draft: false, submit: "false" }, { draft: false, submit: false, legacy: true }])("rejects missing or malformed conversation facts %j", async value => {
+  const f = fixture(); f.conversation(value);
+  await expect(f.service.getState(42, { sessionId: "session", instanceId })).rejects.toMatchObject({ code: "plugin_ui_invalid_message" });
+  expect(f.documentReads()).toBe(0);
 });
 it("still allows independent inline instances to finish loading in either order", async () => {
   const f = fixture(); f.holdDocument();
@@ -147,7 +182,7 @@ it("refuses legacy capability, extra loader fields, foreign windows and wrong se
   const f = fixture(); f.withoutLifecycle();
   expect(await f.service.capabilities(42)).toEqual({ available: false });
   await expect(f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" }))
-    .rejects.toMatchObject({ code: "plugin_ui_unavailable" });
+    .rejects.toMatchObject({ code: "plugin_ui_protocol_mismatch" });
   const valid = fixture();
   await expect(valid.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result", html: "evil" }))
     .rejects.toMatchObject({ code: "plugin_ui_invalid_message" });
@@ -181,6 +216,11 @@ it("allows host dismissal without creating or executing a document", async () =>
 
 it("rejects a document whose component changes while it is fetched", async () => {
   const f = fixture(); f.driftDocument();
+  await expect(f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" }))
+    .rejects.toMatchObject({ code: "plugin_ui_snapshot_changed" });
+});
+it("rejects a document whose declared position changes while it is fetched", async () => {
+  const f = fixture(); f.changeSurface();
   await expect(f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" }))
     .rejects.toMatchObject({ code: "plugin_ui_snapshot_changed" });
 });

@@ -3,7 +3,7 @@ import type { DesktopSessionPart } from "@shared/session-types"
 export const instanceId = "10000000-0000-4000-8000-000000000001"
 export const mountId = "20000000-0000-4000-8000-000000000001"
 export const instance: PluginUiInstanceRecord = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   instanceId,
   sessionId: "session",
   sourceRunId: "source",
@@ -16,7 +16,7 @@ export const instance: PluginUiInstanceRecord = {
   componentId: "card",
   componentDigest: "b".repeat(64),
   title: "检查结果",
-  surfaces: ["tool-result", "session-sidebar"],
+  surface: "tool-result",
   status: "open",
   revision: 1,
   data: { count: 1 },
@@ -30,7 +30,24 @@ export const snapshot: PluginUiViewSnapshot = {
   data: { count: 1 },
   readOnly: false,
   actions: [{ id: "apply", label: "应用", completion: "keep-open" }],
-  theme: "light",
+  appearance: {
+    theme: "light",
+    colors: {
+      background: "#fff",
+      foreground: "#111",
+      muted: "#eee",
+      mutedForeground: "#555",
+      primary: "#222",
+      primaryForeground: "#fff",
+      accent: "#ddd",
+      border: "#ccc",
+      destructive: "#f00",
+    },
+    fontFamily: "sans-serif",
+    fontSizePx: 14,
+    reducedMotion: false,
+  },
+  capabilities: { draft: false, submit: false },
   locale: "zh-CN",
   surface: "tool-result",
 }

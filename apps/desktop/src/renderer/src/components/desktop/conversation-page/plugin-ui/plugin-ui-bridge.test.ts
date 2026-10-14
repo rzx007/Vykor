@@ -20,20 +20,22 @@ function fixture() {
     }),
   }
   const handlers = {
-    getSnapshot: vi.fn(async () => snapshot),
+    getSnapshot: vi.fn(async (_params: Record<string, unknown>, _signal: AbortSignal) => snapshot),
     requestAction: vi.fn(
       async (_params: Record<string, unknown>, _signal: AbortSignal): Promise<null> => null
     ),
-    openSidebar: vi.fn(async () => null),
+    requestConversation: vi.fn(async () => null),
     resize: vi.fn(async () => null),
     dismiss: vi.fn(async () => null),
   }
   const onError = vi.fn()
+  let visible = true
   const bridge = createPluginUiBridge({
     iframe: { contentWindow: child, ownerDocument: { defaultView: host } } as never,
     mountId,
     snapshot,
     isActive: () => true,
+    isInteractive: () => visible,
     handlers,
     onError,
   })
@@ -45,14 +47,14 @@ function fixture() {
     host.dispatchEvent(
       Object.assign(new Event("message"), {
         source,
-        data: { version: 1, type: "plugin-ui-ready" },
+        data: { version: 2, type: "plugin-ui-ready" },
       })
     )
   let serial = 0
   const send = (method = "getSnapshot", params = {}, extra = {}) =>
     port!.postMessage(
       JSON.stringify({
-        version: 1,
+        version: 2,
         mountId,
         id: String(++serial),
         method,
@@ -68,11 +70,56 @@ function fixture() {
     received,
     send,
     onError,
+    hide: () => { visible = false; bridge.setVisible(false) },
     get port() {
       return port!
     },
   }
 }
+it("keeps snapshot transport while hidden and aborts unconfirmed actions", async () => {
+  const f = fixture(); f.ready();
+  let signal: AbortSignal | undefined;
+  f.handlers.requestAction.mockImplementation(async (_params, next) => {
+    signal = next;
+    return await new Promise<null>(resolve => next.addEventListener("abort", () => resolve(null), { once: true }));
+  });
+  f.send("requestAction", { actionId: "apply", args: {}, expectedRevision: 1 });
+  await vi.waitFor(() => expect(signal).toBeDefined());
+  f.hide(); expect(signal!.aborted).toBe(true);
+  f.send("dismiss", { expectedRevision: 1 }); f.send();
+  await vi.waitFor(() => expect(f.received.some(m => m.id === "2" && m.error?.code === "plugin_ui_hidden")).toBe(true));
+  await vi.waitFor(() => expect(f.received.some(m => m.id === "3" && m.result?.revision === 1)).toBe(true));
+});
+it("lets an in-flight snapshot finish while hidden", async () => {
+  const f = fixture(); f.ready();
+  let finish!: () => void;
+  f.handlers.getSnapshot.mockImplementation(async () => {
+    await new Promise<void>(resolve => { finish = resolve }); return snapshot;
+  });
+  f.send(); await vi.waitFor(() => expect(finish).toBeDefined());
+  f.hide(); finish();
+  await vi.waitFor(() => expect(f.received.some(m => m.id === "1" && m.result?.revision === 1)).toBe(true));
+});
+it("delivers an already accepted action result after hiding", async () => {
+  const f = fixture(); f.ready();
+  let finish!: () => void;
+  f.handlers.requestAction.mockImplementation(async (_params, signal) => {
+    f.bridge.markAccepted(signal);
+    await new Promise<void>(resolve => { finish = resolve }); return null;
+  });
+  f.send("requestAction", { actionId: "apply", args: {}, expectedRevision: 1 });
+  await vi.waitFor(() => expect(finish).toBeDefined()); f.hide(); finish();
+  await vi.waitFor(() => expect(f.received.some(m => m.id === "1" && m.result === null)).toBe(true));
+});
+it("refuses all new business methods while hidden and sidebar resize", async () => {
+  const f = fixture(); f.ready(); f.hide();
+  f.send("requestAction", { actionId: "apply", expectedRevision: 1, args: {} });
+  f.send("dismiss", { expectedRevision: 1 });
+  f.send("requestConversation", { mode: "draft", expectedRevision: 1, text: "Follow up", data: {} });
+  await vi.waitFor(() => expect(f.received.filter(message => message.error?.code === "plugin_ui_hidden")).toHaveLength(3));
+  f.bridge.pushSnapshot({ ...snapshot, surface: "session-sidebar" }); f.send("resize", { height: 320 });
+  await vi.waitFor(() => expect(f.received.some(message => message.id === "4" && message.error?.code === "plugin_ui_surface_not_supported")).toBe(true));
+});
 it("uses exact iframe source, initializes once and serves JSON over a real port", async () => {
   const f = fixture()
   f.ready({})

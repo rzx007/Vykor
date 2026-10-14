@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from "electron"
 import { createHash } from "node:crypto"
 import { createServer } from "node:http"
-import { mkdirSync, readFileSync, readdirSync } from "node:fs"
+import { mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import assert from "node:assert/strict"
 import {
@@ -16,9 +16,13 @@ import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/wi
 import { checkDesktopUi } from "./desktop-ui-check"
 import { checkNativeUi } from "./native-ui-check"
 import { desktopPluginUiDocuments } from "../../src/main/features/plugin-ui/document-runtime"
+import { snapshot as currentSnapshot } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
 
 const root = process.env.VYKOR_UI_TEST_ROOT!
-const profile = join(root, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/electron-profile")
+const profile = join(
+  root,
+  ".superpowers/sdd/2026-10-11-native-plugin-ui-continuity/electron-profile"
+)
 mkdirSync(profile, { recursive: true })
 app.setPath("userData", profile)
 app.setPath("sessionData", profile)
@@ -31,13 +35,13 @@ const deadline = setTimeout(() => {
 }, 120_000)
 const instanceId = "10000000-0000-4000-8000-000000000001"
 const snapshot = {
+  ...currentSnapshot,
   instanceId,
   revision: 1,
   status: "open",
   data: { count: 1 },
   actions: [],
   readOnly: true,
-  theme: "light",
   locale: "zh-CN",
   surface: "tool-result",
 }
@@ -108,10 +112,13 @@ app
       "object",
       "trusted preload must actually run"
     )
-    const assets = join(root, "tests/browser-plugin-ui-sdk/dist/assets")
-    const bundle = readdirSync(assets).filter((name) => name.endsWith(".js"))
-    assert.equal(bundle.length, 1)
-    const sdk = readFileSync(join(assets, bundle[0]!), "utf8").replace(/<\/script/gi, "<\\/script")
+    const sdk =
+      readFileSync(join(root, "examples/plugins/text-inspector/ui/sdk.js"), "utf8").replace(
+        /<\/script/gi,
+        "<\\/script"
+      ) +
+      ";VykorPluginUi.createPluginUiClient().then(client=>{client.onSnapshot(s=>document.querySelector('#status').textContent=String(s.data.count??''));" +
+      "document.querySelector('#apply')?.addEventListener('click',()=>client.requestAction('apply',{value:'<script>not html<\\/script>'}).then(r=>document.querySelector('#result').textContent=r.runId).catch(e=>document.querySelector('#result').textContent=e.code));});"
     const attacks =
       "window.addEventListener('message',event=>{" +
       "if(event.data==='attack'){window.attacksRan=true;window.open(" +
@@ -138,7 +145,11 @@ app
       "if(event.data?.command==='navigate')location.href=event.data.url;" +
       "if(event.data==='retired')location.href='data:text/html,<script>window.escaped=1<\\/script>';});"
     const html =
-      '<p id="status">waiting</p><script>' + sdk + "</script><script>" + attacks + "</script>"
+      '<p id="status">waiting</p><input id="local"><script>' +
+      sdk +
+      "</script><script>" +
+      attacks +
+      "</script>"
     const mounted = store.register({
       ownerId: owner.webContents.id,
       connection: {},
@@ -153,15 +164,15 @@ app
       "window.addEventListener('message',event=>{const frame=document.querySelector('iframe');" +
         "if(event.source!==frame?.contentWindow||event.data?.type!=='plugin-ui-ready')return;" +
         "const c=new MessageChannel();c.port1.onmessage=e=>{const r=JSON.parse(e.data);" +
-        "c.port1.postMessage(JSON.stringify({version:1,mountId:" +
+        "c.port1.postMessage(JSON.stringify({version:2,mountId:" +
         JSON.stringify(mounted.mountId) +
         ",id:r.id,result:" +
         JSON.stringify(snapshot) +
         "}));};" +
-        "frame.contentWindow.postMessage({version:1,type:'plugin-ui-init',mountId:" +
+        "frame.contentWindow.postMessage({version:2,type:'plugin-ui-init',mountId:" +
         JSON.stringify(mounted.mountId) +
         "},'*',[c.port2]);" +
-        "c.port1.postMessage(JSON.stringify({version:1,mountId:" +
+        "c.port1.postMessage(JSON.stringify({version:2,mountId:" +
         JSON.stringify(mounted.mountId) +
         ",type:'snapshot',snapshot:" +
         JSON.stringify(snapshot) +
@@ -205,6 +216,7 @@ app
       parent: false,
     })
     const original = frame.url
+    await frame.executeJavaScript("document.querySelector('#local').value='capacity input'")
     // Attacks run in the author's actual document realm, not privileged main executeJavaScript.
     await owner.webContents.executeJavaScript(
       "document.querySelector('iframe').contentWindow.postMessage('attack','*')"
@@ -232,6 +244,37 @@ app
       html: targetHtml,
       sha256: createHash("sha256").update(targetHtml).digest("hex"),
     })
+    // Two live frames fill the window capacity; rejection must preserve both mounts.
+    await owner.webContents.executeJavaScript(
+      "const second=document.createElement('iframe');second.sandbox='allow-scripts';second.src=" +
+        JSON.stringify(target.url) +
+        ";document.body.append(second)"
+    )
+    await wait(
+      async () =>
+        owner.webContents.mainFrame.frames.length === 2 &&
+        (await owner.webContents.mainFrame.frames[1]!.executeJavaScript("window.foreign===1"))
+    )
+    assert.throws(
+      () =>
+        store.register({
+          ownerId: owner.webContents.id,
+          connection: {},
+          sessionId: "session",
+          instanceId: "10000000-0000-4000-8000-000000000003",
+          componentDigest: "c".repeat(64),
+          surface: "tool-result",
+          html: targetHtml,
+          sha256: createHash("sha256").update(targetHtml).digest("hex"),
+        }),
+      /plugin_ui_capacity_reached/
+    )
+    assert.equal(store.owns(mounted.mountId, owner.webContents.id), true)
+    assert.equal(store.owns(target.mountId, owner.webContents.id), true)
+    assert.equal(
+      await frame.executeJavaScript("document.querySelector('#local').value"),
+      "capacity input"
+    )
     await owner.webContents.executeJavaScript(
       "document.querySelector('iframe').contentWindow.postMessage(" +
         JSON.stringify({ command: "navigate", url: target.url }) +
@@ -286,6 +329,7 @@ app
           "other window denied",
           "main CSP unchanged",
           "live-owner retirement",
+          "two-frame capacity rejection preserves mounts",
         ],
         requests,
         popups,

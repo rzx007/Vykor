@@ -12,8 +12,13 @@ import type {
   PluginUiHostState,
 } from "@shared/plugin-ui-types"
 import { Button } from "@renderer/components/ui/button"
+import { readPluginUiAppearance } from "./plugin-ui-appearance"
 import { createPluginUiBridge } from "./plugin-ui-bridge"
-import { usePluginUiHost, type PluginUiDisplay } from "./plugin-ui-provider"
+import {
+  usePluginUiHost,
+  type PluginUiDisplay,
+  type PluginUiMountLease,
+} from "./plugin-ui-provider"
 
 export function pluginUiError(error: unknown): PluginUiBridgeError {
   const code =
@@ -43,20 +48,38 @@ export async function submitPluginUiAction(
     clearTimeout(timer)
   }
 }
-function hostSnapshot(state: PluginUiHostState, display: PluginUiDisplay): PluginUiViewSnapshot {
+function hostSnapshot(
+  state: PluginUiHostState,
+  display: PluginUiDisplay,
+  visible: boolean
+): PluginUiViewSnapshot {
   return parsePluginUiBridgeSnapshot({
     ...state.snapshot,
     surface: display.surface,
-    theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+    appearance: readPluginUiAppearance(),
+    capabilities: {
+      draft: visible && state.conversation.draft,
+      submit: visible && state.conversation.submit,
+    },
     locale: document.documentElement.lang || navigator.language,
   })
 }
-export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
+export function PluginUiFrame({
+  display,
+  visible = true,
+}: {
+  display: PluginUiDisplay
+  visible?: boolean
+}) {
   const host = usePluginUiHost()!
   const hostRef = useRef(host)
   hostRef.current = host
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
   const iframe = useRef<HTMLIFrameElement>(null)
-  const [mounted, setMounted] = useState<DesktopPluginUiMountResult | null>(null)
+  const [mounted, setMounted] = useState<
+    (DesktopPluginUiMountResult & { displayKey: string; lease: PluginUiMountLease }) | null
+  >(null)
   const [error, setError] = useState(false)
   const [height, setHeight] = useState(320)
   const state = useRef<PluginUiHostState | null>(null)
@@ -66,21 +89,26 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
   const target = { sessionId: display.instance.sessionId, instanceId: display.instance.instanceId }
   useEffect(() => {
     let active = true
+    let lease: PluginUiMountLease | undefined
+    setError(false)
+    setMounted(null)
     live.current = true
-    const api = window.desktop.pluginUi
     void Promise.resolve()
       .then(async () => {
         // Effect replay can retire this setup before it starts a document load.
         if (!active) return
-        const result = await api.mount({ ...target, surface: display.surface })
+        lease = hostRef.current.mount(display)
+        const result = await lease.result
         if (!active || !hostRef.current.isCurrent(target.instanceId)) {
-          void api.unmount({ mountId: result.mountId })
+          void lease.release().catch(() => {})
           return
         }
-        if (result.url !== "vykor-plugin-ui://frame/" + result.mountId)
+        if (result.url !== "vykor-plugin-ui://frame/" + result.mountId) {
+          void lease.release().catch(() => {})
           throw new PluginUiBridgeError("plugin_ui_invalid_document")
+        }
         state.current = result.state
-        setMounted(result)
+        setMounted({ ...result, displayKey: display.key, lease })
       })
       .catch(() => {
         if (active) setError(true)
@@ -90,23 +118,24 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
       live.current = false
       sequence.current++
       bridge.current?.dispose()
+      void lease?.release().catch(() => {})
     }
   }, [display.key])
   useEffect(() => {
-    if (error && mounted) {
+    if (error && mounted && mounted.displayKey === display.key) {
       live.current = false
       bridge.current?.dispose()
-      void window.desktop.pluginUi.unmount({ mountId: mounted.mountId })
+      void mounted.lease.release().catch(() => {})
     }
-  }, [error, mounted])
+  }, [error, mounted, display.key])
   useLayoutEffect(() => {
-    if (!mounted || !iframe.current) return
+    if (!mounted || mounted.displayKey !== display.key || !iframe.current) return
     const api = window.desktop.pluginUi
     const active = () => live.current && hostRef.current.isCurrent(target.instanceId)
     const current = () => {
       if (!active() || !state.current) throw new PluginUiBridgeError("plugin_ui_mount_closed")
       const view = hostRef.current.view
-      const snapshot = hostSnapshot(state.current, display)
+      const snapshot = hostSnapshot(state.current, display, visibleRef.current)
       snapshot.readOnly ||=
         view?.session.status === "archived" ||
         Boolean(view?.runs.some((run) => run.status === "running" || run.status === "pending"))
@@ -117,9 +146,10 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
       mountId: mounted.mountId,
       snapshot: current(),
       isActive: active,
+      isInteractive: () => visibleRef.current,
       onError: () => {
         setError(true)
-        void api.unmount({ mountId: mounted.mountId })
+        void mounted.lease.release().catch(() => {})
       },
       handlers: {
         getSnapshot: async () => current(),
@@ -127,11 +157,19 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
           setHeight(params.height as number)
           return null
         },
-        openSidebar: async () => {
-          if (!state.current?.surfaces.includes("session-sidebar"))
-            throw new PluginUiBridgeError("plugin_ui_surface_not_supported")
-          hostRef.current.open(display.instance, "session-sidebar")
-          return null
+        requestConversation: async (params, signal, requestId) => {
+          const before = current()
+          if (!before.capabilities[params.mode as "draft" | "submit"])
+            throw new PluginUiBridgeError("plugin_ui_conversation_unavailable")
+          return await hostRef.current.requestConversation(
+            mounted.mountId,
+            display.instance,
+            params,
+            signal,
+            () => active() && visibleRef.current,
+            () => ready.markAccepted(signal),
+            requestId
+          )
         },
         requestAction: async (params, signal) => {
           const before = current()
@@ -157,6 +195,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
           if (current().revision !== input.expectedRevision)
             throw new PluginUiBridgeError("plugin_ui_revision_conflict")
           if (current().readOnly) throw new PluginUiBridgeError("plugin_ui_read_only")
+          ready.markAccepted(signal)
           return await submitPluginUiAction(api, mounted.mountId, input)
         },
         dismiss: async (params, signal) => {
@@ -176,6 +215,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
             signal
           )
           if (!active() || signal.aborted) throw new PluginUiBridgeError("plugin_ui_mount_closed")
+          ready.markAccepted(signal)
           await api.dismiss({ ...target, input })
           return null
         },
@@ -194,16 +234,20 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
     })
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class", "lang"],
+      attributeFilter: ["class", "lang", "style", "data-reduced-motion"],
     })
     return () => {
       observer.disconnect()
       off()
       ready.dispose()
       bridge.current = null
-      void api.unmount({ mountId: mounted.mountId })
+      void mounted.lease.release().catch(() => {})
     }
   }, [mounted, display.key])
+  useLayoutEffect(() => {
+    bridge.current?.setVisible(visible)
+    if (state.current) bridge.current?.pushSnapshot(hostSnapshot(state.current, display, visible))
+  }, [visible])
   useEffect(() => {
     if (!mounted || !host.available || !host.isCurrent(target.instanceId)) return
     const serial = ++sequence.current
@@ -220,7 +264,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
         )
           return
         state.current = next
-        const updated = hostSnapshot(next, display)
+        const updated = hostSnapshot(next, display, visibleRef.current)
         updated.readOnly ||= Boolean(
           hostRef.current.view?.runs.some(
             (run) => run.status === "pending" || run.status === "running"
@@ -243,6 +287,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
           variant="ghost"
           size="sm"
           shape="pill"
+          title="重新加载后输入不保留"
           onClick={() => host.open(display.instance, display.surface, undefined, true)}
         >
           重新加载
@@ -252,7 +297,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
         </a>
       </div>
     )
-  if (!mounted)
+  if (!mounted || mounted.displayKey !== display.key)
     return (
       <p role="status" className="p-3 text-sm text-muted-foreground">
         正在加载交互页面…
@@ -261,13 +306,20 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
   return (
     <iframe
       ref={iframe}
+      hidden={!visible}
+      inert={!visible}
+      tabIndex={visible ? 0 : -1}
       src={mounted.url}
       title={mounted.state.title}
       sandbox="allow-scripts"
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; fullscreen 'none'"
       referrerPolicy="no-referrer"
       className="block w-full border-0"
-      style={{ height: display.surface === "session-sidebar" ? "100%" : height, minHeight: 160 }}
+      style={{
+        display: visible ? undefined : "none",
+        height: display.surface === "session-sidebar" ? "100%" : height,
+        minHeight: 160,
+      }}
     />
   )
 }

@@ -9,7 +9,7 @@ import { DesktopPluginUiService } from "../../src/main/features/plugin-ui/plugin
 import { createPluginUiIpcContribution } from "../../src/main/features/plugin-ui/ipc"
 import { SessionSubscriptionService } from "../../src/main/features/session/session-subscription-service"
 import type { PluginUiDocumentStore } from "../../src/main/features/plugin-ui/document-store"
-import { IpcEvents } from "../../src/shared/ipc-channels"
+import { IpcEvents, IpcChannels } from "../../src/shared/ipc-channels"
 import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/window-policy"
 import { checkReferenceUi } from "./reference-ui-check"
 
@@ -86,9 +86,11 @@ export async function checkNativeUi(
   subscriptions.onOwnerInvalidated((id) => service.invalidateOwner(id))
   const page = join(
     root,
-    ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/electron-build/renderer/tests/plugin-ui-electron/ui-host.html"
+    ".superpowers/sdd/2026-10-11-native-plugin-ui-continuity/electron-build/renderer/tests/plugin-ui-electron/ui-host.html"
   )
   const handlers = createPluginUiIpcContribution(() => service).register({} as never)
+  ipcMain.handle(IpcChannels.sessionUpdateAck, (event, ack) => subscriptions.acknowledgeUpdate(event.sender.id, ack))
+  ipcMain.handle(IpcChannels.sessionUpdateResync, (event, request) => subscriptions.requestUpdateResync(event.sender.id, request))
   let pendingIpc = 0
   for (const { channel, handler } of handlers)
     ipcMain.handle(channel, async (event, ...args) => {
@@ -142,16 +144,16 @@ export async function checkNativeUi(
       service.registerOwner(window.webContents, pathToFileURL(page).href)
       await window.loadFile(page)
       const snapshot = await subscriptions.openSession(client, window.webContents, ready.sessionId)
-      window.webContents.send(IpcEvents.sessionUpdated, snapshot)
+      window.webContents.send(IpcEvents.sessionUpdated, { kind: "snapshot", subscriptionId: "initial", generation: 0, deliveryId: "initial", view: snapshot })
       await wait(() =>
         evaluate(
           window,
           "document.body.textContent.includes(" +
             JSON.stringify(reference ? "example.text-inspector" : "test.ui-electron") +
-            ")&&document.body.textContent.includes('打开交互')"
+            ")&&document.body.textContent.includes(" + JSON.stringify(reference ? "在侧栏打开" : "打开交互") + ")"
         )
       )
-      await click(window, "打开交互")
+      await click(window, reference ? "在侧栏打开" : "打开交互")
       await wait(() => evaluate(window, "document.querySelector('iframe')!==null"))
     }
     if (reference) {
@@ -163,14 +165,16 @@ export async function checkNativeUi(
       assert.equal(effects(), 0)
       const author = owner.webContents.mainFrame.frames[0]!
       await author.executeJavaScript(
-        "for(const [id,method,extra] of [['attack1','Execute',{}],['attack2','getSnapshot',{html:'x'}],['attack3','getSnapshot',{mountId:'40000000-0000-4000-8000-000000000001'}]])" +
-          "testPort.postMessage(JSON.stringify({version:1,mountId:testMount,id,method,params:{},...extra}));"
+        "for(const [id,method,extra] of [['attack1','Execute',{}],['attack2','getSnapshot',{html:'x'}],['attack3','getSnapshot',{mountId:'40000000-0000-4000-8000-000000000001'}],['attack4','openSidebar',{}],['attack5','getSnapshot',{version:1}]])" +
+          "testPort.postMessage(JSON.stringify({version:2,mountId:testMount,id,method,params:{},...extra}));"
       )
-      await wait(() => author.executeJavaScript("window.testReplies.length===3"))
+      await wait(() => author.executeJavaScript("window.testReplies.length===5"))
       assert.deepEqual(await author.executeJavaScript("window.testReplies.map(r=>r.error.code)"), [
         "plugin_ui_method_not_supported",
         "plugin_ui_invalid_message",
         "plugin_ui_mount_closed",
+        "plugin_ui_method_not_supported",
+        "plugin_ui_invalid_message",
       ])
       assert.equal(effects(), 0)
       await click(owner, "返回")
@@ -184,7 +188,14 @@ export async function checkNativeUi(
       await request(second)
       assert.equal(effects(), 0)
       await click(owner, "确认执行")
-      await wait(async () => effects() === 1)
+      await wait(async () => effects() === 1).catch(async error => {
+        const current = await client.sessions.getState(ready.sessionId)
+        throw new Error(String(error) + " after Native confirm: " + JSON.stringify({
+          runs: current.runs.map(run => ({ id: run.id, status: run.status, error: run.error })),
+          author: await author.executeJavaScript("({status:document.querySelector('#status').textContent,result:document.querySelector('#result').textContent})"),
+          dialog: await evaluate(owner, "document.querySelector('[role=alertdialog]')?.textContent"),
+        }))
+      })
       await wait(() =>
         second.webContents.mainFrame.frames[0]!.executeJavaScript(
           "document.querySelector('#status')?.textContent==='0'"
@@ -238,12 +249,15 @@ export async function checkNativeUi(
     if (reference) console.log(JSON.stringify({ stage: "reference page cleanup" }))
     // Dispose React frames while IPC handlers still exist, including failed assertions.
     await owner.loadURL("about:blank")
+    await second.loadURL("about:blank")
     if (reference) console.log(JSON.stringify({ stage: "reference page unloaded" }))
     await wait(async () => pendingIpc === 0)
     subscriptions.clearAll()
     service.dispose()
     second.destroy()
     for (const { channel } of handlers) ipcMain.removeHandler(channel)
+    ipcMain.removeHandler(IpcChannels.sessionUpdateAck)
+    ipcMain.removeHandler(IpcChannels.sessionUpdateResync)
     const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()))
     if (child.connected) child.send("close")
     if (reference) console.log(JSON.stringify({ stage: "reference backend closing" }))
@@ -320,7 +334,7 @@ export async function checkNativeUi(
   return reference
     ? {
         officialReferencePlugin: true,
-        keyboardCancelAndConfirm: true,
+        hiddenWindowCancelAndConfirm: true,
         samplePreviewNoFileWrites: true,
       }
     : {

@@ -1,53 +1,34 @@
 import type { BrowserWindow, WebFrameMain } from "electron"
-import { mkdirSync, writeFileSync, readdirSync } from "node:fs"
-import { join } from "node:path"
+import { readdirSync } from "node:fs"
 import assert from "node:assert/strict"
 import type { VykorClient } from "@vykor/client"
 
-/** Real packaged sample, real SDK, trusted host confirmation, and real Native/SQLite. */
+/** Packaged sample, current SDK and real Native/SQLite; hidden window, behavioral assertions only. */
 export async function checkReferenceUi(
   owner: BrowserWindow,
   client: VykorClient,
   ready: { sessionId: string; instanceId: string; root: string },
   modelAttempts: number,
-  root: string
+  _root: string
 ) {
   const evaluate = (source: string) => owner.webContents.executeJavaScript(source)
   const wait = async (predicate: () => Promise<boolean>) => {
-    const end = Date.now() + 8000
-    while (Date.now() < end) {
+    const until = Date.now() + 8000
+    while (Date.now() < until) {
       if (await predicate()) return
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
     throw new Error("Reference UI assertion deadline")
   }
   const frameReady = async (): Promise<WebFrameMain> => {
-    await wait(async () => {
-      const frame = owner.webContents.mainFrame.frames[0]
-      return (
-        !!frame &&
-        (await frame.executeJavaScript("document.querySelector('#preview')?.value.length>0"))
-      )
-    })
+    await wait(
+      async () =>
+        !!owner.webContents.mainFrame.frames[0] &&
+        (await owner.webContents.mainFrame.frames[0]!.executeJavaScript(
+          "document.querySelector('#preview')?.value.length>0"
+        ))
+    )
     return owner.webContents.mainFrame.frames[0]!
-  }
-  owner.webContents.debugger.attach("1.3")
-  const key = async (code: "Space" | "Enter" | "Tab" | "Escape") => {
-    const params =
-      code === "Space"
-        ? { key: " ", code, windowsVirtualKeyCode: 32, text: " " }
-        : code === "Enter"
-          ? { key: "Enter", code, windowsVirtualKeyCode: 13, text: "\r" }
-          : { key: code, code, windowsVirtualKeyCode: code === "Tab" ? 9 : 27, text: undefined }
-    await owner.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      ...params,
-    })
-    await owner.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      ...params,
-      text: undefined,
-    })
   }
   const clickHost = (label: string) =>
     evaluate(
@@ -56,264 +37,174 @@ export async function checkReferenceUi(
         ").click()"
     )
   let frame = await frameReady()
+  const initial = await client.pluginUi.get(ready.sessionId, ready.instanceId)
+  assert.equal(initial.instance.surface, "session-sidebar")
+  assert.equal(await frame.executeJavaScript("document.querySelector('#sidebar')===null"), true)
   assert.equal(
     await frame.executeJavaScript("document.querySelectorAll('input[type=checkbox]').length"),
     2
   )
-  const initial = await client.pluginUi.get(ready.sessionId, ready.instanceId)
-  assert.equal(
-    await frame.executeJavaScript("document.querySelector('input[type=checkbox]').disabled"),
-    false,
-    JSON.stringify({
-      availability: initial.availability,
-      actions: initial.actions.map((action) => action.id),
-      ui: await frame.executeJavaScript(
-        "({status:document.querySelector('#status').textContent,preview:document.querySelector('#preview-button').disabled})"
-      ),
-    })
-  )
+  assert.equal(await frame.executeJavaScript("document.querySelector('input').disabled"), false)
   const beforeFiles = readdirSync(ready.root).sort()
-  // Windows suppresses cross-frame dialog autofocus in a never-shown window.
-  // Activate this isolated fixture off-screen; never touch the user's desktop app.
-  owner.setPosition(-10000, -10000)
-  owner.show()
-  owner.focus()
-  await evaluate(
-    "window.testKeys=[];document.addEventListener('keydown',e=>testKeys.push({key:e.key,code:e.code,tag:e.target.tagName}),true)"
-  )
   await frame.executeJavaScript(
-    "window.testKeys=[];document.addEventListener('keydown',e=>testKeys.push({key:e.key,code:e.code,tag:e.target.tagName}),true)"
+    "document.querySelector('input').click();document.querySelector('#conversation-text').value='local note'"
   )
-  // Focus only selects the target; Chromium's native key events actually toggle and submit.
-  owner.webContents.focus()
-  await evaluate("document.querySelector('iframe').focus()")
-  await frame.executeJavaScript("document.querySelector('input[type=checkbox]').focus()", true)
-  await key("Space")
-  await wait(() =>
-    frame.executeJavaScript("document.querySelector('input[type=checkbox]').checked")
-  ).catch(async (error) => {
-    throw new Error(
-      String(error) +
-        " keyboard focus: " +
-        JSON.stringify(
-          await frame.executeJavaScript(
-            "({focused:document.hasFocus(),active:document.activeElement.tagName,checked:document.querySelector('input[type=checkbox]').checked})"
-          )
-        )
-    )
-  })
-  await key("Tab")
-  assert.equal(await frame.executeJavaScript("document.activeElement.value"), "2:tab-indentation")
-  await key("Tab")
-  assert.equal(await frame.executeJavaScript("document.activeElement.id"), "preview-button")
-  await key("Enter")
-  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
-  assert.equal(
-    (await client.sessions.getState(ready.sessionId)).runs.filter((run) => run.metadata.uiAction)
-      .length,
-    0
-  )
-  await wait(() => evaluate("document.activeElement.textContent==='返回'")).catch(async (error) => {
-    throw new Error(
-      String(error) +
-        " dialog focus: " +
-        JSON.stringify(
-          await evaluate(
-            "({focused:document.hasFocus(),active:document.activeElement.tagName,text:document.activeElement.textContent,visible:!!document.querySelector('[role=alertdialog]')})"
-          )
-        )
-    )
-  })
-  assert.equal(
-    await evaluate("document.activeElement.textContent"),
-    "返回",
-    "safe cancel has default focus"
-  )
-  await key("Enter")
-  await wait(() =>
-    frame.executeJavaScript("document.querySelector('#status').textContent.includes('已取消')")
-  ).catch(async (error) => {
-    throw new Error(
-      String(error) +
-        " cancel state: " +
-        JSON.stringify({
-          author: await frame.executeJavaScript(
-            "({status:document.querySelector('#status').textContent,active:document.activeElement.tagName})"
-          ),
-          host: await evaluate(
-            "({dialog:!!document.querySelector('[role=alertdialog]'),active:document.activeElement.textContent,keys:window.testKeys})"
-          ),
-          childKeys: await frame.executeJavaScript("window.testKeys"),
-        })
-    )
-  })
-  assert.equal(
-    (await client.sessions.getState(ready.sessionId)).runs.filter((run) => run.metadata.uiAction)
-      .length,
-    0
-  )
-  await frame.executeJavaScript("document.querySelector('#preview-button').focus()")
-  await key("Enter")
-  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
-  await wait(() => evaluate("document.activeElement.textContent==='返回'"))
-  await key("Escape")
-  await wait(() => evaluate("document.querySelector('[role=alertdialog]')===null"))
-  await wait(() =>
-    frame.executeJavaScript("document.querySelector('#status').textContent.includes('已取消')")
-  )
-  assert.equal(
-    (await client.sessions.getState(ready.sessionId)).runs.filter((run) => run.metadata.uiAction)
-      .length,
-    0
-  )
-  await frame.executeJavaScript("document.querySelector('#preview-button').focus()")
-  await key("Enter")
-  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
-  await wait(() => evaluate("document.activeElement.textContent==='返回'"))
+  const originalId = frame.frameTreeNodeId
   await evaluate(
-    "Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='确认执行').focus()"
+    "window.originalPluginFrame=document.querySelector('iframe');document.documentElement.classList.add('dark')"
   )
-  await wait(() => evaluate("document.activeElement.textContent==='确认执行'"))
-  await key("Enter")
+  await wait(() =>
+    frame.executeJavaScript("document.documentElement.dataset.theme==='dark'")
+  ).catch(async (error) => {
+    console.log(
+      JSON.stringify({
+        stage: "reference appearance failure",
+        css: await evaluate(
+          "(()=>{const c=getComputedStyle(document.documentElement);return Object.fromEntries(['--background','--foreground','--muted','--muted-foreground','--primary','--primary-foreground','--accent','--border','--destructive','--font-sans','--ui-font-size','font-family'].map(k=>[k,c.getPropertyValue(k)]))})()"
+        ),
+      })
+    )
+    throw error
+  })
+  assert.equal(
+    (await client.pluginUi.get(ready.sessionId, ready.instanceId)).instance.revision,
+    initial.instance.revision
+  )
+  assert.equal(
+    await frame.executeJavaScript(
+      "document.querySelector('input').checked && document.querySelector('#conversation-text').value==='local note'"
+    ),
+    true
+  )
+  await clickHost("隐藏侧栏")
+  await wait(() => frame.executeJavaScript("document.querySelector('#draft').hidden"))
+  assert.equal(
+    await evaluate("document.querySelector('iframe')===window.originalPluginFrame"),
+    true
+  )
+  assert.equal(owner.webContents.mainFrame.frames[0]!.frameTreeNodeId, originalId)
+  assert.equal(
+    await frame.executeJavaScript("document.querySelector('#conversation-text').value"),
+    "local note"
+  )
+  await clickHost("显示侧栏")
+  await wait(() => frame.executeJavaScript("!document.querySelector('#draft').hidden"))
+  await frame.executeJavaScript("document.querySelector('#preview-button').click()")
+  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
+  assert.equal(
+    (await client.sessions.getState(ready.sessionId)).runs.filter((run) => run.metadata.uiAction)
+      .length,
+    0
+  )
+  await clickHost("返回")
+  await wait(() =>
+    frame.executeJavaScript("document.querySelector('#status').textContent.includes('已取消')")
+  )
+  assert.equal(await frame.executeJavaScript("document.querySelector('input').checked"), true)
+  await frame.executeJavaScript("document.querySelector('#preview-button').click()")
+  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
+  await clickHost("确认执行")
   await wait(() =>
     frame.executeJavaScript(
       "document.querySelector('#preview').value===" + JSON.stringify("ok\n\titem\n")
     )
-  ).catch(async (error) => {
-    const state = await client.sessions.getState(ready.sessionId)
-    throw new Error(
-      String(error) +
-        " preview state: " +
-        JSON.stringify({
-          uiRuns: state.runs
-            .filter((run) => run.metadata.uiAction)
-            .map((run) => ({ status: run.status })),
-          author: await frame.executeJavaScript(
-            "({status:document.querySelector('#status').textContent,length:document.querySelector('#preview').value.length})"
-          ),
-          host: await evaluate(
-            "({dialog:!!document.querySelector('[role=alertdialog]'),active:document.activeElement.textContent,keys:window.testKeys})"
-          ),
-        })
-    )
-  })
+  )
   await wait(() =>
     frame.executeJavaScript("document.querySelector('#status').textContent.includes('预览已生成')")
   )
-  assert.equal(await frame.executeJavaScript("document.querySelector('#preview').readOnly"), true)
   assert.equal(
     await frame.executeJavaScript("document.querySelectorAll('input:checked').length"),
     0
   )
-  const state = await client.sessions.getState(ready.sessionId)
-  assert.equal(state.inputs.length, 1)
-  assert.equal(state.runs.filter((run) => run.metadata.uiAction).length, 1)
-  assert.equal(state.attempts.length, modelAttempts)
+  const previewState = await client.sessions.getState(ready.sessionId)
+  assert.equal(previewState.inputs.length, 1)
+  assert.equal(previewState.runs.filter((run) => run.metadata.uiAction).length, 1)
+  assert.equal(previewState.attempts.length, modelAttempts)
   assert.deepEqual(
     readdirSync(ready.root).sort(),
     beforeFiles,
     "pure preview creates no workspace file"
   )
-  const screenshots = join(root, ".superpowers/sdd/2026-10-04-native-plugin-ui-a4/screenshots")
-  mkdirSync(screenshots, { recursive: true })
-  await wait(() => evaluate("document.querySelector('[data-slot=alert-dialog-overlay]')===null"))
-  await frame.executeJavaScript("document.querySelector('input').click()")
-  assert.equal(
-    await frame.executeJavaScript("document.querySelector('#preview-button').disabled"),
-    false
+  // The remaining finding is selected and sent via the actual SDK/host handoff.
+  await frame.executeJavaScript(
+    "document.querySelector('input').click();document.querySelector('#conversation-text').value='please explain chosen line'"
   )
-  for (const [width, theme, filename] of [
-    [1000, "light", "wide-light.png"],
-    [420, "light", "narrow-light.png"],
-    [1000, "dark", "wide-dark.png"],
-    [420, "dark", "narrow-dark.png"],
-  ] as const) {
-    owner.setContentSize(width, 950)
-    await evaluate(
-      "document.documentElement.classList.toggle('dark'," + String(theme === "dark") + ")"
-    )
-    await wait(() =>
-      frame.executeJavaScript("document.documentElement.dataset.theme===" + JSON.stringify(theme))
-    )
-    assert.equal(
-      await frame.executeJavaScript("document.documentElement.scrollWidth<=innerWidth"),
-      true,
-      filename + " has no horizontal overflow"
-    )
-    await evaluate("window.scrollTo(0,0)")
-    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))")
-    writeFileSync(join(screenshots, filename), (await owner.webContents.capturePage()).toPNG())
-  }
-  console.log(JSON.stringify({ stage: "reference sidebar click" }))
-  await frame.executeJavaScript("document.querySelector('#sidebar').click()")
-  console.log(JSON.stringify({ stage: "reference sidebar click returned" }))
+  await frame.executeJavaScript("document.querySelector('#draft').click()")
+  await wait(() => evaluate("document.body.textContent.includes('确认加入输入框')"))
+  await clickHost("确认加入输入框")
   await wait(() =>
-    evaluate("document.querySelector('[aria-label=\"插件交互侧栏\"] iframe')!==null")
+    frame.executeJavaScript(
+      "document.querySelector('#status').textContent.includes('已加入输入框')"
+    )
   )
-  console.log(JSON.stringify({ stage: "reference sidebar mounted" }))
-  frame = await frameReady()
-  console.log(JSON.stringify({ stage: "reference sidebar frame ready" }))
+  assert.equal((await client.sessions.getState(ready.sessionId)).inputs.length, 1)
   assert.equal(
-    await frame.executeJavaScript("getComputedStyle(document.querySelector('#sidebar')).display"),
-    "none",
-    "sidebar must not offer a second sidebar-opening action"
-  )
-  assert.equal(
-    await frame.executeJavaScript(
-      "document.querySelector('#status').textContent.includes('操作未完成')"
-    ),
-    false,
-    "sidebar initialization must not request an unsupported card resize"
-  )
-  for (const theme of ["light", "dark"]) {
     await evaluate(
-      "document.documentElement.classList.toggle('dark'," + String(theme === "dark") + ")"
-    )
-    await wait(() =>
-      frame.executeJavaScript("document.documentElement.dataset.theme===" + JSON.stringify(theme))
-    )
-    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))")
-    // A newly mounted off-screen child can suspend its own animation frames.
-    await owner.webContents.capturePage()
-    writeFileSync(
-      join(screenshots, "sidebar-" + theme + ".png"),
-      (await owner.webContents.capturePage()).toPNG()
-    )
-  }
-  assert.equal(
-    await frame.executeJavaScript("document.querySelector('#preview').value"),
-    "ok\n\titem\n"
-  )
-  await clickHost("关闭侧栏")
-  console.log(JSON.stringify({ stage: "reference sidebar close returned" }))
-  await wait(() => evaluate("document.querySelector('iframe')===null"))
-  await wait(() => evaluate("document.activeElement.textContent==='打开交互'"))
-  console.log(JSON.stringify({ stage: "reference sidebar focus restored" }))
-  await clickHost("打开交互")
-  frame = await frameReady()
-  console.log(JSON.stringify({ stage: "reference dismiss click" }))
-  await frame.executeJavaScript("document.querySelector('#dismiss').click()")
-  console.log(JSON.stringify({ stage: "reference dismiss click returned" }))
-  await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
-  console.log(JSON.stringify({ stage: "reference dismiss confirmation shown" }))
-  await clickHost("确认取消")
-  await wait(() => frame.executeJavaScript("document.querySelector('#dismiss').disabled"))
-  console.log(JSON.stringify({ stage: "reference dismissed read-only" }))
-  assert.equal(
-    (await client.pluginUi.get(ready.sessionId, ready.instanceId)).instance.status,
-    "dismissed"
-  )
-  assert.equal(
-    (await client.sessions.getState(ready.sessionId)).runs.filter((run) => run.metadata.uiAction)
-      .length,
-    1
-  )
-  assert.equal(
-    await frame.executeJavaScript("document.querySelector('#preview-button').disabled"),
+      "document.querySelector('#composer-draft').textContent.includes('please explain chosen line')"
+    ),
     true
   )
-  await clickHost("关闭显示")
+  await frame.executeJavaScript(
+    "document.querySelector('#conversation-text').value='assistant submit only';document.querySelector('#submit').click()"
+  )
+  await wait(() => evaluate("document.body.textContent.includes('确认交给助手')"))
+  await clickHost("返回")
+  await wait(() =>
+    frame.executeJavaScript("document.querySelector('#status').textContent.includes('已取消')")
+  )
+  assert.equal((await client.sessions.getState(ready.sessionId)).inputs.length, 1)
+  assert.equal(
+    await frame.executeJavaScript("document.querySelector('#conversation-text').value"),
+    "assistant submit only"
+  )
+  await frame.executeJavaScript("document.querySelector('#submit').click()")
+  await wait(() => evaluate("document.body.textContent.includes('确认交给助手')"))
+  assert.equal(
+    await evaluate(
+      "document.querySelector('[role=alertdialog]').textContent.includes('please explain chosen line')"
+    ),
+    false,
+    "submit excludes existing composer draft"
+  )
+  await clickHost("确认交给助手")
+  await wait(() =>
+    frame.executeJavaScript("document.querySelector('#status').textContent.includes('已交给助手')")
+  )
+  await wait(async () => (await client.sessions.getState(ready.sessionId)).inputs.length === 2)
+  const submitted = await client.sessions.getState(ready.sessionId)
+  assert.equal(submitted.runs.filter((run) => run.metadata.uiAction).length, 1)
+  assert.equal(submitted.runs.length, previewState.runs.length + 1)
+  assert.equal(
+    await evaluate(
+      "document.querySelector('#composer-draft').textContent.includes('please explain chosen line')"
+    ),
+    true
+  )
+  await clickHost("关闭侧栏")
   await wait(() => evaluate("document.querySelector('iframe')===null"))
-  owner.webContents.debugger.detach()
-  owner.hide()
+  await clickHost("在侧栏打开")
+  frame = await frameReady()
+  assert.notEqual(frame.frameTreeNodeId, originalId)
+  assert.equal(
+    await frame.executeJavaScript("document.querySelector('#conversation-text').value"),
+    "请解释所选格式问题并给出建议。"
+  )
+  assert.equal(
+    await frame.executeJavaScript("document.querySelectorAll('input:checked').length"),
+    0
+  )
+  assert.equal(await frame.executeJavaScript("document.querySelector('#dismiss').disabled"), true)
+  assert.equal(
+    (await client.pluginUi.get(ready.sessionId, ready.instanceId)).instance.status,
+    "resolved"
+  )
+  await frame.executeJavaScript("document.querySelector('input').click()")
+  assert.equal(
+    await frame.executeJavaScript(
+      "!document.querySelector('#draft').disabled && document.querySelector('#submit').hidden"
+    ),
+    true
+  )
+  await clickHost("关闭侧栏")
+  await wait(() => evaluate("document.querySelector('iframe')===null"))
 }

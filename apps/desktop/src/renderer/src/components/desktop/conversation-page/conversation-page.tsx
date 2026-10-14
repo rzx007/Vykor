@@ -12,6 +12,8 @@ import {
   MessageScrollerViewport,
 } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { Button } from "@renderer/components/ui/button"
+import { usePluginUiHost } from "./plugin-ui/plugin-ui-provider"
 import {
   Select,
   SelectContent,
@@ -101,6 +103,7 @@ function ConversationPane({
   onOpenTerminal,
   onOpenAgents,
 }: ConversationPaneProps): React.JSX.Element {
+  const pluginUiHost = usePluginUiHost()
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
   const [taskLocation, setTaskLocation] = useState<"default" | "current" | "worktree">("default")
   const [skillCommandSnapshot, setSkillCommandSnapshot] = useState<{
@@ -758,6 +761,27 @@ function ConversationPane({
                 error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
               />
               <PluginPreparationStatus activeSessionId={activeSessionId} view={sessionView} />
+              {pluginUiHost?.conversationStatus && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                  <span>{pluginUiHost.conversationStatus.message}</span>
+                  {pluginUiHost.conversationStatus.requestId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        void pluginUiHost
+                          .queryConversation(pluginUiHost.conversationStatus!.requestId!)
+                          .catch(() => {})
+                      }
+                    >
+                      查询原请求
+                    </Button>
+                  )}
+                </div>
+              )}
               <PendingPromptQueue
                 prompts={pendingPrompts}
                 activeRunId={activeRun?.id}

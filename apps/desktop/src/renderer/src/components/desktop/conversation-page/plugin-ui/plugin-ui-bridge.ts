@@ -8,15 +8,21 @@ import {
   type PluginUiBridgeRequest,
   type PluginUiActionReceipt,
   type PluginUiViewSnapshot,
+  type PluginUiConversationReceipt,
 } from "@vykor/client"
 
-type Result = PluginUiViewSnapshot | PluginUiActionReceipt | null
-type Handler = (params: Record<string, unknown>, signal: AbortSignal) => Promise<Result>
+type Result = PluginUiViewSnapshot | PluginUiActionReceipt | PluginUiConversationReceipt | null
+type Handler = (
+  params: Record<string, unknown>,
+  signal: AbortSignal,
+  requestId: string
+) => Promise<Result>
 interface Options {
   iframe: HTMLIFrameElement
   mountId: string
   snapshot: PluginUiViewSnapshot
   isActive(): boolean
+  isInteractive(): boolean
   handlers: Record<PluginUiBridgeRequest["method"], Handler>
   onError(code: string): void
 }
@@ -28,6 +34,8 @@ export function createPluginUiBridge(options: Options) {
   let closed = false
   let confirming = false
   const seen = new Set<string>()
+  const accepted = new WeakSet<AbortSignal>()
+  const confirmations = new WeakSet<AbortSignal>()
   const pending = new Map<string, AbortController>()
   const arrivals: number[] = []
   const active = () => !closed && options.isActive()
@@ -36,7 +44,7 @@ export function createPluginUiBridge(options: Options) {
   }
   const respondError = (id: string, code: string) =>
     send({
-      version: 1,
+      version: 2,
       mountId: options.mountId,
       id,
       error: { code, message: code },
@@ -45,7 +53,7 @@ export function createPluginUiBridge(options: Options) {
     if (closed) return
     if (port)
       port.postMessage(
-        encodePluginUiBridgeMessage({ version: 1, mountId: options.mountId, type: "dispose" })
+        encodePluginUiBridgeMessage({ version: 2, mountId: options.mountId, type: "dispose" })
       )
     closed = true
     clearTimeout(initialization)
@@ -59,7 +67,7 @@ export function createPluginUiBridge(options: Options) {
     if (!active() || next.instanceId !== current.instanceId || next.revision < current.revision)
       return
     current = next
-    send({ version: 1, mountId: options.mountId, type: "snapshot", snapshot: current })
+    send({ version: 2, mountId: options.mountId, type: "snapshot", snapshot: current })
   }
   async function receive(event: MessageEvent) {
     if (!active()) return
@@ -106,7 +114,14 @@ export function createPluginUiBridge(options: Options) {
       respondError(message.id, "plugin_ui_too_many_requests")
       return
     }
-    const confirmation = message.method === "requestAction" || message.method === "dismiss"
+    const confirmation =
+      message.method === "requestAction" ||
+      message.method === "dismiss" ||
+      message.method === "requestConversation"
+    if (confirmation && !options.isInteractive()) {
+      respondError(message.id, "plugin_ui_hidden")
+      return
+    }
     if (confirmation && confirming) {
       respondError(message.id, "plugin_ui_confirmation_pending")
       return
@@ -129,20 +144,18 @@ export function createPluginUiBridge(options: Options) {
       respondError(message.id, "plugin_ui_read_only")
       return
     }
-    if (
-      (message.method === "resize" || message.method === "openSidebar") &&
-      current.surface !== "tool-result"
-    ) {
+    if (message.method === "resize" && current.surface !== "tool-result") {
       respondError(message.id, "plugin_ui_surface_not_supported")
       return
     }
     const controller = new AbortController()
+    if (confirmation) confirmations.add(controller.signal)
     pending.set(message.id, controller)
     if (confirmation) confirming = true
     let timeout: ReturnType<typeof setTimeout> | undefined
     try {
       const result = await Promise.race([
-        options.handlers[message.method](message.params, controller.signal),
+        options.handlers[message.method](message.params, controller.signal, message.id),
         new Promise<never>((_resolve, reject) => {
           timeout = setTimeout(
             () => {
@@ -160,7 +173,7 @@ export function createPluginUiBridge(options: Options) {
       ])
       if (active() && !controller.signal.aborted) {
         if (message.method === "getSnapshot") pushSnapshot(result as PluginUiViewSnapshot)
-        send({ version: 1, mountId: options.mountId, id: message.id, result })
+        send({ version: 2, mountId: options.mountId, id: message.id, result })
       }
     } catch (error) {
       if (active())
@@ -181,7 +194,7 @@ export function createPluginUiBridge(options: Options) {
       port ||
       event.source !== options.iframe.contentWindow ||
       !value ||
-      value.version !== 1 ||
+      value.version !== 2 ||
       value.type !== "plugin-ui-ready" ||
       Object.keys(value).length !== 2
     )
@@ -195,7 +208,7 @@ export function createPluginUiBridge(options: Options) {
     host.removeEventListener("message", ready)
     clearTimeout(initialization)
     options.iframe.contentWindow!.postMessage(
-      { version: 1, type: "plugin-ui-init", mountId: options.mountId },
+      { version: 2, type: "plugin-ui-init", mountId: options.mountId },
       "*",
       [channel.port2]
     )
@@ -206,5 +219,16 @@ export function createPluginUiBridge(options: Options) {
     dispose()
   }, limits.initializationMs)
   host.addEventListener("message", ready)
-  return { pushSnapshot, dispose }
+  const setVisible = (visible: boolean) => {
+    if (!visible)
+      for (const controller of pending.values())
+        if (confirmations.has(controller.signal) && !accepted.has(controller.signal))
+          controller.abort()
+  }
+  return {
+    pushSnapshot,
+    dispose,
+    setVisible,
+    markAccepted: (signal: AbortSignal) => accepted.add(signal),
+  }
 }
