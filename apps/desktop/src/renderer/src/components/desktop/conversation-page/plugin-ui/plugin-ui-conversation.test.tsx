@@ -109,12 +109,14 @@ it("queries the original request after an unknown response and never automatical
 it("uses a matching source admission to resolve an unknown response without another POST", async () => {
   api.submitConversation = async value => { posts.push(value); throw new Error("offline") }
   await send("submit"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(posts).toHaveLength(1), { timeout: 5000 }))
   const requestFingerprint = createHash("sha256").update('{"data":{"selected":true},"expectedRevision":1,"instanceId":"10000000-0000-4000-8000-000000000001","sessionId":"session","text":"分析选择"}').digest("hex")
   const current = useDesktopSessionStore.getState().sessionView!
   await act(async () => useDesktopSessionStore.setState({ sessionView: { ...current, cursor: 2, parts: [{ ...sourcePart,
     metadata: { pluginUi: { ...instance, status: "resolved", revision: 2 }, pluginUiSubmission: { schemaVersion: 2,
       requestId: posts[0].requestId, requestFingerprint, expectedRevision: 1, inputId: "input", runId: "run",
       pluginDigest: instance.pluginDigest, componentDigest: instance.componentDigest, acceptedAt: 1 } } }] } } as never))
+  await act(async () => vi.waitFor(() => expect(host.conversationStatus?.message).toContain("已交给助手"), { timeout: 5000 }))
   expect(host.conversationStatus?.message).toContain("已交给助手")
   expect(host.conversationStatus?.requestId).toBeUndefined()
   expect(posts).toHaveLength(1)
