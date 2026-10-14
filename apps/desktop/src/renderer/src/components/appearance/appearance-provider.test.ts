@@ -301,6 +301,40 @@ describe("AppearanceProvider", () => {
   })
 
   describe("window material", () => {
+    it("连续切换时迟到的旧响应不能覆盖最后一次选择", async () => {
+      const resolveRequests: ((state: DesktopWindowMaterialState) => void)[] = []
+      stubDesktop(GLASS_TRANSPARENT, () => new Promise(resolve => resolveRequests.push(resolve)))
+      await renderProvider()
+      act(() => {
+        latest?.setWindowMaterial("opaque")
+        latest?.setWindowMaterial("glass")
+      })
+      await act(async () => resolveRequests[1](GLASS_TRANSPARENT))
+      const opaque: DesktopWindowMaterialState = { preference: "opaque", active: "opaque", shell: "solid", unavailableReason: null }
+      await act(async () => resolveRequests[0](opaque))
+      expect(latest?.windowMaterial).toEqual(GLASS_TRANSPARENT)
+      expect(document.documentElement.dataset.windowShell).toBe("transparent")
+    })
+    it("主进程材质变化更新DOM，旧的首次查询结果不覆盖新事件", async () => {
+      const listeners = new Set<(state: DesktopWindowMaterialState) => void>()
+      const release = vi.fn()
+      let resolveRead: (state: DesktopWindowMaterialState) => void = () => undefined
+      stubDesktop(GLASS_TRANSPARENT, vi.fn(), () => new Promise(resolve => { resolveRead = resolve }))
+      window.desktop.window.onMaterialChanged = (listener) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener); release() }
+      }
+      await renderProvider()
+      const fallback: DesktopWindowMaterialState = { ...GLASS_TRANSPARENT, active: "opaque", shell: "solid", unavailableReason: "unsupported-system" }
+      act(() => listeners.forEach(listener => listener(fallback)))
+      expect(latest?.windowMaterial).toEqual(fallback)
+      expect(document.documentElement.dataset.windowShell).toBe("solid")
+      await act(async () => resolveRead(GLASS_TRANSPARENT))
+      expect(latest?.windowMaterial).toEqual(fallback)
+      act(() => root.unmount())
+      expect(release).toHaveBeenCalledTimes(1)
+      expect(listeners.size).toBe(0)
+    })
     const GLASS_TRANSPARENT: DesktopWindowMaterialState = {
       preference: "glass",
       active: "glass",

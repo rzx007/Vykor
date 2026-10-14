@@ -37,7 +37,7 @@ const entries: Array<[string, string, string, string?]> = [
   ["notifications", "通知音效", "声音 试听 静音"],
   ["appearance", "主题与颜色", "深色 浅色 跟随系统 强调 背景 前景 对比度"],
   ["appearance", "字体与字号", "界面字体 代码字体 恢复"],
-  ["appearance", "窗口与动效", "磨玻璃 透明 减少动态"],
+  ["appearance", "窗口与动效", "半透明侧边栏 磨玻璃 透明 减少动态"],
   ["keyboard", "键盘快捷键", "按键 绑定 搜索 冲突 清除 恢复 Esc"],
   ["terminal", "终端启动设置", "Shell PowerShell cmd Git Bash WSL 参数 变量 测试终端"],
   ["terminal", "终端显示", "字体 字号 滚动历史 scrollback 光标 闪烁"],

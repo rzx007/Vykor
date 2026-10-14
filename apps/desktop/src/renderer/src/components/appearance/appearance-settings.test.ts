@@ -300,7 +300,7 @@ describe("AppearanceSettings", () => {
     expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
   })
 
-  it.each(["win32", "darwin"])(
+  it.each(["darwin"])(
     "offers a keyboard-adjustable glass strength slider on %s",
     async (platform) => {
       Object.defineProperty(window, "electron", {
@@ -350,7 +350,7 @@ describe("AppearanceSettings", () => {
     expect(container.textContent).toContain("系统透明效果可用时才能调节")
   })
 
-  it("disables glass strength when the window uses an opaque background", async () => {
+  it("Windows 用开关切换半透明侧边栏，不再显示透光滑杆", async () => {
     Object.defineProperty(window, "electron", {
       configurable: true,
       value: { process: { platform: "win32" } },
@@ -372,12 +372,37 @@ describe("AppearanceSettings", () => {
       resetAppearance,
     })
     await renderSettings()
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="半透明侧边栏"]')
+    expect(toggle).not.toBeNull()
+    expect(toggle?.getAttribute("aria-checked")).toBe("false")
+    act(() => toggle?.click())
+    expect(setWindowMaterial).toHaveBeenCalledWith("glass")
+    expect(container.querySelector('[aria-label="透明磨玻璃窗口背景"]')).toBeNull()
     const slider = container.querySelector<HTMLInputElement>(
       'input[type="range"][aria-label="透光强度"]'
     )
-    expect(slider?.disabled).toBe(true)
-    expect(slider?.value).toBe("35")
-    expect(container.textContent).toContain("开启透明磨玻璃后可调节")
+    expect(slider).toBeNull()
+  })
+
+  it("Windows 开关沿用已保存偏好，关闭时请求实色", async () => {
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "win32" } } })
+    await renderSettings()
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="半透明侧边栏"]')
+    expect(toggle?.getAttribute("aria-checked")).toBe("true")
+    act(() => toggle?.click())
+    expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
+  })
+
+  it("Windows 不支持材质时显示实色回退原因，保留开关偏好", async () => {
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "win32" } } })
+    mocks.useAppearance.mockReturnValue({ ...mocks.useAppearance(), windowMaterial: {
+      ...WINDOW_MATERIAL_STATE, active: "opaque", shell: "solid", unavailableReason: "unsupported-system",
+    } })
+    await renderSettings()
+    const toggle = container.querySelector('[role="switch"][aria-label="半透明侧边栏"]')
+    expect(toggle?.getAttribute("aria-checked")).toBe("true")
+    expect(container.textContent).toContain("已使用实色背景")
+    expect(container.textContent).not.toContain("透光强度")
   })
 
   it("hides the whole window section on Linux", async () => {

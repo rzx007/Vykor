@@ -42,6 +42,7 @@ import {
 } from "@renderer/components/ui/select"
 import { Separator } from "@renderer/components/ui/separator"
 import { Slider } from "@renderer/components/ui/slider"
+import { Switch } from "@renderer/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import { toast } from "@renderer/lib/toast"
 import type { DesktopWindowMaterialPreference } from "@shared/window-material-types"
@@ -180,27 +181,40 @@ export function AppearanceSettings(): React.JSX.Element {
           <FieldGroup>
             <Field orientation="responsive">
               <FieldContent>
-                <FieldTitle id="window-material-label">窗口背景</FieldTitle>
-                <FieldDescription>{windowMaterialDescription(windowMaterial)}</FieldDescription>
+                <FieldTitle id="window-material-label">
+                  {isWindows ? "半透明侧边栏" : "窗口背景"}
+                </FieldTitle>
+                <FieldDescription id="window-material-description">
+                  {windowMaterialDescription(windowMaterial, isWindows ? "win32" : undefined)}
+                </FieldDescription>
               </FieldContent>
-              <ToggleGroup
-                aria-labelledby="window-material-label"
-                variant="outline"
-                value={[windowMaterial.preference]}
-                onValueChange={(values) =>
-                  commitSingle(values as DesktopWindowMaterialPreference[], (value) =>
-                    setWindowMaterial(value)
-                  )
-                }
-              >
-                {WINDOW_MATERIAL_OPTIONS.map(({ value, label }) => (
-                  <ToggleGroupItem key={value} value={value} aria-label={`${label}窗口背景`}>
-                    {label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+              {isWindows ? (
+                <Switch
+                  aria-label="半透明侧边栏"
+                  aria-describedby="window-material-description"
+                  checked={windowMaterial.preference === "glass"}
+                  onCheckedChange={(enabled) => setWindowMaterial(enabled ? "glass" : "opaque")}
+                />
+              ) : (
+                <ToggleGroup
+                  aria-labelledby="window-material-label"
+                  variant="outline"
+                  value={[windowMaterial.preference]}
+                  onValueChange={(values) =>
+                    commitSingle(values as DesktopWindowMaterialPreference[], (value) =>
+                      setWindowMaterial(value)
+                    )
+                  }
+                >
+                  {WINDOW_MATERIAL_OPTIONS.map(({ value, label }) => (
+                    <ToggleGroupItem key={value} value={value} aria-label={`${label}窗口背景`}>
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
             </Field>
-            {isWindows || isMac ? (
+            {isMac ? (
               <Field orientation="responsive" data-disabled={windowMaterial.active !== "glass"}>
                 <FieldContent>
                   <FieldTitle>透光强度</FieldTitle>

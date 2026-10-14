@@ -84,7 +84,7 @@ export const windowControlsIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.windowGetMaterial,
-        handler: () => currentMainWindowMaterialState(),
+        handler: (event) => currentMainWindowMaterialState(process.platform, getEventWindow(event.sender)),
       },
       {
         channel: IpcChannels.windowSetMaterial,

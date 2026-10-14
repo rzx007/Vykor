@@ -6,6 +6,7 @@ import {
   applyMainWindowMaterial,
   mainWindowMaterialOptions,
   resolveWindowMaterialState,
+  supportsWindowsMica,
   supportsNativeWindowMaterial,
   TRANSPARENT_WINDOW_BACKGROUND,
 } from "./window-material"
@@ -20,6 +21,21 @@ describe("supportsNativeWindowMaterial", () => {
 })
 
 describe("resolveWindowMaterialState", () => {
+  it("Windows 系统背景不可用时保留偏好并回退实色", () => {
+    expect(
+      resolveWindowMaterialState({
+        platform: "win32",
+        preference: "glass",
+        reducedTransparency: false,
+        nativeBackdropSupported: false,
+      })
+    ).toEqual({
+      preference: "glass",
+      active: "opaque",
+      shell: "solid",
+      unavailableReason: "unsupported-system",
+    })
+  })
   it("用户选不透明时直接生效，且没有降级原因", () => {
     expect(
       resolveWindowMaterialState({
@@ -147,19 +163,19 @@ describe("mainWindowMaterialOptions", () => {
     ).toEqual({ backgroundColor: "#20242a" })
   })
 
-  it("Windows 玻璃用 acrylic 且不用 transparent", () => {
+  it("Windows 半透明侧边栏用 mica 且不用 transparent", () => {
     expect(
       mainWindowMaterialOptions({ platform: "win32", state: glass, useDarkColors: false })
     ).toEqual({
       backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
-      backgroundMaterial: "acrylic",
+      backgroundMaterial: "mica",
     })
   })
 
   it("Windows 不透明用主题底色", () => {
     expect(
       mainWindowMaterialOptions({ platform: "win32", state: opaque, useDarkColors: false })
-    ).toEqual({ backgroundColor: "#f4f7f9" })
+    ).toEqual({ backgroundColor: "#f4f7f9", backgroundMaterial: "none" })
   })
 
   it("Linux 两档位都用主题底色 + 无阴影（窗口不再透明，漏底问题随之消失）", () => {
@@ -181,7 +197,7 @@ describe("mainWindowMaterialOptions", () => {
     ).toEqual({ backgroundColor: "#f4f7f9" })
     expect(
       mainWindowMaterialOptions({ platform: "win32", state: degradedGlass, useDarkColors: true })
-    ).toEqual({ backgroundColor: "#20242a" })
+    ).toEqual({ backgroundColor: "#20242a", backgroundMaterial: "none" })
   })
 
   it("不支持的平台不走 Linux 分支，兜底返回主题底色", () => {
@@ -241,7 +257,7 @@ describe("applyMainWindowMaterial", () => {
     expect(win.setVibrancy).toHaveBeenCalledWith(null)
   })
 
-  it("Windows 玻璃：透明底 + acrylic；降级：主题底色 + none", () => {
+  it("Windows 半透明侧边栏：透明底 + mica；降级：主题底色 + none", () => {
     const glassWin = createFakeWindow()
 
     applyMainWindowMaterial(glassWin as unknown as BrowserWindow, {
@@ -251,7 +267,7 @@ describe("applyMainWindowMaterial", () => {
     })
 
     expect(glassWin.setBackgroundColor).toHaveBeenCalledWith(TRANSPARENT_WINDOW_BACKGROUND)
-    expect(glassWin.setBackgroundMaterial).toHaveBeenCalledWith("acrylic")
+    expect(glassWin.setBackgroundMaterial).toHaveBeenCalledWith("mica")
     expect(glassWin.setVibrancy).not.toHaveBeenCalled()
 
     const degradedWin = createFakeWindow()
@@ -292,5 +308,46 @@ describe("applyMainWindowMaterial", () => {
     expect(win.setBackgroundColor).not.toHaveBeenCalled()
     expect(win.setVibrancy).not.toHaveBeenCalled()
     expect(win.setBackgroundMaterial).not.toHaveBeenCalled()
+  })
+
+  it("Windows 原生材质设置失败时恢复实色并返回实际状态", () => {
+    const win = createFakeWindow()
+    win.setBackgroundMaterial.mockImplementation((material: string) => {
+      if (material === "mica") throw new Error("DWM unavailable")
+    })
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    expect(
+      applyMainWindowMaterial(win as unknown as BrowserWindow, {
+        platform: "win32",
+        state: glass,
+        useDarkColors: true,
+      })
+    ).toEqual({ ...glass, active: "opaque", shell: "solid", unavailableReason: "material-error" })
+    expect(win.setBackgroundColor).toHaveBeenLastCalledWith("#20242a")
+    expect(win.setBackgroundMaterial).toHaveBeenLastCalledWith("none")
+    vi.restoreAllMocks()
+  })
+})
+
+describe("supportsWindowsMica", () => {
+  it.each([
+    ["10.0.19045", "enabled", false],
+    ["10.0.22000", "enabled", false],
+    ["10.0.22621", "enabled", true],
+    ["10.0.26100", "enabled", true],
+    ["10.0.26100", "disabled_software", false],
+    ["10.0.26100", undefined, false],
+    ["invalid", "enabled", false],
+  ])("Windows %s GPU %s: %s", (release, gpuCompositing, supported) => {
+    expect(supportsWindowsMica({ release, gpuCompositing })).toBe(supported)
+  })
+  it("新 Electron 的能力检测明确拒绝时不启用", () => {
+    expect(
+      supportsWindowsMica({
+        release: "10.0.26100",
+        gpuCompositing: "enabled",
+        systemBackdropSupported: false,
+      })
+    ).toBe(false)
   })
 })

@@ -412,6 +412,7 @@ export const IpcEvents = {
   trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
+  windowMaterialChanged: "window:material-changed",
   petClicked: "pet:clicked",
   sessionUpdated: "session:updated",
   activityUpdated: "activity:updated",

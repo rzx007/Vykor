@@ -32,6 +32,7 @@ import type { DesktopActivityUpdate } from "../shared/activity-types"
 import {
   parseWindowMaterialArguments,
   type DesktopWindowMaterialPreference,
+  type DesktopWindowMaterialState,
 } from "../shared/window-material-types"
 
 const invoke = <C extends IpcChannel>(
@@ -113,6 +114,11 @@ export const desktopAPI = {
     getMaterial: () => invoke(IpcChannels.windowGetMaterial),
     setMaterial: (preference: DesktopWindowMaterialPreference) =>
       invoke(IpcChannels.windowSetMaterial, preference),
+    onMaterialChanged: (listener: (state: DesktopWindowMaterialState) => void): (() => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, state: DesktopWindowMaterialState): void => listener(state)
+      ipcRenderer.on(IpcEvents.windowMaterialChanged, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.windowMaterialChanged, wrapped)
+    },
     onMaximizedChanged: (listener: (value: boolean) => void): (() => void) => {
       const wrapped = (_event: Electron.IpcRendererEvent, value: boolean): void => listener(value)
       ipcRenderer.on(IpcEvents.windowMaximizedChanged, wrapped)

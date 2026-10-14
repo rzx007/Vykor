@@ -122,6 +122,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     readWindowMaterialSnapshot
   )
   const windowMaterialRef = useRef(windowMaterial)
+  const materialRequestRef = useRef(0)
+  const materialRevisionRef = useRef(0)
   const systemDark = useMediaQuery("(prefers-color-scheme: dark)", false)
   const systemReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)", true)
   const resolvedTheme =
@@ -167,6 +169,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
   )
 
   const setWindowMaterial = useCallback((preference: DesktopWindowMaterialPreference): void => {
+    const request = ++materialRequestRef.current
+    const revision = ++materialRevisionRef.current
     const previous = windowMaterialRef.current
     // 乐观更新：开关立刻反映选择，原生材质等主进程返回权威状态后再变。
     // 不伪造 active / shell——沿用上一份状态，只改 preference。
@@ -177,13 +181,20 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     window.desktop.window
       .setMaterial(preference)
       .then((state) => {
-        windowMaterialRef.current = state
-        setWindowMaterialState(state)
+        if (request !== materialRequestRef.current) return
+        // 主进程事件比 invoke 响应更新时，保持最新的实际材质状态。
+        if (revision === materialRevisionRef.current) {
+          windowMaterialRef.current = state
+          setWindowMaterialState(state)
+        }
         setSaveState({ status: "saved" })
       })
       .catch(() => {
-        windowMaterialRef.current = previous
-        setWindowMaterialState(previous)
+        if (request !== materialRequestRef.current) return
+        if (revision === materialRevisionRef.current) {
+          windowMaterialRef.current = previous
+          setWindowMaterialState(previous)
+        }
         setSaveState({ status: "error", message: "无法切换窗口材质" })
       })
   }, [])
@@ -210,10 +221,17 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     if (!windowMaterialRef.current) return
 
     let disposed = false
+    const revision = materialRevisionRef.current
+    const unsubscribe = window.desktop.window.onMaterialChanged?.((state) => {
+      if (disposed) return
+      materialRevisionRef.current += 1
+      windowMaterialRef.current = state
+      setWindowMaterialState(state)
+    })
     void window.desktop.window
       .getMaterial()
       .then((state) => {
-        if (disposed) return
+        if (disposed || revision !== materialRevisionRef.current) return
         windowMaterialRef.current = state
         setWindowMaterialState(state)
       })
@@ -223,6 +241,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
 
     return () => {
       disposed = true
+      unsubscribe?.()
     }
   }, [])
 

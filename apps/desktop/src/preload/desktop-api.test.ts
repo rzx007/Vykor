@@ -143,6 +143,16 @@ describe("desktop note preload bridge", () => {
 })
 
 describe("desktop window preload bridge", () => {
+  it("转发权威材质状态并移除订阅", () => {
+    const listener = vi.fn()
+    const release = desktopAPI.window.onMaterialChanged(listener)
+    const wrapped = electron.on.mock.calls.find(([channel]) => channel === IpcEvents.windowMaterialChanged)?.[1]
+    const state = { preference: "glass", active: "opaque", shell: "solid", unavailableReason: "unsupported-system" }
+    wrapped({}, state)
+    expect(listener).toHaveBeenCalledWith(state)
+    release()
+    expect(electron.removeListener).toHaveBeenCalledWith(IpcEvents.windowMaterialChanged, wrapped)
+  })
   it("opens an address in the system browser through the window IPC channel", async () => {
     await desktopAPI.window.openExternal("file:///D:/demo/index.html")
 

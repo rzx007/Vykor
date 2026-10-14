@@ -238,6 +238,7 @@ export type DesktopAPI = {
       preference: DesktopWindowMaterialPreference
     ) => Promise<DesktopWindowMaterialState>
     onMaximizedChanged: (listener: (value: boolean) => void) => () => void
+    onMaterialChanged: (listener: (state: DesktopWindowMaterialState) => void) => () => void
   }
   browser: {
     updateTab: (

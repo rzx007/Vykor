@@ -17,12 +17,8 @@ import { mainWindowBackgroundColor } from "./window-background"
  */
 export const TRANSPARENT_WINDOW_BACKGROUND = "#00000000"
 
-/**
- * Windows 材质名。选 acrylic 而不是 mica：acrylic 实时模糊窗口背后的动态内容，
- * 效果最接近 macOS 的 under-window vibrancy；mica 只采样桌面壁纸，窗口背后移动的内容不会跟着变。
- * 代价是拖动窗口时 DWM 持续重算模糊，低端 GPU 可能掉帧。若要换成 mica，只改这一处。
- */
-export const WINDOWS_WINDOW_MATERIAL = "acrylic" as const
+/** Mica 融合壁纸和系统主题；长期使用的侧栏不透出背后的其它窗口内容。 */
+export const WINDOWS_WINDOW_MATERIAL = "mica" as const
 
 export const MACOS_WINDOW_VIBRANCY = "under-window" as const
 
@@ -36,10 +32,24 @@ export function supportsNativeWindowMaterial(platform: NodeJS.Platform): boolean
   return platform === "darwin" || platform === "win32"
 }
 
+/** Electron 39 没有 isSystemBackdropSupported，按系统版本和 GPU 合成兜底检测。 */
+export function supportsWindowsMica(input: {
+  release: string
+  gpuCompositing: string | undefined
+  systemBackdropSupported?: boolean
+}): boolean {
+  const version = /^(\d+)\.(\d+)\.(\d+)(?:\.|$)/.exec(input.release)
+  if (!version || input.systemBackdropSupported === false) return false
+  const major = Number(version[1]),
+    build = Number(version[3])
+  return (major > 10 || (major === 10 && build >= 22621)) && input.gpuCompositing === "enabled"
+}
+
 export function resolveWindowMaterialState(input: {
   platform: NodeJS.Platform
   preference: DesktopWindowMaterialPreference
   reducedTransparency: boolean
+  nativeBackdropSupported?: boolean
 }): DesktopWindowMaterialState {
   const solid = (
     preference: DesktopWindowMaterialPreference,
@@ -60,12 +70,16 @@ export function resolveWindowMaterialState(input: {
     return solid("glass", "unsupported-platform")
   }
 
+  if (input.platform === "win32" && input.nativeBackdropSupported === false) {
+    return solid("glass", "unsupported-system")
+  }
+
   return {
     preference: "glass",
     active: "glass",
     unavailableReason: null,
     // macOS 的 vibrancy 是稳定材质，外壳再叠一层半透明染色；
-    // Windows 保持透明宿主，由 DWM 的 Acrylic 出材质，renderer 再按透光强度铺一层雾面底色。
+    // Windows 保持透明宿主，由 Mica 出材质，renderer 只叠加固定主题染色。
     // 走到这里只可能是 darwin / win32：Linux 已在上面按「平台不支持」降级成不透明档。
     shell: input.platform === "darwin" ? "translucent" : "transparent",
   }
@@ -103,13 +117,12 @@ export function mainWindowMaterialOptions(input: {
 
   if (input.platform === "win32") {
     // frame: false 由 window-chrome.ts 提供，窗口控制按钮由 renderer 自绘，避免出现两套按钮。
-    // 实机风险：不设 transparent 时 Acrylic 可能不生效（D2），任务 9 有专门验收与降级处置。
     return glass
       ? {
           backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
           backgroundMaterial: WINDOWS_WINDOW_MATERIAL,
         }
-      : { backgroundColor: opaqueBackground }
+      : { backgroundColor: opaqueBackground, backgroundMaterial: "none" }
   }
 
   if (input.platform === "linux") {
@@ -140,8 +153,8 @@ export function applyMainWindowMaterial(
     state: DesktopWindowMaterialState
     useDarkColors: boolean
   }
-): void {
-  if (win.isDestroyed()) return
+): DesktopWindowMaterialState {
+  if (win.isDestroyed()) return input.state
 
   const glass = isGlassWindowMaterial(input.state)
 
@@ -151,18 +164,34 @@ export function applyMainWindowMaterial(
       glass ? TRANSPARENT_WINDOW_BACKGROUND : mainWindowBackgroundColor(input.useDarkColors)
     )
     win.setVibrancy(glass ? MACOS_WINDOW_VIBRANCY : null)
-    return
+    return input.state
   }
 
   if (input.platform === "win32") {
-    win.setBackgroundColor(
-      glass ? TRANSPARENT_WINDOW_BACKGROUND : mainWindowBackgroundColor(input.useDarkColors)
-    )
-    // 运行期设置是兜底：Electron 36 之前存在「动态 setBackgroundMaterial 不生效」的 bug
-    // （electron/electron#47386），构造期激活也有历史 bug（#46657）。
-    win.setBackgroundMaterial(glass ? WINDOWS_WINDOW_MATERIAL : "none")
-    return
+    try {
+      win.setBackgroundColor(
+        glass ? TRANSPARENT_WINDOW_BACKGROUND : mainWindowBackgroundColor(input.useDarkColors)
+      )
+      win.setBackgroundMaterial(glass ? WINDOWS_WINDOW_MATERIAL : "none")
+      return input.state
+    } catch (error) {
+      // 即使系统材质调用失败，实色背景也必须盖住底层，返回状态不能继续声称透明已生效。
+      console.warn("[window-material] system backdrop unavailable", error)
+      win.setBackgroundColor(mainWindowBackgroundColor(input.useDarkColors))
+      try {
+        win.setBackgroundMaterial("none")
+      } catch {
+        /* 实色背景已经提供回退。 */
+      }
+      return {
+        ...input.state,
+        active: "opaque",
+        shell: "solid",
+        unavailableReason: "material-error",
+      }
+    }
   }
 
   // Linux：窗口构造期就是不透明底色，这里不碰底色与材质。
+  return input.state
 }

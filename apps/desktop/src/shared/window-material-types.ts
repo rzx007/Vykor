@@ -3,14 +3,17 @@ export type DesktopWindowMaterialPreference = "glass" | "opaque"
 /** 材质实际是否生效；"opaque" 既可能是用户选的，也可能是系统侧不支持后的降级。 */
 export type DesktopWindowMaterialActive = "glass" | "opaque"
 
-export type DesktopWindowMaterialUnavailableReason = "unsupported-platform" | "reduced-transparency"
+export type DesktopWindowMaterialUnavailableReason =
+  | "unsupported-platform"
+  | "unsupported-system"
+  | "reduced-transparency"
+  | "material-error"
 
 /**
  * renderer 外壳（`--shell`）该用什么底：
  * - "solid"：不透明档，token 保持原值；Linux 永远是这一档（系统不提供原生材质）；
  * - "translucent"：玻璃 + macOS，vibrancy 之上再叠一层半透明染色；
- * - "transparent"：玻璃 + Windows，保留透明宿主，让原生 Acrylic 在页面透光处可见。
- *   Windows 的雾面底色由 renderer 的透光强度控制；主题不一致时保留更厚底色以保证可读性。
+ * - "transparent"：Windows Mica，保留透明宿主，侧栏叠加主题染色，正文仍用实色。
  */
 export type DesktopWindowMaterialShell = "solid" | "translucent" | "transparent"
 
@@ -35,6 +38,8 @@ const ACTIVE_VALUES = new Set<DesktopWindowMaterialActive>(["glass", "opaque"])
 const REASONS = new Set<DesktopWindowMaterialUnavailableReason>([
   "unsupported-platform",
   "reduced-transparency",
+  "unsupported-system",
+  "material-error",
 ])
 const SHELL_VALUES = new Set<DesktopWindowMaterialShell>(["solid", "translucent", "transparent"])
 

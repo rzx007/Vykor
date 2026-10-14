@@ -1,4 +1,5 @@
-import { BrowserWindow, nativeTheme, shell, type WebPreferences } from "electron"
+import { app, BrowserWindow, nativeTheme, shell, type WebPreferences } from "electron"
+import { release } from "node:os"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { AppContext } from "../../core/app-context"
@@ -12,10 +13,15 @@ import {
   applyMainWindowMaterial,
   mainWindowMaterialOptions,
   resolveWindowMaterialState,
+  supportsWindowsMica,
 } from "./window-material"
+import { attachWindowMaterialRuntime } from "./window-material-runtime"
 import { attachWindowsMaterialRepaint } from "./window-material-repaint"
 import { desktopPluginUiDocuments } from "../plugin-ui/document-runtime"
-import { attachPluginUiWindowPolicy, isPluginUiExternalOpenBlocked } from "../plugin-ui/window-policy"
+import {
+  attachPluginUiWindowPolicy,
+  isPluginUiExternalOpenBlocked,
+} from "../plugin-ui/window-policy"
 import { getDesktopPluginUiService } from "../plugin-ui/service-runtime"
 import { pathToFileURL } from "node:url"
 import {
@@ -28,6 +34,11 @@ import {
   type DesktopWindowMaterialState,
   windowMaterialArguments,
 } from "../../../shared/window-material-types"
+
+const materialRuntimes = new WeakMap<
+  BrowserWindow,
+  ReturnType<typeof attachWindowMaterialRuntime>
+>()
 
 export function createMainWindow(ctx: AppContext): BrowserWindow {
   const existing = ctx.windowManager.getMain()
@@ -65,17 +76,27 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       },
     },
     onCreated: (win) => {
-      getDesktopPluginUiService()?.registerOwner(win.webContents, ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href)
+      getDesktopPluginUiService()?.registerOwner(
+        win.webContents,
+        ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href
+      )
       attachPluginUiWindowPolicy(win.webContents, desktopPluginUiDocuments)
       attachMainWindowBehavior(ctx, win)
       attachMainWindowDiagnostics(win)
-      // 构造期材质激活有历史 bug（electron/electron#46657、#47386），这里再应用一次做兜底。
-      applyMainWindowMaterial(win, {
-        platform,
-        state: materialState,
-        useDarkColors: nativeTheme.shouldUseDarkColors,
+      const runtime = attachWindowMaterialRuntime(win, {
+        app,
+        nativeTheme,
+        resolve: () => currentMainWindowMaterialState(platform),
+        apply: (state) =>
+          applyMainWindowMaterial(win, {
+            platform,
+            state,
+            useDarkColors: nativeTheme.shouldUseDarkColors,
+          }),
+        notify: (state) => win.webContents.send(IpcEvents.windowMaterialChanged, state),
       })
-      // 仅 Windows 需要：acrylic 窗口在拉伸与托盘 hide→show 后可能留下合成层死区。
+      materialRuntimes.set(win, runtime)
+      // Windows 系统材质在拉伸与托盘 hide→show 后可能留下合成层死区。
       if (platform === "win32") attachWindowsMaterialRepaint(win)
     },
   })
@@ -89,12 +110,34 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
  * 且会让 macOS vibrancy 跟随应用主题而不是系统主题。不要在这里「顺手补齐」。
  */
 export function currentMainWindowMaterialState(
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  win?: BrowserWindow | null
 ): DesktopWindowMaterialState {
+  const runtime = win ? materialRuntimes.get(win) : undefined
+  if (runtime) return runtime.getState()
+  let nativeBackdropSupported = true
+  if (platform === "win32") {
+    // 新版 Electron 可直接查询；本项目 Electron 39 走 Windows 11 22H2 + GPU 检测。
+    const backdropApi = BrowserWindow as typeof BrowserWindow & {
+      isSystemBackdropSupported?: () => boolean
+    }
+    try {
+      nativeBackdropSupported = supportsWindowsMica({
+        release: release(),
+        gpuCompositing: app.getGPUFeatureStatus().gpu_compositing,
+        systemBackdropSupported: backdropApi.isSystemBackdropSupported?.(),
+      })
+    } catch {
+      nativeBackdropSupported = false
+    }
+  }
   return resolveWindowMaterialState({
     platform,
     preference: getWindowMaterialPreference(),
-    reducedTransparency: nativeTheme.prefersReducedTransparency,
+    reducedTransparency:
+      nativeTheme.prefersReducedTransparency ||
+      (platform === "win32" && nativeTheme.shouldUseHighContrastColors),
+    nativeBackdropSupported,
   })
 }
 
@@ -109,14 +152,15 @@ export function setMainWindowMaterial(
 
   setWindowMaterialPreference(preference)
 
+  const runtime = materialRuntimes.get(win)
+  if (runtime) return runtime.refresh()
+
   const state = currentMainWindowMaterialState(process.platform)
-  applyMainWindowMaterial(win, {
+  return applyMainWindowMaterial(win, {
     platform: process.platform,
     state,
     useDarkColors: nativeTheme.shouldUseDarkColors,
   })
-
-  return state
 }
 
 export function showMainWindow(win: BrowserWindow): void {

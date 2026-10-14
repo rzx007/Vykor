@@ -4,7 +4,7 @@ import type { BrowserWindow } from "electron"
 export const MATERIAL_REPAINT_DELAY_MS = 32
 
 /**
- * Windows 上 acrylic 窗口的两处合成层补偿，共用同一个「有界双帧重绘」：
+ * Windows 系统材质窗口的两处合成层补偿，共用同一个「有界双帧重绘」：
  *
  * - `resized`：手动拉伸结束后，Chromium 偶发只更新窗口 bounds，renderer 最后一帧没完整 repaint，
  *   新扩展出来的区域会留下宿主底色（用户看到的是一块死区）。

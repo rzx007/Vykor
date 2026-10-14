@@ -18,6 +18,10 @@ describe("isDesktopWindowMaterialPreference", () => {
 })
 
 describe("windowMaterialArguments", () => {
+  it.each(["unsupported-system", "material-error"] as const)("启动快照保留 %s 回退原因", (reason) => {
+    const state: DesktopWindowMaterialState = { preference: "glass", active: "opaque", shell: "solid", unavailableReason: reason }
+    expect(parseWindowMaterialArguments(windowMaterialArguments(state))).toEqual(state)
+  })
   it("往返后得到同一个状态", () => {
     const state: DesktopWindowMaterialState = {
       preference: "glass",
