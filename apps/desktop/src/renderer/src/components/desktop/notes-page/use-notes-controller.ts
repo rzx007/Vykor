@@ -33,6 +33,7 @@ export interface NotesController {
   error: string | null
   setQuery(value: string): void
   createDraft(): void
+  discardEmptyDraft(draftId: string): void
   select(draftId: string): Promise<void>
   edit(content: string): void
   retrySave(): Promise<void>
@@ -264,10 +265,42 @@ export function useNotesController(): NotesController {
   const createDraft = useCallback((): void => {
     const currentKey = selectedKeyRef.current
     if (currentKey) void coordinators.current.get(currentKey)?.flush()
+    const emptyDraft = notesRef.current.find(
+      (note) =>
+        !note.noteId &&
+        !note.content.trim() &&
+        !coordinators.current.get(note.draftId)?.snapshot().record &&
+        coordinators.current.get(note.draftId)?.snapshot().status !== "saving"
+    )
+    if (emptyDraft) {
+      commitSelection(emptyDraft.draftId)
+      return
+    }
     const view = createLocalDraft()
     commitNotes((current) => [view, ...current])
     commitSelection(view.draftId)
   }, [commitNotes, commitSelection, createLocalDraft])
+
+  const discardEmptyDraft = useCallback(
+    (draftId: string): void => {
+      const note = notesRef.current.find((item) => item.draftId === draftId)
+      const coordinator = coordinators.current.get(draftId)
+      if (
+        !note ||
+        note.noteId ||
+        note.content.trim() ||
+        coordinator?.snapshot().record ||
+        coordinator?.snapshot().status === "saving"
+      )
+        return
+      coordinator?.dispose()
+      coordinators.current.delete(draftId)
+      removeRecoveryDraft(window.localStorage, draftId)
+      commitNotes((items) => items.filter((item) => item.draftId !== draftId))
+      if (selectedKeyRef.current === draftId) commitSelection(null)
+    },
+    [commitNotes, commitSelection]
+  )
 
   const edit = useCallback(
     (content: string): void => {
@@ -442,6 +475,7 @@ export function useNotesController(): NotesController {
     error,
     setQuery,
     createDraft,
+    discardEmptyDraft,
     select,
     edit,
     retrySave,
