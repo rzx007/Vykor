@@ -17,17 +17,13 @@ vk plugin details example.text-inspector
 
 进入使用本地执行环境的 Vykor 会话，通过 `/text-inspector:check-text` 提供需要检查的文本，或明确要求模型使用 `TextInspectorCheck`。例如提供第一行 `hello` 后带两个空格、第二行以制表符开头的文本；工具应报告第 1 行 `trailing-whitespace` 和第 2 行 `tab-indentation`。自然语言调用需要正常配置模型；仓库自动验收直接调用注册后的工具，不需要模型服务。
 
-如果只是想在 Desktop 里走一遍真实安装，可以先把样例打成插件包。Desktop 当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`：
+如果只是想在 Desktop 里走一遍真实安装，可以先把 `examples/plugins` 下的所有样例打成 ZIP。Desktop 当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；仓库提供的命令生成 ZIP：
 
-```powershell
-New-Item -ItemType Directory -Force .\.plugin-dist
-Compress-Archive -LiteralPath .\examples\plugins\text-inspector -DestinationPath .\.plugin-dist\text-inspector.zip -Force
-tar -cf .\.plugin-dist\text-inspector.tar -C .\examples\plugins text-inspector
-tar -czf .\.plugin-dist\text-inspector.tar.gz -C .\examples\plugins text-inspector
-tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
+```sh
+pnpm --filter @vykor/plugin-sources package:examples
 ```
 
-然后打开 Desktop 的插件页，选择其中任意一个插件包导入。包内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.vykor-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
+生成的 ZIP 位于仓库根目录的 `.plugin-dist`，该目录已加入 Git 忽略规则。若要测试其他支持的归档格式，请另行打包。然后打开 Desktop 的插件页，选择 ZIP 导入。包内可以带一层插件目录包装，只要里面有唯一的 `.vykor-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
 
 修改链接目录里的工具实现后，在没有运行中任务的会话执行：
 

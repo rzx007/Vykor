@@ -69,17 +69,13 @@ node ../../node_modules/vitest/vitest.mjs run src/native-tools/text-inspector.te
 
 ## 打包后在 Desktop 导入
 
-在仓库根目录执行：
+在仓库根目录执行以下命令，为 `examples/plugins` 下的所有插件生成 ZIP：
 
-```powershell
-New-Item -ItemType Directory -Force .\.plugin-dist
-Compress-Archive -LiteralPath .\examples\plugins\text-inspector -DestinationPath .\.plugin-dist\text-inspector.zip -Force
-tar -cf .\.plugin-dist\text-inspector.tar -C .\examples\plugins text-inspector
-tar -czf .\.plugin-dist\text-inspector.tar.gz -C .\examples\plugins text-inspector
-tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
+```sh
+pnpm --filter @vykor/plugin-sources package:examples
 ```
 
-然后到 Desktop 插件页导入生成的 `.zip`、`.tar`、`.tar.gz` 或 `.tgz` 插件包。安装成功后开一个新对话，再用 `/text-inspector:check-text` 或自然语言要求模型使用 `TextInspectorCheck`。
+ZIP 文件会生成在仓库根目录的 `.plugin-dist`，这个目录不会提交到 Git。Desktop 插件页也支持 `.tar`、`.tar.gz` 和 `.tgz`；这些格式需另行打包。导入 ZIP 后开一个新对话，再用 `/text-inspector:check-text` 或自然语言要求模型使用 `TextInspectorCheck`。
 
 如果要验证插件自己的 Agent，先在本轮选择 `example.text-inspector` 插件，再要求模型使用 `example.text-inspector:reviewer` 检查一段文本。这个 Agent 只在插件被选中时可见，创建后仍只能使用当前 Run 允许的插件能力。
 
