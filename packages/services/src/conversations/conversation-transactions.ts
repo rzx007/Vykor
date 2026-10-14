@@ -320,6 +320,14 @@ export class ConversationTransactions {
 
       this.storage.rollback?.capture(this.storage.state.sessions, session.id);
       session.updatedAt = timestamp;
+      // Only an explicit capability/Skill reference changes the session's
+      // selection. Inherited turns and goal continuations keep their own Run
+      // identity without overwriting a newer selection. The host validates it.
+      if (typeof metadata.pluginId === "string" && items.some(item =>
+        item.type === "capability" || item.type === "skill"
+      )) {
+        session.metadata = { ...session.metadata, activePluginId: metadata.pluginId };
+      }
       if (seq === 1 && isPlaceholderSessionTitle(session.title)) {
         const title = formatSessionTitle(content);
         if (title) session.title = title;

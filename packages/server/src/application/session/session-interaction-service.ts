@@ -128,7 +128,7 @@ export class SessionInteractionService {
       if (requiresPluginService && !this.context.pluginCapabilities) {
         throw new Error("session_plugin_capability_unavailable");
       }
-      const capability = hasPluginCandidates && this.context.pluginCapabilities
+      const capability = (hasPluginCandidates || typeof session.metadata?.activePluginId === "string") && this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
       if (this.context.control.hasWork(sessionId)) {
@@ -195,14 +195,16 @@ export class SessionInteractionService {
     if (requiresPluginService && !this.context.pluginCapabilities) {
       throw new Error("session_plugin_capability_unavailable");
     }
-    const existingPluginId = hasPluginCandidates && originalInput.id
-      ? this.context.conversations.getInput(originalInput.id)?.metadata.pluginId
+    const existingInput = originalInput.id
+      ? this.context.conversations.getInput(originalInput.id)
       : undefined;
-    const capability = hasPluginCandidates && this.context.pluginCapabilities
-      ? typeof existingPluginId === "string"
-        ? { pluginId: existingPluginId }
-        : await this.context.pluginCapabilities.admit(session, items)
-      : {};
+    // Retries keep their original selection, including an ordinary input with
+    // no plugin, rather than picking up a later session selection.
+    const capability = existingInput
+      ? { pluginId: typeof existingInput.metadata.pluginId === "string" ? existingInput.metadata.pluginId : undefined }
+      : (hasPluginCandidates || typeof session.metadata?.activePluginId === "string") && this.context.pluginCapabilities
+        ? await this.context.pluginCapabilities.admit(session, items)
+        : {};
     if (capability.pluginId && originalInput.delivery === "steer") {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
@@ -230,7 +232,7 @@ export class SessionInteractionService {
     };
     const hasAttachments = (input.attachments?.length ?? 0) > 0;
     if (!hasAttachments && this.context.liveChildren.has(sessionId) && input.id) {
-      const existing = this.context.conversations.getInput(input.id);
+      const existing = existingInput;
       if (existing) {
         if (
           existing.sessionId !== sessionId ||

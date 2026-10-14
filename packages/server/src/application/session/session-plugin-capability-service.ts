@@ -5,6 +5,7 @@ import type {
   SessionRecord,
   SessionUserInputItem,
 } from "@vykor/protocol";
+import { readRuntimeMetadata } from "@vykor/protocol";
 import { SessionApplicationError } from "./session-application-error.js";
 
 export interface SessionPluginCapabilityServiceContext {
@@ -18,10 +19,13 @@ export class SessionPluginCapabilityService {
     session: SessionRecord,
     items: readonly SessionUserInputItem[],
   ): Promise<{ pluginId?: string }> {
+    const activePluginId = typeof session.metadata?.activePluginId === "string"
+      ? session.metadata.activePluginId : undefined;
+    const pluginsEnabled = readRuntimeMetadata(session.metadata ?? {}).pluginsEnabled !== false;
     const hasReferences = items.some((item) =>
       item.type === "capability" || item.type === "skill"
     );
-    if (!hasReferences) return {};
+    if (!hasReferences && (!activePluginId || !pluginsEnabled)) return {};
 
     const inventory = await this.context.resolveInventory(session);
     const pluginIds = new Set<string>();
@@ -55,7 +59,11 @@ export class SessionPluginCapabilityService {
     if (pluginIds.size > 1) {
       throw new SessionApplicationError(409, "session_plugin_capability_conflict");
     }
-    const pluginId = [...pluginIds][0];
+    // An explicit reference switches the selection; an ordinary turn keeps it.
+    const pluginId = [...pluginIds][0] ?? (pluginsEnabled ? activePluginId : undefined);
+    if (pluginId && (!pluginsEnabled || !inventory.plugins.has(pluginId))) {
+      throw new SessionApplicationError(409, "session_plugin_capability_unavailable");
+    }
     return pluginId ? { pluginId } : {};
   }
 }
