@@ -37,9 +37,13 @@ export class ProtocolValidationError extends Error {
   constructor(message: string, field?: string, reason?: string) {
     super(message);
     this.name = "ProtocolValidationError";
-    this.details = field || reason !== undefined
-      ? { ...(field ? { field } : {}), ...(reason !== undefined ? { reason } : {}) }
-      : undefined;
+    this.details =
+      field || reason !== undefined
+        ? {
+            ...(field ? { field } : {}),
+            ...(reason !== undefined ? { reason } : {}),
+          }
+        : undefined;
   }
 
   toProtocolError(): ProtocolError {
@@ -52,14 +56,20 @@ export class ProtocolValidationError extends Error {
 }
 
 /** Ordinary Prompt inputs cannot claim host-created UI instances or action Runs. */
-export function assertPromptMetadataAllowed(input: { metadata?: unknown; runMetadata?: unknown }): void {
+export function assertPromptMetadataAllowed(input: {
+  metadata?: unknown;
+  runMetadata?: unknown;
+}): void {
   for (const namespace of ["metadata", "runMetadata"] as const) {
     const metadata = input[namespace];
     if (!metadata || typeof metadata !== "object") continue;
-    for (const name of ["pluginUi", "uiAction"]) {
+    for (const name of ["pluginUi", "uiAction", "pluginUiSubmission"]) {
       if (Object.hasOwn(metadata, name)) {
         const field = `${namespace}.${name}`;
-        throw new ProtocolValidationError(`${field} is reserved for the host`, field);
+        throw new ProtocolValidationError(
+          `${field} is reserved for the host`,
+          field,
+        );
       }
     }
   }
@@ -136,11 +146,20 @@ function optionalRecord(
   return value as Record<string, unknown>;
 }
 
-function optionalStringArray(body: JsonRecord, field: string): string[] | undefined {
+function optionalStringArray(
+  body: JsonRecord,
+  field: string,
+): string[] | undefined {
   const value = body[field];
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
-    throw new ProtocolValidationError(`${field} must be an array of strings`, field);
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string")
+  ) {
+    throw new ProtocolValidationError(
+      `${field} must be an array of strings`,
+      field,
+    );
   }
   return [...value] as string[];
 }
@@ -207,8 +226,14 @@ export function parseForkSessionRequest(value: unknown): ForkSessionInput {
   const afterMessageId = optionalString(body, "afterMessageId");
   const storage = optionalEnum(body, "storage", ["sqlite", "memory"] as const);
   const copyHistory = optionalBoolean(body, "copyHistory");
-  if (copyHistory === false && (beforeMessageId !== undefined || afterMessageId !== undefined)) {
-    throw new ProtocolValidationError("copyHistory=false cannot select a fork point", "copyHistory");
+  if (
+    copyHistory === false &&
+    (beforeMessageId !== undefined || afterMessageId !== undefined)
+  ) {
+    throw new ProtocolValidationError(
+      "copyHistory=false cannot select a fork point",
+      "copyHistory",
+    );
   }
   return {
     ...(copyHistory !== undefined ? { copyHistory } : {}),
@@ -221,7 +246,10 @@ export function parseForkSessionRequest(value: unknown): ForkSessionInput {
 export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   const body = record(value);
   if ("storage" in body) {
-    throw new ProtocolValidationError("storage is selected when the session is created", "storage");
+    throw new ProtocolValidationError(
+      "storage is selected when the session is created",
+      "storage",
+    );
   }
   if ("model" in body) {
     throw new ProtocolValidationError(
@@ -233,8 +261,15 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   const metadata = optionalRecord(body, "metadata");
   readRuntimeMetadata(metadata);
   const rawAgent = body.agent;
-  if (rawAgent !== undefined && rawAgent !== null && typeof rawAgent !== "string") {
-    throw new ProtocolValidationError("agent must be a string or null", "agent");
+  if (
+    rawAgent !== undefined &&
+    rawAgent !== null &&
+    typeof rawAgent !== "string"
+  ) {
+    throw new ProtocolValidationError(
+      "agent must be a string or null",
+      "agent",
+    );
   }
   return {
     ...(title !== undefined ? { title } : {}),
@@ -243,11 +278,27 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   };
 }
 
-export function parseClearSessionWorktreeBindingRequest(value: unknown): ClearSessionWorktreeBindingInput {
+export function parseClearSessionWorktreeBindingRequest(
+  value: unknown,
+): ClearSessionWorktreeBindingInput {
   const body = record(value);
-  for (const key of Object.keys(body)) if (!["id", "path", "branch"].includes(key)) throw new ProtocolValidationError("Only the expected worktree binding may be supplied", key);
-  const result = { id: requiredString(body, "id"), path: requiredString(body, "path"), branch: requiredString(body, "branch") };
-  for (const [key, text] of Object.entries(result)) if (!text.trim() || text.length > 4096 || text.includes("\0")) throw new ProtocolValidationError("Expected worktree binding field is invalid", key);
+  for (const key of Object.keys(body))
+    if (!["id", "path", "branch"].includes(key))
+      throw new ProtocolValidationError(
+        "Only the expected worktree binding may be supplied",
+        key,
+      );
+  const result = {
+    id: requiredString(body, "id"),
+    path: requiredString(body, "path"),
+    branch: requiredString(body, "branch"),
+  };
+  for (const [key, text] of Object.entries(result))
+    if (!text.trim() || text.length > 4096 || text.includes("\0"))
+      throw new ProtocolValidationError(
+        "Expected worktree binding field is invalid",
+        key,
+      );
   return result;
 }
 
@@ -289,15 +340,30 @@ export function parseSessionInputItems(value: unknown): SessionUserInputItem[] {
     const item = entry as JsonRecord;
     if (item.type === "text") {
       if (typeof item.text !== "string") {
-        throw new ProtocolValidationError(`${field}.text must be a string`, `${field}.text`);
+        throw new ProtocolValidationError(
+          `${field}.text must be a string`,
+          `${field}.text`,
+        );
       }
       return { type: "text", text: item.text };
     }
     if (item.type === "context") {
-      if (item.kind !== "conversation" || typeof item.id !== "string" || typeof item.displayName !== "string") {
-        throw new ProtocolValidationError(`${field} requires kind, id and displayName`, field);
+      if (
+        item.kind !== "conversation" ||
+        typeof item.id !== "string" ||
+        typeof item.displayName !== "string"
+      ) {
+        throw new ProtocolValidationError(
+          `${field} requires kind, id and displayName`,
+          field,
+        );
       }
-      return { type: "context", kind: "conversation", id: item.id, displayName: item.displayName };
+      return {
+        type: "context",
+        kind: "conversation",
+        id: item.id,
+        displayName: item.displayName,
+      };
     }
     if (item.type === "capability") {
       if (
@@ -327,34 +393,58 @@ export function parseSessionInputItems(value: unknown): SessionUserInputItem[] {
           };
     }
     if (item.type !== "skill" && item.type !== "mention") {
-      throw new ProtocolValidationError(`${field}.type is invalid`, `${field}.type`);
+      throw new ProtocolValidationError(
+        `${field}.type is invalid`,
+        `${field}.type`,
+      );
     }
     if (typeof item.name !== "string" || typeof item.path !== "string") {
-      throw new ProtocolValidationError(`${field} requires name and path`, field);
+      throw new ProtocolValidationError(
+        `${field} requires name and path`,
+        field,
+      );
     }
-    if (item.displayName !== undefined && typeof item.displayName !== "string") {
-      throw new ProtocolValidationError(`${field}.displayName must be a string`, `${field}.displayName`);
+    if (
+      item.displayName !== undefined &&
+      typeof item.displayName !== "string"
+    ) {
+      throw new ProtocolValidationError(
+        `${field}.displayName must be a string`,
+        `${field}.displayName`,
+      );
     }
     if (item.type === "mention") {
       return {
         type: "mention",
         name: item.name,
         path: item.path,
-        ...(typeof item.displayName === "string" ? { displayName: item.displayName } : {}),
+        ...(typeof item.displayName === "string"
+          ? { displayName: item.displayName }
+          : {}),
       };
     }
     if (
       item.source !== undefined &&
-      item.source !== "bundled" && item.source !== "user" && item.source !== "project" && item.source !== "plugin"
+      item.source !== "bundled" &&
+      item.source !== "user" &&
+      item.source !== "project" &&
+      item.source !== "plugin"
     ) {
-      throw new ProtocolValidationError(`${field}.source is invalid`, `${field}.source`);
+      throw new ProtocolValidationError(
+        `${field}.source is invalid`,
+        `${field}.source`,
+      );
     }
     return {
       type: "skill",
       name: item.name,
       path: item.path,
-      ...(typeof item.displayName === "string" ? { displayName: item.displayName } : {}),
-      ...(item.source !== undefined ? { source: item.source as SkillSource } : {}),
+      ...(typeof item.displayName === "string"
+        ? { displayName: item.displayName }
+        : {}),
+      ...(item.source !== undefined
+        ? { source: item.source as SkillSource }
+        : {}),
     };
   });
   try {
@@ -372,7 +462,10 @@ export function parsePromptAttachments(
 ): AdmitPromptAttachmentInput[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    throw new ProtocolValidationError("attachments must be an array", "attachments");
+    throw new ProtocolValidationError(
+      "attachments must be an array",
+      "attachments",
+    );
   }
   return value.map((entry, index) => {
     const field = `attachments[${index}]`;
@@ -398,7 +491,8 @@ export function parsePromptAttachments(
     ] as const satisfies readonly AttachmentIntent[];
     if (
       intent !== undefined &&
-      (typeof intent !== "string" || !allowedIntents.includes(intent as AttachmentIntent))
+      (typeof intent !== "string" ||
+        !allowedIntents.includes(intent as AttachmentIntent))
     ) {
       throw new ProtocolValidationError(
         `${field}.intent must be one of: ${allowedIntents.join(", ")}`,
@@ -420,13 +514,15 @@ export function parsePromptAttachments(
   });
 }
 
-export function parseReplyPermissionRequest(value: unknown): ReplyPermissionRequest {
+export function parseReplyPermissionRequest(
+  value: unknown,
+): ReplyPermissionRequest {
   const body = record(value);
-  const status = requiredEnum(
-    body,
-    "status",
-    ["approved", "denied", "expired"] as const,
-  );
+  const status = requiredEnum(body, "status", [
+    "approved",
+    "denied",
+    "expired",
+  ] as const);
   const decision = optionalEnum(body, "decision", ["once", "session"] as const);
   const clientId = optionalString(body, "clientId");
   const answer = optionalString(body, "answer");
@@ -440,11 +536,11 @@ export function parseReplyPermissionRequest(value: unknown): ReplyPermissionRequ
 
 function parsePermissionProfile(value: unknown): ScheduledPermissionProfile {
   const body = record(value);
-  const mode = requiredEnum(
-    body,
-    "mode",
-    ["read_only", "workspace_write", "full_access"] as const,
-  );
+  const mode = requiredEnum(body, "mode", [
+    "read_only",
+    "workspace_write",
+    "full_access",
+  ] as const);
   const network = optionalBoolean(body, "network");
   const allowedTools = optionalStringArray(body, "allowedTools");
   const deniedTools = optionalStringArray(body, "deniedTools");
@@ -459,7 +555,10 @@ function parsePermissionProfile(value: unknown): ScheduledPermissionProfile {
 function parseStopPolicy(value: unknown): ScheduledStopPolicy {
   const body = record(value);
   const runOnce = optionalBoolean(body, "runOnce");
-  const maxRuns = optionalNumber(body, "maxRuns", { integer: true, minimum: 1 });
+  const maxRuns = optionalNumber(body, "maxRuns", {
+    integer: true,
+    minimum: 1,
+  });
   const stopWhenCompleted = optionalBoolean(body, "stopWhenCompleted");
   const expiresAt = optionalNumber(body, "expiresAt");
   return {
@@ -470,60 +569,55 @@ function parseStopPolicy(value: unknown): ScheduledStopPolicy {
   };
 }
 
-function parseScheduleFields(body: JsonRecord): Partial<CreateScheduledTaskInput> {
+function parseScheduleFields(
+  body: JsonRecord,
+): Partial<CreateScheduledTaskInput> {
   const id = optionalString(body, "id");
   const name = optionalString(body, "name");
   const description = optionalString(body, "description");
   const prompt = optionalString(body, "prompt");
   const recurrence = optionalString(body, "recurrence");
-  const recurrenceFormat = optionalEnum(
-    body,
-    "recurrenceFormat",
-    ["rrule", "once"] as const,
-  );
+  const recurrenceFormat = optionalEnum(body, "recurrenceFormat", [
+    "rrule",
+    "once",
+  ] as const);
   const timezone = optionalString(body, "timezone");
-  const status = optionalEnum(
-    body,
-    "status",
-    ["active", "paused", "completed"] as const,
-  );
-  const destination = optionalEnum(
-    body,
-    "destination",
-    ["standalone", "chat"] as const,
-  );
+  const status = optionalEnum(body, "status", [
+    "active",
+    "paused",
+    "completed",
+  ] as const);
+  const destination = optionalEnum(body, "destination", [
+    "standalone",
+    "chat",
+  ] as const);
   const sessionId = optionalString(body, "sessionId");
   const projectPaths = optionalStringArray(body, "projectPaths");
-  const executionMode = optionalEnum(
-    body,
-    "executionMode",
-    ["local", "worktree"] as const,
-  );
+  const executionMode = optionalEnum(body, "executionMode", [
+    "local",
+    "worktree",
+  ] as const);
   const model = optionalString(body, "model");
   const effort = optionalString(body, "effort");
   const skillNames = optionalStringArray(body, "skillNames");
   const pluginNames = optionalStringArray(body, "pluginNames");
-  const permissionProfile = body.permissionProfile === undefined
-    ? undefined
-    : parsePermissionProfile(body.permissionProfile);
-  const overlapPolicy = optionalEnum(
-    body,
-    "overlapPolicy",
-    ["skip", "queue"] as const,
-  );
-  const missedRunPolicy = optionalEnum(
-    body,
-    "missedRunPolicy",
-    ["skip", "run_once"] as const,
-  );
-  const stopPolicy = body.stopPolicy === undefined
-    ? undefined
-    : parseStopPolicy(body.stopPolicy);
-  const createdBy = optionalEnum(
-    body,
-    "createdBy",
-    ["user", "agent"] as const,
-  );
+  const permissionProfile =
+    body.permissionProfile === undefined
+      ? undefined
+      : parsePermissionProfile(body.permissionProfile);
+  const overlapPolicy = optionalEnum(body, "overlapPolicy", [
+    "skip",
+    "queue",
+  ] as const);
+  const missedRunPolicy = optionalEnum(body, "missedRunPolicy", [
+    "skip",
+    "run_once",
+  ] as const);
+  const stopPolicy =
+    body.stopPolicy === undefined
+      ? undefined
+      : parseStopPolicy(body.stopPolicy);
+  const createdBy = optionalEnum(body, "createdBy", ["user", "agent"] as const);
   const createdFromSessionId = optionalString(body, "createdFromSessionId");
   return {
     ...(id !== undefined ? { id } : {}),
@@ -551,7 +645,9 @@ function parseScheduleFields(body: JsonRecord): Partial<CreateScheduledTaskInput
   };
 }
 
-export function parseCreateScheduledTaskRequest(value: unknown): CreateScheduledTaskInput {
+export function parseCreateScheduledTaskRequest(
+  value: unknown,
+): CreateScheduledTaskInput {
   const body = record(value);
   const parsed = parseScheduleFields(body);
   const nextRunAt = optionalNumber(body, "nextRunAt");
@@ -560,14 +656,22 @@ export function parseCreateScheduledTaskRequest(value: unknown): CreateScheduled
     name: requiredString(body, "name"),
     prompt: requiredString(body, "prompt"),
     recurrence: requiredString(body, "recurrence"),
-    recurrenceFormat: requiredEnum(body, "recurrenceFormat", ["rrule", "once"] as const),
+    recurrenceFormat: requiredEnum(body, "recurrenceFormat", [
+      "rrule",
+      "once",
+    ] as const),
     timezone: requiredString(body, "timezone"),
-    destination: requiredEnum(body, "destination", ["standalone", "chat"] as const),
+    destination: requiredEnum(body, "destination", [
+      "standalone",
+      "chat",
+    ] as const),
     ...(nextRunAt !== undefined ? { nextRunAt: nextRunAt as number } : {}),
   };
 }
 
-export function parseUpdateScheduledTaskRequest(value: unknown): UpdateScheduledTaskInput {
+export function parseUpdateScheduledTaskRequest(
+  value: unknown,
+): UpdateScheduledTaskInput {
   const body = record(value);
   if ("id" in body) {
     throw new ProtocolValidationError("id cannot be changed", "id");
@@ -575,12 +679,19 @@ export function parseUpdateScheduledTaskRequest(value: unknown): UpdateScheduled
   const parsed = parseScheduleFields(body);
   const lastRunAt = optionalNumber(body, "lastRunAt", { nullable: true });
   const nextRunAt = optionalNumber(body, "nextRunAt", { nullable: true });
-  const runCount = optionalNumber(body, "runCount", { integer: true, minimum: 0 });
+  const runCount = optionalNumber(body, "runCount", {
+    integer: true,
+    minimum: 0,
+  });
   const { id: _id, ...patch } = parsed;
   return {
     ...patch,
-    ...(lastRunAt !== undefined ? { lastRunAt: lastRunAt as number | null } : {}),
-    ...(nextRunAt !== undefined ? { nextRunAt: nextRunAt as number | null } : {}),
+    ...(lastRunAt !== undefined
+      ? { lastRunAt: lastRunAt as number | null }
+      : {}),
+    ...(nextRunAt !== undefined
+      ? { nextRunAt: nextRunAt as number | null }
+      : {}),
     ...(runCount !== undefined ? { runCount: runCount as number } : {}),
   };
 }

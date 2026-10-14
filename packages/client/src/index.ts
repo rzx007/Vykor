@@ -40,6 +40,11 @@ export {
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
+export { parsePluginUiAppearance } from "@vykor/protocol";
+export { stringifyPluginUiJson, parsePluginUiConversationRequest, parsePluginUiConversationPrepared,
+  parsePluginUiConversationReceipt, parsePluginUiSubmissionRecord, ProtocolValidationError } from "@vykor/protocol";
+export type { PluginUiAppearance, PluginUiConversationReceipt, PluginUiConversationRequest, PluginUiConversationPrepared,
+  SubmitPluginUiConversationInput, PluginUiSubmissionRecord } from "@vykor/protocol";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
 export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
 export {

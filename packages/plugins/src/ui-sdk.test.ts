@@ -1,13 +1,14 @@
 import { MessageChannel } from "node:worker_threads";
 import { afterEach, expect, it, vi } from "vitest";
-import { createPluginUiClient } from "./ui-sdk.js";
+import * as sdk from "./ui-sdk.js";
+const { createPluginUiClient } = sdk;
 
 const mountId = "20000000-0000-4000-8000-000000000001";
 const instanceId = "10000000-0000-4000-8000-000000000001";
-const snapshot = {
+const snapshot: sdk.PluginUiViewSnapshot = {
   instanceId, revision: 1, status: "open", data: { count: 1 },
   actions: [{ id: "apply", label: "应用", completion: "keep-open" }],
-  readOnly: false, theme: "light", locale: "zh-CN", surface: "tool-result",
+  readOnly: false, appearance: { theme: "light", colors: { background: "#fff", foreground: "#111", muted: "#eee", mutedForeground: "#666", primary: "#369", primaryForeground: "#fff", accent: "#def", border: "#ccc", destructive: "#c00" }, fontFamily: "system-ui", fontSizePx: 14, reducedMotion: false }, capabilities: { draft: true, submit: true }, locale: "zh-CN", surface: "tool-result",
 };
 const cleanup: Array<() => void> = [];
 afterEach(() => { cleanup.splice(0).forEach(fn => fn()); vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -22,13 +23,13 @@ function setup() {
   const messages: Array<Record<string, any>> = [];
   channel.port2.on("message", data => messages.push(JSON.parse(data)));
   const init = (source: unknown = parent) => child.dispatchEvent(Object.assign(new Event("message"), {
-    source, data: { version: 1, type: "plugin-ui-init", mountId }, ports: [channel.port1],
+    source, data: { version: 2, type: "plugin-ui-init", mountId }, ports: [channel.port1],
   }));
   const push = (value = snapshot) => channel.port2.postMessage(JSON.stringify({
-    version: 1, mountId, type: "snapshot", snapshot: value,
+    version: 2, mountId, type: "snapshot", snapshot: value,
   }));
   const reply = (id: string, result: unknown, idMount = mountId) => channel.port2.postMessage(JSON.stringify({
-    version: 1, mountId: idMount, id, result,
+    version: 2, mountId: idMount, id, result,
   }));
   return { ready, init, push, reply, messages, channel };
 }
@@ -36,7 +37,7 @@ function setup() {
 it("initializes only from the parent and waits for a valid port snapshot", async () => {
   const f = setup();
   const pending = createPluginUiClient();
-  expect(f.ready).toEqual([{ version: 1, type: "plugin-ui-ready" }]);
+  expect(f.ready).toEqual([{ version: 2, type: "plugin-ui-ready" }]);
   let initialized = false;
   void pending.then(() => { initialized = true; });
   f.init({});
@@ -69,17 +70,17 @@ it("captures revision/args, accepts only its own response and returns the durabl
   expect(await action).toEqual(receipt);
 });
 
-it("ignores older snapshots but applies same-revision theme updates with owned listener data", async () => {
+it("ignores older snapshots but applies same-revision appearance updates with owned listener data", async () => {
   const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
   const client = await initializing; cleanup.push(() => client.dispose());
   const seen: Array<{ revision: number; count: unknown; theme: string }> = [];
   const off = client.onSnapshot(value => {
-    seen.push({ revision: value.revision, count: value.data.count, theme: value.theme });
+    seen.push({ revision: value.revision, count: value.data.count, theme: value.appearance.theme });
     value.data.count = 999;
   });
   f.push({ ...snapshot, revision: 2, data: { count: 2 } });
   f.push({ ...snapshot, revision: 1, data: { count: 0 } });
-  f.push({ ...snapshot, revision: 2, data: { count: 2 }, theme: "dark" });
+  f.push({ ...snapshot, revision: 2, data: { count: 2 }, appearance: { ...snapshot.appearance, theme: "dark" } });
   await vi.waitFor(() => expect(seen).toHaveLength(3));
   expect(seen).toEqual([
     { revision: 1, count: 1, theme: "light" }, { revision: 2, count: 2, theme: "light" }, { revision: 2, count: 2, theme: "dark" },
@@ -138,4 +139,117 @@ it("expires an ordinary request without resending after a late response", async 
   f.reply(f.messages[0]!.id, snapshot);
   await new Promise(resolve => setTimeout(resolve, 5));
   expect(f.messages).toHaveLength(1);
+});
+
+it("uses current conversation packets and accepts draft/submit receipts before ordinary actions", async () => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  const draft: sdk.PluginUiConversationReceipt = { kind: "conversation", mode: "draft", instanceId, revision: 1, added: true };
+  const submit: sdk.PluginUiConversationReceipt = { kind: "conversation", mode: "submit", instanceId, revision: 2,
+    requestId: "30000000-0000-4000-8000-000000000001", inputId: "input", runId: "run", status: "pending" };
+  for (const receipt of [draft, submit]) {
+    const result = client.requestConversation({ mode: receipt.mode, expectedRevision: 1, text: "解释", data: {} });
+    await vi.waitFor(() => expect(f.messages).toHaveLength(receipt.mode === "draft" ? 1 : 2));
+    expect(f.messages.at(-1)).toMatchObject({ version: 2, method: "requestConversation",
+      params: { mode: receipt.mode, expectedRevision: 1, text: "解释", data: {} } });
+    f.reply(f.messages.at(-1)!.id, receipt);
+    expect(await result).toEqual(receipt);
+  }
+});
+
+it.each([
+  { mode: "draft", revision: 0 }, { mode: "draft", revision: 2 }, { mode: "submit", revision: 1 },
+  { mode: "submit", revision: 3 },
+] as const)("rejects $mode conversation receipt revision $revision for request revision 1", async ({ mode, revision }) => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  const result = client.requestConversation({ mode, expectedRevision: 1, text: "解释", data: {} });
+  const rejection = expect(result).rejects.toMatchObject({ code: "plugin_ui_invalid_message" });
+  await vi.waitFor(() => expect(f.messages).toHaveLength(1));
+  f.reply(f.messages[0]!.id, mode === "draft"
+    ? { kind: "conversation", mode, instanceId, revision, added: true }
+    : { kind: "conversation", mode, instanceId, revision,
+        requestId: "30000000-0000-4000-8000-000000000001", inputId: "input", runId: "run", status: "pending" });
+  await rejection;
+});
+
+it.each(["draft", "submit"] as const)("checks %s receipt against its captured request after a snapshot update", async mode => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  const result = client.requestConversation({ mode, expectedRevision: 1, text: "解释", data: {} });
+  await vi.waitFor(() => expect(f.messages).toHaveLength(1));
+  const revisions: number[] = [];
+  client.onSnapshot(value => revisions.push(value.revision));
+  f.push({ ...snapshot, revision: 9, data: { count: 9 } });
+  await vi.waitFor(() => expect(revisions).toEqual([1, 9]));
+  const receipt = mode === "draft"
+    ? { kind: "conversation", mode, instanceId, revision: 1, added: true }
+    : { kind: "conversation", mode, instanceId, revision: 2,
+        requestId: "30000000-0000-4000-8000-000000000001", inputId: "input", runId: "run", status: "pending" };
+  f.reply(f.messages[0]!.id, receipt);
+  expect(await result).toEqual(receipt);
+});
+
+it("sets only validated appearance variables and asks the browser to validate every color", () => {
+  const properties = new Map<string, string>();
+  vi.stubGlobal("CSS", { supports: (name: string, value: string) => name === "color" && value.startsWith("#") });
+  const root = { style: { setProperty: (key: string, value: string) => properties.set(key, value) } };
+  sdk.applyPluginUiAppearance(snapshot.appearance, root as unknown as HTMLElement);
+  expect(properties.get("--ohs-background")).toBe("#fff");
+  expect(properties.get("--ohs-font-family")).toBe("system-ui");
+  expect(properties.get("--ohs-font-size")).toBe("14px");
+  expect(properties.get("--ohs-color-scheme")).toBe("light");
+  expect([...properties.keys()].every(key => key.startsWith("--ohs-"))).toBe(true);
+  for (const color of Object.keys(snapshot.appearance.colors)) {
+    expect(() => sdk.applyPluginUiAppearance({
+      ...snapshot.appearance, colors: { ...snapshot.appearance.colors, [color]: "invalid-color" },
+    }, root as unknown as HTMLElement)).toThrow();
+    expect(properties.get("--ohs-background")).toBe("#fff");
+  }
+});
+
+it("keeps conversation requests pending for 330 seconds and never resends them", async () => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  vi.useFakeTimers();
+  const result = client.requestConversation({ mode: "submit", expectedRevision: 1, text: "执行", data: {} });
+  let settled = false;
+  void result.then(() => { settled = true; }, () => { settled = true; });
+  const rejection = expect(result).rejects.toMatchObject({ code: "plugin_ui_request_timeout" });
+  await vi.advanceTimersByTimeAsync(329_999);
+  expect(settled).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  await rejection;
+  vi.useRealTimers();
+  await vi.waitFor(() => expect(f.messages).toHaveLength(1));
+});
+
+it("delivers same-revision capability changes and enforces the selected conversation capability", async () => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  const seen: unknown[] = [];
+  client.onSnapshot(value => seen.push(value.capabilities));
+  f.push({ ...snapshot, capabilities: { draft: false, submit: true } });
+  await vi.waitFor(() => expect(seen).toHaveLength(2));
+  expect(seen).toEqual([{ draft: true, submit: true }, { draft: false, submit: true }]);
+  await expect(client.requestConversation({ mode: "draft", expectedRevision: 1, text: "解释", data: {} }))
+    .rejects.toMatchObject({ code: "plugin_ui_read_only" });
+  expect(f.messages).toEqual([]);
+});
+
+it("rejects receipts from the wrong conversation mode, instance, or action branch", async () => {
+  const f = setup(); const initializing = createPluginUiClient(); f.init(); f.push();
+  const client = await initializing; cleanup.push(() => client.dispose());
+  for (const [index, receipt] of [
+    { kind: "conversation", mode: "submit", instanceId, revision: 1,
+      requestId: "30000000-0000-4000-8000-000000000001", inputId: "input", runId: "run", status: "pending" },
+    { kind: "conversation", mode: "draft", instanceId: "40000000-0000-4000-8000-000000000001", revision: 1, added: true },
+    { requestId: "30000000-0000-4000-8000-000000000001", runId: "run", instanceId, revision: 1, status: "pending" },
+  ].entries()) {
+    const result = client.requestConversation({ mode: "draft", expectedRevision: 1, text: "解释", data: {} });
+    const rejection = expect(result).rejects.toMatchObject({ code: "plugin_ui_invalid_message" });
+    await vi.waitFor(() => expect(f.messages).toHaveLength(index + 1));
+    f.reply(f.messages.at(-1)!.id, receipt);
+    await rejection;
+  }
 });

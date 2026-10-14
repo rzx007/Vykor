@@ -48,7 +48,7 @@ describe("text-inspector reference plugin (real child process)", () => {
   it("returns a real UI proposal for bounded input without changing ordinary result JSON", async () => {
     await withInspector(async (check, cwd) => {
       const result = await check.execute({ text: "ok  \n\titem\n" }, { cwd });
-      expect(result.metadata?.ui).toMatchObject({ schemaVersion: 1, componentId: "text-inspector",
+      expect(result.metadata?.ui).toMatchObject({ schemaVersion: 2, componentId: "text-inspector",
         data: { text: "ok  \n\titem\n", findings: [{ line: 1, code: "trailing-whitespace" }, { line: 2, code: "tab-indentation" }] } });
     });
   });

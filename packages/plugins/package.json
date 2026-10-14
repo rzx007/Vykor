@@ -15,7 +15,8 @@
     "./ui-sdk": {
       "types": "./src/ui-sdk.ts",
       "import": "./src/ui-sdk.ts"
-    }
+    },
+    "./ui-styles.css": "./src/ui-styles.css"
   },
   "scripts": {
     "build": "exit 0",

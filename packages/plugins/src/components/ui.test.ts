@@ -53,7 +53,7 @@ describe("loadNativeUiMetadata", () => {
     expect((await loadNativeUiMetadata(plugin)).value![0]!.componentDigest).toBe(first.value![0]!.componentDigest);
     for (const patch of [
       { title: "Changed" },
-      { surfaces: ["tool-result"] },
+      { surface: "tool-result" },
       { actions: [{ id: "explain", label: "Explain", tool: "TextInspectorExplain", completion: "keep-open" }] },
     ]) {
       ui.components[0] = { ...definition, ...patch };
@@ -128,7 +128,7 @@ describe("loadNativeUiMetadata", () => {
     expect((await loadNativeUiMetadata(plugin)).status).toBe("invalid");
     initial.components = Array.from({ length: 16 }, (_, i) => ({ ...initial.components[0], id: `component-${i}` }));
     await writeFile(join(root, "ui", "manifest.json"), JSON.stringify(initial));
-    await writeFile(join(root, "ui", "second.json"), JSON.stringify({ schemaVersion: 1,
+    await writeFile(join(root, "ui", "second.json"), JSON.stringify({ schemaVersion: 2,
       components: [{ ...initial.components[0], id: "extra" }],
     }));
     expect((await loadNativeUiMetadata(plugin)).status).toBe("invalid");

@@ -10,25 +10,25 @@ const requestId = "2a856850-90b6-420e-b7b3-50f6d5f4f41b";
 const instanceId = "9e165b40-292c-4b77-9c14-6aeb018cad90";
 const validInput = { requestId, expectedRevision: 0, actionId: "apply", args: { selected: ["line-1"] } };
 const instance = {
-  schemaVersion: 1, instanceId, sessionId: "s1", sourceRunId: "r1", sourcePartId: "p1",
+  schemaVersion: 2, instanceId, sessionId: "s1", sourceRunId: "r1", sourcePartId: "p1",
   sourceToolUseId: "call-1", sourceToolName: "Inspect", pluginId: "dev.example.inspect",
   pluginVersion: "1.0.0", pluginDigest: "a".repeat(64), componentId: "findings",
-  componentDigest: "b".repeat(64), title: "Findings", surfaces: ["tool-result", "session-sidebar"],
+  componentDigest: "b".repeat(64), title: "Findings", surface: "session-sidebar",
   status: "open", revision: 0, data: { findings: [{ line: 1 }] }, createdAt: 1, updatedAt: 2,
 };
 const action = {
-  schemaVersion: 1, instanceId, requestId, requestFingerprint: "c".repeat(64), expectedRevision: 0,
+  schemaVersion: 2, instanceId, requestId, requestFingerprint: "c".repeat(64), expectedRevision: 0,
   actionId: "apply", label: "Apply", args: { selected: ["line-1"] }, pluginId: "dev.example.inspect",
   pluginVersion: "1.0.0", pluginDigest: "a".repeat(64), componentDigest: "b".repeat(64),
   toolName: "Apply", toolUseId: "ui-call-1", executionState: "not_started",
 };
-const proposal = { schemaVersion: 1, componentId: "findings", data: { findings: [{ line: 1 }] } };
+const proposal = { schemaVersion: 2, componentId: "findings", data: { findings: [{ line: 1 }] } };
 
 describe("Plugin UI proposals", () => {
   it("reads only complete versioned proposals from plugin metadata.ui", () => {
     expect(readPluginUiProposal({ ui: proposal })).toEqual(proposal);
     expect(readPluginUiProposal(proposal)).toBeUndefined();
-    for (const invalid of [null, [], {}, { ...proposal, schemaVersion: 2 }, { ...proposal, componentId: "" },
+    for (const invalid of [null, [], {}, { ...proposal, schemaVersion: 1 }, { ...proposal, componentId: "" },
       { ...proposal, data: { value: Infinity } }, { ...proposal, extra: true }]) {
       expect(readPluginUiProposal({ ui: invalid })).toBeUndefined();
     }
@@ -137,17 +137,17 @@ describe("host Plugin UI metadata readers", () => {
   });
 
   it.each([
-    { schemaVersion: 2 }, { instanceId: "bad" }, { sourceRunId: "" }, { pluginVersion: "" },
+    { schemaVersion: 1 }, { instanceId: "bad" }, { sourceRunId: "" }, { pluginVersion: "" },
     { pluginDigest: "abc" }, { componentDigest: "g".repeat(64) }, { status: "running" },
     { revision: -1 }, { revision: Number.MAX_SAFE_INTEGER + 1 }, { createdAt: Infinity },
-    { updatedAt: NaN }, { data: { value: Infinity } }, { surfaces: [] }, { surfaces: ["unknown"] }, { surfaces: new Array(1) },
+    { updatedAt: NaN }, { data: { value: Infinity } }, { surface: [] }, { surface: "unknown" }, { surface: new Array(1) },
     { activeActionRunId: "" }, { lastActionRunId: 1 }, { unknown: true },
   ])("rejects malformed instance %j", patch => {
     expect(readPluginUiInstance({ pluginUi: { ...instance, ...patch } })).toBeUndefined();
   });
 
   it.each([
-    { schemaVersion: 2 }, { requestId: "bad" }, { requestFingerprint: "abc" }, { expectedRevision: -1 },
+    { schemaVersion: 1 }, { requestId: "bad" }, { requestFingerprint: "abc" }, { expectedRevision: -1 },
     { pluginId: "" }, { toolName: "" }, { toolUseId: "" }, { executionState: "running" },
     { args: { value: NaN } }, { unknown: true },
   ])("rejects malformed action %j", patch => {

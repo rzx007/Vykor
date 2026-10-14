@@ -12,8 +12,8 @@ describe("formatToolResultForModel", () => {
   });
 
   it("filters forged host UI records while preserving proposals and generic metadata", () => {
-    const proposal = { schemaVersion: 1, componentId: "findings", data: { findings: ["line-1"] } };
-    expect(externalToolMetadata({ pluginUi: { pluginId: "fake" }, uiAction: {}, ui: proposal, source: "plugin" }))
+    const proposal = { schemaVersion: 2, componentId: "findings", data: { findings: ["line-1"] } };
+    expect(externalToolMetadata({ pluginUi: { pluginId: "fake" }, uiAction: {}, pluginUiSubmission: { inputId: "forged" }, ui: proposal, source: "plugin" }))
       .toEqual({ ui: proposal, source: "plugin" });
     const result: ToolExecutionResult = { toolUseId: "a", toolName: "Inspect", content: [{ type: "text", text: "Found one issue" }], metadata: { ui: proposal } };
     expect(formatToolResultForModel(result)).toEqual([{ type: "text", text: "Found one issue" }]);

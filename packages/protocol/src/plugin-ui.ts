@@ -1,4 +1,9 @@
-export type JsonValue = null | boolean | number | string | JsonValue[]
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
   | { [key: string]: JsonValue };
 
 export interface PluginUiActionDefinition {
@@ -12,12 +17,12 @@ export interface PluginUiComponentDefinition {
   id: string;
   title: string;
   entry: string;
-  surfaces: Array<"tool-result" | "session-sidebar">;
+  surface: "tool-result" | "session-sidebar";
   actions: PluginUiActionDefinition[];
 }
 
-export interface PluginUiManifestV1 {
-  schemaVersion: 1;
+export interface PluginUiManifest {
+  schemaVersion: 2;
   components: PluginUiComponentDefinition[];
 }
 
@@ -29,13 +34,13 @@ export interface PluginUiInventory {
 }
 
 export interface PluginUiProposal {
-  schemaVersion: 1;
+  schemaVersion: 2;
   componentId: string;
   data: Record<string, JsonValue>;
 }
 
 export interface PluginUiInstanceRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   instanceId: string;
   sessionId: string;
   sourceRunId: string;
@@ -48,7 +53,7 @@ export interface PluginUiInstanceRecord {
   componentId: string;
   componentDigest: string;
   title: string;
-  surfaces: Array<"tool-result" | "session-sidebar">;
+  surface: "tool-result" | "session-sidebar";
   status: "open" | "resolved" | "dismissed";
   revision: number;
   data: Record<string, JsonValue>;
@@ -73,8 +78,16 @@ export interface InvokePluginUiActionInput {
 }
 
 export interface PluginUiAvailability {
-  code: "available" | "plugin-disabled" | "permission-missing" | "snapshot-missing" | "snapshot-changed"
-    | "runtime-unavailable" | "session-archived" | "action-unknown" | "invalid-definition";
+  code:
+    | "available"
+    | "plugin-disabled"
+    | "permission-missing"
+    | "snapshot-missing"
+    | "snapshot-changed"
+    | "runtime-unavailable"
+    | "session-archived"
+    | "action-unknown"
+    | "invalid-definition";
   canRender: boolean;
   canInvoke: boolean;
 }
@@ -92,6 +105,7 @@ export interface PluginUiInstanceResponse {
   instance: PluginUiInstanceRecord;
   availability: PluginUiAvailability;
   actions: PluginUiActionDescription[];
+  conversation: { draft: boolean; submit: boolean };
 }
 
 export interface DismissPluginUiInput {
@@ -119,7 +133,7 @@ export interface PluginUiActionResponse {
 }
 
 export interface PluginUiActionRunMetadata {
-  schemaVersion: 1;
+  schemaVersion: 2;
   instanceId: string;
   requestId: string;
   requestFingerprint: string;
@@ -148,14 +162,21 @@ export const PLUGIN_UI_LIMITS = {
   jsonDepth: 20,
 } as const;
 
-export function isPluginUiRecord(value: unknown): value is Record<string, unknown> {
+export function isPluginUiRecord(
+  value: unknown,
+): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
 export function isPluginUiUuid(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
 }
 
 export function isPluginUiRevision(value: unknown): value is number {
@@ -163,17 +184,26 @@ export function isPluginUiRevision(value: unknown): value is number {
 }
 
 /** Reject the whole payload; no data or identifiers are truncated. */
-export function isPluginUiJsonRecord(value: unknown, byteLimit: number): value is Record<string, JsonValue> {
+export function isPluginUiJsonRecord(
+  value: unknown,
+  byteLimit: number,
+): value is Record<string, JsonValue> {
   return validatePluginUiJsonRecord(value, byteLimit).valid;
 }
 
 /** Stable failure reasons for request boundaries; serialization and byte counting happen once. */
-export function validatePluginUiJsonRecord(value: unknown, byteLimit: number):
+export function validatePluginUiJsonRecord(
+  value: unknown,
+  byteLimit: number,
+):
   | { valid: true; value: Record<string, JsonValue> }
   | { valid: false; reason: "invalid_json" | "payload_too_large" } {
   if (!isPluginUiRecord(value)) return { valid: false, reason: "invalid_json" };
   try {
-    if (new TextEncoder().encode(stringifyPluginUiJson(value)).byteLength > byteLimit) {
+    if (
+      new TextEncoder().encode(stringifyPluginUiJson(value)).byteLength >
+      byteLimit
+    ) {
       return { valid: false, reason: "payload_too_large" };
     }
     return { valid: true, value: value as Record<string, JsonValue> };
@@ -182,9 +212,17 @@ export function validatePluginUiJsonRecord(value: unknown, byteLimit: number):
   }
 }
 
-function exactFields(record: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []): boolean {
-  return required.every(key => Object.hasOwn(record, key))
-    && Object.keys(record).every(key => required.includes(key) || optional.includes(key));
+function exactFields(
+  record: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  return (
+    required.every((key) => Object.hasOwn(record, key)) &&
+    Object.keys(record).every(
+      (key) => required.includes(key) || optional.includes(key),
+    )
+  );
 }
 
 function nonempty(value: unknown): value is string {
@@ -200,81 +238,179 @@ function finite(value: unknown): value is number {
 }
 
 /** An untrusted plugin proposal; it grants no host identity or permission. */
-export function readPluginUiProposal(metadata: unknown): PluginUiProposal | undefined {
-  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "ui")) return undefined;
+export function readPluginUiProposal(
+  metadata: unknown,
+): PluginUiProposal | undefined {
+  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "ui"))
+    return undefined;
   const record = metadata.ui;
-  if (!isPluginUiRecord(record) || !exactFields(record, ["schemaVersion", "componentId", "data"])
-    || record.schemaVersion !== 1 || !nonempty(record.componentId)
-    || !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)) return undefined;
+  if (
+    !isPluginUiRecord(record) ||
+    !exactFields(record, ["schemaVersion", "componentId", "data"]) ||
+    record.schemaVersion !== 2 ||
+    !nonempty(record.componentId) ||
+    !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)
+  )
+    return undefined;
   return record as unknown as PluginUiProposal;
 }
 
 /** Shape validation only; the Server must also verify ownership against the actual Part. */
-export function readPluginUiInstance(metadata: unknown): PluginUiInstanceRecord | undefined {
-  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "pluginUi")) return undefined;
+export function readPluginUiInstance(
+  metadata: unknown,
+): PluginUiInstanceRecord | undefined {
+  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "pluginUi"))
+    return undefined;
   const record = metadata.pluginUi;
-  const source = ["sessionId", "sourceRunId", "sourcePartId", "sourceToolUseId", "sourceToolName",
-    "pluginId", "pluginVersion", "componentId", "title"];
-  if (!isPluginUiRecord(record) || !exactFields(record, ["schemaVersion", "instanceId", ...source,
-    "pluginDigest", "componentDigest", "surfaces", "status", "revision", "data", "createdAt", "updatedAt"],
-    ["activeActionRunId", "lastActionRunId", "dismissal"])) return undefined;
-  if (record.schemaVersion !== 1 || !isPluginUiUuid(record.instanceId)
-    || !source.every(key => nonempty(record[key]))
-    || !digest(record.pluginDigest) || !digest(record.componentDigest)
-    || !Array.isArray(record.surfaces) || record.surfaces.length === 0
-    || Array.from(record.surfaces).some(surface => surface !== "tool-result" && surface !== "session-sidebar")
-    || !["open", "resolved", "dismissed"].includes(record.status as string)
-    || !isPluginUiRevision(record.revision) || !finite(record.createdAt) || !finite(record.updatedAt)
-    || !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)) return undefined;
+  const source = [
+    "sessionId",
+    "sourceRunId",
+    "sourcePartId",
+    "sourceToolUseId",
+    "sourceToolName",
+    "pluginId",
+    "pluginVersion",
+    "componentId",
+    "title",
+  ];
+  if (
+    !isPluginUiRecord(record) ||
+    !exactFields(
+      record,
+      [
+        "schemaVersion",
+        "instanceId",
+        ...source,
+        "pluginDigest",
+        "componentDigest",
+        "surface",
+        "status",
+        "revision",
+        "data",
+        "createdAt",
+        "updatedAt",
+      ],
+      ["activeActionRunId", "lastActionRunId", "dismissal"],
+    )
+  )
+    return undefined;
+  if (
+    record.schemaVersion !== 2 ||
+    !isPluginUiUuid(record.instanceId) ||
+    !source.every((key) => nonempty(record[key])) ||
+    !digest(record.pluginDigest) ||
+    !digest(record.componentDigest) ||
+    (record.surface !== "tool-result" &&
+      record.surface !== "session-sidebar") ||
+    !["open", "resolved", "dismissed"].includes(record.status as string) ||
+    !isPluginUiRevision(record.revision) ||
+    !finite(record.createdAt) ||
+    !finite(record.updatedAt) ||
+    !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)
+  )
+    return undefined;
   for (const key of ["activeActionRunId", "lastActionRunId"]) {
     if (Object.hasOwn(record, key) && !nonempty(record[key])) return undefined;
   }
   if (Object.hasOwn(record, "dismissal")) {
     const dismissal = record.dismissal;
-    if (!isPluginUiRecord(dismissal) || !exactFields(dismissal,
-      ["requestId", "requestFingerprint", "expectedRevision", "revision", "dismissedAt"])
-      || !isPluginUiUuid(dismissal.requestId) || !digest(dismissal.requestFingerprint)
-      || !isPluginUiRevision(dismissal.expectedRevision) || !isPluginUiRevision(dismissal.revision)
-      || !finite(dismissal.dismissedAt)) return undefined;
+    if (
+      !isPluginUiRecord(dismissal) ||
+      !exactFields(dismissal, [
+        "requestId",
+        "requestFingerprint",
+        "expectedRevision",
+        "revision",
+        "dismissedAt",
+      ]) ||
+      !isPluginUiUuid(dismissal.requestId) ||
+      !digest(dismissal.requestFingerprint) ||
+      !isPluginUiRevision(dismissal.expectedRevision) ||
+      !isPluginUiRevision(dismissal.revision) ||
+      !finite(dismissal.dismissedAt)
+    )
+      return undefined;
   }
   return record as unknown as PluginUiInstanceRecord;
 }
 
 /** Shape validation only; the Server must also verify this Run's trusted provenance. */
-export function readPluginUiAction(metadata: unknown): PluginUiActionRunMetadata | undefined {
-  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "uiAction")) return undefined;
+export function readPluginUiAction(
+  metadata: unknown,
+): PluginUiActionRunMetadata | undefined {
+  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, "uiAction"))
+    return undefined;
   const record = metadata.uiAction;
-  const source = ["actionId", "label", "pluginId", "pluginVersion", "toolName", "toolUseId"];
-  if (!isPluginUiRecord(record) || !exactFields(record, ["schemaVersion", "instanceId", "requestId",
-    "requestFingerprint", "expectedRevision", ...source, "args", "pluginDigest", "componentDigest", "executionState"])) return undefined;
-  if (record.schemaVersion !== 1 || !isPluginUiUuid(record.instanceId) || !isPluginUiUuid(record.requestId)
-    || !digest(record.requestFingerprint) || !digest(record.pluginDigest) || !digest(record.componentDigest)
-    || !isPluginUiRevision(record.expectedRevision) || !source.every(key => nonempty(record[key]))
-    || !["not_started", "completed", "unknown"].includes(record.executionState as string)
-    || !isPluginUiJsonRecord(record.args, PLUGIN_UI_LIMITS.actionArgsBytes)) return undefined;
+  const source = [
+    "actionId",
+    "label",
+    "pluginId",
+    "pluginVersion",
+    "toolName",
+    "toolUseId",
+  ];
+  if (
+    !isPluginUiRecord(record) ||
+    !exactFields(record, [
+      "schemaVersion",
+      "instanceId",
+      "requestId",
+      "requestFingerprint",
+      "expectedRevision",
+      ...source,
+      "args",
+      "pluginDigest",
+      "componentDigest",
+      "executionState",
+    ])
+  )
+    return undefined;
+  if (
+    record.schemaVersion !== 2 ||
+    !isPluginUiUuid(record.instanceId) ||
+    !isPluginUiUuid(record.requestId) ||
+    !digest(record.requestFingerprint) ||
+    !digest(record.pluginDigest) ||
+    !digest(record.componentDigest) ||
+    !isPluginUiRevision(record.expectedRevision) ||
+    !source.every((key) => nonempty(record[key])) ||
+    !["not_started", "completed", "unknown"].includes(
+      record.executionState as string,
+    ) ||
+    !isPluginUiJsonRecord(record.args, PLUGIN_UI_LIMITS.actionArgsBytes)
+  )
+    return undefined;
   return record as unknown as PluginUiActionRunMetadata;
 }
 
 /** JSON with deterministic object-key order, including numeric and literal prototype keys. */
 export function stringifyPluginUiJson(value: unknown): string {
   const render = (item: unknown, depth: number): string => {
-    if (item === null || typeof item === "string" || typeof item === "boolean") {
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "boolean"
+    ) {
       return JSON.stringify(item);
     }
-    if (typeof item === "number" && Number.isFinite(item)) return JSON.stringify(item);
-    if (typeof item !== "object" || item === null) throw new Error("Plugin UI requires JSON data");
-    if (depth >= PLUGIN_UI_LIMITS.jsonDepth) throw new Error("Plugin UI JSON nesting limit exceeded");
+    if (typeof item === "number" && Number.isFinite(item))
+      return JSON.stringify(item);
+    if (typeof item !== "object" || item === null)
+      throw new Error("Plugin UI requires JSON data");
+    if (depth >= PLUGIN_UI_LIMITS.jsonDepth)
+      throw new Error("Plugin UI JSON nesting limit exceeded");
     if (Array.isArray(item)) {
-      return `[${Array.from(item, child => render(child, depth + 1)).join(",")}]`;
+      return `[${Array.from(item, (child) => render(child, depth + 1)).join(",")}]`;
     }
     const prototype = Object.getPrototypeOf(item);
     if (prototype !== Object.prototype && prototype !== null) {
       throw new Error("Plugin UI requires plain JSON objects");
     }
     const record = item as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map(key =>
-      `${JSON.stringify(key)}:${render(record[key], depth + 1)}`,
-    ).join(",")}}`;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${render(record[key], depth + 1)}`)
+      .join(",")}}`;
   };
   return render(value, 0);
 }

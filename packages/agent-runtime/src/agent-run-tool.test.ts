@@ -37,8 +37,8 @@ async function fixture(actionTool = "NativeAction", link = false, driftOnActivat
     schemaVersion: 1, id: pluginId, name: "native-ui", version: "1.0.0",
     components: { tools: ["./tools/index.mjs"], ui: ["./ui/manifest.json"] },
   }));
-  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 1, components: [{
-    id: "panel", title: "Panel", entry: "./ui/panel.html", surfaces: ["tool-result"],
+  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 2, components: [{
+    id: "panel", title: "Panel", entry: "./ui/panel.html", surface: "tool-result",
     actions: [{ id: "run", label: "Run", tool: actionTool, completion: "keep-open" }],
   }] }));
   writeFileSync(join(source, "ui/panel.html"), "<p>Original</p>");

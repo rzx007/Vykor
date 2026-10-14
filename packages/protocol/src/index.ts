@@ -18,5 +18,7 @@ export * from "./workspace-changes.js";
 export * from "./plugin-ui.js";
 export * from "./plugin-ui-requests.js";
 export * from "./plugin-ui-bridge.js";
+export * from "./plugin-ui-appearance.js";
+export * from "./plugin-ui-conversation.js";
 export * from "./notes.js";
 export * from "./memory.js";
