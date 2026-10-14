@@ -203,6 +203,14 @@
       "kind": "runtime-export"
     },
     {
+      "name": "isPluginIconSource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "isPluginWebUrl",
+      "kind": "runtime-export"
+    },
+    {
       "name": "mergeCommandDetails",
       "kind": "runtime-export"
     },
