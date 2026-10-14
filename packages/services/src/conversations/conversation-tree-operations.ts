@@ -86,7 +86,7 @@ export function forkSessionWithHistory(input: {
     for (const part of sourceParts) {
       const messageId = messageIdMap.get(part.messageId);
       if (!messageId) continue;
-      const { pluginUi: _pluginUi, uiAction: _uiAction, ...copiedMetadata } = part.metadata;
+      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, ...copiedMetadata } = part.metadata;
       const sourceReferenceId = typeof part.metadata.inputAttachmentId === "string"
         ? part.metadata.inputAttachmentId
         : undefined;

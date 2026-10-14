@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createDefaultNodeAgent } from "@vykor/agent-runtime"
 import { installLocalNativePlugin } from "@vykor/plugins"
@@ -12,17 +12,18 @@ const workspace = process.env.VYKOR_UI_TEST_ROOT!
 const reference = process.env.VYKOR_UI_TEST_REFERENCE === "1"
 const pluginId = reference ? "example.text-inspector" : "test.ui-electron"
 process.send?.({ stage: "installing" })
-const root = mkdtempSync(join(workspace, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/native-"))
+const root = mkdtempSync(join(workspace, ".superpowers/sdd/2026-10-11-native-plugin-ui-continuity/native-"))
 process.env.VYKOR_CONFIG_DIR = join(root, "config")
 const source = reference ? join(workspace, "examples/plugins/text-inspector") : join(root, "source")
 if (!reference) {
 for (const folder of [".vykor-plugin", "ui", "tools"]) mkdirSync(join(source, folder), { recursive: true })
-const assets = join(workspace, "tests/browser-plugin-ui-sdk/dist/assets")
-const sdk = readFileSync(join(assets, readdirSync(assets).find(name => name.endsWith(".js"))!), "utf8").replace(/<\/script/gi, "<\\/script")
+const sdk = readFileSync(join(workspace, "examples/plugins/text-inspector/ui/sdk.js"), "utf8").replace(/<\/script/gi, "<\\/script") +
+  ";VykorPluginUi.createPluginUiClient().then(client=>{client.onSnapshot(s=>document.querySelector('#status').textContent=String(s.data.count??''));" +
+  "document.querySelector('#apply').addEventListener('click',()=>client.requestAction('apply',{value:'<script>not html<\\/script>'}).then(r=>document.querySelector('#result').textContent=r.runId).catch(e=>document.querySelector('#result').textContent=e.code));});"
 writeFileSync(join(source, ".vykor-plugin/plugin.json"), JSON.stringify({ schemaVersion: 1, id: "test.ui-electron",
   name: "ui-electron", version: "1.0.0", components: { tools: ["./tools/index.mjs"], ui: ["./ui/manifest.json"] } }))
-writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 1, components: [{
-  id: "panel", title: "检查结果", entry: "./ui/panel.html", surfaces: ["tool-result", "session-sidebar"],
+writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 2, components: [{
+  id: "panel", title: "检查结果", entry: "./ui/panel.html", surface: "tool-result",
   actions: [{ id: "apply", label: "应用检查结果", tool: "NativeAction", completion: "keep-open" }],
 }] }))
 const portProbe = "<script>window.testReplies=[];window.addEventListener('message',event=>{" +
@@ -36,7 +37,7 @@ writeFileSync(join(source, "tools/index.mjs"), `
   export function registerTools() { return [
     { name: "NativeInspect", description: "inspect", inputSchema: { type: "object" }, async invoke() {
       return { content: [{ type: "text", text: "原始结果，不应消失" }],
-        metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 1 } } } };
+        metadata: { ui: { schemaVersion: 2, componentId: "panel", data: { count: 1 } } } };
     } },
     { name: "NativeAction", description: "apply", inputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
       async invoke(input, context) {
@@ -47,7 +48,7 @@ writeFileSync(join(source, "tools/index.mjs"), `
           context.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
         });
         return { content: [{ type: "text", text: "Applied" }],
-          metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 0 } } } };
+          metadata: { ui: { schemaVersion: 2, componentId: "panel", data: { count: 0 } } } };
       } }
   ]; }
 `)

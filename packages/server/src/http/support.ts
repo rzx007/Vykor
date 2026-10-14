@@ -185,12 +185,13 @@ export function sessionMutationErrorStatus(error: unknown): number {
     : 404;
 }
 
-export async function readJson(c: Context, tooLargeError = new ProtocolValidationError("Request body too large")): Promise<JsonRecord> {
-  const text = await c.req.text();
-  if (!text.trim()) return {};
-  if (new TextEncoder().encode(text).byteLength > 1024 * 1024) {
+export async function readJson(c: Context, tooLargeError = new ProtocolValidationError("Request body too large"), maxBytes = 1024 * 1024): Promise<JsonRecord> {
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength > maxBytes) {
     throw tooLargeError;
   }
+  const text = new TextDecoder().decode(bytes);
+  if (!text.trim()) return {};
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;

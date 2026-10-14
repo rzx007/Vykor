@@ -21,7 +21,7 @@ function fixture() {
   const binding: RunPluginUiBinding = {
     pluginId, pluginVersion: "1.0.0", pluginDigest: "a".repeat(64), componentId: "findings",
     componentDigest: "b".repeat(64), htmlSha256: "c".repeat(64), root: "/private/plugin", entryPath: "/private/plugin/ui.html",
-    definition: { id: "findings", title: "Findings", entry: "ui.html", surfaces: ["tool-result"],
+    definition: { id: "findings", title: "Findings", entry: "ui.html", surface: "tool-result",
       actions: [{ id: "fix", label: "Fix", tool: "Fix", completion: "resolve" }] },
     actionTools: [tools.get("Fix")!],
   };
@@ -30,8 +30,8 @@ function fixture() {
 }
 function result(): ToolResult {
   return { content: [{ type: "text", text: "Found one issue" }], executionState: "completed",
-    metadata: { ui: { schemaVersion: 1, componentId: "findings", data: { count: 1 } },
-      pluginUi: { instanceId: "forged" }, uiAction: { instanceId: "forged" }, custom: "retained" } };
+    metadata: { ui: { schemaVersion: 2, componentId: "findings", data: { count: 1 } },
+      pluginUi: { instanceId: "forged" }, uiAction: { instanceId: "forged" }, pluginUiSubmission: { inputId: "forged" }, custom: "retained" } };
 }
 function harness() {
   const directory = mkdtempSync(join(tmpdir(), "vykor-ui-instance-"));
@@ -64,6 +64,12 @@ function harness() {
 }
 
 describe("trusted plugin UI source projection", () => {
+  it("rejects a current definition whose surface differs from the persisted instance", async () => {
+    const h = harness(); h.finish();
+    h.setCurrent({ binding: { ...h.binding, definition: { ...h.binding.definition, surface: "session-sidebar" } } });
+    const instance = (await import("@vykor/protocol")).readPluginUiInstance(h.part().metadata)!;
+    expect((await h.service.get(h.session.id, instance.instanceId)).availability).toEqual({ code: "invalid-definition", canRender: false, canInvoke: false });
+  });
   it("renders verified static definitions without inventing Native action schemas", async () => {
     const h = harness(); h.finish();
     const { actionTools: _tools, ...documentBinding } = h.binding;
@@ -87,11 +93,12 @@ describe("trusted plugin UI source projection", () => {
     const savedOriginal = structuredClone(original);
     h.finish(original);
     const instance = h.part().metadata.pluginUi as any;
-    expect(instance).toMatchObject({ schemaVersion: 1, status: "open", revision: 1, sessionId: "s1",
+    expect(instance).toMatchObject({ schemaVersion: 2, status: "open", revision: 1, sessionId: "s1",
       sourceRunId: "run", sourcePartId: "call", sourceToolUseId: "call", sourceToolName: "Inspect", pluginId,
       pluginVersion: "1.0.0", data: { count: 1 } });
     expect(instance.instanceId).toMatch(/^[0-9a-f-]{36}$/);
     expect(h.part().metadata).not.toHaveProperty("uiAction");
+    expect(h.part().metadata).not.toHaveProperty("pluginUiSubmission");
     expect(h.part().output).toEqual(savedOriginal);
     expect(original).toEqual(savedOriginal);
     h.service.releaseRunView("run");
@@ -104,9 +111,9 @@ describe("trusted plugin UI source projection", () => {
   });
 
   it.each([
-    ["unsupported version", { metadata: { ui: { schemaVersion: 2, componentId: "findings", data: {} } } }],
-    ["forged proposal identity", { metadata: { ui: { schemaVersion: 1, componentId: "findings", data: {}, pluginId } } }],
-    ["missing component", { metadata: { ui: { schemaVersion: 1, componentId: "other", data: {} } } }],
+    ["unsupported version", { metadata: { ui: { schemaVersion: 1, componentId: "findings", data: {} } } }],
+    ["forged proposal identity", { metadata: { ui: { schemaVersion: 2, componentId: "findings", data: {}, pluginId } } }],
+    ["missing component", { metadata: { ui: { schemaVersion: 2, componentId: "other", data: {} } } }],
     ["no text", { content: [] }], ["blank text", { content: [{ type: "text", text: "  " }] }],
     ["failed", { isError: true }], ["unknown", { executionState: "unknown" }],
     ["legacy execution", { executionState: undefined }],
@@ -206,7 +213,7 @@ describe("trusted plugin UI source projection", () => {
       : state === "unknown" ? { lastActionRunId: "action" } : { status: state };
     h.store.conversations.upsertMessagePart({ ...source, metadata: { pluginUi: { ...instance, ...patch } } });
     if (state === "unknown") h.store.runs.createRun({ id: "action", sessionId: "s1", metadata: { uiAction: {
-      schemaVersion: 1, instanceId: instance.instanceId, requestId: "00000000-0000-0000-0000-000000000001",
+      schemaVersion: 2, instanceId: instance.instanceId, requestId: "00000000-0000-0000-0000-000000000001",
       requestFingerprint: "d".repeat(64), expectedRevision: 1, actionId: "fix", label: "Fix", args: {},
       pluginId, pluginVersion: "1.0.0", pluginDigest: "a".repeat(64), componentDigest: "b".repeat(64),
       toolName: "Inspect", toolUseId: "action-call", executionState: "unknown",

@@ -65,6 +65,7 @@ import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
 import { createSessionGoalRoutes } from "./routes/session-goal.js";
 import { createSessionPluginUiRoutes } from "./routes/session-plugin-ui.js";
+import { createSessionPluginUiConversationRoutes } from "./routes/session-plugin-ui-conversation.js";
 import { createSessionUtilityRoutes } from "./routes/session-utility.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { createMaintenanceRoutes } from "./routes/maintenance.js";
@@ -353,6 +354,7 @@ export class VykorHttpServer {
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
         pluginUiReady: this.application.pluginUi?.backendReady === true,
         pluginUiLifecycleReady: this.application.pluginUi?.lifecycleReady === true,
+        pluginUiConversationReady: this.application.pluginUiConversation !== undefined,
         pluginUi: this.application.pluginUi,
       }),
     );
@@ -469,7 +471,10 @@ export class VykorHttpServer {
       }),
     );
     this.app.route("/sessions", createSessionGoalRoutes(this.application.goals));
-    if (this.application.pluginUi) this.app.route("/sessions", createSessionPluginUiRoutes(this.application.pluginUi));
+    if (this.application.pluginUi) {
+      this.app.route("/sessions", createSessionPluginUiRoutes(this.application.pluginUi, this.application.pluginUiConversation));
+      if (this.application.pluginUiConversation) this.app.route("/sessions", createSessionPluginUiConversationRoutes(this.application.pluginUiConversation));
+    }
     this.app.route(
       "/sessions",
       createRunExecutionRoutes({

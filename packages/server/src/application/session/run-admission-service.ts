@@ -306,6 +306,44 @@ export class RunAdmissionService {
     assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     if (!this.options.runtimeQueue.hasRuntime) throw new Error("请先配置模型，再启动目标");
+    return this.persistPromptWithRun(sessionId, input);
+  }
+
+  /** 同步保存普通排队输入；调用方提交事务后再处理优先级与派发。 */
+  persistQueuedPrompt(
+    sessionId: string,
+    input: AdmitPromptInput,
+  ): { input: SessionInputRecord; run: SessionRunRecord } {
+    assertPromptMetadataAllowed(input);
+    this.assertReady();
+    if (!this.accepting) throw new Error("Session run engine is stopping");
+    if (input.delivery === "steer") {
+      throw new Error("Steered prompts cannot create their owning run during admission");
+    }
+    if (!this.options.runtimeQueue.hasRuntime) throw new Error("请先配置模型，再发送消息");
+    const traceId =
+      normalizeTraceId(input.traceId) ??
+      normalizeTraceId(input.metadata?.traceId) ??
+      randomUUID();
+    return this.persistPromptWithRun(sessionId, {
+      ...input,
+      items: inputItems(input),
+      metadata: { ...(input.metadata ?? {}), traceId },
+      runMetadata: { ...(input.runMetadata ?? {}), traceId },
+    });
+  }
+
+  prioritizeUserInput(sessionId: string): void {
+    const goal = this.options.goals?.getCurrentGoal?.(sessionId);
+    if (goal?.status === "active") {
+      this.options.goals?.cancelGoalRuns?.(sessionId, goal.id, "用户消息优先", true);
+    }
+  }
+
+  private persistPromptWithRun(
+    sessionId: string,
+    input: AdmitPromptInput,
+  ): { input: SessionInputRecord; run: SessionRunRecord } {
     return this.options.conversationTransactions.admitPromptWithRun(
       {
         prompt: {
@@ -446,10 +484,7 @@ export class RunAdmissionService {
       return Promise.reject(new Error("session_capability_requires_queued_run"));
     }
     if (!input.runMetadata?.goalId) {
-      const goal = this.options.goals?.getCurrentGoal?.(sessionId);
-      if (goal?.status === "active") {
-        this.options.goals?.cancelGoalRuns?.(sessionId, goal.id, "用户消息优先", true);
-      }
+      this.prioritizeUserInput(sessionId);
     }
     if (!input.id) return admitPromptWork(this.options, sessionId, input);
 

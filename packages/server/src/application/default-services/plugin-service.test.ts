@@ -363,12 +363,12 @@ describe("default plugin service user scope", () => {
 
 describe("default plugin service archive imports", () => {
   it("reports two UI components from one manifest and preserves approvals through installation", async () => {
-    const definition = { id: "first", title: "第一个界面", entry: "./ui/app.html", surfaces: ["tool-result"], actions: [] };
+    const definition = { id: "first", title: "第一个界面", entry: "./ui/app.html", surface: "tool-result", actions: [] };
     const archivePath = await writeNativeArchive("ui.zip", {
       ".vykor-plugin/plugin.json": JSON.stringify({ schemaVersion: 1,
         id: "dev.vykor.archive", name: "archive", version: "1.0.0",
         components: { tools: ["./tools/not-executed.js"], ui: ["./ui/manifest.json"] } }),
-      "ui/manifest.json": JSON.stringify({ schemaVersion: 1,
+      "ui/manifest.json": JSON.stringify({ schemaVersion: 2,
         components: [definition, { ...definition, id: "second", title: "第二个界面" }] }),
       "ui/app.html": "<!doctype html><script>throw new Error('not executed')</script>",
     });

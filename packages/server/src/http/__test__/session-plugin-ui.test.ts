@@ -36,8 +36,8 @@ async function harness(link = false) {
   for (const path of [".vykor-plugin", "ui", "tools"]) mkdirSync(join(source, path), { recursive: true });
   writeFileSync(join(source, ".vykor-plugin/plugin.json"), JSON.stringify({ schemaVersion: 1, id: pluginId,
     name: "ui-http", version: "1.0.0", components: { tools: ["./tools/index.mjs"], ui: ["./ui/manifest.json"] } }));
-  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 1, components: [{
-    id: "panel", title: "Panel", entry: "./ui/panel.html", surfaces: ["tool-result"],
+  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 2, components: [{
+    id: "panel", title: "Panel", entry: "./ui/panel.html", surface: "tool-result",
     actions: [{ id: "apply", label: "Apply", tool: "NativeAction", completion: "keep-open" }],
   }] }));
   writeFileSync(join(source, "ui/panel.html"), html);
@@ -49,7 +49,7 @@ async function harness(link = false) {
       return [
       { name: "NativeInspect", description: "inspect", inputSchema: { type: "object" }, async invoke(input) {
         if (input.drift) writeFileSync(${JSON.stringify(join(source, "ui/panel.html"))}, "changed during tool execution");
-        return { content: [{ type: "text", text: "One finding" }], metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 1 } } } };
+        return { content: [{ type: "text", text: "One finding" }], metadata: { ui: { schemaVersion: 2, componentId: "panel", data: { count: 1 } } } };
       } },
       { name: "NativeAction", description: "apply", inputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
         async invoke(input, context) { const file = join(context.cwd, "effects");
@@ -58,7 +58,7 @@ async function harness(link = false) {
             context.signal.throwIfAborted();
             context.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
           });
-          return { content: [{ type: "text", text: "Applied " + (input.value ?? "once") }], metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 0 } } } };
+          return { content: [{ type: "text", text: "Applied " + (input.value ?? "once") }], metadata: { ui: { schemaVersion: 2, componentId: "panel", data: { count: 0 } } } };
         } }
     ]; }
   `);
@@ -152,7 +152,8 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   expect(h.instance()).toBeDefined();
   const id = h.instance()!.instanceId;
   const client = h.client();
-  expect((await client.protocol.capabilities()).features.pluginUi).toBe(1);
+  expect((await client.protocol.capabilities()).features.pluginUi).toBe(2);
+  expect((await client.pluginUi.get(h.session.id, id)).conversation).toEqual({ draft: true, submit: true });
   expect(await client.pluginUi.getDocument(h.session.id, id)).toEqual({ html, sha256: createHash("sha256").update(html).digest("hex") });
   expect((await client.pluginUi.get(h.session.id, id)).actions[0]).toMatchObject({ id: "apply", toolName: "NativeAction" });
   const input = { requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: { value: "approved" } };
@@ -179,6 +180,42 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   expect(dismissed.status).toBe("dismissed");
   expectNoPrivateUiData([h.logs, nativeLogs.values], ["secret-token", html, "approved", join(h.root, "config")]);
   expectNoPrivateUiData(await h.client().pluginUi.get(h.session.id, id), [h.root]);
+});
+
+it("fully assembles ordinary conversation Input/Run and recovers a response lost after acceptance", async () => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  expect((await h.client().protocol.capabilities()).features.pluginUiConversation).toBe(1);
+  const prepared = await h.client().pluginUi.prepareConversation(h.session.id, id, { mode: "submit", expectedRevision: 1, text: "Review selected finding", data: { selected: 1 } });
+  const input = { requestId: randomUUID(), expectedRevision: 1, text: "Review selected finding", data: { selected: 1 } };
+  const client = new VykorClient({ baseUrl: "http://localhost", token: "secret-token", fetch: async (url, init) => {
+    const response = await h.server().app.fetch(new Request(url, init));
+    if (String(url).endsWith("/conversation/submissions")) throw new Error("response lost");
+    return response;
+  } });
+  await expect(client.pluginUi.submitConversation(h.session.id, id, input)).rejects.toThrow("response lost");
+  const receipt = await h.client().pluginUi.getConversationSubmission(h.session.id, id, input.requestId);
+  await h.server().application.runControl.waitForRuns([receipt.runId]);
+  const saved = h.store().conversations.getInput(receipt.inputId)!;
+  expect(saved.items).toEqual([{ type: "text", text: prepared.promptText }]);
+  expect(h.store().runs.getRun(receipt.runId)?.metadata).not.toHaveProperty("uiAction");
+  expect(h.store().conversations.listInputs(h.session.id)).toHaveLength(2);
+  h.settings.plugins = { enabled: false };
+  expect(await h.client().pluginUi.submitConversation(h.session.id, id, input)).toMatchObject({ runId: receipt.runId, status: "completed", revision: 2 });
+  expect(h.modelCalls()).toBe(3); expect(h.effects()).toBe("0");
+  expectNoPrivateUiData([h.logs, nativeLogs.values], [input.text, '"selected":1']);
+});
+
+it.each(["pending", "running"] as const)("interrupts accepted %s conversation Run through actual startup without replaying it", async status => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  // Simulate process loss exactly after durable admission; model executor stays real.
+  const dispatch = vi.spyOn(h.server().application.runAdmission, "dispatchPersistedRun").mockReturnValueOnce("queued");
+  const input = { requestId: randomUUID(), expectedRevision: 1, text: "durable handoff", data: {} };
+  const receipt = await h.client().pluginUi.submitConversation(h.session.id, id, input);
+  dispatch.mockRestore();
+  await h.restart(false, store => { if (status === "running") store.runs.updateRun(receipt.runId, { status }); });
+  expect(await h.client().pluginUi.getConversationSubmission(h.session.id, id, input.requestId)).toEqual({ ...receipt, status: "interrupted" });
+  expect(await h.client().pluginUi.submitConversation(h.session.id, id, input)).toEqual({ ...receipt, status: "interrupted" });
+  expect(h.modelCalls()).toBe(2); expect(h.store().conversations.listInputs(h.session.id)).toHaveLength(2);
 });
 
 it.each(["disable", "uninstall", "reload", "reinstall"] as const)("cancels only UI work and revokes its session before %s completes", async mutation => {
@@ -400,6 +437,10 @@ it("enforces auth, Origin, ownership, strict JSON and byte limits without invoki
   const path = `/sessions/${h.session.id}/plugin-ui/${id}`;
   expect((await h.raw(path, undefined, { authorization: "" })).status).toBe(401);
   expect((await h.raw(path, undefined, { origin: "https://evil.test" })).status).toBe(403);
+  const handoff = { requestId: randomUUID(), expectedRevision: 1, text: "private selected note", data: { selected: 1 } };
+  expect((await h.raw(path + "/conversation/submissions", handoff, { authorization: "" })).status).toBe(401);
+  expect((await h.raw(path + "/conversation/submissions", handoff, { origin: "https://evil.test" })).status).toBe(403);
+  expect((await h.raw(`/sessions/other/plugin-ui/${id}/conversation/submissions`, handoff)).status).toBe(404);
   expect((await h.raw(`/sessions/other/plugin-ui/${id}`)).status).toBe(404);
   expect((await h.raw(`/sessions/${h.session.id}/plugin-ui/not-a-uuid`)).status).toBe(400);
   expect((await h.raw(path + "/document/assets/a.html")).status).toBe(404);
@@ -413,6 +454,7 @@ it("enforces auth, Origin, ownership, strict JSON and byte limits without invoki
   expect(invalid.status).toBe(400); expect(await invalid.json()).toMatchObject({ code: "invalid_request" });
   await expect(h.client().pluginUi.invokeAction(h.session.id, id, { ...input, args: { value: NaN } })).rejects.toMatchObject({ code: "invalid_request" });
   expect(h.effects()).toBe("0");
+  expectNoPrivateUiData([h.logs, nativeLogs.values], [handoff.text]);
 });
 
 it("omits the feature for narrow HTTP assemblies without a full backend", async () => {

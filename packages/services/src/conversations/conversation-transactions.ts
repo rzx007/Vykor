@@ -468,7 +468,7 @@ export class ConversationTransactions {
 
         for (const partInput of row.parts) {
           const partId = randomUUID();
-          const { pluginUi: _pluginUi, uiAction: _uiAction, ...importedMetadata } = partInput.metadata ?? {};
+          const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, ...importedMetadata } = partInput.metadata ?? {};
           const part: SessionMessagePartRecord = {
             id: partId,
             sessionId: input.sessionId,

@@ -33,6 +33,7 @@ export interface SystemRoutesContext {
   memoryManagementReady?: boolean;
   pluginUiReady?: boolean;
   pluginUiLifecycleReady?: boolean;
+  pluginUiConversationReady?: boolean;
   pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
@@ -90,8 +91,9 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               safeRestart: 1,
               attachments: 1,
               pluginCapabilities: 1,
-              ...(context.pluginUiReady ? { pluginUi: 1 } : {}),
+              ...(context.pluginUiReady ? { pluginUi: 2 } : {}),
               ...(context.pluginUiReady && context.pluginUiLifecycleReady ? { pluginUiLifecycle: 1 } : {}),
+              ...(context.pluginUiReady && context.pluginUiConversationReady ? { pluginUiConversation: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
               ...(context.memoryManagementReady ? { memoryManagement: 1 } : {}),

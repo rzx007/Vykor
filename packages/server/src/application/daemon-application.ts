@@ -87,6 +87,7 @@ import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
 import { SessionPluginUiService } from "./session/session-plugin-ui-service.js";
+import { SessionPluginUiConversationService } from "./session/session-plugin-ui-conversation-service.js";
 import { SessionPluginUiActionExecutor } from "./session/session-plugin-ui-action-executor.js";
 import { resolveSessionPluginUiCurrent } from "./session/session-plugin-ui-current.js";
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
@@ -164,6 +165,7 @@ export interface DaemonApplicationOptions {
 export interface DurableAgentApplication {
   readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
   readonly pluginUi?: SessionPluginUiService;
+  readonly pluginUiConversation?: SessionPluginUiConversationService;
   readonly store: SessionStore;
   readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
@@ -210,6 +212,7 @@ function failMissingSettings(): never {
  */
 export class DaemonApplication implements DurableAgentApplication {
   readonly pluginUi: SessionPluginUiService;
+  readonly pluginUiConversation: SessionPluginUiConversationService;
   readonly store: SessionStore;
   readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
@@ -814,6 +817,20 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runAdmission = runServices.admission;
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
+      this.pluginUiConversation = new SessionPluginUiConversationService({ store, source: this.pluginUi,
+        operations: this.operationRunner, admission: this.runAdmission,
+        modelAvailable: async sessionId => {
+          if (!this.agentPool.configured) return false;
+          const session = store.sessions.get(sessionId);
+          if (!session) return false;
+          const settings = await resolveSessionSettings(session.cwd);
+          if (!settings) return false;
+          const runtime = readSessionRuntimeConfig(session, { provider: settings.provider });
+          validateRequestSelection({ catalog: await this.modelCatalog.load(), provider: runtime.provider,
+            model: runtime.model, effort: runtime.effort, explicitEffort: false, customProviders: settings.customProviders });
+          return true;
+        },
+      });
       /**
        * 控制服务：
        * 1. 接收控制命令（如停止、重启）

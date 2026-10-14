@@ -31,8 +31,8 @@ async function harness(denyPermission = false, resultMode: "valid" | "malformed"
   mkdirSync(join(source, "ui")); mkdirSync(join(source, "tools"));
   writeFileSync(join(source, ".vykor-plugin/plugin.json"), JSON.stringify({ schemaVersion: 1, id: pluginId,
     name: "ui-actions", version: "1.0.0", components: { tools: ["./tools/index.mjs"], ui: ["./ui/manifest.json"] } }));
-  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 1, components: [{
-    id: "panel", title: "Panel", entry: "./ui/panel.html", surfaces: ["tool-result"], actions: [
+  writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 2, components: [{
+    id: "panel", title: "Panel", entry: "./ui/panel.html", surface: "tool-result", actions: [
       { id: "run", label: "Apply", tool: "NativeAction", completion: "keep-open" },
       { id: "resolve", label: "Finish", tool: "NativeAction", completion: "resolve" },
     ],
@@ -50,7 +50,7 @@ async function harness(denyPermission = false, resultMode: "valid" | "malformed"
         if (input.wait) await new Promise((resolve, reject) => context.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true }));
         return { content: [{ type: "text", text: "Applied " + (input.value ?? "once") }],
           ${resultMode === "error" ? 'isError: true,' : ""}
-          metadata: { ui: { schemaVersion: 1, componentId: ${JSON.stringify(resultMode === "foreign" ? "other-panel" : "panel")},
+          metadata: { ui: { schemaVersion: 2, componentId: ${JSON.stringify(resultMode === "foreign" ? "other-panel" : "panel")},
             data: ${resultMode === "malformed" ? "[]" : "{ count: 0 }"} } } };
       }
     }]; }
@@ -72,7 +72,7 @@ async function harness(denyPermission = false, resultMode: "valid" | "malformed"
   store.runs.updateRun("source-run", { status: "completed" });
   const message = store.conversations.createMessage({ sessionId: session.id, role: "assistant", runId: "source-run" });
   const output = { content: [{ type: "text", text: "One issue" }], executionState: "completed",
-    metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 1 } } } };
+    metadata: { ui: { schemaVersion: 2, componentId: "panel", data: { count: 1 } } } };
   const part = store.conversations.upsertMessagePart({ id: "source-call", sessionId: session.id, messageId: message.id,
     type: "tool", status: "completed", toolName: "NativeAction", toolUseId: "source-call", input: {}, output,
     metadata: { executionState: "completed" } });
@@ -299,7 +299,7 @@ describe("durable plugin UI actions", () => {
     expect(h.service.readAction(h.session.id, h.instance.instanceId, receipt.requestId).result)
       .toMatchObject({ content: [{ type: "text", text: "Applied once" }],
         ...(mode === "error" ? { isError: true } : {}), metadata: { ui: {
-          schemaVersion: 1, componentId: mode === "foreign" ? "other-panel" : "panel",
+          schemaVersion: 2, componentId: mode === "foreign" ? "other-panel" : "panel",
           data: mode === "malformed" ? [] : { count: 0 },
         } } });
     expect(h.diagnostics).toEqual(mode === "malformed" || mode === "foreign"
@@ -474,7 +474,7 @@ describe("durable plugin UI actions", () => {
       pluginUi: { ...readPluginUiInstance(h.source().metadata)!, lastActionRunId: "missing" },
     } });
     else h.store.runs.updateRun(receipt.runId, { metadata: { uiAction: state === "malformed" ? {} : {
-      ...(saved.metadata.uiAction as object), ...(state === "future-schema" ? { schemaVersion: 2 } : { pluginId: "foreign" }),
+      ...(saved.metadata.uiAction as object), ...(state === "future-schema" ? { schemaVersion: 3 } : { pluginId: "foreign" }),
     } } });
     expect((await h.service.get(h.session.id, h.instance.instanceId)).availability).toEqual({ code: "action-unknown", canRender: true, canInvoke: false });
     await expect(h.service.invokeAction(h.session.id, h.instance.instanceId,
