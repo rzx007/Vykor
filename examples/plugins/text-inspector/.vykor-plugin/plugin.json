@@ -4,6 +4,18 @@
   "name": "text-inspector",
   "version": "1.1.1",
   "description": "检查文本格式问题，通过交互界面选择修复并预览；不写入文件。",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3QgeD0iOCIgeT0iNiIgd2lkdGg9IjM3IiBoZWlnaHQ9IjQ5IiByeD0iNyIgZmlsbD0iI2VlZjJmZiIgc3Ryb2tlPSIjNGY0NmU1IiBzdHJva2Utd2lkdGg9IjMiLz48cGF0aCBkPSJNMTYgMTloMjFNMTYgMjdoMTVNMTYgMzVoOSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjM2NmYxIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS13aWR0aD0iMyIvPjxjaXJjbGUgY3g9IjQzIiBjeT0iNDMiIHI9IjExIiBmaWxsPSIjZmZmIiBzdHJva2U9IiM0ZjQ2ZTUiIHN0cm9rZS13aWR0aD0iMyIvPjxwYXRoIGQ9Im01MSA1MSA3IDciIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzRmNDZlNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2Utd2lkdGg9IjQiLz48L3N2Zz4=",
+  "introduction": "## 检查文本格式\n\n找出行尾空白和行首制表符，并标明所在行。你可以在交互界面选择问题、生成修复预览，再决定是否交给助手。\n\n插件只处理你传入的文本，不读取或写入文件；原文不会被自动替换。",
+  "prompts": [
+    {
+      "title": "检查文本格式",
+      "prompt": "请检查下面文本中的行尾空白和行首制表符，指出问题所在行：\n\n在这里粘贴文本"
+    },
+    {
+      "title": "预览格式修复",
+      "prompt": "请检查我提供的文本，并让我通过交互界面选择要修复的问题；先展示修复预览，不要改动文件。"
+    }
+  ],
   "components": {
     "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],

@@ -5,6 +5,18 @@
   "displayName": "Agent Reviewer Test",
   "version": "1.0.0",
   "description": "A minimal Native Plugin that contributes one delegatable reviewer agent.",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZD0iTTggMTRhNiA2IDAgMCAxIDYtNmgzNmE2IDYgMCAwIDEgNiA2djI3YTYgNiAwIDAgMS02IDZIMzFMMTcgNTd2LTEwaC0zYTYgNiAwIDAgMS02LTZ6IiBmaWxsPSIjZWNmZGY1IiBzdHJva2U9IiMwNTk2NjkiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Im0yMCAzMCA4IDggMTctMTgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzA0Nzg1NyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjUiLz48L3N2Zz4=",
+  "introduction": "## 代码与计划审阅\n\nAgent Reviewer 是一个轻量示例插件，提供可委派的审阅助手。它会优先指出具体风险、缺陷和可执行的改进建议；不会修改文件，也不包含工具或外部服务。",
+  "prompts": [
+    {
+      "title": "审阅一段实现",
+      "prompt": "请使用 example.agent-reviewer:reviewer 审阅我接下来提供的实现，先列出具体风险和缺陷，再给出精简、可执行的建议。"
+    },
+    {
+      "title": "检查实施计划",
+      "prompt": "请使用 example.agent-reviewer:reviewer 检查这份计划是否有遗漏的依赖、含糊的步骤或无法验证的完成条件。"
+    }
+  ],
   "components": {
     "agents": ["./agents"]
   },
