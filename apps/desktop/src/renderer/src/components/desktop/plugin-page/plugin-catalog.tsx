@@ -14,7 +14,7 @@ export function ExtensionIcon({
 }: {
   name: string
   src?: string
-  size?: "sm" | "md" | "lg"
+  size?: "inline" | "sm" | "md" | "lg"
 }): React.JSX.Element {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const [remoteIcon, setRemoteIcon] = useState<{ src: string; value: string | null } | null>(null)
@@ -66,12 +66,16 @@ export function ExtensionIcon({
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center rounded-xl border border-border/60 bg-background",
+        size === "inline"
+          ? "inline-grid size-4 shrink-0 place-items-center align-middle [&>svg]:size-4"
+          : "grid shrink-0 place-items-center rounded-xl border border-border/60 bg-background",
         size === "lg"
           ? "size-16 p-2 [&>svg]:size-10"
-          : size === "sm"
-            ? "size-6 p-0.5 [&>svg]:size-4"
-            : "size-11 p-2"
+          : size === "inline"
+            ? ""
+            : size === "sm"
+              ? "size-6 p-0.5 [&>svg]:size-4"
+              : "size-11 p-2"
       )}
       aria-hidden="true"
     >

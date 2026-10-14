@@ -1,0 +1,34 @@
+.plugin-prompt-background {
+  --plugin-prompt-color-1: color-mix(in srgb, var(--note-sky) 78%, var(--background));
+  --plugin-prompt-color-2: color-mix(in srgb, var(--note-lilac) 72%, var(--background));
+  --plugin-prompt-color-3: color-mix(in srgb, var(--note-lilac) 42%, var(--background));
+  --plugin-prompt-color-4: color-mix(in srgb, var(--note-sky) 20%, var(--background));
+  background:
+    radial-gradient(ellipse at 30% 20%, var(--plugin-prompt-color-4), transparent 60%),
+    radial-gradient(ellipse at 90% 15%, var(--plugin-prompt-color-3), transparent 65%),
+    linear-gradient(115deg, var(--plugin-prompt-color-1), var(--plugin-prompt-color-2));
+}
+
+.plugin-prompt-example {
+  background-color: color-mix(in srgb, var(--background) 80%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.plugin-prompt-example:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--background) 92%, transparent);
+}
+
+.plugin-prompt-example:disabled {
+  opacity: 1;
+  color: var(--muted-foreground);
+}
+
+:root[data-reduced-motion="true"] .plugin-prompt-example {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plugin-prompt-example {
+    transition: none;
+  }
+}

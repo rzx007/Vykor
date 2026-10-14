@@ -7,6 +7,8 @@ import { Button } from "@renderer/components/ui/button"
 import { toast } from "@renderer/lib/toast"
 import type { DesktopPluginInfo } from "@shared/plugin-types"
 import { ExtensionIcon } from "./plugin-catalog"
+import { PluginPromptBackground } from "./plugin-prompt-background"
+import "./plugin-detail.css"
 
 export function PluginDetail({
   plugin,
@@ -44,24 +46,28 @@ export function PluginDetail({
     }
   }
   return (
-    <section aria-label={`${name} 插件详情`} className="flex flex-col gap-8">
-      <Button variant="ghost" shape="pill" className="self-start" onClick={onBack}>
+    <section
+      aria-label={`${name} 插件详情`}
+      className="mx-auto flex w-full max-w-[56rem] flex-col gap-8"
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        shape="pill"
+        className="-ml-2 self-start text-muted-foreground"
+        onClick={onBack}
+      >
         <ArrowLeft data-icon="inline-start" />
         返回插件
       </Button>
-      <header className="flex flex-col gap-4">
+      <header className="flex flex-col gap-5">
         <ExtensionIcon name={name} src={presentation?.icon} size="lg" />
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold break-words">{name}</h1>
-            {presentation?.description ? (
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {presentation.description}
-              </p>
-            ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" shape="pill" onClick={onManage}>
+            <Button variant="secondary" shape="pill" onClick={onManage}>
               <Settings2 data-icon="inline-start" />
               管理
             </Button>
@@ -71,6 +77,11 @@ export function PluginDetail({
             </Button>
           </div>
         </div>
+        {presentation?.description ? (
+          <p className="-mt-2 text-sm leading-6 text-muted-foreground">
+            {presentation.description}
+          </p>
+        ) : null}
         {!usable ? (
           <p className="text-xs text-muted-foreground">
             {plugin.runtimeStatus.message} 请在管理中检查插件状态。
@@ -78,11 +89,15 @@ export function PluginDetail({
         ) : null}
       </header>
       {presentation?.prompts?.length ? (
-        <section aria-labelledby="plugin-prompts-title" className="flex flex-col gap-3">
-          <h2 id="plugin-prompts-title" className="text-[15px] font-semibold">
+        <section
+          aria-labelledby="plugin-prompts-title"
+          className="relative isolate overflow-hidden rounded-2xl px-5 py-8 sm:px-10 sm:py-9"
+        >
+          <h2 id="plugin-prompts-title" className="sr-only">
             快速使用
           </h2>
-          <div className="flex flex-col gap-2 rounded-2xl bg-muted/40 p-4 sm:p-6">
+          <PluginPromptBackground />
+          <div className="relative mx-auto flex w-full max-w-[34rem] flex-col gap-4">
             {presentation.prompts.map((item, index) => (
               <Button
                 key={index}
@@ -90,22 +105,29 @@ export function PluginDetail({
                 disabled={!usable || starting}
                 aria-label={`使用示例：${item.title}`}
                 onClick={() => void start(item.prompt)}
-                className="h-auto min-h-14 w-full justify-between gap-4 rounded-xl bg-background px-4 py-3 text-left whitespace-normal"
+                title={item.title}
+                className="plugin-prompt-example h-auto min-h-16 w-full justify-between gap-4 rounded-2xl border-0 px-3 py-3 text-left whitespace-normal active:translate-y-0"
               >
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-sm font-medium">{item.title}</span>
-                  <span className="text-xs leading-5 font-normal break-words text-muted-foreground">
-                    {item.prompt}
+                <span className="min-w-0 text-sm leading-6 font-normal break-words">
+                  <span className="mr-1 inline-flex items-center gap-1 align-middle font-medium">
+                    <ExtensionIcon name={name} src={presentation.icon} size="inline" />
+                    {name}
                   </span>
+                  {item.prompt}
                 </span>
-                <ArrowRight className="shrink-0" />
+                <span
+                  aria-hidden="true"
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground/8"
+                >
+                  <ArrowRight className="size-4" />
+                </span>
               </Button>
             ))}
           </div>
         </section>
       ) : null}
       <section aria-labelledby="plugin-introduction-title" className="flex flex-col gap-3">
-        <h2 id="plugin-introduction-title" className="text-[15px] font-semibold">
+        <h2 id="plugin-introduction-title" className="sr-only">
           插件介绍
         </h2>
         {presentation?.introduction || presentation?.description ? (
@@ -130,7 +152,7 @@ export function PluginDetail({
         >
           信息
         </h2>
-        <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
+        <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-8 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] [&>dd]:min-w-0 [&>dd]:break-words">
           <dt className="text-muted-foreground">版本</dt>
           <dd>{plugin.identity.version}</dd>
           {presentation?.author ? (
