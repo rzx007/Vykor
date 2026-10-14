@@ -426,6 +426,14 @@ describe("RunAdmissionService", () => {
     expect(createRun).toHaveBeenCalledOnce();
   });
 
+  it("keeps the admitted plugin when a rejected steer becomes a separate run", () => {
+    const { options, inputs, runs } = createMockOptions();
+    inputs.set("plugin-steer", { id: "plugin-steer", sessionId: "s1", items: [{ type: "text", text: "continue" }],
+      delivery: "steer", attachments: [], metadata: { pluginId: "P" }, createdAt: 1 } as any);
+    const runId = new RunAdmissionService(options).recoverRejectedSteer("s1", { id: "plugin-steer" });
+    expect(runs.get(runId)?.metadata.pluginId).toBe("P");
+  });
+
   it("rejects stale goal revisions before execution", () => {
     const { options, runs, runOperations } = createMockOptions();
     runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: { goalId: "g1", goalRevision: 1, goalRunKind: "continuation" }, createdAt: 1, updatedAt: 1 });

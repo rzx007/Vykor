@@ -60,10 +60,14 @@ export class SessionPluginCapabilityService {
       throw new SessionApplicationError(409, "session_plugin_capability_conflict");
     }
     // An explicit reference switches the selection; an ordinary turn keeps it.
-    const pluginId = [...pluginIds][0] ?? (pluginsEnabled ? activePluginId : undefined);
-    if (pluginId && (!pluginsEnabled || !inventory.plugins.has(pluginId))) {
+    const explicitPluginId = [...pluginIds][0];
+    if (explicitPluginId && !pluginsEnabled) {
       throw new SessionApplicationError(409, "session_plugin_capability_unavailable");
     }
+    // A disabled, removed, or globally suspended plugin must not block ordinary
+    // chat. Retain the identity so enabling it again can restore the selection.
+    const pluginId = explicitPluginId ?? (pluginsEnabled && activePluginId && inventory.plugins.has(activePluginId)
+      ? activePluginId : undefined);
     return pluginId ? { pluginId } : {};
   }
 }

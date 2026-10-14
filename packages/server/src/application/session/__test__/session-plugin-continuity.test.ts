@@ -9,6 +9,8 @@ import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 import { RunAdmissionService } from "../run-admission-service.js";
 import { SessionInteractionService } from "../session-interaction-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
+import { createSessionRuntimeDiscovery } from "../session-runtime-discovery.js";
+import type { Settings } from "@vykor/core";
 
 const cleanup: Array<() => void> = [];
 afterEach(() => { for (const dispose of cleanup.splice(0)) dispose(); });
@@ -27,7 +29,8 @@ function fixture(activePluginId?: string) {
     plugins: new Map(["P", "Q"].map(id => [id, owner(id)])),
     skills: new Map(), agents: new Map(), nativeToolEntries: new Map(), mcpServers: new Map(), diagnostics: [],
   };
-  function application() {
+  let activeRunId: string | undefined;
+  function application(resolveInventory = async () => inventory) {
     const admission = new RunAdmissionService({
       conversationTransactions: {
         admitPrompt: (input, config) => store.conversationTransactions.admitPrompt(input, config),
@@ -37,14 +40,18 @@ function fixture(activePluginId?: string) {
         getInput: id => store.conversations.getInput(id),
       },
       runOperations: store.runs,
-      runtimeQueue: { hasRuntime: true, enqueueRun: () => "queued", steer: () => ({ merged: false }) },
+      runtimeQueue: { hasRuntime: true, enqueueRun: () => "queued", steer: (_id, input) => {
+        if (!activeRunId) return { merged: false };
+        store.conversations.createMessage({ sessionId: "s1", role: "user", inputId: input.id, runId: activeRunId });
+        return { merged: true, activeRunId, delivery: Promise.resolve({ runId: activeRunId }) };
+      } },
       events: { checkpoint: () => 0, publishSince: () => {} },
     });
     return new SessionInteractionService({
       sessions: store.sessions, conversations: store.conversations, runs: store.runs, admission,
-      pluginCapabilities: new SessionPluginCapabilityService({ resolveInventory: async () => inventory }),
+      pluginCapabilities: new SessionPluginCapabilityService({ resolveInventory }),
       operationRunner: { run: async (_id, work) => work() },
-      control: { hasWork: () => false } as never,
+      control: { hasWork: () => !!activeRunId, activeRunId: () => activeRunId } as never,
       agentPool: { configured: true } as never,
       liveChildren: { has: () => false, send: async () => undefined, interrupt: async () => false },
       operationGate: new DaemonOperationGate(),
@@ -53,6 +60,16 @@ function fixture(activePluginId?: string) {
   return {
     get store() { return store; }, inventory, application,
     reopen() { store.close(); store = new SessionStore({ path }); return application(); },
+    startRun(pluginId?: string) {
+      const initial = store.conversationTransactions.admitPromptWithRun({
+        prompt: { id: "active-input", sessionId: "s1", items: text(), metadata: pluginId ? { pluginId } : {} },
+        run: { metadata: pluginId ? { pluginId } : {} },
+      });
+      activeRunId = initial.run.id;
+      store.runs.updateRun(activeRunId, { status: "running" });
+      return activeRunId;
+    },
+    finishRun() { store.runs.updateRun(activeRunId!, { status: "completed" }); activeRunId = undefined; },
   };
 }
 
@@ -105,10 +122,11 @@ describe("session plugin continuity", () => {
     expect(f.store.conversations.getInput("rejected")).toBeUndefined();
   });
 
-  it("rejects an unavailable retained plugin rather than silently dropping its tools", async () => {
+  it("allows ordinary chat when the retained plugin is disabled or uninstalled", async () => {
     const f = fixture("P"); f.inventory.plugins.delete("P");
-    await expect(f.application().admitPrompt("s1", { id: "missing", items: text() })).rejects.toThrow("session_plugin_capability_unavailable");
-    expect(f.store.conversations.getInput("missing")).toBeUndefined();
+    const result = await f.application().admitPrompt("s1", { id: "missing", items: text() });
+    expect(result.run?.metadata.pluginId).toBeUndefined();
+    await expect(f.application().admitPrompt("s1", { id: "explicit", items: mention("P") })).rejects.toThrow("session_plugin_capability_unavailable");
   });
 
   it("keeps a fresh session ordinary and ignores forged Input/Run plugin metadata", async () => {
@@ -142,5 +160,47 @@ describe("session plugin continuity", () => {
     expect(result.run?.metadata.pluginId).toBeUndefined();
     expect(f.store.sessions.get("s1")?.metadata.activePluginId).toBe("P");
     await expect(f.application().admitPrompt("s1", { id: "explicit-disabled", items: mention("P") })).rejects.toThrow("session_plugin_capability_unavailable");
+  });
+
+  it("allows ordinary chat while global discovery is empty and resumes selection when enabled again", async () => {
+    const f = fixture("P"); const available = [...f.inventory.plugins];
+    f.inventory.plugins.clear();
+    expect((await f.application().admitPrompt("s1", { id: "off", items: text() })).run?.metadata.pluginId).toBeUndefined();
+    for (const [id, owner] of available) f.inventory.plugins.set(id, owner);
+    expect((await f.application().admitPrompt("s1", { id: "on", items: text() })).run?.metadata.pluginId).toBe("P");
+  });
+
+  it("honors the actual global plugin setting in runtime discovery", async () => {
+    const f = fixture("P");
+    const discovery = createSessionRuntimeDiscovery({ settings: { plugins: { enabled: false } } as Settings });
+    const app = f.application(async () => discovery.resolvePluginInventory(f.store.sessions.get("s1")!));
+    expect((await app.admitPrompt("s1", { id: "global-off", items: text() })).run?.metadata.pluginId).toBeUndefined();
+    await expect(app.admitPrompt("s1", { id: "global-explicit", items: mention("P") }))
+      .rejects.toThrow("session_plugin_capability_unavailable");
+  });
+
+  it("merges a plain follow-up into the active run of the same plugin", async () => {
+    const f = fixture("P"); const runId = f.startRun("P");
+    const result = await f.application().admitPrompt("s1", { id: "steer", delivery: "steer", items: text() });
+    expect(result.run?.id).toBe(runId);
+    expect(result.input.metadata.pluginId).toBe("P");
+    expect(f.store.runs.listRuns("s1")).toHaveLength(1);
+  });
+
+  it.each([undefined, "Q"])("rejects inherited plugin steering when the active run uses %s", async pluginId => {
+    const f = fixture("P"); f.startRun(pluginId);
+    await expect(f.application().admitPrompt("s1", { id: "mismatch", delivery: "steer", items: text() }))
+      .rejects.toThrow("session_capability_requires_queued_run");
+    expect(f.store.conversations.getInput("mismatch")).toBeUndefined();
+  });
+
+  it("returns the original successful steer on retry after its active run finished", async () => {
+    const f = fixture("P"); const runId = f.startRun("P"); const app = f.application();
+    const input = { id: "successful-steer", delivery: "steer" as const, items: text() };
+    await app.admitPrompt("s1", input);
+    f.finishRun();
+    const retry = await app.admitPrompt("s1", input);
+    expect(retry.run?.id).toBe(runId);
+    expect(f.store.runs.listRuns("s1")).toHaveLength(1);
   });
 });

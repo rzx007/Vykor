@@ -205,8 +205,13 @@ export class SessionInteractionService {
       : (hasPluginCandidates || typeof session.metadata?.activePluginId === "string") && this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
-    if (capability.pluginId && originalInput.delivery === "steer") {
-      throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+    if (!existingInput && originalInput.delivery === "steer") {
+      const activeRunId = this.context.control.activeRunId?.(sessionId);
+      const activeRun = activeRunId ? this.context.runs.getRun(activeRunId) : undefined;
+      const activePluginId = typeof activeRun?.metadata?.pluginId === "string" ? activeRun.metadata.pluginId : undefined;
+      if ((capability.pluginId && hasPluginCandidates) || capability.pluginId !== activePluginId) {
+        throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+      }
     }
     const sanitizedInput = {
       ...originalInput,

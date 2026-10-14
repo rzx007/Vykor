@@ -252,7 +252,10 @@ export class RunAdmissionService {
     const run = this.options.runOperations.createRun({
       sessionId,
       inputId: admitted.id,
-      metadata: { traceId, recoveredFromSteer: true },
+      metadata: {
+        traceId, recoveredFromSteer: true,
+        ...(typeof admitted.metadata.pluginId === "string" ? { pluginId: admitted.metadata.pluginId } : {}),
+      },
     });
     this.options.events.publishSince(before);
     this.options.runtimeQueue.enqueueRun(run, admitted.id);

@@ -298,6 +298,23 @@ describe("RunControlService", () => {
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
 
+  it.each(["P", "Q", undefined])("only promotes an inherited plugin prompt into the same plugin run (%s)", async activePluginId => {
+    const { options, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [{ type: "text", text: "continue" }],
+      delivery: "queue", attachments: [], metadata: { pluginId: "P" }, createdAt: 1 } as any);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: { pluginId: "P" }, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: { pluginId: activePluginId }, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    if (activePluginId === "P") {
+      await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
+      expect(options.runtime.promoteQueuedRun).toHaveBeenCalledOnce();
+    } else {
+      await expect(result).rejects.toThrow("session_capability_requires_queued_run");
+      expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+    }
+  });
+
   it("returns an already promoted queued run idempotently", async () => {
     const { options, runs, inputs } = createMockControlOptions();
     inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);

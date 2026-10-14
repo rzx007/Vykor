@@ -41,7 +41,7 @@ export interface SessionInteractionServiceContext {
   conversations: SessionInteractionConversations;
   runs: SessionInteractionRuns;
   admission: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">;
-  control: Pick<RunControlService, "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "promoteQueuedRun">;
+  control: Pick<RunControlService, "activeRunId" | "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "promoteQueuedRun">;
   operationRunner: Pick<SessionOperationRunner, "run">;
   agentPool: Pick<AgentPool, "close" | "configured" | "warm">;
   liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;

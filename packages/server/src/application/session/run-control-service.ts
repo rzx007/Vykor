@@ -275,7 +275,9 @@ export class RunControlService {
     if (!input || input.sessionId !== sessionId) {
       throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
     }
-    if (typeof input.metadata?.pluginId === "string") {
+    if (typeof input.metadata?.pluginId === "string" && (!input.items || input.items.some(item =>
+      item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+    ))) {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
     if (input.attachments.length > 0) {
@@ -312,6 +314,11 @@ export class RunControlService {
       !activeRun || activeRun.sessionId !== sessionId ||
       (activeRun.status !== "pending" && activeRun.status !== "running")
     ) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
+    const inputPluginId = typeof input.metadata.pluginId === "string" ? input.metadata.pluginId : undefined;
+    const activePluginId = typeof activeRun.metadata.pluginId === "string" ? activeRun.metadata.pluginId : undefined;
+    if (inputPluginId !== activePluginId) {
+      throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+    }
     const content = await this.materializeSteerInput(sessionId, input.items);
     const promoted = this.options.runtime.promoteQueuedRun(
       sessionId,
