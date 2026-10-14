@@ -11,6 +11,7 @@ export type SkillSource = "bundled" | "user" | "project" | "plugin"
 /** Safe picker metadata; implementation locations and permissions stay on the server. */
 export interface PluginCatalogEntry {
   pluginId: string
+  icon?: string
   displayName: string
   version: string
   scope: "user" | "managed" | "project" | "local"

@@ -6,6 +6,7 @@ import type {
 
 export interface PluginCapabilityOwner {
   pluginId: string;
+  icon?: string;
   displayName: string;
   description: string;
   version: string;
@@ -113,6 +114,7 @@ export function createPluginCapabilityInventory(
 
     plugins.set(pluginId, {
       pluginId,
+      ...(plugin.manifest.icon ? { icon: plugin.manifest.icon } : {}),
       displayName: plugin.manifest.displayName ?? plugin.manifest.name,
       description: plugin.manifest.description ?? "",
       version: record.currentVersion,

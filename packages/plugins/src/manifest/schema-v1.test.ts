@@ -10,6 +10,21 @@ const validManifest = {
 };
 
 describe("VykorPluginManifestV1Schema", () => {
+  it.each(["https://example.test/icon.png", "data:image/png;base64,aGVsbG8="])("accepts presentation with icon %s", (icon) => {
+    const input = { ...validManifest, icon, introduction: "## 能做什么\n整理资料。",
+      prompts: [{ title: "整理资料", prompt: "帮我整理这些资料，并标出来源。" }] };
+    expect(VykorPluginManifestV1Schema.parse(input)).toEqual(input);
+  });
+
+  it.each(["javascript:alert(1)", "file:///tmp/icon.png", "data:text/html;base64,aGVsbG8=", "data:image/png;base64,???"])("rejects invalid icon %s", (icon) => {
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, icon }).success).toBe(false);
+  });
+
+  it("rejects empty or excessive quick prompts", () => {
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, prompts: [{ title: "", prompt: "hi" }] }).success).toBe(false);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, prompts: [{ title: "hi", prompt: " " }] }).success).toBe(false);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, prompts: Array.from({ length: 17 }, () => ({ title: "hi", prompt: "hi" })) }).success).toBe(false);
+  });
   it("bounds UI definition-file declarations before filesystem work", () => {
     const ui = Array.from({ length: 8 }, (_, i) => `./ui/manifest-${i}.json`);
     expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, components: { ui } }).success).toBe(true);

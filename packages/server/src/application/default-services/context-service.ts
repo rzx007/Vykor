@@ -64,6 +64,7 @@ export function createDefaultContextService(
       const { pluginCapabilityInventory } = await discoverVykorExtensions(cwd, settings);
       return { plugins: [...pluginCapabilityInventory.plugins.values()].map((plugin) => ({
         pluginId: plugin.pluginId,
+        ...(plugin.icon ? { icon: plugin.icon } : {}),
         displayName: plugin.displayName,
         version: plugin.version,
         scope: plugin.scope,

@@ -8,6 +8,7 @@ vi.mock("@vykor/agent-runtime", () => ({
     pluginCapabilityInventory: {
       plugins: new Map([["dev.quality", {
         pluginId: "dev.quality", displayName: "Quality", description: "Review code",
+        icon: "https://example.test/quality.png",
         version: "1.0.0", scope: "user", origin: "native",
         skillNames: ["review"], mcpServerIds: ["secret-server"], nativeToolEntries: ["/private/entry.js"], agentNames: [],
         permissions: ["secret"], path: "/private/plugin",
@@ -22,6 +23,7 @@ it("projects discovery winners into a catalog with no paths, permissions or serv
   const result = await service.plugins!({ cwd: "/repo" });
   expect(result).toEqual({ plugins: [{
     pluginId: "dev.quality", displayName: "Quality", description: "Review code",
+    icon: "https://example.test/quality.png",
     version: "1.0.0", scope: "user", origin: "native", capabilities: ["skills", "tools"],
   }] });
 });
@@ -36,6 +38,7 @@ it("serves the scoped catalog through the context endpoint", async () => {
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ plugins: [{
     pluginId: "dev.quality", displayName: "Quality", description: "Review code",
+    icon: "https://example.test/quality.png",
     version: "1.0.0", scope: "user", origin: "native", capabilities: ["skills", "tools"],
   }] });
 });

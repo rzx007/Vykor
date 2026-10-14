@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PLUGIN_UI_LIMITS } from "@vykor/protocol";
+import { isPluginIconSource, PLUGIN_UI_LIMITS } from "@vykor/protocol";
 import type { VykorPluginManifestV1 } from "../types.js";
 
 const declaredPathSchema = z
@@ -53,6 +53,12 @@ export const VykorPluginManifestV1Schema: z.ZodType<VykorPluginManifestV1> = z
     displayName: z.string().min(1).optional(),
     version: z.string().min(1),
     description: z.string().optional(),
+    icon: z.string().max(1_048_576).refine(isPluginIconSource, "icon must be an HTTP(S) URL or a base64 image data URL").optional(),
+    introduction: z.string().max(65_536).optional(),
+    prompts: z.array(z.object({
+      title: z.string().trim().min(1).max(100),
+      prompt: z.string().trim().min(1).max(16_384),
+    }).strict()).max(16).optional(),
     author: z
       .object({
         name: z.string().min(1),

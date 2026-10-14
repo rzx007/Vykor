@@ -16,6 +16,7 @@ export * from "./execution-observability.js";
 export * from "./auto-review.js";
 export * from "./workspace-changes.js";
 export * from "./plugin-ui.js";
+export * from "./plugin-presentation.js";
 export * from "./plugin-ui-requests.js";
 export * from "./plugin-ui-bridge.js";
 export * from "./plugin-ui-appearance.js";

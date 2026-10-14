@@ -1,4 +1,4 @@
-import type { PluginUiInventory } from "@vykor/protocol";
+import type { PluginPresentation, PluginUiInventory } from "@vykor/protocol";
 export type { PluginUiInventory } from "@vykor/protocol";
 
 export type PluginRuntimeStatus =
@@ -20,6 +20,7 @@ export type PluginRuntimeStatus =
 
 export interface PluginInfo {
   identity: { id: string; name: string; version: string; displayName?: string };
+  presentation?: PluginPresentation;
   origin: "native" | "converted";
   sourceFormat?: string;
   scope: "user" | "managed";

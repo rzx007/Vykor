@@ -125,6 +125,8 @@ export {
 } from "./commands/index.js";
 export {
   patchSessionRuntimeMetadata,
+  isPluginIconSource,
+  isPluginWebUrl,
   readRuntimeMetadata,
   readSessionRuntimeConfig,
 } from "@vykor/protocol";

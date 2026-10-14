@@ -2,7 +2,7 @@ import type { PluginDiagnostic } from "./diagnostics.js";
 import type { HookDefinition, McpServerConfig } from "@vykor/core";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { SkillDefinition } from "@vykor/skills";
-import type { PluginUiComponentDefinition } from "@vykor/protocol";
+import type { PluginPresentation, PluginUiComponentDefinition } from "@vykor/protocol";
 
 export const NATIVE_PLUGIN_COMPONENT_KINDS = [
   "skills", "agents", "hooks", "mcpServers", "lspServers", "tools", "workflows",
@@ -66,7 +66,7 @@ export interface VykorPluginRuntime {
   isolation: "worker" | "process";
 }
 
-export interface VykorPluginManifestV1 {
+export interface VykorPluginManifestV1 extends PluginPresentation {
   $schema?: string;
   schemaVersion: 1;
   id: string;

@@ -242,6 +242,7 @@ export type PluginRuntimeStatus =
 
 export interface PluginInfo {
   identity: { id: string; name: string; version: string; displayName?: string };
+  presentation?: import("@vykor/protocol").PluginPresentation;
   origin: "native" | "converted";
   sourceFormat?: string;
   scope: "user" | "managed";

@@ -214,6 +214,22 @@ async function installPreviewedArchive(archive: string): Promise<void> {
 }
 
 describe("default plugin service user scope", () => {
+  it("returns author presentation for an installed plugin without exposing arbitrary metadata", async () => {
+    const presentation = {
+      icon: "https://example.test/icon.png", description: "整理资料",
+      introduction: "## 功能\n生成带来源的报告。",
+      prompts: [{ title: "写报告", prompt: "根据资料生成报告。" }],
+      author: { name: "Example" }, homepage: "https://example.test",
+    };
+    const archive = await writeNativeArchive("presentation.zip", {
+      ".vykor-plugin/plugin.json": JSON.stringify({ schemaVersion: 1, id: "dev.vykor.archive", name: "archive", version: "1.0.0",
+        ...presentation, metadata: { privateSetting: "must-not-leak" }, components: { tools: ["./tools/not-executed.js"] } }),
+    });
+    await installPreviewedArchive(archive);
+    const listed = await service().list({ cwd: "C:/workspace" });
+    expect(listed.plugins[0]).toHaveProperty("presentation", presentation);
+    expect(JSON.stringify(listed)).not.toContain("must-not-leak");
+  });
   it("marks an unverifiable copied user installation invalid without loading its contributions", async () => {
     const pluginDir = join(root, "cache", "dev.example.unverifiable");
     await mkdir(join(pluginDir, ".vykor-plugin"), { recursive: true });

@@ -25,6 +25,14 @@ type RuntimeDiagnostic = PluginInfo["diagnostics"][number];
 type RuntimeToolStatus = NonNullable<PluginInfo["toolRuntime"]>;
 type RuntimeStatus = PluginInfo["runtimeStatus"];
 
+function pluginPresentation(manifest: import("@vykor/plugins").VykorPluginManifestV1): NonNullable<PluginInfo["presentation"]> {
+  const result: NonNullable<PluginInfo["presentation"]> = {};
+  for (const key of ["icon", "description", "introduction", "prompts", "author", "homepage", "repository", "license", "keywords"] as const) {
+    if (manifest[key] !== undefined) Object.assign(result, { [key]: manifest[key] });
+  }
+  return result;
+}
+
 export class PluginArchiveFailure extends Error {
   constructor(readonly body: PluginArchiveError) {
     super(body.message);
@@ -354,6 +362,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
             version: manifest?.version ?? record.currentVersion,
             ...(manifest?.displayName ? { displayName: manifest.displayName } : {}),
           },
+          ...(manifest ? { presentation: pluginPresentation(manifest) } : {}),
           origin: record.origin,
           ...(record.sourceFormat ? { sourceFormat: record.sourceFormat } : {}),
           scope: record.scope,
