@@ -201,6 +201,7 @@
   --color-code: var(--code);
   --color-code-foreground: var(--code-foreground);
   --color-user-message: var(--user-message);
+  --color-user-message-bubble: var(--user-message-bubble);
   --color-file-link: var(--file-link);
 
   --color-sidebar: var(--sidebar);
@@ -293,6 +294,7 @@
   --code: var(--muted);
   --code-foreground: var(--foreground);
   --user-message: var(--muted);
+  --user-message-bubble: color-mix(in oklab, var(--primary) 10%, var(--background));
   --file-link: var(--primary);
   --composer-shadow: 0 -8px 22px oklch(0.145 0 0 / 3.5%), 0 4px 12px oklch(0.145 0 0 / 5%);
   --workspace-shadow: -4px -2px 18px oklch(0.145 0 0 / 3%), -0px 0 10px oklch(0.145 0 0 / 2%);

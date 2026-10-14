@@ -281,9 +281,10 @@ describe("visibleTranscriptParts", () => {
     )
 
     expect(html).toContain('aria-expanded="false"')
-    expect(html).toContain("bg-input/60")
-    expect(html).toContain("to-input/60")
-    expect(html).toContain("bg-input/30")
+    expect(html).toContain("bg-user-message-bubble")
+    expect(html).toContain("to-user-message-bubble")
+    expect(html).toContain("bg-user-message-bubble/55")
+    expect(html).not.toContain("bg-input/60")
     expect(html).not.toContain("gap-1 border-t border-border/40")
   })
 
