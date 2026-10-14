@@ -51,6 +51,21 @@ describe("bounded cancellable workspace observation", () => {
     try { return await Promise.race([work.then(() => true), new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), 1500); })]); }
     finally { clearTimeout(timer); }
   }
+  function isProcessRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      if (process.platform === "linux") {
+        const statPath = `/proc/${pid}/stat`;
+        if (!existsSync(statPath)) return false;
+        const stat = readFileSync(statPath, "utf8");
+        const state = stat[stat.lastIndexOf(")") + 2];
+        return state !== "Z" && state !== "X";
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
   async function cleanOwnedChildren(pending: Promise<unknown>) {
     for (const child of slowGit.children) child.kill();
     await pending;
@@ -99,9 +114,7 @@ describe("bounded cancellable workspace observation", () => {
     try {
       await pending; descendant = Number(readFileSync(slowGit.pidFile, "utf8"));
       expect(Number.isSafeInteger(descendant) && descendant > 0).toBe(true);
-      let alive = false;
-      try { process.kill(descendant, 0); alive = true; } catch {}
-      expect(alive).toBe(false);
+      expect(isProcessRunning(descendant)).toBe(false);
       expect(slowGit.children.size).toBe(0);
       expect(existsSync(slowGit.marker)).toBe(false);
       expect(store.runs.getRun(id)?.metadata.workspaceChanges).toMatchObject({ status: "unavailable", reason: "git_inspection_failed" });
