@@ -10,7 +10,9 @@ export const Route = createFileRoute("/_main/conversation/$sessionId")({
     if (state.sessionView?.session.id !== params.sessionId) {
       await state.openSession(params.sessionId)
     }
-    if (useDesktopSessionStore.getState().sessionView?.session.id !== params.sessionId) {
+    // 打开失败时仍保留当前会话及其错误，交给会话页展示；跳回首页会再次跳到同一会话。
+    // 只有用户在等待期间切换了会话（或新建对话）时，才跟随最新选择返回首页。
+    if (useDesktopSessionStore.getState().activeSessionId !== params.sessionId) {
       throw redirect({ to: "/", replace: true })
     }
   },
