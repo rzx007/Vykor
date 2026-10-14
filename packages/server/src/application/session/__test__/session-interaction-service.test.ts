@@ -313,7 +313,7 @@ describe("SessionInteractionService", () => {
 
   it("explicitly rejects UI action prompt replay even if an input ID is present", async () => {
     const { service } = createService({ run: { id: "ui-run", sessionId: "s1", inputId: "source-input", status: "interrupted", metadata: {
-      uiAction: { schemaVersion: 1, instanceId: "00000000-0000-0000-0000-000000000002", requestId: "00000000-0000-0000-0000-000000000001",
+      uiAction: { schemaVersion: 2, instanceId: "00000000-0000-0000-0000-000000000002", requestId: "00000000-0000-0000-0000-000000000001",
         requestFingerprint: "a".repeat(64), expectedRevision: 1, actionId: "apply", label: "Apply", args: {},
         pluginId: "test.ui", pluginVersion: "1.0.0", pluginDigest: "b".repeat(64), componentDigest: "c".repeat(64),
         toolName: "Apply", toolUseId: "call", executionState: "unknown" },
