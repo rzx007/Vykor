@@ -98,6 +98,11 @@ it("does not display a late response in a different source conversation", async 
 it("queries the original request after an unknown response and never automatically POSTs again", async () => {
   api.submitConversation = async (value) => { posts.push(value); throw new Error("offline") }
   await send("submit"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(posts).toHaveLength(1), { timeout: 5000 }))
+  await act(async () => vi.waitFor(() => {
+    expect(queries).toEqual([posts[0].requestId])
+    expect(host.conversationStatus?.message).toContain("尚未确认")
+  }, { timeout: 5000 }))
   expect(posts).toHaveLength(1); expect(queries).toEqual([posts[0].requestId])
   expect(host.conversationStatus?.message).toContain("尚未确认")
 })
@@ -126,11 +131,17 @@ it("keeps the new request ID when an old scope error arrives after same-content 
   await act(async () => useDesktopSessionStore.setState({ activeSessionId: "other", sessionView: null }))
   await act(async () => useDesktopSessionStore.setState({ activeSessionId: "session", sessionView: original }))
   await send("submit", "2"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(posts).toHaveLength(2), { timeout: 5000 }))
   expect(posts).toHaveLength(2)
   expect(posts[1].requestId).not.toBe(posts[0].requestId)
   await act(async () => rejectOld(new Error("plugin_ui_mount_closed")))
   oldPort.close()
   await send("submit", "3"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(posts).toHaveLength(3), { timeout: 5000 }))
+  await act(async () => vi.waitFor(() => {
+    expect(queries).toEqual([posts[1].requestId, posts[1].requestId])
+    expect(host.conversationStatus?.message).toContain("尚未确认")
+  }, { timeout: 5000 }))
   expect(posts).toHaveLength(3)
   expect(posts[2].requestId).toBe(posts[1].requestId)
   expect(queries).toEqual([posts[1].requestId, posts[1].requestId])
