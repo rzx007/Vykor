@@ -370,6 +370,7 @@ export const IpcChannels = {
   connectionsRuntimeStop: "connections:runtime-stop",
 
   pluginSnapshot: "plugin:snapshot",
+  pluginLoadIcon: "plugin:load-icon",
   pluginEnable: "plugin:enable",
   pluginDisable: "plugin:disable",
   pluginUninstall: "plugin:uninstall",
@@ -1023,6 +1024,10 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
   [IpcChannels.providerCustomRemove]: {
     args: [input: RemoveDesktopCustomProviderInput]
     result: DesktopProviderSnapshot
+  }
+  [IpcChannels.pluginLoadIcon]: {
+    args: [input: { src: string }]
+    result: string | null
   }
   [IpcChannels.pluginSnapshot]: {
     args: [input: DesktopPluginContextInput]

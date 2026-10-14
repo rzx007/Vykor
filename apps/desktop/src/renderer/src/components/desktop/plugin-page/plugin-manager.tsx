@@ -45,6 +45,7 @@ import type {
 } from "@shared/plugin-types"
 import { PluginDetailsDialog } from "../settings-page/plugin-settings"
 import { ExtensionIcon } from "./plugin-catalog"
+import { PluginDetail } from "./plugin-detail"
 export interface PluginManagerProps {
   query: string
   addRequest: number
@@ -52,6 +53,8 @@ export interface PluginManagerProps {
   refreshRequest: number
   projectPath: string
   notify: (message: string) => void
+  onDetailChange?: (open: boolean) => void
+  onUse?: (plugin: DesktopPluginInfo, prompt: string) => Promise<void>
 }
 type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }> & {
   source: "archive" | "git"
@@ -99,6 +102,8 @@ export function PluginManager({
   refreshRequest,
   projectPath,
   notify,
+  onDetailChange,
+  onUse,
 }: PluginManagerProps): React.JSX.Element {
   const api = window.desktop?.plugins
   const [snapshot, setSnapshot] = useState<DesktopPluginSnapshot | null>(null)
@@ -106,6 +111,7 @@ export function PluginManager({
   const [busy, setBusy] = useState(Boolean(api))
   const [filter, setFilter] = useState("all")
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
   const [removal, setRemoval] = useState<{ id: string; name: string } | null>(null)
   const [approval, setApproval] = useState<Approval | null>(null)
   const [gitDialogOpen, setGitDialogOpen] = useState(false)
@@ -192,10 +198,12 @@ export function PluginManager({
     lock.current = true
     setBusy(true)
     try {
-      applyImportResult(await api.importArchive({
-        cwd: projectPath,
-        ...(bundledPlugin ? { bundledPlugin } : {}),
-      }))
+      applyImportResult(
+        await api.importArchive({
+          cwd: projectPath,
+          ...(bundledPlugin ? { bundledPlugin } : {}),
+        })
+      )
     } catch {
       if (mounted.current) reportFeedback("导入插件失败，请重试。", { destructive: true })
     } finally {
@@ -317,6 +325,7 @@ export function PluginManager({
       if (uninstall) {
         setRemoval(null)
         setDetailId(null)
+        setManageOpen(false)
       }
       notify(`${displayName(plugin)} 已${uninstall ? "卸载" : plugin.enabled ? "禁用" : "启用"}。`)
     } catch (cause) {
@@ -330,170 +339,212 @@ export function PluginManager({
   const matches = (...values: (string | undefined)[]): boolean =>
     values.join(" ").toLocaleLowerCase().includes(normalizedQuery)
   const plugins = snapshot?.plugins ?? []
-  const knowledgeWork = plugins.find(plugin => plugin.identity.id === "vykor.knowledge-work")
-  const knowledgeWorkAction = !knowledgeWork ? "添加" : knowledgeWork.identity.version === "1.0.0" ? "更新" : null
+  const knowledgeWork = plugins.find((plugin) => plugin.identity.id === "vykor.knowledge-work")
+  const knowledgeWorkAction = !knowledgeWork
+    ? "添加"
+    : knowledgeWork.identity.version === "1.0.0"
+      ? "更新"
+      : null
   const visiblePlugins = plugins.filter(
     (plugin) =>
       matches(
         displayName(plugin),
         plugin.identity.id,
         plugin.identity.version,
+        plugin.presentation?.description,
         plugin.sourceFormat
       ) &&
       (filter === "all" || (filter === "enabled" ? plugin.enabled : needsAttention(plugin)))
   )
   const detail = plugins.find((plugin) => plugin.identity.id === detailId) ?? null
+  const detailOpen = Boolean(detail)
+  useEffect(() => {
+    onDetailChange?.(detailOpen)
+  }, [detailOpen, onDetailChange])
   return (
     <div className="flex flex-col gap-9">
-      {snapshot?.warnings.length ? (
-        <Alert>
-          <CircleAlert />
-          <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
-        </Alert>
-      ) : null}
-      {!loading && knowledgeWorkAction && matches("研究与写作", "knowledge-work") ? (
-        <section className="flex items-center justify-between gap-4" aria-label="内置研究与写作">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-medium">研究与写作</h2>
-            <p className="text-xs leading-5 text-muted-foreground">
-              应用内置。整理网页和资料，生成带来源的报告、文章，并继续修改。
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            shape="pill"
-            disabled={busy || !api}
-            aria-label={`${knowledgeWorkAction}研究与写作`}
-            onClick={() => void importArchive("knowledge-work")}
-          >
-            {knowledgeWorkAction}
-          </Button>
-        </section>
-      ) : null}
-      <section className="flex flex-col gap-4" aria-labelledby="plugin-installed-title">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="plugin-installed-title" className="text-sm font-medium">
-            已安装
-          </h2>
-        </div>
-        <Separator className="bg-border/50" />
-        {loading ? (
-          <div className="flex gap-6 py-2" aria-label="正在加载插件">
-            {[1, 2, 3, 4].map((id) => (
-              <Skeleton key={id} className="size-11 rounded-xl" />
-            ))}
-          </div>
-        ) : plugins.length ? (
-          <div className="flex flex-wrap gap-x-5 gap-y-3 py-1" aria-label="已安装插件">
-            {plugins
-              .filter((plugin) => matches(displayName(plugin), plugin.identity.id))
-              .map((plugin) => (
-                <Tooltip key={plugin.identity.id}>
-                  <TooltipTrigger
-                    className="relative rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`查看 ${displayName(plugin)} 详情`}
-                    onClick={() => setDetailId(plugin.identity.id)}
-                  >
-                    <ExtensionIcon name={displayName(plugin)} />
-                    {needsAttention(plugin) ? (
-                      <CircleAlert className="absolute -right-1 -bottom-1 size-4 rounded-full bg-background text-destructive" />
-                    ) : null}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {displayName(plugin)} · {pluginRuntimeLabel(plugin)}
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-          </div>
-        ) : (
-          <NoPlugins />
-        )}
-      </section>
-      {plugins.length ? (
-        <section className="flex flex-col gap-3" aria-labelledby="plugin-list-title">
-          <Tabs value={filter} onValueChange={setFilter} className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="plugin-list-title" className="text-sm font-medium">
-                我的插件
-              </h2>
-              <TabsList
-                className="extension-tabs bg-transparent"
-                wrapperClassName="w-auto"
-                aria-label="插件状态"
+      {detail ? (
+        <PluginDetail
+          key={detail.identity.id}
+          plugin={detail}
+          onUse={onUse}
+          onBack={() => {
+            setDetailId(null)
+            setManageOpen(false)
+          }}
+          onManage={() => setManageOpen(true)}
+        />
+      ) : (
+        <>
+          {snapshot?.warnings.length ? (
+            <Alert>
+              <CircleAlert />
+              <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
+            </Alert>
+          ) : null}
+          {!loading && knowledgeWorkAction && matches("研究与写作", "knowledge-work") ? (
+            <section
+              className="flex items-center justify-between gap-4"
+              aria-label="内置研究与写作"
+            >
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">研究与写作</h2>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  应用内置。整理网页和资料，生成带来源的报告、文章，并继续修改。
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                shape="pill"
+                disabled={busy || !api}
+                aria-label={`${knowledgeWorkAction}研究与写作`}
+                onClick={() => void importArchive("knowledge-work")}
               >
-                <TabsTrigger value="all" aria-label="全部">
-                  全部
-                </TabsTrigger>
-                <TabsTrigger value="enabled" aria-label="已启用">
-                  已启用
-                </TabsTrigger>
-                <TabsTrigger value="attention" aria-label="需处理">
-                  需处理
-                </TabsTrigger>
-              </TabsList>
+                {knowledgeWorkAction}
+              </Button>
+            </section>
+          ) : null}
+          <section className="flex flex-col gap-4" aria-labelledby="plugin-installed-title">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="plugin-installed-title" className="text-sm font-medium">
+                已安装
+              </h2>
             </div>
-            <Separator />
-            <TabsContent value={filter} className="mt-0">
-              {visiblePlugins.length ? (
-                <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2">
-                  {visiblePlugins.map((plugin) => (
-                    <ExtensionRow
-                      key={plugin.identity.id}
-                      name={displayName(plugin)}
-                      description={`${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${pluginRuntimeLabel(plugin)}`}
-                      onClick={() => setDetailId(plugin.identity.id)}
-                      action={
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            size="sm"
-                            checked={plugin.enabled}
-                            disabled={busy || plugin.scope === "managed"}
-                            aria-label={`${plugin.enabled ? "禁用" : "启用"} ${displayName(plugin)}`}
-                            onCheckedChange={() => void mutate(plugin)}
-                          />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={<Button variant="ghost" size="icon-sm" />}
-                              aria-label={`${displayName(plugin)} 更多操作`}
-                            >
-                              <Ellipsis />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuGroup>
-                                <DropdownMenuItem onClick={() => setDetailId(plugin.identity.id)}>
-                                  查看详情
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={busy || plugin.scope === "managed"}
-                                  variant="destructive"
-                                  onClick={() =>
-                                    setRemoval({
-                                      id: plugin.identity.id,
-                                      name: displayName(plugin),
-                                    })
-                                  }
-                                >
-                                  卸载
-                                </DropdownMenuItem>
-                              </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      }
-                    />
+            <Separator className="bg-border/50" />
+            {loading ? (
+              <div className="flex gap-6 py-2" aria-label="正在加载插件">
+                {[1, 2, 3, 4].map((id) => (
+                  <Skeleton key={id} className="size-11 rounded-xl" />
+                ))}
+              </div>
+            ) : plugins.length ? (
+              <div className="flex flex-wrap gap-x-5 gap-y-3 py-1" aria-label="已安装插件">
+                {plugins
+                  .filter((plugin) => matches(displayName(plugin), plugin.identity.id))
+                  .map((plugin) => (
+                    <Tooltip key={plugin.identity.id}>
+                      <TooltipTrigger
+                        className="relative rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`查看 ${displayName(plugin)} 详情`}
+                        onClick={() => setDetailId(plugin.identity.id)}
+                      >
+                        <ExtensionIcon name={displayName(plugin)} src={plugin.presentation?.icon} />
+                        {needsAttention(plugin) ? (
+                          <CircleAlert className="absolute -right-1 -bottom-1 size-4 rounded-full bg-background text-destructive" />
+                        ) : null}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {displayName(plugin)} · {pluginRuntimeLabel(plugin)}
+                      </TooltipContent>
+                    </Tooltip>
                   ))}
+              </div>
+            ) : (
+              <NoPlugins />
+            )}
+          </section>
+          {plugins.length ? (
+            <section className="flex flex-col gap-3" aria-labelledby="plugin-list-title">
+              <Tabs
+                value={filter}
+                onValueChange={setFilter}
+                className="flex min-w-0 flex-col gap-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 id="plugin-list-title" className="text-sm font-medium">
+                    我的插件
+                  </h2>
+                  <TabsList
+                    className="extension-tabs bg-transparent"
+                    wrapperClassName="w-auto"
+                    aria-label="插件状态"
+                  >
+                    <TabsTrigger value="all" aria-label="全部">
+                      全部
+                    </TabsTrigger>
+                    <TabsTrigger value="enabled" aria-label="已启用">
+                      已启用
+                    </TabsTrigger>
+                    <TabsTrigger value="attention" aria-label="需处理">
+                      需处理
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
-              ) : (
-                <NoPlugins searched={Boolean(normalizedQuery) || filter !== "all"} />
-              )}
-            </TabsContent>
-          </Tabs>
-        </section>
-      ) : null}
+                <Separator />
+                <TabsContent value={filter} className="mt-0">
+                  {visiblePlugins.length ? (
+                    <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2">
+                      {visiblePlugins.map((plugin) => (
+                        <ExtensionRow
+                          key={plugin.identity.id}
+                          name={displayName(plugin)}
+                          icon={plugin.presentation?.icon}
+                          description={
+                            plugin.presentation?.description ||
+                            `${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${pluginRuntimeLabel(plugin)}`
+                          }
+                          status={
+                            plugin.presentation?.description
+                              ? pluginRuntimeLabel(plugin)
+                              : undefined
+                          }
+                          onClick={() => setDetailId(plugin.identity.id)}
+                          action={
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                size="sm"
+                                checked={plugin.enabled}
+                                disabled={busy || plugin.scope === "managed"}
+                                aria-label={`${plugin.enabled ? "禁用" : "启用"} ${displayName(plugin)}`}
+                                onCheckedChange={() => void mutate(plugin)}
+                              />
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  render={<Button variant="ghost" size="icon-sm" />}
+                                  aria-label={`${displayName(plugin)} 更多操作`}
+                                >
+                                  <Ellipsis />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                      onClick={() => setDetailId(plugin.identity.id)}
+                                    >
+                                      查看详情
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      disabled={busy || plugin.scope === "managed"}
+                                      variant="destructive"
+                                      onClick={() =>
+                                        setRemoval({
+                                          id: plugin.identity.id,
+                                          name: displayName(plugin),
+                                        })
+                                      }
+                                    >
+                                      卸载
+                                    </DropdownMenuItem>
+                                  </DropdownMenuGroup>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <NoPlugins searched={Boolean(normalizedQuery) || filter !== "all"} />
+                  )}
+                </TabsContent>
+              </Tabs>
+            </section>
+          ) : null}
+        </>
+      )}
       <PluginDetailsDialog
         error=""
-        plugin={detail}
-        onOpenChange={(open) => !open && setDetailId(null)}
+        plugin={manageOpen ? detail : null}
+        onOpenChange={(open) => !open && setManageOpen(false)}
         actions={
           detail ? (
             <div className="flex items-center justify-between gap-3 py-2">
@@ -630,12 +681,16 @@ export function PluginManager({
 }
 function ExtensionRow({
   name,
+  icon,
   description,
+  status,
   onClick,
   action,
 }: {
   name: string
+  icon?: string
   description: string
+  status?: string
   onClick: () => void
   action: React.ReactNode
 }): React.JSX.Element {
@@ -648,7 +703,7 @@ function ExtensionRow({
         className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onClick}
       >
-        <ExtensionIcon name={name} />
+        <ExtensionIcon name={name} src={icon} />
         <span className="flex min-w-0 flex-col gap-1">
           <span className="truncate text-sm font-semibold group-hover:underline group-hover:underline-offset-4">
             {name}
@@ -656,6 +711,7 @@ function ExtensionRow({
           <span className="truncate text-sm text-muted-foreground" title={description}>
             {description}
           </span>
+          {status ? <span className="truncate text-xs text-muted-foreground">{status}</span> : null}
         </span>
       </button>
       {action}

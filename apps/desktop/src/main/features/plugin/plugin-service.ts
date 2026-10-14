@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/plugin-types"
 import { desktopSessionService } from "../session/session-service"
 import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
+import { PluginIconLoader } from "./icon-loader"
 
 type PluginClient = Pick<VykorClient, "plugins">
 
@@ -35,6 +36,7 @@ export interface DesktopPluginServiceOptions {
 }
 
 export class DesktopPluginService {
+  private readonly icons = new PluginIconLoader()
   private readonly chooseArchive: (sender: WebContents) => Promise<string | null>
   private readonly now: () => number
   private readonly createSelectionId: () => string
@@ -58,6 +60,10 @@ export class DesktopPluginService {
     const cwd = normalizeCwd(input.cwd)
     const result = await this.withDaemonRetry((client) => client.plugins.list({ cwd }))
     return { cwd, plugins: result.plugins, warnings: result.warnings }
+  }
+
+  loadIcon(input: { src: string }): Promise<string | null> {
+    return this.icons.load(input)
   }
 
   async enable(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {

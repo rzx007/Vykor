@@ -1,14 +1,34 @@
-import { Box, CircleAlert, Info, LoaderCircle, MoreHorizontal, Plug, Trash2 } from "lucide-react"
+import { CircleAlert, Info, LoaderCircle, MoreHorizontal, Trash2 } from "lucide-react"
 import type * as React from "react"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { Badge } from "@renderer/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@renderer/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@renderer/components/ui/dropdown-menu"
-import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@renderer/components/ui/item"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@renderer/components/ui/dropdown-menu"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@renderer/components/ui/item"
 import { Separator } from "@renderer/components/ui/separator"
 import { Switch } from "@renderer/components/ui/switch"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPluginInfo } from "@shared/plugin-types"
+import { ExtensionIcon } from "../plugin-page/plugin-catalog"
 
 const scopeLabels: Record<DesktopPluginInfo["scope"], string> = {
   user: "用户",
@@ -176,10 +196,17 @@ export function PluginDetailsDialog({
           {plugin.uiInventory ? (
             <DetailSection title="插件界面定义">
               <DetailRow label="定义文件" value={String(plugin.uiInventory.manifestCount)} />
-              <DetailRow label="静态校验" value={plugin.uiInventory.componentCount === null
-                ? "UI 定义数量暂不可确认"
-                : `已校验 ${plugin.uiInventory.validatedComponentCount} 个 UI 定义`} />
-              <p className="text-xs text-muted-foreground">在工具结果中按需打开交互，是否可用以会话检查为准。</p>
+              <DetailRow
+                label="静态校验"
+                value={
+                  plugin.uiInventory.componentCount === null
+                    ? "UI 定义数量暂不可确认"
+                    : `已校验 ${plugin.uiInventory.validatedComponentCount} 个 UI 定义`
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                在工具结果中按需打开交互，是否可用以会话检查为准。
+              </p>
             </DetailSection>
           ) : null}
           <DetailSection title="权限">
@@ -259,11 +286,11 @@ export function PluginIcon({
   return (
     <span
       className={cn(
-        "relative grid shrink-0 place-items-center rounded-lg bg-muted text-foreground",
-        compact ? "size-9" : "size-10"
+        "relative inline-flex shrink-0 text-foreground",
+        compact ? "[&>span]:size-9" : "[&>span]:size-10"
       )}
     >
-      {plugin.origin === "converted" ? <Box aria-hidden="true" /> : <Plug aria-hidden="true" />}
+      <ExtensionIcon name={pluginDisplayName(plugin)} src={plugin.presentation?.icon} />
       {needsAttention(plugin) ? (
         <CircleAlert
           className="absolute -right-1 -bottom-1 size-4 fill-background text-destructive"

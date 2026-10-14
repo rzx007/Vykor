@@ -7,7 +7,12 @@ import type { NotificationSettingsAPI } from "./notification-settings-types"
 import type { PersonalizationManagementAPI } from "./personalization-management-types"
 import type { ConfigurationSettingsAPI } from "./configuration-settings-types"
 import type { ProviderDefaultsAPI } from "./provider-defaults-types"
-import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
+import type {
+  AddAnnotationInput,
+  AnnotationIdInput,
+  BrowserAnnotationSnapshot,
+  SetAnnotationModeInput,
+} from "./browser-annotation"
 import type {
   DesktopAppInfo,
   PetState,
@@ -93,11 +98,7 @@ import type {
   ListDesktopScheduledRunsInput,
   UpdateDesktopScheduledTaskInput,
 } from "./schedule-types"
-import type {
-  CreateDesktopNoteInput,
-  DesktopNote,
-  UpdateDesktopNoteInput,
-} from "./note-types"
+import type { CreateDesktopNoteInput, DesktopNote, UpdateDesktopNoteInput } from "./note-types"
 import type {
   ActivateDesktopProviderInput,
   ConnectDesktopProviderInput,
@@ -410,10 +411,18 @@ export type DesktopAPI = {
   }
   permissionSettings: {
     snapshot: () => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsSnapshot]["result"]>
-    update: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["result"]>
-    updateIsolation: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["result"]>
-    check: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["result"]>
-    revoke: (input: IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["result"]>
+    update: (
+      input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["args"][0]
+    ) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdate]["result"]>
+    updateIsolation: (
+      input: IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["args"][0]
+    ) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsUpdateIsolation]["result"]>
+    check: (
+      input: IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["args"][0]
+    ) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsCheck]["result"]>
+    revoke: (
+      input: IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["args"][0]
+    ) => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsRevoke]["result"]>
   }
   daemonAutoStart: {
     snapshot: () => Promise<DesktopDaemonAutoStartSnapshot>
@@ -422,6 +431,7 @@ export type DesktopAPI = {
     dismissOnboarding: () => Promise<DesktopDaemonAutoStartSnapshot>
   }
   plugins: {
+    loadIcon: (input: { src: string }) => Promise<string | null>
     snapshot: (input: DesktopPluginContextInput) => Promise<DesktopPluginSnapshot>
     enable: (input: DesktopPluginActionInput) => Promise<DesktopPluginSnapshot>
     disable: (input: DesktopPluginActionInput) => Promise<DesktopPluginSnapshot>
@@ -453,8 +463,12 @@ export type DesktopAPI = {
     listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>
     compact: (input: CompactDesktopSessionInput) => Promise<DesktopCompactSessionResult>
     getGoal: (input: GetDesktopSessionGoalInput) => Promise<SessionGoal | null>
-    getMessagePart: (input: import("./session-types").GetDesktopMessagePartInput) => Promise<import("./session-types").DesktopSessionPart>
-    readToolImagePreview: (input: import("./session-types").GetDesktopMessagePartInput) => Promise<import("./attachment-types").DesktopAttachmentPreview>
+    getMessagePart: (
+      input: import("./session-types").GetDesktopMessagePartInput
+    ) => Promise<import("./session-types").DesktopSessionPart>
+    readToolImagePreview: (
+      input: import("./session-types").GetDesktopMessagePartInput
+    ) => Promise<import("./attachment-types").DesktopAttachmentPreview>
     createGoal: (input: CreateDesktopSessionGoalInput) => Promise<SessionGoal>
     updateGoal: (input: UpdateDesktopSessionGoalInput) => Promise<SessionGoal>
     goalAction: (input: DesktopSessionGoalActionInput) => Promise<SessionGoal>
@@ -471,9 +485,7 @@ export type DesktopAPI = {
     open: (sessionId: string) => Promise<DesktopSessionView>
     openAux: (input: OpenDesktopAuxSessionInput) => Promise<DesktopSessionView>
     closeAux: (input: CloseDesktopAuxSessionInput) => Promise<void>
-    acknowledgeUpdate: (
-      ack: DesktopSessionUpdateAck
-    ) => Promise<DesktopSessionUpdateAckResult>
+    acknowledgeUpdate: (ack: DesktopSessionUpdateAck) => Promise<DesktopSessionUpdateAckResult>
     requestUpdateResync: (
       request: DesktopSessionResyncRequest
     ) => Promise<DesktopSessionUpdateAckResult>

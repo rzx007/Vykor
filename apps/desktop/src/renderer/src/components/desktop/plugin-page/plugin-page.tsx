@@ -1,5 +1,6 @@
 import { ChevronDown, CircleCheck, RefreshCw, Search, Settings2, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@renderer/components/ui/button"
 import { ButtonGroup } from "@renderer/components/ui/button-group"
 import {
@@ -24,6 +25,8 @@ import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { PluginManager } from "./plugin-manager"
 import { SkillManager } from "./skill-manager"
 import { McpManager } from "./mcp-manager"
+import { preparePluginConversation } from "./plugin-quick-start"
+import type { DesktopPluginInfo } from "@shared/plugin-types"
 
 type ExtensionTab = "plugins" | "skills" | "mcp"
 const sections = {
@@ -41,6 +44,7 @@ export function PluginPage(): React.JSX.Element {
 }
 
 function ExtensionManagement({ projectPath }: { projectPath: string }): React.JSX.Element {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<ExtensionTab>("plugins")
   const [queries, setQueries] = useState({ plugins: "", skills: "", mcp: "" })
   const [addRequests, setAddRequests] = useState(initialCounts)
@@ -49,6 +53,12 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
   const [message, setMessage] = useState("")
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [compact, setCompact] = useState(false)
+  const [pluginDetailsOpen, setPluginDetailsOpen] = useState(false)
+
+  async function usePlugin(plugin: DesktopPluginInfo, prompt: string): Promise<void> {
+    await preparePluginConversation(plugin, prompt, useDesktopSessionStore.getState)
+    await navigate({ to: "/" })
+  }
 
   useEffect(() => {
     if (!message) return
@@ -127,38 +137,44 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
         </div>
         <ScrollArea horizontal={false} className="min-h-0 flex-1">
           <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-8 px-6 pt-7 pb-16 sm:px-10 sm:pt-9 lg:px-12">
-            <header className="flex flex-col gap-2">
-              <h1 className="text-[28px] leading-tight font-medium tracking-tight">
-                {sections[tab].title}
-              </h1>
-              <p className="text-sm leading-6 text-muted-foreground">{sections[tab].description}</p>
-            </header>
-            <InputGroup shape="pill">
-              <InputGroupAddon>
-                <Search />
-              </InputGroupAddon>
-              <InputGroupInput
-                aria-label={`搜索${sections[tab].title}`}
-                placeholder={`搜索${sections[tab].title}`}
-                value={queries[tab]}
-                onChange={(event) =>
-                  setQueries((previous) => ({ ...previous, [tab]: event.target.value }))
-                }
-              />
-              {queries[tab] ? (
-                <InputGroupAddon align="inline-end">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    shape="circle"
-                    aria-label="清除搜索"
-                    onClick={() => setQueries((previous) => ({ ...previous, [tab]: "" }))}
-                  >
-                    <X />
-                  </Button>
-                </InputGroupAddon>
-              ) : null}
-            </InputGroup>
+            {tab === "plugins" && pluginDetailsOpen ? null : (
+              <>
+                <header className="flex flex-col gap-2">
+                  <h1 className="text-[28px] leading-tight font-medium tracking-tight">
+                    {sections[tab].title}
+                  </h1>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {sections[tab].description}
+                  </p>
+                </header>
+                <InputGroup shape="pill">
+                  <InputGroupAddon>
+                    <Search />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    aria-label={`搜索${sections[tab].title}`}
+                    placeholder={`搜索${sections[tab].title}`}
+                    value={queries[tab]}
+                    onChange={(event) =>
+                      setQueries((previous) => ({ ...previous, [tab]: event.target.value }))
+                    }
+                  />
+                  {queries[tab] ? (
+                    <InputGroupAddon align="inline-end">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        shape="circle"
+                        aria-label="清除搜索"
+                        onClick={() => setQueries((previous) => ({ ...previous, [tab]: "" }))}
+                      >
+                        <X />
+                      </Button>
+                    </InputGroupAddon>
+                  ) : null}
+                </InputGroup>
+              </>
+            )}
             <TabsContent value="plugins" keepMounted className="mt-0">
               <PluginManager
                 key={projectPath}
@@ -168,6 +184,8 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 gitAddRequest={gitAddRequest}
                 refreshRequest={refreshRequests.plugins}
                 notify={setMessage}
+                onDetailChange={setPluginDetailsOpen}
+                onUse={usePlugin}
               />
             </TabsContent>
             <TabsContent value="skills" keepMounted className="mt-0">

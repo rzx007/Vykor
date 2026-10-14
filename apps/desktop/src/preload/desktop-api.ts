@@ -486,6 +486,8 @@ export const desktopAPI = {
     dismissOnboarding: () => invoke(IpcChannels.daemonAutoStartDismissOnboarding),
   },
   plugins: {
+    loadIcon: (input: IpcInvokeMap[typeof IpcChannels.pluginLoadIcon]["args"][0]) =>
+      invoke(IpcChannels.pluginLoadIcon, input),
     snapshot: (input: IpcInvokeMap[typeof IpcChannels.pluginSnapshot]["args"][0]) =>
       invoke(IpcChannels.pluginSnapshot, input),
     enable: (input: IpcInvokeMap[typeof IpcChannels.pluginEnable]["args"][0]) =>

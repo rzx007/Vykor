@@ -182,6 +182,7 @@ export function Composer({
           id: `context:plugin:${plugin.pluginId}`,
           label: plugin.displayName,
           description: plugin.description,
+          icon: plugin.icon,
           group: "插件",
           action: { kind: "plugin", pluginId: plugin.pluginId, displayName: plugin.displayName },
         }))

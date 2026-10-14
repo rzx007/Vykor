@@ -15,6 +15,7 @@ import { desktopPluginService, type DesktopPluginService } from "./plugin-servic
 type PluginIpcService = Pick<
   DesktopPluginService,
   | "snapshot"
+  | "loadIcon"
   | "enable"
   | "disable"
   | "uninstall"
@@ -39,6 +40,10 @@ export function createPluginIpcContribution(service: PluginIpcService): IpcContr
         app.once("before-quit", () => service.clearArchiveSelections())
       }
       return [
+        {
+          channel: IpcChannels.pluginLoadIcon,
+          handler: (_event, input) => service.loadIcon(input as { src: string }),
+        },
         {
           channel: IpcChannels.pluginSnapshot,
           handler: (_event, input) => service.snapshot(input as DesktopPluginContextInput),

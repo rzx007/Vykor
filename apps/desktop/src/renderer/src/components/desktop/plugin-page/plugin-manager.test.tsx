@@ -15,6 +15,9 @@ const toastMocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@renderer/lib/toast", () => ({ toast: toastMocks }))
+vi.mock("streamdown", () => ({
+  Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+}))
 
 import { PluginManager, type PluginManagerProps } from "./plugin-manager"
 
@@ -88,6 +91,7 @@ describe("PluginManager archive import", () => {
       configurable: true,
       value: {
         plugins: {
+          loadIcon: vi.fn(async () => "data:image/png;base64,aGVsbG8="),
           snapshot: vi.fn(async () => snapshot),
           reload: vi.fn(async () => snapshot),
           importArchive: vi.fn(),
@@ -191,68 +195,123 @@ describe("PluginManager archive import", () => {
 
   it("installs the included research and writing pack only after an explicit click", async () => {
     const installed = plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.1.0" },
+      identity: {
+        id: "vykor.knowledge-work",
+        name: "knowledge-work",
+        displayName: "研究与写作",
+        version: "1.1.0",
+      },
     })
     api().importArchive.mockResolvedValue({
-      status: "installed", pluginName: "研究与写作", snapshot: { ...snapshot, plugins: [installed] },
+      status: "installed",
+      pluginName: "研究与写作",
+      snapshot: { ...snapshot, plugins: [installed] },
     })
     await render()
     expect(api().importArchive).not.toHaveBeenCalled()
     await click("添加研究与写作")
-    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "knowledge-work" })
+    expect(api().importArchive).toHaveBeenCalledWith({
+      cwd: "D:/project",
+      bundledPlugin: "knowledge-work",
+    })
     expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
     expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
   })
 
   it("does not reinstall an included plugin that the user has disabled", async () => {
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.1.0" },
-      enabled: false,
-    })] })
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          identity: {
+            id: "vykor.knowledge-work",
+            name: "knowledge-work",
+            displayName: "研究与写作",
+            version: "1.1.0",
+          },
+          enabled: false,
+        }),
+      ],
+    })
     await render()
     expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
     expect(api().importArchive).not.toHaveBeenCalled()
   })
 
-  it.each([true, false])("updates the old bundled plugin only after a click and permission approval (enabled=%s)", async (enabled) => {
-    const installed = plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version: "1.0.0" },
-      enabled,
-    })
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
-    api().importArchive.mockResolvedValue({
-      status: "approval-required", selectionId: "knowledge-update", pluginName: "研究与写作",
-      requestedPermissions: ["network:api.openalex.org"],
-    })
-    api().confirmArchive.mockResolvedValue({
-      status: "installed", pluginName: "研究与写作",
-      snapshot: { ...snapshot, plugins: [{ ...installed, identity: { ...installed.identity, version: "1.1.0" } }] },
-    })
-    await render()
-    expect(host.querySelector('[aria-label="更新研究与写作"]')?.textContent).toBe("更新")
-    expect(api().importArchive).not.toHaveBeenCalled()
-    await click("更新研究与写作")
-    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "knowledge-work" })
-    expect(document.body.textContent).toContain("网络访问")
-    expect(api().confirmArchive).not.toHaveBeenCalled()
-    await click("安装")
-    expect(api().confirmArchive).toHaveBeenCalledWith({ cwd: "D:/project", selectionId: "knowledge-update" })
-    expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
-    expect(host.querySelector(`[aria-label="${enabled ? "禁用" : "启用"} 研究与写作"]`)).not.toBeNull()
-    expect(api().enable).not.toHaveBeenCalled()
-    expect(api().disable).not.toHaveBeenCalled()
-    expect(props.notify).toHaveBeenCalledWith("研究与写作 已安装或更新，将在下次对话中生效。")
-  })
+  it.each([true, false])(
+    "updates the old bundled plugin only after a click and permission approval (enabled=%s)",
+    async (enabled) => {
+      const installed = plugin({
+        identity: {
+          id: "vykor.knowledge-work",
+          name: "knowledge-work",
+          displayName: "研究与写作",
+          version: "1.0.0",
+        },
+        enabled,
+      })
+      api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
+      api().importArchive.mockResolvedValue({
+        status: "approval-required",
+        selectionId: "knowledge-update",
+        pluginName: "研究与写作",
+        requestedPermissions: ["network:api.openalex.org"],
+      })
+      api().confirmArchive.mockResolvedValue({
+        status: "installed",
+        pluginName: "研究与写作",
+        snapshot: {
+          ...snapshot,
+          plugins: [{ ...installed, identity: { ...installed.identity, version: "1.1.0" } }],
+        },
+      })
+      await render()
+      expect(host.querySelector('[aria-label="更新研究与写作"]')?.textContent).toBe("更新")
+      expect(api().importArchive).not.toHaveBeenCalled()
+      await click("更新研究与写作")
+      expect(api().importArchive).toHaveBeenCalledWith({
+        cwd: "D:/project",
+        bundledPlugin: "knowledge-work",
+      })
+      expect(document.body.textContent).toContain("网络访问")
+      expect(api().confirmArchive).not.toHaveBeenCalled()
+      await click("安装")
+      expect(api().confirmArchive).toHaveBeenCalledWith({
+        cwd: "D:/project",
+        selectionId: "knowledge-update",
+      })
+      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
+      expect(
+        host.querySelector(`[aria-label="${enabled ? "禁用" : "启用"} 研究与写作"]`)
+      ).not.toBeNull()
+      expect(api().enable).not.toHaveBeenCalled()
+      expect(api().disable).not.toHaveBeenCalled()
+      expect(props.notify).toHaveBeenCalledWith("研究与写作 已安装或更新，将在下次对话中生效。")
+    }
+  )
 
-  it.each(["1.1.0", "2.0.0"])("does not offer a bundled downgrade for installed version %s", async (version) => {
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({
-      identity: { id: "vykor.knowledge-work", name: "knowledge-work", displayName: "研究与写作", version },
-    })] })
-    await render()
-    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
-    expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
-    expect(api().importArchive).not.toHaveBeenCalled()
-  })
+  it.each(["1.1.0", "2.0.0"])(
+    "does not offer a bundled downgrade for installed version %s",
+    async (version) => {
+      api().snapshot.mockResolvedValue({
+        ...snapshot,
+        plugins: [
+          plugin({
+            identity: {
+              id: "vykor.knowledge-work",
+              name: "knowledge-work",
+              displayName: "研究与写作",
+              version,
+            },
+          }),
+        ],
+      })
+      await render()
+      expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
+      expect(api().importArchive).not.toHaveBeenCalled()
+    }
+  )
 
   it("explains UI permissions and component counts in the host approval dialog", async () => {
     api().importArchive.mockResolvedValue({
@@ -280,6 +339,7 @@ describe("PluginManager archive import", () => {
     })
     await render()
     await click("查看 Alpha 详情")
+    await click("管理")
     expect(document.body.textContent).toContain("已校验 2 个 UI 定义")
     expect(document.body.textContent).toContain("在工具结果中按需打开")
   })
@@ -295,6 +355,7 @@ describe("PluginManager archive import", () => {
     })
     await render()
     await click("查看 Alpha 详情")
+    await click("管理")
     expect(document.body.textContent).toContain("UI 定义数量暂不可确认")
     expect(document.body.textContent).not.toContain("已校验 0 个 UI 定义")
   })
@@ -496,6 +557,7 @@ describe("PluginManager archive import", () => {
     expect(host.textContent).toContain("加载失败：插件文件不完整，请重新导入插件包。")
 
     await click("查看 Beta 详情")
+    await click("管理")
 
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain("运行状态")
@@ -555,13 +617,72 @@ describe("PluginManager archive import", () => {
     expect(api().uninstall).not.toHaveBeenCalled()
   })
 
-  it("opens plugin details from a populated list", async () => {
+  it("opens a detail page and keeps management in the manage dialog", async () => {
     api().snapshot.mockResolvedValue(populatedSnapshot)
     await render()
 
     await click("查看 Alpha 详情")
 
+    expect(host.querySelector('[aria-label="Alpha 插件详情"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    await click("管理")
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("alpha@1.0.0")
+  })
+
+  it("shows author content and icon, passes the full prompt with its plugin, and returns to the filtered list", async () => {
+    const alpha = plugin({
+      presentation: {
+        icon: "https://example.test/icon.png",
+        description: "整理资料",
+        introduction: "生成带来源的报告。",
+        author: { name: "Example" },
+        prompts: [{ title: "写报告", prompt: "根据资料生成完整报告。" }],
+      },
+    })
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [alpha, populatedSnapshot.plugins[1]!],
+    })
+    const onUse = vi.fn(async () => undefined)
+    await render({ query: "Alpha", onUse })
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,aGVsbG8=")
+    expect(window.desktop.plugins.loadIcon).toHaveBeenCalledWith({ src: alpha.presentation!.icon })
+    await click("查看 Alpha 详情")
+    expect(host.textContent).toContain("生成带来源的报告。")
+    expect(host.textContent).toContain("Example")
+    expect(host.textContent).not.toContain("已连接的账户")
+    await click("使用示例：写报告")
+    expect(onUse).toHaveBeenCalledExactlyOnceWith(alpha, "根据资料生成完整报告。")
+    await click("立即使用")
+    expect(onUse).toHaveBeenLastCalledWith(alpha, "")
+    await click("返回插件")
+    expect(host.querySelectorAll("[data-extension-row]")).toHaveLength(1)
+  })
+
+  it("disables quick use for a failed plugin", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    const onUse = vi.fn(async () => undefined)
+    await render({ onUse })
+    await click("查看 Beta 详情")
+    const button = [...host.querySelectorAll("button")].find(
+      (item) => item.textContent?.trim() === "立即使用"
+    )
+    expect(button?.disabled).toBe(true)
+    await click("立即使用")
+    expect(onUse).not.toHaveBeenCalled()
+  })
+
+  it("falls back when an author icon fails to load", async () => {
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [plugin({ presentation: { icon: "https://example.test/broken.png" } })],
+    })
+    await render()
+    const image = host.querySelector("img")!
+    const parent = image.parentElement!
+    await act(async () => image.dispatchEvent(new Event("error")))
+    expect(parent.querySelector("img")).toBeNull()
+    expect(parent.querySelector("svg")).not.toBeNull()
   })
 
   it("hides my-plugins and keeps a single empty prompt when nothing is installed", async () => {
