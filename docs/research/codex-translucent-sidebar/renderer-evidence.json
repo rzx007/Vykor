@@ -1,0 +1,158 @@
+{
+  "source": "C:/Program Files/WindowsApps/OpenAI.Codex_26.1007.9446.0_x64__2p2nqsd0c76g0/app/resources/app.asar",
+  "evidenceType": "Shipped JavaScript and CSS; report-local IDs; source byte and SHA-256 comparisons passed",
+  "records": [
+    {
+      "id": "ui-capability",
+      "member": "webview/assets/general-settings-7cb780277784.js",
+      "sha256": "7ce2c1e0c9c017e3532e80667968f4f0c58506a1bf2dfa3308fd9eb548ad3514",
+      "memberCharOffset": 48722,
+      "memberByteOffset": 48726,
+      "excerpt": "function Ya(e){let t=(0,lo.c)(7),{section:n,separateModes:r}=e,i=xr(),a=qn(i),{data:o}=Nt(),s=o?.isSystemBackdropSupported!==!1,c;t[0]!==a||t[1]!==r?(c=r?[`light`,`dark`]:[a],t[0]=a,t[1]=r,t[2]=c):c=t[2];let l=c,u;return t[3]!==n||t[4]!==s||t[5]!==l?(u=(0,X.jsx)(`div`,{className:`flex flex-col gap-[var(--padding-panel)]`,children:l.map(e=>(0,X.jsx)(Xa,{section:n,showTranslucentSidebarToggle:s,showVariantTitle:l.length>1,variant:e},e))}),t[3]=n,t[4]=s,t[5]=l,t[6]=u):u=t[6],u}function Xa(e){let t=(0,lo.c)(7),{section:r,showTranslucentSidebarToggle:i,showVariantTitle:a,variant:o}=e,s=N(P),c=L(),l=c.formatMessage(J.chromeThemeAccent),u=c.formatMessage(J.chromeThemeBackground),f=c.formatMessage(J"
+    },
+    {
+      "id": "ui-toggle",
+      "member": "webview/assets/general-settings-7cb780277784.js",
+      "sha256": "7ce2c1e0c9c017e3532e80667968f4f0c58506a1bf2dfa3308fd9eb548ad3514",
+      "memberCharOffset": 55967,
+      "memberByteOffset": 55973,
+      "excerpt": "r===`advanced`&&i?(0,X.jsx)(I,{size:`compact`,control:(0,X.jsx)(n,{checked:!O.opaqueWindows,onChange:e=>{D({opaqueWindows:!e})},ariaLabel:c.formatMessage({id:`settings.general.appearance.chromeTheme.translucentSidebar`,defaultMessage:`{variant} translucent sidebar`,description:`Aria label for the translucent sidebar toggle in chrome theme settings`},{variant:k})}),label:g}):null,r===`advanced`&&(0,X.jsx)(I,{size:`compact`,control:(0,X.jsx)(oo,{ariaLabel:c.formatMessage({id:`settings.general.appearance.chromeTheme.contrast`,defaultMessage:`{variant} contrast`,description:`Aria label f"
+    },
+    {
+      "id": "config-keys",
+      "member": "webview/assets/app-shared-30671c57ec82.js",
+      "sha256": "392b023063a3569a2efc47a019accb2d1e72295b1bfec2cbb81fc37e1515580a",
+      "memberCharOffset": 1985862,
+      "memberByteOffset": 2022924,
+      "excerpt": "lightChromeTheme:AN({agentAccess:`read-write`,default:void 0,description:`Chrome theme used in light mode`,key:`appearanceLightChromeTheme`,schema:$Tt}),darkChromeTheme:AN({agentAccess:`read-write`,default:void 0,description:`Chrome theme used in dark mode`,key:`appearanceDarkChromeTheme`,schema:$Tt}),lightCodeThemeId:AN({agentAccess:`rea"
+    },
+    {
+      "id": "config-storage",
+      "member": "webview/assets/app-shared-30671c57ec82.js",
+      "sha256": "392b023063a3569a2efc47a019accb2d1e72295b1bfec2cbb81fc37e1515580a",
+      "memberCharOffset": 1925564,
+      "memberByteOffset": 1962618,
+      "excerpt": "function AN({agentAccess:e,default:t,description:n,key:r,schema:i,vscode:a}){return{agentAccess:e,default:t,description:n,key:r,hostStorage:{kind:`configuration`,key:r},schema:i,vscode:a}}function jN({agentAccess:e,default:t,description:n,key:r,schem"
+    },
+    {
+      "id": "config-write",
+      "member": "webview/assets/app-shared-30671c57ec82.js",
+      "sha256": "392b023063a3569a2efc47a019accb2d1e72295b1bfec2cbb81fc37e1515580a",
+      "memberCharOffset": 3541110,
+      "memberByteOffset": 3578250,
+      "excerpt": "async function oAn(e,t){if(e6?.settings!=null){await e6.settings.write(e.key,t);return}await $G(`set-setting`,{params:{key:e.key,value:t}})}function sAn(){}var VK,HK,UK,cAn,lAn,uAn,dAn;function WK(){return(WK=t((()=>{gA("
+    },
+    {
+      "id": "electron-default",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 5584183,
+      "memberByteOffset": 5595708,
+      "excerpt": "KJ={dark:{accent:`#339cff`,contrast:60,fonts:{code:null,ui:null},ink:`#ffffff`,opaqueWindows:!1,semanticColors:{diffAdded:`#40c977`,diffRemoved:`#fa423e`,skill:`#ad7bf9`},surface:`#181818`},light:{accent:`#339cff`,contrast:45,fonts:{code:null,ui:null},ink:`#1a1c1f`,opaqueWindows:!1,semanticColors:{diffAdded:`#00a240`,diffRemoved:`#ba2623`,skill:`#924ff7`},surface:`#ffffff`}}})))()}function _ya(e,t){let n=wya(t);return n.find(t=>t.id===e)||(n"
+    },
+    {
+      "id": "theme-normalize",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 5583204,
+      "memberByteOffset": 5594729,
+      "excerpt": "opaqueWindows:e?.opaqueWindows??i.opaqueWindows,semanticColors:pya(e?.seman"
+    },
+    {
+      "id": "theme-write",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 9292932,
+      "memberByteOffset": 9304705,
+      "excerpt": "await Wf(i,t),o.committedSnapshot=s},r)},t[29]=i,t"
+    },
+    {
+      "id": "toggle-patch",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 9293521,
+      "memberByteOffset": 9305294,
+      "excerpt": "A=t=>{let r=n.get(S8,e);r.editRevision+=1;let i=t.accent!=null||t.accentSource!=null;i&&(r.accentEditRevision+=1),D(r0s(r.getSnapshot().theme,t),i?gLe(n,`custom`):void 0).catch(J1s)},t[39]=D,t[40]=n,t[41]=e,t[42]=A):A=t[42];let j="
+    },
+    {
+      "id": "native-state-event",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 9038501,
+      "memberByteOffset": 9050268,
+      "excerpt": "Ho.subscribe(`electron-window-opaque-surface-changed`,e=>{c(e.opaqueWindowSurfaceEnabled)}),F=[],t[14]=P,t[15]=F):(P=t[14],F"
+    },
+    {
+      "id": "native-state-class",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 9041011,
+      "memberByteOffset": 9052778,
+      "excerpt": "B=()=>{let e=document.querySelector(`[data-codex-window-type=\"electron\"]`);if(e){if(s&&!mm()){e.classList.add(`electron-opaque`);return}e.classList.remove(`electron-opaque`)}},V=[s],t[51]=s,t[52]=B,t[53]=V),(0,K6.useLayoutEffect)(B,V);let H;t[54]===Symbol"
+    },
+    {
+      "id": "transparent-html",
+      "member": "webview/assets/app-shared-6ed15bfa827c.css",
+      "sha256": "8b4732f16ae0250887d3fe584652ac26fe67e1c8c576dbe364b5063b6324af33",
+      "memberCharOffset": 1251067,
+      "memberByteOffset": 1251073,
+      "excerpt": "[data-codex-window-type=electron]{--image-viewer-transparent-backdrop-filter:blur(var(--blur-xs));--text-sm:13px;--text-xs:12px;--font-weight-medium:500;--font-ui-weight:430;background:0 0;overflow:hidden}:is([data-codex-window-type=browser"
+    },
+    {
+      "id": "transparent-body",
+      "member": "webview/assets/app-shared-6ed15bfa827c.css",
+      "sha256": "8b4732f16ae0250887d3fe584652ac26fe67e1c8c576dbe364b5063b6324af33",
+      "memberCharOffset": 1254086,
+      "memberByteOffset": 1254092,
+      "excerpt": "[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) body{background:0 0}[d"
+    },
+    {
+      "id": "sidebar-alpha",
+      "member": "webview/assets/app-shared-6ed15bfa827c.css",
+      "sha256": "8b4732f16ae0250887d3fe584652ac26fe67e1c8c576dbe364b5063b6324af33",
+      "memberCharOffset": 1254189,
+      "memberByteOffset": 1254195,
+      "excerpt": "[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true],.app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface])){background:var(--color-surface-tertiary)}@supports (color:color-mix(in lab, red, red)){[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true],.app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface])){background:color-mix(in srgb, var(--color-surface-tertiary) 70%, transparent)}}[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true],.app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface])){overflow:visible}[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true],.app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface]))[data-app-shell-page-surface=true]{background:var(--lightningcss-light,var(--color-surface-secondary))var(--lightningcss-dark,var(--color-surface-tertiary))}@supports (color:color-mix(in lab, red, red)){[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true],.app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface]))[data-app-shell-page-surface=true]{background:var(--lightningcss-light,color-mix(in srgb, var(--color-surface-secondary) 85%, transparent))var(--lightningcss-dark,color-mix(in srgb, var(--color-surface-tertiary) 80%, transparent))}}[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) :is([data-app-shell-frame][data-app-shell-workspace-tab-chrome],[data-app-shell-page-surface=true]) .app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface]){background:0 0}[data-codex-window-type=electron]:not([data-codex-window-chrome=application-menu]) .app-shell-left-panel:not([data-app-shell-left-panel-appearance=content-surface]):after{inset:0 calc(-1 * var(--radius-2xl)) 0 auto;width:var(--radius-2xl);background:inherit;content:\"\";pointer-events:none;position:absolute}[data-codex-"
+    },
+    {
+      "id": "opaque-class-css",
+      "member": "webview/assets/app-shared-6ed15bfa827c.css",
+      "sha256": "8b4732f16ae0250887d3fe584652ac26fe67e1c8c576dbe364b5063b6324af33",
+      "memberCharOffset": 1256717,
+      "memberByteOffset": 1256723,
+      "excerpt": "[data-codex-window-type=electron].electron-opaque{background-color:var(--app-color-background-surface-under);background-image:none}[data-codex-window-type=electron].electron-opaque body{background-color:var(--app-color-background-surface-under);--app-color-background-elevated-primary:var(--app-color-background-elevated-primary-opaque);background-image:none}[data-codex-window-type=electron] .ble"
+    },
+    {
+      "id": "opaque-main-content",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "memberCharOffset": 91461,
+      "memberByteOffset": 91461,
+      "excerpt": "._MainContentSurface_yl8z4_2[data-app-shell-main-surface=default]:where(:is([data-codex-window-type=browser],[data-codex-window-type=chrome-extension],[data-codex-window-type=electron]) ._MainContentSurface_yl8z4_2[data-app-shell-main-surface=default]){background-color:var(--color-surface);background-clip:padding-box;overflow:hidd"
+    },
+    {
+      "id": "win-main-content-radius",
+      "member": "webview/assets/app-initial-99e8b4b455fa.css",
+      "sha256": "1a75f9180b89d2457dc09e4efea288436c9cf6d44e5ba59b2c03d3d571b7bf61",
+      "memberCharOffset": 96011,
+      "memberByteOffset": 96011,
+      "excerpt": "._MainContentSurface_yl8z4_2[data-app-shell-main-surface=default]:where(:root[data-codex-os=win32] ._MainContentSurface_yl8z4_2[data-app-shell-main-surface=default]){border-top-left-radius:var(--radius-lg);min-width:0;overf"
+    },
+    {
+      "id": "rail-transparent",
+      "member": "webview/assets/app-initial-102e45562729.js",
+      "sha256": "c59b2a0be6c13496b30ebda167925cdccab26799cae350c62d2b37afe3589b57",
+      "memberCharOffset": 7814909,
+      "memberByteOffset": 7826559,
+      "excerpt": "let fe=m?`bg-surface-secondary electron:bg-transparent browser:[--control-radius-md:var(--radius-token-row)] browser:[--radius-token-row:10px]`:`bg-surface-secondary electron:bg-transparent`;t[67]===fe?M=t[68]:(M=eg(`group/sidebar-rail relative flex min-h-0 shrink-0 flex-col item"
+    },
+    {
+      "id": "popover-css-local-blur",
+      "member": "webview/assets/popover-33fff3f58ec9.css",
+      "sha256": "4743105b668ed950b744936102f770c5f8700827e84630c802e8845af0556430",
+      "memberCharOffset": 890,
+      "memberByteOffset": 890,
+      "excerpt": "._Popover_oe2a7_2[data-translucent]{-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);background:linear-gradient(360deg,#f7f7f880 0%,#f7f7f8 100%)}._Popover_oe2a7_2[data-translucent]:where([data-theme=dark]){background:linear-gradient(360deg,#56586940 0%,#5658697d 100%)}@container style(--theme-variant:dark){._Popover_oe2a7_2[data-translucent]:where(:not([data-theme])){backgroun"
+    }
+  ]
+}

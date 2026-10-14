@@ -1,0 +1,104 @@
+{
+  "recordedOn": "2026-10-14",
+  "source": "C:/Program Files/WindowsApps/OpenAI.Codex_26.1007.9446.0_x64__2p2nqsd0c76g0/app/resources/app.asar",
+  "windowsPackageVersion": "26.1007.9446.0",
+  "electronAppVersion": "26.1007.71326",
+  "electronDependency": "42.3.0",
+  "archiveSha256": "356c13dc715816436fa1cf31e9f77863f62ea7b7cacc465b397313246eb29325",
+  "memberSha256": "e8923725ad6357380ac7bb25818f78eb4d97e522ebbde2ddf6ff5a2a93032e54",
+  "records": [
+    {
+      "id": "W01",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 1393314,
+      "memberByteOffset": 1393343,
+      "archiveByteOffset": 9041619,
+      "excerpt": "function jL(){return process.platform===`win32`&&_.app.getGPUFeatureStatus().gpu_compositing!==`enabled`?!1:_.BrowserWindow.isSystemBackdropSupported()}",
+      "truncated": false
+    },
+    {
+      "id": "W02",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 3720190,
+      "memberByteOffset": 3725105,
+      "archiveByteOffset": 11373381,
+      "excerpt": "var O9=`#00000000`,i1e=`#000000`,a1e=`#f9f9f9`,o1e=3840,s1e=2160,c1e=320,l1e=140,u1e=400,d1e=400,k9=44,f1e=14,p1e=16,m1e=36,h1e=`#1f1f1f`,g1e=`#ffffff`,_1e=5e3,v1e=1e3,y1e=5e3;function A9(e,t){return{x:p1e,y:Math.round((e*t-f1e)/2)}}function j9(e=1){return{color:O9,symbolColor:_.nativeTheme.shouldUseDarkColors?g1e:h1e,height:Math.round(m1e*e)}}",
+      "truncated": false
+    },
+    {
+      "id": "W03",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 3748286,
+      "memberByteOffset": 3753201,
+      "archiveByteOffset": 11401477,
+      "excerpt": "isOpaqueWindowsEnabled(){return(x1e(this.options.settingsStore.getEffective(r.X.theme.key)??`system`)===`light`?this.options.settingsStore.getEffective(r.X.lightChromeTheme.key):this.options.settingsStore.getEffective(r.X.darkChromeTheme.key))?.opaqueWindows===!0}shouldUseOpaqueWindowSurface(e,t,n){let r=_.screen.getDisplayMatching(t);return this.shouldAlwaysUseOpaqueWindowSurface(e)||D1e({appearance:e,isFocused:n,platform:process.platform})||T1e({appearance:e,platform:process.platform,scaleFactor:r.scaleFactor,windowBounds:t})}shouldAlwaysUseOpaqueWindowSurface(e){return E1e({appearance:e,opaqueWindowsEnabled:this.isOpaqueWindowsEnabled(),platform:process.platform})||!jL()&&!I9(e)}applyWindowBackdrop(e,t,n){let r=e.getBounds(),i=this.shouldUseOpaqueWindowSurface(t,r,e.isFocused());if(!n&&this.opaqueWindowSurfaceModes.get(e.id)===i)return;let{backgroundColor:a,backgroundMaterial:o}=L9({platform:process.platform,appearance:t,opaqueWindowSurfaceEnabled:i,prefersDarkColors:_.nativeTheme.shouldUseDarkColors});e.setBackgroundColor(a),o!=null&&e.setBackgroundMaterial(o),process.platform===`darwin`&&e.setVibrancy(this.windowVibrancyOverrides.has(e.id)?this.windowVibrancyOverrides.get(e.id)??null:A1e(t,i)),this.opaqueWindowSurfaceModes.set(e.id,i),this.sendMessageToWindow(e,{type:`electron-window-opaque-surface-changed`,opaqueWindowSurfaceEnabled:i})}",
+      "truncated": false
+    },
+    {
+      "id": "W04",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 3753147,
+      "memberByteOffset": 3758062,
+      "archiveByteOffset": 11406338,
+      "excerpt": "function I9(e){return e===`avatarOverlay`||e===`browserCommentPopup`||e===`globalDictation`||e===`screenOverlay`||e===`spotlight`||e===`hotkeyWindowHome`||e===`hotkeyWindowThread`}function T1e({appearance:e,platform:t,scaleFactor:n,windowBounds:r}){if(t!==`darwin`||I9(e))return!1;let i=r.width*n,a=r.height*n;return Math.max(i,a)>=o1e&&Math.min(i,a)>=s1e}function E1e({appearance:e,opaqueWindowsEnabled:t,platform:n}){return t&&!I9(e)&&(n===`darwin`||n===`win32`)}function D1e({appearance:e,isFocused:t,platform:n}){return!t&&!I9(e)&&n===`darwin`}function O1e(e){return e===`primary`||e===`detached`||e===`hotkeyWindowThread`||e===`hud`}function k1e(e,t){switch(e){case`avatarOverlay`:case`browserCommentPopup`:case`globalDictation`:case`screenOverlay`:case`spotlight`:return null;case`primary`:return t;case`hotkeyWindowHome`:return{width:c1e,height:l1e};case`hotkeyWindowThread`:return{width:u1e,height:d1e};case`hud`:case`secondary`:case`detached`:return{width:400,height:400}}}function L9({platform:e,appearance:t,opaqueWindowSurfaceEnabled:n,prefersDarkColors:r}){return n?{backgroundColor:r?i1e:a1e,backgroundMaterial:e===`win32`?`none`:null}:e!==`win32`||I9(t)?{backgroundColor:O9,backgroundMaterial:null}:{backgroundColor:O9,backgroundMaterial:`mica`}}",
+      "truncated": false
+    },
+    {
+      "id": "W05",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 1442001,
+      "memberByteOffset": 1442030,
+      "archiveByteOffset": 9090306,
+      "excerpt": "applySettingSideEffects(e,t){if(e===r.Y.soundEnabled.key&&qhe(t===!0).catch(t=>{KL().warning(`Failed to write appshot sound setting`,{safe:{settingKey:e},sensitive:{error:t}})}),e===r.J.debugChromePagesEnabled.key){let e=t===!0&&p.t.allowDebugMenu(p.t.resolve());_.app.setDebugChromePagesEnabled(e),Md(e)}e===`appearanceTheme`&&g.J(t),(e===`appearanceTheme`||e===`appearanceLightChromeTheme`||e===`appearanceDarkChromeTheme`)&&this.windowManager.refreshWindowBackdrops(),e===r.gs.DOCK_ICON_PREFERENCE&&this.updateDockIcon()}",
+      "truncated": false
+    },
+    {
+      "id": "W06",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 3730775,
+      "memberByteOffset": 3735690,
+      "archiveByteOffset": 11383966,
+      "excerpt": "refreshWindowBackdrops(){for(let e of _.BrowserWindow.getAllWindows()){if(e.isDestroyed()||!this.registeredWindowIds.has(e.id))continue;let t=this.windowAppearances.get(e.id);t!=null&&this.applyWindowBackdrop(e,t,!0)}}",
+      "truncated": false
+    },
+    {
+      "id": "W07",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 3755590,
+      "memberByteOffset": 3760505,
+      "archiveByteOffset": 11408781,
+      "excerpt": "case`primary`:return n===`darwin`?{titleBarStyle:`hiddenInset`,trafficLightPosition:A9(k9,r),acceptFirstMouse:!0,...t?{}:{vibrancy:`menu`}}:n===`win32`||n===`linux`?{titleBarStyle:`hidden`,titleBarOverlay:j9(r)}:{titleBarStyle:`default`};",
+      "truncated": false
+    },
+    {
+      "id": "W08",
+      "member": ".vite/build/main-Bgi5Xaw-.js",
+      "charOffset": 1441871,
+      "memberByteOffset": 1441900,
+      "archiveByteOffset": 9090176,
+      "excerpt": "async setSettingValue(e,t){if(this.settings==null)throw Error(`Settings store unavailable`);await this.settings.write(e,r.F(e,t))}",
+      "truncated": false
+    }
+  ],
+  "rea": {
+    "initialArchiveResult": "artifact_integrity_mismatch on an unrelated unpacked serialport native module; no whole-archive graph produced",
+    "focusedParentEvidenceId": "ev_30ff4a9ccedc39ab67838b89947d7692b0cbab398ae35e022560b75740078f67",
+    "summaryEvidenceId": "ev_ce5361aa2a343e26d19a3190296e81590ac8b3818e2f2f6e169f7a9422a487e6",
+    "coverage": "partial; main source analyzer timed out at 45000 ms; source excerpts were independently read and compared against original archive bytes"
+  },
+  "externalSources": [
+    {
+      "url": "https://www.electronjs.org/docs/latest/api/base-window#winsetbackgroundmaterialmaterial-windows",
+      "support": "System-drawn window background, material names, Windows 11 22H2 minimum documented for the API."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/apps/design/style/mica",
+      "support": "Mica is an opaque dynamic material incorporating desktop wallpaper and theme; OS fallback conditions and transparent-layer guidance."
+    }
+  ],
+  "limitations": [
+    "Static source inspection, not observation of the running application.",
+    "Did not change the setting or inspect user preferences.",
+    "Did not decompile Electron native implementation; Windows DWM material meaning corroborated by official documentation."
+  ]
+}
