@@ -85,7 +85,8 @@ export function verifyResearch(payload) {
       /** @type {Row} */
       const info = { source: citation.source, url: citation.url, resolved_by: source ? byId.has(inline(citation.source)) ? "id" : "url" : "unknown",
         url_status: provenanceAvailable ? "known" : "unknown", quote_status: quoteStatus, doi_status: doiStatus, verdict,
-        provenance: source?.plugin_recorded ? "plugin_recorded" : "input_only" };
+        provenance: source?.plugin_recorded ? "plugin_recorded" : "input_only",
+        source_text_truncated: source?.source_text_truncated ?? (typeof source?.text_truncated === "boolean" ? source.text_truncated : null) };
       if (verdict === "verified") verified++;
       else if (verdict === "weak") weak++;
       else {
@@ -184,12 +185,16 @@ function renderEvidence(rows) {
 }
 /** @param {Row} result @param {Row} options */
 export function renderResearchReport(result, options = {}) {
-  const lines = [`# ${inline(options.title || "Research report")}`, "", String(options.analysis_markdown ?? options.analysis ?? "").trim(), "",
+  const ready = !result.abstain && result.attributionPassed === true;
+  const lines = [`# ${inline(options.title || "Research report")}`, "",
+    ...(ready ? [String(options.analysis_markdown ?? options.analysis ?? "").trim(), ""]
+      : ["## 尚未完成引用检查", "", "本次输入未通过引用检查，分析正文未组装为报告。以下仅保留已匹配的证据与检查缺口；不能据此宣称原报告或结论已核验。", ""]),
     "Citation attribution is checked separately from semantic support; conclusions still require context review."];
   if (result.abstain) lines.push("", "No usable source-backed conclusions are available.");
-  if (result.comparison_markdown) lines.push("", "## Comparison", "", result.comparison_markdown);
+  if (ready && result.comparison_markdown) lines.push("", "## Comparison", "", result.comparison_markdown);
   lines.push("", "## Evidence used", "", result.evidence_markdown || "No verified evidence.");
-  if (result.flags.length || result.warnings.length || result.comparison_warnings.length) lines.push("", "## Verification gaps", "",
-    ...[...result.flags, ...result.warnings, ...result.comparison_warnings].map((/** @type {Row} */ issue) => `- ${cell(issue.issue)}${issue.field ? ` (${cell(issue.field)})` : ""}`));
+  const gaps = [...result.flags, ...result.warnings, ...result.comparison_warnings, ...(result.source_record_issues ?? [])];
+  if (gaps.length) lines.push("", "## Verification gaps", "",
+    ...gaps.map((/** @type {Row} */ issue) => `- ${cell(issue.issue ?? issue.code)}${issue.field ? ` (${cell(issue.field)})` : ""}`));
   return `${lines.join("\n")}\n`;
 }

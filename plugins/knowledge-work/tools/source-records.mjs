@@ -55,6 +55,8 @@ export async function readResearchSources(input, context, verification = false) 
   if (!Number.isFinite(since)) throw new TypeError("Invalid since date");
   const maxChars = input.max_chars ?? 12_000;
   if (!Number.isInteger(maxChars) || maxChars < 0 || maxChars > 50_000) throw new TypeError("max_chars must be 0–50000");
+  const offset = verification ? 0 : input.offset ?? 0;
+  if (!Number.isInteger(offset) || offset < 0 || offset > 100_000) throw new TypeError("offset must be 0–100000");
   context.signal.throwIfAborted();
   /** @type {Row[]} */ const sources = [];
   /** @type {Row[]} */ const issues = [];
@@ -68,9 +70,14 @@ export async function readResearchSources(input, context, verification = false) 
       const { checksum, ...record } = JSON.parse(await readFile(path, "utf8"));
       if (record.schema_version !== 1 || record.id !== ref || !record.source || typeof record.source.text !== "string" ||
           checksum !== createHash("sha256").update(JSON.stringify(record)).digest("hex")) throw new Error("Damaged source record");
-      const text = record.source.text.slice(0, remaining); remaining -= text.length;
+      const start = Math.min(offset, record.source.text.length);
+      const text = record.source.text.slice(start, start + remaining); remaining -= text.length;
       sources.push({ ...record.source, id: record.source.id ?? ref, source_ref: ref, text, plugin_recorded: true,
-        text_truncated: Boolean(record.source.text_truncated || text.length < record.source.text.length) });
+        stored_chars: record.source.text.length, returned_chars: text.length, returned_offset: start,
+        source_text_truncated: typeof record.source.text_truncated === "boolean" ? record.source.text_truncated : null,
+        read_truncated: start > 0 || text.length < record.source.text.length,
+        next_offset: start + text.length < record.source.text.length ? start + text.length : null,
+        text_truncated: Boolean(record.source.text_truncated || start > 0 || text.length < record.source.text.length) });
     } catch (error) {
       context.signal.throwIfAborted();
       issues.push({ source_ref: ref, code: /** @type {Row} */ (error).code === "ENOENT" ? "source_record_missing" : "source_record_invalid" });
@@ -96,11 +103,11 @@ export async function readResearchSources(input, context, verification = false) 
 /** @type {import('@vykor/plugins/sdk').NativeToolDefinition} */
 export const researchSourcesTool = {
   name: "KnowledgeResearchSources", safeToRetry: false, toolResultInput: "tool_result_id",
-  description: "读取插件持久来源与本会话请求账本；op=import按本轮Tool-Result-Id导入WebFetch实际结果，不接收模型转抄的正文。source_ref为插件保存的UUID；校验损坏，不提供宿主认证。",
+  description: "读取插件来源与本会话请求账本；返回保存长度、读取长度、来源截断与读取截断。offset可分段回查保存原文。op=import按本轮Tool-Result-Id导入WebFetch实际结果，不接收模型转抄正文；不提供宿主认证。",
   inputSchema: { type: "object", additionalProperties: false, properties: {
     op: { type: "string", enum: ["read", "import"] }, tool_result_id: { type: "string", minLength: 1, maxLength: 200 },
     source_refs: { type: "array", maxItems: 24, items: { type: "string", minLength: 36, maxLength: 36 } },
-    since: { type: "string", maxLength: 40 }, max_chars: { type: "integer" },
+    since: { type: "string", maxLength: 40 }, max_chars: { type: "integer" }, offset: { type: "integer", minimum: 0, maximum: 100000 },
   } },
   async invoke(input, context) {
     if (input.op === "import") {
@@ -111,7 +118,9 @@ export const researchSourcesTool = {
       await appendResearchAttempts(context, [{ kind: "fetch", status: result.isError ? "failed" : "ok",
         tool: result.toolName, tool_call_id: result.toolUseId, url: header?.[1], recorded_at: new Date().toISOString() }]);
       if (result.isError || !header) return { content: [{ type: "text", text: JSON.stringify({ imported: false, reason: "source_request_failed_or_unusable" }) }] };
-      const source_ref = await saveResearchSource(context, { url: header[1], text: text.slice(header[0].length), source_type: "web", origin: "tool_result" });
+      const body = text.slice(header[0].length);
+      const source_ref = await saveResearchSource(context, { url: header[1], text: body, source_type: "web", origin: "tool_result",
+        text_truncated: /\n\.\.\.\[truncated\]\s*$/u.test(body) });
       return { content: [{ type: "text", text: JSON.stringify({ imported: true, source_ref }) }] };
     }
     if (input.tool_result_id !== undefined) throw new Error("tool_result_id is only used by op=import");

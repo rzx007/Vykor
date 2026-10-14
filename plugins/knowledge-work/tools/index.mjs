@@ -66,7 +66,7 @@ function check(input) {
 /** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
 export const registerTools = () => [{
   name: "KnowledgeResearchCheck",
-  description: "核对来源、原句和DOI归属，绑定比较表逐项证据并组装报告。op省略保留旧版输入对应检查；完整verify/references/report支持source_ref核对插件保存的检索正文。recorded_only要求实际来源记录；不判事实真伪或语义支持，不联网。",
+  description: "核对来源、原句和DOI归属。source_ref读取保存原文，返回实际来源长度及截断信息；report仅在引用检查通过时组装分析，否则返回report_ready=false与缺口报告，不判事实真伪或语义支持。",
   inputSchema: {
     type: "object", required: ["sources", "claims"], additionalProperties: false,
     properties: {
@@ -93,6 +93,8 @@ export const registerTools = () => [{
           source_type: { type: "string", maxLength: 100 }, source: { type: "string", maxLength: 100 },
           limitation: { type: "string", maxLength: 4000 }, limitations: { type: "string", maxLength: 4000 },
           text_truncated: { type: "boolean" },
+          stored_chars: { type: "integer" }, returned_chars: { type: "integer" }, returned_offset: { type: "integer" },
+          source_text_truncated: { type: ["boolean", "null"] }, read_truncated: { type: "boolean" }, next_offset: { type: ["integer", "null"] },
         },
       } },
       claims: { type: "array", maxItems: 80, items: {
@@ -132,7 +134,18 @@ export const registerTools = () => [{
     });
     const result = verifyResearch({ ...input, sources });
     result.source_record_issues = records.issues;
-    if (input.op === "report") result.report_markdown = renderResearchReport(result, input);
+    result.source_diagnostics = sources.map(source => ({ id: source.id, source_ref: source.source_ref,
+      provenance: source.plugin_recorded ? "plugin_recorded" : "input_only",
+      checked_chars: source.text.length, stored_chars: source.stored_chars ?? null,
+      source_text_truncated: source.source_text_truncated ?? null, read_truncated: source.read_truncated ?? null,
+    }));
+    if (records.issues.length) result.attributionPassed = false;
+    if (input.op === "report") {
+      result.report_ready = result.attributionPassed === true && !result.abstain;
+      result.report_markdown = renderResearchReport(result, input);
+      if (!result.report_ready) return { isError: true, failureKind: "precondition", executionState: "completed",
+        content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
     const output = input.op === "references" ? { abstain: result.abstain, references: result.references, semanticVerification: result.semanticVerification } : result;
     return { content: [{ type: "text", text: JSON.stringify(output) }] };
   },

@@ -24,6 +24,8 @@ WebFetch 返回的 `Tool-Result-Id` 是本轮工具调用编号，不是持久�
 
 来源只截取部分正文时，引用不得超出实际已取得的范围。用户本地材料使用真实路径和读取的正文；没有快照引用时仅能作传入文字的对应检查。校验和不证明来源内容真实或结论语义正确。
 
+每份来源返回 `stored_chars`（插件保存的正文长度）、`returned_chars/returned_offset`（本次读取范围）、`source_text_truncated`（保存时已知的来源截断，未知为 null）、`read_truncated`（本次是否只返回部分保存文字）、`next_offset`（后续位置，无后续为 null）。`max_chars` 是总返回预算，不是保存上限。回查某份原文时只传该 `source_ref`；后半段用 `offset: next_offset` 分段读，不需重复联网。offset 为 0–100000，按 UTF-16 单元计算。不要把读取预算说成“插件只保存前 3000 字”。WebFetch 的明确 `[truncated]` 尾标会作为来源截断记录，但仍不能证明某个失败引用必然在缺失部分。
+
 ## 预算
 
 `KnowledgeResearchBudget` 接收 `op: "plan" | "account"`，返回 `{ "ok": true, "data": ... }`。计划去重并裁剪问题，提供实际生效的上限。子问题数量还会受总抓取次数限制，无法分配至少一次抓取的问题会列在 `dropped.fetch_budget`：
@@ -85,4 +87,6 @@ research-plan.json = { started_at: 实际as_of, budget_plan: 实际plan返回值
 
 对比表的 `comparison` 每行使用 `candidate`、`evidence_sources` 和 `field_claims`；事实字段必须绑定其候选来源的具体说法 ID，不能用一条总引用装饰整行。模板字段为 `os/setup_ease/model_capabilities/local_offline/privacy_data_handling/pricing_cost/key_limitations`；不适用或缺乏证据时填 `Not verified`，不为填满表格编造信息。`best_for/ideal_user` 是智能体判断，说明依据。
 
-`report` 还接收 `title` 与 `analysis_markdown`，保留分析中的 Markdown 换行并返回 `report_markdown`。它只组装提供的分析和检查表，最终事实结论、限制和推荐仍由智能体负责。工具返回后用已有 `Write/Edit` 保存报告，它不会替你修改文件。
+`verify/report` 的 `source_diagnostics` 给出本次检查实际读取的 `checked_chars/stored_chars/source_text_truncated/read_truncated`。带有效 source_ref 时检查器直接读取保存全文，替换调用方的精简 text；公开读取工具的 max_chars/offset 不限制这次全文检查。原句 not_found 先回查保存原文并复制连续原句，不能将意译、拼接句放进直接引用，不能猜测截断原因。
+
+`report` 接收 `title` 与 `analysis_markdown`。只有引用检查通过才返回 `report_ready: true` 并组装分析正文；无来源、无有效引用、弱证据、未匹配引用或来源记录有问题时返回工具错误、`report_ready: false` 和只含证据及缺口的 report_markdown，分析正文不输出。不能用空 sources/claims 重跑或自行改写来宣称检查通过。缩小到有证据支持的说法后重新核对，并保留未完成项。即使 report_ready 为真，工具仍不判断语义支持或用户范围是否正确；先人工核对原始比较项和来源性质。工具不写文件，保存实际报告与 check.json 使用既有 Write/Edit。
