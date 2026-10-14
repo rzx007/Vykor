@@ -114,7 +114,7 @@ describe("real permission checker after core schema validation", () => {
         yield { type: "complete", stopReason: "tool_calls" };
       } else yield { type: "complete", stopReason: "end_turn" };
     } }, registry, checker, { register() {}, execute: async () => ({ blocked: false }) }, { trajectoryTrackerFactory: false });
-    const execution = { scope: {}, emit: async () => {}, takeSteeredInputs: async () => [],
+    const execution = { scope: { signal: new AbortController().signal }, emit: async () => {}, takeSteeredInputs: async () => [],
       effects: { requestPermission: async (request: unknown) => { approvals.push(request); return { status: "approved" }; } },
     } as unknown as AgentExecutionContext;
     const events: StreamEvent[] = [];

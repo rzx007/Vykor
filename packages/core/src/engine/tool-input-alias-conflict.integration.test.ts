@@ -28,7 +28,7 @@ describe("path alias conflicts at the core input boundary", () => {
       } else yield { type: "complete", stopReason: "end_turn" };
     } }, registry, { checkTool: async (_, input) => { checked.push(input.file_path as string); return { action: "ask" }; } },
     { register() {}, execute: async () => ({ blocked: false }) }, { trajectoryTrackerFactory: false });
-    const execution = { scope: {}, emit: async () => {}, takeSteeredInputs: async () => [],
+    const execution = { scope: { signal: new AbortController().signal }, emit: async () => {}, takeSteeredInputs: async () => [],
       effects: { requestPermission: async (request: { input: Record<string, unknown> }) => {
         approved.push(request.input.file_path as string); return { status: "approved" };
       } },

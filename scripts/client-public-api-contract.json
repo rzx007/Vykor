@@ -499,6 +499,14 @@
       "kind": "type-export"
     },
     {
+      "name": "GoalExternalWait",
+      "kind": "type-export"
+    },
+    {
+      "name": "GoalStopReason",
+      "kind": "type-export"
+    },
+    {
       "name": "HookInfo",
       "kind": "type-export"
     },

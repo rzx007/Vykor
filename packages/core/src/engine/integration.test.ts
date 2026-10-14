@@ -1298,6 +1298,7 @@ describe("Integration: Full Agent Loop", () => {
     const run = (async () => {
       for await (const _ of engine.submitMessage("hang", { signal: controller.signal })) {}
     })();
+    await vi.waitFor(() => expect(receivedSignal).toBeDefined());
     controller.abort(interrupted);
 
     await expect(Promise.race([
