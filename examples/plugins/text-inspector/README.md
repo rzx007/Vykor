@@ -28,11 +28,13 @@
 
 ## 交互界面如何工作
 
-`components.ui` 指向 `ui/manifest.json`，组件 `text-inspector` 的 HTML 入口是 `./ui/panel.html`。它声明卡片与会话侧栏两个显示位置，动作 `preview` 只绑定同插件的 `TextInspectorPreview`，完成后保持交互打开。
+`components.ui` 指向 `ui/manifest.json`，UI 定义与建议使用 schemaVersion 2；Native 根 manifest 仍为 1。组件 `text-inspector` 的 HTML 入口是 `./ui/panel.html`，固定声明 surface: session-sidebar，由用户打开。动作 `preview` 只绑定同插件的 `TextInspectorPreview`，完成后保持交互打开。
 
 `TextInspectorCheck` 返回原文字结果，另在 `metadata.ui` 放入组件 ID、原文本与问题列表。宿主保存可信实例、版本号与执行状态；插件不能自行伪造这些字段。文本经 JSON 转义后的 UTF-8 长度超过 48,000 字节时不生成 UI 数据，仍返回原检查结果；这是为 64 KiB 动作参数上限保留空间，不是工具的输入长度上限。
 
-在 Desktop 点击“打开交互”，勾选问题后点“生成修复预览”。确认弹窗由主界面提供，默认焦点在“返回”；取消不会执行工具。确认才调用 `TextInspectorPreview`，只替换所选问题：每个行首制表符换为 2 个空格、删除所选行的行尾空白，保留其他内容及 CRLF。新结果存回原实例，页面从 SDK 的快照通知更新；不增加模型输入或自动调用模型。
+在 Desktop 点击“在侧栏打开”，勾选问题后点“生成修复预览”。确认弹窗由主界面提供，默认焦点在“返回”；取消不会执行工具。确认才调用 `TextInspectorPreview`，只替换所选问题：每个行首制表符换为 2 个空格、删除所选行的行尾空白，保留其他内容及 CRLF。新结果存回原实例，页面从 SDK 的快照通知更新；预览不增加模型输入。
+
+填写给助手的说明后，可把勾选问题所在行“加入输入框”或“交给助手”。按钮按快照 capabilities 显示；requestConversation 只携带实际选择的行，JSON UTF-8 超过 32 KiB 时明确提示，不发送或裁剪。取消/失败保留说明和选择；submit 不发送主输入框已有草稿。同 revision 外观更新保留本地编辑，隐藏保留 iframe，关闭重开重置本地输入。
 
 预览参数为 `{ "text": "原文本", "selected": ["1:trailing-whitespace"] }`。选项来自本次检查结果，最多 100 项，不允许重复、缺失或过期行号。插件工具会重新检查参数中的文本，不信任前端勾选值。
 
@@ -43,12 +45,13 @@
 编辑 `ui/panel.template.html`（结构与样式）和 `ui/panel.mjs`（交互），不要手工修改生成的 `ui/panel.html`。在仓库根目录执行：
 
 ```sh
-node examples/plugins/text-inspector/scripts/build-ui.mjs
+node examples/plugins/text-inspector/scripts/build-ui.mjs --export-author-assets
+node skills/create-plugin/assets/text-inspector/scripts/build-ui.mjs
 ```
 
-脚本使用仓库已有 Vite，将公开 `@vykor/plugins/ui-sdk` 及其依赖打包进唯一 HTML。安装后的插件不需要构建工具或运行期依赖。生成文件随源码提交，打包前重新构建；构建会拒绝 Node 依赖。
+--export-author-assets 使用已有 Vite 从当前 SDK 源机械生成两份 VykorPluginUi IIFE 和 stylesheet。各脚本把附带 SDK、CSS 与 panel 合成唯一 HTML；Skill 样例复制后只用 Node 构建，不需要本仓库、Vite 或网络。生成文件随源码交付，打包前重新构建；SDK 导出会拒绝 Node 依赖。
 
-前端只调用 `createPluginUiClient()`、`onSnapshot`、`requestAction`、`openSidebar`、`resize`、`dismiss` 和 `dispose`。SDK 通过宿主提供的 MessagePort 通信；不要手写通信协议，也不要访问父页面、Node、网络或宿主 preload。
+前端调用 createPluginUiClient/getSnapshot/onSnapshot/applyPluginUiAppearance/requestAction/requestConversation/dismiss/dispose。固定侧栏不调用 resize，没有 openSidebar。SDK 通过宿主提供的 MessagePort 通信；不要手写协议或访问父页面、Node、网络、preload。
 
 真实 `.mjs` 通过 JSDoc 引用 `@vykor/plugins/sdk` 的 `NativeToolRegister` 类型，无运行期 SDK 依赖，也无需安装样例依赖。在仓库根目录运行：
 
@@ -88,5 +91,5 @@ tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 - 导入成功但当前对话不能用：开新对话，或在没有运行中任务时执行 `/reload-plugins`。
 - Tool Host 启动失败：检查 `tools/index.mjs` 是否能被 Node 正常 import，不要普通 import `@vykor/plugins/sdk`。
 - 工具输入无效：只传 `{ "text": "..." }`，不要传字符串或额外字段。
-- 有文字但没有交互入口：检查当前 Desktop/后台是否支持 `pluginUi=1`、`pluginUiLifecycle=1`，是否关闭了 `plugins.uiEnabled`，以及文本是否超过 UI 的 48,000 字节限制。CLI/TUI 不等待 UI，继续使用文字结果。
+- 有文字但没有交互入口：检查当前 Desktop/后台是否支持 pluginUi=2、pluginUiLifecycle=1，是否关闭了 plugins.uiEnabled，以及文本是否超过 UI 的 48,000 字节限制；普通交接还需 pluginUiConversation=1。CLI/TUI 继续使用文字结果。
 - 已安装但 UI 不可用：在插件详情查看授权、启用状态和快照诊断；不要直接修改已安装快照。

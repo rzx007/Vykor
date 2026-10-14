@@ -5,49 +5,189 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>文本格式检查</title>
   <style>
-    :root { color-scheme: light; --bg:#fff; --fg:#202124; --muted:#62666c; --line:#dedfe2; --control:#f5f5f6; --focus:#3265bf; --danger:#b42318; --danger-hover:#fff1f0; }
-    :root[data-theme="dark"] { color-scheme:dark; --bg:#18191b; --fg:#ececef; --muted:#b0b3b9; --line:#3c3e43; --control:#25272b; --focus:#8bb3fb; --danger:#f6aaa4; --danger-hover:#392323; }
-    * { box-sizing:border-box; }
+    /* Inline this optional stylesheet into the plugin's standalone HTML at build time. */
+:root {
+  font-family: var(--ohs-font-family), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--ohs-font-size);
+  color: var(--ohs-foreground);
+  background: var(--ohs-background);
+  color-scheme: var(--ohs-color-scheme);
+  line-height: 1.5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 16px; }
+h1, h2, h3, p { margin: 0 0 12px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button, input, select, textarea {
+  border: 1px solid var(--ohs-border);
+  border-radius: 8px;
+  background: var(--ohs-background);
+  padding: 8px 12px;
+  transition: background-color var(--ohs-motion-duration), border-color var(--ohs-motion-duration);
+}
+button { cursor: pointer; background: var(--ohs-primary); color: var(--ohs-primary-foreground); }
+button:hover { background: var(--ohs-accent); color: var(--ohs-foreground); }
+button:disabled { cursor: default; opacity: .6; }
+:focus-visible { outline: 2px solid var(--ohs-primary); outline-offset: 2px; }
+small { color: var(--ohs-muted-foreground); }
+hr { border: 0; border-top: 1px solid var(--ohs-border); margin: 16px 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
     [hidden] { display:none !important; }
-    body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.5 "Segoe UI","Microsoft YaHei UI",system-ui,sans-serif; }
-    h1 { margin:0 0 4px; font-size:16px; font-weight:600; }
-    p { margin:0 0 12px; }
-    .muted { color:var(--muted); }
-    #findings { margin:0 0 16px; padding:0; list-style:none; max-height:190px; overflow:auto; border-block:1px solid var(--line); }
+    h1 { font-size:1.15rem; }
+    .muted { color:var(--ohs-muted-foreground); }
+    #findings { margin:0 0 16px; padding:0; list-style:none; max-height:190px; overflow:auto; border-block:1px solid var(--ohs-border); }
     #findings label { display:flex; align-items:center; gap:8px; min-height:38px; padding:6px 0; cursor:pointer; }
-    input { accent-color:var(--focus); }
-    button { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 16px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--fg); font:inherit; font-weight:500; cursor:pointer; transition:background-color 150ms,color 150ms,border-color 150ms; }
-    button:hover:not(:disabled) { background:var(--control); }
-    button:active:not(:disabled) { border-color:var(--muted); }
-    button:disabled { color:var(--muted); background:var(--control); border-color:var(--line); cursor:not-allowed; }
-    .primary { border-color:var(--fg); background:var(--fg); color:var(--bg); font-weight:600; }
-    .primary:hover:not(:disabled) { background:color-mix(in srgb,var(--fg) 85%,var(--bg)); }
-    .danger { color:var(--danger); background:transparent; border-color:transparent; }
-    .danger:hover:not(:disabled) { color:var(--danger); background:var(--danger-hover); border-color:transparent; }
-    :focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    input { accent-color:var(--ohs-primary); }
     .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-    #selection-count { font-size:12px; }
-    #preview { width:100%; min-height:120px; max-height:250px; resize:vertical; padding:12px; border:1px solid var(--line); border-radius:12px; color:var(--fg); background:var(--bg); font:13px/1.5 ui-monospace,monospace; tab-size:2; }
-    .preview-label { display:block; margin-bottom:6px; }
-    #status { min-height:21px; margin-bottom:8px; }
-    footer { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
-    .finish { display:flex; flex-direction:column; align-items:flex-end; gap:2px; margin-left:auto; }
-    #finish-hint { font-size:12px; }
-    ::selection { background:var(--fg); color:var(--bg); }
-    @media (prefers-reduced-motion:reduce) { button { transition:none; } }
-    @media (max-width:360px) { body { padding:12px; } .actions button { flex:1 1 auto; } }
+    button { border-radius:999px; }
+    #selection-count { font-size:.85rem; }
+    textarea { width:100%; min-height:80px; resize:vertical; margin-bottom:12px; }
+    #preview { min-height:120px; max-height:250px; font-family:ui-monospace,monospace; tab-size:2; }
+    label { display:block; margin-bottom:6px; }
+    #status { min-height:21px; }
+    footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--ohs-border); }
+    .danger { color:var(--ohs-destructive); background:transparent; }
   </style>
 </head>
 <body>
   <h1>文本格式检查</h1>
   <p class="muted">勾选要修复的问题，确认后生成文本预览。不会修改文件。</p>
   <ul id="findings" aria-label="可选格式问题"></ul>
-  <div class="actions"><button id="preview-button" class="primary" disabled>生成修复预览</button><span id="selection-count" class="muted">请选择要修复的问题</span></div>
+  <div class="actions"><button id="preview-button" disabled>生成修复预览</button><span id="selection-count" class="muted">请选择要修复的问题</span></div>
   <p id="status" role="status" aria-live="polite">正在加载检查结果…</p>
-  <label class="preview-label" for="preview">当前文本（可选中复制）</label>
+  <label for="preview">当前文本（可选中复制）</label>
   <textarea id="preview" readonly spellcheck="false" aria-describedby="status"></textarea>
-  <footer><button id="sidebar">在侧栏查看</button><div class="finish"><button id="dismiss" class="danger" aria-describedby="finish-hint">结束此交互</button><span id="finish-hint" class="muted">结束后仅供查看</span></div></footer>
-  <script>(function(){"use strict";const Z=["off","risk_based"],W=["none","low","medium","high","unknown"],D=["disabled","captured","skipped","pending","passed","findings","partial","failed","timed_out","unavailable"],ee=["pass","fail","partial"],te=["critical","important","minor"],ne=["mode_off","no_changes","low_risk_change","source_change","large_change","many_files","sensitive_path","sensitive_content_path","production_delete_or_rename","patch_truncated","not_git_repository","preexisting_dirty_overlap","non_linear_head_change","post_commit_worktree_changed","git_inspection_failed","review_output_invalid","review_child_failed","review_child_timed_out","review_preempted_by_user","parent_run_not_completed","daemon_restarted"];new Set(Z),new Set(W),new Set(D),new Set(ee),new Set(te),new Set(ne);const ie=["root_agent_run","child_agent_run","workflow_run","workflow_task"],se=["completed","failed","timed_out","cancelled","blocked","skipped","running","pending","unknown"],oe=["model_error","tool_error","timeout","permission_denied","budget_exceeded","dependency_failed","cancelled_by_user","cancelled_by_parent","recovery_failed","conflict","unknown"];new Set(ie),new Set(se),new Set(oe),new Set(D),new Set(W);const O={actionsPerComponent:16,dataBytes:256*1024,actionArgsBytes:64*1024,titleCodePoints:80,jsonDepth:20};function N(t){if(!t||typeof t!="object"||Array.isArray(t))return!1;const e=Object.getPrototypeOf(t);return e===Object.prototype||e===null}function E(t){return typeof t=="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)}function x(t){return typeof t=="number"&&Number.isSafeInteger(t)&&t>=0}function re(t,e){return $(t,e).valid}function $(t,e){if(!N(t))return{valid:!1,reason:"invalid_json"};try{return new TextEncoder().encode(ce(t)).byteLength>e?{valid:!1,reason:"payload_too_large"}:{valid:!0,value:t}}catch{return{valid:!1,reason:"invalid_json"}}}function ce(t){const e=(n,s)=>{if(n===null||typeof n=="string"||typeof n=="boolean"||typeof n=="number"&&Number.isFinite(n))return JSON.stringify(n);if(typeof n!="object"||n===null)throw new Error("Plugin UI requires JSON data");if(s>=O.jsonDepth)throw new Error("Plugin UI JSON nesting limit exceeded");if(Array.isArray(n))return`[${Array.from(n,v=>e(v,s+1)).join(",")}]`;const i=Object.getPrototypeOf(n);if(i!==Object.prototype&&i!==null)throw new Error("Plugin UI requires plain JSON objects");const a=n;return`{${Object.keys(a).sort().map(v=>`${JSON.stringify(v)}:${e(a[v],s+1)}`).join(",")}}`};return e(t,0)}const f={requestBytes:64*1024,snapshotBytes:512*1024,pendingRequests:16,requestsPerMinute:60,rateWindowMs:6e4,initializationMs:1e4,requestMs:3e4,confirmationMs:3e5,confirmedRequestMs:33e4,framesPerWindow:2,minHeight:160,maxHeight:640,resultCodePoints:1024};class c extends Error{constructor(e,n=e){super(n),this.code=e,this.name="PluginUiBridgeError"}code}function r(t="plugin_ui_invalid_message"){throw new c(t)}function _(t){return N(t)||r(),t}function l(t,e,n=[]){(!e.every(s=>Object.hasOwn(t,s))||!Object.keys(t).every(s=>e.includes(s)||n.includes(s)))&&r()}const y=(t,e)=>typeof t=="string"&&t.length>0&&(e===void 0||[...t].length<=e),S=(t,e)=>typeof t=="string"&&e.includes(t);function P(t,e){new TextEncoder().encode(JSON.stringify(t)).byteLength>e&&r("plugin_ui_payload_too_large")}function B(t){(t.version!==1||!E(t.mountId))&&r()}function k(t){const e=_(t);return l(e,["requestId","runId","instanceId","revision","status"]),(!E(e.requestId)||!E(e.instanceId)||!y(e.runId)||!x(e.revision)||!S(e.status,["pending","running","completed","failed","interrupted"]))&&r(),structuredClone(e)}function M(t){const e=_(t);l(e,["instanceId","revision","status","data","actions","readOnly","theme","locale","surface"],["activeAction","lastAction"]),(!E(e.instanceId)||!x(e.revision)||!S(e.status,["open","resolved","dismissed"])||typeof e.readOnly!="boolean"||!S(e.theme,["light","dark"])||!S(e.surface,["tool-result","session-sidebar"])||!y(e.locale))&&r(),re(e.data,O.dataBytes)||r(),(!Array.isArray(e.actions)||e.actions.length>O.actionsPerComponent)&&r();const n=new Set;for(const s of e.actions){const i=_(s);l(i,["id","label","completion"]),(!y(i.id)||!y(i.label,O.titleCodePoints)||!S(i.completion,["keep-open","resolve"])||n.has(i.id))&&r(),n.add(i.id)}if(Object.hasOwn(e,"activeAction")){const s=k(e.activeAction);(s.instanceId!==e.instanceId||s.revision>e.revision)&&r()}if(Object.hasOwn(e,"lastAction")){const s=_(e.lastAction);l(s,["receipt","executionState","message"]);const i=k(s.receipt);(i.instanceId!==e.instanceId||i.revision>e.revision||!S(s.executionState,["not_started","completed","unknown"])||typeof s.message!="string"||[...s.message].length>f.resultCodePoints)&&r()}return P(e,f.snapshotBytes),structuredClone(e)}function ae(t){const e=_(t);l(e,["version","mountId","id","method","params"]),B(e),y(e.id,80)||r();const n=_(e.params);switch(e.method){case"getSnapshot":case"openSidebar":l(n,[]);break;case"resize":l(n,["height"]),(typeof n.height!="number"||!Number.isFinite(n.height)||n.height<f.minHeight||n.height>f.maxHeight)&&r();break;case"dismiss":l(n,["expectedRevision"]),x(n.expectedRevision)||r();break;case"requestAction":l(n,["actionId","args","expectedRevision"]),(!y(n.actionId)||!x(n.expectedRevision))&&r();const s=$(n.args,O.actionArgsBytes);s.valid||r(s.reason==="payload_too_large"?"plugin_ui_payload_too_large":"plugin_ui_invalid_message");break;default:r("plugin_ui_method_not_supported")}return P(e,f.requestBytes),structuredClone(e)}function H(t){try{const e=_(t);if(B(e),y(e.id,80)||r(),Object.hasOwn(e,"error")){l(e,["version","mountId","id","error"]);const n=_(e.error);l(n,["code","message"]),(!y(n.code,80)||!/^plugin_ui_[a-z0-9_]+$/.test(n.code)||typeof n.message!="string"||[...n.message].length>1024)&&r()}else if(l(e,["version","mountId","id","result"]),e.result!==null){const n=_(e.result);Object.hasOwn(n,"requestId")?k(n):M(n)}return P(e,f.snapshotBytes),structuredClone(e)}catch{return}}function F(t){try{const e=_(t);return B(e),e.type==="dispose"?l(e,["version","mountId","type"]):e.type==="snapshot"?(l(e,["version","mountId","type","snapshot"]),M(e.snapshot)):r(),P(e,f.snapshotBytes),structuredClone(e)}catch{return}}function de(t,e=f.requestBytes){typeof t!="string"&&r(),(t.length>e||new TextEncoder().encode(t).byteLength>e)&&r("plugin_ui_payload_too_large");try{return JSON.parse(t)}catch{return r()}}function ue(t){const e=_(t);if(Object.hasOwn(e,"method"))return JSON.stringify(ae(e));const n=Object.hasOwn(e,"type")?F(e):H(e);return n||r(),JSON.stringify(n)}function le(){return typeof window>"u"||window.parent===window?Promise.reject(new c("plugin_ui_unavailable")):new Promise((t,e)=>{let n,s,i,a=!1,v=0;const j=new Set,w=new Map,X=setTimeout(()=>C("plugin_ui_load_timeout"),f.initializationMs);function C(o="plugin_ui_mount_closed"){if(!a){a=!0,clearTimeout(X),window.removeEventListener("message",V),n&&(n.onmessage=null,n.onmessageerror=null,n.close());for(const d of w.values())clearTimeout(d.timer),d.reject(new c(o));w.clear(),j.clear(),e(new c(o))}}function Q(o){if(i&&o.instanceId!==i.instanceId)throw new c("plugin_ui_invalid_message");if(i&&o.revision<i.revision)return;const d=!i;i=structuredClone(o),d&&(clearTimeout(X),t(he));for(const u of j)try{u(structuredClone(i))}catch(p){queueMicrotask(()=>{throw p})}}function me(o){if(a)return;let d;try{d=de(o.data,f.snapshotBytes)}catch{return}const u=F(d);if(u&&u.mountId===s){if(u.type==="dispose")C();else try{Q(u.snapshot)}catch{C("plugin_ui_invalid_message")}return}const p=H(d);if(!p||p.mountId!==s)return;const m=w.get(p.id);if(m){if(w.delete(p.id),clearTimeout(m.timer),"error"in p){m.reject(new c(p.error.code,p.error.message));return}try{if(m.method==="getSnapshot")Q(M(p.result)),m.resolve(structuredClone(i));else if(m.method==="requestAction"){const I=k(p.result);if(I.instanceId!==i.instanceId)throw new c("plugin_ui_invalid_message");m.resolve(I)}else{if(p.result!==null)throw new c("plugin_ui_invalid_message");m.resolve(void 0)}}catch{m.reject(new c("plugin_ui_invalid_message"))}}}function V(o){if(a||n||o.source!==window.parent||o.ports?.length!==1)return;const d=o.data;if(!N(d)||Object.keys(d).length!==3||d.version!==1||d.type!=="plugin-ui-init"||!E(d.mountId))return;const u=o.ports[0];!u||typeof u.postMessage!="function"||(s=d.mountId,n=u,window.removeEventListener("message",V),n.onmessage=me,n.onmessageerror=()=>C("plugin_ui_invalid_message"),n.start())}async function U(o,d){if(a||!n||!i)throw new c("plugin_ui_mount_closed");if(w.size>=f.pendingRequests)throw new c("plugin_ui_rate_limited");const u=String(++v),p=ue({version:1,mountId:s,id:u,method:o,params:d});return await new Promise((m,I)=>{const ye=o==="requestAction"||o==="dismiss"?f.confirmedRequestMs:f.requestMs,Y=setTimeout(()=>{w.delete(u),I(new c("plugin_ui_request_timeout"))},ye);w.set(u,{method:o,resolve:m,reject:I,timer:Y});try{n.postMessage(p)}catch{w.delete(u),clearTimeout(Y),I(new c("plugin_ui_invalid_message"))}})}const he={getSnapshot:async()=>await U("getSnapshot",{}),onSnapshot:o=>{if(a)throw new c("plugin_ui_mount_closed");return j.add(o),o(structuredClone(i)),()=>{j.delete(o)}},requestAction:async(o,d)=>{if(a)throw new c("plugin_ui_mount_closed");if(i.readOnly)throw new c("plugin_ui_read_only");if(!i.actions.some(u=>u.id===o))throw new c("plugin_ui_invalid_action");return await U("requestAction",{actionId:o,args:structuredClone(d),expectedRevision:i.revision})},openSidebar:async()=>{await U("openSidebar",{})},resize:async o=>{await U("resize",{height:o})},dismiss:async()=>{if(a)throw new c("plugin_ui_mount_closed");if(i.status!=="open")throw new c("plugin_ui_read_only");if(i.activeAction)throw new c("plugin_ui_session_busy");await U("dismiss",{expectedRevision:i.revision})},dispose:()=>C()};window.addEventListener("message",V),window.parent.postMessage({version:1,type:"plugin-ui-ready"},"*")})}const L=document.querySelector("#findings"),pe=document.querySelector("#preview"),z=document.querySelector("#preview-button"),g=document.querySelector("#status"),R=document.querySelector("#sidebar"),J=document.querySelector("#dismiss"),fe=document.querySelector("#selection-count"),b=new Set;let h,A=!1,G;const _e={plugin_ui_user_cancelled:"已取消，没有执行修复。",plugin_ui_revision_conflict:"结果已更新，请重新选择问题。",plugin_ui_session_busy:"会话正在执行其他操作，请稍后再试。",plugin_ui_read_only:"当前结果只能查看，不能执行操作。",plugin_ui_mount_closed:"交互已关闭，可从结果卡重新打开。",plugin_ui_request_timeout:"请求超时，请先查看最新结果，再决定是否重试。"};function q(t){g.textContent=_e[t?.code]||"操作未完成，请查看会话中的错误信息。"}function T(){const t=A||h?.readOnly||!!h?.activeAction;z.disabled=t||b.size===0,fe.textContent=b.size?"已选 "+b.size+" 项":"请选择要修复的问题";for(const e of L.querySelectorAll("input"))e.disabled=!!t;R.disabled=A,J.disabled=A||h?.status!=="open"||!!h?.activeAction}function K(t){const e=t.revision!==G;if(h=t,R.hidden=t.surface!=="tool-result",document.documentElement.dataset.theme=t.theme,e){G=t.revision,b.clear(),L.replaceChildren();for(const n of t.data.findings){const s=document.createElement("li"),i=document.createElement("label"),a=document.createElement("input");a.type="checkbox",a.value=n.line+":"+n.code,a.addEventListener("change",()=>{a.checked?b.add(a.value):b.delete(a.value),T()}),i.append(a,document.createTextNode("第 "+n.line+" 行 · "+(n.code==="tab-indentation"?"行首制表符 → 每个替换为 2 个空格":"删除行尾空白"))),s.append(i),L.append(s)}pe.value=t.data.text,g.textContent=t.readOnly?"当前结果只能查看。":t.data.findings.length?"发现 "+t.data.findings.length+" 个问题"+(t.data.truncated?"（仅列出前 100 个）。":"。"):"没有发现格式问题。"}else t.readOnly&&(g.textContent="当前结果只能查看。");t.status!=="open"?g.textContent="交互已结束，仅供查看。":t.activeAction?g.textContent="正在生成修复预览…":t.readOnly?g.textContent="当前结果只能查看。":t.lastAction?.executionState==="unknown"?g.textContent="无法确认上次操作结果，请查看会话记录；不会自动重试。":t.lastAction?.receipt.status==="completed"?g.textContent="修复预览已生成，没有修改文件。":t.lastAction&&(g.textContent="上次操作未完成，请查看会话记录。"),T()}async function ge(){try{const t=await le();t.onSnapshot(K),z.addEventListener("click",async()=>{if(!z.disabled){A=!0,T(),g.textContent="等待你在主界面确认…";try{const e=await t.requestAction("preview",{text:h.data.text,selected:[...b]});h.lastAction?.receipt.requestId===e.requestId?K(h):g.textContent="操作已受理，正在等待结果更新…"}catch(e){q(e)}finally{A=!1,T()}}}),R.addEventListener("click",()=>{t.openSidebar().catch(q)}),J.addEventListener("click",()=>{t.dismiss().catch(q)}),h.surface==="tool-result"&&t.resize(520).catch(q),window.addEventListener("pagehide",()=>t.dispose(),{once:!0})}catch(t){R.disabled=!0,J.disabled=!0,q(t)}}ge()})();
-</script>
+  <label for="conversation-text">给助手的说明（只携带勾选问题所在行）</label>
+  <textarea id="conversation-text" maxlength="4096">请解释所选格式问题并给出建议。</textarea>
+  <div class="actions"><button id="draft" hidden disabled>加入输入框</button><button id="submit" hidden disabled>交给助手</button></div>
+  <footer><button id="dismiss" class="danger" aria-describedby="finish-hint">结束此交互</button><small id="finish-hint">结束后仅供查看</small></footer>
+  <script>var VykorPluginUi=(function(R){"use strict";class q extends Error{code="invalid_request";details;constructor(e,n,s){super(e),this.name="ProtocolValidationError",this.details=n||s!==void 0?{...n?{field:n}:{},...s!==void 0?{reason:s}:{}}:void 0}toProtocolError(){return{code:this.code,message:this.message,...this.details?{details:this.details}:{}}}}const X=["off","risk_based"],B=["none","low","medium","high","unknown"],z=["disabled","captured","skipped","pending","passed","findings","partial","failed","timed_out","unavailable"],Q=["pass","fail","partial"],Y=["critical","important","minor"],Z=["mode_off","no_changes","low_risk_change","source_change","large_change","many_files","sensitive_path","sensitive_content_path","production_delete_or_rename","patch_truncated","not_git_repository","preexisting_dirty_overlap","non_linear_head_change","post_commit_worktree_changed","git_inspection_failed","review_output_invalid","review_child_failed","review_child_timed_out","review_preempted_by_user","parent_run_not_completed","daemon_restarted","concurrent_run_overlap","execution_environment_unavailable","observation_budget_exceeded","observation_cancelled"];new Set(X),new Set(B),new Set(z),new Set(Q),new Set(Y),new Set(Z);const ee=["root_agent_run","child_agent_run","workflow_run","workflow_task"],te=["completed","failed","timed_out","cancelled","blocked","skipped","running","pending","unknown"],ne=["model_error","tool_error","timeout","permission_denied","budget_exceeded","dependency_failed","cancelled_by_user","cancelled_by_parent","recovery_failed","conflict","unknown"];new Set(ee),new Set(te),new Set(ne),new Set(z),new Set(B);const O={actionsPerComponent:16,dataBytes:256*1024,actionArgsBytes:64*1024,titleCodePoints:80,jsonDepth:20};function b(t){if(!t||typeof t!="object"||Array.isArray(t))return!1;const e=Object.getPrototypeOf(t);return e===Object.prototype||e===null}function S(t){return typeof t=="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)}function P(t){return typeof t=="number"&&Number.isSafeInteger(t)&&t>=0}function ie(t,e){return k(t,e).valid}function k(t,e){if(!b(t))return{valid:!1,reason:"invalid_json"};try{return new TextEncoder().encode(oe(t)).byteLength>e?{valid:!1,reason:"payload_too_large"}:{valid:!0,value:t}}catch{return{valid:!1,reason:"invalid_json"}}}function oe(t){const e=(n,s)=>{if(n===null||typeof n=="string"||typeof n=="boolean"||typeof n=="number"&&Number.isFinite(n))return JSON.stringify(n);if(typeof n!="object"||n===null)throw new Error("Plugin UI requires JSON data");if(s>=O.jsonDepth)throw new Error("Plugin UI JSON nesting limit exceeded");if(Array.isArray(n))return`[${Array.from(n,m=>e(m,s+1)).join(",")}]`;const i=Object.getPrototypeOf(n);if(i!==Object.prototype&&i!==null)throw new Error("Plugin UI requires plain JSON objects");const o=n;return`{${Object.keys(o).sort().map(m=>`${JSON.stringify(m)}:${e(o[m],s+1)}`).join(",")}}`};return e(t,0)}const L=["background","foreground","muted","mutedForeground","primary","primaryForeground","accent","border","destructive"];function V(t){function e(){throw new q("Invalid Plugin UI appearance")}const n=(o,m)=>m.every(v=>Object.hasOwn(o,v))&&Object.keys(o).every(v=>m.includes(v)),s=(o,m)=>typeof o=="string"&&o.trim().length>0&&o.length<=m&&!/[;{}\\\u0000-\u001f\u007f]/.test(o)&&!/url\s*\(|var\s*\(|\/\*|\*\/|@|:\/\//i.test(o);(!b(t)||!n(t,["theme","colors","fontFamily","fontSizePx","reducedMotion"])||t.theme!=="light"&&t.theme!=="dark"||!b(t.colors)||!n(t.colors,L)||!s(t.fontFamily,256)||typeof t.fontSizePx!="number"||!Number.isFinite(t.fontSizePx)||t.fontSizePx<8||t.fontSizePx>32||typeof t.reducedMotion!="boolean")&&e();const i=t.colors;return L.every(o=>s(i[o],128))||e(),structuredClone(t)}const re={dataBytes:32*1024};function h(t){throw new q("Invalid Plugin UI conversation",t)}function J(t,e){return(!b(t)||!e.every(n=>Object.hasOwn(t,n))||Object.keys(t).some(n=>!e.includes(n)))&&h(),t}const j=t=>typeof t=="string"&&!!t.trim(),F=t=>t==="draft"||t==="submit";function se(t){P(t.expectedRevision)||h("expectedRevision"),(!j(t.text)||[...t.text].length>4096)&&h("text");const e=k(t.data,re.dataBytes);if(!e.valid)throw new q("Invalid Plugin UI conversation data","data",e.reason)}function ae(t){const e=J(t,["mode","expectedRevision","text","data"]);return F(e.mode)||h("mode"),se(e),structuredClone(e)}function W(t){b(t)||h();const e=J(t,t.mode==="draft"?["kind","mode","instanceId","revision","added"]:["kind","mode","instanceId","revision","requestId","inputId","runId","status"]);return(e.kind!=="conversation"||!F(e.mode)||!S(e.instanceId)||!P(e.revision))&&h(),e.mode==="draft"?e.added!==!0&&h("added"):(!S(e.requestId)||!j(e.inputId)||!j(e.runId)||typeof e.status!="string"||!["pending","running","completed","failed","interrupted"].includes(e.status))&&h(),structuredClone(e)}const g={requestBytes:64*1024,snapshotBytes:512*1024,pendingRequests:16,requestsPerMinute:60,rateWindowMs:6e4,initializationMs:1e4,requestMs:3e4,confirmationMs:3e5,confirmedRequestMs:33e4,framesPerWindow:2,minHeight:160,maxHeight:640,resultCodePoints:1024};class c extends Error{constructor(e,n=e){super(n),this.code=e,this.name="PluginUiBridgeError"}code}function a(t="plugin_ui_invalid_message"){throw new c(t)}function _(t){return b(t)||a(),t}function p(t,e,n=[]){(!e.every(s=>Object.hasOwn(t,s))||!Object.keys(t).every(s=>e.includes(s)||n.includes(s)))&&a()}const w=(t,e)=>typeof t=="string"&&t.length>0&&(e===void 0||[...t].length<=e),E=(t,e)=>typeof t=="string"&&e.includes(t);function x(t,e){new TextEncoder().encode(JSON.stringify(t)).byteLength>e&&a("plugin_ui_payload_too_large")}function T(t){(t.version!==2||!S(t.mountId))&&a()}function A(t){const e=_(t);return p(e,["requestId","runId","instanceId","revision","status"]),(!S(e.requestId)||!S(e.instanceId)||!w(e.runId)||!P(e.revision)||!E(e.status,["pending","running","completed","failed","interrupted"]))&&a(),structuredClone(e)}function N(t){const e=_(t);p(e,["instanceId","revision","status","data","actions","readOnly","appearance","capabilities","locale","surface"],["activeAction","lastAction"]),(!S(e.instanceId)||!P(e.revision)||!E(e.status,["open","resolved","dismissed"])||typeof e.readOnly!="boolean"||!E(e.surface,["tool-result","session-sidebar"])||!w(e.locale))&&a();try{V(e.appearance)}catch{a()}const n=_(e.capabilities);p(n,["draft","submit"]),(typeof n.draft!="boolean"||typeof n.submit!="boolean")&&a(),ie(e.data,O.dataBytes)||a(),(!Array.isArray(e.actions)||e.actions.length>O.actionsPerComponent)&&a();const s=new Set;for(const i of e.actions){const o=_(i);p(o,["id","label","completion"]),(!w(o.id)||!w(o.label,O.titleCodePoints)||!E(o.completion,["keep-open","resolve"])||s.has(o.id))&&a(),s.add(o.id)}if(Object.hasOwn(e,"activeAction")){const i=A(e.activeAction);(i.instanceId!==e.instanceId||i.revision>e.revision)&&a()}if(Object.hasOwn(e,"lastAction")){const i=_(e.lastAction);p(i,["receipt","executionState","message"]);const o=A(i.receipt);(o.instanceId!==e.instanceId||o.revision>e.revision||!E(i.executionState,["not_started","completed","unknown"])||typeof i.message!="string"||[...i.message].length>g.resultCodePoints)&&a()}return x(e,g.snapshotBytes),structuredClone(e)}function ce(t){const e=_(t);p(e,["version","mountId","id","method","params"]),T(e),w(e.id,80)||a();const n=_(e.params);switch(e.method){case"getSnapshot":p(n,[]);break;case"resize":p(n,["height"]),(typeof n.height!="number"||!Number.isFinite(n.height)||n.height<g.minHeight||n.height>g.maxHeight)&&a();break;case"dismiss":p(n,["expectedRevision"]),P(n.expectedRevision)||a();break;case"requestConversation":try{ae(n)}catch(i){a(i instanceof q&&i.details?.reason==="payload_too_large"?"plugin_ui_payload_too_large":"plugin_ui_invalid_message")}break;case"requestAction":p(n,["actionId","args","expectedRevision"]),(!w(n.actionId)||!P(n.expectedRevision))&&a();const s=k(n.args,O.actionArgsBytes);s.valid||a(s.reason==="payload_too_large"?"plugin_ui_payload_too_large":"plugin_ui_invalid_message");break;default:a("plugin_ui_method_not_supported")}return x(e,g.requestBytes),structuredClone(e)}function $(t){try{const e=_(t);if(T(e),w(e.id,80)||a(),Object.hasOwn(e,"error")){p(e,["version","mountId","id","error"]);const n=_(e.error);p(n,["code","message"]),(!w(n.code,80)||!/^plugin_ui_[a-z0-9_]+$/.test(n.code)||typeof n.message!="string"||[...n.message].length>1024)&&a()}else if(p(e,["version","mountId","id","result"]),e.result!==null){const n=_(e.result);n.kind==="conversation"?W(n):Object.hasOwn(n,"requestId")?A(n):N(n)}return x(e,g.snapshotBytes),structuredClone(e)}catch{return}}function D(t){try{const e=_(t);return T(e),e.type==="dispose"?p(e,["version","mountId","type"]):e.type==="snapshot"?(p(e,["version","mountId","type","snapshot"]),N(e.snapshot)):a(),x(e,g.snapshotBytes),structuredClone(e)}catch{return}}function de(t,e=g.requestBytes){typeof t!="string"&&a(),(t.length>e||new TextEncoder().encode(t).byteLength>e)&&a("plugin_ui_payload_too_large");try{return JSON.parse(t)}catch{return a()}}function ue(t){const e=_(t);if(Object.hasOwn(e,"method"))return JSON.stringify(ce(e));const n=Object.hasOwn(e,"type")?D(e):$(e);return n||a(),JSON.stringify(n)}function le(){return typeof window>"u"||window.parent===window?Promise.reject(new c("plugin_ui_unavailable")):new Promise((t,e)=>{let n,s,i,o=!1,m=0;const v=new Set,I=new Map,G=setTimeout(()=>U("plugin_ui_load_timeout"),g.initializationMs);function U(r="plugin_ui_mount_closed"){if(!o){o=!0,clearTimeout(G),window.removeEventListener("message",M),n&&(n.onmessage=null,n.onmessageerror=null,n.close());for(const d of I.values())clearTimeout(d.timer),d.reject(new c(r));I.clear(),v.clear(),e(new c(r))}}function H(r){if(i&&r.instanceId!==i.instanceId)throw new c("plugin_ui_invalid_message");if(i&&r.revision<i.revision)return;const d=!i;i=structuredClone(r),d&&(clearTimeout(G),t(ge));for(const u of v)try{u(structuredClone(i))}catch(f){queueMicrotask(()=>{throw f})}}function fe(r){if(o)return;let d;try{d=de(r.data,g.snapshotBytes)}catch{return}const u=D(d);if(u&&u.mountId===s){if(u.type==="dispose")U();else try{H(u.snapshot)}catch{U("plugin_ui_invalid_message")}return}const f=$(d);if(!f||f.mountId!==s)return;const l=I.get(f.id);if(l){if(I.delete(f.id),clearTimeout(l.timer),"error"in f){l.reject(new c(f.error.code,f.error.message));return}try{if(l.method==="getSnapshot")H(N(f.result)),l.resolve(structuredClone(i));else if(l.method==="requestAction"){const y=A(f.result);if(y.instanceId!==i.instanceId)throw new c("plugin_ui_invalid_message");l.resolve(y)}else if(l.method==="requestConversation"){const y=W(f.result);if(y.instanceId!==i.instanceId||y.mode!==l.mode||l.expectedRevision===void 0||y.revision!==l.expectedRevision+(l.mode==="submit"?1:0))throw new c("plugin_ui_invalid_message");l.resolve(y)}else{if(f.result!==null)throw new c("plugin_ui_invalid_message");l.resolve(void 0)}}catch{l.reject(new c("plugin_ui_invalid_message"))}}}function M(r){if(o||n||r.source!==window.parent||r.ports?.length!==1)return;const d=r.data;if(!b(d)||Object.keys(d).length!==3||d.version!==2||d.type!=="plugin-ui-init"||!S(d.mountId))return;const u=r.ports[0];!u||typeof u.postMessage!="function"||(s=d.mountId,n=u,window.removeEventListener("message",M),n.onmessage=fe,n.onmessageerror=()=>U("plugin_ui_invalid_message"),n.start())}async function C(r,d){if(o||!n||!i)throw new c("plugin_ui_mount_closed");if(I.size>=g.pendingRequests)throw new c("plugin_ui_rate_limited");const u=String(++m),f=ue({version:2,mountId:s,id:u,method:r,params:d});return await new Promise((l,y)=>{const _e=r==="requestAction"||r==="dismiss"||r==="requestConversation"?g.confirmedRequestMs:g.requestMs,K=setTimeout(()=>{I.delete(u),y(new c("plugin_ui_request_timeout"))},_e);I.set(u,{method:r,mode:r==="requestConversation"?d.mode:void 0,expectedRevision:r==="requestConversation"?d.expectedRevision:void 0,resolve:l,reject:y,timer:K});try{n.postMessage(f)}catch{I.delete(u),clearTimeout(K),y(new c("plugin_ui_invalid_message"))}})}const ge={getSnapshot:async()=>await C("getSnapshot",{}),onSnapshot:r=>{if(o)throw new c("plugin_ui_mount_closed");return v.add(r),r(structuredClone(i)),()=>{v.delete(r)}},requestAction:async(r,d)=>{if(o)throw new c("plugin_ui_mount_closed");if(i.readOnly)throw new c("plugin_ui_read_only");if(!i.actions.some(u=>u.id===r))throw new c("plugin_ui_invalid_action");return await C("requestAction",{actionId:r,args:structuredClone(d),expectedRevision:i.revision})},requestConversation:async r=>{if(o)throw new c("plugin_ui_mount_closed");if(r.mode!=="draft"&&r.mode!=="submit")throw new c("plugin_ui_invalid_message");if(!i.capabilities[r.mode])throw new c("plugin_ui_read_only");return await C("requestConversation",structuredClone(r))},resize:async r=>{await C("resize",{height:r})},dismiss:async()=>{if(o)throw new c("plugin_ui_mount_closed");if(i.status!=="open")throw new c("plugin_ui_read_only");if(i.activeAction)throw new c("plugin_ui_session_busy");await C("dismiss",{expectedRevision:i.revision})},dispose:()=>U()};window.addEventListener("message",M),window.parent.postMessage({version:2,type:"plugin-ui-ready"},"*")})}function pe(t,e=document.documentElement){const n=V(t),s=[["background","--ohs-background"],["foreground","--ohs-foreground"],["muted","--ohs-muted"],["mutedForeground","--ohs-muted-foreground"],["primary","--ohs-primary"],["primaryForeground","--ohs-primary-foreground"],["accent","--ohs-accent"],["border","--ohs-border"],["destructive","--ohs-destructive"]];for(const[i]of s)if(typeof CSS>"u"||!CSS.supports("color",n.colors[i]))throw new c("plugin_ui_invalid_message");for(const[i,o]of s)e.style.setProperty(o,n.colors[i]);e.style.setProperty("--ohs-font-family",n.fontFamily),e.style.setProperty("--ohs-font-size",`${n.fontSizePx}px`),e.style.setProperty("--ohs-color-scheme",n.theme),e.style.setProperty("--ohs-motion-duration",n.reducedMotion?"0ms":"120ms")}return R.applyPluginUiAppearance=pe,R.createPluginUiClient=le,Object.defineProperty(R,Symbol.toStringTag,{value:"Module"}),R})({});
+
+;(() => {
+const { createPluginUiClient, applyPluginUiAppearance } = VykorPluginUi;
+
+const list = document.querySelector("#findings");
+const preview = document.querySelector("#preview");
+const button = document.querySelector("#preview-button");
+const status = document.querySelector("#status");
+const dismiss = document.querySelector("#dismiss");
+const selectionCount = document.querySelector("#selection-count");
+const note = document.querySelector("#conversation-text");
+const draft = document.querySelector("#draft");
+const submit = document.querySelector("#submit");
+const selected = new Set();
+let snapshot;
+let pending = false;
+let revision;
+const errors = {
+  plugin_ui_user_cancelled: "已取消，没有执行操作。",
+  plugin_ui_revision_conflict: "结果已更新，请重新选择问题。",
+  plugin_ui_session_busy: "会话正在执行其他操作，请稍后再试。",
+  plugin_ui_read_only: "当前结果只能查看，不能执行操作。",
+  plugin_ui_mount_closed: "交互已关闭，可从结果卡重新打开。",
+  plugin_ui_request_timeout: "请求超时，请先查看会话回执，再决定是否重试。",
+  plugin_ui_payload_too_large: "所选内容超过 32 KiB，请减少选择；没有发送或裁剪内容。",
+};
+function report(error) {
+  status.textContent = errors[error?.code] || error?.message || "操作未完成，请查看会话中的错误信息。";
+}
+function controls() {
+  const locked = pending || snapshot?.readOnly || !!snapshot?.activeAction || snapshot?.status !== "open";
+  button.disabled = locked || selected.size === 0;
+  selectionCount.textContent = selected.size ? "已选 " + selected.size + " 项" : "请选择要修复的问题";
+  for (const input of list.querySelectorAll("input"))
+    input.disabled = pending || (locked && !snapshot?.capabilities.draft && !snapshot?.capabilities.submit);
+  draft.hidden = !snapshot?.capabilities.draft;
+  submit.hidden = !snapshot?.capabilities.submit;
+  draft.disabled = pending || !snapshot?.capabilities.draft || !selected.size || !note.value.trim();
+  submit.disabled = pending || !snapshot?.capabilities.submit || !selected.size || !note.value.trim();
+  dismiss.disabled = pending || snapshot?.status !== "open" || !!snapshot?.activeAction;
+}
+function render(value) {
+  // Presentation/capability notifications can keep the business revision unchanged.
+  applyPluginUiAppearance(value.appearance);
+  document.documentElement.dataset.theme = value.appearance.theme;
+  snapshot = value;
+  if (value.revision !== revision) {
+    revision = value.revision;
+    selected.clear();
+    list.replaceChildren();
+    for (const finding of value.data.findings) {
+      const item = document.createElement("li");
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = finding.line + ":" + finding.code;
+      input.addEventListener("change", () => {
+        if (input.checked) selected.add(input.value); else selected.delete(input.value);
+        controls();
+      });
+      label.append(input, document.createTextNode("第 " + finding.line + " 行 · " +
+        (finding.code === "tab-indentation" ? "行首制表符 → 每个替换为 2 个空格" : "删除行尾空白")));
+      item.append(label); list.append(item);
+    }
+    preview.value = value.data.text;
+    status.textContent = value.data.findings.length ? "发现 " + value.data.findings.length + " 个问题" +
+      (value.data.truncated ? "（仅列出前 100 个）。" : "。") : "没有发现格式问题。";
+  }
+  if (value.status !== "open") status.textContent = value.capabilities.draft ? "交互已结束，仍可加入输入框。" : "交互已结束，仅供查看。";
+  else if (value.activeAction) status.textContent = "正在生成修复预览…";
+  else if (value.readOnly) status.textContent = "当前结果只能查看。";
+  else if (value.lastAction?.executionState === "unknown") status.textContent = "无法确认上次操作结果，请查看会话记录；不会自动重试。";
+  else if (value.lastAction?.receipt.status === "completed") status.textContent = "修复预览已生成，没有修改文件。";
+  else if (value.lastAction) status.textContent = "上次操作未完成，请查看会话记录。";
+  controls();
+}
+function conversationPayload(mode) {
+  const text = note.value.trim();
+  if (!text || [...text].length > 4096) throw new Error("说明需要 1–4096 个字符；没有发送内容。");
+  const lines = snapshot.data.text.split("\n");
+  const data = { findings: snapshot.data.findings.filter(item => selected.has(item.line + ":" + item.code))
+    .map(item => ({ line: item.line, code: item.code, text: lines[item.line - 1] })) };
+  if (new TextEncoder().encode(JSON.stringify(data)).byteLength > 32 * 1024)
+    throw Object.assign(new Error("Selected data exceeds the conversation limit"), { code: "plugin_ui_payload_too_large" });
+  return { mode, expectedRevision: snapshot.revision, text, data };
+}
+async function initialize() {
+  try {
+    const client = await createPluginUiClient();
+    render(await client.getSnapshot());
+    client.onSnapshot(render);
+    note.addEventListener("input", controls);
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      pending = true; controls(); status.textContent = "等待你在主界面确认…";
+      try {
+        const receipt = await client.requestAction("preview", { text: snapshot.data.text, selected: [...selected] });
+        if (snapshot.lastAction?.receipt.requestId === receipt.requestId) render(snapshot);
+        else status.textContent = "操作已受理，正在等待结果更新…";
+      } catch (error) { report(error); }
+      finally { pending = false; controls(); }
+    });
+    for (const [element, mode] of [[draft, "draft"], [submit, "submit"]]) {
+      element.addEventListener("click", async () => {
+        if (element.disabled) return;
+        try {
+          const payload = conversationPayload(mode);
+          pending = true; controls();
+          status.textContent = mode === "submit" ? "等待你在主界面确认交给助手…" : "正在加入输入框…";
+          const receipt = await client.requestConversation(payload);
+          status.textContent = receipt.mode === "draft" ? "已加入输入框，尚未发送。" : "已交给助手，请查看会话回执。";
+        } catch (error) { report(error); }
+        finally { pending = false; controls(); }
+      });
+    }
+    dismiss.addEventListener("click", () => { client.dismiss().catch(report); });
+    window.addEventListener("pagehide", () => client.dispose(), { once: true });
+  } catch (error) {
+    draft.disabled = true; submit.disabled = true; dismiss.disabled = true; report(error);
+  }
+}
+initialize();
+
+})();</script>
 </body>
 </html>

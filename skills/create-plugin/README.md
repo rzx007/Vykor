@@ -8,4 +8,4 @@
 
 工具＋UI 样例位于 `assets/text-inspector/`。复制到新的开发目录后，可直接修改并运行 `node scripts/build-ui.mjs`；不需要本仓库、pnpm、Vite 或 npm SDK。样例的普通 Node 工具没有运行依赖，构建后的 UI 不访问外部资源。
 
-接口基于 Native manifest schemaVersion 1、UI 定义 schemaVersion 1 与 UI bridge version 1。是否能显示交互仍取决于安装的 Desktop、后台版本和用户授权；本 Skill 不升级用户的桌面程序。
+接口基于 Native 根 manifest schemaVersion 1、UI 定义/建议 schemaVersion 2 与 UI bridge version 2。组件选择单个固定 surface，快照直接提供 appearance/capabilities；支持同插件工具操作和主动交给普通会话。是否能显示交互仍取决于安装的 Desktop、后台版本和用户授权；本 Skill 不升级用户的桌面程序。

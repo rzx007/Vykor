@@ -1,24 +1,17 @@
 # 插件 UI
 
-## 实际运行流程
+## 文件与实际运行流程
 
-manifest 指定 UI 定义；同插件 Native Tool 返回 UI 建议数据；宿主验证后把可信实例保存在原工具结果中。Desktop 按需显示内联卡片或会话侧栏。HTML 用浏览器 SDK 读快照、请求动作；用户在宿主弹窗确认后，后台才调用该动作对应的工具。界面关闭、业务结束和取消运行是不同操作。
-
-声明 UI 不会自动打开窗口，不会让普通工具调用等待界面。始终保留文字结果，CLI/TUI、UI 关闭或旧客户端都能读取它。
-
-## 三个必需部分
-
-1. Native manifest 声明 `"ui": ["./ui/manifest.json"]`，同时声明真正存在的工具入口。
-2. `ui/manifest.json` 声明组件与动作：
+Native Plugin 根 manifest 仍是 `schemaVersion: 1`，通过 `components.ui: ["./ui/manifest.json"]` 声明定义。UI 定义和工具返回的建议均是 `schemaVersion: 2`：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "components": [{
     "id": "text-inspector",
     "title": "文本格式检查",
     "entry": "./ui/panel.html",
-    "surfaces": ["tool-result", "session-sidebar"],
+    "surface": "session-sidebar",
     "actions": [{
       "id": "preview",
       "label": "生成所选修复预览",
@@ -29,66 +22,115 @@ manifest 指定 UI 定义；同插件 Native Tool 返回 UI 建议数据；宿�
 }
 ```
 
-3. 初始检查工具返回文字与 UI 建议：
+每个组件只选一个 `surface`：`tool-result` 是工具结果内联卡片，`session-sidebar` 是会话侧栏。“固定”指声明的位置不变；不会始终显示或自动打开。只有用户打开后才加载 HTML。没有 `surfaces`、`openSidebar()`、跨位置移动或旧版本兼容别名。
+
+同插件 Native Tool 返回普通文字与 UI 建议：
 
 ```js
 return {
   content: [{ type: "text", text: JSON.stringify({ findings, truncated }) }],
   metadata: { ui: {
-    schemaVersion: 1,
-    componentId: "text-inspector",
+    schemaVersion: 2, componentId: "text-inspector",
     data: { text, findings, truncated }
   } }
 };
 ```
 
-entry 相对于插件根目录，不是定义文件目录。纯展示组件显式写 `actions: []`。action.tool 必须精确匹配同插件真实注册的 Native Tool 名称，不能指向内置、其他插件或 MCP 工具；inputSchema 取自工具，不在 UI 定义里复制。completion 必须为 `keep-open` 或 `resolve`。
+`entry` 相对于插件根目录。展示组件写 `actions: []`；`action.tool` 精确匹配同插件注册工具，参数 schema 来自工具，`completion` 为 `keep-open` 或 `resolve`。插件不生成可信 instanceId、revision 或 metadata.pluginUi/uiAction，这些由宿主验证并保存在原工具结果中。始终保留文字结果。
 
-插件不生成可信 instanceId、revision 或 `metadata.pluginUi`、`metadata.uiAction`。这些由宿主保存，伪造保留字段不会获得身份。
+## 两种提交路径
 
-## 浏览器 SDK 与离线构建
+- `requestAction(actionId, args)`：用户确认后调用组件声明的同插件 Native Tool，适合生成预览、执行业务操作；不把按钮请求变成普通模型消息。
+- `requestConversation({ mode, expectedRevision, text, data })`：插件主动构造说明和所选数据，交给普通会话。`draft` 在必要确认后加入输入框，尚未发送；`submit` 经确认新建普通 Input/Run，由助手处理。它不会发送输入框已有草稿。宿主在 Server 一处构造最终带插件来源的文本。
 
-本 Skill 的 `assets/text-inspector/ui/sdk.js` 是浏览器 SDK 的独立构建，暴露 `VykorPluginUi.createPluginUiClient()`。样例构建脚本把它与界面代码一起内联进 HTML，无需 Vykor 源码或下载 npm SDK。不要让 HTML 用外部 `<script src>` 加载它。
+没有宿主草稿 getter，也不能读父 DOM。说明 `text` 必须非空且最多 4096 个 Unicode 字符；`data` 必须是有限 JSON 对象，JSON UTF-8 最多 32 KiB。业务 snapshot.data 可到 256 KiB，不能直接全部交接。仅构造用户选择的必要内容；超限显示错误，让用户调整选择，不能默默裁掉内容。取消、失败和未知回执保留本地输入，不自动重试。
 
-界面源码可按下面的接口组织；变量与 render 由插件实现：
+## 浏览器 SDK、快照与完整例子
+
+复制 `assets/text-inspector/` 后只用 Node 运行 `node scripts/build-ui.mjs`。它把附带的 `ui/sdk.js`（全局 `VykorPluginUi`）、`ui/styles.css` 和 panel 源码内联成单文件 HTML。独立作者无需本仓库、pnpm、Vite 或网络。修改后重新构建；安装不会替作者构建。仓库维护者使用 `node examples/plugins/text-inspector/scripts/build-ui.mjs --export-author-assets` 从当前源机械导出 SDK/CSS，不能手改 bundle。
+
+快照必需字段：instanceId、revision、status、data、actions、readOnly、appearance、capabilities、locale、surface。可选 activeAction、lastAction。appearance 包含 theme、colors、fontFamily、fontSizePx、reducedMotion；使用 `applyPluginUiAppearance(snapshot.appearance)` 设置公共 CSS 变量。capabilities.draft/submit 控制两种交接按钮。getSnapshot/onSnapshot 直接获得这些字段，没有独立 presentation 通道或顶层 theme。
+
+readOnly 和 status 限制工具动作，不代替聊天交接能力判断。交接按钮按 capabilities 分别控制；resolved 或没有模型时仍可能允许 draft，但不允许 submit。
+
+下面是完整浏览器入口：先把附带 SDK 和 CSS 内联进 HTML，再内联这段脚本。工具建议的 data 为 `{ choices: ["条目一", "条目二"] }`，组件声明固定 surface 和 actions: []。每次业务 revision 变化重建业务选项，同 revision 外观/能力更新保留输入。完整带 Native preview 的可运行例子见附带 panel.mjs/panel.template.html。
 
 ```js
-const client = await VykorPluginUi.createPluginUiClient();
-const off = client.onSnapshot(snapshot => {
-  render(snapshot); // 用 textContent/value；按 readOnly 与 activeAction 禁用操作。
-});
-button.addEventListener("click", async () => {
-  try {
-    await client.requestAction("preview", { text, selected });
-  } catch (error) {
-    showError(error.code);
+const { createPluginUiClient, applyPluginUiAppearance } = VykorPluginUi;
+const select = document.createElement("select");
+const note = document.createElement("textarea");
+note.value = "请分析所选内容。";
+const status = document.createElement("p");
+status.setAttribute("role", "status");
+const draft = document.createElement("button");
+draft.textContent = "加入输入框";
+const submit = document.createElement("button");
+submit.textContent = "交给助手";
+document.body.append(select, note, draft, submit, status);
+let snapshot, revision, pending = false;
+function controls() {
+  draft.hidden = !snapshot.capabilities.draft;
+  submit.hidden = !snapshot.capabilities.submit;
+  draft.disabled = pending || !snapshot.capabilities.draft;
+  submit.disabled = pending || !snapshot.capabilities.submit;
+}
+function render(value) {
+  applyPluginUiAppearance(value.appearance);
+  snapshot = value;
+  if (revision !== value.revision) {
+    revision = value.revision;
+    select.replaceChildren();
+    for (const text of value.data.choices) {
+      const option = document.createElement("option");
+      option.textContent = text;
+      option.value = text;
+      select.append(option);
+    }
   }
-});
-window.addEventListener("pagehide", () => { off(); client.dispose(); }, { once: true });
+  controls();
+}
+(async () => {
+  try {
+    const client = await createPluginUiClient();
+    render(await client.getSnapshot());
+    const off = client.onSnapshot(render);
+    for (const [button, mode] of [[draft, "draft"], [submit, "submit"]]) {
+      button.addEventListener("click", async () => {
+        if (button.disabled) return;
+        try {
+          const text = note.value.trim();
+          const data = { selection: select.value };
+          if (!text || [...text].length > 4096) throw new Error("说明需要 1–4096 个字符。");
+          if (new TextEncoder().encode(JSON.stringify(data)).byteLength > 32 * 1024)
+            throw new Error("所选内容超过 32 KiB，请减少选择。");
+          pending = true; controls();
+          const receipt = await client.requestConversation({ mode, expectedRevision: snapshot.revision, text, data });
+          status.textContent = receipt.mode === "draft" ? "已加入输入框，尚未发送。" : "已受理，请查看会话回执。";
+        } catch (error) {
+          status.textContent = error.code || error.message;
+        } finally {
+          pending = false; controls();
+        }
+      });
+    }
+    window.addEventListener("pagehide", () => { off(); client.dispose(); }, { once: true });
+  } catch (error) {
+    draft.disabled = submit.disabled = true;
+    status.textContent = error.code || error.message;
+  }
+})();
 ```
 
-完整可运行的业务逻辑、状态处理和按钮样式见附带样例的 `ui/panel.mjs` 与 `ui/panel.template.html`。在复制后的插件目录执行 `node scripts/build-ui.mjs`，提交和打包生成的 `ui/panel.html`；安装和校验不会替作者构建。
+`onSnapshot` 立即提供当前快照并返回取消订阅函数。`resize(height)` 仅 tool-result 可用，160–640 px；侧栏不调用。`dismiss()` 经确认结束业务交互，不能撤销已执行工具；`dispose()` 清理页面通信，不改变业务状态。pending/running 回执只表示受理；unknown/timeout 要先查会话回执，不自动重试。
 
-| SDK 方法 | 用途及边界 |
-| --- | --- |
-| `getSnapshot()` | 读取当前实例的快照 |
-| `onSnapshot(listener)` | 立即收到快照并订阅更新，返回取消订阅函数 |
-| `requestAction(actionId, args)` | 请求宿主确认后执行已声明的工具，不接收任意工具名 |
-| `openSidebar()` | 从 tool-result 移到同一实例的侧栏；侧栏里隐藏此按钮 |
-| `resize(height)` | 仅 tool-result 可用，限制在 160–640 px |
-| `dismiss()` | 经宿主确认结束业务交互，不撤销已经执行的工具 |
-| `dispose()` | 清理页面通信，不改变业务状态 |
+## 本地输入与隐藏/关闭
 
-快照包含 instanceId、revision、status、data、actions、readOnly、theme、locale、surface，以及可选 activeAction、lastAction。数据以快照通知为准：pending/running 回执只表示受理，不是成功；lastAction.executionState 为 unknown 时不自动重试。结果更新后清理旧选择，让用户重新选择。
+插件作者管理自己的表单、选择和光标。宿主切换侧栏标签或收起面板只是隐藏，保留同一 iframe 和本地输入；明确关闭显示会销毁 iframe，重新打开从当前业务快照初始化，未交接的本地输入不恢复。宿主不缓存插件表单。业务 revision 更新时才重建结果/选择；主题、字体、减少动画或能力同 revision 更新不能清空编辑。
 
-取消确认会返回 `plugin_ui_user_cancelled`，保持可操作；`plugin_ui_revision_conflict` 要刷新状态并重新选择。初始化或请求失败应显示真实错误、保留原始文字结果，不无限停在加载状态。只读、会话忙和已结束时，禁止提交新动作。
+## 安全与边界
 
-## 安全与交互
+UI 没有父 DOM、Node、preload、文件、网络、剪贴板、任意 IPC/工具权限。只用附带 SDK；不用 CDN、外部脚本/CSS/字体、嵌套 frame、手写 MessagePort 或 innerHTML 渲染用户内容。按钮具体说明会执行什么，支持键盘、窄宽度和 disabled 状态。样式由用户查看反馈，不能把行为检查称为视觉验收。
 
-UI 没有父页面 DOM、Node、preload、文件、网络、剪贴板、任意 IPC 或任意工具权限。禁止 CDN、外部脚本/CSS/字体、嵌套 frame、手写 MessagePort 协议和使用 innerHTML 渲染用户输入。
+业务 data 最多 256 KiB，Native action args 最多 64 KiB，交接 data 最多 32 KiB；定义 JSON 最多 256 KiB，HTML 最多 2 MiB。标签最多 80 Unicode 字符；每插件最多 8 个定义、16 组件，每组件最多 16 动作。样例的 Native preview 为参数包装预留空间，把可交互文本 JSON UTF-8 限在 48,000 字节；更大文本只提供文字检查结果。
 
-主动作突出显示，并说清会执行什么；导航、收起用次要样式；结束或不可恢复操作与普通收起明确区分。不要把“生成预览”写成“已经保存”，不要把“结束交互”写成“撤销修改”。支持主题、窄宽度、键盘焦点与 disabled 状态。
-
-UI 数据是有限 JSON 对象，最多 UTF-8 256 KiB；动作参数最多 UTF-8 64 KiB。定义 JSON 最多 256 KiB，HTML 最多 2 MiB；标签最多 80 个 Unicode 字符。单插件最多 8 个定义文件、16 个组件，每组件最多 16 个动作。样例把可交互文本限制在 JSON 转义后的 UTF-8 48,000 字节，以给包装与选择项留空间；较大文本只返回普通文字检查结果。
-
-声明 UI 自动请求 `ui:render` 和 `ui:invoke-own-tools` 两项安装授权，即使 actions 为空也一样。授权不替代参数和工具权限检查。新增 UI 的旧安装必须重新确认；需要支持 pluginUi=1、pluginUiLifecycle=1 和本地隔离能力的 Desktop/后台，旧安装版不能靠重装 Skill 获得这些功能。
+UI 自动请求安装权限 ui:render/ui:invoke-own-tools，即使 actions 为空；不替代参数和工具权限检查。当前 Desktop/后台需支持 pluginUi=2、pluginUiLifecycle=1 和本地隔离；普通会话交接还需 pluginUiConversation=1。增加 UI 的旧安装需要重新确认；重装 Skill 不能升级客户端。

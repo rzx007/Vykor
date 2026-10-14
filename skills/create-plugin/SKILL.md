@@ -32,7 +32,7 @@ description: Use when creating, extending, or packaging a Vykor Native Plugin wi
 
 1. 写 `.vykor-plugin/plugin.json`，声明实际存在的组件及实际需要的权限。所有组件路径留在插件目录内。
 2. 实现组件。Node 工具导出 `registerTools`，返回 `content` 内容块；参数、结果和错误都要有明确上限。UI 入口是提前构建的单文件 HTML。
-3. UI 先读快照，再请求已声明的动作。业务执行由宿主确认和后台工具完成；界面不能直接访问文件、网络或任意工具。
+3. UI 每个组件声明一个固定 surface，先读快照并应用 appearance，再按 capabilities 显示操作。requestAction 调自己的工具；主动构造 text/data 后用 requestConversation 加入输入框或交给助手。隐藏保留 iframe，本地输入由作者管理；关闭重开重置。详见 UI reference 的完整例子与上限。
 4. 运行与组件对应的检查。`vk` 不存在时，仍可以做 Node 语法检查和纯逻辑测试；明确说明宿主校验、真实激活和桌面交互尚未验证。
 5. 给出输出目录、功能、请求的权限、实际跑过的检查和安装后的入口。安装、link、替换、发布都不是“创建插件”的默认动作。
 

@@ -28,6 +28,8 @@ ID 使用稳定的点分名称，name 使用小写连字符名称。组件路径
 
 有 Node 工具时，可同时声明 `"runtime":{"engine":"node","isolation":"process"}`。不要把 schema 中的预留组件或其他产品的插件格式当作已开放能力。
 
+Native 根 manifest 保持 schemaVersion 1；UI 定义与工具 metadata.ui 建议是 schemaVersion 2。UI 组件声明单个 surface；普通会话交接和当前浏览器快照字段见 [插件 UI](plugin-ui.md)。
+
 ## Native Tool
 
 最小工具实现，保存为 `tools/index.mjs`：
