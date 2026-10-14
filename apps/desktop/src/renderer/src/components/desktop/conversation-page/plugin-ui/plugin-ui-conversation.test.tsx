@@ -68,6 +68,10 @@ it("previews the final prompt and appends to the latest real composer document w
 it("keeps the composer when submitting only confirmed plugin text and validates the captured successor revision", async () => {
   useDesktopSessionStore.getState().setComposerDraftDocument(scope, composerDocument([{ type: "text", text: "不发送的草稿" }]))
   await send("submit"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => {
+    expect(posts).toHaveLength(1)
+    expect(host.conversationStatus?.message).toContain("已交给助手")
+  }, { timeout: 5000 }))
   expect(posts).toHaveLength(1); expect(posts[0].input).toEqual({ expectedRevision: 1, text: "分析选择", data: { selected: true } })
   expect(selectDraftDocument(useDesktopSessionStore.getState(), scope).items).toEqual([{ type: "text", text: "不发送的草稿" }])
   expect(host.conversationStatus?.message).toContain("已交给助手")

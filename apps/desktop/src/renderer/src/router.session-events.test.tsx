@@ -38,6 +38,7 @@ vi.mock("@renderer/stores/desktop-session", () => ({
     {
       getState: () => ({
         initialize: sessionEvents.initialize,
+        activeSessionId: "session-1",
         sessionView: { session: { id: "session-1" } },
       }),
     }
@@ -65,9 +66,10 @@ it("opens the notification's chat from settings and releases the click listener"
   expect(onClick).toBeTypeOf("function")
   await act(async () => {
     onClick!("session-1")
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await vi.waitFor(() => {
+      expect(router.state.location.pathname).toBe("/conversation/session-1")
+    })
   })
-  expect(router.state.location.pathname).toBe("/conversation/session-1")
   act(() => root.unmount())
   expect(detach).toHaveBeenCalledOnce()
   root = createRoot(container)
