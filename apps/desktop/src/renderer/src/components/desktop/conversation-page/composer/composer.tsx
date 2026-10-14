@@ -48,6 +48,8 @@ export function Composer({
   onGoalModeChange,
   goalAutoTurns = 20,
   onGoalAutoTurnsChange,
+  goalTokenBudget = "",
+  onGoalTokenBudgetChange,
   className,
   textareaClassName,
   rows = 2,
@@ -93,6 +95,8 @@ export function Composer({
   onGoalModeChange?: (active: boolean) => void
   goalAutoTurns?: number
   onGoalAutoTurnsChange?: (count: number) => void
+  goalTokenBudget?: string
+  onGoalTokenBudgetChange?: (value: string) => void
   className?: string
   textareaClassName?: string
   rows?: number
@@ -308,6 +312,14 @@ export function Composer({
               className="w-12 rounded border px-1"
             />
             次
+          </label>
+        ) : null}
+        {goalMode && onGoalTokenBudgetChange ? (
+          <label className="flex items-center gap-1 text-xs text-muted-foreground">
+            Token 总预算
+            <input aria-label="Token 总预算" type="text" inputMode="numeric" placeholder="不限制"
+              value={goalTokenBudget} disabled={sending} onChange={(event) => onGoalTokenBudgetChange(event.target.value)}
+              className="w-24 rounded border px-1" />
           </label>
         ) : null}
         <Popover

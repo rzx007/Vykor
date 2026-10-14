@@ -6,6 +6,7 @@ import {
   type CompactProgressEvent,
 } from "./compact-service.js";
 import type { Message, StreamEvent, IHookExecutor, HookResult } from "../index.js";
+import { AgentExecutionLimitError } from "../types/runtime.js";
 
 it("counts replayable reasoning but not display-only think text", () => {
   const service = new CompactService();
@@ -87,6 +88,14 @@ function bigConversation(turns: number): Message[] {
 }
 
 const SMALL_MAX = 20_000 + 13_000 + 100; // threshold ~= 100 tokens
+
+it("never converts a host limit rejection into compact fallback or prompt-too-long retry", async () => {
+  const limit = new AgentExecutionLimitError("input exceeds available context size: host closed");
+  let calls = 0;
+  const svc = new CompactService(SMALL_MAX, 2, { client: { async *submitMessage() { calls++; throw limit; } } });
+  await expect(svc.autoCompact(bigConversation(15))).rejects.toBe(limit);
+  expect(calls).toBe(1);
+});
 
 it("uses the newly selected model's context window on the next compaction", async () => {
   const svc = new CompactService(100_000, 1);

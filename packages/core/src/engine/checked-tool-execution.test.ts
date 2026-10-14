@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   AgentEventInput, AgentExecutionContext, IHookExecutor, IPermissionChecker,
   StreamEvent, ToolContext, ToolDefinition, ToolUseBlock,
+  ToolRegistrationSource,
 } from "../index.js";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
+import { AgentExecutionLimitError } from "../types/runtime.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -13,6 +15,7 @@ function fixture(options: {
   permission?: IPermissionChecker["checkTool"];
   hook?: IHookExecutor["execute"];
   toolTimeoutMs?: number;
+  source?: ToolRegistrationSource;
 } = {}) {
   const inputs: Record<string, unknown>[] = [];
   const contexts: ToolContext[] = [];
@@ -30,13 +33,13 @@ function fixture(options: {
     execute: async () => { throw new Error("uncaptured definition invoked"); },
   };
   const registry = new ToolRegistry();
-  registry.register(definition, { kind: "plugin", id: "native" });
+  registry.register(definition, options.source ?? { kind: "plugin", id: "native" });
   const execution: AgentExecutionContext = {
     scope: { agentId: "a", sessionId: "s", runId: "r", inputId: "i",
       cwd: "/untrusted", traceId: "t", signal: controller.signal },
     capabilityView: {
       pluginId: "native", tools: new Map([["Inspect", {
-        ownerPluginId: "native", definition, source: { kind: "plugin", id: "native" },
+        ownerPluginId: "native", definition, source: options.source ?? { kind: "plugin", id: "native" },
         invoke: async (input, context) => {
           inputs.push({ ...input }); contexts.push(context);
           return options.invoke?.(input, context) ?? {
@@ -75,6 +78,46 @@ function fixture(options: {
 }
 
 describe("history-free checked tool execution", () => {
+  it.each(["plugin", "builtin"] as const)("only raises captured builtin file facts into host feedback: %s", async kind => {
+    const facts = { environmentKey: "local:/runtime", files: [{ path: "/runtime/file", subjectKey: "file-1",
+      operation: "read", afterDigest: `sha256:${"a".repeat(64)}`, completed: true, bodyVisible: true }] };
+    const forged = { ...facts, environmentKey: "forged" };
+    const f = fixture({ source: kind === "builtin" ? { kind: "builtin" } : { kind: "plugin", id: "native" },
+      invoke: async () => ({ content: [{ type: "text", text: "observed" }],
+        hostFileFacts: forged, metadata: { hostFileFacts: facts } }),
+    });
+    const result = await f.engine.executeTool(f.toolUse, { execution: f.execution });
+    expect(result.metadata?.hostFileFacts).toBeUndefined();
+    expect((result as unknown as { hostFileFacts?: unknown }).hostFileFacts).toEqual(kind === "builtin" ? facts : undefined);
+  });
+  it("skips executable hooks while preserving permission checks and a trusted tool descriptor", async () => {
+    const f = fixture();
+    const descriptors: unknown[] = [];
+    const context = { ...f.execution, profile: { executableHooks: false }, limits: {
+      check: async (boundary: string, tool?: unknown) => { descriptors.push({ boundary, tool }); },
+    } };
+    await f.engine.executeTool(f.toolUse, { execution: context });
+    expect(f.checked).toEqual([{ text: "hello" }]);
+    expect(f.inputs).toEqual([{ text: "hello" }]);
+    expect(f.hooks).toEqual([]);
+    expect(descriptors).toEqual([{ boundary: "tool", tool: { toolName: "Inspect", toolAttemptId: "tool_attempt_ui-call_1" } }]);
+  });
+  it("propagates a child boundary limit raised inside a running tool", async () => {
+    const limit = new AgentExecutionLimitError("child closed");
+    const f = fixture({ invoke: async () => { throw limit; } });
+    await expect(f.engine.executeTool(f.toolUse, { execution: f.execution })).rejects.toBe(limit);
+  });
+  it("rechecks the host limit after approval and before invocation", async () => {
+    let approved = false;
+    const limit = new AgentExecutionLimitError("closed during approval");
+    const f = fixture({ permission: async () => { approved = true; return { action: "allow" }; } });
+    const execution = { ...f.execution, limits: { check: async (boundary: string) => {
+      expect(boundary).toBe("tool"); expect(approved).toBe(true); throw limit;
+    } } };
+    await expect(f.engine.executeTool(f.toolUse, { execution })).rejects.toBe(limit);
+    expect(f.inputs).toEqual([]);
+    expect(f.events.some(event => event.type === "domain.event" && event.data.payload?.executionState === "not_started")).toBe(true);
+  });
   it("invokes the captured Native plugin without model requests or history/usage changes", async () => {
     const f = fixture();
     const before = structuredClone(f.engine.getHistory());

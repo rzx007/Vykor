@@ -322,6 +322,7 @@ export class SessionStore {
         assertSession: (sessionId) => assertSession(this.state, sessionId),
         assertMutableSession,
         getRun: (runId) => this.runs.getRun(runId),
+        listGoalRuns: (goalId) => this.runs.listGoalRuns(goalId),
         appendEvent: (input) => this.conversations.appendEvent(input),
       });
       this.conversationTransactions = new ConversationTransactions({

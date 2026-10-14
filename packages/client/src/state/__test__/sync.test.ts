@@ -29,6 +29,19 @@ function emptyStream(): AsyncIterable<SessionEventRecord> {
 }
 
 describe("syncEvents reconnect", () => {
+  it("forwards a usage-only event without adding a second Goal state", async () => {
+    const usage = { knownTokens: 12, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 5, seq: 2, updatedAt: 2 };
+    const value: SessionEventRecord = { id: "usage-2", seq: 2, type: "session.goal.usage.updated", schemaVersion: 1, sessionId: "s1", payload: { goalId: "g1", usage }, createdAt: 2 };
+    const client = { sessions: { getState: async () => snapshot(1) }, events: { list: async () => [], stream: async function* () { yield value; } } };
+    for await (const update of syncEvents(client, { sessionId: "s1" })) {
+      if (!update.event) continue;
+      expect(update.event).toEqual(value);
+      expect(update.state.lastSeq).toBe(2);
+      expect(update.state.eventsBySeq).toEqual({});
+      return;
+    }
+    throw new Error("usage event was not forwarded");
+  });
   it("keeps ordered session updates without accumulating event bodies or replaying duplicates", async () => {
     const updated = (seq: number): SessionEventRecord => ({
       id: `e${seq}`, seq, type: "session.updated", schemaVersion: 1,

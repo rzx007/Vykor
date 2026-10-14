@@ -279,3 +279,5 @@ export type {
   FeishuRegistrationState,
   RecordChannelDeliveryInput,
 } from "@vykor/protocol";
+
+export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";

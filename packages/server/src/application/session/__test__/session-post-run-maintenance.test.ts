@@ -37,6 +37,24 @@ function createStore(runStatus = "completed") {
 }
 
 describe("SessionPostRunMaintenance", () => {
+  it("passes the explicit completed Run to memory and skips unbound Dream work for Goals", async () => {
+    const store = createStore();
+    store.getRun.mockReturnValue({ id: "run-1", sessionId: "s1", status: "completed", metadata: { goalId: "g1" } } as any);
+    const remember = vi.fn();
+    const autoDream = vi.fn();
+    const limits = { check: vi.fn() };
+    const maintenance = new SessionPostRunMaintenance({ data: store as any,
+      getSettings: async () => ({ memory: { enabled: true, autoExtractEnabled: true, autoDreamEnabled: true, sessionMemoryEnabled: false } } as any),
+      personalizationUpdater: () => 0, autoDream, log: vi.fn(),
+    });
+    await maintenance.run("s1", "run-1", { remember } as any, limits);
+    expect(remember).toHaveBeenCalledWith({ automatic: true, execution: { scope: { sessionId: "s1", runId: "run-1" }, limits } });
+    expect(autoDream).not.toHaveBeenCalled();
+    limits.check.mockImplementation(() => { throw new Error("budget closed"); });
+    remember.mockClear();
+    await maintenance.run("s1", "run-1", { remember } as any, limits);
+    expect(remember).not.toHaveBeenCalled();
+  });
   it("never writes automatic memory or personalization for temporary sessions", async () => {
     const store = createStore();
     store.getSession.mockReturnValue({ ...store.getSession(), storage: "memory" } as any);

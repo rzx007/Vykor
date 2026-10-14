@@ -22,6 +22,7 @@ export interface RunControlDurableRuns {
   getRun(runId: string): SessionRunRecord | undefined;
   updateRun(runId: string, update: Partial<SessionRunRecord>): SessionRunRecord;
   listRuns(sessionId: string): SessionRunRecord[];
+  listGoalRuns?(goalId: string, objectiveVersion?: number): SessionRunRecord[];
   appendEvent(event: AppendEventInput): SessionEventRecord;
   transaction<T>(fn: () => T): T;
 }
@@ -74,7 +75,7 @@ export interface RunControlEvents {
 
 export interface RunControlGoals {
   getGoal?(goalId: string): SessionGoal | undefined;
-  updateGoal?(goalId: string, patch: { expectedRevision: number; status: "paused"; reason: string }): SessionGoal | undefined;
+  updateGoal?(goalId: string, patch: { expectedRevision: number; status: "paused"; reason: string; stopReason?: SessionGoal["stopReason"] }): SessionGoal | undefined;
   markGoalContinuation?(runId: string, status: "cancelled"): void;
 }
 
@@ -83,6 +84,7 @@ export interface RunControlAdmissionQuery {
 }
 
 export interface RunControlServiceOptions {
+  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> };
   durableSessions: RunControlDurableSessions;
   durableRuns: RunControlDurableRuns;
   durableInputs: RunControlDurableInputs;
@@ -451,6 +453,18 @@ export class RunControlService {
     await this.options.runtime.waitForRuns(runIds);
   }
 
+  async stopGoalChildren(sessionId: string, goalId: string, objectiveVersion: number | undefined, reason: string): Promise<void> {
+    const goal = this.options.goals?.getGoal?.(goalId);
+    if (!goal || goal.sessionId !== sessionId) throw new SessionApplicationError(409, "目标归属不匹配");
+    const read = () => (this.options.durableRuns.listGoalRuns?.(goalId, objectiveVersion) ?? [])
+      .filter((run) => typeof run.metadata.parentRunId === "string" && (run.status === "pending" || run.status === "running"));
+    const active = read();
+    for (const run of active) {
+      await this.options.children?.interruptRun(run.sessionId, run.id, reason);
+    }
+    if (read().length) throw new SessionApplicationError(409, "目标子任务尚未停止，请稍后重试");
+  }
+
   async stopAndDrain(reason = "Daemon shutting down"): Promise<void> {
     if (this.stopPromise) return await this.stopPromise;
     this.accepting = false;
@@ -480,6 +494,7 @@ export class RunControlService {
         expectedRevision: goal.revision,
         status: "paused",
         reason: "用户停止了目标回合",
+        stopReason: { code: "user_paused", at: Date.now(), runId },
       });
     }
   }

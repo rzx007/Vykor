@@ -1,5 +1,5 @@
 import type { ContentBlock } from "./messages.js";
-import type { GenerationIdentity, ModelAttemptUsageStatus, ModelRetryState } from "../engine/model-retry.js";
+import type { GenerationIdentity, ModelAttemptStarted, ModelAttemptUsageStatus, ModelRetryState } from "../engine/model-retry.js";
 import type { AgentPermissionRequest, AgentPermissionDecision, AgentRequestConfiguration } from "./runtime.js";
 import type { AgentChildSpawnInput, AgentChildResult, ChildFailureKind, ChildPartialResult } from "./runtime-child.js";
 
@@ -96,12 +96,14 @@ export type AgentEventInput =
   | { type: "usage.updated"; data: { usage: import("./usage").UsageSnapshot } }
   | { type: "output.generation.started"; data: GenerationIdentity }
   | { type: "model.retry.scheduled"; data: ModelRetryState }
+  | { type: "model.attempt.started"; data: ModelAttemptStarted }
   | {
       type: "model.attempt.finished";
       data: GenerationIdentity & {
         status: "completed" | "failed" | "interrupted";
         usageStatus: ModelAttemptUsageStatus;
         usage?: import("./usage").UsageSnapshot;
+        notDispatched?: true;
       };
     }
   | {

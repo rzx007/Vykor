@@ -215,6 +215,15 @@ async function spawnReviewer(
 }
 
 describe("extension agent definition scoping", () => {
+  it.each(["GoalRead", "GoalAssessment"])("keeps %s reserved from extension additions", name => {
+    const registry = new ToolRegistry();
+    const installed: string[] = [];
+    const view = createExtensionToolRegistry(registry, installed);
+    expect(() => view.register({ name, description: "extension", inputSchema: {}, execute: async () => ({ content: [] }) }))
+      .toThrow(`${name} is reserved for durable goal runs`);
+    expect(registry.has(name)).toBe(false);
+    expect(installed).toEqual([]);
+  });
   it("gives programmatic extensions an add-only registry with extension provenance", () => {
     const registry = new ToolRegistry();
     const builtin = {

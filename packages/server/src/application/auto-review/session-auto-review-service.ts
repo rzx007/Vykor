@@ -13,7 +13,7 @@ import {
   type AutoReviewStatus,
 } from "@vykor/protocol";
 import { getBuiltinAgentDefinitions } from "@vykor/coordinator";
-import type { RunCapabilityView } from "@vykor/core";
+import type { AgentExecutionLimits, RunCapabilityView } from "@vykor/core";
 import type { VykorAgent } from "@vykor/agent-runtime";
 
 import { classifyAutoReviewRisk, type AutoReviewChangeSet } from "./auto-review-policy.js";
@@ -63,6 +63,7 @@ export interface CaptureBaselineInput {
 }
 
 export interface ReviewCompletedRunInput {
+  limits?: AgentExecutionLimits;
   sessionId: string;
   inputId: string;
   runId: string;
@@ -298,7 +299,7 @@ export class SessionAutoReviewService {
           scope: built.scope,
           expectedResult: built.expectedResult,
         },
-        { inputId: input.inputId, runId: input.runId, traceId: input.traceId, signal: input.signal },
+        { inputId: input.inputId, runId: input.runId, traceId: input.traceId, signal: input.signal, limits: input.limits },
         sensitiveInitialContent,
         emptyCapabilityView(),
       );

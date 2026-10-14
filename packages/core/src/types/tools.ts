@@ -144,7 +144,25 @@ export interface ToolResult {
   recoveryHint?: string;
   /** Controlled builtin/host summary, at most 1,000 characters; never an instruction. */
   compactSummary?: string;
+  /** Set only by checked execution after verifying the captured builtin definition. */
+  hostFileFacts?: HostFileFacts;
   metadata?: Record<string, unknown>;
+}
+
+/** File observations emitted by a captured builtin; free metadata is not a trust boundary. */
+export interface HostFileFacts {
+  environmentKey: string;
+  executionRoot?: string;
+  pathStyle?: "windows" | "posix";
+  files: Array<{
+    path: string;
+    subjectKey: string;
+    operation: "read" | "write" | "edit" | "patch";
+    beforeDigest?: "missing" | `sha256:${string}`;
+    afterDigest: "missing" | `sha256:${string}`;
+    completed: true;
+    bodyVisible?: boolean;
+  }>;
 }
 
 /** A definite result does not imply success or completion of the user's goal. */

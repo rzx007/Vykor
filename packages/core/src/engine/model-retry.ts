@@ -231,4 +231,12 @@ export interface ModelAttemptFinishedEvent extends GenerationIdentity {
   usageStatus: ModelAttemptUsageStatus;
   /** 已知消耗；unknown 时省略，不能用 0 冒充已知。 */
   usage?: UsageSnapshot;
+  /** Host proved the client was never called after registration. */
+  notDispatched?: true;
+}
+
+export interface ModelAttemptStarted extends GenerationIdentity {
+  model: string;
+  provider?: string;
+  purpose: "generation" | "compaction" | "finalization" | "memory";
 }

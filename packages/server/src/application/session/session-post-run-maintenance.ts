@@ -1,4 +1,4 @@
-import { getProjectMemoryDir, type Settings } from "@vykor/core";
+import { getProjectMemoryDir, type AgentExecutionLimits, type Settings } from "@vykor/core";
 import { sessionSettingsRoot } from "../../runtime/session-settings-root.js";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";
@@ -28,9 +28,9 @@ export interface SessionPostRunMaintenanceContext {
 export class SessionPostRunMaintenance {
   constructor(private readonly context: SessionPostRunMaintenanceContext) {}
 
-  async run(sessionId: string, runId: string, agent: VykorAgent): Promise<void> {
+  async run(sessionId: string, runId: string, agent: VykorAgent, limits?: AgentExecutionLimits): Promise<void> {
     try {
-      await this.runMaintenance(sessionId, runId, agent);
+      await this.runMaintenance(sessionId, runId, agent, limits);
     } catch (error) {
       this.context.log({
         level: "warn",
@@ -46,6 +46,7 @@ export class SessionPostRunMaintenance {
     sessionId: string,
     runId: string,
     agent: VykorAgent,
+    limits?: AgentExecutionLimits,
   ): Promise<void> {
     const session = this.context.data.sessions.get(sessionId);
     const run = this.context.data.runs.getRun(runId);
@@ -77,11 +78,15 @@ export class SessionPostRunMaintenance {
 
     if (settings.memory?.autoExtractEnabled !== false) {
       await this.bestEffort("session.memory.auto_extract_failed", sessionId, runId, async () => {
-        await agent.remember({ automatic: true });
+        const goalBound = typeof run.metadata?.goalId === "string";
+        if (goalBound && !limits) return;
+        await limits?.check("maintenance");
+        await agent.remember({ automatic: true, ...(goalBound ? { execution: { scope: { sessionId, runId }, limits } } : {}) });
       });
     }
 
-    if (settings.memory?.autoDreamEnabled) {
+    // 全局 Dream 没有这次 Run 的计量来源；Goal 触发时不另发无绑定模型任务。
+    if (settings.memory?.autoDreamEnabled && typeof run.metadata?.goalId !== "string") {
       await this.bestEffort("session.memory.auto_dream_failed", sessionId, runId, async () => {
         const memoryDir = getProjectMemoryDir(memoryRoot);
         const lastAtMs = (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;

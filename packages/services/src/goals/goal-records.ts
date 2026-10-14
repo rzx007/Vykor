@@ -1,8 +1,12 @@
 import type {
   GoalAssessment,
   GoalStatus,
+  GoalStopReason,
   GoalWait,
+  GoalUsage,
   SessionGoal,
+  GoalPhase,
+  GoalRequirement,
 } from "@vykor/protocol";
 import type {
   sessionGoalRequests,
@@ -15,19 +19,30 @@ export interface CreateSessionGoalStoreInput {
   objective: string;
   pluginId?: string;
   maxAutoTurns: number;
+  tokenBudget?: number;
+  phase?: GoalPhase;
+  requirements?: GoalRequirement[];
+  preparationEpisodeId?: string;
 }
 
 export interface UpdateSessionGoalStoreInput {
   expectedRevision: number;
   objective?: string;
+  objectiveVersion?: number;
+  phase?: GoalPhase;
+  requirements?: GoalRequirement[];
+  preparationEpisodeId?: string | null;
   pluginId?: string;
   status?: GoalStatus;
   maxAutoTurns?: number;
+  tokenBudget?: number | null;
   autoTurnsUsed?: number;
   noProgressCount?: number;
+  stagnationCount?: number;
   blockerKey?: string | null;
   currentRunId?: string | null;
   reason?: string | null;
+  stopReason?: GoalStopReason | null;
   wait?: GoalWait | null;
   evidence?: string[];
   assessment?: GoalAssessment | null;
@@ -43,6 +58,15 @@ export interface SessionGoalRequestRecord {
   error?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface GoalContinuationRecord {
+  goalId: string;
+  revision: number;
+  previousRunId: string;
+  inputId: string;
+  runId: string;
+  status: "pending" | "dispatched" | "cancelled";
 }
 
 export function sessionGoalFromRow(
@@ -64,12 +88,19 @@ export function sessionGoalFromRow(
     id: String(row.id),
     sessionId: String(row.sessionId),
     objective: String(row.objective),
+    objectiveVersion: Number(row.objectiveVersion),
+    phase: row.phase as GoalPhase,
+    requirements: JSON.parse(row.requirementsJson) as GoalRequirement[],
+    ...(row.preparationEpisodeId === null ? {} : { preparationEpisodeId: row.preparationEpisodeId }),
     ...(typeof row.pluginId === "string" ? { pluginId: row.pluginId } : {}),
     revision: Number(row.revision),
     status: String(row.status) as GoalStatus,
     maxAutoTurns: Number(row.maxAutoTurns),
+    ...(row.tokenBudget === null ? {} : { tokenBudget: row.tokenBudget }),
+    usage: JSON.parse(row.usageJson) as GoalUsage,
     autoTurnsUsed: Number(row.autoTurnsUsed),
     noProgressCount: Number(row.noProgressCount),
+    stagnationCount: Number(row.stagnationCount),
     ...(typeof row.blockerKey === "string"
       ? { blockerKey: row.blockerKey }
       : {}),
@@ -77,6 +108,7 @@ export function sessionGoalFromRow(
       ? { currentRunId: row.currentRunId }
       : {}),
     ...(typeof row.reason === "string" ? { reason: row.reason } : {}),
+    ...(typeof row.stopReasonJson === "string" ? { stopReason: JSON.parse(row.stopReasonJson) as GoalStopReason } : {}),
     ...(wait ? { wait } : {}),
     evidence,
     ...(assessment ? { assessment } : {}),

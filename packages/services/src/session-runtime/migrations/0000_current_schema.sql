@@ -283,16 +283,24 @@ CREATE TABLE `session_goal` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`objective` text NOT NULL,
+	`objective_version` integer DEFAULT 1 NOT NULL,
+	`phase` text NOT NULL,
+	`requirements_json` text NOT NULL,
+	`preparation_episode_id` text,
 	`plugin_id` text,
 	`revision` integer NOT NULL,
 	`status` text NOT NULL,
 	`max_auto_turns` integer NOT NULL,
+	`token_budget` integer,
+	`usage_json` text NOT NULL,
 	`auto_turns_used` integer NOT NULL,
 	`no_progress_count` integer NOT NULL,
+	`stagnation_count` integer NOT NULL,
 	`blocker_key` text,
 	`last_assessment_json` text,
 	`current_run_id` text,
 	`reason` text,
+	`stop_reason_json` text,
 	`wait_json` text,
 	`evidence_json` text NOT NULL,
 	`created_at` integer NOT NULL,
@@ -302,6 +310,45 @@ CREATE TABLE `session_goal` (
 --> statement-breakpoint
 CREATE INDEX `session_goal_session_updated_idx` ON `session_goal` (`session_id`,`updated_at`);--> statement-breakpoint
 CREATE UNIQUE INDEX `session_goal_session_open_unique` ON `session_goal` (`session_id`) WHERE "session_goal"."status" IN ('active','waiting_user','blocked','paused');--> statement-breakpoint
+CREATE TABLE `session_goal_version` (
+	`goal_id` text NOT NULL,
+	`objective_version` integer NOT NULL,
+	`previous_version` integer,
+	`objective` text NOT NULL,
+	`requirements_json` text NOT NULL,
+	`frozen_at` integer,
+	`change_kind` text NOT NULL,
+	`change_reason` text NOT NULL,
+	`request_id` text NOT NULL,
+	`actor_json` text NOT NULL,
+	`input_ids_json` text NOT NULL,
+	`created_at` integer NOT NULL,
+	PRIMARY KEY(`goal_id`, `objective_version`),
+	FOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `session_goal_model_attempt` (
+	`run_id` text NOT NULL,
+	`generation_id` text NOT NULL,
+	`attempt` integer NOT NULL,
+	`goal_id` text NOT NULL,
+	`objective_version` integer NOT NULL,
+	`session_id` text NOT NULL,
+	`provider` text,
+	`model` text NOT NULL,
+	`purpose` text NOT NULL,
+	`state` text NOT NULL,
+	`known_input_tokens` integer NOT NULL,
+	`known_output_tokens` integer NOT NULL,
+	`inconsistent` integer NOT NULL,
+	`raw_usage_json` text,
+	`started_at` integer NOT NULL,
+	`finished_at` integer,
+	PRIMARY KEY(`run_id`, `generation_id`, `attempt`),
+	FOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `session_goal_model_attempt_goal_idx` ON `session_goal_model_attempt` (`goal_id`);--> statement-breakpoint
 CREATE TABLE `session_input_attachment` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,

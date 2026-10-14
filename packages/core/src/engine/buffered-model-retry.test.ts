@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { streamBufferedModelWithRetry } from "./buffered-model-retry.js";
 import { ModelRequestFailure } from "./model-retry.js";
+import { AgentExecutionLimitError } from "../types/runtime.js";
+import { attemptFinishedEvent } from "./query-model-attempt.js";
 import type { ModelAttemptFinishedEvent, StreamEvent, StreamMessageParams } from "../index.js";
 
 async function collect(
@@ -20,6 +22,72 @@ async function collect(
 }
 
 describe("streamBufferedModelWithRetry", () => {
+  it("settles before its first external yield and never settles twice on consumer close", async () => {
+    const finished: ModelAttemptFinishedEvent[] = [];
+    const iterator = streamBufferedModelWithRetry({ async *streamMessage() {
+      yield { type: "text_delta", delta: "summary" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } }, { model: "m", messages: [] }, { onAttemptFinished: event => { finished.push(event); } })[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toMatchObject({ type: "text_delta" });
+    expect(finished).toHaveLength(1);
+    await iterator.return?.();
+    expect(finished).toHaveLength(1);
+  });
+  it("uses a final metering report even on failure and keeps legacy display counts unknown", () => {
+    const usage = { inputTokens: 5, outputTokens: 2, metering: { knownInputTokens: 5, knownOutputTokens: 2,
+      completeness: "complete" as const, inputIncludesCache: true, raw: {},
+    } };
+    expect(attemptFinishedEvent("g", 1, "failed", usage).usageStatus).toBe("complete");
+    expect(attemptFinishedEvent("g", 1, "completed", { inputTokens: 0, outputTokens: 0 }).usageStatus).toBe("unknown");
+  });
+  it("rechecks before the next retry and issues no request after limits close", async () => {
+    let calls = 0;
+    let checks = 0;
+    const limit = new AgentExecutionLimitError("closed");
+    const finished: ModelAttemptFinishedEvent[] = [];
+    await expect(collect({ async *streamMessage() {
+      calls++;
+      throw new ModelRequestFailure("disconnect", { kind: "network", phase: "request", retryable: true });
+    } }, { policy: { baseDelayMs: 0, maxDelayMs: 0 }, limits: { check: () => { if (++checks === 2) throw limit; } },
+      onAttemptFinished: event => { finished.push(event); },
+    })).rejects.toBe(limit);
+    expect(calls).toBe(1);
+    expect(finished).toHaveLength(1);
+  });
+  it("registers every retry and settles final reports independently of request success", async () => {
+    const starts: number[] = [];
+    const finished: ModelAttemptFinishedEvent[] = [];
+    let calls = 0;
+    await collect({ async *streamMessage() {
+      const attempt = ++calls;
+      expect(starts).toContain(attempt);
+      yield { type: "usage", usage: { inputTokens: 3, outputTokens: 1,
+        metering: { knownInputTokens: 3, knownOutputTokens: 1, completeness: attempt === 1 ? "partial" : "complete", inputIncludesCache: true, raw: {} },
+      } } as const;
+      if (attempt === 1) throw new ModelRequestFailure("disconnect", { kind: "network", phase: "stream", retryable: true });
+      yield { type: "complete", stopReason: "end_turn" };
+    } }, { policy: { baseDelayMs: 0, maxDelayMs: 0 },
+      onAttemptStarted: async event => { starts.push(event.attempt); },
+      onAttemptFinished: event => { finished.push(event); },
+    });
+    expect(starts).toEqual([1, 2]);
+    expect(finished.map(event => event.usageStatus)).toEqual(["partial", "complete"]);
+  });
+  it("awaits each start and preserves rejection without calling or settling the client", async () => {
+    const limit = Object.assign(new Error("closed"), { [Symbol.for("@vykor/core/AgentExecutionLimitError")]: true });
+    let calls = 0;
+    const finished: ModelAttemptFinishedEvent[] = [];
+    const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
+      calls++;
+      yield { type: "complete", stopReason: "end_turn" };
+    } };
+    await expect(collect(client, {
+      onAttemptStarted: async () => { throw limit; },
+      onAttemptFinished: event => { finished.push(event); },
+    })).rejects.toBe(limit);
+    expect(calls).toBe(0);
+    expect(finished).toEqual([]);
+  });
   it.each(["max_tokens", "length"])("rejects a %s stop without delivering partial helper output or retrying", async (stopReason) => {
     let calls = 0;
     const delivered: StreamEvent[] = [];
@@ -41,7 +109,7 @@ describe("streamBufferedModelWithRetry", () => {
     })()).rejects.toMatchObject({ info: { kind: "stream_incomplete", phase: "stream", retryable: false } });
     expect(delivered).toEqual([]);
     expect(calls).toBe(1);
-    expect(finished).toEqual([expect.objectContaining({ status: "failed", usageStatus: "partial", usage: { inputTokens: 7, outputTokens: 3 } })]);
+    expect(finished).toEqual([expect.objectContaining({ status: "failed", usageStatus: "unknown", usage: { inputTokens: 7, outputTokens: 3 } })]);
   });
 
   it("delivers only the successful attempt and drops the failed prefix", async () => {
@@ -107,7 +175,7 @@ describe("streamBufferedModelWithRetry", () => {
 
       expect(finished.map((event) => [event.attempt, event.status, event.usageStatus])).toEqual([
         [1, "failed", "unknown"],
-        [2, "completed", "complete"],
+        [2, "completed", "unknown"],
       ]);
       expect(finished[1]!.usage).toMatchObject({ inputTokens: 7, outputTokens: 3 });
     } finally {
@@ -162,7 +230,7 @@ describe("streamBufferedModelWithRetry", () => {
       await rejected;
       expect(calls).toBe(2);
       expect(finished.map(event => [event.attempt, event.status, event.usageStatus])).toEqual([
-        [1, "failed", "unknown"], [2, "failed", "partial"],
+        [1, "failed", "unknown"], [2, "failed", "unknown"],
       ]);
       expect(finished[1]?.usage).toEqual({ inputTokens: 7, outputTokens: 3 });
     } finally {
@@ -240,7 +308,7 @@ describe("streamBufferedModelWithRetry", () => {
 
       expect(finished).toEqual([{
         type: "model_attempt_finished", generationId: "aux-cancel", attempt: 1,
-        status: "interrupted", usageStatus: usage ? "partial" : "unknown",
+        status: "interrupted", usageStatus: "unknown",
         ...(usage ? { usage } : {}),
       }]);
       expect(delivered).toEqual([]);

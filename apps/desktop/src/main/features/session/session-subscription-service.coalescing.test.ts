@@ -103,6 +103,29 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("turns an isolated usage event into the existing snapshot delivery after ACK", async () => {
+    vi.useFakeTimers();
+    const stream = new EventEmitter();
+    const client = clientWithStream(async function* () {
+      for await (const [value] of on(stream, "event")) yield value as SessionEventRecord;
+    });
+    const { contents, sent } = webContents();
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 });
+    await service.openSession(client as never, contents as never, "s1");
+    await vi.advanceTimersByTimeAsync(1);
+    stream.emit("event", sessionUpdated(2));
+    await vi.advanceTimersByTimeAsync(50);
+    const first = sent[0]!.payload as DesktopSessionUpdate;
+    stream.emit("event", { ...sessionUpdated(3), type: "session.goal.usage.updated", payload: { goalId: "g1", usage: { knownTokens: 12, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 1, updatedAt: 3 } } });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(sent).toHaveLength(1);
+    service.acknowledgeUpdate(contents.id, { subscriptionId: first.subscriptionId, generation: first.generation, deliveryId: first.deliveryId, result: "applied" });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.payload).toMatchObject({ kind: "snapshot", view: { cursor: 3 } });
+    service.clearAll();
+    stream.emit("event", sessionUpdated(4));
+  });
   it("does not rebuild owner snapshots for each text delta while delivering the complete coalesced text", async () => {
     vi.useFakeTimers()
     const client = {
@@ -641,7 +664,7 @@ describe("SessionSubscriptionService coalescing", () => {
           effects: {} as never, children: { cwd: directory, createController: () => ({}) } as never,
           onSettled() {},
         })
-        await providerPaused
+        await Promise.race([providerPaused, run.result.then(result => { throw new Error(`Model did not reach the arguments gate: ${JSON.stringify(result)}`) })])
         await vi.advanceTimersByTimeAsync(51)
         const pausedView = await generationView
         const presented = withToolGenerationPresentation(pausedView.runs, pausedView.messages, pausedView.parts)

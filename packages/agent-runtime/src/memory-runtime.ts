@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { Message, StreamingMessageClient, ModelAttemptFinishedEvent, ModelRetryPolicy } from "@vykor/core";
+import type { Message, StreamingMessageClient, ModelAttemptFinishedEvent, ModelAttemptStarted, ModelRetryPolicy, AgentExecutionContext, AgentRunScope } from "@vykor/core";
 import { getProjectMemoryDir, streamBufferedModelWithRetry } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
@@ -20,6 +20,14 @@ export interface AgentRememberResult {
   titles: string[];
 }
 
+export type AgentMemoryExecution = Pick<AgentExecutionContext, "emit" | "limits"> & {
+  scope: Pick<AgentRunScope, "sessionId" | "runId">;
+};
+export interface AgentRememberOptions {
+  automatic?: boolean;
+  execution?: Omit<AgentMemoryExecution, "emit"> & { emit?: AgentMemoryExecution["emit"] };
+}
+
 export interface AgentMemoryRuntime {
   manager: MemoryManager;
   directory: string;
@@ -30,6 +38,7 @@ export interface AgentMemoryRuntime {
     model: string,
     completedRunToolActivity?: FrameworkAgentRunToolActivity,
     automatic?: boolean,
+    execution?: AgentMemoryExecution,
   ): Promise<AgentRememberResult>;
 }
 
@@ -51,7 +60,7 @@ export async function createAgentMemoryRuntime(
       if (selected.ids.length > 0) await manager.markMemoryUsed(selected.ids);
       return selected.text || null;
     },
-    async remember(messages, apiClient, model, completedRunToolActivity, automatic) {
+    async remember(messages, apiClient, model, completedRunToolActivity, automatic, execution) {
       return await extractMemories({
         apiClient,
         model,
@@ -62,6 +71,7 @@ export async function createAgentMemoryRuntime(
         sessionId,
         completedRunToolActivity,
         automatic,
+        execution,
       });
     },
   };
@@ -77,7 +87,9 @@ export async function extractMemories(options: {
   sessionId: string;
   automatic?: boolean;
   completedRunToolActivity?: FrameworkAgentRunToolActivity;
-  onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void;
+  execution?: AgentMemoryExecution;
+  onAttemptStarted?: (event: ModelAttemptStarted) => void | Promise<void>;
+  onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
   retryPolicy?: Partial<ModelRetryPolicy>;
 }): Promise<AgentRememberResult> {
   if (options.messages.length < 2) {
@@ -109,6 +121,7 @@ export async function extractMemories(options: {
       : "");
 
   let finalText = "";
+  await options.execution?.limits?.check("maintenance");
   for await (const event of streamBufferedModelWithRetry(
     options.apiClient,
     {
@@ -123,7 +136,17 @@ export async function extractMemories(options: {
       tools: [],
     },
     {
-      ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
+      limits: options.execution?.limits,
+      purpose: "memory",
+      onAttemptStarted: async (data) => {
+        await options.onAttemptStarted?.(data);
+        await options.execution?.emit({ type: "model.attempt.started", data });
+      },
+      onAttemptFinished: async (event) => {
+        const { type: _, ...data } = event;
+        await options.execution?.emit({ type: "model.attempt.finished", data });
+        await options.onAttemptFinished?.(event);
+      },
       ...(options.retryPolicy ? { policy: options.retryPolicy } : {}),
     },
   )) {

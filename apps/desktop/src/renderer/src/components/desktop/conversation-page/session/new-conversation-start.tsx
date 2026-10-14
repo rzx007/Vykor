@@ -57,6 +57,8 @@ export function NewConversationStart({
   onGoalModeChange,
   goalAutoTurns,
   onGoalAutoTurnsChange,
+  goalTokenBudget,
+  onGoalTokenBudgetChange,
   goalError = null,
   onDismissGoalError,
   attachments,
@@ -108,6 +110,8 @@ export function NewConversationStart({
   onGoalModeChange?: (active: boolean) => void
   goalAutoTurns?: number
   onGoalAutoTurnsChange?: (count: number) => void
+  goalTokenBudget?: string
+  onGoalTokenBudgetChange?: (value: string) => void
   goalError?: string | null
   onDismissGoalError?: () => void
   attachments: readonly DesktopAttachmentDraft[]
@@ -447,6 +451,8 @@ export function NewConversationStart({
             onGoalModeChange={onGoalModeChange}
             goalAutoTurns={goalAutoTurns}
             onGoalAutoTurnsChange={onGoalAutoTurnsChange}
+            goalTokenBudget={goalTokenBudget}
+            onGoalTokenBudgetChange={onGoalTokenBudgetChange}
             canSubmit={Boolean(
               (goalMode
                 ? selectGoalObjective(draft)

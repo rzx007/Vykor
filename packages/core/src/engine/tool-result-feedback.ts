@@ -3,6 +3,7 @@ import type {
   ToolExecutionResult,
   ToolFailureKind,
   ToolResult,
+  HostFileFacts,
 } from "../types/tools";
 
 const FAILURE_KINDS: readonly ToolFailureKind[] = [
@@ -25,9 +26,11 @@ export function toolFeedbackFields(
   result: Partial<ToolResult>,
 ): Pick<
   ToolResult,
-  "failureKind" | "executionState" | "recoveryHint" | "compactSummary"
+  "failureKind" | "executionState" | "recoveryHint" | "compactSummary" | "hostFileFacts"
 > {
+  const hostFileFacts = validHostFileFacts(result.hostFileFacts);
   return {
+    ...(hostFileFacts ? { hostFileFacts } : {}),
     ...(FAILURE_KINDS.includes(result.failureKind!)
       ? { failureKind: result.failureKind }
       : {}),
@@ -48,6 +51,7 @@ export function toolFeedbackFields(
 /** Free tool metadata cannot impersonate host identities, lifecycle facts or summaries. */
 export function externalToolMetadata(
   metadata?: Record<string, unknown>,
+  trustedBuiltin = false,
 ): Record<string, unknown> {
   const reserved = new Set([
     "pluginUi",
@@ -69,10 +73,30 @@ export function externalToolMetadata(
     "compactSummary",
     "toolFeedbackVersion",
     "toolProgress",
+    "hostFileFacts",
   ]);
-  return Object.fromEntries(
+  const fields = Object.fromEntries(
     Object.entries(metadata ?? {}).filter(([key]) => !reserved.has(key)),
   );
+  const facts = trustedBuiltin ? validHostFileFacts(metadata?.hostFileFacts) : undefined;
+  return facts ? { ...fields, hostFileFacts: facts } : fields;
+}
+
+/** Preserve complete identities and digests, or reject the entire malformed receipt. */
+export function validHostFileFacts(value: unknown): HostFileFacts | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const facts = value as HostFileFacts;
+  const digest = (item: unknown) => item === "missing" || typeof item === "string" && /^sha256:[a-f0-9]{64}$/.test(item);
+  if (typeof facts.environmentKey !== "string" || !facts.environmentKey || !Array.isArray(facts.files) || !facts.files.length) return undefined;
+  if (facts.executionRoot !== undefined && (typeof facts.executionRoot !== "string" || !facts.executionRoot)
+    || facts.pathStyle !== undefined && facts.pathStyle !== "windows" && facts.pathStyle !== "posix") return undefined;
+  if (!facts.files.every(file => file && typeof file.path === "string" && file.path.length > 0
+    && typeof file.subjectKey === "string" && file.subjectKey.length > 0
+    && ["read", "write", "edit", "patch"].includes(file.operation) && file.completed === true
+    && digest(file.afterDigest) && (file.beforeDigest === undefined || digest(file.beforeDigest))
+    && (file.operation === "read" || file.beforeDigest !== undefined)
+    && (file.bodyVisible === undefined || typeof file.bodyVisible === "boolean"))) return undefined;
+  return facts;
 }
 
 export function defaultRecoveryHint(result: ToolExecutionResult): string {

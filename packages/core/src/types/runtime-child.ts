@@ -1,4 +1,4 @@
-import type { RunCapabilityView } from "./runtime.js";
+import type { AgentExecutionLimits, RunCapabilityView } from "./runtime.js";
 
 export interface AgentChildSpawnInput {
   description: string;
@@ -157,6 +157,7 @@ export interface AgentRunScope {
  * be attributed to. Callers cannot widen this into a forged session/agent/cwd.
  */
 export interface AgentPostRunChildParent {
+  limits?: AgentExecutionLimits;
   inputId: string;
   runId: string;
   traceId: string;
@@ -175,6 +176,8 @@ export interface AgentChildHandle {
   /** Host-owned current Run selection, separate from user input and metadata. */
   send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;
+  /** Interrupts only the matching current Run, leaving the child available for reuse. */
+  interruptRun(expectedRunId: string, reason?: string): Promise<boolean>;
   close(): Promise<void>;
 }
 

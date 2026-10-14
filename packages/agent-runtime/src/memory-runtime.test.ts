@@ -50,6 +50,21 @@ function fakeClient(responseText: string, onStream?: () => void): StreamingMessa
 }
 
 describe("extractMemories", () => {
+  it("forwards an explicit origin's start and settlement and checks maintenance before the request", async () => {
+    const events: import("@vykor/core").AgentEventInput[] = [];
+    const boundaries: string[] = [];
+    const result = await extractMemories({ apiClient: fakeClient('{"memories":[]}', () => {
+      expect(events[0]).toMatchObject({ type: "model.attempt.started", data: { model: "m", purpose: "memory", attempt: 1 } });
+    }), model: "m", messages, manager: new MemoryManager(), memoryDir: resolve("memory"), cwd: resolve("project"), sessionId: "s",
+      execution: { scope: { sessionId: "origin", runId: "r" }, emit: async event => { events.push(event); },
+        limits: { check: boundary => { boundaries.push(boundary); } },
+      },
+    });
+    expect(result.skipped).toBe(true);
+    expect(boundaries).toEqual(["maintenance", "model"]);
+    expect(events.map(event => event.type)).toEqual(["model.attempt.started", "model.attempt.finished"]);
+    expect(events[1]).toMatchObject({ data: { usageStatus: "unknown" } });
+  });
   it("rejects an automatic memory whose body is not in its quoted user statement", async () => {
     const manager = new MemoryManager();
     const result = await extractMemories({

@@ -192,6 +192,14 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
   sessionDefinition("session.run.created", objectPayload("run")),
   sessionDefinition("session.goal.created", objectPayload("goal")),
   sessionDefinition("session.goal.updated", objectPayload("goal")),
+  sessionDefinition("session.goal.usage.updated", (payload) => {
+    if (typeof payload.goalId !== "string" || !payload.goalId) throw new Error("goalId must be a non-empty string");
+    objectPayload("usage")(payload);
+    const usage = payload.usage as Record<string, unknown>;
+    for (const field of ["knownTokens", "unknownAttempts", "partialAttempts", "inFlightAttempts", "runTimeMs", "seq", "updatedAt"])
+      if (!Number.isSafeInteger(usage[field]) || (usage[field] as number) < 0) throw new Error(`usage.${field} must be a non-negative safe integer`);
+    if (typeof usage.incomplete !== "boolean") throw new Error("usage.incomplete must be a boolean");
+  }),
   sessionDefinition("session.run.updated", (payload) => {
     objectPayload("run")(payload);
     requireString(payload, "previousStatus");

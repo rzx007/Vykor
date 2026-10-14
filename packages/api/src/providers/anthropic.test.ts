@@ -12,6 +12,24 @@ function mockMessages(client: AnthropicClient, create: (...args: any[]) => unkno
 }
 
 describe("AnthropicClient cancellation", () => {
+  it.each([true, false])("keeps final cache accounting complete only with explicit cache components (%s)", async hasCache => {
+    const client = new AnthropicClient({ apiKey: "test" });
+    mockMessages(client, () => ({ async *[Symbol.asyncIterator]() {
+      yield { type: "message_start", message: { usage: { input_tokens: 10, output_tokens: 0,
+        ...(hasCache ? { cache_creation_input_tokens: 3, cache_read_input_tokens: 5 } : {}),
+      } } };
+      yield { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 2 } };
+      yield { type: "message_stop" };
+    } }));
+    const usages: any[] = [];
+    for await (const event of client.streamMessage({ model: "m", messages: [{ type: "user", content: "q" }] })) {
+      if (event.type === "usage") usages.push(event.usage);
+    }
+    expect(usages[0].metering.completeness).toBe("partial");
+    expect(usages.at(-1).metering).toMatchObject({ knownInputTokens: hasCache ? 18 : 10, knownOutputTokens: 2,
+      inputIncludesCache: false, completeness: hasCache ? "complete" : "partial",
+    });
+  });
   it("emits cumulative partial usage before a disconnect", async () => {
     const client = new AnthropicClient({ apiKey: "test" } as any);
     mockMessages(client, () => ({
@@ -28,11 +46,12 @@ describe("AnthropicClient cancellation", () => {
         if (event.type === "usage") usages.push(event.usage);
       }
     })()).rejects.toThrow("disconnect");
-    expect(usages).toEqual([
+    expect(usages).toMatchObject([
       { inputTokens: 9, outputTokens: 0 },
       { inputTokens: 9, outputTokens: 3 },
       { inputTokens: 9, outputTokens: 5 },
     ]);
+    expect(usages.map(usage => usage.metering.completeness)).toEqual(["partial", "partial", "partial"]);
   });
   it("forwards external cancellation to the Anthropic request", async () => {
     const external = new AbortController();

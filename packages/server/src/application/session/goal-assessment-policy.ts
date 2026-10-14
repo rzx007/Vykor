@@ -1,95 +1,40 @@
-import type {
-  GoalAssessment,
-  GoalEvidenceRef,
-  SessionGoal,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-} from "@vykor/protocol";
-
-export interface GoalEvidenceReader {
-  listMessages(sessionId: string): SessionMessageRecord[];
-  listMessageParts(sessionId: string): SessionMessagePartRecord[];
-}
+import type { GoalAssessment, GoalRequirement, GoalRequirementAssessment, SessionGoal } from "@vykor/protocol";
+import type { VerifiedGoalEvidence } from "./goal-evidence-reader.js";
 
 export type GoalCompletionDisposition =
   | { kind: "completed" }
   | { kind: "continue"; reason: string }
-  | { kind: "waiting_user"; reason: string };
+  | { kind: "waiting_user"; reason: string; requirementIds: string[] };
 
-export function verifiedGoalEvidence(
-  store: GoalEvidenceReader,
-  goal: SessionGoal,
-  assessment: GoalAssessment,
-) {
-  const messages = new Map(
-    store.listMessages(goal.sessionId).map((message) => [message.id, message]),
-  );
-  const parts = store.listMessageParts(goal.sessionId);
-  const unique = new Map<string, GoalEvidenceRef>();
-  for (const ref of assessment.evidenceRefs) unique.set(ref.messagePartId, ref);
-  for (const requirement of assessment.requirements ?? []) {
-    for (const ref of requirement.evidenceRefs)
-      unique.set(ref.messagePartId, ref);
-  }
-  return [...unique.values()].flatMap((ref) => {
-    if (
-      ref.goalId !== goal.id ||
-      ref.revision !== goal.revision ||
-      ref.runId !== assessment.runId
-    )
-      return [];
-    const part = parts.find((item) => item.id === ref.messagePartId);
-    if (
-      !part ||
-      messages.get(part.messageId)?.runId !== ref.runId ||
-      part.type !== "tool" ||
-      part.status !== "completed" ||
-      part.isError ||
-      part.output == null ||
-      part.toolName === "GoalAssessment"
-    )
-      return [];
-    return [part];
-  });
+export function validateRequirementCoverage(requirements: GoalRequirement[], assessment: GoalRequirementAssessment[] | undefined): void {
+  const expected = new Set(requirements.map(item => item.id));
+  const actual = assessment ?? [];
+  if (!expected.size || expected.size !== requirements.length || actual.length !== requirements.length
+    || new Set(actual.map(item => item.requirementId)).size !== expected.size
+    || actual.some(item => !expected.has(item.requirementId))) throw new Error("goal_assessment_requirement_coverage_invalid");
 }
 
-export function classifyGoalCompletion(
-  assessment: GoalAssessment,
-  verifiedPartIds: ReadonlySet<string>,
-): GoalCompletionDisposition {
-  const requirements = assessment.requirements ?? [];
-  if (requirements.some((item) => item.status === "needs_user")) {
-    return {
-      kind: "waiting_user",
-      reason: "请验收目标中需要主观判断的完成条件",
-    };
-  }
-  const unfinished =
-    requirements.some((item) => item.status === "incomplete") ||
-    Boolean(assessment.remainingWork?.length);
-  if (unfinished) {
-    return {
-      kind: "continue",
-      reason:
-        assessment.nextStep ??
-        assessment.remainingWork?.[0] ??
-        "继续完成剩余要求",
-    };
-  }
-  const allSatisfied =
-    requirements.length > 0 &&
-    requirements.every(
-      (item) =>
-        item.status === "satisfied" &&
-        item.evidenceRefs.length > 0 &&
-        item.evidenceRefs.every((ref) =>
-          verifiedPartIds.has(ref.messagePartId),
-        ),
-    );
-  return allSatisfied
-    ? { kind: "completed" }
-    : {
-        kind: "waiting_user",
-        reason: "完成审查缺少当前运行的有效证据，请验收目标结果",
-      };
+export function requirementEvidenceSatisfied(goal: SessionGoal, assessment: GoalAssessment, evidence: VerifiedGoalEvidence[], requirementId: string): boolean {
+  const formal = goal.requirements.find(item => item.id === requirementId);
+  const report = assessment.requirements?.find(item => item.requirementId === requirementId);
+  if (!formal || !report || report.status !== "satisfied") return false;
+  if (formal.verification.kind === "user_acceptance") return Boolean(assessment.userReceipts?.some(receipt => receipt.objectiveVersion === goal.objectiveVersion && receipt.requirementIds.includes(requirementId)));
+  return Boolean(report.explanation.trim()) && report.evidenceRefs.length > 0 && report.evidenceRefs.every(ref => evidence.some(item => item.requirementId === requirementId
+    && item.verifiedForVersion === goal.objectiveVersion && item.origin.goalId === goal.id
+    && item.origin.runId === ref.runId && item.origin.objectiveVersion === ref.objectiveVersion && item.origin.messagePartId === ref.messagePartId
+    && item.supportsCompletion !== false && (!item.facts.external || item.facts.external.status === "completed")));
+}
+
+/** Objective checks and complete coverage take precedence over subjective acceptance. */
+export function classifyGoalCompletion(goal: SessionGoal, assessment: GoalAssessment, evidence: VerifiedGoalEvidence[]): GoalCompletionDisposition {
+  validateRequirementCoverage(goal.requirements, assessment.requirements);
+  const reason = assessment.nextStep ?? assessment.remainingWork?.[0] ?? "继续完成剩余要求或补充当前有效证据";
+  const objectiveUnfinished = goal.requirements.some(requirement => requirement.verification.kind !== "user_acceptance"
+    && !requirementEvidenceSatisfied(goal, assessment, evidence, requirement.id));
+  if (objectiveUnfinished || assessment.remainingWork?.length) return { kind: "continue", reason };
+  const subjective = goal.requirements.filter(requirement => requirement.verification.kind === "user_acceptance"
+    && !requirementEvidenceSatisfied(goal, assessment, evidence, requirement.id));
+  if (subjective.some(requirement => assessment.requirements!.find(item => item.requirementId === requirement.id)?.status === "incomplete")) return { kind: "continue", reason };
+  if (subjective.length) return { kind: "waiting_user", reason: "请验收这些需要主观判断的完成条件", requirementIds: subjective.map(item => item.id) };
+  return { kind: "completed" };
 }

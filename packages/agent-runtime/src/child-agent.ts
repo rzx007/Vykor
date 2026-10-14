@@ -11,6 +11,7 @@ import type {
   AgentChildResult,
   AgentChildSpawnInput,
   AgentInputReceipt,
+  AgentExecutionLimits,
   AgentRunHandle,
   AgentRunScope,
   ChildActivitySnapshot,
@@ -48,6 +49,9 @@ import { applyChildActivityEvent, partialResultFields, type ChildActivityState }
 export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-environment.js";
 export { AgentChildRegistry, DEFAULT_AGENT_CHILD_BUDGET } from "./child-registry.js";
 
+/** Captured by the host at submission, never read from model input metadata. */
+export type TrustedChildRunParent = Pick<AgentRunScope, "sessionId" | "runId" | "signal"> & { limits?: AgentExecutionLimits };
+
 interface ChildRecord {
   id: string;
   sessionId: string;
@@ -70,8 +74,8 @@ interface ChildRecord {
   result: Promise<AgentChildResult>;
   startChain: Promise<void>;
   lastResult?: AgentChildResult;
-  parentAbortHandler?: () => void;
-  requests: Map<string, { input: AgentChildInput; receipt: Promise<AgentInputReceipt>; settled: boolean }>;
+  currentRunParent?: TrustedChildRunParent | null;
+  requests: Map<string, { input: AgentChildInput; parent: TrustedChildRunParent | null; receipt: Promise<AgentInputReceipt>; settled: boolean }>;
   state: AgentChildHandle["state"];
   activity?: ChildActivityState;
   activityRunId?: string;
@@ -121,11 +125,11 @@ export class AgentChildManager implements AgentChildDirectory {
     return this.options.cwd;
   }
 
-  createController(parentScope: AgentRunScope, parentView?: RunCapabilityView): AgentChildController {
+  createController(parentScope: AgentRunScope & { limits?: AgentExecutionLimits }, parentView?: RunCapabilityView): AgentChildController {
     return {
       hasChildAgent: (childId) => this.find(childId) !== undefined,
       spawnChildAgent: (input) => this.spawn(parentScope, input, parentView),
-      sendChildInput: (childId, input) => this.send(childId, input, parentView),
+      sendChildInput: (childId, input) => this.send(childId, input, parentView, captureParent(parentScope)),
       interruptChildAgent: (childId, reason) => this.interrupt(childId, reason),
       awaitChildAgent: (childId) => this.awaitResult(childId),
     };
@@ -171,7 +175,7 @@ export class AgentChildManager implements AgentChildDirectory {
    * the child's first message; it never appears in persisted spawn summaries.
    */
   async spawnSystemChild(
-    parentScope: AgentRunScope,
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
     input: AgentChildSpawnInput,
     sensitiveInitialContent: string,
     capabilityView?: RunCapabilityView,
@@ -187,7 +191,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private async spawn(
-    parentScope: AgentRunScope,
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
     input: AgentChildSpawnInput,
     parentView?: RunCapabilityView,
   ): Promise<AgentChildInvocation> {
@@ -195,7 +199,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private async spawnInternal(
-    parentScope: AgentRunScope,
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
     input: AgentChildSpawnInput,
     options: {
       parentView?: RunCapabilityView;
@@ -204,6 +208,7 @@ export class AgentChildManager implements AgentChildDirectory {
       initialContent?: string;
     },
   ): Promise<AgentChildInvocation> {
+    await parentScope.limits?.check("child");
     const system = options.system === true;
     const parentView = options.parentView;
     const childId = `child_${randomUUID()}`;
@@ -325,22 +330,10 @@ export class AgentChildManager implements AgentChildDirectory {
           ? deriveChildCapabilityView(parentView, input)
           : undefined;
       await this.ensureAgent(record, false);
-      const parentAbortHandler = () => {
-        const current = this.find(childId);
-        if (current) current.cancelSource = "parent_interrupted";
-        void this.interrupt(childId, "Parent run interrupted").catch(() => {});
-      };
-      record.parentAbortHandler = parentAbortHandler;
-      parentScope.signal.addEventListener("abort", parentAbortHandler, { once: true });
-      if (parentScope.signal.aborted) {
-        record.cancelSource = "parent_interrupted";
-        await this.interrupt(childId, "Parent run interrupted");
-        throw new Error("Parent run interrupted");
-      }
       const receipt = await this.beginRun(record, {
         content: options.initialContent ?? childInitialTask(input),
         ...(system ? { metadata: { sensitiveInput: true } } : {}),
-      });
+      }, captureParent(parentScope));
       budgetReservation.commit();
       return {
         id: childId,
@@ -360,7 +353,7 @@ export class AgentChildManager implements AgentChildDirectory {
     }
   }
 
-  async send(childId: string, input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt> {
+  async send(childId: string, input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">, parent: TrustedChildRunParent | null = null): Promise<AgentInputReceipt> {
     const record = this.require(childId);
     if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${childId}`);
     const pluginId = record.capabilityView?.pluginId;
@@ -370,11 +363,11 @@ export class AgentChildManager implements AgentChildDirectory {
     if (input.id) {
       const existing = record.requests.get(input.id);
       if (existing) {
-        if (!sameChildInput(existing.input, input)) throw new Error(`Child input id is already used: ${input.id}`);
+        if (!sameChildInput(existing.input, input) || !sameParent(existing.parent, parent)) throw new Error(`Child input id is already used: ${input.id}`);
         return await existing.receipt;
       }
-      const receipt = this.sendToRecord(record, input);
-      const request = { input, receipt, settled: false };
+      const receipt = this.sendToRecord(record, input, parent);
+      const request = { input, parent, receipt, settled: false };
       record.requests.set(input.id, request);
       void receipt.then(
         () => {
@@ -388,7 +381,19 @@ export class AgentChildManager implements AgentChildDirectory {
       );
       return await receipt;
     }
-    return await this.sendToRecord(record, input);
+    return await this.sendToRecord(record, input, parent);
+  }
+
+  async interruptRun(childId: string, expectedRunId: string, reason = "Child run interrupted"): Promise<boolean> {
+    const record = this.find(childId);
+    const run = record?.currentRun;
+    if (!record || !run || run.id !== expectedRunId) return false;
+    const result = record.result;
+    record.cancelSource = "user_cancelled";
+    record.abortController?.abort(new ChildRunTerminationError("user_cancelled", reason));
+    await run.interrupt(reason);
+    await result;
+    return true;
   }
 
   async interrupt(childId: string, reason?: string): Promise<void> {
@@ -432,9 +437,10 @@ export class AgentChildManager implements AgentChildDirectory {
     await closing;
   }
 
-  private async sendToRecord(record: ChildRecord, input: AgentChildInput): Promise<AgentInputReceipt> {
+  private async sendToRecord(record: ChildRecord, input: AgentChildInput, parent: TrustedChildRunParent | null): Promise<AgentInputReceipt> {
     const activeRun = record.currentRun;
-    if (input.delivery !== "queue" && activeRun) {
+    if (parent?.signal.aborted) throw new Error("Parent run interrupted");
+    if (input.delivery !== "queue" && activeRun && parent && sameParent(record.currentRunParent, parent)) {
       try {
         return await activeRun.steer(input);
       } catch (error) {
@@ -446,18 +452,30 @@ export class AgentChildManager implements AgentChildDirectory {
     const scheduled = record.startChain.then(async () => {
       await record.result.catch(() => {});
       if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${record.id}`);
-      receipt = await this.beginRun(record, input);
+      receipt = await this.beginRun(record, input, parent);
     });
     record.startChain = scheduled.then(() => {}, () => {});
     await scheduled;
     return receipt!;
   }
 
-  private async beginRun(record: ChildRecord, input: AgentChildInput): Promise<AgentInputReceipt> {
+  private async beginRun(record: ChildRecord, input: AgentChildInput, parent: TrustedChildRunParent | null): Promise<AgentInputReceipt> {
+    await parent?.limits?.check("child");
+    if (parent?.signal.aborted) throw new Error("Parent run interrupted");
     const agent = await this.ensureAgent(record);
     if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${record.id}`);
+    if (parent?.signal.aborted) throw new Error("Parent run interrupted");
     const controller = new AbortController();
     record.abortController = controller;
+    record.currentRunParent = parent;
+    record.cancelSource = undefined;
+    const parentAbortHandler = () => {
+      if (record.abortController !== controller) return;
+      record.cancelSource = "parent_interrupted";
+      controller.abort(new ChildRunTerminationError("parent_interrupted", "Parent run interrupted"));
+      void record.currentRun?.interrupt("Parent run interrupted").catch(() => {});
+    };
+    parent?.signal.addEventListener("abort", parentAbortHandler, { once: true });
     record.state = "running";
     const ids = {
       inputId: input.id ?? `input_${randomUUID()}`,
@@ -486,6 +504,8 @@ export class AgentChildManager implements AgentChildDirectory {
     let run: AgentRunHandle;
     try {
       run = agent.submitMessage(input.content, {
+        childRunParent: parent,
+        limits: parent?.limits,
         capabilityView: record.capabilityView,
         ids,
         inputItems: input.inputItems,
@@ -495,6 +515,7 @@ export class AgentChildManager implements AgentChildDirectory {
         ...(hardMaxTurns !== undefined ? { hardMaxTurns } : {}),
       });
     } catch (error) {
+      parent?.signal.removeEventListener("abort", parentAbortHandler);
       this.clearRunDeadline(record);
       if (record.abortController === controller) record.abortController = undefined;
       throw error;
@@ -542,6 +563,7 @@ export class AgentChildManager implements AgentChildDirectory {
       };
     });
     record.result = result.finally(() => {
+      parent?.signal.removeEventListener("abort", parentAbortHandler);
       this.clearRunDeadline(record);
       if (record.abortController === controller) record.abortController = undefined;
       if (record.currentRun === run) record.currentRun = undefined;
@@ -677,7 +699,6 @@ export class AgentChildManager implements AgentChildDirectory {
     if (record.state === "closed" && !this.records.has(record.id)) return;
     const failures: unknown[] = [];
     record.state = "closed";
-    this.detachParentAbort(record);
     this.clearIdleTimer(record);
     this.clearRunDeadline(record);
     try {
@@ -757,11 +778,6 @@ export class AgentChildManager implements AgentChildDirectory {
     record.runDeadline = undefined;
   }
 
-  private detachParentAbort(record: ChildRecord): void {
-    if (!record.parentAbortHandler) return;
-    record.parentScope.signal.removeEventListener("abort", record.parentAbortHandler);
-    record.parentAbortHandler = undefined;
-  }
 }
 
 class ChildHandle implements AgentChildHandle {
@@ -787,7 +803,16 @@ class ChildHandle implements AgentChildHandle {
     return this.manager.send(this.id, input, authorization);
   }
   interrupt(reason?: string): Promise<void> { return this.manager.interrupt(this.id, reason); }
+  interruptRun(expectedRunId: string, reason?: string): Promise<boolean> { return this.manager.interruptRun(this.id, expectedRunId, reason); }
   close(): Promise<void> { return this.manager.close(this.id); }
+}
+
+function captureParent(scope: TrustedChildRunParent): TrustedChildRunParent {
+  return { sessionId: scope.sessionId, runId: scope.runId, signal: scope.signal, ...(scope.limits ? { limits: scope.limits } : {}) };
+}
+
+function sameParent(left: TrustedChildRunParent | null | undefined, right: TrustedChildRunParent | null): boolean {
+  return left == null ? right === null : right !== null && left.sessionId === right.sessionId && left.runId === right.runId;
 }
 
 function sameChildInput(left: AgentChildInput, right: AgentChildInput): boolean {

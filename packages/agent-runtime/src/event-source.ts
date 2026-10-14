@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isAgentExecutionLimitError } from "@vykor/core";
 
 import type {
   AgentEvent,
@@ -43,6 +44,7 @@ export class AgentEventBus implements AgentEventSource {
         try {
           await this.sink(event);
         } catch (error) {
+          if (isAgentExecutionLimitError(error)) throw error;
           throw new AgentEventDeliveryError(error);
         }
       }

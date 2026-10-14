@@ -8,6 +8,8 @@ import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
 export interface SessionRunAssemblyOptions {
+  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> };
+  pendingPermissionId?: (sessionId: string) => string | undefined;
   preemptAutoReview?: (sessionId: string) => void;
   store: Pick<SessionStore, "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;
   goals: GoalOperations;
@@ -18,6 +20,7 @@ export interface SessionRunAssemblyOptions {
   materializeSteerInput(sessionId: string, items: readonly SessionUserInputItem[]): Promise<string>;
   assertReady(): void;
   settleGoalRun(sessionId: string, runId: string): Promise<void>;
+  checkGoalExecution?(goalId: string, objectiveVersion: number): void;
 }
 
 /** Explicit two-phase wiring for the shared lane runtime, Admission and Control services. */
@@ -33,10 +36,12 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     getRun: (runId: string) => options.store.runs.getRun(runId),
     updateRun: (runId: string, input: Parameters<SessionStore["runs"]["updateRun"]>[1]) => options.store.runs.updateRun(runId, input),
     listRuns: (sessionId: string) => options.store.runs.listRuns(sessionId),
+    listGoalRuns: (goalId: string, objectiveVersion?: number) => options.store.runs.listGoalRuns(goalId, objectiveVersion),
     appendEvent: (input: Parameters<SessionStore["conversations"]["appendEvent"]>[0]) => options.store.conversations.appendEvent(input),
     transaction: <T>(work: () => T) => transaction(work),
   };
   const control = new RunControlService({
+    children: options.children,
     durableSessions: {
       getSession: (sessionId) => options.store.sessions.get(sessionId),
       listSessions: (input) => options.store.sessions.list(input),
@@ -96,8 +101,17 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
       getCurrentGoal: (sessionId) => options.goals.getCurrentGoal(sessionId),
       getGoal: (goalId) => options.goals.getGoal(goalId),
       startGoalRun: (goalId, revision, runId, continuation) => options.goals.startGoalRun(goalId, revision, runId, continuation),
+      checkExecution: options.checkGoalExecution,
       markGoalContinuation: (runId, status) => options.goals.markGoalContinuation(runId, status),
       hasUserWork: (sessionId) => control.hasUserWork(sessionId),
+      pendingPermissionId: options.pendingPermissionId,
+      waitForApproval: (goalId, objectiveVersion, permissionRequestId) => {
+        const goal = options.goals.getGoal(goalId);
+        if (goal?.status === "active" && goal.objectiveVersion === objectiveVersion) options.goals.updateGoal(goal.id, {
+          expectedRevision: goal.revision, status: "waiting_user", stopReason: null, reason: "目标需要批准后才能继续",
+          wait: { kind: "approval", permissionRequestId },
+        });
+      },
       cancelGoalRuns: (sessionId, goalId, reason, queuedOnly) => control.cancelGoalRuns(sessionId, goalId, reason, queuedOnly),
     },
     materializer: { materializeSteerInput: options.materializeSteerInput },

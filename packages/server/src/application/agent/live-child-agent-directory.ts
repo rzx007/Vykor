@@ -61,4 +61,15 @@ export class LiveChildAgentDirectory {
     await child.interrupt(reason);
     return true;
   }
+
+  async interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> {
+    const current = this.entries.get(sessionId);
+    if (!current) return false;
+    const child = current.rootAgent.children.get(current.childId);
+    if (!child) {
+      this.entries.delete(sessionId);
+      return false;
+    }
+    return await child.interruptRun(runId, reason);
+  }
 }

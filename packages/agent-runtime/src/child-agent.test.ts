@@ -547,6 +547,76 @@ describe("AgentChildManager", () => {
       failureKind: "parent_interrupted",
     });
     expect(interrupt).toHaveBeenCalled();
+    expect(manager.get(invocation.id)?.state).toBe("idle");
+    await manager.closeAll();
+  });
+
+  it("keeps parent identity per reused Run and old abort cannot interrupt the new Run", async () => {
+    const parents: any[] = [];
+    let count = 0;
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent((content: unknown, options: any) => {
+      parents.push(options.childRunParent);
+      return ++count === 1 ? completedRun("first") : signalAwareHangingRun()(content, options);
+    }));
+    const p1 = new AbortController();
+    const p2 = new AbortController();
+    try {
+      const first = manager.createController({ ...parentScope(p1.signal), runId: "P1" });
+      const child = await first.spawnChildAgent({ description: "d", prompt: "first", agent: "worker", cwd: "/repo" });
+      await child.result;
+      const second = await manager.createController({ ...parentScope(p2.signal), runId: "P2" })
+        .sendChildInput(child.id, { content: "second" });
+      p1.abort();
+      expect(manager.get(child.id)?.state).toBe("running");
+      expect(parents.map((parent) => parent?.runId)).toEqual(["P1", "P2"]);
+      expect(await manager.get(child.id)!.interruptRun(child.runId!)).toBe(false);
+      expect(await manager.get(child.id)!.interruptRun(second.runId)).toBe(true);
+      expect(manager.get(child.id)?.state).toBe("idle");
+    } finally { await manager.closeAll(); }
+  });
+
+  it("queues a different parent identity, captures it at send, and rejects input ID reuse by another parent", async () => {
+    const first = deferred<AgentRunResult>();
+    const steer = vi.fn();
+    const parents: any[] = [];
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent((_content: unknown, options: any) => {
+      parents.push(options.childRunParent);
+      return parents.length === 1 ? runHandle(first.promise, steer) : completedRun("second");
+    }));
+    try {
+      const child = await manager.createController({ ...parentScope(), runId: "P1" })
+        .spawnChildAgent({ description: "d", prompt: "first", agent: "worker", cwd: "/repo" });
+      const scope = { ...parentScope(), runId: "P2" };
+      const input = { id: "follow-up", content: "second" };
+      const queued = manager.createController(scope).sendChildInput(child.id, input);
+      scope.runId = "P3";
+      expect(steer).not.toHaveBeenCalled();
+      first.resolve(completedResult("first"));
+      const receipt = await queued;
+      await manager.get(child.id)!.result;
+      expect(parents.map((parent) => parent?.runId)).toEqual(["P1", "P2"]);
+      await expect(manager.createController(scope).sendChildInput(child.id, input)).rejects.toThrow("already used");
+      const external = await manager.get(child.id)!.send({ content: "external" });
+      expect(external.runId).not.toBe(receipt.runId);
+      expect(parents.at(-1)).toBeNull();
+    } finally { await manager.closeAll(); }
+  });
+
+  it("rejects a queued parent identity whose signal aborted before the child Run starts", async () => {
+    const first = deferred<AgentRunResult>();
+    const submit = vi.fn(() => runHandle(first.promise, vi.fn()));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submit));
+    try {
+      const child = await manager.createController({ ...parentScope(), runId: "P1" })
+        .spawnChildAgent({ description: "d", prompt: "first", agent: "worker", cwd: "/repo" });
+      const parent = new AbortController();
+      const queued = manager.createController({ ...parentScope(parent.signal), runId: "P2" }).sendChildInput(child.id, { content: "second" });
+      const rejected = expect(queued).rejects.toThrow("Parent run interrupted");
+      parent.abort();
+      first.resolve(completedResult("first"));
+      await rejected;
+      expect(submit).toHaveBeenCalledTimes(1);
+    } finally { await manager.closeAll(); }
   });
 
   it("fails a child run whose wall-clock budget expires with a trusted timeout source", async () => {

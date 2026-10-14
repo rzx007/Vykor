@@ -8,6 +8,8 @@ import type {
   AgentChildResult,
   AgentChildSpawnInput,
   AgentEffects,
+  AgentExecutionLimits,
+  AgentExecutionProfile,
   AgentEventInput,
   AgentEventListener,
   AgentEventSubscription,
@@ -36,7 +38,8 @@ import type {
 import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
-import { createRunCapabilityView, readonlyMap } from "./run-capability-view.js";
+import { createRunCapabilityView, createPreparationRunCapabilityView, readonlyMap } from "./run-capability-view.js";
+import type { GoalRunBinding } from "./goal-extension.js";
 import {
   AgentOperationConflictError,
   type VykorAgentState,
@@ -54,6 +57,7 @@ import {
 import {
   AgentChildRegistry,
   type AgentChildManager,
+  type TrustedChildRunParent,
 } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
 import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
@@ -65,6 +69,7 @@ import {
 import type {
   AgentMemoryRuntime,
   AgentRememberResult,
+  AgentRememberOptions,
 } from "./memory-runtime.js";
 
 export {
@@ -90,8 +95,11 @@ export interface VykorAgentOptions extends VykorAgentConfiguration {
 }
 
 export interface VykorAgentSubmitOptions {
+  limits?: AgentExecutionLimits;
+  profile?: AgentExecutionProfile;
+  childRunParent?: TrustedChildRunParent | null;
   capabilityView?: RunCapabilityView;
-  goal?: { goalId: string; revision: number; objective?: string };
+  goal?: GoalRunBinding;
   signal?: AbortSignal;
   /** Trusted Run-scoped turn ceiling resolved by the host; later configuration cannot raise it. */
   hardMaxTurns?: number;
@@ -177,7 +185,7 @@ export interface VykorAgent {
     provider: CompactContextProvider | undefined,
   ): void;
   compact(): Promise<AgentCompactResult>;
-  remember(options?: { automatic?: boolean }): Promise<AgentRememberResult>;
+  remember(options?: AgentRememberOptions): Promise<AgentRememberResult>;
   /**
    * Trusted host-only entry point for a bounded, strictly read-only post-run child.
    *
@@ -253,7 +261,8 @@ class DefaultVykorAgent implements VykorAgent {
       runId: `run_${randomUUID()}`,
       traceId: randomUUID(),
     };
-    const capabilityView = options.capabilityView ?? this.createRunCapabilityView();
+    const capturedView = options.capabilityView ?? this.createRunCapabilityView();
+    const capabilityView = options.goal?.phase === "preparing" ? createPreparationRunCapabilityView(capturedView) : capturedView;
     const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
       agentId: this.id,
@@ -262,12 +271,17 @@ class DefaultVykorAgent implements VykorAgent {
       eventBus: this.eventBus,
       effects: this.effects,
       children: this.childManager,
-      identity: this.identity,
+      identity: options.childRunParent === undefined ? this.identity : {
+        ...(this.identity?.childId ? { childId: this.identity.childId } : {}),
+        ...(options.childRunParent ? { parentSessionId: options.childRunParent.sessionId, parentRunId: options.childRunParent.runId } : {}),
+      },
       content,
       inputItems: options.inputItems,
       ids,
       externalSignal: options.signal,
       hardMaxTurns: options.hardMaxTurns,
+      limits: options.limits,
+      profile: options.profile ? Object.freeze({ ...options.profile }) : undefined,
       delivery: options.delivery ?? "queue",
       metadata: options.metadata,
       goal: options.goal,
@@ -410,7 +424,7 @@ class DefaultVykorAgent implements VykorAgent {
     });
   }
 
-  remember(options?: { automatic?: boolean }): Promise<AgentRememberResult> {
+  remember(options?: AgentRememberOptions): Promise<AgentRememberResult> {
     return this.runMaintenance("remember", async () => {
       if (!this.memory) {
         return {
@@ -426,6 +440,12 @@ class DefaultVykorAgent implements VykorAgent {
         this.model,
         this.completedRunToolActivity,
         options?.automatic,
+        options?.execution ? {
+          ...options.execution,
+          emit: options.execution.emit ?? (async (event) => {
+            await this.eventBus.emit(event, { agentId: this.id, ...options.execution!.scope });
+          }),
+        } : undefined,
       );
     });
   }
@@ -437,7 +457,9 @@ class DefaultVykorAgent implements VykorAgent {
     capabilityView?: RunCapabilityView,
   ): Promise<{ invocation: AgentChildInvocation; result: AgentChildResult }> {
     return this.runMaintenance("post_run_child", async () => {
-      const scope: AgentRunScope = {
+      await parent.limits?.check("maintenance");
+      const scope: AgentRunScope & { limits?: AgentExecutionLimits } = {
+        limits: parent.limits,
         agentId: this.id,
         sessionId: this.id,
         runId: parent.runId,

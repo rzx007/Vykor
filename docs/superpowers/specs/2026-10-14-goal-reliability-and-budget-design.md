@@ -1,7 +1,8 @@
 # Goal 持续执行改进规格：可靠等待、可验证进展与预算
 
 > 日期：2026-10-14
-> 状态：独立审查与修订复核通过；尚未实现。可进入分阶段实施计划。
+> 状态：A/B/C 已实施并完成集中审核修订。交付验证与边界见 [C 实施审查](../reviews/2026-10-14-goal-phase-c-implementation-review.md)；历史测试缺少完整可信依赖记录时重跑对应检查，不自动继承完成状态。
+> 修订：用户明确不兼容旧数据；取消旧格式迁移、转换、回填与升级接管，只维护一套当前契约。
 > 源码基线：`12bbe28bc3538a74aa8f57da2e5583ea34fd3d99`，同时核对本次工作区中的 Goal 相关文件；不修改其他正在进行的工作。
 > 依据：[Codex `/goal` 实现与改进建议](../../codex-goal-implementation-research.md)、[已有 Goal 设计](../../session-goals-design.md)。本文对冲突部分给出增量规则，不声称复原 Codex 的计费或调度算法。
 > 审查：[设计审查与修订记录](../reviews/2026-10-14-goal-reliability-and-budget-design-review.md)。
@@ -19,6 +20,7 @@
 - 不增加独立 Critic、新的工作流引擎、通用预算平台、后台目标规划代理或默认定时唤醒。评估继续由运行模型提交，宿主核对；不是每轮再调用一个模型评审。
 - Token 限制是可选的，仅由用户明确设置。现有默认 20 次自动续跑额度继续保留，是次数限制，不冒充成本预算。
 - 本次只输出规格，不实施代码。分三个可独立交付的阶段；未实施阶段不得在 UI 宣称已支持。
+- 只支持当前格式新建的数据，不兼容此前 Goal/Run/请求/等待/用量格式；不增加旧字段别名、双读或转换代码。当前格式内的历史版本、迟到事件、重启恢复与请求去重照常保留，不把它们误删成兼容机制。
 
 ## 2. 已有能力与确认缺口
 
@@ -163,12 +165,12 @@ usage 的规范化字段：`knownTokens / incomplete / unknownAttempts / partial
 
 1. Goal 和后代使用同一宿主门禁。排队、开始 Run、每次模型尝试（含重试/压缩）、新工具调用与派生 Child 前重新读取状态、版本与预算；不只在一轮 final 后检查。
 2. 已知小计达到 tokenBudget：事务置 paused + token_budget，撤销尚未执行的续跑；拒绝新的模型/工具/子任务。通知关联运行合作停止，已提交工具按现有取消能力清理，不能回滚已完成操作。
-3. 有限预算下 `usage.incomplete=true`：paused + usage_unknown，不假设仍有余额，包含旧数据无法重建的缺账，不能仅检查 unknownAttempts/partialAttempts。无 Token 预算时保持“用量不完整”提示与次数保护，可继续，不为每个不完整事件增加确认流程。
+3. 有限预算下当前账本 `usage.incomplete=true`：paused + usage_unknown，不假设仍有余额，不能仅检查 unknownAttempts/partialAttempts。无 Token 预算时保持“用量不完整”提示与次数保护，可继续，不为每个不完整事件增加确认流程。
 4. 排队检查与真正派发之间要重新检查；记账与关闭门禁在同一事务。并发请求都通过同一宿主限制检查，正在飞行的尝试在详情显示数量；其实际用量到达后照常补账。
 5. 达到限制不新增“最后再总结一次”的模型调用。使用现有持久 assessment/requirements/工具结果生成宿主停止摘要，列出已做、剩余、限制原因与恢复方式；没有评估也可明确报告信息缺失。
 6. 若完整结果在限制触发前已经提交并满足验收，可保留 completed；限制触发后旧 Run 的迟到评估只入历史，不改状态。限额判断与验收结算均按事务顺序保存，不能仅凭事件网络到达顺序做 UI 判定。
 
-用户通过独立 budget 动作设置**总预算**，不是追加后偷偷清零。预算只可为正整数或显式 null（解除限制），不低于当前已知使用量；恢复要求余额大于零、usage.incomplete=false、旧运行完成清理，并通过其他门禁。历史缺账时可以保存用户明确给出的有限预算，但保持 paused + usage_unknown，不因看过提示就当作缺账已解决。无法补齐未知用量时，用户可明确解除 Token 限制后继续，UI 说明仍会展示不完整小计；不把估算转成真实用量。
+用户通过独立 budget 动作设置**总预算**，不是追加后偷偷清零。预算只可为正整数或显式 null（解除限制），不低于当前已知使用量；恢复要求余额大于零、usage.incomplete=false、上一运行完成清理，并通过其他门禁。当前调用缺账时可以保存用户明确给出的有限预算，但保持 paused + usage_unknown，不因看过提示就当作缺账已解决。无法补齐未知用量时，用户可明确解除 Token 限制后继续，UI 说明仍会展示不完整小计；不把估算转成真实用量。
 
 改预算不会自动 resume，resume 不默认加预算；`additionalAutoTurns` 只改次数上限。用户可以一次提交明确的预算修改与继续操作，后台仍按先改预算、再检查恢复的顺序执行。refine/pivot、重启、模型更换均保留整个 Goal 的累计用量与已用续跑次数。
 
@@ -180,7 +182,7 @@ runTimeMs 复用 Goal 根 Run 的 startedAt→finishedAt 耗时之和，不再�
 
 ### 7.1 refine / pivot
 
-复用已有 PATCH 编辑入口，增加 `changeKind: "refine" | "pivot"` 与 `changeReason`；旧普通编辑入口默认解释为 refine，不另建三套后端流程。Desktop 在现有编辑区域提供“补充条件/改变方向”，slash 子命令可后续接入同一操作，不是本阶段交付前提。
+复用现有 PATCH 编辑入口，明确提交 `changeKind: "refine" | "pivot"` 与 `changeReason`；普通编辑由当前 UI 显式发送 refine，不保留旧请求字段的默认适配。Desktop 在现有编辑区域提供“补充条件/改变方向”，slash 子命令可后续接入同一操作，不是本阶段交付前提。
 
 - refine：补充原范围内的条件、约束与表述。
 - pivot：显式改变预期结果或主要范围。首版仍使用同一个 Goal ID，写新 objectiveVersion 与历史版本；不引入跨 Goal 替代链和另一套预算账户。
@@ -233,17 +235,17 @@ GoalAssessment 增加 requirementId，必须覆盖当前正式要求的完整 ID
 
 | 阶段 | 独立交付结果 | 修改集中点 | 后续阶段依赖 |
 | --- | --- | --- | --- |
-| A | 具体 Run 等待 + 停止原因 + 最小 objectiveVersion/父子归属；已有可靠续跑规则不退化 | `protocol/session-goals.ts`；schema/迁移/memory controls；`services/goals/goal-records.ts`、repository/transactions；`server/application/agent/daemon-agent-event-projector.ts` 逐 Child Run 持久绑定 parentRunId/goalId/objectiveVersion；run admission/executor 与 wait verifier/observer/goal service；现有 Goal Banner | B/C 使用同一版本和可信归属，不依赖尚未交付的后阶段 |
-| B | 真实尝试账本、可选 Token 门禁、用量展示 | schema/迁移/memory controls；新增 `services/goals/goal-usage.ts`；projector；run admission/control；core 可选通用执行限制接口、api provider 用量适配；client Goal 类型/动作与 Desktop | 依赖 A；不依赖 C 的稳定要求，可先完整交付预算 |
+| A | 具体 Run 等待 + 停止原因 + 最小 objectiveVersion/父子归属；已有可靠续跑规则不退化 | `protocol/session-goals.ts`；schema/当前初始化 SQL/memory controls；`services/goals/goal-records.ts`、repository/transactions；`server/application/agent/daemon-agent-event-projector.ts` 逐 Child Run 持久绑定 parentRunId/goalId/objectiveVersion；run admission/executor 与 wait verifier/observer/goal service；现有 Goal Banner | B/C 使用同一版本和可信归属，不依赖尚未交付的后阶段 |
+| B | 真实尝试账本、可选 Token 门禁、用量展示 | schema/当前初始化 SQL/memory controls；新增 `services/goals/goal-usage.ts`；projector；run admission/control；core 可选通用执行限制接口、api provider 用量适配；client Goal 类型/动作与 Desktop | 依赖 A；不依赖 C 的稳定要求，可先完整交付预算 |
 | C | preparing 澄清、objectiveVersion/版本审计、正式条件、GoalRead、历史证据与 stagnationCount | 新增 `services/goals/goal-version.ts`；现有 goal service/policy；`agent-runtime/goal-extension.ts`、assessment tool；`server/application/session/session-run-executor.ts`；协议与原编辑/验收 UI | 受 A/B 的等待和预算保护 |
 
 不新建 GoalCoordinator 替代现有 SessionGoalService。新增的 usage/version 文件留在已有 goals 模块，分别只管记账和版本读写；service 不吸收 provider 字段适配或文件系统检查逻辑。具体检查复用已有工具结果或注入小型 evidence reader。
 
-采用仓库现有数据库迁移链更新结构，保持单一当前协议，不运行时双读两个 Goal 设计。A 为旧目标初始化 objectiveVersion=1，之后既有正文编辑也递增它，状态变化不递增；不在 A 引入准备与正式条件。B 为旧目标保留 tokenBudget 未设置，尝试重建账本；C 为当前 objectiveVersion 建立版本记录并初始化空 requirements/phase=preparing，下次执行整理条件，不把 A/B 期间的版本重置成 1。既有 objective/次数/状态/历史保留。
+各阶段直接更新现行 schema、初始化 SQL、当前 ORM snapshot 和 memory 结构，面向当前格式新建存储与记录；不新增旧数据兼容迁移、不改造全库初始化框架。A 新建 Goal 的 objectiveVersion=1；B 新建 Goal 的 tokenBudget 仅由明确输入设置，账本从其真实调用开始；C 新建 Goal 使用 preparing 和正式版本记录。执行中的正文变化、状态与用量分别按本文规则更新，不做旧格式回填或推断。
 
-旧数据未记录的模型量不编造历史零用量：能从已有尝试事件重建时按同一唯一键重建；无法重建标记 incomplete，用户设置有限预算前明确提示。迁移不启动 Goal 或删除历史；临时存储同步更新，按现有语义不做重启恢复。
+不接管旧 Goal、旧运行意图、旧请求快照、旧等待句柄或未记录的用量，不恢复或重建这些数据。当前读取/执行入口必须满足当前结构与身份契约；不符合时明确拒绝，不自动清理、转换或删除用户实际数据库。本文与配套计划的修改仅为文档修订，不执行数据重置。当前格式的临时会话沿用 memory 语义，不做重启恢复。
 
-重启恢复仍沿用活动目标默认暂停、外部等待恢复观察的现有规则。pending 尝试先对账，再应用 usage_unknown/token_budget；重新打开窗口不恢复执行。stage C 尚未上线前保持旧验收规则，不能提前显示正式条件已冻结。
+当前格式重启恢复仍沿用活动目标默认暂停、外部等待恢复观察的现有规则。pending 尝试先对账，再应用 usage_unknown/token_budget；重新打开窗口不恢复执行。stage C 尚未上线前使用已交付阶段的验收规则，不能提前显示正式条件已冻结。
 
 ## 11. 验收与回归场景
 

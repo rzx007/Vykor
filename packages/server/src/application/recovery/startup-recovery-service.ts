@@ -2,6 +2,7 @@ export interface StartupRecoveryServiceOptions {
   recoverProjectionSettlements(): void;
   recoverPluginUiActions?(): void;
   interruptActiveRuns(): void;
+  reconcileGoalModelAttempts?(): void;
   failIncompleteReviewsOnStartup?(): number;
   pauseActiveGoals(): void;
   terminalizeUnownedInputs(): void;
@@ -21,6 +22,7 @@ export class StartupRecoveryService {
     this.options.recoverProjectionSettlements();
     this.options.recoverPluginUiActions?.();
     this.options.interruptActiveRuns();
+    this.options.reconcileGoalModelAttempts?.();
     this.options.failIncompleteReviewsOnStartup?.();
     this.options.pauseActiveGoals();
     this.options.terminalizeUnownedInputs();

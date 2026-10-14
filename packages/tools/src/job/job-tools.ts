@@ -160,6 +160,12 @@ export const jobSendTool: ToolDefinition = {
     if ("content" in host) return host;
     try {
       const jobId = requiredString(input.jobId, "jobId");
+      // Model-originated child input carries this Run's trusted controller.
+      // Desktop/direct handle.send remains an explicitly unparented follow-up.
+      if (context.agent?.children.hasChildAgent(jobId)) {
+        const receipt = await context.agent.children.sendChildInput(jobId, { content: String(input.data ?? "") });
+        return result("send", { jobId, ...receipt });
+      }
       const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
       const authorization = context.capabilityView ?? context.agent?.capabilityView;
       if (authorization) await host.jobs.send(request, authorization);

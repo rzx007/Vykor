@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { ModelRequestFailure } from "./model-retry.js";
+import { AgentExecutionLimitError, type AgentExecutionContext, type AgentEventInput } from "../types/runtime.js";
 import type { StreamEvent, ToolDefinition } from "../index.js";
 
 function allowAll(): any {
@@ -35,6 +36,43 @@ async function collect(
 }
 
 describe("QueryEngine model network retry", () => {
+  it.each(["limits", "started"])("stops at rejected %s before invoking or settling the client", async boundary => {
+    let calls = 0;
+    const limit = new AgentExecutionLimitError("closed");
+    const emitted: AgentEventInput[] = [];
+    const streamEvents: StreamEvent[] = [];
+    const execution = {
+      limits: { check: async () => { if (boundary === "limits") throw limit; } },
+      emit: async (event: AgentEventInput) => { emitted.push(event); if (event.type === "model.attempt.started") throw limit; },
+      takeSteeredInputs: async () => [], closeSteering() {},
+    } as unknown as AgentExecutionContext;
+    const engine = new QueryEngine({ async *streamMessage() { calls++; yield { type: "complete" as const, stopReason: "end_turn" }; } },
+      new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    await expect((async () => {
+      for await (const event of engine.submitMessage("q", { execution })) streamEvents.push(event);
+    })()).rejects.toBe(limit);
+    expect(calls).toBe(0);
+    expect(streamEvents.some(event => event.type === "model_attempt_finished")).toBe(false);
+    expect(emitted.filter(event => event.type === "model.attempt.started")).toHaveLength(boundary === "started" ? 1 : 0);
+  });
+  it("settles registration followed by cancellation as proven not dispatched", async () => {
+    const controller = new AbortController();
+    const cancellation = new Error("cancelled");
+    let calls = 0;
+    const events: StreamEvent[] = [];
+    const execution = {
+      emit: async (event: AgentEventInput) => { if (event.type === "model.attempt.started") controller.abort(cancellation); },
+      takeSteeredInputs: async () => [], closeSteering() {},
+    } as unknown as AgentExecutionContext;
+    const engine = new QueryEngine({ async *streamMessage() { calls++; yield { type: "complete" as const, stopReason: "end_turn" }; } },
+      new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    await expect((async () => { for await (const event of engine.submitMessage("q", { execution, signal: controller.signal })) events.push(event); })())
+      .rejects.toBe(cancellation);
+    expect(calls).toBe(0);
+    expect(events.filter(event => event.type === "model_attempt_finished")).toMatchObject([
+      { status: "interrupted", usageStatus: "complete", notDispatched: true },
+    ]);
+  });
   it("shows failed-attempt argument progress but commits and executes only the successful retry", async () => {
     let requests = 0, executions = 0;
     const registry = new ToolRegistry();
@@ -124,11 +162,12 @@ describe("QueryEngine model network retry", () => {
     const execution = { emit: async (event: any) => { emitted.push(event); } };
     const active = (engine as any).createCompactClient(client, "m", execution);
     for await (const _ of active.submitMessage("compact")) {}
-    expect(emitted.map((event) => event.type)).toEqual(["model.attempt.finished", "usage.updated"]);
-    expect(emitted[0].data.usage).toEqual({ inputTokens: 3, outputTokens: 1 });
+    expect(emitted.map((event) => event.type)).toEqual(["model.attempt.started", "model.attempt.finished", "usage.updated"]);
+    expect(emitted[0].data).toMatchObject({ model: "m", purpose: "compaction", attempt: 1 });
+    expect(emitted[1].data.usage).toEqual({ inputTokens: 3, outputTokens: 1 });
     const standalone = (engine as any).createCompactClient(client, "m");
     for await (const _ of standalone.submitMessage("compact")) {}
-    expect(emitted).toHaveLength(2);
+    expect(emitted).toHaveLength(3);
     expect(engine.getTotalUsage()).toMatchObject({ inputTokens: 6, outputTokens: 2 });
   });
 
@@ -180,7 +219,7 @@ describe("QueryEngine model network retry", () => {
     })()).rejects.toThrow("stopped");
     expect(events.filter((event) => event.type === "model_attempt_finished")).toEqual([{
       type: "model_attempt_finished", generationId: expect.any(String), attempt: 1,
-      status: "interrupted", usageStatus: "partial",
+      status: "interrupted", usageStatus: "unknown",
       usage: { inputTokens: 8, outputTokens: 2 },
     }]);
   });
@@ -261,7 +300,7 @@ describe("QueryEngine model network retry", () => {
       expect(finished).toHaveLength(2);
       expect(finished.map((event) => [event.attempt, event.status, event.usageStatus])).toEqual([
         [1, "failed", "unknown"],
-        [2, "completed", "complete"],
+        [2, "completed", "unknown"],
       ]);
       expect(engine.getTotalUsage()).toMatchObject({ inputTokens: 10, outputTokens: 4 });
     } finally {

@@ -169,6 +169,10 @@ export interface GoalComposerState {
   busy: boolean
   error: string | null
   maxAutoTurns: number
+  tokenBudget?: string
+  changeKind?: "refine" | "pivot"
+  changeReason?: string
+  replaceRequirementIds?: string[]
   ordinaryDraft?: DesktopComposerDraft
   editingGoal?: SessionGoal
   createdSessionId?: string
@@ -179,6 +183,8 @@ export interface GoalComposerState {
 export interface GoalActions {
   setGoalMode: (scope: string, active: boolean) => void
   setGoalAutoTurns: (scope: string, count: number) => void
+  setGoalTokenBudget: (scope: string, value: string) => void
+  setGoalChange: (scope: string, patch: Pick<GoalComposerState, "changeKind" | "changeReason" | "replaceRequirementIds">) => void
   dismissGoalError: (scope: string) => void
   dismissGoalBanner: (scope: string, goalId: string) => void
   refreshGoal: (sessionId: string) => Promise<void>
@@ -187,7 +193,7 @@ export interface GoalActions {
     sessionId: string,
     input: Pick<
       DesktopSessionGoalActionInput,
-      "action" | "additionalAutoTurns" | "questionId" | "response"
+      "action" | "additionalAutoTurns" | "questionId" | "response" | "tokenBudget" | "objectiveVersion" | "reprepare"
     >
   ) => Promise<void>
 }

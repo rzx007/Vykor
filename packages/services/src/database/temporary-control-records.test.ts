@@ -48,7 +48,7 @@ const settlementInput = {
 describe("temporary control records", () => {
   const goalWrites: Array<[string, (repository: GoalRepository) => void]> = [
     ["insert goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, status: "completed" }); repository.insertGoal({ id: "added", sessionId: "temporary", objective: "next", maxAutoTurns: 2 }); }],
-    ["revise goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, objective: "changed" }); }],
+    ["revise goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, objective: "changed", stopReason: { code: "user_paused", at: 10 } }); }],
     ["begin request", (repository) => { repository.beginRequest({ requestId: "added", sessionId: "temporary", fingerprint: "new" }); }],
     ["settle request", (repository) => { repository.settleRequest("request", { status: "completed", result: { value: "changed" } }); }],
     ["upsert assessment", (repository) => { repository.recordAssessment({ goalId: "goal", revision: 0, runId: "run", assessment: { verifiedSignatures: ["changed"] } }); }],
@@ -120,10 +120,10 @@ describe("temporary control records", () => {
     try {
       store.sessions.create({ id: "formal", cwd: process.cwd(), model: "m" });
       store.sessions.create({ id: "temporary", cwd: process.cwd(), model: "m", storage: "memory" });
-      const formalGoal = store.goals.createGoal({ id: "formal-goal", sessionId: "formal", objective: "formal", maxAutoTurns: 1 });
-      const goal = store.goals.createGoal({ id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
+      const formalGoal = store.goals.createGoal({ phase: "executing", id: "formal-goal", sessionId: "formal", objective: "formal", maxAutoTurns: 1 });
+      const goal = store.goals.createGoal({ phase: "executing", id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
       const run = store.runs.createRun({ id: "temporary-run", sessionId: "temporary" });
-      expect(store.goals.startGoalRun(goal.id, 0, run.id, true)).toBe(true);
+      expect(store.goals.startGoalRun(goal.id, goal.objectiveVersion, run.id, true)).toBe(true);
       expect(store.goals.getGoal(goal.id)).toMatchObject({ currentRunId: run.id, autoTurnsUsed: 1 });
       store.goals.finishGoalRun(run.id);
       expect(store.goals.getGoal(goal.id)?.currentRunId).toBeUndefined();
@@ -219,7 +219,7 @@ describe("temporary control records", () => {
       const updated = repository.updateGoalRevision(goal.id, {
         expectedRevision: 0,
         evidence: ["first"],
-        wait: { kind: "external", handleId: "handle", runId: "external-run", deadlineAt: 100 },
+        wait: { kind: "external", targetRunId: "handle", runId: "external-run", deadlineAt: 100 },
       });
       expect(updated).toMatchObject({ revision: 1, evidence: ["first"] });
       updated.evidence.push("caller-change");

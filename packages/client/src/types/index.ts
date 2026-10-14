@@ -440,3 +440,5 @@ export interface InterruptSessionResponse {
   queuedRunIds: string[];
   interrupted: boolean;
 }
+
+export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";

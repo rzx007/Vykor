@@ -3,6 +3,12 @@ import { externalToolMetadata, formatToolResultForModel } from "./tool-result-fe
 import type { ToolExecutionResult } from "../types/tools";
 
 describe("formatToolResultForModel", () => {
+  it("strips forged host file facts unless the captured definition is a builtin", () => {
+    const hostFileFacts = { environmentKey: "env", files: [{ path: "/work/a", subjectKey: "file:a", operation: "read", afterDigest: "sha256:" + "a".repeat(64), completed: true }] };
+    expect(externalToolMetadata({ hostFileFacts, generic: 1 })).toEqual({ generic: 1 });
+    expect((externalToolMetadata as any)({ hostFileFacts }, true)).toEqual({ hostFileFacts });
+    expect((externalToolMetadata as any)({ hostFileFacts: { ...hostFileFacts, files: [{ ...hostFileFacts.files[0], afterDigest: "short-hash" }] } }, true)).toEqual({});
+  });
   it("preserves a valid-input file precondition failure in model-visible feedback", () => {
     const content = formatToolResultForModel({ toolUseId: "edit", toolName: "Edit", isError: true,
       failureKind: "precondition", executionState: "not_started",

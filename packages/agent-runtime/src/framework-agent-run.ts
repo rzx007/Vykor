@@ -7,10 +7,13 @@ import type { AgentChildManager } from "./child-agent.js";
 import { abortError, serializeError } from "./agent-errors.js";
 import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 import { createGoalRunContribution } from "./goal-extension.js";
+import type { GoalRunBinding } from "./goal-extension.js";
 
 interface FrameworkAgentRunOptions {
+  limits?: AgentExecutionContext["limits"];
+  profile?: AgentExecutionContext["profile"];
   capabilityView?: AgentExecutionContext["capabilityView"];
-  goal?: { goalId: string; revision: number; objective?: string };
+  goal?: GoalRunBinding;
   agentId: string;
   session: AgentSession;
   runtime: RuntimeBundle;
@@ -92,6 +95,7 @@ export function streamEventToAgentEvent(event: StreamEvent): AgentEventInput | u
         status: event.status,
         usageStatus: event.usageStatus,
         ...(event.usage ? { usage: event.usage } : {}),
+        ...(event.notDispatched ? { notDispatched: event.notDispatched } : {}),
       },
     };
   }
@@ -189,13 +193,14 @@ export class FrameworkAgentRun implements AgentRunHandle {
       traceId: this.traceId,
       signal: this.controller.signal,
     };
-    const execution: AgentExecutionContext = {
+    let execution: AgentExecutionContext = {
       scope,
+      limits: this.options.limits,
+      profile: this.options.profile,
       capabilityView: this.options.capabilityView,
       ...(this.options.hardMaxTurns !== undefined ? { hardMaxTurns: this.options.hardMaxTurns } : {}),
-      ...(this.options.goal ? { contribution: createGoalRunContribution(this.options.goal) } : {}),
       effects: this.options.effects,
-      children: this.options.children.createController(scope, this.options.capabilityView),
+      children: this.options.children.createController({ ...scope, limits: this.options.limits }, this.options.capabilityView),
       emit: (event) => this.emit(event),
       takeSteeredInputs: (options) => this.takeSteeredInputs(options),
       closeSteering: () => {
@@ -213,6 +218,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
           ...(this.options.metadata ? { metadata: this.options.metadata } : {}),
         },
       });
+      await this.options.limits?.check("run");
+      if (this.options.goal) execution = { ...execution, contribution: await createGoalRunContribution(this.options.goal) };
       await this.emit({ type: "run.started", data: {} });
       this.start.resolve({
         sessionId: this.sessionId,

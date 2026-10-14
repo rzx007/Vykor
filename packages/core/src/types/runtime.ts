@@ -15,6 +15,33 @@ import type { AgentEventInput } from "./runtime-events.js";
 export * from "./runtime-child.js";
 export * from "./runtime-events.js";
 
+export interface AgentExecutionLimits {
+  check(boundary: "run" | "model" | "tool" | "child" | "maintenance",
+    tool?: { toolName: string; toolAttemptId: string }): void | Promise<void>;
+}
+
+/** Host-owned restrictions scoped to one Run, including every model retry. */
+export interface AgentExecutionProfile {
+  maxOutputTokens?: number;
+  executableHooks?: boolean;
+}
+
+const AGENT_EXECUTION_LIMIT_ERROR = Symbol.for("@vykor/core/AgentExecutionLimitError");
+
+export function isAgentExecutionLimitError(value: unknown): value is AgentExecutionLimitError {
+  return typeof value === "object" && value !== null
+    && AGENT_EXECUTION_LIMIT_ERROR in value && value[AGENT_EXECUTION_LIMIT_ERROR] === true;
+}
+
+export class AgentExecutionLimitError extends Error {
+  private readonly [AGENT_EXECUTION_LIMIT_ERROR] = true;
+  static [Symbol.hasInstance](value: unknown): boolean { return isAgentExecutionLimitError(value); }
+  constructor(message: string) {
+    super(message);
+    this.name = "AgentExecutionLimitError";
+  }
+}
+
 /** The user-selected values that are safe to change between model requests. */
 export type AgentRequestConfiguration = {
   model: string;
@@ -163,6 +190,8 @@ export interface AgentEffects {
 export interface AgentRunToolContribution {
   readonly definition: import("./tools").ToolDefinition;
   readonly permission: "host-internal";
+  /** End only after this exact definition succeeds and the whole batch is delivered. */
+  readonly endRunOnSuccess?: true;
 }
 
 export interface AgentRunContribution {
@@ -265,6 +294,8 @@ export interface RunCapabilityView {
 
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
+  readonly limits?: AgentExecutionLimits;
+  readonly profile?: AgentExecutionProfile;
   readonly scope: AgentRunScope;
   readonly capabilityView?: RunCapabilityView;
   /** Trusted, run-scoped ceiling for this Run only. Later configuration cannot raise it. */

@@ -8,6 +8,23 @@ import { SessionStore } from "../session-runtime/store.js";
 import { RunRepository } from "./run-repository.js";
 
 describe("RunRepository read operations", () => {
+  it("lists only the requested Goal objective across durable and memory descendants", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-runs-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    try {
+      store.sessions.create({ id: "root", cwd: directory, model: "m" });
+      store.sessions.create({ id: "child", cwd: directory, model: "m", storage: "memory" });
+      store.runs.createRun({ id: "root-run", sessionId: "root", metadata: { goalId: "g", goalObjectiveVersion: 1 } });
+      store.runs.createRun({ id: "child-run", sessionId: "child", metadata: { goalId: "g", goalObjectiveVersion: 1, parentRunId: "root-run" } });
+      store.runs.createRun({ id: "new-version", sessionId: "child", metadata: { goalId: "g", goalObjectiveVersion: 2 } });
+      const runs = store.runs.listGoalRuns("g", 1);
+      expect(runs.map(run => run.id).sort()).toEqual(["child-run", "root-run"]);
+      expect(store.runs.listGoalRuns("g").map(run => run.id).sort()).toEqual(["child-run", "new-version", "root-run"]);
+      runs[0].metadata.goalId = "changed";
+      expect(store.runs.listGoalRuns("g", 1)).toHaveLength(2);
+      expect(store.runs.listGoalRuns("missing", 1)).toEqual([]);
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it("gets and lists runs with input ownership, promotion, sorting and clone protection", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });

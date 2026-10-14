@@ -1,8 +1,8 @@
 import type { AutoReviewMode, SessionRecord } from "@vykor/protocol";
 import { readSessionModelRetryState } from "@vykor/protocol";
 import type { ProviderInputCapabilities } from "@vykor/api";
-import { PluginPreparationError } from "@vykor/agent-runtime";
-import type { ContentBlock, ModelInputCapabilities } from "@vykor/core";
+import { PluginPreparationError, type GoalRunBinding, type GoalReadSnapshot } from "@vykor/agent-runtime";
+import { isAgentExecutionLimitError, type AgentExecutionLimits, type ContentBlock, type ModelInputCapabilities } from "@vykor/core";
 import type { GoalOperations, SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
@@ -46,6 +46,9 @@ export interface SessionRunExecutorContext {
     "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
   >;
   goals: Pick<GoalOperations, "getGoal">;
+  checkGoalExecution?(goalId: string, objectiveVersion: number): void;
+  checkGoalRunExecution?(goalId: string, objectiveVersion: number, runId: string, boundary: string, tool?: {toolName: string; toolAttemptId: string}): void;
+  readGoalSnapshot?(goalId: string, objectiveVersion: number, runId: string): Promise<GoalReadSnapshot>;
   agentPool: Pick<
     AgentPool,
     "configured" | "acquireSession" | "close" | "closeIfStale"
@@ -237,27 +240,37 @@ export class SessionRunExecutor {
         );
       }
       const goalId = typeof storedRun?.metadata?.goalId === "string" ? storedRun.metadata.goalId : undefined;
-      const goalRevision = typeof storedRun?.metadata?.goalRevision === "number" ? storedRun.metadata.goalRevision : undefined;
-      let goalBinding: { goalId: string; revision: number; objective: string } | undefined;
-      if (goalId && goalRevision !== undefined) {
+      const goalObjectiveVersion = typeof storedRun?.metadata?.goalObjectiveVersion === "number" ? storedRun.metadata.goalObjectiveVersion : undefined;
+      let goalBinding: GoalRunBinding | undefined;
+      if (goalId) {
         const goal = this.context.goals.getGoal(goalId);
-        if (!goal || goal.sessionId !== sessionId || goal.revision !== goalRevision || goal.status !== "active") {
+        if (!goal || goal.sessionId !== sessionId || goal.objectiveVersion !== goalObjectiveVersion || goal.status !== "active" || goal.currentRunId !== runId) {
           throw new Error("session_goal_run_is_stale");
         }
-        goalBinding = { goalId: goal.id, revision: goal.revision, objective: goal.objective };
+        if (storedRun?.metadata.goalPhase !== goal.phase) throw new Error("session_goal_phase_is_stale");
+        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion, objective: goal.objective, phase: goal.phase,
+          readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
       }
+      const limits: AgentExecutionLimits | undefined = goalBinding && this.context.checkGoalExecution
+        ? { check: (boundary, tool) => this.context.checkGoalRunExecution
+          ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, runId, boundary, tool)
+          : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion) } : undefined;
+      await limits?.check("run");
 
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
-      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
+      const preparing = goalBinding?.phase === "preparing";
+      if (!preparing) await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
-      const uiSummary = this.context.pluginUi?.summarizeForInput?.(sessionId, runId);
+      const uiSummary = !preparing ? this.context.pluginUi?.summarizeForInput?.(sessionId, runId) : undefined;
       if (uiSummary) submittedContent = typeof submittedContent === "string"
         ? `${submittedContent}\n\n${uiSummary}` : [...submittedContent, { type: "text", text: uiSummary }];
       const run = agent.submitMessage(submittedContent, {
         ...(capabilityView ? { capabilityView } : {}),
         ...(goalBinding ? { goal: goalBinding } : {}),
+        ...(limits ? { limits } : {}),
+        ...(preparing ? { profile: { maxOutputTokens: 1024, executableHooks: false } } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,
         delivery: admitted.delivery,
@@ -345,17 +358,18 @@ export class SessionRunExecutor {
 
       // Auto review runs before memory/personalization maintenance and never overrides
       // the parent Run's completed status on review failure.
-      await reviewAutoReview(this.context, {
+      if (!preparing) await reviewAutoReview(this.context, {
         sessionId,
         inputId,
         runId,
         cwd: session.cwd,
         agent,
         signal: workContext.signal,
+        limits,
       });
 
       // 只在成功走完之后做记忆/个性化/auto-dream。失败路径不跑，避免半截对话被写进长期记忆。
-      await this.context.postRunMaintenance?.run(sessionId, runId, agent);
+      if (!preparing) await this.context.postRunMaintenance?.run(sessionId, runId, agent, limits);
 
       // Run terminal (success): invalidate then rewrite live usage from the same agent
       // before closeIfStale may drop the warm runtime.
@@ -407,7 +421,7 @@ export class SessionRunExecutor {
 
       const message = error instanceof Error ? error.message : String(error);
       const traceId = this.context.traceIdForRun(runId);
-      const interrupted = error instanceof RunInterruptedError || workContext.signal.aborted;
+      const interrupted = error instanceof RunInterruptedError || isAgentExecutionLimitError(error) || workContext.signal.aborted;
       const routingError = attachmentRoutingError(error);
       const before = this.context.events.checkpoint();
       this.context.data.transaction(() => {

@@ -39,6 +39,17 @@ describe("buildCodexHeaders", () => {
 
 describe("CodexSubscriptionClient phases", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("keeps cache-inclusive input and missing output distinct from zero", async () => {
+    vi.stubGlobal("fetch", async () => new Response('data: {"type":"response.completed","response":{"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":7}}}}\n\n', {
+      headers: { "content-type": "text/event-stream" },
+    }));
+    const client = new CodexSubscriptionClient({ apiKey: jwt({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } }) });
+    const events = [];
+    for await (const event of client.streamMessage({ model: "m", messages: [] })) events.push(event);
+    expect(events.find(event => event.type === "usage")).toMatchObject({ usage: { metering: {
+      knownInputTokens: 10, knownOutputTokens: 0, completeness: "partial", inputIncludesCache: true,
+    } } });
+  });
 
   it("preserves optional function parameters instead of relying on Responses strict normalization", async () => {
     const schema = { type: "object", properties: { file_path: { type: "string" },
@@ -196,7 +207,7 @@ describe("CodexSubscriptionClient stream completion validation", () => {
         if (event.type === "usage") usages.push(event.usage);
       }
     })()).rejects.toMatchObject({ name: "ModelRequestFailure" });
-    expect(usages).toEqual([{ inputTokens: 7, outputTokens: 2 }]);
+    expect(usages).toMatchObject([{ inputTokens: 7, outputTokens: 2, metering: { completeness: "partial" } }]);
   });
 
   it("rejects a stream that ends without response.completed", async () => {

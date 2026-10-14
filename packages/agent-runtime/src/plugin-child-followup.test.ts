@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import type { RuntimeBundle, Settings, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import type { AgentEvent, RuntimeBundle, Settings, StreamingMessageClient, ToolDefinition } from "@vykor/core";
 import { CompositeAgentJobHost } from "@vykor/jobs";
 import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@vykor/services/executions";
 import { LocalAgentJobHost } from "../../tools/src/job/local-job-host.js";
@@ -16,6 +16,9 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
   const cwd = mkdtempSync(join(tmpdir(), "vk-plugin-child-followup-"));
   const sessionId = "root-followup";
   const pluginCalls: string[] = [];
+  const events: AgentEvent[] = [];
+  const firstLimits: string[] = [];
+  const secondLimits: string[] = [];
   let childId = "";
   let rootRuntime!: RuntimeBundle;
   const settings: Settings = { model: "test", apiFormat: "anthropic", maxTurns: 3, permission: { mode: "default" } };
@@ -55,6 +58,7 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
     },
   });
   const agent = await createAgentKernel({
+    onEvent: (event) => { events.push(event); },
     cwd, sessionId, settings, effects: { requestPermission: async () => ({ status: "approved" }) },
     capabilities: {
       terminal: unavailableCapability("test"), backgroundShell: unavailableCapability("test"),
@@ -79,7 +83,9 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
     rootRuntime.queryEngine.setJobs(new CompositeAgentJobHost([new LocalAgentJobHost({
       cwd, sessionId, childManager: agent.children,
     })]));
-    await agent.runMessage("spawn", { capabilityView: agent.createRunCapabilityView("P") });
+    await agent.runMessage("spawn", { capabilityView: agent.createRunCapabilityView("P"), limits: { check: boundary => { firstLimits.push(boundary); } } });
+    expect(firstLimits).toContain("child");
+    const firstLimitCount = firstLimits.length;
     expect(pluginCalls).toEqual(["P"]);
     expect(agent.children.get(childId)!.state).toBe("idle");
     for (const pluginId of [undefined, "Q"]) {
@@ -87,10 +93,21 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
       expect(result.output).toContain("not authorized for this Run");
       expect(pluginCalls).toEqual(["P"]);
     }
-    const accepted = await agent.runMessage("follow up", { capabilityView: agent.createRunCapabilityView("P") });
+    const accepted = await agent.runMessage("follow up", { capabilityView: agent.createRunCapabilityView("P"), limits: { check: boundary => { secondLimits.push(boundary); } } });
     expect(accepted.output).toContain('"action":"send"');
     await agent.children.get(childId)!.result;
     expect(pluginCalls).toEqual(["P", "P"]);
+    expect(firstLimits).toHaveLength(firstLimitCount);
+    expect(secondLimits).toContain("child");
+    expect(secondLimits.filter(boundary => boundary === "model").length).toBeGreaterThanOrEqual(4);
+    const starts = events.filter((event) => event.type === "run.started");
+    const rootStarts = starts.filter((event) => !event.context.childId);
+    const childStarts = starts.filter((event) => event.context.childId === childId);
+    expect(childStarts).toHaveLength(2);
+    expect(childStarts[0].context.parentRunId).toBe(rootStarts[0].context.runId);
+    expect(childStarts[1].context.parentRunId).toBe(rootStarts.at(-1)!.context.runId);
+    expect(childStarts[1].context.parentRunId).not.toBe(childStarts[0].context.parentRunId);
+    expect(childStarts[1].context.sessionId).toBe(childStarts[0].context.sessionId);
   } finally {
     await agent.close();
     await getDetachedProcessSupervisor({ cwd, sessionId }).aclose();

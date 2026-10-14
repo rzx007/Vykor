@@ -35,7 +35,7 @@ describe("GoalTransactions", () => {
       failGoalEvent(store, "session.goal.created");
 
       expect(() =>
-        store.goals.createGoal({
+        store.goals.createGoal({ phase: "executing",
           id: "goal-1",
           sessionId: "s1",
           objective: "finish",
@@ -53,7 +53,7 @@ describe("GoalTransactions", () => {
 
   it("rolls back update and start when their durable event fails", () => {
     withStore((store) => {
-      const goal = store.goals.createGoal({
+      const goal = store.goals.createGoal({ phase: "executing",
         id: "goal-1",
         sessionId: "s1",
         objective: "finish",
@@ -66,14 +66,18 @@ describe("GoalTransactions", () => {
         store.goals.updateGoal(goal.id, {
           expectedRevision: goal.revision,
           status: "paused",
+          objective: "changed",
+          stopReason: { code: "user_paused", at: 10 },
         }),
       ).toThrow("forced goal event failure");
       expect(store.goals.getGoal(goal.id)).toMatchObject({
         revision: 0,
+        objectiveVersion: 1,
+        objective: "finish",
         status: "active",
       });
 
-      expect(() => store.goals.startGoalRun(goal.id, 0, run.id, true)).toThrow(
+      expect(() => store.goals.startGoalRun(goal.id, goal.objectiveVersion, run.id, true)).toThrow(
         "forced goal event failure",
       );
       expect(store.goals.getGoal(goal.id)).toMatchObject({
@@ -85,14 +89,14 @@ describe("GoalTransactions", () => {
 
   it("rolls back clearing currentRunId when the finish event fails", () => {
     withStore((store) => {
-      const goal = store.goals.createGoal({
+      const goal = store.goals.createGoal({ phase: "executing",
         id: "goal-1",
         sessionId: "s1",
         objective: "finish",
         maxAutoTurns: 2,
       });
       const run = store.runs.createRun({ id: "run-1", sessionId: "s1" });
-      expect(store.goals.startGoalRun(goal.id, 0, run.id, false)).toBe(true);
+      expect(store.goals.startGoalRun(goal.id, goal.objectiveVersion, run.id, false)).toBe(true);
       failGoalEvent(store, "session.goal.updated");
 
       expect(() => store.goals.finishGoalRun(run.id)).toThrow(
@@ -112,7 +116,7 @@ describe("GoalTransactions", () => {
       const beforeSequence = internals.state.nextEventSeq;
       expect(() =>
         store.transaction(() => {
-          store.goals.createGoal({
+          store.goals.createGoal({ phase: "executing",
             id: "goal-outer",
             sessionId: "s1",
             objective: "outer",
@@ -174,7 +178,7 @@ describe("GoalTransactions", () => {
         now: 1_000,
       });
       first.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
-      const goal = first.goals.createGoal({
+      const goal = first.goals.createGoal({ phase: "executing",
         id: "goal-1",
         sessionId: "s1",
         objective: "owner",
@@ -218,6 +222,8 @@ describe("GoalTransactions", () => {
       for (const write of writes) expect(write).toThrow();
       expect(first.goals.getGoal(goal.id)).toMatchObject({
         revision: 0,
+        objectiveVersion: 1,
+        objective: "owner",
         status: "active",
       });
       expect(first.goals.getGoalRequest("request")).toBeUndefined();

@@ -16,12 +16,15 @@ const goal = (sessionId = "s1", patch: Partial<SessionGoal> = {}): SessionGoal =
   id: "g1",
   sessionId,
   objective: "完成测试",
+  objectiveVersion: 1,
+  phase: "executing", requirements: [], stagnationCount: 0,
   revision: 0,
   status: "active",
   maxAutoTurns: 20,
   autoTurnsUsed: 0,
   noProgressCount: 0,
   evidence: [],
+  usage: { knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: 1 },
   createdAt: 1,
   updatedAt: 1,
   ...patch,
@@ -47,6 +50,28 @@ const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => 
 }
 
 describe("goal actions", () => {
+  it("follows a refresh requested during a slow GET with one fresh read", async () => {
+    const first = deferred<SessionGoal>();
+    vi.mocked(window.desktop.sessions.getGoal).mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(goal("s1", { usage: { ...goal().usage, knownTokens: 13, seq: 2 } }));
+    const reading = useDesktopSessionStore.getState().refreshGoal("s1");
+    const newer = useDesktopSessionStore.getState().refreshGoal("s1");
+    expect(window.desktop.sessions.getGoal).toHaveBeenCalledTimes(1);
+    first.resolve(goal("s1", { usage: { ...goal().usage, knownTokens: 10, seq: 1 } }));
+    await Promise.all([reading, newer]);
+    expect(window.desktop.sessions.getGoal).toHaveBeenCalledTimes(2);
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.usage).toMatchObject({ knownTokens: 13, seq: 2 });
+  });
+  it("merges usage independently from an older Goal state", async () => {
+    const current = goal("s1", { revision: 8, status: "cancelled", usage: { ...goal().usage, knownTokens: 10, seq: 10 } });
+    useDesktopSessionStore.setState({ goalsBySession: { s1: current } });
+    vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(goal("s1", { revision: 7, status: "active", usage: { ...goal().usage, knownTokens: 11, seq: 11 } }));
+    await useDesktopSessionStore.getState().refreshGoal("s1");
+    expect(useDesktopSessionStore.getState().goalsBySession.s1).toMatchObject({ revision: 8, status: "cancelled", usage: { knownTokens: 11, seq: 11 } });
+    vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(goal("s1", { revision: 9, status: "cancelled", usage: { ...goal().usage, knownTokens: 8, seq: 8 } }));
+    await useDesktopSessionStore.getState().refreshGoal("s1");
+    expect(useDesktopSessionStore.getState().goalsBySession.s1).toMatchObject({ revision: 9, status: "cancelled", usage: { knownTokens: 11, seq: 11 } });
+  });
   beforeEach(() => {
     resetDesktopSessionStore()
     useDesktopSessionStore.setState({ selectedModel: "test", workspaceMode: "outside_project" })
@@ -75,6 +100,19 @@ describe("goal actions", () => {
       },
     }))
   }
+
+  it("submits an optional positive total budget and keeps invalid input in the draft", async () => {
+    const scope = sessionComposerScope("s1");
+    useDesktopSessionStore.getState().setGoalMode(scope, true);
+    draft(scope, "目标");
+    useDesktopSessionStore.getState().setGoalTokenBudget(scope, "1e3");
+    await useDesktopSessionStore.getState().submitGoal(scope);
+    expect(window.desktop.sessions.createGoal).not.toHaveBeenCalled();
+    expect(useDesktopSessionStore.getState().goalComposersByScope[scope]?.tokenBudget).toBe("1e3");
+    useDesktopSessionStore.getState().setGoalTokenBudget(scope, "50000");
+    await useDesktopSessionStore.getState().submitGoal(scope);
+    expect(window.desktop.sessions.createGoal).toHaveBeenCalledWith(expect.objectContaining({ tokenBudget: 50000 }));
+  });
 
   it("keeps new-goal text on exit, and restores ordinary text and files after editing", () => {
     const scope = sessionComposerScope("s1")
@@ -145,6 +183,7 @@ describe("goal actions", () => {
     draft(scope, "原草稿", [{ ...attachment(), status: "uploading", assetId: undefined }])
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
     useDesktopSessionStore.getState().setGoalMode(scope, true)
+    useDesktopSessionStore.getState().setGoalChange(scope, { changeKind: "refine", changeReason: "补充完成条件", replaceRequirementIds: [] })
     useDesktopSessionStore.getState().applyAttachmentUploadEvent({
       type: "success",
       draftId: "a1",
@@ -156,7 +195,7 @@ describe("goal actions", () => {
     })
     await useDesktopSessionStore.getState().submitGoal(scope)
     expect(window.desktop.sessions.updateGoal).toHaveBeenCalledWith(
-      expect.objectContaining({ attachments: [] })
+      expect.objectContaining({ attachments: [], changeKind: "refine", changeReason: "补充完成条件", replaceRequirementIds: [] })
     )
     expect(
       selectComposerDocumentText(selectDraftDocument(useDesktopSessionStore.getState(), scope))
@@ -209,19 +248,26 @@ describe("goal actions", () => {
     expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("paused")
   })
 
-  it("removes a cancelled goal immediately but keeps a completed result for this view", async () => {
-    vi.mocked(window.desktop.sessions.getGoal).mockRejectedValue(new Error("offline"))
+  it("hides a cancelled banner while retaining its ledger and keeps a completed result", async () => {
+    vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(null)
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
     vi.mocked(window.desktop.sessions.goalAction).mockResolvedValueOnce(
       goal("s1", { status: "cancelled", revision: 1 })
     )
 
     await useDesktopSessionStore.getState().applyGoalAction("s1", { action: "cancel" })
-    expect(useDesktopSessionStore.getState().goalsBySession.s1).toBeNull()
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("cancelled")
+    expect(useDesktopSessionStore.getState().goalComposersByScope[sessionComposerScope("s1")]?.dismissedGoalId).toBe("g1")
+    await useDesktopSessionStore.getState().refreshGoal("s1")
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("cancelled")
+    vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(goal("s1", { status: "cancelled", revision: 1, usage: { ...goal().usage, knownTokens: 12, seq: 2 } }))
+    await useDesktopSessionStore.getState().refreshGoal("s1")
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.usage.knownTokens).toBe(12)
 
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
+    vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(goal("s1", { status: "completed", revision: 2 }))
     vi.mocked(window.desktop.sessions.goalAction).mockResolvedValueOnce(
-      goal("s1", { status: "completed", revision: 1 })
+      goal("s1", { status: "completed", revision: 2 })
     )
     await useDesktopSessionStore
       .getState()

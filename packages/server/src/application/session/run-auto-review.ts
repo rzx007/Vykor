@@ -1,6 +1,7 @@
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
 import type { WorkspaceBaselineResult, WorkspaceChangeResult } from "./session-workspace-changes.js";
+import type { AgentExecutionLimits } from "@vykor/core";
 
 type AutoReviewContext = Pick<
   SessionRunExecutorContext,
@@ -51,6 +52,7 @@ export async function reviewAutoReview(context: AutoReviewContext, input: {
   cwd: string;
   agent: Awaited<ReturnType<AgentPool["acquireSession"]>>;
   signal: AbortSignal;
+  limits?: AgentExecutionLimits;
 }): Promise<void> {
   let changes: WorkspaceChangeResult | undefined;
   if (context.workspaceChanges) {
@@ -73,6 +75,7 @@ export async function reviewAutoReview(context: AutoReviewContext, input: {
         cwd: input.cwd,
         agent: input.agent,
         signal: input.signal,
+        limits: input.limits,
         ...(changes ? { changes } : {}),
       });
     } else {

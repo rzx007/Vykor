@@ -4,6 +4,20 @@ import { AgentEventBus, AgentEventDeliveryError } from "./event-source.js";
 
 const context = { agentId: "a1", sessionId: "s1", runId: "r1", inputId: "i1", traceId: "t1" };
 
+it("preserves a host limit rejection and continues terminal event delivery", async () => {
+  const limit = Object.assign(new Error("closed"), { [Symbol.for("@vykor/core/AgentExecutionLimitError")]: true });
+  const delivered: string[] = [];
+  const bus = new AgentEventBus(event => {
+    if (event.type === "model.attempt.started") throw limit;
+    delivered.push(event.type);
+  });
+  await expect(bus.emit({ type: "model.attempt.started", data: {
+    generationId: "g", attempt: 1, model: "m", purpose: "generation",
+  } }, context)).rejects.toBe(limit);
+  await bus.emit({ type: "run.failed", data: { error: { name: "Error", message: "closed" } } }, context);
+  expect(delivered).toEqual(["run.failed"]);
+});
+
 describe("AgentEventBus", () => {
   it("delivers one ordered reliable event stream", async () => {
     const seen: Array<{ type: string; sequence: number }> = [];

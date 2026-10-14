@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { normalizeTokenMetering } from "./token-metering.js";
 import type {
   StreamingMessageClient,
   StreamMessageParams,
@@ -168,7 +169,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       ...tokenLimitParamForModel(params.model, params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX),
       temperature: params.temperature,
       stream: true,
-      stream_options: tools ? undefined : { include_usage: true },
+      stream_options: { include_usage: true },
       ...(params.reasoningEffort
         ? {
             reasoning_effort:
@@ -220,6 +221,8 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
               yield { type: "usage", usage: {
                 inputTokens: chunk.usage.prompt_tokens ?? 0,
                 outputTokens: chunk.usage.completion_tokens ?? 0,
+                metering: { ...normalizeTokenMetering({ input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens },
+                  true, Array.isArray(chunk.choices) && chunk.choices.length === 0), raw: { ...chunk.usage } },
               } };
             }
             continue;
@@ -288,6 +291,8 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
             yield { type: "usage", usage: {
               inputTokens: chunk.usage.prompt_tokens ?? 0,
               outputTokens: chunk.usage.completion_tokens ?? 0,
+              metering: { ...normalizeTokenMetering({ input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens },
+                true, !!choice.finish_reason), raw: { ...chunk.usage } },
             } };
           }
         }

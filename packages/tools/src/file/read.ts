@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { extname, posix, win32 } from "node:path";
-import { readToolOutputInlineChars, type ToolDefinition, type ToolResult } from "@vykor/core";
+import { readToolOutputInlineChars, type ToolContext, type ToolDefinition, type ToolResult } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
@@ -16,6 +16,31 @@ export const MAX_READ_BYTES_LABEL = "50 KB";
 export const MAX_LINE_LENGTH = 2000;
 export const MAX_LINE_SUFFIX = ` ... (line truncated to ${MAX_LINE_LENGTH} chars)`;
 export const MAX_SUGGESTIONS = 3;
+
+export function fileDigest(bytes: Uint8Array): `sha256:${string}` {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+/** Stable environment/workspace identity, independent of a Run or environment lease. */
+export function hostFileFacts(context: ToolContext, files: Array<{
+  path: string; operation: "read" | "write" | "edit" | "patch";
+  beforeDigest?: string; afterDigest: string; bodyVisible?: boolean;
+}>) {
+  const info = context.environment?.info;
+  const workspace = context.environment?.workspace;
+  const pathStyle = info?.pathStyle ?? (process.platform === "win32" ? "windows" : "posix");
+  const identityPath = (path: string) => pathStyle === "windows" ? win32.normalize(path).toLowerCase() : posix.normalize(path);
+  const environmentKey = `environment:${createHash("sha256").update(JSON.stringify({
+    kind: info?.kind ?? workspace?.kind ?? "local",
+    pathStyle,
+    hostRoot: identityPath(workspace?.hostRoot ?? context.cwd),
+    executionRoot: identityPath(workspace?.executionRoot ?? context.cwd),
+    shell: info?.shellDescriptor,
+  })).digest("hex")}`;
+  return { environmentKey, executionRoot: workspace?.executionRoot ?? context.cwd, pathStyle, files: files.map(file => ({ ...file, completed: true as const,
+    subjectKey: `file:${createHash("sha256").update(environmentKey).update("\0").update(identityPath(file.path)).digest("hex")}`,
+  })) };
+}
 
 export function normalizeReadInteger(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value)
@@ -237,6 +262,7 @@ export const fileReadTool: ToolDefinition = {
       });
       return {
         content: [{ type: "text", text: body ? `${body}\n\n${trailer}` : trailer }],
+        metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: fileDigest(bytes), bodyVisible: true }]) },
         executionState: "completed",
         compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
       };
@@ -313,7 +339,9 @@ async function inspectFileInfo(
   if (policy) info.writePolicyError = policy;
   return {
     content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
-    metadata: { fileInfo: info }, executionState: "completed",
+    metadata: { fileInfo: info, ...((kind === "file" || kind === "missing") ? {
+      hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: kind === "missing" ? "missing" : `sha256:${info.sha256}`, bodyVisible: false }]),
+    } : {}) }, executionState: "completed",
     compactSummary: `Read file info: ${filePath}; ${kind}; no write authorization`,
   };
 }

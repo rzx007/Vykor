@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { SessionGoal } from "@vykor/protocol";
+import type { GoalUsage, SessionGoal, GoalAssessment } from "@vykor/protocol";
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";
@@ -14,9 +14,11 @@ import {
   goalRequestFromRow,
   sessionGoalFromRow,
   type CreateSessionGoalStoreInput,
+  type GoalContinuationRecord,
   type SessionGoalRequestRecord,
   type UpdateSessionGoalStoreInput,
 } from "./goal-records.js";
+import { getGoalVersion } from "./goal-version.js";
 
 const openGoalStatuses = new Set(["active", "waiting_user", "blocked", "paused"]);
 
@@ -51,26 +53,29 @@ export class GoalRepository {
     return row ? sessionGoalFromRow(row) : undefined;
   }
 
-  getCurrentGoal(sessionId: string): SessionGoal | undefined {
+  getCurrentGoal(sessionId: string, includeTerminal = false): SessionGoal | undefined {
     const row = this.isTemporary(sessionId)
       ? [...this.temporaryRecords().goals.values()]
         .filter((row) =>
-          row.sessionId === sessionId && openGoalStatuses.has(row.status),
+          row.sessionId === sessionId && (includeTerminal || openGoalStatuses.has(row.status)),
         )
-        .sort((left, right) => right.updatedAt - left.updatedAt)[0]
+        .sort((left, right) => (includeTerminal ? right.createdAt - left.createdAt : 0) || right.updatedAt - left.updatedAt)[0]
       : this.database
       .select()
       .from(sessionGoals)
       .where(
         and(
           eq(sessionGoals.sessionId, sessionId),
-          inArray(sessionGoals.status, [...openGoalStatuses]),
+          includeTerminal ? undefined : inArray(sessionGoals.status, [...openGoalStatuses]),
         ),
       )
-      .orderBy(desc(sessionGoals.updatedAt))
+      .orderBy(...(includeTerminal ? [desc(sessionGoals.createdAt), desc(sessionGoals.updatedAt)] : [desc(sessionGoals.updatedAt)]))
       .limit(1)
       .get();
-    return row ? sessionGoalFromRow(row) : undefined;
+    if (!row) return undefined;
+    const goal = sessionGoalFromRow(row);
+    const version = getGoalVersion(this.storage, goal.id, goal.objectiveVersion);
+    return version ? { ...goal, versionSummary: { changeKind: version.changeKind, changeReason: version.changeReason, createdAt: version.createdAt } } : goal;
   }
 
   insertGoal(input: CreateSessionGoalStoreInput): SessionGoal {
@@ -80,16 +85,25 @@ export class GoalRepository {
       id,
       sessionId: input.sessionId,
       objective: input.objective,
+      objectiveVersion: 1,
+      phase: input.phase ?? "preparing",
+      requirementsJson: JSON.stringify(input.requirements ?? []),
+      preparationEpisodeId: input.preparationEpisodeId ?? null,
       pluginId: input.pluginId ?? null,
       revision: 0,
       status: "active",
       maxAutoTurns: input.maxAutoTurns,
+      tokenBudget: input.tokenBudget ?? null,
+      usageJson: JSON.stringify({ knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0,
+        inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: timestamp } satisfies GoalUsage),
       autoTurnsUsed: 0,
       noProgressCount: 0,
+      stagnationCount: 0,
       blockerKey: null,
       lastAssessmentJson: null,
       currentRunId: null,
       reason: null,
+      stopReasonJson: null,
       waitJson: null,
       evidenceJson: "[]",
       createdAt: timestamp,
@@ -128,6 +142,12 @@ export class GoalRepository {
     if (!current) throw new Error(`Session goal not found: ${id}`);
     if (current.revision !== input.expectedRevision)
       throw new Error("session_goal_revision_conflict");
+    const nextVersion = input.objectiveVersion ?? current.objectiveVersion + (input.objective !== undefined && input.objective !== current.objective ? 1 : 0);
+    if (!Number.isSafeInteger(nextVersion) || nextVersion < current.objectiveVersion || nextVersion > current.objectiveVersion + 1)
+      throw new Error("goal_version_binding_invalid");
+    const frozenVersion = getGoalVersion(this.storage, id, nextVersion);
+    if (frozenVersion?.frozenAt !== undefined && ((input.requirements !== undefined && JSON.stringify(input.requirements) !== JSON.stringify(frozenVersion.requirements))
+      || (input.objective !== undefined && input.objective !== frozenVersion.objective) || input.phase === "preparing")) throw new Error("goal_version_frozen");
     const next = {
       objective: input.objective ?? current.objective,
       pluginId: input.pluginId ?? current.pluginId,
@@ -156,15 +176,24 @@ export class GoalRepository {
     };
     const changes = {
       objective: next.objective,
+      objectiveVersion: nextVersion,
+      phase: input.phase ?? current.phase,
+      requirementsJson: JSON.stringify(input.requirements ?? current.requirements),
+      preparationEpisodeId: input.preparationEpisodeId === undefined ? (current.preparationEpisodeId ?? null) : input.preparationEpisodeId,
       pluginId: next.pluginId ?? null,
       revision: current.revision + 1,
       status: next.status,
       maxAutoTurns: next.maxAutoTurns,
+      tokenBudget: input.tokenBudget === undefined ? (current.tokenBudget ?? null) : input.tokenBudget,
       autoTurnsUsed: next.autoTurnsUsed,
       noProgressCount: next.noProgressCount,
+      stagnationCount: input.stagnationCount ?? current.stagnationCount,
       blockerKey: next.blockerKey ?? null,
       currentRunId: next.currentRunId ?? null,
       reason: next.reason ?? null,
+      stopReasonJson: input.stopReason === undefined
+        ? (current.stopReason ? JSON.stringify(current.stopReason) : null)
+        : (input.stopReason ? JSON.stringify(input.stopReason) : null),
       waitJson: next.wait ? JSON.stringify(next.wait) : null,
       evidenceJson: JSON.stringify(next.evidence),
       lastAssessmentJson: next.assessment ? JSON.stringify(next.assessment) : null,
@@ -334,6 +363,15 @@ export class GoalRepository {
     );
   }
 
+  listAssessments(goalId: string, objectiveVersion?: number): GoalAssessment[] {
+    const rows = this.temporary?.goals.has(goalId)
+      ? [...this.temporaryRecords().assessments.values()].filter(row => row.goalId === goalId)
+      : this.database.select().from(sessionGoalAssessments).where(eq(sessionGoalAssessments.goalId, goalId)).all();
+    return rows.sort((left, right) => left.createdAt - right.createdAt || left.revision - right.revision)
+      .map(row => JSON.parse(row.assessmentJson) as GoalAssessment)
+      .filter(assessment => objectiveVersion === undefined || assessment.objectiveVersion === objectiveVersion);
+  }
+
   recordContinuation(input: {
     goalId: string;
     revision: number;
@@ -379,6 +417,14 @@ export class GoalRepository {
     }
   }
 
+  findContinuation(runId: string): GoalContinuationRecord | undefined {
+    const row = [...this.temporary?.continuations.values() ?? []].find((row) => row.runId === runId)
+      ?? this.database.select().from(sessionGoalContinuations).where(eq(sessionGoalContinuations.runId, runId)).get();
+    if (!row || !row.inputId || !row.runId) return undefined;
+    return { goalId: row.goalId, revision: row.revision, previousRunId: row.previousRunId,
+      inputId: row.inputId, runId: row.runId, status: row.status as GoalContinuationRecord["status"] };
+  }
+
   markContinuation(runId: string, status: "dispatched" | "cancelled"): void {
     const records = this.temporary?.continuations;
     let updatedTemporary = false;
@@ -410,6 +456,24 @@ export class GoalRepository {
     return [...stored, ...temporary];
   }
 
+  listGoalIds(includeTemporary = true): string[] {
+    const stored = this.database.select({ id: sessionGoals.id }).from(sessionGoals).all().map(row => row.id);
+    if (!includeTemporary) return stored;
+    return [...stored,
+      ...this.temporary?.goals.keys() ?? []];
+  }
+
+  updateUsage(id: string, usage: GoalUsage): void {
+    const temporaryRow = this.temporary?.goals.get(id);
+    const changes = { usageJson: JSON.stringify(usage) };
+    if (temporaryRow) {
+      this.temporary!.capture(this.temporary!.goals, id);
+      this.temporary!.goals.set(id, { ...temporaryRow, ...changes });
+      return;
+    }
+    this.database.update(sessionGoals).set(changes).where(eq(sessionGoals.id, id)).run();
+  }
+
   listActiveExternalWaitGoals(): SessionGoal[] {
     const stored = this.database
       .select()
@@ -425,10 +489,11 @@ export class GoalRepository {
       .filter((goal) => goal.wait?.kind === "external");
   }
 
-  cancelPendingContinuations(): void {
+  cancelPendingContinuations(goalIds?: string[]): void {
+    if (goalIds?.length === 0) return;
     const records = this.temporary?.continuations;
     for (const [id, row] of records ?? []) {
-      if (row.status === "pending") {
+      if (row.status === "pending" && (!goalIds || goalIds.includes(row.goalId))) {
         this.temporary!.capture(records!, id);
         records!.set(id, { ...row, status: "cancelled", updatedAt: Date.now() });
       }
@@ -436,7 +501,8 @@ export class GoalRepository {
     this.database
       .update(sessionGoalContinuations)
       .set({ status: "cancelled", updatedAt: Date.now() })
-      .where(eq(sessionGoalContinuations.status, "pending"))
+      .where(and(eq(sessionGoalContinuations.status, "pending"),
+        goalIds ? inArray(sessionGoalContinuations.goalId, goalIds) : undefined))
       .run();
   }
 

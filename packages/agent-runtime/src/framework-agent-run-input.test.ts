@@ -1,10 +1,54 @@
 import { expect, it } from "vitest";
 import { FrameworkAgentRun } from "./framework-agent-run.js";
 import { AgentEventBus } from "./event-source.js";
-import { ToolRegistry } from "@vykor/core";
+import { QueryEngine, ToolRegistry, type UsageSnapshot, type AgentEvent } from "@vykor/core";
 import { AgentChildManager } from "./child-agent.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { agentTool } from "../../tools/src/agent/agent-tools.js";
+
+it.each(["unknown_delta", "partial_delta", "complete_tool"] as const)("settles an invoked model when cancellation closes QueryEngine (%s)", async mode => {
+  const hasUsage = mode !== "unknown_delta";
+  const completeTool = mode === "complete_tool";
+  const events: AgentEvent[] = [];
+  const cancelled = new AbortController();
+  const stop = new Error("stop run");
+  let calls = 0;
+  let providerClosed = false;
+  const usage: UsageSnapshot = { inputTokens: 7, outputTokens: 2,
+    metering: { knownInputTokens: 7, knownOutputTokens: 2, completeness: completeTool ? "complete" : "partial", inputIncludesCache: true, raw: {} },
+  };
+  const engine = new QueryEngine({ async *streamMessage() {
+    calls++;
+    try {
+      if (hasUsage) yield { type: "usage" as const, usage };
+      if (completeTool) {
+        yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "unexecuted", name: "Read", input: {} } };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+        cancelled.abort(stop);
+        return;
+      }
+      cancelled.abort(stop);
+      yield { type: "text_delta" as const, delta: "after cancellation" };
+      yield { type: "complete" as const, stopReason: "end_turn" };
+    } finally { providerClosed = true; }
+  } }, new ToolRegistry(), { checkTool: async () => ({ action: "allow" }) }, { register() {}, execute: async () => ({ blocked: false }) });
+  const run = new FrameworkAgentRun({ agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" }, content: "q", delivery: "queue",
+    externalSignal: cancelled.signal, eventBus: new AgentEventBus(event => { events.push(event); }),
+    session: { id: "s", submitMessage: engine.submitMessage.bind(engine), getHistory: () => engine.getHistory() } as any,
+    runtime: { queryEngine: engine } as any, effects: {} as any,
+    children: { cwd: "/repo", createController: () => ({}) } as any, onSettled: () => {},
+  });
+  await expect(run.result).rejects.toBe(stop);
+  expect(calls).toBe(1);
+  expect(providerClosed).toBe(true);
+  const settlements = events.filter(event => event.type === "model.attempt.finished");
+  expect(settlements).toHaveLength(1);
+  expect(settlements[0]).toMatchObject({ data: { status: completeTool ? "completed" : "interrupted", usageStatus: completeTool ? "complete" : hasUsage ? "partial" : "unknown" } });
+  expect(events.filter(event => event.type === "model.attempt.started")).toHaveLength(1);
+  expect(events.some(event => event.type === "run.interrupted")).toBe(true);
+  expect(engine.getTotalUsage()).toMatchObject({ inputTokens: hasUsage ? 7 : 0, outputTokens: hasUsage ? 2 : 0 });
+  if (!completeTool) expect(engine.getTotalUsage().usageIncomplete).toBe(true);
+});
 
 it.each([false, true])("keeps plugin delegation in the root run and lets it finish after child failure=%s", async (fail) => {
   const events: any[] = [];
@@ -146,7 +190,11 @@ it("scopes the assessment tool and binding to each run without mutating the runt
     toolRegistry,
     queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) },
   };
-  for (const goal of [{ goalId: "g1", revision: 1 }, undefined, { goalId: "g2", revision: 3 }]) {
+  for (const binding of [{ goalId: "g1", objectiveVersion: 1 }, undefined, { goalId: "g2", objectiveVersion: 3 }]) {
+    const goal = binding ? { ...binding, phase: "executing" as const,
+      readSnapshot: async () => ({ ...binding, phase: "executing" as const, objective: "work",
+        sourceInputIds: [], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 3, knownTokens: 0, usageIncomplete: false }),
+    } : undefined;
     const run = new FrameworkAgentRun({
       agentId: "a",
       goal,
@@ -178,8 +226,26 @@ it("scopes the assessment tool and binding to each run without mutating the runt
     expect(toolRegistry.has("GoalAssessment")).toBe(false);
   }
   expect(observed).toEqual([
-    { tools: ["GoalAssessment"], registryVisible: false },
+    { tools: ["GoalAssessment", "GoalRead"], registryVisible: false },
     { tools: [], registryVisible: false },
-    { tools: ["GoalAssessment"], registryVisible: false },
+    { tools: ["GoalAssessment", "GoalRead"], registryVisible: false },
   ]);
+});
+
+it("settles a stale snapshot callback as run failure before invoking the engine", async () => {
+  const error = new Error("goal_run_stale");
+  const events: AgentEvent[] = [];
+  let calls = 0;
+  const run = new FrameworkAgentRun({ agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" },
+    content: "work", delivery: "queue", goal: { goalId: "g", objectiveVersion: 1, phase: "preparing",
+      readSnapshot: async () => { throw error; } },
+    eventBus: new AgentEventBus(event => { events.push(event); }),
+    session: { id: "s", getHistory: () => [], submitMessage: async function* () { calls++; } } as any,
+    runtime: {} as any, effects: {} as any, children: { cwd: "/repo", createController: () => ({}) } as any,
+    onSettled: () => {},
+  });
+  await expect(run.result).rejects.toBe(error);
+  await expect(run.started).rejects.toBe(error);
+  expect(events.map(event => event.type)).toEqual(["input.accepted", "run.failed"]);
+  expect(calls).toBe(0);
 });

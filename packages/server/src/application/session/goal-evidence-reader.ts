@@ -1,0 +1,237 @@
+import { validHostFileFacts } from "@vykor/core";
+import { posix, win32 } from "node:path";
+import type { GoalAssessment, GoalEvidenceRef, GoalRequirement, GoalVersion, SessionGoal, SessionMessagePartRecord, SessionMessageRecord, SessionRunRecord } from "@vykor/protocol";
+
+export interface GoalEvidenceReaderContext {
+  conversations: {
+    listMessages(sessionId: string): SessionMessageRecord[];
+    listMessageParts(sessionId: string): SessionMessagePartRecord[];
+  };
+  runs: {
+    getRun(runId: string): SessionRunRecord | undefined;
+    listGoalRuns?(goalId: string, objectiveVersion?: number): SessionRunRecord[];
+  };
+  goals: { getGoalVersion(goalId: string, objectiveVersion: number): GoalVersion | undefined };
+}
+export interface VerifiedGoalEvidence {
+  requirementId: string;
+  origin: Pick<GoalEvidenceRef, "goalId" | "objectiveVersion" | "runId" | "messagePartId">;
+  verifiedForVersion: number;
+  /** File changes can advance a check without proving the check passed. */
+  supportsCompletion?: boolean;
+  facts: {
+    environmentKey?: string; command?: string; expected?: string;
+    artifacts?: Array<{ subjectKey: string; beforeDigest?: string; afterDigest: string }>;
+    external?: {
+      waitOwnerRunId: string; targetRunId: string;
+      observedStatus: "pending" | "running" | "completed" | "failed" | "interrupted";
+      status: "completed" | "failed" | "interrupted"; resultPartId: string;
+    };
+  };
+}
+export interface VerifiedGoalDiagnostic {
+  origin: VerifiedGoalEvidence["origin"];
+  kind: "tool_error" | "run_error" | "unavailable_resource";
+  summary: string;
+}
+
+function origin(ref: GoalEvidenceRef): VerifiedGoalEvidence["origin"] {
+  return { goalId: ref.goalId, objectiveVersion: ref.objectiveVersion, runId: ref.runId, messagePartId: ref.messagePartId };
+}
+function bound(run: SessionRunRecord | undefined, goalId: string, version: number): run is SessionRunRecord {
+  return Boolean(run && run.metadata.goalId === goalId && run.metadata.goalObjectiveVersion === version);
+}
+function terminal(run: SessionRunRecord): boolean {
+  return ["completed", "failed", "interrupted"].includes(run.status);
+}
+function descendant(context: GoalEvidenceReaderContext, source: SessionRunRecord, root: SessionRunRecord): boolean {
+  const visited = new Set<string>();
+  let current = source;
+  while (current.id !== root.id) {
+    if (visited.has(current.id) || visited.size >= 128 || !bound(current, String(root.metadata.goalId), Number(root.metadata.goalObjectiveVersion))) return false;
+    visited.add(current.id);
+    const parentId = current.metadata.parentRunId;
+    if (typeof parentId !== "string") return false;
+    const parent = context.runs.getRun(parentId);
+    if (!bound(parent, String(root.metadata.goalId), Number(root.metadata.goalObjectiveVersion))) return false;
+    current = parent;
+  }
+  return true;
+}
+function lookupPart(context: GoalEvidenceReaderContext, run: SessionRunRecord, partId: string): SessionMessagePartRecord | undefined {
+  const part = context.conversations.listMessageParts(run.sessionId).find(item => item.id === partId);
+  if (!part || part.sessionId !== run.sessionId) return undefined;
+  const message = context.conversations.listMessages(run.sessionId).find(item => item.id === part.messageId);
+  return message?.runId === run.id ? part : undefined;
+}
+function rootFor(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): SessionRunRecord | undefined {
+  const root = context.runs.getRun(assessment.runId);
+  return assessment.goalId === goal.id && assessment.objectiveVersion === goal.objectiveVersion
+    && bound(root, goal.id, goal.objectiveVersion) && root.sessionId === goal.sessionId && !root.metadata.parentRunId
+    && terminal(root) ? root : undefined;
+}
+function readSource(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef) {
+  if (ref.goalId !== goal.id || ref.objectiveVersion > goal.objectiveVersion || ref.objectiveVersion < 1) return undefined;
+  const run = context.runs.getRun(ref.runId);
+  if (!bound(run, goal.id, ref.objectiveVersion) || !terminal(run)) return undefined;
+  const historical = ref.objectiveVersion !== goal.objectiveVersion || !descendant(context, run, root);
+  if (historical) {
+    const version = context.goals.getGoalVersion(goal.id, ref.objectiveVersion);
+    if (!version || version.goalId !== goal.id || version.frozenAt === undefined || !ref.revalidation) return undefined;
+  }
+  const part = lookupPart(context, run, ref.messagePartId);
+  if (!part || !["completed", "failed"].includes(part.status) || part.toolName === "GoalRead" || part.toolName === "GoalAssessment") return undefined;
+  return { run, part, historical };
+}
+function successful(part: SessionMessagePartRecord): boolean {
+  return part.type === "tool" && part.status === "completed" && !part.isError && part.output != null && part.metadata.executionState === "completed";
+}
+function refsByRequirement(assessment: GoalAssessment): Array<{ requirementId: string; ref: GoalEvidenceRef }> {
+  const values = [
+    ...(assessment.requirements ?? []).flatMap(item => item.evidenceRefs.map(ref => ({ requirementId: item.requirementId, ref }))),
+    ...(assessment.progressSignals ?? []).flatMap(item => item.evidenceRefs.map(ref => ({ requirementId: item.requirementId, ref }))),
+  ];
+  return [...new Map(values.map(value => [`${value.requirementId}\0${value.ref.runId}\0${value.ref.messagePartId}`, value])).values()];
+}
+function sameVerification(left: GoalRequirement, right: GoalRequirement): boolean {
+  return JSON.stringify(left.verification) === JSON.stringify(right.verification) && JSON.stringify(left.constraints) === JSON.stringify(right.constraints);
+}
+
+/** Creation order within one tool batch cannot prove completion order. */
+function artifactObservationStillCurrent(
+  context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord,
+  sourceRun: SessionRunRecord, sourcePart: SessionMessagePartRecord,
+  environmentKey: string, subjectKey: string, digest: string,
+): boolean {
+  const runs = [...new Map([root, sourceRun, ...(context.runs.listGoalRuns?.(goal.id, goal.objectiveVersion) ?? [])]
+    .filter(run => bound(run, goal.id, goal.objectiveVersion) && terminal(run) && (run.id === sourceRun.id || descendant(context, run, root)))
+    .map(run => [run.id, run])).values()];
+  for (const run of runs) {
+    const messages = context.conversations.listMessages(run.sessionId);
+    for (const part of context.conversations.listMessageParts(run.sessionId)) {
+      const message = messages.find(item => item.id === part.messageId);
+      if (message?.runId !== run.id || part.id === sourcePart.id || !successful(part)) continue;
+      const receipt = validHostFileFacts(part.metadata.hostFileFacts);
+      if (receipt?.environmentKey !== environmentKey || !receipt.files.some(file => file.subjectKey === subjectKey && file.afterDigest !== digest)) continue;
+      const sourceMessage = run.id === sourceRun.id ? messages.find(item => item.id === sourcePart.messageId) : undefined;
+      const candidateGeneration = part.metadata.modelGeneration as { generationId?: string; committed?: boolean; superseded?: boolean } | undefined;
+      const sourceGeneration = sourcePart.metadata.modelGeneration as typeof candidateGeneration;
+      // Different committed model turns of one Run are sequential. Same-turn tools may overlap.
+      const definitelyEarlier = sourceMessage && message.id !== sourceMessage.id && Number.isSafeInteger(message.seq)
+        && Number.isSafeInteger(sourceMessage.seq) && message.seq < sourceMessage.seq
+        && candidateGeneration?.committed === true && sourceGeneration?.committed === true
+        && !candidateGeneration.superseded && !sourceGeneration.superseded
+        && typeof candidateGeneration.generationId === "string" && typeof sourceGeneration.generationId === "string"
+        && candidateGeneration.generationId !== sourceGeneration.generationId;
+      if (!definitelyEarlier) return false;
+    }
+  }
+  return true;
+}
+
+/** Historical checks without a host-recorded complete dependency set are deliberately not reusable. */
+function historicalArtifactValid(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef, requirement: GoalRequirement, part: SessionMessagePartRecord): boolean {
+  const review = ref.revalidation;
+  const facts = validHostFileFacts(part.metadata.hostFileFacts);
+  const previous = context.goals.getGoalVersion(goal.id, ref.objectiveVersion)?.requirements.find(item => item.id === requirement.id);
+  if (requirement.verification.kind !== "artifact_review" || !previous || !sameVerification(previous, requirement) || !review || !facts
+    || review.environmentKey !== facts.environmentKey || !review.messagePartIds.length
+    || review.command !== undefined || review.expected !== undefined) return false;
+  const original = facts.files;
+  if (review.dependencies.length !== original.length || new Set(review.dependencies.map(item => item.subjectKey)).size !== original.length
+    || !original.every(file => review.dependencies.some(dependency => dependency.subjectKey === file.subjectKey && dependency.digest === file.afterDigest))) return false;
+  const currentSessions = [...new Set((context.runs.listGoalRuns?.(goal.id, goal.objectiveVersion) ?? [root])
+    .filter(run => bound(run, goal.id, goal.objectiveVersion) && descendant(context, run, root)).map(run => run.sessionId))];
+  const observed = review.messagePartIds.flatMap(id => {
+    const candidates = currentSessions.flatMap(sessionId => context.conversations.listMessageParts(sessionId)).filter(item => item.id === id);
+    return candidates.flatMap(candidate => {
+      const message = context.conversations.listMessages(candidate.sessionId).find(item => item.id === candidate.messageId);
+      const current = message?.runId ? context.runs.getRun(message.runId) : undefined;
+      if (!bound(current, goal.id, goal.objectiveVersion) || !terminal(current) || !descendant(context, current, root) || !successful(candidate)) return [];
+      const receipt = validHostFileFacts(candidate.metadata.hostFileFacts);
+      return receipt?.environmentKey === facts.environmentKey ? receipt.files.filter(file => file.operation === "read"
+        && artifactObservationStillCurrent(context, goal, root, current, candidate, receipt.environmentKey, file.subjectKey, file.afterDigest)) : [];
+    });
+  });
+  return original.every(file => observed.some(current => current.subjectKey === file.subjectKey && current.afterDigest === file.afterDigest));
+}
+function externalEvidence(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, requirementId: string, ref: GoalEvidenceRef): VerifiedGoalEvidence | undefined {
+  const wait = root.metadata.goalWaitSource as import("@vykor/protocol").GoalExternalWait | undefined;
+  if (!wait || wait.kind !== "external" || wait.goalId !== goal.id || wait.objectiveVersion !== goal.objectiveVersion
+    || wait.targetRunId !== ref.runId || ref.goalId !== goal.id || ref.objectiveVersion !== goal.objectiveVersion
+    || wait.observedStatus === undefined || !Number.isSafeInteger(wait.deadlineAt)) return undefined;
+  const owner = context.runs.getRun(wait.ownerRunId);
+  const target = context.runs.getRun(wait.targetRunId);
+  if (!bound(owner, goal.id, goal.objectiveVersion) || owner.sessionId !== goal.sessionId || owner.metadata.parentRunId
+    || !bound(target, goal.id, goal.objectiveVersion) || !terminal(target) || target.id === owner.id || !descendant(context, target, owner)
+    || target.finishedAt === undefined || target.finishedAt > wait.deadlineAt) return undefined;
+  const part = lookupPart(context, target, ref.messagePartId);
+  if (!part || !["completed", "failed"].includes(part.status) || part.output == null && !part.text
+    || part.toolName === "GoalRead" || part.toolName === "GoalAssessment") return undefined;
+  return { requirementId, origin: origin(ref), verifiedForVersion: goal.objectiveVersion, supportsCompletion: false, facts: { external: {
+    waitOwnerRunId: owner.id, targetRunId: target.id, observedStatus: wait.observedStatus,
+    status: target.status as "completed" | "failed" | "interrupted", resultPartId: part.id,
+  } } };
+}
+
+/** Verify only durable Run/Part facts. This function never reads workspace files or executes checks. */
+export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): VerifiedGoalEvidence[] {
+  const root = rootFor(context, goal, assessment);
+  if (!root) return [];
+  return refsByRequirement(assessment).flatMap(({ requirementId, ref }) => {
+    const requirement = goal.requirements.find(item => item.id === requirementId);
+    if (!requirement || requirement.verification.kind === "user_acceptance") return [];
+    const external = externalEvidence(context, goal, root, requirementId, ref);
+    const externalRun = external ? context.runs.getRun(ref.runId) : undefined;
+    const externalPart = externalRun ? lookupPart(context, externalRun, ref.messagePartId) : undefined;
+    const source = externalRun && externalPart ? { run: externalRun, part: externalPart, historical: false } : readSource(context, goal, root, ref);
+    if (!source || source.run.status !== "completed" || !successful(source.part)
+      || source.historical && !historicalArtifactValid(context, goal, root, ref, requirement, source.part)) return external ? [external] : [];
+    const receipt = validHostFileFacts(source.part.metadata.hostFileFacts);
+    const command = typeof source.part.input?.command === "string" ? source.part.input.command.trim() : undefined;
+    let supportsCompletion = requirement.verification.kind !== "check" || (requirement.verification.command
+      ? command === requirement.verification.command.trim()
+      : !receipt);
+    if (!supportsCompletion && !receipt) return external ? [external] : [];
+    // A current model review must point to the actual named artifact and explain the formal standard.
+    if (requirement.verification.kind === "artifact_review") {
+      const artifact = requirement.verification.artifact;
+      if (!receipt) return external ? [external] : [];
+      const pathApi = receipt.pathStyle === "windows" || /^[a-zA-Z]:[\\/]/.test(artifact) ? win32 : posix;
+      const normalize = (path: string) => pathApi === win32 ? pathApi.normalize(path).toLowerCase() : pathApi.normalize(path);
+      const artifactPath = pathApi.isAbsolute(artifact) ? normalize(artifact) : receipt.executionRoot ? normalize(pathApi.resolve(receipt.executionRoot, artifact)) : undefined;
+      const matching = receipt.files.filter(file => normalize(file.path) === artifactPath);
+      if (!artifactPath || !matching.length) return external ? [external] : [];
+      supportsCompletion = matching.some(file => file.afterDigest !== "missing" && (source.historical
+        || artifactObservationStillCurrent(context, goal, root, source.run, source.part, receipt.environmentKey, file.subjectKey, file.afterDigest)));
+    }
+    return [{ requirementId, origin: origin(ref), verifiedForVersion: goal.objectiveVersion, supportsCompletion, facts: {
+      ...(external ? external.facts : {}),
+      ...(receipt ? { environmentKey: receipt.environmentKey, artifacts: receipt.files.map(file => ({ subjectKey: file.subjectKey, ...(file.beforeDigest === undefined ? {} : { beforeDigest: file.beforeDigest }), afterDigest: file.afterDigest })) } : {}),
+      ...(command === undefined ? {} : { command }),
+      ...(requirement.verification.kind === "check" ? { expected: requirement.verification.expected } : {}),
+    } }];
+  });
+}
+
+export function readGoalDiagnostics(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): VerifiedGoalDiagnostic[] {
+  const root = rootFor(context, goal, assessment);
+  if (!root) return [];
+  const refs = [...assessment.evidenceRefs, ...refsByRequirement(assessment).map(item => item.ref)];
+  const diagnostics = new Map<string, VerifiedGoalDiagnostic>();
+  for (const ref of refs) {
+    const external = externalEvidence(context, goal, root, "", ref);
+    const externalRun = external ? context.runs.getRun(ref.runId) : undefined;
+    const externalPart = externalRun ? lookupPart(context, externalRun, ref.messagePartId) : undefined;
+    const source = externalRun && externalPart ? { run: externalRun, part: externalPart, historical: false } : readSource(context, goal, root, ref);
+    if (!source || source.historical) continue;
+    if (source.part.type === "tool" && (source.part.isError || source.part.status === "failed")) {
+      const output = source.part.output;
+      const blocks = output && typeof output === "object" && "content" in output ? output.content : output;
+      const summary = (Array.isArray(blocks) ? blocks.filter(item => item?.type === "text" && typeof item.text === "string").map(item => item.text).join("\n") : typeof blocks === "string" ? blocks : source.part.text ?? "工具调用失败").slice(0, 4000);
+      diagnostics.set(`${source.run.id}\0${source.part.id}`, { origin: origin(ref), kind: "tool_error", summary });
+    }
+  }
+  if (root.status !== "completed" && root.error) diagnostics.set(root.id, { origin: { goalId: goal.id, objectiveVersion: goal.objectiveVersion, runId: root.id, messagePartId: "" }, kind: "run_error", summary: root.error.slice(0, 4000) });
+  return [...diagnostics.values()];
+}

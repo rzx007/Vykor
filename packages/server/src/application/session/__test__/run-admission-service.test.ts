@@ -170,10 +170,28 @@ function createStoredAdmission() {
 }
 
 describe("RunAdmissionService synchronous queued persistence", () => {
+  it("turns a queued Goal into an approval wait if permission arrived after admission", () => {
+    const { store, options, service } = createStoredAdmission();
+    const goal = store.goals.createGoal({ sessionId: "s1", objective: "finish", maxAutoTurns: 2 });
+    const saved = service.persistGoalRun("s1", { id: "wait-result", items: [{ type: "text", text: "continue" }],
+      runMetadata: { goalId: goal.id, goalObjectiveVersion: goal.objectiveVersion, goalRunKind: "continuation" } });
+    const permission = store.permissions.create({ sessionId: "s1", toolName: "Bash", payload: {} });
+    options.goals = { getGoal: id => store.goals.getGoal(id), pendingPermissionId: () => permission.id,
+      waitForApproval: (id, version, permissionRequestId) => {
+        const current = store.goals.getGoal(id)!;
+        if (current.status === "active" && current.objectiveVersion === version) store.goals.updateGoal(id, {
+          expectedRevision: current.revision, status: "waiting_user", wait: { kind: "approval", permissionRequestId },
+        });
+      } };
+    expect(service.prepareRunExecution(saved.run.id)).toBe(false);
+    expect(store.goals.getGoal(goal.id)).toMatchObject({ status: "waiting_user", wait: { kind: "approval", permissionRequestId: permission.id } });
+    expect(store.goals.getGoal(goal.id)?.currentRunId).toBeUndefined();
+    expect(store.goals.getGoal(goal.id)?.autoTurnsUsed).toBe(0);
+  });
   it("saves corresponding ordinary Input/Run synchronously without dispatch or publication", () => {
     const { store, service, options, enqueueRunFn, steerFn } = createStoredAdmission();
     const cancelGoalRuns = vi.fn();
-    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }), cancelGoalRuns };
+    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
 
     const saved = service.persistQueuedPrompt("s1", {
       id: "confirmed-input",
@@ -318,7 +336,7 @@ describe("RunAdmissionService user priority", () => {
     const { options, steerFn, runs } = createMockOptions();
     const actions: string[] = [];
     options.goals = {
-      getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }),
+      getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }),
       cancelGoalRuns: () => { actions.push("priority"); return []; },
     };
     const getInput = options.conversationTransactions.getInput;
@@ -337,7 +355,7 @@ describe("RunAdmissionService user priority", () => {
   it("preserves user priority for repeated IDs without a second Run", async () => {
     const { options, runs } = createMockOptions();
     const cancelGoalRuns = vi.fn(() => []);
-    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }), cancelGoalRuns };
+    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
     const service = new RunAdmissionService(options);
     const input: AdmitPromptInput = { id: "shared-user-id", items: [{ type: "text", text: "hello" }] };
     const first = service.admitPromptAndMaybeRun("s1", input);
@@ -350,7 +368,7 @@ describe("RunAdmissionService user priority", () => {
   it("keeps Goal admission and replay outside user priority", async () => {
     const { options } = createMockOptions();
     const cancelGoalRuns = vi.fn(() => []);
-    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }), cancelGoalRuns };
+    options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
     const service = new RunAdmissionService(options);
     const admitted = await service.admitPromptAndMaybeRun("s1", {
       items: [{ type: "text", text: "goal" }], runMetadata: { goalId: "g1", goalRunKind: "continuation" },
@@ -365,7 +383,7 @@ describe("RunAdmissionService", () => {
     for (const name of ["pluginUi", "uiAction", "pluginUiSubmission"]) {
       const { options, inputs, runs } = createMockOptions();
       const cancelGoalRuns = vi.fn(() => []);
-      options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", revision: 1 }), cancelGoalRuns };
+      options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
       const service = new RunAdmissionService(options);
       await expect(Promise.resolve().then(() => service.admitPromptAndMaybeRun("s1", {
         items: [{ type: "text", text: "hello" }], [namespace]: { [name]: {} },
@@ -436,7 +454,7 @@ describe("RunAdmissionService", () => {
 
   it("rejects stale goal revisions before execution", () => {
     const { options, runs, runOperations } = createMockOptions();
-    runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: { goalId: "g1", goalRevision: 1, goalRunKind: "continuation" }, createdAt: 1, updatedAt: 1 });
+    runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalRunKind: "continuation" }, createdAt: 1, updatedAt: 1 });
     options.goals = {
       getGoal: vi.fn(() => ({ id: "g1", sessionId: "s1", status: "active", revision: 2 } as any)),
       startGoalRun: vi.fn(() => false),
@@ -639,7 +657,7 @@ describe("RunAdmissionService", () => {
     const { options } = createMockOptions();
     const cancelGoalRuns = vi.fn(() => ["gr1"]);
     options.goals = {
-      getCurrentGoal: vi.fn(() => ({ id: "g1", status: "active", revision: 1 })),
+      getCurrentGoal: vi.fn(() => ({ id: "g1", status: "active", objectiveVersion: 1 })),
       cancelGoalRuns,
     };
     const service = new RunAdmissionService(options);
@@ -655,7 +673,7 @@ describe("RunAdmissionService", () => {
     const { options, conversationTransactions } = createMockOptions();
     const cancelGoalRuns = vi.fn();
     options.goals = {
-      getCurrentGoal: vi.fn(() => ({ id: "g1", status: "active", revision: 1 })),
+      getCurrentGoal: vi.fn(() => ({ id: "g1", status: "active", objectiveVersion: 1 })),
       cancelGoalRuns,
     };
     const service = new RunAdmissionService(options);

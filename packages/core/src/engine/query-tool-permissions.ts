@@ -69,6 +69,8 @@ export async function authorizeToolCall(
     }
   }
 
+  if (execution?.profile?.executableHooks === false) return;
+
   // hook 本身抛错时放行，不阻断执行。
   let hookResult: { blocked: boolean; reason?: string };
   try {

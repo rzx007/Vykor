@@ -77,6 +77,18 @@ function frozenCopy<T>(value: T): T {
   return value;
 }
 
+/** Preparation may inspect only exact builtin bindings already captured by the host. */
+export function createPreparationRunCapabilityView(view: RunCapabilityView): RunCapabilityView {
+  const allowed = new Set(["Read", "Glob", "Grep"]);
+  return Object.freeze({ ...view,
+    tools: readonlyMap([...view.tools].filter(([name, binding]) => allowed.has(name)
+      && binding.definition.name === name && binding.source?.kind === "builtin"
+      && typeof binding.definitionIdentity === "symbol")),
+    agents: readonlyMap<RunAgentBinding>([]), mcpServers: readonlyMap<RunMcpServerBinding>([]),
+    pluginUi: readonlyMap<RunPluginUiBinding>([]),
+  });
+}
+
 /** Object.freeze(Map) still permits set/delete; expose only read operations. */
 export function readonlyMap<T>(entries: Iterable<readonly [string, T]>): ReadonlyMap<string, T> {
   const inner = new Map(entries);

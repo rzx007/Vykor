@@ -34,6 +34,11 @@ export interface RunRepositoryOptions {
 }
 
 export class RunRepository {
+  listGoalRuns(goalId: string, objectiveVersion?: number): SessionRunRecord[] {
+    return Object.values(this.storage.state.runs)
+      .filter((run) => run.metadata.goalId === goalId && (objectiveVersion === undefined || run.metadata.goalObjectiveVersion === objectiveVersion))
+      .map((run) => clone(run));
+  }
   private readonly storage: StorageContext;
   private readonly appendEvent?: (input: AppendEventInput) => SessionEventRecord;
   private readonly saveChanges?: () => void;

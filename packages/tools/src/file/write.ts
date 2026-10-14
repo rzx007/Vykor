@@ -5,6 +5,7 @@ import { sandboxPathError } from "./sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, fileSnapshotMatches } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
 import { isSystemPath } from "./file-mutation-guard.js";
+import { fileDigest, hostFileFacts } from "./read.js";
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 const MAX_SUMMARY_LENGTH = 1000;
@@ -41,7 +42,7 @@ function refused(message: string, failureKind: "invalid_input" | "precondition" 
   };
 }
 
-function completed(operation: WriteOperation, filePath: string, content: string): ToolResult {
+function completed(operation: WriteOperation, filePath: string, content: string, before: Uint8Array | undefined, context: import("@vykor/core").ToolContext): ToolResult {
   const bytes = new TextEncoder().encode(content);
   const digest = sha256(bytes);
   const text = operation === "created"
@@ -52,6 +53,7 @@ function completed(operation: WriteOperation, filePath: string, content: string)
   return {
     content: [{ type: "text", text }],
     executionState: "completed",
+    metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "write", beforeDigest: before ? fileDigest(before) : "missing", afterDigest: fileDigest(bytes) }]) },
     compactSummary: writeSummary(operation, filePath, bytes.byteLength, digest),
   };
 }
@@ -151,12 +153,12 @@ export const fileWriteTool: ToolDefinition = {
         }
         writeStarted = true;
         await operations.createTextExclusive(filePath, content);
-        return completed("created", filePath, content);
+        return completed("created", filePath, content, undefined, context);
       }
 
       const requested = new TextEncoder().encode(content);
       if (Buffer.from(existing).equals(Buffer.from(requested))) {
-        return completed("unchanged", filePath, content);
+        return completed("unchanged", filePath, content, existing, context);
       }
       if (expectedSha256 !== undefined && sha256(existing) !== expectedSha256.toLowerCase()) {
         return refused(
@@ -170,7 +172,7 @@ export const fileWriteTool: ToolDefinition = {
       }
       writeStarted = true;
       await operations.writeTextAtomic(filePath, content);
-      return completed("overwrote", filePath, content);
+      return completed("overwrote", filePath, content, existing, context);
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error writing file: ${error}` }],

@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   AgentChildBudgetExceededError,
+  AgentExecutionLimitError,
   type AgentEvent,
   type Settings,
   type StreamingMessageClient,
@@ -63,6 +64,23 @@ function reviewInput(cwd: string) {
 }
 
 describe("runChildForCompletedRun", () => {
+  it("preserves a started rejection with zero client calls and later terminal delivery", async () => {
+    const cwd = tempDir();
+    let calls = 0;
+    const limit = new AgentExecutionLimitError("closed");
+    const events: AgentEvent[] = [];
+    const agent = await createDefaultNodeAgent({ cwd, settings: SETTINGS, client: passingClient(() => { calls++; }),
+      onEvent: event => { if (event.type === "model.attempt.started") throw limit; events.push(event); },
+    });
+    try {
+      const child = await agent.runChildForCompletedRun(reviewInput(cwd), PARENT, "patch");
+      expect(child.result).toMatchObject({ status: "failed", error: "closed" });
+      expect(calls).toBe(0);
+      expect(events.some(event => event.type === "model.attempt.finished")).toBe(false);
+      expect(events.map(event => event.type)).toContain("run.failed");
+      expect(events.map(event => event.type)).toContain("child.closed");
+    } finally { await agent.close(); }
+  });
   it("runs a strictly read-only child attributed to the completed parent run", async () => {
     const cwd = tempDir();
     const events: AgentEvent[] = [];

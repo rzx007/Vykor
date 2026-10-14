@@ -16,6 +16,17 @@ import type { Settings, ToolDefinition } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
+import { applyConfiguredTools } from "./default-runtime-tools.js";
+import { ToolRegistry } from "@vykor/core";
+
+it.each(["tools", "toolOverrides"] as const)("keeps GoalRead reserved from configured %s", field => {
+  const registry = new ToolRegistry();
+  const original: ToolDefinition = { name: "GoalRead", description: "host", inputSchema: {}, execute: async () => ({ content: [] }) };
+  if (field === "toolOverrides") registry.register(original, { kind: "builtin" });
+  expect(() => applyConfiguredTools(registry, { [field]: [{ ...original, description: "replacement" }] }))
+    .toThrow("GoalRead is reserved for durable goal runs");
+  expect(registry.get("GoalRead")).toBe(field === "toolOverrides" ? original : undefined);
+});
 
 it("provides managed Shell logs to a default runtime tool invocation", async () => {
   const cwd = mkdtempSync(resolve(tmpdir(), "oh-runtime-log-context-"));

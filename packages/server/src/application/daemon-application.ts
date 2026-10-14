@@ -668,6 +668,7 @@ export class DaemonApplication implements DurableAgentApplication {
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
             log: options.log,
+            requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId),
           });
           return (event) => projector.apply(event);
         },
@@ -800,6 +801,9 @@ export class DaemonApplication implements DurableAgentApplication {
 
       const runExecution = assembleSessionRunExecutor({
         store, attachmentService: this.attachments, goals: store.goals,
+        checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
+        checkGoalRunExecution: (goalId, version, runId, boundary, tool) => this.goals.checkRunExecution(goalId, version, runId, boundary, tool),
+        readGoalSnapshot: (goalId, version, runId) => this.goals.readSnapshot(goalId, version, runId),
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
@@ -808,11 +812,14 @@ export class DaemonApplication implements DurableAgentApplication {
       const runExecutor = runExecution.executor;
       const materializeSteerInput = runExecution.materializeSteerInput;
       const runServices = assembleSessionRunServices({
+        children: this.liveChildren,
+        pendingPermissionId: (sessionId) => store.permissions.list({ sessionId, status: "pending" })[0]?.id,
         store, goals: store.goals, agentPool: this.agentPool, runExecutor, events: this.eventPublisher,
         preemptAutoReview: (sessionId) => autoReview.preemptForUserInput(sessionId),
         attachmentLimits: this.attachments.limits, materializeSteerInput,
         assertReady: () => this.assertReady(),
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
+        checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
       });
       this.runAdmission = runServices.admission;
       this.runControl = runServices.control;
@@ -987,7 +994,6 @@ export class DaemonApplication implements DurableAgentApplication {
         pluginCapabilities,
         waitVerifier: new GoalWaitVerifier({
           store,
-          liveChildren: this.liveChildren,
         }),
       });
       /**
@@ -1058,6 +1064,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverPluginUiActions: () => this.pluginUi.recover(),
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
+        reconcileGoalModelAttempts: () => { store.goals.reconcileGoalModelAttempts(); },
         failIncompleteReviewsOnStartup: () => { workspaceChanges.failIncompleteOnStartup(); return autoReview.failIncompleteReviewsOnStartup(); },
         pauseActiveGoals: () => { store.goals.pauseActiveGoalsOnStartup(); },
         terminalizeUnownedInputs: () => { store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON); },

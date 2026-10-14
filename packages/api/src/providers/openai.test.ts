@@ -11,6 +11,32 @@ import {
 } from "./openai.js";
 
 describe("OpenAICompatibleClient configuration", () => {
+  it.each([true, false])("requests terminal usage (with tools=%s) and keeps cache-inclusive input", async hasTools => {
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gateway.example/v1" });
+    const create = vi.fn(async () => ({ async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: {}, finish_reason: "tool_calls" }] };
+      yield { choices: [], usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 7 } } };
+    } }));
+    client.client = { chat: { completions: { create } } } as any;
+    const events = [];
+    for await (const event of client.streamMessage({ model: "m", messages: [{ type: "user", content: "hi" }],
+      ...(hasTools ? { tools: [{ name: "Read", description: "read", inputSchema: { type: "object" } }] } : {}),
+    })) events.push(event);
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ stream_options: { include_usage: true } });
+    expect(events.find(event => event.type === "usage")).toMatchObject({ usage: { metering: {
+      knownInputTokens: 10, knownOutputTokens: 2, inputIncludesCache: true, completeness: "complete",
+    } } });
+  });
+  it("keeps intermediate usage partial when completion carries no terminal report", async () => {
+    const client = new OpenAICompatibleClient({ apiKey: "test" });
+    client.client = { chat: { completions: { create: async () => ({ async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: { content: "reply" }, finish_reason: null }], usage: { prompt_tokens: 10, completion_tokens: 2 } };
+      yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+    } }) } } } as any;
+    const events = [];
+    for await (const event of client.streamMessage({ model: "m", messages: [] })) events.push(event);
+    expect(events.find(event => event.type === "usage")).toMatchObject({ usage: { metering: { completeness: "partial" } } });
+  });
   it("forwards custom provider headers to the OpenAI SDK", () => {
     const client = new OpenAICompatibleClient({
       apiKey: "test",
@@ -425,7 +451,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
     expect(await collect(makeClient([
       { choices: [], usage: { prompt_tokens: 6, completion_tokens: 2 } },
       { type: "failure" },
-    ]))).toEqual([{ type: "usage", usage: { inputTokens: 6, outputTokens: 2 } }]);
+    ]))).toMatchObject([{ type: "usage", usage: { inputTokens: 6, outputTokens: 2, metering: { completeness: "complete" } } }]);
   });
   function streamingClient() {
     const create = vi.fn(async (_params: unknown) => ({

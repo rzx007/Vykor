@@ -8,6 +8,7 @@ import { isSystemPath } from "./file-mutation-guard.js";
 import { decodeUtf8Text } from "./text-content.js";
 import { EditPlanError, parseTextEdits, planTextEdits } from "./edit-plan.js";
 import { editFailureResult } from "./edit-feedback.js";
+import { fileDigest, hostFileFacts } from "./read.js";
 
 const replacementProperties = {
   old_string: { type: "string", description: "Copy the shortest unique text observed in the current file, with enough context to identify it. Do not reconstruct unrelated values." },
@@ -74,7 +75,7 @@ export const fileEditTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: `Successfully edited ${filePath}${plan.editCount > 1 ? ` (${plan.editCount} edits)` : ""}` }],
         executionState: "completed", compactSummary: `Edit completed: ${filePath}; edits=${plan.editCount}`,
-        metadata: { editCount: plan.editCount },
+        metadata: { editCount: plan.editCount, hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "edit", beforeDigest: fileDigest(beforeBytes), afterDigest: fileDigest(new TextEncoder().encode(plan.content)) }]) },
       };
     } catch (error) {
       if (!writeStarted && isFileNotFoundError(error)) return refused("Edit target does not exist. Check the current path; use Write to create a new file.", "precondition");

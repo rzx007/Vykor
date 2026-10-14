@@ -96,4 +96,6 @@ export {
 } from "./memory-extract.js";
 export * from "./autodream/index.js";
 export * from "./attachments/index.js";
-export type { GoalOperations } from "./goals/index.js";
+export type { GoalOperations, FreezeGoalVersionInput } from "./goals/index.js";
+export { goalBudgetStopCode } from "./goals/index.js";
+export type { GoalAttemptStart, GoalAttemptReport, GoalBudgetStopCode } from "./goals/index.js";

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { StreamMessageParams, StreamingMessageClient } from "../types/client";
 import type { ModelAttemptFinishedEvent, StreamEvent } from "../types/events";
 import type { UsageSnapshot } from "../types/usage";
+import { isAgentExecutionLimitError, type AgentExecutionLimits } from "../types/runtime";
+import type { ModelAttemptStarted } from "./model-retry";
 import {
   ModelRequestFailure,
   nextModelRetryDelay,
@@ -14,6 +16,10 @@ import {
 import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
 
 export interface BufferedModelRetryOptions {
+  onAttemptStarted?: (event: ModelAttemptStarted) => void | Promise<void>;
+  limits?: AgentExecutionLimits;
+  provider?: string;
+  purpose?: ModelAttemptStarted["purpose"];
   policy?: Partial<ModelRetryPolicy>;
   /** 每次实际请求结算一次用量；不产生 Run 时由宿主记录，不伪造 Run。 */
   onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
@@ -48,8 +54,16 @@ export async function* streamBufferedModelWithRetry(
     let completeSeen = false;
     let failure: ModelRequestFailure | undefined;
     const attemptSignal = createAttemptSignal(params.abortSignal, recoveryDeadlineAt);
+    let registered = false;
+    let clientInvoked = false;
 
     try {
+      await options.limits?.check("model");
+      await options.onAttemptStarted?.({ generationId, attempt, model: params.model,
+        ...(options.provider ? { provider: options.provider } : {}), purpose: options.purpose ?? "compaction" });
+      registered = true;
+      attemptSignal.signal.throwIfAborted();
+      clientInvoked = true;
       const stream = client.streamMessage({
         ...params,
         abortSignal: attemptSignal.signal,
@@ -89,6 +103,12 @@ export async function* streamBufferedModelWithRetry(
         );
       }
     } catch (error) {
+      if (!registered) throw error;
+      if (isAgentExecutionLimitError(error)) {
+        await options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "failed", usage,
+          clientInvoked ? undefined : true));
+        throw error;
+      }
       failure = describeModelFailure(error, params.abortSignal, attemptSignal);
     } finally {
       attemptSignal.dispose();
@@ -96,7 +116,7 @@ export async function* streamBufferedModelWithRetry(
 
     if (failure) {
       await options.onAttemptFinished?.(attemptFinishedEvent(
-        generationId, attempt, params.abortSignal?.aborted ? "interrupted" : "failed", usage,
+        generationId, attempt, params.abortSignal?.aborted ? "interrupted" : "failed", usage, clientInvoked ? undefined : true,
       ));
       if (params.abortSignal?.aborted) throw params.abortSignal.reason;
       if (!failure.info.retryable) throw failure;

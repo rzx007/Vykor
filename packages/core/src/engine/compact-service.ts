@@ -19,6 +19,7 @@ import type {
   IHookExecutor,
 } from "../index";
 import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens";
+import { isAgentExecutionLimitError } from "../types/runtime";
 import {
   createCompactBoundaryMarker,
   estimateMessageTokens,
@@ -239,6 +240,7 @@ export class CompactService {
         this.consecutiveFailures = 0;
         return result;
       } catch (err) {
+        if (isAgentExecutionLimitError(err)) throw err;
         if (signal?.aborted) throw signal.reason;
         if (err instanceof CompactContextProviderError) throw err;
         this.consecutiveFailures++;
@@ -391,6 +393,7 @@ export class CompactService {
         summaryText = await collectSummary(this.client, summarizable, compactPrompt, signal);
         break;
       } catch (err) {
+        if (isAgentExecutionLimitError(err)) throw err;
         if (signal?.aborted) throw signal.reason;
         if (isPromptTooLongError(err) && ptlRetries < MAX_PTL_RETRIES) {
           const truncated = this.truncateHeadForPtlRetry(summarizable);

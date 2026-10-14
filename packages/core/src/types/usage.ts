@@ -1,4 +1,14 @@
+export interface ModelTokenMetering {
+  knownInputTokens: number;
+  knownOutputTokens: number;
+  completeness: "complete" | "partial" | "unknown";
+  inputIncludesCache: boolean;
+  /** Original usage fields only; never prompts, credentials, or response text. */
+  raw: Record<string, unknown>;
+}
+
 export interface UsageSnapshot {
+  metering?: ModelTokenMetering;
   inputTokens: number;
   outputTokens: number;
   cacheCreationTokens?: number;

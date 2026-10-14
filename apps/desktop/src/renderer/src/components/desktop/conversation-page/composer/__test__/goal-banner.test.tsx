@@ -31,11 +31,14 @@ const goal: SessionGoal = {
   sessionId: "s1",
   revision: 1,
   objective: "修复并验证",
+  objectiveVersion: 1,
+  phase: "executing", requirements: [], stagnationCount: 0,
   status: "paused",
   autoTurnsUsed: 20,
   maxAutoTurns: 20,
   noProgressCount: 0,
   evidence: ["测试记录"],
+  usage: { knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: 1 },
   createdAt: 1,
   updatedAt: 2,
 }
@@ -43,6 +46,39 @@ const button = (label: string): HTMLButtonElement =>
   Array.from(container.querySelectorAll("button")).find(
     (node) => node.textContent === label || node.getAttribute("aria-label") === label
   )!
+
+it("keeps preparation restart explicit and separate from ordinary resume", async () => {
+  const onAction = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, phase: "preparing", autoTurnsUsed: 0 }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
+  await act(async () => button("继续").click())
+  expect(onAction).toHaveBeenCalledWith({ action: "resume" })
+  await act(async () => button("展开目标详情").click())
+  await act(async () => button("重新整理目标").click())
+  expect(onAction).toHaveBeenCalledWith({ action: "resume", reprepare: true })
+})
+
+it("accepts only the displayed current-version user requirements", async () => {
+  const onAction = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, status: "waiting_user", autoTurnsUsed: goal.maxAutoTurns,
+    requirements: [{ id: "R1", text: "页面符合预期", source: [{ kind: "input", inputId: "i", quote: "页面" }], constraints: [], verification: { kind: "user_acceptance", question: "页面符合预期？" } }],
+    wait: { kind: "user", purpose: "acceptance", objectiveVersion: 1, questionId: "q", question: "验收", requirementIds: ["R1"] } },
+    busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
+  expect(container.textContent).toContain("页面符合预期")
+  expect(container.querySelector('[aria-label="回答目标问题"]')).toBeNull()
+  await act(async () => button("结果满足所列条件").click())
+  expect(onAction).toHaveBeenCalledWith({ action: "confirm", objectiveVersion: 1, questionId: "q" })
+})
+
+it("removes a Token limit without also resuming and shows truthful overage", async () => {
+  const onAction = vi.fn();
+  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, tokenBudget: 20, usage: { ...goal.usage, knownTokens: 25, seq: 1 } }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })));
+  await act(async () => button("展开目标详情").click());
+  expect(container.textContent).toContain("25 Token");
+  expect(button("保存总预算").disabled).toBe(true);
+  await act(async () => button("解除 Token 限制").click());
+  expect(onAction).toHaveBeenCalledWith({ action: "budget", tokenBudget: null });
+  expect(onAction).not.toHaveBeenCalledWith(expect.objectContaining({ action: "resume" }));
+});
 
 it("requires an explicit quota increase before resuming an exhausted goal", async () => {
   const onAction = vi.fn()
@@ -124,6 +160,10 @@ it("shows requirement status and remaining work in goal details", async () => {
       createElement(GoalBanner, {
         goal: {
           ...goal,
+          requirements: [
+            { id: "R1", text: "测试通过", constraints: [], source: [{ kind: "input", inputId: "i", quote: "测试" }], verification: { kind: "check", method: "测试", environment: "local", expected: "通过" } },
+            { id: "R2", text: "补充文档", constraints: [], source: [{ kind: "input", inputId: "i", quote: "文档" }], verification: { kind: "user_acceptance", question: "文档满足条件？" } },
+          ],
           assessment: {
             goalId: "g1",
             revision: 1,
@@ -135,14 +175,12 @@ it("shows requirement status and remaining work in goal details", async () => {
             evidenceRefs: [],
             requirements: [
               {
-                requirement: "测试通过",
-                source: "目标正文",
+                requirementId: "R1", explanation: "测试通过",
                 status: "satisfied",
                 evidenceRefs: [],
               },
               {
-                requirement: "补充文档",
-                source: "目标正文",
+                requirementId: "R2", explanation: "文档未完成",
                 status: "incomplete",
                 evidenceRefs: [],
               },

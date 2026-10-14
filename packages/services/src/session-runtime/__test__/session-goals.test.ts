@@ -14,10 +14,10 @@ describe("SessionStore goals", () => {
       const goal = store.goals.createGoal({ sessionId: "s1", objective: "review", maxAutoTurns: 2, pluginId: "quality" })
       expect(goal).toMatchObject({ pluginId: "quality" })
       expect(store.goals.updateGoal(goal.id, { expectedRevision: 0, objective: "review again" })).toMatchObject({ pluginId: "quality" })
-      store.goals.updateGoal(goal.id, { expectedRevision: 1, pluginId: "research", status: "paused" })
+      store.goals.updateGoal(goal.id, { expectedRevision: 1, pluginId: "research", status: "paused", stopReason: { code: "user_paused", at: 10 } })
       store.close()
       store = new SessionStore({ path })
-      expect(store.goals.getGoal(goal.id)).toMatchObject({ revision: 2, pluginId: "research", status: "paused" })
+      expect(store.goals.getGoal(goal.id)).toMatchObject({ revision: 2, objectiveVersion: 2, pluginId: "research", status: "paused", stopReason: { code: "user_paused", at: 10 } })
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
   it("counts a started automatic run once and preserves waiting/blocked goals during restart recovery", () => {
@@ -25,22 +25,22 @@ describe("SessionStore goals", () => {
     const store = new SessionStore({ path: join(directory, "store.db") })
     try {
       for (const id of ["active", "waiting", "blocked"]) store.sessions.create({ id, cwd: process.cwd(), model: "m" })
-      const active = store.goals.createGoal({ sessionId: "active", objective: "run", maxAutoTurns: 2 })
+      const active = store.goals.createGoal({ sessionId: "active", objective: "run", maxAutoTurns: 2, phase: "executing" })
       const waiting = store.goals.createGoal({ sessionId: "waiting", objective: "wait", maxAutoTurns: 2 })
       const blocked = store.goals.createGoal({ sessionId: "blocked", objective: "blocked", maxAutoTurns: 2 })
-      const run = store.runs.createRun({ sessionId: "active", metadata: { goalId: active.id, goalRevision: 0, goalRunKind: "continuation" } })
-      expect(store.goals.startGoalRun(active.id, 0, run.id, true)).toBe(true)
-      expect(store.goals.startGoalRun(active.id, 0, run.id, true)).toBe(true)
+      const run = store.runs.createRun({ sessionId: "active", metadata: { goalId: active.id, goalObjectiveVersion: 1, goalPhase: "executing", goalRunKind: "continuation" } })
+      expect(store.goals.startGoalRun(active.id, active.objectiveVersion, run.id, true)).toBe(true)
+      expect(store.goals.startGoalRun(active.id, active.objectiveVersion, run.id, true)).toBe(true)
       expect(store.goals.getGoal(active.id)?.autoTurnsUsed).toBe(1)
       store.goals.updateGoal(waiting.id, { expectedRevision: 0, status: "waiting_user", wait: { kind: "user", questionId: "q1", question: "哪个选项？" } })
       store.goals.updateGoal(blocked.id, { expectedRevision: 0, status: "blocked", reason: "缺少配置" })
       store.interruptActiveRuns("restart")
       expect(store.goals.pauseActiveGoalsOnStartup()).toBe(1)
-      expect(store.goals.getGoal(active.id)).toMatchObject({ status: "paused", autoTurnsUsed: 1 })
+      expect(store.goals.getGoal(active.id)).toMatchObject({ status: "paused", autoTurnsUsed: 1, stopReason: { code: "startup_recovery" } })
       expect(store.goals.getGoal(active.id)?.currentRunId).toBeUndefined()
       expect(store.goals.getGoal(waiting.id)).toMatchObject({ status: "waiting_user", revision: 1, wait: { questionId: "q1" } })
       expect(store.goals.getGoal(blocked.id)).toMatchObject({ status: "blocked", revision: 1, reason: "缺少配置" })
-      expect(store.goals.startGoalRun(active.id, 0, run.id, true)).toBe(false)
+      expect(store.goals.startGoalRun(active.id, active.objectiveVersion, run.id, true)).toBe(false)
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
 
@@ -52,13 +52,13 @@ describe("SessionStore goals", () => {
       const goal = store.goals.createGoal({ sessionId: "waiting-external", objective: "wait", maxAutoTurns: 2 })
       store.goals.updateGoal(goal.id, {
         expectedRevision: goal.revision,
-        wait: { kind: "external", handleId: "job-1", runId: "run-1", deadlineAt: Date.now() + 60_000 },
+        wait: { kind: "external", targetRunId: "job-1", ownerRunId: "run-1", goalId: goal.id, objectiveVersion: goal.objectiveVersion, deadlineAt: Date.now() + 60_000 },
       })
 
       expect(store.goals.pauseActiveGoalsOnStartup()).toBe(0)
       expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "active",
-        wait: { kind: "external", handleId: "job-1" },
+        wait: { kind: "external", targetRunId: "job-1" },
       })
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
@@ -71,7 +71,7 @@ describe("SessionStore goals", () => {
       store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" })
       const goal = store.goals.createGoal({ sessionId: "s1", objective: "continue", maxAutoTurns: 2 })
       const persist = (id: string) => store.transaction(() => {
-        const admitted = store.conversationTransactions.admitPromptWithRun({ prompt: { id, sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "continue" }] }, run: { metadata: { goalId: goal.id, goalRevision: 0 } } })
+        const admitted = store.conversationTransactions.admitPromptWithRun({ prompt: { id, sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "continue" }] }, run: { metadata: { goalId: goal.id, goalObjectiveVersion: 1 } } })
         const inserted = store.goals.recordGoalContinuation({ goalId: goal.id, revision: 0, previousRunId: "previous", inputId: admitted.input.id, runId: admitted.run.id })
         if (!inserted) throw new Error("duplicate intent")
         return admitted.run.id

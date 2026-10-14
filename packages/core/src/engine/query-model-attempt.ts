@@ -72,10 +72,9 @@ export function attemptFinishedEvent(
   attempt: number,
   status: "completed" | "failed" | "interrupted",
   usage: UsageSnapshot | undefined,
+  notDispatched?: true,
 ): ModelAttemptFinishedEvent {
-  const usageStatus = status === "completed"
-    ? (usage ? "complete" : "unknown")
-    : (usage ? "partial" : "unknown");
+  const usageStatus = notDispatched ? "complete" : usage?.metering?.completeness ?? "unknown";
   return {
     type: "model_attempt_finished",
     generationId,
@@ -83,5 +82,6 @@ export function attemptFinishedEvent(
     status,
     usageStatus,
     ...(usage ? { usage } : {}),
+    ...(notDispatched ? { notDispatched } : {}),
   };
 }

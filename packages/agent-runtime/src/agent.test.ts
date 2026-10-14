@@ -763,10 +763,16 @@ describe("createDefaultNodeAgent", () => {
         { type: "user", content: "loaded history without memory writes" },
         { type: "assistant", content: "loaded answer" },
       ]);
-      await expect(agent.remember()).resolves.toMatchObject({
+      const memoryBoundaries: string[] = [];
+      await expect(agent.remember({ execution: { scope: { sessionId: agent.id, runId: "explicit-memory-origin" },
+        limits: { check: boundary => { memoryBoundaries.push(boundary); } },
+      } })).resolves.toMatchObject({
         skipped: true,
         reason: "no durable memories proposed",
       });
+      expect(memoryBoundaries).toEqual(["maintenance", "model"]);
+      expect(events.filter(event => event.context.runId === "explicit-memory-origin").map(event => event.type))
+        .toEqual(["model.attempt.started", "model.attempt.finished"]);
       expect(extractionCalls).toBe(1);
 
       await expect(agent.runMessage("a new independent run")).resolves.toMatchObject({

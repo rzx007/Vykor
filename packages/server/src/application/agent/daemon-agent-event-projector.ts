@@ -1,4 +1,5 @@
 import type { VykorAgent } from "@vykor/agent-runtime";
+import { AgentExecutionLimitError, isAgentExecutionLimitError } from "@vykor/core";
 import type {
   AgentChildSpawnInput,
   AgentEvent,
@@ -59,7 +60,7 @@ export interface DaemonAgentEventProjectorContext {
   rootSessionId?: string;
   rootAgent: VykorAgent;
   store: Pick<SessionStore,
-    "conversations" | "conversationTransactions" | "incrementalOutput" | "runs" | "sessions" |
+    "conversations" | "conversationTransactions" | "incrementalOutput" | "runs" | "sessions" | "goals" |
     "createProjectionSettlement" | "failProjectionSettlement" | "getProjectionSettlement" |
     "getSessionTask" | "listProjectionSettlements" | "markProjectionSettlementRetrying" |
     "resolveProjectionSettlement" | "transaction" | "updateSessionTask"
@@ -69,6 +70,7 @@ export interface DaemonAgentEventProjectorContext {
   liveChildren: Pick<LiveChildAgentDirectory, "register" | "unregister">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publish" | "publishSince">;
   log(event: ObservabilityEvent): void;
+  requestBudgetStop?(goalId: string): void;
 }
 
 /**
@@ -87,6 +89,8 @@ export class DaemonAgentEventProjector {
   constructor(private readonly context: DaemonAgentEventProjectorContext) { }
 
   async apply(event: AgentEvent): Promise<void> {
+    // 用量不依赖文本顺序：已终态或旧正文的合法报告仍需补账。
+    this.projectGoalUsage(event);
     if (this.hasDurableSettlementStore()) await this.reconcileDurableSettlements();
     else await this.reconcilePendingSettlement();
     if (event.sequence <= this.lastAppliedSequence) return;
@@ -94,6 +98,7 @@ export class DaemonAgentEventProjector {
       await this.project(event);
       this.lastAppliedSequence = event.sequence;
     } catch (error) {
+      if (isAgentExecutionLimitError(error)) throw error;
       let recovered = false;
       if (event.context.childId) {
         const settlement: PendingEventSettlement = {
@@ -107,6 +112,30 @@ export class DaemonAgentEventProjector {
       }
       if (recovered) return;
       throw error;
+    }
+  }
+
+  private projectGoalUsage(event: AgentEvent): void {
+    if (event.type !== "model.attempt.started" && event.type !== "model.attempt.finished") return;
+    if (!event.context.runId) return;
+    const before = this.context.events.checkpoint();
+    const identity = { runId: event.context.runId, sessionId: event.context.sessionId,
+      generationId: event.data.generationId, attempt: event.data.attempt };
+    // 少量只测文本投影的替身不安装 Goal 存储；生产装配始终提供完整接口。
+    if (event.type === "model.attempt.started") {
+      if (!this.context.store.goals.beginGoalModelAttempt) return;
+      const result = this.context.store.goals.beginGoalModelAttempt({ ...identity,
+        model: event.data.model, provider: event.data.provider, purpose: event.data.purpose });
+      this.context.events.publishSince(before);
+      if (result.budgetClosed && result.goalId) this.context.requestBudgetStop?.(result.goalId);
+      if (!result.allowed) throw new AgentExecutionLimitError("目标预算或执行条件已关闭");
+    } else {
+      if (!this.context.store.goals.recordGoalModelAttempt) return;
+      const result = this.context.store.goals.recordGoalModelAttempt({ ...identity,
+        status: event.data.status, usageStatus: event.data.usageStatus,
+        metering: event.data.usage?.metering, notDispatched: event.data.notDispatched });
+      this.context.events.publishSince(before);
+      if (result.budgetClosed && result.goalId) this.context.requestBudgetStop?.(result.goalId);
     }
   }
 
@@ -187,10 +216,11 @@ export class DaemonAgentEventProjector {
         }
         if (event.data.name === "goal.assessment" && event.context.runId) {
           const run = this.context.store.runs.getRun(event.context.runId);
+          const goal = typeof run?.metadata.goalId === "string" ? this.context.store.goals.getGoal(run.metadata.goalId) : undefined;
           const payload = event.data.payload;
-          if (run && run.sessionId === event.context.sessionId && typeof run.metadata.goalId === "string" && typeof run.metadata.goalRevision === "number" && run.status === "running" && !run.metadata.goalSettled && payload?.goalId === run.metadata.goalId && payload?.revision === run.metadata.goalRevision && payload?.runId === run.id) {
+          if (run && goal?.status === "active" && goal.sessionId === run.sessionId && goal.currentRunId === run.id && goal.objectiveVersion === run.metadata.goalObjectiveVersion && run.sessionId === event.context.sessionId && typeof run.metadata.goalId === "string" && typeof run.metadata.goalObjectiveVersion === "number" && run.status === "running" && !run.metadata.goalSettled && payload?.goalId === run.metadata.goalId && payload?.objectiveVersion === run.metadata.goalObjectiveVersion && payload?.runId === run.id) {
             try {
-              const assessment = parseGoalAssessment(payload, { goalId: run.metadata.goalId, revision: run.metadata.goalRevision, runId: run.id });
+              const assessment = parseGoalAssessment(payload, { goalId: run.metadata.goalId, objectiveVersion: run.metadata.goalObjectiveVersion, runId: run.id, phase: goal.phase });
               this.context.store.runs.updateRun(run.id, { metadata: { goalAssessment: assessment } });
             } catch { /* Invalid or unbound suggestions cannot change the durable goal. */ }
           }
@@ -446,6 +476,16 @@ export class DaemonAgentEventProjector {
     const inputId = required(event.context.inputId, "inputId", event.type);
     const input = this.context.store.conversations.getInput(inputId);
     if (!input) throw new Error(`Agent run input not found: ${inputId}`);
+    const childBinding = this.childRunBinding(event);
+    const assertBinding = (existing: ReturnType<SessionStore["runs"]["getRun"]>) => {
+      if (!existing || !event.context.childId) return;
+      if ((existing.metadata.parentRunId !== undefined || existing.status !== "pending") && existing.metadata.parentRunId !== childBinding.parentRunId)
+        throw new Error(`Agent parent run identity conflict: ${runId}`);
+      if ((existing.metadata.goalId !== undefined || existing.metadata.goalObjectiveVersion !== undefined)
+        && (existing.metadata.goalId !== childBinding.goalId || existing.metadata.goalObjectiveVersion !== childBinding.goalObjectiveVersion))
+        throw new Error(`Agent goal identity conflict: ${runId}`);
+    };
+    assertBinding(this.context.store.runs.getRun(runId));
     if (this.transcripts.has(runId)) {
       await this.bindChildTaskRun(event, runId);
       return;
@@ -461,7 +501,7 @@ export class DaemonAgentEventProjector {
           inputId,
           metadata: {
             ...(event.context.traceId ? { traceId: event.context.traceId } : {}),
-            ...(event.context.parentRunId ? { parentRunId: event.context.parentRunId } : {}),
+            ...childBinding,
           },
         });
       } else if (existing.sessionId !== sessionId || existing.inputId !== inputId) {
@@ -469,7 +509,7 @@ export class DaemonAgentEventProjector {
       } else if (existing.status === "completed" || existing.status === "failed" || existing.status === "interrupted") {
         throw new Error(`Agent run is already terminal: ${runId}`);
       }
-      this.context.store.runs.updateRun(runId, { status: "running" });
+      this.context.store.runs.updateRun(runId, { status: "running", metadata: childBinding });
       const existingAttempts = this.context.store.runs.listRunAttempts(runId);
       if (existingAttempts.length === 0) {
         const session = this.context.store.sessions.get(sessionId);
@@ -497,6 +537,23 @@ export class DaemonAgentEventProjector {
     this.context.events.publishSince(before);
 
     await this.bindChildTaskRun(event, runId);
+  }
+
+  private childRunBinding(event: AgentEvent): Record<string, unknown> {
+    if (!event.context.childId || !event.context.parentRunId) return {};
+    const parent = this.context.store.runs.getRun(event.context.parentRunId);
+    if (!parent || parent.sessionId !== event.context.parentSessionId) throw new Error("Child parent Run not found or mismatched");
+    const metadata: Record<string, unknown> = { parentRunId: parent.id };
+    if (parent.metadata.goalId !== undefined) {
+      const goal = typeof parent.metadata.goalId === "string" ? this.context.store.goals.getGoal(parent.metadata.goalId) : undefined;
+      if (!goal || goal.status !== "active" || parent.metadata.goalObjectiveVersion !== goal.objectiveVersion)
+        throw new Error("Child Goal is stopped or objective version changed");
+      metadata.goalId = goal.id;
+      metadata.goalObjectiveVersion = goal.objectiveVersion;
+      if (goal.phase === "preparing") throw new AgentExecutionLimitError("准备阶段不开放子任务");
+      metadata.goalPhase = goal.phase;
+    }
+    return metadata;
   }
 
   private async bindChildTaskRun(event: AgentEvent, runId: string): Promise<void> {

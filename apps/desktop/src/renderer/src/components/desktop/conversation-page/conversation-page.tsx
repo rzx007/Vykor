@@ -146,6 +146,8 @@ function ConversationPane({
   const submitGoal = useDesktopSessionStore((state) => state.submitGoal)
   const setGoalMode = useDesktopSessionStore((state) => state.setGoalMode)
   const setGoalAutoTurns = useDesktopSessionStore((state) => state.setGoalAutoTurns)
+  const setGoalTokenBudget = useDesktopSessionStore((state) => state.setGoalTokenBudget)
+  const setGoalChange = useDesktopSessionStore((state) => state.setGoalChange)
   const refreshGoal = useDesktopSessionStore((state) => state.refreshGoal)
   const applyGoalAction = useDesktopSessionStore((state) => state.applyGoalAction)
   const dismissGoalError = useDesktopSessionStore((state) => state.dismissGoalError)
@@ -587,6 +589,8 @@ function ConversationPane({
           onGoalModeChange={changeGoalMode}
           goalAutoTurns={goalComposer.maxAutoTurns}
           onGoalAutoTurnsChange={(count) => setGoalAutoTurns(composerScope, count)}
+          goalTokenBudget={goalComposer.tokenBudget}
+          onGoalTokenBudgetChange={(value) => setGoalTokenBudget(composerScope, value)}
           commands={applicationCommands}
           onCommand={executeComposerCommand}
           skills={skillCommands}
@@ -824,6 +828,22 @@ function ConversationPane({
                   </Select>
                 </div>
               ) : null}
+              {goalMode && goalComposer.editingGoal ? (
+                <div className="space-y-2 px-3 py-2 text-xs">
+                  <label>变更类型 <select aria-label="目标变更类型" disabled={goalBusy} value={goalComposer.changeKind ?? "refine"}
+                    onChange={(event) => setGoalChange(composerScope, { changeKind: event.target.value as "refine" | "pivot" })} className="rounded border bg-background px-2 py-1">
+                    <option value="refine">补充条件</option><option value="pivot">改变方向</option>
+                  </select></label>
+                  <input aria-label="目标变更原因" placeholder="说明变更原因" disabled={goalBusy} value={goalComposer.changeReason ?? ""}
+                    onChange={(event) => setGoalChange(composerScope, { changeReason: event.target.value })} className="w-full rounded border bg-background px-2 py-1" />
+                  {goalComposer.changeKind !== "pivot" ? goalComposer.editingGoal.requirements.map(item => (
+                    <label key={item.id} className="flex items-start gap-2"><input type="checkbox" disabled={goalBusy}
+                      checked={goalComposer.replaceRequirementIds?.includes(item.id) ?? false}
+                      onChange={(event) => setGoalChange(composerScope, { replaceRequirementIds: event.target.checked
+                        ? [...(goalComposer.replaceRequirementIds ?? []), item.id] : (goalComposer.replaceRequirementIds ?? []).filter(id => id !== item.id) })} />替换 {item.id}：{item.text}</label>
+                  )) : null}
+                </div>
+              ) : null}
               <Composer
                 key={composerScope}
                 id="message-composer"
@@ -845,6 +865,8 @@ function ConversationPane({
                 goalMode={goalMode}
                 onGoalModeChange={changeGoalMode}
                 goalAutoTurns={goalComposer.maxAutoTurns}
+                goalTokenBudget={goalComposer.tokenBudget}
+                onGoalTokenBudgetChange={goalComposer.editingGoal ? undefined : (value) => setGoalTokenBudget(composerScope, value)}
                 onGoalAutoTurnsChange={
                   goalComposer.editingGoal
                     ? undefined

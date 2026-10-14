@@ -21,6 +21,7 @@ describe("StartupRecoveryService", () => {
       recoverProjectionSettlements: () => { order.push("projection"); },
       recoverPluginUiActions: () => { order.push("ui-actions"); },
       interruptActiveRuns: () => { order.push("runs"); store.interruptActiveRuns("restart"); },
+      reconcileGoalModelAttempts: () => { order.push("usage"); store.goals.reconcileGoalModelAttempts(); },
       pauseActiveGoals: () => { order.push("goals"); store.goals.pauseActiveGoalsOnStartup(); },
       terminalizeUnownedInputs: () => { order.push("inputs"); store.terminalizeUnownedInputs("restart"); },
       expirePendingPermissions: () => { order.push("permissions"); store.permissions.expirePending("restart"); },
@@ -36,7 +37,7 @@ describe("StartupRecoveryService", () => {
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     await recovery.run();
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
-    expect(order.slice(0, 7)).toEqual(["projection", "ui-actions", "runs", "goals", "inputs", "permissions", "sessions"]);
+    expect(order.slice(0, 8)).toEqual(["projection", "ui-actions", "runs", "usage", "goals", "inputs", "permissions", "sessions"]);
     expect(order.filter((entry) => entry === "workflows")).toHaveLength(2);
     expect(order.filter((entry) => entry === "goal-waits")).toHaveLength(2);
   });

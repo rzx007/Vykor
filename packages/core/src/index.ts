@@ -39,6 +39,7 @@ export type {
   RetryCounters,
   NextModelRetryDelayInput,
   ModelAttemptUsageStatus,
+  ModelAttemptStarted,
 } from "./engine/model-retry";
 export {
   ModelRequestFailure,
@@ -57,6 +58,7 @@ export type {
   ToolContext,
   ToolResult,
   ToolExecutionResult,
+  HostFileFacts,
   ToolFailureKind,
   ToolExecutionState,
   ToolRegistrationSource,
@@ -76,7 +78,7 @@ export type {
   ToolExecutionSpec,
 } from "./types/tools";
 
-export { formatToolResultForModel, toolFeedbackFields, externalToolMetadata } from "./engine/tool-result-feedback";
+export { formatToolResultForModel, toolFeedbackFields, externalToolMetadata, validHostFileFacts } from "./engine/tool-result-feedback";
 export { readToolOutputInlineChars } from "./engine/query-tool-limits";
 export { toolDefinitionIdentity } from "./engine/tool-definition-identity";
 
@@ -144,7 +146,7 @@ export type {
 
 export { createUnavailableMcpRuntimeCoordinator } from "./mcp-runtime-coordinator";
 
-export type { UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";
+export type { ModelTokenMetering, UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";
 
 export type {
   QueryEngine as IQueryEngine,
@@ -203,7 +205,8 @@ export type {
 
 export { AgentChildBudgetExceededError, ChildRunTerminationError } from "./types/runtime";
 
-export { AgentRunNotAcceptingInputError, RuntimeBundle } from "./types/runtime";
+export { AgentRunNotAcceptingInputError, AgentExecutionLimitError, isAgentExecutionLimitError, RuntimeBundle } from "./types/runtime";
+export type { AgentExecutionLimits, AgentExecutionProfile } from "./types/runtime";
 export {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,

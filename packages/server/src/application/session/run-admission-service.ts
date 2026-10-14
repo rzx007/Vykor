@@ -158,9 +158,12 @@ export interface RunAdmissionEvents {
 }
 
 export interface RunAdmissionGoalControl {
-  getCurrentGoal?(sessionId: string): { id: string; status: string; revision: number } | undefined;
-  getGoal?(goalId: string): { id: string; status: string; revision: number } | undefined;
-  startGoalRun?(goalId: string, revision: number, runId: string, continuation: boolean): boolean;
+  checkExecution?(goalId: string, objectiveVersion: number): void;
+  getCurrentGoal?(sessionId: string): { id: string; status: string; objectiveVersion: number; phase?: string; preparationEpisodeId?: string } | undefined;
+  getGoal?(goalId: string): { id: string; status: string; objectiveVersion: number; phase?: string; preparationEpisodeId?: string } | undefined;
+  startGoalRun?(goalId: string, objectiveVersion: number, runId: string, continuation: boolean): boolean;
+  pendingPermissionId?(sessionId: string): string | undefined;
+  waitForApproval?(goalId: string, objectiveVersion: number, permissionRequestId: string): void;
   markGoalContinuation?(runId: string, status: "cancelled"): void;
   hasUserWork?(sessionId: string): boolean;
   cancelGoalRuns?(sessionId: string, goalId: string, reason: string, queuedOnly?: boolean): string[];
@@ -230,7 +233,14 @@ export class RunAdmissionService {
     const existingState = this.options.runtimeQueue.runState?.(run.sessionId, runId);
     if (existingState) return existingState;
     if (run.status !== "pending") return undefined;
+    if (typeof run.metadata.goalId === "string" && typeof run.metadata.goalObjectiveVersion === "number")
+      this.options.goals?.checkExecution?.(run.metadata.goalId, run.metadata.goalObjectiveVersion);
     return this.options.runtimeQueue.enqueueRun(run, run.inputId);
+  }
+
+  isRunQueuedOrRunning(runId: string): boolean {
+    const run = this.options.runOperations.getRun(runId);
+    return Boolean(run && this.options.runtimeQueue.runState?.(run.sessionId, runId));
   }
 
   recoverRejectedSteer(
@@ -266,9 +276,12 @@ export class RunAdmissionService {
     const run = this.options.runOperations.getRun(runId);
     if (!run) throw new Error(`Session run not found: ${runId}`);
     const isUserRun = !run.metadata.goalRunKind || run.metadata.goalRunKind === "user";
-    if (run.metadata.goalRunKind === "continuation" && this.options.goals?.hasUserWork?.(run.sessionId)) {
+    const permissionId = !isUserRun ? this.options.goals?.pendingPermissionId?.(run.sessionId) : undefined;
+    if (!isUserRun && (this.options.goals?.hasUserWork?.(run.sessionId) || permissionId)) {
       this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "用户消息优先" });
-      this.options.goals.markGoalContinuation?.(run.id, "cancelled");
+      this.options.goals?.markGoalContinuation?.(run.id, "cancelled");
+      if (permissionId && typeof run.metadata.goalId === "string" && typeof run.metadata.goalObjectiveVersion === "number")
+        this.options.goals?.waitForApproval?.(run.metadata.goalId, run.metadata.goalObjectiveVersion, permissionId);
       return false;
     }
     const goal = isUserRun
@@ -281,12 +294,18 @@ export class RunAdmissionService {
       return false;
     }
     if (!goal || (goal.status !== "active" && isUserRun)) return true;
-    const revision = isUserRun ? goal.revision : run.metadata.goalRevision;
+    if (isUserRun && goal.phase === "preparing") return true;
+    if (!isUserRun && (goal.phase !== run.metadata.goalPhase || (goal.phase === "preparing" && goal.preparationEpisodeId !== run.metadata.goalEpisodeId))) {
+      this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "目标阶段或准备批次已变化" });
+      return false;
+    }
+    const objectiveVersion = isUserRun ? goal.objectiveVersion : run.metadata.goalObjectiveVersion;
+    if (typeof objectiveVersion === "number") this.options.goals?.checkExecution?.(goal.id, objectiveVersion);
     if (
-      typeof revision !== "number" ||
+      typeof objectiveVersion !== "number" ||
       !this.options.goals?.startGoalRun?.(
         goal.id,
-        revision,
+        objectiveVersion,
         run.id,
         run.metadata.goalRunKind === "continuation",
       )
@@ -296,7 +315,7 @@ export class RunAdmissionService {
     }
     if (isUserRun) {
       this.options.runOperations.updateRun(run.id, {
-        metadata: { goalId: goal.id, goalRevision: revision, goalRunKind: "user" },
+        metadata: { goalId: goal.id, goalObjectiveVersion: objectiveVersion, goalRunKind: "user", goalPhase: goal.phase },
       });
     }
     return true;
@@ -309,7 +328,18 @@ export class RunAdmissionService {
     assertPromptMetadataAllowed(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     if (!this.options.runtimeQueue.hasRuntime) throw new Error("请先配置模型，再启动目标");
+    if (typeof input.runMetadata?.goalId === "string" && typeof input.runMetadata.goalObjectiveVersion === "number")
+      this.options.goals?.checkExecution?.(input.runMetadata.goalId, input.runMetadata.goalObjectiveVersion);
     return this.persistPromptWithRun(sessionId, input);
+  }
+
+  /** Save an accepted Goal answer/change while a budget prevents any Run. */
+  persistGoalInput(sessionId: string, input: AdmitPromptInput): SessionInputRecord {
+    assertPromptMetadataAllowed(input);
+    return this.options.conversationTransactions.admitPrompt({
+      id: input.id, sessionId, delivery: "queue", items: input.items, content: input.content,
+      attachments: normalizePromptAttachments(input.attachments), metadata: input.metadata,
+    }, this.options.attachmentLimits ? { attachmentLimits: this.options.attachmentLimits } : undefined);
   }
 
   /** 同步保存普通排队输入；调用方提交事务后再处理优先级与派发。 */

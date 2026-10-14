@@ -1,4 +1,6 @@
 import { platform, machine } from "node:os";
+import { normalizeTokenMetering } from "./token-metering.js";
+import type { UsageSnapshot } from "@vykor/core";
 import type {
   ContentBlock,
   Message,
@@ -148,7 +150,8 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
           const eventType = event.type;
           const responsePayload = event.response;
           if (isRecord(responsePayload)) {
-            const usage = usageFromResponse(responsePayload);
+            const usage = usageFromResponse(responsePayload,
+              eventType === "response.completed" || eventType === "response.incomplete" || eventType === "response.failed");
             if (usage) yield { type: "usage", usage };
           }
           if (eventType === "response.output_item.added") {
@@ -461,12 +464,13 @@ function assistantPhase(value: unknown): "commentary" | "final_answer" | undefin
   return value === "commentary" || value === "final_answer" ? value : undefined;
 }
 
-function usageFromResponse(response: Record<string, unknown>): { inputTokens: number; outputTokens: number } | undefined {
+function usageFromResponse(response: Record<string, unknown>, finalReport: boolean): UsageSnapshot | undefined {
   const usage = response.usage;
   if (!isRecord(usage)) return undefined;
   return {
     inputTokens: numberValue(usage.input_tokens),
     outputTokens: numberValue(usage.output_tokens),
+    metering: { ...normalizeTokenMetering({ input: usage.input_tokens, output: usage.output_tokens }, true, finalReport), raw: { ...usage } },
   };
 }
 

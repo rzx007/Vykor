@@ -23,6 +23,26 @@ function withRepository(
 }
 
 describe("GoalRepository", () => {
+  it("changes objectiveVersion only when objective changes", () => {
+    withRepository((repository) => {
+      const first = repository.insertGoal({ id: "versioned", sessionId: "s1", objective: "finish", maxAutoTurns: 2 });
+      expect(first.objectiveVersion).toBe(1);
+      const paused = repository.updateGoalRevision(first.id, {
+        expectedRevision: first.revision, status: "paused", stopReason: { code: "user_paused", at: 100 },
+      });
+      expect(paused.objectiveVersion).toBe(1);
+      expect(paused.stopReason).toEqual({ code: "user_paused", at: 100 });
+      const same = repository.updateGoalRevision(first.id, { expectedRevision: paused.revision, objective: "finish" });
+      expect(same.objectiveVersion).toBe(1);
+      const edited = repository.updateGoalRevision(first.id, {
+        expectedRevision: same.revision, objective: "finish and verify", stopReason: null,
+      });
+      expect(edited.objectiveVersion).toBe(2);
+      expect(edited.revision).toBe(same.revision + 1);
+      expect(edited.stopReason).toBeUndefined();
+    });
+  });
+
   it("reloads requests, assessments, and continuations from disk", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-goal-related-reload-"));
     const path = join(directory, "sessions.db");

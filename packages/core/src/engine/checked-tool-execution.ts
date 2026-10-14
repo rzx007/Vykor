@@ -1,4 +1,5 @@
 import type { AgentExecutionContext } from "../types/runtime";
+import { isAgentExecutionLimitError } from "../types/runtime";
 import type { HookExecutor as IHookExecutor } from "../types/hooks";
 import type { PermissionChecker as IPermissionChecker } from "../types/permissions";
 import type { Message, ToolUseBlock } from "../types/messages";
@@ -7,7 +8,7 @@ import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCall, emitToolLifecycle } from "./query-tool-permissions";
 import { executeToolWithTimeout, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
 import type { ToolFailureMemory } from "./tool-failure-memory";
-import { defaultRecoveryHint, externalToolMetadata, toolFeedbackFields } from "./tool-result-feedback";
+import { defaultRecoveryHint, externalToolMetadata, toolFeedbackFields, validHostFileFacts } from "./tool-result-feedback";
 
 export interface CheckedToolExecutionOptions {
   toolUses: ToolUseBlock[];
@@ -97,6 +98,8 @@ export async function executeCheckedTools(options: CheckedToolExecutionOptions):
             startSignal.throwIfAborted();
             await emitToolLifecycle(pendingExecution, toolUse.id, "running");
             startSignal.throwIfAborted();
+            await execution?.limits?.check("tool", { toolName: tool.name, toolAttemptId });
+            startSignal.throwIfAborted();
             started = true;
             executedIndexes.add(idx);
             const returned = await executeToolWithTimeout(tool, toolUse.input, context, timeoutMs, signal);
@@ -108,12 +111,16 @@ export async function executeCheckedTools(options: CheckedToolExecutionOptions):
               toolName: toolUse.name,
               toolAttemptId,
               metadata: externalToolMetadata(returned.metadata),
+              // A tool's own top-level field cannot claim host trust. Promote only captured builtin receipts.
+              hostFileFacts: isTrustedSummary(toolUse, tool) && !returned.isError
+                ? validHostFileFacts(returned.metadata?.hostFileFacts) : undefined,
               compactSummary: isTrustedSummary(toolUse, tool)
                 ? toolFeedbackFields(returned).compactSummary : undefined,
             };
           }
         }
       } catch (error) {
+        if (isAgentExecutionLimitError(error)) failBatch(error);
         // Reliable emits already recorded their error, including concurrent user cancellation.
         // Exceptions from a running tool remain ordinary tool feedback.
         if (!started && !startSignal.aborted) failBatch(error);
@@ -133,6 +140,7 @@ export async function executeCheckedTools(options: CheckedToolExecutionOptions):
       result.executionState ??= result.isError ? "unknown" : "completed";
       if (result.executionState === "unknown") result.isError = true;
       if (result.isError) {
+        result.hostFileFacts = undefined;
         result.failureKind ??= "unknown_outcome";
         result.recoveryHint ??= defaultRecoveryHint(result);
         result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
@@ -155,7 +163,7 @@ export async function executeCheckedTools(options: CheckedToolExecutionOptions):
   // Post hooks do not replace results already returned during cancellation.
   for (const idx of executedIndexes) {
     const result = results[idx]!;
-    if (signal?.aborted) break;
+    if (signal?.aborted || execution?.profile?.executableHooks === false) break;
     try {
       await hookExecutor.execute("post_tool_use", { tool: result.toolName, result });
     } catch (error) {

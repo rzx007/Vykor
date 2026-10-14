@@ -3,12 +3,16 @@ import type {
   sessionGoalAssessments,
   sessionGoalContinuations,
   sessionGoalRequests,
+  sessionGoalModelAttempts,
   sessionGoals,
+  sessionGoalVersions,
 } from "../session-runtime/schema.js";
 import type { TransactionJournal } from "./transaction-journal.js";
 
 export interface TemporaryControlSnapshot {
   goals: Map<string, typeof sessionGoals.$inferSelect>;
+  versions: Map<string, typeof sessionGoalVersions.$inferSelect>;
+  goalModelAttempts: Map<string, typeof sessionGoalModelAttempts.$inferSelect>;
   requests: Map<string, typeof sessionGoalRequests.$inferSelect>;
   assessments: Map<string, typeof sessionGoalAssessments.$inferSelect>;
   continuations: Map<string, typeof sessionGoalContinuations.$inferSelect>;
@@ -18,6 +22,8 @@ export interface TemporaryControlSnapshot {
 /** Process-local rows for control records owned by temporary chats. */
 export class TemporaryControlRecords implements TemporaryControlSnapshot {
   readonly goals: TemporaryControlSnapshot["goals"] = new Map();
+  readonly versions: TemporaryControlSnapshot["versions"] = new Map();
+  readonly goalModelAttempts: TemporaryControlSnapshot["goalModelAttempts"] = new Map();
   readonly requests: TemporaryControlSnapshot["requests"] = new Map();
   readonly assessments: TemporaryControlSnapshot["assessments"] = new Map();
   readonly continuations: TemporaryControlSnapshot["continuations"] = new Map();
@@ -32,6 +38,8 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
   snapshot(): TemporaryControlSnapshot {
     return structuredClone({
       goals: this.goals,
+      versions: this.versions,
+      goalModelAttempts: this.goalModelAttempts,
       requests: this.requests,
       assessments: this.assessments,
       continuations: this.continuations,
@@ -42,6 +50,8 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
   restore(snapshot: TemporaryControlSnapshot): void {
     const rows = structuredClone(snapshot);
     replaceRows(this.goals, rows.goals);
+    replaceRows(this.versions, rows.versions);
+    replaceRows(this.goalModelAttempts, rows.goalModelAttempts);
     replaceRows(this.requests, rows.requests);
     replaceRows(this.assessments, rows.assessments);
     replaceRows(this.continuations, rows.continuations);
@@ -57,6 +67,18 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
     for (const id of goalIds) {
       this.capture(this.goals, id);
       this.goals.delete(id);
+    }
+    for (const [key, row] of this.goalModelAttempts) {
+      if (goalIds.has(row.goalId)) {
+        this.capture(this.goalModelAttempts, key);
+        this.goalModelAttempts.delete(key);
+      }
+    }
+    for (const [key, row] of this.versions) {
+      if (goalIds.has(row.goalId)) {
+        this.capture(this.versions, key);
+        this.versions.delete(key);
+      }
     }
     for (const [id, row] of this.requests) {
       if (row.sessionId === sessionId) {

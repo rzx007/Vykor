@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { normalizeTokenMetering } from "./token-metering.js";
+import type { UsageSnapshot } from "@vykor/core";
 import type {
   StreamingMessageClient,
   StreamMessageParams,
@@ -88,7 +90,8 @@ export class AnthropicClient implements StreamingMessageClient {
       const completedToolUses: ToolUseBlock[] = [];
       let sawMessageStop = false;
       let stopReason: string = "end_turn";
-      let usage: { inputTokens: number; outputTokens: number; cacheCreationTokens?: number; cacheReadTokens?: number } | undefined;
+      let usage: UsageSnapshot | undefined;
+      let rawUsage: Record<string, unknown> = {};
 
       lifecycle.markStreamStarted();
       try {
@@ -98,17 +101,24 @@ export class AnthropicClient implements StreamingMessageClient {
             sawMessageStop = true;
           } else if (event.type === "message_start") {
             const current = event.message.usage;
+            rawUsage = { ...current };
             usage = {
               inputTokens: current.input_tokens,
               outputTokens: current.output_tokens,
               cacheCreationTokens: current.cache_creation_input_tokens ?? undefined,
               cacheReadTokens: current.cache_read_input_tokens ?? undefined,
+              metering: { ...normalizeTokenMetering({ input: current.input_tokens, output: current.output_tokens,
+                cacheCreation: current.cache_creation_input_tokens, cacheRead: current.cache_read_input_tokens }, false, false), raw: rawUsage },
             };
             yield { type: "usage", usage };
           } else if (event.type === "message_delta") {
             if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
             if (usage) {
-              usage = { ...usage, outputTokens: event.usage.output_tokens };
+              rawUsage = { ...rawUsage, ...event.usage };
+              usage = { ...usage, outputTokens: event.usage.output_tokens,
+                metering: { ...normalizeTokenMetering({ input: rawUsage.input_tokens, output: rawUsage.output_tokens,
+                  cacheCreation: rawUsage.cache_creation_input_tokens, cacheRead: rawUsage.cache_read_input_tokens },
+                  false, !!event.delta.stop_reason), raw: rawUsage } };
               yield { type: "usage", usage };
             }
           } else if (

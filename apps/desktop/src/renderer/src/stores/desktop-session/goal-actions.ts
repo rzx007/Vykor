@@ -71,6 +71,7 @@ export function forgetSessionGoals(
 
 export function createGoalActions({ get, set }: DesktopStoreContext): GoalActions {
   const reads = new Map<string, Promise<void>>()
+  const refreshAgain = new Set<string>()
   const generations = new Map<string, number>()
   const updateComposer = (scope: string, patch: Partial<GoalComposerState>): void => {
     set((state) => ({
@@ -83,14 +84,12 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
   const saveGoal = (sessionId: string, goal: SessionGoal | null): void => {
     set((state) => {
       const current = state.goalsBySession[sessionId]
-      if (
-        current &&
-        goal &&
-        current.id === goal.id &&
-        (current.revision > goal.revision || current.updatedAt > goal.updatedAt)
-      )
-        return state
-      return { goalsBySession: { ...state.goalsBySession, [sessionId]: goal } }
+      if (!goal && current && (current.status === "cancelled" || current.status === "completed")) return state
+      const merged = current && goal && current.id === goal.id
+        ? { ...(current.revision > goal.revision ? current : goal),
+            usage: current.usage.seq > goal.usage.seq ? current.usage : goal.usage }
+        : goal
+      return { goalsBySession: { ...state.goalsBySession, [sessionId]: merged } }
     })
   }
   const invalidateRead = (sessionId: string): void => {
@@ -121,6 +120,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
           mode: true,
           ordinaryDraft,
           editingGoal: goal,
+          changeKind: "refine", changeReason: "", replaceRequirementIds: [],
           request: undefined,
           error: null,
         })
@@ -144,6 +144,12 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
     setGoalAutoTurns(scope, maxAutoTurns) {
       if (!get().goalComposersByScope[scope]?.busy) updateComposer(scope, { maxAutoTurns })
     },
+    setGoalTokenBudget(scope, tokenBudget) {
+      if (!get().goalComposersByScope[scope]?.busy) updateComposer(scope, { tokenBudget })
+    },
+    setGoalChange(scope, patch) {
+      if (!get().goalComposersByScope[scope]?.busy) updateComposer(scope, patch)
+    },
     dismissGoalError(scope) {
       updateComposer(scope, { error: null })
     },
@@ -154,7 +160,10 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       const getGoal = window.desktop?.sessions?.getGoal
       if (typeof getGoal !== "function") return
       const existing = reads.get(sessionId)
-      if (existing) return existing
+      if (existing) {
+        refreshAgain.add(sessionId)
+        return existing
+      }
       const generation = generations.get(sessionId) ?? 0
       const request = (async () => {
         try {
@@ -164,6 +173,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
           // Preserve the last known state during reconnect; the next event/read retries.
         } finally {
           reads.delete(sessionId)
+          if (refreshAgain.delete(sessionId)) await get().refreshGoal(sessionId)
         }
       })()
       reads.set(sessionId, request)
@@ -191,13 +201,26 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
           : []
       )
       const editingGoal = composer.editingGoal
+      if (editingGoal && !composer.changeReason?.trim()) {
+        updateComposer(scope, { error: "请说明目标变更原因。" })
+        return
+      }
+      const rawBudget = (composer.tokenBudget ?? "").trim()
+      const tokenBudget = rawBudget ? Number(rawBudget) : undefined
+      if (!editingGoal && rawBudget && (!/^\d+$/.test(rawBudget) || !Number.isSafeInteger(tokenBudget) || tokenBudget! <= 0)) {
+        updateComposer(scope, { error: "Token 总预算需为正整数，留空表示不限制。" })
+        return
+      }
       const fingerprint = JSON.stringify({
         objective,
         items: document.items,
         attachments,
         goalId: editingGoal?.id,
         revision: editingGoal?.revision,
+        changeKind: composer.changeKind, changeReason: composer.changeReason,
+        replaceRequirementIds: composer.replaceRequirementIds,
         maxAutoTurns: composer.maxAutoTurns,
+        ...(!editingGoal ? { tokenBudget } : {}),
       })
       const requestId =
         composer.request?.fingerprint === fingerprint ? composer.request.id : crypto.randomUUID()
@@ -229,10 +252,13 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
               ...payload,
               goalId: editingGoal.id,
               expectedRevision: editingGoal.revision,
+              changeKind: composer.changeKind ?? "refine", changeReason: composer.changeReason!.trim(),
+              replaceRequirementIds: composer.changeKind === "pivot" ? [] : composer.replaceRequirementIds,
             })
           : await window.desktop.sessions.createGoal({
               ...payload,
               maxAutoTurns: composer.maxAutoTurns,
+              tokenBudget,
             })
         invalidateRead(sessionId)
         saveGoal(sessionId, goal)
@@ -302,8 +328,8 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       try {
         const saved = await window.desktop.sessions.goalAction(actionInput)
         invalidateRead(sessionId)
-        saveGoal(sessionId, saved.status === "cancelled" ? null : saved)
-        updateComposer(scope, { request: undefined })
+        saveGoal(sessionId, saved)
+        updateComposer(scope, { request: undefined, ...(saved.status === "cancelled" ? { dismissedGoalId: saved.id } : {}) })
       } catch (error) {
         updateComposer(scope, { error: goalErrorMessage(error) })
       } finally {

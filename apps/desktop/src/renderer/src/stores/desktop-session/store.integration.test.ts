@@ -35,6 +35,28 @@ describe("desktop session store composition", () => {
 })
 
 describe("desktop session store event lifecycle", () => {
+  it("refreshes Goal usage through GET on snapshots and reconnect snapshots", async () => {
+    vi.useFakeTimers();
+    let listener!: (update: DesktopSessionUpdate) => void;
+    const refreshGoal = vi.fn(async () => {});
+    vi.stubGlobal("window", { desktop: { sessions: {
+      onUpdated: (callback: typeof listener) => { listener = callback; return () => {}; },
+      onDaemonStatusChanged: () => () => {}, onDataDirectoryChanged: () => () => {}, onDaemonRestarted: () => () => {},
+      acknowledgeUpdate: vi.fn(async () => ({ accepted: true })), requestUpdateResync: vi.fn(),
+    } } });
+    const cleanup = attachDesktopSessionEvents();
+    useDesktopSessionStore.setState({ refreshGoal });
+    try {
+      listener(snapshotUpdate(emptySessionView("s1", 2)));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(refreshGoal).toHaveBeenLastCalledWith("s1");
+      const reconnect = snapshotUpdate(emptySessionView("s1", 3));
+      reconnect.generation = 2;
+      listener(reconnect);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(refreshGoal).toHaveBeenCalledTimes(2);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
   it("applies session part deltas without running snapshot reconciliation", async () => {
     vi.useFakeTimers()
     const listeners = new Set<(update: DesktopSessionUpdate) => void>()

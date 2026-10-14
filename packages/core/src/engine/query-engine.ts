@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isAgentExecutionLimitError } from "../types/runtime";
 
 import type { Message, StreamEvent, ToolUseBlock, UsageSnapshot, ContentBlock, ModelAttemptFinishedEvent, ToolGenerationProgressEvent } from "../index";
 import type {
@@ -84,6 +85,10 @@ function toCompactClient(
   options: {
     policy?: Partial<ModelRetryPolicy>;
     onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
+    onAttemptStarted?: import("./buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
+    limits?: import("../types/runtime").AgentExecutionLimits;
+    maxOutputTokens?: number;
+    provider?: string;
   } = {},
 ): CompactClient {
   return {
@@ -94,13 +99,17 @@ function toCompactClient(
           model,
           messages: [{ type: "user", content }],
           system: COMPACT_SUMMARIZER_SYSTEM_PROMPT,
-          maxTokens: MAX_COMPACT_OUTPUT_TOKENS,
+          maxTokens: Math.min(MAX_COMPACT_OUTPUT_TOKENS, options.maxOutputTokens ?? MAX_COMPACT_OUTPUT_TOKENS),
           tools: undefined,
           abortSignal: submitOptions?.signal,
         },
         {
           ...(options.policy ? { policy: options.policy } : {}),
           ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
+          ...(options.onAttemptStarted ? { onAttemptStarted: options.onAttemptStarted } : {}),
+          ...(options.limits ? { limits: options.limits } : {}),
+          ...(options.provider ? { provider: options.provider } : {}),
+          purpose: "compaction",
         },
       );
     },
@@ -306,6 +315,9 @@ export class QueryEngine implements IQueryEngine {
         ?.filter((item) => item.permission === "host-internal")
         .map((item) => item.definition.name) ?? [],
     );
+    const endRunDefinitions = new Set(contribution?.tools
+      ?.filter(item => item.permission === "host-internal" && item.endRunOnSuccess === true)
+      .map(item => item.definition) ?? []);
 
     let turnCount = 0;
     const failedToolCalls = new ToolFailureMemory();
@@ -328,7 +340,9 @@ export class QueryEngine implements IQueryEngine {
       hardMaxTurns === undefined ? this.maxTurns : Math.min(this.maxTurns, hardMaxTurns);
 
     // 执行会话开始时的钩子函数
-    await this.hookExecutor.execute("session_start", {});
+    if (options.execution?.profile?.executableHooks !== false) {
+      await this.hookExecutor.execute("session_start", {});
+    }
 
     while (turnCount < maxTurnsLimit() || forceFinalResponse) {
       // The first request must use the same client that prepared its attachments.
@@ -341,7 +355,7 @@ export class QueryEngine implements IQueryEngine {
         throw new MaxTurnsExceeded(maxTurnsLimit());
       }
       this.compactService.setClient(
-        this.createCompactClient(requestConfiguration.client, requestConfiguration.model, options.execution),
+        this.createCompactClient(requestConfiguration.client, requestConfiguration.model, options.execution, requestConfiguration.provider, requestConfiguration.maxOutputTokens),
       );
       if (requestConfiguration.contextWindow !== undefined) {
         this.compactService.setContextWindow(requestConfiguration.contextWindow);
@@ -351,6 +365,7 @@ export class QueryEngine implements IQueryEngine {
       }
       // 自动压缩消息历史以控制上下文长度
       try {
+        this.compactService.setHookExecutor(options.execution?.profile?.executableHooks === false ? undefined : this.hookExecutor);
         this.compactService.setProgressCallback((event) =>
           options.execution?.emit({
             type: "domain.event",
@@ -366,9 +381,11 @@ export class QueryEngine implements IQueryEngine {
           options.signal,
         );
       } catch (error) {
+        if (isAgentExecutionLimitError(error)) throw error;
         if (options.signal?.aborted) throw options.signal.reason;
         // compact failure is non-fatal; continue with current messages
       } finally {
+        this.compactService.setHookExecutor(this.hookExecutor);
         // Manual compaction after this turn must keep the resolved client/model
         // without retaining an emitter bound to this run.
         this.compactService.setClient(
@@ -458,8 +475,20 @@ export class QueryEngine implements IQueryEngine {
         let attemptFailed: ModelRequestFailure | undefined;
         const pendingProgress = new Map<string, ToolGenerationProgressEvent>();
         const progressSentAt = new Map<string, number>();
+        let registered = false;
+        let clientInvoked = false;
+        let requestExitedNormally = false;
 
         try {
+          await options.execution?.limits?.check("model");
+          await options.execution?.emit({ type: "model.attempt.started", data: {
+            generationId, attempt, model: requestConfiguration.model,
+            ...(requestConfiguration.provider ? { provider: requestConfiguration.provider } : {}),
+            purpose: forcedFinalTurn ? "finalization" : "generation",
+          } });
+          registered = true;
+          attemptSignal.signal.throwIfAborted();
+          clientInvoked = true;
           const stream = requestConfiguration.client.streamMessage({
             model: requestConfiguration.model,
             messages: this.messages,
@@ -525,16 +554,33 @@ export class QueryEngine implements IQueryEngine {
               { kind: "stream_incomplete", phase: "stream", retryable: true },
             );
           }
+          requestExitedNormally = true;
         } catch (error) {
+          requestExitedNormally = true;
+          if (!registered) throw error;
+          if (isAgentExecutionLimitError(error)) {
+            this.settleModelAttempt(attemptUsage, clientInvoked);
+            yield attemptFinishedEvent(generationId, attempt, "failed", attemptUsage, clientInvoked ? undefined : true);
+            throw error;
+          }
           attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
         } finally {
           attemptSignal.dispose();
+          // A consumer can return() while we are suspended at a streamed delta.
+          // It will ignore a finally yield, so settle directly through the host.
+          if (registered && !requestExitedNormally) {
+            this.settleModelAttempt(attemptUsage, clientInvoked);
+            const { type: _, ...data } = attemptFinishedEvent(generationId, attempt,
+              options.signal?.aborted ? "interrupted" : "failed", attemptUsage, clientInvoked ? undefined : true);
+            await options.execution?.emit({ type: "model.attempt.finished", data });
+            if (attemptUsage) await options.execution?.emit({ type: "usage.updated", data: { usage: attemptUsage } });
+          }
         }
 
         if (attemptFailed) {
-          this.settleModelAttempt(attemptUsage, true);
+          this.settleModelAttempt(attemptUsage, clientInvoked);
           yield attemptFinishedEvent(
-            generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage,
+            generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage, clientInvoked ? undefined : true,
           );
 
           if (options.signal?.aborted) throw options.signal.reason;
@@ -573,15 +619,8 @@ export class QueryEngine implements IQueryEngine {
           continue;
         }
 
-        // 成功：补一次截断提示，然后发布缓冲的工具事件、结算用量并发出 complete。
-        for (const progress of pendingProgress.values()) yield progress;
-        if (isTruncatedStopReason(stopReason) && attemptToolUses.length === 0) {
-          const notice =
-            "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
-          assistantText += notice;
-          yield { type: "text_delta", delta: notice };
-        }
-
+        // Settle before yielding buffered output: cancellation at those yields
+        // must not strand a request whose provider has already returned.
         toolUses = attemptToolUses;
         this.settleModelAttempt(attemptUsage, false);
         if (forcedFinalTurn && toolUses.length > 0) {
@@ -594,10 +633,18 @@ export class QueryEngine implements IQueryEngine {
             { kind: "protocol", phase: "stream", retryable: false },
           );
         }
+        yield attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
+
+        for (const progress of pendingProgress.values()) yield progress;
+        if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
+          const notice =
+            "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
+          assistantText += notice;
+          yield { type: "text_delta", delta: notice };
+        }
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
         }
-        yield attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
 
         // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
         if (assistantText || toolUses.length > 0 || assistantReasoning) {
@@ -670,6 +717,13 @@ export class QueryEngine implements IQueryEngine {
         if (failure) throw failure.error;
         // Cancellation still owes every committed call its full result, in model order.
         options.signal?.throwIfAborted();
+        options.execution?.scope?.signal.throwIfAborted();
+        if ([...endRunDefinitions].some(definition => runToolRegistry.get(definition.name) === definition
+          && results.some((result, index) => toolUses[index]?.name === definition.name
+            && !result.isError && result.executionState === "completed"))) {
+          options.execution?.closeSteering();
+          return;
+        }
         // Evaluate the whole batch so a successful alternative cancels recovery
         // regardless of whether it appears before or after a rejected retry.
         if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
@@ -785,18 +839,20 @@ export class QueryEngine implements IQueryEngine {
   private async resolveRequestConfiguration(
     options: SubmitMessageOptions,
   ): Promise<QueryRequestConfiguration> {
-    if (this.options.resolveRequestConfiguration) {
-      return await this.options.resolveRequestConfiguration({
+    const configuration: QueryRequestConfiguration = this.options.resolveRequestConfiguration
+      ? await this.options.resolveRequestConfiguration({
         signal: options.signal,
         capabilityView: options.execution?.capabilityView,
-      });
-    }
-    return {
+      }) : {
       revision: 0,
       model: this.model,
       client: this.apiClient,
       ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
     };
+    const cap = options.execution?.profile?.maxOutputTokens;
+    if (cap === undefined) return configuration;
+    if (!Number.isSafeInteger(cap) || cap <= 0) throw new RangeError("Run output limit must be a positive safe integer");
+    return { ...configuration, maxOutputTokens: Math.min(configuration.maxOutputTokens ?? cap, cap) };
   }
 
   private applyRequestMaxTurns(maxTurns: number | undefined): void {
@@ -825,7 +881,7 @@ export class QueryEngine implements IQueryEngine {
    */
   private settleModelAttempt(usage: UsageSnapshot | undefined, incomplete: boolean): void {
     if (usage) this.costTracker.addUsage(usage);
-    if (incomplete || !usage) this.costTracker.markUsageIncomplete();
+    if (incomplete || usage?.metering?.completeness !== "complete") this.costTracker.markUsageIncomplete();
   }
 
   getHistory(): Message[] {
@@ -890,10 +946,15 @@ export class QueryEngine implements IQueryEngine {
    * 不能把主生成包进这里，避免双层重试或重复计费。
    */
   private createCompactClient(
-    client: StreamingMessageClient, model: string, execution?: AgentExecutionContext,
+    client: StreamingMessageClient, model: string, execution?: AgentExecutionContext, provider?: string, maxOutputTokens?: number,
   ): CompactClient {
     return toCompactClient(client, model, {
       policy: this.options.modelRetry,
+      limits: execution?.limits,
+      maxOutputTokens: execution?.profile?.maxOutputTokens === undefined ? undefined
+        : Math.min(execution.profile.maxOutputTokens, maxOutputTokens ?? execution.profile.maxOutputTokens),
+      provider,
+      onAttemptStarted: async (data) => { await execution?.emit({ type: "model.attempt.started", data }); },
       onAttemptFinished: async (event) => {
         if (event.usage) this.costTracker.addUsage(event.usage);
         if (event.usageStatus !== "complete") this.costTracker.markUsageIncomplete();
@@ -901,6 +962,7 @@ export class QueryEngine implements IQueryEngine {
           generationId: event.generationId, attempt: event.attempt,
           status: event.status, usageStatus: event.usageStatus,
           ...(event.usage ? { usage: event.usage } : {}),
+          ...(event.notDispatched ? { notDispatched: event.notDispatched } : {}),
         } });
         if (event.usage) await execution?.emit({ type: "usage.updated", data: { usage: event.usage } });
       },

@@ -15,6 +15,7 @@ import {
 } from "./patch-path.js";
 import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "./edit-replacers.js";
 import { decodeUtf8Text, isBinaryContent } from "./text-content.js";
+import { fileDigest, hostFileFacts } from "./read.js";
 
 export type PatchFailureKind = "invalid_input" | "precondition" | "policy" | "command";
 
@@ -303,7 +304,7 @@ function buildSummary(prefix: string, changes: PatchChange[]): string {
   return body ? `${prefix}: ${body}` : prefix;
 }
 
-function patchSuccess(changes: PatchChange[]): ToolResult {
+function patchSuccess(changes: PatchChange[], context?: ToolContext): ToolResult {
   const counts = countOperations(changes);
   const header =
     `ApplyPatch ${changes.length} files: ${counts.create} created, ${counts.update} updated, ${counts.delete} deleted`;
@@ -314,7 +315,11 @@ function patchSuccess(changes: PatchChange[]): ToolResult {
     }],
     executionState: "completed",
     compactSummary: buildSummary(header, changes),
-    metadata: { changedFiles: completedFileIdentities(changes) },
+    metadata: { changedFiles: completedFileIdentities(changes), ...(context ? { hostFileFacts: hostFileFacts(context, changes.map(change => ({
+      path: change.executionPath, operation: "patch" as const,
+      beforeDigest: change.operation === "create" ? "missing" : `sha256:${change.beforeHash}`,
+      afterDigest: change.operation === "delete" ? "missing" : fileDigest(new TextEncoder().encode(change.newContent)),
+    }))) } : {}) },
   };
 }
 
@@ -381,7 +386,7 @@ export function patchErrorResult(error: unknown, executionState: "not_started" |
  * 执行已预演的 patch：写盘前 best-effort 复核 update/delete 原始字节 hash，
  * 然后按稳定路径顺序落盘。首版只承诺“预演全有或全无”，不承诺跨文件磁盘回滚。
  */
-export async function executePatchPlan(plan: PatchPlan, operations: FileOperations): Promise<ToolResult> {
+export async function executePatchPlan(plan: PatchPlan, operations: FileOperations, context?: ToolContext): Promise<ToolResult> {
   for (const change of plan.changes) {
     if (change.beforeHash === undefined) continue;
     let current: Uint8Array;
@@ -423,7 +428,7 @@ export async function executePatchPlan(plan: PatchPlan, operations: FileOperatio
       return patchPartialFailure(completed, ordered.slice(index), error);
     }
   }
-  return patchSuccess(ordered);
+  return patchSuccess(ordered, context);
 }
 
 export const applyPatchTool: ToolDefinition = {
@@ -441,7 +446,7 @@ export const applyPatchTool: ToolDefinition = {
     try {
       const plan = await planPatch(input.patch as string, context);
       planning = false;
-      return await executePatchPlan(plan, fileOperationsFor(context));
+      return await executePatchPlan(plan, fileOperationsFor(context), context);
     } catch (error) {
       return patchErrorResult(error, planning ? "not_started" : "unknown");
     }

@@ -115,6 +115,24 @@ function createMockControlOptions() {
 }
 
 describe("RunControlService", () => {
+  it("stops precise descendant Runs after the root finished, and refuses incomplete cleanup", async () => {
+    const { options, runs } = createMockControlOptions();
+    options.goals = { getGoal: () => ({ id: "g", sessionId: "s1", objectiveVersion: 1 } as any) };
+    options.durableRuns.listGoalRuns = (id, version) => [...runs.values()]
+      .filter(run => run.metadata.goalId === id && run.metadata.goalObjectiveVersion === version);
+    const child: SessionRunRecord = { id: "child-run", sessionId: "child", status: "running", createdAt: 1, updatedAt: 1,
+      metadata: { goalId: "g", goalObjectiveVersion: 1, parentRunId: "finished-root" } };
+    runs.set(child.id, child);
+    const interruptRun = vi.fn(async () => false);
+    options.children = { interruptRun };
+    const service = new RunControlService(options);
+    await expect(service.stopGoalChildren("s1", "g", 1, "edited")).rejects.toThrow("尚未停止");
+    expect(runs.get(child.id)?.status).toBe("running");
+    interruptRun.mockImplementation(async () => { child.status = "interrupted"; return true; });
+    await service.stopGoalChildren("s1", "g", 1, "edited");
+    expect(interruptRun).toHaveBeenLastCalledWith("child", "child-run", "edited");
+    await expect(service.stopGoalChildren("wrong", "g", 1, "edited")).rejects.toThrow("归属");
+  });
   it("queries activeRunId, queuedRunIds and hasWork correctly", () => {
     const { options, activeRuns, queuedRuns } = createMockControlOptions();
     activeRuns.set("s1", "r-active");
