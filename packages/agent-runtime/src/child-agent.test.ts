@@ -8,6 +8,41 @@ import { createRunCapabilityView } from "./run-capability-view.js";
 import { ToolRegistry } from "@vykor/core";
 
 describe("AgentChildManager", () => {
+  it("binds inherited limits to each framework-created child Run, including reused children", async () => {
+    const submissions: any[] = [];
+    const bind = vi.fn((runId: string) => ({ check: vi.fn(), runId }));
+    const inherited = { check: vi.fn(), forChildRun: bind };
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent((_content: unknown, options: any) => {
+      submissions.push(options);
+      return completedRun("done");
+    }));
+    try {
+      const controller = manager.createController({ ...parentScope(), limits: inherited });
+      const child = await controller.spawnChildAgent({ description: "write", prompt: "write", agent: "worker", cwd: "/repo" });
+      await child.result;
+      await controller.sendChildInput(child.id, { content: "check again" });
+      await manager.get(child.id)!.result;
+      expect(bind.mock.calls.map(([id]) => id)).toEqual(submissions.map(options => options.ids.runId));
+      expect(submissions[0].ids.runId).not.toBe(submissions[1].ids.runId);
+      for (const options of submissions) {
+        expect(options.limits).toMatchObject({ runId: options.ids.runId });
+        expect(options.childRunParent.limits).toBe(inherited);
+      }
+    } finally { await manager.closeAll(); }
+  });
+
+  it("keeps inherited limits when the host has no child Run binder", async () => {
+    const inherited = { check: vi.fn() };
+    const submit = vi.fn((_content: unknown, _options: any) => completedRun("done"));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submit));
+    try {
+      const child = await manager.createController({ ...parentScope(), limits: inherited })
+        .spawnChildAgent({ description: "read", prompt: "read", agent: "worker", cwd: "/repo" });
+      await child.result;
+      expect(submit.mock.calls[0][1].limits).toBe(inherited);
+    } finally { await manager.closeAll(); }
+  });
+
   it("uses the parent's applied selection for a newly created child", async () => {
     let appliedModel = "old-model";
     const models: string[] = [];

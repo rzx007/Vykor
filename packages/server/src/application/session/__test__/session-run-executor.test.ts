@@ -1,4 +1,4 @@
-import type { AgentRunHandle } from "@vykor/core";
+import type { AgentExecutionLimits, AgentRunHandle } from "@vykor/core";
 import type { AgentCapabilitySnapshot, GoalReadSnapshot, GoalRunBinding } from "@vykor/agent-runtime";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { ToolRegistry } from "@vykor/core";
@@ -25,12 +25,16 @@ describe("SessionRunExecutor", () => {
     const submitGoalUpdate = vi.fn(async () => ({ recorded: true as const }));
     const update = { status: "completed", reason: "checked current files" };
     let observedGoal: GoalRunBinding | undefined;
+    let observedLimits: AgentExecutionLimits | undefined;
+    const checkGoalRunExecution = vi.fn();
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
       readGoalSnapshot, submitGoalUpdate,
+      checkGoalExecution: vi.fn(), checkGoalRunExecution,
       agentPool: { configured: true, acquireSession: async () => ({
-        submitMessage: (_content: unknown, options: { goal?: GoalRunBinding }) => {
+        submitMessage: (_content: unknown, options: { goal?: GoalRunBinding; limits?: AgentExecutionLimits }) => {
           observedGoal = options.goal;
+          observedLimits = options.limits;
           const handle = completedHandle();
           return { ...handle, result: (async () => {
             if (options.goal) {
@@ -50,10 +54,26 @@ describe("SessionRunExecutor", () => {
       expect(observedGoal).toMatchObject({ goalId: "g1", objectiveVersion: 2 });
       expect(readGoalSnapshot).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1");
       expect(submitGoalUpdate).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1", update);
+      checkGoalRunExecution.mockClear();
+      const child = observedLimits!.forChildRun!("child-run");
+      await child.check("run"); // Before run.started is projected, authorize through the parent.
+      await child.check("model");
+      await child.check("run"); // A later run check cannot borrow the parent again.
+      const nested = child.forChildRun!("nested-run");
+      await nested.check("run");
+      await nested.check("tool", { toolName: "Write", toolAttemptId: "write-1" });
+      expect(checkGoalRunExecution.mock.calls).toEqual([
+        ["g1", 2, "run-1", "child", undefined],
+        ["g1", 2, "child-run", "model", undefined],
+        ["g1", 2, "child-run", "run", undefined],
+        ["g1", 2, "child-run", "child", undefined],
+        ["g1", 2, "nested-run", "tool", { toolName: "Write", toolAttemptId: "write-1" }],
+      ]);
     } else {
       expect(observedGoal).toBeUndefined();
       expect(readGoalSnapshot).not.toHaveBeenCalled();
       expect(submitGoalUpdate).not.toHaveBeenCalled();
+      expect(observedLimits).toBeUndefined();
     }
   });
 

@@ -252,10 +252,26 @@ export class SessionRunExecutor {
           submitUpdate: (input) => this.context.submitGoalUpdate ? this.context.submitGoalUpdate(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal update handler is unavailable")),
           readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
       }
-      const limits: AgentExecutionLimits | undefined = goalBinding && this.context.checkGoalExecution
-        ? { check: (boundary, tool) => this.context.checkGoalRunExecution
-          ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, runId, boundary, tool)
-          : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion) } : undefined;
+      const bindLimits = (boundRunId: string, parent?: AgentExecutionLimits): AgentExecutionLimits => {
+        let starting = Boolean(parent);
+        const bound: AgentExecutionLimits = {
+          // The child's first check precedes run.started and its durable projection.
+          // Authorize that start through the parent, then check the child's own Run.
+          check: (boundary, tool) => {
+            if (starting && boundary === "run") {
+              starting = false;
+              return parent!.check("child");
+            }
+            starting = false;
+            return this.context.checkGoalRunExecution
+              ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, boundRunId, boundary, tool)
+              : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion);
+          },
+          forChildRun: childRunId => bindLimits(childRunId, bound),
+        };
+        return bound;
+      };
+      const limits = goalBinding && this.context.checkGoalExecution ? bindLimits(runId) : undefined;
       await limits?.check("run");
 
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,11 +8,12 @@ import type { GoalUpdateInput, SessionGoal } from "@vykor/protocol";
 import { SessionGoalService } from "../session-goal-service.js";
 import type { AdmitPromptInput } from "../run-admission-service.js";
 import type { GoalWaitCheck } from "../goal-wait-verifier.js";
+import { GoalWaitVerifier } from "../goal-wait-verifier.js";
 
 const disposals: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of disposals.splice(0)) await dispose(); });
 
-function harness() {
+function harness(realWaitVerifier = false) {
   const directory = mkdtempSync(join(tmpdir(), "vk-goal-simple-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
@@ -52,7 +53,7 @@ function harness() {
     transaction: store, sessions: store.sessions, runs: store.runs,
     permissions: store.permissions, goals: store.goals, events, admission, control, pluginCapabilities,
     operationRunner: { run: async (_id, work) => work() },
-    waitVerifier: { check: () => waitResult },
+    waitVerifier: realWaitVerifier ? new GoalWaitVerifier({ store }) : { check: () => waitResult },
   });
   const current = () => store.goals.getCurrentGoal("s1", true)!;
   const run = () => store.runs.getRun(current().currentRunId!)!;
@@ -70,7 +71,7 @@ function harness() {
     }
     store.close(); rmSync(directory, { recursive: true, force: true });
   });
-  return { store, service, admission, control, pluginCapabilities, current, run, finish,
+  return { store, directory, service, admission, control, pluginCapabilities, current, run, finish,
     userWork: (value: boolean) => { hasUserWork = value; }, failDispatch: (value: boolean) => { dispatchError = value; },
     wait: (value: GoalWaitCheck) => { waitResult = value; },
     create: (options: { requestId?: string; objective?: string; maxAutoTurns?: number; tokenBudget?: number } = {}) =>
@@ -78,7 +79,85 @@ function harness() {
   };
 }
 
+function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-run") {
+  h.store.sessions.create({ id, cwd: process.cwd(), model: "m" });
+  h.store.runs.createRun({ id, sessionId: id, metadata: {
+    goalId: h.current().id, goalObjectiveVersion: h.current().objectiveVersion, parentRunId: parentId,
+  } });
+  h.store.runs.updateRun(id, { status: "running" });
+  return h.store.runs.getRun(id)!;
+}
+
 describe("SessionGoalService simple lifecycle", () => {
+  it("keeps the child live across a settled parent, wakes once, then automatically continues to completion", async () => {
+    const h = harness(true); await h.create();
+    const goal = h.current(), root = h.run();
+    const child = childRun(h, root.id);
+    const file = join(h.directory, "target.txt");
+    writeFileSync(file, "BEFORE");
+    await h.finish({ wait: { targetRunId: child.id, deadlineAt: Date.now() + 30_000 } });
+    expect(h.current()).toMatchObject({ status: "active", wait: { ownerRunId: root.id, targetRunId: child.id } });
+    expect(h.current().currentRunId).toBeUndefined();
+    expect(() => h.service.checkRunExecution(goal.id, 1, root.id, "model")).toThrow();
+    expect(() => h.service.checkRunExecution(goal.id, 1, root.id, "child")).toThrow();
+    await expect(h.service.submitRunUpdate(goal.id, 1, child.id, { status: "completed", reason: "not the root" })).rejects.toThrow();
+    expect(() => h.service.checkRunExecution(goal.id, 1, child.id, "model")).not.toThrow();
+    expect(() => h.service.checkRunExecution(goal.id, 1, child.id, "tool", { toolName: "Write", toolAttemptId: "write-after" })).not.toThrow();
+    writeFileSync(file, "AFTER");
+    // The observer must not resume merely because the child has produced a result.
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(1);
+    h.store.runs.updateRun(child.id, { status: "completed", finishedAt: Date.now() });
+    await vi.waitFor(() => expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(2), { timeout: 4000 });
+    expect(h.current().wait).toBeUndefined();
+    const awakened = h.run();
+    expect(awakened.metadata).toMatchObject({ goalRunKind: "continuation", goalWaitSource: { targetRunId: child.id } });
+    expect(readFileSync(file, "utf8")).toBe("AFTER");
+    await h.service.settleRun("s1", root.id);
+    expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(2);
+    await h.finish(); // No GoalUpdate: ordinary automatic continuation after the awakened Run.
+    expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(3);
+    expect(h.run().id).not.toBe(awakened.id);
+    await h.finish({ status: "completed", reason: "重新读到 AFTER，自动续跑完成" });
+    expect(h.current().status).toBe("completed");
+    expect(h.store.runs.listRuns("s1")).toHaveLength(3);
+    expect(h.store.runs.listRuns(child.sessionId)).toHaveLength(1);
+    expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(["missing-parent", "cycle", "wrong-version", "wrong-goal", "wrong-root-session", "failed-parent", "interrupted-parent"])("rejects a child with %s ancestry", async fault => {
+    const h = harness(); await h.create();
+    const goal = h.current(), root = h.run();
+    const child = childRun(h, root.id);
+    if (fault === "missing-parent") h.store.runs.updateRun(child.id, { metadata: { parentRunId: "missing" } });
+    if (fault === "cycle") h.store.runs.updateRun(child.id, { metadata: { parentRunId: child.id } });
+    if (fault === "wrong-version") h.store.runs.updateRun(root.id, { metadata: { goalObjectiveVersion: 2 } });
+    if (fault === "wrong-goal") h.store.runs.updateRun(root.id, { metadata: { goalId: "other-goal" } });
+    if (fault === "wrong-root-session") h.store.runs.updateRun(child.id, { metadata: { parentRunId: undefined } });
+    if (fault === "failed-parent") h.store.runs.updateRun(root.id, { status: "failed" });
+    if (fault === "interrupted-parent") h.store.runs.updateRun(root.id, { status: "interrupted" });
+    expect(() => h.service.checkRunExecution(goal.id, 1, child.id, "model")).toThrow();
+  });
+
+  it.each(["paused", "cancelled", "edited", "budget", "child-completed", "child-failed", "child-interrupted"])("still stops a waiting child after %s", async fault => {
+    const h = harness(true); await h.create();
+    const goal = h.current(), root = h.run();
+    const child = childRun(h, root.id);
+    await h.finish({ wait: { targetRunId: child.id, deadlineAt: Date.now() + 30_000 } });
+    if (fault === "paused" || fault === "cancelled") await h.service.action("s1", goal.id, {
+      requestId: fault, action: fault === "paused" ? "pause" : "cancel", expectedRevision: h.current().revision,
+    });
+    if (fault === "edited") await h.service.update("s1", goal.id, {
+      requestId: "edit-waiting-goal", expectedRevision: h.current().revision, objective: "新的完整目标",
+    });
+    if (fault === "budget") {
+      h.store.goals.updateGoal(goal.id, { expectedRevision: h.current().revision, tokenBudget: 1 });
+      vi.spyOn(h.store.goals, "checkGoalBudget").mockReturnValue({ budgetClosed: true, code: "token_budget" } as any);
+    }
+    if (fault.startsWith("child-")) h.store.runs.updateRun(child.id, { status: fault.slice(6) as "completed" | "failed" | "interrupted" });
+    expect(() => h.service.checkRunExecution(goal.id, 1, child.id, "tool")).toThrow();
+  });
+
   it("creates a normal initial run without a preparation phase", async () => {
     const h = harness(); await h.create();
     expect(h.current()).not.toHaveProperty("phase");

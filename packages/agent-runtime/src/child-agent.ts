@@ -505,7 +505,7 @@ export class AgentChildManager implements AgentChildDirectory {
     try {
       run = agent.submitMessage(input.content, {
         childRunParent: parent,
-        limits: parent?.limits,
+        limits: parent?.limits?.forChildRun?.(ids.runId) ?? parent?.limits,
         capabilityView: record.capabilityView,
         ids,
         inputItems: input.inputItems,

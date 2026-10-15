@@ -18,6 +18,8 @@ export * from "./runtime-events.js";
 export interface AgentExecutionLimits {
   check(boundary: "run" | "model" | "tool" | "child" | "maintenance",
     tool?: { toolName: string; toolAttemptId: string }): void | Promise<void>;
+  /** Host restrictions rebound to a framework-generated child Run, never model input. */
+  forChildRun?(runId: string): AgentExecutionLimits;
 }
 
 /** Host-owned restrictions scoped to one Run, including every model retry. */

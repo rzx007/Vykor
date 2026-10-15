@@ -73,6 +73,22 @@ export class SessionGoalService {
     if (!run || run.metadata.goalId !== goalId || run.metadata.goalObjectiveVersion !== version
       || (run.status !== "pending" && run.status !== "running" && !(run.status === "completed" && goal.currentRunId === runId)))
       throw new AgentExecutionLimitError("目标运行身份已变化或运行已停止");
+    // A live child may outlast a normally completed parent. Its durable ancestry
+    // must still belong to this Goal/version; failed or interrupted parents stop it.
+    let ancestor = run;
+    const visited = new Set([run.id]);
+    while (ancestor.metadata.parentRunId !== undefined) {
+      const parentId = ancestor.metadata.parentRunId;
+      const parent = typeof parentId === "string" ? this.context.runs.getRun(parentId) : undefined;
+      if (!parent || visited.has(parent.id) || visited.size >= 128
+        || parent.metadata.goalId !== goalId || parent.metadata.goalObjectiveVersion !== version
+        || !["pending", "running", "completed"].includes(parent.status))
+        throw new AgentExecutionLimitError("目标子任务的父运行身份已变化或运行已停止");
+      visited.add(parent.id);
+      ancestor = parent;
+    }
+    if (ancestor.sessionId !== goal.sessionId)
+      throw new AgentExecutionLimitError("目标运行不属于当前目标会话");
   }
 
   readSnapshot(goalId: string, version: number, runId: string): Promise<GoalReadSnapshot> {
