@@ -38,7 +38,7 @@ import type {
 import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
-import { createRunCapabilityView, createPreparationRunCapabilityView, readonlyMap } from "./run-capability-view.js";
+import { createRunCapabilityView, readonlyMap } from "./run-capability-view.js";
 import type { GoalRunBinding } from "./goal-extension.js";
 import {
   AgentOperationConflictError,
@@ -261,9 +261,7 @@ class DefaultVykorAgent implements VykorAgent {
       runId: `run_${randomUUID()}`,
       traceId: randomUUID(),
     };
-    const capturedView = options.capabilityView ?? this.createRunCapabilityView();
-    const capabilityView = options.goal?.phase === "preparing"
-      ? createPreparationRunCapabilityView(capturedView, this.runtime.trustedToolOverrides) : capturedView;
+    const capabilityView = options.capabilityView ?? this.createRunCapabilityView();
     const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
       agentId: this.id,

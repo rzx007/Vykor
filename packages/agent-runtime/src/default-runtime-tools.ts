@@ -3,7 +3,7 @@ import { resolveToolExecution, ToolRegistrationError } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 import type { VykorAgentConfiguration } from "./agent-options.js";
-import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
+import { GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
 import { GOAL_READ_TOOL_NAME } from "./goal-read-tool.js";
 
 export type ToolLimit =
@@ -20,7 +20,7 @@ export function applyConfiguredTools(
   const trustedOverrides = new Set(configuration.trustedToolOverrides ?? []);
   const additionNames = assertUniqueToolNames(additions, "tools");
   const overrideNames = assertUniqueToolNames(overrides, "toolOverrides");
-  for (const name of [GOAL_ASSESSMENT_TOOL_NAME, GOAL_READ_TOOL_NAME]) {
+  for (const name of [GOAL_UPDATE_TOOL_NAME, GOAL_READ_TOOL_NAME]) {
     if (additionNames.has(name) || overrideNames.has(name)) {
       throw new ToolRegistrationError("tool_already_registered", `${name} is reserved for durable goal runs`);
     }

@@ -2,22 +2,25 @@ import { describe, expect, it } from "vitest";
 import { createGoalRunContribution } from "./goal-extension.js";
 
 describe("goal run contribution", () => {
-  it("reads a fresh bound snapshot for guidance and GoalRead without accepting IDs", async () => {
+  it("reads fresh state and keeps the complete objective without enabling evidence IDs or ending the run", async () => {
     let reads = 0;
-    const snapshot = { goalId: "g", objectiveVersion: 1, phase: "preparing", objective: "整理目标",
-      sourceInputIds: ["input-1"], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 3,
-      knownTokens: 7, usageIncomplete: false };
-    const contribution = await createGoalRunContribution({ goalId: "g", objectiveVersion: 1, phase: "preparing",
-      readSnapshot: async () => { reads++; return { ...snapshot, knownTokens: reads }; },
-    } as never);
+    const objective = "目标原文".repeat(2000);
+    const contribution = await createGoalRunContribution({ goalId: "g", objectiveVersion: 1,
+      readSnapshot: async () => ({ goalId: "g", objectiveVersion: 1, status: "active", objective,
+        autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: ++reads, usageIncomplete: false }),
+      submitUpdate: async () => ({ recorded: true }),
+    });
     expect(reads).toBe(1);
-    const read = contribution.tools?.find(item => item.definition.name === "GoalRead")?.definition;
-    expect(read).toBeDefined();
-    const result = await read!.execute({}, { cwd: process.cwd() });
-    expect(JSON.parse((result.content[0] as { text: string }).text).knownTokens).toBe(2);
-    expect((await read!.execute({ goalId: "another" }, { cwd: process.cwd() })).isError).toBe(true);
+    expect(contribution.systemGuidance).toContain(objective);
+    expect(contribution.exposeToolResultIds).toBeUndefined();
+    expect(contribution.tools?.map(item => item.definition.name)).toEqual(["GoalUpdate", "GoalRead"]);
+    expect(contribution.tools?.every(item => item.permission === "host-internal" && !item.endRunOnSuccess)).toBe(true);
+    const read = contribution.tools!.find(item => item.definition.name === "GoalRead")!.definition;
+    const result = await read.execute({}, { cwd: process.cwd() });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({
+      objective, status: "active", knownTokens: 2, maxAutoTurns: "unlimited",
+    });
+    expect((await read.execute({ goalId: "another" }, { cwd: process.cwd() })).isError).toBe(true);
     expect(reads).toBe(2);
-    expect(contribution.systemGuidance).toContain('"sourceInputIds":["input-1"]');
-    expect(contribution.tools?.find(item => item.definition.name === "GoalAssessment")).toMatchObject({ endRunOnSuccess: true });
   });
 });

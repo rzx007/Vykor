@@ -34,6 +34,8 @@ describe("GoalRepository", () => {
       expect(paused.stopReason).toEqual({ code: "user_paused", at: 100 });
       const same = repository.updateGoalRevision(first.id, { expectedRevision: paused.revision, objective: "finish" });
       expect(same.objectiveVersion).toBe(1);
+      expect(() => repository.updateGoalRevision(first.id, { expectedRevision: same.revision, objectiveVersion: 2 })).toThrow("goal_version_binding_invalid");
+      expect(() => repository.updateGoalRevision(first.id, { expectedRevision: same.revision, objective: "changed", objectiveVersion: 1 })).toThrow("goal_version_binding_invalid");
       const edited = repository.updateGoalRevision(first.id, {
         expectedRevision: same.revision, objective: "finish and verify", stopReason: null,
       });
@@ -43,7 +45,7 @@ describe("GoalRepository", () => {
     });
   });
 
-  it("reloads requests, assessments, and continuations from disk", () => {
+  it("reloads requests and continuations from disk", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-goal-related-reload-"));
     const path = join(directory, "sessions.db");
     try {
@@ -57,8 +59,7 @@ describe("GoalRepository", () => {
       });
       first.goals.updateGoal(goal.id, {
         expectedRevision: 0,
-        wait: { kind: "user", questionId: "q1", question: "continue?" },
-        assessment: { decision: "continue", evidenceRefs: [], reason: "more" },
+        wait: { kind: "user", questionId: "q1", question: "continue?", objectiveVersion: 1 },
       });
       first.goals.beginGoalRequest({
         requestId: "request-related",
@@ -69,12 +70,6 @@ describe("GoalRepository", () => {
         status: "completed",
         goalId: goal.id,
         result: { runId: "run-related" },
-      });
-      first.goals.recordGoalAssessment({
-        goalId: goal.id,
-        revision: 1,
-        runId: "run-related",
-        assessment: { verifiedSignatures: ["signature"] },
       });
       first.goals.recordGoalContinuation({
         goalId: goal.id,
@@ -89,14 +84,10 @@ describe("GoalRepository", () => {
       try {
         expect(second.goals.getGoal(goal.id)).toMatchObject({
           wait: { questionId: "q1" },
-          assessment: { decision: "continue" },
         });
         expect(second.goals.getGoalRequest("request-related")).toMatchObject({
           result: { runId: "run-related" },
         });
-        expect(second.goals.goalEvidenceSignatures(goal.id)).toEqual([
-          "signature",
-        ]);
         const continuation = (second as any).storage.database.connection
           .prepare(
             "SELECT status FROM session_goal_continuation WHERE run_id = ?",
@@ -117,14 +108,6 @@ describe("GoalRepository", () => {
           .prepare("UPDATE session_goal SET wait_json = ? WHERE id = ?")
           .run("{broken", goal.id);
         expect(() => second.goals.getGoal(goal.id)).toThrow(SyntaxError);
-        database
-          .prepare(
-            "UPDATE session_goal_assessment SET assessment_json = ? WHERE goal_id = ?",
-          )
-          .run("{broken", goal.id);
-        expect(() => second.goals.goalEvidenceSignatures(goal.id)).toThrow(
-          SyntaxError,
-        );
       } finally {
         second.close();
       }
@@ -147,12 +130,11 @@ describe("GoalRepository", () => {
       });
       first.goals.updateGoal(goal.id, {
         expectedRevision: 0,
-        evidence: ["e1"],
-        assessment: { decision: "continue", evidenceRefs: [], reason: "more" },
+        wait: { kind: "user", questionId: "q1", question: "continue?", objectiveVersion: 1 },
       });
       const returned = first.goals.getGoal(goal.id)!;
-      returned.evidence.push("caller-change");
-      expect(first.goals.getGoal(goal.id)?.evidence).toEqual(["e1"]);
+      if (returned.wait?.kind === "user") returned.wait.question = "caller-change";
+      expect(first.goals.getGoal(goal.id)?.wait).toMatchObject({ question: "continue?" });
       first.close();
 
       const second = new SessionStore({ path });
@@ -160,10 +142,10 @@ describe("GoalRepository", () => {
         expect(second.goals.getGoal(goal.id)).toMatchObject({
           objective: "reload",
           revision: 1,
-          evidence: ["e1"],
+          wait: { kind: "user", questionId: "q1", question: "continue?", objectiveVersion: 1 },
         });
         (second as any).storage.database.connection
-          .prepare("UPDATE session_goal SET evidence_json = ? WHERE id = ?")
+          .prepare("UPDATE session_goal SET wait_json = ? WHERE id = ?")
           .run("{broken", goal.id);
         expect(() => second.goals.getGoal(goal.id)).toThrow(SyntaxError);
       } finally {
@@ -243,7 +225,7 @@ describe("GoalRepository", () => {
     });
   });
 
-  it("upserts assessments and deduplicates continuations", () => {
+  it("deduplicates continuations", () => {
     withRepository((repository, store) => {
       const goal = store.goals.createGoal({
         id: "goal-1",
@@ -251,20 +233,6 @@ describe("GoalRepository", () => {
         objective: "finish",
         maxAutoTurns: 2,
       });
-      repository.recordAssessment({
-        goalId: goal.id,
-        revision: goal.revision,
-        runId: "run-1",
-        assessment: { verifiedSignatures: ["first"] },
-      });
-      repository.recordAssessment({
-        goalId: goal.id,
-        revision: goal.revision,
-        runId: "run-1",
-        assessment: { verifiedSignatures: ["updated"] },
-      });
-      expect(repository.evidenceSignatures(goal.id)).toEqual(["updated"]);
-
       const continuation = {
         goalId: goal.id,
         revision: goal.revision,

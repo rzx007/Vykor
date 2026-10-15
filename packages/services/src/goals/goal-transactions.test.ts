@@ -35,7 +35,7 @@ describe("GoalTransactions", () => {
       failGoalEvent(store, "session.goal.created");
 
       expect(() =>
-        store.goals.createGoal({ phase: "executing",
+        store.goals.createGoal({
           id: "goal-1",
           sessionId: "s1",
           objective: "finish",
@@ -53,7 +53,7 @@ describe("GoalTransactions", () => {
 
   it("rolls back update and start when their durable event fails", () => {
     withStore((store) => {
-      const goal = store.goals.createGoal({ phase: "executing",
+      const goal = store.goals.createGoal({
         id: "goal-1",
         sessionId: "s1",
         objective: "finish",
@@ -89,7 +89,7 @@ describe("GoalTransactions", () => {
 
   it("rolls back clearing currentRunId when the finish event fails", () => {
     withStore((store) => {
-      const goal = store.goals.createGoal({ phase: "executing",
+      const goal = store.goals.createGoal({
         id: "goal-1",
         sessionId: "s1",
         objective: "finish",
@@ -116,7 +116,7 @@ describe("GoalTransactions", () => {
       const beforeSequence = internals.state.nextEventSeq;
       expect(() =>
         store.transaction(() => {
-          store.goals.createGoal({ phase: "executing",
+          store.goals.createGoal({
             id: "goal-outer",
             sessionId: "s1",
             objective: "outer",
@@ -178,7 +178,7 @@ describe("GoalTransactions", () => {
         now: 1_000,
       });
       first.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
-      const goal = first.goals.createGoal({ phase: "executing",
+      const goal = first.goals.createGoal({
         id: "goal-1",
         sessionId: "s1",
         objective: "owner",
@@ -203,13 +203,8 @@ describe("GoalTransactions", () => {
             sessionId: "s1",
             fingerprint: "f",
           }),
-        () =>
-          first.goals.recordGoalAssessment({
-            goalId: goal.id,
-            revision: 0,
-            runId: "run",
-            assessment: {},
-          }),
+        () => first.goals.beginGoalVersion({ goalId: goal.id, objectiveVersion: 1, objective: goal.objective,
+          requestId: "version", actor: { kind: "local_user" }, createdAt: 1 }),
         () =>
           first.goals.recordGoalContinuation({
             goalId: goal.id,

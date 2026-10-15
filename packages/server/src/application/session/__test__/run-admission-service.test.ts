@@ -170,6 +170,20 @@ function createStoredAdmission() {
 }
 
 describe("RunAdmissionService synchronous queued persistence", () => {
+  it("starts an active Goal directly with its normal Run binding", () => {
+    const { store, options, service } = createStoredAdmission();
+    const goal = store.goals.createGoal({ sessionId: "s1", objective: "finish", maxAutoTurns: 0 });
+    const saved = service.persistGoalRun("s1", { id: "initial-goal", items: [{ type: "text", text: "finish" }],
+      runMetadata: { goalId: goal.id, goalObjectiveVersion: 1, goalRunKind: "initial" } });
+    options.goals = {
+      getGoal: id => store.goals.getGoal(id),
+      startGoalRun: (id, version, runId, automatic) => store.goals.startGoalRun(id, version, runId, automatic),
+    };
+    expect(service.prepareRunExecution(saved.run.id)).toBe(true);
+    expect(store.goals.getGoal(goal.id)).toMatchObject({ status: "active", currentRunId: saved.run.id, autoTurnsUsed: 0, maxAutoTurns: 0 });
+    expect(store.runs.getRun(saved.run.id)?.metadata).toMatchObject({ goalId: goal.id, goalObjectiveVersion: 1, goalRunKind: "initial" });
+  });
+
   it("turns a queued Goal into an approval wait if permission arrived after admission", () => {
     const { store, options, service } = createStoredAdmission();
     const goal = store.goals.createGoal({ sessionId: "s1", objective: "finish", maxAutoTurns: 2 });
@@ -326,7 +340,7 @@ describe("RunAdmissionService user priority", () => {
   it.each(["active", "paused", undefined] as const)("only cancels queued continuation for an active Goal (%s)", (status) => {
     const { options } = createMockOptions();
     const cancelGoalRuns = vi.fn();
-    options.goals = { getCurrentGoal: () => status ? { id: "g1", status, revision: 1 } : undefined, cancelGoalRuns };
+    options.goals = { getCurrentGoal: () => status ? { id: "g1", status, objectiveVersion: 1 } : undefined, cancelGoalRuns };
     new RunAdmissionService(options).prioritizeUserInput("s1");
     if (status === "active") expect(cancelGoalRuns).toHaveBeenCalledExactlyOnceWith("s1", "g1", "用户消息优先", true);
     else expect(cancelGoalRuns).not.toHaveBeenCalled();
@@ -452,15 +466,16 @@ describe("RunAdmissionService", () => {
     expect(runs.get(runId)?.metadata.pluginId).toBe("P");
   });
 
-  it("rejects stale goal revisions before execution", () => {
+  it("rejects a stale goal objective version before execution", () => {
     const { options, runs, runOperations } = createMockOptions();
     runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalRunKind: "continuation" }, createdAt: 1, updatedAt: 1 });
     options.goals = {
-      getGoal: vi.fn(() => ({ id: "g1", sessionId: "s1", status: "active", revision: 2 } as any)),
+      getGoal: vi.fn(() => ({ id: "g1", status: "active", objectiveVersion: 2 })),
       startGoalRun: vi.fn(() => false),
     };
 
     expect(new RunAdmissionService(options).prepareRunExecution("r1")).toBe(false);
+    expect(options.goals.startGoalRun).toHaveBeenCalledWith("g1", 1, "r1", true);
     expect(runOperations.updateRun).toHaveBeenCalledWith("r1", expect.objectContaining({
       status: "interrupted",
       error: "目标已暂停或版本已变化",

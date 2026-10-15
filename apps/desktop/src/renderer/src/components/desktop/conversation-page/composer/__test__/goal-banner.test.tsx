@@ -32,12 +32,9 @@ const goal: SessionGoal = {
   revision: 1,
   objective: "修复并验证",
   objectiveVersion: 1,
-  phase: "executing", requirements: [], stagnationCount: 0,
   status: "paused",
   autoTurnsUsed: 20,
   maxAutoTurns: 20,
-  noProgressCount: 0,
-  evidence: ["测试记录"],
   usage: { knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: 1 },
   createdAt: 1,
   updatedAt: 2,
@@ -47,43 +44,41 @@ const button = (label: string): HTMLButtonElement =>
     (node) => node.textContent === label || node.getAttribute("aria-label") === label
   )!
 
-it("keeps preparation restart explicit and separate from ordinary resume", async () => {
+it("resumes a blocked goal without requiring a change explanation", async () => {
   const onAction = vi.fn()
-  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, phase: "preparing", autoTurnsUsed: 0 }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
-  await act(async () => button("继续").click())
-  expect(onAction).toHaveBeenCalledWith({ action: "resume" })
-  await act(async () => button("展开目标详情").click())
-  await act(async () => button("重新整理目标").click())
-  expect(onAction).toHaveBeenCalledWith({ action: "resume", reprepare: true })
+  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, status: "blocked", maxAutoTurns: 0 }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
+  await act(async () => button("检查并继续").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume" })
 })
 
-it("accepts only the displayed current-version user requirements", async () => {
+it("answers the displayed question with its objective version", async () => {
   const onAction = vi.fn()
-  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, status: "waiting_user", autoTurnsUsed: goal.maxAutoTurns,
-    requirements: [{ id: "R1", text: "页面符合预期", source: [{ kind: "input", inputId: "i", quote: "页面" }], constraints: [], verification: { kind: "user_acceptance", question: "页面符合预期？" } }],
-    wait: { kind: "user", purpose: "acceptance", objectiveVersion: 1, questionId: "q", question: "验收", requirementIds: ["R1"] } },
+  await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, status: "waiting_user", maxAutoTurns: 0,
+    wait: { kind: "user", objectiveVersion: 1, questionId: "q", question: "需要处理哪个模块？" } },
     busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
-  expect(container.textContent).toContain("页面符合预期")
-  expect(container.querySelector('[aria-label="回答目标问题"]')).toBeNull()
-  await act(async () => button("结果满足所列条件").click())
-  expect(onAction).toHaveBeenCalledWith({ action: "confirm", objectiveVersion: 1, questionId: "q" })
+  expect(container.textContent).toContain("需要处理哪个模块？")
+  const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
+    answer.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => button("补充并继续").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume", objectiveVersion: 1, questionId: "q", response: "协议模块" })
 })
 
 it("keeps execution metadata behind a second disclosure and exposes no budget form", async () => {
   await act(async () => root.render(createElement(GoalBanner, {
-    goal: { ...goal, maxAutoTurns: 0, autoTurnsUsed: 0, versionSummary: { changeKind: "create", changeReason: "用户创建目标", createdAt: 1 },
+    goal: { ...goal, maxAutoTurns: 0, autoTurnsUsed: 0,
       usage: { ...goal.usage, knownTokens: 10608, runTimeMs: 21000 } },
     busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn(),
   })))
   await act(async () => button("展开目标详情").click())
   expect(container.textContent).not.toContain("10,608 Token")
-  expect(container.textContent).not.toContain("用户创建目标")
   expect(container.querySelector('[aria-label="修改 Token 总预算"]')).toBeNull()
   expect(button("保存总预算")).toBeUndefined()
   expect(button("运行详情").getAttribute("aria-expanded")).toBe("false")
   await act(async () => button("运行详情").click())
   expect(container.textContent).toContain("10,608 Token")
-  expect(container.textContent).toContain("用户创建目标")
   expect(container.textContent).toContain("21 秒")
   await act(async () => button("运行详情").click())
   expect(container.textContent).not.toContain("10,608 Token")
@@ -122,15 +117,17 @@ it("requires an explicit quota increase before resuming an exhausted goal", asyn
   expect(onAction).toHaveBeenCalledWith({ action: "resume", additionalAutoTurns: 20 })
 })
 
-it("does not expose a resume or completion shortcut for approval waits", async () => {
+it.each([false, true])("allows an approval wait to resume only while its budget is open (closed: %s)", async (budgetClosed) => {
   const onAction = vi.fn()
   await act(async () =>
     root.render(
       createElement(GoalBanner, {
         goal: {
           ...goal,
+          maxAutoTurns: 0,
           status: "waiting_user",
           wait: { kind: "approval", permissionRequestId: "p1" },
+          ...(budgetClosed ? { tokenBudget: 1, usage: { ...goal.usage, knownTokens: 1 } } : {}),
         },
         busy: false,
         stopping: false,
@@ -141,9 +138,13 @@ it("does not expose a resume or completion shortcut for approval waits", async (
     )
   )
   expect(container.textContent).toContain("授权请求")
-  expect(button("答复并继续")).toBeUndefined()
+  expect(container.querySelector('[aria-label="回答目标问题"]')).toBeNull()
   expect(button("确认目标已完成")).toBeUndefined()
-  expect(onAction).not.toHaveBeenCalled()
+  expect(button("批准后继续")).toBeDefined()
+  expect(button("批准后继续").disabled).toBe(budgetClosed)
+  await act(async () => button("批准后继续").click())
+  if (budgetClosed) expect(onAction).not.toHaveBeenCalled()
+  else expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume" })
 })
 
 it("keeps goal limits hidden until settings open and preserves submit and exit behavior", async () => {
@@ -187,8 +188,8 @@ it("keeps goal limits hidden until settings open and preserves submit and exit b
 })
 
 it("hides the answer form during editing and restores it without losing the answer", async () => {
-  const props = { goal: { ...goal, status: "waiting_user" as const, wait: { kind: "user" as const, purpose: "clarification" as const,
-    goalId: goal.id, objectiveVersion: 1, questionId: "q-edit", question: "需要处理哪个模块？" } },
+  const props = { goal: { ...goal, status: "waiting_user" as const, wait: { kind: "user" as const,
+    objectiveVersion: 1, questionId: "q-edit", question: "需要处理哪个模块？" } },
     busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn() }
   await act(async () => root.render(createElement(GoalBanner, props)))
   const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
@@ -203,11 +204,11 @@ it("hides the answer form during editing and restores it without losing the answ
   expect(container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')?.value).toBe("协议模块")
 })
 
-it("allows saving a preparation answer while its Token budget is closed", async () => {
+it("does not resume a question while its Token budget is closed", async () => {
   const onAction = vi.fn()
   await act(async () => root.render(createElement(GoalBanner, {
-    goal: { ...goal, phase: "preparing", status: "waiting_user", tokenBudget: 1, usage: { ...goal.usage, knownTokens: 1 },
-      wait: { kind: "user", purpose: "clarification", objectiveVersion: 1, questionId: "q-budget", question: "需要处理哪个模块？" } },
+    goal: { ...goal, maxAutoTurns: 0, status: "waiting_user", tokenBudget: 1, usage: { ...goal.usage, knownTokens: 1 },
+      wait: { kind: "user", objectiveVersion: 1, questionId: "q-budget", question: "需要处理哪个模块？" } },
     busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn(),
   })))
   const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
@@ -216,8 +217,28 @@ it("allows saving a preparation answer while its Token budget is closed", async 
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
     answer.dispatchEvent(new Event("input", { bubbles: true }))
   })
-  await act(async () => button("保存补充").click())
-  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume", questionId: "q-budget", objectiveVersion: 1, response: "协议模块" })
+  expect(button("补充并继续").disabled).toBe(true)
+  await act(async () => button("补充并继续").click())
+  expect(onAction).not.toHaveBeenCalled()
+})
+
+it("clears a previous answer when the displayed question or objective version changes", async () => {
+  const onAction = vi.fn()
+  const props = { busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() }
+  const waiting = { ...goal, maxAutoTurns: 0, status: "waiting_user" as const,
+    wait: { kind: "user" as const, objectiveVersion: 1, questionId: "q1", question: "哪个模块？" } }
+  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: waiting })))
+  const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
+    answer.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: {
+    ...waiting, objectiveVersion: 2, wait: { ...waiting.wait, objectiveVersion: 2, questionId: "q2", question: "新的问题？" },
+  } })))
+  expect(container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')?.value).toBe("")
+  expect(button("补充并继续").disabled).toBe(true)
+  expect(onAction).not.toHaveBeenCalled()
 })
 
 it("requires confirmation to cancel a goal", async () => {
@@ -257,101 +278,4 @@ it("provides explicit save and cancel actions while editing a prefilled goal", a
   await act(async () => button("取消编辑").click())
   expect(onGoalModeChange).toHaveBeenLastCalledWith(false)
   expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原聊天草稿")
-})
-
-it("keeps acceptance progress behind a secondary disclosure without exposing internal IDs", async () => {
-  await act(async () =>
-    root.render(
-      createElement(GoalBanner, {
-        goal: {
-          ...goal,
-          requirements: [
-            { id: "R1", text: "测试通过", constraints: [], source: [{ kind: "input", inputId: "i", quote: "测试" }], verification: { kind: "check", method: "测试", environment: "local", expected: "通过" } },
-            { id: "R2", text: "补充文档", constraints: [], source: [{ kind: "input", inputId: "i", quote: "文档" }], verification: { kind: "user_acceptance", question: "文档满足条件？" } },
-          ],
-          assessment: {
-            goalId: "g1",
-            objectiveVersion: 1,
-            runId: "r1",
-            decision: "continue",
-            progress: "完成测试",
-            progressAssessment: { kind: "progress", summary: "测试已通过" },
-            evidence: ["测试记录"],
-            evidenceRefs: [],
-            requirements: [
-              {
-                requirementId: "R1", explanation: "测试通过",
-                status: "satisfied",
-                evidenceRefs: [],
-              },
-              {
-                requirementId: "R2", explanation: "文档未完成",
-                status: "incomplete",
-                evidenceRefs: [],
-              },
-            ],
-            remainingWork: ["补充文档"],
-            nextStep: "补充文档",
-          },
-        },
-        busy: false,
-        stopping: false,
-        onAction: vi.fn(),
-        onEdit: vi.fn(),
-        onDismiss: vi.fn(),
-      })
-    )
-  )
-  await act(async () => button("展开目标详情").click())
-  expect(container.textContent).not.toContain("测试通过")
-  expect(container.textContent).not.toContain("补充文档")
-  expect(container.textContent).not.toContain("测试记录")
-  expect(button("验收进度").getAttribute("aria-expanded")).toBe("false")
-  expect(button("验收进度").textContent).toContain("1 / 2 已满足")
-  await act(async () => button("验收进度").click())
-  const details = container.querySelector('[aria-label="验收明细"]')!
-  expect(details.textContent).toBe("测试通过补充文档")
-  expect(details.querySelector('[role="img"][aria-label="已满足"]')?.getAttribute("title")).toBe("已满足")
-  expect(details.querySelector('[role="img"][aria-label="未完成"]')).not.toBeNull()
-  expect(details.textContent).not.toContain("R1")
-  expect(details.textContent).not.toContain("R2")
-  const completed = Array.from(details.querySelectorAll("li")).find(item => item.textContent?.includes("测试通过"))!
-  const incomplete = Array.from(details.querySelectorAll("li")).find(item => item.textContent?.includes("补充文档"))!
-  expect(completed.querySelector('svg[aria-hidden="true"] path')).not.toBeNull()
-  expect(incomplete.querySelector('svg[aria-hidden="true"] circle')).not.toBeNull()
-  expect(details.querySelector('button, input[type="checkbox"]')).toBeNull()
-  await act(async () => button("运行详情").click())
-  expect(container.textContent).toContain("测试记录")
-  await act(async () => button("收起目标详情").click())
-  await act(async () => button("展开目标详情").click())
-  expect(container.querySelector('[aria-label="验收明细"]')).toBeNull()
-})
-
-it("shows unchecked conditions as pending rather than failed and keeps acceptance waits distinct", async () => {
-  const props = {
-    goal: { ...goal, maxAutoTurns: 0, requirements: [
-      { id: "R1-1", text: "验证文件内容", constraints: [], source: [{ kind: "input" as const, inputId: "i", quote: "文件内容" }], verification: { kind: "user_acceptance" as const, question: "文件内容符合预期？" } },
-    ] },
-    busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn(),
-  }
-  await act(async () => root.render(createElement(GoalBanner, props)))
-  await act(async () => button("展开目标详情").click())
-  expect(button("验收进度").textContent).toContain("1 项待检查")
-  await act(async () => button("验收进度").click())
-  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toBe("验证文件内容")
-  expect(container.querySelector('[aria-label="验收明细"] [role="img"][aria-label="待检查"]')).not.toBeNull()
-  expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).not.toBeNull()
-  expect(container.textContent).not.toContain("未完成")
-  const wait = { kind: "user" as const, purpose: "acceptance" as const, objectiveVersion: 1, questionId: "q", question: "文件内容符合预期？", requirementIds: ["R1-1"] }
-  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: { ...props.goal,
-    status: "waiting_user", wait,
-    assessment: { goalId: "g1", objectiveVersion: 1, runId: "r1", decision: "waiting_user", progress: "等待验收", evidence: [], evidenceRefs: [],
-      progressAssessment: { kind: "waiting", summary: "等待验收" }, wait,
-      requirements: [{ requirementId: "R1-1", status: "needs_user", explanation: "请验收", evidenceRefs: [] }] },
-  } })))
-  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toBe("验证文件内容")
-  expect(container.querySelector('[aria-label="验收明细"] [role="img"][aria-label="待验收"]')).not.toBeNull()
-  expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).toBeNull()
-  expect(container.querySelector('[aria-label="验收明细"] li svg path')).not.toBeNull()
-  expect(props.onAction).not.toHaveBeenCalled()
 })

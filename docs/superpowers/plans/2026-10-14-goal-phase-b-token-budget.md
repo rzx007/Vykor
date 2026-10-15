@@ -1,5 +1,7 @@
 # Goal B 阶段实现计划：真实用量与可选 Token 预算
 
+> 2026-10-15：本计划仅保留为历史交付记录，不能作为后续实施指令。后续以 [Goal 收缩规格](../specs/2026-10-14-goal-reliability-and-budget-design.md)的保留项、删除项和职责边界为准；收缩实现及验证见 [实施审查](../reviews/2026-10-15-goal-simplification-implementation-review.md)。
+
 > **面向执行者：**使用 `executing-plans` 按 B1 → B2 → B3 → B4 实施，复选框记录进度。用户要求优先：关键回归集中运行，一名子代理集中审核和必要定点复核，不逐步骤设审批、重复全套测试或强制提交。
 > 日期：2026-10-14。状态：已实施并完成集中审核修订，变更未提交；交付见 [B 实施审查](../reviews/2026-10-14-goal-phase-b-implementation-review.md)。
 > 基线：当前工作区 A 实现，Git HEAD 为 `f364f7c9`，A 尚有未提交变更；不能只检出该提交就认为包含 A。

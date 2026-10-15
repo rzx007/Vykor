@@ -11,7 +11,7 @@ export {
   type VykorAgentRunToolOptions,
 } from "./agent.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
-export { createRunCapabilityView, createPreparationRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
+export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
 export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";
 export type {
   AgentCapabilityOverrides,
@@ -55,7 +55,8 @@ export {
   type PluginCapabilityOwner,
 } from "./plugin-capability-inventory.js";
 export { createGoalRunContribution, type GoalRunBinding } from "./goal-extension.js";
-export { createGoalReadTool, formatGoalReadSnapshot, type GoalReadSnapshot, type GoalAssessmentFeedback } from "./goal-read-tool.js";
+export { createGoalReadTool, formatGoalReadSnapshot, type GoalReadSnapshot } from "./goal-read-tool.js";
+export { createGoalUpdateTool, GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
 export {
   activateNativePluginTools,
   type NativeToolActivationResult,

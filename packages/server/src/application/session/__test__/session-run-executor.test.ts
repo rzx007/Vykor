@@ -1,5 +1,5 @@
 import type { AgentRunHandle } from "@vykor/core";
-import type { AgentCapabilitySnapshot } from "@vykor/agent-runtime";
+import type { AgentCapabilitySnapshot, GoalReadSnapshot, GoalRunBinding } from "@vykor/agent-runtime";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { ToolRegistry } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
@@ -10,6 +10,53 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it.each([false, true])("binds goal callbacks to the admitted Run only when it has a Goal (goal=%s)", async goalRun => {
+    const store = createStore();
+    const snapshot: GoalReadSnapshot = { goalId: "g1", objectiveVersion: 2, objective: "finish the current work", status: "active",
+      autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false };
+    store.goals.getGoal.mockReturnValue({
+      id: "g1", sessionId: "s1", objective: snapshot.objective, objectiveVersion: 2, revision: 0, status: "active",
+      currentRunId: "run-1", autoTurnsUsed: 0, maxAutoTurns: 0,
+      usage: { knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: 1 },
+      createdAt: 1, updatedAt: 1,
+    });
+    if (goalRun) Object.assign(store.spies.getRun(), { metadata: { goalId: "g1", goalObjectiveVersion: 2 } });
+    const readGoalSnapshot = vi.fn(async () => snapshot);
+    const submitGoalUpdate = vi.fn(async () => ({ recorded: true as const }));
+    const update = { status: "completed", reason: "checked current files" };
+    let observedGoal: GoalRunBinding | undefined;
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      readGoalSnapshot, submitGoalUpdate,
+      agentPool: { configured: true, acquireSession: async () => ({
+        submitMessage: (_content: unknown, options: { goal?: GoalRunBinding }) => {
+          observedGoal = options.goal;
+          const handle = completedHandle();
+          return { ...handle, result: (async () => {
+            if (options.goal) {
+              expect(await options.goal.readSnapshot()).toEqual(snapshot);
+              expect(await options.goal.submitUpdate(update)).toEqual({ recorded: true });
+            }
+            return handle.result;
+          })() };
+        },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    if (goalRun) {
+      expect(observedGoal).toMatchObject({ goalId: "g1", objectiveVersion: 2 });
+      expect(readGoalSnapshot).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1");
+      expect(submitGoalUpdate).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1", update);
+    } else {
+      expect(observedGoal).toBeUndefined();
+      expect(readGoalSnapshot).not.toHaveBeenCalled();
+      expect(submitGoalUpdate).not.toHaveBeenCalled();
+    }
+  });
+
   it("adds UI facts only to the submitted normal input without changing the durable user prompt", async () => {
     const store = createStore();
     let submitted = "";

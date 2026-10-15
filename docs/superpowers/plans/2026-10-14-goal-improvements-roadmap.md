@@ -1,5 +1,8 @@
 # Goal 改进分阶段实施路线
 
+> 2026-10-15：本路线仅保留为 A/B/C 的历史交付记录，不能作为后续实施指令。[Goal 收缩规格](../specs/2026-10-14-goal-reliability-and-budget-design.md)已替代原增量规格；保留项和删除项以收缩版为准，收缩实现及验证见 [实施审查](../reviews/2026-10-15-goal-simplification-implementation-review.md)。
+> 后续实施以 [Goal 收缩精简实施计划](./2026-10-15-goal-simplification.md)为准，不接续下面的 A/B/C 扩展步骤。
+
 > 日期：2026-10-14
 > 状态：A/B/C 已实施并完成集中审核修订。交付记录见 [A 实施审查](../reviews/2026-10-14-goal-phase-a-implementation-review.md)、[B 实施审查](../reviews/2026-10-14-goal-phase-b-implementation-review.md)、[C 实施审查](../reviews/2026-10-14-goal-phase-c-implementation-review.md)。
 > 修订：用户明确不兼容旧数据；只维护当前格式，不设计转换、回填或升级接管。

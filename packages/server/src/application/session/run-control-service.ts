@@ -153,7 +153,8 @@ export class RunControlService {
     reason?: string,
   ): { activeRunId?: string; queuedRunIds: string[]; interrupted: boolean } {
     const before = this.options.events.checkpoint();
-    this.pauseGoalForRun(this.activeRunId(sessionId));
+    let pauseError: unknown;
+    try { this.pauseGoalForRun(this.activeRunId(sessionId)); } catch (error) { pauseError = error; }
     const result = this.options.runtime.interruptSession(sessionId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
@@ -175,6 +176,7 @@ export class RunControlService {
       });
       this.options.events.publishSince(before);
     }
+    if (pauseError) throw new SessionApplicationError(500, "已尝试中断，但目标暂停未保存，请重试：" + (pauseError instanceof Error ? pauseError.message : String(pauseError)));
     return result;
   }
 
@@ -190,7 +192,10 @@ export class RunControlService {
       durableRun.status !== "pending" &&
       durableRun.status !== "running"
     ) return { queuedRunIds: [], interrupted: false };
-    if (this.activeRunId(sessionId) === runId) this.pauseGoalForRun(runId);
+    let pauseError: unknown;
+    if (this.activeRunId(sessionId) === runId) {
+      try { this.pauseGoalForRun(runId); } catch (error) { pauseError = error; }
+    }
     const result = this.options.runtime.interruptRun(sessionId, runId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
@@ -213,6 +218,7 @@ export class RunControlService {
       });
       this.options.events.publishSince(before);
     }
+    if (pauseError) throw new SessionApplicationError(500, "已尝试中断，但目标暂停未保存，请重试：" + (pauseError instanceof Error ? pauseError.message : String(pauseError)));
     return result;
   }
 

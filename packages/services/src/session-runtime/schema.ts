@@ -263,9 +263,6 @@ export const sessionGoals = sqliteTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     objective: text("objective").notNull(),
     objectiveVersion: integer("objective_version").notNull().default(1),
-    phase: text("phase").notNull(),
-    requirementsJson: text("requirements_json").notNull(),
-    preparationEpisodeId: text("preparation_episode_id"),
     pluginId: text("plugin_id"),
     revision: integer("revision").notNull(),
     status: text("status").notNull(),
@@ -273,15 +270,10 @@ export const sessionGoals = sqliteTable(
     tokenBudget: integer("token_budget"),
     usageJson: text("usage_json").notNull(),
     autoTurnsUsed: integer("auto_turns_used").notNull(),
-    noProgressCount: integer("no_progress_count").notNull(),
-    stagnationCount: integer("stagnation_count").notNull(),
-    blockerKey: text("blocker_key"),
-    lastAssessmentJson: text("last_assessment_json"),
     currentRunId: text("current_run_id"),
     reason: text("reason"),
     stopReasonJson: text("stop_reason_json"),
     waitJson: text("wait_json"),
-    evidenceJson: text("evidence_json").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -299,13 +291,8 @@ export const sessionGoalVersions = sqliteTable(
     objectiveVersion: integer("objective_version").notNull(),
     previousVersion: integer("previous_version"),
     objective: text("objective").notNull(),
-    requirementsJson: text("requirements_json").notNull(),
-    frozenAt: integer("frozen_at"),
-    changeKind: text("change_kind").notNull(),
-    changeReason: text("change_reason").notNull(),
     requestId: text("request_id").notNull(),
     actorJson: text("actor_json").notNull(),
-    inputIdsJson: text("input_ids_json").notNull(),
     createdAt: integer("created_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.goalId, table.objectiveVersion] })],
@@ -353,23 +340,6 @@ export const sessionGoalRequests = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [index("session_goal_request_session_idx").on(table.sessionId, table.updatedAt)],
-);
-
-export const sessionGoalAssessments = sqliteTable(
-  "session_goal_assessment",
-  {
-    id: text("id").primaryKey(),
-    goalId: text("goal_id")
-      .notNull()
-      .references(() => sessionGoals.id, { onDelete: "cascade" }),
-    revision: integer("revision").notNull(),
-    runId: text("run_id").notNull(),
-    assessmentJson: text("assessment_json").notNull(),
-    createdAt: integer("created_at").notNull(),
-  },
-  (table) => [
-    uniqueIndex("session_goal_assessment_run_unique").on(table.goalId, table.revision, table.runId),
-  ],
 );
 
 export const sessionGoalContinuations = sqliteTable(

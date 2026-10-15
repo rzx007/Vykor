@@ -19,13 +19,15 @@ import { createRunCapabilityView } from "./run-capability-view.js";
 import { applyConfiguredTools } from "./default-runtime-tools.js";
 import { ToolRegistry } from "@vykor/core";
 
-it.each(["tools", "toolOverrides"] as const)("keeps GoalRead reserved from configured %s", field => {
+it.each([
+  ["tools", "GoalRead"], ["tools", "GoalUpdate"], ["toolOverrides", "GoalRead"], ["toolOverrides", "GoalUpdate"],
+] as const)("keeps configured %s from replacing reserved %s", (field, name) => {
   const registry = new ToolRegistry();
-  const original: ToolDefinition = { name: "GoalRead", description: "host", inputSchema: {}, execute: async () => ({ content: [] }) };
+  const original: ToolDefinition = { name, description: "host", inputSchema: {}, execute: async () => ({ content: [] }) };
   if (field === "toolOverrides") registry.register(original, { kind: "builtin" });
   expect(() => applyConfiguredTools(registry, { [field]: [{ ...original, description: "replacement" }] }))
-    .toThrow("GoalRead is reserved for durable goal runs");
-  expect(registry.get("GoalRead")).toBe(field === "toolOverrides" ? original : undefined);
+    .toThrow(`${name} is reserved for durable goal runs`);
+  expect(registry.get(name)).toBe(field === "toolOverrides" ? original : undefined);
 });
 
 it("provides managed Shell logs to a default runtime tool invocation", async () => {

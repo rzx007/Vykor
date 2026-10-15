@@ -51,7 +51,6 @@ describe("temporary control records", () => {
     ["revise goal", (repository) => { repository.updateGoalRevision("goal", { expectedRevision: 0, objective: "changed", stopReason: { code: "user_paused", at: 10 } }); }],
     ["begin request", (repository) => { repository.beginRequest({ requestId: "added", sessionId: "temporary", fingerprint: "new" }); }],
     ["settle request", (repository) => { repository.settleRequest("request", { status: "completed", result: { value: "changed" } }); }],
-    ["upsert assessment", (repository) => { repository.recordAssessment({ goalId: "goal", revision: 0, runId: "run", assessment: { verifiedSignatures: ["changed"] } }); }],
     ["record continuation", (repository) => { repository.recordContinuation({ goalId: "goal", revision: 0, previousRunId: "other", inputId: "input", runId: "next" }); }],
     ["mark continuation", (repository) => { repository.markContinuation("run", "dispatched"); }],
     ["cancel continuations", (repository) => { repository.cancelPendingContinuations(); }],
@@ -63,7 +62,6 @@ describe("temporary control records", () => {
     repository.insertGoal({ id: "goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
     repository.bindCurrentRun("goal", 0, "run", false);
     repository.beginRequest({ requestId: "request", sessionId: "temporary", fingerprint: "same" });
-    repository.recordAssessment({ goalId: "goal", revision: 0, runId: "run", assessment: { verifiedSignatures: ["saved"] } });
     repository.recordContinuation({ goalId: "goal", revision: 0, previousRunId: "previous", inputId: "input", runId: "run" });
     createProjectionSettlement(storage.database.orm, settlementInput, storage.temporaryControls, "memory");
   }
@@ -100,7 +98,7 @@ describe("temporary control records", () => {
     });
   });
 
-  it("restores all five control maps after deletion and recreation of the same goal key", () => {
+  it("restores temporary control maps after deletion and recreation of the same goal key", () => {
     withTemporaryRepository((repository, storage) => {
       seedControls(repository, storage);
       const original = storage.temporaryControls!.snapshot();
@@ -120,21 +118,20 @@ describe("temporary control records", () => {
     try {
       store.sessions.create({ id: "formal", cwd: process.cwd(), model: "m" });
       store.sessions.create({ id: "temporary", cwd: process.cwd(), model: "m", storage: "memory" });
-      const formalGoal = store.goals.createGoal({ phase: "executing", id: "formal-goal", sessionId: "formal", objective: "formal", maxAutoTurns: 1 });
-      const goal = store.goals.createGoal({ phase: "executing", id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
+      const formalGoal = store.goals.createGoal({ id: "formal-goal", sessionId: "formal", objective: "formal", maxAutoTurns: 1 });
+      const goal = store.goals.createGoal({ id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
       const run = store.runs.createRun({ id: "temporary-run", sessionId: "temporary" });
       expect(store.goals.startGoalRun(goal.id, goal.objectiveVersion, run.id, true)).toBe(true);
       expect(store.goals.getGoal(goal.id)).toMatchObject({ currentRunId: run.id, autoTurnsUsed: 1 });
       store.goals.finishGoalRun(run.id);
       expect(store.goals.getGoal(goal.id)?.currentRunId).toBeUndefined();
       store.goals.beginGoalRequest({ requestId: "temporary-request", sessionId: "temporary", fingerprint: "same" });
-      store.goals.recordGoalAssessment({ goalId: goal.id, revision: 0, runId: run.id, assessment: { verifiedSignatures: ["saved"] } });
       expect(store.goals.recordGoalContinuation({ goalId: goal.id, revision: 0, previousRunId: run.id, inputId: "next-input", runId: "next-run" })).toBe(true);
       const settlement = store.createProjectionSettlement(settlementInput);
       expect(store.markProjectionSettlementRetrying(settlement.id)).toMatchObject({ status: "retrying", attemptCount: 1 });
       const storage = (store as unknown as { storage: StorageContext }).storage;
       expect(storage.database.connection.prepare("SELECT id FROM session_goal").all()).toEqual([{ id: formalGoal.id }]);
-      for (const table of ["session_goal_request", "session_goal_assessment", "session_goal_continuation", "projection_settlement"]) {
+      for (const table of ["session_goal_request", "session_goal_continuation", "projection_settlement"]) {
         expect(storage.database.connection.prepare(`SELECT count(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
       }
       store.close();
@@ -143,7 +140,6 @@ describe("temporary control records", () => {
         expect(reopened.goals.getGoal(formalGoal.id)?.objective).toBe("formal");
         expect(reopened.goals.getGoal(goal.id)).toBeUndefined();
         expect(reopened.goals.getGoalRequest("temporary-request")).toBeUndefined();
-        expect(reopened.goals.goalEvidenceSignatures(goal.id)).toEqual([]);
         expect(reopened.getProjectionSettlement(settlement.id)).toBeUndefined();
       } finally {
         reopened.close();
@@ -218,12 +214,11 @@ describe("temporary control records", () => {
       expect(() => repository.insertGoal({ id: goal.id, sessionId: "formal", objective: "duplicate", maxAutoTurns: 2 })).toThrow("UNIQUE constraint failed");
       const updated = repository.updateGoalRevision(goal.id, {
         expectedRevision: 0,
-        evidence: ["first"],
-        wait: { kind: "external", targetRunId: "handle", runId: "external-run", deadlineAt: 100 },
+        wait: { kind: "external", targetRunId: "handle", ownerRunId: "external-run", goalId: goal.id, objectiveVersion: 1, deadlineAt: 100 },
       });
-      expect(updated).toMatchObject({ revision: 1, evidence: ["first"] });
-      updated.evidence.push("caller-change");
-      expect(repository.getGoal(goal.id)?.evidence).toEqual(["first"]);
+      expect(updated).toMatchObject({ revision: 1, wait: { targetRunId: "handle" } });
+      if (updated.wait?.kind === "external") updated.wait.targetRunId = "caller-change";
+      expect(repository.getGoal(goal.id)?.wait).toMatchObject({ targetRunId: "handle" });
       expect(() => repository.updateGoalRevision(goal.id, { expectedRevision: 0, status: "paused" })).toThrow("session_goal_revision_conflict");
       expect(repository.listActiveExternalWaitGoals().map((row) => row.id)).toEqual([goal.id]);
       repository.bindCurrentRun(goal.id, 0, "stale-run", true);
@@ -250,15 +245,9 @@ describe("temporary control records", () => {
     });
   });
 
-  it("upserts temporary assessments and deduplicates continuation claims", () => {
+  it("deduplicates temporary continuation claims", () => {
     withTemporaryRepository((repository, storage) => {
       const goal = repository.insertGoal({ id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
-      const assessment = { goalId: goal.id, revision: 0, runId: "run", assessment: { verifiedSignatures: ["first"] } };
-      repository.recordAssessment(assessment);
-      repository.recordAssessment({ ...assessment, assessment: { verifiedSignatures: ["updated"] } });
-      expect(repository.evidenceSignatures(goal.id)).toEqual(["updated"]);
-      expect(storage.temporaryControls!.assessments.size).toBe(1);
-      expect(() => repository.recordAssessment({ ...assessment, goalId: "missing" })).toThrow("FOREIGN KEY constraint failed");
       const continuation = { goalId: goal.id, revision: 0, previousRunId: "previous", inputId: "input", runId: "next-run" };
       expect(repository.recordContinuation({ ...continuation, revision: Number.NaN })).toBe(false);
       expect(repository.recordContinuation(continuation)).toBe(true);
@@ -269,7 +258,6 @@ describe("temporary control records", () => {
       expect(repository.recordContinuation({ ...continuation, previousRunId: "previous-2", runId: "pending-run" })).toBe(true);
       repository.cancelPendingContinuations();
       expect([...storage.temporaryControls!.continuations.values()].map((row) => row.status)).toEqual(["dispatched", "cancelled"]);
-      expect(storage.database.connection.prepare("SELECT count(*) AS count FROM session_goal_assessment").get()).toEqual({ count: 0 });
       expect(storage.database.connection.prepare("SELECT count(*) AS count FROM session_goal_continuation").get()).toEqual({ count: 0 });
     });
   });
@@ -315,7 +303,6 @@ describe("temporary control records", () => {
         repository.updateGoalRevision(original.id, { expectedRevision: 0, status: "completed" });
         repository.insertGoal({ id: "rolled-back", sessionId: "temporary", objective: "next", maxAutoTurns: 2 });
         repository.beginRequest({ requestId: "rolled-back", sessionId: "temporary", fingerprint: "same" });
-        repository.recordAssessment({ goalId: original.id, revision: 0, runId: "run", assessment: { verifiedSignatures: ["temporary"] } });
         repository.recordContinuation({ goalId: original.id, revision: 0, previousRunId: "previous", inputId: "input", runId: "run" });
         createProjectionSettlement(storage.database.orm, settlementInput, storage.temporaryControls, "memory");
         throw new Error("rollback controls");
@@ -323,7 +310,6 @@ describe("temporary control records", () => {
       expect(repository.getGoal(original.id)).toMatchObject({ status: "active", revision: 0 });
       expect(repository.getGoal("rolled-back")).toBeUndefined();
       expect(repository.getRequest("rolled-back")).toBeUndefined();
-      expect(repository.evidenceSignatures(original.id)).toEqual([]);
       expect(storage.temporaryControls!.continuations.size).toBe(0);
       expect(listProjectionSettlements(storage.database.orm, {}, storage.temporaryControls)).toEqual([]);
     });
@@ -335,7 +321,6 @@ describe("temporary control records", () => {
       const goal = repository.insertGoal({ id: "temporary-goal", sessionId: "temporary", objective: "finish", maxAutoTurns: 2 });
       repository.insertGoal({ id: "formal-goal", sessionId: "formal", objective: "formal", maxAutoTurns: 1 });
       repository.beginRequest({ requestId: "request", sessionId: "temporary", fingerprint: "same" });
-      repository.recordAssessment({ goalId: goal.id, revision: 0, runId: "run", assessment: { verifiedSignatures: ["saved"] } });
       repository.recordContinuation({ goalId: goal.id, revision: 0, previousRunId: "previous", inputId: "input", runId: "run" });
       createProjectionSettlement(storage.database.orm, settlementInput, controls, "memory");
       const snapshot = controls.snapshot();
@@ -343,13 +328,11 @@ describe("temporary control records", () => {
       expect(repository.getGoal(goal.id)).toBeUndefined();
       expect(repository.getGoal("formal-goal")?.objective).toBe("formal");
       expect(controls.requests.size).toBe(0);
-      expect(controls.assessments.size).toBe(0);
       expect(controls.continuations.size).toBe(0);
       expect(controls.settlements.size).toBe(0);
       controls.restore(snapshot);
       expect(repository.getGoal(goal.id)?.objective).toBe("finish");
       expect(repository.getRequest("request")?.status).toBe("pending");
-      expect(repository.evidenceSignatures(goal.id)).toEqual(["saved"]);
       expect([...controls.continuations.values()]).toMatchObject([{ status: "pending" }]);
       expect(getProjectionSettlement(storage.database.orm, settlementInput.id, controls)?.status).toBe("pending");
       controls.goals.get(goal.id)!.objective = "mutated after restoration";

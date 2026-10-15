@@ -183,7 +183,7 @@ it("passes the trusted hardMaxTurns to the execution context of its own run only
   expect(seen).toEqual([7, undefined]);
 });
 
-it("scopes the assessment tool and binding to each run without mutating the runtime registry", async () => {
+it("scopes the goal tools and binding to each run without mutating the runtime registry", async () => {
   const toolRegistry = new ToolRegistry();
   const observed: unknown[] = [];
   const runtime = {
@@ -191,9 +191,10 @@ it("scopes the assessment tool and binding to each run without mutating the runt
     queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) },
   };
   for (const binding of [{ goalId: "g1", objectiveVersion: 1 }, undefined, { goalId: "g2", objectiveVersion: 3 }]) {
-    const goal = binding ? { ...binding, phase: "executing" as const,
-      readSnapshot: async () => ({ ...binding, phase: "executing" as const, objective: "work",
-        sourceInputIds: [], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 3, knownTokens: 0, usageIncomplete: false }),
+    const goal = binding ? { ...binding,
+      readSnapshot: async () => ({ ...binding, status: "active" as const, objective: "work",
+        autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false }),
+      submitUpdate: async () => ({ recorded: true as const }),
     } : undefined;
     const run = new FrameworkAgentRun({
       agentId: "a",
@@ -212,7 +213,7 @@ it("scopes the assessment tool and binding to each run without mutating the runt
         submitMessage: async function* (_: string, options: any) {
           observed.push({
             tools: options.execution.contribution?.tools?.map((item: any) => item.definition.name) ?? [],
-            registryVisible: toolRegistry.has("GoalAssessment"),
+            registryVisible: toolRegistry.has("GoalUpdate"),
           });
           yield { type: "complete", stopReason: "end_turn" };
         },
@@ -223,12 +224,12 @@ it("scopes the assessment tool and binding to each run without mutating the runt
       onSettled: () => {},
     });
     await run.result;
-    expect(toolRegistry.has("GoalAssessment")).toBe(false);
+    expect(toolRegistry.has("GoalUpdate")).toBe(false);
   }
   expect(observed).toEqual([
-    { tools: ["GoalAssessment", "GoalRead"], registryVisible: false },
+    { tools: ["GoalUpdate", "GoalRead"], registryVisible: false },
     { tools: [], registryVisible: false },
-    { tools: ["GoalAssessment", "GoalRead"], registryVisible: false },
+    { tools: ["GoalUpdate", "GoalRead"], registryVisible: false },
   ]);
 });
 
@@ -237,8 +238,8 @@ it("settles a stale snapshot callback as run failure before invoking the engine"
   const events: AgentEvent[] = [];
   let calls = 0;
   const run = new FrameworkAgentRun({ agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" },
-    content: "work", delivery: "queue", goal: { goalId: "g", objectiveVersion: 1, phase: "preparing",
-      readSnapshot: async () => { throw error; } },
+    content: "work", delivery: "queue", goal: { goalId: "g", objectiveVersion: 1,
+      readSnapshot: async () => { throw error; }, submitUpdate: async () => ({ recorded: true }) },
     eventBus: new AgentEventBus(event => { events.push(event); }),
     session: { id: "s", getHistory: () => [], submitMessage: async function* () { calls++; } } as any,
     runtime: {} as any, effects: {} as any, children: { cwd: "/repo", createController: () => ({}) } as any,

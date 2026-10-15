@@ -83,7 +83,7 @@ describe("DaemonAgentEventProjector", () => {
     const store = new SessionStore({ path: join(directory, "store.db") });
     compactionCleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
     for (const id of ["parent", "child", "grandchild"]) store.sessions.create({ id, cwd: directory, model: "m", metadata: { runtime: { model: "m" } } });
-    const goal = store.goals.createGoal({ phase: "executing", sessionId: "parent", objective: "finish", maxAutoTurns: 2 });
+    const goal = store.goals.createGoal({ sessionId: "parent", objective: "finish", maxAutoTurns: 2 });
     for (const id of ["P1", "P2"]) {
       store.runs.createRun({ id, sessionId: "parent", metadata: { goalId: goal.id, goalObjectiveVersion: 1 } });
       store.runs.updateRun(id, { status: "completed" });
@@ -103,12 +103,12 @@ describe("DaemonAgentEventProjector", () => {
 
   it("reports the actual goal stop reason instead of implying the token budget was exhausted", async () => {
     const { store, goal, projector, started } = goalProjector();
-    await projector.apply(started("C-preparation", "child", "P1"));
-    const reason = "目标整理次数达到上限，这不是 Token 预算耗尽";
+    await projector.apply(started("C-stopped", "child", "P1"));
+    const reason = "目标自动续跑次数已用完";
     store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "paused", reason });
     await expect(projector.apply(event("model.attempt.started", {
       generationId: "denied", attempt: 1, model: "m", purpose: "generation",
-    }, { runId: "C-preparation", sessionId: "child" }))).rejects.toThrow(reason);
+    }, { runId: "C-stopped", sessionId: "child" }))).rejects.toThrow(reason);
   });
 
   it("passes Child budget rejection through the real EventBus without calling the model or compensating projection", async () => {
@@ -666,21 +666,20 @@ describe("DaemonAgentEventProjector", () => {
     expect(completeChildExecution).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts only assessments bound to the current nonterminal session run", async () => {
+  it("keeps a historical goal.assessment event as ordinary history without updating Run metadata", async () => {
     const run = {
       id: "r1",
       sessionId: "s1",
       status: "running",
-      metadata: { goalId: "g1", goalObjectiveVersion: 2, goalPhase: "executing" },
+      metadata: { goalId: "g1", goalObjectiveVersion: 2 },
     };
     const updateRun = vi.fn();
-    const goal = { id: "g1", sessionId: "s1", status: "active", objectiveVersion: 2, phase: "executing", currentRunId: "r1" };
+    const appendEvent = vi.fn();
     const projector = new DaemonAgentEventProjector({
       store: projectorStore({
-        getGoal: () => goal,
         getRun: () => run,
         updateRun,
-        appendEvent: vi.fn(),
+        appendEvent,
         listEvents: () => [],
       }),
       rootAgent: {} as any,
@@ -690,56 +689,14 @@ describe("DaemonAgentEventProjector", () => {
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
     });
-    const payload = {
-      goalId: "g1",
-      objectiveVersion: 2,
-      runId: "r1",
-      decision: "complete",
-      progress: "done",
-      progressAssessment: { kind: "progress", summary: "done" },
-      evidence: [],
-      evidenceRefs: [],
-      progressSignals: [],
-      requirements: [
-        {
-          requirementId: "R1", explanation: "需要用户验收",
-          status: "needs_user",
-          evidenceRefs: [],
-        },
-      ],
-      remainingWork: [],
-    };
-    for (const change of [{ goalId: "foreign" }, { objectiveVersion: 1 }, { runId: "foreign" }]) {
-      await projector.apply(
-        event(
-          "domain.event",
-          { name: "goal.assessment", payload: { ...payload, ...change } },
-          { sessionId: "s1", runId: "r1" },
-        ),
-      );
-    }
-    await projector.apply(
-      event(
-        "domain.event",
-        { name: "goal.assessment", payload },
-        { sessionId: "foreign", runId: "r1" },
-      ),
-    );
+    const historical = event("domain.event", { name: "goal.assessment", payload: { status: "completed" } }, { sessionId: "s1", runId: "r1" });
+    await projector.apply(historical);
     expect(updateRun).not.toHaveBeenCalled();
-    await projector.apply(
-      event("domain.event", { name: "goal.assessment", payload }, { sessionId: "s1", runId: "r1" }),
-    );
-    expect(updateRun).toHaveBeenCalledOnce();
-    for (const change of [{ status: "paused" }, { objectiveVersion: 3 }, { currentRunId: "another-run" }]) {
-      Object.assign(goal, { status: "active", objectiveVersion: 2, currentRunId: "r1" }, change);
-      await projector.apply(event("domain.event", { name: "goal.assessment", payload }, { sessionId: "s1", runId: "r1" }));
-    }
-    expect(updateRun).toHaveBeenCalledOnce();
-    run.status = "completed";
-    await projector.apply(
-      event("domain.event", { name: "goal.assessment", payload }, { sessionId: "s1", runId: "r1" }),
-    );
-    expect(updateRun).toHaveBeenCalledOnce();
+    expect(run.metadata).toEqual({ goalId: "g1", goalObjectiveVersion: 2 });
+    expect(appendEvent).toHaveBeenCalledWith({
+      type: "agent.domain.event", sessionId: "s1",
+      payload: { frameworkEventId: historical.id, name: "goal.assessment", payload: { status: "completed" } },
+    });
   });
 
   it("accepts promoted structured input by its original items, and rejects changed identity", async () => {

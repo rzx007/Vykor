@@ -159,8 +159,8 @@ export interface RunAdmissionEvents {
 
 export interface RunAdmissionGoalControl {
   checkExecution?(goalId: string, objectiveVersion: number): void;
-  getCurrentGoal?(sessionId: string): { id: string; status: string; objectiveVersion: number; phase?: string; preparationEpisodeId?: string } | undefined;
-  getGoal?(goalId: string): { id: string; status: string; objectiveVersion: number; phase?: string; preparationEpisodeId?: string } | undefined;
+  getCurrentGoal?(sessionId: string): { id: string; status: string; objectiveVersion: number } | undefined;
+  getGoal?(goalId: string): { id: string; status: string; objectiveVersion: number } | undefined;
   startGoalRun?(goalId: string, objectiveVersion: number, runId: string, continuation: boolean): boolean;
   pendingPermissionId?(sessionId: string): string | undefined;
   waitForApproval?(goalId: string, objectiveVersion: number, permissionRequestId: string): void;
@@ -294,11 +294,6 @@ export class RunAdmissionService {
       return false;
     }
     if (!goal || (goal.status !== "active" && isUserRun)) return true;
-    if (isUserRun && goal.phase === "preparing") return true;
-    if (!isUserRun && (goal.phase !== run.metadata.goalPhase || (goal.phase === "preparing" && goal.preparationEpisodeId !== run.metadata.goalEpisodeId))) {
-      this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "目标阶段或准备批次已变化" });
-      return false;
-    }
     const objectiveVersion = isUserRun ? goal.objectiveVersion : run.metadata.goalObjectiveVersion;
     if (typeof objectiveVersion === "number") this.options.goals?.checkExecution?.(goal.id, objectiveVersion);
     if (
@@ -315,7 +310,7 @@ export class RunAdmissionService {
     }
     if (isUserRun) {
       this.options.runOperations.updateRun(run.id, {
-        metadata: { goalId: goal.id, goalObjectiveVersion: objectiveVersion, goalRunKind: "user", goalPhase: goal.phase },
+        metadata: { goalId: goal.id, goalObjectiveVersion: objectiveVersion, goalRunKind: "user" },
       });
     }
     return true;

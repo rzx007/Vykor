@@ -55,7 +55,6 @@ import {
 import { Composer } from "./composer/composer"
 import { pluginMentionsEnabled } from "./composer/plugin-mentions-feature"
 import { GoalBanner } from "./composer/goal-banner"
-import { GoalEditFields } from "./composer/goal-edit-fields"
 import {
   emptyGoalComposer,
   selectGoalObjective,
@@ -147,7 +146,6 @@ function ConversationPane({
   const setGoalMode = useDesktopSessionStore((state) => state.setGoalMode)
   const setGoalAutoTurns = useDesktopSessionStore((state) => state.setGoalAutoTurns)
   const setGoalTokenBudget = useDesktopSessionStore((state) => state.setGoalTokenBudget)
-  const setGoalChange = useDesktopSessionStore((state) => state.setGoalChange)
   const refreshGoal = useDesktopSessionStore((state) => state.refreshGoal)
   const applyGoalAction = useDesktopSessionStore((state) => state.applyGoalAction)
   const dismissGoalError = useDesktopSessionStore((state) => state.dismissGoalError)
@@ -848,14 +846,6 @@ function ConversationPane({
                 activeSessionId={activeSessionId}
                 goalMode={goalMode}
                 goalEditing={goalMode && Boolean(goalComposer.editingGoal)}
-                contextContent={goalMode && goalComposer.editingGoal ? <GoalEditFields
-                  goal={goalComposer.editingGoal}
-                  changeKind={goalComposer.changeKind ?? "refine"}
-                  changeReason={goalComposer.changeReason ?? ""}
-                  replaceRequirementIds={goalComposer.replaceRequirementIds ?? []}
-                  disabled={goalBusy}
-                  onChange={change => setGoalChange(composerScope, change)}
-                /> : undefined}
                 onGoalModeChange={changeGoalMode}
                 goalAutoTurns={goalComposer.maxAutoTurns}
                 goalTokenBudget={goalComposer.tokenBudget}
@@ -869,8 +859,7 @@ function ConversationPane({
                     ? undefined
                     : (count) => setGoalAutoTurns(composerScope, count)
                 }
-                canSubmit={goalMode ? Boolean(selectGoalObjective(draft)) && canSubmit
-                  && (!goalComposer.editingGoal || Boolean(goalComposer.changeReason?.trim())) : canSubmit}
+                canSubmit={goalMode ? Boolean(selectGoalObjective(draft)) && canSubmit : canSubmit}
                 contextUsage={contextUsageSnapshot}
                 attachments={attachments}
                 attachmentInteractionEnabled={attachmentSupport.interactionEnabled}

@@ -120,7 +120,6 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
           mode: true,
           ordinaryDraft,
           editingGoal: goal,
-          changeKind: "refine", changeReason: "", replaceRequirementIds: [],
           request: undefined,
           error: null,
         })
@@ -146,9 +145,6 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
     },
     setGoalTokenBudget(scope, tokenBudget) {
       if (!get().goalComposersByScope[scope]?.busy) updateComposer(scope, { tokenBudget })
-    },
-    setGoalChange(scope, patch) {
-      if (!get().goalComposersByScope[scope]?.busy) updateComposer(scope, patch)
     },
     dismissGoalError(scope) {
       updateComposer(scope, { error: null })
@@ -187,10 +183,12 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       const attachmentDrafts = selectDraftAttachments(state, scope)
       const objective = selectGoalObjective(document)
       if (!objective || !areDesktopAttachmentsSendable(attachmentDrafts)) return
+      const editingGoal = composer.editingGoal
       if (
-        !Number.isSafeInteger(composer.maxAutoTurns) ||
-        composer.maxAutoTurns < 0 ||
-        composer.maxAutoTurns > 1000
+        !editingGoal &&
+        (!Number.isSafeInteger(composer.maxAutoTurns) ||
+          composer.maxAutoTurns < 0 ||
+          composer.maxAutoTurns > 1000)
       ) {
         updateComposer(scope, { error: "自动续跑次数需为 1 到 1000 的整数，留空表示不限。" })
         return
@@ -200,11 +198,6 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
           ? [{ assetId: item.assetId, intent: "auto" as const, displayName: item.displayName }]
           : []
       )
-      const editingGoal = composer.editingGoal
-      if (editingGoal && !composer.changeReason?.trim()) {
-        updateComposer(scope, { error: "请说明目标变更原因。" })
-        return
-      }
       const rawBudget = (composer.tokenBudget ?? "").trim()
       const tokenBudget = rawBudget ? Number(rawBudget) : undefined
       if (!editingGoal && rawBudget && (!/^\d+$/.test(rawBudget) || !Number.isSafeInteger(tokenBudget) || tokenBudget! <= 0)) {
@@ -217,10 +210,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
         attachments,
         goalId: editingGoal?.id,
         revision: editingGoal?.revision,
-        changeKind: composer.changeKind, changeReason: composer.changeReason,
-        replaceRequirementIds: composer.replaceRequirementIds,
-        maxAutoTurns: composer.maxAutoTurns,
-        ...(!editingGoal ? { tokenBudget } : {}),
+        ...(!editingGoal ? { tokenBudget, maxAutoTurns: composer.maxAutoTurns } : {}),
       })
       const requestId =
         composer.request?.fingerprint === fingerprint ? composer.request.id : crypto.randomUUID()
@@ -252,8 +242,6 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
               ...payload,
               goalId: editingGoal.id,
               expectedRevision: editingGoal.revision,
-              changeKind: composer.changeKind ?? "refine", changeReason: composer.changeReason!.trim(),
-              replaceRequirementIds: composer.changeKind === "pivot" ? [] : composer.replaceRequirementIds,
             })
           : await window.desktop.sessions.createGoal({
               ...payload,

@@ -17,13 +17,10 @@ const goal = (sessionId = "s1", patch: Partial<SessionGoal> = {}): SessionGoal =
   sessionId,
   objective: "完成测试",
   objectiveVersion: 1,
-  phase: "executing", requirements: [], stagnationCount: 0,
   revision: 0,
   status: "active",
-  maxAutoTurns: 20,
+  maxAutoTurns: 0,
   autoTurnsUsed: 0,
-  noProgressCount: 0,
-  evidence: [],
   usage: { knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: 1 },
   createdAt: 1,
   updatedAt: 1,
@@ -134,6 +131,9 @@ describe("goal actions", () => {
       selectComposerDocumentText(selectDraftDocument(useDesktopSessionStore.getState(), scope))
     ).toBe("新目标")
     expect(selectDraftAttachments(useDesktopSessionStore.getState(), scope)).toHaveLength(1)
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.objective).toBe("完成测试")
+    expect(window.desktop.sessions.updateGoal).not.toHaveBeenCalled()
+    expect(window.desktop.sessions.goalAction).not.toHaveBeenCalled()
   })
 
   it("exits editing and restores ordinary text and files after cancelling the goal", async () => {
@@ -149,6 +149,33 @@ describe("goal actions", () => {
     expect(selectComposerDocumentText(selectDraftDocument(state, scope))).toBe("原聊天草稿")
     expect(selectDraftAttachments(state, scope)).toHaveLength(1)
     expect(state.goalsBySession.s1?.status).toBe("cancelled")
+  })
+
+  it.each(["paused", "blocked"] as const)("saves only objective content and keeps a %s goal stopped", async (status) => {
+    const scope = sessionComposerScope("s1")
+    draft(scope, "普通聊天草稿", [attachment()])
+    const current = goal("s1", { status, revision: 3 })
+    useDesktopSessionStore.setState({ goalsBySession: { s1: current } })
+    useDesktopSessionStore.getState().setGoalAutoTurns(scope, 1001)
+    useDesktopSessionStore.getState().setGoalTokenBudget(scope, "invalid creation budget")
+    useDesktopSessionStore.getState().setGoalMode(scope, true)
+    draft(scope, "新的完整目标")
+    vi.mocked(window.desktop.sessions.updateGoal).mockResolvedValue({
+      ...current, objective: "新的完整目标", objectiveVersion: 2, revision: 4,
+    })
+
+    await useDesktopSessionStore.getState().submitGoal(scope)
+
+    expect(window.desktop.sessions.updateGoal).toHaveBeenCalledExactlyOnceWith({
+      sessionId: "s1", goalId: "g1", requestId: expect.any(String), expectedRevision: 3,
+      objective: "新的完整目标", items: [{ type: "text", text: "新的完整目标" }], attachments: [],
+    })
+    expect(window.desktop.sessions.goalAction).not.toHaveBeenCalled()
+    const state = useDesktopSessionStore.getState()
+    expect(state.goalsBySession.s1?.status).toBe(status)
+    expect(state.goalComposersByScope[scope]).toMatchObject({ mode: false, editingGoal: undefined })
+    expect(selectComposerDocumentText(selectDraftDocument(state, scope))).toBe("普通聊天草稿")
+    expect(selectDraftAttachments(state, scope)).toHaveLength(1)
   })
 
   it("preserves editing text when cancelling the goal fails", async () => {
@@ -209,7 +236,6 @@ describe("goal actions", () => {
     draft(scope, "原草稿", [{ ...attachment(), status: "uploading", assetId: undefined }])
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
     useDesktopSessionStore.getState().setGoalMode(scope, true)
-    useDesktopSessionStore.getState().setGoalChange(scope, { changeKind: "refine", changeReason: "补充完成条件", replaceRequirementIds: [] })
     useDesktopSessionStore.getState().applyAttachmentUploadEvent({
       type: "success",
       draftId: "a1",
@@ -221,7 +247,7 @@ describe("goal actions", () => {
     })
     await useDesktopSessionStore.getState().submitGoal(scope)
     expect(window.desktop.sessions.updateGoal).toHaveBeenCalledWith(
-      expect.objectContaining({ attachments: [], changeKind: "refine", changeReason: "补充完成条件", replaceRequirementIds: [] })
+      expect.objectContaining({ attachments: [], objective: "完成测试", expectedRevision: 0 })
     )
     expect(
       selectComposerDocumentText(selectDraftDocument(useDesktopSessionStore.getState(), scope))
@@ -292,12 +318,7 @@ describe("goal actions", () => {
 
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
     vi.mocked(window.desktop.sessions.getGoal).mockResolvedValue(goal("s1", { status: "completed", revision: 2 }))
-    vi.mocked(window.desktop.sessions.goalAction).mockResolvedValueOnce(
-      goal("s1", { status: "completed", revision: 2 })
-    )
-    await useDesktopSessionStore
-      .getState()
-      .applyGoalAction("s1", { action: "confirm", questionId: "goal-complete-run" })
+    await useDesktopSessionStore.getState().refreshGoal("s1")
     expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("completed")
   })
 

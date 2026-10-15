@@ -1,6 +1,6 @@
 import type { IHookExecutor, IToolRegistry, Settings, ToolDefinition } from "@vykor/core";
 import { SkillRegistry } from "@vykor/skills";
-import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
+import { GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
 import { GOAL_READ_TOOL_NAME } from "./goal-read-tool.js";
 import { type VykorExtensionDiscovery, discoverVykorExtensions } from "./plugin-discovery.js";
 import { activateDiscoveredPlugins } from "./plugin-activation.js";
@@ -55,7 +55,7 @@ export function createExtensionToolRegistry(
 ): ExtensionToolRegistry {
   return {
     register(tool) {
-      if (tool.name === GOAL_ASSESSMENT_TOOL_NAME || tool.name === GOAL_READ_TOOL_NAME) {
+      if (tool.name === GOAL_UPDATE_TOOL_NAME || tool.name === GOAL_READ_TOOL_NAME) {
         throw new Error(`${tool.name} is reserved for durable goal runs`);
       }
       registry.register(tool, { kind: "extension" });

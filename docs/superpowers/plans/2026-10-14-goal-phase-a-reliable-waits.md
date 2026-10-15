@@ -1,5 +1,7 @@
 # Goal A 阶段实现计划：可靠等待与停止原因
 
+> 2026-10-15：本计划仅保留为历史交付记录，不能作为后续实施指令。后续以 [Goal 收缩规格](../specs/2026-10-14-goal-reliability-and-budget-design.md)的保留项、删除项和职责边界为准；收缩实现及验证见 [实施审查](../reviews/2026-10-15-goal-simplification-implementation-review.md)。
+
 > **面向 AI 代理的工作者：** 使用 `executing-plans` 顺序执行；需要用户授权的子代理实施时使用 `subagent-driven-development`，逐任务检查。步骤以复选框记录。用户实施指令优先：集中测试与一次集中审查、定点复核，不逐任务设置审批或提交。
 > 日期：2026-10-14。源码基线：`04eea243ecce37f0ace914c8a63076085d302adc`。
 > 状态：A 已实施；集中审查两项问题已修正并定点复核。交付记录见 [实施审查](../reviews/2026-10-14-goal-phase-a-implementation-review.md)。

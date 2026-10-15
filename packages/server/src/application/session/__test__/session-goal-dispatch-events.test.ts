@@ -29,6 +29,10 @@ describe("SessionGoalService dispatch event boundary", () => {
         events: publisher,
       });
       const admission = {
+        persistGoalInput: (sessionId: string, input: any) => store.conversationTransactions.admitPrompt({
+          id: input.id, sessionId, delivery: "queue", items: input.items,
+          attachments: input.attachments ?? [], metadata: input.metadata,
+        }),
         persistGoalRun: (sessionId: string, input: any) =>
           store.conversationTransactions.admitPromptWithRun({
             prompt: {
@@ -44,17 +48,18 @@ describe("SessionGoalService dispatch event boundary", () => {
         dispatchPersistedRun: () => {
           throw new Error("dispatch unavailable");
         },
+        isRunQueuedOrRunning: () => false,
       };
       const control = {
         cancelGoalRuns: () => [],
         waitForRuns: async () => undefined,
         hasUserWork: () => false,
+        stopGoalChildren: async () => {},
       };
       const service = new SessionGoalService({
         transaction: store,
         sessions: store.sessions,
         runs: store.runs,
-        conversations: store.conversations,
         permissions: store.permissions,
         goals: store.goals,
         operationRunner,
@@ -89,6 +94,11 @@ describe("SessionGoalService dispatch event boundary", () => {
         stopReason: { code: "run_error" },
       });
       expect(store.goals.getGoalRequest("goal-create")).toMatchObject({ status: "pending" });
+      expect(store.runs.listRuns("s1")).toEqual([
+        expect.objectContaining({ metadata: expect.objectContaining({
+          goalId: store.goals.getCurrentGoal("s1")!.id, goalObjectiveVersion: 1, goalRunKind: "initial",
+        }) }),
+      ]);
 
       controller.abort();
       await iterator.return?.();

@@ -12,8 +12,8 @@ function withStore(test: (store: SessionStore, storage: StorageContext) => void,
   const store = new SessionStore({ path: join(directory, "store.db") });
   try {
     store.sessions.create({ id: "s1", cwd: directory, model: "m", ...(memory ? { storage: "memory" } : {}) });
-    store.goals.createGoal({ phase: "executing", id: "g1", sessionId: "s1", objective: "finish", maxAutoTurns: 2 });
-    store.runs.createRun({ id: "r1", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalPhase: "executing" } });
+    store.goals.createGoal({ id: "g1", sessionId: "s1", objective: "finish", maxAutoTurns: 2 });
+    store.runs.createRun({ id: "r1", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1 } });
     store.runs.updateRun("r1", { status: "running" });
     test(store, (store as unknown as { storage: StorageContext }).storage);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
@@ -44,7 +44,7 @@ describe("Goal model attempt ledger", () => {
         usage: { knownTokens: 13, incomplete: false, seq: 3 } });
 
       clock.mockReturnValue(4_000);
-      store.goals.createGoal({ phase: "executing", id: "g2", sessionId: "s1", objective: "next", maxAutoTurns: 2 });
+      store.goals.createGoal({ id: "g2", sessionId: "s1", objective: "next", maxAutoTurns: 2 });
       clock.mockReturnValue(5_000);
       store.goals.updateGoal("g1", { expectedRevision: 1, reason: "old Goal inspected" });
       expect(store.goals.getCurrentGoal("s1")!.id).toBe("g2");
@@ -60,7 +60,7 @@ describe("Goal model attempt ledger", () => {
       store.goals.beginGoalModelAttempt(start);
       store.goals.recordGoalModelAttempt(report(10, 3));
       store.goals.updateGoal("g1", { expectedRevision: 0, objective: "second version" });
-      store.runs.createRun({ id: "r2", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 2, goalPhase: "executing" } });
+      store.runs.createRun({ id: "r2", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 2 } });
       store.runs.updateRun("r2", { status: "running" });
       for (const attempt of [1, 2]) {
         store.goals.beginGoalModelAttempt({ ...start, runId: "r2", attempt });
@@ -92,7 +92,7 @@ describe("Goal model attempt ledger", () => {
 
   it("registers new bound attempts only during running or completed source memory maintenance", () => {
     withStore((store) => {
-      store.runs.createRun({ id: "pending", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalPhase: "executing" } });
+      store.runs.createRun({ id: "pending", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1 } });
       expect(store.goals.beginGoalModelAttempt({ ...start, runId: "pending" })).toMatchObject({ allowed: false, changed: false });
       store.runs.updateRun("r1", { status: "completed" });
       for (const purpose of ["generation", "compaction", "finalization"] as const)
@@ -214,7 +214,7 @@ describe("Goal model attempt ledger", () => {
   it("keeps memory Goal attempts out of SQLite even from durable Child sessions, and journals deletion", () => {
     withStore((store, storage) => {
       store.sessions.create({ id: "child", cwd: process.cwd(), model: "m" });
-      store.runs.createRun({ id: "child-run", sessionId: "child", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalPhase: "executing", parentRunId: "r1" } });
+      store.runs.createRun({ id: "child-run", sessionId: "child", metadata: { goalId: "g1", goalObjectiveVersion: 1, parentRunId: "r1" } });
       store.runs.updateRun("child-run", { status: "running" });
       const childStart = { ...start, runId: "child-run", sessionId: "child" };
       store.goals.beginGoalModelAttempt(childStart);
@@ -235,7 +235,7 @@ describe("Goal model attempt ledger", () => {
   it("keeps frozen dispatch identity after durable Child deletion and rejects unregistered or forged reports", () => {
     withStore((store, storage) => {
       store.sessions.create({ id: "child", cwd: process.cwd(), model: "m" });
-      store.runs.createRun({ id: "child-run", sessionId: "child", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalPhase: "executing", parentRunId: "r1" } });
+      store.runs.createRun({ id: "child-run", sessionId: "child", metadata: { goalId: "g1", goalObjectiveVersion: 1, parentRunId: "r1" } });
       store.runs.updateRun("child-run", { status: "running" });
       const child = { ...start, runId: "child-run", sessionId: "child" };
       store.goals.beginGoalModelAttempt(child);
@@ -256,9 +256,9 @@ describe("Goal model attempt ledger", () => {
       store.runs.updateRun("r1", { status: "running" });
       clock.mockReturnValue(5_000);
       store.runs.updateRun("r1", { status: "interrupted" });
-      store.runs.createRun({ id: "r2", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 2, goalPhase: "executing" } });
+      store.runs.createRun({ id: "r2", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 2 } });
       store.runs.updateRun("r2", { status: "running" });
-      store.runs.createRun({ id: "child", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1, goalPhase: "executing", parentRunId: "r1" } });
+      store.runs.createRun({ id: "child", sessionId: "s1", metadata: { goalId: "g1", goalObjectiveVersion: 1, parentRunId: "r1" } });
       store.runs.updateRun("child", { status: "running" });
       clock.mockReturnValue(7_000);
       store.runs.updateRun("r2", { status: "completed" });

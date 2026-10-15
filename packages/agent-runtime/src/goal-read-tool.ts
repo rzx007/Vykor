@@ -4,46 +4,46 @@ import type { ToolDefinition } from "@vykor/core";
 export interface GoalReadSnapshot {
   goalId: string;
   objectiveVersion: number;
-  phase: "preparing" | "executing";
   objective: string;
-  sourceInputIds: string[];
-  requirements: Array<{ id: string; text: string; verification: string;
-    constraints?: string[];
-    status: "incomplete" | "satisfied" | "needs_user" }>;
-  latestAssessment?: string;
-  waitSummary?: string;
+  status: "active" | "waiting_user" | "blocked" | "paused" | "completed" | "cancelled";
+  wait?:
+    | { kind: "user"; questionId: string; question: string; objectiveVersion: number }
+    | { kind: "approval"; permissionRequestId: string }
+    | { kind: "external"; targetRunId: string; deadlineAt: number;
+        observedStatus?: "pending" | "running" | "completed" | "failed" | "interrupted" | "cancelled" };
+  reason?: string;
   stopReason?: string;
   autoTurnsUsed: number;
   maxAutoTurns: number;
   knownTokens: number;
   usageIncomplete: boolean;
-  recentEvidence?: Array<{ messagePartId: string; runId: string; toolName: string; command?: string; workdir?: string }>;
-}
-export interface GoalAssessmentFeedback {
-  issues: string[];
-  evidenceIssues?: Array<{ requirementId: string; messagePartId: string; code: string; message: string }>;
-  availableEvidence?: GoalReadSnapshot["recentEvidence"];
+  tokenBudget?: number;
 }
 
 export const GOAL_READ_TOOL_NAME = "GoalRead";
 
 /** Shared rendering for both prompt guidance and on-demand reads. */
 export function formatGoalReadSnapshot(snapshot: GoalReadSnapshot): string {
-  const short = (value: string | undefined, limit = 1000) => value === undefined ? undefined
-    : value.length <= limit ? value : value.slice(0, limit) + "…";
-  return JSON.stringify({ ...snapshot, maxAutoTurns: snapshot.maxAutoTurns === 0 ? "unlimited" : snapshot.maxAutoTurns, objective: short(snapshot.objective, 4000),
-    sourceInputIds: snapshot.sourceInputIds.map(id => short(id, 256)),
-    requirements: snapshot.requirements.slice(0, 64).map(requirement => ({ ...requirement,
-      text: short(requirement.text, 500), verification: short(requirement.verification, 500),
-      ...(requirement.constraints ? { constraints: requirement.constraints.map(value => short(value, 1000)) } : {}) })),
-    latestAssessment: short(snapshot.latestAssessment), waitSummary: short(snapshot.waitSummary),
-    stopReason: short(snapshot.stopReason) });
+  return JSON.stringify({
+    goalId: snapshot.goalId,
+    objectiveVersion: snapshot.objectiveVersion,
+    objective: snapshot.objective,
+    status: snapshot.status,
+    wait: snapshot.wait,
+    reason: snapshot.reason,
+    stopReason: snapshot.stopReason,
+    autoTurnsUsed: snapshot.autoTurnsUsed,
+    maxAutoTurns: snapshot.maxAutoTurns === 0 ? "unlimited" : snapshot.maxAutoTurns,
+    knownTokens: snapshot.knownTokens,
+    usageIncomplete: snapshot.usageIncomplete,
+    tokenBudget: snapshot.tokenBudget,
+  });
 }
 
 export function createGoalReadTool(read: () => Promise<GoalReadSnapshot>): ToolDefinition {
   return {
     name: GOAL_READ_TOOL_NAME,
-    description: "Read the current host-bound goal, formal requirements and latest status. No IDs are accepted.",
+    description: "Read the complete current host-bound goal, status, wait, stop details and usage. No IDs are accepted.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
     execution: { domain: "control_plane", supportedEnvironments: ["local", "wsl"] },
     safeToRetry: true,

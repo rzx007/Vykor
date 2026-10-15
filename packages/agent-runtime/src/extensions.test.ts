@@ -215,7 +215,7 @@ async function spawnReviewer(
 }
 
 describe("extension agent definition scoping", () => {
-  it.each(["GoalRead", "GoalAssessment"])("keeps %s reserved from extension additions", name => {
+  it.each(["GoalRead", "GoalUpdate"])("keeps %s reserved from extension additions", name => {
     const registry = new ToolRegistry();
     const installed: string[] = [];
     const view = createExtensionToolRegistry(registry, installed);

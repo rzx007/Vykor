@@ -248,7 +248,7 @@ export function Composer({
           <div className="space-y-1">
             <p className="text-sm font-medium">编辑目标</p>
             <p className="text-xs text-muted-foreground">
-              保存后重新整理完成条件，取消编辑不改变当前目标。
+              保存后更新目标内容，取消编辑不改变当前目标。
             </p>
           </div>
           <Button
@@ -277,7 +277,7 @@ export function Composer({
         value={draft}
         placeholder={
           goalEditing
-            ? "编辑目标内容与完成条件"
+            ? "编辑目标内容"
             : goalMode
               ? "描述要完成的事情，以及你期望的结果"
               : "随心输入"

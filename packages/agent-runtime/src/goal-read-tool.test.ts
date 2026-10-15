@@ -12,15 +12,31 @@ describe("GoalRead", () => {
     await tool.execute({ objectiveVersion: 2 }, { cwd: process.cwd() });
     expect(reads).toBe(1);
   });
-  it("rechecks version and phase on every call", async () => {
-    let version = 1;
-    const contribution = await createGoalRunContribution({ goalId: "g", objectiveVersion: 1, phase: "executing",
-      readSnapshot: async () => ({ goalId: "g", objectiveVersion: version, phase: "executing", objective: "work",
-        sourceInputIds: [], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 3, knownTokens: 0, usageIncomplete: false }),
+
+  it.each(["goalId", "objectiveVersion"])("rechecks %s on every call", async changed => {
+    let stale = false;
+    const contribution = await createGoalRunContribution({ goalId: "g", objectiveVersion: 1,
+      readSnapshot: async () => ({ goalId: stale && changed === "goalId" ? "other" : "g",
+        objectiveVersion: stale && changed === "objectiveVersion" ? 2 : 1, status: "active", objective: "work",
+        autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false }),
+      submitUpdate: async () => ({ recorded: true }),
     });
-    version = 2;
+    stale = true;
     const read = contribution.tools!.find(item => item.definition.name === "GoalRead")!.definition;
     expect((await read.execute({}, { cwd: process.cwd() })).isError).toBe(true);
-    expect(contribution.tools!.find(item => item.definition.name === "GoalAssessment")!.endRunOnSuccess).toBeUndefined();
+  });
+
+  it("returns only the current goal, wait, stop details and usage", async () => {
+    const tool = createGoalReadTool(async () => ({ goalId: "g", objectiveVersion: 2, objective: "work", status: "paused",
+      wait: { kind: "external", targetRunId: "child", deadlineAt: 12345 }, reason: "task failed", stopReason: "external_run_failed",
+      autoTurnsUsed: 3, maxAutoTurns: 10, knownTokens: 42, usageIncomplete: true, tokenBudget: 100,
+      phase: "executing", requirements: ["obsolete"], recentEvidence: ["obsolete"],
+    }));
+    const result = await tool.execute({}, { cwd: process.cwd() });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual({
+      goalId: "g", objectiveVersion: 2, objective: "work", status: "paused",
+      wait: { kind: "external", targetRunId: "child", deadlineAt: 12345 }, reason: "task failed", stopReason: "external_run_failed",
+      autoTurnsUsed: 3, maxAutoTurns: 10, knownTokens: 42, usageIncomplete: true, tokenBudget: 100,
+    });
   });
 });

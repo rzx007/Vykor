@@ -16,7 +16,6 @@ import {
   readSessionModelUsage,
   readSessionRuntimeConfig,
   parseSessionInputItems,
-  parseGoalAssessment,
   type SessionInputRecord,
 } from "@vykor/protocol";
 
@@ -216,17 +215,6 @@ export class DaemonAgentEventProjector {
         }
         if (event.data.name === "request.configuration") {
           this.projectRequestConfiguration(event);
-        }
-        if (event.data.name === "goal.assessment" && event.context.runId) {
-          const run = this.context.store.runs.getRun(event.context.runId);
-          const goal = typeof run?.metadata.goalId === "string" ? this.context.store.goals.getGoal(run.metadata.goalId) : undefined;
-          const payload = event.data.payload;
-          if (run && goal?.status === "active" && goal.sessionId === run.sessionId && goal.currentRunId === run.id && goal.objectiveVersion === run.metadata.goalObjectiveVersion && run.sessionId === event.context.sessionId && typeof run.metadata.goalId === "string" && typeof run.metadata.goalObjectiveVersion === "number" && run.status === "running" && !run.metadata.goalSettled && payload?.goalId === run.metadata.goalId && payload?.objectiveVersion === run.metadata.goalObjectiveVersion && payload?.runId === run.id) {
-            try {
-              const assessment = parseGoalAssessment(payload, { goalId: run.metadata.goalId, objectiveVersion: run.metadata.goalObjectiveVersion, runId: run.id, phase: goal.phase });
-              this.context.store.runs.updateRun(run.id, { metadata: { goalAssessment: assessment } });
-            } catch { /* Invalid or unbound suggestions cannot change the durable goal. */ }
-          }
         }
         let beforeAppend: (() => void) | undefined;
         if (event.data.name === "context_compaction") {
@@ -553,8 +541,6 @@ export class DaemonAgentEventProjector {
         throw new Error("Child Goal is stopped or objective version changed");
       metadata.goalId = goal.id;
       metadata.goalObjectiveVersion = goal.objectiveVersion;
-      if (goal.phase === "preparing") throw new AgentExecutionLimitError("准备阶段不开放子任务");
-      metadata.goalPhase = goal.phase;
     }
     return metadata;
   }

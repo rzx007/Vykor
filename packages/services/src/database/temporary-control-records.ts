@@ -1,6 +1,5 @@
 import type {
   projectionSettlements,
-  sessionGoalAssessments,
   sessionGoalContinuations,
   sessionGoalRequests,
   sessionGoalModelAttempts,
@@ -14,7 +13,6 @@ export interface TemporaryControlSnapshot {
   versions: Map<string, typeof sessionGoalVersions.$inferSelect>;
   goalModelAttempts: Map<string, typeof sessionGoalModelAttempts.$inferSelect>;
   requests: Map<string, typeof sessionGoalRequests.$inferSelect>;
-  assessments: Map<string, typeof sessionGoalAssessments.$inferSelect>;
   continuations: Map<string, typeof sessionGoalContinuations.$inferSelect>;
   settlements: Map<string, typeof projectionSettlements.$inferSelect>;
 }
@@ -25,7 +23,6 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
   readonly versions: TemporaryControlSnapshot["versions"] = new Map();
   readonly goalModelAttempts: TemporaryControlSnapshot["goalModelAttempts"] = new Map();
   readonly requests: TemporaryControlSnapshot["requests"] = new Map();
-  readonly assessments: TemporaryControlSnapshot["assessments"] = new Map();
   readonly continuations: TemporaryControlSnapshot["continuations"] = new Map();
   readonly settlements: TemporaryControlSnapshot["settlements"] = new Map();
 
@@ -41,7 +38,6 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
       versions: this.versions,
       goalModelAttempts: this.goalModelAttempts,
       requests: this.requests,
-      assessments: this.assessments,
       continuations: this.continuations,
       settlements: this.settlements,
     });
@@ -53,7 +49,6 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
     replaceRows(this.versions, rows.versions);
     replaceRows(this.goalModelAttempts, rows.goalModelAttempts);
     replaceRows(this.requests, rows.requests);
-    replaceRows(this.assessments, rows.assessments);
     replaceRows(this.continuations, rows.continuations);
     replaceRows(this.settlements, rows.settlements);
   }
@@ -84,12 +79,6 @@ export class TemporaryControlRecords implements TemporaryControlSnapshot {
       if (row.sessionId === sessionId) {
         this.capture(this.requests, id);
         this.requests.delete(id);
-      }
-    }
-    for (const [id, row] of this.assessments) {
-      if (goalIds.has(row.goalId)) {
-        this.capture(this.assessments, id);
-        this.assessments.delete(id);
       }
     }
     for (const [id, row] of this.continuations) {

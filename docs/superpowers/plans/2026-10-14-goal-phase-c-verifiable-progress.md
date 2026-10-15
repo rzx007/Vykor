@@ -1,5 +1,7 @@
 # Goal C 阶段实施计划：准备澄清、正式条件与可核实进展
 
+> 2026-10-15：本计划仅保留为历史交付记录，不能作为后续实施指令。后续以 [Goal 收缩规格](../specs/2026-10-14-goal-reliability-and-budget-design.md)为准：强制准备、冻结条件与证据验收列入删除范围；收缩实现及验证见 [实施审查](../reviews/2026-10-15-goal-simplification-implementation-review.md)。
+
 > **面向执行者：**使用 `executing-plans`，按 C1 → C2 → C3 → C4 实施，复选框记录进度。用户要求优先：关键回归集中运行，一名子代理集中审核和必要定点复核，不逐步骤审批、重复全仓测试或强制提交。
 > 日期：2026-10-14。状态：C1–C4 已实施，集中验证与实现审核定点复核通过。计划审查见 [C 计划审查](../reviews/2026-10-14-goal-phase-c-plan-review.md)；交付见 [C 实施审查](../reviews/2026-10-14-goal-phase-c-implementation-review.md)。
 > 基线：当前 `codex/goal-phase-b` 工作区；HEAD 为 `f364f7c9`，A/B 仍有未提交实现，单独检出该提交不包含交付基线。

@@ -55,7 +55,7 @@ describe("createDefaultNodeAgent", () => {
     }
   });
 
-  it.each([false, true])("keeps a host-trusted Read through a real Run capability view (preparing=%s)", async (preparing) => {
+  it.each([false, true])("keeps a host-trusted Read through a real Run capability view (goal=%s)", async (goalRun) => {
     const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-trusted-read-"));
     tempDirs.push(cwd);
     const completed: AgentEvent[] = [];
@@ -73,24 +73,17 @@ describe("createDefaultNodeAgent", () => {
       client: { async *streamMessage() {
         if (turn++ === 0) yield { type: "tool_use_start" as const,
           toolUse: { type: "tool_use" as const, id: "read-1", name: "Read", input: { file_path: "attachment://att-1/notes.txt" } } };
-        if (preparing && turn === 2) yield { type: "tool_use_start" as const,
-          toolUse: { type: "tool_use" as const, id: "ready", name: "GoalAssessment", input: {
-            decision: "ready", progress: "conditions extracted", evidence: [],
-            progressAssessment: { kind: "progress", summary: "ready" }, preparedRequirements: [{
-              text: "read attachment", source: [{ kind: "input", inputId: "i", quote: "read attachment" }],
-              verification: { kind: "check", method: "read", environment: "local", expected: "read" }, constraints: [],
-            }],
-          } } };
-        yield { type: "complete" as const, stopReason: turn === 1 || preparing ? "tool_use" as const : "end_turn" as const };
+        yield { type: "complete" as const, stopReason: turn === 1 ? "tool_use" as const : "end_turn" as const };
       } },
       onEvent: (event) => completed.push(event),
     });
     try {
-      const resultRun = await agent.runMessage("read attachment", preparing ? { goal: {
-        goalId: "g", objectiveVersion: 1, phase: "preparing", readSnapshot: async () => ({
-          goalId: "g", objectiveVersion: 1, phase: "preparing", objective: "read attachment",
-          sourceInputIds: ["i"], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false,
+      const resultRun = await agent.runMessage("read attachment", goalRun ? { goal: {
+        goalId: "g", objectiveVersion: 1, readSnapshot: async () => ({
+          goalId: "g", objectiveVersion: 1, status: "active", objective: "read attachment",
+          autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false,
         }),
+        submitUpdate: async () => ({ recorded: true }),
       } } : {});
       expect(resultRun.status).toBe("completed");
       const result = completed.find((event) => event.type === "tool.completed")?.data.result;

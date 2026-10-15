@@ -115,6 +115,22 @@ function createMockControlOptions() {
 }
 
 describe("RunControlService", () => {
+  it.each(["session", "run"] as const)("still interrupts the %s when saving the Goal pause fails", (scope) => {
+    const { options, runs, activeRuns } = createMockControlOptions();
+    activeRuns.set("s1", "r1");
+    runs.set("r1", { id: "r1", sessionId: "s1", status: "running", createdAt: 1, updatedAt: 1,
+      metadata: { goalId: "g", goalObjectiveVersion: 1 } });
+    options.goals = {
+      getGoal: () => ({ id: "g", sessionId: "s1", objectiveVersion: 1, revision: 1, status: "active" } as any),
+      updateGoal: () => { throw new Error("pause storage unavailable"); },
+    };
+    const service = new RunControlService(options);
+    expect(() => scope === "session" ? service.interruptSession("s1") : service.interruptRun("s1", "r1"))
+      .toThrow("目标暂停未保存");
+    expect(scope === "session" ? options.runtime.interruptSession : options.runtime.interruptRun).toHaveBeenCalled();
+    expect(activeRuns.has("s1")).toBe(false);
+  });
+
   it("stops precise descendant Runs after the root finished, and refuses incomplete cleanup", async () => {
     const { options, runs } = createMockControlOptions();
     options.goals = { getGoal: () => ({ id: "g", sessionId: "s1", objectiveVersion: 1 } as any) };

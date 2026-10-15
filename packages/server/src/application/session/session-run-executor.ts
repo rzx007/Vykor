@@ -49,7 +49,7 @@ export interface SessionRunExecutorContext {
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
   checkGoalRunExecution?(goalId: string, objectiveVersion: number, runId: string, boundary: string, tool?: {toolName: string; toolAttemptId: string}): void;
   readGoalSnapshot?(goalId: string, objectiveVersion: number, runId: string): Promise<GoalReadSnapshot>;
-  reviewGoalAssessment?(goalId: string, objectiveVersion: number, runId: string, input: Record<string, unknown>): ReturnType<NonNullable<GoalRunBinding["reviewAssessment"]>>;
+  submitGoalUpdate?(goalId: string, objectiveVersion: number, runId: string, input: Record<string, unknown>): Promise<{ recorded: true }>;
   agentPool: Pick<
     AgentPool,
     "configured" | "acquireSession" | "close" | "closeIfStale"
@@ -248,9 +248,8 @@ export class SessionRunExecutor {
         if (!goal || goal.sessionId !== sessionId || goal.objectiveVersion !== goalObjectiveVersion || goal.status !== "active" || goal.currentRunId !== runId) {
           throw new Error("session_goal_run_is_stale");
         }
-        if (storedRun?.metadata.goalPhase !== goal.phase) throw new Error("session_goal_phase_is_stale");
-        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion, objective: goal.objective, phase: goal.phase,
-          reviewAssessment: (input) => this.context.reviewGoalAssessment ? this.context.reviewGoalAssessment(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal evidence reviewer is unavailable")),
+        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion,
+          submitUpdate: (input) => this.context.submitGoalUpdate ? this.context.submitGoalUpdate(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal update handler is unavailable")),
           readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
       }
       const limits: AgentExecutionLimits | undefined = goalBinding && this.context.checkGoalExecution
@@ -260,19 +259,17 @@ export class SessionRunExecutor {
       await limits?.check("run");
 
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
-      const preparing = goalBinding?.phase === "preparing";
-      if (!preparing) await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
+      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
-      const uiSummary = !preparing ? this.context.pluginUi?.summarizeForInput?.(sessionId, runId) : undefined;
+      const uiSummary = this.context.pluginUi?.summarizeForInput?.(sessionId, runId);
       if (uiSummary) submittedContent = typeof submittedContent === "string"
         ? `${submittedContent}\n\n${uiSummary}` : [...submittedContent, { type: "text", text: uiSummary }];
       const run = agent.submitMessage(submittedContent, {
         ...(capabilityView ? { capabilityView } : {}),
         ...(goalBinding ? { goal: goalBinding } : {}),
         ...(limits ? { limits } : {}),
-        ...(preparing ? { profile: { executableHooks: false } } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,
         delivery: admitted.delivery,
@@ -360,7 +357,7 @@ export class SessionRunExecutor {
 
       // Auto review runs before memory/personalization maintenance and never overrides
       // the parent Run's completed status on review failure.
-      if (!preparing) await reviewAutoReview(this.context, {
+      await reviewAutoReview(this.context, {
         sessionId,
         inputId,
         runId,
@@ -371,7 +368,7 @@ export class SessionRunExecutor {
       });
 
       // 只在成功走完之后做记忆/个性化/auto-dream。失败路径不跑，避免半截对话被写进长期记忆。
-      if (!preparing) await this.context.postRunMaintenance?.run(sessionId, runId, agent, limits);
+      await this.context.postRunMaintenance?.run(sessionId, runId, agent, limits);
 
       // Run terminal (success): invalidate then rewrite live usage from the same agent
       // before closeIfStale may drop the warm runtime.
