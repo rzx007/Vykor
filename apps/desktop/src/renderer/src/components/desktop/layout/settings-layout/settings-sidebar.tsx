@@ -133,7 +133,7 @@ function SettingsNavigationGroup({
               aria-current={selectedSection === itemLabel ? "page" : undefined}
               onClick={() => onSelect(itemLabel)}
               className={cn(
-                "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 selectedSection === itemLabel
                   ? "bg-sidebar-selected font-medium text-sidebar-foreground"
                   : "text-sidebar-foreground/82"

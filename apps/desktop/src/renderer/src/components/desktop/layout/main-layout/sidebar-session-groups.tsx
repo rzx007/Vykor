@@ -97,7 +97,7 @@ export function SessionRow({
         type="button"
         onClick={() => actions.onOpen(session)}
         className={cn(
-          "text-ui-small relative h-7.5 min-w-0 flex-1 truncate rounded-md pr-12 text-left leading-7.5 font-normal transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          "relative h-7.5 min-w-0 flex-1 truncate rounded-md pr-12 text-left text-sm leading-7.5 font-normal transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           nested ? "pl-8" : "pl-2.5",
           active
             ? "bg-sidebar-selected text-sidebar-foreground"
@@ -197,7 +197,7 @@ export function ProjectGroup({
             aria-expanded={expanded}
             onClick={onToggle}
             aria-label={project.name}
-            className="text-ui-small flex h-7.5 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 pr-8 text-left font-[450] text-sidebar-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="flex h-7.5 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 pr-8 text-left text-sm font-[450] text-sidebar-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {expanded ? (
               <FolderOpen className="size-3.75 shrink-0 text-sidebar-muted" strokeWidth={1.7} />
@@ -315,7 +315,7 @@ export function ImSessionGroup({
 
   return (
     <section>
-      <div className="text-ui-small flex h-7.5 min-w-0 items-center gap-2 px-2.5 font-[450] text-sidebar-foreground/90">
+      <div className="flex h-7.5 min-w-0 items-center gap-2 px-2.5 text-sm font-[450] text-sidebar-foreground/90">
         <Smartphone className="size-3.75 shrink-0 text-sidebar-muted" strokeWidth={1.7} />
         <span className="truncate">{group.label}</span>
       </div>

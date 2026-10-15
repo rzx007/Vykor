@@ -26,7 +26,7 @@ export function SidebarNavigationButton({
         badge ? `${label}，${badge} 个结果待查看` : running ? `${label}，正在运行` : label
       }
       className={cn(
-        "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left font-[450] text-sidebar-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-[450] text-sidebar-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         selected && "bg-sidebar-selected"
       )}
     >
@@ -69,7 +69,7 @@ export function SidebarSectionHeader({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="text-ui-small flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left text-sm font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span>{title}</span>
         {!expanded && running ? (
@@ -109,7 +109,7 @@ export function SidebarSectionLabel({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={cn("text-ui-small px-2.5 pb-1.5 font-normal text-sidebar-muted/70", className)}>
+    <div className={cn("px-2.5 pb-1.5 text-sm font-normal text-sidebar-muted/70", className)}>
       {children}
     </div>
   )
