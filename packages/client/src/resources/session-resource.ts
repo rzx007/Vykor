@@ -308,14 +308,17 @@ export class SessionResource {
   /** `POST /sessions/:id/interrupt` — 中断当前/排队中的 run。 */
   async interrupt(
     sessionId: string,
-    options: { signal?: AbortSignal; expectedRunId?: string } = {},
+    options: { signal?: AbortSignal; expectedRunId?: string; source?: "user" | "system" } = {},
   ): Promise<InterruptSessionResponse> {
     return await this.transport.request<InterruptSessionResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/interrupt`,
       {
         method: "POST",
-        body: options.expectedRunId
-          ? { expectedRunId: options.expectedRunId }
+        body: options.expectedRunId || options.source
+          ? {
+              ...(options.expectedRunId ? { expectedRunId: options.expectedRunId } : {}),
+              ...(options.source ? { source: options.source } : {}),
+            }
           : undefined,
         signal: options.signal,
       },

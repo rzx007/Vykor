@@ -183,8 +183,11 @@ export function createRunExecutionRoutes(
         return errorResponse(400, "expectedRunId must be a non-empty string");
       }
       const expectedRunId = body.expectedRunId as string | undefined;
+      if (body.source !== undefined && body.source !== "user" && body.source !== "system") {
+        return errorResponse(400, "source must be user or system");
+      }
       return jsonResponse(
-        await context.application.interruptSession(sessionId, expectedRunId),
+        await context.application.interruptSession(sessionId, expectedRunId, body.source ?? "user"),
       );
     });
 }

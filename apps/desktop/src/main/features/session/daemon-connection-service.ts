@@ -70,7 +70,8 @@ export class DaemonConnectionService {
     this.stopNonDesktopDaemon = options.stopNonDesktopDaemon ?? stopNonDesktopDaemon
     this.reconcileDesktopService = options.reconcileDesktopService ?? reconcileDesktopManagedService
     this.browserHost = options.browserHost
-    this.dataLocationPath = () => options.dataLocationPath ?? join(app.getPath("userData"), "runtime-data-location.json")
+    this.dataLocationPath = () =>
+      options.dataLocationPath ?? join(app.getPath("userData"), "runtime-data-location.json")
   }
 
   getDaemonStatus(): DesktopDaemonStatus {
@@ -108,16 +109,25 @@ export class DaemonConnectionService {
       const client = await this.getOrConnectClient()
       if (!this.embeddedServer) {
         const registry = readDaemonRegistry()
-        if (!registry || !isDesktopManagedRegistry(registry) || !isLoopbackDaemonUrl(registry.url)) throw new Error("当前后台不是本机桌面托管服务，不能安全重启。")
+        if (!registry || !isDesktopManagedRegistry(registry) || !isLoopbackDaemonUrl(registry.url))
+          throw new Error("当前后台不是本机桌面托管服务，不能安全重启。")
         const capabilities = await client.protocol.capabilities()
-        if ((capabilities.features.safeRestart ?? 0) < 1) throw new Error("当前常驻后台版本未提供安全重启接口，请先对齐后台版本。")
+        if ((capabilities.features.safeRestart ?? 0) < 1)
+          throw new Error("当前常驻后台版本未提供安全重启接口，请先对齐后台版本。")
         if (options.stopActive) await this.stopActiveWork(client)
         const prepared = await client.system.prepareRestart({ signal: AbortSignal.timeout(60_000) })
         if (prepared.prepared !== true) throw new Error("后台未确认安全收尾，未停止系统常驻服务。")
         const latest = readDaemonRegistry()
-        if (!latest || latest.pid !== registry.pid || latest.url !== registry.url || latest.token !== registry.token) throw new Error("常驻后台连接在准备期间发生变化，请重新连接后重试。")
+        if (
+          !latest ||
+          latest.pid !== registry.pid ||
+          latest.url !== registry.url ||
+          latest.token !== registry.token
+        )
+          throw new Error("常驻后台连接在准备期间发生变化，请重新连接后重试。")
         await this.reconcileDesktopService(registry)
-        this.invalidateClient(); this.clientPromise = null
+        this.invalidateClient()
+        this.clientPromise = null
         return await this.getOrConnectClient()
       }
       const lease = await this.prepareShutdown(client, options.stopActive === true)
@@ -127,10 +137,15 @@ export class DaemonConnectionService {
       lease.release()
       await closing
       return await this.getOrConnectClient()
-    } finally { this.restarting = false }
+    } finally {
+      this.restarting = false
+    }
   }
 
-  async switchDataDirectory(directory: string, options: { stopActive?: boolean; storePath?: string } = {}): Promise<VykorClient> {
+  async switchDataDirectory(
+    directory: string,
+    options: { stopActive?: boolean; storePath?: string } = {}
+  ): Promise<VykorClient> {
     if (this.restarting) throw new Error("后台服务正在重启或切换数据，请稍候。")
     this.restarting = true
     try {
@@ -138,9 +153,11 @@ export class DaemonConnectionService {
       const target = resolve(directory)
       const storePath = resolve(options.storePath ?? join(target, "session-runtime", "sessions.db"))
       const offset = relative(target, storePath)
-      if (offset.startsWith("..") || isAbsolute(offset)) throw new Error("数据库必须位于所选数据目录内。")
+      if (offset.startsWith("..") || isAbsolute(offset))
+        throw new Error("数据库必须位于所选数据目录内。")
       if (!existsSync(storePath)) throw new Error("请先恢复并校验目标数据库，再切换数据目录。")
-      if (!this.embeddedServer) throw new Error("切换数据需要使用应用内置后台服务。请先关闭系统常驻服务并重新打开应用。")
+      if (!this.embeddedServer)
+        throw new Error("切换数据需要使用应用内置后台服务。请先关闭系统常驻服务并重新打开应用。")
       const previous = this.dataLocation
       const previousEnv = process.env.VYKOR_DATA_DIR
       const previousStore = this.embeddedServer.store.path
@@ -157,38 +174,60 @@ export class DaemonConnectionService {
         return next
       } catch (error) {
         await this.dispose()
-        this.dataLocation = previous ?? (previousEnv ? { directory: previousEnv, storePath: previousStore } : null)
-        if (previousEnv === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previousEnv
+        this.dataLocation =
+          previous ?? (previousEnv ? { directory: previousEnv, storePath: previousStore } : null)
+        if (previousEnv === undefined) delete process.env.VYKOR_DATA_DIR
+        else process.env.VYKOR_DATA_DIR = previousEnv
         await this.getOrConnectClient()
         throw new Error(`数据切换失败，已恢复原数据位置：${errorMessage(error)}`)
       }
-    } finally { this.restarting = false }
+    } finally {
+      this.restarting = false
+    }
   }
 
   private async prepareShutdown(client: VykorClient, stopActive: boolean) {
     const server = this.embeddedServer
-    if (!server) throw new Error("系统常驻后台暂未提供原子安全重启接口。请先关闭系统常驻服务并重新打开应用，再使用内置后台重启。")
+    if (!server)
+      throw new Error(
+        "系统常驻后台暂未提供原子安全重启接口。请先关闭系统常驻服务并重新打开应用，再使用内置后台重启。"
+      )
     if (stopActive) await this.stopActiveWork(client)
     const lease = server.application.control.acquireGlobalMutation()
     if (!lease) throw new Error("仍有任务运行或尚未安全收尾，请等待结束后重试。")
     try {
       const preview = await client.system.getRestartPreview()
       const terminals = await client.terminals.list()
-      if (!Array.isArray(preview.runs) || !Array.isArray(preview.tasks) || !Array.isArray(preview.terminals)) throw new Error("后台未提供有效活动清单，无法安全重启。")
-      if (preview.runs.length || preview.tasks.length || preview.terminals.length || terminals.some(terminal => ["pending", "running", "stopping"].includes(terminal.status))) {
+      if (
+        !Array.isArray(preview.runs) ||
+        !Array.isArray(preview.tasks) ||
+        !Array.isArray(preview.terminals)
+      )
+        throw new Error("后台未提供有效活动清单，无法安全重启。")
+      if (
+        preview.runs.length ||
+        preview.tasks.length ||
+        preview.terminals.length ||
+        terminals.some((terminal) => ["pending", "running", "stopping"].includes(terminal.status))
+      ) {
         throw new Error("仍有运行或排队的任务、后台任务或终端，请等待它们安全收尾后重试。")
       }
       if (this.embeddedServer !== server) throw new Error("后台连接已变化，请重新读取后重试。")
       return lease
-    } catch (error) { lease.release(); throw error }
+    } catch (error) {
+      lease.release()
+      throw error
+    }
   }
 
   private async stopActiveWork(client: VykorClient) {
     const preview = await client.system.getRestartPreview()
-    const sessions = new Set([...preview.runs, ...preview.tasks].map(item => item.sessionId))
-    for (const sessionId of sessions) await client.sessions.interrupt(sessionId)
+    const sessions = new Set([...preview.runs, ...preview.tasks].map((item) => item.sessionId))
+    for (const sessionId of sessions)
+      await client.sessions.interrupt(sessionId, { source: "system" })
     for (const terminal of await client.terminals.list()) {
-      if (["pending", "running", "stopping"].includes(terminal.status)) await client.terminals.close(terminal.id)
+      if (["pending", "running", "stopping"].includes(terminal.status))
+        await client.terminals.close(terminal.id)
     }
   }
 
@@ -221,7 +260,9 @@ export class DaemonConnectionService {
 
   onInvalidated(listener: () => void): () => void {
     this.invalidationListeners.add(listener)
-    return () => { this.invalidationListeners.delete(listener) }
+    return () => {
+      this.invalidationListeners.delete(listener)
+    }
   }
 
   private invalidateClient(): void {
@@ -308,8 +349,16 @@ export class DaemonConnectionService {
       if (!this.dataLocation) {
         try {
           const saved = JSON.parse(readFileSync(this.dataLocationPath(), "utf8"))
-          if (saved.version === 1 && saved.location && isAbsolute(saved.location.directory) && (!saved.location.storePath || isAbsolute(saved.location.storePath))) this.dataLocation = saved.location
-        } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error }
+          if (
+            saved.version === 1 &&
+            saved.location &&
+            isAbsolute(saved.location.directory) &&
+            (!saved.location.storePath || isAbsolute(saved.location.storePath))
+          )
+            this.dataLocation = saved.location
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+        }
       }
       if (this.dataLocation) process.env.VYKOR_DATA_DIR = this.dataLocation.directory
       const { server, listen } = await startVykorDaemon({

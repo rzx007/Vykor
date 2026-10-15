@@ -35,10 +35,14 @@ function createService(options: {
     archiveSession: vi.fn(() => ({ ...session, status: "archived" })),
     deleteSessionTree: vi.fn((id) => [id]),
     getRun: vi.fn((id) => id === options.run?.id ? options.run : undefined),
+    updateRun: vi.fn((id, patch) => {
+      if (id === options.run?.id) Object.assign(options.run, patch);
+      return options.run;
+    }),
     getInput: vi.fn(() => options.input),
     listInputs: vi.fn(() => options.inputs ?? []),
     listRunsByInput: vi.fn(() => []),
-    listMessages: vi.fn(() => []),
+    listMessages: vi.fn((): Array<{ runId?: string }> => []),
     listMessageParts: vi.fn(() => []),
     findRunByInput: vi.fn(() => options.owningRun),
     forkSessionWithHistory: vi.fn((input) => ({ ...session, ...input.session })),
@@ -57,6 +61,7 @@ function createService(options: {
       queue_state: "running",
     })),
     interruptSession: vi.fn(() => ({ interrupted: false, queuedRunIds: [] })),
+    interruptRun: vi.fn((_sessionId: string, _runId: string) => ({ interrupted: false, queuedRunIds: [] as string[] })),
     waitForRuns: vi.fn(async () => {}),
     hasWork: vi.fn(() => options.hasWork ?? false),
     hasAnyActiveRuns: vi.fn(() => false),
@@ -109,6 +114,61 @@ function createService(options: {
 }
 
 describe("SessionInteractionService", () => {
+  it("records an explicit system stop without labelling it as a user stop", async () => {
+    const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
+    const { service, runEngine } = createService({ run });
+    const result = { interrupted: true, activeRunId: run.id, queuedRunIds: [] };
+    runEngine.interruptRun.mockReturnValue(result);
+    await service.interruptSession("s1", run.id, "system");
+    expect(run.metadata).toMatchObject({ interruption: { source: "system", runId: run.id } });
+  });
+  it.each([true, false])("records the user source only after an accepted stop (scoped: %s)", async scoped => {
+    const run = { id: "r1", sessionId: "s1", status: "running", startedAt: 1, metadata: { keep: true } };
+    const { service, store, runEngine } = createService({ run });
+    const result = { interrupted: true, activeRunId: run.id, queuedRunIds: [] };
+    runEngine.interruptRun.mockReturnValue(result);
+    runEngine.interruptSession.mockReturnValue(result);
+    await service.interruptSession("s1", scoped ? run.id : undefined);
+    expect(run.metadata).toMatchObject({ keep: true, interruption: {
+      source: "user", runId: "r1", requestedAt: expect.any(Number), wasPending: false,
+    } });
+    expect(store.updateRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark a rejected stop or an already completed run", async () => {
+    const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
+    const { service, store, runEngine } = createService({ run });
+    await service.interruptSession("s1", run.id);
+    expect(store.updateRun).not.toHaveBeenCalled();
+    run.status = "completed";
+    const result = { interrupted: true, activeRunId: run.id, queuedRunIds: [] };
+    runEngine.interruptRun.mockReturnValue(result);
+    await service.interruptSession("s1", run.id);
+    expect(store.updateRun).not.toHaveBeenCalled();
+  });
+
+  it("also records a user stop delivered through a live child handle", async () => {
+    const run = { id: "child-run", sessionId: "s1", status: "running", startedAt: 1, metadata: {} };
+    const { service, store, liveChildren } = createService({ run, live: true });
+    store.listMessages.mockReturnValue([{ runId: run.id }]);
+    liveChildren.interrupt.mockImplementation(async () => { run.status = "interrupted"; return true; });
+    await service.interruptSession("s1");
+    expect(run.metadata).toMatchObject({ interruption: { source: "user", runId: run.id } });
+  });
+
+  it("marks a cancelled queued target without attributing the active run to the user", async () => {
+    const run = { id: "queued", sessionId: "s1", status: "interrupted", metadata: {} };
+    const { service, store, runEngine } = createService({ run });
+    const result = { interrupted: true, activeRunId: "unrelated", queuedRunIds: [run.id] };
+    runEngine.interruptRun.mockReturnValue(result);
+    await service.interruptSession("s1", run.id);
+    expect(store.updateRun).toHaveBeenCalledTimes(1);
+    expect(run.metadata).toMatchObject({ interruption: { source: "user", wasPending: true } });
+    const recorded = JSON.stringify(run.metadata);
+    await service.interruptSession("s1", run.id);
+    expect(JSON.stringify(run.metadata)).toBe(recorded);
+  });
+
   it.each(["metadata", "runMetadata"])("rejects reserved host names in %s before live-child delivery", async namespace => {
     for (const name of ["pluginUi", "uiAction"]) {
       const { service, liveChildren, runEngine, store } = createService({ live: true });

@@ -43,6 +43,19 @@ function event(seq: number, type = "daemon.test"): SessionEventRecord {
   };
 }
 
+it("sends the system interruption source for host-initiated stops", async () => {
+  let body: unknown;
+  const client = businessClient({
+    baseUrl: "http://daemon.test",
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      return jsonResponse({ interrupted: true, queuedRunIds: [] });
+    },
+  });
+  await client.sessions.interrupt("s", { expectedRunId: "r", source: "system" });
+  expect(body).toEqual({ expectedRunId: "r", source: "system" });
+});
+
 describe("VykorClient", () => {
   it("uses typed plugin archive endpoints and preserves structured failures", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];

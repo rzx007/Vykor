@@ -431,24 +431,70 @@ export class SessionInteractionService {
   async interruptSession(
     sessionId: string,
     expectedRunId?: string,
+    source: "user" | "system" = "user",
   ): Promise<{ activeRunId?: string; queuedRunIds: string[]; interrupted: boolean }> {
     return this.context.operationRunner.run(sessionId, async () => {
       if (expectedRunId) {
-        return this.context.control.interruptRun(sessionId, expectedRunId);
+        const requestedAt = Date.now();
+        const result = this.context.control.interruptRun(sessionId, expectedRunId);
+        this.recordInterruption(sessionId, result, requestedAt, source, expectedRunId);
+        return result;
       }
+      const requestedAt = Date.now();
       const lane = this.context.control.interruptSession(sessionId);
+      this.recordInterruption(sessionId, lane, requestedAt, source);
       const targets = [sessionId, ...this.descendantSessionIds(sessionId)];
       const childInterrupted = (
         await Promise.all(
-          targets.map((target) =>
-            this.context.liveChildren.interrupt(target, "Session interrupted"),
-          ),
+          targets.map(async (target) => {
+            // 子会话的运行可能由 live handle 管理；在停止前保存实际活动的运行 ID。
+            const ids = this.context.liveChildren.has(target)
+              ? [...new Set(this.context.conversations.listMessages(target).map(message => message.runId))]
+                  .filter((id): id is string => Boolean(id))
+                  .filter(id => {
+                    const run = this.context.runs.getRun(id);
+                    return run?.status === "pending" || run?.status === "running";
+                  })
+              : [];
+            const interrupted = await this.context.liveChildren.interrupt(target, "Session interrupted");
+            if (interrupted) for (const id of ids) {
+              this.recordInterruption(target, { interrupted: true, activeRunId: id, queuedRunIds: [] }, requestedAt, source);
+            }
+            return interrupted;
+          }),
         )
       ).some(Boolean);
       return childInterrupted && !lane.interrupted
         ? { ...lane, interrupted: true }
         : lane;
     });
+  }
+
+  private recordInterruption(
+    sessionId: string,
+    result: { interrupted: boolean; activeRunId?: string; queuedRunIds: string[] },
+    requestedAt: number,
+    source: "user" | "system",
+    targetRunId?: string,
+  ): void {
+    if (!result.interrupted) return;
+    const ids = new Set([targetRunId ?? result.activeRunId, ...result.queuedRunIds]);
+    for (const id of ids) {
+      if (!id) continue;
+      const run = this.context.runs.getRun(id);
+      if (!run || run.sessionId !== sessionId || run.status === "completed" || run.status === "failed") continue;
+      const previous = run.metadata.interruption;
+      if (isRecord(previous) && previous.runId === id) continue;
+      this.context.runs.updateRun(id, {
+        metadata: {
+          ...run.metadata,
+          interruption: {
+            source, runId: id, requestedAt,
+            wasPending: !Number.isFinite(run.startedAt) && (result.queuedRunIds.includes(id) || run.status === "pending"),
+          },
+        },
+      });
+    }
   }
 
   async promoteQueuedPrompt(
