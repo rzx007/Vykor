@@ -4,7 +4,6 @@ import { Composer } from "../conversation-page/composer/composer"
 import { toComposerSkills } from "../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../conversation-page/composer/plugin-mentions-feature"
-import { PluginPreparationStatus } from "../conversation-page/composer/plugin-preparation-status"
 import { PermissionCard } from "../conversation-page/message/message-block"
 import { AskUserCard } from "../conversation-page/message/ask-user-card"
 import { isAskUserPermission } from "../conversation-page/message/ask-user-payload"
@@ -746,7 +745,6 @@ export function SideChatPanel({
           </Alert>
         ) : (
           <>
-            <PluginPreparationStatus activeSessionId={targetId} view={view} />
             <Composer
               id={`side-chat-composer-${sourceId}`}
               contextContent={

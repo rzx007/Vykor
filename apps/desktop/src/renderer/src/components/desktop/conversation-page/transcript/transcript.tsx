@@ -16,6 +16,7 @@ import { ModelUsageNotice } from "../message/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { selectRunNotices } from "./run-notices"
+import { pluginPreparationLabel } from "./plugin-preparation-label"
 import { TaskDuration } from "../message/task-duration"
 import { taskTiming } from "../message/task-timing"
 import { conversationActivityLabel } from "../message/message-render-model"
@@ -49,7 +50,7 @@ export function ConversationTranscript({
   onOpenReview,
   onOpenTerminal,
   showReasoning = false,
-  tasks,
+  tasks = [],
   onOpenAgents,
 }: {
   messages: DesktopSessionMessage[]
@@ -96,7 +97,8 @@ export function ConversationTranscript({
     }
     return undefined
   }, [runs])
-  const runningLabel = modelRetry ? "等待重试" : (activityLabel ?? "进行中")
+  const preparationLabel = pluginPreparationLabel(activeRun, { messages, parts, inputs, tasks })
+  const runningLabel = modelRetry ? "等待重试" : (preparationLabel ?? activityLabel ?? "进行中")
   const turnPlansById = useMemo(() => {
     const plans = new Map<string, ReturnType<typeof planTurnBlocks>>()
     for (const entry of entries) {
