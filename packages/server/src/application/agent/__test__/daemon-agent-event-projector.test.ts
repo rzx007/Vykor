@@ -101,16 +101,27 @@ describe("DaemonAgentEventProjector", () => {
     return { store, goal, projector, started };
   }
 
+  it("reports the actual goal stop reason instead of implying the token budget was exhausted", async () => {
+    const { store, goal, projector, started } = goalProjector();
+    await projector.apply(started("C-preparation", "child", "P1"));
+    const reason = "目标整理次数达到上限，这不是 Token 预算耗尽";
+    store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "paused", reason });
+    await expect(projector.apply(event("model.attempt.started", {
+      generationId: "denied", attempt: 1, model: "m", purpose: "generation",
+    }, { runId: "C-preparation", sessionId: "child" }))).rejects.toThrow(reason);
+  });
+
   it("passes Child budget rejection through the real EventBus without calling the model or compensating projection", async () => {
     const { store, goal, projector, started } = goalProjector();
-    await projector.apply(started("C-budget", "child", "P1"));
+    const bus = new AgentEventBus((value) => projector.apply(value));
+    const initial = started("C-budget", "child", "P1");
+    await bus.emit({ type: "run.started", data: {} }, initial.context);
     store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, tokenBudget: 10 });
     const key = { runId: "C-budget", sessionId: "child", generationId: "spent", attempt: 1 };
     store.goals.beginGoalModelAttempt({ ...key, model: "m", purpose: "generation" });
     store.goals.recordGoalModelAttempt({ ...key, status: "completed", usageStatus: "complete", metering: {
       knownInputTokens: 8, knownOutputTokens: 3, completeness: "complete", inputIncludesCache: true, raw: { input: 8, output: 3 },
     } });
-    const bus = new AgentEventBus((value) => projector.apply(value));
     const context = { runId: "C-budget", sessionId: "child", childId: "child-handle", parentRunId: "P1", parentSessionId: "parent" };
     const client = { streamMessage: vi.fn(async function* () { yield { type: "complete" as const, stopReason: "end_turn" }; }) };
     let error: unknown;

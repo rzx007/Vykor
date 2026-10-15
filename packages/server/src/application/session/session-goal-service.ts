@@ -1,4 +1,4 @@
-import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type GoalRequirement, type PreparationEpisode, type GoalVersion, type SessionInputRecord, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
+import { MAX_GOAL_PREPARATION_MODEL_ATTEMPTS, DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type GoalRequirement, type PreparationEpisode, type GoalVersion, type SessionInputRecord, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
 import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
 import { AgentExecutionLimitError } from "@vykor/core";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
@@ -629,7 +629,7 @@ export class SessionGoalService {
       if (episode.readyRunId) runId = this.freezePrepared(active, episode);
       else if (retry) runId = retry.id;
       else {
-        if (episode.modelAttempts >= 2) throw new SessionApplicationError(409, "准备模型额度已用完，请补充条件或明确重新整理");
+        if (episode.modelAttempts >= MAX_GOAL_PREPARATION_MODEL_ATTEMPTS) throw new SessionApplicationError(409, "准备模型额度已用完，请补充条件或明确重新整理");
         const admitted = this.admission.persistGoalRun(goal.sessionId, this.runInput(active, input.requestId, "preparation", {
           items: [{ type: "text", text: `继续原准备批次，整理目标条件：${goal.objective}` }], transcriptVisibility: "hidden" }));
         runId = admitted.run.id;

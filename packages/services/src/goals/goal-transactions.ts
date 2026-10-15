@@ -1,3 +1,4 @@
+import { MAX_GOAL_PREPARATION_MODEL_ATTEMPTS } from "@vykor/protocol";
 import type {
   AppendEventInput,
   SessionEventRecord,
@@ -179,7 +180,7 @@ export class GoalTransactions implements GoalOperations {
         || goal.objectiveVersion !== input.objectiveVersion || goal.phase !== "preparing"
         || input.inputIds.length > 64 || input.inputIds.some(id => !id.trim() || id.length > 256)
         || new Set(input.inputIds).size !== input.inputIds.length
-        || !Number.isSafeInteger(input.modelAttempts) || input.modelAttempts < 0 || input.modelAttempts > 2
+        || !Number.isSafeInteger(input.modelAttempts) || input.modelAttempts < 0 || input.modelAttempts > MAX_GOAL_PREPARATION_MODEL_ATTEMPTS
         || !Number.isSafeInteger(input.readToolCalls) || input.readToolCalls < 0 || input.readToolCalls > 4
         || !["accepted", "running", "waiting_user", "ready", "stopped"].includes(input.state)
         || (input.state === "ready" && (!input.readyRunId || input.readyRunId !== input.runId))
@@ -291,9 +292,9 @@ export class GoalTransactions implements GoalOperations {
       if (goal.phase === "preparing") {
         if (typeof run.metadata.goalEpisodeId !== "string") throw new Error("goal_preparation_run_invalid");
         const { episode } = this.currentPreparation(run.metadata.goalEpisodeId, run.id);
-        if (episode.modelAttempts >= 2) {
+        if (episode.modelAttempts >= MAX_GOAL_PREPARATION_MODEL_ATTEMPTS) {
           const paused = this.options.repository.updateGoalRevision(goalId, { expectedRevision: goal.revision, status: "paused", currentRunId: null,
-            reason: "本次目标整理已用完两次模型尝试，请补充条件或重新整理", stopReason: { code: "preparation_limit", at: Date.now(), runId: run.id } });
+            reason: `本次目标整理已达到 ${MAX_GOAL_PREPARATION_MODEL_ATTEMPTS} 次模型调用上限，尚未提交完整条件；请重新整理目标。这不是 Token 预算或续跑轮数耗尽。`, stopReason: { code: "preparation_limit", at: Date.now(), runId: run.id } });
           this.options.repository.cancelPendingContinuations([goalId]);
           this.emit("session.goal.updated", paused);
           return { allowed: false, changed: false, goalId, usage: goal.usage };

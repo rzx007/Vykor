@@ -236,6 +236,8 @@ export interface GoalAssessment {
 /** Zero means no automatic-turn limit. */
 export const DEFAULT_GOAL_AUTO_TURNS = 0;
 export const MAX_GOAL_AUTO_TURNS = 1_000;
+/** Four sequential read rounds plus one call to submit the prepared conditions. */
+export const MAX_GOAL_PREPARATION_MODEL_ATTEMPTS = 5;
 export const MAX_GOAL_OBJECTIVE_CHARS = 32_000;
 
 export function parseCreateSessionGoalInput(value: unknown): CreateSessionGoalInput {

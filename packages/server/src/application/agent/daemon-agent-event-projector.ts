@@ -128,7 +128,10 @@ export class DaemonAgentEventProjector {
         model: event.data.model, provider: event.data.provider, purpose: event.data.purpose });
       this.context.events.publishSince(before);
       if (result.budgetClosed && result.goalId) this.context.requestBudgetStop?.(result.goalId);
-      if (!result.allowed) throw new AgentExecutionLimitError("目标预算或执行条件已关闭");
+      if (!result.allowed) {
+        const goal = result.goalId ? this.context.store.goals.getGoal(result.goalId) : undefined;
+        throw new AgentExecutionLimitError(goal?.reason ?? "目标执行条件已变化，请查看目标状态");
+      }
     } else {
       if (!this.context.store.goals.recordGoalModelAttempt) return;
       const result = this.context.store.goals.recordGoalModelAttempt({ ...identity,

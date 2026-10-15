@@ -352,18 +352,23 @@ describe("SessionGoalService durable lifecycle", () => {
     const first = h.store.goals.getGoal(created.id)!;
     await h.service.action("s1", created.id, { requestId: "same-episode", expectedRevision: first.revision, action: "resume" });
     await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));
+    for (let attempt = 3; attempt <= 5; attempt++) {
+      const paused = h.store.goals.getGoal(created.id)!;
+      await h.service.action("s1", created.id, { requestId: `same-episode-${attempt}`, expectedRevision: paused.revision, action: "resume" });
+      await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));
+    }
     const second = h.store.goals.getGoal(created.id)!;
     expect(second.preparationEpisodeId).toBe("prepare-first");
-    expect(h.store.goals.getPreparationEpisode("prepare-first")?.modelAttempts).toBe(2);
+    expect(h.store.goals.getPreparationEpisode("prepare-first")?.modelAttempts).toBe(5);
     await expect(h.service.action("s1", created.id, { requestId: "exhausted-episode", expectedRevision: second.revision, action: "resume" })).rejects.toMatchObject({ status: 409 });
     const reprepare = { requestId: "new-episode", expectedRevision: second.revision, action: "resume" as const, reprepare: true };
     const accepted = await h.service.action("s1", created.id, reprepare);
     await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));
     expect(await h.service.action("s1", created.id, reprepare)).toEqual(accepted);
-    expect(h.store.goals.getGoal(created.id)).toMatchObject({ preparationEpisodeId: "new-episode", objectiveVersion: 1, usage: { knownTokens: 3 } });
+    expect(h.store.goals.getGoal(created.id)).toMatchObject({ preparationEpisodeId: "new-episode", objectiveVersion: 1, usage: { knownTokens: 6 } });
     expect(h.store.goals.getPreparationEpisode("new-episode")?.modelAttempts).toBe(1);
     expect(h.store.goals.listGoalVersions(created.id)).toHaveLength(1);
-    expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(3);
+    expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(6);
   });
 
   it("records refine and pivot reasons once and leaves unchanged refine and frozen history intact", async () => {
