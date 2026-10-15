@@ -575,7 +575,6 @@ export class DaemonApplication implements DurableAgentApplication {
                   createPluginInstallTool(
                     createDefaultPluginService({ current: pluginSettings }),
                     () => this.agentPool.invalidateWarmAgents(),
-                    work => this.pluginUi.withPluginUiLifecycleMutation({ kind: "global" }, work),
                   ),
                 ]
               : []),

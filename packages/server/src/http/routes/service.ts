@@ -29,6 +29,7 @@ export interface ServiceRoutesContext {
   control: Pick<
     DaemonControlService,
     | "closeAllRuntimes"
+    | "invalidateRuntimes"
     | "closeRuntimesForCwd"
     | "acquireCwdMutation"
     | "acquireGlobalMutation"
@@ -42,22 +43,16 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
   return new Hono()
     .use("*", async (c, next) => {
       const path = c.req.path;
-      const mutation = c.req.method === "POST" && /^\/plugins\/(install-local|link-local|archive\/install|git\/install|reload|[^/]+\/(enable|disable))$/.test(path)
+      // Installation publishes a new snapshot for future runs; only destructive
+      // maintenance may interrupt current plugin UI actions.
+      const mutation = c.req.method === "POST" && /^\/plugins\/(reload|[^/]+\/(enable|disable))$/.test(path)
         || c.req.method === "DELETE" && /^\/plugins\/[^/]+$/.test(path);
       if (!mutation || !context.pluginUi || !context.pluginService) return next();
-      if (path.endsWith("/install-local") || path.endsWith("/link-local")) {
-        if (!context.pluginService.installLocal) return next();
-      }
-      if (path === "/plugins/archive/install" && !context.pluginService.installArchive
-        || path === "/plugins/git/install" && !context.pluginService.installGit
-        || c.req.method === "DELETE" && !context.pluginService.uninstall) return next();
+      if (c.req.method === "DELETE" && !context.pluginService.uninstall) return next();
       let body: Record<string, unknown>;
       try { body = await readJson(c); } catch { return next(); }
       const cwd = typeof body.cwd === "string" ? body.cwd : path === "/plugins/reload" ? c.req.query("cwd") : undefined;
       if (!cwd) return next();
-      if (/\/(install-local|link-local)$/.test(path) && (!body.sourcePath || body.scope !== "user")) return next();
-      if (path === "/plugins/archive/install" && (!body.archivePath || !body.expectedArchiveDigest || !Array.isArray(body.approvedPermissions))) return next();
-      if (path === "/plugins/git/install" && (!body.url || !body.expectedSourceDigest || !Array.isArray(body.approvedPermissions))) return next();
       let scope: PluginUiLifecycleScope = { kind: "global" };
       if (path === "/plugins/reload") {
         scope = { kind: "cwd", cwd };
@@ -284,16 +279,11 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
       if (!cwd || !archivePath || !expectedArchiveDigest || !approvedPermissions) {
         return pluginArchiveErrorResponse(400, "plugin_archive_invalid_request", "cwd, archivePath, expectedArchiveDigest and approvedPermissions are required");
       }
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease) return pluginArchiveErrorResponse(409, "plugin_archive_mutation_blocked", "Cannot install plugins while session runs are active");
       try {
         const result = await context.pluginService.installArchive({ cwd, archivePath, expectedArchiveDigest, approvedPermissions });
-        await context.control.closeAllRuntimes();
-        return jsonResponse(result);
+        return await pluginInstalledResponse(context, result);
       } catch (error) {
         return pluginArchiveFailureResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .post("/plugins/git/preview", async (c) => {
@@ -332,16 +322,11 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
       if (!cwd || !url || !expectedSourceDigest || !approvedPermissions) {
         return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", "cwd, url, expectedSourceDigest and approvedPermissions are required");
       }
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease) return pluginArchiveErrorResponse(409, "plugin_git_mutation_blocked", "Cannot install plugins while session runs are active");
       try {
         const result = await context.pluginService.installGit({ cwd, url, ref, expectedSourceDigest, approvedPermissions });
-        await context.control.closeAllRuntimes();
-        return jsonResponse(result);
+        return await pluginInstalledResponse(context, result);
       } catch (error) {
         return pluginArchiveFailureResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .post("/plugins/:id/enable", async (c) =>
@@ -575,12 +560,6 @@ async function installLocalPlugin(
   if (!cwd || !sourcePath || scope !== "user") {
     return errorResponse(400, "cwd, sourcePath and user scope are required");
   }
-  const lease = context.control.acquireGlobalMutation();
-  if (!lease)
-    return errorResponse(
-      409,
-      "Cannot install plugins while session runs are active",
-    );
   try {
     const result = await context.pluginService.installLocal({
       cwd,
@@ -589,14 +568,25 @@ async function installLocalPlugin(
       approvedPermissions,
       link,
     });
-    if (result.restartRuntimes) await context.control.closeAllRuntimes();
-    return jsonResponse({ message: result.message });
+    return await pluginInstalledResponse(context, result);
   } catch (error) {
     return errorResponse(
       400,
       error instanceof Error ? error.message : String(error),
     );
-  } finally {
-    lease.release();
+  }
+}
+
+async function pluginInstalledResponse(
+  context: ServiceRoutesContext,
+  result: { message: string },
+): Promise<Response> {
+  try {
+    // Busy agents keep their current snapshot; rebuild only when they become idle.
+    await context.control.invalidateRuntimes();
+    return jsonResponse({ message: `${result.message} 下一次对话生效。` });
+  } catch (error) {
+    // Installation has already committed; do not turn a refresh failure into a failed install.
+    return jsonResponse({ message: `${result.message} 运行时刷新失败，请在任务结束后使用 /reload-plugins：${error instanceof Error ? error.message : String(error)}` });
   }
 }

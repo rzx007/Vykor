@@ -284,8 +284,15 @@ export class NoteRepository {
 
   copyLegacyFilesTo(destination: string): void {
     ensureNoteDirectory(destination);
+    const indexed = this.database.all<{ name: string }>(
+      sql`SELECT name FROM sqlite_master WHERE type='table' AND name='note_file_index'`,
+    );
+    const hasIndex = indexed.length > 0;
     for (const legacy of this.database.select().from(notes).all()) {
-      if (legacy.properties?.deletedAt != null || this.entry(legacy.id))
+      if (
+        legacy.properties?.deletedAt != null ||
+        (hasIndex && this.entry(legacy.id))
+      )
         continue;
       const path = noteFilePath(destination, legacy.id);
       if (!readNoteFile(path)) replaceNoteFile(path, legacy.content);
@@ -294,6 +301,10 @@ export class NoteRepository {
 
   validateFiles(directory = this.directory): void {
     ensureNoteDirectory(directory);
+    const indexed = this.database.all<{ name: string }>(
+      sql`SELECT name FROM sqlite_master WHERE type='table' AND name='note_file_index'`,
+    );
+    if (indexed.length === 0) return;
     for (const entry of this.database.select().from(noteFileIndex).all()) {
       if (entry.deletedAt !== null) continue;
       const file = readNoteFile(noteFilePath(directory, entry.id));

@@ -1,15 +1,15 @@
 -- Discard only Goal-owned state; sessions, messages, Runs, and tool history remain intact.
-DROP TABLE `session_goal_assessment`;
+DROP TABLE IF EXISTS `session_goal_assessment`;
 --> statement-breakpoint
-DROP TABLE `session_goal_continuation`;
+DROP TABLE IF EXISTS `session_goal_continuation`;
 --> statement-breakpoint
-DROP TABLE `session_goal_model_attempt`;
+DROP TABLE IF EXISTS `session_goal_model_attempt`;
 --> statement-breakpoint
-DROP TABLE `session_goal_version`;
+DROP TABLE IF EXISTS `session_goal_version`;
 --> statement-breakpoint
-DROP TABLE `session_goal_request`;
+DROP TABLE IF EXISTS `session_goal_request`;
 --> statement-breakpoint
-DROP TABLE `session_goal`;
+DROP TABLE IF EXISTS `session_goal`;
 --> statement-breakpoint
 CREATE TABLE `session_goal` (
 	`id` text PRIMARY KEY NOT NULL,

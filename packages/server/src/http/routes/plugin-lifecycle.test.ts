@@ -34,6 +34,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
       globalCloseCount += 1;
       await fixture.closeAll();
     },
+    async invalidateRuntimes() { /* Existing fixture hosts represent ongoing work. */ },
     runtimeInspectionAvailable: false,
     sessionExists: () => false,
     async inspectRuntimeHooks() { throw new Error("Hook inspection is outside this lifecycle test"); },
@@ -91,6 +92,22 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
 }
 
 describe("plugin lifecycle routes with real installation, discovery, registry and child processes", () => {
+  it("keeps the active copied plugin host on its old snapshot while later activation loads an update", async () => {
+    await withNativePluginFixture(async fixture => {
+      const routes = lifecycleRoutes(fixture);
+      const previous = await routes.install(false);
+      const active = await fixture.activate();
+      const source = await readFile(fixture.entry, "utf8");
+      await writeFile(fixture.entry, source.replaceAll('"trailing-whitespace"', '"updated-whitespace"'));
+      const updated = await routes.install(false);
+      expect(updated.cachePath).not.toBe(previous.cachePath);
+      expect(routes.globalCloseCount).toBe(0);
+      expect((await callInspector(active)).content[0]).toMatchObject({ text: expect.stringContaining('"trailing-whitespace"') });
+      const next = await fixture.activate();
+      expect((await callInspector(next)).content[0]).toMatchObject({ text: expect.stringContaining('"updated-whitespace"') });
+      expect((await callInspector(active)).content[0]).toMatchObject({ text: expect.stringContaining('"trailing-whitespace"') });
+    });
+  });
   it("reloads linked implementation changes through the actual slash/HTTP route before reactivation", async () => {
     await withNativePluginFixture(async fixture => {
       const routes = lifecycleRoutes(fixture);

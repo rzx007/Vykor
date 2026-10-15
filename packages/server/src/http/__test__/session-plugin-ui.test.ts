@@ -218,7 +218,7 @@ it.each(["pending", "running"] as const)("interrupts accepted %s conversation Ru
   expect(h.modelCalls()).toBe(2); expect(h.store().conversations.listInputs(h.session.id)).toHaveLength(2);
 });
 
-it.each(["disable", "uninstall", "reload", "reinstall"] as const)("cancels only UI work and revokes its session before %s completes", async mutation => {
+it.each(["disable", "uninstall", "reload"] as const)("cancels only UI work and revokes its session before %s completes", async mutation => {
   const h = await harness(); const id = h.instance()!.instanceId;
   writeFileSync(join(h.root, "wait-action"), "wait");
   const before = h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration;
@@ -228,9 +228,7 @@ it.each(["disable", "uninstall", "reload", "reinstall"] as const)("cancels only 
   await vi.waitFor(() => expect(h.effects()).toBe("1"), { timeout: 10000 });
   const result = mutation === "disable" ? h.client().plugins.disable(pluginId, { cwd: h.root })
     : mutation === "uninstall" ? h.client().plugins.uninstall(pluginId, { cwd: h.root })
-    : mutation === "reload" ? h.client().plugins.reload({ cwd: h.root })
-    : h.client().plugins.installLocal({ cwd: h.root, sourcePath: join(h.root, "source"), scope: "user",
-      approvedPermissions: ["ui:render", "ui:invoke-own-tools"] });
+    : h.client().plugins.reload({ cwd: h.root });
   await expect(result).resolves.toBeDefined();
   expect(h.store().runs.getRun(receipt.runId)).toMatchObject({ status: "interrupted", metadata: { uiAction: { executionState: "unknown" } } });
   expect(h.instance()!.activeActionRunId).toBeUndefined();
@@ -238,6 +236,47 @@ it.each(["disable", "uninstall", "reload", "reinstall"] as const)("cancels only 
   expect(h.modelCalls()).toBe(2);
   expect(h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration).toEqual(expect.any(String));
   expect(h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration).not.toBe(before);
+});
+
+it("installs without cancelling an active UI action or revoking its session", async () => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  writeFileSync(join(h.root, "wait-action"), "wait");
+  const before = h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration;
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, id, {
+    requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {},
+  });
+  await vi.waitFor(() => expect(h.effects()).toBe("1"), { timeout: 10000 });
+  try {
+    await expect(h.client().plugins.installLocal({ cwd: h.root, sourcePath: join(h.root, "source"), scope: "user",
+      approvedPermissions: ["ui:render", "ui:invoke-own-tools"] })).resolves.toBeDefined();
+    expect(h.store().runs.getRun(receipt.runId)?.status).toBe("running");
+    expect(h.instance()!.activeActionRunId).toBe(receipt.runId);
+    expect(h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration).toBe(before);
+    expect(h.nativeRuntime().hostCount).toBe(1);
+    expect(h.effects()).toBe("1");
+  } finally {
+    h.server().application.runControl.interruptRun(h.session.id, receipt.runId);
+    await h.server().application.runControl.waitForRuns([receipt.runId]);
+  }
+});
+
+it("installs an update during model work and rebuilds the agent only for a later prompt", async () => {
+  const h = await harness(); const pause = h.pauseModel();
+  const manifestPath = join(h.root, "source", ".vykor-plugin", "plugin.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  writeFileSync(manifestPath, JSON.stringify({ ...manifest, version: "2.0.0" }));
+  const admitted = await h.server().application.interactions.admitPrompt(h.session.id, { items: [{ type: "text", text: "continue work" }] });
+  try {
+    await expect(h.client().plugins.installLocal({ cwd: h.root, sourcePath: join(h.root, "source"), scope: "user",
+      approvedPermissions: ["ui:render", "ui:invoke-own-tools"] })).resolves.toBeDefined();
+    expect(h.store().runs.getRun(admitted.run!.id)?.status).not.toBe("interrupted");
+    expect(h.nativeRuntime().hostCount).toBe(1);
+    expect(h.agentLoads()).toBe(1);
+  } finally { pause.resolve(); await h.server().application.runControl.waitForRuns([admitted.run!.id]); }
+  expect(h.store().runs.getRun(admitted.run!.id)?.status).toBe("completed");
+  expect((await h.inspectAgain(false)).status).toBe("completed");
+  expect(h.agentLoads()).toBe(2);
+  expect(h.nativeRuntime().hostCount).toBe(0);
 });
 
 it("cancels a real UI permission wait before disabling, with no Native side effect", async () => {

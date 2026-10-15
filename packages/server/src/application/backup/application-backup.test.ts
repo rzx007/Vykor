@@ -36,9 +36,13 @@ describe("application backup notes", () => {
           )
           .run("legacy", "legacy idea", 3, 10, 20);
         // Reproduce the real pre-file-storage schema, not a current-schema DB
-        // with an old manifest label.
+        // with an old manifest label. Delete every migration row from
+        // 0006_note_file_index onward (when=1791186378776, per meta/_journal.json)
+        // so restore re-runs 0006 and recreates the table. Deleting only the
+        // newest row would leave 0006 recorded after later migrations were
+        // added, so the table would never be recreated.
         Reflect.get(source, "storage").database.connection.exec(
-          "DROP TABLE note_file_index; DELETE FROM __drizzle_migrations WHERE created_at = (SELECT MAX(created_at) FROM __drizzle_migrations);",
+          "DROP TABLE note_file_index; DELETE FROM __drizzle_migrations WHERE created_at >= 1791186378776;",
         );
         await source.backupDatabase(join(backup, "database.sqlite"));
         writeFileSync(
