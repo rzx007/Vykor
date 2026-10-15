@@ -123,7 +123,6 @@ describe("record transaction boundaries", () => {
         store.incrementalOutput.appendMessagePartDelta({ sessionId: id, messageId: `m-${id}`, partId: `p-${id}`, field: "text", delta: " accepted" });
         repository.insertGoal({ id: `goal-${id}`, sessionId: id, objective: "finish", maxAutoTurns: 2 });
         repository.beginRequest({ requestId: `request-${id}`, sessionId: id, fingerprint: "same" });
-        repository.recordAssessment({ goalId: `goal-${id}`, revision: 0, runId: `r-${id}`, assessment: { verifiedSignatures: ["saved"] } });
         repository.recordContinuation({ goalId: `goal-${id}`, revision: 0, previousRunId: "previous", inputId: `i-${id}`, runId: `r-${id}` });
         createProjectionSettlement(storage.database.orm, { id: `settlement-${id}`, projector: "execution", rootSessionId: id, eventSequence: 2, action: "retry-terminal-projection", payload: {} }, storage.temporaryControls, "memory");
       }
