@@ -163,6 +163,9 @@ export function ConversationTranscript({
         const userMessage = entry.turn.userMessage
         const turnRuns = runs.filter((run) => entry.turn.runIds.includes(run.id))
         const timing = taskTiming(turnRuns)
+        const finished = Boolean(
+          timing && timing.status !== "pending" && timing.status !== "running"
+        )
         const turnUsageRuns = runs.filter(
           (run) =>
             import.meta.env.DEV &&
@@ -177,6 +180,7 @@ export function ConversationTranscript({
         const lastAssistantKey = [...turnPlan]
           .reverse()
           .find((item) => item.kind === "assistant")?.key
+        const firstAssistantKey = turnPlan.find((item) => item.kind === "assistant")?.key
         return (
           <Fragment key={entry.turn.id}>
             {userMessage ? (
@@ -227,6 +231,9 @@ export function ConversationTranscript({
                       messageId={item.messageId}
                       className="group/msg min-w-0"
                     >
+                      {item.key === firstAssistantKey && !folded && finished ? (
+                        <TaskDuration timing={timing} placement="header" />
+                      ) : null}
                       <AssistantMessage
                         parts={item.parts}
                         summaryParts={item.summaryParts}
@@ -248,7 +255,7 @@ export function ConversationTranscript({
                         onOpenReview={onOpenReview}
                         onOpenTerminal={onOpenTerminal}
                       />
-                      {item.key === lastAssistantKey && !folded ? (
+                      {item.key === lastAssistantKey && !folded && !finished ? (
                         <TaskDuration timing={timing} label={runningLabel} />
                       ) : null}
                       {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
@@ -284,7 +291,11 @@ export function ConversationTranscript({
               <>
                 {timing ? (
                   <MessageScrollerItem messageId={`${entry.turn.id}-duration`}>
-                    <TaskDuration timing={timing} label={runningLabel} />
+                    <TaskDuration
+                      timing={timing}
+                      label={runningLabel}
+                      placement={finished ? "header" : "footer"}
+                    />
                   </MessageScrollerItem>
                 ) : null}
                 {turnUsageRuns.map((run) => (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { LoadingState } from "@renderer/components/ui/loading-state"
-import { formatElapsedTime, type TaskTiming } from "./task-timing"
+import { formatElapsedTime, taskTimingLabel, type TaskTiming } from "./task-timing"
 
 export function ElapsedTime({
   startedAt,
@@ -35,32 +35,34 @@ export function ElapsedTime({
 export function TaskDuration({
   timing,
   label,
+  placement = "footer",
 }: {
   timing?: TaskTiming
   label?: string
+  placement?: "header" | "footer"
 }): React.JSX.Element | null {
   if (!timing) return null
   const active = timing.status === "running" || timing.status === "pending"
   const status = label ?? (timing.status === "pending" ? "等待执行" : "进行中")
-  const finishedLabel =
-    timing.status === "interrupted"
-      ? "已中断 · 运行了"
-      : timing.status === "failed"
-        ? "失败 · 运行了"
-        : "耗时"
+  const finishedLabel = taskTimingLabel(timing)
+  if (!active && !finishedLabel) return null
   return (
-    <div data-task-duration className="text-ui-caption mt-2 flex items-center gap-2 text-ui-muted">
+    <div
+      data-task-duration
+      className={
+        placement === "header"
+          ? "text-chat border-workspace mb-6 border-b pb-2 text-ui-muted"
+          : "text-ui-caption mt-2 flex items-center gap-2 text-ui-muted"
+      }
+    >
       {active ? (
-        <LoadingState label={status} variant="Dots" showElapsed={false} />
+        <>
+          <LoadingState label={status} variant="Dots" showElapsed={false} />
+          <ElapsedTime key={`${timing.startedAt}:${active}`} startedAt={timing.startedAt} running />
+        </>
       ) : (
         <span>{finishedLabel}</span>
       )}
-      <ElapsedTime
-        key={`${timing.startedAt}:${active}`}
-        startedAt={timing.startedAt}
-        finishedAt={timing.finishedAt}
-        running={active}
-      />
     </div>
   )
 }

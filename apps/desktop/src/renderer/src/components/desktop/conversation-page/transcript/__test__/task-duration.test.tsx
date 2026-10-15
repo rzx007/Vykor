@@ -81,9 +81,10 @@ function render(
 it("keeps completed duration above message actions after reopening a historical task", () => {
   vi.setSystemTime(9_999_999)
   const html = render([run])
-  expect(html).toContain("耗时")
+  expect(html).toContain("用时")
   expect(html).toContain("1分5秒")
-  expect(html.indexOf("耗时")).toBeLessThan(html.indexOf('aria-label="复制回复"'))
+  expect(html.indexOf("用时")).toBeLessThan(html.indexOf("已经处理"))
+  expect(html.indexOf("用时")).toBeLessThan(html.indexOf('aria-label="复制回复"'))
   expect(html.match(/data-task-duration/g)).toHaveLength(1)
 })
 
@@ -137,6 +138,23 @@ it("folds a completed process but keeps the answer, file summary and actions vis
   expect(failed).toContain("报告已经完成")
   expect(failed).toContain("用时 1分5秒")
   expect(failed).toContain("后台连接失败")
+
+  const stopped = render(
+    [
+      {
+        ...run,
+        status: "interrupted",
+        metadata: {
+          interruption: { source: "user", runId: run.id },
+        },
+      },
+    ],
+    false,
+    parts
+  )
+  expect(stopped).toContain("你在 1分5秒后停止了")
+  expect(stopped).toContain('aria-expanded="false"')
+  expect(stopped).not.toContain("正在检查文件")
 })
 
 it("restores live elapsed time from the stored start instead of the mount time", () => {
@@ -158,11 +176,82 @@ it("shows one wall-clock duration across multiple runs of the same input", () =>
 
 it("preserves elapsed time for interrupted work and hides unknown historic timing", () => {
   expect(render([{ ...run, status: "interrupted", finishedAt: 25_000 }])).toContain("24秒")
-  expect(render([{ ...run, status: "interrupted", finishedAt: 25_000 }])).toContain("已中断")
+  expect(render([{ ...run, status: "interrupted", finishedAt: 25_000 }])).toContain(
+    "执行在 24秒后中断"
+  )
   expect(render([{ ...run, startedAt: undefined, finishedAt: undefined }])).not.toContain(
     "data-task-duration"
   )
+  expect(
+    render([{ ...run, status: "interrupted", startedAt: undefined, finishedAt: undefined }])
+  ).toContain("执行已中断")
 })
+
+it.each(["user", "system"] as const)(
+  "puts an interrupted status before the process without adding a fold (%s)",
+  (source) => {
+    const html = render([
+      {
+        ...run,
+        status: "interrupted",
+        metadata: {
+          interruption: { source, runId: run.id },
+        },
+      },
+    ])
+    const label = source === "user" ? "你在 1分5秒后停止了" : "执行在 1分5秒后中断"
+    expect(html.indexOf(label)).toBeGreaterThan(html.indexOf("处理任务"))
+    expect(html.indexOf(label)).toBeLessThan(html.indexOf("已经处理"))
+    expect(html.match(/data-task-duration/g)).toHaveLength(1)
+    expect(html).not.toContain("collapsible-trigger")
+  }
+)
+
+it("restores an explicit user stop from saved metadata and uses the latest recovery status", () => {
+  const stopped: DesktopSessionRun = {
+    ...run,
+    status: "interrupted",
+    finishedAt: 25_000,
+    metadata: { interruption: { source: "user", runId: run.id, requestedAt: 25_000 } },
+  }
+  expect(render([JSON.parse(JSON.stringify(stopped))])).toContain("你在 24秒后停止了")
+  const resumed = {
+    ...run,
+    id: "recovery",
+    createdAt: 30_000,
+    startedAt: 31_000,
+    finishedAt: 40_000,
+  }
+  expect(render([stopped, resumed])).toContain("用时 39秒")
+  expect(render([stopped, resumed])).not.toContain("你在")
+  expect(render([{ ...resumed, status: "interrupted", metadata: stopped.metadata }])).not.toContain(
+    "你在"
+  )
+})
+
+it("does not infer a user stop from an error string, stalled run or system source", () => {
+  for (const metadata of [
+    {},
+    { stalled: true },
+    { interruption: { source: "system", runId: run.id } },
+  ]) {
+    const html = render([{ ...run, status: "interrupted", error: "Run interrupted", metadata }])
+    expect(html).toContain("执行在 1分5秒后中断")
+    expect(html).not.toContain("你在")
+  }
+})
+
+it.each([
+  { interruption: { source: "user", runId: run.id, wasPending: true } },
+  { cancellation: { kind: "user_cancelled_pending" } },
+])(
+  "shows a user cancellation without inventing elapsed time before execution starts",
+  (metadata) => {
+    const html = render([{ ...run, status: "interrupted", startedAt: undefined, metadata }])
+    expect(html).toContain("你取消了等待中的任务")
+    expect(html).not.toContain("秒后")
+  }
+)
 
 it("puts the agent's own elapsed time alongside its task status", () => {
   const html = renderToStaticMarkup(

@@ -5,7 +5,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@renderer/components/motion/collapsible"
-import { formatElapsedTime, type TaskTiming } from "../message/task-timing"
+import { taskTimingLabel, type TaskTiming } from "../message/task-timing"
 import type { TurnBlockPlanItem } from "./turn-block-plan"
 import { splitTurnProcess } from "./turn-process-plan"
 import type { DesktopSessionTask } from "@shared/session-types"
@@ -90,13 +90,7 @@ export function TurnProcess({
     }
   }, [eligible])
 
-  const validTiming =
-    Number.isFinite(timing?.startedAt) &&
-    Number.isFinite(timing?.finishedAt) &&
-    timing!.finishedAt! >= timing!.startedAt!
-  const label = validTiming
-    ? `用时 ${formatElapsedTime(timing!.finishedAt! - timing!.startedAt!)}`
-    : "过程说明"
+  const label = (timing && taskTimingLabel(timing)) ?? "过程说明"
 
   return (
     <div ref={root} className="flex min-w-0 flex-col gap-6">
@@ -113,7 +107,7 @@ export function TurnProcess({
             <div className="border-workspace border-b pb-2">
               <CollapsibleTrigger
                 render={<button />}
-                className="text-chat flex items-center gap-1 rounded-sm text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex items-center gap-1 rounded-sm text-[length:var(--chat-font-size)] leading-[var(--chat-line-height)] text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {label}
                 <ChevronRight
