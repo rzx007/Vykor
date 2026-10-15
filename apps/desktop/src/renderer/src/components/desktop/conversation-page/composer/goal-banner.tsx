@@ -1,5 +1,6 @@
-import { ChevronDown, Goal, Pause, Trash2, X } from "lucide-react"
+import { ChevronDown, Circle, CircleCheck, CircleHelp, Goal, ListTodo, Pause, Trash2, X } from "lucide-react"
 import { useEffect, useId, useState } from "react"
+import { TodoStatusIcon } from "@renderer/components/agents/todo-list"
 import { Button } from "@renderer/components/ui/button"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -161,30 +162,36 @@ export function GoalBanner({
             <div className="border-t border-border/60 pt-2">
               <Button type="button" variant="ghost" size="sm" shape="pill" className="w-full justify-start gap-1.5 text-muted-foreground"
                 aria-label="验收进度" aria-expanded={progressExpanded} aria-controls={progressId} onClick={() => setProgressExpanded(!progressExpanded)}>
-                <ChevronDown strokeWidth={1.75} className={progressExpanded ? "rotate-180" : undefined} />
+                {goal.requirements.length > 0 && satisfiedCount === goal.requirements.length
+                  ? <CircleCheck aria-hidden="true" strokeWidth={1.75} />
+                  : <ListTodo aria-hidden="true" strokeWidth={1.75} />}
                 <span className="flex-1 text-left">验收进度</span>
                 {goal.requirements.length > 0 ? <span className="text-xs tabular-nums">
                   {assessedCount > 0 ? `${satisfiedCount} / ${goal.requirements.length} 已满足` : `${goal.requirements.length} 项待检查`}
                 </span> : null}
+                <ChevronDown aria-hidden="true" strokeWidth={1.75} className={progressExpanded ? "rotate-180" : undefined} />
               </Button>
               {progressExpanded ? (
                 <div id={progressId} role="region" aria-label="验收明细" tabIndex={0}
                   className="mt-3 max-h-72 space-y-4 overflow-y-auto overscroll-contain rounded-sm px-2 leading-6 break-words outline-none focus-visible:outline-2 focus-visible:outline-ring">
                   {goal.requirements.length > 0 ? <div className="space-y-2">
                     <p className="font-medium">完成条件</p>
-                    <ol className="list-decimal space-y-3 pl-5 marker:text-muted-foreground">
+                    <ul className="space-y-1">
                       {goal.requirements.map(item => {
                         const status = requirementStatuses.get(item.id)
-                        return <li key={item.id}>
-                          <div className="flex min-w-0 items-start gap-3">
-                            <span className="min-w-0 flex-1">{item.text}</span>
-                            <span className="shrink-0 text-xs leading-6 text-muted-foreground">
-                              {status === "satisfied" ? "已满足" : status === "needs_user" ? "待验收" : status === "incomplete" ? "未完成" : "待检查"}
-                            </span>
-                          </div>
+                        return <li key={item.id} className="flex min-w-0 items-start gap-2.5 py-1">
+                          <span className="grid size-6 shrink-0 place-items-center text-muted-foreground">
+                            {status === "needs_user" ? <CircleHelp aria-hidden="true" strokeWidth={1.75} className="size-5" />
+                              : status === "incomplete" ? <Circle aria-hidden="true" strokeWidth={1.75} className="size-5" />
+                              : <TodoStatusIcon status={status === "satisfied" ? "completed" : "pending"} />}
+                          </span>
+                          <span className={status === "satisfied" ? "min-w-0 flex-1 text-muted-foreground line-through decoration-muted-foreground/50" : "min-w-0 flex-1"}>{item.text}</span>
+                          <span className="shrink-0 text-xs leading-6 text-muted-foreground">
+                            {status === "satisfied" ? "已满足" : status === "needs_user" ? "待验收" : status === "incomplete" ? "未完成" : "待检查"}
+                          </span>
                         </li>
                       })}
-                    </ol>
+                    </ul>
                   </div> : null}
                   {goal.assessment?.remainingWork?.length ? <div className="space-y-2">
                     <p className="font-medium">剩余工作</p>

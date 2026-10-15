@@ -316,6 +316,11 @@ it("keeps acceptance progress behind a secondary disclosure without exposing int
   expect(details.textContent).toContain("测试记录")
   expect(details.textContent).not.toContain("R1")
   expect(details.textContent).not.toContain("R2")
+  const completed = Array.from(details.querySelectorAll("li")).find(item => item.textContent?.includes("测试通过"))!
+  const incomplete = Array.from(details.querySelectorAll("li")).find(item => item.textContent?.includes("补充文档"))!
+  expect(completed.querySelector('svg[aria-hidden="true"] path')).not.toBeNull()
+  expect(incomplete.querySelector('svg[aria-hidden="true"] circle')).not.toBeNull()
+  expect(details.querySelector('button, input[type="checkbox"]')).toBeNull()
   await act(async () => button("收起目标详情").click())
   await act(async () => button("展开目标详情").click())
   expect(container.querySelector('[aria-label="验收明细"]')).toBeNull()
@@ -333,6 +338,7 @@ it("shows unchecked conditions as pending rather than failed and keeps acceptanc
   expect(button("验收进度").textContent).toContain("1 项待检查")
   await act(async () => button("验收进度").click())
   expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待检查/)
+  expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).not.toBeNull()
   expect(container.textContent).not.toContain("未完成")
   const wait = { kind: "user" as const, purpose: "acceptance" as const, objectiveVersion: 1, questionId: "q", question: "文件内容符合预期？", requirementIds: ["R1-1"] }
   await act(async () => root.render(createElement(GoalBanner, { ...props, goal: { ...props.goal,
@@ -342,4 +348,7 @@ it("shows unchecked conditions as pending rather than failed and keeps acceptanc
       requirements: [{ requirementId: "R1-1", status: "needs_user", explanation: "请验收", evidenceRefs: [] }] },
   } })))
   expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待验收/)
+  expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).toBeNull()
+  expect(container.querySelector('[aria-label="验收明细"] li svg path')).not.toBeNull()
+  expect(props.onAction).not.toHaveBeenCalled()
 })
