@@ -8,6 +8,7 @@ export interface GoalReadSnapshot {
   objective: string;
   sourceInputIds: string[];
   requirements: Array<{ id: string; text: string; verification: string;
+    constraints?: string[];
     status: "incomplete" | "satisfied" | "needs_user" }>;
   latestAssessment?: string;
   waitSummary?: string;
@@ -20,6 +21,7 @@ export interface GoalReadSnapshot {
 }
 export interface GoalAssessmentFeedback {
   issues: string[];
+  evidenceIssues?: Array<{ requirementId: string; messagePartId: string; code: string; message: string }>;
   availableEvidence?: GoalReadSnapshot["recentEvidence"];
 }
 
@@ -32,7 +34,8 @@ export function formatGoalReadSnapshot(snapshot: GoalReadSnapshot): string {
   return JSON.stringify({ ...snapshot, maxAutoTurns: snapshot.maxAutoTurns === 0 ? "unlimited" : snapshot.maxAutoTurns, objective: short(snapshot.objective, 4000),
     sourceInputIds: snapshot.sourceInputIds.map(id => short(id, 256)),
     requirements: snapshot.requirements.slice(0, 64).map(requirement => ({ ...requirement,
-      text: short(requirement.text, 500), verification: short(requirement.verification, 500) })),
+      text: short(requirement.text, 500), verification: short(requirement.verification, 500),
+      ...(requirement.constraints ? { constraints: requirement.constraints.map(value => short(value, 1000)) } : {}) })),
     latestAssessment: short(snapshot.latestAssessment), waitSummary: short(snapshot.waitSummary),
     stopReason: short(snapshot.stopReason) });
 }

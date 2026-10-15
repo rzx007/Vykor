@@ -18,7 +18,10 @@ const evidenceSchema = object({
 const verificationSchema = { oneOf: [
   object({ kind: { const: "check" }, method: textSchema, command: textSchema, commandPolicy: { enum: ["suggested", "required"] },
     environment: textSchema, expected: textSchema }, ["kind", "method", "environment", "expected"]),
-  object({ kind: { const: "artifact_review" }, artifact: textSchema, standard: textSchema }),
+  object({ kind: { const: "artifact_review" }, artifact: { ...textSchema, pattern: "^(?:/|[a-zA-Z]:[\\\\/]|\\\\\\\\|\\.{1,2}[\\\\/])",
+    description: "A literal file path, absolute or explicitly relative (./ or ../). Never a chat message label." }, standard: textSchema }),
+  object({ kind: { const: "tool_result" }, toolName: { ...idSchema, pattern: "^(?!(?:GoalRead|GoalAssessment)$).+" }, outcome: { const: "success" }, standard: textSchema }),
+  object({ kind: { const: "tool_result" }, toolName: { const: "GoalAssessment" }, outcome: { const: "rejected" }, rejectionCode: idSchema, standard: textSchema }),
   object({ kind: { const: "user_acceptance" }, question: textSchema }),
 ] };
 const preparedSchema = object({
@@ -114,7 +117,7 @@ export function createGoalAssessmentTool(binding?: GoalAssessmentBinding): ToolD
       if (!preparing && binding.reviewAssessment) {
         const feedback = await binding.reviewAssessment(input);
         if (feedback.issues.length) return { isError: true, failureKind: "precondition", executionState: "not_started",
-          content: [{ type: "text", text: JSON.stringify({ message: "Goal assessment rejected. Correct the references or coverage using existing results before rerunning tools.", ...feedback }) }] };
+          content: [{ type: "text", text: JSON.stringify({ kind: "goal_assessment_rejected", message: "Goal assessment rejected. Correct the references or coverage using existing results before rerunning tools.", ...feedback }) }] };
       }
       await context.agent.emit({ type: "domain.event", data: { name: "goal.assessment", payload: {
         ...input, evidenceRefs: input.evidenceRefs ?? [],

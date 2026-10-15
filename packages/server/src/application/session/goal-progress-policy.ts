@@ -17,6 +17,12 @@ function sameOrigin(evidence: VerifiedGoalEvidence, refs: NonNullable<GoalAssess
     && ref.runId === evidence.origin.runId && ref.messagePartId === evidence.origin.messagePartId);
 }
 
+/** Waiting preserves counters; candidate signals are not treated as new progress. */
+export function isWaitingGoalAssessment(assessment: GoalAssessment): boolean {
+  return assessment.progressAssessment.kind === "waiting" || assessment.decision === "waiting_user"
+    || assessment.wait?.kind === "approval" || assessment.wait?.kind === "user" || assessment.wait?.kind === "external";
+}
+
 /** A pure policy: candidates become progress only through already verified facts. */
 export function evaluateGoalProgress(input: {
   goal: SessionGoal; assessment: GoalAssessment; evidence: VerifiedGoalEvidence[];
@@ -28,8 +34,7 @@ export function evaluateGoalProgress(input: {
   const duplicate = history.find(item => item.runId === assessment.runId && item.hostProgress);
   if (duplicate?.hostProgress) return { ...duplicate.hostProgress, trustedProgress: duplicate.hostProgress.verifiedSignals.length > 0 };
   if (goal.phase !== "executing" || goal.status !== "active" || assessment.goalId !== goal.id || assessment.objectiveVersion !== goal.objectiveVersion
-    || goal.currentRunId && goal.currentRunId !== assessment.runId || assessment.progressAssessment.kind === "waiting"
-    || assessment.decision === "waiting_user" || assessment.wait?.kind === "approval" || assessment.wait?.kind === "user" || assessment.wait?.kind === "external") return unchanged;
+    || goal.currentRunId && goal.currentRunId !== assessment.runId || isWaitingGoalAssessment(assessment)) return unchanged;
   let waitingForAcceptance = false;
   if (assessment.decision === "complete") {
     try { waitingForAcceptance = classifyGoalCompletion(goal, assessment, evidence).kind === "waiting_user"; } catch { /* Coverage is checked below. */ }

@@ -57,7 +57,7 @@
 
 运行评估的可信绑定以 `(goalId, objectiveVersion, runId)` 为准，不再把当前 Goal.revision 必须等于开跑时 revision 作为正文有效性的判断。修改预算/普通状态会改变 revision，但不应让同正文版本的合法评估失效；暂停/取消仍通过状态和 currentRunId 拒绝，正文变化通过 objectiveVersion 拒绝。宿主状态事务提交仍以读取时的 expectedRevision 防并发覆盖，续跑去重沿用已有运行意图唯一规则。
 
-`GoalRequirement` 最小字段：`id / text / source / verification / constraints`。source 包含用户目标文本定位，或引用文档路径与内容摘要；verification 为 `check / artifact_review / user_acceptance`。`check` 记录验收命令或结构化条件与执行环境；`artifact_review` 记录交付物及复查标准；`user_acceptance` 记录用户需要判断的结果。无量化指标的 UI、调研与文档任务也可形成有效条件。
+`GoalRequirement` 最小字段：`id / text / source / verification / constraints`。source 包含用户目标文本定位，或引用文档路径与内容摘要；verification 为 `check / artifact_review / tool_result / user_acceptance`。`check` 仅验收实际执行的 Shell 检查；`artifact_review` 验收真实文件的当前内容，路径须为绝对路径或显式 `./`、`../` 相对路径；`tool_result` 审查已经发生的指定工具调用记录；`user_acceptance` 记录用户需要判断的结果。执行步骤、顺序、操作边界及最终回复格式保留在相关条件的 constraints 中，不机械拆成独立命令检查；聊天消息不能作为文件路径。无量化指标的 UI、调研与文档任务也可形成有效条件。
 
 创建时的版本是尚未冻结的 version 1；首次冻结补足该版本记录，不另增 objectiveVersion。冻结前绑定的澄清答复补充这个版本的来源；冻结后改变正文、条件或约束才生成下一版本。用量、状态、进度与用户对既有条件的验收都不增加正文版本。
 
@@ -206,6 +206,10 @@ GoalAssessment 增加 requirementId，必须覆盖当前正式要求的完整 ID
 
 `check.commandPolicy` 默认 `suggested`，命令作为操作建议，模型须说明实际成功的 Shell 检查如何覆盖期望结果；不实现任意 Shell 命令等价解析。用户明确规定必须执行的命令标为 `required`，准备冻结时必须有包含原命令的有效来源引用，验证时继续严格匹配。Read、控制工具及失败调用不能证明命令检查成功。
 
+`tool_result` 明确 `toolName / outcome / standard`，成功记录必须来自当前运行或正常结束的同目标后代，并匹配指定工具；它证明调用记录，不证明文件当前仍未变化，不支持跨轮次或跨版本继承。预期拒绝只允许 `GoalAssessment`，必须指定并匹配宿主结构化 `rejectionCode`；验证旧文件过期使用 `artifact_stale`，不能将参数错误、工具类型错误或普通错误文本视为测试通过。文件内容与调用输出的业务含义仍按正式标准由模型审查，宿主只核对可验证事实。
+
+拒绝反馈保留可读 issues，并附 `evidenceIssues`（条件、结果 ID、原因代码、说明）。分别说明身份错误、来源运行未结束、工具类型不匹配、文件摘要缺失、目标路径不匹配、文件不存在、文件已变化及历史复核失败；路径不匹配时给出要求与实际路径，不再统称“可能缺失或变化”。
+
 失败工具的诊断可用于进展判断，但不能单独证明一个要求 satisfied。子代理完成只能证明该次工作结束；正文摘要不代替产物和验证证据。外部等待 completed 后的结果检查轮依然要按目标要求验收。
 
 ## 8. 防循环：不把新日志当作新进展
@@ -213,6 +217,8 @@ GoalAssessment 增加 requirementId，必须覆盖当前正式要求的完整 ID
 保留当前同一阻塞三轮规则，同时新增与 blockerKey 无关的 stagnationCount。只统计已结算的 executing 轮；准备阶段由自身固定限额控制。宿主观察等待、权限等待、用户等待不产生轮，不累计无进展。
 
 在已有 assessment 中增加 progressSignals，不创建进展表或新评分服务。每项包含 `requirementId / kind / evidenceRefs / subjectKey`；kind 首版只有 `requirement_satisfied / artifact_changed / external_terminal`。artifact_changed 的 before/after 内容摘要、external_terminal 的 targetRunId/终态由宿主证据读取器补齐或核实，不信任模型自报摘要。证据不足的信号不清零计数。
+
+等待评估中的信号只保留为候选，不计新增进展、不改变停滞计数，也不要求候选必须转换成新增 verifiedSignals。预检与结算共用等待判定；每条 `satisfied` 的证据校验、版本身份与覆盖要求保持不变。
 
 - requirement_satisfied：对当前正式要求进行有效证据审查，首次从 incomplete 变为 satisfied。
 - artifact_changed：有关交付物的内容变化，且当前审查说明如何推进对应要求；按当前版本内 `(requirementId, subjectKey, afterDigest)` 检查历史 assessment，已出现的状态或往返修改不单独归零。时间戳、日志随机 ID 不是交付物内容摘要。

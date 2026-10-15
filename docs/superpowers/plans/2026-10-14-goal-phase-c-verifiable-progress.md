@@ -71,6 +71,8 @@ interface GoalRequirement {
   verification:
     | { kind: "check"; method: string; command?: string; environment: string; expected: string }
     | { kind: "artifact_review"; artifact: string; standard: string }
+    | { kind: "tool_result"; toolName: string; outcome: "success"; standard: string }
+    | { kind: "tool_result"; toolName: "GoalAssessment"; outcome: "rejected"; rejectionCode: string; standard: string }
     | { kind: "user_acceptance"; question: string };
   constraints: string[];
   replaces?: string[];
@@ -204,7 +206,7 @@ GoalRunBinding 增 `readSnapshot: () => Promise<GoalReadSnapshot>`，server 闭�
 ### 5.2 覆盖与指定项验收
 
 - [x] GoalRequirementAssessment 使用 `requirementId / status / evidenceRefs / explanation`；不再接收自由 requirement/source 当定义。executing 每轮对完整当前集合报告，缺/未知/重复 ID 均为 assessment_invalid，不能从漏项报告完成；合法局部成功通过完整集合里其他项 incomplete 表达。
-- [x] `classifyGoalCompletion(goal, assessment, verifiedEvidence)` 先检查缺项/incomplete/客观证据，再处理 needs_user。客观 check/artifact_review 无有效证明只能保持 incomplete；失败结果可解释诊断，不能证明 satisfied。有可执行下一步先 continue；不能继续则等待或停止，不能给通用“全部满足”按钮。
+- [x] `classifyGoalCompletion(goal, assessment, verifiedEvidence)` 先检查缺项/incomplete/客观证据，再处理 needs_user。客观条件无有效证明只能保持 incomplete；普通失败结果仅用于诊断，只有显式 tool_result 预期拒绝且宿主原因代码匹配时才能证明该负向条件。有可执行下一步先 continue；不能继续则等待或停止，不能给通用“全部满足”按钮。
 - [x] 只有所有客观项有效、剩下仅 user_acceptance 时生成 acceptance wait，保存 goalId/version/questionId/requirementIds。confirm 匹配 current wait，只保存这些 ID 的用户验收回执，再核对完整集合。无当前验收、旧按钮/版本、客观项混入均 409；不通过 confirm 免除失败测试。
 - [x] confirm 的用户输入与 receipt 保存 requestId/inputId/actor/at/questionId，属于当前 assessment 的宿主字段；模型不能填 receipt。验收变化不改冻结定义/objectiveVersion，不重置次数/总量。批准仍是独立 approval wait，confirm 不是批准。
 
@@ -238,7 +240,7 @@ readGoalDiagnostics(goal: SessionGoal, assessment: GoalAssessment): VerifiedGoal
 - [x] digest 字段只允许 `sha256:<64位十六进制>` 或明确 `missing`，创建/删除都有前后状态；不把“不知道”写成 missing。environmentKey 使用稳定的执行环境/工作区/验证配置，不用每次变化的 lease ID。subjectKey 从环境与规范路径摘要生成，不截短真实路径造碰撞，也不信任模型给的随机 ID。
 - [x] Core 只为捕获且验证的 builtin 定义保留这些宿主事实，在 projector 持久化 Part metadata；普通插件/MCP metadata 同名字段剥离，不按 toolName 猜信任。不解析 compactSummary 的短 hash；不在 GoalService 直接读 Node 文件绕过环境/路径权限。
 - [x] 历史测试/交付物复用要求当前 Run 的廉价只读复核事实匹配当时的文件/输入摘要、环境、验收命令和目标值。当前实际读取可用原 Read；reader 只比较记录。环境/依赖条件未知、文件已变或只有主观解释时重新执行对应检查。没有依赖清单不假装“某一文件未改”证明全部测试有效，也不默认重跑全套测试。
-- [x] artifact_review 的语义由当前模型按正式标准审查，宿主核对产物与当前事实；主观 user_acceptance 必须用户 receipt。历史证据不是直接继承的 satisfied 状态；新版本当前报告重新引用并核对后才接纳。
+- [x] artifact_review 的语义由当前模型按正式标准审查，宿主核对真实文件路径与当前摘要；路径使用绝对或显式相对形式，聊天报告与执行步骤不伪装文件。tool_result 核对本轮/已结束后代的指定工具记录，拒绝测试严格匹配宿主原因代码，不能复用历史轮次。主观 user_acceptance 必须用户 receipt。历史文件证据不是直接继承的 satisfied 状态；新版本当前报告重新引用并核对后才接纳。
 
 **回归样例：**正式 R1 接口检查 incomplete、R2 UI needs_user，complete 建议仍不能进入验收；R1 有效 satisfied 后 acceptance 只列 R2。旧 version=1 的 confirm 对当前 version=2 拒绝。同 request stop 失败重试只有一个版本/准备；旧评估拒绝、旧 usage 仍补账；历史检查的全部已声明依赖匹配才复用，未知环境不复用。
 

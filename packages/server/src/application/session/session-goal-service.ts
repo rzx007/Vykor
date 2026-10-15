@@ -6,8 +6,8 @@ import type { AdmitPromptInput } from "./run-admission-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, requirementEvidenceSatisfied, validateRequirementCoverage } from "./goal-assessment-policy.js";
-import { readGoalEvidence, readGoalDiagnostics, describeGoalEvidenceRejection } from "./goal-evidence-reader.js";
-import { evaluateGoalProgress } from "./goal-progress-policy.js";
+import { readGoalEvidence, readGoalDiagnostics, goalEvidenceRejection } from "./goal-evidence-reader.js";
+import { evaluateGoalProgress, isWaitingGoalAssessment } from "./goal-progress-policy.js";
 import type { GoalReadSnapshot, GoalAssessmentFeedback } from "@vykor/agent-runtime";
 import type { GoalWaitCheck, GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
@@ -103,7 +103,7 @@ export class SessionGoalService {
         ...(typeof part.input?.workdir === "string" ? { workdir: part.input.workdir.slice(0, 500) } : {}) }));
     return Promise.resolve({ goalId, objectiveVersion: version, phase: goal.phase, objective: goal.objective,
       sourceInputIds: definition.inputIds,
-      requirements: goal.requirements.map(item => ({ id: item.id, text: item.text,
+      requirements: goal.requirements.map(item => ({ id: item.id, text: item.text, constraints: item.constraints,
         verification: JSON.stringify(item.verification),
         status: goal.assessment?.requirements?.find(value => value.requirementId === item.id)?.status ?? "incomplete" })),
       latestAssessment: goal.assessment?.progress, waitSummary: goal.reason,
@@ -123,6 +123,7 @@ export class SessionGoalService {
       return { issues: [`评估格式或条件覆盖不完整：${error instanceof Error ? error.message : String(error)}`], availableEvidence: snapshot.recentEvidence };
     }
     const evidence = readGoalEvidence(this.context, goal, assessment, { preview: true });
+    const evidenceIssues: NonNullable<GoalAssessmentFeedback["evidenceIssues"]> = [];
     const issues = (assessment.requirements ?? []).flatMap(report => {
       const requirement = goal.requirements.find(item => item.id === report.requirementId)!;
       if (report.status !== "satisfied" || requirement.verification.kind === "user_acceptance"
@@ -131,17 +132,21 @@ export class SessionGoalService {
       return report.evidenceRefs.filter(ref => !evidence.some(item => item.requirementId === report.requirementId
         && item.supportsCompletion !== false && item.origin.goalId === ref.goalId && item.origin.runId === ref.runId
         && item.origin.objectiveVersion === ref.objectiveVersion && item.origin.messagePartId === ref.messagePartId))
-        .map(ref => describeGoalEvidenceRejection(this.context, goal, assessment, requirement, ref));
+        .map(ref => {
+          const issue = goalEvidenceRejection(this.context, goal, assessment, requirement, ref);
+          evidenceIssues.push(issue);
+          return `[${issue.code}] ${issue.requirementId} / ${issue.messagePartId}: ${issue.message}`;
+        });
     });
     const progress = evaluateGoalProgress({ goal, assessment, evidence, diagnostics: [],
       history: this.context.goals.listGoalAssessments(goal.id, version) });
-    for (const signal of assessment.progressSignals ?? []) {
+    for (const signal of isWaitingGoalAssessment(assessment) ? [] : assessment.progressSignals ?? []) {
       const origins = progress.verifiedSignals.filter(item => item.requirementId === signal.requirementId && item.kind === signal.kind).flatMap(item => item.origins);
       if (!signal.evidenceRefs.every(ref => origins.some(origin => origin.goalId === ref.goalId && origin.runId === ref.runId
           && origin.objectiveVersion === ref.objectiveVersion && origin.messagePartId === ref.messagePartId)))
         issues.push(`${signal.requirementId}: 进展声明 ${signal.kind} 的引用 [${signal.evidenceRefs.map(ref => ref.messagePartId).join(", ")}] 无效或没有证明新增变化。请修正声明；已有有效结果无需重跑。`);
     }
-    return { issues, availableEvidence: snapshot.recentEvidence };
+    return { issues, evidenceIssues, availableEvidence: snapshot.recentEvidence };
   }
 
   /** 事件回调只请求中断，不能等待它所属的 Run 完成。 */

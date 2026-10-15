@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput, parseGoalAssessment } from "./session-goals.js";
+import { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput, parseGoalAssessment, parsePreparedGoalRequirements } from "./session-goals.js";
 
 describe("session goal protocol", () => {
+  it("distinguishes tool records from current files and requires a specific host rejection", () => {
+    const candidate = (verification: unknown) => [{ text: "核对真实记录", source: [{ kind: "input", inputId: "i", quote: "核对真实记录" }], constraints: [], verification }];
+    for (const verification of [
+      { kind: "tool_result", toolName: "Read", outcome: "success", standard: "保存最初读取的真实结果" },
+      { kind: "tool_result", toolName: "GoalAssessment", outcome: "rejected", rejectionCode: "artifact_stale", standard: "旧文件证据因改写被拒绝" },
+      { kind: "artifact_review", artifact: "./README", standard: "符合要求" },
+      { kind: "artifact_review", artifact: "C:\\Temp\\report.md", standard: "符合要求" },
+      { kind: "artifact_review", artifact: "/tmp/report.md", standard: "符合要求" },
+    ]) expect(parsePreparedGoalRequirements(candidate(verification))[0]!.verification).toEqual(verification);
+    for (const verification of [
+      { kind: "tool_result", toolName: "Read", outcome: "rejected", rejectionCode: "artifact_stale", standard: "失败" },
+      { kind: "tool_result", toolName: "GoalAssessment", outcome: "rejected", standard: "任意报错" },
+      { kind: "tool_result", toolName: "GoalAssessment", outcome: "success", standard: "自行声明完成" },
+      { kind: "artifact_review", artifact: "最终给用户的报告消息", standard: "报告结果" },
+    ]) expect(() => parsePreparedGoalRequirements(candidate(verification))).toThrow();
+  });
   it("accepts unlimited automatic turns as zero and rejects invalid limits", () => {
     expect(parseCreateSessionGoalInput({ requestId: "r", objective: "finish", maxAutoTurns: 0 }).maxAutoTurns).toBe(0);
     for (const maxAutoTurns of [-1, 1.5, 1001]) expect(() => parseCreateSessionGoalInput({ requestId: "r", objective: "finish", maxAutoTurns })).toThrow();

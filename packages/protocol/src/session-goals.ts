@@ -16,6 +16,8 @@ export interface GoalRequirement {
   verification:
     | { kind: "check"; method: string; command?: string; commandPolicy?: "suggested" | "required"; environment: string; expected: string }
     | { kind: "artifact_review"; artifact: string; standard: string }
+    | { kind: "tool_result"; toolName: string; outcome: "success"; standard: string }
+    | { kind: "tool_result"; toolName: "GoalAssessment"; outcome: "rejected"; rejectionCode: string; standard: string }
     | { kind: "user_acceptance"; question: string };
   constraints: string[];
   replaces?: string[];
@@ -560,7 +562,22 @@ export function parsePreparedGoalRequirements(value: unknown): PreparedGoalRequi
       environment: requiredGoalString(raw.environment, "environment", 4000), expected: requiredGoalString(raw.expected, "expected", 4000),
       ...(raw.command === undefined ? {} : { command: requiredGoalString(raw.command, "command", 4000) }),
       ...(raw.commandPolicy === undefined ? {} : { commandPolicy: raw.commandPolicy as "suggested" | "required" }) };
-    else if (raw.kind === "artifact_review") verification = { kind: "artifact_review", artifact: requiredGoalString(raw.artifact, "artifact", 4000), standard: requiredGoalString(raw.standard, "standard", 4000) };
+    else if (raw.kind === "artifact_review") {
+      const artifact = requiredGoalString(raw.artifact, "artifact", 4000);
+      if (!/^(?:\/|[a-zA-Z]:[\\/]|\\\\|\.{1,2}[\\/])/.test(artifact)) throw new ProtocolValidationError("invalid_goal_artifact_path", "verification.artifact");
+      verification = { kind: "artifact_review", artifact, standard: requiredGoalString(raw.standard, "standard", 4000) };
+    }
+    else if (raw.kind === "tool_result") {
+      if (Object.keys(raw).some(key => !["kind", "toolName", "outcome", "standard", "rejectionCode"].includes(key)))
+        throw new ProtocolValidationError("invalid_goal_tool_result_verification", "verification");
+      const toolName = requiredGoalString(raw.toolName, "toolName", 256);
+      const standard = requiredGoalString(raw.standard, "standard", 4000);
+      if (raw.outcome === "success" && !["GoalRead", "GoalAssessment"].includes(toolName) && raw.rejectionCode === undefined)
+        verification = { kind: "tool_result", toolName, outcome: "success", standard };
+      else if (raw.outcome === "rejected" && toolName === "GoalAssessment")
+        verification = { kind: "tool_result", toolName, outcome: "rejected", standard, rejectionCode: requiredGoalString(raw.rejectionCode, "rejectionCode", 256) };
+      else throw new ProtocolValidationError("invalid_goal_tool_result_verification", "verification");
+    }
     else if (raw.kind === "user_acceptance") verification = { kind: "user_acceptance", question: requiredGoalString(raw.question, "question", 4000) };
     else throw new ProtocolValidationError("invalid_goal_verification", "verification");
     const constraints = parseGoalTextArray(record.constraints, "constraints");

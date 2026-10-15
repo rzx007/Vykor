@@ -8,9 +8,10 @@ import type { GoalWaitCheck } from "../goal-wait-verifier.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { assembleSessionRunServices } from "../session-run-assembly.js";
 import { SessionRunExecutor } from "../session-run-executor.js";
-import { createRunCapabilityView } from "@vykor/agent-runtime";
+import { createGoalRunContribution, createRunCapabilityView } from "@vykor/agent-runtime";
 import { ToolRegistry, type RunCapabilityView } from "@vykor/core";
 import type { GoalRequirement, SessionGoal } from "@vykor/protocol";
+import { SessionTranscriptProjection } from "../transcript-projection.js";
 
 const pluginId = "dev.vykor.quality";
 const pluginSkill = {
@@ -191,6 +192,99 @@ function modelAttempt(store: SessionStore, runId: string, tokens = 1): void {
 }
 
 describe("SessionGoalService durable lifecycle", () => {
+  it("accepts waiting assessments with candidate signals without counting progress or weakening completion evidence", async () => {
+    const h = harness();
+    const store = h.store;
+    const created = await h.service.create("s1", { requestId: "waiting-signals", objective: "检查后选择范围" });
+    await vi.waitFor(() => expect(store.goals.getGoal(created.id)?.status).toBe("paused"));
+    await drainRuns(store, h.control);
+    let goal = store.goals.getGoal(created.id)!;
+    const runId = "waiting-run";
+    store.runs.createRun({ id: runId, sessionId: "s1", metadata: { goalId: goal.id, goalObjectiveVersion: 1, goalPhase: "executing" } });
+    store.runs.updateRun(runId, { status: "running" });
+    goal = store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "active", stopReason: null, currentRunId: runId, stagnationCount: 2, noProgressCount: 1 });
+    const message = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId });
+    store.conversations.upsertMessagePart({ id: "wait-check", sessionId: "s1", messageId: message.id, type: "tool", status: "completed", toolName: "Shell",
+      input: { command: "run-check" }, output: { content: [{ type: "text", text: "passed" }] }, metadata: { executionState: "completed" } });
+    const candidate = { decision: "waiting_user", question: "请选择后续范围", progress: "检查已完成，等待选择", evidence: [],
+      progressAssessment: { kind: "waiting", summary: "等待选择" },
+      requirements: [{ requirementId: goal.requirements[0]!.id, status: "satisfied", explanation: "真实检查通过", evidenceRefs: [{ messagePartId: "wait-check", criterion: "检查通过" }] }],
+      progressSignals: [{ requirementId: goal.requirements[0]!.id, kind: "requirement_satisfied", subjectKey: "check", evidenceRefs: [{ messagePartId: "wait-check", criterion: "检查通过" }] }] };
+    expect((await h.service.reviewAssessment(goal.id, 1, runId, candidate)).issues).toEqual([]);
+    const invalid = { ...candidate, requirements: [{ ...candidate.requirements[0], evidenceRefs: [{ messagePartId: "missing", criterion: "伪造" }] }] };
+    expect((await h.service.reviewAssessment(goal.id, 1, runId, invalid)).issues.join(" ")).toContain("missing");
+    assessment(store, runId, candidate);
+    await h.service.settleRun("s1", runId);
+    expect(h.store.goals.getGoal(goal.id)).toMatchObject({ status: "waiting_user", stagnationCount: 2, noProgressCount: 1,
+      assessment: { hostProgress: { verifiedSignals: [] } } });
+  });
+  it("rejects a running child's stale file by code and completes with a fresh read of the same artifact", async () => {
+    const artifact = "/work/target.txt";
+    const h = harness(async (store, runId) => {
+      const run = store.runs.getRun(runId)!;
+      if (run.metadata.goalPhase === "preparing") {
+        const source = [{ kind: "input", inputId: run.inputId, quote: "验收当前文件并确认旧证据因改写被拒" }];
+        assessment(store, runId, { decision: "ready", progressAssessment: { kind: "progress", summary: "条件明确" }, preparedRequirements: [
+          { text: "当前文件内容正确", source, constraints: [], verification: { kind: "artifact_review", artifact, standard: "AFTER_CHILD" } },
+          { text: "宿主拒绝旧文件证据", source, constraints: [], verification: { kind: "tool_result", toolName: "GoalAssessment", outcome: "rejected", rejectionCode: "artifact_stale", standard: "文件已被改写导致拒绝" } },
+        ] });
+      } else store.runs.updateRun(runId, { status: "completed" });
+    }, undefined, undefined, { autoPrepare: false });
+    const store = h.store;
+    const before = "sha256:" + "a".repeat(64), after = "sha256:" + "b".repeat(64);
+    const created = await h.service.create("s1", { requestId: "artifact-freshness", objective: "验收当前文件并确认旧证据因改写被拒" });
+    await vi.waitFor(() => expect(store.goals.getGoal(created.id)?.status).toBe("paused"));
+    await drainRuns(store, h.control);
+    const goal = store.goals.getGoal(created.id)!;
+    const requirementId = goal.requirements[0]!.id;
+    const binding = { goalId: goal.id, goalObjectiveVersion: 1, goalPhase: "executing" };
+    store.runs.createRun({ id: "root", sessionId: "s1", metadata: binding });
+    store.runs.updateRun("root", { status: "running" });
+    store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "active", stopReason: null, currentRunId: "root" });
+    const message = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId: "root" });
+    store.conversations.upsertMessagePart({ id: "old-read", sessionId: "s1", messageId: message.id, type: "tool", status: "completed", toolName: "Read",
+      output: { content: [{ type: "text", text: "BEFORE_CHILD" }] }, metadata: { executionState: "completed", modelGeneration: { generationId: "before", committed: true },
+        hostFileFacts: { environmentKey: "local", files: [{ path: artifact, subjectKey: "target", operation: "read", afterDigest: before, completed: true, bodyVisible: true }] } } });
+    store.sessions.create({ id: "child-session", cwd: process.cwd(), model: "m", metadata: {} });
+    store.runs.createRun({ id: "child", sessionId: "child-session", metadata: { ...binding, parentRunId: "root" } });
+    store.runs.updateRun("child", { status: "running" });
+    const childMessage = store.conversations.createMessage({ sessionId: "child-session", role: "assistant", runId: "child" });
+    store.conversations.upsertMessagePart({ id: "child-write", sessionId: "child-session", messageId: childMessage.id, type: "tool", status: "completed", toolName: "Write",
+      output: { content: [{ type: "text", text: "written" }] }, metadata: { executionState: "completed", hostFileFacts: { environmentKey: "local",
+        files: [{ path: artifact, subjectKey: "target", operation: "write", beforeDigest: before, afterDigest: after, completed: true }] } } });
+    const candidate = (messagePartId: string, includeRejection = false) => ({ decision: includeRejection ? "complete" : "continue", progress: "文件验收", evidence: [], progressAssessment: { kind: "progress", summary: "已检查" }, progressSignals: [],
+      requirements: [{ requirementId, status: "satisfied", explanation: "已读取当前内容", evidenceRefs: [{ messagePartId, criterion: "AFTER_CHILD" }] },
+        { requirementId: goal.requirements[1]!.id, status: includeRejection ? "satisfied" : "incomplete", explanation: "检查宿主拒绝的精确原因",
+          evidenceRefs: includeRejection ? [{ messagePartId: "negative-probe", criterion: "artifact_stale" }] : [] }] });
+    const rejected = await h.service.reviewAssessment(goal.id, 1, "root", candidate("old-read"));
+    expect(rejected.evidenceIssues).toMatchObject([{ code: "artifact_stale", requirementId, messagePartId: "old-read" }]);
+    expect(store.goals.getGoal(goal.id)?.status).toBe("active");
+    expect(store.goals.listGoalAssessments(goal.id)).toHaveLength(0);
+    const contribution = await createGoalRunContribution({ goalId: goal.id, objectiveVersion: 1, phase: "executing",
+      readSnapshot: () => h.service.readSnapshot(goal.id, 1, "root"),
+      reviewAssessment: input => h.service.reviewAssessment(goal.id, 1, "root", input) });
+    const tool = contribution.tools!.find(item => item.definition.name === "GoalAssessment")!.definition;
+    const emit = vi.fn();
+    const rejectedResult = await tool.execute(candidate("old-read"), { cwd: process.cwd(), agent: { emit, scope: { runId: "root" } } as never });
+    expect(rejectedResult.isError).toBe(true);
+    expect(emit).not.toHaveBeenCalled();
+    const projection = new SessionTranscriptProjection(store);
+    const inputId = store.goals.getGoalVersion(goal.id, 1)!.inputIds[0]!;
+    const state = projection.beginRun("s1", inputId, "root", store.conversations.getInput(inputId)!);
+    projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { id: "negative-probe", name: "GoalAssessment", input: candidate("old-read") } });
+    projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "negative-probe", result: rejectedResult });
+    expect(store.conversations.listMessageParts("s1").find(part => part.id === "negative-probe")).toMatchObject({ status: "failed", isError: true,
+      output: { failureKind: "precondition" } });
+    const freshMessage = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId: "root" });
+    store.conversations.upsertMessagePart({ id: "new-read", sessionId: "s1", messageId: freshMessage.id, type: "tool", status: "completed", toolName: "Read",
+      output: { content: [{ type: "text", text: "AFTER_CHILD" }] }, metadata: { executionState: "completed", modelGeneration: { generationId: "after", committed: true },
+        hostFileFacts: { environmentKey: "local", files: [{ path: artifact, subjectKey: "target", operation: "read", afterDigest: after, completed: true, bodyVisible: true }] } } });
+    expect((await h.service.reviewAssessment(goal.id, 1, "root", candidate("new-read", true))).issues).toEqual([]);
+    store.runs.updateRun("child", { status: "completed" });
+    assessment(store, "root", candidate("new-read", true));
+    await h.service.settleRun("s1", "root");
+    expect(store.goals.getGoal(goal.id)?.status).toBe("completed");
+  });
   it("rejects invented evidence during the same Run and completes after correcting only the reference", async () => {
     let executions = 0;
     const h = harness(async (store, runId) => {

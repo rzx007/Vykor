@@ -2,6 +2,22 @@ import { describe, expect, it, vi } from "vitest";
 import { createGoalAssessmentTool } from "./goal-assessment-tool.js";
 
 describe("GoalAssessment tool", () => {
+  it("exposes record verification during preparation without accepting a chat label as a file", async () => {
+    const emit = vi.fn();
+    const tool = createGoalAssessmentTool({ goalId: "g", objectiveVersion: 1, phase: "preparing" });
+    const context = { cwd: process.cwd(), agent: { emit, scope: { runId: "r" } } as never };
+    const input = (verification: unknown) => ({ decision: "ready", progress: "已整理", progressAssessment: { kind: "progress", summary: "条件明确" }, evidence: [],
+      preparedRequirements: [{ text: "保存旧读取记录", source: [{ kind: "input", inputId: "i", quote: "保存旧读取记录" }], constraints: [], verification }] });
+    for (const verification of [
+      { kind: "tool_result", toolName: "Read", outcome: "success", standard: "记录真实旧 ID" },
+      { kind: "tool_result", toolName: "GoalAssessment", outcome: "rejected", rejectionCode: "artifact_stale", standard: "旧证据过期" },
+      { kind: "artifact_review", artifact: "./README", standard: "符合要求" },
+      { kind: "artifact_review", artifact: "C:\\Temp\\report.md", standard: "符合要求" },
+    ]) expect((await tool.execute(input(verification), context)).isError).not.toBe(true);
+    expect(emit).toHaveBeenCalledTimes(4);
+    expect((await tool.execute(input({ kind: "artifact_review", artifact: "最终报告消息", standard: "列出结果" }), context)).isError).toBe(true);
+    expect(emit).toHaveBeenCalledTimes(4);
+  });
   it("rejects execution blockers during preparation without disabling them during execution", async () => {
     const emit = vi.fn();
     const context = { cwd: process.cwd(), agent: { emit, scope: { runId: "r" } } as never };
@@ -19,13 +35,16 @@ describe("GoalAssessment tool", () => {
   });
   it("returns host rejection details before recording a false completion", async () => {
     const emit = vi.fn();
-    const review = vi.fn(async () => ({ issues: ["R1: 引用 tool:invented 不存在，请使用 call_actual"], availableEvidence: [{ messagePartId: "call_actual", runId: "r", toolName: "Shell" }] }));
+    const review = vi.fn(async () => ({ issues: ["R1: 引用 tool:invented 不存在，请使用 call_actual"],
+      evidenceIssues: [{ requirementId: "R1", messagePartId: "tool:invented", code: "evidence_not_found", message: "记录不存在" }],
+      availableEvidence: [{ messagePartId: "call_actual", runId: "r", toolName: "Shell" }] }));
     const tool = createGoalAssessmentTool({ goalId: "g", objectiveVersion: 1, phase: "executing", requirementIds: ["R1"], reviewAssessment: review });
     const input = { decision: "complete", progress: "done", progressAssessment: { kind: "progress", summary: "done" }, evidence: [], progressSignals: [],
       requirements: [{ requirementId: "R1", status: "satisfied", explanation: "passed", evidenceRefs: [{ messagePartId: "tool:invented", criterion: "tests" }] }] };
     const result = await tool.execute(input, { cwd: process.cwd(), agent: { emit, scope: { runId: "r" } } as never });
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain("call_actual");
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ kind: "goal_assessment_rejected", evidenceIssues: [{ code: "evidence_not_found" }] });
     expect(emit).not.toHaveBeenCalled();
   });
   it.each(["messagePartIds", "dependencies"] as const)("rejects duplicate revalidation %s", field => {

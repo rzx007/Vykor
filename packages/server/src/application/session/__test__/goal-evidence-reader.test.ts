@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readGoalEvidence, readGoalDiagnostics } from "../goal-evidence-reader.js";
+import { readGoalEvidence, readGoalDiagnostics, describeGoalEvidenceRejection } from "../goal-evidence-reader.js";
 import { classifyGoalCompletion } from "../goal-assessment-policy.js";
 
 const sha = "sha256:" + "a".repeat(64);
@@ -17,6 +17,55 @@ function records() {
     goals: { getGoalVersion: (_id: string, version: number) => ({ goalId: "g", objectiveVersion: version, frozenAt: 1, requirements: goal.requirements }) as any } } };
 }
 describe("evidence identity and current validity", () => {
+  it.each(["Read", "Agent", "JobRead", "JobWait"])("accepts a prior %s call only for its declared tool, without turning it into a Shell check", toolName => {
+    const { context, parts } = records();
+    parts[0].toolName = toolName;
+    if (toolName !== "Read") delete parts[0].metadata.hostFileFacts;
+    const recordGoal = { ...goal, requirements: [{ id: "R1", verification: { kind: "tool_result", toolName, outcome: "success", standard: "核对已经发生的调用" } }] } as any;
+    expect(classifyGoalCompletion(recordGoal, assessment, readGoalEvidence(context, recordGoal, assessment))).toMatchObject({ kind: "completed" });
+    parts[0].toolName = "Shell";
+    parts[0].input = { command: "echo summary" };
+    expect(readGoalEvidence(context, recordGoal, assessment)).toEqual([]);
+    const old = { ...assessment, requirements: [{ ...assessment.requirements[0], evidenceRefs: [{ ...ref, objectiveVersion: 1 }] }] };
+    expect(readGoalEvidence(context, recordGoal, old)).toEqual([]);
+  });
+  it("distinguishes a stale file from a wrong path and accepts a later read of the changed file", () => {
+    const { context, runs, messages, parts } = records();
+    runs.get("root").status = "running";
+    const current = { ...goal, status: "active", currentRunId: "root" };
+    Object.assign(messages[0], { seq: 1 });
+    parts[0].metadata.modelGeneration = { generationId: "before", committed: true };
+    const after = "sha256:" + "b".repeat(64);
+    runs.set("child", { id: "child", sessionId: "child-session", status: "running", metadata: { goalId: "g", goalObjectiveVersion: 2, parentRunId: "root" } });
+    messages.push({ id: "child-message", sessionId: "child-session", runId: "child" });
+    parts.push({ ...parts[0], id: "child-write", sessionId: "child-session", messageId: "child-message", toolName: "Write",
+      metadata: { executionState: "completed", hostFileFacts: { environmentKey: "environment", files: [{ path: "/work/a", subjectKey: "file:a", operation: "write", beforeDigest: sha, afterDigest: after, completed: true }] } } });
+    expect(describeGoalEvidenceRejection(context, current, assessment, current.requirements[0], ref)).toContain("artifact_stale");
+    expect(readGoalEvidence(context, current, assessment, { preview: true })).toMatchObject([{ supportsCompletion: false }]);
+    const wrongPath = { ...current.requirements[0], verification: { kind: "artifact_review", artifact: "/work/report.md", standard: "报告" } } as any;
+    const rejected = describeGoalEvidenceRejection(context, current, assessment, wrongPath, ref);
+    expect(rejected).toContain("artifact_path_mismatch");
+    expect(rejected).toContain("/work/report.md");
+    expect(rejected).toContain("/work/a");
+    messages.push({ id: "after-message", sessionId: "s", runId: "root", seq: 2 } as any);
+    parts.push({ ...parts[0], id: "new-read", messageId: "after-message", metadata: { executionState: "completed", modelGeneration: { generationId: "after", committed: true },
+      hostFileFacts: { environmentKey: "environment", files: [{ path: "/work/a", subjectKey: "file:a", operation: "read", afterDigest: after, completed: true, bodyVisible: true }] } } });
+    const fresh = { ...assessment, requirements: [{ ...assessment.requirements[0], evidenceRefs: [{ ...ref, messagePartId: "new-read" }] }] };
+    expect(readGoalEvidence(context, current, fresh, { preview: true })).toMatchObject([{ supportsCompletion: true }]);
+    runs.get("root").status = "completed";
+    expect(classifyGoalCompletion(current, fresh, readGoalEvidence(context, current, fresh))).toMatchObject({ kind: "completed" });
+  });
+  it("accepts only a host rejection with the required code, not arbitrary GoalAssessment errors", () => {
+    const { context, parts } = records();
+    const rejectedGoal = { ...goal, requirements: [{ id: "R1", verification: { kind: "tool_result", toolName: "GoalAssessment", outcome: "rejected", rejectionCode: "artifact_stale", standard: "旧证据因改写失效" } }] } as any;
+    parts[0] = { ...parts[0], toolName: "GoalAssessment", status: "failed", isError: true,
+      output: { failureKind: "precondition", content: [{ type: "text", text: JSON.stringify({ kind: "goal_assessment_rejected", evidenceIssues: [{ code: "artifact_stale", requirementId: "file", messagePartId: "old", message: "旧证据过期" }] }) }] }, metadata: { executionState: "not_started" } };
+    expect(readGoalEvidence(context, rejectedGoal, assessment)).toMatchObject([{ supportsCompletion: true }]);
+    for (const content of ["invalid input", JSON.stringify({ kind: "goal_assessment_rejected", evidenceIssues: [{ code: "verification_tool_mismatch" }] })]) {
+      parts[0].output.content = [{ type: "text", text: content }];
+      expect(readGoalEvidence(context, rejectedGoal, assessment)).toEqual([]);
+    }
+  });
   it("treats suggested commands as guidance while preserving explicit required commands", () => {
     const { context, parts } = records();
     parts[0] = { ...parts[0], toolName: "Shell", input: { command: "npx vitest run", workdir: "/repo/packages/protocol" }, metadata: { executionState: "completed" } };
@@ -173,11 +222,23 @@ describe("evidence identity and current validity", () => {
     const result = readGoalEvidence(context, goal, { ...assessment, requirements: [{ ...assessment.requirements[0], evidenceRefs: [targetRef] }] });
     expect(result).toMatchObject([{ supportsCompletion: false, facts: { external: { waitOwnerRunId: "owner", targetRunId: "target", observedStatus: "running", status: "completed", resultPartId: "part" } } }]);
   });
+  it("does not turn a previous owner's child tool result into completion proof through an external wait", () => {
+    const { context, runs, messages } = records();
+    runs.get("root").metadata.goalWaitSource = { kind: "external", goalId: "g", objectiveVersion: 2, ownerRunId: "owner", targetRunId: "target", observedStatus: "running", deadlineAt: 100 };
+    runs.set("owner", { id: "owner", sessionId: "s", status: "completed", metadata: { goalId: "g", goalObjectiveVersion: 2 } });
+    runs.set("target", { id: "target", sessionId: "s", status: "completed", finishedAt: 90, metadata: { goalId: "g", goalObjectiveVersion: 2, parentRunId: "owner" } });
+    messages[0].runId = "target";
+    const recordGoal = { ...goal, requirements: [{ id: "R1", verification: { kind: "tool_result", toolName: "Read", outcome: "success", standard: "本轮读取记录" } }] } as any;
+    const report = { ...assessment, requirements: [{ ...assessment.requirements[0], evidenceRefs: [{ ...ref, runId: "target" }] }] };
+    const result = readGoalEvidence(context, recordGoal, report);
+    expect(result).toMatchObject([{ supportsCompletion: false, facts: { external: { targetRunId: "target" } } }]);
+    expect(classifyGoalCompletion(recordGoal, report, result)).toMatchObject({ kind: "continue" });
+  });
   it("resolves a relative artifact from its trusted recorded workspace without reading the host filesystem", () => {
     const { context, parts } = records();
     parts[0].metadata.hostFileFacts.executionRoot = "/work";
     parts[0].metadata.hostFileFacts.pathStyle = "posix";
-    const relativeGoal = { ...goal, requirements: [{ ...goal.requirements[0], verification: { ...goal.requirements[0].verification, artifact: "a" } }] };
+    const relativeGoal = { ...goal, requirements: [{ ...goal.requirements[0], verification: { ...goal.requirements[0].verification, artifact: "./a" } }] };
     expect(readGoalEvidence(context, relativeGoal, assessment)).toHaveLength(1);
   });
 });
