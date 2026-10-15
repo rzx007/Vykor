@@ -24,7 +24,7 @@ export const GOAL_READ_TOOL_NAME = "GoalRead";
 export function formatGoalReadSnapshot(snapshot: GoalReadSnapshot): string {
   const short = (value: string | undefined, limit = 1000) => value === undefined ? undefined
     : value.length <= limit ? value : value.slice(0, limit) + "…";
-  return JSON.stringify({ ...snapshot, objective: short(snapshot.objective, 4000),
+  return JSON.stringify({ ...snapshot, maxAutoTurns: snapshot.maxAutoTurns === 0 ? "unlimited" : snapshot.maxAutoTurns, objective: short(snapshot.objective, 4000),
     sourceInputIds: snapshot.sourceInputIds.map(id => short(id, 256)),
     requirements: snapshot.requirements.slice(0, 64).map(requirement => ({ ...requirement,
       text: short(requirement.text, 500), verification: short(requirement.verification, 500) })),

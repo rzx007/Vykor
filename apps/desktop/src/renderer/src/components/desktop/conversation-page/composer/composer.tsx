@@ -46,7 +46,7 @@ export function Composer({
   activeSessionId = null,
   goalMode = false,
   onGoalModeChange,
-  goalAutoTurns = 20,
+  goalAutoTurns = 0,
   onGoalAutoTurnsChange,
   goalTokenBudget = "",
   onGoalTokenBudgetChange,
@@ -122,7 +122,9 @@ export function Composer({
   onRemoveAttachment?: (draftId: string) => void
   contextContent?: ReactNode
 }): React.JSX.Element {
-  const [activePicker, setActivePicker] = useState<"model" | "permission" | "effort" | null>(null)
+  const [activePicker, setActivePicker] = useState<
+    "model" | "permission" | "effort" | "goal" | null
+  >(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const effortTiers = resolveEffortTiers(models, selectedModel, selectedProvider)
@@ -283,44 +285,90 @@ export function Composer({
           <IconPlus className="size-5" />
         </Button>
         {goalMode ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="ml-1 rounded-full"
-            disabled={sending}
-            aria-label="退出目标输入"
-            onClick={() => onGoalModeChange?.(false)}
-          >
-            <X data-icon="inline-start" />
-            <Goal className="size-3.5" />
-            目标
-          </Button>
-        ) : null}
-        {goalMode && onGoalAutoTurnsChange ? (
-          <label className="flex items-center gap-1 text-xs text-muted-foreground">
-            续跑
-            <input
-              aria-label="自动续跑额度"
-              type="number"
-              min={1}
-              max={1000}
-              step={1}
-              value={goalAutoTurns}
+          <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
               disabled={sending}
-              onChange={(event) => onGoalAutoTurnsChange(Number(event.target.value))}
-              className="w-12 rounded border px-1"
-            />
-            次
-          </label>
-        ) : null}
-        {goalMode && onGoalTokenBudgetChange ? (
-          <label className="flex items-center gap-1 text-xs text-muted-foreground">
-            Token 总预算
-            <input aria-label="Token 总预算" type="text" inputMode="numeric" placeholder="不限制"
-              value={goalTokenBudget} disabled={sending} onChange={(event) => onGoalTokenBudgetChange(event.target.value)}
-              className="w-24 rounded border px-1" />
-          </label>
+              aria-label="退出目标输入"
+              onClick={() => onGoalModeChange?.(false)}
+            >
+              <X className="size-3.5" />
+            </Button>
+            {onGoalAutoTurnsChange || onGoalTokenBudgetChange ? (
+              <Popover
+                open={activePicker === "goal"}
+                onOpenChange={(open) => setActivePicker(open ? "goal" : null)}
+              >
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1 rounded-full px-2"
+                      disabled={sending}
+                      aria-label="目标设置"
+                    />
+                  }
+                >
+                  <Goal className="size-3.5" />
+                  目标
+                  <ChevronDown className="size-3" />
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className="w-64 gap-4 rounded-2xl p-4"
+                >
+                  <div className="text-sm font-medium">目标设置</div>
+                  {onGoalAutoTurnsChange ? (
+                    <label className="grid gap-2 text-xs text-muted-foreground">
+                      自动续跑轮数
+                      <input
+                        aria-label="自动续跑额度"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        step={1}
+                        placeholder="不限"
+                        value={goalAutoTurns === 0 ? "" : goalAutoTurns}
+                        disabled={sending}
+                        onChange={(event) => onGoalAutoTurnsChange(Number(event.target.value))}
+                        className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </label>
+                  ) : null}
+                  {onGoalTokenBudgetChange ? (
+                    <label className="grid gap-2 text-xs text-muted-foreground">
+                      Token 总预算
+                      <input
+                        aria-label="Token 总预算"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="不限"
+                        value={goalTokenBudget}
+                        disabled={sending}
+                        onChange={(event) => onGoalTokenBudgetChange(event.target.value)}
+                        className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </label>
+                  ) : null}
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    默认不限，填写后生效。连续停滞时仍会暂停。
+                  </p>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span className="flex items-center gap-1 pr-3 text-xs">
+                <Goal className="size-3.5" />
+                目标
+              </span>
+            )}
+          </div>
         ) : null}
         <Popover
           open={activePicker === "permission"}

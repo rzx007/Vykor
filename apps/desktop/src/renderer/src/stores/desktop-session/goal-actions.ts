@@ -19,7 +19,7 @@ export const emptyGoalComposer: GoalComposerState = {
   mode: false,
   busy: false,
   error: null,
-  maxAutoTurns: 20,
+  maxAutoTurns: 0,
 }
 export const isOpenGoal = (goal: SessionGoal | null | undefined): goal is SessionGoal =>
   Boolean(goal && goal.status !== "completed" && goal.status !== "cancelled")
@@ -189,10 +189,10 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       if (!objective || !areDesktopAttachmentsSendable(attachmentDrafts)) return
       if (
         !Number.isSafeInteger(composer.maxAutoTurns) ||
-        composer.maxAutoTurns < 1 ||
+        composer.maxAutoTurns < 0 ||
         composer.maxAutoTurns > 1000
       ) {
-        updateComposer(scope, { error: "自动续跑次数需为 1 到 1000 的整数。" })
+        updateComposer(scope, { error: "自动续跑次数需为 1 到 1000 的整数，留空表示不限。" })
         return
       }
       const attachments = attachmentDrafts.flatMap((item) =>

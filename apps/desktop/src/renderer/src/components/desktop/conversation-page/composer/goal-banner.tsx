@@ -44,7 +44,7 @@ export function GoalBanner({
   const budgetClosed = goal.tokenBudget !== undefined && (goal.usage.incomplete || goal.usage.knownTokens >= goal.tokenBudget)
   const stopLabel = goalStopReasonLabel(goal)
   const terminal = goal.status === "completed" || goal.status === "cancelled"
-  const quotaExhausted = goal.phase === "executing" && goal.autoTurnsUsed >= goal.maxAutoTurns
+  const quotaExhausted = goal.phase === "executing" && goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns
   const validQuota =
     Number.isSafeInteger(additionalAutoTurns) &&
     additionalAutoTurns > 0 &&
@@ -133,7 +133,7 @@ export function GoalBanner({
             <Button type="button" variant="outline" size="sm" disabled={busy || stopping || budgetClosed || !response.trim()} onClick={resume}>检查并继续</Button></div> : null}
           {goal.stopReason?.detail ? <p className="break-words text-xs text-muted-foreground">{goal.stopReason.detail}</p> : null}
           <p className="text-xs text-muted-foreground">
-            自动续跑 {goal.autoTurnsUsed} / {goal.maxAutoTurns} 次
+            自动续跑 {goal.autoTurnsUsed} 次{goal.maxAutoTurns > 0 ? ` / 限额 ${goal.maxAutoTurns} 次` : " · 不限轮数"}
           </p>
           <div className="space-y-1 text-xs text-muted-foreground">
             <p>{goal.usage.incomplete ? "至少使用" : "已知使用"} {goal.usage.knownTokens.toLocaleString()} Token{goal.usage.incomplete ? "，用量不完整" : ""}</p>

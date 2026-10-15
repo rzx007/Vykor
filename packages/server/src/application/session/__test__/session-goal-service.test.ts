@@ -190,6 +190,25 @@ function modelAttempt(store: SessionStore, runId: string, tokens = 1): void {
 }
 
 describe("SessionGoalService durable lifecycle", () => {
+  it("defaults to unlimited turns", async () => {
+    const h = harness();
+    const created = await h.service.create("s1", { requestId: "unlimited", objective: "finish" });
+    expect(created.maxAutoTurns).toBe(0);
+    await drainRuns(h.store, h.control);
+  });
+  it("resumes an unlimited completed wait after many automatic turns", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness(undefined, { check: () => ({ state: "completed" }) });
+      const goal = persistedWait(h.store, 0);
+      h.store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, autoTurnsUsed: 1001 });
+      h.service.recoverExternalWaits();
+      await vi.advanceTimersByTimeAsync(1000);
+      await drainRuns(h.store, h.control);
+      expect(h.store.runs.listRuns("s1")).toHaveLength(2);
+      expect(h.store.goals.getGoal(goal.id)?.stopReason?.code).not.toBe("auto_turn_limit");
+    } finally { vi.useRealTimers(); }
+  });
   it("keeps ready paused behind ordinary user work and resumes the saved candidate without another preparation", async () => {
     let preparationCalls = 0;
     let releasePreparation!: () => void;

@@ -257,7 +257,7 @@ export class SessionGoalService {
         const changed = this.context.goals.updateGoal(goalId, {
           expectedRevision: input.expectedRevision,
           status: input.action === "cancel" ? "cancelled" : input.action === "pause" ? "paused" : input.action === "confirm" ? "completed" : "active",
-          maxAutoTurns: goal.maxAutoTurns + (input.action === "resume" ? (input.additionalAutoTurns ?? 0) : 0),
+          maxAutoTurns: goal.maxAutoTurns === 0 ? 0 : goal.maxAutoTurns + (input.action === "resume" ? (input.additionalAutoTurns ?? 0) : 0),
           ...(input.action === "resume" ? { noProgressCount: 0, stagnationCount: 0, blockerKey: null, currentRunId: null } : {}),
           reason: null,
           stopReason: input.action === "pause" ? { code: "user_paused", at: Date.now() }
@@ -471,7 +471,7 @@ export class SessionGoalService {
           });
           return;
         }
-        if (goal.autoTurnsUsed >= goal.maxAutoTurns) {
+        if (goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns) {
           change({ status: "paused", reason: "目标自动续跑额度已用完", stopReason: { code: "auto_turn_limit", at: Date.now(), runId } });
           return;
         }
@@ -695,7 +695,7 @@ export class SessionGoalService {
           });
           return "stopped";
         }
-        if (goal.autoTurnsUsed >= goal.maxAutoTurns) {
+        if (goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns) {
           this.context.goals.updateGoal(goal.id, {
             expectedRevision: goal.revision, status: "paused", wait: null, reason: "目标自动续跑额度已用完",
             stopReason: { code: "auto_turn_limit", at: Date.now() },
@@ -779,8 +779,8 @@ export class SessionGoalService {
 
   private validateResume(goal: SessionGoal, input: GoalActionInput, retryRunId?: string, savingAnswer = false): void {
     if (!["paused", "blocked", "waiting_user"].includes(goal.status)) throw new SessionApplicationError(409, `Goal cannot resume from ${goal.status}`);
-    if (goal.maxAutoTurns + (input.additionalAutoTurns ?? 0) > MAX_GOAL_AUTO_TURNS) throw new SessionApplicationError(400, "自动续跑总额度最多为 1000");
-    if (goal.phase === "executing" && goal.autoTurnsUsed >= goal.maxAutoTurns + (input.additionalAutoTurns ?? 0)) throw new SessionApplicationError(409, "请明确增加自动续跑额度");
+    if (goal.maxAutoTurns > 0 && goal.maxAutoTurns + (input.additionalAutoTurns ?? 0) > MAX_GOAL_AUTO_TURNS) throw new SessionApplicationError(400, "自动续跑总额度最多为 1000");
+    if (goal.maxAutoTurns > 0 && goal.phase === "executing" && goal.autoTurnsUsed >= goal.maxAutoTurns + (input.additionalAutoTurns ?? 0)) throw new SessionApplicationError(409, "请明确增加自动续跑额度");
     if (this.control.hasUserWork(goal.sessionId)) throw new SessionApplicationError(409, "请先等待用户任务结束");
     if (!savingAnswer && goalBudgetStopCode(goal, goal.usage)) throw new SessionApplicationError(409, "Token 预算已用完或用量不完整，请先调整预算");
     if (this.context.runs.listGoalRuns(goal.id).some((run) => run.id !== retryRunId && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标仍在停止，请稍后继续");

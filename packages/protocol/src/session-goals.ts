@@ -233,7 +233,8 @@ export interface GoalAssessment {
   wait?: GoalWait;
 }
 
-export const DEFAULT_GOAL_AUTO_TURNS = 20;
+/** Zero means no automatic-turn limit. */
+export const DEFAULT_GOAL_AUTO_TURNS = 0;
 export const MAX_GOAL_AUTO_TURNS = 1_000;
 export const MAX_GOAL_OBJECTIVE_CHARS = 32_000;
 
@@ -247,7 +248,7 @@ export function parseCreateSessionGoalInput(value: unknown): CreateSessionGoalIn
     ...(record.maxAutoTurns === undefined
       ? {}
       : {
-          maxAutoTurns: goalPositiveInteger(record.maxAutoTurns, "maxAutoTurns"),
+          maxAutoTurns: goalPositiveInteger(record.maxAutoTurns, "maxAutoTurns", true),
         }),
     ...parseGoalContent(record),
   };
@@ -338,9 +339,9 @@ function goalNonNegativeInteger(value: unknown, field: string): number {
   return value as number;
 }
 
-function goalPositiveInteger(value: unknown, field: string): number {
+function goalPositiveInteger(value: unknown, field: string, allowUnlimited = false): number {
   const integer = goalNonNegativeInteger(value, field);
-  if (integer < 1 || integer > MAX_GOAL_AUTO_TURNS) throw new ProtocolValidationError(`invalid_goal_${field}`, field);
+  if (integer < (allowUnlimited ? 0 : 1) || integer > MAX_GOAL_AUTO_TURNS) throw new ProtocolValidationError(`invalid_goal_${field}`, field);
   return integer;
 }
 function parseGoalContent(record: Record<string, unknown>): Pick<CreateSessionGoalInput, "items" | "attachments"> {

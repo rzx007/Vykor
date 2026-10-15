@@ -125,7 +125,7 @@ it("does not expose a resume or completion shortcut for approval waits", async (
   expect(onAction).not.toHaveBeenCalled()
 })
 
-it("offers submit while editing a running goal and disables mode exit during submission", () => {
+it("keeps goal limits hidden until settings open and preserves submit and exit behavior", async () => {
   const props = {
     id: "goal-composer",
     draft: composerDocument([{ type: "text" as const, text: "新目标" }]),
@@ -152,6 +152,17 @@ it("offers submit while editing a running goal and disables mode exit during sub
   const busy = document.createElement("div")
   busy.innerHTML = renderToStaticMarkup(createElement(Composer, { ...props, sending: true }))
   expect(busy.querySelector<HTMLButtonElement>('[aria-label="退出目标输入"]')?.disabled).toBe(true)
+  const onGoalAutoTurnsChange = vi.fn()
+  await act(async () => root.render(createElement(Composer, { ...props, running: false, onGoalAutoTurnsChange, onGoalTokenBudgetChange: vi.fn() })))
+  expect(document.querySelector('[aria-label="自动续跑额度"]')).toBeNull()
+  expect(document.querySelector('[aria-label="Token 总预算"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="目标设置"]')!.click())
+  const turns = document.querySelector<HTMLInputElement>('[aria-label="自动续跑额度"]')!
+  expect(turns.value).toBe("")
+  expect(turns.placeholder).toBe("不限")
+  expect(document.querySelector<HTMLInputElement>('[aria-label="Token 总预算"]')!.value).toBe("")
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="退出目标输入"]')!.click())
+  expect(props.onGoalModeChange).toHaveBeenCalledWith(false)
 })
 
 it("shows requirement status and remaining work in goal details", async () => {

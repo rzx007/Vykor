@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput, parseGoalAssessment } from "./session-goals.js";
 
 describe("session goal protocol", () => {
+  it("accepts unlimited automatic turns as zero and rejects invalid limits", () => {
+    expect(parseCreateSessionGoalInput({ requestId: "r", objective: "finish", maxAutoTurns: 0 }).maxAutoTurns).toBe(0);
+    for (const maxAutoTurns of [-1, 1.5, 1001]) expect(() => parseCreateSessionGoalInput({ requestId: "r", objective: "finish", maxAutoTurns })).toThrow();
+  });
   it("accepts a blocked-resume explanation without treating it as a question answer", () => {
     expect(parseGoalActionInput({ requestId: "blocked-resume", expectedRevision: 4, action: "resume", response: "所需配置已经补齐" })).toEqual({
       requestId: "blocked-resume", expectedRevision: 4, action: "resume", response: "所需配置已经补齐",

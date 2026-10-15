@@ -478,7 +478,7 @@ export class GoalTransactions implements GoalOperations {
         return false;
       if (goal.currentRunId === runId) return true;
       const countedAutomatic = automatic && goal.phase === "executing";
-      if (countedAutomatic && goal.autoTurnsUsed >= goal.maxAutoTurns) {
+      if (countedAutomatic && goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns) {
         const paused = this.options.repository.updateGoalRevision(goalId, {
           expectedRevision: goal.revision,
           status: "paused",
