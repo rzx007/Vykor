@@ -70,7 +70,7 @@ it("keeps the composer when submitting only confirmed plugin text and validates 
   await send("submit"); await decide("确认交给助手")
   await act(async () => vi.waitFor(() => {
     expect(posts).toHaveLength(1)
-    expect(host.conversationStatus?.message).toContain("已交给助手")
+    expect(host.conversationStatus).toEqual({ message: "已交给助手。" })
   }, { timeout: 5000 }))
   expect(posts).toHaveLength(1); expect(posts[0].input).toEqual({ expectedRevision: 1, text: "分析选择", data: { selected: true } })
   expect(selectDraftDocument(useDesktopSessionStore.getState(), scope).items).toEqual([{ type: "text", text: "不发送的草稿" }])
@@ -93,6 +93,7 @@ it("does not display a late response in a different source conversation", async 
   const submit = api.submitConversation
   api.submitConversation = async value => { const receipt = await submit(value); return await new Promise(resolve => { finish = () => resolve(receipt) }) }
   await send("submit"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(finish).toBeTypeOf("function"), { timeout: 5000 }))
   const original = useDesktopSessionStore.getState().sessionView
   await act(async () => useDesktopSessionStore.setState({ activeSessionId: "other", sessionView: null }))
   await act(async () => useDesktopSessionStore.setState({ activeSessionId: "session", sessionView: original }))
