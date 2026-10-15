@@ -5,7 +5,7 @@ import { agentTaskStatusLabel } from "../../tools/agents/agent-task-model"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { cn } from "@renderer/lib/utils"
 import { summarizeToolCall, toolCallStatus } from "./message-render-model"
-import { toolOutputText } from "./message-content"
+import { agentJobId, toolOutputText } from "./message-content"
 import { ElapsedTime } from "./task-duration"
 
 const dispatchStatusLabels = {
@@ -85,18 +85,4 @@ export function AgentActivityMessage({
       ) : null}
     </button>
   )
-}
-
-function agentJobId(text: string): string | undefined {
-  try {
-    const job = JSON.parse(text)
-    return job?.kind === "job" &&
-      job.jobKind === "agent" &&
-      job.action === "created" &&
-      typeof job.jobId === "string"
-      ? job.jobId
-      : undefined
-  } catch {
-    return undefined
-  }
 }

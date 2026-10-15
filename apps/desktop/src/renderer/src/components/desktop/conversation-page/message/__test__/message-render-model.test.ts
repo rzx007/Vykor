@@ -12,6 +12,17 @@ import {
 } from "../message-render-model"
 
 describe("message render model", () => {
+  it("does not merge adjacent commentary and final answer text", () => {
+    const base = { ...toolPart("Read", {}), type: "text" as const };
+    expect(buildAssistantContent([
+      { ...base, id: "progress", text: "检查中", metadata: { phase: "commentary" } },
+      { ...base, id: "answer", text: "检查完成", metadata: { phase: "final_answer" } },
+      { ...base, id: "answer-2", text: "。", metadata: { phase: "final_answer" } },
+    ])).toEqual([
+      { id: "progress", type: "markdown", text: "检查中", phase: "commentary" },
+      { id: "answer", type: "markdown", text: "检查完成。", phase: "final_answer" },
+    ]);
+  });
   it("shows the number of ordered edits in the existing tool summary", () => {
     expect(summarizeToolCall(toolPart("Edit", { file_path: "a.ts", edits: [
       { old_string: "a", new_string: "A" }, { old_string: "b", new_string: "B" },

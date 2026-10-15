@@ -1,7 +1,7 @@
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import type { DesktopSessionRun } from "@shared/session-types"
+import type { DesktopSessionPart, DesktopSessionRun } from "@shared/session-types"
 import { MessageScroller, MessageScrollerProvider } from "@renderer/components/ui/message-scroller"
 import { ConversationTranscript } from "../transcript"
 import { AgentActivityMessage } from "../../message/agent-activity-message"
@@ -23,7 +23,11 @@ const run: DesktopSessionRun = {
   updatedAt: 66_000,
 }
 
-function render(runs: DesktopSessionRun[], running = false): string {
+function render(
+  runs: DesktopSessionRun[],
+  running = false,
+  assistantParts?: DesktopSessionPart[]
+): string {
   const messages = [
     { id: "user", role: "user" as const, seq: 1 },
     { id: "assistant", role: "assistant" as const, seq: 2, runId: runs.at(-1)?.id },
@@ -56,7 +60,9 @@ function render(runs: DesktopSessionRun[], running = false): string {
         null,
         createElement(ConversationTranscript, {
           messages,
-          parts,
+          parts: assistantParts
+            ? [...parts.filter((part) => part.messageId === "user"), ...assistantParts]
+            : parts,
           runs,
           running,
           canEditLastUserMessage: false,
@@ -79,6 +85,58 @@ it("keeps completed duration above message actions after reopening a historical 
   expect(html).toContain("1分5秒")
   expect(html.indexOf("耗时")).toBeLessThan(html.indexOf('aria-label="复制回复"'))
   expect(html.match(/data-task-duration/g)).toHaveLength(1)
+})
+
+it("folds a completed process but keeps the answer, file summary and actions visible", () => {
+  const base = {
+    sessionId: "chat",
+    messageId: "assistant",
+    status: "completed" as const,
+    createdAt: 1,
+    updatedAt: 1,
+  }
+  const parts: DesktopSessionPart[] = [
+    {
+      ...base,
+      id: "progress",
+      seq: 1,
+      type: "text",
+      text: "正在检查文件",
+      metadata: { phase: "commentary" },
+    },
+    {
+      ...base,
+      id: "write",
+      seq: 2,
+      type: "tool",
+      toolUseId: "write-call",
+      toolName: "Write",
+      input: { file_path: "D:/report.md", content: "done" },
+      metadata: {},
+    },
+    {
+      ...base,
+      id: "answer",
+      seq: 3,
+      type: "text",
+      text: "报告已经完成",
+      metadata: { phase: "final_answer" },
+    },
+  ]
+  const html = render([run], false, parts)
+  expect(html).toContain("用时 1分5秒")
+  expect(html).toContain('aria-expanded="false"')
+  expect(html).not.toContain("正在检查文件")
+  expect(html).toContain("报告已经完成")
+  expect(html).toContain('aria-label="文件编辑摘要"')
+  expect(html).toContain('aria-label="复制回复"')
+  expect(html).not.toContain("data-task-duration")
+
+  const failed = render([{ ...run, status: "failed", error: "后台连接失败" }], false, parts)
+  expect(failed).not.toContain("正在检查文件")
+  expect(failed).toContain("报告已经完成")
+  expect(failed).toContain("用时 1分5秒")
+  expect(failed).toContain("后台连接失败")
 })
 
 it("restores live elapsed time from the stored start instead of the mount time", () => {

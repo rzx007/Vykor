@@ -15,6 +15,7 @@ import { ModelRetryNotice } from "../message/model-retry-notice"
 import { ModelUsageNotice } from "../message/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
+import { TurnProcess } from "./turn-process"
 import { selectRunNotices } from "./run-notices"
 import { pluginPreparationLabel } from "./plugin-preparation-label"
 import { TaskDuration } from "../message/task-duration"
@@ -160,7 +161,8 @@ export function ConversationTranscript({
             (Boolean(run.inputId) && run.inputId === entry.turn.inputId)
         )
         const userMessage = entry.turn.userMessage
-        const timing = taskTiming(runs.filter((run) => entry.turn.runIds.includes(run.id)))
+        const turnRuns = runs.filter((run) => entry.turn.runIds.includes(run.id))
+        const timing = taskTiming(turnRuns)
         const turnUsageRuns = runs.filter(
           (run) =>
             import.meta.env.DEV &&
@@ -201,63 +203,83 @@ export function ConversationTranscript({
                 </ContentEntrance>
               </MessageScrollerItem>
             ) : null}
-            {turnPlan.map((item) =>
-              item.kind === "divider" && item.phase ? (
-                <MessageScrollerItem key={item.key} messageId={item.messageId}>
-                  <ContextCompactionDivider
-                    presentation={{ kind: "context_compaction", phase: item.phase }}
-                  />
-                </MessageScrollerItem>
-              ) : (
-                <MessageScrollerItem
-                  key={item.key}
-                  messageId={item.messageId}
-                  className="group/msg min-w-0"
-                >
-                  <AssistantMessage
-                    parts={item.parts}
-                    observations={runs
-                      .filter((run) => entry.turn.runIds.includes(run.id))
-                      .flatMap((run) => {
-                        const result = readWorkspaceChangesMetadata(run.metadata.workspaceChanges)
-                        return result ? [result] : []
-                      })}
-                    showObservations={item.key === lastAssistantKey}
-                    streaming={item.streaming}
-                    initialPartIds={initialPartIds}
-                    tasks={tasks}
-                    onOpenAgents={onOpenAgents}
-                    onOpenFile={onOpenFile}
-                    canOpenReview={canOpenReview}
-                    onOpenReview={onOpenReview}
-                    onOpenTerminal={onOpenTerminal}
-                  />
-                  {item.key === lastAssistantKey ? (
-                    <TaskDuration timing={timing} label={runningLabel} />
-                  ) : null}
-                  {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
-                    <AssistantMessageActions
-                      message={entry.turn.assistantMessages.at(-1)}
-                      content={messageTextContent(entry.turn.assistantParts)}
-                      disabled={false}
-                      onCopy={onCopyAssistantMessage}
-                      onFork={onForkAssistantMessage}
-                    />
-                  ) : null}
-                  {item.key === lastAssistantKey &&
-                  (turnUsageRuns.length > 0 || turnFailures.length > 0) ? (
-                    <div className="mt-3 flex flex-col gap-3">
-                      {turnUsageRuns.map((run) => (
-                        <ModelUsageNotice key={run.id} metadata={run.metadata} />
-                      ))}
-                      {turnFailures.map((run) => (
-                        <RunErrorNotice key={run.id} error={run.error} />
-                      ))}
-                    </div>
-                  ) : null}
-                </MessageScrollerItem>
-              )
-            )}
+            <TurnProcess
+              plan={turnPlan}
+              timing={timing}
+              tasks={tasks}
+              canCollapse={
+                turnRuns.length > 0 &&
+                turnRuns.every((run) => run.status !== "pending" && run.status !== "running") &&
+                !turnPlan.some((item) => item.streaming)
+              }
+            >
+              {(items, folded) =>
+                items.map((item) =>
+                  item.kind === "divider" && item.phase ? (
+                    <MessageScrollerItem key={item.key} messageId={item.messageId}>
+                      <ContextCompactionDivider
+                        presentation={{ kind: "context_compaction", phase: item.phase }}
+                      />
+                    </MessageScrollerItem>
+                  ) : (
+                    <MessageScrollerItem
+                      key={item.key}
+                      messageId={item.messageId}
+                      className="group/msg min-w-0"
+                    >
+                      <AssistantMessage
+                        parts={item.parts}
+                        summaryParts={item.summaryParts}
+                        observations={runs
+                          .filter((run) => entry.turn.runIds.includes(run.id))
+                          .flatMap((run) => {
+                            const result = readWorkspaceChangesMetadata(
+                              run.metadata.workspaceChanges
+                            )
+                            return result ? [result] : []
+                          })}
+                        showObservations={item.key === lastAssistantKey}
+                        streaming={item.streaming}
+                        initialPartIds={initialPartIds}
+                        tasks={tasks}
+                        onOpenAgents={onOpenAgents}
+                        onOpenFile={onOpenFile}
+                        canOpenReview={canOpenReview}
+                        onOpenReview={onOpenReview}
+                        onOpenTerminal={onOpenTerminal}
+                      />
+                      {item.key === lastAssistantKey && !folded ? (
+                        <TaskDuration timing={timing} label={runningLabel} />
+                      ) : null}
+                      {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
+                        <AssistantMessageActions
+                          message={entry.turn.assistantMessages.at(-1)}
+                          content={messageTextContent(
+                            folded
+                              ? items.flatMap((block) => block.parts)
+                              : entry.turn.assistantParts
+                          )}
+                          disabled={false}
+                          onCopy={onCopyAssistantMessage}
+                          onFork={onForkAssistantMessage}
+                        />
+                      ) : null}
+                      {item.key === lastAssistantKey &&
+                      (turnUsageRuns.length > 0 || turnFailures.length > 0) ? (
+                        <div className="mt-3 flex flex-col gap-3">
+                          {turnUsageRuns.map((run) => (
+                            <ModelUsageNotice key={run.id} metadata={run.metadata} />
+                          ))}
+                          {turnFailures.map((run) => (
+                            <RunErrorNotice key={run.id} error={run.error} />
+                          ))}
+                        </div>
+                      ) : null}
+                    </MessageScrollerItem>
+                  )
+                )
+              }
+            </TurnProcess>
             {lastAssistantKey === undefined ? (
               <>
                 {timing ? (

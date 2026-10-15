@@ -33,7 +33,9 @@ export function ReadToolRow({
           ? "读取已中断"
           : "读取文件"
   return (
-    <div className={cn("flex h-7 min-w-0 items-center gap-2", calling && "shimmer")}>
+    <div
+      className={cn("group/read-tool flex h-7 min-w-0 items-center gap-2", calling && "shimmer")}
+    >
       <BookOpen className="size-3.5 shrink-0" strokeWidth={1.75} />
       <span className="shrink-0">{label}</span>
       <button
@@ -53,8 +55,10 @@ export function ReadToolRow({
         title="查看读取结果"
         aria-expanded={active}
         onClick={onToggle}
+        className="opacity-0 transition-opacity group-focus-within/read-tool:opacity-100 group-hover/read-tool:opacity-100 motion-reduce:transition-none"
       >
         <ChevronDown
+          aria-hidden="true"
           className={cn("size-3.5 motion-safe:transition-transform", active && "rotate-180")}
         />
       </Button>

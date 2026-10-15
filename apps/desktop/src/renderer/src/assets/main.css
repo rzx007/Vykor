@@ -553,11 +553,6 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .b
     text-indent: 0;
   }
 
-  /* 过程说明使用独立文字颜色，保持正文大小和可读行距。 */
-  .assistant-markdown[data-phase="commentary"] {
-    color: var(--ui-muted);
-  }
-
   .desktop-streamdown {
     --muted: var(--code);
     --muted-foreground: var(--ui-muted);

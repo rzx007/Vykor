@@ -1,5 +1,19 @@
 import type { DesktopSessionPart } from "@shared/session-types"
 
+export function agentJobId(text: string): string | undefined {
+  try {
+    const job = JSON.parse(text)
+    return job?.kind === "job" &&
+      job.jobKind === "agent" &&
+      job.action === "created" &&
+      typeof job.jobId === "string"
+      ? job.jobId
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function messageTextContent(parts: DesktopSessionPart[]): string {
   return parts
     .filter((part) => part.type === "text")

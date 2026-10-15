@@ -8,6 +8,8 @@ export interface TurnBlockPlanItem {
   messageId: string
   kind: "assistant" | "divider"
   parts: DesktopSessionPart[]
+  /** 折叠只改变展示分组，文件改动摘要仍使用完整来源。 */
+  summaryParts?: DesktopSessionPart[]
   streaming: boolean
   showActions: boolean
   phase?: ContextCompactionPhase

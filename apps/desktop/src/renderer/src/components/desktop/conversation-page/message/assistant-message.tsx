@@ -2,8 +2,8 @@ import {
   AlertCircle,
   ChevronDown,
   FileCode2,
+  Layers,
   LoaderCircle,
-  Pencil,
   TerminalSquare,
 } from "lucide-react"
 import { memo, useEffect, useId, useMemo, useState } from "react"
@@ -73,6 +73,7 @@ const streamingTextAnimation = {
 
 type AssistantMessageProps = {
   parts: DesktopSessionPart[]
+  summaryParts?: DesktopSessionPart[]
   observations?: WorkspaceChangesMetadata[]
   showObservations?: boolean
   streaming: boolean
@@ -88,6 +89,7 @@ type AssistantMessageProps = {
 
 export const AssistantMessage = memo(function AssistantMessage({
   parts,
+  summaryParts = parts,
   observations,
   showObservations = true,
   streaming,
@@ -101,8 +103,8 @@ export const AssistantMessage = memo(function AssistantMessage({
 }: AssistantMessageProps): React.JSX.Element {
   const units = useMemo(() => buildAssistantContent(parts), [parts])
   const blocks = useMemo(() => groupToolUnits(units), [units])
-  const changedFiles = useMemo(() => collectChangedFiles(parts), [parts])
-  const fileIdentityLimits = parts.flatMap((part) => {
+  const changedFiles = useMemo(() => collectChangedFiles(summaryParts), [summaryParts])
+  const fileIdentityLimits = summaryParts.flatMap((part) => {
     if (
       part.bodyView?.input !== "preview" ||
       part.status !== "completed" ||
@@ -262,7 +264,10 @@ export const AssistantMessage = memo(function AssistantMessage({
         )
       })}
 
-      {!streaming && showObservations && isTurnComplete(parts) && changedFileList.length > 0 ? (
+      {!streaming &&
+      showObservations &&
+      isTurnComplete(summaryParts) &&
+      changedFileList.length > 0 ? (
         <ChangedFilesSummary
           files={changedFileList}
           observation={observation}
@@ -271,7 +276,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           onOpenReview={onOpenReview}
         />
       ) : null}
-      {!streaming
+      {!streaming && showObservations
         ? fileIdentityLimits.map((limit) => (
             <p key={limit.id} className="text-xs text-ui-muted">
               工具文件列表仅显示 {limit.shown} / {limit.total} 个文件。
@@ -299,6 +304,7 @@ function areAssistantMessagePropsEqual(
     previous.onOpenReview === next.onOpenReview &&
     previous.onOpenTerminal === next.onOpenTerminal &&
     sameReferences(previous.parts, next.parts) &&
+    sameReferences(previous.summaryParts ?? previous.parts, next.summaryParts ?? next.parts) &&
     sameReferences(previous.tasks ?? emptyAgentTasks, next.tasks ?? emptyAgentTasks) &&
     (!previousShowsObservations || sameReferences(previous.observations, next.observations))
   )
@@ -516,7 +522,7 @@ function ToolActivityGroup({
                 }
               />
             ) : (
-              <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
+              <Layers aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.75} />
             )}
             <span className="truncate">
               {heading || "工具活动"}
@@ -618,12 +624,12 @@ function ToolActivityGroup({
                     }}
                     aria-expanded={active}
                     className={cn(
-                      "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      "group/tool-row flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                       calling && "shimmer"
                     )}
                   >
                     <TerminalSquare className="size-3.5 shrink-0" strokeWidth={1.6} />
-                    <span className="min-w-0 flex-1 truncate">
+                    <span className="min-w-0 truncate">
                       <span className="text-ui-foreground">{summary.name}</span>
                       <span className="ml-1.5 text-ui-muted">{detail}</span>
                     </span>
@@ -635,8 +641,9 @@ function ToolActivityGroup({
                       )
                     ) : null}
                     <ChevronDown
+                      aria-hidden="true"
                       className={cn(
-                        "size-3.5 shrink-0 transition-transform",
+                        "size-3.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/tool-row:opacity-100 group-focus-visible/tool-row:opacity-100 motion-reduce:transition-none",
                         active && "rotate-180"
                       )}
                     />

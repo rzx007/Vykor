@@ -70,9 +70,9 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
     if (part.type === "tool_result") continue
     if (part.type === "text" && part.text) {
       const previous = units.at(-1)
-      if (previous?.type === "markdown") previous.text += part.text
+      const phase = assistantPhase(part.metadata.phase)
+      if (previous?.type === "markdown" && previous.phase === phase) previous.text += part.text
       else if (part.text.trim()) {
-        const phase = assistantPhase(part.metadata.phase)
         units.push({ id: part.id, type: "markdown", text: part.text, ...(phase ? { phase } : {}) })
       }
       continue
