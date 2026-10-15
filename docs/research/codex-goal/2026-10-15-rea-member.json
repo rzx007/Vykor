@@ -1,0 +1,9 @@
+{
+  "archive": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1007.9446.0_x64__2p2nqsd0c76g0\\app\\resources\\app.asar",
+  "member": "webview/assets/registered-65d3e6c78c19.js",
+  "offset": 420232336,
+  "size": 2748,
+  "sha256": "90874f6afeb311dfc44cfc09263c13245af34082e5c62a0da7b2d993808b5615",
+  "extractedPath": "C:\\Users\\ruanz\\AppData\\Local\\Temp\\codex-goal-exact-member-iomqzx7x\\registered-65d3e6c78c19.js",
+  "scope": "One exact shipped member, unchanged; imported modules are not copied."
+}

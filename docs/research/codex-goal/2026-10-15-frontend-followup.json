@@ -1,0 +1,237 @@
+{
+  "archive": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1007.9446.0_x64__2p2nqsd0c76g0\\app\\resources\\app.asar",
+  "archiveSha256": "356c13dc715816436fa1cf31e9f77863f62ea7b7cacc465b397313246eb29325",
+  "method": "Direct ASAR header parsing and exact member byte searches; not REA Evidence",
+  "members": [
+    {
+      "member": ".vite/build/src-BSoROW9v.js",
+      "sha256": "02bfe16d532e9de068979823a2409783b03a10d9b9348e8ad6247ba81aca1e16",
+      "searches": [
+        {
+          "needle": "thread/goal/set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread/goal/get",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-resume",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "turn/start",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "preparing",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "preparation",
+          "count": 0,
+          "matches": []
+        }
+      ]
+    },
+    {
+      "member": ".vite/build/src-C9YLnbgY.js",
+      "sha256": "56f4e7f71fb8e93a022d0378322e8fa723a8da07085138957e722e0ac36e9c9d",
+      "searches": [
+        {
+          "needle": "thread/goal/set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread/goal/get",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-resume",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "turn/start",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "preparing",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "preparation",
+          "count": 0,
+          "matches": []
+        }
+      ]
+    },
+    {
+      "member": ".vite/build/src-CP7XXlpZ.js",
+      "sha256": "79623d50989f9efbcb8e5752c56b3cc608a0f5993c05112e03e11b718ac7a586",
+      "searches": [
+        {
+          "needle": "thread/goal/set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread/goal/get",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-resume",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "turn/start",
+          "count": 7,
+          "matches": [
+            {
+              "offset": 32994,
+              "text": ",t)}t.exports=i})),Ur=e.a(Vr()),Wr=e.a(Hr()),Gr=new Set(`config/batchWrite.config/read.configRequirements/read.command/exec.model/list.permissionProfile/list.thread/archive.thread/list.thread/name/set.thread/read.thread/queue/add.thread/queue/list.thread/queue/update.thread/queue/delete.thread/queue/reorder.thread/realtime/appendAudio.thread/realtime/appendSpeech.thread/realtime/appendText.thread/realtime/listVoices.thread/realtime/start.thread/realtime/stop.thread/resume.thread/settings/update.thread/start.thread/startAeon.thread/stop.thread/items/list.thread/inject_items.thread/turns/list.thread/unarchive.turn/addUserMessage.turn/interrupt.turn/start.turn/steer`.split(`.`)),Kr={model:null,review_model:null,model_context_window:null,model_auto_compact_token_limit:null,model_auto_compact_token_limit_scope:null,model_provider:null,approval_policy:null,approvals_reviewer:null,sandbox_mode:null,sandbox_workspace_write:null,forced_chatgpt_workspace_id:null,forced_login_method:null,web_search:null,tools:null,profile:null,profiles:{},instructions:null,developer_instructions:null,compact_prompt:null,model_reasoning_effort:null,model_reasoning_summary:null,model_verbosity:null,service_tier:null,analytics:null,apps:null,browser_use:null,computer_use:null,desktop:null},qr=class{options;inMemoryConfigVersion=0;inMemoryConfig=structuredClone(Kr);constructor(e={forwardConfigRequirements:!1}){this.options=e}supports(e){return Gr.has(e.method)}send(e){if(e.method===`thread/read`&&e.params.t"
+            },
+            {
+              "offset": 35199,
+              "text": "ig,t.keyPath);continue}(0,Ur.default)(this.inMemoryConfig,t.keyPath,structuredClone(t.value))}return this.inMemoryConfigVersion+=1,{type:`response`,response:{id:e.id,result:{status:`ok`,version:`in-memory-${this.inMemoryConfigVersion}`,filePath:`/in-memory/config.toml`,overriddenMetadata:null}}}}return e.method===`configRequirements/read`&&!this.options.forwardConfigRequirements?{type:`response`,response:{id:e.id,result:{requirements:null}}}:e.method===`permissionProfile/list`?{type:`response`,response:{id:e.id,result:{data:[],nextCursor:null}}}:e.method===`thread/startAeon`||e.method===`thread/start`||e.method===`thread/resume`||e.method===`turn/start`||e.method===`turn/addUserMessage`?{type:`request`,request:{...e,params:{...e.params,personality:void 0,serviceTier:Yr(e.params.serviceTier)}}}:{type:`request`,request:e}}};function Jr(e,t=!1,n,r,i){if(i!=null&&(!(`method`in e)||e.method!==`turn/start`))throw Error(`Environment draft replacement requires turn/start`);if(!(`id`in e)||!(`method`in e)||e.method!==`thread/start`&&e.method!==`thread/startAeon`&&e.method!==`thread/resume`&&e.method!==`thread/queue/add`&&e.method!==`turn/start`&&e.method!==`turn/addUserMessage`)return JSON.stringify(r!=null&&`id`in e&&`method`in e?{...e,params:{...e.params,threadAccess:r}}:e);let a={};r!=null&&(a.threadAccess=r);let o=e.method;switch(e.method){case`thread/queue/add`:o=`turn/addUserMessage`,a.mode=`queue`;break;case`thread/start`:a.deferredEnvironment=e.params.environments?.some(({envi"
+            },
+            {
+              "offset": 35451,
+              "text": "mory/config.toml`,overriddenMetadata:null}}}}return e.method===`configRequirements/read`&&!this.options.forwardConfigRequirements?{type:`response`,response:{id:e.id,result:{requirements:null}}}:e.method===`permissionProfile/list`?{type:`response`,response:{id:e.id,result:{data:[],nextCursor:null}}}:e.method===`thread/startAeon`||e.method===`thread/start`||e.method===`thread/resume`||e.method===`turn/start`||e.method===`turn/addUserMessage`?{type:`request`,request:{...e,params:{...e.params,personality:void 0,serviceTier:Yr(e.params.serviceTier)}}}:{type:`request`,request:e}}};function Jr(e,t=!1,n,r,i){if(i!=null&&(!(`method`in e)||e.method!==`turn/start`))throw Error(`Environment draft replacement requires turn/start`);if(!(`id`in e)||!(`method`in e)||e.method!==`thread/start`&&e.method!==`thread/startAeon`&&e.method!==`thread/resume`&&e.method!==`thread/queue/add`&&e.method!==`turn/start`&&e.method!==`turn/addUserMessage`)return JSON.stringify(r!=null&&`id`in e&&`method`in e?{...e,params:{...e.params,threadAccess:r}}:e);let a={};r!=null&&(a.threadAccess=r);let o=e.method;switch(e.method){case`thread/queue/add`:o=`turn/addUserMessage`,a.mode=`queue`;break;case`thread/start`:a.deferredEnvironment=e.params.environments?.some(({environmentId:e})=>!1)?!0:void 0,a.pluginsMcp={productSku:`codex`},t&&(o=`thread/prewarm`);break;case`thread/startAeon`:break;case`thread/resume`:a.baseInstructions=void 0,a.developerInstructions=void 0,a.pluginsMcp=void 0;break;case`turn/start`:case`turn/"
+            }
+          ]
+        },
+        {
+          "needle": "preparing",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "preparation",
+          "count": 0,
+          "matches": []
+        }
+      ]
+    },
+    {
+      "member": ".vite/build/src-DCNiwad_.js",
+      "sha256": "86fb2066bbc2f7428864b76b46ef570b09eb1e92e81e9d6f089f5b048a66df25",
+      "searches": [
+        {
+          "needle": "thread/goal/set",
+          "count": 3,
+          "matches": [
+            {
+              "offset": 390337,
+              "text": "null:{goal:e.threadGoal??null,completedGoal:e.completedThreadGoal??null,resumeConfirmation:e.threadGoalResumeConfirmation??null}}async function qg(e,t,{appendTranscriptItem:n,objective:r,threadSettings:i},a){let o=await e.resumeConversationForUnavailableOwner({conversationId:t,model:null,serviceTier:null,reasoningEffort:null,workspaceRoots:[e.getConversationCwd(t)??`/`],collaborationMode:e.getConversation(t)?.latestCollaborationMode??null});if(o.status===`not-ready`)throw new Wg(o);e.assertThreadFollowerOwner(t),i==null?await e.waitForPendingThreadSettingsUpdate(t):await e.updateThreadSettingsForNextTurn(t,i);let{goal:s}=await e.sendRequest(`thread/goal/set`,{threadId:t,objective:r,status:`active`});return n===!1?e.updateConversationState(t,e=>{e.threadGoal=s}):Xg(e,t,s,a.createSearchIslandId),s}async function Jg(e,t,{status:n,threadSettings:r}){n===`active`&&(r==null?await e.waitForPendingThreadSettingsUpdate(t):await e.updateThreadSettingsForNextTurn(t,r));let{goal:i}=await e.sendRequest(`thread/goal/set`,{threadId:t,status:n});return e.updateConversationState(t,e=>{e.threadGoal=i,e.threadGoalResumeConfirmation=null}),i}function Yg(e,t,n){return{params:{threadId:e,input:[{type:`text`,text:Be(t.objective),text_elements:[]}],cwd:null,approvalPolicy:n.approvalPolicy,approvalsReviewer:n.approvalsReviewer,sandboxPolicy:n.sandboxPolicy,model:null,effort:`minimal`,summary:`none`,personality:null,outputSchema:null,collaborationMode:null},turnId:null,turnStartedAtMs:t.updatedAt*1e3,"
+            },
+            {
+              "offset": 390693,
+              "text": "tionCwd(t)??`/`],collaborationMode:e.getConversation(t)?.latestCollaborationMode??null});if(o.status===`not-ready`)throw new Wg(o);e.assertThreadFollowerOwner(t),i==null?await e.waitForPendingThreadSettingsUpdate(t):await e.updateThreadSettingsForNextTurn(t,i);let{goal:s}=await e.sendRequest(`thread/goal/set`,{threadId:t,objective:r,status:`active`});return n===!1?e.updateConversationState(t,e=>{e.threadGoal=s}):Xg(e,t,s,a.createSearchIslandId),s}async function Jg(e,t,{status:n,threadSettings:r}){n===`active`&&(r==null?await e.waitForPendingThreadSettingsUpdate(t):await e.updateThreadSettingsForNextTurn(t,r));let{goal:i}=await e.sendRequest(`thread/goal/set`,{threadId:t,status:n});return e.updateConversationState(t,e=>{e.threadGoal=i,e.threadGoalResumeConfirmation=null}),i}function Yg(e,t,n){return{params:{threadId:e,input:[{type:`text`,text:Be(t.objective),text_elements:[]}],cwd:null,approvalPolicy:n.approvalPolicy,approvalsReviewer:n.approvalsReviewer,sandboxPolicy:n.sandboxPolicy,model:null,effort:`minimal`,summary:`none`,personality:null,outputSchema:null,collaborationMode:null},turnId:null,turnStartedAtMs:t.updatedAt*1e3,durationMs:null,firstTurnWorkItemStartedAtMs:null,finalAssistantStartedAtMs:null,status:`completed`,error:null,diff:null,items:[]}}function Xg(e,t,r,i){e.updateConversationState(t,e=>{e.threadGoal=r;let o=a.o(e),s=o?.params.input[0];if(o!=null&&o.turnId==null&&o.turnStartedAtMs===r.updatedAt*1e3&&o.status===`completed`&&o.items.length===0&&o.params.input"
+            },
+            {
+              "offset": 998610,
+              "text": ":this.logger,backgroundCleanup:t===`user-stop`&&r==null,killNodeReplExecutions:(e,t)=>this.runtime.killNodeReplExecutions(e,t),onTurnInterruptStarted:()=>this.events.emitTurnInterruptStarted(e),schedule:this.scheduler.schedule,cleanBackgroundTerminals:()=>this.cleanBackgroundTerminals(e),conversationId:e,conversationState:this.conversations.get(e),expectedTurnId:r,sendInterruptRequest:(e,t)=>this.sendRequest(`turn/interrupt`,{threadId:e,turnId:t}),updateConversationState:(e,t)=>this.updateConversationState(e,t)});if(r!=null)return a();let o=this.getConversation(e)?.threadGoal?.status===`active`,s=async t=>{let{goal:n}=await this.sendRequest(`thread/goal/set`,{threadId:e,status:`paused`},t);this.updateConversationState(e,e=>{e.threadGoal=n,e.threadGoalResumeConfirmation=null})},c;if(o&&t===`system`)await s();else if(o&&t===`user-stop`)try{await s({priority:`critical`,timeoutMs:500})}catch(t){c=t,this.logger.warning(`Failed to pause thread goal before interrupt`,{safe:{conversationId:e},sensitive:{error:t}})}Gy(this,wp,e,this.conversations.get(e));let l=await a();if(o&&t===`descendant-cleanup`)try{await s()}catch(t){this.logger.warning(`Failed to pause thread goal after interrupt`,{safe:{conversationId:e},sensitive:{error:t}})}if(c!=null)throw Object.assign(Error(`Failed to pause thread goal`,{cause:c}),{interruptedTurnId:l});return l}async cleanBackgroundTerminals(e,t){let n=this.getStreamRole(e);if(!t?.allowOverlayDirect&&n?.role===`follower`)throw Error(fo);let r=this.conver"
+            }
+          ]
+        },
+        {
+          "needle": "thread/goal/get",
+          "count": 1,
+          "matches": [
+            {
+              "offset": 698889,
+              "text": "eason:`canceled`};Ge!=null&&B?.mark(`history_ready`);let Ke=e.getConversation(m)?.environmentSelectionEvidence,qe=De??(R&&O&&z?Hm(e,{conversationId:m,cwd:he,isCurrent:u,mapThreadTurns:c.mapThreadTurns,options:{itemsView:`summary`,itemLimit:re,limit:ne,requestOptions:Ae},permissions:Ce,reasoningEffort:_,threadStartKind:C?.threadStartKind,turnMergePolicy:c.turnMergePolicy}):null);qe!==De&&qe?.then(()=>B?.mark(`history_ready`),()=>void 0),B?.mark(`runtime_resume_started`);let Je=ET({sendRequest:e.sendRequest.bind(e),request:Ve,options:p?{...Ae,timeoutMs:ao}:Ae,schedule:f,isCurrentResumeAttempt:u,setRetryCleanup:e=>{ie=e}}),Ye=()=>e.sendRequest(`thread/goal/get`,{threadId:m},x===!0?Ae:je).then(({goal:e})=>({ok:!0,goal:e})).catch(t=>(e.logger.warning(`Failed to hydrate thread goal after resume`,{safe:{conversationId:m},sensitive:{error:t}}),{ok:!1})),W=await Je.catch(async t=>{ae=!0;let n=e.getConversation(m);throw e.logger.warning(`VM lifecycle`,{safe:{vmEvent:`thread_resume_failed`,vmProduct:em(n?.threadStartKind,n?.threadSource)?`orbit`:`unknown`,threadId:m,errorType:t instanceof Error?t.name:`unknown`},sensitive:{hostId:w}}),u()&&await qe?.catch(()=>void 0),t});if(W==null||!u())return{status:`not-ready`,reason:`canceled`};ae=!0,B?.mark(`runtime_resume_finished`);let Xe=e.getConversation(m)?.environmentSelectionEvidence;(Xe?.source!==`live`||Xe===Ke)&&e.updateConversationState(m,e=>{Object.assign(e,uy(W.thread,e,`live`))}),e.ensureRecentConversationId(m);let Ze=ue?Jb(W):null,Qe"
+            }
+          ]
+        },
+        {
+          "needle": "thread-goal-set",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "thread-goal-resume",
+          "count": 0,
+          "matches": []
+        },
+        {
+          "needle": "turn/start",
+          "count": 33,
+          "matches": [
+            {
+              "offset": 70949,
+              "text": ",serviceTier:a,schema:o,timeoutMs:s,client:c,onTokenUsage:l,onTurnCompleted:u,signal:d,experimentalPredictionMode:f=!1,effort:p}){let m=null,h=null,g=null,_=!1,v=!1,y=()=>{},b=()=>{v||m==null||c.interruptTurn==null||(v=!0,c.interruptTurn({threadId:r,turnId:m}).catch(()=>void 0))},x=new Promise((t,n)=>{let i=()=>{_=!0,y(),b(),n(new DOMException(`The operation was aborted`,`AbortError`))},a=setTimeout(()=>{_=!0,y(),b(),n(Error(`Timed out waiting for structured result.`))},s),o=c.registerInternalNotificationHandler(i=>{switch(i.method){case`error`:{let e=i.params;if(e.threadId!==r||m!=null&&e.turnId!==m)return;m??=e.turnId,g=e.error;return}case`turn/started`:{let e=i.params;if(e.threadId!==r)return;m=e.turn.id;return}case`thread/tokenUsage/updated`:{let e=i.params;if(e.threadId!==r||m!=null&&e.turnId!==m)return;l?.(e.tokenUsage);return}case`item/agentMessage/delta`:{let e=i.params;if(e.threadId!==r)return;if(e.turnId==null){if(m!=null)return}else if(m!=null&&e.turnId!==m)return;h=`${h??``}${e.delta}`;return}case`item/completed`:{let e=i.params;if(e.threadId!==r)return;if(e.turnId==null){if(m!=null)return}else if(m!=null&&e.turnId!==m)return;e.item.type===`agentMessage`&&(h=e.item.text);return}case`turn/completed`:{let a=i.params;if(a.threadId!==r||m!=null&&a.turn.id!==m)return;if(m=a.turn.id,a.turn.status!==`completed`){y(),n(Error(jn(a.turn.status,a.turn.error??g)));return}y(),u?.({turnId:a.turn.id}),t(An(h,e));return}default:return}});y=()=>{clearTimeout(a),d?.removeEventListe"
+            },
+            {
+              "offset": 125301,
+              "text": "[e.codexHome(),e.platformFamily()]);return!e.isLocal||process.platform===`win32`&&n!==`windows`?no({codexHome:e.isLocal&&n!==`windows`?o.Ut(t):t,platformFamily:n,spawn:e.spawn.bind(e)}):to({codexHome:t,homeDirectory:(0,y.homedir)(),localAppData:process.env.LOCALAPPDATA,platformFamily:n})}var ao=3e4,oo=`codex_cloud`,so=12e4,co=`Timed out waiting for Windows sandbox setup completion`,lo=12e5,uo=3e5,fo=`Please continue this conversation on the window where it was started.`,po=5e3;function mo(e){return e===`thread/start`||e===`thread/startAeon`||e===`thread/fork`||e===`thread/inject_items`||e===`thread/queue/add`||e===`turn/addUserMessage`||e===`turn/start`||e===`turn/steer`}var ho=class extends Error{},go=class extends Error{delivery;constructor(e,t){let n=`Codex app-server is not available`;t instanceof Error?n=t.message:typeof t==`string`&&(n=t),super(n,{cause:t}),this.delivery=e,this.name=`AppServerRequestDeliveryError`}};function*_o(e){let t={type:`reset-part`,itemsByKey:{},turnsByKey:{},realtimeItems:{}},n=0,r=!1;for(let i of[`itemsByKey`,`turnsByKey`,`realtimeItems`])for(let a in e[i]){switch(i){case`itemsByKey`:t.itemsByKey[a]=e.itemsByKey[a];break;case`turnsByKey`:t.turnsByKey[a]=e.turnsByKey[a];break;case`realtimeItems`:t.realtimeItems[a]=e.realtimeItems[a]}++n<256||(r||(r=!0,yield{type:`reset-start`,value:{resumeState:e.resumeState,historyComplete:e.historyComplete,itemTimeline:e.itemTimeline,timeline:e.timeline,turnEntityKeys:e.turnEntityKeys}}),yield t,t={type:`reset"
+            },
+            {
+              "offset": 589012,
+              "text": "gentsStates}):t.type===`imageGeneration`?u_(t):t}function eS(e,t,r){if(!e.supportsThreadTimeline())return;let i=n.bs(t.params.threadId),o=e.getConversation(i);o?.historyMode===`paginated`&&o.canonicalVoiceHistory&&e.updateConversationState(i,e=>{if(t.method===`thread/realtime/item/transcript/delta`){let n=e.realtimeItems?.[t.params.itemId];n?.item.type===`transcriptSegment`&&!n.completed&&(n.item.text+=t.params.delta);return}if(t.method===`thread/realtime/item/started`&&t.params.item.type!==`transcriptSegment`)return;let n=e.itemTimeline??={activeRealtimeSessionAtPageStart:null,entries:[]},o=(n.entries.at(-1)?.position??0)+1,s;if(t.method===`turn/started`||t.method===`turn/completed`){let{turn:e}=t.params;s=t.method===`turn/started`?{type:`turnStarted`,position:o,turnId:e.id,startedAt:e.startedAt}:{type:`turnCompleted`,position:o,turnId:e.id,status:e.status,error:e.error,startedAt:e.startedAt,completedAt:e.completedAt,durationMs:e.durationMs}}else if(t.method===`item/started`||t.method===`item/completed`){let{item:e,turnId:n}=t.params;s={type:`item`,position:o,turnId:n,item:{id:e.id,type:e.type,completed:t.method===`item/completed`}}}else{let{item:n}=t.params,r=e.realtimeItems??={};if(r[n.id]!=null&&t.method===`thread/realtime/item/started`)return;r[n.id]=a.pt({item:n,completed:t.method===`thread/realtime/item/completed`}),s={type:`realtime`,position:o,item:n}}let c=um(s),l=r.getItemTimelineEntryIndex(i,c),u=l==null?void 0:n.entries[l];u==null?n.entries.push(a.pt(s)):u.type=="
+            }
+          ]
+        },
+        {
+          "needle": "preparing",
+          "count": 2,
+          "matches": [
+            {
+              "offset": 50395,
+              "text": "ecision, approval, or lightweight input.\nBefore returning a suggestion, it must pass all four checks:\n- Why this user: the evidence shows the user is directly involved, assigned, mentioned, blocked, or they will need to address it.\n- Why now: ${l?`there is a fresh event, deadline, active branch, meeting, unresolved open loop, or recurring workflow where an available feature would materially reduce ongoing effort.`:`there is a fresh event, deadline, active branch, meeting, or unresolved open loop.`}\n- Why Codex: Codex can actually reduce the work now by coding, triaging, drafting, comparing,${l?` applying a relevant available feature,`:``} or preparing a concrete artifact. Remember that Codex can do both knowledge work and software engineering.\n- Why not already handled: recent PRs, dismissed suggestions, or recent tasks do not already cover ${l?`the proposed next action. A completed task may still reveal a recurring workflow that the user has never improved with the recommended feature`:`it`}.\n\nIf any check is weak, delete the candidate.\nStrong signals include DMs, Slack threads where the user is directly involved, non-bot emails, emails from humans the user knows, open review comments on the user's PRs, calendar events that the user needs to prep for soon, unresolved doc comments involving the user,${l?` recurring manual workflows or capability gaps visible in recent tasks,`:``} and blockers across connected apps.\nWeak signals include broad channel chatter, generic todos, ra"
+            },
+            {
+              "offset": 1441695,
+              "text": "CdnRequestHeaders(d)}catch(e){YJ().warning(`Failed to authorize internal plugin CDN access`,{safe:{},sensitive:{error:e}})}try{await uY({config:e,destination:l,downloadFile:t.downloadFile??pY,internalCdnRequestHeaders:f,waitForRetry:t.waitForRetry??T.setTimeout}),n!=null&&(u=m.default.join(r,`${x.default.randomUUID()}-${cY(n.url)}.download`),await uY({config:n,destination:u,downloadFile:t.downloadFile??pY,internalCdnRequestHeaders:f,waitForRetry:t.waitForRetry??T.setTimeout})),await mY({additionalArchivePath:u,archivePath:l,destination:r,extractArchive:t.extractArchive??CY,pluginCountBeforeWrite:c,version:s})}catch(t){throw YJ().error(`Error preparing internal plugins marketplace`,{safe:{marketplaceName:XJ,version:e.version},sensitive:{error:t,url:e.url}}),t}finally{await p.default.rm(l,{force:!0}),u!=null&&await p.default.rm(u,{force:!0})}return!0}function cY(e){let t=new URL(e),r=m.default.posix.basename(t.pathname);return n.st.parse(r)}function lY(e){return m.default.join(e,`.agents`,`plugins`,`marketplace.json`)}async function uY({config:e,destination:t,downloadFile:n,internalCdnRequestHeaders:r,waitForRetry:i}){let a={attempts:0,retries:0};if(e.internalCdnUrl!=null&&r!=null)try{await dY({destination:t,downloadFile:n,expectedSha256:e.sha256,authenticatedCdnRequest:{redirect:`error`,requestHeaders:r},reserveFallbackAttempt:!0,retryBudget:a,url:e.internalCdnUrl,version:e.version,waitForRetry:i});return}catch(n){await p.default.rm(t,{force:!0}),YJ().warning(`Internal plugin "
+            }
+          ]
+        },
+        {
+          "needle": "preparation",
+          "count": 8,
+          "matches": [
+            {
+              "offset": 907895,
+              "text": "e!=null&&t?.cwd===w&&t.gitInfo===ee&&this.params.threadStore.updateConversationState(C,t=>{t.gitInfo=a.pt(e)})}).catch(()=>void 0)),this.params.initializationCapabilities.assertCurrent?.(),m.ephemeral||this.params.threadStore.ensureRecentConversationId(C)}catch(e){I=e instanceof Error?e.message:String(e),this.params.logger.error(`Accepted conversation initialization failed`,{safe:{conversationId:C},sensitive:{error:e}}),o!==void 0&&this.params.threadStore.applyThreadDaybreakUpdate(C,x.thread.daybreakEnabled)}if(I==null){let e=Date.now();this.params.logger.info(`Conversation created`,{safe:{conversationId:C,durationMs:e-c,inputsDurationMs:p-c,preparationDurationMs:h-p,requestPreparationDurationMs:v-h,requestDurationMs:b-v,initializationDurationMs:e-b,mode:l,threadStartKind:u,usedPrewarmedThread:y,vmEvent:`thread_created`,vmProduct:em(A.threadStartKind,A.threadSource)?`orbit`:`unknown`,threadId:C,environmentIds:A.environments?.map(e=>e.environmentId),connectedEnvironmentIds:A.connectedEnvironmentIds,traceId:_?.options.trace?.traceparent.slice(3,35)},sensitive:{}})}return{conversationId:C,conversationResponse:x,effectiveCwd:w,gitInfoPromise:F,firstTurnContext:{conversationId:C,gitInfo:T,workspaceKind:S.workspaceKind},serviceTier:m.serviceTier,initializationError:I}}async saveInitialDaybreak(e,t,n,r){if(t!==void 0){this.params.threadStore.applyThreadDaybreakUpdate(e,t);try{await r(e,t)}catch(t){throw this.params.threadStore.applyThreadDaybreakUpdate(e,n),t}}}getRequestedThreadHis"
+            },
+            {
+              "offset": 909988,
+              "text": "t(e,r),a=e.editPosition;if(a?.serverSubmission==null)return i;let o=a.serverSubmission,s=e=>DA({input:e,context:g.context,previousSubmission:o,preserveSerializedContext:a.preserveSerializedContext===!0,isDurableThread:n()}),c=e=>e==null?void 0:{...e,request:{...e.request,input:s(e.request.input)}};return{...i,start:c(i.start),steer:{...i.steer,input:s(i.steer.input),userMessageAdmissionStart:c(i.steer.userMessageAdmissionStart)}}},y=await v(`steer`);if(y.conversationId!==h)throw Error(`Prepared submission belongs to another thread`);let b=c(e,_)||y.requiresIdle===!0,x=await o(y,b?`when-idle`:`send-now`,r,a,l,d,f,p);if(x.status===`needs-start-preparation`){let t=x.afterInactiveTurnId;if(y=await v(`start`),y.conversationId!==h||y.start==null)throw Error(`Start preparation did not produce a matching turn request`);b=c(e,_)||y.requiresIdle===!0,x=await o({...y,afterInactiveTurnId:t},b?`when-idle`:`send-now`,r,a,l,d,f,p)}if(x.status===`deferred`&&a!=null&&!a())throw new mM;if(x.status===`deferred`&&b)return i(h,g,e.editPosition,d,p,m);if(x.status!==`sent`)throw Error(`Explicit message submission was not sent`);return{status:`sent`,messageId:g.id,turnId:x.turnId}}async function o(n,r,i,a,o,s,c,l){if(!t())throw Error(`Turn coordinator retired`);let{conversationId:u}=n;if(n.resume.conversationId!==u)throw Error(`Resume request does not match the submission thread`);let d=null;if(e.needsResume(u)){let t=await e.resume(n.resume,i);if(t.status===`not-ready`)throw new Wg(t);d=t.activeTur"
+            },
+            {
+              "offset": 910107,
+              "text": "xt,previousSubmission:o,preserveSerializedContext:a.preserveSerializedContext===!0,isDurableThread:n()}),c=e=>e==null?void 0:{...e,request:{...e.request,input:s(e.request.input)}};return{...i,start:c(i.start),steer:{...i.steer,input:s(i.steer.input),userMessageAdmissionStart:c(i.steer.userMessageAdmissionStart)}}},y=await v(`steer`);if(y.conversationId!==h)throw Error(`Prepared submission belongs to another thread`);let b=c(e,_)||y.requiresIdle===!0,x=await o(y,b?`when-idle`:`send-now`,r,a,l,d,f,p);if(x.status===`needs-start-preparation`){let t=x.afterInactiveTurnId;if(y=await v(`start`),y.conversationId!==h||y.start==null)throw Error(`Start preparation did not produce a matching turn request`);b=c(e,_)||y.requiresIdle===!0,x=await o({...y,afterInactiveTurnId:t},b?`when-idle`:`send-now`,r,a,l,d,f,p)}if(x.status===`deferred`&&a!=null&&!a())throw new mM;if(x.status===`deferred`&&b)return i(h,g,e.editPosition,d,p,m);if(x.status!==`sent`)throw Error(`Explicit message submission was not sent`);return{status:`sent`,messageId:g.id,turnId:x.turnId}}async function o(n,r,i,a,o,s,c,l){if(!t())throw Error(`Turn coordinator retired`);let{conversationId:u}=n;if(n.resume.conversationId!==u)throw Error(`Resume request does not match the submission thread`);let d=null;if(e.needsResume(u)){let t=await e.resume(n.resume,i);if(t.status===`not-ready`)throw new Wg(t);d=t.activeTurnId}if(l!=null&&await l(),!t())throw Error(`Turn coordinator retired`);if(a!=null&&!a())return{status:`deferred`};let f"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
