@@ -262,7 +262,8 @@ class DefaultVykorAgent implements VykorAgent {
       traceId: randomUUID(),
     };
     const capturedView = options.capabilityView ?? this.createRunCapabilityView();
-    const capabilityView = options.goal?.phase === "preparing" ? createPreparationRunCapabilityView(capturedView) : capturedView;
+    const capabilityView = options.goal?.phase === "preparing"
+      ? createPreparationRunCapabilityView(capturedView, this.runtime.trustedToolOverrides) : capturedView;
     const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
       agentId: this.id,

@@ -55,7 +55,7 @@ export {
   type PluginCapabilityOwner,
 } from "./plugin-capability-inventory.js";
 export { createGoalRunContribution, type GoalRunBinding } from "./goal-extension.js";
-export { createGoalReadTool, formatGoalReadSnapshot, type GoalReadSnapshot } from "./goal-read-tool.js";
+export { createGoalReadTool, formatGoalReadSnapshot, type GoalReadSnapshot, type GoalAssessmentFeedback } from "./goal-read-tool.js";
 export {
   activateNativePluginTools,
   type NativeToolActivationResult,

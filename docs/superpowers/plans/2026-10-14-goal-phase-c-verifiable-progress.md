@@ -17,7 +17,7 @@
 - 只维护当前格式，不转换 A/B 旧格式的已有数据库记录，不回填版本或旧评估，不双读旧字段，不删除或重建真实数据库。当前格式的旧正文版本、迟到事件、同请求重试及重启恢复继续保护。
 - C 只新增一张 `session_goal_version` 表；沿用 B 已实现的 `session_goal_model_attempt` 和三元唯一键，不按规格早期表名另建账本。准备计数放现有请求结果，进展与证据复核放现有 assessment JSON。
 - 最多新增四份生产文件：`services/goals/goal-version.ts`、`agent-runtime/goal-read-tool.ts`、server 的 `goal-evidence-reader.ts` / `goal-progress-policy.ts`。不建立准备服务、需求服务、提案工作流、Critic、评分平台或恢复队列。
-- 每准备批次最多 **5 次真实模型尝试、4 次只读调查工具调用，每次输出最多 1024 Token**。重试与压缩也占模型尝试；无子代理、部署、实质文件修改或长后台任务。
+- 准备阶段只整理条件；次数仅作诊断计数，复用通用运行上限、用户预算和常规模型输出设置，不再设专属 5 次模型 / 4 次调查 / 1024 输出硬限额。明确条件直接 ready，必要时才读取用户引用材料；无子代理、部署、实质文件修改或长后台任务。
 - 条件最多 **64 项**，正文继续 32000 字符。沿用协议的 4000 字符说明、256 字符标识符及 32 条证据引用上限；超限要求用户拆分，不静默丢条件。
 - 源码只能核验身份、引用文本、工具结果、摘要及环境等事实，不能数学证明自由文本语义。来源可信不等于结论正确；模型整理与当前审查仍不可省。
 - 首版进展仅 `requirement_satisfied / artifact_changed / external_terminal`。无量化指标的文档/视觉任务可以使用交付物审查或用户验收；不强迫填 QPS，不让模型发明性能阈值。
@@ -131,8 +131,8 @@ expect(store.goals.getGoalVersion(goal.id, 1)?.frozenAt).toBeUndefined();
 
 - [x] create 保存 Goal preparing、原用户 Input、version 1、request.result.preparation、唯一 preparation Run，在同一事务完成，提交后原队列派发。用户原文 Input 直接使用现有 `conversationTransactions.admitPrompt(...)` 保存；它本身不创建 Run，不能虚构 createRun 参数。运行记录保存可信 `goalPhase / goalEpisodeId / goalRunKind=preparation`。
 - [x] 原开跑检查核对 phase 与 metadata，不把 preparing 当可执行任务。准备不加 autoTurnsUsed；用户无关聊天仍按 A/B 规则，不能偷偷转成 executing 或换 episode。goalSettled 仍阻止同 Run 结算两次。
-- [x] beginGoalModelAttempt 在 B 同一登记事务中，对首次新尝试递增所属 episode.modelAttempts；第 3 次在 client 前拒绝并暂停 preparation_limit。已有键重播不再计数。generation/compaction 都占批次；取消前已登记但未调用的预约保守保留，不能把该取消当免费重开机会。
-- [x] resume 增仅 preparing 可用的 `reprepare?: true`，对应 UI“重新整理目标”。只有该显式新用户提交、create/update 或有效关联回答开启新批次；普通 resume / 同请求重试 / 网络重新派发 / 重启延续原批次及计数。终态准备 Run 需要再跑时可创建同 episode 的新 Run，剩余限额不够则拒绝；不复用已终态 Run 执行。暂停/预算变更本身不新开批次，模型没有入口。
+- [x] beginGoalModelAttempt 在 B 同一登记事务中，对首次新尝试递增所属 episode.modelAttempts，仅作诊断，不设置准备专属调用上限。已有键重播不再计数。generation/compaction 都记录；用户 Token 预算继续按 B 的账本检查。
+- [x] resume 增仅 preparing 可用的 `reprepare?: true`，对应 UI“重新整理目标”。只有该显式新用户提交、create/update 或有效关联回答开启新批次；普通 resume / 同请求重试 / 网络重新派发 / 重启延续原批次及计数。终态准备 Run 需要再跑时可创建同 episode 的新 Run，仍受用户预算和通用执行限制保护；不复用已终态 Run 执行。暂停/预算变更本身不新开批次，模型没有入口。
 
 ### 4.2 实际执行限制
 
@@ -162,9 +162,9 @@ interface GoalReadSnapshot {
 }
 ```
 
-- [x] preparing 的 profile 固定输出上限 1024，QueryEngine 在最终请求参数对主调用/重试/压缩取 min；provider 切换、摘要 finalization 或配置变化不能提高它。真实 createParams 验证，不仅测试提示词。准备不运行 auto-review、remember/Dream 或可执行用户/插件 hooks，避免只禁工具却从其他路径写入；`query-tool-permissions.ts` 当前在批准后执行 pre_tool_use hook，必须受同一 profile 禁止，原权限裁决仍执行。普通 Run 不注入 profile，保持原行为。
-- [x] RunCapabilityView 只保留**已捕获、宿主核实为 builtin 的 Read/Glob/Grep**及两项宿主 Goal 工具；去掉 agents/MCP/插件 UI 动作/会改变权限的控制工具。不按名称前缀判断只读，也不把 Shell 中的“只读命令”加进白名单。注入的 skills/资料仍是数据，不能扩权。保留原路径、环境与批准检查。
-- [x] checked-tool-execution 在批准/串行等待之后、invoke 前传可信工具描述；宿主在 `reservePreparationTool` 的事务中计一次已授权调查派发，最多 4。GoalRead/GoalAssessment 不计调查额度，依据实际宿主定义身份区分。非法/被拒工具不执行；已预约后取消不退额度。limits 对 child/maintenance 直接拒绝，工具批次并行预约仍不能放出第 5 个。
+- [x] preparing 复用常规模型输出配置，不注入专属 1024 Token 截断。准备不运行 auto-review、remember/Dream 或可执行用户/插件 hooks，避免只禁工具却从其他路径写入；`query-tool-permissions.ts` 当前在批准后执行 pre_tool_use hook，必须受同一 profile 禁止，原权限裁决仍执行。普通 Run 不注入 profile，保持原行为。
+- [x] RunCapabilityView 只保留已捕获的 builtin Read/Glob/Grep、身份及执行函数与宿主可信快照一致的替代实现，以及两项宿主 Goal 工具；去掉 agents/MCP/插件 UI 动作/会改变权限的控制工具。不按名称前缀判断只读，也不把 Shell 中的“只读命令”加进白名单。注入的 skills/资料仍是数据，不能扩权。保留原路径、环境与批准检查。
+- [x] checked-tool-execution 在批准/串行等待之后、invoke 前传可信工具描述；宿主在 `reservePreparationTool` 的事务中计一次已授权调查派发，仅作诊断。GoalRead/GoalAssessment 不计调查，依据实际宿主定义身份区分。非法/被拒工具不执行；limits 对 child/maintenance 直接拒绝。
 - [x] 准备内 `GoalAssessment` 只允许 ready/waiting_user/blocked；ready 必须有完整候选和来源说明，不能 complete。执行内禁止 ready/preparedRequirements，不能重定义正式条件。原 projector 仅保存绑定建议，phase 校验来自 Run/Goal，不能信任模型自报。
 - [x] 准备的 GoalAssessment 贡献设置 `endRunOnSuccess: true`。QueryEngine 在整批工具结果保存/交付、失败与取消检查之后，识别该捕获定义的成功调用，关闭 steering 并正常 return；不再调用模型写收尾文字，不提前跳过同批结果。执行的 GoalAssessment 和普通工具不设置该标志。不要用 `hardMaxTurns=2` 代替批次限制：当前最后一轮会去掉工具，反而使第 2 次无法提交建议。宿主冻结仍在 Run completed 后发生，无效候选暂停/澄清，不通过工具返回自行切执行阶段。
 
@@ -174,7 +174,7 @@ interface GoalReadSnapshot {
 - [x] ready 被 B 预算或用户暂停挡住时，保留未消费候选及原计数，Goal 保持 paused，不自动派发。预算恢复后的**普通显式 resume**优先重新核对同版本/episode/来源与所有 A/B 接纳条件，原子冻结并保存唯一 initial，零新增准备模型调用；重启也读同一记录。`reprepare:true` 才明确放弃候选、保存操作来源并开新批次。未实际执行、被限额拒绝、interrupted/failed Run 上的建议只能诊断，不能冒充 completed ready。迟到/旧版本建议仍拒绝，预算调整本身不消费候选。
 - [x] 准备/initial 的派发失败都保存 paused/run_error + 候选 runId；原 replay/finishDispatch 按候选 phase/版本处理。executing 下显式 resume 可核验已冻结版本、goalPreparedBy、原意图和所有 A/B 接纳条件后复用未派发 initial；沿 A 的同请求二次失败恢复规则，不能回退为 preparation 或建第二 initial。已完成 preparation 的原创建请求重播仍返回原接纳快照，不把它再次派发。
 - [x] 模型新增范围、删用户条件或发明性能阈值不冻结，转最少澄清。性能任务的基线/环境/负载/方法/阈值/不可退化约束需有来源；未知基线允许之后测量，阈值只能来自用户。已有明确取舍不重新提问。只读调查后仍不明则 waiting_user，不自动新开 preparation。
-- [x] 无有效建议、尝试/工具耗尽或输出不足以完整表达条件时，暂停 preparation_limit 或保存 clarification wait，说明用户需缩小/补足的具体条件；没有新的自动准备 Run。运行网络故障仍保留 run_error，B 的 token_budget/usage_unknown 优先保护。
+- [x] 无有效建议或条件仍不明确时，暂停 preparation_incomplete 或保存 clarification wait，说明用户需补足的具体条件；没有新的自动准备 Run。运行网络故障仍保留 run_error，B 的 token_budget/usage_unknown 优先保护。
 - [x] clarification 回答必须匹配当前 goalId/version/questionId，保存真实 response Input，加入未冻结版本.inputIds 和来源，再以该用户 requestId 开一个批次。旧答案拒绝；answered request 重试返回原结果。被预算阻挡时回答可保存为已接纳结果、Goal 保持 paused；以后显式 resume 用同一已接纳批次，不能丢答案或自动发请求。
 - [x] 启动仍先 B 对账再 A 默认暂停；memory 不恢复。新请求结果保留 episode 计数与 phase。preparing 的外部等待拒绝；executing 的外部等待继续只读观察，不累计准备或执行轮。
 
@@ -186,7 +186,7 @@ interface GoalReadSnapshot {
 
 GoalRunBinding 增 `readSnapshot: () => Promise<GoalReadSnapshot>`，server 闭包捕获当前 Run 身份；`createGoalRunContribution(goal): Promise<AgentRunContribution>` 与原 agent 调用点改为 await，通过这一个回调构建 systemGuidance，GoalRead 执行时再次调用。显示文本都由同一 formatter 截短，查询不接受任意 ID；不要把来源为模型的客体 JSON 充当宿主快照。
 
-**关键回归：**明确修复 → preparation ready → 一次 initial；“优化系统” → 一次当前澄清，不强制 QPS；范围明确 UI → user_acceptance 条件。第 1 次读文档、第 2 次提交建议后正常 completed，无第 3 次收尾模型；第 2 次后被真正取消则不冻结。假客户端计第 1 次失败、第 2 次重试、第 3 次零调用；并行第 5 个调查零执行；伪造 Read 名称的插件、Shell、Child、可执行 hook、后置维护均不运行。ready 被预算挡住后，重启/同请求重播/普通 resume 零重新准备且只一个 initial，显式 reprepare 才开新 episode；输出参数始终 ≤1024。回答重试/重启保留原 episode，过期问题不能补新来源。
+**关键回归：**明确修复 → preparation ready → 一次 initial；“优化系统” → 一次当前澄清，不强制 QPS；范围明确 UI → user_acceptance 条件。条件明确时零调查即可 ready；读取材料后提交建议正常 completed，无额外收尾模型；被真正取消则不冻结。超过旧模型及调查次数仍可继续，显式用户预算仍有效；生产宿主 Read 可用，伪造或被替换的 Read、Shell、Child、可执行 hook、后置维护均不运行。ready 被预算挡住后，重启/同请求重播/普通 resume 零重新准备且只一个 initial，显式 reprepare 才开新 episode；输出复用常规模型配置。回答重试/重启保留原 episode，过期问题不能补新来源。
 
 ## 5. C3：用户变更、完整集合与历史证据
 
@@ -333,3 +333,6 @@ expect(evaluateGoalProgress({ goal: { ...goal, stagnationCount: 2 }, assessment:
 
 
 2026-10-15 实测修正：准备阶段允许最多 5 次模型调用，为最多 4 次顺序只读调查保留一次提交条件的机会。该内部防循环限制独立于用户的 Token 预算和自动续跑轮数；目标条件已经明确时应直接提交 ready，不在准备阶段提前执行或验收任务。
+
+
+2026-10-15 后续修正：以前述最新规格为准，取消本日此前提出的准备专有次数上限；实现及审核见 `../reviews/2026-10-15-goal-read-preparation-fix.md`。

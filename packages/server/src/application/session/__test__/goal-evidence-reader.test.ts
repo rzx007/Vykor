@@ -13,6 +13,32 @@ function records() {
   return { runs, messages, parts, context: { runs: { getRun: (id: string) => runs.get(id) }, conversations: { listMessages: () => messages as any, listMessageParts: () => parts as any }, goals: { getGoalVersion: (_id: string, version: number) => ({ goalId: "g", objectiveVersion: version, frozenAt: 1, requirements: goal.requirements }) as any } } };
 }
 describe("evidence identity and current validity", () => {
+  it("treats suggested commands as guidance while preserving explicit required commands", () => {
+    const { context, parts } = records();
+    parts[0] = { ...parts[0], toolName: "Shell", input: { command: "npx vitest run", workdir: "/repo/packages/protocol" }, metadata: { executionState: "completed" } };
+    const verification = { kind: "check", command: "npx vitest run packages/protocol/src/session-goals.test.ts", environment: "local", expected: "tests pass" };
+    const checkGoal = { ...goal, requirements: [{ id: "R1", verification }] } as any;
+    expect(readGoalEvidence(context, checkGoal, assessment)).toMatchObject([{ supportsCompletion: true }]);
+    const required = { ...checkGoal, requirements: [{ id: "R1", verification: { ...verification, commandPolicy: "required" } }] } as any;
+    expect(readGoalEvidence(context, required, assessment)).toEqual([]);
+    parts[0].input.command = verification.command;
+    expect(readGoalEvidence(context, required, assessment)).toMatchObject([{ supportsCompletion: true }]);
+    for (const name of ["Read", "GoalRead", "Inspect"]) {
+      parts[0].toolName = name;
+      expect(readGoalEvidence(context, checkGoal, assessment)).toEqual([]);
+    }
+    parts[0].toolName = "Shell";
+    parts[0].isError = true;
+    expect(readGoalEvidence(context, checkGoal, assessment)).toEqual([]);
+  });
+  it("previews only the current bound running root and never weakens final settlement", () => {
+    const { context, runs } = records();
+    runs.get("root").status = "running";
+    const current = { ...goal, status: "active", currentRunId: "root" };
+    expect(readGoalEvidence(context, current, assessment)).toEqual([]);
+    expect(readGoalEvidence(context, current, assessment, { preview: true })).toHaveLength(1);
+    expect(readGoalEvidence(context, { ...current, currentRunId: "other" }, assessment, { preview: true })).toEqual([]);
+  });
   it("retains missing or deleted artifact facts for progress while refusing completion", () => {
     for (const operation of ["read", "patch"]) {
       const { context, parts } = records();
@@ -30,7 +56,7 @@ describe("evidence identity and current validity", () => {
       { operation: "patch", digest: "missing", ordered: true },
       { operation: "write", digest: "sha256:" + "b".repeat(64), ordered: false },
     ]) {
-      const { context, parts, messages } = records();
+      const { context, parts, messages, runs } = records();
       Object.assign(messages[0], { seq: 1 });
       parts[0].metadata.modelGeneration = { generationId: "generation-1", attempt: 1, committed: true };
       messages.push({ id: "later-message", sessionId: "s", runId: "root", seq: 2 } as any);
@@ -41,6 +67,9 @@ describe("evidence identity and current validity", () => {
       const verified = readGoalEvidence(context, goal, assessment);
       expect(verified).toMatchObject([{ supportsCompletion: false }]);
       expect(classifyGoalCompletion(goal, assessment, verified)).toMatchObject({ kind: "continue" });
+      runs.get("root").status = "running";
+      expect(readGoalEvidence(context, { ...goal, status: "active", currentRunId: "root" }, assessment, { preview: true }))
+        .toMatchObject([{ supportsCompletion: false }]);
     }
   });
   it("accepts settled current facts and separates actual failed output from completion evidence", () => {

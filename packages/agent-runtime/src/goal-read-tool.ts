@@ -16,6 +16,11 @@ export interface GoalReadSnapshot {
   maxAutoTurns: number;
   knownTokens: number;
   usageIncomplete: boolean;
+  recentEvidence?: Array<{ messagePartId: string; runId: string; toolName: string; command?: string; workdir?: string }>;
+}
+export interface GoalAssessmentFeedback {
+  issues: string[];
+  availableEvidence?: GoalReadSnapshot["recentEvidence"];
 }
 
 export const GOAL_READ_TOOL_NAME = "GoalRead";

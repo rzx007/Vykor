@@ -804,6 +804,7 @@ export class DaemonApplication implements DurableAgentApplication {
         checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
         checkGoalRunExecution: (goalId, version, runId, boundary, tool) => this.goals.checkRunExecution(goalId, version, runId, boundary, tool),
         readGoalSnapshot: (goalId, version, runId) => this.goals.readSnapshot(goalId, version, runId),
+        reviewGoalAssessment: (goalId, version, runId, input) => this.goals.reviewAssessment(goalId, version, runId, input),
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,

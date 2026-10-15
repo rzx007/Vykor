@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "@vykor/core";
+import type { GoalAssessmentFeedback } from "./goal-read-tool.js";
 
 const textSchema = { type: "string", minLength: 1, maxLength: 4000 };
 const idSchema = { type: "string", minLength: 1, maxLength: 256 };
@@ -15,7 +16,7 @@ const evidenceSchema = object({
   ["messagePartIds", "environmentKey", "dependencies"]),
 }, ["messagePartId", "criterion"]);
 const verificationSchema = { oneOf: [
-  object({ kind: { const: "check" }, method: textSchema, command: textSchema,
+  object({ kind: { const: "check" }, method: textSchema, command: textSchema, commandPolicy: { enum: ["suggested", "required"] },
     environment: textSchema, expected: textSchema }, ["kind", "method", "environment", "expected"]),
   object({ kind: { const: "artifact_review" }, artifact: textSchema, standard: textSchema }),
   object({ kind: { const: "user_acceptance" }, question: textSchema }),
@@ -36,6 +37,7 @@ export interface GoalAssessmentBinding {
   objectiveVersion: number;
   phase: "preparing" | "executing";
   requirementIds?: readonly string[];
+  reviewAssessment?: (input: Record<string, unknown>) => Promise<GoalAssessmentFeedback>;
 }
 
 /** Phase is captured from the host; neither model input nor metadata can change it. */
@@ -108,6 +110,11 @@ export function createGoalAssessmentTool(binding?: GoalAssessmentBinding): ToolD
           || new Set(review.dependencies.map(dependency => dependency.subjectKey)).size !== review.dependencies.length;
       })) return reject("Current revalidation must use unique Part IDs and dependency subjects.");
       const wait = input.wait as { kind: "external"; targetRunId: string; deadlineAt: number } | undefined;
+      if (!preparing && binding.reviewAssessment) {
+        const feedback = await binding.reviewAssessment(input);
+        if (feedback.issues.length) return { isError: true, failureKind: "precondition", executionState: "not_started",
+          content: [{ type: "text", text: JSON.stringify({ message: "Goal assessment rejected. Correct the references or coverage using existing results before rerunning tools.", ...feedback }) }] };
+      }
       await context.agent.emit({ type: "domain.event", data: { name: "goal.assessment", payload: {
         ...input, evidenceRefs: input.evidenceRefs ?? [],
         goalId: binding.goalId, objectiveVersion: binding.objectiveVersion, runId: context.agent.scope.runId,

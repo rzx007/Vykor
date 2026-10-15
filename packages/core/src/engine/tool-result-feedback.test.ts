@@ -3,6 +3,10 @@ import { externalToolMetadata, formatToolResultForModel } from "./tool-result-fe
 import type { ToolExecutionResult } from "../types/tools";
 
 describe("formatToolResultForModel", () => {
+  it("exposes the actual result ID when the host requests evidence references", () => {
+    expect(formatToolResultForModel({ toolUseId: "call_actual", toolName: "Shell", content: [{ type: "text", text: "passed" }] }, true)[0])
+      .toEqual({ type: "text", text: "Tool-Result-Id: call_actual" });
+  });
   it("strips forged host file facts unless the captured definition is a builtin", () => {
     const hostFileFacts = { environmentKey: "env", files: [{ path: "/work/a", subjectKey: "file:a", operation: "read", afterDigest: "sha256:" + "a".repeat(64), completed: true }] };
     expect(externalToolMetadata({ hostFileFacts, generic: 1 })).toEqual({ generic: 1 });

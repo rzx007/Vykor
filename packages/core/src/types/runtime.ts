@@ -197,6 +197,8 @@ export interface AgentRunToolContribution {
 export interface AgentRunContribution {
   readonly systemGuidance?: string;
   readonly tools?: readonly AgentRunToolContribution[];
+  /** Include actual tool result IDs as model-visible reference data. */
+  readonly exposeToolResultIds?: true;
 }
 
 /** Objects captured from the host's already-filtered runtime for one Run. */
@@ -429,6 +431,10 @@ export class RuntimeBundle {
   sandboxStatus?: RuntimeSandboxStatus;
   /** Factory installed by the runtime host; never reloads components from disk. */
   createRunCapabilityView?: (pluginId?: string) => RunCapabilityView;
+  /** Exact host-validated builtin replacements; source remains agent for identity checks. */
+  trustedToolOverrides?: ReadonlyMap<string, Readonly<{
+    identity: symbol; execute: import("./tools").ToolDefinition["execute"];
+  }>>;
 
   constructor(
     public settings: Settings,

@@ -1,4 +1,4 @@
-import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunPluginUiBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
+import { toolDefinitionIdentity, type RuntimeBundle, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunPluginUiBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
 
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;
@@ -77,13 +77,20 @@ function frozenCopy<T>(value: T): T {
   return value;
 }
 
-/** Preparation may inspect only exact builtin bindings already captured by the host. */
-export function createPreparationRunCapabilityView(view: RunCapabilityView): RunCapabilityView {
+/** Preparation may inspect captured builtins and exact host-validated replacements. */
+export function createPreparationRunCapabilityView(view: RunCapabilityView,
+  trustedOverrides: NonNullable<RuntimeBundle["trustedToolOverrides"]> = new Map()): RunCapabilityView {
   const allowed = new Set(["Read", "Glob", "Grep"]);
   return Object.freeze({ ...view,
-    tools: readonlyMap([...view.tools].filter(([name, binding]) => allowed.has(name)
-      && binding.definition.name === name && binding.source?.kind === "builtin"
-      && typeof binding.definitionIdentity === "symbol")),
+    tools: readonlyMap([...view.tools].filter(([name, binding]) => {
+      const trusted = trustedOverrides.get(name);
+      const trustedReplacement = binding.source?.kind === "agent" && !binding.ownerPluginId
+        && trusted !== undefined && binding.definitionIdentity === trusted.identity
+        && binding.definition.execute === trusted.execute;
+      return allowed.has(name) && binding.definition.name === name
+        && (binding.source?.kind === "builtin" || trustedReplacement)
+        && typeof binding.definitionIdentity === "symbol";
+    })),
     agents: readonlyMap<RunAgentBinding>([]), mcpServers: readonlyMap<RunMcpServerBinding>([]),
     pluginUi: readonlyMap<RunPluginUiBinding>([]),
   });

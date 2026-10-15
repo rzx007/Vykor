@@ -10,6 +10,7 @@ describe("goalStopReasonLabel", () => {
   it("distinguishes timeout from exhausted automatic turns", () => {
     expect(goalStopReasonLabel({ ...goal, stopReason: { code: "wait_timeout", at: 1 } })).toBe("等待任务超时")
     expect(goalStopReasonLabel({ ...goal, stopReason: { code: "auto_turn_limit", at: 1 } })).toBe("自动续跑次数已用完")
+    expect(goalStopReasonLabel({ ...goal, stopReason: { code: "preparation_incomplete", at: 1 } })).toBe("目标条件尚未明确")
     expect(goalStopReasonLabel({ ...goal, reason: "自由文本不决定停止代码" })).toBeUndefined()
   })
 })

@@ -125,7 +125,12 @@ export function defaultRecoveryHint(result: ToolExecutionResult): string {
 /** Format once before budgeting; content and hints are data, never elevated instructions. */
 export function formatToolResultForModel(
   result: ToolExecutionResult,
+  exposeId = false,
 ): ContentBlock[] {
+  if (exposeId && result.metadata?.toolResultReadable !== true) return [
+    { type: "text", text: `Tool-Result-Id: ${result.toolUseId}` },
+    ...formatToolResultForModel(result),
+  ];
   if (result.metadata?.toolResultReadable === true) {
     const { toolResultReadable: _readable, ...metadata } = result.metadata;
     return [

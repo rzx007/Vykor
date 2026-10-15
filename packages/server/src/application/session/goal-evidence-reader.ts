@@ -64,16 +64,16 @@ function lookupPart(context: GoalEvidenceReaderContext, run: SessionRunRecord, p
   const message = context.conversations.listMessages(run.sessionId).find(item => item.id === part.messageId);
   return message?.runId === run.id ? part : undefined;
 }
-function rootFor(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): SessionRunRecord | undefined {
+function rootFor(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment, preview = false): SessionRunRecord | undefined {
   const root = context.runs.getRun(assessment.runId);
   return assessment.goalId === goal.id && assessment.objectiveVersion === goal.objectiveVersion
     && bound(root, goal.id, goal.objectiveVersion) && root.sessionId === goal.sessionId && !root.metadata.parentRunId
-    && terminal(root) ? root : undefined;
+    && (terminal(root) || preview && root.status === "running" && goal.status === "active" && goal.currentRunId === root.id) ? root : undefined;
 }
-function readSource(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef) {
+function readSource(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef, preview = false) {
   if (ref.goalId !== goal.id || ref.objectiveVersion > goal.objectiveVersion || ref.objectiveVersion < 1) return undefined;
   const run = context.runs.getRun(ref.runId);
-  if (!bound(run, goal.id, ref.objectiveVersion) || !terminal(run)) return undefined;
+  if (!bound(run, goal.id, ref.objectiveVersion) || !(terminal(run) || preview && run.id === root.id && run.status === "running")) return undefined;
   const historical = ref.objectiveVersion !== goal.objectiveVersion || !descendant(context, run, root);
   if (historical) {
     const version = context.goals.getGoalVersion(goal.id, ref.objectiveVersion);
@@ -101,10 +101,10 @@ function sameVerification(left: GoalRequirement, right: GoalRequirement): boolea
 function artifactObservationStillCurrent(
   context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord,
   sourceRun: SessionRunRecord, sourcePart: SessionMessagePartRecord,
-  environmentKey: string, subjectKey: string, digest: string,
+  environmentKey: string, subjectKey: string, digest: string, preview = false,
 ): boolean {
   const runs = [...new Map([root, sourceRun, ...(context.runs.listGoalRuns?.(goal.id, goal.objectiveVersion) ?? [])]
-    .filter(run => bound(run, goal.id, goal.objectiveVersion) && terminal(run) && (run.id === sourceRun.id || descendant(context, run, root)))
+    .filter(run => bound(run, goal.id, goal.objectiveVersion) && (terminal(run) || preview && run.id === root.id && run.status === "running") && (run.id === sourceRun.id || descendant(context, run, root)))
     .map(run => [run.id, run])).values()];
   for (const run of runs) {
     const messages = context.conversations.listMessages(run.sessionId);
@@ -130,7 +130,7 @@ function artifactObservationStillCurrent(
 }
 
 /** Historical checks without a host-recorded complete dependency set are deliberately not reusable. */
-function historicalArtifactValid(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef, requirement: GoalRequirement, part: SessionMessagePartRecord): boolean {
+function historicalArtifactValid(context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord, ref: GoalEvidenceRef, requirement: GoalRequirement, part: SessionMessagePartRecord, preview = false): boolean {
   const review = ref.revalidation;
   const facts = validHostFileFacts(part.metadata.hostFileFacts);
   const previous = context.goals.getGoalVersion(goal.id, ref.objectiveVersion)?.requirements.find(item => item.id === requirement.id);
@@ -147,10 +147,10 @@ function historicalArtifactValid(context: GoalEvidenceReaderContext, goal: Sessi
     return candidates.flatMap(candidate => {
       const message = context.conversations.listMessages(candidate.sessionId).find(item => item.id === candidate.messageId);
       const current = message?.runId ? context.runs.getRun(message.runId) : undefined;
-      if (!bound(current, goal.id, goal.objectiveVersion) || !terminal(current) || !descendant(context, current, root) || !successful(candidate)) return [];
+      if (!bound(current, goal.id, goal.objectiveVersion) || !(terminal(current) || preview && current.id === root.id && current.status === "running") || !descendant(context, current, root) || !successful(candidate)) return [];
       const receipt = validHostFileFacts(candidate.metadata.hostFileFacts);
       return receipt?.environmentKey === facts.environmentKey ? receipt.files.filter(file => file.operation === "read"
-        && artifactObservationStillCurrent(context, goal, root, current, candidate, receipt.environmentKey, file.subjectKey, file.afterDigest)) : [];
+        && artifactObservationStillCurrent(context, goal, root, current, candidate, receipt.environmentKey, file.subjectKey, file.afterDigest, preview)) : [];
     });
   });
   return original.every(file => observed.some(current => current.subjectKey === file.subjectKey && current.afterDigest === file.afterDigest));
@@ -175,8 +175,8 @@ function externalEvidence(context: GoalEvidenceReaderContext, goal: SessionGoal,
 }
 
 /** Verify only durable Run/Part facts. This function never reads workspace files or executes checks. */
-export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): VerifiedGoalEvidence[] {
-  const root = rootFor(context, goal, assessment);
+export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment, options: { preview?: boolean } = {}): VerifiedGoalEvidence[] {
+  const root = rootFor(context, goal, assessment, options.preview);
   if (!root) return [];
   return refsByRequirement(assessment).flatMap(({ requirementId, ref }) => {
     const requirement = goal.requirements.find(item => item.id === requirementId);
@@ -184,14 +184,13 @@ export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: Sessi
     const external = externalEvidence(context, goal, root, requirementId, ref);
     const externalRun = external ? context.runs.getRun(ref.runId) : undefined;
     const externalPart = externalRun ? lookupPart(context, externalRun, ref.messagePartId) : undefined;
-    const source = externalRun && externalPart ? { run: externalRun, part: externalPart, historical: false } : readSource(context, goal, root, ref);
-    if (!source || source.run.status !== "completed" || !successful(source.part)
-      || source.historical && !historicalArtifactValid(context, goal, root, ref, requirement, source.part)) return external ? [external] : [];
+    const source = externalRun && externalPart ? { run: externalRun, part: externalPart, historical: false } : readSource(context, goal, root, ref, options.preview);
+    if (!source || !(source.run.status === "completed" || options.preview && source.run.id === root.id && source.run.status === "running") || !successful(source.part)
+      || source.historical && !historicalArtifactValid(context, goal, root, ref, requirement, source.part, options.preview)) return external ? [external] : [];
     const receipt = validHostFileFacts(source.part.metadata.hostFileFacts);
     const command = typeof source.part.input?.command === "string" ? source.part.input.command.trim() : undefined;
-    let supportsCompletion = requirement.verification.kind !== "check" || (requirement.verification.command
-      ? command === requirement.verification.command.trim()
-      : !receipt);
+    let supportsCompletion = requirement.verification.kind !== "check" || (source.part.toolName === "Shell" && Boolean(command)
+      && (requirement.verification.commandPolicy !== "required" || Boolean(requirement.verification.command) && command === requirement.verification.command!.trim()));
     if (!supportsCompletion && !receipt) return external ? [external] : [];
     // A current model review must point to the actual named artifact and explain the formal standard.
     if (requirement.verification.kind === "artifact_review") {
@@ -203,7 +202,7 @@ export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: Sessi
       const matching = receipt.files.filter(file => normalize(file.path) === artifactPath);
       if (!artifactPath || !matching.length) return external ? [external] : [];
       supportsCompletion = matching.some(file => file.afterDigest !== "missing" && (source.historical
-        || artifactObservationStillCurrent(context, goal, root, source.run, source.part, receipt.environmentKey, file.subjectKey, file.afterDigest)));
+        || artifactObservationStillCurrent(context, goal, root, source.run, source.part, receipt.environmentKey, file.subjectKey, file.afterDigest, options.preview)));
     }
     return [{ requirementId, origin: origin(ref), verifiedForVersion: goal.objectiveVersion, supportsCompletion, facts: {
       ...(external ? external.facts : {}),
@@ -212,6 +211,40 @@ export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: Sessi
       ...(requirement.verification.kind === "check" ? { expected: requirement.verification.expected } : {}),
     } }];
   });
+}
+
+/** Explain a rejected reference without accepting aliases or changing persistent state. */
+export function describeGoalEvidenceRejection(
+  context: GoalEvidenceReaderContext,
+  goal: SessionGoal,
+  assessment: GoalAssessment,
+  requirement: GoalRequirement,
+  ref: GoalEvidenceRef,
+): string {
+  const root = rootFor(context, goal, assessment, true);
+  const source = root && readSource(context, goal, root, ref, true);
+  const label = `${requirement.id} / ${ref.messagePartId}`;
+  if (!source)
+    return `${label}: 记录不存在、不属于允许的目标/运行，或历史引用缺少当前复核。请使用真实 Tool-Result-Id。`;
+  if (!successful(source.part))
+    return `${label}: 工具尚未完成、失败或结果不确定，不能证明检查通过。`;
+  if (requirement.verification.kind === "check") {
+    if (
+      source.part.toolName !== "Shell" ||
+      typeof source.part.input?.command !== "string"
+    )
+      return `${label}: 读取或控制工具不能证明命令检查通过，请引用实际成功的 Shell 检查结果。`;
+    if (
+      requirement.verification.commandPolicy === "required" &&
+      source.part.input.command.trim() !==
+        requirement.verification.command?.trim()
+    )
+      return `${label}: 用户指定必须执行的命令不匹配。要求=${requirement.verification.command}; 实际=${source.part.input.command}`.slice(
+        0,
+        1000,
+      );
+  }
+  return `${label}: 该结果未满足当前条件的证据规则（产物可能缺失、已变化，或复核不完整）。`;
 }
 
 export function readGoalDiagnostics(context: GoalEvidenceReaderContext, goal: SessionGoal, assessment: GoalAssessment): VerifiedGoalDiagnostic[] {

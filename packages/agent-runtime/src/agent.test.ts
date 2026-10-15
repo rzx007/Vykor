@@ -55,7 +55,7 @@ describe("createDefaultNodeAgent", () => {
     }
   });
 
-  it("keeps a host-trusted Read summary through a real Run capability view", async () => {
+  it.each([false, true])("keeps a host-trusted Read through a real Run capability view (preparing=%s)", async (preparing) => {
     const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-trusted-read-"));
     tempDirs.push(cwd);
     const completed: AgentEvent[] = [];
@@ -73,12 +73,26 @@ describe("createDefaultNodeAgent", () => {
       client: { async *streamMessage() {
         if (turn++ === 0) yield { type: "tool_use_start" as const,
           toolUse: { type: "tool_use" as const, id: "read-1", name: "Read", input: { file_path: "attachment://att-1/notes.txt" } } };
-        yield { type: "complete" as const, stopReason: turn === 1 ? "tool_use" as const : "end_turn" as const };
+        if (preparing && turn === 2) yield { type: "tool_use_start" as const,
+          toolUse: { type: "tool_use" as const, id: "ready", name: "GoalAssessment", input: {
+            decision: "ready", progress: "conditions extracted", evidence: [],
+            progressAssessment: { kind: "progress", summary: "ready" }, preparedRequirements: [{
+              text: "read attachment", source: [{ kind: "input", inputId: "i", quote: "read attachment" }],
+              verification: { kind: "check", method: "read", environment: "local", expected: "read" }, constraints: [],
+            }],
+          } } };
+        yield { type: "complete" as const, stopReason: turn === 1 || preparing ? "tool_use" as const : "end_turn" as const };
       } },
       onEvent: (event) => completed.push(event),
     });
     try {
-      await agent.runMessage("read attachment");
+      const resultRun = await agent.runMessage("read attachment", preparing ? { goal: {
+        goalId: "g", objectiveVersion: 1, phase: "preparing", readSnapshot: async () => ({
+          goalId: "g", objectiveVersion: 1, phase: "preparing", objective: "read attachment",
+          sourceInputIds: ["i"], requirements: [], autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false,
+        }),
+      } } : {});
+      expect(resultRun.status).toBe("completed");
       const result = completed.find((event) => event.type === "tool.completed")?.data.result;
       expect(result).toBeDefined();
       expect(result?.isError).toBeFalsy();

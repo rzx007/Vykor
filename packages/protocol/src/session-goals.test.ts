@@ -20,6 +20,7 @@ describe("session goal protocol", () => {
     expect(() => parseUpdateSessionGoalInput({ ...update, actor: { kind: "local_user" } })).toThrow();
     const answer = { requestId: "a", expectedRevision: 0, action: "confirm", questionId: "q" };
     expect(() => parseGoalActionInput(answer)).toThrow();
+    expect(() => parseGoalActionInput({ requestId: "a", expectedRevision: 0, action: "confirm", objectiveVersion: 1 })).toThrow();
     expect(parseGoalActionInput({ ...answer, objectiveVersion: 1 })).toMatchObject({ objectiveVersion: 1 });
     expect(parseGoalActionInput({ ...answer, action: "resume", objectiveVersion: 1, response: "answer" })).toMatchObject({ response: "answer" });
     expect(parseGoalActionInput({ requestId: "a", expectedRevision: 0, action: "resume", reprepare: true })).toMatchObject({ reprepare: true });
@@ -32,6 +33,11 @@ describe("session goal protocol", () => {
       verification: { kind: "check", method: "test", environment: "local", expected: "通过" }, constraints: [] };
     const ready = { decision: "ready", progress: "整理完成", progressAssessment: { kind: "progress", summary: "已整理" }, evidence: [], preparedRequirements: [candidate] };
     expect(parseGoalAssessment(ready, binding).preparedRequirements).toEqual([candidate]);
+    expect(parseGoalAssessment({ ...ready, preparedRequirements: [{ ...candidate, verification: { ...candidate.verification, command: "npm test", commandPolicy: "required" } }] }, binding)
+      .preparedRequirements?.[0]?.verification).toMatchObject({ command: "npm test", commandPolicy: "required" });
+    for (const commandPolicy of ["unknown", 1, ["required"]]) expect(() => parseGoalAssessment({ ...ready,
+      preparedRequirements: [{ ...candidate, verification: { ...candidate.verification, commandPolicy } }] }, binding)).toThrow();
+    expect(() => parseGoalAssessment({ ...ready, preparedRequirements: [{ ...candidate, verification: { ...candidate.verification, commandPolicy: "required" } }] }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, preparedRequirements: [{ ...candidate, id: "forged" }] }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, preparedRequirements: Array.from({ length: 65 }, () => candidate) }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, decision: "complete" }, binding)).toThrow();

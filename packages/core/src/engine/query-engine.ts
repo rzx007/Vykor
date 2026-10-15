@@ -685,7 +685,7 @@ export class QueryEngine implements IQueryEngine {
           const toolUse = toolUses[i]!;
           const tool = runToolRegistry.get(toolUse.name);
           const rawResult = withToolInputReuseHint(tool, toolUse, results[i]!, this.messages);
-          const result = { ...rawResult, content: formatToolResultForModel(rawResult) };
+          const result = { ...rawResult, content: formatToolResultForModel(rawResult, contribution?.exposeToolResultIds) };
           const recoveryGuard = result.metadata?.recoveryGuard;
           // A rejected retry never ran, and its failure is already recorded. Re-recording it
           // would refresh the record to the current evidence revision, which silently voids

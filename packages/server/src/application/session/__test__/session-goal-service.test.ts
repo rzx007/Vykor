@@ -68,6 +68,7 @@ function harness(
     runExecutor: createView ? new SessionRunExecutor({
       data: store, attachments: store.attachments, goals: store.goals, events,
       readGoalSnapshot: (goalId, version, runId) => service.readSnapshot(goalId, version, runId),
+      reviewGoalAssessment: (goalId, version, runId, input) => service.reviewAssessment(goalId, version, runId, input),
       agentPool: {
         configured: true,
         acquireSession: async () => ({
@@ -190,6 +191,50 @@ function modelAttempt(store: SessionStore, runId: string, tokens = 1): void {
 }
 
 describe("SessionGoalService durable lifecycle", () => {
+  it("rejects invented evidence during the same Run and completes after correcting only the reference", async () => {
+    let executions = 0;
+    const h = harness(async (store, runId) => {
+      executions++;
+      const goal = store.goals.getGoal(String(store.runs.getRun(runId)!.metadata.goalId))!;
+      const message = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId });
+      const part = store.conversations.upsertMessagePart({ id: "call_actual", sessionId: "s1", messageId: message.id,
+        type: "tool", status: "completed", toolName: "Shell", input: { command: "npx vitest run", workdir: "/repo/package" },
+        output: { exitCode: 0, content: [{ type: "text", text: "331 tests passed" }] }, metadata: { executionState: "completed" } });
+      const report = (messagePartId: string): Record<string, unknown> => ({ decision: "complete", progress: "tests passed", evidence: [],
+        progressAssessment: { kind: "progress", summary: "tests passed" }, progressSignals: [],
+        requirements: [{ requirementId: goal.requirements[0]!.id, status: "satisfied", explanation: "suite covers the requested behavior",
+          evidenceRefs: [{ messagePartId, criterion: "tests passed" }] }] });
+      const rejected = await h.service.reviewAssessment(goal.id, 1, runId, report("tool:invented"));
+      expect(rejected.issues.join(" ")).toContain("tool:invented");
+      expect(rejected.availableEvidence).toContainEqual(expect.objectContaining({ messagePartId: part.id, runId }));
+      expect((await h.service.reviewAssessment(goal.id, 1, runId, report(part.id))).issues).toEqual([]);
+      const diagnosticOnly = { ...report(part.id), decision: "continue", requirements: [{ requirementId: goal.requirements[0]!.id,
+        status: "incomplete", explanation: "investigating", evidenceRefs: [] }], progressSignals: [{ requirementId: goal.requirements[0]!.id,
+        kind: "artifact_changed", subjectKey: "file", evidenceRefs: [{ messagePartId: "invented-change", criterion: "changed" }] }] };
+      expect((await h.service.reviewAssessment(goal.id, 1, runId, diagnosticOnly)).issues.join(" ")).toContain("invented-change");
+      const writes = ["a", "b"].map(name => store.conversations.upsertMessagePart({ id: `call_write_${name}`, sessionId: "s1", messageId: message.id,
+        type: "tool", status: "completed", toolName: "Write", output: { content: [{ type: "text", text: "written" }] },
+        metadata: { executionState: "completed", hostFileFacts: { environmentKey: "local", files: [{ path: `/repo/${name}`, subjectKey: `file:${name}`,
+          operation: "write", beforeDigest: "missing", afterDigest: `sha256:${name.repeat(64)}`, completed: true }] } } }));
+      const twoChanges = { ...diagnosticOnly, progressSignals: [{ requirementId: goal.requirements[0]!.id, kind: "artifact_changed", subjectKey: "files",
+        evidenceRefs: writes.map(part => ({ messagePartId: part.id, criterion: "file changed" })) }] };
+      expect((await h.service.reviewAssessment(goal.id, 1, runId, twoChanges)).issues).toEqual([]);
+      assessment(store, runId, report(part.id));
+    });
+    const created = await h.service.create("s1", { requestId: "feedback", objective: "check tests" });
+    await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("completed"));
+    await drainRuns(h.store, h.control);
+    expect(h.store.goals.getGoal(created.id)?.status).toBe("completed");
+    expect(executions).toBe(1);
+  });
+  it("does not freeze a model-suggested command as required without a quoted source", async () => {
+    const h = harness(undefined, undefined, undefined, { verification: { kind: "check", method: "test", command: "npm test",
+      commandPolicy: "required", environment: "local", expected: "pass" } });
+    const created = await h.service.create("s1", { requestId: "command-source", objective: "check tests" });
+    await drainRuns(h.store, h.control);
+    expect(h.store.goals.getGoal(created.id)).toMatchObject({ phase: "preparing", status: "waiting_user" });
+    expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(1);
+  });
   it("defaults to unlimited turns", async () => {
     const h = harness();
     const created = await h.service.create("s1", { requestId: "unlimited", objective: "finish" });
@@ -360,15 +405,17 @@ describe("SessionGoalService durable lifecycle", () => {
     const second = h.store.goals.getGoal(created.id)!;
     expect(second.preparationEpisodeId).toBe("prepare-first");
     expect(h.store.goals.getPreparationEpisode("prepare-first")?.modelAttempts).toBe(5);
-    await expect(h.service.action("s1", created.id, { requestId: "exhausted-episode", expectedRevision: second.revision, action: "resume" })).rejects.toMatchObject({ status: 409 });
-    const reprepare = { requestId: "new-episode", expectedRevision: second.revision, action: "resume" as const, reprepare: true };
+    await h.service.action("s1", created.id, { requestId: "continue-episode", expectedRevision: second.revision, action: "resume" });
+    await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));
+    expect(h.store.goals.getPreparationEpisode("prepare-first")?.modelAttempts).toBe(6);
+    const reprepare = { requestId: "new-episode", expectedRevision: h.store.goals.getGoal(created.id)!.revision, action: "resume" as const, reprepare: true };
     const accepted = await h.service.action("s1", created.id, reprepare);
     await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));
     expect(await h.service.action("s1", created.id, reprepare)).toEqual(accepted);
-    expect(h.store.goals.getGoal(created.id)).toMatchObject({ preparationEpisodeId: "new-episode", objectiveVersion: 1, usage: { knownTokens: 6 } });
+    expect(h.store.goals.getGoal(created.id)).toMatchObject({ preparationEpisodeId: "new-episode", objectiveVersion: 1, usage: { knownTokens: 7 } });
     expect(h.store.goals.getPreparationEpisode("new-episode")?.modelAttempts).toBe(1);
     expect(h.store.goals.listGoalVersions(created.id)).toHaveLength(1);
-    expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(6);
+    expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(7);
   });
 
   it("records refine and pivot reasons once and leaves unchanged refine and frozen history intact", async () => {
@@ -414,7 +461,7 @@ describe("SessionGoalService durable lifecycle", () => {
       if (executionTurns === 2) await gate;
       const goal = store.goals.getGoal(String(run.metadata.goalId))!;
       const message = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId });
-      const part = store.conversations.upsertMessagePart({ sessionId: "s1", messageId: message.id, type: "tool", status: "completed", toolName: "Bash",
+      const part = store.conversations.upsertMessagePart({ sessionId: "s1", messageId: message.id, type: "tool", status: "completed", toolName: "Shell",
         input: { command: "run-check" }, output: { exitCode: 0 }, metadata: { executionState: "completed" } });
       assessment(store, runId, { decision: "complete", remainingWork: [], requirements: [
         { requirementId: goal.requirements[0]!.id, status: executionTurns === 1 ? "incomplete" : "satisfied", explanation: "接口检查结果", evidenceRefs: executionTurns === 1 ? [] : [{ messagePartId: part.id, criterion: "接口检查通过" }] },
@@ -620,7 +667,7 @@ describe("SessionGoalService durable lifecycle", () => {
     try {
       const { service, store } = harness(undefined, { check: () => ({ state: "completed" }) });
       const goal = persistedWait(store);
-      const permission = store.permissions.create({ sessionId: "s1", toolName: "Bash", payload: {} });
+      const permission = store.permissions.create({ sessionId: "s1", toolName: "Shell", payload: {} });
       service.recoverExternalWaits();
       await vi.advanceTimersByTimeAsync(1000);
       const waiting = store.goals.getGoal(goal.id)!;
@@ -975,7 +1022,7 @@ describe("SessionGoalService durable lifecycle", () => {
         messageId: message.id,
         type: "tool",
         status: "completed",
-        toolName: "Bash",
+        toolName: "Shell",
         input: { command: "run-check" },
         output: { exitCode: 0, checked: ++turns },
         metadata: { executionState: "completed" },
@@ -1072,7 +1119,7 @@ describe("SessionGoalService durable lifecycle", () => {
     ).rejects.toThrow("增加");
     const permission = store.permissions.create({
       sessionId: "s1",
-      toolName: "Bash",
+      toolName: "Shell",
       payload: {},
     });
     const waiting = store.goals.updateGoal(goal.id, {

@@ -1,4 +1,4 @@
-import { MAX_GOAL_PREPARATION_MODEL_ATTEMPTS, DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type GoalRequirement, type PreparationEpisode, type GoalVersion, type SessionInputRecord, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
+import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type GoalRequirement, type PreparationEpisode, type GoalVersion, type SessionInputRecord, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
 import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
 import { AgentExecutionLimitError } from "@vykor/core";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
@@ -6,9 +6,9 @@ import type { AdmitPromptInput } from "./run-admission-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, requirementEvidenceSatisfied, validateRequirementCoverage } from "./goal-assessment-policy.js";
-import { readGoalEvidence, readGoalDiagnostics } from "./goal-evidence-reader.js";
+import { readGoalEvidence, readGoalDiagnostics, describeGoalEvidenceRejection } from "./goal-evidence-reader.js";
 import { evaluateGoalProgress } from "./goal-progress-policy.js";
-import type { GoalReadSnapshot } from "@vykor/agent-runtime";
+import type { GoalReadSnapshot, GoalAssessmentFeedback } from "@vykor/agent-runtime";
 import type { GoalWaitCheck, GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 import type { RunAdmissionService } from "./run-admission-service.js";
@@ -84,8 +84,7 @@ export class SessionGoalService {
     if (boundary === "child" || boundary === "maintenance") throw new AgentExecutionLimitError("准备阶段不开放子任务或维护");
     if (boundary === "tool" && tool && !["GoalRead", "GoalAssessment"].includes(tool.toolName)) {
       if (!["Read", "Glob", "Grep"].includes(tool.toolName)) throw new AgentExecutionLimitError("准备只允许只读调查");
-      try { this.context.goals.reservePreparationTool(goal.preparationEpisodeId!, runId); }
-      catch { throw new AgentExecutionLimitError("准备只读调查额度已用完"); }
+      this.context.goals.reservePreparationTool(goal.preparationEpisodeId!, runId);
     }
   }
 
@@ -95,6 +94,13 @@ export class SessionGoalService {
     if (goal.currentRunId !== runId) return Promise.reject(new Error("目标查询所属 Run 已变化"));
     const definition = this.context.goals.getGoalVersion(goalId, version);
     if (!definition) return Promise.reject(new Error("目标版本记录缺失"));
+    const messages = new Set(this.context.conversations.listMessages(goal.sessionId).filter(item => item.runId === runId).map(item => item.id));
+    const recentEvidence = this.context.conversations.listMessageParts(goal.sessionId)
+      .filter(part => messages.has(part.messageId) && part.type === "tool" && part.status === "completed" && !part.isError && part.output != null
+        && part.metadata.executionState === "completed" && part.toolName && !["GoalRead", "GoalAssessment"].includes(part.toolName))
+      .slice(-32).map(part => ({ messagePartId: part.id, runId, toolName: part.toolName!,
+        ...(typeof part.input?.command === "string" ? { command: part.input.command.slice(0, 1000) } : {}),
+        ...(typeof part.input?.workdir === "string" ? { workdir: part.input.workdir.slice(0, 500) } : {}) }));
     return Promise.resolve({ goalId, objectiveVersion: version, phase: goal.phase, objective: goal.objective,
       sourceInputIds: definition.inputIds,
       requirements: goal.requirements.map(item => ({ id: item.id, text: item.text,
@@ -102,7 +108,40 @@ export class SessionGoalService {
         status: goal.assessment?.requirements?.find(value => value.requirementId === item.id)?.status ?? "incomplete" })),
       latestAssessment: goal.assessment?.progress, waitSummary: goal.reason,
       stopReason: goal.stopReason?.detail, autoTurnsUsed: goal.autoTurnsUsed, maxAutoTurns: goal.maxAutoTurns,
-      knownTokens: goal.usage.knownTokens, usageIncomplete: goal.usage.incomplete });
+      knownTokens: goal.usage.knownTokens, usageIncomplete: goal.usage.incomplete, recentEvidence });
+  }
+
+  /** Same evidence rules as settlement, allowing only this still-running root for preflight. */
+  async reviewAssessment(goalId: string, version: number, runId: string, input: Record<string, unknown>): Promise<GoalAssessmentFeedback> {
+    const snapshot = await this.readSnapshot(goalId, version, runId);
+    const goal = this.context.goals.getGoal(goalId)!;
+    let assessment: GoalAssessment;
+    try {
+      assessment = parseGoalAssessment(input, { goalId, objectiveVersion: version, runId, phase: goal.phase });
+      validateRequirementCoverage(goal.requirements, assessment.requirements);
+    } catch (error) {
+      return { issues: [`评估格式或条件覆盖不完整：${error instanceof Error ? error.message : String(error)}`], availableEvidence: snapshot.recentEvidence };
+    }
+    const evidence = readGoalEvidence(this.context, goal, assessment, { preview: true });
+    const issues = (assessment.requirements ?? []).flatMap(report => {
+      const requirement = goal.requirements.find(item => item.id === report.requirementId)!;
+      if (report.status !== "satisfied" || requirement.verification.kind === "user_acceptance"
+        || requirementEvidenceSatisfied(goal, assessment, evidence, report.requirementId)) return [];
+      if (!report.evidenceRefs.length) return [`${report.requirementId}: 已满足的客观条件缺少证据引用。`];
+      return report.evidenceRefs.filter(ref => !evidence.some(item => item.requirementId === report.requirementId
+        && item.supportsCompletion !== false && item.origin.goalId === ref.goalId && item.origin.runId === ref.runId
+        && item.origin.objectiveVersion === ref.objectiveVersion && item.origin.messagePartId === ref.messagePartId))
+        .map(ref => describeGoalEvidenceRejection(this.context, goal, assessment, requirement, ref));
+    });
+    const progress = evaluateGoalProgress({ goal, assessment, evidence, diagnostics: [],
+      history: this.context.goals.listGoalAssessments(goal.id, version) });
+    for (const signal of assessment.progressSignals ?? []) {
+      const origins = progress.verifiedSignals.filter(item => item.requirementId === signal.requirementId && item.kind === signal.kind).flatMap(item => item.origins);
+      if (!signal.evidenceRefs.every(ref => origins.some(origin => origin.goalId === ref.goalId && origin.runId === ref.runId
+          && origin.objectiveVersion === ref.objectiveVersion && origin.messagePartId === ref.messagePartId)))
+        issues.push(`${signal.requirementId}: 进展声明 ${signal.kind} 的引用 [${signal.evidenceRefs.map(ref => ref.messagePartId).join(", ")}] 无效或没有证明新增变化。请修正声明；已有有效结果无需重跑。`);
+    }
+    return { issues, availableEvidence: snapshot.recentEvidence };
   }
 
   /** 事件回调只请求中断，不能等待它所属的 Run 完成。 */
@@ -575,7 +614,7 @@ export class SessionGoalService {
       status: assessment.decision === "waiting_user" ? "waiting_user" : "paused", assessment,
       wait: assessment.wait ?? null,
       reason: assessment.reason ?? assessment.progress,
-      stopReason: assessment.decision === "blocked" ? { code: "preparation_limit", at: Date.now(), runId: run.id } : null });
+      stopReason: assessment.decision === "blocked" ? { code: "preparation_incomplete", at: Date.now(), runId: run.id } : null });
     this.context.goals.setPreparationEpisode({ ...episode, state: assessment.decision === "waiting_user" ? "waiting_user" : "stopped" });
     this.context.runs.updateRun(run.id, { metadata: { goalSettled: true } });
   }
@@ -629,7 +668,6 @@ export class SessionGoalService {
       if (episode.readyRunId) runId = this.freezePrepared(active, episode);
       else if (retry) runId = retry.id;
       else {
-        if (episode.modelAttempts >= MAX_GOAL_PREPARATION_MODEL_ATTEMPTS) throw new SessionApplicationError(409, "准备模型额度已用完，请补充条件或明确重新整理");
         const admitted = this.admission.persistGoalRun(goal.sessionId, this.runInput(active, input.requestId, "preparation", {
           items: [{ type: "text", text: `继续原准备批次，整理目标条件：${goal.objective}` }], transcriptVisibility: "hidden" }));
         runId = admitted.run.id;
@@ -963,6 +1001,10 @@ export class SessionGoalService {
             || !facts?.files?.some(item => item.operation === "read" && item.bodyVisible && item.path === source.path && item.afterDigest === source.digest)) throw new Error("文档引用与读取记录不一致");
         }
       }
+      const requiredCommand = candidate.verification.kind === "check" && candidate.verification.commandPolicy === "required" ? candidate.verification.command : undefined;
+      if (candidate.verification.kind === "check" && candidate.verification.commandPolicy === "required"
+        && (!requiredCommand || !candidate.source.some(source => source.quote.includes(requiredCommand))))
+        throw new Error("强制执行的命令必须来自用户输入或引用材料，不能将模型建议变成强制条件");
       const { previousRequirementId: _previous, ...definition } = candidate;
       return { ...definition, id: unchanged ? old.id : `R${goal.objectiveVersion}-${index + 1}`,
         ...(old && !unchanged ? { replaces: [old.id] } : {}) };

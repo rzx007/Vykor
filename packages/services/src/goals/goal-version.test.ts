@@ -92,7 +92,7 @@ describe("Goal versions and preparation episodes", () => {
     }, memory);
   });
 
-  it.each([false, true])("allows four read rounds plus assessment but rejects a sixth model or fifth read (memory=%s)", memory => {
+  it.each([false, true])("counts preparation activity without a second hidden budget (memory=%s)", memory => {
     withStore(store => {
       prepare(store);
       const start = { runId: "r1", generationId: "gen", attempt: 1, sessionId: "s1", model: "m", purpose: "generation" as const };
@@ -100,12 +100,12 @@ describe("Goal versions and preparation episodes", () => {
       expect(store.goals.beginGoalModelAttempt(start)).toMatchObject({ allowed: true, changed: false });
       expect(store.goals.beginGoalModelAttempt({ ...start, attempt: 2, purpose: "compaction" })).toMatchObject({ allowed: true });
       for (let i = 0; i < 4; i++) store.goals.reservePreparationTool("request1", "r1");
-      expect(() => store.goals.reservePreparationTool("request1", "r1")).toThrow("goal_preparation_tool_limit");
+      store.goals.reservePreparationTool("request1", "r1");
       for (let attempt = 3; attempt <= 5; attempt++)
         expect(store.goals.beginGoalModelAttempt({ ...start, attempt })).toMatchObject({ allowed: true });
-      expect(store.goals.beginGoalModelAttempt({ ...start, attempt: 6 })).toMatchObject({ allowed: false });
-      expect(store.goals.getPreparationEpisode("request1")).toMatchObject({ modelAttempts: 5, readToolCalls: 4 });
-      expect(store.goals.getGoal("g1")).toMatchObject({ status: "paused", stopReason: { code: "preparation_limit" } });
+      expect(store.goals.beginGoalModelAttempt({ ...start, attempt: 6 })).toMatchObject({ allowed: true });
+      expect(store.goals.getPreparationEpisode("request1")).toMatchObject({ modelAttempts: 6, readToolCalls: 5 });
+      expect(store.goals.getGoal("g1")).toMatchObject({ status: "active" });
       expect(store.goals.getGoalRequest("request1")?.result?.retained).toBe("value");
     }, memory);
   });

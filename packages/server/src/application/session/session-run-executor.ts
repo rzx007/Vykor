@@ -49,6 +49,7 @@ export interface SessionRunExecutorContext {
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
   checkGoalRunExecution?(goalId: string, objectiveVersion: number, runId: string, boundary: string, tool?: {toolName: string; toolAttemptId: string}): void;
   readGoalSnapshot?(goalId: string, objectiveVersion: number, runId: string): Promise<GoalReadSnapshot>;
+  reviewGoalAssessment?(goalId: string, objectiveVersion: number, runId: string, input: Record<string, unknown>): ReturnType<NonNullable<GoalRunBinding["reviewAssessment"]>>;
   agentPool: Pick<
     AgentPool,
     "configured" | "acquireSession" | "close" | "closeIfStale"
@@ -249,6 +250,7 @@ export class SessionRunExecutor {
         }
         if (storedRun?.metadata.goalPhase !== goal.phase) throw new Error("session_goal_phase_is_stale");
         goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion, objective: goal.objective, phase: goal.phase,
+          reviewAssessment: (input) => this.context.reviewGoalAssessment ? this.context.reviewGoalAssessment(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal evidence reviewer is unavailable")),
           readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
       }
       const limits: AgentExecutionLimits | undefined = goalBinding && this.context.checkGoalExecution
@@ -270,7 +272,7 @@ export class SessionRunExecutor {
         ...(capabilityView ? { capabilityView } : {}),
         ...(goalBinding ? { goal: goalBinding } : {}),
         ...(limits ? { limits } : {}),
-        ...(preparing ? { profile: { maxOutputTokens: 1024, executableHooks: false } } : {}),
+        ...(preparing ? { profile: { executableHooks: false } } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,
         delivery: admitted.delivery,

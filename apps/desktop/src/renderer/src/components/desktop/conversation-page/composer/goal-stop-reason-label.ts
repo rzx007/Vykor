@@ -15,7 +15,7 @@ const labels: Record<NonNullable<SessionGoal["stopReason"]>["code"], string> = {
   token_budget: "Token 预算已用完",
   usage_unknown: "无法确认用量",
   provider_limit: "服务商限制了运行",
-  preparation_limit: "目标准备次数已用完",
+  preparation_incomplete: "目标条件尚未明确",
 }
 
 export function goalStopReasonLabel(goal: SessionGoal): string | undefined {

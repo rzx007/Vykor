@@ -4,6 +4,7 @@ import {
   QueryEngine,
   RuntimeBuilder,
   RuntimeBundle,
+  toolDefinitionIdentity,
   resolveOutputTokenCap,
 } from "@vykor/core";
 import {
@@ -383,6 +384,9 @@ export async function createVykorRuntime(
     .setQueryEngine(queryEngine)
     .build(settings);
 
+  bundle.trustedToolOverrides = new Map([...engineOptions.trustedToolOverrides].map(([name, definition]) => [
+    name, Object.freeze({ identity: toolDefinitionIdentity(definition), execute: definition.execute }),
+  ]));
   await attachSandboxRuntime(
     bundle,
     hostCwd,

@@ -14,7 +14,7 @@ export interface GoalRequirement {
   text: string;
   source: GoalRequirementSource[];
   verification:
-    | { kind: "check"; method: string; command?: string; environment: string; expected: string }
+    | { kind: "check"; method: string; command?: string; commandPolicy?: "suggested" | "required"; environment: string; expected: string }
     | { kind: "artifact_review"; artifact: string; standard: string }
     | { kind: "user_acceptance"; question: string };
   constraints: string[];
@@ -61,7 +61,7 @@ export interface GoalStopReason {
   code: "user_paused" | "user_cancelled" | "updating_objective" | "auto_turn_limit"
     | "run_error" | "assessment_invalid" | "wait_invalid" | "wait_timeout"
     | "external_failed" | "no_progress" | "startup_recovery" | "token_budget"
-    | "usage_unknown" | "provider_limit" | "preparation_limit";
+    | "usage_unknown" | "provider_limit" | "preparation_incomplete";
   at: number;
   runId?: string;
   detail?: string;
@@ -236,8 +236,6 @@ export interface GoalAssessment {
 /** Zero means no automatic-turn limit. */
 export const DEFAULT_GOAL_AUTO_TURNS = 0;
 export const MAX_GOAL_AUTO_TURNS = 1_000;
-/** Four sequential read rounds plus one call to submit the prepared conditions. */
-export const MAX_GOAL_PREPARATION_MODEL_ATTEMPTS = 5;
 export const MAX_GOAL_OBJECTIVE_CHARS = 32_000;
 
 export function parseCreateSessionGoalInput(value: unknown): CreateSessionGoalInput {
@@ -555,10 +553,13 @@ export function parsePreparedGoalRequirements(value: unknown): PreparedGoalRequi
       throw new ProtocolValidationError("invalid_goal_requirement_source", "source");
     });
     const raw = goalRecord(record.verification);
+    if (raw.commandPolicy !== undefined && (raw.kind !== "check" || raw.commandPolicy !== "suggested" && raw.commandPolicy !== "required"
+      || raw.commandPolicy === "required" && raw.command === undefined)) throw new ProtocolValidationError("invalid_goal_command_policy", "commandPolicy");
     let verification: GoalRequirement["verification"];
     if (raw.kind === "check") verification = { kind: "check", method: requiredGoalString(raw.method, "method", 4000),
       environment: requiredGoalString(raw.environment, "environment", 4000), expected: requiredGoalString(raw.expected, "expected", 4000),
-      ...(raw.command === undefined ? {} : { command: requiredGoalString(raw.command, "command", 4000) }) };
+      ...(raw.command === undefined ? {} : { command: requiredGoalString(raw.command, "command", 4000) }),
+      ...(raw.commandPolicy === undefined ? {} : { commandPolicy: raw.commandPolicy as "suggested" | "required" }) };
     else if (raw.kind === "artifact_review") verification = { kind: "artifact_review", artifact: requiredGoalString(raw.artifact, "artifact", 4000), standard: requiredGoalString(raw.standard, "standard", 4000) };
     else if (raw.kind === "user_acceptance") verification = { kind: "user_acceptance", question: requiredGoalString(raw.question, "question", 4000) };
     else throw new ProtocolValidationError("invalid_goal_verification", "verification");
