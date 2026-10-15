@@ -1,15 +1,38 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
 import { GitSettingsChannels, type GitSettingsIpcMap } from "./git-settings-types"
-import { MaintenanceSettingsChannels, type MaintenanceSettingsIpcMap } from "./maintenance-settings-types"
+import {
+  MaintenanceSettingsChannels,
+  type MaintenanceSettingsIpcMap,
+} from "./maintenance-settings-types"
 import { RuntimeSettingsChannels, type RuntimeSettingsIpcMap } from "./runtime-settings-types"
-import { NotificationSettingsChannels, type NotificationSettingsIpcMap } from "./notification-settings-types"
-import { PersonalizationManagementChannels, type PersonalizationManagementIpcMap } from "./personalization-management-types"
-import { ConfigurationSettingsChannels, type ConfigurationSettingsIpcMap } from "./configuration-settings-types"
+import {
+  NotificationSettingsChannels,
+  type NotificationSettingsIpcMap,
+} from "./notification-settings-types"
+import {
+  PersonalizationManagementChannels,
+  type PersonalizationManagementIpcMap,
+} from "./personalization-management-types"
+import {
+  ConfigurationSettingsChannels,
+  type ConfigurationSettingsIpcMap,
+} from "./configuration-settings-types"
 import { ProviderDefaultsChannels, type ProviderDefaultsIpcMap } from "./provider-defaults-types"
-import type { CheckDesktopPermissionInput, DesktopIsolationSettings, DesktopPermissionSettingsSnapshot,
-  RevokeDesktopApprovalInput, UpdateDesktopPermissionSettingsInput } from "./permission-settings-types"
-import type { AddAnnotationInput, AnnotationIdInput, BrowserAnnotationSnapshot, SetAnnotationModeInput } from "./browser-annotation"
+import type {
+  CheckDesktopPermissionInput,
+  DesktopIsolationSettings,
+  DesktopPermissionSettingsSnapshot,
+  RevokeDesktopApprovalInput,
+  UpdateDesktopPermissionSettingsInput,
+} from "./permission-settings-types"
+import type {
+  AddAnnotationInput,
+  AnnotationIdInput,
+  BrowserAnnotationSnapshot,
+  SetAnnotationModeInput,
+} from "./browser-annotation"
 import type {
   CreateDesktopSessionInput,
   CheckoutDesktopProjectBranchInput,
@@ -85,11 +108,7 @@ import type {
   ListDesktopScheduledRunsInput,
   UpdateDesktopScheduledTaskInput,
 } from "./schedule-types"
-import type {
-  CreateDesktopNoteInput,
-  DesktopNote,
-  UpdateDesktopNoteInput,
-} from "./note-types"
+import type { CreateDesktopNoteInput, DesktopNote, UpdateDesktopNoteInput } from "./note-types"
 import type {
   ActivateDesktopProviderInput,
   ConnectDesktopProviderInput,
@@ -214,6 +233,7 @@ export const IpcChannels = {
   windowOpenExternal: "window:open-external",
   windowGetMaterial: "window:get-material",
   windowSetMaterial: "window:set-material",
+  windowSetThemeSource: "window:set-theme-source",
 
   browserTabUpdate: "browser:tab:update",
   browserReadAnnotations: "browser:annotations:read",
@@ -428,7 +448,8 @@ export const IpcEvents = {
   browserOpenRequest: "browser:open-request",
 } as const
 
-export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
+export type IpcChannel =
+  | (typeof IpcChannels)[keyof typeof IpcChannels]
   | (typeof TerminalSettingsChannels)[keyof typeof TerminalSettingsChannels]
   | (typeof GitSettingsChannels)[keyof typeof GitSettingsChannels]
   | (typeof MaintenanceSettingsChannels)[keyof typeof MaintenanceSettingsChannels]
@@ -473,7 +494,16 @@ export interface PetState {
   position: PetPosition | null
 }
 
-export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap, MaintenanceSettingsIpcMap, RuntimeSettingsIpcMap, NotificationSettingsIpcMap, PersonalizationManagementIpcMap, ConfigurationSettingsIpcMap, ProviderDefaultsIpcMap {
+export interface IpcInvokeMap
+  extends
+    TerminalSettingsIpcMap,
+    GitSettingsIpcMap,
+    MaintenanceSettingsIpcMap,
+    RuntimeSettingsIpcMap,
+    NotificationSettingsIpcMap,
+    PersonalizationManagementIpcMap,
+    ConfigurationSettingsIpcMap,
+    ProviderDefaultsIpcMap {
   [IpcChannels.pluginUiCapabilities]: {
     args: []
     result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>>
@@ -528,6 +558,7 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
   [IpcChannels.windowSetZoomLevel]: { args: [level: number]; result: number }
   [IpcChannels.windowOpenExternal]: { args: [url: string]; result: void }
   [IpcChannels.windowGetMaterial]: { args: []; result: DesktopWindowMaterialState }
+  [IpcChannels.windowSetThemeSource]: { args: [source: DesktopWindowThemeSource]; result: void }
   [IpcChannels.windowSetMaterial]: {
     args: [preference: DesktopWindowMaterialPreference]
     result: DesktopWindowMaterialState
@@ -541,10 +572,22 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
     ]
     result: void
   }
-  [IpcChannels.browserReadAnnotations]: { args: [input: { tabId: string }]; result: BrowserAnnotationSnapshot }
-  [IpcChannels.browserSetAnnotationMode]: { args: [input: SetAnnotationModeInput]; result: BrowserAnnotationSnapshot }
-  [IpcChannels.browserFocusAnnotation]: { args: [input: AnnotationIdInput]; result: BrowserAnnotationSnapshot }
-  [IpcChannels.browserRemoveAnnotation]: { args: [input: AnnotationIdInput]; result: BrowserAnnotationSnapshot }
+  [IpcChannels.browserReadAnnotations]: {
+    args: [input: { tabId: string }]
+    result: BrowserAnnotationSnapshot
+  }
+  [IpcChannels.browserSetAnnotationMode]: {
+    args: [input: SetAnnotationModeInput]
+    result: BrowserAnnotationSnapshot
+  }
+  [IpcChannels.browserFocusAnnotation]: {
+    args: [input: AnnotationIdInput]
+    result: BrowserAnnotationSnapshot
+  }
+  [IpcChannels.browserRemoveAnnotation]: {
+    args: [input: AnnotationIdInput]
+    result: BrowserAnnotationSnapshot
+  }
   [IpcChannels.browserAddAnnotation]: {
     args: [input: AddAnnotationInput]
     result: BrowserAnnotationSnapshot
@@ -563,13 +606,22 @@ export interface IpcInvokeMap extends TerminalSettingsIpcMap, GitSettingsIpcMap,
 
   [IpcChannels.settingsSnapshot]: { args: []; result: DesktopSettingsSnapshot }
   [IpcChannels.permissionSettingsSnapshot]: { args: []; result: DesktopPermissionSettingsSnapshot }
-  [IpcChannels.permissionSettingsUpdate]: { args: [input: UpdateDesktopPermissionSettingsInput]; result: DesktopPermissionSettingsSnapshot }
+  [IpcChannels.permissionSettingsUpdate]: {
+    args: [input: UpdateDesktopPermissionSettingsInput]
+    result: DesktopPermissionSettingsSnapshot
+  }
   [IpcChannels.permissionSettingsUpdateIsolation]: {
     args: [input: { sandbox: DesktopIsolationSettings; expectedSandbox: DesktopIsolationSettings }]
     result: DesktopPermissionSettingsSnapshot
   }
-  [IpcChannels.permissionSettingsCheck]: { args: [input: CheckDesktopPermissionInput]; result: { action: "allow" | "deny" | "ask"; reason?: string } }
-  [IpcChannels.permissionSettingsRevoke]: { args: [input: RevokeDesktopApprovalInput]; result: DesktopPermissionSettingsSnapshot }
+  [IpcChannels.permissionSettingsCheck]: {
+    args: [input: CheckDesktopPermissionInput]
+    result: { action: "allow" | "deny" | "ask"; reason?: string }
+  }
+  [IpcChannels.permissionSettingsRevoke]: {
+    args: [input: RevokeDesktopApprovalInput]
+    result: DesktopPermissionSettingsSnapshot
+  }
   [IpcChannels.settingsUpdateCustomInstructions]: {
     args: [input: UpdateDesktopCustomInstructionsInput]
     result: DesktopSettingsSnapshot

@@ -259,6 +259,12 @@ export function applyAppearanceColors(
   const colors = resolveAppearanceColors(preferences.accent, theme, preferences.colors[theme])
   for (const [token, value] of Object.entries(colors)) {
     const property = `--${token.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`
-    root.style.setProperty(property, value)
+    if (token === "sidebarAccent" || token === "sidebarSelected") {
+      // 只提供实色候选值，由 CSS 根据窗口材质决定最终背景。
+      root.style.setProperty(`${property}-solid`, value)
+      root.style.removeProperty(property)
+    } else {
+      root.style.setProperty(property, value)
+    }
   }
 }

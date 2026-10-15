@@ -201,13 +201,16 @@ describe("AppearanceProvider", () => {
       "--accent-foreground",
       "--sidebar-primary",
       "--sidebar-primary-foreground",
-      "--sidebar-accent",
+      "--sidebar-accent-solid",
       "--sidebar-accent-foreground",
-      "--sidebar-selected",
+      "--sidebar-selected-solid",
       "--file-link",
     ]) {
       expect(rootStyle.getPropertyValue(property), property).toMatch(/^#[0-9A-F]{6}$/)
     }
+    // 交互背景交由 CSS 按窗口材质选择，主题不能以内联实色覆盖玻璃效果。
+    expect(rootStyle.getPropertyValue("--sidebar-accent")).toBe("")
+    expect(rootStyle.getPropertyValue("--sidebar-selected")).toBe("")
   })
 
   it("persists a valid update before publishing it", async () => {
@@ -367,6 +370,45 @@ describe("AppearanceProvider", () => {
       expect(latest?.windowMaterial).toEqual(GLASS_TRANSPARENT)
       expect(document.documentElement.dataset.windowMaterial).toBe("glass")
       expect(document.documentElement.dataset.windowShell).toBe("transparent")
+    })
+
+    it("syncs the theme preference to Windows even when system and application themes differ", async () => {
+      stubDesktop(GLASS_TRANSPARENT, vi.fn())
+      const setThemeSource = vi.fn().mockResolvedValue(undefined)
+      Object.assign(window.desktop.window, { setThemeSource })
+      Object.assign(window, { electron: { process: { platform: "win32" } } })
+      localStorage.setItem(
+        APPEARANCE_STORAGE_KEY,
+        JSON.stringify({ ...DEFAULT_APPEARANCE_PREFERENCES, theme: "dark" })
+      )
+      try {
+        await renderProvider()
+        expect(latest?.resolvedTheme).toBe("dark")
+        expect(setThemeSource).toHaveBeenLastCalledWith("dark")
+        act(() => latest!.setPreference("theme", "light"))
+        expect(setThemeSource).toHaveBeenLastCalledWith("light")
+        act(() => latest!.setPreference("theme", "system"))
+        expect(setThemeSource).toHaveBeenLastCalledWith("system")
+        act(() => darkQuery.emit(true))
+        expect(latest?.resolvedTheme).toBe("dark")
+        expect(setThemeSource).toHaveBeenLastCalledWith("system")
+      } finally {
+        delete (window as unknown as { electron?: unknown }).electron
+      }
+    })
+
+    it.each(["darwin", "linux"])("does not override the %s native theme", async (platform) => {
+      stubDesktop(GLASS_TRANSPARENT, vi.fn())
+      const setThemeSource = vi.fn().mockResolvedValue(undefined)
+      Object.assign(window.desktop.window, { setThemeSource })
+      Object.assign(window, { electron: { process: { platform } } })
+      try {
+        await renderProvider()
+        act(() => latest!.setPreference("theme", "dark"))
+        expect(setThemeSource).not.toHaveBeenCalled()
+      } finally {
+        delete (window as unknown as { electron?: unknown }).electron
+      }
     })
 
     it("reconciles the material state with the main process once after mount", async () => {

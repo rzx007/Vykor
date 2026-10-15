@@ -215,6 +215,14 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     if (windowMaterial) writeWindowMaterialAttributes(document.documentElement, windowMaterial)
   }, [preferences, resolvedReducedMotion, resolvedTheme, windowMaterial])
 
+  useEffect(() => {
+    if (!windowMaterialRef.current || window.electron?.process?.platform !== "win32") return
+    // 传偏好而不是 resolvedTheme：切回 system 时必须解除 Electron 的强制深浅色。
+    void window.desktop.window.setThemeSource?.(preferences.theme).catch((error: unknown) => {
+      console.warn("[appearance] failed to sync native window theme", error)
+    })
+  }, [preferences.theme])
+
   // renderer 重载（崩溃恢复 / dev 刷新）后 argv 快照会停留在建窗时刻，
   // 这里和主进程对账一次：落盘偏好、实际材质、开关显示才能对得上。
   useEffect(() => {

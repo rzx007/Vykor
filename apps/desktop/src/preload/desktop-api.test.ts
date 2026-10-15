@@ -172,6 +172,13 @@ describe("desktop window preload bridge", () => {
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.windowGetMaterial)
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.windowSetMaterial, "opaque")
   })
+
+  it("forwards the native theme preference including system mode", async () => {
+    for (const source of ["dark", "light", "system"] as const) {
+      await desktopAPI.window.setThemeSource(source)
+      expect(electron.invoke).toHaveBeenLastCalledWith(IpcChannels.windowSetThemeSource, source)
+    }
+  })
 })
 
 describe("desktop updater preload bridge", () => {

@@ -1,5 +1,8 @@
 import { app, BrowserWindow, nativeTheme, shell, type WebPreferences } from "electron"
 import { release } from "node:os"
+import { join } from "node:path"
+import { createWindowThemeController } from "./window-theme"
+import type { DesktopWindowThemeSource } from "../../../shared/window-theme-types"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { AppContext } from "../../core/app-context"
@@ -40,6 +43,24 @@ const materialRuntimes = new WeakMap<
   ReturnType<typeof attachWindowMaterialRuntime>
 >()
 
+let themeController: ReturnType<typeof createWindowThemeController> | undefined
+function getThemeController(): ReturnType<typeof createWindowThemeController> {
+  return (themeController ??= createWindowThemeController({
+    platform: process.platform,
+    nativeTheme,
+    preferencePath: join(app.getPath("userData"), "desktop-window-theme.json"),
+  }))
+}
+
+export function setMainWindowThemeSource(
+  win: BrowserWindow,
+  source: DesktopWindowThemeSource
+): void {
+  if (process.platform !== "win32") return
+  getThemeController().set(source)
+  materialRuntimes.get(win)?.refresh()
+}
+
 export function createMainWindow(ctx: AppContext): BrowserWindow {
   const existing = ctx.windowManager.getMain()
   if (existing) {
@@ -48,6 +69,7 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
   }
 
   const platform = process.platform
+  if (platform === "win32") getThemeController()
   const materialState = currentMainWindowMaterialState(platform)
 
   const mainWindow = ctx.windowManager.createWindow({
@@ -106,8 +128,8 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
 
 /**
  * 当前材质状态。刻意保持同步：建窗口路径（托盘、activate、second-instance 都会走到）不能 await。
- * 刻意不写 nativeTheme.themeSource：启动 loading 阶段写原生窗口主题会污染系统壳观察到的窗口主题，
- * 且会让 macOS vibrancy 跟随应用主题而不是系统主题。不要在这里「顺手补齐」。
+ * Windows 原生主题在建窗前及应用切换主题时单独同步；状态查询不改主题。
+ * macOS vibrancy 继续跟随系统，不覆盖其 nativeTheme.themeSource。
  */
 export function currentMainWindowMaterialState(
   platform: NodeJS.Platform = process.platform,

@@ -1,4 +1,5 @@
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
 import type { GitSettingsAPI } from "./git-settings-types"
 import type { MaintenanceSettingsAPI } from "./maintenance-settings-types"
@@ -233,6 +234,8 @@ export type DesktopAPI = {
     openExternal: (url: string) => Promise<void>
     /** 读取主进程当前的权威材质状态；renderer 重载后用它和主进程对账（argv 快照会过期）。 */
     getMaterial: () => Promise<DesktopWindowMaterialState>
+    /** Windows 原生材质和菜单使用应用的主题偏好，system 表示解除覆盖。 */
+    setThemeSource: (source: DesktopWindowThemeSource) => Promise<void>
     /** 切换窗口材质；返回主进程算出的权威状态（偏好 / 生效 / 降级原因 / 外壳模式）。 */
     setMaterial: (
       preference: DesktopWindowMaterialPreference

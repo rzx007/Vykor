@@ -13,9 +13,12 @@ export function attachWindowMaterialRuntime(
     notify: (state: DesktopWindowMaterialState) => void
   }
 ): { getState: () => DesktopWindowMaterialState; refresh: () => DesktopWindowMaterialState } {
+  // BrowserWindow.webContents throws after the window emits `closed`. Keep the
+  // already-created WebContents reference for both event wiring and cleanup.
+  const webContents = win.webContents
   let state = deps.apply(deps.resolve())
   const notify = (): void => {
-    if (!win.isDestroyed() && !win.webContents.isDestroyed()) deps.notify(state)
+    if (!win.isDestroyed() && !webContents.isDestroyed()) deps.notify(state)
   }
   const refresh = (): DesktopWindowMaterialState => {
     if (!win.isDestroyed()) {
@@ -26,11 +29,11 @@ export function attachWindowMaterialRuntime(
   }
   deps.nativeTheme.on("updated", refresh)
   deps.app.on("gpu-info-update", refresh)
-  win.webContents.on("did-finish-load", notify)
+  webContents.on("did-finish-load", notify)
   win.once("closed", () => {
     deps.nativeTheme.removeListener("updated", refresh)
     deps.app.removeListener("gpu-info-update", refresh)
-    win.webContents.removeListener("did-finish-load", notify)
+    webContents.removeListener("did-finish-load", notify)
   })
   notify()
   return { getState: () => state, refresh }

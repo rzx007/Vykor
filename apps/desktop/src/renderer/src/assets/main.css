@@ -304,10 +304,12 @@
   --sidebar-foreground: color-mix(in srgb, var(--shell-solid), var(--foreground) 90%);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 4.5%);
+  --sidebar-accent-solid: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 4.5%);
+  --sidebar-accent: var(--sidebar-accent-solid);
   --sidebar-accent-foreground: var(--sidebar-foreground);
   --sidebar-muted: color-mix(in srgb, var(--shell-solid), var(--foreground) 62%);
-  --sidebar-selected: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 8.5%);
+  --sidebar-selected-solid: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 8.5%);
+  --sidebar-selected: var(--sidebar-selected-solid);
   --sidebar-border: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 10%);
   --sidebar-ring: var(--ring);
 }
@@ -343,8 +345,8 @@
   --workspace-shadow: -7px -3px 18px oklch(0 0 0 / 28%);
   --workspace-top-shadow: -5px -4px 16px oklch(0 0 0 / 34%), 0 -1px 5px oklch(0 0 0 / 28%);
 
-  --sidebar-accent: color-mix(in srgb, var(--shell-solid), white 7%);
-  --sidebar-selected: color-mix(in srgb, var(--shell-solid), white 12%);
+  --sidebar-accent-solid: color-mix(in srgb, var(--shell-solid), white 7%);
+  --sidebar-selected-solid: color-mix(in srgb, var(--shell-solid), white 12%);
 }
 
 /* 外壳模式由主进程决定：
@@ -361,13 +363,22 @@ html[data-window-shell="translucent"] {
 }
 
 html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) {
-  /* 轻量透色区分悬停与选中，让原生材质连续穿过导航项。 */
-  --sidebar-accent: color-mix(in oklab, var(--surface-elevation-target) 4%, transparent);
-  --sidebar-selected: color-mix(in oklab, var(--surface-elevation-target) 7%, transparent);
+  /* 去掉前景色的冷暖偏色，透明灰随原生材质保留侧栏本身的色调。 */
+  --sidebar-interaction-tint: oklch(from var(--surface-elevation-target) l 0 h);
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-interaction-tint) 3%, transparent);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-interaction-tint) 5%, transparent);
+}
+
+/* 导航行本身和滑动悬停背景共用圆角，避免悬停、选中切换时轮廓变化。 */
+html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) :is(
+  .bg-sidebar-selected,
+  .rounded-md.bg-sidebar-accent,
+  .rounded-md[class~="hover:bg-sidebar-accent"]
+) {
+  border-radius: var(--radius-xl);
 }
 
 html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .bg-sidebar-selected {
-  border-radius: var(--radius);
   font-weight: normal;
 }
 

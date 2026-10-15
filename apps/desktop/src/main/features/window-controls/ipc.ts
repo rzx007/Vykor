@@ -6,10 +6,12 @@ import { quitApp, setForceQuit } from "../../core/services/lifecycle"
 import {
   currentMainWindowMaterialState,
   setMainWindowMaterial,
+  setMainWindowThemeSource,
   showMainWindow,
 } from "../main-window/window"
 import { normalizeZoomLevel } from "../../../shared/zoom"
 import { isDesktopWindowMaterialPreference } from "../../../shared/window-material-types"
+import { isDesktopWindowThemeSource } from "../../../shared/window-theme-types"
 import { openUrlInDefaultBrowser } from "./open-external-url"
 
 export const windowControlsIpcContribution: IpcContribution = {
@@ -85,6 +87,16 @@ export const windowControlsIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.windowGetMaterial,
         handler: (event) => currentMainWindowMaterialState(process.platform, getEventWindow(event.sender)),
+      },
+      {
+        channel: IpcChannels.windowSetThemeSource,
+        handler: (event, source) => {
+          if (!isDesktopWindowThemeSource(source)) throw new Error("未知的窗口主题设置。")
+          const win = getEventWindow(event.sender)
+          // 页面主题只由主窗口同步，宠物和其它窗口不能覆盖应用主题。
+          if (!win || win !== ctx.windowManager.getMain()) return
+          setMainWindowThemeSource(win, source)
+        },
       },
       {
         channel: IpcChannels.windowSetMaterial,

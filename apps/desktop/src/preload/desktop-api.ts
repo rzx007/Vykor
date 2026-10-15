@@ -1,4 +1,5 @@
 import { ipcRenderer, webUtils } from "electron"
+import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
 import {
   TerminalSettingsChannels,
   TerminalSettingsEvents,
@@ -112,6 +113,8 @@ export const desktopAPI = {
     // 没有参数（宠物窗口等）就是 null——不要在这里伪造 fallback 状态（D5）。
     material: parseWindowMaterialArguments(process.argv),
     getMaterial: () => invoke(IpcChannels.windowGetMaterial),
+    setThemeSource: (source: DesktopWindowThemeSource) =>
+      invoke(IpcChannels.windowSetThemeSource, source),
     setMaterial: (preference: DesktopWindowMaterialPreference) =>
       invoke(IpcChannels.windowSetMaterial, preference),
     onMaterialChanged: (listener: (state: DesktopWindowMaterialState) => void): (() => void) => {

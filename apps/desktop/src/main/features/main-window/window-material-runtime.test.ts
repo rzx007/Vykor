@@ -75,4 +75,35 @@ describe("window material runtime", () => {
     expect(runtime.getState()).toEqual(actual)
     expect(notify).toHaveBeenLastCalledWith(actual)
   })
+
+  it("窗口销毁后清理监听不再访问已销毁的 webContents", () => {
+    const nativeTheme = new EventEmitter()
+    const app = new EventEmitter()
+    const webContents = Object.assign(new EventEmitter(), { isDestroyed: () => false })
+    let destroyed = false
+    const win = Object.assign(new EventEmitter(), { isDestroyed: () => destroyed })
+    Object.defineProperty(win, "webContents", {
+      get() {
+        if (destroyed) throw new Error("Object has been destroyed")
+        return webContents
+      },
+    })
+
+    attachWindowMaterialRuntime(win as unknown as BrowserWindow, {
+      nativeTheme,
+      app,
+      resolve: () => ({
+        preference: "opaque",
+        active: "opaque",
+        shell: "solid",
+        unavailableReason: null,
+      }),
+      apply: (state) => state,
+      notify: vi.fn(),
+    })
+
+    destroyed = true
+    expect(() => win.emit("closed")).not.toThrow()
+    expect(webContents.listenerCount("did-finish-load")).toBe(0)
+  })
 })
