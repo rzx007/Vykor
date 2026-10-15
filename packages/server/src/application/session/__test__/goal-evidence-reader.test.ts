@@ -10,7 +10,11 @@ function records() {
   const runs = new Map<string, any>([["root", { id: "root", sessionId: "s", status: "completed", metadata: { goalId: "g", goalObjectiveVersion: 2 } }]]);
   const messages = [{ id: "message", sessionId: "s", runId: "root" }];
   const parts: any[] = [{ id: "part", sessionId: "s", messageId: "message", type: "tool", toolName: "Read", status: "completed", output: [{ type: "text", text: "1: visible" }], metadata: { executionState: "completed", hostFileFacts: { environmentKey: "environment", files: [{ path: "/work/a", subjectKey: "file:a", operation: "read", afterDigest: sha, completed: true, bodyVisible: true }] } } }];
-  return { runs, messages, parts, context: { runs: { getRun: (id: string) => runs.get(id) }, conversations: { listMessages: () => messages as any, listMessageParts: () => parts as any }, goals: { getGoalVersion: (_id: string, version: number) => ({ goalId: "g", objectiveVersion: version, frozenAt: 1, requirements: goal.requirements }) as any } } };
+  return { runs, messages, parts, context: { runs: { getRun: (id: string) => runs.get(id),
+    listGoalRuns: (goalId: string, version?: number) => [...runs.values()].filter(run => run.metadata.goalId === goalId && (version === undefined || run.metadata.goalObjectiveVersion === version)) },
+    conversations: { listMessages: (sessionId: string) => messages.filter(message => message.sessionId === sessionId) as any,
+      listMessageParts: (sessionId: string) => parts.filter(part => part.sessionId === sessionId) as any },
+    goals: { getGoalVersion: (_id: string, version: number) => ({ goalId: "g", objectiveVersion: version, frozenAt: 1, requirements: goal.requirements }) as any } } };
 }
 describe("evidence identity and current validity", () => {
   it("treats suggested commands as guidance while preserving explicit required commands", () => {
@@ -71,6 +75,38 @@ describe("evidence identity and current validity", () => {
       expect(readGoalEvidence(context, { ...goal, status: "active", currentRunId: "root" }, assessment, { preview: true }))
         .toMatchObject([{ supportsCompletion: false }]);
     }
+  });
+  it.each([false, true])("invalidates old artifact evidence after a running child writes or deletes it (preview=%s)", preview => {
+    for (const afterDigest of ["sha256:" + "b".repeat(64), "missing"]) {
+      const { context, runs, messages, parts } = records();
+      const current = { ...goal, status: "active", currentRunId: "root" };
+      if (preview) runs.get("root").status = "running";
+      runs.set("child", { id: "child", sessionId: "child-session", status: "running",
+        metadata: { goalId: "g", goalObjectiveVersion: 2, parentRunId: "root" } });
+      messages.push({ id: "child-message", sessionId: "child-session", runId: "child" });
+      parts.push({ ...parts[0], id: "child-write", sessionId: "child-session", messageId: "child-message", toolName: "Write",
+        metadata: { executionState: "completed", hostFileFacts: { environmentKey: "environment", files: [{ path: "/work/a", subjectKey: "file:a",
+          operation: "write", beforeDigest: sha, afterDigest, completed: true }] } } });
+      const verified = readGoalEvidence(context, current, assessment, { preview });
+      expect(verified).toMatchObject([{ supportsCompletion: false }]);
+      expect(classifyGoalCompletion(current, assessment, verified)).toMatchObject({ kind: "continue" });
+      const childRef = { ...ref, runId: "child", messagePartId: "child-write" };
+      expect(readGoalEvidence(context, current, { ...assessment, requirements: [{ ...assessment.requirements[0], evidenceRefs: [childRef] }] }, { preview })).toEqual([]);
+    }
+  });
+  it.each(["unfinished", "unrelated", "other-environment"])("does not invalidate current artifacts for %s child writes", scenario => {
+    const { context, runs, messages, parts } = records();
+    runs.set("child", { id: "child", sessionId: "child-session", status: "running",
+      metadata: { goalId: "g", goalObjectiveVersion: 2, ...(scenario === "unrelated" ? {} : { parentRunId: "root" }) } });
+    messages.push({ id: "child-message", sessionId: "child-session", runId: "child" });
+    parts.push({ ...parts[0], id: "child-write", sessionId: "child-session", messageId: "child-message", toolName: "Write",
+      ...(scenario === "unfinished" ? { status: "running", output: undefined } : {}),
+      metadata: { executionState: scenario === "unfinished" ? "unknown" : "completed", hostFileFacts: {
+        environmentKey: scenario === "other-environment" ? "other" : "environment",
+        files: [{ path: "/work/a", subjectKey: "file:a", operation: "write", beforeDigest: sha, afterDigest: "sha256:" + "b".repeat(64), completed: true }] } } });
+    const verified = readGoalEvidence(context, goal, assessment);
+    expect(verified).toMatchObject([{ supportsCompletion: true }]);
+    expect(classifyGoalCompletion(goal, assessment, verified)).toMatchObject({ kind: "completed" });
   });
   it("accepts settled current facts and separates actual failed output from completion evidence", () => {
     const { context, parts } = records();

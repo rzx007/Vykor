@@ -101,10 +101,11 @@ function sameVerification(left: GoalRequirement, right: GoalRequirement): boolea
 function artifactObservationStillCurrent(
   context: GoalEvidenceReaderContext, goal: SessionGoal, root: SessionRunRecord,
   sourceRun: SessionRunRecord, sourcePart: SessionMessagePartRecord,
-  environmentKey: string, subjectKey: string, digest: string, preview = false,
+  environmentKey: string, subjectKey: string, digest: string,
 ): boolean {
+  // Completed tool results can invalidate an observation before their Run ends.
   const runs = [...new Map([root, sourceRun, ...(context.runs.listGoalRuns?.(goal.id, goal.objectiveVersion) ?? [])]
-    .filter(run => bound(run, goal.id, goal.objectiveVersion) && (terminal(run) || preview && run.id === root.id && run.status === "running") && (run.id === sourceRun.id || descendant(context, run, root)))
+    .filter(run => bound(run, goal.id, goal.objectiveVersion) && (run.id === sourceRun.id || descendant(context, run, root)))
     .map(run => [run.id, run])).values()];
   for (const run of runs) {
     const messages = context.conversations.listMessages(run.sessionId);
@@ -150,7 +151,7 @@ function historicalArtifactValid(context: GoalEvidenceReaderContext, goal: Sessi
       if (!bound(current, goal.id, goal.objectiveVersion) || !(terminal(current) || preview && current.id === root.id && current.status === "running") || !descendant(context, current, root) || !successful(candidate)) return [];
       const receipt = validHostFileFacts(candidate.metadata.hostFileFacts);
       return receipt?.environmentKey === facts.environmentKey ? receipt.files.filter(file => file.operation === "read"
-        && artifactObservationStillCurrent(context, goal, root, current, candidate, receipt.environmentKey, file.subjectKey, file.afterDigest, preview)) : [];
+        && artifactObservationStillCurrent(context, goal, root, current, candidate, receipt.environmentKey, file.subjectKey, file.afterDigest)) : [];
     });
   });
   return original.every(file => observed.some(current => current.subjectKey === file.subjectKey && current.afterDigest === file.afterDigest));
@@ -202,7 +203,7 @@ export function readGoalEvidence(context: GoalEvidenceReaderContext, goal: Sessi
       const matching = receipt.files.filter(file => normalize(file.path) === artifactPath);
       if (!artifactPath || !matching.length) return external ? [external] : [];
       supportsCompletion = matching.some(file => file.afterDigest !== "missing" && (source.historical
-        || artifactObservationStillCurrent(context, goal, root, source.run, source.part, receipt.environmentKey, file.subjectKey, file.afterDigest, options.preview)));
+        || artifactObservationStillCurrent(context, goal, root, source.run, source.part, receipt.environmentKey, file.subjectKey, file.afterDigest)));
     }
     return [{ requirementId, origin: origin(ref), verifiedForVersion: goal.objectiveVersion, supportsCompletion, facts: {
       ...(external ? external.facts : {}),
