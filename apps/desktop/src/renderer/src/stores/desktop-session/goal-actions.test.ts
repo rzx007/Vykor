@@ -136,6 +136,32 @@ describe("goal actions", () => {
     expect(selectDraftAttachments(useDesktopSessionStore.getState(), scope)).toHaveLength(1)
   })
 
+  it("exits editing and restores ordinary text and files after cancelling the goal", async () => {
+    const scope = sessionComposerScope("s1")
+    draft(scope, "原聊天草稿", [attachment()])
+    useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
+    useDesktopSessionStore.getState().setGoalMode(scope, true)
+    draft(scope, "未保存的目标修改")
+    vi.mocked(window.desktop.sessions.goalAction).mockResolvedValue(goal("s1", { status: "cancelled", revision: 1 }))
+    await useDesktopSessionStore.getState().applyGoalAction("s1", { action: "cancel" })
+    const state = useDesktopSessionStore.getState()
+    expect(state.goalComposersByScope[scope]).toMatchObject({ mode: false, editingGoal: undefined })
+    expect(selectComposerDocumentText(selectDraftDocument(state, scope))).toBe("原聊天草稿")
+    expect(selectDraftAttachments(state, scope)).toHaveLength(1)
+    expect(state.goalsBySession.s1?.status).toBe("cancelled")
+  })
+
+  it("preserves editing text when cancelling the goal fails", async () => {
+    const scope = sessionComposerScope("s1")
+    useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
+    useDesktopSessionStore.getState().setGoalMode(scope, true)
+    draft(scope, "保留这份编辑草稿")
+    vi.mocked(window.desktop.sessions.goalAction).mockRejectedValue(new Error("连接失败"))
+    await useDesktopSessionStore.getState().applyGoalAction("s1", { action: "cancel" })
+    expect(useDesktopSessionStore.getState().goalComposersByScope[scope].mode).toBe(true)
+    expect(selectComposerDocumentText(selectDraftDocument(useDesktopSessionStore.getState(), scope))).toBe("保留这份编辑草稿")
+  })
+
   it("retries a failed new goal in its already-created session with the same request", async () => {
     const scope = NEW_CONVERSATION_SCOPE
     draft(scope, "目标正文", [attachment()])

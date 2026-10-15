@@ -45,6 +45,7 @@ export function Composer({
   conversations = [],
   activeSessionId = null,
   goalMode = false,
+  goalEditing = false,
   onGoalModeChange,
   goalAutoTurns = 0,
   onGoalAutoTurnsChange,
@@ -92,6 +93,7 @@ export function Composer({
   conversations?: readonly DesktopSessionRecord[]
   activeSessionId?: string | null
   goalMode?: boolean
+  goalEditing?: boolean
   onGoalModeChange?: (active: boolean) => void
   goalAutoTurns?: number
   onGoalAutoTurnsChange?: (count: number) => void
@@ -210,6 +212,21 @@ export function Composer({
         event.preventDefault()
         submit()
       }}
+      onKeyDown={(event) => {
+        if (
+          goalEditing &&
+          event.key === "Escape" &&
+          !event.defaultPrevented &&
+          !event.nativeEvent.isComposing &&
+          event.currentTarget.contains(event.target as Node) &&
+          !sending &&
+          !activePicker &&
+          !contextPickerOpen
+        ) {
+          event.preventDefault()
+          onGoalModeChange?.(false)
+        }
+      }}
       onDragOver={(event) => {
         if (!attachmentInteractionEnabled || !event.dataTransfer.types.includes("Files")) return
         event.preventDefault()
@@ -224,8 +241,28 @@ export function Composer({
       }}
     >
       <label htmlFor={id} className="sr-only">
-        输入对话内容
+        {goalEditing ? "目标内容" : "输入对话内容"}
       </label>
+      {goalEditing ? (
+        <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">编辑目标</p>
+            <p className="text-xs text-muted-foreground">
+              保存后重新整理完成条件，取消编辑不改变当前目标。
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            shape="pill"
+            disabled={sending}
+            onClick={() => onGoalModeChange?.(false)}
+          >
+            取消编辑
+          </Button>
+        </div>
+      ) : null}
       {contextContent}
       <ComposerAttachments
         attachments={attachments}
@@ -238,7 +275,13 @@ export function Composer({
         key={id}
         id={id}
         value={draft}
-        placeholder={goalMode ? "描述你的目标，定义可衡量的成果，以获得最佳效果" : "随心输入"}
+        placeholder={
+          goalEditing
+            ? "编辑目标内容与完成条件"
+            : goalMode
+              ? "描述要完成的事情，以及你期望的结果"
+              : "随心输入"
+        }
         rows={rows}
         disabled={sending}
         skills={skills}
@@ -284,7 +327,7 @@ export function Composer({
         >
           <IconPlus className="size-5" />
         </Button>
-        {goalMode ? (
+        {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
             <Button
               type="button"
@@ -429,12 +472,18 @@ export function Composer({
             <Mic />
           </ComposerIconButton>
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
-          <ComposerSendButton
-            sending={sending}
-            running={running && !goalMode}
-            disabled={!allowSubmit}
-            onInterrupt={onInterrupt}
-          />
+          {goalEditing ? (
+            <Button type="submit" size="sm" shape="pill" disabled={sending || !allowSubmit}>
+              {sending ? "正在保存…" : "保存目标"}
+            </Button>
+          ) : (
+            <ComposerSendButton
+              sending={sending}
+              running={running && !goalMode}
+              disabled={!allowSubmit}
+              onInterrupt={onInterrupt}
+            />
+          )}
         </div>
       </div>
     </form>

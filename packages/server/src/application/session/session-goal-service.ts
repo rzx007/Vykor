@@ -592,10 +592,11 @@ export class SessionGoalService {
       if (assessment.decision === "ready") this.preparedRequirements(goal, episode, assessment);
     } catch (error) {
       if (goal.status === "active") this.context.goals.updateGoal(goal.id, { expectedRevision: goal.revision,
-        status: "waiting_user", currentRunId: null,
-        wait: { kind: "user", purpose: "clarification", objectiveVersion: goal.objectiveVersion,
-          questionId: `goal-prepare-${run.id}`, question: `请补充或缩小完成条件：${error instanceof Error ? error.message : String(error)}` },
-        reason: "准备没有形成有效正式条件" });
+        status: "paused", currentRunId: null, wait: null,
+        reason: "暂时无法整理目标条件，请重新整理，或编辑目标后重试。",
+        stopReason: { code: "preparation_incomplete", at: Date.now(), runId: run.id,
+          detail: error instanceof Error ? error.message : String(error) } });
+      this.context.goals.setPreparationEpisode({ ...episode, state: "stopped" });
       this.context.runs.updateRun(run.id, { metadata: { goalSettled: true } });
       return;
     }

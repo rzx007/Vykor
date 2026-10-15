@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement } from "react"
+import { act, createElement, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -163,6 +163,79 @@ it("keeps goal limits hidden until settings open and preserves submit and exit b
   expect(document.querySelector<HTMLInputElement>('[aria-label="Token 总预算"]')!.value).toBe("")
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="退出目标输入"]')!.click())
   expect(props.onGoalModeChange).toHaveBeenCalledWith(false)
+})
+
+it("hides the answer form during editing and restores it without losing the answer", async () => {
+  const props = { goal: { ...goal, status: "waiting_user" as const, wait: { kind: "user" as const, purpose: "clarification" as const,
+    goalId: goal.id, objectiveVersion: 1, questionId: "q-edit", question: "需要处理哪个模块？" } },
+    busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn() }
+  await act(async () => root.render(createElement(GoalBanner, props)))
+  const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
+  expect(answer.tagName).toBe("TEXTAREA")
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
+    answer.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => root.render(createElement(GoalBanner, { ...props, editing: true })))
+  expect(container.querySelector('[aria-label="回答目标问题"]')).toBeNull()
+  await act(async () => root.render(createElement(GoalBanner, { ...props, editing: false })))
+  expect(container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')?.value).toBe("协议模块")
+})
+
+it("allows saving a preparation answer while its Token budget is closed", async () => {
+  const onAction = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, {
+    goal: { ...goal, phase: "preparing", status: "waiting_user", tokenBudget: 1, usage: { ...goal.usage, knownTokens: 1 },
+      wait: { kind: "user", purpose: "clarification", objectiveVersion: 1, questionId: "q-budget", question: "需要处理哪个模块？" } },
+    busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn(),
+  })))
+  const answer = container.querySelector<HTMLTextAreaElement>('[aria-label="回答目标问题"]')!
+  expect(answer.disabled).toBe(false)
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
+    answer.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => button("保存补充").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume", questionId: "q-budget", objectiveVersion: 1, response: "协议模块" })
+})
+
+it("requires confirmation to cancel a goal", async () => {
+  const onAction = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, { goal, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
+  await act(async () => button("取消目标").click())
+  expect(onAction).not.toHaveBeenCalled()
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("保留会话")
+  const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(item => item.textContent === "取消目标")!
+  await act(async () => confirm.click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "cancel" })
+})
+
+it("provides explicit save and cancel actions while editing a prefilled goal", async () => {
+  const onGoalModeChange = vi.fn()
+  const onSubmit = vi.fn()
+  function EditableGoal() {
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState(composerDocument([{ type: "text", text: "原聊天草稿" }]))
+    const changeMode = (active: boolean) => {
+      setEditing(active)
+      setDraft(composerDocument([{ type: "text", text: active ? "原来的完整目标" : "原聊天草稿" }]))
+      onGoalModeChange(active)
+    }
+    return createElement("div", null,
+      !editing ? createElement("button", { onClick: () => changeMode(true) }, "编辑目标") : null,
+      createElement(Composer, { id: "edit-goal", draft, sending: false, goalMode: editing, goalEditing: editing,
+        models: [], selectedModel: "test", selectedProvider: null, modelLabel: "test", permissionMode: "default", effort: null,
+        onDraftChange: setDraft, onSubmit, onGoalModeChange: changeMode, onSelectModel: vi.fn(), onSelectPermissionMode: vi.fn(), onSelectEffort: vi.fn() }))
+  }
+  await act(async () => root.render(createElement(EditableGoal)))
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原聊天草稿")
+  await act(async () => button("编辑目标").click())
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原来的完整目标")
+  await act(async () => button("保存目标").click())
+  expect(onSubmit).toHaveBeenCalledOnce()
+  await act(async () => button("取消编辑").click())
+  expect(onGoalModeChange).toHaveBeenLastCalledWith(false)
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原聊天草稿")
 })
 
 it("shows requirement status and remaining work in goal details", async () => {

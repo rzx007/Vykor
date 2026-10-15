@@ -1,6 +1,9 @@
 import { ChevronDown, Goal, Pause, Trash2, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { Textarea } from "@renderer/components/ui/textarea"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@renderer/components/ui/alert-dialog"
 import type { DesktopSessionGoalActionInput, SessionGoal } from "@shared/session-types"
 import { goalStopReasonLabel } from "./goal-stop-reason-label"
 
@@ -17,6 +20,7 @@ export function GoalBanner({
   goal,
   busy,
   stopping,
+  editing = false,
   onAction,
   onEdit,
   onDismiss,
@@ -24,6 +28,7 @@ export function GoalBanner({
   goal: SessionGoal
   busy: boolean
   stopping: boolean
+  editing?: boolean
   onAction: (
     input: Pick<
       DesktopSessionGoalActionInput,
@@ -34,6 +39,7 @@ export function GoalBanner({
   onDismiss: () => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
   const [additionalAutoTurns, setAdditionalAutoTurns] = useState(20)
   const [response, setResponse] = useState("")
   useEffect(() => setResponse(""), [goal.wait?.kind === "user" ? goal.wait.questionId : undefined])
@@ -42,8 +48,10 @@ export function GoalBanner({
   const budgetValue = Number(budgetDraft)
   const validBudget = /^\d+$/.test(budgetDraft) && Number.isSafeInteger(budgetValue) && budgetValue > 0 && budgetValue >= goal.usage.knownTokens
   const budgetClosed = goal.tokenBudget !== undefined && (goal.usage.incomplete || goal.usage.knownTokens >= goal.tokenBudget)
+  const saveAnswerOnly = budgetClosed && goal.phase === "preparing" && goal.wait?.kind === "user" && goal.wait.purpose === "clarification"
   const stopLabel = goalStopReasonLabel(goal)
   const terminal = goal.status === "completed" || goal.status === "cancelled"
+  const preparationFailed = goal.phase === "preparing" && goal.stopReason?.code === "preparation_incomplete"
   const quotaExhausted = goal.phase === "executing" && goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns
   const validQuota =
     Number.isSafeInteger(additionalAutoTurns) &&
@@ -52,18 +60,21 @@ export function GoalBanner({
   const resume = (): void =>
     onAction({ action: "resume", ...(goal.status === "blocked" ? { response: response.trim() } : {}), ...(quotaExhausted ? { additionalAutoTurns } : {}) })
   return (
-    <div className="rounded-xl border border-border/70 bg-background/95 px-3 text-sm shadow-sm">
-      <div className="flex min-h-10 items-center gap-2">
-        <Goal className="size-4 shrink-0 text-muted-foreground" />
+    <div className="rounded-xl border border-border/70 bg-background px-3 text-sm">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1 py-1">
+        <Goal strokeWidth={1.75} className="size-4 shrink-0 text-muted-foreground" />
         <span className="shrink-0 font-medium">
-          {stopping ? "正在停止目标" : goal.status === "active" && goal.phase === "preparing" ? "正在整理目标" : labels[goal.status]}
+          {stopping ? "正在停止目标" : goal.status === "active" && goal.phase === "preparing" ? "正在整理目标"
+            : goal.status === "waiting_user" && goal.wait?.kind === "user" && goal.wait.purpose === "clarification" ? "需要补充信息"
+            : preparationFailed ? "目标准备未完成" : labels[goal.status]}
         </span>
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{goal.objective}</span>
-        {goal.status === "active" ? (
+        {goal.status === "active" && !editing ? (
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
+            shape="circle"
             disabled={busy}
             aria-label="暂停目标"
             onClick={() => onAction({ action: "pause" })}
@@ -71,32 +82,39 @@ export function GoalBanner({
             <Pause />
           </Button>
         ) : null}
-        {goal.status === "paused" || goal.status === "blocked" ? (
+        {!editing && (goal.status === "paused" || goal.status === "blocked") ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             disabled={busy || stopping}
-            onClick={() => (quotaExhausted || budgetClosed || (goal.status === "blocked" && !response.trim()) ? setExpanded(true) : resume())}
+            onClick={() => {
+              if (quotaExhausted || budgetClosed || (goal.status === "blocked" && !response.trim())) setExpanded(true)
+              else if (preparationFailed) onAction({ action: "resume", reprepare: true })
+              else resume()
+            }}
           >
-            {goal.status === "blocked" ? "检查并继续" : "继续"}
+            {preparationFailed ? "重新整理" : goal.status === "blocked" ? "检查并继续" : "继续"}
           </Button>
         ) : null}
-        <Button
+        {!terminal && !editing ? <Button type="button" variant="ghost" size="sm" shape="pill" disabled={busy || stopping} onClick={onEdit}>编辑目标</Button> : null}
+        {!editing ? <Button
           type="button"
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
+          shape="circle"
           aria-label={expanded ? "收起目标详情" : "展开目标详情"}
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
           <ChevronDown />
-        </Button>
+        </Button> : null}
         {terminal ? (
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
+            shape="circle"
             aria-label="收起目标"
             onClick={onDismiss}
           >
@@ -106,23 +124,25 @@ export function GoalBanner({
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
+            shape="circle"
             disabled={busy}
             aria-label="取消目标"
-            onClick={() => onAction({ action: "cancel" })}
+            title="取消目标"
+            onClick={() => setCancelOpen(true)}
           >
             <Trash2 />
           </Button>
         )}
       </div>
-      {stopLabel || goal.reason || goal.wait ? (
-        <div className="pb-2 text-xs text-muted-foreground">
-          {stopLabel ? <span>{stopLabel}{goal.reason || goal.wait ? "：" : ""}</span> : null}
+      {!editing && (stopLabel || goal.reason || goal.wait) ? (
+        <div className="pb-3 text-sm leading-relaxed break-words text-muted-foreground">
+          {stopLabel && !preparationFailed ? <span>{stopLabel}{goal.reason || goal.wait ? "：" : ""}</span> : null}
           {goal.wait?.kind === "user" ? goal.wait.question : goal.reason}
           {goal.wait?.kind === "approval" ? " 请处理上方对应的授权请求。" : null}
         </div>
       ) : null}
-      {expanded ? (
+      {expanded && !editing ? (
         <div className="space-y-3 border-t py-3">
           <p className="break-words whitespace-pre-wrap">{goal.objective}</p>
           {goal.versionSummary ? <p className="text-xs text-muted-foreground">版本 {goal.objectiveVersion} · {goal.versionSummary.changeReason}</p> : null}
@@ -190,11 +210,6 @@ export function GoalBanner({
               ))}
             </div>
           ) : null}
-          {!terminal ? (
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-              编辑目标
-            </Button>
-          ) : null}
           {quotaExhausted && !terminal ? (
             <div className="flex items-center gap-2 text-xs">
               <label>
@@ -226,15 +241,15 @@ export function GoalBanner({
           ) : null}
         </div>
       ) : null}
-      {goal.status === "waiting_user" && goal.wait?.kind === "user" ? (
+      {!editing && goal.status === "waiting_user" && goal.wait?.kind === "user" ? (
         <form
           key={goal.wait.questionId}
-          className="flex flex-wrap items-center gap-2 border-t py-2"
+          className="flex flex-col gap-2 border-t border-border/60 py-3"
           onSubmit={(event) => {
             event.preventDefault()
             if (
               goal.wait?.kind !== "user" ||
-              busy ||
+              busy || stopping ||
               (goal.wait.purpose === "clarification" && !response.trim()) ||
               (goal.wait.purpose === "clarification" && quotaExhausted && (!expanded || !validQuota))
             )
@@ -248,27 +263,46 @@ export function GoalBanner({
             })
           }}
         >
-          {goal.wait.purpose === "clarification" ? <input
+          {goal.wait.purpose === "clarification" ? <Textarea
             aria-label="回答目标问题"
-            placeholder="填写答复以继续"
-            disabled={busy}
+            placeholder="补充你的说明，可分行填写"
+            rows={2}
+            disabled={busy || stopping}
             value={response}
             onChange={(event) => setResponse(event.target.value)}
-            className="min-w-0 flex-1 rounded border px-2 py-1 text-xs"
+            className="max-h-36 min-h-20 resize-y"
           /> : <span className="min-w-0 text-xs">{goal.wait.requirementIds?.map(id => goal.requirements.find(item => item.id === id)?.text).join("；")}</span>}
-          <Button
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {saveAnswerOnly ? <span className="mr-auto text-xs text-muted-foreground">补充内容会先保存，调整预算后再继续。</span> : null}
+            <Button
             type="submit"
-            variant="outline"
             size="sm"
-            disabled={busy || (goal.wait.purpose === "clarification" && (!response.trim() || (quotaExhausted && (!expanded || !validQuota))))}
+            shape="pill"
+            disabled={busy || stopping || (goal.wait.purpose === "clarification" && (!response.trim() || (quotaExhausted && (!expanded || !validQuota))))}
           >
-            {goal.wait.purpose === "acceptance" ? "结果满足所列条件" : "提交回答"}
-          </Button>
+            {goal.wait.purpose === "acceptance" ? "结果满足所列条件" : busy ? "正在提交…" : saveAnswerOnly ? "保存补充" : "补充并继续"}
+          </Button></div>
           {goal.wait.purpose === "clarification" && quotaExhausted && !expanded ? (
             <span className="text-xs">自动续跑次数已用完，请先展开详情增加次数。</span>
           ) : null}
         </form>
       ) : null}
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>取消这个目标？</AlertDialogTitle>
+            <AlertDialogDescription>将停止此目标的后续执行，保留会话和已经产生的文件。取消后可以新建目标。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>保留目标</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy} onClick={() => {
+              if (busy) return
+              setCancelOpen(false)
+              onAction({ action: "cancel" })
+            }}>取消目标</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

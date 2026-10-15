@@ -227,12 +227,35 @@ describe("SessionGoalService durable lifecycle", () => {
     expect(h.store.goals.getGoal(created.id)?.status).toBe("completed");
     expect(executions).toBe(1);
   });
+  it("pauses invalid prepared sources for retry instead of inventing a user question", async () => {
+    let preparations = 0;
+    const h = harness(async (store, runId) => {
+      const run = store.runs.getRun(runId)!;
+      if (run.metadata.goalPhase !== "preparing") { store.runs.updateRun(runId, { status: "completed" }); return; }
+      preparations++;
+      assessment(store, runId, { decision: "ready", preparedRequirements: [{ text: "完成说明", constraints: [],
+        source: [{ kind: "input", inputId: preparations === 1 ? "missing-input" : run.inputId, quote: "完成说明" }],
+        verification: { kind: "user_acceptance", question: "说明是否完整？" } }] });
+    }, undefined, undefined, { autoPrepare: false });
+    const created = await h.service.create("s1", { requestId: "invalid-source", objective: "完成说明" });
+    const preparationId = h.store.runs.listGoalRuns(created.id)[0]!.id;
+    await vi.waitFor(() => expect(h.store.runs.getRun(preparationId)?.metadata.goalSettled).toBe(true));
+    const stopped = h.store.goals.getGoal(created.id)!;
+    expect(stopped).toMatchObject({ phase: "preparing", status: "paused", stopReason: { code: "preparation_incomplete" } });
+    expect(stopped.wait).toBeUndefined();
+    expect(stopped.stopReason?.detail).toContain("条件缺少有效用户输入来源");
+    await h.service.action("s1", created.id, { requestId: "retry-invalid-source", expectedRevision: stopped.revision, action: "resume", reprepare: true });
+    await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.phase).toBe("executing"));
+    await drainRuns(h.store, h.control);
+    expect(preparations).toBe(2);
+  });
+
   it("does not freeze a model-suggested command as required without a quoted source", async () => {
     const h = harness(undefined, undefined, undefined, { verification: { kind: "check", method: "test", command: "npm test",
       commandPolicy: "required", environment: "local", expected: "pass" } });
     const created = await h.service.create("s1", { requestId: "command-source", objective: "check tests" });
     await drainRuns(h.store, h.control);
-    expect(h.store.goals.getGoal(created.id)).toMatchObject({ phase: "preparing", status: "waiting_user" });
+    expect(h.store.goals.getGoal(created.id)).toMatchObject({ phase: "preparing", status: "paused", stopReason: { code: "preparation_incomplete" } });
     expect(h.store.runs.listGoalRuns(created.id)).toHaveLength(1);
   });
   it("defaults to unlimited turns", async () => {

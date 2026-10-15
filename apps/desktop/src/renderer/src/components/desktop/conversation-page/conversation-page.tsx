@@ -55,6 +55,7 @@ import {
 import { Composer } from "./composer/composer"
 import { pluginMentionsEnabled } from "./composer/plugin-mentions-feature"
 import { GoalBanner } from "./composer/goal-banner"
+import { GoalEditFields } from "./composer/goal-edit-fields"
 import {
   emptyGoalComposer,
   selectGoalObjective,
@@ -747,6 +748,7 @@ function ConversationPane({
                   key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}
                   goal={goal}
                   busy={goalBusy}
+                  editing={goalMode && Boolean(goalComposer.editingGoal)}
                   stopping={Boolean(goal.currentRunId && goal.status === "paused" && running)}
                   onEdit={() => changeGoalMode(true)}
                   onDismiss={() => dismissGoalBanner(composerScope, goal.id)}
@@ -826,58 +828,6 @@ function ConversationPane({
                   </Select>
                 </div>
               ) : null}
-              {goalMode && goalComposer.editingGoal ? (
-                <div className="space-y-2 px-3 py-2 text-xs">
-                  <label>
-                    变更类型{" "}
-                    <select
-                      aria-label="目标变更类型"
-                      disabled={goalBusy}
-                      value={goalComposer.changeKind ?? "refine"}
-                      onChange={(event) =>
-                        setGoalChange(composerScope, {
-                          changeKind: event.target.value as "refine" | "pivot",
-                        })
-                      }
-                      className="rounded border bg-background px-2 py-1"
-                    >
-                      <option value="refine">补充条件</option>
-                      <option value="pivot">改变方向</option>
-                    </select>
-                  </label>
-                  <input
-                    aria-label="目标变更原因"
-                    placeholder="说明变更原因"
-                    disabled={goalBusy}
-                    value={goalComposer.changeReason ?? ""}
-                    onChange={(event) =>
-                      setGoalChange(composerScope, { changeReason: event.target.value })
-                    }
-                    className="w-full rounded border bg-background px-2 py-1"
-                  />
-                  {goalComposer.changeKind !== "pivot"
-                    ? goalComposer.editingGoal.requirements.map((item) => (
-                        <label key={item.id} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            disabled={goalBusy}
-                            checked={goalComposer.replaceRequirementIds?.includes(item.id) ?? false}
-                            onChange={(event) =>
-                              setGoalChange(composerScope, {
-                                replaceRequirementIds: event.target.checked
-                                  ? [...(goalComposer.replaceRequirementIds ?? []), item.id]
-                                  : (goalComposer.replaceRequirementIds ?? []).filter(
-                                      (id) => id !== item.id
-                                    ),
-                              })
-                            }
-                          />
-                          替换 {item.id}：{item.text}
-                        </label>
-                      ))
-                    : null}
-                </div>
-              ) : null}
               <Composer
                 key={composerScope}
                 id="message-composer"
@@ -897,6 +847,15 @@ function ConversationPane({
                 conversations={sessions}
                 activeSessionId={activeSessionId}
                 goalMode={goalMode}
+                goalEditing={goalMode && Boolean(goalComposer.editingGoal)}
+                contextContent={goalMode && goalComposer.editingGoal ? <GoalEditFields
+                  goal={goalComposer.editingGoal}
+                  changeKind={goalComposer.changeKind ?? "refine"}
+                  changeReason={goalComposer.changeReason ?? ""}
+                  replaceRequirementIds={goalComposer.replaceRequirementIds ?? []}
+                  disabled={goalBusy}
+                  onChange={change => setGoalChange(composerScope, change)}
+                /> : undefined}
                 onGoalModeChange={changeGoalMode}
                 goalAutoTurns={goalComposer.maxAutoTurns}
                 goalTokenBudget={goalComposer.tokenBudget}
@@ -910,7 +869,8 @@ function ConversationPane({
                     ? undefined
                     : (count) => setGoalAutoTurns(composerScope, count)
                 }
-                canSubmit={goalMode ? Boolean(selectGoalObjective(draft)) && canSubmit : canSubmit}
+                canSubmit={goalMode ? Boolean(selectGoalObjective(draft)) && canSubmit
+                  && (!goalComposer.editingGoal || Boolean(goalComposer.changeReason?.trim())) : canSubmit}
                 contextUsage={contextUsageSnapshot}
                 attachments={attachments}
                 attachmentInteractionEnabled={attachmentSupport.interactionEnabled}

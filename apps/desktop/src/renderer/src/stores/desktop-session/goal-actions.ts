@@ -325,15 +325,18 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
         request: { fingerprint, id: requestId, actionInput },
       })
       invalidateRead(sessionId)
+      let cancelled = false
       try {
         const saved = await window.desktop.sessions.goalAction(actionInput)
         invalidateRead(sessionId)
         saveGoal(sessionId, saved)
+        cancelled = saved.status === "cancelled"
         updateComposer(scope, { request: undefined, ...(saved.status === "cancelled" ? { dismissedGoalId: saved.id } : {}) })
       } catch (error) {
         updateComposer(scope, { error: goalErrorMessage(error) })
       } finally {
         updateComposer(scope, { busy: false })
+        if (cancelled) get().setGoalMode(scope, false)
         void get().refreshGoal(sessionId)
       }
     },
