@@ -117,7 +117,7 @@ it("requires an explicit quota increase before resuming an exhausted goal", asyn
   )
   await act(async () => button("继续").click())
   expect(onAction).not.toHaveBeenCalled()
-  expect(container.textContent).toContain("测试记录")
+  expect(container.querySelector('[aria-label="增加自动续跑次数"]')).not.toBeNull()
   await act(async () => button("增加次数并继续").click())
   expect(onAction).toHaveBeenCalledWith({ action: "resume", additionalAutoTurns: 20 })
 })
@@ -259,7 +259,7 @@ it("provides explicit save and cancel actions while editing a prefilled goal", a
   expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原聊天草稿")
 })
 
-it("shows requirement status and remaining work in goal details", async () => {
+it("keeps acceptance progress behind a secondary disclosure without exposing internal IDs", async () => {
   await act(async () =>
     root.render(
       createElement(GoalBanner, {
@@ -271,7 +271,7 @@ it("shows requirement status and remaining work in goal details", async () => {
           ],
           assessment: {
             goalId: "g1",
-            revision: 1,
+            objectiveVersion: 1,
             runId: "r1",
             decision: "continue",
             progress: "完成测试",
@@ -293,7 +293,7 @@ it("shows requirement status and remaining work in goal details", async () => {
             remainingWork: ["补充文档"],
             nextStep: "补充文档",
           },
-        } as any,
+        },
         busy: false,
         stopping: false,
         onAction: vi.fn(),
@@ -303,7 +303,43 @@ it("shows requirement status and remaining work in goal details", async () => {
     )
   )
   await act(async () => button("展开目标详情").click())
-  expect(container.textContent).toContain("测试通过：已满足")
-  expect(container.textContent).toContain("补充文档：未完成")
-  expect(container.textContent).toContain("剩余工作：补充文档")
+  expect(container.textContent).not.toContain("测试通过")
+  expect(container.textContent).not.toContain("补充文档")
+  expect(container.textContent).not.toContain("测试记录")
+  expect(button("验收进度").getAttribute("aria-expanded")).toBe("false")
+  expect(button("验收进度").textContent).toContain("1 / 2 已满足")
+  await act(async () => button("验收进度").click())
+  const details = container.querySelector('[aria-label="验收明细"]')!
+  expect(details.textContent).toMatch(/测试通过\s*已满足/)
+  expect(details.textContent).toMatch(/补充文档\s*未完成/)
+  expect(details.textContent).toContain("剩余工作")
+  expect(details.textContent).toContain("测试记录")
+  expect(details.textContent).not.toContain("R1")
+  expect(details.textContent).not.toContain("R2")
+  await act(async () => button("收起目标详情").click())
+  await act(async () => button("展开目标详情").click())
+  expect(container.querySelector('[aria-label="验收明细"]')).toBeNull()
+})
+
+it("shows unchecked conditions as pending rather than failed and keeps acceptance waits distinct", async () => {
+  const props = {
+    goal: { ...goal, maxAutoTurns: 0, requirements: [
+      { id: "R1-1", text: "验证文件内容", constraints: [], source: [{ kind: "input" as const, inputId: "i", quote: "文件内容" }], verification: { kind: "user_acceptance" as const, question: "文件内容符合预期？" } },
+    ] },
+    busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn(),
+  }
+  await act(async () => root.render(createElement(GoalBanner, props)))
+  await act(async () => button("展开目标详情").click())
+  expect(button("验收进度").textContent).toContain("1 项待检查")
+  await act(async () => button("验收进度").click())
+  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待检查/)
+  expect(container.textContent).not.toContain("未完成")
+  const wait = { kind: "user" as const, purpose: "acceptance" as const, objectiveVersion: 1, questionId: "q", question: "文件内容符合预期？", requirementIds: ["R1-1"] }
+  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: { ...props.goal,
+    status: "waiting_user", wait,
+    assessment: { goalId: "g1", objectiveVersion: 1, runId: "r1", decision: "waiting_user", progress: "等待验收", evidence: [], evidenceRefs: [],
+      progressAssessment: { kind: "waiting", summary: "等待验收" }, wait,
+      requirements: [{ requirementId: "R1-1", status: "needs_user", explanation: "请验收", evidenceRefs: [] }] },
+  } })))
+  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待验收/)
 })

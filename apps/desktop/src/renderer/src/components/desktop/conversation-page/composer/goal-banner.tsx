@@ -39,7 +39,9 @@ export function GoalBanner({
   onDismiss: () => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
+  const [progressExpanded, setProgressExpanded] = useState(false)
   const [metricsExpanded, setMetricsExpanded] = useState(false)
+  const progressId = useId()
   const metricsId = useId()
   const [cancelOpen, setCancelOpen] = useState(false)
   const [additionalAutoTurns, setAdditionalAutoTurns] = useState(20)
@@ -50,6 +52,9 @@ export function GoalBanner({
   const stopLabel = goalStopReasonLabel(goal)
   const terminal = goal.status === "completed" || goal.status === "cancelled"
   const preparationFailed = goal.phase === "preparing" && goal.stopReason?.code === "preparation_incomplete"
+  const requirementStatuses = new Map(goal.assessment?.requirements?.map(item => [item.requirementId, item.status]))
+  const assessedCount = goal.requirements.filter(item => requirementStatuses.has(item.id)).length
+  const satisfiedCount = goal.requirements.filter(item => requirementStatuses.get(item.id) === "satisfied").length
   const quotaExhausted = goal.phase === "executing" && goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns
   const validQuota =
     Number.isSafeInteger(additionalAutoTurns) &&
@@ -104,9 +109,9 @@ export function GoalBanner({
           shape="circle"
           aria-label={expanded ? "收起目标详情" : "展开目标详情"}
           aria-expanded={expanded}
-          onClick={() => { setExpanded(!expanded); setMetricsExpanded(false) }}
+          onClick={() => { setExpanded(!expanded); setProgressExpanded(false); setMetricsExpanded(false) }}
         >
-          <ChevronDown />
+          <ChevronDown className={expanded ? "rotate-180" : undefined} />
         </Button> : null}
         {terminal ? (
           <Button
@@ -152,43 +157,49 @@ export function GoalBanner({
           ) : null}
           {goal.status === "blocked" ? <div className="flex gap-2"><input aria-label="阻塞条件变化" placeholder="说明什么条件发生了变化" value={response} onChange={event => setResponse(event.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1" />
             <Button type="button" variant="outline" size="sm" disabled={busy || stopping || budgetClosed || !response.trim()} onClick={resume}>检查并继续</Button></div> : null}
-          {goal.evidence.length > 0 ? (
-            <ul className="list-disc space-y-1 pl-4 text-xs">
-              {goal.evidence.map((item, index) => (
-                <li key={index} className="break-words">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {goal.requirements.length ? (
-            <div className="space-y-1 text-xs">
-              <p className="font-medium">完成条件</p>
-              <ul className="space-y-1">
-                {goal.requirements.map((item) => {
-                  const status = goal.assessment?.requirements?.find(value => value.requirementId === item.id)?.status ?? "incomplete"
-                  return <li key={item.id} className="flex min-w-0 gap-1.5">
-                    <span className="min-w-0 break-words">{item.id}：{item.text}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      ：
-                      {status === "satisfied"
-                        ? "已满足"
-                        : status === "needs_user"
-                          ? "待验收"
-                          : "未完成"}
-                    </span>
-                  </li>
-                })}
-              </ul>
-            </div>
-          ) : null}
-          {goal.assessment?.remainingWork?.length ? (
-            <div className="space-y-1 text-xs text-muted-foreground">
-              {goal.assessment.remainingWork.map((item, index) => (
-                <p key={`${item}-${index}`} className="break-words">
-                  剩余工作：{item}
-                </p>
-              ))}
+          {goal.requirements.length > 0 || goal.evidence.length > 0 || goal.assessment?.remainingWork?.length ? (
+            <div className="border-t border-border/60 pt-2">
+              <Button type="button" variant="ghost" size="sm" shape="pill" className="w-full justify-start gap-1.5 text-muted-foreground"
+                aria-label="验收进度" aria-expanded={progressExpanded} aria-controls={progressId} onClick={() => setProgressExpanded(!progressExpanded)}>
+                <ChevronDown strokeWidth={1.75} className={progressExpanded ? "rotate-180" : undefined} />
+                <span className="flex-1 text-left">验收进度</span>
+                {goal.requirements.length > 0 ? <span className="text-xs tabular-nums">
+                  {assessedCount > 0 ? `${satisfiedCount} / ${goal.requirements.length} 已满足` : `${goal.requirements.length} 项待检查`}
+                </span> : null}
+              </Button>
+              {progressExpanded ? (
+                <div id={progressId} role="region" aria-label="验收明细" tabIndex={0}
+                  className="mt-3 max-h-72 space-y-4 overflow-y-auto overscroll-contain rounded-sm px-2 leading-6 break-words outline-none focus-visible:outline-2 focus-visible:outline-ring">
+                  {goal.requirements.length > 0 ? <div className="space-y-2">
+                    <p className="font-medium">完成条件</p>
+                    <ol className="list-decimal space-y-3 pl-5 marker:text-muted-foreground">
+                      {goal.requirements.map(item => {
+                        const status = requirementStatuses.get(item.id)
+                        return <li key={item.id}>
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="min-w-0 flex-1">{item.text}</span>
+                            <span className="shrink-0 text-xs leading-6 text-muted-foreground">
+                              {status === "satisfied" ? "已满足" : status === "needs_user" ? "待验收" : status === "incomplete" ? "未完成" : "待检查"}
+                            </span>
+                          </div>
+                        </li>
+                      })}
+                    </ol>
+                  </div> : null}
+                  {goal.assessment?.remainingWork?.length ? <div className="space-y-2">
+                    <p className="font-medium">剩余工作</p>
+                    <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
+                      {goal.assessment.remainingWork.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                    </ul>
+                  </div> : null}
+                  {goal.evidence.length > 0 ? <div className="space-y-2">
+                    <p className="font-medium">验证记录</p>
+                    <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
+                      {goal.evidence.map((item, index) => <li key={index}>{item}</li>)}
+                    </ul>
+                  </div> : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {quotaExhausted && !terminal ? (
