@@ -69,12 +69,33 @@ it("accepts only the displayed current-version user requirements", async () => {
   expect(onAction).toHaveBeenCalledWith({ action: "confirm", objectiveVersion: 1, questionId: "q" })
 })
 
-it("removes a Token limit without also resuming and shows truthful overage", async () => {
+it("keeps execution metadata behind a second disclosure and exposes no budget form", async () => {
+  await act(async () => root.render(createElement(GoalBanner, {
+    goal: { ...goal, maxAutoTurns: 0, autoTurnsUsed: 0, versionSummary: { changeKind: "create", changeReason: "用户创建目标", createdAt: 1 },
+      usage: { ...goal.usage, knownTokens: 10608, runTimeMs: 21000 } },
+    busy: false, stopping: false, onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn(),
+  })))
+  await act(async () => button("展开目标详情").click())
+  expect(container.textContent).not.toContain("10,608 Token")
+  expect(container.textContent).not.toContain("用户创建目标")
+  expect(container.querySelector('[aria-label="修改 Token 总预算"]')).toBeNull()
+  expect(button("保存总预算")).toBeUndefined()
+  expect(button("运行详情").getAttribute("aria-expanded")).toBe("false")
+  await act(async () => button("运行详情").click())
+  expect(container.textContent).toContain("10,608 Token")
+  expect(container.textContent).toContain("用户创建目标")
+  expect(container.textContent).toContain("21 秒")
+  await act(async () => button("运行详情").click())
+  expect(container.textContent).not.toContain("10,608 Token")
+})
+
+it("removes an existing Token limit from secondary details without resuming", async () => {
   const onAction = vi.fn();
   await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, tokenBudget: 20, usage: { ...goal.usage, knownTokens: 25, seq: 1 } }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })));
   await act(async () => button("展开目标详情").click());
+  await act(async () => button("运行详情").click());
   expect(container.textContent).toContain("25 Token");
-  expect(button("保存总预算").disabled).toBe(true);
+  expect(container.querySelector('[aria-label="修改 Token 总预算"]')).toBeNull();
   await act(async () => button("解除 Token 限制").click());
   expect(onAction).toHaveBeenCalledWith({ action: "budget", tokenBudget: null });
   expect(onAction).not.toHaveBeenCalledWith(expect.objectContaining({ action: "resume" }));
