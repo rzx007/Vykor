@@ -95,6 +95,7 @@ function createDesktopService(): DesktopPluginService {
       acquireCwdMutation: () => ({ release: () => {} }),
       closeAllRuntimes: async () => {},
       closeRuntimesForCwd: async () => {},
+      invalidateRuntimes: async () => {},
       runtimeInspectionAvailable: false,
       inspectRuntimeHooks: async () => [],
       sessionExists: () => false,
