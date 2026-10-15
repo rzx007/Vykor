@@ -66,7 +66,17 @@ describe("model retry through engine, runtime, durable projection and client", (
         reset();
       }
       yield { type: "text_delta", delta: "answer" };
-      yield { type: "usage", usage: { inputTokens: 10, outputTokens: 2 } };
+      yield { type: "usage", usage: {
+        inputTokens: 10,
+        outputTokens: 2,
+        metering: {
+          knownInputTokens: 10,
+          knownOutputTokens: 2,
+          completeness: "complete",
+          inputIncludesCache: false,
+          raw: {},
+        },
+      } };
       yield { type: "complete", stopReason };
     } });
     const run = h.start();
@@ -173,7 +183,17 @@ describe("model retry through engine, runtime, durable projection and client", (
     const h = harness({ async *streamMessage(params) {
       calls++;
       yield { type: "text_delta", delta: "partial" };
-      yield { type: "usage", usage: { inputTokens: 6, outputTokens: 2 } };
+      yield { type: "usage", usage: {
+        inputTokens: 6,
+        outputTokens: 2,
+        metering: {
+          knownInputTokens: 6,
+          knownOutputTokens: 2,
+          completeness: "partial",
+          inputIncludesCache: false,
+          raw: {},
+        },
+      } };
       await new Promise<void>((resolve) => params.abortSignal?.addEventListener("abort", () => resolve(), { once: true }));
       throw params.abortSignal?.reason;
     } });

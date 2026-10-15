@@ -84,7 +84,10 @@ describe("SessionGoalService dispatch event boundary", () => {
         value: { type: "session.goal.created", sessionId: "s1" },
         done: false,
       });
-      expect(store.goals.getCurrentGoal("s1")).toMatchObject({ status: "active" });
+      expect(store.goals.getCurrentGoal("s1")).toMatchObject({
+        status: "paused",
+        stopReason: { code: "run_error" },
+      });
       expect(store.goals.getGoalRequest("goal-create")).toMatchObject({ status: "pending" });
 
       controller.abort();

@@ -177,7 +177,7 @@ describe("SessionRunExecutor", () => {
     });
     expect(agent.setModel).not.toHaveBeenCalled();
     expect(registerHandle).toHaveBeenCalledWith(handle);
-    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", agent);
+    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", agent, undefined);
     expect(closeIfStale).toHaveBeenCalledWith("s1");
   });
 
@@ -651,7 +651,7 @@ describe("SessionRunExecutor", () => {
       { signal: new AbortController().signal, registerHandle: async () => {} },
     );
 
-    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", expect.anything());
+    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", expect.anything(), undefined);
     expect(refreshContextUsage).toHaveBeenCalled();
     expect(closeIfStale).toHaveBeenCalledWith("s1");
     expect(store.spies.updateRun).not.toHaveBeenCalledWith(
