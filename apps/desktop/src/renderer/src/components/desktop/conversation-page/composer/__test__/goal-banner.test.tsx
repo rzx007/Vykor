@@ -44,6 +44,37 @@ const button = (label: string): HTMLButtonElement =>
     (node) => node.textContent === label || node.getAttribute("aria-label") === label
   )!
 
+it("keeps a completed goal compact and reveals its full completion note on demand", async () => {
+  const reason = "第一回合创建文件，第二回合检查结果，第三回合完成。测试目录已保留。"
+  await act(async () => root.render(createElement(GoalBanner, {
+    goal: { ...goal, status: "completed", reason }, busy: false, stopping: false,
+    onAction: vi.fn(), onEdit: vi.fn(), onDismiss: vi.fn(),
+  })))
+  expect(container.textContent).not.toContain(reason)
+  await act(async () => button("展开目标详情").click())
+  expect(container.textContent).toContain("完成说明")
+  expect(container.textContent).toContain(reason)
+  await act(async () => button("收起目标详情").click())
+  expect(container.textContent).not.toContain(reason)
+})
+
+it("keeps pause separate from the grouped icon actions and preserves edit behavior", async () => {
+  const onAction = vi.fn(), onEdit = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, {
+    goal: { ...goal, status: "active" }, busy: false, stopping: false,
+    onAction, onEdit, onDismiss: vi.fn(),
+  })))
+  const actions = container.querySelector('[role="group"][aria-label="目标操作"]')
+  expect(actions).not.toBeNull()
+  expect(actions!.contains(button("暂停目标"))).toBe(false)
+  expect(actions!.contains(button("编辑目标"))).toBe(true)
+  expect(button("编辑目标").textContent).toBe("")
+  await act(async () => button("编辑目标").click())
+  expect(onEdit).toHaveBeenCalledOnce()
+  await act(async () => button("暂停目标").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "pause" })
+})
+
 it("resumes a blocked goal without requiring a change explanation", async () => {
   const onAction = vi.fn()
   await act(async () => root.render(createElement(GoalBanner, { goal: { ...goal, status: "blocked", maxAutoTurns: 0 }, busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() })))
@@ -273,6 +304,8 @@ it("provides explicit save and cancel actions while editing a prefilled goal", a
   expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原聊天草稿")
   await act(async () => button("编辑目标").click())
   expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("原来的完整目标")
+  expect(button("取消编辑").textContent).toBe("")
+  expect(button("取消编辑").title).toBe("取消编辑")
   await act(async () => button("保存目标").click())
   expect(onSubmit).toHaveBeenCalledOnce()
   await act(async () => button("取消编辑").click())

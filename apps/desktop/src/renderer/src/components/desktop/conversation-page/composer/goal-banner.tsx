@@ -1,6 +1,7 @@
-import { ChevronDown, Goal, Pause, Trash2, X } from "lucide-react"
+import { ChevronDown, Goal, Pause, Pencil, Play, Trash2, X } from "lucide-react"
 import { useEffect, useId, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { ButtonGroup } from "@renderer/components/ui/button-group"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@renderer/components/ui/alert-dialog"
@@ -41,6 +42,7 @@ export function GoalBanner({
   const [expanded, setExpanded] = useState(false)
   const [metricsExpanded, setMetricsExpanded] = useState(false)
   const metricsId = useId()
+  const detailsId = useId()
   const [cancelOpen, setCancelOpen] = useState(false)
   const [additionalAutoTurns, setAdditionalAutoTurns] = useState(20)
   const [response, setResponse] = useState("")
@@ -50,6 +52,10 @@ export function GoalBanner({
   const terminal = goal.status === "completed" || goal.status === "cancelled"
   const approvalWait = goal.status === "waiting_user" && goal.wait?.kind === "approval"
   const canResume = goal.status === "paused" || goal.status === "blocked" || approvalWait
+  const resumeLabel = approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"
+  const explanation = goal.wait?.kind === "user" ? goal.wait.question : goal.reason
+  const hasExplanation = Boolean(stopLabel || explanation || goal.wait?.kind === "approval")
+  const explanationLabel = goal.status === "completed" ? "完成说明" : goal.status === "cancelled" ? "取消说明" : "状态说明"
   const quotaExhausted = goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns
   const validQuota =
     Number.isSafeInteger(additionalAutoTurns) &&
@@ -59,91 +65,113 @@ export function GoalBanner({
     onAction({ action: "resume", ...(quotaExhausted ? { additionalAutoTurns } : {}) })
   return (
     <div className="rounded-xl border border-border/70 bg-background px-3 text-sm">
-      <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1 py-1">
+      <div className="flex min-h-12 items-center gap-2 py-2">
         <Goal strokeWidth={1.75} className="size-4 shrink-0 text-muted-foreground" />
         <span className="shrink-0 font-medium">
           {stopping ? "正在停止目标" : labels[goal.status]}
         </span>
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{goal.objective}</span>
-        {goal.status === "active" && !editing ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            shape="circle"
-            disabled={busy}
-            aria-label="暂停目标"
-            onClick={() => onAction({ action: "pause" })}
-          >
-            <Pause />
-          </Button>
-        ) : null}
-        {!editing && canResume ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={busy || stopping || (approvalWait && budgetClosed)}
-            onClick={() => {
-              if (budgetClosed) { setExpanded(true); setMetricsExpanded(true) }
-              else if (quotaExhausted) setExpanded(true)
-              else resume()
-            }}
-          >
-            {approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"}
-          </Button>
-        ) : null}
-        {!terminal && !editing ? <Button type="button" variant="ghost" size="sm" shape="pill" disabled={busy || stopping} onClick={onEdit}>编辑目标</Button> : null}
-        {!editing ? <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          shape="circle"
-          aria-label={expanded ? "收起目标详情" : "展开目标详情"}
-          aria-expanded={expanded}
-          onClick={() => { setExpanded(!expanded); setMetricsExpanded(false) }}
-        >
-          <ChevronDown className={expanded ? "rotate-180" : undefined} />
-        </Button> : null}
-        {terminal ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            shape="circle"
-            aria-label="收起目标"
-            onClick={onDismiss}
-          >
-            <X />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            shape="circle"
-            disabled={busy}
-            aria-label="取消目标"
-            title="取消目标"
-            onClick={() => setCancelOpen(true)}
-          >
-            <Trash2 />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {goal.status === "active" && !editing ? (
+            <Button
+              type="button"
+              variant="control"
+              size="icon"
+              shape="circle"
+              disabled={busy || stopping}
+              aria-label="暂停目标"
+              title="暂停目标"
+              onClick={() => onAction({ action: "pause" })}
+            >
+              <Pause />
+            </Button>
+          ) : null}
+          {!editing && canResume ? (
+            <Button
+              type="button"
+              variant="control"
+              size="icon"
+              shape="circle"
+              aria-label={resumeLabel}
+              title={resumeLabel}
+              disabled={busy || stopping || (approvalWait && budgetClosed)}
+              onClick={() => {
+                if (budgetClosed) { setExpanded(true); setMetricsExpanded(true) }
+                else if (quotaExhausted) setExpanded(true)
+                else resume()
+              }}
+            >
+              <Play />
+            </Button>
+          ) : null}
+          <ButtonGroup variant="toolbar" aria-label="目标操作">
+            {!terminal && !editing ? <Button type="button" variant="ghost" size="icon-sm" shape="circle"
+              aria-label="编辑目标" title="编辑目标" disabled={busy || stopping} onClick={onEdit}><Pencil /></Button> : null}
+            {!editing ? <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              shape="circle"
+              aria-label={expanded ? "收起目标详情" : "展开目标详情"}
+              title={expanded ? "收起目标详情" : "展开目标详情"}
+              aria-expanded={expanded}
+              aria-controls={detailsId}
+              onClick={() => { setExpanded(!expanded); setMetricsExpanded(false) }}
+            >
+              <ChevronDown className={expanded ? "rotate-180" : undefined} />
+            </Button> : null}
+            {terminal ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                shape="circle"
+                aria-label="收起目标"
+                title="收起目标"
+                onClick={onDismiss}
+              >
+                <X />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                shape="circle"
+                disabled={busy}
+                aria-label="取消目标"
+                title="取消目标"
+                onClick={() => setCancelOpen(true)}
+              >
+                <Trash2 />
+              </Button>
+            )}
+          </ButtonGroup>
+        </div>
       </div>
-      {!editing && (stopLabel || goal.reason || goal.wait) ? (
+      {!editing && !terminal && !expanded && hasExplanation ? (
         <div className="pb-3 text-sm leading-relaxed break-words text-muted-foreground">
-          {stopLabel ? <span>{stopLabel}{goal.reason || goal.wait ? "：" : ""}</span> : null}
-          {goal.wait?.kind === "user" ? goal.wait.question : goal.reason}
+          <div className={goal.wait?.kind === "user" ? undefined : "line-clamp-2"}>
+          {stopLabel ? <span>{stopLabel}{explanation ? "：" : ""}</span> : null}
+          {explanation}
           {goal.wait?.kind === "approval" ? " 请处理上方对应的授权请求。" : null}
+          </div>
         </div>
       ) : null}
       {expanded && !editing ? (
-        <div className="space-y-3 border-t py-3">
+        <div id={detailsId} className="space-y-3 border-t border-border/60 py-3">
           <div role="region" aria-label="目标内容" tabIndex={0}
             className="max-h-60 overflow-y-auto overscroll-contain rounded-sm pr-2 leading-relaxed break-words whitespace-pre-wrap outline-none focus-visible:outline-2 focus-visible:outline-ring">
             {goal.objective}
           </div>
+          {hasExplanation ? <section aria-label={explanationLabel} className="space-y-1.5">
+            <h3 className="text-xs font-medium text-muted-foreground">{explanationLabel}</h3>
+            <div tabIndex={0} className="max-h-40 overflow-y-auto overscroll-contain rounded-sm pr-2 text-sm leading-relaxed break-words whitespace-pre-wrap text-muted-foreground outline-none focus-visible:outline-2 focus-visible:outline-ring">
+              {stopLabel ? <span>{stopLabel}{explanation ? "：" : ""}</span> : null}
+              {explanation}
+              {goal.wait?.kind === "approval" ? " 请处理上方对应的授权请求。" : null}
+            </div>
+          </section> : null}
           {quotaExhausted && !terminal ? (
             <div className="flex items-center gap-2 text-xs">
               <label>

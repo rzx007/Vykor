@@ -1,4 +1,4 @@
-import { ChevronDown, Goal, Mic, ShieldCheck, X } from "lucide-react"
+import { ChevronDown, Goal, Mic, ShieldCheck, X, Undo2 } from "lucide-react"
 import { IconPlus } from "@tabler/icons-react"
 import { useState, type ReactNode } from "react"
 
@@ -253,13 +253,15 @@ export function Composer({
           </div>
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            shape="pill"
+            variant="control"
+            size="icon"
+            shape="circle"
+            aria-label="取消编辑"
+            title="取消编辑"
             disabled={sending}
             onClick={() => onGoalModeChange?.(false)}
           >
-            取消编辑
+            <Undo2 />
           </Button>
         </div>
       ) : null}
