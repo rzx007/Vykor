@@ -241,7 +241,7 @@ jobs:
           pnpm --filter @rzx/ohs... build
           PUBLISHED_VERSION=""
           for attempt in $(seq 1 12); do
-            PUBLISHED_VERSION="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+            PUBLISHED_VERSION="$(npm view "@rzx/ohs@${VERSION}" version --prefer-online 2>/dev/null || true)"
             if [ -n "$PUBLISHED_VERSION" ]; then
               break
             fi
@@ -254,16 +254,19 @@ jobs:
             pnpm --filter @rzx/ohs publish --access public --no-git-checks
           fi
           ACTUAL=""
-          for attempt in $(seq 1 12); do
-            ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+          for attempt in $(seq 1 40); do
+            ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version --prefer-online 2>/dev/null || true)"
             if [ "$ACTUAL" = "$VERSION" ]; then
               break
             fi
-            if [ "$attempt" -lt 12 ]; then
-              sleep 10
+            if [ "$attempt" -lt 40 ]; then
+              sleep 15
             fi
           done
-          test "$ACTUAL" = "$VERSION"
+          test "$ACTUAL" = "$VERSION" || {
+            echo "npm did not expose @rzx/ohs@${VERSION} within the verification window (last seen: '${ACTUAL}')" >&2
+            exit 1
+          }
 
   publish-release:
     needs: [validate, create-tag, publish-npm, build-desktop]
