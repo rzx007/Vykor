@@ -413,7 +413,7 @@ describe("SessionGoalService durable lifecycle", () => {
   it("ordinary resume preserves the preparation episode while explicit reprepare starts one new batch", async () => {
     const h = harness(async (store, runId) => {
       modelAttempt(store, runId);
-      assessment(store, runId, { decision: "blocked", reason: "需要缩小条件", progressAssessment: { kind: "no_progress", summary: "条件尚未明确", blockerKey: "scope" } });
+      store.runs.updateRun(runId, { status: "completed" });
     }, undefined, undefined, { autoPrepare: false });
     const created = await h.service.create("s1", { requestId: "prepare-first", objective: "整理条件" });
     await vi.waitFor(() => expect(h.store.goals.getGoal(created.id)?.status).toBe("paused"));

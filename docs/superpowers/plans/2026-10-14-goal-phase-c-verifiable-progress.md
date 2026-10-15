@@ -112,7 +112,7 @@ beginGoalVersion 同键/同 request 重播返回原行；不同提交拒绝。fr
 - [x] PATCH 必须提供 `changeKind: refine|pivot`、非空 changeReason。refine 若明确替换既有条件，增加可选 `replaceRequirementIds: string[]`，只能从旧版本集合选择；补充条件不用填。该小字段使“替换客观条件”有可信用户授权，不建立提案流程。pivot 的显式方向变更允许重整旧集合，仍须保留前后差异及原因。
 - [x] user wait 增 `purpose: clarification|acceptance`、objectiveVersion，acceptance 增 requirementIds。actions confirm/resume 回答必须带该 wait 的 objectiveVersion；普通无问答 resume 不用模型/客户端自报版本覆盖宿主。拒绝旧结构，不按 questionId 前缀猜用途。
 
-GoalAssessment 保留原可信绑定与说明字段，preparing 的 ready 必须带 preparedRequirements；waiting_user 必须说明当前最少问题，blocked 保留可读原因，不能自定正式 ID。executing 使用完整 requirementId 集合和 progressSignals，禁止准备字段。派发始终按 Run.goalPhase 校验，不能仅改工具枚举而沿用旧 phase 无条件 parser。
+GoalAssessment 保留原可信绑定与说明字段，preparing 的 ready 必须带 preparedRequirements；waiting_user 必须说明当前最少问题，不能自定正式 ID。准备回合临时隐藏执行工具，不据此判定执行能力或提交 blocked。executing 使用完整 requirementId 集合和 progressSignals，可提交真实阻塞，禁止准备字段。派发始终按 Run.goalPhase 校验，不能仅改工具枚举而沿用旧 phase 无条件 parser。
 
 **回归样例：**同 request 创建一次 version 1；首次冻结仍是 version 1；状态/预算/用户验收不改版本；正文或正式定义改变才产生 version 2；临时版本冻结事件失败时 Goal/版本/请求全部回滚；重开当前格式数据仍在，旧格式不做读取适配。
 
@@ -165,7 +165,7 @@ interface GoalReadSnapshot {
 - [x] preparing 复用常规模型输出配置，不注入专属 1024 Token 截断。准备不运行 auto-review、remember/Dream 或可执行用户/插件 hooks，避免只禁工具却从其他路径写入；`query-tool-permissions.ts` 当前在批准后执行 pre_tool_use hook，必须受同一 profile 禁止，原权限裁决仍执行。普通 Run 不注入 profile，保持原行为。
 - [x] RunCapabilityView 只保留已捕获的 builtin Read/Glob/Grep、身份及执行函数与宿主可信快照一致的替代实现，以及两项宿主 Goal 工具；去掉 agents/MCP/插件 UI 动作/会改变权限的控制工具。不按名称前缀判断只读，也不把 Shell 中的“只读命令”加进白名单。注入的 skills/资料仍是数据，不能扩权。保留原路径、环境与批准检查。
 - [x] checked-tool-execution 在批准/串行等待之后、invoke 前传可信工具描述；宿主在 `reservePreparationTool` 的事务中计一次已授权调查派发，仅作诊断。GoalRead/GoalAssessment 不计调查，依据实际宿主定义身份区分。非法/被拒工具不执行；limits 对 child/maintenance 直接拒绝。
-- [x] 准备内 `GoalAssessment` 只允许 ready/waiting_user/blocked；ready 必须有完整候选和来源说明，不能 complete。执行内禁止 ready/preparedRequirements，不能重定义正式条件。原 projector 仅保存绑定建议，phase 校验来自 Run/Goal，不能信任模型自报。
+- [x] 准备内 `GoalAssessment` 只允许 ready/waiting_user；ready 必须有完整候选和来源说明，不能 complete 或 blocked。准备只整理条件，工具能力与任务阻塞由执行阶段核实；无效准备结果按 preparation_incomplete 暂停。执行内禁止 ready/preparedRequirements，不能重定义正式条件。原 projector 仅保存绑定建议，phase 校验来自 Run/Goal，不能信任模型自报。
 - [x] 准备的 GoalAssessment 贡献设置 `endRunOnSuccess: true`。QueryEngine 在整批工具结果保存/交付、失败与取消检查之后，识别该捕获定义的成功调用，关闭 steering 并正常 return；不再调用模型写收尾文字，不提前跳过同批结果。执行的 GoalAssessment 和普通工具不设置该标志。不要用 `hardMaxTurns=2` 代替批次限制：当前最后一轮会去掉工具，反而使第 2 次无法提交建议。宿主冻结仍在 Run completed 后发生，无效候选暂停/澄清，不通过工具返回自行切执行阶段。
 
 ### 4.3 终态、冻结与回答

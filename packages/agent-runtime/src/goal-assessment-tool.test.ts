@@ -2,6 +2,21 @@ import { describe, expect, it, vi } from "vitest";
 import { createGoalAssessmentTool } from "./goal-assessment-tool.js";
 
 describe("GoalAssessment tool", () => {
+  it("rejects execution blockers during preparation without disabling them during execution", async () => {
+    const emit = vi.fn();
+    const context = { cwd: process.cwd(), agent: { emit, scope: { runId: "r" } } as never };
+    const blocked = { decision: "blocked", progress: "看不到执行工具", evidence: [],
+      progressAssessment: { kind: "no_progress", summary: "没有 Write/Shell/Agent/JobRead", blockerKey: "missing-tools" } };
+    const preparing = createGoalAssessmentTool({ goalId: "g", objectiveVersion: 1, phase: "preparing" });
+    const rejected = await preparing.execute(blocked, context);
+    expect(rejected.isError).toBe(true);
+    expect(emit).not.toHaveBeenCalled();
+    const executing = createGoalAssessmentTool({ goalId: "g", objectiveVersion: 1, phase: "executing", requirementIds: ["R1"] });
+    expect((await executing.execute({ ...blocked, progressSignals: [], requirements: [
+      { requirementId: "R1", status: "incomplete", evidenceRefs: [], explanation: "执行中遇到阻塞" },
+    ] }, context)).isError).not.toBe(true);
+    expect(emit).toHaveBeenCalledOnce();
+  });
   it("returns host rejection details before recording a false completion", async () => {
     const emit = vi.fn();
     const review = vi.fn(async () => ({ issues: ["R1: 引用 tool:invented 不存在，请使用 call_actual"], availableEvidence: [{ messagePartId: "call_actual", runId: "r", toolName: "Shell" }] }));

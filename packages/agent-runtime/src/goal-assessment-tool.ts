@@ -44,7 +44,7 @@ export interface GoalAssessmentBinding {
 export function createGoalAssessmentTool(binding?: GoalAssessmentBinding): ToolDefinition {
   const preparing = binding?.phase === "preparing";
   const inputSchema = object({
-    decision: { type: "string", enum: preparing ? ["ready", "waiting_user", "blocked"] : ["continue", "complete", "waiting_user", "blocked"] },
+    decision: { type: "string", enum: preparing ? ["ready", "waiting_user"] : ["continue", "complete", "waiting_user", "blocked"] },
     progress: textSchema,
     progressAssessment: object({ kind: { type: "string", enum: ["progress", "waiting", "no_progress"] },
       summary: textSchema, blockerKey: idSchema }, ["kind", "summary"]),
@@ -63,12 +63,13 @@ export function createGoalAssessmentTool(binding?: GoalAssessmentBinding): ToolD
   return {
     name: GOAL_ASSESSMENT_TOOL_NAME,
     description: preparing
-      ? "Submit complete goal preparation candidates or a necessary clarification. A successful submission ends this preparation Run."
+      ? "Define goal requirements or ask a necessary clarification. Execution tools are intentionally hidden in preparation; do not assess execution capability here. A successful submission ends this preparation Run."
       : "Submit an audit of every frozen goal requirement by requirementId, with evidence and candidate progress signals.",
     inputSchema,
     execution: { domain: "control_plane", supportedEnvironments: ["local", "wsl"] },
     async execute(input, context) {
       const reject = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: message }] });
+      if (preparing && input?.decision === "blocked") return reject("准备阶段只整理完成条件，不能提交执行阻塞。执行工具在本阶段暂不展示，不能据此判定执行能力缺失。条件明确请提交 ready；只有缺少用户选择或定义条件所需材料时才提交 waiting_user。");
       if (!binding || !context.agent || !validSchema(input, inputSchema)) {
         return reject("Goal assessment is unavailable or invalid for this phase.");
       }

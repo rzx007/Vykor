@@ -94,7 +94,7 @@
 - **只缺可调查事实：**在既有授权内允许一次低成本只读调查。必须使用明确允许的读取/查询工具，不以工具名称前缀推断只读；不得写文件、执行部署、启动子代理或长后台任务。调查结束若仍有重要取舍，waiting_user；不得把“调查已完成”当原优化目标已完成。
 - **主观但范围明确：**可直接执行，verification 为 user_acceptance，结果交用户验收。不得强迫文档/视觉任务填入 QPS 等指标。
 
-准备阶段复用 GoalAssessment，增加仅供 phase=preparing 使用的 `decision: ready` 和 `preparedRequirements`。ready 只是准备建议，不能 complete；projector 保存建议，SessionGoalService 在 Run 终态后冻结并派发 initial。preparing 下提交 complete 拒绝；executing 下提交 ready 或修改正式条件也拒绝。若无法通过校验则 waiting_user 或 preparation_incomplete，不新增自动准备 Run。完整调用和结算继续经过现有权限、预算和请求去重。
+准备阶段复用 GoalAssessment，增加仅供 phase=preparing 使用的 `decision: ready` 和 `preparedRequirements`。ready 只是准备建议，不能 complete；projector 保存建议，SessionGoalService 在 Run 终态后冻结并派发 initial。preparing 只允许 ready 或 waiting_user，提交 complete/blocked 拒绝：本阶段隐藏执行工具是临时权限范围，不能用来证明任务无法执行。只有缺少定义条件所需的用户选择或材料才提问；候选校验失败按 preparation_incomplete 暂停并提供重试。executing 下提交 ready 或修改正式条件拒绝，执行能力和真实阻塞在此阶段核实。完整调用和结算继续经过现有权限、预算和请求去重。
 
 准备批次按一次可信用户提交划分：创建、编辑、关联澄清回答或明确“重新整理目标”的 resume，各开启一个 preparation episode（准备批次）。批次身份使用去重后的用户 requestId，计数保存在对应请求结果中；自动重试、重新派发、窗口/进程重启都延续同一计数。准备批次只提取用户原始条件与约束，不先调查实现或验收结果；条件明确时直接提交 ready。模型尝试（含重试）和只读调用仅累计诊断计数，不另设 Goal 准备专属次数预算；使用常规模型输出配置、通用单轮执行上限、用户 Token 预算及中断控制。只有定义条件确实需要引用材料时才做必要读取；不得派生子代理。初次等待问题后不自动开启新批次，只有绑定当前版本问题的用户答复才能继续。新批次不清零 Goal 总用量/次数。
 

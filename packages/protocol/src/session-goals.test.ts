@@ -41,6 +41,8 @@ describe("session goal protocol", () => {
     expect(() => parseGoalAssessment({ ...ready, preparedRequirements: [{ ...candidate, id: "forged" }] }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, preparedRequirements: Array.from({ length: 65 }, () => candidate) }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, decision: "complete" }, binding)).toThrow();
+    expect(() => parseGoalAssessment({ ...ready, decision: "blocked",
+      progressAssessment: { kind: "no_progress", summary: "当前看不到执行工具", blockerKey: "missing-tools" } }, binding)).toThrow();
     expect(() => parseGoalAssessment(ready, { ...binding, phase: "executing" })).toThrow();
     for (const host of [{ hostProgress: { verifiedSignals: [] } }, { hostEvidence: [] }, { hostDiagnostics: [] }, { userReceipts: [] }]) expect(() => parseGoalAssessment({ ...ready, ...host }, binding)).toThrow();
     expect(() => parseGoalAssessment({ ...ready, preparedRequirements: [{ ...candidate, source: [{ kind: "document", path: "doc", digest: "short", quote: "测试通过", evidencePartId: "p" }] }] }, binding)).toThrow();

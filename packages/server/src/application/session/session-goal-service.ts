@@ -612,11 +612,11 @@ export class SessionGoalService {
     }
     if (goal.status !== "active") return;
     this.context.goals.updateGoal(goal.id, { expectedRevision: goal.revision, currentRunId: null,
-      status: assessment.decision === "waiting_user" ? "waiting_user" : "paused", assessment,
+      status: "waiting_user", assessment,
       wait: assessment.wait ?? null,
       reason: assessment.reason ?? assessment.progress,
-      stopReason: assessment.decision === "blocked" ? { code: "preparation_incomplete", at: Date.now(), runId: run.id } : null });
-    this.context.goals.setPreparationEpisode({ ...episode, state: assessment.decision === "waiting_user" ? "waiting_user" : "stopped" });
+      stopReason: null });
+    this.context.goals.setPreparationEpisode({ ...episode, state: "waiting_user" });
     this.context.runs.updateRun(run.id, { metadata: { goalSettled: true } });
   }
 

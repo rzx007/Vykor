@@ -37,7 +37,7 @@ describe("goal preparation runtime", () => {
     const invoked: string[] = [];
     const descriptors: unknown[] = [];
     const registry = new ToolRegistry();
-    for (const name of ["Read", "Glob", "Grep", "Shell", "Write", "Agent"]) registry.register({
+    for (const name of ["Read", "Glob", "Grep", "Shell", "Write", "Agent", "JobRead"]) registry.register({
       name, description: name, inputSchema: { type: "object" },
       execute: async () => { invoked.push(name); return { content: [{ type: "text", text: "observed" }] }; },
     }, { kind: "builtin" });
@@ -85,6 +85,10 @@ describe("goal preparation runtime", () => {
       expect(requests[readRounds + 1]?.tools?.map(tool => tool.name)).not.toContain("GoalRead");
       expect(requests[readRounds + 1]?.maxTokens).toBeUndefined();
       expect(hooks).toEqual(["session_start"]);
+      await agent.runMessage("execute", { goal: { goalId: "g", objectiveVersion: 1, phase: "executing",
+        readSnapshot: async () => ({ ...snapshot, phase: "executing", requirements: [{ id: "R1", text: "修复错误", verification: "运行测试", status: "incomplete" }] }),
+      } });
+      expect(requests[readRounds + 2]?.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(["Shell", "Write", "Agent", "JobRead", "GoalAssessment", "GoalRead"]));
     } finally { await agent.close(); }
   });
 

@@ -362,7 +362,7 @@ export function parseGoalAssessment(value: unknown, binding: GoalAssessmentBindi
   const phase = binding.phase ?? "executing";
   const decision = record.decision;
   if (phase === "preparing"
-    ? decision !== "ready" && decision !== "waiting_user" && decision !== "blocked"
+    ? decision !== "ready" && decision !== "waiting_user"
     : decision !== "continue" && decision !== "complete" && decision !== "waiting_user" && decision !== "blocked") {
     throw new ProtocolValidationError("invalid_goal_decision", "decision");
   }
