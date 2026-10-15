@@ -1391,17 +1391,22 @@ describe("VykorHttpServer", () => {
 
   it("projects framework-owned child execution into durable child sessions", async () => {
     const closed: string[] = [];
+    let getParentRunId: (sessionId: string) => string | undefined = () => undefined;
     const runtimeFactory: TestAgentProgramFactory = {
       async createRuntime({ session }) {
         let runContext: TestAgentRunContext | undefined;
         let runCount = 0;
-        const childContext = () => ({
-          agentId: "child-invocation",
-          sessionId: "child-session",
-          childId: "child-invocation",
-          parentSessionId: session.id,
-          parentRunId: "parent-run",
-        });
+        const childContext = () => {
+          const parentRunId = getParentRunId(session.id);
+          if (!parentRunId) throw new Error("Parent Run was not found for child execution");
+          return {
+            agentId: "child-invocation",
+            sessionId: "child-session",
+            childId: "child-invocation",
+            parentSessionId: session.id,
+            parentRunId,
+          };
+        };
         const send = async (input: AgentChildInput) => {
           const suffix = ++runCount;
           const inputId = input.id ?? `child-input-${suffix}`;
@@ -1500,6 +1505,11 @@ describe("VykorHttpServer", () => {
 
     await withServer(
       async ({ baseUrl, token, server }) => {
+        getParentRunId = (sessionId) => {
+          const runs = server.store.runs.listRuns(sessionId);
+          return runs.find((run) => run.status === "running")?.id ??
+            runs.at(-1)?.id;
+        };
         const response = await fetch(`${baseUrl}/sessions`, {
           method: "POST",
           headers: { ...auth(token), "content-type": "application/json" },
@@ -1556,7 +1566,7 @@ describe("VykorHttpServer", () => {
             body: JSON.stringify({ content: "follow up" }),
           },
         );
-        expect(followUp.status).toBe(202);
+        expect(followUp.status, await followUp.clone().text()).toBe(202);
         await waitForEvent(
           baseUrl,
           token,
