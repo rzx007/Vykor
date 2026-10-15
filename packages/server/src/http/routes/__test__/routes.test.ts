@@ -779,7 +779,7 @@ describe("run execution routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(interruptSession).toHaveBeenCalledWith("s1", "run-before-click");
+    expect(interruptSession).toHaveBeenCalledWith("s1", "run-before-click", "user");
   });
 
   it("rejects a malformed scoped interrupt instead of falling back to interrupt-all", async () => {
