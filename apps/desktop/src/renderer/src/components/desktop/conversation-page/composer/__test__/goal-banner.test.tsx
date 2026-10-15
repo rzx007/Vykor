@@ -310,10 +310,9 @@ it("keeps acceptance progress behind a secondary disclosure without exposing int
   expect(button("验收进度").textContent).toContain("1 / 2 已满足")
   await act(async () => button("验收进度").click())
   const details = container.querySelector('[aria-label="验收明细"]')!
-  expect(details.textContent).toMatch(/测试通过\s*已满足/)
-  expect(details.textContent).toMatch(/补充文档\s*未完成/)
-  expect(details.textContent).toContain("剩余工作")
-  expect(details.textContent).toContain("测试记录")
+  expect(details.textContent).toBe("测试通过补充文档")
+  expect(details.querySelector('[role="img"][aria-label="已满足"]')?.getAttribute("title")).toBe("已满足")
+  expect(details.querySelector('[role="img"][aria-label="未完成"]')).not.toBeNull()
   expect(details.textContent).not.toContain("R1")
   expect(details.textContent).not.toContain("R2")
   const completed = Array.from(details.querySelectorAll("li")).find(item => item.textContent?.includes("测试通过"))!
@@ -321,6 +320,8 @@ it("keeps acceptance progress behind a secondary disclosure without exposing int
   expect(completed.querySelector('svg[aria-hidden="true"] path')).not.toBeNull()
   expect(incomplete.querySelector('svg[aria-hidden="true"] circle')).not.toBeNull()
   expect(details.querySelector('button, input[type="checkbox"]')).toBeNull()
+  await act(async () => button("运行详情").click())
+  expect(container.textContent).toContain("测试记录")
   await act(async () => button("收起目标详情").click())
   await act(async () => button("展开目标详情").click())
   expect(container.querySelector('[aria-label="验收明细"]')).toBeNull()
@@ -337,7 +338,8 @@ it("shows unchecked conditions as pending rather than failed and keeps acceptanc
   await act(async () => button("展开目标详情").click())
   expect(button("验收进度").textContent).toContain("1 项待检查")
   await act(async () => button("验收进度").click())
-  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待检查/)
+  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toBe("验证文件内容")
+  expect(container.querySelector('[aria-label="验收明细"] [role="img"][aria-label="待检查"]')).not.toBeNull()
   expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).not.toBeNull()
   expect(container.textContent).not.toContain("未完成")
   const wait = { kind: "user" as const, purpose: "acceptance" as const, objectiveVersion: 1, questionId: "q", question: "文件内容符合预期？", requirementIds: ["R1-1"] }
@@ -347,7 +349,8 @@ it("shows unchecked conditions as pending rather than failed and keeps acceptanc
       progressAssessment: { kind: "waiting", summary: "等待验收" }, wait,
       requirements: [{ requirementId: "R1-1", status: "needs_user", explanation: "请验收", evidenceRefs: [] }] },
   } })))
-  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toMatch(/验证文件内容\s*待验收/)
+  expect(container.querySelector('[aria-label="验收明细"]')?.textContent).toBe("验证文件内容")
+  expect(container.querySelector('[aria-label="验收明细"] [role="img"][aria-label="待验收"]')).not.toBeNull()
   expect(container.querySelector('[aria-label="验收明细"] li svg circle[stroke-dasharray]')).toBeNull()
   expect(container.querySelector('[aria-label="验收明细"] li svg path')).not.toBeNull()
   expect(props.onAction).not.toHaveBeenCalled()

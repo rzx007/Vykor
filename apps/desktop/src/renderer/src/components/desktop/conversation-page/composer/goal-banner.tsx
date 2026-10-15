@@ -158,7 +158,7 @@ export function GoalBanner({
           ) : null}
           {goal.status === "blocked" ? <div className="flex gap-2"><input aria-label="阻塞条件变化" placeholder="说明什么条件发生了变化" value={response} onChange={event => setResponse(event.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1" />
             <Button type="button" variant="outline" size="sm" disabled={busy || stopping || budgetClosed || !response.trim()} onClick={resume}>检查并继续</Button></div> : null}
-          {goal.requirements.length > 0 || goal.evidence.length > 0 || goal.assessment?.remainingWork?.length ? (
+          {goal.requirements.length > 0 ? (
             <div className="border-t border-border/60 pt-2">
               <Button type="button" variant="ghost" size="sm" shape="pill" className="w-full justify-start gap-1.5 text-muted-foreground"
                 aria-label="验收进度" aria-expanded={progressExpanded} aria-controls={progressId} onClick={() => setProgressExpanded(!progressExpanded)}>
@@ -173,38 +173,21 @@ export function GoalBanner({
               </Button>
               {progressExpanded ? (
                 <div id={progressId} role="region" aria-label="验收明细" tabIndex={0}
-                  className="mt-3 max-h-72 space-y-4 overflow-y-auto overscroll-contain rounded-sm px-2 leading-6 break-words outline-none focus-visible:outline-2 focus-visible:outline-ring">
-                  {goal.requirements.length > 0 ? <div className="space-y-2">
-                    <p className="font-medium">完成条件</p>
-                    <ul className="space-y-1">
-                      {goal.requirements.map(item => {
-                        const status = requirementStatuses.get(item.id)
-                        return <li key={item.id} className="flex min-w-0 items-start gap-2.5 py-1">
-                          <span className="grid size-6 shrink-0 place-items-center text-muted-foreground">
-                            {status === "needs_user" ? <CircleHelp aria-hidden="true" strokeWidth={1.75} className="size-5" />
-                              : status === "incomplete" ? <Circle aria-hidden="true" strokeWidth={1.75} className="size-5" />
-                              : <TodoStatusIcon status={status === "satisfied" ? "completed" : "pending"} />}
-                          </span>
-                          <span className={status === "satisfied" ? "min-w-0 flex-1 text-muted-foreground line-through decoration-muted-foreground/50" : "min-w-0 flex-1"}>{item.text}</span>
-                          <span className="shrink-0 text-xs leading-6 text-muted-foreground">
-                            {status === "satisfied" ? "已满足" : status === "needs_user" ? "待验收" : status === "incomplete" ? "未完成" : "待检查"}
-                          </span>
-                        </li>
-                      })}
-                    </ul>
-                  </div> : null}
-                  {goal.assessment?.remainingWork?.length ? <div className="space-y-2">
-                    <p className="font-medium">剩余工作</p>
-                    <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
-                      {goal.assessment.remainingWork.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
-                    </ul>
-                  </div> : null}
-                  {goal.evidence.length > 0 ? <div className="space-y-2">
-                    <p className="font-medium">验证记录</p>
-                    <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
-                      {goal.evidence.map((item, index) => <li key={index}>{item}</li>)}
-                    </ul>
-                  </div> : null}
+                  className="mt-3 max-h-72 overflow-y-auto overscroll-contain rounded-sm px-2 leading-6 break-words outline-none focus-visible:outline-2 focus-visible:outline-ring">
+                  <ul className="space-y-1">
+                    {goal.requirements.map(item => {
+                      const status = requirementStatuses.get(item.id)
+                      const statusLabel = status === "satisfied" ? "已满足" : status === "needs_user" ? "待验收" : status === "incomplete" ? "未完成" : "待检查"
+                      return <li key={item.id} className="flex min-w-0 items-start gap-2.5 py-1">
+                        <span role="img" aria-label={statusLabel} title={statusLabel} className="grid size-6 shrink-0 place-items-center text-muted-foreground">
+                          {status === "needs_user" ? <CircleHelp aria-hidden="true" strokeWidth={1.75} className="size-5" />
+                            : status === "incomplete" ? <Circle aria-hidden="true" strokeWidth={1.75} className="size-5" />
+                            : <TodoStatusIcon status={status === "satisfied" ? "completed" : "pending"} />}
+                        </span>
+                        <span className={status === "satisfied" ? "min-w-0 flex-1 text-muted-foreground line-through decoration-muted-foreground/50" : "min-w-0 flex-1"}>{item.text}</span>
+                      </li>
+                    })}
+                  </ul>
                 </div>
               ) : null}
             </div>
@@ -254,6 +237,9 @@ export function GoalBanner({
                   <dt>用量状态</dt><dd>{goal.usage.incomplete || goal.usage.inFlightAttempts > 0
                     ? `未知 ${goal.usage.unknownAttempts} 次 · 部分 ${goal.usage.partialAttempts} 次 · 进行中 ${goal.usage.inFlightAttempts} 次` : "已确认"}</dd>
                   <dt>累计耗时</dt><dd>{Math.round(goal.usage.runTimeMs / 1000)} 秒</dd>
+                  {goal.evidence.length > 0 ? <><dt>验证记录</dt><dd><ul className="space-y-1">
+                    {goal.evidence.map((item, index) => <li key={index}>{item}</li>)}
+                  </ul></dd></> : null}
                   {goal.stopReason?.detail ? <><dt>停止详情</dt><dd className="max-h-32 overflow-y-auto whitespace-pre-wrap">{goal.stopReason.detail}</dd></> : null}
                 </dl>
                 {!terminal && goal.tokenBudget !== undefined ? <div className="flex flex-wrap items-center gap-2">
