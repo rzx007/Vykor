@@ -68,10 +68,10 @@ it("previews the final prompt and appends to the latest real composer document w
 it("keeps the composer when submitting only confirmed plugin text and validates the captured successor revision", async () => {
   useDesktopSessionStore.getState().setComposerDraftDocument(scope, composerDocument([{ type: "text", text: "不发送的草稿" }]))
   await send("submit"); await decide("确认交给助手")
-  await act(async () => vi.waitFor(() => {
-    expect(posts).toHaveLength(1)
-    expect(host.conversationStatus).toEqual({ message: "已交给助手。" })
-  }, { timeout: 5000 }))
+  await act(async () => vi.waitFor(() => expect(packets.some(packet =>
+    packet.id === "1" && ("result" in packet || "error" in packet))).toBe(true), { timeout: 5000 }))
+  expect(posts).toHaveLength(1)
+  expect(host.conversationStatus).toEqual({ message: "已交给助手。" })
   expect(posts).toHaveLength(1); expect(posts[0].input).toEqual({ expectedRevision: 1, text: "分析选择", data: { selected: true } })
   expect(selectDraftDocument(useDesktopSessionStore.getState(), scope).items).toEqual([{ type: "text", text: "不发送的草稿" }])
   expect(host.conversationStatus?.message).toContain("已交给助手")
@@ -104,10 +104,10 @@ it("queries the original request after an unknown response and never automatical
   api.submitConversation = async (value) => { posts.push(value); throw new Error("offline") }
   await send("submit"); await decide("确认交给助手")
   await act(async () => vi.waitFor(() => expect(posts).toHaveLength(1), { timeout: 5000 }))
-  await act(async () => vi.waitFor(() => {
-    expect(queries).toEqual([posts[0].requestId])
-    expect(host.conversationStatus?.message).toContain("尚未确认")
-  }, { timeout: 5000 }))
+  await act(async () => vi.waitFor(() => expect(packets.some(packet =>
+    packet.id === "1" && packet.error?.code === "plugin_ui_submission_unknown")).toBe(true), { timeout: 5000 }))
+  expect(queries).toEqual([posts[0].requestId])
+  expect(host.conversationStatus?.message).toContain("尚未确认")
   expect(posts).toHaveLength(1); expect(queries).toEqual([posts[0].requestId])
   expect(host.conversationStatus?.message).toContain("尚未确认")
 })
@@ -121,7 +121,7 @@ it("uses a matching source admission to resolve an unknown response without anot
     metadata: { pluginUi: { ...instance, status: "resolved", revision: 2 }, pluginUiSubmission: { schemaVersion: 2,
       requestId: posts[0].requestId, requestFingerprint, expectedRevision: 1, inputId: "input", runId: "run",
       pluginDigest: instance.pluginDigest, componentDigest: instance.componentDigest, acceptedAt: 1 } } }] } } as never))
-  await act(async () => vi.waitFor(() => expect(host.conversationStatus?.message).toContain("已交给助手"), { timeout: 5000 }))
+  expect(host.conversationStatus?.message).toContain("已交给助手")
   expect(host.conversationStatus?.message).toContain("已交给助手")
   expect(host.conversationStatus?.requestId).toBeUndefined()
   expect(posts).toHaveLength(1)
@@ -145,11 +145,10 @@ it("keeps the new request ID when an old scope error arrives after same-content 
   oldPort.close()
   await send("submit", "3"); await decide("确认交给助手")
   await act(async () => vi.waitFor(() => expect(posts).toHaveLength(3), { timeout: 5000 }))
-  await act(async () => vi.waitFor(() => {
-    expect(queries).toEqual([posts[1].requestId, posts[1].requestId])
-    expect(host.conversationStatus?.message).toContain("尚未确认")
-  }, { timeout: 5000 }))
+  await act(async () => vi.waitFor(() => expect(packets.some(packet =>
+    packet.id === "3" && packet.error?.code === "plugin_ui_submission_unknown")).toBe(true), { timeout: 5000 }))
   expect(posts).toHaveLength(3)
   expect(posts[2].requestId).toBe(posts[1].requestId)
   expect(queries).toEqual([posts[1].requestId, posts[1].requestId])
+  expect(host.conversationStatus?.message).toContain("尚未确认")
 })
