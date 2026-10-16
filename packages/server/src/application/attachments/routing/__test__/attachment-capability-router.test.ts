@@ -47,6 +47,16 @@ function harness() {
 }
 
 describe("AttachmentCapabilityRouter", () => {
+  it("keeps modern Office uploads lazy and requires Read", async () => {
+    const {router,readReadyText,resolveReadyContentPath}=harness();
+    const input={text:"read",attachments:[attachment("office",0,{displayName:"report.docx",mediaType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})],modelCapabilities:{image:"unsupported" as const},providerCapabilities:{image:"unsupported" as const},availableTools:["Read"]};
+    const result=await router.route(input);
+    expect(result.decisions[0]).toMatchObject({route:"text_resource",complete:false});
+    expect(JSON.stringify(result.content)).toContain("attachment://office/report.docx");
+    expect(readReadyText).not.toHaveBeenCalled();expect(resolveReadyContentPath).not.toHaveBeenCalled();
+    await expect(router.route({...input,availableTools:[]})).rejects.toMatchObject({code:"attachment_document_unsupported"});
+  });
+
   it("routes unsupported image models to an explicit ImageToText resource hint", async () => {
     const { router, resolveReadyContentPath } = harness();
     const result = await router.route({

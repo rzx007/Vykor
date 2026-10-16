@@ -1,5 +1,6 @@
 import { cpSync, rmSync } from "node:fs"
 import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 
 import { defineConfig } from "electron-vite"
 import react from "@vitejs/plugin-react"
@@ -14,6 +15,8 @@ function copyRuntimeResources(): Plugin {
     name: "copy-runtime-resources",
     async writeBundle(options) {
       const outputDirectory = resolve(options.dir ?? "out/main")
+      const { prepareOfficeEngine } = await import(pathToFileURL(resolve("../../scripts/prepare-office-engine.mjs")).href)
+      await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
       const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations")
       rmSync(migrationsDirectory, { recursive: true, force: true })
       cpSync(

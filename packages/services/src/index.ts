@@ -99,3 +99,4 @@ export * from "./attachments/index.js";
 export type { GoalOperations } from "./goals/index.js";
 export { goalBudgetStopCode } from "./goals/index.js";
 export type { GoalAttemptStart, GoalAttemptReport, GoalBudgetStopCode } from "./goals/index.js";
+export * from "./office/index.js";

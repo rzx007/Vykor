@@ -281,3 +281,6 @@ export type {
 } from "@vykor/protocol";
 
 export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
+
+export { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+export type { OfficeFormat, OfficePreview } from "@vykor/protocol";

@@ -41,6 +41,8 @@ export class SessionAttachmentResources {
       for (const decision of input.decisions) {
         if (decision.route !== "text_resource") continue;
         const asset = this.options.attachments.get(decision.assetId);
+        // Office resources are read through the authorized attachment URI, not mounted as raw text.
+        if(asset.mediaType?.includes("openxmlformats-officedocument")) continue;
         if (
           asset.status !== "ready" ||
           !asset.mediaType ||

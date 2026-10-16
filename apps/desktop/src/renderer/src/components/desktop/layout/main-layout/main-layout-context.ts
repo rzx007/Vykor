@@ -4,6 +4,7 @@ export type MainLayoutContextValue = {
   conversationWorkspace: ReactNode
   startNewConversation: () => void
   openSideChat: (sourceId: string, text: string) => void
+  openFile?: (path: string) => void
 }
 
 export const MainLayoutContext = createContext<MainLayoutContextValue | null>(null)

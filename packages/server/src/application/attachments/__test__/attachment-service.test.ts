@@ -96,6 +96,12 @@ describe("AttachmentService", () => {
     }
   });
 
+  it("rejects a renamed fake Office upload", async () => {
+    const {service,store}=createHarness();
+    try {await expect(service.import({displayName:"fake.docx",content:streamOf([bytes("fake")])})).rejects.toMatchObject({code:"attachment_document_invalid"});}
+    finally {store.close();}
+  });
+
   it("rejects a binary payload disguised as text", async () => {
     const { service, store } = createHarness();
     try {

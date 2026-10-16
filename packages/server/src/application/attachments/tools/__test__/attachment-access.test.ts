@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createAttachmentAuthorizationSessionResolver,
   createAttachmentOcrService,
+  createAttachmentTextReader,
 } from "../attachment-access.js";
 
 describe("attachment authorization", () => {
@@ -48,4 +49,32 @@ describe("attachment authorization", () => {
     })).rejects.toThrow("attachment_resource_access_denied");
     expect(recognize).toHaveBeenCalledTimes(1);
   });
+});
+
+it("checks Office reference ownership before parsing and keeps reads bounded",async()=>{
+  const readReadyText=vi.fn(async()=>({displayName:"report.docx",mediaType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",encoding:"utf-8",text:Array(500).fill("x".repeat(2000)).join("\n")}));
+  const reader=createAttachmentTextReader({store:{listSessionInputAttachments:(id:string)=>id==="owner"?[{assetId:"office",displayName:"report.docx",mediaType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"} as any]:[]},attachments:{get:()=>({status:"ready"}),readReadyText} as any});
+  await expect(reader.readText({authorizationSessionId:"other",assetId:"office",offset:1,limit:2000})).rejects.toThrow("access_denied");
+  expect(readReadyText).not.toHaveBeenCalled();
+  const result=await reader.readText({authorizationSessionId:"owner",assetId:"office",offset:1,limit:2000});
+  expect(result.content.length).toBeLessThan(50000);expect(result.hasMore).toBe(true);
+});
+
+it("allows every part of a long Office paragraph to be read across pages", async () => {
+  const text = "甲😀".repeat(20000) + "TAIL_MARK";
+  const reader = createAttachmentTextReader({
+    store: { listSessionInputAttachments: () => [{ assetId: "office", displayName: "report.docx", mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } as any] },
+    attachments: { get: () => ({ status: "ready" }), readReadyText: async () => ({ displayName: "report.docx", mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", encoding: "utf-8", text }) } as any,
+  });
+  let offset = 1;
+  let recovered = "";
+  for (let page = 0; page < 100; page++) {
+    const slice = await reader.readText({ authorizationSessionId: "owner", assetId: "office", offset, limit: 2000 });
+    expect(Buffer.byteLength(slice.content, "utf8")).toBeLessThanOrEqual(48000);
+    expect(slice.endLine).toBeGreaterThanOrEqual(offset);
+    recovered += slice.content.replaceAll("\n", "");
+    if (!slice.hasMore) break;
+    offset = slice.endLine + 1;
+  }
+  expect(recovered).toBe(text);
 });

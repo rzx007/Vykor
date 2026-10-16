@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+import { readOfficeFile } from "@vykor/services";
 
 import {
   DEFAULT_ATTACHMENT_LIMITS,
@@ -114,6 +116,10 @@ export class AttachmentService {
         maxBytes: this.limits.maxBytesPerFile,
         signal: input.signal,
       });
+      const format=officeFormat(input.displayName);
+      if(format && imported.mediaType!==OFFICE_MEDIA_TYPES[format]) {
+        throw new AttachmentError("attachment_document_invalid", "文件内容与 Office 格式不匹配，或文件包含不支持的宏、加密或过大内容。");
+      }
       return this.store.markAttachmentReady(id, {
         sha256: imported.sha256,
         sizeBytes: imported.sizeBytes,
@@ -190,6 +196,12 @@ export class AttachmentService {
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<ReadyAttachmentTextResult> {
+    const asset=this.get(id);
+    if(officeFormat(asset.displayName)) {
+      const source=await this.resolveReadyContentPath(id);
+      const {text}=await readOfficeFile(source.path,{signal:options.signal,formatName:asset.displayName});
+      return {assetId:id,displayName:asset.displayName,mediaType:source.mediaType,encoding:"utf-8",text};
+    }
     const opened = await this.openContent(id);
     const bytes = await readAllBytes(opened.content, options.signal);
     const decoded = decodeAttachmentText(bytes);

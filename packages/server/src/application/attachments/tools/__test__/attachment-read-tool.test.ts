@@ -4,6 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createShellOutputLogHost } from "@vykor/services/executions";
 import { fileReadTool } from "@vykor/tools";
+import { createHash } from "node:crypto";
+import { readOfficeBytes } from "@vykor/services";
+
+vi.mock("@vykor/services", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@vykor/services")>(),
+  readOfficeBytes: vi.fn(),
+}));
 
 import { createAttachmentReadTool } from "../attachment-read-tool.js";
 
@@ -111,4 +118,35 @@ describe("attachment Read tool", () => {
     const denied = await tool.execute({ file_path: "attachment://att-1/notes.txt" }, { cwd: "/work", sessionId: "other" });
     expect(denied).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
   });
+});
+
+it("keeps local Office reads behind the existing Read permission check",async()=>{
+  const execute=vi.fn(async()=>({isError:true,content:[{type:"text" as const,text:"access denied"}]}));
+  const tool=createAttachmentReadTool({defaultTool:{name:"Read",description:"read",inputSchema:{},execute},authorizationSessions:{resolve:()=>undefined},attachmentReader:{readText:vi.fn()},supportsImageInput:async()=>false});
+  const result=await tool.execute({file_path:"secret.docx"},{cwd:"C:/work"});
+  expect(result.isError).toBe(true);expect(execute).toHaveBeenCalledWith({file_path:"secret.docx",info_only:true},{cwd:"C:/work"});
+});
+
+it.each(["file", "symlink"])("reads complete Office paragraphs from an authorized %s", async (kind) => {
+  const bytes = Buffer.from("office bytes");
+  const text = "甲😀".repeat(20000) + "TAIL_MARK";
+  vi.mocked(readOfficeBytes).mockResolvedValue({ text });
+  const execute = vi.fn(async () => ({ content: [{ type: "text" as const, text: JSON.stringify({ path: "/work/report.docx", kind, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }) }] }));
+  const tool = createAttachmentReadTool({ defaultTool: { name: "Read", description: "read", inputSchema: {}, execute }, authorizationSessions: { resolve: () => undefined }, attachmentReader: { readText: vi.fn() }, supportsImageInput: async () => false });
+  const context = { cwd: "/work", environment: { files: { readBytes: async () => bytes } } } as any;
+  let recovered = "";
+  let offset = 1;
+  for (let page = 0; page < 100; page++) {
+    const result = await tool.execute({ file_path: "report.docx", offset, limit: 2000 }, context);
+    expect(result.isError).not.toBe(true);
+    const output = (result.content[0] as { text: string }).text;
+    const lines = output.split("\n");
+    const more = lines.pop();
+    expect(lines.length).toBeGreaterThan(0);
+    recovered += lines.map((line) => line.replace(/^\d+: /, "")).join("");
+    if (more === "has_more: false") break;
+    offset += lines.length;
+  }
+  expect(recovered).toBe(text);
+  expect(execute).toHaveBeenCalledWith({ file_path: "report.docx", info_only: true }, context);
 });

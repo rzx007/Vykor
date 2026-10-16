@@ -1,4 +1,5 @@
 import type { ContentBlock } from "@vykor/core";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 import {
   classifyAttachmentCandidate,
   AttachmentTextDecodingError,
@@ -63,6 +64,11 @@ export class AttachmentCapabilityRouter {
         mediaType: attachment.mediaType,
       };
       const kind = classifyAttachmentCandidate(attachment);
+      const format=officeFormat(attachment.displayName);
+      if(format && attachment.mediaType===OFFICE_MEDIA_TYPES[format]) {
+        if(!availableTools.has("Read"))return {...common,route:"blocked",reason:"attachment_document_unsupported"};
+        return {...common,route:"text_resource",complete:false,resourceUri:attachmentResourceUri(attachment.assetId,attachment.displayName)};
+      }
       if (kind === "document") {
         return { ...common, route: "blocked", reason: "attachment_document_unsupported" };
       }
@@ -107,6 +113,10 @@ export class AttachmentCapabilityRouter {
         throwIfAborted(input.signal, assetIds, decisions);
         const attachment = attachments[index]!;
         const decision = decisions[index]!;
+        if(decision.route==="text_resource") {
+          content.push({type:"text",text:textResourceBlock(attachment,"此 Office 文件尚未解析，按需调用 Read 分段读取；不要把整个文件一次性加入上下文。",decision.resourceUri!)});
+          continue;
+        }
         if (decision.route === "image_to_text_tool") {
           content.push({ type: "text", text: ocrResourceHint(attachment) });
           continue;
@@ -276,7 +286,7 @@ function routingErrorMessage(code: AttachmentRoutingErrorCode): string {
     case "attachment_kind_unsupported":
       return "attachment kind is not supported for image input";
     case "attachment_document_unsupported":
-      return "PDF and office document attachments are not supported yet";
+      return "This document format is unsupported, or Read is unavailable for DOCX/XLSX/PPTX";
     case "attachment_archive_unsupported":
       return "archive attachments are not supported";
     case "attachment_binary_unsupported":

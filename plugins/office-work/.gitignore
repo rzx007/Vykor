@@ -1,2 +1,3 @@
 /bin/*.exe
 /out/
+/tools/office-engine.mjs

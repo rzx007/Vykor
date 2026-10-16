@@ -19,6 +19,7 @@ import {
   createSolidPng,
   createWebpDeclaringSize,
 } from "../image-preview/safe-image-test-bytes"
+import * as officeEngine from "@vykor/server/daemon-host"
 import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
 
 const temporaryDirectories: string[] = []
@@ -318,3 +319,12 @@ async function createSizedPng(path: string, size: number): Promise<void> {
     await handle.close()
   }
 }
+
+it("uses the public Office engine for read-only workspace previews",async()=>{
+  const rootPath=await createTemporaryDirectory();const file=join(rootPath,"sample.pptx");await writeFile(file,"original bytes");
+  const spy=vi.spyOn(officeEngine,"readOfficeFile").mockResolvedValue({text:"",preview:{html:"<p>slide</p>",format:"pptx",page:2,pageCount:2,sha256:"hash"}});
+  try {
+    const result=await workspaceService.readFile({rootPath,path:"sample.pptx",officePage:2});
+    expect(spy).toHaveBeenCalledWith(file,{preview:true,page:2});expect(result.officePreview?.page).toBe(2);expect(result.content).toBeNull();
+  }finally{spy.mockRestore();}
+});

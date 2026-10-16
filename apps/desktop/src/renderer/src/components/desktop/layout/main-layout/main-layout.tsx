@@ -483,6 +483,7 @@ export function MainLayout(): React.JSX.Element {
           <MainLayoutContext.Provider
             value={{
               conversationWorkspace,
+              openFile: openWorkspaceFile,
               startNewConversation: startNewConversationRoute,
               openSideChat: (sourceId, text) => {
                 if (sourceId !== activeSessionId) return

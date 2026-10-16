@@ -326,7 +326,7 @@ async function inspectFileInfo(
       catch (error) { if (isFileNotFoundError(error)) info.parentExists = false; }
     }
   }
-  if (kind === "file") {
+  if (item?.isFile) {
     const bytes = await operations.readBytes(filePath);
     info.sizeBytes = bytes.byteLength;
     info.sha256 = createHash("sha256").update(bytes).digest("hex");

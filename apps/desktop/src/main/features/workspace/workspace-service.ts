@@ -2,6 +2,9 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, extname, join, posix, relative, resolve, sep, win32 } from "node:path"
 import { clipboard, shell } from "electron"
+import { officeFormat } from "@vykor/client"
+import { readOfficeFile, readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/server/daemon-host"
+import { desktopSessionService } from "../session/session-service"
 
 import type {
   WorkspaceCopyPathInput,
@@ -91,9 +94,20 @@ class WorkspaceService {
   }
 
   async readFile(input: WorkspaceReadFileInput): Promise<WorkspaceReadFileResult> {
+    if (input.path.startsWith("attachment://")) return await this.readOfficeAttachment(input)
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")
+    if (officeFormat(resolved.absolutePath)) {
+      const result = await readOfficeFile(resolved.absolutePath, {
+        preview: true,
+        page: input.officePage ?? 1,
+      })
+      return {
+        ...toReadResult(resolved.classification, info.size, true, null),
+        officePreview: result.preview!,
+      }
+    }
 
     const imageMediaType = safeImageMediaTypeFromName(resolved.absolutePath)
     if (imageMediaType) {
@@ -157,6 +171,60 @@ class WorkspaceService {
     shell.showItemInFolder(resolved.absolutePath)
   }
 
+  private async readOfficeAttachment(
+    input: WorkspaceReadFileInput
+  ): Promise<WorkspaceReadFileResult> {
+    const match = input.path.match(/^attachment:\/\/([^/]+)\//)
+    if (!match) throw new Error("无效附件引用。")
+    const assetId = decodeURIComponent(match[1]!)
+    const client = await desktopSessionService.daemonClient()
+    const asset = await client.attachments.get(assetId)
+    if (
+      !officeFormat(asset.displayName) ||
+      asset.status !== "ready" ||
+      !asset.sizeBytes ||
+      asset.sizeBytes > MAX_OFFICE_BYTES
+    )
+      throw new Error("附件不是可预览的 Office 文档或超过 64 MB。")
+    const response = await client.attachments.download(assetId)
+    if (!response.body) throw new Error("无法读取附件。")
+    const reader = response.body.getReader(),
+      chunks: Uint8Array[] = []
+    let total = 0
+    try {
+      for (;;) {
+        const part = await reader.read()
+        if (part.done) break
+        total += part.value.byteLength
+        if (total > MAX_OFFICE_BYTES) throw new Error("附件超过 64 MB。")
+        chunks.push(part.value)
+      }
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
+    }
+    const bytes = Buffer.concat(chunks)
+    const result = await readOfficeBytes(bytes, asset.displayName, {
+      preview: true,
+      page: input.officePage ?? 1,
+    })
+    return {
+      path: input.path,
+      name: asset.displayName,
+      size: bytes.length,
+      binary: true,
+      content: null,
+      language: "",
+      scope: "project",
+      relativePath: input.path,
+      rootLabel: "会话附件",
+      previewBytes: null,
+      mediaType: null,
+      imagePreviewError: null,
+      officePreview: result.preview!,
+    }
+  }
+
   async copyPath(input: WorkspaceCopyPathInput): Promise<string> {
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
     const text = input.absolute ? resolved.absolutePath : resolved.classification.relativePath
@@ -200,9 +268,7 @@ class WorkspaceService {
 
   private rootsFor(projectRoot: string): WorkspaceAllowedRoots {
     const configDir =
-      this.allowedRoots?.configDir ??
-      process.env.VYKOR_CONFIG_DIR ??
-      join(homedir(), ".vykor")
+      this.allowedRoots?.configDir ?? process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor")
     const documentsPath = this.allowedRoots?.documentsPath ?? ""
     return {
       projectRoot,

@@ -118,6 +118,7 @@ export function errorResponse(status: number, message: string): Response {
 
 const ATTACHMENT_ERROR_HTTP_STATUS = {
   attachment_invalid_request: 400,
+  attachment_document_invalid: 400,
   attachment_too_large: 413,
   attachment_not_found: 404,
   attachment_not_ready: 409,

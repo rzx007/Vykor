@@ -7,6 +7,7 @@ import {
   readdir,
   rmdir,
   unlink,
+  readFile,
   type FileHandle,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -14,6 +15,7 @@ import { Readable } from "node:stream";
 
 import { AttachmentError, isAttachmentError } from "../attachment-errors.js";
 import { sniffAttachmentMediaType } from "./attachment-media-type.js";
+import { sniffOfficePackage } from "../../office/office-package.js";
 
 const MIME_PREFIX_BYTES = 4_100;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
@@ -130,11 +132,14 @@ export class AttachmentBlobStore {
       handle = undefined;
 
       const sha256 = hash.digest("hex");
-      const mediaType = sniffAttachmentMediaType(
+      let mediaType = sniffAttachmentMediaType(
         prefix.subarray(0, prefixLength),
         input.declaredMediaType,
         sizeBytes === prefixLength,
       );
+      if(mediaType === "application/zip" && sizeBytes <= 64*1024*1024) {
+        mediaType = sniffOfficePackage(await readFile(stagingPath)) ?? mediaType;
+      }
       const bucket = join(this.blobsRoot, sha256.slice(0, 2));
       const blobPath = join(bucket, sha256);
       await mkdir(bucket, { recursive: true });

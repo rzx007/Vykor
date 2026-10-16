@@ -1,4 +1,5 @@
 import type { ServerCapabilities } from "@vykor/client"
+import { officeFormat } from "@vykor/client"
 
 type DesktopAttachmentLimits = NonNullable<ServerCapabilities["attachments"]>["limits"]
 
@@ -79,6 +80,7 @@ export function resolveDesktopAttachmentCompatibility(
     .toLowerCase()
   const name = attachment.displayName.trim().toLowerCase()
   const extension = name.includes(".") ? name.split(".").at(-1)! : ""
+  if(officeFormat(name))return {supported:true}
   if (mediaType.startsWith("image/")) return { supported: true }
   if (
     mediaType === "application/pdf" ||
@@ -88,7 +90,7 @@ export function resolveDesktopAttachmentCompatibility(
     mediaType.includes("ms-powerpoint") ||
     documentExtensions.has(extension)
   ) {
-    return { supported: false, reason: "暂不支持 PDF 和 Office 文档" }
+    return { supported: false, reason: "暂不支持此文档格式（支持 DOCX、XLSX、PPTX）" }
   }
   if (
     mediaType.includes("zip") || mediaType.includes("rar") ||

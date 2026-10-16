@@ -1,6 +1,8 @@
 param([switch]$PrepareOnly)
 $ErrorActionPreference = 'Stop'
 $pluginRoot = Split-Path $PSScriptRoot -Parent
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $pluginRoot '../..'))
+Copy-Item -LiteralPath (Join-Path $repositoryRoot 'packages/services/src/office/office-engine.mjs') -Destination (Join-Path $pluginRoot 'tools/office-engine.mjs') -Force
 $engineDirectory = Join-Path $pluginRoot 'bin'
 $enginePath = Join-Path $engineDirectory 'officecli-win-x64.exe'
 $expected = '864e0580c8e8c91a6aa4a4c1e8900551c8d4aa648ff10136ceed3a6ba5310888'

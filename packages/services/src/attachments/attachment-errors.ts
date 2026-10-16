@@ -1,4 +1,5 @@
 export type AttachmentErrorCode =
+  | "attachment_document_invalid"
   | "attachment_invalid_request"
   | "attachment_too_large"
   | "attachment_not_found"

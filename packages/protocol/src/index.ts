@@ -23,3 +23,4 @@ export * from "./plugin-ui-appearance.js";
 export * from "./plugin-ui-conversation.js";
 export * from "./notes.js";
 export * from "./memory.js";
+export * from "./office.js";

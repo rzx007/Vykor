@@ -83,4 +83,17 @@ describe("Read info_only before generating file changes", () => {
       expect(result.metadata?.fileInfo).not.toHaveProperty("sha256");
     });
   });
+
+  it("includes target size and hash for a symlink to a readable file", async () => {
+    await inDirectory(async dir => {
+      const target = join(dir, "target.docx");
+      const link = join(dir, "link.docx");
+      await writeFile(target, "office bytes");
+      try { await symlink(target, link, "file"); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "EPERM") return; throw error; }
+      const result = await fileReadTool.execute({ file_path: link, info_only: true }, { cwd: dir, settings });
+      expect(result.metadata?.fileInfo).toMatchObject({ kind: "symlink", sizeBytes: 12,
+        sha256: createHash("sha256").update("office bytes").digest("hex") });
+    });
+  });
 });

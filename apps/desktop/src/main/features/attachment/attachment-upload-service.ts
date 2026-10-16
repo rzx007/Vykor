@@ -352,6 +352,9 @@ function toPublicError(error: unknown): DesktopAttachmentError {
 function inferMediaType(fileName: string): string {
   const extension = extname(fileName).toLowerCase()
   const mediaTypes: Record<string, string> = {
+    ".docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx":"application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".avif": "image/avif",
     ".bmp": "image/bmp",
     ".gif": "image/gif",

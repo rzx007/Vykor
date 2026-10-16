@@ -1,5 +1,7 @@
 import { Download, ExternalLink, FileImage, FileText } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useContext, useEffect, useState } from "react"
+import { officeFormat } from "@vykor/client"
+import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
 
 import {
   Attachment,
@@ -42,6 +44,11 @@ export function MessageAttachment({
   fill?: boolean
 }): React.JSX.Element {
   const viewer = useImageViewer()
+  const layout=useContext(MainLayoutContext)
+  const open=()=>{
+    if(officeFormat(part.displayName)&&layout?.openFile)layout.openFile(`attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`)
+    else void window.desktop.attachments.open({assetId:part.assetId})
+  }
   const previewUrl = useMessageAttachmentPreview(part)
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null)
   const visiblePreviewUrl = previewUrl && previewUrl !== failedPreviewUrl ? previewUrl : null
@@ -117,7 +124,9 @@ export function MessageAttachment({
         )}
       </AttachmentMedia>
       <AttachmentContent>
-        <AttachmentTitle title={part.displayName}>{part.displayName}</AttachmentTitle>
+        <AttachmentTitle title={part.displayName}>
+          {officeFormat(part.displayName)&&layout?.openFile?<button className="text-left hover:underline" onClick={open}>{part.displayName}</button>:part.displayName}
+        </AttachmentTitle>
         <AttachmentDescription>
           {fileKind(part.mediaType)} · {formatBytes(part.sizeBytes)}
         </AttachmentDescription>
@@ -127,7 +136,7 @@ export function MessageAttachment({
           <AttachmentAction
             aria-label={`打开 ${part.displayName}`}
             title="打开"
-            onClick={() => void window.desktop.attachments.open({ assetId: part.assetId })}
+            onClick={open}
           >
             <ExternalLink />
           </AttachmentAction>

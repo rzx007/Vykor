@@ -90,6 +90,9 @@ describe("desktop attachment compatibility", () => {
     ["index.ts", "application/octet-stream"],
     ["payload.json", "application/json"],
     ["photo.png", "image/png"],
+    ["proposal.docx", "application/zip"],
+    ["table.xlsx", "application/octet-stream"],
+    ["slides.pptx", "application/zip"],
   ])("allows %s", (displayName, mediaType) => {
     expect(resolveDesktopAttachmentCompatibility({
       displayName,
@@ -99,10 +102,7 @@ describe("desktop attachment compatibility", () => {
   })
 
   it.each([
-    ["report.pdf", "application/pdf", "暂不支持 PDF 和 Office 文档"],
-    ["proposal.docx", "application/zip", "暂不支持 PDF 和 Office 文档"],
-    ["table.xlsx", "application/octet-stream", "暂不支持 PDF 和 Office 文档"],
-    ["slides.pptx", "application/zip", "暂不支持 PDF 和 Office 文档"],
+    ["report.pdf", "application/pdf", "暂不支持此文档格式（支持 DOCX、XLSX、PPTX）"],
     ["source.zip", "application/zip", "暂不支持压缩包"],
     ["program.exe", "application/octet-stream", "暂不支持这种二进制文件"],
   ])("blocks %s", (displayName, mediaType, reason) => {

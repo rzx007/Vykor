@@ -1,4 +1,8 @@
-import type { SessionInputAttachmentRecord, SessionRecord } from "@vykor/protocol";
+import type {
+  SessionInputAttachmentRecord,
+  SessionRecord,
+} from "@vykor/protocol";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 import {
   classifyAttachmentCandidate,
   type LocalOcrResult,
@@ -11,7 +15,9 @@ export interface AttachmentSessionResolverQueries {
 }
 
 export interface AttachmentSessionReferenceQueries {
-  listSessionInputAttachments(sessionId: string): SessionInputAttachmentRecord[];
+  listSessionInputAttachments(
+    sessionId: string,
+  ): SessionInputAttachmentRecord[];
 }
 
 export interface AttachmentAuthorizationSessionResolver {
@@ -36,6 +42,12 @@ export interface AttachmentTextReader {
     limit: number;
     signal?: AbortSignal;
   }): Promise<AttachmentTextSlice>;
+}
+
+// Stable display lines let offset/limit reach long paragraphs without dropping
+// their tails. Unicode-aware matching keeps surrogate pairs together.
+export function officeTextLines(text: string): string[] {
+  return text.split("\n").flatMap((line) => line.match(/[\s\S]{1,2000}/gu) ?? [""]);
 }
 
 export interface AttachmentOcrService {
@@ -68,20 +80,38 @@ export function createAttachmentTextReader(options: {
   return {
     async readText(input) {
       input.signal?.throwIfAborted();
-      validateReference(options.store, input.authorizationSessionId, input.assetId);
+      validateReference(
+        options.store,
+        input.authorizationSessionId,
+        input.assetId,
+      );
       validateRange(input.offset, input.limit);
-      const reference = options.store.listSessionInputAttachments(input.authorizationSessionId)
+      const reference = options.store
+        .listSessionInputAttachments(input.authorizationSessionId)
         .find((candidate) => candidate.assetId === input.assetId)!;
-      if (classifyAttachmentCandidate(reference) !== "text") throw resourceDenied();
+      const format = officeFormat(reference.displayName);
+      if (
+        classifyAttachmentCandidate(reference) !== "text" &&
+        !(format && reference.mediaType === OFFICE_MEDIA_TYPES[format])
+      )
+        throw resourceDenied();
       const asset = options.attachments.get(input.assetId);
-      if (asset.status !== "ready") throw new Error("attachment_resource_unavailable");
+      if (asset.status !== "ready")
+        throw new Error("attachment_resource_unavailable");
       const decoded = await options.attachments.readReadyText(input.assetId, {
         ...(input.signal ? { signal: input.signal } : {}),
       });
-      const lines = decoded.text.split("\n");
-      if (input.offset > lines.length) throw new Error("attachment_resource_range_invalid");
+      const lines = format ? officeTextLines(decoded.text) : decoded.text.split("\n");
+      if (input.offset > lines.length)
+        throw new Error("attachment_resource_range_invalid");
       const startIndex = input.offset - 1;
-      const selected = lines.slice(startIndex, startIndex + input.limit);
+      const selected: string[] = [];
+      let chars = 0;
+      for (const line of lines.slice(startIndex, startIndex + input.limit)) {
+        if (format && chars + Buffer.byteLength(line, "utf8") > 48000) break;
+        selected.push(line);
+        chars += Buffer.byteLength(line, "utf8") + 20;
+      }
       return {
         displayName: decoded.displayName,
         mediaType: decoded.mediaType,
@@ -97,12 +127,19 @@ export function createAttachmentTextReader(options: {
 
 export function createAttachmentOcrService(options: {
   store: AttachmentSessionReferenceQueries;
-  recognize(input: { assetId: string; signal?: AbortSignal }): Promise<LocalOcrResult>;
+  recognize(input: {
+    assetId: string;
+    signal?: AbortSignal;
+  }): Promise<LocalOcrResult>;
 }): AttachmentOcrService {
   return {
     async recognize(input) {
       input.signal?.throwIfAborted();
-      validateReference(options.store, input.authorizationSessionId, input.assetId);
+      validateReference(
+        options.store,
+        input.authorizationSessionId,
+        input.assetId,
+      );
       return await options.recognize({
         assetId: input.assetId,
         ...(input.signal ? { signal: input.signal } : {}),
@@ -117,7 +154,12 @@ function validateReference(
   assetId: string,
 ): void {
   try {
-    if (store.listSessionInputAttachments(sessionId).some((item) => item.assetId === assetId)) return;
+    if (
+      store
+        .listSessionInputAttachments(sessionId)
+        .some((item) => item.assetId === assetId)
+    )
+      return;
   } catch {
     // Deliberately collapse missing sessions and storage details into one access error.
   }
@@ -125,8 +167,13 @@ function validateReference(
 }
 
 function validateRange(offset: number, limit: number): void {
-  if (!Number.isSafeInteger(offset) || offset < 1 ||
-      !Number.isSafeInteger(limit) || limit < 1 || limit > 2_000) {
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 1 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 2_000
+  ) {
     throw new Error("attachment_resource_range_invalid");
   }
 }

@@ -7,9 +7,12 @@ directories:
 files:
   - out/**
   - '!out/bundled-plugins/**'
+  - '!out/office-engine/**'
   - resources/**
   - package.json
 extraResources:
+  - from: out/office-engine
+    to: office-engine
   - from: out/bundled-plugins
     to: bundled-plugins
 asarUnpack:

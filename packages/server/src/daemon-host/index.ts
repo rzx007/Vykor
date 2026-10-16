@@ -31,3 +31,5 @@ export {
   startVykorDaemon,
   type VykorDaemonOptions,
 } from "../daemon/default-daemon.js";
+
+export { readOfficeFile, readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/services";
