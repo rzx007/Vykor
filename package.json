@@ -19,7 +19,7 @@
     "check:clean-slate": "node scripts/verify-clean-slate.mjs",
     "check:clean-slate:artifacts": "node scripts/verify-clean-slate.mjs --require-build-artifacts",
     "test": "turbo test --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins",
-    "test:bundled-plugins": "node --test plugins/*/test/*.test.mjs",
+    "test:bundled-plugins": "node scripts/test-bundled-plugins.mjs",
     "test:client-browser": "vite build --config tests/browser-client/vite.config.ts",
     "clean": "turbo clean",
     "release:cli": "node scripts/npm-release.mjs",
