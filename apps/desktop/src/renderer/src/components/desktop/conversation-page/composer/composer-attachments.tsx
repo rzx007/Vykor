@@ -1,5 +1,6 @@
-import { FileArchive, FileImage, FileSpreadsheet, FileText, RotateCcw, X } from "lucide-react"
-import { useEffect, useState, type ReactNode } from "react"
+import { RotateCcw, X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
 
 import {
   Attachment,
@@ -82,7 +83,7 @@ function ComposerAttachmentCard({
         : "error"
   const mediaType = attachment.mediaType ?? attachment.declaredMediaType
   const compatibility = resolveDesktopAttachmentCompatibility(attachment)
-  const fileIcon = attachmentIcon(mediaType)
+  const FileIcon = getFileIcon(attachment.displayName, mediaType)
   const errorMessage =
     attachment.error?.message ??
     (attachment.status === "cancelled" ? "上传已取消" : null) ??
@@ -140,7 +141,7 @@ function ComposerAttachmentCard({
             onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
           />
         ) : (
-          fileIcon
+          <FileIcon />
         )}
       </AttachmentMedia>
       <AttachmentContent>
@@ -245,13 +246,6 @@ function fileKind(mediaType: string): string {
   if (mediaType.includes("sheet") || mediaType.includes("excel")) return "表格"
   if (mediaType.startsWith("text/")) return "文本"
   return "文件"
-}
-
-function attachmentIcon(mediaType: string): ReactNode {
-  if (mediaType.startsWith("image/")) return <FileImage />
-  if (mediaType.includes("sheet") || mediaType.includes("excel")) return <FileSpreadsheet />
-  if (mediaType.includes("zip") || mediaType.includes("compressed")) return <FileArchive />
-  return <FileText />
 }
 
 function formatBytes(bytes: number): string {

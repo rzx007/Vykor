@@ -5,11 +5,11 @@ import {
   FileBraces,
   FileCode2,
   FileImage,
-  FileSpreadsheet,
   FileText,
   Settings,
   type LucideIcon,
 } from "lucide-react"
+import { WordFileIcon, ExcelFileIcon, PowerPointFileIcon, PdfFileIcon } from "./document-file-icons"
 
 export type FileIconKind =
   | "archive"
@@ -19,6 +19,8 @@ export type FileIconKind =
   | "document"
   | "image"
   | "markdown"
+  | "pdf"
+  | "presentation"
   | "spreadsheet"
   | "text"
   | "unknown"
@@ -52,9 +54,9 @@ const codeExtensions = new Set([
 
 const configExtensions = new Set(["env", "ini", "toml", "xml", "yaml", "yml"])
 const dataExtensions = new Set(["json", "jsonc", "jsonl", "lock", "sql"])
-const documentExtensions = new Set(["doc", "docx", "pdf", "ppt", "pptx"])
+const documentExtensions = new Set(["doc", "docx", "odt", "rtf"])
 const imageExtensions = new Set(["avif", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"])
-const spreadsheetExtensions = new Set(["csv", "tsv", "xls", "xlsx"])
+const spreadsheetExtensions = new Set(["csv", "tsv", "xls", "xlsx", "ods"])
 const archiveExtensions = new Set(["7z", "br", "gz", "rar", "tar", "tgz", "zip"])
 
 const configFileNames = new Set([
@@ -67,7 +69,16 @@ const configFileNames = new Set([
   "makefile",
 ])
 
-export function getFileIcon(pathOrName: string): LucideIcon {
+export function getFileIcon(pathOrName: string, mediaType = ""): LucideIcon {
+  if (getFileIconKind(pathOrName) === "unknown") {
+    if (mediaType.startsWith("image/")) return FileImage
+    if (/presentation|powerpoint/.test(mediaType)) return PowerPointFileIcon
+    if (/sheet|excel/.test(mediaType)) return ExcelFileIcon
+    if (mediaType.includes("pdf")) return PdfFileIcon
+    if (/zip|compressed/.test(mediaType)) return FileArchive
+    if (/word/.test(mediaType)) return WordFileIcon
+    if (mediaType.startsWith("text/")) return FileText
+  }
   switch (getFileIconKind(pathOrName)) {
     case "archive":
       return FileArchive
@@ -78,13 +89,17 @@ export function getFileIcon(pathOrName: string): LucideIcon {
     case "data":
       return FileBraces
     case "document":
-      return FileText
+      return WordFileIcon
+    case "pdf":
+      return PdfFileIcon
+    case "presentation":
+      return PowerPointFileIcon
     case "image":
       return FileImage
     case "markdown":
       return BookOpenText
     case "spreadsheet":
-      return FileSpreadsheet
+      return ExcelFileIcon
     case "text":
       return FileText
     default:
@@ -100,6 +115,8 @@ export function getFileIconKind(pathOrName: string): FileIconKind {
   if (configFileNames.has(name) || configExtensions.has(extension)) return "config"
   if (dataExtensions.has(extension)) return "data"
   if (codeExtensions.has(extension)) return "code"
+  if (extension === "pdf") return "pdf"
+  if (["ppt", "pptx", "odp"].includes(extension)) return "presentation"
   if (documentExtensions.has(extension)) return "document"
   if (imageExtensions.has(extension)) return "image"
   if (spreadsheetExtensions.has(extension)) return "spreadsheet"

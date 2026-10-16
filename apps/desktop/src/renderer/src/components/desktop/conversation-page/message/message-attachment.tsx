@@ -1,4 +1,5 @@
-import { Download, ExternalLink, FileImage, FileText } from "lucide-react"
+import { Download, ExternalLink, FileText } from "lucide-react"
+import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
 import { useContext, useEffect, useState } from "react"
 import { officeFormat } from "@vykor/client"
 import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
@@ -44,6 +45,7 @@ export function MessageAttachment({
   fill?: boolean
 }): React.JSX.Element {
   const viewer = useImageViewer()
+  const FileIcon = getFileIcon(part.displayName, part.mediaType)
   const layout=useContext(MainLayoutContext)
   const open=()=>{
     if(officeFormat(part.displayName)&&layout?.openFile)layout.openFile(`attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`)
@@ -117,10 +119,8 @@ export function MessageAttachment({
             alt=""
             onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
           />
-        ) : part.mediaType.startsWith("image/") ? (
-          <FileImage />
         ) : (
-          <FileText />
+          <FileIcon />
         )}
       </AttachmentMedia>
       <AttachmentContent>

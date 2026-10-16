@@ -6,6 +6,7 @@ import { prepareFileTreeInput, type ContextMenuAnchorRect, type ContextMenuItem 
 import { FileTree, useFileTree, useFileTreeSearch } from "@pierre/trees/react"
 import { OpenWithSubmenu } from "@renderer/components/desktop/open-with"
 import { isHtmlPath } from "@renderer/components/desktop/tools/file-viewer-model"
+import { documentTreeIcons } from "@renderer/components/desktop/tools/document-file-icons"
 import { Button } from "@renderer/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 
@@ -31,6 +32,7 @@ export function ProjectFileTree({
     [paths]
   )
   const { model } = useFileTree({
+    icons: documentTreeIcons,
     density: "compact",
     flattenEmptyDirectories: true,
     fileTreeSearchMode: "hide-non-matches",
