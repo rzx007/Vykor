@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { InputGroup, InputGroupInput } from "@renderer/components/ui/input-group"
 import GlideMenu from "@renderer/components/ui/GlideMenu"
 import { cn } from "@renderer/lib/utils"
 
@@ -399,7 +400,7 @@ export default function ApprovalCard({
                   >
                     <div className="pr-8 text-sm leading-6 font-semibold text-foreground">{question.q}</div>
                     <GlideMenu
-                      className="mt-3 flex flex-col gap-1.5"
+                      className={cn("flex flex-col gap-1.5", question.options.length > 0 && "mt-3")}
                       highlightClassName="inset-x-0 rounded-lg bg-muted"
                     >
                       {question.options.map((option, i) => {
@@ -458,42 +459,42 @@ export default function ApprovalCard({
                           </button>
                         )
                       })}
-                      <label
-                        data-menu-row
-                        className={cn(
-                          "relative z-10 flex min-h-10 items-center rounded-lg border border-input bg-input/30 px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
-                          question.options.length > 0 && "mt-1"
-                        )}
-                      >
-                        <input
-                          value={custom[qIdx] ?? ""}
-                          tabIndex={active ? 0 : -1}
-                          onChange={(event) => {
-                            if (!active) return
-                            setCustom((current) => {
-                              const updated = { ...current, [qIdx]: event.target.value }
-                              customRef.current = updated
+                    </GlideMenu>
+
+                    <InputGroup
+                      shape="pill"
+                      className={cn(
+                        "relative z-10",
+                        question.options.length > 0 ? "mt-2.5" : "mt-3"
+                      )}
+                    >
+                      <InputGroupInput
+                        value={custom[qIdx] ?? ""}
+                        tabIndex={active ? 0 : -1}
+                        onChange={(event) => {
+                          if (!active) return
+                          setCustom((current) => {
+                            const updated = { ...current, [qIdx]: event.target.value }
+                            customRef.current = updated
+                            return updated
+                          })
+                          if (question.type === "radio")
+                            setAnswers((current) => {
+                              const updated = { ...current, [qIdx]: [] }
+                              answersRef.current = updated
                               return updated
                             })
-                            if (question.type === "radio")
-                              setAnswers((current) => {
-                                const updated = { ...current, [qIdx]: [] }
-                                answersRef.current = updated
-                                return updated
-                              })
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault()
-                              if (hasAnswer && !last) goTo(qi + 1)
-                            }
-                          }}
-                          placeholder={t.customPlaceholder}
-                          aria-label="Custom answer"
-                          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                        />
-                      </label>
-                    </GlideMenu>
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault()
+                            if (hasAnswer && !last) goTo(qi + 1)
+                          }
+                        }}
+                        placeholder={t.customPlaceholder}
+                        aria-label="自定义答案"
+                      />
+                    </InputGroup>
                   </div>
                 )
               })}
@@ -533,12 +534,13 @@ export default function ApprovalCard({
           <div className="-mr-0.5 flex items-center gap-1.5">
             <Button
               variant="ghost"
+              shape="pill"
               size="sm"
               onClick={() => (last ? setOpen(false) : goTo(qi + 1))}
             >
               {t.skip}
             </Button>
-            <Button size="sm" disabled={!hasAnswer} onClick={advance}>
+            <Button shape="pill" size="sm" disabled={!hasAnswer} onClick={advance}>
               {last ? t.send : t.continue}
             </Button>
           </div>
