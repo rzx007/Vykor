@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import JSZip from "jszip"
 
 /** Keep the official plugin a normal Native archive consumed by the existing installer. */
@@ -16,8 +16,10 @@ export async function packageOfficeWorkPlugin(
   engineBinaryPath: string,
   engineModulePath: string
 ): Promise<void> {
+  const asset = basename(engineBinaryPath)
+  if (!["officecli-win-x64.exe", "officecli-mac-arm64", "officecli-linux-x64"].includes(asset)) throw new Error(`Unsupported bundled Office engine: ${asset}`)
   await packageNativePlugin(sourceDirectory, outputDirectory, "office-work.zip", {
-    "bin/officecli-win-x64.exe": engineBinaryPath,
+    [`bin/${asset}`]: engineBinaryPath,
     "tools/office-engine.mjs": engineModulePath,
   })
 }
@@ -45,9 +47,9 @@ async function packageNativePlugin(
   }
   await addDirectory(sourceDirectory)
   for (const [archivePath, sourcePath] of Object.entries(preparedFiles)) {
-    zip.file(archivePath, await readFile(sourcePath), { date, createFolders: false })
+    zip.file(archivePath, await readFile(sourcePath), { date, createFolders: false, unixPermissions: archivePath.startsWith("bin/") ? 0o100755 : 0o100644 })
   }
   await mkdir(outputDirectory, { recursive: true })
-  const archive = await zip.generateAsync({ type: "nodebuffer", compression: "STORE" })
+  const archive = await zip.generateAsync({ type: "nodebuffer", compression: "STORE", platform: "UNIX" })
   await writeFile(join(outputDirectory, archiveName), archive)
 }

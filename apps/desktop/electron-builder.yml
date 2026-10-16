@@ -36,6 +36,9 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # Preserve the pinned upstream engine bytes during app signing.
+  signIgnore:
+    - /Resources/office-engine/officecli-mac-arm64$
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.

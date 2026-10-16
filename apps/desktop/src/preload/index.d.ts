@@ -4,7 +4,7 @@ import type { DesktopAPI } from "../shared/desktop-api-contract"
 
 declare global {
   interface Window {
-    electron: ElectronAPI
+    electron: ElectronAPI & { process: ElectronAPI["process"] & { arch: string } }
     desktop: DesktopAPI
   }
 

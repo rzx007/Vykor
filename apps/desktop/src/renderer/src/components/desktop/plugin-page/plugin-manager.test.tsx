@@ -218,9 +218,9 @@ describe("PluginManager archive import", () => {
     expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
   })
 
-  it("installs the included presentation plugin after an explicit click", async () => {
+  it.each([["win32", "x64"], ["darwin", "arm64"], ["linux", "x64"]])("installs the included presentation plugin on %s/%s after an explicit click", async (platform, arch) => {
     const previous = Object.getOwnPropertyDescriptor(window, "electron")
-    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "win32" } } })
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform, arch } } })
     try {
       api().importArchive.mockResolvedValue({ status: "installed", pluginName: "演示文稿",
         snapshot: { ...snapshot, plugins: [plugin({ identity: { id: "vykor.office-work", name: "office-work", version: "0.2.4" } })] } })
@@ -235,14 +235,14 @@ describe("PluginManager archive import", () => {
     }
   })
 
-  it("shows the presentation pack but prevents installation on Linux", async () => {
+  it("shows the presentation pack but prevents installation on unsupported architectures", async () => {
     const previous = Object.getOwnPropertyDescriptor(window, "electron")
-    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "linux" } } })
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "linux", arch: "arm64" } } })
     try {
       await render()
       const button = host.querySelector<HTMLButtonElement>('[aria-label="添加演示文稿"]')
       expect(button?.disabled).toBe(true)
-      expect(button?.textContent).toContain("仅 Windows x64")
+      expect(button?.textContent).toContain("当前系统暂不支持")
       expect(api().importArchive).not.toHaveBeenCalled()
     } finally {
       if (previous) Object.defineProperty(window, "electron", previous)

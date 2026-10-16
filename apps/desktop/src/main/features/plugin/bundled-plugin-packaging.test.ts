@@ -5,7 +5,7 @@ import JSZip from "jszip"
 import { expect, it } from "vitest"
 import { packageKnowledgeWorkPlugin, packageOfficeWorkPlugin } from "../../../../scripts/package-bundled-plugin"
 
-it("packages Office with the prepared engine and excludes development files", async () => {
+it.each(["officecli-win-x64.exe", "officecli-mac-arm64", "officecli-linux-x64"])("packages Office with %s and excludes development files", async asset => {
   const temporary = await mkdtemp(join(tmpdir(), "vykor-office-plugin-"))
   try {
     const source = join(temporary, "source")
@@ -19,18 +19,19 @@ it("packages Office with the prepared engine and excludes development files", as
     await writeFile(join(source, "scripts/build.ps1"), "build")
     await writeFile(join(source, "bin/unrelated.exe"), "stale")
     await writeFile(join(source, "licenses/OFFICECLI-LICENSE"), "license")
-    const binary = join(temporary, "officecli-win-x64.exe")
+    const binary = join(temporary, asset)
     const module = join(temporary, "office-engine.mjs")
     await writeFile(binary, "verified binary")
     await writeFile(module, "shared engine")
     await packageOfficeWorkPlugin(source, join(temporary, "out"), binary, module)
     const zip = await JSZip.loadAsync(await readFile(join(temporary, "out/office-work.zip")))
     expect(Object.keys(zip.files).sort()).toEqual([
-      ".vykor-plugin/plugin.json", "bin/officecli-win-x64.exe", "licenses/OFFICECLI-LICENSE",
+      ".vykor-plugin/plugin.json", `bin/${asset}`, "licenses/OFFICECLI-LICENSE",
       "tools/index.mjs", "tools/office-engine.mjs",
     ])
+    expect(zip.files[`bin/${asset}`]!.unixPermissions).toBe(0o100755)
     expect(await zip.file("tools/office-engine.mjs")!.async("string")).toBe("shared engine")
-    expect(await zip.file("bin/officecli-win-x64.exe")!.async("string")).toBe("verified binary")
+    expect(await zip.file(`bin/${asset}`)!.async("string")).toBe("verified binary")
   } finally { await rm(temporary, { recursive: true, force: true }) }
 })
 

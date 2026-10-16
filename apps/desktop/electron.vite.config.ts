@@ -10,6 +10,8 @@ import type { Plugin } from "vite"
 import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-selector-plugin"
 import { packageKnowledgeWorkPlugin, packageOfficeWorkPlugin } from "./scripts/package-bundled-plugin"
 
+import { supportsBundledOfficePlugin } from "./src/shared/office-platform"
+
 function copyRuntimeResources(): Plugin {
   return {
     name: "copy-runtime-resources",
@@ -17,7 +19,7 @@ function copyRuntimeResources(): Plugin {
       const outputDirectory = resolve(options.dir ?? "out/main")
       const { prepareOfficeEngine } = await import(pathToFileURL(resolve("../../scripts/prepare-office-engine.mjs")).href)
       const officeBinaryPath = await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
-      if (process.platform === "win32" && process.arch === "x64") {
+      if (supportsBundledOfficePlugin(process.platform, process.arch)) {
         await packageOfficeWorkPlugin(
           resolve("../../plugins/office-work"),
           resolve(outputDirectory, "../bundled-plugins"),

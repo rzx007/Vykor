@@ -191,12 +191,12 @@ describe("DesktopPluginService", () => {
     }
   })
 
-  it.each([false, true])("installs the bundled Office archive without a picker (packaged=%s)", async packaged => {
+  it.each([[false, "win32", "x64"], [true, "win32", "x64"], [true, "darwin", "arm64"], [true, "linux", "x64"]] as const)("installs bundled Office (packaged=%s, %s/%s)", async (packaged, platformName, architecture) => {
     const platform = Object.getOwnPropertyDescriptor(process, "platform")!
     const arch = Object.getOwnPropertyDescriptor(process, "arch")!
     const resources = Object.getOwnPropertyDescriptor(process, "resourcesPath")
-    Object.defineProperty(process, "platform", { configurable: true, value: "win32" })
-    Object.defineProperty(process, "arch", { configurable: true, value: "x64" })
+    Object.defineProperty(process, "platform", { configurable: true, value: platformName })
+    Object.defineProperty(process, "arch", { configurable: true, value: architecture })
     Object.defineProperty(process, "resourcesPath", { configurable: true, value: "C:/app/resources" })
     electron.app.isPackaged = packaged
     try {
@@ -229,7 +229,7 @@ describe("DesktopPluginService", () => {
     expect(daemon.plugins.installArchive).not.toHaveBeenCalled()
   })
 
-  it.each([["linux", "x64"], ["win32", "arm64"]])("rejects Office on %s/%s before installing", async (platformName, architecture) => {
+  it.each([["linux", "arm64"], ["darwin", "x64"], ["win32", "arm64"]])("rejects Office on %s/%s before installing", async (platformName, architecture) => {
     const platform = Object.getOwnPropertyDescriptor(process, "platform")!
     const arch = Object.getOwnPropertyDescriptor(process, "arch")!
     Object.defineProperty(process, "platform", { configurable: true, value: platformName })

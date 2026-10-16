@@ -1,3 +1,4 @@
+import { supportsBundledOfficePlugin } from "../../../../../shared/office-platform"
 import { useEffect, useRef, useState } from "react"
 import { CircleAlert, Ellipsis, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
@@ -345,7 +346,7 @@ export function PluginManager({
   const officeWork = plugins.find((plugin) => plugin.identity.id === "vykor.office-work")
   const officeWorkAction = !officeWork ? "添加"
     : officeWork.identity.version.localeCompare("0.2.4", undefined, { numeric: true }) < 0 ? "更新" : null
-  const officeSupported = window.electron?.process?.platform === "win32"
+  const officeSupported = supportsBundledOfficePlugin(window.electron?.process?.platform ?? "", window.electron?.process?.arch ?? "")
   const knowledgeWorkAction = !knowledgeWork
     ? "添加"
     : knowledgeWork.identity.version === "1.0.0"
@@ -415,12 +416,12 @@ export function PluginManager({
               <div className="flex flex-col gap-1">
                 <h2 className="text-sm font-medium">演示文稿</h2>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  应用内置。创建、读取、修改和预览可编辑 PPTX。目前仅支持 Windows x64。
+                  应用内置。创建、读取、修改和预览可编辑 PPTX。支持 Windows x64、macOS arm64 和 Linux x64。
                 </p>
               </div>
               <Button variant="outline" shape="pill" disabled={busy || !api || !officeSupported}
                 aria-label={`${officeWorkAction}演示文稿`} onClick={() => void importArchive("office-work")}>
-                {officeSupported ? officeWorkAction : "仅 Windows x64"}
+                {officeSupported ? officeWorkAction : "当前系统暂不支持"}
               </Button>
             </section>
           ) : null}

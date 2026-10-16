@@ -1,3 +1,4 @@
+import { supportsBundledOfficePlugin } from "../../../shared/office-platform"
 import { randomUUID } from "node:crypto"
 import { extname, join, resolve } from "node:path"
 
@@ -103,8 +104,8 @@ export class DesktopPluginService {
         if (input.bundledPlugin !== "knowledge-work" && input.bundledPlugin !== "office-work") {
           return archiveFailure("找不到这个内置插件。", [{ code: "plugin_bundled_unknown" }])
         }
-        if (input.bundledPlugin === "office-work" && (process.platform !== "win32" || process.arch !== "x64")) {
-          return archiveFailure("演示文稿插件目前仅支持 Windows x64。", [{ code: "plugin_bundled_unsupported_platform" }])
+        if (input.bundledPlugin === "office-work" && !supportsBundledOfficePlugin(process.platform, process.arch)) {
+          return archiveFailure("Office 插件支持 Windows x64、macOS arm64 和 Linux x64；当前系统或架构暂不支持。", [{ code: "plugin_bundled_unsupported_platform" }])
         }
         archivePath = join(
           app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "out"),

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, chmod } from "node:fs/promises";
+import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +67,11 @@ export async function createOfficeRunner(context) {
   if (!verified.has(binary)) {
     if (hash(await readFile(binary)) !== expected)
       throw new Error("OfficeCLI 校验失败，请重新安装。");
+    // ZIP installation may lose executable permissions. Repair only the verified binary.
+    if (process.platform !== "win32") {
+      try { await access(binary, constants.X_OK); }
+      catch { await chmod(binary, 0o755); }
+    }
     verified.set(binary, true);
   }
   return createRunner(binary, context);

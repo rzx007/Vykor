@@ -1,6 +1,6 @@
 # office-work：演示文稿
 
-独立原生插件，首版仅支持 Windows x64。六个工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
+独立原生插件，支持 Windows x64、macOS arm64 和 Linux x64（后两者待实机验收）。六个工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
 
 支持可编辑文字、基础形状、表格及工作区 PNG/JPEG；修改只支持元素文字与基础样式。不包含 Word/Excel/PDF、旧格式、图表、页增删重排、复杂模板、自动渲染审查。用户已有文件另存；插件成果以摘要检查后继续修改。结构验证不等于 PowerPoint/WPS 保真或视觉验收。
 
@@ -18,7 +18,7 @@
 
 0.2.4：创建前按最终表格行高检查与显式定位文本框的重叠，预留 6pt 间距。冲突时拒绝创建，返回具体页码、表格、文本框及下方文本最小 y；放不下时要求精简或拆页。仅检查明确尺寸的文本框，不检查装饰背景，不自动移动内容，不扫描或修改已有 PPT，仍需截图检查实际排版。
 
-Windows x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面插件市场的“演示文稿”条目点击“添加”，按提示确认权限即可安装，无需手动选取 ZIP。已安装同版本或更新版本时不重复安装，旧版本可点击“更新”；安装后新建会话选择“演示文稿”。其他平台暂不提供安装。
+Windows x64、macOS arm64 和 Linux x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面插件市场的“演示文稿”条目点击“添加”，按提示确认权限即可安装，无需手动选取 ZIP。已安装同版本或更新版本时不重复安装，旧版本可点击“更新”；安装后新建会话选择“演示文稿”。其他系统或架构暂不提供内置安装。
 
 单独构建 ZIP 仍可使用 Windows PowerShell：`powershell -ExecutionPolicy Bypass -File plugins/office-work/scripts/build.ps1`。下载固定版本并核对 SHA256，统一输出 `apps/desktop/out/bundled-plugins/office-work.zip`，可手动导入。二进制不提交 Git。
 
@@ -27,3 +27,11 @@ Windows x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面�
 成果在当前工作区；内部当前成果记录在稳定 plugin.dataDir/presentations。仅允许工作区内路径，声明文件读写和 officecli 进程权限。该权限声明不是操作系统沙箱。异常退出遗留 `.office-work.lock` 时，先确认相应操作与引擎已退出，再人工移除对应锁；工具不会自动抢锁覆盖。
 
 设计参考 Orkas 的 PPT 工作流程与 OfficeCLI 适配经验，采用独立实现；相关许可见 THIRD-PARTY-NOTICES.md。
+
+## 平台与构建
+
+内置安装入口支持 Windows x64、macOS arm64 和 Linux x64。桌面构建按构建主机平台和架构准备固定版本、校验 SHA-256，将公共引擎与对应二进制放入 `out/bundled-plugins/office-work.zip`。各平台在对应系统和架构上构建，不支持复用 Windows 产物交叉打包。`scripts/build.ps1` 仅为 Windows 辅助入口。
+
+Unix 解压后可能丢失执行权限，公共引擎只在校验二进制通过后补齐权限。macOS 打包保留上游引擎字节，避免签名改变校验值。
+
+macOS arm64 和 Linux x64 尚无实机验证：原生依赖、系统安全提示、字体和布局需要对应机器验收。右侧 HTML 预览使用应用内浏览器；插件截图检查需要 OfficeCLI 可用的浏览器，缺失时报告原因，不自动安装。
