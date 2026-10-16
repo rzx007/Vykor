@@ -2,6 +2,10 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "OFFICE_MEDIA_TYPES", "kind": "runtime-export" },
+    { "name": "officeFormat", "kind": "runtime-export" },
+    { "name": "OfficeFormat", "kind": "type-export" },
+    { "name": "OfficePreview", "kind": "type-export" },
     { "name": "CleanupCandidate", "kind": "type-export" },
     { "name": "CleanupPreview", "kind": "type-export" },
     { "name": "CleanupResult", "kind": "type-export" },
