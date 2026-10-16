@@ -1,5 +1,7 @@
 # 会话目标（Goal）设计
 
+> 状态：当前设计，按 Goal 收缩规格及实施审查维护。
+
 > 2026-10-15：按 [Goal 收缩规格](superpowers/specs/2026-10-14-goal-reliability-and-budget-design.md)实施。
 > 实施依据：[精简计划](superpowers/plans/2026-10-15-goal-simplification.md)；验证与交付边界见[实施审查](superpowers/reviews/2026-10-15-goal-simplification-implementation-review.md)。
 > 旧 A/B/C 文档保留历史，不再用于扩展准备、冻结条件或证据验收。

@@ -217,7 +217,7 @@ state/src/runtime/goals.rs
 
 建议提供宿主绑定的只读 `get_goal`，或每轮注入精简的持久摘要：完整正文、稳定要求 ID、已完成/剩余项、最新有效证据、上轮结论、当前等待和用量。长证据按需读取；上下文压缩或恢复后仍能从这些状态继续。
 
-当前 [GoalAssessmentPolicy](../packages/server/src/application/session/goal-assessment-policy.ts) 第 19～86 行会核对本轮成功工具的引用来源，并要求逐项 satisfied。它不能机器证明自由文本要求没有遗漏，或引用结果真的支持该项。
+调查时的 `GoalAssessmentPolicy`（原文件名为 `goal-assessment-policy.ts`，第 19～86 行；该文件已在后续 Goal 收缩中删除，参见[现行目标设计](session-goals-design.md)）会核对本轮成功工具的引用来源，并要求逐项 satisfied。它不能机器证明自由文本要求没有遗漏，或引用结果真的支持该项。
 
 应让评估引用目标版本内稳定的要求 ID，明确哪些要求仍未完成；能确定检查的条件使用宿主结果，其余做模型覆盖审查，主观标准交用户验收。允许引用经过重新核实的历史成果，避免每轮为了满足“当前 Run 引用”重复执行昂贵检查。先明确旧证据的有效范围，不能直接取消现有归属校验。
 
