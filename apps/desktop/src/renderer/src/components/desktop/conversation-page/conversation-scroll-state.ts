@@ -85,6 +85,11 @@ export function createConversationScrollState() {
       intent = direction
       if (direction <= 0) publish({ ...snapshot, following: false })
     },
+    recordScrollAdjustment: () => {
+      // 自己写入的位置（包括浏览器临时限位）不是用户上滚；保留独立的阅读意图。
+      const viewport = viewportRef.current
+      if (viewport) lastScrollTop = viewport.scrollTop
+    },
     onScroll: () => {
       const viewport = viewportRef.current
       if (!viewport) return

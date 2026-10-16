@@ -284,6 +284,35 @@ it("aligns streaming growth in the measurement delivery without waiting another 
   expect(scroller.getSnapshot().atEnd).toBe(true)
 })
 
+it("keeps following when a layout shrink clamps its own scroll before the correction frame", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  const element = viewport()
+  const normalScrollTo = HTMLElement.prototype.scrollTo
+  let clamped = true
+  HTMLElement.prototype.scrollTo = function (options) {
+    if (!clamped || this !== element || typeof options !== "object") {
+      Reflect.apply(normalScrollTo, this, [options])
+      return
+    }
+    // Chromium 的布局临时限位：位置已上移，但新尺寸尚未允许完全滚到底部。
+    this.scrollTop = Math.max(
+      0,
+      Math.min(options.top ?? 0, this.scrollHeight - this.clientHeight) - 20
+    )
+    queueMicrotask(() => this.dispatchEvent(new Event("scroll")))
+  }
+  heights.set("turn-999", 60)
+  await act(async () => {
+    for (const observer of [...observers]) observer.flush()
+  })
+  expect(scroller.getSnapshot().following).toBe(true)
+  clamped = false
+  await settle()
+  expect(scroller.getSnapshot().atEnd).toBe(true)
+  expect(element.scrollHeight - element.clientHeight - element.scrollTop).toBeLessThanOrEqual(1)
+})
+
 it("gives upward intent priority when growth arrives before React commits the scroll mode", async () => {
   act(() => render(rows(1000)))
   await settle()
@@ -366,7 +395,6 @@ it("resumes following when the scrollbar is moved back to the end", async () => 
   await settle()
   const bottom = viewport().scrollTop
   act(() => {
-    viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }))
     scroll(bottom - 500)
   })
   await settle()

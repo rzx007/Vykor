@@ -2,15 +2,20 @@ import type { BrowserWindow, WebFrameMain } from "electron"
 import { readdirSync } from "node:fs"
 import assert from "node:assert/strict"
 import type { VykorClient } from "@vykor/client"
+import { currentPluginUiFrame } from "./plugin-ui-frame-query"
 
 /** Packaged sample, current SDK and real Native/SQLite; hidden window, behavioral assertions only. */
 export async function checkReferenceUi(
   owner: BrowserWindow,
   client: VykorClient,
   ready: { sessionId: string; instanceId: string; root: string },
-  modelAttempts: number,
-  _root: string
+  modelAttempts: number
 ) {
+  const started = Date.now()
+  const checkpoint = (stage: string) =>
+    console.log(
+      JSON.stringify({ scenario: "reference-ui", stage, elapsedMs: Date.now() - started })
+    )
   const evaluate = (source: string) => owner.webContents.executeJavaScript(source)
   const wait = async (predicate: () => Promise<boolean>) => {
     const until = Date.now() + 8000
@@ -21,14 +26,18 @@ export async function checkReferenceUi(
     throw new Error("Reference UI assertion deadline")
   }
   const frameReady = async (): Promise<WebFrameMain> => {
-    await wait(
-      async () =>
-        !!owner.webContents.mainFrame.frames[0] &&
-        (await owner.webContents.mainFrame.frames[0]!.executeJavaScript(
-          "document.querySelector('#preview')?.value.length>0"
-        ))
-    )
-    return owner.webContents.mainFrame.frames[0]!
+    let current: WebFrameMain | undefined
+    await wait(async () => {
+      const candidate = await currentPluginUiFrame(owner)
+      if (
+        !candidate ||
+        !(await candidate.executeJavaScript("document.querySelector('#preview')?.value.length>0"))
+      )
+        return false
+      current = candidate
+      return true
+    })
+    return current!
   }
   const clickHost = (label: string) =>
     evaluate(
@@ -36,7 +45,9 @@ export async function checkReferenceUi(
         JSON.stringify(label) +
         ").click()"
     )
+  checkpoint("frame-ready")
   let frame = await frameReady()
+  checkpoint("initial-state")
   const initial = await client.pluginUi.get(ready.sessionId, ready.instanceId)
   assert.equal(initial.instance.surface, "session-sidebar")
   assert.equal(await frame.executeJavaScript("document.querySelector('#sidebar')===null"), true)
@@ -45,6 +56,7 @@ export async function checkReferenceUi(
     2
   )
   assert.equal(await frame.executeJavaScript("document.querySelector('input').disabled"), false)
+  checkpoint("appearance")
   const beforeFiles = readdirSync(ready.root).sort()
   await frame.executeJavaScript(
     "document.querySelector('input').click();document.querySelector('#conversation-text').value='local note'"
@@ -76,6 +88,7 @@ export async function checkReferenceUi(
     ),
     true
   )
+  checkpoint("hide-show")
   await clickHost("隐藏侧栏")
   await wait(() => frame.executeJavaScript("document.querySelector('#draft').hidden"))
   assert.equal(
@@ -89,6 +102,7 @@ export async function checkReferenceUi(
   )
   await clickHost("显示侧栏")
   await wait(() => frame.executeJavaScript("!document.querySelector('#draft').hidden"))
+  checkpoint("preview-cancel")
   await frame.executeJavaScript("document.querySelector('#preview-button').click()")
   await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
   assert.equal(
@@ -103,6 +117,7 @@ export async function checkReferenceUi(
   assert.equal(await frame.executeJavaScript("document.querySelector('input').checked"), true)
   await frame.executeJavaScript("document.querySelector('#preview-button').click()")
   await wait(() => evaluate("document.querySelector('[role=alertdialog]')!==null"))
+  checkpoint("preview-confirm")
   await clickHost("确认执行")
   await wait(() =>
     frame.executeJavaScript(
@@ -125,6 +140,7 @@ export async function checkReferenceUi(
     beforeFiles,
     "pure preview creates no workspace file"
   )
+  checkpoint("draft")
   // The remaining finding is selected and sent via the actual SDK/host handoff.
   await frame.executeJavaScript(
     "document.querySelector('input').click();document.querySelector('#conversation-text').value='please explain chosen line'"
@@ -144,6 +160,7 @@ export async function checkReferenceUi(
     ),
     true
   )
+  checkpoint("submit-cancel")
   await frame.executeJavaScript(
     "document.querySelector('#conversation-text').value='assistant submit only';document.querySelector('#submit').click()"
   )
@@ -166,6 +183,7 @@ export async function checkReferenceUi(
     false,
     "submit excludes existing composer draft"
   )
+  checkpoint("submit-confirm")
   await clickHost("确认交给助手")
   await wait(() =>
     frame.executeJavaScript("document.querySelector('#status').textContent.includes('已交给助手')")
@@ -180,10 +198,15 @@ export async function checkReferenceUi(
     ),
     true
   )
+  checkpoint("reopen")
   await clickHost("关闭侧栏")
+  checkpoint("reopen-wait-close")
   await wait(() => evaluate("document.querySelector('iframe')===null"))
+  checkpoint("reopen-click")
   await clickHost("在侧栏打开")
+  checkpoint("reopen-wait-frame")
   frame = await frameReady()
+  checkpoint("reopen-frame-ready")
   assert.notEqual(frame.frameTreeNodeId, originalId)
   assert.equal(
     await frame.executeJavaScript("document.querySelector('#conversation-text').value"),

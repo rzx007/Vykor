@@ -8,6 +8,7 @@ import {
 } from "react"
 import {
   defaultRangeExtractor,
+  elementScroll,
   useVirtualizer,
   type Range,
   type Virtualizer,
@@ -81,6 +82,18 @@ function VirtualTranscriptViewport({
       ),
     [retainedIndexes]
   )
+  const scrollToFn = useCallback(
+    (
+      offset: number,
+      options: Parameters<typeof elementScroll>[1],
+      instance: Virtualizer<HTMLDivElement, HTMLDivElement>
+    ) => {
+      // 统一记录虚拟库的所有位置写入，包括其内部测高补偿与 RAF 收尾。
+      elementScroll(offset, options, instance)
+      state.recordScrollAdjustment()
+    },
+    [state]
+  )
   const onChange = useCallback(
     (instance: Virtualizer<HTMLDivElement, HTMLDivElement>) => {
       const first = instance.range?.startIndex
@@ -116,6 +129,7 @@ function VirtualTranscriptViewport({
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: () => state.viewportRef.current,
+    scrollToFn,
     getItemKey,
     estimateSize,
     rangeExtractor,

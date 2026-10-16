@@ -33,6 +33,8 @@ void (async () => {
     const run = (code: string) => window.webContents.executeJavaScript(code)
     await window.webContents.debugger.attach("1.3")
     await window.webContents.debugger.sendCommand("Performance.enable")
+    const cpuRate = Number(process.env.VYKOR_CONVERSATION_CPU_RATE ?? 1)
+    assert.ok(Number.isFinite(cpuRate) && cpuRate >= 1 && cpuRate <= 20)
     const sample = async () => {
       const result = (await window.webContents.debugger.sendCommand("Performance.getMetrics")) as {
         metrics: Array<{ name: string; value: number }>
@@ -88,63 +90,72 @@ void (async () => {
           })
         )
       }
-      for (const target of ["sidebar", "utility"]) {
-        const point = await run(`window.panelPerformance.separatorInfo('${target}')`)
-        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
-          type: "mouseMoved",
-          x: point.x,
-          y: point.y,
-        })
-        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
-          type: "mousePressed",
-          x: point.x,
-          y: point.y,
-          button: "left",
-          buttons: 1,
-          clickCount: 1,
-        })
-        for (let step = 1; step <= 5; step++) {
+      for (const iteration of [0, 1, 2, 3]) {
+        const direction = iteration % 2 ? -1 : 1
+        const key = direction > 0 ? "ArrowRight" : "ArrowLeft"
+        for (const target of ["sidebar", "utility"]) {
+          await window.webContents.debugger.sendCommand("Emulation.setCPUThrottlingRate", {
+            rate: cpuRate,
+          })
+          const point = await run(`window.panelPerformance.separatorInfo('${target}')`)
           await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
             type: "mouseMoved",
-            x: point.x + step * 6,
+            x: point.x,
+            y: point.y,
+          })
+          await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+            type: "mousePressed",
+            x: point.x,
             y: point.y,
             button: "left",
             buttons: 1,
+            clickCount: 1,
           })
-          await run("window.panelPerformance.growFrame()")
+          for (let step = 1; step <= 5; step++) {
+            await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+              type: "mouseMoved",
+              x: point.x + direction * step * 6,
+              y: point.y,
+              button: "left",
+              buttons: 1,
+            })
+            await run("window.panelPerformance.growFrame()")
+          }
+          await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+            type: "mouseReleased",
+            x: point.x + direction * 30,
+            y: point.y,
+            button: "left",
+            buttons: 0,
+            clickCount: 1,
+          })
+          await run(`window.panelPerformance.resized('${target}', ${point.width})`)
+          const keyboard = await run(`window.panelPerformance.separatorInfo('${target}')`)
+          await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+            type: "keyDown",
+            key,
+            code: key,
+            windowsVirtualKeyCode: direction > 0 ? 39 : 37,
+          })
+          await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+            type: "keyUp",
+            key,
+            code: key,
+            windowsVirtualKeyCode: direction > 0 ? 39 : 37,
+          })
+          await run(`window.panelPerformance.resized('${target}', ${keyboard.width})`)
+          console.log(
+            JSON.stringify({
+              scenario: "panel-pointer-keyboard",
+              iteration,
+              history: count,
+              target,
+              passed: true,
+            })
+          )
         }
-        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
-          type: "mouseReleased",
-          x: point.x + 30,
-          y: point.y,
-          button: "left",
-          buttons: 0,
-          clickCount: 1,
-        })
-        await run(`window.panelPerformance.resized('${target}', ${point.width})`)
-        const keyboard = await run(`window.panelPerformance.separatorInfo('${target}')`)
-        await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
-          type: "keyDown",
-          key: "ArrowRight",
-          code: "ArrowRight",
-          windowsVirtualKeyCode: 39,
-        })
-        await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
-          type: "keyUp",
-          key: "ArrowRight",
-          code: "ArrowRight",
-          windowsVirtualKeyCode: 39,
-        })
-        await run(`window.panelPerformance.resized('${target}', ${keyboard.width})`)
-        console.log(
-          JSON.stringify({
-            scenario: "panel-pointer-keyboard",
-            history: count,
-            target,
-            passed: true,
-          })
-        )
       }
+      await window.webContents.debugger.sendCommand("Emulation.setCPUThrottlingRate", { rate: 1 })
       console.log(
         JSON.stringify({
           scenario: "panel-regression",

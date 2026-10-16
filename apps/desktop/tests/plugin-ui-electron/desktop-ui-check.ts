@@ -8,6 +8,7 @@ import { DesktopPluginUiService } from "../../src/main/features/plugin-ui/plugin
 import { createPluginUiIpcContribution } from "../../src/main/features/plugin-ui/ipc"
 import type { PluginUiDocumentStore } from "../../src/main/features/plugin-ui/document-store"
 import { IpcEvents, IpcChannels } from "../../src/shared/ipc-channels"
+import { currentPluginUiFrame } from "./plugin-ui-frame-query"
 import {
   instance,
   sourcePart,
@@ -149,7 +150,8 @@ export async function checkDesktopUi(
     )
     await click("打开交互")
     await wait(() => evaluate("document.querySelector('iframe')!==null"))
-    const frame = owner.webContents.mainFrame.frames[0]!
+    await wait(async () => !!(await currentPluginUiFrame(owner)))
+    const frame = (await currentPluginUiFrame(owner))!
     await wait(() =>
       frame.executeJavaScript("document.querySelector('#status')?.textContent==='1'")
     )
@@ -184,7 +186,8 @@ export async function checkDesktopUi(
     await wait(() => evaluate("document.querySelector('iframe')===null"))
     await click("打开交互")
     await wait(() => evaluate("document.querySelector('iframe')!==null"))
-    const reopened = owner.webContents.mainFrame.frames[0]!
+    await wait(async () => !!(await currentPluginUiFrame(owner)))
+    const reopened = (await currentPluginUiFrame(owner))!
     await wait(() =>
       reopened.executeJavaScript("document.querySelector('#status')?.textContent==='2'")
     )

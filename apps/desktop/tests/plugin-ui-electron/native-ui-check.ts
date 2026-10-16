@@ -12,6 +12,7 @@ import type { PluginUiDocumentStore } from "../../src/main/features/plugin-ui/do
 import { IpcEvents, IpcChannels } from "../../src/shared/ipc-channels"
 import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/window-policy"
 import { checkReferenceUi } from "./reference-ui-check"
+import { currentPluginUiFrame } from "./plugin-ui-frame-query"
 
 export async function checkNativeUi(
   owner: BrowserWindow,
@@ -19,13 +20,10 @@ export async function checkNativeUi(
   root: string,
   reference = false
 ) {
+  const started = Date.now()
   const child = spawn(
     process.env.VYKOR_UI_TEST_NODE!,
-    [
-      "--import",
-      pathToFileURL(join(root, "apps/cli/node_modules/tsx/dist/loader.mjs")).href,
-      join(root, "packages/server/test-helpers/native-ui-electron.mts"),
-    ],
+    [join(__dirname, "../backend/backend.mjs")],
     {
       cwd: root,
       windowsHide: true,
@@ -35,6 +33,7 @@ export async function checkNativeUi(
   )
   let stderr = ""
   let stage = "module loading"
+  child.stdout?.resume()
   child.stderr?.on("data", (data) => {
     stderr += data
   })
@@ -49,19 +48,46 @@ export async function checkNativeUi(
       child.kill()
       reject(new Error("Native backend startup timeout at " + stage + ": " + stderr))
     }, 45000)
-    child.once("error", reject)
+    child.once("error", (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
     child.once("exit", (code) => {
       clearTimeout(timeout)
       reject(new Error("Native backend exited: " + code + " " + stderr))
     })
-    child.on("message", (message: any) => {
+    child.on("message", (raw: unknown) => {
+      if (!raw || typeof raw !== "object") return
+      const message = raw as Partial<{
+        stage: string
+        baseUrl: string
+        token: string
+        root: string
+        sessionId: string
+        instanceId: string
+      }>
       if (message.stage) stage = message.stage
-      if (message.baseUrl) {
+      if (
+        message.baseUrl &&
+        message.token &&
+        message.root &&
+        message.sessionId &&
+        message.instanceId
+      ) {
         clearTimeout(timeout)
-        resolve(message)
+        resolve({
+          baseUrl: message.baseUrl,
+          token: message.token,
+          root: message.root,
+          sessionId: message.sessionId,
+          instanceId: message.instanceId,
+        })
       }
     })
   })
+  console.log(
+    JSON.stringify({ scenario: "native-backend-ready", reference, startupMs: Date.now() - started })
+  )
   const client = new VykorClient({ baseUrl: ready.baseUrl, token: ready.token })
   const second = new BrowserWindow({
     show: false,
@@ -89,8 +115,12 @@ export async function checkNativeUi(
     ".superpowers/sdd/2026-10-11-native-plugin-ui-continuity/electron-build/renderer/tests/plugin-ui-electron/ui-host.html"
   )
   const handlers = createPluginUiIpcContribution(() => service).register({} as never)
-  ipcMain.handle(IpcChannels.sessionUpdateAck, (event, ack) => subscriptions.acknowledgeUpdate(event.sender.id, ack))
-  ipcMain.handle(IpcChannels.sessionUpdateResync, (event, request) => subscriptions.requestUpdateResync(event.sender.id, request))
+  ipcMain.handle(IpcChannels.sessionUpdateAck, (event, ack) =>
+    subscriptions.acknowledgeUpdate(event.sender.id, ack)
+  )
+  ipcMain.handle(IpcChannels.sessionUpdateResync, (event, request) =>
+    subscriptions.requestUpdateResync(event.sender.id, request)
+  )
   let pendingIpc = 0
   for (const { channel, handler } of handlers)
     ipcMain.handle(channel, async (event, ...args) => {
@@ -126,7 +156,7 @@ export async function checkNativeUi(
     evaluate(window, "document.querySelector('[role=alertdialog]')!==null")
   const request = async (window: BrowserWindow) => {
     await wait(async () => {
-      const frame = window.webContents.mainFrame.frames[0]
+      const frame = await currentPluginUiFrame(window)
       return (
         !!frame &&
         (await frame.executeJavaScript(
@@ -134,7 +164,8 @@ export async function checkNativeUi(
         ))
       )
     })
-    const frame = window.webContents.mainFrame.frames[0]!
+    const frame = await currentPluginUiFrame(window)
+    assert.ok(frame)
     await frame.executeJavaScript("document.querySelector('#apply').click()")
     await wait(() => confirmVisible(window))
   }
@@ -144,26 +175,35 @@ export async function checkNativeUi(
       service.registerOwner(window.webContents, pathToFileURL(page).href)
       await window.loadFile(page)
       const snapshot = await subscriptions.openSession(client, window.webContents, ready.sessionId)
-      window.webContents.send(IpcEvents.sessionUpdated, { kind: "snapshot", subscriptionId: "initial", generation: 0, deliveryId: "initial", view: snapshot })
+      window.webContents.send(IpcEvents.sessionUpdated, {
+        kind: "snapshot",
+        subscriptionId: "initial",
+        generation: 0,
+        deliveryId: "initial",
+        view: snapshot,
+      })
       await wait(() =>
         evaluate(
           window,
           "document.body.textContent.includes(" +
             JSON.stringify(reference ? "example.text-inspector" : "test.ui-electron") +
-            ")&&document.body.textContent.includes(" + JSON.stringify(reference ? "在侧栏打开" : "打开交互") + ")"
+            ")&&document.body.textContent.includes(" +
+            JSON.stringify(reference ? "在侧栏打开" : "打开交互") +
+            ")"
         )
       )
       await click(window, reference ? "在侧栏打开" : "打开交互")
       await wait(() => evaluate(window, "document.querySelector('iframe')!==null"))
     }
     if (reference) {
-      await checkReferenceUi(owner, client, ready, baseline.attempts.length, root)
+      await checkReferenceUi(owner, client, ready, baseline.attempts.length)
       console.log(JSON.stringify({ stage: "reference interactions passed" }))
       await wait(async () => pendingIpc === 0)
     } else {
       await request(owner)
       assert.equal(effects(), 0)
-      const author = owner.webContents.mainFrame.frames[0]!
+      const author = await currentPluginUiFrame(owner)
+      assert.ok(author)
       await author.executeJavaScript(
         "for(const [id,method,extra] of [['attack1','Execute',{}],['attack2','getSnapshot',{html:'x'}],['attack3','getSnapshot',{mountId:'40000000-0000-4000-8000-000000000001'}],['attack4','openSidebar',{}],['attack5','getSnapshot',{version:1}]])" +
           "testPort.postMessage(JSON.stringify({version:2,mountId:testMount,id,method,params:{},...extra}));"
@@ -188,13 +228,26 @@ export async function checkNativeUi(
       await request(second)
       assert.equal(effects(), 0)
       await click(owner, "确认执行")
-      await wait(async () => effects() === 1).catch(async error => {
+      await wait(async () => effects() === 1).catch(async (error) => {
         const current = await client.sessions.getState(ready.sessionId)
-        throw new Error(String(error) + " after Native confirm: " + JSON.stringify({
-          runs: current.runs.map(run => ({ id: run.id, status: run.status, error: run.error })),
-          author: await author.executeJavaScript("({status:document.querySelector('#status').textContent,result:document.querySelector('#result').textContent})"),
-          dialog: await evaluate(owner, "document.querySelector('[role=alertdialog]')?.textContent"),
-        }))
+        throw new Error(
+          String(error) +
+            " after Native confirm: " +
+            JSON.stringify({
+              runs: current.runs.map((run) => ({
+                id: run.id,
+                status: run.status,
+                error: run.error,
+              })),
+              author: await author.executeJavaScript(
+                "({status:document.querySelector('#status').textContent,result:document.querySelector('#result').textContent})"
+              ),
+              dialog: await evaluate(
+                owner,
+                "document.querySelector('[role=alertdialog]')?.textContent"
+              ),
+            })
+        )
       })
       await wait(() =>
         second.webContents.mainFrame.frames[0]!.executeJavaScript(

@@ -1,13 +1,10 @@
-import { app, BrowserWindow, ipcMain, session } from "electron"
+import { app, BrowserWindow, session } from "electron"
 import { createHash } from "node:crypto"
 import { createServer } from "node:http"
 import { mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import assert from "node:assert/strict"
-import {
-  PluginUiDocumentStore,
-  PLUGIN_UI_PERMISSIONS_POLICY,
-} from "../../src/main/features/plugin-ui/document-store"
+import { PLUGIN_UI_PERMISSIONS_POLICY } from "../../src/main/features/plugin-ui/document-store"
 import {
   installPluginUiDocumentProtocol,
   registerPluginUiScheme,
@@ -19,16 +16,15 @@ import { desktopPluginUiDocuments } from "../../src/main/features/plugin-ui/docu
 import { snapshot as currentSnapshot } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
 
 const root = process.env.VYKOR_UI_TEST_ROOT!
-const profile = join(
-  root,
-  ".superpowers/sdd/2026-10-11-native-plugin-ui-continuity/electron-profile"
-)
+const profile = process.env.VYKOR_UI_TEST_PROFILE!
 mkdirSync(profile, { recursive: true })
 app.setPath("userData", profile)
 app.setPath("sessionData", profile)
 app.setAppLogsPath(join(profile, "logs"))
 app.commandLine.appendSwitch("disable-gpu")
 registerPluginUiScheme()
+// Keep the event loop alive until the probe server and child backends have closed.
+app.on("window-all-closed", () => {})
 const deadline = setTimeout(() => {
   console.error("plugin-ui Electron test timed out")
   app.exit(2)
@@ -86,14 +82,12 @@ app
     attachPluginUiWindowPolicy(other.webContents, store)
     if (process.env.VYKOR_UI_TEST_REFERENCE === "only") {
       const referenceUi = await checkNativeUi(owner, store, root, true)
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      clearTimeout(deadline)
       console.log(
         JSON.stringify({ result: "passed", electron: process.versions.electron, ...referenceUi })
       )
-      owner.destroy()
-      other.destroy()
-      await new Promise<void>((resolve) => server.close(() => resolve()))
-      clearTimeout(deadline)
-      app.exit(0)
+      app.quit()
       return
     }
     owner.webContents.setWindowOpenHandler(() => {
@@ -317,6 +311,8 @@ app
     const desktopUi = await checkDesktopUi(owner, store, root, sdk)
     const nativeUi = await checkNativeUi(owner, store, root)
     const referenceUi = await checkNativeUi(owner, store, root, true)
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    clearTimeout(deadline)
     console.log(
       JSON.stringify({
         result: "passed",
@@ -339,11 +335,7 @@ app
         ...referenceUi,
       })
     )
-    owner.destroy()
-    other.destroy()
-    await new Promise<void>((resolve) => server.close(() => resolve()))
-    clearTimeout(deadline)
-    app.exit(0)
+    app.quit()
   })
   .catch((error) => {
     console.error(error)

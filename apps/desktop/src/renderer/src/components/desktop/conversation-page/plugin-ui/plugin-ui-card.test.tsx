@@ -6,7 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { instance, snapshot, sourcePart } from "./plugin-ui-fixtures.test-support"
 import { PluginUiProvider } from "./plugin-ui-provider"
 import { PluginUiCard } from "./plugin-ui-card"
-import { PluginUiFrame, submitPluginUiAction } from "./plugin-ui-frame"
+import { PluginUiFrame } from "./plugin-ui-frame"
+import { submitPluginUiAction } from "./plugin-ui-action"
 import { usePluginUiHost } from "./plugin-ui-context"
 import { ConversationScrollerProvider } from "../conversation-scroller"
 import { useConversationScroller } from "../conversation-scroll-context"
@@ -23,11 +24,13 @@ type FixtureView = {
 }
 const fixture = vi.hoisted(() => ({ view: null as FixtureView | null }))
 vi.mock("@renderer/stores/desktop-session", () => ({
-  useDesktopSessionStore: Object.assign((selector) =>
-    selector({ sessionView: fixture.view, activeSessionId: "session" }), {
+  useDesktopSessionStore: Object.assign(
+    (selector) => selector({ sessionView: fixture.view, activeSessionId: "session" }),
+    {
       // 此夹具由 render 显式推进快照；提交回执流在真实 store 的 conversation 测试中验证。
       subscribe: () => () => {},
-    }),
+    }
+  ),
 }))
 let root: Root, container: HTMLDivElement
 type MockApi = Pick<

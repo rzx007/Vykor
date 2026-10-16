@@ -1,5 +1,5 @@
 import { usePluginUiHost, type PluginUiDisplay, type PluginUiMountLease } from "./plugin-ui-context"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   PluginUiBridgeError,
   parsePluginUiBridgeSnapshot,
@@ -7,43 +7,12 @@ import {
   type JsonValue,
   type PluginUiViewSnapshot,
 } from "@vykor/client"
-import type {
-  DesktopPluginUiAPI,
-  DesktopPluginUiMountResult,
-  PluginUiHostState,
-} from "@shared/plugin-ui-types"
+import type { DesktopPluginUiMountResult, PluginUiHostState } from "@shared/plugin-ui-types"
 import { Button } from "@renderer/components/ui/button"
 import { readPluginUiAppearance } from "./plugin-ui-appearance"
 import { createPluginUiBridge } from "./plugin-ui-bridge"
+import { submitPluginUiAction } from "./plugin-ui-action"
 
-export function pluginUiError(error: unknown): PluginUiBridgeError {
-  const code =
-    error instanceof Error ? error.message.match(/\bplugin_ui_[a-z_]+\b/)?.[0] : undefined
-  return error instanceof PluginUiBridgeError
-    ? error
-    : new PluginUiBridgeError(code ?? "plugin_ui_unavailable")
-}
-export async function submitPluginUiAction(
-  api: DesktopPluginUiAPI,
-  mountId: string,
-  input: InvokePluginUiActionInput
-) {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      api.invokeAction({ mountId, input }),
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new PluginUiBridgeError("plugin_ui_timeout")), 30_000)
-      }),
-    ])
-  } catch (error) {
-    if (pluginUiError(error).code !== "plugin_ui_timeout") throw pluginUiError(error)
-    // Look up this exact admission; never create a second action after an uncertain response.
-    return await api.getAction({ mountId, requestId: input.requestId })
-  } finally {
-    clearTimeout(timer)
-  }
-}
 function hostSnapshot(
   state: PluginUiHostState,
   display: PluginUiDisplay,
@@ -67,11 +36,25 @@ export function PluginUiFrame({
   display: PluginUiDisplay
   visible?: boolean
 }) {
+  // 文档身份改变时整体重置本地状态；同一文档的流式更新与隐藏不会重建 iframe。
+  return <PluginUiDocument key={display.key} display={display} visible={visible} />
+}
+function PluginUiDocument({
+  display,
+  visible = true,
+}: {
+  display: PluginUiDisplay
+  visible?: boolean
+}) {
   const host = usePluginUiHost()!
   const hostRef = useRef(host)
-  hostRef.current = host
   const visibleRef = useRef(visible)
-  visibleRef.current = visible
+  const displayRef = useRef(display)
+  useLayoutEffect(() => {
+    hostRef.current = host
+    visibleRef.current = visible
+    displayRef.current = display
+  }, [host, visible, display])
   const iframe = useRef<HTMLIFrameElement>(null)
   const [mounted, setMounted] = useState<
     (DesktopPluginUiMountResult & { displayKey: string; lease: PluginUiMountLease }) | null
@@ -82,18 +65,20 @@ export function PluginUiFrame({
   const bridge = useRef<ReturnType<typeof createPluginUiBridge> | null>(null)
   const live = useRef(false)
   const sequence = useRef(0)
-  const target = { sessionId: display.instance.sessionId, instanceId: display.instance.instanceId }
+  const sessionId = display.instance.sessionId
+  const instanceId = display.instance.instanceId
+  const displayKey = display.key
+  const target = useMemo(() => ({ sessionId, instanceId }), [sessionId, instanceId])
   useEffect(() => {
     let active = true
     let lease: PluginUiMountLease | undefined
-    setError(false)
-    setMounted(null)
+    const ownedDisplay = displayRef.current
     live.current = true
     void Promise.resolve()
       .then(async () => {
         // Effect replay can retire this setup before it starts a document load.
         if (!active) return
-        lease = hostRef.current.mount(display)
+        lease = hostRef.current.mount(ownedDisplay)
         const result = await lease.result
         if (!active || !hostRef.current.isCurrent(target.instanceId)) {
           void lease.release().catch(() => {})
@@ -104,7 +89,7 @@ export function PluginUiFrame({
           throw new PluginUiBridgeError("plugin_ui_invalid_document")
         }
         state.current = result.state
-        setMounted({ ...result, displayKey: display.key, lease })
+        setMounted({ ...result, displayKey, lease })
       })
       .catch(() => {
         if (active) setError(true)
@@ -112,11 +97,10 @@ export function PluginUiFrame({
     return () => {
       active = false
       live.current = false
-      sequence.current++
       bridge.current?.dispose()
       void lease?.release().catch(() => {})
     }
-  }, [display.key])
+  }, [displayKey, target.instanceId])
   useEffect(() => {
     if (error && mounted && mounted.displayKey === display.key) {
       live.current = false
@@ -125,13 +109,13 @@ export function PluginUiFrame({
     }
   }, [error, mounted, display.key])
   useLayoutEffect(() => {
-    if (!mounted || mounted.displayKey !== display.key || !iframe.current) return
+    if (!mounted || !iframe.current) return
     const api = window.desktop.pluginUi
     const active = () => live.current && hostRef.current.isCurrent(target.instanceId)
     const current = () => {
       if (!active() || !state.current) throw new PluginUiBridgeError("plugin_ui_mount_closed")
       const view = hostRef.current.view
-      const snapshot = hostSnapshot(state.current, display, visibleRef.current)
+      const snapshot = hostSnapshot(state.current, displayRef.current, visibleRef.current)
       snapshot.readOnly ||=
         view?.session.status === "archived" ||
         Boolean(view?.runs.some((run) => run.status === "running" || run.status === "pending"))
@@ -159,7 +143,7 @@ export function PluginUiFrame({
             throw new PluginUiBridgeError("plugin_ui_conversation_unavailable")
           return await hostRef.current.requestConversation(
             mounted.mountId,
-            display.instance,
+            displayRef.current.instance,
             params,
             signal,
             () => active() && visibleRef.current,
@@ -180,7 +164,7 @@ export function PluginUiFrame({
           }
           await hostRef.current.confirm(
             {
-              instance: display.instance,
+              instance: displayRef.current.instance,
               label: action.label,
               toolName: action.toolName,
               args: input.args,
@@ -207,7 +191,12 @@ export function PluginUiFrame({
             expectedRevision: params.expectedRevision as number,
           }
           await hostRef.current.confirm(
-            { instance: display.instance, label: "取消此次交互", args: {}, dismiss: true },
+            {
+              instance: displayRef.current.instance,
+              label: "取消此次交互",
+              args: {},
+              dismiss: true,
+            },
             signal
           )
           if (!active() || signal.aborted) throw new PluginUiBridgeError("plugin_ui_mount_closed")
@@ -239,13 +228,14 @@ export function PluginUiFrame({
       bridge.current = null
       void mounted.lease.release().catch(() => {})
     }
-  }, [mounted, display.key])
+  }, [mounted, target])
   useLayoutEffect(() => {
     bridge.current?.setVisible(visible)
     if (state.current) bridge.current?.pushSnapshot(hostSnapshot(state.current, display, visible))
-  }, [visible])
+  }, [visible, display])
   useEffect(() => {
-    if (!mounted || !host.available || !host.isCurrent(target.instanceId)) return
+    if (!mounted || !hostRef.current.available || !hostRef.current.isCurrent(target.instanceId))
+      return
     const serial = ++sequence.current
     let active = true
     void window.desktop.pluginUi
@@ -260,7 +250,7 @@ export function PluginUiFrame({
         )
           return
         state.current = next
-        const updated = hostSnapshot(next, display, visibleRef.current)
+        const updated = hostSnapshot(next, displayRef.current, visibleRef.current)
         updated.readOnly ||= Boolean(
           hostRef.current.view?.runs.some(
             (run) => run.status === "pending" || run.status === "running"
@@ -274,7 +264,7 @@ export function PluginUiFrame({
     return () => {
       active = false
     }
-  }, [mounted, host.view?.cursor, host.available, display.key])
+  }, [mounted, host.view?.cursor, host.available, target])
   if (error)
     return (
       <div role="status" className="flex flex-col items-start gap-2 p-4 text-sm">

@@ -297,6 +297,14 @@ const api = {
     return { passed: true }
   },
   async regress() {
+    const bottom = viewport().scrollTop
+    // 原生 scroll 事件也必须识别上滚；不先用 wheel/key/touch 提前关闭跟随。
+    viewport().scrollTop = bottom - 240
+    await settle()
+    check(!scroller.getSnapshot().following, "scrollbar scroll did not stop following")
+    check(viewport().scrollTop < bottom - 100, "scrollbar scroll was pulled back to bottom")
+    scroller.scrollToEnd()
+    await settle()
     check(scroller.scrollToMessage("prompt-400"), "navigation unavailable")
     await settle()
     const position = viewport().scrollTop
@@ -326,26 +334,35 @@ const api = {
         document.querySelector(`[data-stream-size="${tailSize}"]`) !== null,
       "offscreen stream did not advance"
     )
-    document.getElementById("utility-maximize")!.click()
-    await settle()
-    await settle()
-    check(utility.maximized, "maximize failed")
-    document.getElementById("utility-maximize")!.click()
-    await settle()
-    await settle()
-    check(!utility.maximized && utility.open, "restore maximized failed")
-    check(scroller.getSnapshot().following, "restore lost following")
-    document.getElementById("sidebar-toggle")!.click()
-    await frame()
-    document.getElementById("sidebar-toggle")!.click()
-    await settle()
-    await settle()
-    check(
-      document.getElementById("sidebar")!.getBoundingClientRect().width > 180,
-      "rapid toggle failed to reopen"
-    )
-    check(!document.querySelector("[data-panel-animating]"), "rapid toggle left stale animation")
-    return { passed: true }
+    let lostFollowing = 0
+    const stopObserving = scroller.subscribe(() => {
+      if (!scroller.getSnapshot().following) lostFollowing++
+    })
+    try {
+      document.getElementById("utility-maximize")!.click()
+      await settle()
+      await settle()
+      check(utility.maximized, "maximize failed")
+      document.getElementById("utility-maximize")!.click()
+      await settle()
+      await settle()
+      check(!utility.maximized && utility.open, "restore maximized failed")
+      check(scroller.getSnapshot().following, "restore lost following")
+      document.getElementById("sidebar-toggle")!.click()
+      await frame()
+      document.getElementById("sidebar-toggle")!.click()
+      await settle()
+      await settle()
+      check(
+        document.getElementById("sidebar")!.getBoundingClientRect().width > 180,
+        "rapid toggle failed to reopen"
+      )
+      check(!document.querySelector("[data-panel-animating]"), "rapid toggle left stale animation")
+      check(lostFollowing === 0, `layout temporarily disabled following ${lostFollowing} times`)
+      return { passed: true }
+    } finally {
+      stopObserving()
+    }
   },
 }
 Object.assign(window, { panelPerformance: api })
