@@ -1215,11 +1215,21 @@ describe("VykorHttpServer", () => {
           new Blob([new Uint8Array(5 * 1024 * 1024).fill(0x61)]),
         );
         const pdf = await upload("manual.pdf", "application/pdf", "%PDF-1.7\ncontent");
-        const docx = await upload(
-          "report.docx",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])]),
-        );
+        // A ZIP header alone is not a DOCX: reject it during upload, before a
+        // prompt can reference it. Valid Office documents have their own routing tests.
+        const invalidDocx = await fetch(`${baseUrl}/attachments`, {
+          method: "POST",
+          headers: {
+            ...auth(token),
+            "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "x-vykor-filename": encodeURIComponent("report.docx"),
+          },
+          body: new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])]),
+        });
+        expect(invalidDocx.status).toBe(400);
+        expect(await invalidDocx.json()).toMatchObject({
+          error: expect.stringContaining("文件内容与 Office 格式不匹配"),
+        });
         const disguisedBinary = await upload(
           "fake.txt",
           "text/plain",
@@ -1235,16 +1245,13 @@ describe("VykorHttpServer", () => {
         expect(inlineRuns.every((run) => run?.status === "completed")).toBe(true);
         const blockedRuns = await Promise.all([
           submit("pdf", pdf),
-          submit("docx", docx),
           submit("binary", disguisedBinary),
         ]);
         expect(blockedRuns.map((run) => run?.status)).toEqual([
           "failed",
           "failed",
-          "failed",
         ]);
         expect(blockedRuns.map((run) => (run?.metadata.attachmentRouting as any)?.code)).toEqual([
-          "attachment_document_unsupported",
           "attachment_document_unsupported",
           "attachment_text_encoding_unsupported",
         ]);
