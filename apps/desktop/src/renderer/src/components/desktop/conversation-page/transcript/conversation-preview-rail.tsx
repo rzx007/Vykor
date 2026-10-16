@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { useReducedMotion } from "motion/react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import type {
   DesktopSessionMessage,
   DesktopSessionPart,
@@ -7,10 +6,7 @@ import type {
 } from "@shared/session-types"
 
 import { PreviewRail, type PreviewRailItem } from "@renderer/components/motion/preview-rail"
-import {
-  useMessageScroller,
-  useMessageScrollerVisibility,
-} from "@renderer/components/ui/message-scroller"
+import { useConversationScroller } from "../conversation-scroll-context"
 import { buildConversationEntries } from "../message/conversation-turn-model"
 import {
   CONVERSATION_RAIL_MIN_CONTAINER_WIDTH,
@@ -46,13 +42,16 @@ export function ConversationPreviewRail({
   runs: DesktopSessionRun[]
   showReasoning: boolean
 }): React.JSX.Element | null {
-  const reduce = useReducedMotion()
-  const { scrollToMessage } = useMessageScroller()
-  const { visibleMessageIds } = useMessageScrollerVisibility()
+  const scroller = useConversationScroller()!
+  const { activeMessageId } = useSyncExternalStore(
+    scroller.subscribe,
+    scroller.getSnapshot,
+    scroller.getSnapshot
+  )
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [railItemsCache, setRailItemsCache] = useState<RailItemsCache | null>(null)
-  const turnCount = countUserTurns(messages, runs)
+  const turnCount = useMemo(() => countUserTurns(messages, runs), [messages, runs])
   const [viewport, setViewport] = useState({ wide: true, height: 0 })
 
   useEffect(() => {
@@ -84,12 +83,9 @@ export function ConversationPreviewRail({
 
   const handleSelect = useCallback(
     (item: PreviewRailItem) => {
-      scrollToMessage(item.id, {
-        align: "start",
-        behavior: reduce ? "auto" : "smooth",
-      })
+      scroller.scrollToMessage(item.id)
     },
-    [reduce, scrollToMessage]
+    [scroller]
   )
 
   const renderPreview = useCallback(
@@ -101,8 +97,7 @@ export function ConversationPreviewRail({
     items.length,
     viewport.wide ? CONVERSATION_RAIL_MIN_CONTAINER_WIDTH : 0
   )
-  const itemIds = new Set(items.map((item) => item.id))
-  const activeId = visibleMessageIds.find((id) => itemIds.has(id)) ?? items.at(-1)?.id
+  const activeId = activeMessageId ?? items.at(-1)?.id
 
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-0 z-20">

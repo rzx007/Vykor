@@ -8,6 +8,7 @@ import { toolCallStatus } from "../message/message-render-model"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { usePluginUiHost } from "./plugin-ui-provider"
 import { useToolDetails } from "../message/use-tool-details"
+import { useRetainTranscriptRow } from "../transcript/virtual-transcript-row"
 
 export function PluginUiCard({
   instance,
@@ -29,6 +30,7 @@ export function PluginUiCard({
     (display) =>
       display.instance.instanceId === instance.instanceId && display.surface === "tool-result"
   )
+  useRetainTranscriptRow(Boolean(display))
   const text =
     toolOutputText(details.result?.output ?? details.call.output) ?? result?.text ?? call.text
   const failed = toolCallStatus(call, result) === "failed"

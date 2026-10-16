@@ -32,6 +32,7 @@ export function StreamdownCodeBlock({
       language={codeType}
       filename={codeType}
       showLineNumbers={false}
+      streaming={isIncomplete}
     />
   )
 }

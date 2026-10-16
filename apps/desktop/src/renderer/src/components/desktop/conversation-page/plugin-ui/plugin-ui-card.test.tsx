@@ -8,6 +8,9 @@ import { PluginUiProvider } from "./plugin-ui-provider"
 import { PluginUiCard } from "./plugin-ui-card"
 import { PluginUiFrame, submitPluginUiAction } from "./plugin-ui-frame"
 import { usePluginUiHost } from "./plugin-ui-provider"
+import { ConversationScrollerProvider } from "../conversation-scroller"
+import { useConversationScroller } from "../conversation-scroll-context"
+import { TranscriptRowContext } from "../transcript/virtual-transcript-row"
 const fixture = vi.hoisted(() => ({ view: null as any }))
 vi.mock("@renderer/stores/desktop-session", () => ({
   useDesktopSessionStore: (selector) =>
@@ -63,6 +66,36 @@ async function render() {
     )
   )
 }
+it("retains an open interaction's virtual row until its display closes", async () => {
+  let scroller: NonNullable<ReturnType<typeof useConversationScroller>>
+  function Probe() {
+    scroller = useConversationScroller()!
+    return null
+  }
+  api.mount.mockResolvedValue({
+    mountId: "20000000-0000-4000-8000-000000000001",
+    url: "vykor-plugin-ui://frame/20000000-0000-4000-8000-000000000001",
+    state: await api.getState(),
+  })
+  await act(async () =>
+    root.render(
+      <ConversationScrollerProvider>
+        <Probe />
+        <PluginUiProvider onOpenSidebar={() => {}}>
+          <TranscriptRowContext value="plugin-turn">
+            <PluginUiCard instance={instance} call={sourcePart} />
+          </TranscriptRowContext>
+        </PluginUiProvider>
+      </ConversationScrollerProvider>
+    )
+  )
+  expect(scroller!.getSnapshot().retainedRowIds).toEqual([])
+  await click("打开交互")
+  expect(container.querySelector("iframe")).not.toBeNull()
+  expect(scroller!.getSnapshot().retainedRowIds).toEqual(["plugin-turn"])
+  await click("关闭显示")
+  expect(scroller!.getSnapshot().retainedRowIds).toEqual([])
+})
 async function click(label: string) {
   const button = [...document.querySelectorAll("button")].find(
     (button) => button.textContent === label

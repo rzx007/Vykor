@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from "react"
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   readSessionModelRetryState,
   readSessionModelUsage,
@@ -25,35 +25,24 @@ import {
   isToolGenerationPresentation,
   withToolGenerationPresentation,
 } from "../message/tool-generation-presentation"
-import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
+import { ConversationScrollerItem as MessageScrollerItem } from "../conversation-scroller"
+import { useConversationScroller } from "../conversation-scroll-context"
+import { VirtualTranscript, type TranscriptRow } from "./virtual-transcript"
 import type {
   DesktopSessionMessage,
   DesktopSessionPart,
   DesktopSessionRun,
+  DesktopSessionTask,
 } from "@shared/session-types"
-import type { ConversationEntry } from "../message/conversation-turn-model"
+import type { ConversationTurn, ConversationEntry } from "../message/conversation-turn-model"
 import { AssistantMessageActions, MessageBlock } from "../message/message-block"
 import { RunErrorNotice } from "../message/run-error-notice"
 import { ContentEntrance } from "../message/content-entrance"
 
-export function ConversationTranscript({
-  messages,
-  inputs = [],
-  parts,
-  runs,
-  running,
-  canEditLastUserMessage,
-  onEditLastUserMessage,
-  onCopyAssistantMessage,
-  onForkAssistantMessage,
-  onOpenFile,
-  canOpenReview,
-  onOpenReview,
-  onOpenTerminal,
-  showReasoning = false,
-  tasks = [],
-  onOpenAgents,
-}: {
+const emptyInputs: DesktopSessionInput[] = []
+const emptyTasks: DesktopSessionTask[] = []
+
+interface ConversationTranscriptProps {
   messages: DesktopSessionMessage[]
   inputs?: DesktopSessionInput[]
   parts: DesktopSessionPart[]
@@ -68,9 +57,28 @@ export function ConversationTranscript({
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
   showReasoning?: boolean
-  tasks?: import("@shared/session-types").DesktopSessionTask[]
+  tasks?: DesktopSessionTask[]
   onOpenAgents?: (taskId?: string) => void
-}): React.JSX.Element {
+}
+
+export const ConversationTranscript = memo(function ConversationTranscript({
+  messages,
+  inputs = emptyInputs,
+  parts,
+  runs,
+  running,
+  canEditLastUserMessage,
+  onEditLastUserMessage,
+  onCopyAssistantMessage,
+  onForkAssistantMessage,
+  onOpenFile,
+  canOpenReview,
+  onOpenReview,
+  onOpenTerminal,
+  showReasoning = false,
+  tasks = emptyTasks,
+  onOpenAgents,
+}: ConversationTranscriptProps): React.JSX.Element {
   const modelCache = useRef<TranscriptModelCache | null>(null)
   const { entries, streamingPart, activityLabel, activeRun, activeRunGrouped } = useTranscriptModel(
     modelCache,
@@ -100,40 +108,102 @@ export function ConversationTranscript({
   }, [runs])
   const preparationLabel = pluginPreparationLabel(activeRun, { messages, parts, inputs, tasks })
   const runningLabel = modelRetry ? "等待重试" : (preparationLabel ?? activityLabel ?? "进行中")
-  const turnPlansById = useMemo(() => {
-    const plans = new Map<string, ReturnType<typeof planTurnBlocks>>()
+  const turnDataById = useMemo(
+    () => buildTurnData(entries, inputs, runs, noticeRuns, running, lastTurn),
+    [entries, inputs, runs, noticeRuns, running, lastTurn]
+  )
+
+  const rows = useMemo<TranscriptRow[]>(() => {
+    const firstUser = entries.find((entry) => entry.type === "turn" && entry.turn.userMessage)
+    let navigationId =
+      firstUser?.type === "turn"
+        ? (firstUser.turn.userMessage!.inputId ?? firstUser.turn.userMessage!.id)
+        : undefined
+    const result: TranscriptRow[] = []
     for (const entry of entries) {
-      if (entry.type === "turn") {
-        plans.set(
-          entry.turn.id,
-          planTurnBlocks(entry.turn, {
-            streaming: running && entry === lastTurn,
-          })
-        )
+      if (entry.type === "system") {
+        result.push({
+          id: entry.system.id,
+          messageIds: [entry.system.id],
+          navigationId,
+          estimateSize: 80,
+        })
+        continue
       }
+      const turn = entry.turn
+      const user = turn.userMessage
+      if (user) navigationId = user.inputId ?? user.id
+      const textLength = [...turn.userParts, ...turn.assistantParts].reduce(
+        (sum, part) => sum + (part.text?.length ?? 0),
+        0
+      )
+      result.push({
+        id: turn.id,
+        navigationId,
+        messageIds: [
+          user?.inputId,
+          user?.id,
+          ...turn.assistantMessages.map((message) => message.id),
+        ].filter((id): id is string => Boolean(id)),
+        estimateSize: Math.min(1200, Math.max(180, Math.ceil(textLength / 70) * 24 + 100)),
+      })
     }
-    return plans
-  }, [entries, lastTurn, running])
+    if (modelRetry)
+      result.push({
+        id: "conversation-model-retry",
+        messageIds: [],
+        navigationId,
+        estimateSize: 80,
+      })
+    if (running && !activeRunGrouped)
+      result.push({
+        id: "conversation-running-status",
+        messageIds: [],
+        navigationId,
+        estimateSize: 32,
+      })
+    if (messages.length === 0 && !running && noticeRuns.length === 0)
+      result.push({ id: "conversation-empty", messageIds: [], estimateSize: 320 })
+    return result
+  }, [entries, modelRetry, running, activeRunGrouped, messages.length, noticeRuns.length])
 
   // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
   const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
 
-  if (messages.length === 0 && !running && noticeRuns.length === 0) {
-    return (
-      <MessageScrollerItem>
-        <div className="flex min-h-80 items-center justify-center text-sm text-ui-muted">
-          这个会话还没有消息
-        </div>
-      </MessageScrollerItem>
-    )
-  }
-
   return (
-    <>
-      {entries.map((entry) => {
+    <VirtualTranscript
+      rows={rows}
+      renderRow={(index) => {
+        const row = rows[index]!
+        const entry = entries[index]
+        if (!entry) {
+          if (row.id === "conversation-empty")
+            return (
+              <MessageScrollerItem>
+                <div className="flex min-h-80 items-center justify-center text-sm text-ui-muted">
+                  这个会话还没有消息
+                </div>
+              </MessageScrollerItem>
+            )
+          if (row.id === "conversation-model-retry" && modelRetry)
+            return (
+              <MessageScrollerItem messageId={row.id}>
+                <ModelRetryNotice retry={modelRetry} />
+              </MessageScrollerItem>
+            )
+          return (
+            <MessageScrollerItem messageId={row.id}>
+              <TaskDuration
+                timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
+                label={runningLabel}
+              />
+            </MessageScrollerItem>
+          )
+        }
+
         if (entry.type === "system") {
           return (
-            <MessageScrollerItem key={entry.system.id} messageId={entry.system.id}>
+            <MessageScrollerItem messageId={entry.system.id}>
               {entry.system.compactionPhase ? (
                 <ContextCompactionDivider
                   presentation={{
@@ -155,180 +225,280 @@ export function ConversationTranscript({
             </MessageScrollerItem>
           )
         }
-        const turnFailures = noticeRuns.filter(
-          (run) =>
-            entry.turn.runIds.includes(run.id) ||
-            (Boolean(run.inputId) && run.inputId === entry.turn.inputId)
-        )
-        const userMessage = entry.turn.userMessage
-        const turnRuns = runs.filter((run) => entry.turn.runIds.includes(run.id))
-        const timing = taskTiming(turnRuns)
-        const finished = Boolean(
-          timing && timing.status !== "pending" && timing.status !== "running"
-        )
-        const turnUsageRuns = runs.filter(
-          (run) =>
-            import.meta.env.DEV &&
-            entry.turn.runIds.includes(run.id) &&
-            readSessionModelUsage(run.metadata)?.incomplete
-        )
-        const cachedPlan = turnPlansById.get(entry.turn.id) ?? []
-        const turnPlan =
-          streamingPart && entry === lastTurn
-            ? replacePlannedPart(cachedPlan, streamingPart)
-            : cachedPlan
-        const lastAssistantKey = [...turnPlan]
-          .reverse()
-          .find((item) => item.kind === "assistant")?.key
-        const firstAssistantKey = turnPlan.find((item) => item.kind === "assistant")?.key
+        const data = turnDataById.get(entry.turn.id)!
+        const userMessageIsAnchor = entry.turn.userMessage?.id === lastUserMessage?.id
         return (
-          <Fragment key={entry.turn.id}>
-            {userMessage ? (
-              <MessageScrollerItem
-                messageId={userMessage.inputId ?? userMessage.id}
-                scrollAnchor={userMessage.id === lastUserMessage?.id}
-                className="pt-2"
-              >
-                <ContentEntrance animate={userMessage.metadata.optimistic === true}>
-                  <MessageBlock
-                    message={userMessage}
-                    inputItems={inputs.find((input) => input.id === userMessage.inputId)?.items}
-                    parts={entry.turn.userParts}
-                    streaming={false}
-                    userActions={{
-                      canEdit: canEditLastUserMessage && userMessage.id === lastUserMessage?.id,
-                      onEdit: (content) => onEditLastUserMessage(userMessage.id, content),
-                    }}
-                    onOpenFile={onOpenFile}
-                    canOpenReview={canOpenReview}
-                    onOpenReview={onOpenReview}
-                    onOpenTerminal={onOpenTerminal}
-                  />
-                </ContentEntrance>
-              </MessageScrollerItem>
-            ) : null}
-            <TurnProcess
-              plan={turnPlan}
-              timing={timing}
-              tasks={tasks}
-              canCollapse={
-                turnRuns.length > 0 &&
-                turnRuns.every((run) => run.status !== "pending" && run.status !== "running") &&
-                !turnPlan.some((item) => item.streaming)
-              }
-            >
-              {(items, folded) =>
-                items.map((item) =>
-                  item.kind === "divider" && item.phase ? (
-                    <MessageScrollerItem key={item.key} messageId={item.messageId}>
-                      <ContextCompactionDivider
-                        presentation={{ kind: "context_compaction", phase: item.phase }}
-                      />
-                    </MessageScrollerItem>
-                  ) : (
-                    <MessageScrollerItem
-                      key={item.key}
-                      messageId={item.messageId}
-                      className="group/msg min-w-0"
-                    >
-                      {item.key === firstAssistantKey && !folded && finished ? (
-                        <TaskDuration timing={timing} placement="header" />
-                      ) : null}
-                      <AssistantMessage
-                        parts={item.parts}
-                        summaryParts={item.summaryParts}
-                        observations={runs
-                          .filter((run) => entry.turn.runIds.includes(run.id))
-                          .flatMap((run) => {
-                            const result = readWorkspaceChangesMetadata(
-                              run.metadata.workspaceChanges
-                            )
-                            return result ? [result] : []
-                          })}
-                        showObservations={item.key === lastAssistantKey}
-                        streaming={item.streaming}
-                        initialPartIds={initialPartIds}
-                        tasks={tasks}
-                        onOpenAgents={onOpenAgents}
-                        onOpenFile={onOpenFile}
-                        canOpenReview={canOpenReview}
-                        onOpenReview={onOpenReview}
-                        onOpenTerminal={onOpenTerminal}
-                      />
-                      {item.key === lastAssistantKey && !folded && !finished ? (
-                        <TaskDuration timing={timing} label={runningLabel} />
-                      ) : null}
-                      {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
-                        <AssistantMessageActions
-                          message={entry.turn.assistantMessages.at(-1)}
-                          content={messageTextContent(
-                            folded
-                              ? items.flatMap((block) => block.parts)
-                              : entry.turn.assistantParts
-                          )}
-                          disabled={false}
-                          onCopy={onCopyAssistantMessage}
-                          onFork={onForkAssistantMessage}
-                        />
-                      ) : null}
-                      {item.key === lastAssistantKey &&
-                      (turnUsageRuns.length > 0 || turnFailures.length > 0) ? (
-                        <div className="mt-3 flex flex-col gap-3">
-                          {turnUsageRuns.map((run) => (
-                            <ModelUsageNotice key={run.id} metadata={run.metadata} />
-                          ))}
-                          {turnFailures.map((run) => (
-                            <RunErrorNotice key={run.id} error={run.error} />
-                          ))}
-                        </div>
-                      ) : null}
-                    </MessageScrollerItem>
-                  )
-                )
-              }
-            </TurnProcess>
-            {lastAssistantKey === undefined ? (
-              <>
-                {timing ? (
-                  <MessageScrollerItem messageId={`${entry.turn.id}-duration`}>
-                    <TaskDuration
-                      timing={timing}
-                      label={runningLabel}
-                      placement={finished ? "header" : "footer"}
-                    />
-                  </MessageScrollerItem>
-                ) : null}
-                {turnUsageRuns.map((run) => (
-                  <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
-                    <ModelUsageNotice metadata={run.metadata} />
-                  </MessageScrollerItem>
-                ))}
-                {turnFailures.map((run) => (
-                  <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
-                    <RunErrorNotice error={run.error} />
-                  </MessageScrollerItem>
-                ))}
-              </>
-            ) : null}
-          </Fragment>
+          <TranscriptTurn
+            data={data}
+            streamingPart={entry === lastTurn ? streamingPart : undefined}
+            userMessageIsAnchor={userMessageIsAnchor}
+            canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
+            runningLabel={data.finished ? undefined : runningLabel}
+            initialPartIds={initialPartIds}
+            tasks={tasks}
+            onOpenAgents={onOpenAgents}
+            onEditLastUserMessage={onEditLastUserMessage}
+            onCopyAssistantMessage={onCopyAssistantMessage}
+            onForkAssistantMessage={onForkAssistantMessage}
+            onOpenFile={onOpenFile}
+            canOpenReview={canOpenReview}
+            onOpenReview={onOpenReview}
+            onOpenTerminal={onOpenTerminal}
+          />
         )
-      })}
-      {modelRetry ? (
-        <MessageScrollerItem messageId="conversation-model-retry">
-          <ModelRetryNotice retry={modelRetry} />
+      }}
+    />
+  )
+})
+
+interface TranscriptTurnData {
+  turn: ConversationTurn
+  plan: ReturnType<typeof planTurnBlocks>
+  inputItems?: DesktopSessionInput["items"]
+  turnRuns: DesktopSessionRun[]
+  turnFailures: DesktopSessionRun[]
+  turnUsageRuns: DesktopSessionRun[]
+  timing: ReturnType<typeof taskTiming>
+  finished: boolean
+  observations: NonNullable<ReturnType<typeof readWorkspaceChangesMetadata>>[]
+}
+
+// These indexes and summaries stay unchanged during text-only updates.
+function buildTurnData(
+  entries: ConversationEntry[],
+  inputs: DesktopSessionInput[],
+  runs: DesktopSessionRun[],
+  noticeRuns: DesktopSessionRun[],
+  running: boolean,
+  lastTurn: ConversationEntry | undefined
+): Map<string, TranscriptTurnData> {
+  const runsById = new Map(runs.map((run, index) => [run.id, { run, index }]))
+  const inputsById = new Map(inputs.map((input) => [input.id, input]))
+  const noticeIds = new Set(noticeRuns.map((run) => run.id))
+  const noticesByInputId = new Map<string, DesktopSessionRun[]>()
+  for (const run of noticeRuns) {
+    if (!run.inputId) continue
+    const group = noticesByInputId.get(run.inputId) ?? []
+    group.push(run)
+    noticesByInputId.set(run.inputId, group)
+  }
+  const compareRunOrder = (left: DesktopSessionRun, right: DesktopSessionRun): number =>
+    runsById.get(left.id)!.index - runsById.get(right.id)!.index
+  const result = new Map<string, TranscriptTurnData>()
+  for (const entry of entries) {
+    if (entry.type !== "turn") continue
+    const turn = entry.turn
+    const turnRuns = turn.runIds
+      .flatMap((id) => {
+        const item = runsById.get(id)
+        return item ? [item.run] : []
+      })
+      .sort(compareRunOrder)
+    const failures = new Map(
+      turnRuns.filter((run) => noticeIds.has(run.id)).map((run) => [run.id, run])
+    )
+    for (const run of noticesByInputId.get(turn.inputId ?? "") ?? []) failures.set(run.id, run)
+    const timing = taskTiming(turnRuns)
+    result.set(turn.id, {
+      turn,
+      plan: planTurnBlocks(turn, { streaming: running && entry === lastTurn }),
+      inputItems: turn.userMessage?.inputId
+        ? inputsById.get(turn.userMessage.inputId)?.items
+        : undefined,
+      turnRuns,
+      turnFailures: [...failures.values()].sort(compareRunOrder),
+      turnUsageRuns: import.meta.env.DEV
+        ? turnRuns.filter((run) => readSessionModelUsage(run.metadata)?.incomplete)
+        : [],
+      timing,
+      finished: Boolean(timing && timing.status !== "pending" && timing.status !== "running"),
+      observations: turnRuns.flatMap((run) => {
+        const observation = readWorkspaceChangesMetadata(run.metadata.workspaceChanges)
+        return observation ? [observation] : []
+      }),
+    })
+  }
+  return result
+}
+
+type TranscriptTurnProps = Pick<
+  ConversationTranscriptProps,
+  | "onEditLastUserMessage"
+  | "onCopyAssistantMessage"
+  | "onForkAssistantMessage"
+  | "onOpenFile"
+  | "canOpenReview"
+  | "onOpenReview"
+  | "onOpenTerminal"
+  | "onOpenAgents"
+> & {
+  data: TranscriptTurnData
+  streamingPart?: DesktopSessionPart
+  userMessageIsAnchor: boolean
+  canEditUserMessage: boolean
+  runningLabel?: string
+  initialPartIds: ReadonlySet<string>
+  tasks: DesktopSessionTask[]
+}
+
+const TranscriptTurn = memo(function TranscriptTurn({
+  data,
+  streamingPart,
+  userMessageIsAnchor,
+  canEditUserMessage,
+  runningLabel,
+  initialPartIds,
+  tasks,
+  onOpenAgents,
+  onEditLastUserMessage,
+  onCopyAssistantMessage,
+  onForkAssistantMessage,
+  onOpenFile,
+  canOpenReview,
+  onOpenReview,
+  onOpenTerminal,
+}: TranscriptTurnProps): React.JSX.Element {
+  const { turn, turnRuns, timing, finished, turnFailures, turnUsageRuns } = data
+  const scroller = useConversationScroller()
+  const [animationBaseline] = useState(() =>
+    scroller?.presentedTurns.has(turn.id)
+      ? new Set([...initialPartIds, ...turn.assistantParts.map((part) => part.id)])
+      : initialPartIds
+  )
+  useLayoutEffect(() => {
+    scroller?.presentedTurns.add(turn.id)
+  }, [scroller, turn.id])
+  const userMessage = turn.userMessage
+  const turnPlan = useMemo(
+    () => (streamingPart ? replacePlannedPart(data.plan, streamingPart) : data.plan),
+    [data.plan, streamingPart]
+  )
+  const lastAssistantKey = [...turnPlan].reverse().find((item) => item.kind === "assistant")?.key
+  const firstAssistantKey = turnPlan.find((item) => item.kind === "assistant")?.key
+  return (
+    <>
+      {userMessage ? (
+        <MessageScrollerItem
+          messageId={userMessage.inputId ?? userMessage.id}
+          scrollAnchor={userMessageIsAnchor}
+          className="pt-2"
+        >
+          <ContentEntrance animate={userMessage.metadata.optimistic === true}>
+            <MessageBlock
+              message={userMessage}
+              inputItems={data.inputItems}
+              parts={turn.userParts}
+              streaming={false}
+              userActions={{
+                canEdit: canEditUserMessage,
+                onEdit: (content) => onEditLastUserMessage(userMessage.id, content),
+              }}
+              onOpenFile={onOpenFile}
+              canOpenReview={canOpenReview}
+              onOpenReview={onOpenReview}
+              onOpenTerminal={onOpenTerminal}
+            />
+          </ContentEntrance>
         </MessageScrollerItem>
       ) : null}
-      {running && !activeRunGrouped ? (
-        <MessageScrollerItem messageId="conversation-running-status">
-          <TaskDuration
-            timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
-            label={runningLabel}
-          />
-        </MessageScrollerItem>
+      <TurnProcess
+        turnId={turn.id}
+        plan={turnPlan}
+        timing={timing}
+        tasks={tasks}
+        canCollapse={
+          turnRuns.length > 0 &&
+          turnRuns.every((run) => run.status !== "pending" && run.status !== "running") &&
+          !turnPlan.some((item) => item.streaming)
+        }
+      >
+        {(items, folded) =>
+          items.map((item) =>
+            item.kind === "divider" && item.phase ? (
+              <MessageScrollerItem key={item.key} messageId={item.messageId}>
+                <ContextCompactionDivider
+                  presentation={{ kind: "context_compaction", phase: item.phase }}
+                />
+              </MessageScrollerItem>
+            ) : (
+              <MessageScrollerItem
+                key={item.key}
+                messageId={item.messageId}
+                className="group/msg min-w-0"
+              >
+                {item.key === firstAssistantKey && !folded && finished ? (
+                  <TaskDuration timing={timing} placement="header" />
+                ) : null}
+                <AssistantMessage
+                  parts={item.parts}
+                  summaryParts={item.summaryParts}
+                  observations={data.observations}
+                  showObservations={item.key === lastAssistantKey}
+                  streaming={item.streaming}
+                  initialPartIds={animationBaseline}
+                  tasks={tasks}
+                  onOpenAgents={onOpenAgents}
+                  onOpenFile={onOpenFile}
+                  canOpenReview={canOpenReview}
+                  onOpenReview={onOpenReview}
+                  onOpenTerminal={onOpenTerminal}
+                />
+                {item.key === lastAssistantKey && !folded && !finished ? (
+                  <TaskDuration timing={timing} label={runningLabel} />
+                ) : null}
+                {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
+                  <AssistantMessageActions
+                    message={turn.assistantMessages.at(-1)}
+                    content={messageTextContent(
+                      folded ? items.flatMap((block) => block.parts) : turn.assistantParts
+                    )}
+                    disabled={false}
+                    onCopy={onCopyAssistantMessage}
+                    onFork={onForkAssistantMessage}
+                  />
+                ) : null}
+                {item.key === lastAssistantKey &&
+                (turnUsageRuns.length > 0 || turnFailures.length > 0) ? (
+                  <div className="mt-3 flex flex-col gap-3">
+                    {turnUsageRuns.map((run) => (
+                      <ModelUsageNotice key={run.id} metadata={run.metadata} />
+                    ))}
+                    {turnFailures.map((run) => (
+                      <RunErrorNotice key={run.id} error={run.error} />
+                    ))}
+                  </div>
+                ) : null}
+              </MessageScrollerItem>
+            )
+          )
+        }
+      </TurnProcess>
+      {lastAssistantKey === undefined ? (
+        <>
+          {timing ? (
+            <MessageScrollerItem messageId={`${turn.id}-duration`}>
+              <TaskDuration
+                timing={timing}
+                label={runningLabel}
+                placement={finished ? "header" : "footer"}
+              />
+            </MessageScrollerItem>
+          ) : null}
+          {turnUsageRuns.map((run) => (
+            <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
+              <ModelUsageNotice metadata={run.metadata} />
+            </MessageScrollerItem>
+          ))}
+          {turnFailures.map((run) => (
+            <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
+              <RunErrorNotice error={run.error} />
+            </MessageScrollerItem>
+          ))}
+        </>
       ) : null}
     </>
   )
-}
+})
 
 interface TranscriptModelCache {
   messages: DesktopSessionMessage[]
@@ -343,6 +513,7 @@ interface TranscriptModelCache {
   activityLabel?: string
   activeRun?: DesktopSessionRun
   activeRunGrouped: boolean
+  streamingPart?: DesktopSessionPart
 }
 
 type TranscriptModelInput = Pick<
@@ -374,8 +545,16 @@ function useTranscriptModel(
       (updatedPart !== undefined &&
         previous.lastAssistantMessageId === updatedPart.messageId &&
         (previous.visiblePartIds.has(updatedPart.id) ||
-          (updatedPart.type === "reasoning" && !input.showReasoning)))
+          (updatedPart.type === "reasoning" && !input.showReasoning)) &&
+        (!previous.streamingPart ||
+          previous.streamingPart.id === updatedPart.id ||
+          !previous.visiblePartIds.has(updatedPart.id)))
     if (canReuse) {
+      // 普通重渲染或隐藏思考更新也要保留上次已显示的文本。
+      const streamingPart =
+        updatedPart && previous.visiblePartIds.has(updatedPart.id)
+          ? updatedPart
+          : previous.streamingPart
       cacheRef.current = {
         ...input,
         visibleParts: previous.visibleParts,
@@ -385,14 +564,14 @@ function useTranscriptModel(
         activityLabel: previous.activityLabel,
         activeRun: previous.activeRun,
         activeRunGrouped: previous.activeRunGrouped,
+        streamingPart,
       }
       return {
         entries: previous.entries,
         activityLabel: previous.activityLabel,
         activeRun: previous.activeRun,
         activeRunGrouped: previous.activeRunGrouped,
-        streamingPart:
-          updatedPart && previous.visiblePartIds.has(updatedPart.id) ? updatedPart : undefined,
+        streamingPart,
       }
     }
   }

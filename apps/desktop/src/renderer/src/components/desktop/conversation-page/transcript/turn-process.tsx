@@ -9,20 +9,24 @@ import { taskTimingLabel, type TaskTiming } from "../message/task-timing"
 import type { TurnBlockPlanItem } from "./turn-block-plan"
 import { splitTurnProcess } from "./turn-process-plan"
 import type { DesktopSessionTask } from "@shared/session-types"
+import { useConversationScroller } from "../conversation-scroll-context"
 
 export function TurnProcess({
+  turnId,
   plan,
   canCollapse,
   timing,
   tasks,
   children,
 }: {
+  turnId?: string
   plan: TurnBlockPlanItem[]
   canCollapse: boolean
   timing?: TaskTiming
   tasks?: readonly DesktopSessionTask[]
   children: (items: TurnBlockPlanItem[], folded: boolean) => ReactNode
 }): React.JSX.Element {
+  const scroller = useConversationScroller()
   const candidate = useMemo(
     () => (canCollapse ? splitTurnProcess(plan, tasks) : null),
     [plan, canCollapse, tasks]
@@ -34,14 +38,16 @@ export function TurnProcess({
   if (!eligible && allowFold) setAllowFold(false)
   const split = allowFold ? candidate : null
   const folded = Boolean(split)
-  const [open, setOpen] = useState(!eligible)
+  const [open, setOpen] = useState(
+    () => (turnId ? scroller?.turnExpansion.get(turnId) : undefined) ?? !eligible
+  )
   const previousEligible = useRef(eligible)
-  const manualChoice = useRef(false)
+  const manualChoice = useRef(Boolean(turnId && scroller?.turnExpansion.has(turnId)))
   const root = useRef<HTMLDivElement>(null)
   const readingEarlier = useRef(false)
 
   useLayoutEffect(() => {
-    if (folded) return
+    if (folded || scroller) return
     const viewport = root.current?.closest<HTMLElement>('[data-slot="message-scroller-viewport"]')
     if (!viewport) return
     const observe = (): void => {
@@ -73,7 +79,7 @@ export function TurnProcess({
       viewport.removeEventListener("keydown", onKeyDown)
       viewport.removeEventListener("touchstart", onTouchStart)
     }
-  }, [folded])
+  }, [folded, scroller])
 
   useLayoutEffect(() => {
     const justFinished = eligible && !previousEligible.current
@@ -84,11 +90,12 @@ export function TurnProcess({
       selection && !selection.isCollapsed && root.current?.contains(selection.anchorNode)
     const interacting = root.current?.contains(document.activeElement)
     // 用户阅读历史、选择文字或操作工具时保留展开，避免完成瞬间内容消失。
-    if (!readingEarlier.current && !selecting && !interacting) {
+    const readingHistory = scroller ? !scroller.getSnapshot().following : readingEarlier.current
+    if (!readingHistory && !selecting && !interacting) {
       setAllowFold(true)
       setOpen(false)
     }
-  }, [eligible])
+  }, [eligible, scroller])
 
   const label = (timing && taskTimingLabel(timing)) ?? "过程说明"
 
@@ -100,6 +107,7 @@ export function TurnProcess({
             open={open}
             onOpenChange={(value) => {
               manualChoice.current = true
+              if (turnId) scroller?.turnExpansion.set(turnId, value)
               setOpen(value)
             }}
             className="group/process min-w-0"

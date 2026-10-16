@@ -4,6 +4,7 @@ import type { PendingPromptSubmission } from "@renderer/stores/desktop-session/t
 import type {
   DesktopSessionInput,
   DesktopSessionMessage,
+  DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
 import { buildConversationEntries } from "../../message/conversation-turn-model"
@@ -21,6 +22,53 @@ const submission: PendingPromptSubmission = {
 }
 
 describe("mergeOptimisticTranscript", () => {
+  it.each([
+    { label: "no submissions", submissions: [] },
+    { label: "failed submission", submissions: [{ ...submission, phase: "failed" as const }] },
+  ])("reuses authoritative arrays with $label", ({ submissions }) => {
+    const messages: DesktopSessionMessage[] = []
+    const parts: DesktopSessionPart[] = []
+
+    const result = mergeOptimisticTranscript(messages, parts, submissions)
+
+    expect(result.messages).toBe(messages)
+    expect(result.parts).toBe(parts)
+  })
+
+  it("reuses authoritative arrays after the server confirms the local message", () => {
+    const messages: DesktopSessionMessage[] = [
+      {
+        id: "confirmed-message",
+        sessionId: "session-1",
+        seq: 1,
+        role: "user",
+        inputId: submission.id,
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    const parts: DesktopSessionPart[] = [
+      {
+        id: "confirmed-part",
+        sessionId: "session-1",
+        messageId: "confirmed-message",
+        seq: 1,
+        type: "text",
+        status: "completed",
+        text: submission.content,
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+
+    const result = mergeOptimisticTranscript(messages, parts, [submission])
+
+    expect(result.messages).toBe(messages)
+    expect(result.parts).toBe(parts)
+  })
+
   it("shows a normal local submission as a user message before the stream confirms it", () => {
     const result = mergeOptimisticTranscript([], [], [submission])
 
@@ -76,35 +124,49 @@ describe("mergeOptimisticTranscript", () => {
       turn: { userMessage: { id: "optimistic-message:input-local" } },
     })
 
-    const result = mergeOptimisticTranscript([authoritative], [{
-      id: "part-server",
-      sessionId: "session-1",
-      messageId: "message-server",
-      seq: 1,
-      type: "text",
-      status: "completed",
-      text: "new request",
-      metadata: {},
-      createdAt: 11,
-      updatedAt: 11,
-    }], [submission])
+    const result = mergeOptimisticTranscript(
+      [authoritative],
+      [
+        {
+          id: "part-server",
+          sessionId: "session-1",
+          messageId: "message-server",
+          seq: 1,
+          type: "text",
+          status: "completed",
+          text: "new request",
+          metadata: {},
+          createdAt: 11,
+          updatedAt: 11,
+        },
+      ],
+      [submission]
+    )
     expect(result.messages).toEqual([authoritative])
     expect(result.parts.map((part) => part.id)).toEqual(["part-server"])
   })
 
   it("keeps ordered items for optimistic skills, including an empty text task", () => {
-    const items = [{
-      type: "skill" as const,
-      name: "archify",
-      displayName: "Archify",
-      source: "project" as const,
-      path: "D:/skills/archify/SKILL.md",
-    }]
-    const result = mergeOptimisticTranscript([], [], [{
-      ...submission,
-      content: "",
-      items,
-    }])
+    const items = [
+      {
+        type: "skill" as const,
+        name: "archify",
+        displayName: "Archify",
+        source: "project" as const,
+        path: "D:/skills/archify/SKILL.md",
+      },
+    ]
+    const result = mergeOptimisticTranscript(
+      [],
+      [],
+      [
+        {
+          ...submission,
+          content: "",
+          items,
+        },
+      ]
+    )
 
     expect(result.parts).toEqual([
       expect.objectContaining({

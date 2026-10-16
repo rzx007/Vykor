@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { TurnProcess } from "../turn-process"
 import type { TurnBlockPlanItem } from "../turn-block-plan"
+import { ConversationScrollerProvider } from "../../conversation-scroller"
+import { useConversationScroller } from "../../conversation-scroll-context"
 
 const parts: DesktopSessionPart[] = ["commentary", "final_answer"].map((phase, i) => ({
   id: phase,
@@ -49,6 +51,51 @@ describe("turn process disclosure", () => {
       )
     )
   }
+  it("keeps manual expansion after a virtual row unmounts and mounts again", () => {
+    const showVirtualRow = (visible: boolean) =>
+      act(() =>
+        root.render(
+          <ConversationScrollerProvider>
+            {visible ? (
+              <TurnProcess turnId="turn" plan={plan} canCollapse timing={timing}>
+                {render}
+              </TurnProcess>
+            ) : null}
+          </ConversationScrollerProvider>
+        )
+      )
+    showVirtualRow(true)
+    act(() => container.querySelector("button")!.click())
+    expect(container.textContent).toContain("执行过程")
+    showVirtualRow(false)
+    showVirtualRow(true)
+    expect(container.querySelector("button")?.getAttribute("aria-expanded")).toBe("true")
+    expect(container.textContent).toContain("执行过程")
+  })
+
+  it("uses shared reading intent to keep a just-completed process expanded", () => {
+    let scroller: NonNullable<ReturnType<typeof useConversationScroller>>
+    function Reader() {
+      scroller = useConversationScroller()!
+      return null
+    }
+    const showVirtualRow = (finished: boolean) =>
+      act(() =>
+        root.render(
+          <ConversationScrollerProvider>
+            <Reader />
+            <TurnProcess turnId="turn" plan={plan} canCollapse={finished} timing={timing}>
+              {render}
+            </TurnProcess>
+          </ConversationScrollerProvider>
+        )
+      )
+    showVirtualRow(false)
+    act(() => scroller.setIntent(-1))
+    showVirtualRow(true)
+    expect(container.textContent).toContain("执行过程")
+    expect(container.querySelector("button")).toBeNull()
+  })
   it("keeps running work visible, then collapses it under its duration", () => {
     show(false)
     expect(container.textContent).toContain("执行过程")

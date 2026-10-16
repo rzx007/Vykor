@@ -49,6 +49,11 @@ export function mergeOptimisticTranscript(
   parts: DesktopSessionPart[],
   submissions: PendingPromptSubmission[]
 ): { messages: DesktopSessionMessage[]; parts: DesktopSessionPart[] } {
+  const candidates = submissions.filter(
+    (submission) => submission.placement === "transcript" && submission.phase !== "failed"
+  )
+  if (candidates.length === 0) return { messages, parts }
+
   const visibleMessageIds = new Set(
     parts
       .filter((part) => part.type === "text" || part.type === "attachment")
@@ -61,12 +66,8 @@ export function mergeOptimisticTranscript(
         : []
     )
   )
-  const optimistic = submissions.filter(
-    (submission) =>
-      submission.placement === "transcript" &&
-      submission.phase !== "failed" &&
-      !authoritativeInputIds.has(submission.id)
-  )
+  const optimistic = candidates.filter((submission) => !authoritativeInputIds.has(submission.id))
+  if (optimistic.length === 0) return { messages, parts }
 
   return {
     messages: [
@@ -102,9 +103,7 @@ function optimisticParts(submission: PendingPromptSubmission): DesktopSessionPar
             text: submission.content,
             metadata: {
               optimistic: true,
-              ...(Array.isArray(items)
-                ? { items }
-                : {}),
+              ...(Array.isArray(items) ? { items } : {}),
             },
             createdAt: submission.createdAt,
             updatedAt: submission.createdAt,

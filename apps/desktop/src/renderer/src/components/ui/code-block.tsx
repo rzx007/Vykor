@@ -37,6 +37,8 @@ interface CodeBlockProps {
   /** Tailwind class(es) applied to the code body — e.g. "bg-muted", "bg-slate-950" */
   bodyClassName?: string
   className?: string
+  /** 围栏仍在追加时显示源码，闭合后再进入语法着色。 */
+  streaming?: boolean
 }
 
 // -- Copy button --
@@ -225,6 +227,7 @@ export function CodeBlock({
   highlightLines,
   bodyClassName,
   className,
+  streaming = false,
 }: CodeBlockProps): React.JSX.Element {
   return (
     <div
@@ -250,16 +253,34 @@ export function CodeBlock({
         </span>
         <CopyBtn code={code} />
       </div>
-      <CodeRenderer
-        conversation={variant === "conversation"}
-        code={code}
-        language={language}
-        showLineNumbers={showLineNumbers}
-        scrollable={scrollable}
-        maxHeight={maxHeight}
-        highlightLines={highlightLines}
-        bodyClassName={bodyClassName}
-      />
+      {streaming ? (
+        <pre
+          className={cn(
+            "overflow-x-auto font-mono whitespace-pre",
+            variant === "conversation" && "px-[0.85rem] pt-[0.7rem] pb-[0.9rem]",
+            scrollable && "overflow-y-auto",
+            bodyClassName
+          )}
+          style={{
+            fontSize: "var(--code-font-size)",
+            lineHeight: "var(--code-line-height)",
+            maxHeight: scrollable ? maxHeight : undefined,
+          }}
+        >
+          <code>{code}</code>
+        </pre>
+      ) : (
+        <CodeRenderer
+          conversation={variant === "conversation"}
+          code={code}
+          language={language}
+          showLineNumbers={showLineNumbers}
+          scrollable={scrollable}
+          maxHeight={maxHeight}
+          highlightLines={highlightLines}
+          bodyClassName={bodyClassName}
+        />
+      )}
     </div>
   )
 }

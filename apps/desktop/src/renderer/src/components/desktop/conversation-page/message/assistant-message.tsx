@@ -9,7 +9,6 @@ import {
 import { memo, useEffect, useId, useMemo, useState } from "react"
 import type { WorkspaceChangesMetadata } from "@vykor/client"
 import type { DesktopGitDiffScope } from "@shared/git-types"
-import { Streamdown } from "streamdown"
 
 import { Button } from "@renderer/components/ui/button"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
@@ -39,8 +38,7 @@ import {
   type AssistantContentUnit,
   type ChangedFile,
 } from "./message-render-model"
-import { createStreamdownComponents } from "./streamdown-components"
-import { streamdownPlugins } from "./streamdown-plugins"
+import { AssistantMarkdown } from "./assistant-markdown"
 import { truncateReasoning } from "./reasoning-text"
 import { MessageAttachment } from "./message-attachment"
 import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generation-message"
@@ -62,14 +60,6 @@ type ChangedFileStats = {
   additions: number
   deletions: number
 }
-
-const streamingTextAnimation = {
-  animation: "fadeIn",
-  duration: 150,
-  easing: "ease-out",
-  sep: "char",
-  stagger: 0,
-} as const
 
 type AssistantMessageProps = {
   parts: DesktopSessionPart[]
@@ -317,49 +307,6 @@ function sameReferences<T>(
   if (previous === next) return true
   if (!previous || !next || previous.length !== next.length) return false
   return previous.every((item, index) => item === next[index])
-}
-
-function AssistantMarkdown({
-  text,
-  phase,
-  streaming,
-  animateInitialText,
-  onOpenFile,
-}: {
-  text: string
-  phase?: "commentary" | "final_answer"
-  streaming: boolean
-  animateInitialText: boolean
-  onOpenFile: (path: string, line?: number) => void
-}): React.JSX.Element {
-  const components = useMemo(
-    () => createStreamdownComponents({ onOpenFile, codeBlockVariant: "conversation" }),
-    [onOpenFile]
-  )
-  // 让 Streamdown 记住已有文字，重新打开进行中的回复时不重播历史。
-  const [initialText] = useState(() => (animateInitialText ? "" : text))
-
-  return (
-    <div
-      className="assistant-markdown min-w-0"
-      data-phase={phase}
-      data-stream-initial={streaming && text === initialText ? "true" : undefined}
-    >
-      <Streamdown
-        className="desktop-streamdown space-y-0"
-        animated={streaming ? streamingTextAnimation : false}
-        isAnimating={streaming}
-        mode={streaming ? "streaming" : "static"}
-        controls
-        lineNumbers={false}
-        parseIncompleteMarkdown={streaming}
-        plugins={streamdownPlugins}
-        components={components}
-      >
-        {text}
-      </Streamdown>
-    </div>
-  )
 }
 
 type ToolUnit = Extract<AssistantContentUnit, { type: "tool" }>

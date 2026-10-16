@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react"
 
 import { messageTextContent } from "./message-content"
+import { renderUserItems, type UserDisplayItem } from "./user-display-items"
 import { AssistantMessage } from "./assistant-message"
 import { formatMessageTime } from "./format-message-time"
 import { Button } from "@renderer/components/ui/button"
@@ -35,6 +36,7 @@ import {
 import { ModelSwitchDivider, readModelSwitchPresentation } from "./model-switch-divider"
 import { ContextCompactionDivider } from "./context-compaction-divider"
 import { readContextCompactionPresentation } from "./compaction-presentation"
+import { useRetainTranscriptRow } from "../transcript/virtual-transcript-row"
 
 const collapsibleUserMessageChars = 900
 const collapsibleUserMessageLines = 14
@@ -125,6 +127,7 @@ function UserMessageBlock({
   userActions?: { canEdit: boolean; onEdit: (document: ComposerDocument) => void }
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
+  useRetainTranscriptRow(editing)
   const [draft, setDraft] = useState(document)
   const canEdit = Boolean(userActions?.canEdit && (content.trim() || attachmentParts.length > 0))
   const containsImage = attachmentParts.some((part) => part.mediaType.startsWith("image/"))
@@ -244,25 +247,6 @@ function UserMessageBlock({
   )
 }
 
-export type UserDisplayItem =
-  | { kind: "text"; text: string }
-  | { kind: "skill"; name: string; displayName: string }
-  | { kind: "context"; name: string; displayName: string }
-  | { kind: "plugin"; name: string; displayName: string }
-
-export function renderUserItems(items: readonly SessionUserInputItem[]): UserDisplayItem[] {
-  return items.flatMap((item): UserDisplayItem[] => {
-    if (item.type === "text") return item.text ? [{ kind: "text", text: item.text }] : []
-    if (item.type === "context")
-      return [{ kind: "context", name: item.id, displayName: item.displayName }]
-    if (item.type === "capability")
-      return [{ kind: "plugin", name: item.pluginId, displayName: item.displayName }]
-    const name = item.name.trim()
-    if (!name) return []
-    return [{ kind: "skill", name, displayName: item.displayName?.trim() || name }]
-  })
-}
-
 function readUserItems(parts: DesktopSessionPart[]): UserDisplayItem[] {
   for (const part of parts) {
     if (part.type !== "text") continue
@@ -299,7 +283,7 @@ function UserMessageBubble({
                 ) : (
                   <span
                     key={index}
-                    className="inline-flex items-center gap-1 align-middle font-medium !text-primary select-none leading-5"
+                    className="inline-flex items-center gap-1 align-middle leading-5 font-medium !text-primary select-none"
                   >
                     {item.kind !== "plugin" ? <Box className="size-3.5 shrink-0" /> : null}
                     <span>
@@ -524,7 +508,9 @@ export function PermissionCard({
                 {"）"}
               </p>
               <p className="text-ui-caption leading-snug text-ui-muted">
-                {"检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"}
+                {
+                  "检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"
+                }
               </p>
             </div>
           ) : null}

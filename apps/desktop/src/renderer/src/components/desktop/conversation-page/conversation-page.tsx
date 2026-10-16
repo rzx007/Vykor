@@ -5,12 +5,12 @@ import { useNavigate } from "@tanstack/react-router"
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat-selection-actions"
 import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "@renderer/components/ui/message-scroller"
+  ConversationScroller as MessageScroller,
+  ConversationScrollerButton as MessageScrollerButton,
+  ConversationScrollerContent as MessageScrollerContent,
+  ConversationScrollerProvider as MessageScrollerProvider,
+  ConversationScrollerViewport as MessageScrollerViewport,
+} from "./conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Button } from "@renderer/components/ui/button"
 import { usePluginUiHost } from "./plugin-ui/plugin-ui-provider"
@@ -82,9 +82,9 @@ import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
 import { ConversationTranscriptSkeletonOverlay } from "./transcript/conversation-transcript-skeleton"
 import { ConversationPreviewRail } from "./transcript/conversation-preview-rail"
-import { ConversationScrollHold } from "./conversation-scroll-hold"
 import { ConversationTranscript } from "./transcript/transcript"
 import { useShowReasoning } from "./use-show-reasoning"
+import { useTaskLocation } from "./session/use-task-location"
 import { openConversationTextMenu } from "./conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
 import {
@@ -104,7 +104,6 @@ function ConversationPane({
 }: ConversationPaneProps): React.JSX.Element {
   const pluginUiHost = usePluginUiHost()
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
-  const [taskLocation, setTaskLocation] = useState<"default" | "current" | "worktree">("default")
   const [skillCommandSnapshot, setSkillCommandSnapshot] = useState<{
     cwd: string
     commands: import("@shared/session-types").DesktopCommandCatalogEntry[]
@@ -132,7 +131,7 @@ function ConversationPane({
   const selectedEffort = useDesktopSessionStore((state) => state.selectedEffort)
   const workspaceMode = useDesktopSessionStore((state) => state.workspaceMode)
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
-  useEffect(() => setTaskLocation("default"), [selectedProject?.id])
+  const [taskLocation, setTaskLocation] = useTaskLocation(selectedProject?.id ?? null)
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
   const branch = useDesktopSessionStore((state) => state.branch)
@@ -354,22 +353,25 @@ function ConversationPane({
     })
   }
 
-  const copyAssistantMessage = async (content: string): Promise<void> => {
+  const copyAssistantMessage = useCallback(async (content: string): Promise<void> => {
     await window.desktop.clipboard.writeText(content)
-  }
+  }, [])
 
-  const forkFromAssistantMessage = async (messageId: string): Promise<void> => {
-    if (!activeSessionId || archived || running) return
-    await forkSession(activeSessionId, { afterMessageId: messageId })
-  }
+  const forkFromAssistantMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      if (!activeSessionId || archived || running) return
+      await forkSession(activeSessionId, { afterMessageId: messageId })
+    },
+    [activeSessionId, archived, running, forkSession]
+  )
 
-  const editLatestUserMessage = async (
-    sourceMessageId: string,
-    document: ComposerDocument
-  ): Promise<void> => {
-    if (archived || running) return
-    await editLatestMessage(sourceMessageId, selectComposerDocumentText(document), document)
-  }
+  const editLatestUserMessage = useCallback(
+    async (sourceMessageId: string, document: ComposerDocument): Promise<void> => {
+      if (archived || running) return
+      await editLatestMessage(sourceMessageId, selectComposerDocumentText(document), document)
+    },
+    [archived, running, editLatestMessage]
+  )
 
   useEffect(() => {
     const handleAddToComposer = (event: Event): void => {
@@ -629,9 +631,6 @@ function ConversationPane({
           <div className="relative min-h-0 min-w-0 flex-1">
             <MessageScrollerProvider
               key={`${activeSessionId ?? "new-session"}:${sessionView?.session.id === activeSessionId ? "ready" : "loading"}`}
-              autoScroll
-              defaultScrollPosition="end"
-              scrollPreviousItemPeek={72}
             >
               <MessageScroller
                 className={cn(
@@ -644,7 +643,7 @@ function ConversationPane({
                   onContextMenu={(event) => void openConversationTextMenu(event)}
                   className="overflow-x-hidden"
                 >
-                  <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 gap-6 pt-7 pb-5 text-content-foreground">
+                  <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
                     {openingSession && !sessionView ? null : (
                       <ConversationTranscript
                         tasks={sessionView?.tasks}
@@ -655,13 +654,9 @@ function ConversationPane({
                         runs={sessionView?.runs ?? []}
                         running={running}
                         canEditLastUserMessage={!archived && !running && !sending}
-                        onEditLastUserMessage={(sourceMessageId, content) =>
-                          void editLatestUserMessage(sourceMessageId, content)
-                        }
-                        onCopyAssistantMessage={(content) => copyAssistantMessage(content)}
-                        onForkAssistantMessage={(messageId) =>
-                          void forkFromAssistantMessage(messageId)
-                        }
+                        onEditLastUserMessage={editLatestUserMessage}
+                        onCopyAssistantMessage={copyAssistantMessage}
+                        onForkAssistantMessage={forkFromAssistantMessage}
                         onOpenFile={onOpenFile}
                         canOpenReview={canOpenReview}
                         onOpenReview={onOpenReview}
@@ -686,7 +681,6 @@ function ConversationPane({
                 runs={sessionView?.runs ?? []}
                 showReasoning={showReasoning}
               />
-              <ConversationScrollHold running={running} viewportRef={messageViewportRef} />
             </MessageScrollerProvider>
             <ConversationTranscriptSkeletonOverlay
               key={activeSessionId}
