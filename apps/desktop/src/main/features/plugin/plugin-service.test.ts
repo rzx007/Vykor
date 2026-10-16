@@ -191,6 +191,32 @@ describe("DesktopPluginService", () => {
     }
   })
 
+  it.each([false, true])("installs the bundled Office archive without a picker (packaged=%s)", async packaged => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")!
+    const arch = Object.getOwnPropertyDescriptor(process, "arch")!
+    const resources = Object.getOwnPropertyDescriptor(process, "resourcesPath")
+    Object.defineProperty(process, "platform", { configurable: true, value: "win32" })
+    Object.defineProperty(process, "arch", { configurable: true, value: "x64" })
+    Object.defineProperty(process, "resourcesPath", { configurable: true, value: "C:/app/resources" })
+    electron.app.isPackaged = packaged
+    try {
+      const chooseArchive = vi.fn()
+      const result = await new DesktopPluginService({ chooseArchive }).importArchive({} as never, {
+        cwd: "C:/workspace", bundledPlugin: "office-work",
+      } as never)
+      expect(result.status).toBe("installed")
+      expect(chooseArchive).not.toHaveBeenCalled()
+      expect(daemon.plugins.installArchive).toHaveBeenCalledWith(expect.objectContaining({
+        archivePath: join(packaged ? "C:/app/resources" : "C:/desktop/out", "bundled-plugins/office-work.zip"),
+      }))
+    } finally {
+      Object.defineProperty(process, "platform", platform)
+      Object.defineProperty(process, "arch", arch)
+      if (resources) Object.defineProperty(process, "resourcesPath", resources)
+      else delete (process as { resourcesPath?: string }).resourcesPath
+    }
+  })
+
   it("rejects unknown bundled IDs before choosing or installing any archive", async () => {
     const chooseArchive = vi.fn(async () => "C:/forged.zip")
     const service = new DesktopPluginService({ chooseArchive })
@@ -201,6 +227,24 @@ describe("DesktopPluginService", () => {
     expect(chooseArchive).not.toHaveBeenCalled()
     expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
     expect(daemon.plugins.installArchive).not.toHaveBeenCalled()
+  })
+
+  it.each([["linux", "x64"], ["win32", "arm64"]])("rejects Office on %s/%s before installing", async (platformName, architecture) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")!
+    const arch = Object.getOwnPropertyDescriptor(process, "arch")!
+    Object.defineProperty(process, "platform", { configurable: true, value: platformName })
+    Object.defineProperty(process, "arch", { configurable: true, value: architecture })
+    try {
+      const result = await new DesktopPluginService().importArchive({} as never, {
+        cwd: "C:/workspace", bundledPlugin: "office-work",
+      })
+      expect(result).toMatchObject({ status: "failed", details: [{ code: "plugin_bundled_unsupported_platform" }] })
+      expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
+      expect(daemon.plugins.installArchive).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, "platform", platform)
+      Object.defineProperty(process, "arch", arch)
+    }
   })
 
   it("reinstalls immediately when existing approval covers requested permissions", async () => {

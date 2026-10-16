@@ -8,7 +8,7 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
 import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-selector-plugin"
-import { packageKnowledgeWorkPlugin } from "./scripts/package-bundled-plugin"
+import { packageKnowledgeWorkPlugin, packageOfficeWorkPlugin } from "./scripts/package-bundled-plugin"
 
 function copyRuntimeResources(): Plugin {
   return {
@@ -16,7 +16,17 @@ function copyRuntimeResources(): Plugin {
     async writeBundle(options) {
       const outputDirectory = resolve(options.dir ?? "out/main")
       const { prepareOfficeEngine } = await import(pathToFileURL(resolve("../../scripts/prepare-office-engine.mjs")).href)
-      await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
+      const officeBinaryPath = await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
+      if (process.platform === "win32" && process.arch === "x64") {
+        await packageOfficeWorkPlugin(
+          resolve("../../plugins/office-work"),
+          resolve(outputDirectory, "../bundled-plugins"),
+          officeBinaryPath,
+          resolve("../../packages/services/src/office/office-engine.mjs")
+        )
+      } else {
+        rmSync(resolve(outputDirectory, "../bundled-plugins/office-work.zip"), { force: true })
+      }
       const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations")
       rmSync(migrationsDirectory, { recursive: true, force: true })
       cpSync(

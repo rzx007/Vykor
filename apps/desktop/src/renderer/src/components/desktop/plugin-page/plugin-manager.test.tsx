@@ -218,6 +218,48 @@ describe("PluginManager archive import", () => {
     expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
   })
 
+  it("installs the included presentation plugin after an explicit click", async () => {
+    const previous = Object.getOwnPropertyDescriptor(window, "electron")
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "win32" } } })
+    try {
+      api().importArchive.mockResolvedValue({ status: "installed", pluginName: "演示文稿",
+        snapshot: { ...snapshot, plugins: [plugin({ identity: { id: "vykor.office-work", name: "office-work", version: "0.2.4" } })] } })
+      await render()
+      expect(api().importArchive).not.toHaveBeenCalled()
+      await click("添加演示文稿")
+      expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "office-work" })
+      expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
+    } finally {
+      if (previous) Object.defineProperty(window, "electron", previous)
+      else delete (window as unknown as { electron?: unknown }).electron
+    }
+  })
+
+  it("shows the presentation pack but prevents installation on Linux", async () => {
+    const previous = Object.getOwnPropertyDescriptor(window, "electron")
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "linux" } } })
+    try {
+      await render()
+      const button = host.querySelector<HTMLButtonElement>('[aria-label="添加演示文稿"]')
+      expect(button?.disabled).toBe(true)
+      expect(button?.textContent).toContain("仅 Windows x64")
+      expect(api().importArchive).not.toHaveBeenCalled()
+    } finally {
+      if (previous) Object.defineProperty(window, "electron", previous)
+      else delete (window as unknown as { electron?: unknown }).electron
+    }
+  })
+
+  it.each(["0.2.4", "1.0.0"])("does not reinstall or downgrade the installed Office plugin %s", async version => {
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({ identity: {
+      id: "vykor.office-work", name: "office-work", version,
+    }, enabled: false })] })
+    await render()
+    expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
+    expect(host.querySelector('[aria-label="更新演示文稿"]')).toBeNull()
+    expect(api().importArchive).not.toHaveBeenCalled()
+  })
+
   it("does not reinstall an included plugin that the user has disabled", async () => {
     api().snapshot.mockResolvedValue({
       ...snapshot,

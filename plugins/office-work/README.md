@@ -18,7 +18,9 @@
 
 0.2.4：创建前按最终表格行高检查与显式定位文本框的重叠，预留 6pt 间距。冲突时拒绝创建，返回具体页码、表格、文本框及下方文本最小 y；放不下时要求精简或拆页。仅检查明确尺寸的文本框，不检查装饰背景，不自动移动内容，不扫描或修改已有 PPT，仍需截图检查实际排版。
 
-Windows PowerShell 构建：`powershell -ExecutionPolicy Bypass -File plugins/office-work/scripts/build.ps1`。下载固定版本并核对 SHA256，统一输出 `apps/desktop/out/bundled-plugins/office-work.zip`。导入此 ZIP，新建会话选择“演示文稿”。二进制不提交 Git。
+Windows x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面插件市场的“演示文稿”条目点击“添加”，按提示确认权限即可安装，无需手动选取 ZIP。已安装同版本或更新版本时不重复安装，旧版本可点击“更新”；安装后新建会话选择“演示文稿”。其他平台暂不提供安装。
+
+单独构建 ZIP 仍可使用 Windows PowerShell：`powershell -ExecutionPolicy Bypass -File plugins/office-work/scripts/build.ps1`。下载固定版本并核对 SHA256，统一输出 `apps/desktop/out/bundled-plugins/office-work.zip`，可手动导入。二进制不提交 Git。
 
 测试：先构建准备引擎，再 `node --test plugins/office-work/test/*.test.mjs`。真实引擎测试在临时目录运行，不修改用户材料。
 

@@ -11,7 +11,7 @@ export interface DesktopPluginActionInput extends DesktopPluginContextInput {
 }
 
 export interface DesktopPluginArchiveImportInput extends DesktopPluginContextInput {
-  bundledPlugin?: "knowledge-work"
+  bundledPlugin?: "knowledge-work" | "office-work"
 }
 
 export interface DesktopPluginGitImportInput extends DesktopPluginContextInput {

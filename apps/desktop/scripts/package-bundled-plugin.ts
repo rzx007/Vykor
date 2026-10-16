@@ -7,14 +7,36 @@ export async function packageKnowledgeWorkPlugin(
   sourceDirectory: string,
   outputDirectory: string
 ): Promise<void> {
+  await packageNativePlugin(sourceDirectory, outputDirectory, "knowledge-work.zip")
+}
+
+export async function packageOfficeWorkPlugin(
+  sourceDirectory: string,
+  outputDirectory: string,
+  engineBinaryPath: string,
+  engineModulePath: string
+): Promise<void> {
+  await packageNativePlugin(sourceDirectory, outputDirectory, "office-work.zip", {
+    "bin/officecli-win-x64.exe": engineBinaryPath,
+    "tools/office-engine.mjs": engineModulePath,
+  })
+}
+
+async function packageNativePlugin(
+  sourceDirectory: string,
+  outputDirectory: string,
+  archiveName: string,
+  preparedFiles: Record<string, string> = {}
+): Promise<void> {
   const zip = new JSZip()
   const date = new Date("2000-01-01T00:00:00Z")
   async function addDirectory(directory: string, prefix = ""): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true })
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!prefix && entry.isDirectory() && entry.name === "test") continue
+      if (!prefix && ["test", "scripts", "out", "bin", ".gitignore"].includes(entry.name)) continue
       const filePath = join(directory, entry.name)
       const archivePath = `${prefix}${entry.name}`
+      if (archivePath in preparedFiles) continue
       if (entry.isDirectory()) await addDirectory(filePath, `${archivePath}/`)
       else if (entry.isFile()) {
         zip.file(archivePath, await readFile(filePath), { date, createFolders: false })
@@ -22,7 +44,10 @@ export async function packageKnowledgeWorkPlugin(
     }
   }
   await addDirectory(sourceDirectory)
+  for (const [archivePath, sourcePath] of Object.entries(preparedFiles)) {
+    zip.file(archivePath, await readFile(sourcePath), { date, createFolders: false })
+  }
   await mkdir(outputDirectory, { recursive: true })
   const archive = await zip.generateAsync({ type: "nodebuffer", compression: "STORE" })
-  await writeFile(join(outputDirectory, "knowledge-work.zip"), archive)
+  await writeFile(join(outputDirectory, archiveName), archive)
 }

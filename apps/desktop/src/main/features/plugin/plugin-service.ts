@@ -100,13 +100,16 @@ export class DesktopPluginService {
     let archivePath: string | null
     try {
       if (input.bundledPlugin !== undefined) {
-        if (input.bundledPlugin !== "knowledge-work") {
+        if (input.bundledPlugin !== "knowledge-work" && input.bundledPlugin !== "office-work") {
           return archiveFailure("找不到这个内置插件。", [{ code: "plugin_bundled_unknown" }])
+        }
+        if (input.bundledPlugin === "office-work" && (process.platform !== "win32" || process.arch !== "x64")) {
+          return archiveFailure("演示文稿插件目前仅支持 Windows x64。", [{ code: "plugin_bundled_unsupported_platform" }])
         }
         archivePath = join(
           app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "out"),
           "bundled-plugins",
-          "knowledge-work.zip"
+          `${input.bundledPlugin}.zip`
         )
       } else {
         archivePath = await this.chooseArchive(sender)

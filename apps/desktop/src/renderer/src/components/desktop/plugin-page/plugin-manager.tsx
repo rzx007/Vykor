@@ -190,7 +190,7 @@ export function PluginManager({
       destructive: true,
     })
   }
-  async function importArchive(bundledPlugin?: "knowledge-work"): Promise<void> {
+  async function importArchive(bundledPlugin?: "knowledge-work" | "office-work"): Promise<void> {
     if (!api || lock.current) return
     lock.current = true
     setBusy(true)
@@ -342,6 +342,10 @@ export function PluginManager({
     values.join(" ").toLocaleLowerCase().includes(normalizedQuery)
   const plugins = snapshot?.plugins ?? []
   const knowledgeWork = plugins.find((plugin) => plugin.identity.id === "vykor.knowledge-work")
+  const officeWork = plugins.find((plugin) => plugin.identity.id === "vykor.office-work")
+  const officeWorkAction = !officeWork ? "添加"
+    : officeWork.identity.version.localeCompare("0.2.4", undefined, { numeric: true }) < 0 ? "更新" : null
+  const officeSupported = window.electron?.process?.platform === "win32"
   const knowledgeWorkAction = !knowledgeWork
     ? "添加"
     : knowledgeWork.identity.version === "1.0.0"
@@ -403,6 +407,20 @@ export function PluginManager({
                 onClick={() => void importArchive("knowledge-work")}
               >
                 {knowledgeWorkAction}
+              </Button>
+            </section>
+          ) : null}
+          {!loading && officeWorkAction && matches("演示文稿", "office-work", "PPTX") ? (
+            <section className="flex items-center justify-between gap-4" aria-label="内置演示文稿">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-medium">演示文稿</h2>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  应用内置。创建、读取、修改和预览可编辑 PPTX。目前仅支持 Windows x64。
+                </p>
+              </div>
+              <Button variant="outline" shape="pill" disabled={busy || !api || !officeSupported}
+                aria-label={`${officeWorkAction}演示文稿`} onClick={() => void importArchive("office-work")}>
+                {officeSupported ? officeWorkAction : "仅 Windows x64"}
               </Button>
             </section>
           ) : null}
