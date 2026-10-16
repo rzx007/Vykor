@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react"
+import { act, StrictMode, useLayoutEffect } from "react"
 import { MessageChannel } from "node:worker_threads"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -11,15 +11,39 @@ import { usePluginUiHost } from "./plugin-ui-provider"
 import { ConversationScrollerProvider } from "../conversation-scroller"
 import { useConversationScroller } from "../conversation-scroll-context"
 import { TranscriptRowContext } from "../transcript/virtual-transcript-row"
-const fixture = vi.hoisted(() => ({ view: null as any }))
+import type { DesktopPluginUiAPI, PluginUiHostState } from "@shared/plugin-ui-types"
+import type { DesktopSessionPart } from "@shared/session-types"
+import type { InvokePluginUiActionInput } from "@vykor/client"
+type FixtureView = {
+  cursor: number
+  syncStatus: string
+  session: { id: string; status: string; metadata: object }
+  parts: DesktopSessionPart[]
+  runs: unknown[]
+}
+const fixture = vi.hoisted(() => ({ view: null as FixtureView | null }))
 vi.mock("@renderer/stores/desktop-session", () => ({
   useDesktopSessionStore: (selector) =>
     selector({ sessionView: fixture.view, activeSessionId: "session" }),
 }))
-let root: Root, container: HTMLDivElement, api: any
+let root: Root, container: HTMLDivElement
+type MockApi = Pick<
+  DesktopPluginUiAPI,
+  "prepareConversation" | "submitConversation" | "getConversationSubmission"
+> & {
+  capabilities: ReturnType<typeof vi.fn<DesktopPluginUiAPI["capabilities"]>>
+  mount: ReturnType<typeof vi.fn<DesktopPluginUiAPI["mount"]>>
+  getState: ReturnType<typeof vi.fn<() => Promise<PluginUiHostState>>>
+  dismiss: ReturnType<typeof vi.fn<DesktopPluginUiAPI["dismiss"]>>
+  onRevoked: ReturnType<typeof vi.fn<DesktopPluginUiAPI["onRevoked"]>>
+  unmount: ReturnType<typeof vi.fn<DesktopPluginUiAPI["unmount"]>>
+  invokeAction: DesktopPluginUiAPI["invokeAction"]
+  getAction: DesktopPluginUiAPI["getAction"]
+}
+let api: MockApi
 const ports: import("node:worker_threads").MessagePort[] = []
 beforeEach(() => {
-  ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -31,11 +55,16 @@ beforeEach(() => {
     runs: [],
   }
   api = {
+    prepareConversation: vi.fn<DesktopPluginUiAPI["prepareConversation"]>(),
+    submitConversation: vi.fn<DesktopPluginUiAPI["submitConversation"]>(),
+    getConversationSubmission: vi.fn<DesktopPluginUiAPI["getConversationSubmission"]>(),
+    invokeAction: vi.fn<DesktopPluginUiAPI["invokeAction"]>(),
+    getAction: vi.fn<DesktopPluginUiAPI["getAction"]>(),
     capabilities: vi.fn(async () => ({ available: true })),
-    mount: vi.fn(async () => {
+    mount: vi.fn<DesktopPluginUiAPI["mount"]>(async () => {
       throw new Error("offline")
     }),
-    getState: vi.fn(async () => ({
+    getState: vi.fn(async (): Promise<PluginUiHostState> => ({
       snapshot,
       plugin: { id: "example.ui", version: "1" },
       title: "检查结果",
@@ -43,7 +72,11 @@ beforeEach(() => {
       conversation: { draft: false, submit: false },
       actions: [{ id: "apply", label: "应用", toolName: "Inspect", completion: "keep-open" }],
     })),
-    dismiss: vi.fn(async () => ({ ...instance, status: "dismissed", revision: 2 })),
+    dismiss: vi.fn<DesktopPluginUiAPI["dismiss"]>(async () => ({
+      ...instance,
+      status: "dismissed",
+      revision: 2,
+    })),
     onRevoked: vi.fn(() => () => {}),
     unmount: vi.fn(async () => {}),
   }
@@ -55,7 +88,7 @@ afterEach(() => {
   container.remove()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  delete (globalThis as any).IS_REACT_ACT_ENVIRONMENT
+  delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
 })
 async function render() {
   await act(async () =>
@@ -69,7 +102,10 @@ async function render() {
 it("retains an open interaction's virtual row until its display closes", async () => {
   let scroller: NonNullable<ReturnType<typeof useConversationScroller>>
   function Probe() {
-    scroller = useConversationScroller()!
+    const value = useConversationScroller()!
+    useLayoutEffect(() => {
+      scroller = value
+    }, [value])
     return null
   }
   api.mount.mockResolvedValue({
@@ -151,7 +187,7 @@ it("can dismiss without an iframe, but never submits before or after cancelled c
 it("cancels a pending confirmation when the source part disappears", async () => {
   await render()
   await click("取消交互")
-  fixture.view = { ...fixture.view, cursor: 2, parts: [] }
+  fixture.view = { ...fixture.view!, cursor: 2, parts: [] }
   await render()
   expect(document.body.textContent).not.toContain("确认取消")
   expect(api.dismiss).not.toHaveBeenCalled()
@@ -226,11 +262,17 @@ async function connectedFrame() {
   const frame = container.querySelector("iframe")!
   expect(frame.getAttribute("sandbox")).toBe("allow-scripts")
   expect(frame.hasAttribute("srcdoc")).toBe(false)
-  const packets: any[] = []
+  const packets: {
+    id?: string
+    type?: string
+    error?: { code: string }
+    result?: { runId: string }
+    snapshot?: { revision: number; data: { count: number } }
+  }[] = []
   let port!: import("node:worker_threads").MessagePort
   vi.spyOn(frame.contentWindow!, "postMessage").mockImplementation(
-    (_message, _origin?: any, transferred?: any) => {
-      port = transferred[0]
+    (_message, _origin?: string | WindowPostMessageOptions, transferred?: Transferable[]) => {
+      port = transferred![0] as unknown as import("node:worker_threads").MessagePort
       ports.push(port)
       port.on("message", (data) => packets.push(JSON.parse(data)))
     }
@@ -262,7 +304,7 @@ async function connectedFrame() {
   return { packets, port, send }
 }
 it("runs open → request → host confirmation → one receipt → existing stream update", async () => {
-  const persisted: any[] = []
+  const persisted: InvokePluginUiActionInput[] = []
   api.invokeAction = async ({ input }) => {
     persisted.push(structuredClone(input))
     return {
@@ -306,7 +348,7 @@ it("runs open → request → host confirmation → one receipt → existing str
     ...(await api.getState()),
     snapshot: { ...snapshot, revision: 2, data: { count: 2 } },
   })
-  fixture.view = { ...fixture.view, cursor: 2 }
+  fixture.view = { ...fixture.view!, cursor: 2 }
   await render()
   await vi.waitFor(() =>
     expect(
@@ -323,10 +365,10 @@ it("runs open → request → host confirmation → one receipt → existing str
   expect(persisted).toHaveLength(1)
 })
 it("keeps the original revision while confirmation is open and rejects a later conflict", async () => {
-  const submitted: any[] = []
+  const submitted: Parameters<DesktopPluginUiAPI["invokeAction"]>[0][] = []
   api.invokeAction = async (input) => {
     submitted.push(input)
-    return {}
+    throw new Error("conflicting action must not be submitted")
   }
   const f = await connectedFrame()
   await f.send("conflict")
@@ -334,7 +376,7 @@ it("keeps the original revision while confirmation is open and rejects a later c
     ...(await api.getState()),
     snapshot: { ...snapshot, revision: 2 },
   })
-  fixture.view = { ...fixture.view, cursor: 2 }
+  fixture.view = { ...fixture.view!, cursor: 2 }
   await render()
   await click("确认执行")
   await vi.waitFor(() =>
@@ -354,9 +396,9 @@ it("looks up the original request after a submission timeout, without another ad
     expectedRevision: 1,
     args: {},
   }
-  const admitted: any[] = [],
-    lookedUp: any[] = []
-  const receipt = {
+  const admitted: Parameters<DesktopPluginUiAPI["invokeAction"]>[0][] = [],
+    lookedUp: Parameters<DesktopPluginUiAPI["getAction"]>[0][] = []
+  const receipt: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>> = {
     requestId: input.requestId,
     instanceId: instance.instanceId,
     revision: 2,
@@ -387,7 +429,7 @@ it("rejects a third display and refuses an undeclared position", async () => {
     { ...instance, instanceId: "10000000-0000-4000-8000-000000000003", sourcePartId: "part3" },
   ]
   fixture.view = {
-    ...fixture.view,
+    ...fixture.view!,
     parts: sources.map((source) => ({
       ...sourcePart,
       id: source.sourcePartId,

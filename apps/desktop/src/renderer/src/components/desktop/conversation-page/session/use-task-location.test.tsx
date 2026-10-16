@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, Profiler } from "react"
+import { act, Profiler, useLayoutEffect } from "react"
 import { createRoot } from "react-dom/client"
 import { afterEach, expect, it } from "vitest"
 import { useTaskLocation } from "./use-task-location"
@@ -10,7 +10,9 @@ let changeLocation: (value: "default" | "current" | "worktree") => void
 
 function Picker({ projectId }: { projectId: string | null }) {
   const [location, setLocation] = useTaskLocation(projectId)
-  changeLocation = setLocation
+  useLayoutEffect(() => {
+    changeLocation = setLocation
+  }, [setLocation])
   return <span>{location}</span>
 }
 

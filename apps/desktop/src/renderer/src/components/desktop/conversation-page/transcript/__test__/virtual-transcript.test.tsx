@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react"
+import { act, useLayoutEffect, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import {
@@ -91,7 +91,10 @@ class LayoutObserver {
 }
 
 function Probe() {
-  scroller = useConversationScroller()!
+  const value = useConversationScroller()!
+  useLayoutEffect(() => {
+    scroller = value
+  }, [value])
   return null
 }
 function rows(count: number): TranscriptRow[] {
@@ -198,7 +201,9 @@ beforeEach(() => {
       bottom: this.offsetHeight,
       width: 1000,
       height: this.offsetHeight,
-      toJSON() {},
+      toJSON() {
+        return {}
+      },
     }
   })
   HTMLElement.prototype.scrollTo = function (options) {
