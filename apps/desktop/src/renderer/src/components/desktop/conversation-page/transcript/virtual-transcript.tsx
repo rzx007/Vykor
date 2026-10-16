@@ -82,20 +82,23 @@ function VirtualTranscriptViewport({
     (instance: Virtualizer<HTMLDivElement, HTMLDivElement>) => {
       const first = instance.range?.startIndex
       const viewport = state.viewportRef.current
+      const end = Math.max(0, instance.getTotalSize() - (viewport?.clientHeight ?? 0))
+      // directDomUpdates 已在 onChange 前写入容器高度。此时对齐可在同次测量中完成，
+      // 避免流式增长先露出空隙、再等下一帧补滚动；用户上滚后立即停止。
+      if (viewport && state.getSnapshot().following && Math.abs(viewport.scrollTop - end) > 1)
+        instance.scrollToEnd({ behavior: "auto" })
       state.setPosition(
-        viewport ? instance.getTotalSize() - viewport.clientHeight - viewport.scrollTop <= 8 : true,
+        viewport ? end - viewport.scrollTop <= 8 : true,
         first === undefined
           ? null
           : (rows[first]?.navigationId ?? rows[first]?.messageIds[0] ?? null)
       )
-      // 容器增高后再对齐一次底部，避免浏览器把提前写入的 scrollTop 限制在旧高度。
+      // 新挂载节点尚未完成布局时仍可能被浏览器限位，只为这种情况保留一帧补偿。
       if (
         viewport &&
         state.getSnapshot().following &&
         followFrame.current === null &&
-        Math.abs(
-          viewport.scrollTop - Math.max(0, instance.getTotalSize() - viewport.clientHeight)
-        ) > 1
+        Math.abs(viewport.scrollTop - end) > 1
       ) {
         followFrame.current = window.requestAnimationFrame(() => {
           followFrame.current = null

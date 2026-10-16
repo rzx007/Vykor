@@ -272,6 +272,55 @@ it("follows appended turns and streaming height changes only while at the end", 
   expect(scroller.getSnapshot().atEnd).toBe(true)
 })
 
+it("aligns streaming growth in the measurement delivery without waiting another frame", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  const before = viewport().scrollTop
+  heights.set("turn-999", 420)
+  await act(async () => {
+    for (const observer of [...observers]) observer.flush()
+  })
+  expect(viewport().scrollTop).toBe(before + 300)
+  expect(scroller.getSnapshot().atEnd).toBe(true)
+})
+
+it("gives upward intent priority when growth arrives before React commits the scroll mode", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  const before = viewport().scrollTop
+  await act(async () => {
+    viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }))
+    heights.set("turn-999", 420)
+    for (const observer of [...observers]) observer.flush()
+  })
+  expect(viewport().scrollTop).toBe(before)
+  expect(scroller.getSnapshot().following).toBe(false)
+  await settle()
+  expect(viewport().scrollTop).toBe(before)
+})
+
+it("follows reply growth before a footer and stays at the end when that footer disappears", async () => {
+  const items = [
+    ...rows(1000),
+    { id: "status", messageIds: [], navigationId: "prompt-999", estimateSize: 32 },
+  ]
+  heights.set("status", 32)
+  act(() => render(items))
+  await settle()
+  const before = viewport().scrollTop
+  heights.set("turn-999", 420)
+  await act(async () => {
+    for (const observer of [...observers]) observer.flush()
+  })
+  expect(viewport().scrollTop).toBe(before + 300)
+  expect(scroller.getSnapshot().atEnd).toBe(true)
+  act(() => render(items.slice(0, -1)))
+  await settle()
+  expect(scroller.getSnapshot().atEnd).toBe(true)
+  expect(scroller.getSnapshot().following).toBe(true)
+  expect(row(999)).not.toBeNull()
+})
+
 it("honors upward intent before the native scroll event and resumes through jump to latest", async () => {
   act(() => render(rows(1000)))
   await settle()
@@ -558,4 +607,27 @@ it("navigates to unmounted turns and resets the scroll state on conversation cha
   await settle()
   expect(row(999)).not.toBeNull()
   expect(scroller.getSnapshot().following).toBe(true)
+})
+
+it("reuses measured heights after offscreen remounts and rebuilding rows with the same IDs", async () => {
+  const items = rows(1000)
+  heights.set("turn-400", 620)
+  act(() => render(items))
+  await settle()
+  act(() => scroller.scrollToMessage("prompt-400"))
+  await settle()
+  const measuredTotal = viewport().scrollHeight
+  act(() => scroller.scrollToEnd())
+  await settle()
+  expect(row(400)).toBeNull()
+  expect(viewport().scrollHeight).toBe(measuredTotal)
+
+  act(() => render(items.map((item) => ({ ...item }))))
+  // 在新的 ResizeObserver 回调前，已测得的行高就应继续有效。
+  expect(viewport().scrollHeight).toBe(measuredTotal)
+  act(() => scroller.scrollToMessage("prompt-400"))
+  await settle()
+  expect(row(400)).not.toBeNull()
+  expect(viewport().scrollHeight).toBe(measuredTotal)
+  expect(scroller.getSnapshot().activeMessageId).toBe("prompt-400")
 })
