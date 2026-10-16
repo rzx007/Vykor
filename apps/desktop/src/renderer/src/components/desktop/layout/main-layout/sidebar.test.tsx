@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { createActivityState } from "@renderer/stores/desktop-session/activity-state"
+import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import type { DesktopSessionRecord } from "@shared/session-types"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "./sidebar-section-expansion"
 import { Sidebar } from "./sidebar"
@@ -34,11 +35,15 @@ vi.mock("@renderer/components/ui/scroll-area", () => ({
   ),
 }))
 
+const sidebarMetrics = vi.hoisted(() => ({ renders: 0 }))
 vi.mock("@renderer/components/appearance/appearance-provider", () => ({
-  useAppearance: () => ({
-    resolvedTheme: "light" as const,
-    setPreference: vi.fn(),
-  }),
+  useAppearance: () => {
+    sidebarMetrics.renders++
+    return {
+      resolvedTheme: "light" as const,
+      setPreference: vi.fn(),
+    }
+  },
 }))
 
 vi.mock("./daemon-autostart-card", () => ({
@@ -78,6 +83,65 @@ describe("Sidebar collapsible sections and empty states", () => {
     container.remove()
     localStorage.clear()
     vi.clearAllMocks()
+  })
+
+  it("does not rerender the sidebar for text-only updates in a long running conversation", async () => {
+    const view = emptySessionView("sidebar-stream")
+    view.session.status = "running"
+    view.session.workspaceMode = "outside_project"
+    view.parts = Array.from({ length: 10000 }, (_, index) => ({
+      id: `part-${index}`,
+      sessionId: view.session.id,
+      messageId: "reply",
+      seq: index,
+      type: "text",
+      status: "completed",
+      text: "历史消息",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }))
+    useDesktopSessionStore.setState({
+      sessions: [view.session],
+      activeSessionId: view.session.id,
+      sessionView: view,
+    })
+    await act(async () =>
+      root.render(
+        <Sidebar
+          open
+          onOpenSettings={() => {}}
+          onOpenScheduled={() => {}}
+          onOpenPlugins={() => {}}
+          onOpenConversation={() => {}}
+        />
+      )
+    )
+    sidebarMetrics.renders = 0
+    for (let index = 1; index <= 20; index++) {
+      await act(async () =>
+        useDesktopSessionStore.setState({
+          sessionView: {
+            ...view,
+            cursor: index,
+            parts: [
+              ...view.parts.slice(0, -1),
+              { ...view.parts.at(-1)!, text: "新增".repeat(index), status: "running" },
+            ],
+          },
+        })
+      )
+    }
+    console.info(
+      JSON.stringify({
+        scenario: "sidebar-text-stream",
+        history: 10000,
+        updates: 20,
+        renders: sidebarMetrics.renders,
+      })
+    )
+    expect(sidebarMetrics.renders).toBe(0)
+    expect(container.querySelector('[aria-label*="正在运行"]')).not.toBeNull()
   })
 
   it("renders both sections expanded by default and shows empty state text", () => {

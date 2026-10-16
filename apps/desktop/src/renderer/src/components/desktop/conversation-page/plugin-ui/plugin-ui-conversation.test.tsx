@@ -8,7 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { addCandidates, selectDraftAttachments, selectDraftDocument, sessionComposerScope } from "@renderer/stores/desktop-session/composer-draft-state"
-import { PluginUiProvider, usePluginUiHost } from "./plugin-ui-provider"
+import { PluginUiProvider } from "./plugin-ui-provider"
+import { usePluginUiHost } from "./plugin-ui-host-context"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { instance, snapshot, sourcePart, mountId } from "./plugin-ui-fixtures.test-support"
 let root: Root, container: HTMLDivElement, host: NonNullable<ReturnType<typeof usePluginUiHost>>
@@ -99,6 +100,33 @@ it("does not display a late response in a different source conversation", async 
   await act(async () => useDesktopSessionStore.setState({ activeSessionId: "session", sessionView: original }))
   await act(async () => finish(undefined))
   expect(host.conversationStatus).toBeNull()
+})
+it("does not publish a late accepted receipt after the plugin generation changes", async () => {
+  let finish!: () => void
+  const submit = api.submitConversation
+  api.submitConversation = async (value) => {
+    const receipt = await submit(value)
+    return await new Promise((resolve) => {
+      finish = () => resolve(receipt)
+    })
+  }
+  await send("submit")
+  await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(finish).toBeTypeOf("function")))
+  await act(async () =>
+    useDesktopSessionStore.setState((state) => ({
+      sessionView: {
+        ...state.sessionView!,
+        session: {
+          ...state.sessionView!.session,
+          metadata: { ...state.sessionView!.session.metadata, pluginUiGeneration: 2 },
+        },
+      },
+    }))
+  )
+  await act(async () => finish())
+  expect(host.conversationStatus).toBeNull()
+  expect(host.displays).toHaveLength(0)
 })
 it("queries the original request after an unknown response and never automatically POSTs again", async () => {
   api.submitConversation = async (value) => { posts.push(value); throw new Error("offline") }

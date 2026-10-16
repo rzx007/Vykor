@@ -3,11 +3,12 @@ import { act, StrictMode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { MessageChannel } from "node:worker_threads"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { PluginUiProvider, usePluginUiHost } from "./plugin-ui-provider"
+import { PluginUiProvider } from "./plugin-ui-provider"
+import { usePluginUiHost } from "./plugin-ui-host-context"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { instance, snapshot, sourcePart, mountId } from "./plugin-ui-fixtures.test-support"
 const fixture = vi.hoisted(() => ({ view: null as any }))
-vi.mock("@renderer/stores/desktop-session", () => ({ useDesktopSessionStore: (select) => select({ sessionView: fixture.view, activeSessionId: "session" }) }))
+vi.mock("@renderer/stores/desktop-session", () => ({ useDesktopSessionStore: Object.assign((select) => select({ sessionView: fixture.view, activeSessionId: "session" }), { subscribe: () => () => {} }) }))
 let root: Root, container: HTMLDivElement, host: NonNullable<ReturnType<typeof usePluginUiHost>>, api: any
 let mountReads: number, unmounts: string[], releaseUnmount: (() => void) | undefined
 let panelOpens: number

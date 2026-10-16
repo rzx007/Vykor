@@ -127,6 +127,13 @@ export function useUtilityPanelController({
   )
 
   const toggleTransitionCancelRef = useRef<(() => void) | null>(null)
+  const deferredLayoutRef = useRef<{ scopeId: string; layout: Layout } | null>(null)
+  const layoutFrameRef = useRef<number | null>(null)
+  const cancelDeferredLayout = useCallback(() => {
+    if (layoutFrameRef.current !== null) window.cancelAnimationFrame(layoutFrameRef.current)
+    layoutFrameRef.current = null
+    deferredLayoutRef.current = null
+  }, [])
   const maximizedRef = useRef(maximized)
   // Set when a scope switch changes the maximized value, so the maximize effect
   // applies the stored layout without animating. Assumes a user maximize and a
@@ -147,8 +154,9 @@ export function useUtilityPanelController({
     () => () => {
       toggleTransitionCancelRef.current?.()
       toggleTransitionCancelRef.current = null
+      cancelDeferredLayout()
     },
-    []
+    [cancelDeferredLayout]
   )
 
   if (lastOpenLayoutRef.current === null) lastOpenLayoutRef.current = defaultLayout
@@ -170,6 +178,7 @@ export function useUtilityPanelController({
 
     toggleTransitionCancelRef.current?.()
     toggleTransitionCancelRef.current = null
+    cancelDeferredLayout()
 
     const previousScopeId = activeScopeIdRef.current
     const createdSessionFromDraft = shouldMoveDraftPanelToSession(
@@ -218,6 +227,7 @@ export function useUtilityPanelController({
     return () => window.cancelAnimationFrame(frame)
   }, [
     activeSessionId,
+    cancelDeferredLayout,
     collapsedLayout,
     conversationPanelRef,
     defaultLayout,
@@ -413,10 +423,36 @@ export function useUtilityPanelController({
     (nextLayout: Layout): void => {
       if (maximized || !isOpenLayout(nextLayout)) return
       lastOpenLayoutRef.current = nextLayout
+      // 左侧开合也会改变本组宽度。分栏库继续实时布局，React 状态和存储只接收
+      // 动画结束后的最终比例，避免每帧重建整个工作区并同步写 localStorage。
+      if (groupElementRef.current?.closest("[data-panel-animating]")) {
+        deferredLayoutRef.current = { scopeId: activeScopeIdRef.current, layout: nextLayout }
+        if (layoutFrameRef.current === null) {
+          const flush = () => {
+            layoutFrameRef.current = null
+            const pending = deferredLayoutRef.current
+            if (!pending) return
+            if (pending.scopeId !== activeScopeIdRef.current || maximizedRef.current) {
+              deferredLayoutRef.current = null
+              return
+            }
+            if (groupElementRef.current?.closest("[data-panel-animating]")) {
+              layoutFrameRef.current = window.requestAnimationFrame(flush)
+              return
+            }
+            deferredLayoutRef.current = null
+            setLayout(pending.layout)
+            persistActiveView({ layout: pending.layout })
+          }
+          layoutFrameRef.current = window.requestAnimationFrame(flush)
+        }
+        return
+      }
+      cancelDeferredLayout()
       setLayout(nextLayout)
       persistActiveView({ layout: nextLayout })
     },
-    [maximized, persistActiveView]
+    [cancelDeferredLayout, groupElementRef, maximized, persistActiveView]
   )
 
   const handlePanelResize = useCallback(

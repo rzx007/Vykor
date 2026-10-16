@@ -65,6 +65,94 @@ void (async () => {
         })
       )
     }
+    window.setSize(1500, 700)
+    await window.loadFile(join(__dirname, "../renderer/panels.html"))
+    for (const count of [1000, 10000]) {
+      await run(`window.panelPerformance.prepare(${count})`)
+      for (const target of ["sidebar", "utility"]) {
+        const before = await sample()
+        const panel = await run(`window.panelPerformance.toggle('${target}')`)
+        const after = await sample()
+        console.log(
+          JSON.stringify({
+            scenario: "panel-toggle-stream",
+            history: count,
+            target,
+            panel,
+            chromium: Object.fromEntries(
+              ["ScriptDuration", "LayoutDuration", "LayoutCount"].map((name) => [
+                name,
+                +(after[name] - before[name]).toFixed(6),
+              ])
+            ),
+          })
+        )
+      }
+      for (const target of ["sidebar", "utility"]) {
+        const point = await run(`window.panelPerformance.separatorInfo('${target}')`)
+        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: point.x,
+          y: point.y,
+        })
+        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          x: point.x,
+          y: point.y,
+          button: "left",
+          buttons: 1,
+          clickCount: 1,
+        })
+        for (let step = 1; step <= 5; step++) {
+          await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+            type: "mouseMoved",
+            x: point.x + step * 6,
+            y: point.y,
+            button: "left",
+            buttons: 1,
+          })
+          await run("window.panelPerformance.growFrame()")
+        }
+        await window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x: point.x + 30,
+          y: point.y,
+          button: "left",
+          buttons: 0,
+          clickCount: 1,
+        })
+        await run(`window.panelPerformance.resized('${target}', ${point.width})`)
+        const keyboard = await run(`window.panelPerformance.separatorInfo('${target}')`)
+        await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          key: "ArrowRight",
+          code: "ArrowRight",
+          windowsVirtualKeyCode: 39,
+        })
+        await window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+          type: "keyUp",
+          key: "ArrowRight",
+          code: "ArrowRight",
+          windowsVirtualKeyCode: 39,
+        })
+        await run(`window.panelPerformance.resized('${target}', ${keyboard.width})`)
+        console.log(
+          JSON.stringify({
+            scenario: "panel-pointer-keyboard",
+            history: count,
+            target,
+            passed: true,
+          })
+        )
+      }
+      console.log(
+        JSON.stringify({
+          scenario: "panel-regression",
+          history: count,
+          result: await run("window.panelPerformance.regress()"),
+        })
+      )
+    }
     console.log(JSON.stringify({ result: "passed" }))
     clearTimeout(deadline)
     window.destroy()

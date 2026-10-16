@@ -7,7 +7,7 @@ import {
   useUtilityPanelController,
   type UtilityPanelController,
 } from "./use-utility-panel-controller"
-import { writeUtilityPanelViewStates } from "./utility-panel-repository"
+import { readUtilityPanelViewStates, writeUtilityPanelViewStates } from "./utility-panel-repository"
 
 let root: Root
 let container: HTMLDivElement
@@ -26,6 +26,7 @@ afterEach(() => {
   act(() => root.unmount())
   localStorage.removeItem("vykor.desktop.utility-panel-states")
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 function mount(
@@ -165,4 +166,98 @@ it("does not reverse an explicit open or close when animation reports an interme
   expect(workspace.controller().open).toBe(true)
   act(() => workspace.controller().handlePanelResize(0))
   expect(workspace.controller().open).toBe(false)
+})
+
+it("commits only the final split after an ancestor panel finishes animating", () => {
+  const outer = document.createElement("div")
+  const element = outer.appendChild(document.createElement("div"))
+  const workspace = mount(false, { conversation: 60, utility: 40 }, element)
+  const writes = vi.spyOn(Storage.prototype, "setItem")
+  const frames = new Map<number, FrameRequestCallback>()
+  let sequence = 0
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.set(++sequence, callback)
+    return sequence
+  })
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    frames.delete(id)
+  })
+  outer.setAttribute("data-panel-animating", "true")
+  for (let index = 1; index <= 20; index++) {
+    act(() =>
+      workspace
+        .controller()
+        .handleLayoutChanged({ conversation: 60 - index / 4, utility: 40 + index / 4 })
+    )
+  }
+  console.info(
+    JSON.stringify({
+      scenario: "ancestor-toggle-layout",
+      reports: 20,
+      writes: writes.mock.calls.length,
+    })
+  )
+  expect(writes).not.toHaveBeenCalled()
+  expect(workspace.controller().visibleLayout).toEqual({ conversation: 60, utility: 40 })
+  // 动画仍在进行时，下一帧也不能发布中间比例。
+  act(() => {
+    const queued = [...frames.values()]
+    frames.clear()
+    queued.forEach((callback) => callback(0))
+  })
+  expect(writes).not.toHaveBeenCalled()
+  outer.removeAttribute("data-panel-animating")
+  act(() => {
+    const queued = [...frames.values()]
+    frames.clear()
+    queued.forEach((callback) => callback(0))
+  })
+  expect(workspace.controller().visibleLayout).toEqual({ conversation: 55, utility: 45 })
+  expect(readUtilityPanelViewStates()["session:chat"]?.layout).toEqual({
+    conversation: 55,
+    utility: 45,
+  })
+  expect(writes).toHaveBeenCalledTimes(1)
+  writes.mockRestore()
+})
+
+it("does not let a deferred split overwrite a later session or a manual resize", () => {
+  const outer = document.createElement("div")
+  const element = outer.appendChild(document.createElement("div"))
+  const workspace = mount(false, { conversation: 60, utility: 40 }, element)
+  const frames = new Map<number, FrameRequestCallback>()
+  let sequence = 0
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.set(++sequence, callback)
+    return sequence
+  })
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    frames.delete(id)
+  })
+  const flush = () =>
+    act(() => {
+      const queued = [...frames.values()]
+      frames.clear()
+      queued.forEach((callback) => callback(0))
+    })
+  outer.setAttribute("data-panel-animating", "true")
+  act(() => workspace.controller().handleLayoutChanged({ conversation: 55, utility: 45 }))
+  outer.removeAttribute("data-panel-animating")
+  act(() => workspace.controller().handleLayoutChanged({ conversation: 62, utility: 38 }))
+  flush()
+  expect(workspace.controller().visibleLayout).toEqual({ conversation: 62, utility: 38 })
+  outer.setAttribute("data-panel-animating", "true")
+  act(() => workspace.controller().handleLayoutChanged({ conversation: 56, utility: 44 }))
+  workspace.switchSession("other")
+  outer.removeAttribute("data-panel-animating")
+  flush()
+  expect(workspace.controller().visibleLayout).toEqual({ conversation: 50, utility: 50 })
+  expect(readUtilityPanelViewStates()["session:other"]?.layout).not.toEqual({
+    conversation: 56,
+    utility: 44,
+  })
+  expect(readUtilityPanelViewStates()["session:chat"]?.layout).toEqual({
+    conversation: 62,
+    utility: 38,
+  })
 })

@@ -13,7 +13,7 @@ import {
 } from "./conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Button } from "@renderer/components/ui/button"
-import { usePluginUiHost } from "./plugin-ui/plugin-ui-provider"
+import { usePluginUiHost } from "./plugin-ui/plugin-ui-host-context"
 import {
   Select,
   SelectContent,

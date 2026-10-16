@@ -5,7 +5,7 @@ import type * as React from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { DesktopSessionView } from "@shared/session-types"
+import type { DesktopSessionPart, DesktopSessionView } from "@shared/session-types"
 
 import { resetWorkspaceGitProbeCacheForTests } from "@renderer/lib/workspace-git-probe"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -34,12 +34,123 @@ vi.mock("@renderer/components/desktop/image-viewer/image-viewer-panel", () => ({
 }))
 
 const initialStoreState = useDesktopSessionStore.getState()
+const panelMetrics = vi.hoisted(() => ({ renders: 0 }))
+vi.mock("./use-utility-panel-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./use-utility-panel-runtime")>()
+  return {
+    ...actual,
+    useUtilityPanelRuntime(scopeId: string) {
+      panelMetrics.renders++
+      return actual.useUtilityPanelRuntime(scopeId)
+    },
+  }
+})
 vi.hoisted(() => {
   // Importing the native terminal probes Canvas; this suite does not use a terminal.
-  HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext
+  HTMLCanvasElement.prototype.getContext = (() =>
+    null) as typeof HTMLCanvasElement.prototype.getContext
 })
 let mountedRoot: Root | null = null
 let mountedContainer: HTMLDivElement | null = null
+
+it.each([1000, 10000])(
+  "keeps the utility panel idle during 20 text updates across %i historical parts",
+  async (count) => {
+    let metadataReads = 0
+    const view = emptySessionView("panel-stream")
+    view.session.status = "running"
+    view.parts = Array.from({ length: count }, (_, index): DesktopSessionPart => ({
+      id: `history-${index}`,
+      sessionId: view.session.id,
+      messageId: `message-${index}`,
+      seq: index,
+      type: "text",
+      status: "completed",
+      text: "历史消息",
+      get metadata() {
+        metadataReads++
+        return {}
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    }))
+    const tail: DesktopSessionPart = {
+      id: "tail",
+      sessionId: view.session.id,
+      messageId: "reply",
+      seq: count,
+      type: "text",
+      status: "running",
+      text: "",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    view.parts.push(tail)
+    useDesktopSessionStore.setState({
+      activeSessionId: view.session.id,
+      sessionView: view,
+      selectedProject: null,
+    })
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { pluginUi: { capabilities: async () => ({ available: true }) } },
+    })
+    mountedContainer = document.createElement("div")
+    document.body.append(mountedContainer)
+    mountedRoot = createRoot(mountedContainer)
+    await act(async () =>
+      mountedRoot!.render(
+        <PluginUiProvider onOpenSidebar={() => {}}>
+          <UtilityPanel
+            scopeId={`session:panel-perf-${count}`}
+            open
+            maximized={false}
+            onToggleMaximized={() => {}}
+            onClose={() => {}}
+            fileOpenRequest={null}
+            reviewOpenRequest={null}
+            terminalOpenRequest={null}
+            toolOpenRequest={null}
+            onOpenFile={() => {}}
+            onOpenReview={() => {}}
+            onOpenTerminal={() => {}}
+          />
+        </PluginUiProvider>
+      )
+    )
+    await settle()
+    const focusedAction = mountedContainer.querySelector<HTMLButtonElement>("button")!
+    focusedAction.focus()
+    metadataReads = 0
+    panelMetrics.renders = 0
+    const start = performance.now()
+    for (let index = 1; index <= 20; index++) {
+      await act(async () =>
+        useDesktopSessionStore.setState({
+          sessionView: {
+            ...view,
+            cursor: index,
+            parts: [...view.parts.slice(0, -1), { ...tail, text: "新增".repeat(index) }],
+          },
+        })
+      )
+    }
+    console.info(
+      JSON.stringify({
+        scenario: "panel-text-stream",
+        history: count,
+        updates: 20,
+        metadataReads,
+        renders: panelMetrics.renders,
+        elapsedMs: performance.now() - start,
+      })
+    )
+    expect(metadataReads).toBe(0)
+    expect(panelMetrics.renders).toBe(0)
+    expect(document.activeElement).toBe(focusedAction)
+  }
+)
 
 beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -215,17 +326,10 @@ describe("UtilityPanel review tool access", () => {
     })
     await act(async () =>
       mountedRoot!.render(
-        createElement(PluginUiProvider, {
-          onOpenSidebar: () => {},
-          children: [
-            createElement(PluginUiCard, {
-              key: "card",
-              instance: actualInstance,
-              call: actualPart,
-            }),
-            createElement("div", { key: "panel" }, panel),
-          ],
-        })
+        <PluginUiProvider onOpenSidebar={() => {}}>
+          <PluginUiCard instance={actualInstance} call={actualPart} />
+          <div>{panel}</div>
+        </PluginUiProvider>
       )
     )
     expect(utilityToolOrder).not.toContain("plugin-ui")

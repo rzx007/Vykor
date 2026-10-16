@@ -1,8 +1,8 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -18,6 +18,8 @@ import type { DesktopSessionView } from "@shared/session-types"
 import type { DesktopPluginUiMountResult } from "@shared/plugin-ui-types"
 import { PluginUiConfirmation, type PluginUiConfirmationDetails } from "./plugin-ui-confirmation"
 import { usePluginUiConversation } from "./use-plugin-ui-conversation"
+import { PluginUiDisplaysContext } from "./plugin-ui-displays-context"
+import { PluginUiHostContext } from "./plugin-ui-host-context"
 
 export interface PluginUiDisplay {
   key: string
@@ -28,7 +30,7 @@ export interface PluginUiMountLease {
   result: Promise<DesktopPluginUiMountResult>
   release(): Promise<void>
 }
-interface Host {
+export interface PluginUiHost {
   available: boolean
   view: DesktopSessionView | null
   displays: PluginUiDisplay[]
@@ -46,8 +48,6 @@ interface Host {
   conversationStatus: ReturnType<typeof usePluginUiConversation>["status"]
   queryConversation: ReturnType<typeof usePluginUiConversation>["query"]
 }
-const Context = createContext<Host | null>(null)
-export const usePluginUiHost = () => useContext(Context)
 function hasSource(view: DesktopSessionView | null, instanceId: string): boolean {
   return Boolean(
     view?.parts.some((part) => {
@@ -74,11 +74,13 @@ export function PluginUiProvider({
   const [displays, setDisplays] = useState<PluginUiDisplay[]>([])
   const [confirmation, setConfirmation] = useState<PluginUiConfirmationDetails | null>(null)
   const viewRef = useRef(view)
-  viewRef.current = view
   const scopeRef = useRef(sessionId)
-  scopeRef.current = sessionId
   const availableRef = useRef(available)
-  availableRef.current = available
+  useLayoutEffect(() => {
+    viewRef.current = view
+    scopeRef.current = sessionId
+    availableRef.current = available
+  }, [view, sessionId, available])
   const displaysRef = useRef<PluginUiDisplay[]>([])
   // Pending loads and revocations outlive a Frame, but never retain its DOM or inputs.
   const mounts = useRef(new Map<string, PluginUiMountLease>())
@@ -86,6 +88,17 @@ export function PluginUiProvider({
   const pending = useRef<{ instanceId: string; decide(accepted: boolean): void } | null>(null)
   const generation = view?.session.metadata.pluginUiGeneration
   const syncStatus = view?.syncStatus
+  const [displayScope, setDisplayScope] = useState({ sessionId, syncStatus, generation })
+  if (
+    displayScope.sessionId !== sessionId ||
+    displayScope.syncStatus !== syncStatus ||
+    !Object.is(displayScope.generation, generation)
+  ) {
+    setDisplayScope({ sessionId, syncStatus, generation })
+    setDisplays([])
+    setConfirmation(null)
+    setAvailable(false)
+  }
   const isCurrent = useCallback((id: string) => {
     const current = viewRef.current
     return Boolean(
@@ -95,35 +108,53 @@ export function PluginUiProvider({
       hasSource(current, id)
     )
   }, [])
-  const mount = useCallback((display: PluginUiDisplay): PluginUiMountLease => {
-    const id = display.instance.instanceId
-    const previous = mounts.current.get(id)
-    const api = window.desktop.pluginUi
-    let released = false
-    let retirement: Promise<void> | undefined
-    const lease: PluginUiMountLease = {
-      result: (async () => {
-        await previous?.release()
-        if (released || !isCurrent(id) || !displaysRef.current.some(item => item.key === display.key))
-          throw new PluginUiBridgeError("plugin_ui_mount_closed")
-        return await api.mount({ sessionId: display.instance.sessionId, instanceId: id, surface: display.surface })
-      })(),
-      release: () => {
-        if (!retirement) {
-          released = true
-          retirement = lease.result.then(result => api.unmount({ mountId: result.mountId }), () => {}).finally(() => {
-            if (mounts.current.get(id) === lease) mounts.current.delete(id)
+  const mount = useCallback(
+    (display: PluginUiDisplay): PluginUiMountLease => {
+      const id = display.instance.instanceId
+      const previous = mounts.current.get(id)
+      const api = window.desktop.pluginUi
+      let released = false
+      let retirement: Promise<void> | undefined
+      const lease: PluginUiMountLease = {
+        result: (async () => {
+          await previous?.release()
+          if (
+            released ||
+            !isCurrent(id) ||
+            !displaysRef.current.some((item) => item.key === display.key)
+          )
+            throw new PluginUiBridgeError("plugin_ui_mount_closed")
+          return await api.mount({
+            sessionId: display.instance.sessionId,
+            instanceId: id,
+            surface: display.surface,
           })
-        }
-        return retirement
-      },
-    }
-    mounts.current.set(id, lease)
-    return lease
-  }, [isCurrent])
+        })(),
+        release: () => {
+          if (!retirement) {
+            released = true
+            retirement = lease.result
+              .then(
+                (result) => api.unmount({ mountId: result.mountId }),
+                () => {}
+              )
+              .finally(() => {
+                if (mounts.current.get(id) === lease) mounts.current.delete(id)
+              })
+          }
+          return retirement
+        },
+      }
+      mounts.current.set(id, lease)
+      return lease
+    },
+    [isCurrent]
+  )
   const close = useCallback((id: string, focus = true) => {
     pending.current?.instanceId === id && pending.current.decide(false)
-    displaysRef.current = displaysRef.current.filter(display => display.instance.instanceId !== id)
+    displaysRef.current = displaysRef.current.filter(
+      (display) => display.instance.instanceId !== id
+    )
     setDisplays(displaysRef.current)
     if (focus) {
       const opener = openers.current.get(id)
@@ -137,19 +168,26 @@ export function PluginUiProvider({
       opener?: HTMLElement,
       forceReload = false
     ) => {
-      if (
-        !availableRef.current ||
-        !isCurrent(instance.instanceId) ||
-        instance.surface !== surface
-      )
+      if (!availableRef.current || !isCurrent(instance.instanceId) || instance.surface !== surface)
         return
       const current = displaysRef.current
-      const existing = current.find(display => display.instance.instanceId === instance.instanceId)
-      if (!existing && (current.length >= 2 || (surface === "session-sidebar" && current.some(display => display.surface === surface)))) return
+      const existing = current.find(
+        (display) => display.instance.instanceId === instance.instanceId
+      )
+      if (
+        !existing &&
+        (current.length >= 2 ||
+          (surface === "session-sidebar" && current.some((display) => display.surface === surface)))
+      )
+        return
       pending.current?.instanceId === instance.instanceId && pending.current.decide(false)
       if (opener) openers.current.set(instance.instanceId, opener)
       const next = existing
-        ? current.map(display => display === existing ? { ...display, instance, key: forceReload ? crypto.randomUUID() : display.key } : display)
+        ? current.map((display) =>
+            display === existing
+              ? { ...display, instance, key: forceReload ? crypto.randomUUID() : display.key }
+              : display
+          )
         : [...current, { key: crypto.randomUUID(), instance, surface }]
       displaysRef.current = next
       setDisplays(next)
@@ -183,31 +221,64 @@ export function PluginUiProvider({
     [isCurrent]
   )
   const conversation = usePluginUiConversation(confirm)
-  useEffect(() => {
-    let active = true
+  useLayoutEffect(() => {
     displaysRef.current = []
-    setDisplays([])
     pending.current?.decide(false)
-    setAvailable(false)
-    if (sessionId && syncStatus === "connected")
-      void window.desktop?.pluginUi?.capabilities().then(caps => { if (active) setAvailable(caps.available) }).catch(() => {})
-    return () => { active = false }
   }, [sessionId, syncStatus, generation])
   useEffect(() => {
-    displaysRef.current = displaysRef.current.filter(display => isCurrent(display.instance.instanceId))
-    setDisplays(displaysRef.current)
+    let active = true
+    if (sessionId && syncStatus === "connected")
+      void window.desktop?.pluginUi
+        ?.capabilities()
+        .then((caps) => {
+          if (active) setAvailable(caps.available)
+        })
+        .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [sessionId, syncStatus, generation])
+  useEffect(() => {
+    const current = displaysRef.current
+    const next = current.filter((display) => isCurrent(display.instance.instanceId))
+    if (next.length !== current.length) {
+      displaysRef.current = next
+      setDisplays(next)
+    }
     if (pending.current && !isCurrent(pending.current.instanceId)) pending.current.decide(false)
   }, [view, sessionId, isCurrent])
-  useEffect(() => () => {
-    pending.current?.decide(false)
-    openers.current.clear()
-    for (const lease of mounts.current.values()) void lease.release().catch(() => {})
-  }, [])
+  useEffect(
+    () => () => {
+      pending.current?.decide(false)
+      openers.current.clear()
+      for (const lease of mounts.current.values()) void lease.release().catch(() => {})
+    },
+    []
+  )
+  const displayControls = useMemo(() => ({ displays, close }), [displays, close])
   return (
-    <Context.Provider value={{ available, view, displays, isCurrent, mount, open, close, confirm, requestConversation: conversation.request,
-      conversationStatus: conversation.status, queryConversation: conversation.query }}>
-      {children}
-      <PluginUiConfirmation details={confirmation} decide={accepted => pending.current?.decide(accepted)} />
-    </Context.Provider>
+    <PluginUiHostContext.Provider
+      value={{
+        available,
+        view,
+        displays,
+        isCurrent,
+        mount,
+        open,
+        close,
+        confirm,
+        requestConversation: conversation.request,
+        conversationStatus: conversation.status,
+        queryConversation: conversation.query,
+      }}
+    >
+      <PluginUiDisplaysContext.Provider value={displayControls}>
+        {children}
+      </PluginUiDisplaysContext.Provider>
+      <PluginUiConfirmation
+        details={confirmation}
+        decide={(accepted) => pending.current?.decide(accepted)}
+      />
+    </PluginUiHostContext.Provider>
   )
 }

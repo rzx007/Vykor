@@ -391,6 +391,36 @@ it("does not close or delete the new source when switching main chats while dele
   expect(document.querySelector('[role="alertdialog"]')).toBeNull()
 })
 
+it("does not close a returned source tab after leaving and returning while deletion is pending", async () => {
+  sideChatTargets.set("main", "side-main")
+  let finish!: (ids: string[]) => void
+  deleteSession.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  await mountUtilitySideChat()
+  await closeSideChatTab()
+  await confirmSideChatClose()
+  await act(async () =>
+    useDesktopSessionStore.setState({
+      activeSessionId: "other",
+      sessionView: emptySessionView("other"),
+    })
+  )
+  await act(async () =>
+    useDesktopSessionStore.setState({
+      activeSessionId: "main",
+      sessionView: emptySessionView("main"),
+    })
+  )
+  await act(async () => finish(["side-main"]))
+  expect(deleteSession).toHaveBeenCalledExactlyOnceWith("side-main")
+  expect(container.querySelector('section[aria-label="侧边聊天"]')).not.toBeNull()
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+})
+
 it.each(["关闭其他标签", "关闭右侧标签"])("also confirms destruction through %s", async (action) => {
   sideChatTargets.set("main", "side-main")
   writeUtilityPanelRuntimeState("session:side-chat-close", {

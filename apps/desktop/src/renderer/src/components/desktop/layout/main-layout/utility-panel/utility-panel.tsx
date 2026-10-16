@@ -1,5 +1,5 @@
 import type * as React from "react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import { BrowserTool, type BrowserToolTab } from "@renderer/components/desktop/tools/browser-tool"
 import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser-navigation"
@@ -50,7 +50,7 @@ import {
   type UtilityTool,
 } from "./utility-panel-tabs"
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
-import { usePluginUiHost } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
+import { usePluginUiDisplays } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-displays-context"
 import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import {
@@ -92,7 +92,7 @@ export function UtilityPanel({
   onOpenReview,
   onOpenTerminal,
 }: UtilityPanelProps): React.JSX.Element {
-  const pluginUi = usePluginUiHost()
+  const pluginUi = usePluginUiDisplays()
   const pluginSidebar = pluginUi?.displays.find((display) => display.surface === "session-sidebar")
   const pluginTab: UtilityTab | null = pluginSidebar
     ? {
@@ -195,7 +195,7 @@ export function UtilityPanel({
       : null
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0]
   useEffect(() => {
-    if (pluginTab) setActiveTabId(pluginTab.id)
+    if (pluginSidebar) setActiveTabId("plugin-ui:" + pluginSidebar.key)
   }, [pluginSidebar, setActiveTabId])
   const terminalCommand = terminalCommands[0] ?? null
   const pendingTerminalOpenRequest =
@@ -371,6 +371,23 @@ export function UtilityPanel({
     return () => window.clearTimeout(timer)
   }, [addTab, handledToolRequestId, setHandledToolRequestId, toolOpenRequest])
 
+  function persistFileTabs(paths: string[], activePath: string | null): void {
+    if (!selectedProjectPath) return
+    setPersistedFileTabs((current) => {
+      const nextState = { ...current }
+      if (paths.length === 0) {
+        delete nextState[scopeId]
+      } else {
+        nextState[scopeId] = {
+          activePath,
+          paths: paths.slice(0, 12),
+        }
+      }
+      writePersistedUtilityFileTabs(nextState)
+      return nextState
+    })
+  }
+
   const finishCloseTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
     const closingIds = new Set(tabIds)
     if (closingIds.size === 0) return
@@ -455,7 +472,9 @@ export function UtilityPanel({
       ])
     }
   }
-  latestCloseTabs.current = finishCloseTabs
+  useLayoutEffect(() => {
+    latestCloseTabs.current = finishCloseTabs
+  })
 
   const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
     if (closeInProgress.current) return
@@ -469,12 +488,16 @@ export function UtilityPanel({
     }
     finishCloseTabs(tabIds, preferredActiveTabId)
   }
-  const closeContext = useRef({ scopeId, activeSessionId })
-  closeContext.current = { scopeId, activeSessionId }
-  useEffect(() => {
+  const [closeScope, setCloseScope] = useState({ scopeId, activeSessionId })
+  const closeContext = useRef(closeScope)
+  useLayoutEffect(() => {
+    closeContext.current = closeScope
+  }, [closeScope])
+  if (closeScope.scopeId !== scopeId || closeScope.activeSessionId !== activeSessionId) {
+    setCloseScope({ scopeId, activeSessionId })
     setPendingSideChatClose(null)
     setSideChatCloseError(null)
-  }, [scopeId, activeSessionId])
+  }
 
   const confirmSideChatClose = async (): Promise<void> => {
     const request = pendingSideChatClose
@@ -485,6 +508,7 @@ export function UtilityPanel({
     try {
       await destroySideChat(request.sourceId)
       if (
+        closeContext.current === closeScope &&
         closeContext.current.scopeId === request.scopeId &&
         closeContext.current.activeSessionId === request.sourceId
       ) {
@@ -493,6 +517,7 @@ export function UtilityPanel({
       }
     } catch (cause) {
       if (
+        closeContext.current === closeScope &&
         closeContext.current.scopeId === request.scopeId &&
         closeContext.current.activeSessionId === request.sourceId
       )
@@ -574,23 +599,6 @@ export function UtilityPanel({
         .map((tab) => tab.preview.path),
       nextFileTab.preview.scope === "extra-root" ? null : nextFileTab.preview.path
     )
-  }
-
-  const persistFileTabs = (paths: string[], activePath: string | null): void => {
-    if (!selectedProjectPath) return
-    setPersistedFileTabs((current) => {
-      const nextState = { ...current }
-      if (paths.length === 0) {
-        delete nextState[scopeId]
-      } else {
-        nextState[scopeId] = {
-          activePath,
-          paths: paths.slice(0, 12),
-        }
-      }
-      writePersistedUtilityFileTabs(nextState)
-      return nextState
-    })
   }
 
   const updateBrowserTab = (tabId: string, patch: Partial<BrowserToolTab>): void => {

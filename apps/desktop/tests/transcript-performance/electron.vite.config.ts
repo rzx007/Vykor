@@ -21,7 +21,12 @@ export default defineConfig({
     },
     build: {
       outDir: resolve(output, "renderer"),
-      rollupOptions: { input: resolve("tests/transcript-performance/host.html") },
+      rollupOptions: {
+        input: {
+          host: resolve("tests/transcript-performance/host.html"),
+          panels: resolve("tests/transcript-performance/panels.html"),
+        },
+      },
     },
   },
 })

@@ -6,7 +6,7 @@ import { Button } from "@renderer/components/ui/button"
 import { toolOutputText } from "../message/message-content"
 import { toolCallStatus } from "../message/message-render-model"
 import { PluginUiFrame } from "./plugin-ui-frame"
-import { usePluginUiHost } from "./plugin-ui-provider"
+import { usePluginUiHost } from "./plugin-ui-host-context"
 import { useToolDetails } from "../message/use-tool-details"
 import { useRetainTranscriptRow } from "../transcript/virtual-transcript-row"
 
