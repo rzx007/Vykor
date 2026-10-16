@@ -4,11 +4,11 @@ export interface ThinkExtraction {
   leftover: string;
 }
 
-const THINK_TAG = "<think>";
-const THINK_PAIR_RE = /<think>([\s\S]*?)<\/think>/g;
+const THINK_TAGS = ["<think>", "<thinking>"];
+const THINK_PAIR_RE = /<(think|thinking)>([\s\S]*?)<\/\1>/g;
 
 /**
- * 把正文里的 `<think>…</think>` 拆成三段：可见正文、思考内容、需要等下一个
+ * 把正文里的 `<think>` 或 `<thinking>` 块拆成三段：可见正文、思考内容、需要等下一个
  * chunk 的残留。`final: true` 表示流已结束：未闭合的块整体算思考内容，只有
  * "可能是标签前缀"的尾巴按正文放出。
  */
@@ -25,16 +25,17 @@ export function extractThinkBlocks(
     const match = THINK_PAIR_RE.exec(rest);
     if (!match) break;
     visible += rest.slice(0, match.index);
-    reasoning += match[1] ?? "";
+    reasoning += match[2] ?? "";
     rest = rest.slice(match.index + match[0].length);
   }
 
-  const openIndex = rest.indexOf(THINK_TAG);
-  if (openIndex !== -1) {
+  const opening = /<(?:think|thinking)>/.exec(rest);
+  if (opening) {
+    const openIndex = opening.index;
     visible += rest.slice(0, openIndex);
     const tail = rest.slice(openIndex);
     if (options.final) {
-      return { visible, reasoning: reasoning + tail.slice(THINK_TAG.length), leftover: "" };
+      return { visible, reasoning: reasoning + tail.slice(opening[0].length), leftover: "" };
     }
     return { visible, reasoning, leftover: tail };
   }
@@ -43,9 +44,9 @@ export function extractThinkBlocks(
     return { visible: visible + rest, reasoning, leftover: "" };
   }
 
-  const maxPrefix = Math.min(rest.length, THINK_TAG.length - 1);
+  const maxPrefix = Math.min(rest.length, Math.max(...THINK_TAGS.map(tag => tag.length)) - 1);
   for (let prefixLen = maxPrefix; prefixLen > 0; prefixLen--) {
-    if (THINK_TAG.startsWith(rest.slice(rest.length - prefixLen))) {
+    if (THINK_TAGS.some(tag => tag.startsWith(rest.slice(rest.length - prefixLen)))) {
       return {
         visible: visible + rest.slice(0, rest.length - prefixLen),
         reasoning,

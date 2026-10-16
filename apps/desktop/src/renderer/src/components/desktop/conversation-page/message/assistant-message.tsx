@@ -71,6 +71,9 @@ const streamingTextAnimation = {
   stagger: 0,
 } as const
 
+// 长正文不再为每个字符创建动画节点，避免流式更新时出现大量透明文字层。
+const maxAnimatedTextChars = 2_000
+
 type AssistantMessageProps = {
   parts: DesktopSessionPart[]
   summaryParts?: DesktopSessionPart[]
@@ -338,6 +341,7 @@ function AssistantMarkdown({
   )
   // 让 Streamdown 记住已有文字，重新打开进行中的回复时不重播历史。
   const [initialText] = useState(() => (animateInitialText ? "" : text))
+  const animateText = streaming && text.length <= maxAnimatedTextChars
 
   return (
     <div
@@ -347,7 +351,7 @@ function AssistantMarkdown({
     >
       <Streamdown
         className="desktop-streamdown space-y-0"
-        animated={streamingTextAnimation}
+        animated={animateText ? streamingTextAnimation : false}
         isAnimating={streaming}
         mode={streaming ? "streaming" : "static"}
         controls

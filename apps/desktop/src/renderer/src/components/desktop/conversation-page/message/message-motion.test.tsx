@@ -120,6 +120,25 @@ it("does not animate completed history", async () => {
   expect(container.textContent).toContain("历史正文")
 })
 
+it("settles character animation once a streaming reply grows long and keeps appended Markdown visible", async () => {
+  await renderReply("简短开头", true)
+  expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
+
+  const longText = "长正文内容。".repeat(400)
+  await renderReply(`${longText}\n\n1. 普通列表文字与 \`inlineCode\``, true)
+  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  expect(container.textContent).toContain(longText)
+  expect(container.querySelector("li")?.textContent).toContain("普通列表文字")
+  expect(container.querySelector("code")?.textContent).toBe("inlineCode")
+
+  await renderReply(`${longText}\n\n后续内容`, true)
+  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  expect(container.textContent).toContain("后续内容")
+  await renderReply(`${longText}\n\n最终内容`, false)
+  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  expect(container.textContent).toContain("最终内容")
+})
+
 it("enters a new standalone tool once and leaves restored tools settled", async () => {
   const tool: DesktopSessionPart = {
     ...part(""),
