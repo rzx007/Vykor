@@ -33,6 +33,7 @@ import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { toast } from "@renderer/lib/toast"
+import { pluginErrorMessage as errorMessage } from "@renderer/lib/plugin-error"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopPluginInfo, DesktopPluginSnapshot } from "@shared/plugin-types"
 import {
@@ -61,6 +62,7 @@ export function PluginSettings(): React.JSX.Element {
   const [message, setMessage] = useState<string | null>(null)
   const [detailTarget, setDetailTarget] = useState<DesktopPluginInfo | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<DesktopPluginInfo | null>(null)
+  const [uninstallError, setUninstallError] = useState<string | null>(null)
   const mutationInFlight = useRef(false)
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export function PluginSettings(): React.JSX.Element {
     mutationInFlight.current = true
     setBusyPlugin(plugin.identity.id)
     setMessage(null)
+    setUninstallError(null)
     try {
       const nextSnapshot = await operation()
       setSnapshot(nextSnapshot)
@@ -131,7 +134,9 @@ export function PluginSettings(): React.JSX.Element {
       setMessage(successMessage)
       return true
     } catch (mutationError) {
-      toast.error(errorMessage(mutationError))
+      const reason = errorMessage(mutationError)
+      if (uninstallTarget?.identity.id === plugin.identity.id) setUninstallError(reason)
+      toast.error(reason)
       return false
     } finally {
       mutationInFlight.current = false
@@ -317,7 +322,12 @@ export function PluginSettings(): React.JSX.Element {
 
       <AlertDialog
         open={uninstallTarget !== null}
-        onOpenChange={(open) => !open && !busyPlugin && setUninstallTarget(null)}
+        onOpenChange={(open) => {
+          if (!open && !busyPlugin) {
+            setUninstallTarget(null)
+            setUninstallError(null)
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -328,12 +338,20 @@ export function PluginSettings(): React.JSX.Element {
               将移除插件的安装记录和缓存。local linked 插件的源目录不会被删除。
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {uninstallError ? (
+            <p role="alert" className="whitespace-pre-wrap break-words text-sm text-destructive">
+              {uninstallError}
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busyPlugin !== null}>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={busyPlugin !== null}
-              onClick={uninstall}
+              onClick={(event) => {
+                event.preventDefault()
+                uninstall()
+              }}
             >
               {busyPlugin ? (
                 <LoaderCircle data-icon="inline-start" className="animate-spin" />
@@ -367,9 +385,4 @@ function PluginSettingsSkeleton(): React.JSX.Element {
       </div>
     </div>
   )
-}
-
-function errorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error)
-  return raw.replace(/^Error invoking remote method '[^']+': Error: /, "")
 }

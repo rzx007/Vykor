@@ -36,6 +36,7 @@ import { Switch } from "@renderer/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { toast } from "@renderer/lib/toast"
+import { pluginErrorMessage as errorText } from "@renderer/lib/plugin-error"
 import type {
   DesktopPluginArchiveConfirmResult,
   DesktopPluginArchiveFailureDetail,
@@ -76,11 +77,6 @@ const displayName = (plugin: DesktopPluginInfo): string =>
 const needsAttention = (plugin: DesktopPluginInfo): boolean =>
   plugin.runtimeStatus.state === "failed" || plugin.runtimeStatus.state === "degraded"
 const pluginRuntimeLabel = (plugin: DesktopPluginInfo): string => plugin.runtimeStatus.message
-const errorText = (error: unknown): string =>
-  (error instanceof Error ? error.message : String(error)).replace(
-    /^Error invoking remote method '[^']+': Error: /,
-    ""
-  )
 function groupPermissions(permissions: string[]): Array<{ label: string; values: string[] }> {
   const groups = new Map<string, string[]>()
   for (const permission of permissions) {
@@ -113,6 +109,7 @@ export function PluginManager({
   const [detailId, setDetailId] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
   const [removal, setRemoval] = useState<{ id: string; name: string } | null>(null)
+  const [uninstallError, setUninstallError] = useState<string | null>(null)
   const [approval, setApproval] = useState<Approval | null>(null)
   const [gitDialogOpen, setGitDialogOpen] = useState(false)
   const [gitUrl, setGitUrl] = useState("")
@@ -313,6 +310,7 @@ export function PluginManager({
     if (!api || lock.current || plugin.scope === "managed") return
     lock.current = true
     setBusy(true)
+    if (uninstall) setUninstallError(null)
     try {
       const input = { cwd: projectPath, pluginId: plugin.identity.id }
       const result = await (uninstall
@@ -329,7 +327,11 @@ export function PluginManager({
       }
       notify(`${displayName(plugin)} 已${uninstall ? "卸载" : plugin.enabled ? "禁用" : "启用"}。`)
     } catch (cause) {
-      if (mounted.current) reportFeedback(errorText(cause), { destructive: true })
+      if (mounted.current) {
+        const message = errorText(cause)
+        if (uninstall) setUninstallError(message)
+        reportFeedback(message, { destructive: true })
+      }
     } finally {
       lock.current = false
       if (mounted.current) setBusy(false)
@@ -610,7 +612,12 @@ export function PluginManager({
       </Dialog>
       <AlertDialog
         open={Boolean(removal)}
-        onOpenChange={(open) => !open && !busy && setRemoval(null)}
+        onOpenChange={(open) => {
+          if (!open && !busy) {
+            setRemoval(null)
+            setUninstallError(null)
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -619,12 +626,18 @@ export function PluginManager({
               将移除插件安装记录与缓存。本地链接插件的源目录不会被删除。
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {uninstallError ? (
+            <p role="alert" className="whitespace-pre-wrap break-words text-sm text-destructive">
+              {uninstallError}
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={busy}
-              onClick={() => {
+              onClick={(event) => {
+                event.preventDefault()
                 const plugin = plugins.find((item) => item.identity.id === removal?.id)
                 if (plugin) void mutate(plugin, true)
               }}

@@ -599,6 +599,23 @@ describe("PluginManager archive import", () => {
     expect(host.textContent).not.toContain("Alpha ·")
   })
 
+  it.each([
+    ["Cannot uninstall plugins while session runs are active", "当前有任务正在运行，请等待任务结束后再卸载插件。"],
+    ["Plugin not found for user: alpha", "Plugin not found for user: alpha"],
+  ])("shows the full uninstall failure in the confirmation dialog: %s", async (reason, expected) => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    api().uninstall.mockRejectedValue(new Error(`Error invoking remote method 'plugin:uninstall': VykorApiError: ${reason}`))
+    await render()
+    await click("Alpha 更多操作")
+    await click("卸载")
+    await click("确认卸载")
+
+    expect(document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent).toBe(expected)
+    expect(toastMocks.error).toHaveBeenCalledWith(expected, undefined)
+    expect(host.textContent).toContain("Alpha")
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toContain("Error invoking remote method")
+  })
+
   it("keeps managed plugin controls disabled and never starts a mutation", async () => {
     api().snapshot.mockResolvedValue(populatedSnapshot)
     await render()
