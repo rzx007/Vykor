@@ -1,11 +1,12 @@
 import { FileCode2 } from "lucide-react"
-import { isValidElement } from "react"
+import { isValidElement, useContext, useLayoutEffect } from "react"
 import { useIsCodeFenceIncomplete, type ExtraProps } from "streamdown"
 
 import { CodeBlock } from "@renderer/components/ui/code-block"
 import { cn } from "@renderer/lib/utils"
 
 import { MermaidDiagram } from "./mermaid-diagram"
+import { CodeFenceActivityContext } from "./code-fence-activity"
 
 export function StreamdownCodeBlock({
   className,
@@ -16,6 +17,12 @@ export function StreamdownCodeBlock({
     variant?: "default" | "conversation"
   }): React.JSX.Element {
   const isIncomplete = useIsCodeFenceIncomplete()
+  const codeActivity = useContext(CodeFenceActivityContext)
+  // 由真正的 Markdown 解析结果报告开放围栏，避免另写一套围栏语法扫描。
+  useLayoutEffect(() => {
+    if (isIncomplete) return codeActivity?.retain()
+    return
+  }, [codeActivity, isIncomplete])
   const language = className?.match(/language-([^\s]+)/)?.[1] ?? ""
   const code = markdownNodeText(children).replace(/\n$/, "")
 

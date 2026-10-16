@@ -83,6 +83,90 @@ function applyDeltas(view: DesktopSessionView, sessionId: string, deltas: TestPa
 }
 
 describe("desktop session view state", () => {
+  it("indexes a long history once for a batch and preserves untouched parts", () => {
+    const view = viewWithTextPart("")
+    let idReads = 0
+    view.messages = Array.from({ length: 2000 }, (_, index) => ({
+      ...view.messages[0]!,
+      get id() {
+        idReads++
+        return `m${index}`
+      },
+    }))
+    view.parts = Array.from({ length: 2000 }, (_, index) => ({
+      ...view.parts[0]!,
+      get id() {
+        idReads++
+        return `p${index}`
+      },
+      messageId: `m${index}`,
+      text: "",
+    }))
+    const untouched = view.parts[0]
+    const result = sessionViewState.applySessionPartDeltas(view, {
+      sessionId: "s1",
+      deltas: Array.from({ length: 64 }, (_, index) => ({
+        seq: index + 8,
+        messageId: "m1999",
+        partId: "p1999",
+        field: "text",
+        delta: "😀",
+        baseLength: index * 2,
+        createdAt: index + 8,
+      })),
+    })
+    expect(result.kind).toBe("applied")
+    if (result.kind !== "applied") throw new Error("expected delta to apply")
+    expect(result.view.parts[1999]?.text).toBe("😀".repeat(64))
+    expect(result.view.parts[0]).toBe(untouched)
+    expect(view.parts[1999]?.text).toBe("")
+    expect(idReads).toBeLessThan(10_000)
+  })
+
+  it("indexes newly created interleaved parts before the next delta and sorts once", () => {
+    const view = viewWithTextPart("hello")
+    const result = sessionViewState.applySessionPartDeltas(view, {
+      sessionId: "s1",
+      deltas: [
+        {
+          seq: 8,
+          messageId: "m2",
+          partId: "new",
+          field: "reasoning",
+          delta: "思",
+          baseLength: 0,
+          partSeq: 0,
+          createdAt: 8,
+        },
+        {
+          seq: 9,
+          messageId: "m1",
+          partId: "p1",
+          field: "text",
+          delta: "!",
+          baseLength: 5,
+          createdAt: 9,
+        },
+        {
+          seq: 10,
+          messageId: "m2",
+          partId: "new",
+          field: "reasoning",
+          delta: "考",
+          baseLength: 1,
+          createdAt: 10,
+        },
+      ],
+    })
+    expect(result.kind).toBe("applied")
+    if (result.kind !== "applied") throw new Error("expected delta to apply")
+    expect(result.view.parts.map((part) => [part.id, part.text])).toEqual([
+      ["new", "思考"],
+      ["p1", "hello!"],
+    ])
+    expect(view.parts).toHaveLength(1)
+  })
+
   it("exposes a session delta reducer", () => {
     expect(Reflect.get(sessionViewState, "applySessionPartDeltas")).toBeTypeOf("function")
   })
@@ -111,16 +195,18 @@ describe("desktop session view state", () => {
 
   it("creates a new reasoning part at its supplied part sequence", () => {
     const view = viewWithTextPart("hello")
-    const result = applyDeltas(view, "s1", [{
-      seq: 8,
-      messageId: "m2",
-      partId: "p2",
-      field: "reasoning",
-      delta: "thinking",
-      baseLength: 0,
-      partSeq: 2,
-      createdAt: 8,
-    }])
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m2",
+        partId: "p2",
+        field: "reasoning",
+        delta: "thinking",
+        baseLength: 0,
+        partSeq: 2,
+        createdAt: 8,
+      },
+    ])
 
     expect(result.kind).toBe("applied")
     if (result.kind !== "applied") throw new Error("expected delta to apply")
@@ -136,15 +222,17 @@ describe("desktop session view state", () => {
 
   it("uses JavaScript UTF-16 code-unit offsets for Unicode text", () => {
     const view = viewWithTextPart("😀")
-    const result = applyDeltas(view, "s1", [{
-      seq: 8,
-      messageId: "m1",
-      partId: "p1",
-      field: "text",
-      delta: "!",
-      baseLength: 2,
-      createdAt: 8,
-    }])
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "!",
+        baseLength: 2,
+        createdAt: 8,
+      },
+    ])
 
     expect(result.kind).toBe("applied")
     if (result.kind !== "applied") throw new Error("expected delta to apply")
@@ -153,15 +241,17 @@ describe("desktop session view state", () => {
 
   it("ignores a delta already covered by the view cursor", () => {
     const view = viewWithTextPart("hello")
-    const result = applyDeltas(view, "s1", [{
-      seq: 7,
-      messageId: "m1",
-      partId: "p1",
-      field: "text",
-      delta: "duplicate",
-      baseLength: 5,
-      createdAt: 8,
-    }])
+    const result = applyDeltas(view, "s1", [
+      {
+        seq: 7,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "duplicate",
+        baseLength: 5,
+        createdAt: 8,
+      },
+    ])
 
     expect(result).toEqual({ kind: "applied", view })
   })
@@ -214,30 +304,34 @@ describe("desktop session view state", () => {
   })
 
   it("requires a snapshot when a delta refers to a missing message", () => {
-    const result = applyDeltas(viewWithTextPart("hello"), "s1", [{
-      seq: 8,
-      messageId: "missing",
-      partId: "p2",
-      field: "text",
-      delta: "text",
-      baseLength: 0,
-      partSeq: 2,
-      createdAt: 8,
-    }])
+    const result = applyDeltas(viewWithTextPart("hello"), "s1", [
+      {
+        seq: 8,
+        messageId: "missing",
+        partId: "p2",
+        field: "text",
+        delta: "text",
+        baseLength: 0,
+        partSeq: 2,
+        createdAt: 8,
+      },
+    ])
 
     expect(result.kind).toBe("resync-required")
   })
 
   it("requires a snapshot when the update session does not match the view", () => {
-    const result = applyDeltas(viewWithTextPart("hello"), "other-session", [{
-      seq: 8,
-      messageId: "m1",
-      partId: "p1",
-      field: "text",
-      delta: "!",
-      baseLength: 5,
-      createdAt: 8,
-    }])
+    const result = applyDeltas(viewWithTextPart("hello"), "other-session", [
+      {
+        seq: 8,
+        messageId: "m1",
+        partId: "p1",
+        field: "text",
+        delta: "!",
+        baseLength: 5,
+        createdAt: 8,
+      },
+    ])
 
     expect(result.kind).toBe("resync-required")
   })
@@ -371,7 +465,9 @@ describe("desktop session view state", () => {
       createdAt: 1,
       updatedAt: 1,
     })
-    expect(reconcileRuntimeWithView(runtime, view).pendingPromptSubmissions).toHaveProperty("input-1")
+    expect(reconcileRuntimeWithView(runtime, view).pendingPromptSubmissions).toHaveProperty(
+      "input-1"
+    )
     view.parts.push({
       id: "part-1",
       sessionId: "s1",

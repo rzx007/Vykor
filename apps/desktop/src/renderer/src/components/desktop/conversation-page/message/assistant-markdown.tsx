@@ -1,9 +1,10 @@
-import { memo, useMemo, useState } from "react"
+import { memo, useMemo, useState, useSyncExternalStore } from "react"
 import { Streamdown } from "streamdown"
 import { createStreamdownComponents } from "./streamdown-components"
 import { streamdownPlugins } from "./streamdown-plugins"
 import { createIncrementalMarkdownParser } from "./incremental-markdown"
 import { longMarkdownCharacters, useStreamingMarkdown } from "./use-streaming-markdown"
+import { CodeFenceActivityContext, createCodeFenceActivity } from "./code-fence-activity"
 
 const streamingTextAnimation = {
   animation: "fadeIn",
@@ -30,7 +31,13 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     () => createStreamdownComponents({ onOpenFile, codeBlockVariant: "conversation" }),
     [onOpenFile]
   )
-  const rendered = useStreamingMarkdown(text, streaming)
+  const [codeActivity] = useState(createCodeFenceActivity)
+  const liveCode = useSyncExternalStore(
+    codeActivity.subscribe,
+    codeActivity.getSnapshot,
+    codeActivity.getSnapshot
+  )
+  const rendered = useStreamingMarkdown(text, streaming, liveCode)
   const [parseBlocks] = useState(createIncrementalMarkdownParser)
   // 让 Streamdown 记住已有文字，重新打开进行中的回复时不重播历史。
   const [initialText] = useState(() => (animateInitialText ? "" : text))
@@ -42,21 +49,23 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       data-phase={phase}
       data-stream-initial={streaming && rendered.text === initialText ? "true" : undefined}
     >
-      <Streamdown
-        key={rendered.revision}
-        className="desktop-streamdown space-y-0"
-        animated={animated ? streamingTextAnimation : false}
-        isAnimating={streaming}
-        mode={streaming ? "streaming" : "static"}
-        controls
-        lineNumbers={false}
-        parseIncompleteMarkdown={streaming}
-        parseMarkdownIntoBlocksFn={parseBlocks}
-        plugins={streamdownPlugins}
-        components={components}
-      >
-        {rendered.text}
-      </Streamdown>
+      <CodeFenceActivityContext value={codeActivity}>
+        <Streamdown
+          key={rendered.revision}
+          className="desktop-streamdown space-y-0"
+          animated={animated ? streamingTextAnimation : false}
+          isAnimating={streaming}
+          mode={streaming ? "streaming" : "static"}
+          controls
+          lineNumbers={false}
+          parseIncompleteMarkdown={streaming}
+          parseMarkdownIntoBlocksFn={parseBlocks}
+          plugins={streamdownPlugins}
+          components={components}
+        >
+          {rendered.text}
+        </Streamdown>
+      </CodeFenceActivityContext>
     </div>
   )
 })

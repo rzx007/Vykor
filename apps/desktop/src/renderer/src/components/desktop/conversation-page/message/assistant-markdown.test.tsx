@@ -65,27 +65,16 @@ beforeEach(() => {
   )
 })
 
-it("keeps an unfinished code fence as plain readable code instead of repeatedly highlighting it", async () => {
+it("keeps live code source and copy current before deferred coloring, including fence closure", async () => {
   vi.useFakeTimers()
   const code = "const item = 42;\n".repeat(400)
   await act(async () => render(`\`\`\`typescript\n${code}`))
   expect(container.querySelector("pre > code")?.textContent).toBe(code.trimEnd())
   await act(async () => render(`\`\`\`typescript\n${code}const tail = 1;`))
-  await act(async () => vi.advanceTimersByTimeAsync(100))
   expect(container.querySelector("pre > code")?.textContent).toBe(`${code}const tail = 1;`)
   await act(async () => render(`\`\`\`typescript\n${code}const tail = 1;\n\`\`\``))
   await act(async () => vi.advanceTimersByTimeAsync(100))
-  expect(container.querySelector("pre > code")).toBeNull()
-  await vi.waitFor(
-    () => {
-      expect(
-        container
-          .querySelector("diffs-container")
-          ?.shadowRoot?.textContent?.includes("const tail = 1;")
-      ).toBe(true)
-    },
-    { timeout: 5000 }
-  )
+  expect(container.querySelector("pre > code")?.textContent).toBe(`${code}const tail = 1;`)
 })
 
 it("shows a same-length correction immediately instead of reusing stale Markdown nodes", async () => {
@@ -164,6 +153,27 @@ it("coalesces continuous long-text deltas without starving visible updates", asy
   expect(container.textContent?.slice(prefix.length).length).toBeGreaterThanOrEqual(12)
   await act(async () => vi.advanceTimersByTimeAsync(100))
   expect(container.textContent?.slice(prefix.length)).toBe("新增".repeat(15))
+})
+
+it("coalesces long prose again after a code fence has closed", async () => {
+  vi.useFakeTimers()
+  const source = `\`\`\`ts\nconst ready = 1;\n\`\`\`\n\n${prefix}`
+  await act(async () => render("```ts\nconst ready = 1;"))
+  await act(async () => render(source))
+  await act(async () => render(`${source} pending prose`))
+  expect(container.textContent).not.toContain("pending prose")
+  await act(async () => vi.advanceTimersByTimeAsync(100))
+  expect(container.textContent).toContain("pending prose")
+})
+
+it("reveals a new split fence immediately after previously coalesced prose", async () => {
+  vi.useFakeTimers()
+  await act(async () => render(prefix))
+  await act(async () => render(`${prefix}\n\n\`\``))
+  await act(async () => render(`${prefix}\n\n\`\`\`typescript\nconst fresh = 1;`))
+  expect(container.querySelector("pre code")?.textContent).toBe("const fresh = 1;")
+  await act(async () => render(`${prefix}\n\n\`\`\`typescript\nconst fresh = 12;`))
+  expect(container.querySelector("pre code")?.textContent).toBe("const fresh = 12;")
 })
 
 it("flushes completion and a replacement immediately and never restores an old pending delta", async () => {

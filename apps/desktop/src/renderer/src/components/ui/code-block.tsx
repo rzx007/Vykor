@@ -6,6 +6,8 @@ import { Check, CodeXml, Copy } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { cn } from "@renderer/lib/utils"
+import { CodeHighlightingProvider } from "./code-highlighting-provider"
+import { BackgroundCode } from "./background-code"
 
 // -- Styles --
 // Injected once at runtime — ships as a single self-contained file with no
@@ -37,7 +39,7 @@ interface CodeBlockProps {
   /** Tailwind class(es) applied to the code body — e.g. "bg-muted", "bg-slate-950" */
   bodyClassName?: string
   className?: string
-  /** 围栏仍在追加时显示源码，闭合后再进入语法着色。 */
+  /** 流式源码即时显示，语法着色在后台合并计算。 */
   streaming?: boolean
 }
 
@@ -253,25 +255,28 @@ export function CodeBlock({
         </span>
         <CopyBtn code={code} />
       </div>
-      {streaming ? (
-        <pre
-          className={cn(
-            "overflow-x-auto font-mono whitespace-pre",
-            variant === "conversation" && "px-[0.85rem] pt-[0.7rem] pb-[0.9rem]",
-            scrollable && "overflow-y-auto",
-            bodyClassName
-          )}
-          style={{
-            fontSize: "var(--code-font-size)",
-            lineHeight: "var(--code-line-height)",
-            maxHeight: scrollable ? maxHeight : undefined,
-          }}
-        >
-          <code>{code}</code>
-        </pre>
+      {variant === "conversation" ? (
+        <CodeHighlightingProvider>
+          <BackgroundCode
+            code={code}
+            language={normalizeLanguage(language) ?? "text"}
+            streaming={streaming}
+            className={cn(
+              "overflow-x-auto font-mono whitespace-pre",
+              variant === "conversation" && "px-[0.85rem] pt-[0.7rem] pb-[0.9rem]",
+              scrollable && "overflow-y-auto",
+              bodyClassName
+            )}
+            style={{
+              fontSize: "var(--code-font-size)",
+              lineHeight: "var(--code-line-height)",
+              maxHeight: scrollable ? maxHeight : undefined,
+            }}
+          />
+        </CodeHighlightingProvider>
       ) : (
         <CodeRenderer
-          conversation={variant === "conversation"}
+          conversation={false}
           code={code}
           language={language}
           showLineNumbers={showLineNumbers}

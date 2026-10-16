@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
-import type { ReactElement } from "react"
+import { createElement, type ReactElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 
 vi.mock("streamdown", () => ({
   useIsCodeFenceIncomplete: () => false,
 }))
+vi.mock("@renderer/components/ui/code-block", () => ({ CodeBlock: vi.fn(() => null) }))
 
 import { CodeBlock } from "@renderer/components/ui/code-block"
 
@@ -27,13 +29,17 @@ describe("StreamdownCodeBlock", () => {
   it("routes a non-Mermaid fence to CodeBlock with its source and language", () => {
     const code = "const answer = 42\n"
 
-    const rendered = StreamdownCodeBlock({
-      className: "language-typescript",
-      children: code,
-    })
+    renderToStaticMarkup(
+      createElement(
+        StreamdownCodeBlock,
+        {
+          className: "language-typescript",
+        },
+        code
+      )
+    )
 
-    expect(rendered.type).toBe(CodeBlock)
-    expect(rendered.props).toMatchObject({
+    expect(vi.mocked(CodeBlock).mock.lastCall?.[0]).toMatchObject({
       className: "my-4",
       code: "const answer = 42",
       language: "typescript",

@@ -10,8 +10,7 @@ import {
 import type { DesktopOperation, DesktopSessionRuntime } from "./types"
 
 export type ApplySessionPartDeltasResult =
-  | { kind: "applied"; view: DesktopSessionView }
-  | { kind: "resync-required" }
+  { kind: "applied"; view: DesktopSessionView } | { kind: "resync-required" }
 
 export function applySessionPartDeltas(
   view: DesktopSessionView,
@@ -23,6 +22,8 @@ export function applySessionPartDeltas(
   let cursor = view.cursor
   let previousSeq = Number.NEGATIVE_INFINITY
   let addedPart = false
+  let messagesById: Map<string, DesktopSessionView["messages"][number]> | undefined
+  let partIndexes: Map<string, number> | undefined
 
   for (const delta of update.deltas) {
     if (
@@ -39,11 +40,28 @@ export function applySessionPartDeltas(
     previousSeq = delta.seq
     if (delta.seq <= cursor) continue
 
-    const message = view.messages.find((candidate) => candidate.id === delta.messageId)
+    // 一批内只扫描一次历史；过期重放不需要建索引，也不改变原数组。
+    if (!messagesById) {
+      messagesById = new Map()
+      const messageIds = new Set(update.deltas.map((item) => item.messageId))
+      for (const message of view.messages) {
+        const id = message.id
+        if (messageIds.delete(id)) messagesById.set(id, message)
+        if (messageIds.size === 0) break
+      }
+      partIndexes = new Map()
+      const partIds = new Set(update.deltas.map((item) => item.partId))
+      for (let index = 0; index < view.parts.length; index++) {
+        const id = view.parts[index]!.id
+        if (partIds.delete(id)) partIndexes.set(id, index)
+        if (partIds.size === 0) break
+      }
+    }
+    const message = messagesById.get(delta.messageId)
     if (!message || message.sessionId !== update.sessionId) return { kind: "resync-required" }
 
     const currentParts = parts ?? view.parts
-    const partIndex = currentParts.findIndex((candidate) => candidate.id === delta.partId)
+    const partIndex = partIndexes!.get(delta.partId) ?? -1
     if (partIndex < 0) {
       if (
         delta.baseLength !== 0 ||
@@ -54,6 +72,7 @@ export function applySessionPartDeltas(
         return { kind: "resync-required" }
       }
       if (parts === null) parts = [...view.parts]
+      partIndexes!.set(delta.partId, parts.length)
       parts.push({
         id: delta.partId,
         sessionId: update.sessionId,

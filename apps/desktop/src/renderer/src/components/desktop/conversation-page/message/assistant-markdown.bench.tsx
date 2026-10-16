@@ -18,7 +18,7 @@ const previousComponents: NonNullable<StreamdownProps["components"]> = {
     const language = className?.match(/language-([^\s]+)/)?.[1] ?? "text"
     return (
       <CodeBlock
-        variant="conversation"
+        variant="default"
         className="my-4"
         code={String(children).replace(/\n$/, "")}
         language={language}
