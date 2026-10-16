@@ -7,7 +7,7 @@ import { instance, snapshot, sourcePart } from "./plugin-ui-fixtures.test-suppor
 import { PluginUiProvider } from "./plugin-ui-provider"
 import { PluginUiCard } from "./plugin-ui-card"
 import { PluginUiFrame, submitPluginUiAction } from "./plugin-ui-frame"
-import { usePluginUiHost } from "./plugin-ui-host-context"
+import { usePluginUiHost } from "./plugin-ui-context"
 import { ConversationScrollerProvider } from "../conversation-scroller"
 import { useConversationScroller } from "../conversation-scroll-context"
 import { TranscriptRowContext } from "../transcript/virtual-transcript-row"

@@ -280,7 +280,16 @@ const api = {
     await settle()
     const width = document.getElementById(target)!.getBoundingClientRect().width
     check(Math.abs(width - before) > 1, `${target} resize had no effect`)
-    check(scroller.getSnapshot().following, "resize lost following")
+    check(
+      scroller.getSnapshot().following,
+      `${target} resize lost following: ${JSON.stringify({
+        snapshot: scroller.getSnapshot(),
+        top: viewport().scrollTop,
+        height: viewport().scrollHeight,
+        width: viewport().clientWidth,
+        focus: document.activeElement?.getAttribute("aria-label"),
+      })}`
+    )
     check(
       Math.abs(viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop) <= 1,
       "resize lost bottom"

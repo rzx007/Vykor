@@ -6,14 +6,14 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const profile = mkdtempSync(join(tmpdir(), "vykor-transcript-"))
-const env = { ...process.env, VYKOR_TRANSCRIPT_PROFILE: profile }
+const profile = mkdtempSync(join(tmpdir(), "vykor-conversation-perf-"))
+const env = { ...process.env, VYKOR_CONVERSATION_PROFILE: profile }
 delete env.ELECTRON_RUN_AS_NODE
 const child = spawn(
   createRequire(import.meta.url)("electron"),
   [
     "--user-data-dir=" + profile,
-    resolve(root, "../../.superpowers/transcript-performance/main/main.cjs"),
+    resolve(root, "../../.superpowers/conversation-performance/main/main.cjs"),
   ],
   { env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }
 )
@@ -44,7 +44,7 @@ child.on("close", (code) => {
   process.exitCode = code === 0 && passed ? 0 : 1
   if (
     dirname(resolve(profile)) === resolve(tmpdir()) &&
-    profile.startsWith(join(tmpdir(), "vykor-transcript-"))
+    profile.startsWith(join(tmpdir(), "vykor-conversation-perf-"))
   )
     try {
       rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })

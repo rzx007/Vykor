@@ -15,39 +15,14 @@ import {
 } from "@vykor/client"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionView } from "@shared/session-types"
-import type { DesktopPluginUiMountResult } from "@shared/plugin-ui-types"
 import { PluginUiConfirmation, type PluginUiConfirmationDetails } from "./plugin-ui-confirmation"
 import { usePluginUiConversation } from "./use-plugin-ui-conversation"
-import { PluginUiDisplaysContext } from "./plugin-ui-displays-context"
-import { PluginUiHostContext } from "./plugin-ui-host-context"
-
-export interface PluginUiDisplay {
-  key: string
-  instance: PluginUiInstanceRecord
-  surface: PluginUiSurface
-}
-export interface PluginUiMountLease {
-  result: Promise<DesktopPluginUiMountResult>
-  release(): Promise<void>
-}
-export interface PluginUiHost {
-  available: boolean
-  view: DesktopSessionView | null
-  displays: PluginUiDisplay[]
-  isCurrent(instanceId: string): boolean
-  mount(display: PluginUiDisplay): PluginUiMountLease
-  open(
-    instance: PluginUiInstanceRecord,
-    surface: PluginUiSurface,
-    opener?: HTMLElement,
-    forceReload?: boolean
-  ): void
-  close(instanceId: string, focus?: boolean): void
-  confirm(details: PluginUiConfirmationDetails, signal: AbortSignal): Promise<void>
-  requestConversation: ReturnType<typeof usePluginUiConversation>["request"]
-  conversationStatus: ReturnType<typeof usePluginUiConversation>["status"]
-  queryConversation: ReturnType<typeof usePluginUiConversation>["query"]
-}
+import {
+  PluginUiDisplaysContext,
+  PluginUiHostContext,
+  type PluginUiDisplay,
+  type PluginUiMountLease,
+} from "./plugin-ui-context"
 function hasSource(view: DesktopSessionView | null, instanceId: string): boolean {
   return Boolean(
     view?.parts.some((part) => {

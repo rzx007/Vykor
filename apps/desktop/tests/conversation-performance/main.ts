@@ -2,8 +2,8 @@ import { app, BrowserWindow } from "electron"
 import { join } from "node:path"
 import assert from "node:assert/strict"
 
-app.setPath("userData", process.env.VYKOR_TRANSCRIPT_PROFILE!)
-app.setPath("sessionData", process.env.VYKOR_TRANSCRIPT_PROFILE!)
+app.setPath("userData", process.env.VYKOR_CONVERSATION_PROFILE!)
+app.setPath("sessionData", process.env.VYKOR_CONVERSATION_PROFILE!)
 app.commandLine.appendSwitch("disable-gpu")
 const deadline = setTimeout(() => app.exit(2), 120_000)
 void (async () => {

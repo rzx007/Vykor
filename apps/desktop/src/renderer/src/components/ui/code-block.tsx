@@ -78,8 +78,7 @@ function CopyBtn({ code }: { code: string }): React.JSX.Element {
 
 // -- Internal code renderer --
 
-interface RendererProps {
-  conversation: boolean
+interface FileCodeRendererProps {
   code: string
   language: string
   showLineNumbers: boolean
@@ -89,8 +88,7 @@ interface RendererProps {
   bodyClassName?: string
 }
 
-function CodeRenderer({
-  conversation,
+function FileCodeRenderer({
   code,
   language,
   showLineNumbers,
@@ -98,7 +96,7 @@ function CodeRenderer({
   maxHeight,
   highlightLines,
   bodyClassName,
-}: RendererProps): React.JSX.Element {
+}: FileCodeRendererProps): React.JSX.Element {
   const { resolvedTheme: themeType } = useAppearance()
   const file = useMemo<FileContents>(
     () => ({
@@ -143,11 +141,10 @@ function CodeRenderer({
           line-height: var(--code-line-height) !important;
           white-space: pre;
           word-break: normal;
-          ${conversation ? "padding: 0.7rem 0.85rem 0.9rem !important;" : ""}
         }
       `,
     }),
-    [conversation, showLineNumbers, themeType]
+    [showLineNumbers, themeType]
   )
 
   useEffect(() => {
@@ -262,8 +259,7 @@ export function CodeBlock({
             language={normalizeLanguage(language) ?? "text"}
             streaming={streaming}
             className={cn(
-              "overflow-x-auto font-mono whitespace-pre",
-              variant === "conversation" && "px-[0.85rem] pt-[0.7rem] pb-[0.9rem]",
+              "overflow-x-auto px-[0.85rem] pt-[0.7rem] pb-[0.9rem] font-mono whitespace-pre",
               scrollable && "overflow-y-auto",
               bodyClassName
             )}
@@ -275,8 +271,7 @@ export function CodeBlock({
           />
         </CodeHighlightingProvider>
       ) : (
-        <CodeRenderer
-          conversation={false}
+        <FileCodeRenderer
           code={code}
           language={language}
           showLineNumbers={showLineNumbers}

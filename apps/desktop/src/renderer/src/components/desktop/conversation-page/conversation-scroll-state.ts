@@ -1,3 +1,6 @@
+// 原生滚动事件与虚拟列表使用相同的底部判定，避免两端各自维护不同阈值。
+export const conversationEndThresholdPx = 8
+
 export interface ConversationScrollSnapshot {
   following: boolean
   atEnd: boolean
@@ -85,7 +88,9 @@ export function createConversationScrollState() {
     onScroll: () => {
       const viewport = viewportRef.current
       if (!viewport) return
-      const atEnd = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 8
+      const atEnd =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
+        conversationEndThresholdPx
       const movedUp = viewport.scrollTop < lastScrollTop - 1
       const movedDown = viewport.scrollTop > lastScrollTop + 1
       lastScrollTop = viewport.scrollTop

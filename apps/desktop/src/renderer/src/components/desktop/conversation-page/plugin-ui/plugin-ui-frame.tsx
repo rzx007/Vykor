@@ -1,4 +1,4 @@
-import { usePluginUiHost } from "./plugin-ui-host-context"
+import { usePluginUiHost, type PluginUiDisplay, type PluginUiMountLease } from "./plugin-ui-context"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import {
   PluginUiBridgeError,
@@ -15,7 +15,6 @@ import type {
 import { Button } from "@renderer/components/ui/button"
 import { readPluginUiAppearance } from "./plugin-ui-appearance"
 import { createPluginUiBridge } from "./plugin-ui-bridge"
-import { type PluginUiDisplay, type PluginUiMountLease } from "./plugin-ui-provider"
 
 export function pluginUiError(error: unknown): PluginUiBridgeError {
   const code =

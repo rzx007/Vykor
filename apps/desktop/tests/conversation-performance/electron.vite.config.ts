@@ -2,19 +2,19 @@ import { defineConfig } from "electron-vite"
 import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
 
-const output = resolve("../../.superpowers/transcript-performance")
+const output = resolve("../../.superpowers/conversation-performance")
 export default defineConfig({
   main: {
     build: {
       outDir: resolve(output, "main"),
       rollupOptions: {
-        input: resolve("tests/transcript-performance/main.ts"),
+        input: resolve("tests/conversation-performance/main.ts"),
         output: { entryFileNames: "main.cjs" },
       },
     },
   },
   renderer: {
-    root: resolve("tests/transcript-performance"),
+    root: resolve("tests/conversation-performance"),
     plugins: [react()],
     resolve: {
       alias: { "@renderer": resolve("src/renderer/src"), "@shared": resolve("src/shared") },
@@ -23,8 +23,8 @@ export default defineConfig({
       outDir: resolve(output, "renderer"),
       rollupOptions: {
         input: {
-          host: resolve("tests/transcript-performance/host.html"),
-          panels: resolve("tests/transcript-performance/panels.html"),
+          host: resolve("tests/conversation-performance/host.html"),
+          panels: resolve("tests/conversation-performance/panels.html"),
         },
       },
     },

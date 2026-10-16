@@ -9,7 +9,7 @@ import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { addCandidates, selectDraftAttachments, selectDraftDocument, sessionComposerScope } from "@renderer/stores/desktop-session/composer-draft-state"
 import { PluginUiProvider } from "./plugin-ui-provider"
-import { usePluginUiHost } from "./plugin-ui-host-context"
+import { usePluginUiHost } from "./plugin-ui-context"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { instance, snapshot, sourcePart, mountId } from "./plugin-ui-fixtures.test-support"
 let root: Root, container: HTMLDivElement, host: NonNullable<ReturnType<typeof usePluginUiHost>>

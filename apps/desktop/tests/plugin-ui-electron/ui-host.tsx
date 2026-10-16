@@ -7,7 +7,7 @@ import { createSessionUpdateDeliveryAcknowledger } from "../../src/renderer/src/
 import { PluginUiProvider } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { PluginUiCard } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-card"
 import { PluginUiFrame } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
-import { usePluginUiHost } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
+import { usePluginUiHost } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-context"
 import { selectDraftText, sessionComposerScope } from "../../src/renderer/src/stores/desktop-session/composer-draft-state"
 import {
   instance,

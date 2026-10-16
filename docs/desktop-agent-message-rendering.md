@@ -1,6 +1,6 @@
 # Desktop Agent 消息渲染设计
 
-> 状态：当前 Desktop 消息与文件变更渲染说明，最近核对：2026-10-02。
+> 状态：当前 Desktop 消息与文件变更渲染说明，性能边界最近核对：2026-10-16。完整复盘与复测入口见[长对话性能优化文档](./desktop-conversation-performance.md)。
 
 ## 目标
 
@@ -58,6 +58,14 @@ Markdown 链接和行内代码中的文件路径都可以成为文件入口。�
 - 该目录下的 `message/message-render-model.ts`：合并文本、配对工具、统一工具状态、提取文件引用与成功文件变更，保持为可测试的纯函数。
 - `message/assistant-message.tsx`：Streamdown、自定义文件节点、工具活动、错误和变更摘要。
 - `layout/main-layout/utility-panel/` 与 `tools/files-tool.tsx`（均位于 `components/desktop/`）：传递并消费一次性文件打开请求。
+
+### 长对话的性能边界
+
+`transcript/virtual-transcript.tsx` 按稳定轮次 ID 管理可见行，`conversation-scroll-state.ts` 独立保存上滚意图、导航、交互保留行和展开状态。普通文本追加复用历史模型；编辑和插件交互不能随离屏行一起丢失。
+
+正文由 `message/assistant-markdown.tsx` 组合尾部解析和流式显示策略；`ui/background-code.tsx` 即时显示源码，`lib/streaming-code-highlighter.ts` 只合并后台颜色计算。历史内容、完整复制、修正和收尾均须保持正确。
+
+插件宿主通过 `plugin-ui/plugin-ui-context.ts` 提供两个订阅范围：Frame 读取实时宿主，工具面板只读取显示列表和关闭操作。两者共享类型入口，不能合并成每次文本增量都变化的大 Context。
 
 ## 验收标准
 

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  codePreviewHighlighterOptions,
-  createCodePreviewWorkerPoolOptions,
-} from "./code-preview-worker-options"
+  codeHighlighterOptions,
+  createCodeHighlightWorkerPoolOptions,
+} from "./code-highlight-options"
 
-describe("code preview worker options", () => {
+describe("shared code highlighting worker options", () => {
   it("uses one worker and preserves the supplied factory", () => {
     const worker = {} as Worker
     let factoryCalls = 0
-    const options = createCodePreviewWorkerPoolOptions(() => {
+    const options = createCodeHighlightWorkerPoolOptions(() => {
       factoryCalls += 1
       return worker
     })
@@ -20,7 +20,7 @@ describe("code preview worker options", () => {
   })
 
   it("limits syntax analysis for pathological lines", () => {
-    expect(codePreviewHighlighterOptions).toMatchObject({
+    expect(codeHighlighterOptions).toMatchObject({
       preferredHighlighter: "shiki-js",
       tokenizeMaxLineLength: 4_000,
     })

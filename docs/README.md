@@ -150,7 +150,8 @@
 
 ### 产品界面
 
-- [Desktop 会话流式输出传输性能分析](./desktop-session-streaming-performance-analysis.md)：记录当前完整快照 IPC 链路、T3 Code/ZCode 的事件传输对照，以及保留快照恢复前提下的最小增量传输建议。
+- [Desktop 长对话性能优化复盘与维护约定](./desktop-conversation-performance.md)：本轮优化的职责边界、实测结果、取舍、复测入口与维护约定。
+- [Desktop 会话流式输出传输历史分析](./desktop-session-streaming-performance-analysis.md)：记录 2026-10-08 的完整快照链路分析和增量传输建议，当前实现见性能复盘。
 - [桌面设置完整需求](./desktop-settings-requirements.md)：按页面定义权限、终端、Git、运行环境及其余设置的完整功能、保存生效规则和验收标准，供逐页实现。
 - [Product Surface Integration](./product-surface-integration.md)：各种上层产品共同使用 Application 的规则。
 - [输入框能力需求](./composer-capabilities-requirements.md)：`@`、`+`、Slash、Skill、附件与上下文选择的当前契约。

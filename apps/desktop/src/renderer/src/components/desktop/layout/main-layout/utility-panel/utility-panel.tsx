@@ -50,7 +50,7 @@ import {
   type UtilityTool,
 } from "./utility-panel-tabs"
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
-import { usePluginUiDisplays } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-displays-context"
+import { usePluginUiDisplays } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-context"
 import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import {

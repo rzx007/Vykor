@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { MessageChannel } from "node:worker_threads"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { PluginUiProvider } from "./plugin-ui-provider"
-import { usePluginUiHost } from "./plugin-ui-host-context"
+import { usePluginUiHost } from "./plugin-ui-context"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { instance, snapshot, sourcePart, mountId } from "./plugin-ui-fixtures.test-support"
 const fixture = vi.hoisted(() => ({ view: null as any }))

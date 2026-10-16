@@ -7,7 +7,7 @@ import {
 } from "@pierre/diffs/react"
 import { useEffect, useMemo } from "react"
 
-import { codePreviewHighlighterOptions } from "./code-preview-worker-options"
+import { codeHighlighterOptions } from "@renderer/lib/code-highlight-options"
 import { CodeHighlightingProvider } from "@renderer/components/ui/code-highlighting-provider"
 import {
   createPreviewFile,
@@ -63,7 +63,7 @@ export function VirtualizedCodePreview({
       preferredHighlighter: "shiki-js",
       theme: DEFAULT_THEMES,
       themeType,
-      tokenizeMaxLineLength: codePreviewHighlighterOptions.tokenizeMaxLineLength,
+      tokenizeMaxLineLength: codeHighlighterOptions.tokenizeMaxLineLength,
       unsafeCSS: codeViewerCSS,
     }),
     [themeType]

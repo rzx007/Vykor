@@ -13,7 +13,10 @@ import {
   type Virtualizer,
 } from "@tanstack/react-virtual"
 import { useConversationScroller } from "../conversation-scroll-context"
-import type { ConversationScrollState } from "../conversation-scroll-state"
+import {
+  conversationEndThresholdPx,
+  type ConversationScrollState,
+} from "../conversation-scroll-state"
 import { TranscriptRowContext } from "./virtual-transcript-row"
 
 export interface TranscriptRow {
@@ -88,7 +91,7 @@ function VirtualTranscriptViewport({
       if (viewport && state.getSnapshot().following && Math.abs(viewport.scrollTop - end) > 1)
         instance.scrollToEnd({ behavior: "auto" })
       state.setPosition(
-        viewport ? end - viewport.scrollTop <= 8 : true,
+        viewport ? end - viewport.scrollTop <= conversationEndThresholdPx : true,
         first === undefined
           ? null
           : (rows[first]?.navigationId ?? rows[first]?.messageIds[0] ?? null)
@@ -125,7 +128,7 @@ function VirtualTranscriptViewport({
       Math.max(0, rows.reduce((sum, row) => sum + row.estimateSize + 24, 24) - 600),
     anchorTo: snapshot.following ? "end" : "start",
     followOnAppend: snapshot.following,
-    scrollEndThreshold: 8,
+    scrollEndThreshold: conversationEndThresholdPx,
     directDomUpdates: true,
     useFlushSync: false,
     onChange,
