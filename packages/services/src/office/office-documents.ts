@@ -8,6 +8,7 @@ import {
 } from "@vykor/protocol";
 import { createOfficeRunner, hash } from "./office-engine.mjs";
 import { sniffOfficePackage } from "./office-package.js";
+import { wordParagraphText, assertCompleteOfficeText } from "./office-text.js";
 
 export const MAX_OFFICE_BYTES = 64 * 1024 * 1024;
 const cache = new Map<string, string>();
@@ -33,13 +34,22 @@ export async function readOfficeBytes(
 ): Promise<{ text: string; preview?: OfficePreview }> {
   options.signal?.throwIfAborted();
   const format = officeFormat(name);
+  if (!format) throw new Error("仅支持 DOCX、XLSX、PPTX 文件。");
+  if (bytes.byteLength > MAX_OFFICE_BYTES)
+    throw new Error("Office 文件超过 64 MB，请拆分文档后重试。");
   if (
-    !format ||
-    bytes.byteLength > MAX_OFFICE_BYTES ||
-    sniffOfficePackage(bytes) !== OFFICE_MEDIA_TYPES[format]
-  )
+    bytes.length >= 8 &&
+    Buffer.from(bytes.subarray(0, 8)).equals(
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    )
+  ) {
     throw new Error(
-      "不是有效的受支持 Office 文件，或文件超过 64 MB；不支持加密和宏文件。",
+      "该文件可能已加密或使用旧版 Office 格式；请先解密并另存为 DOCX、XLSX 或 PPTX 后上传。",
+    );
+  }
+  if (sniffOfficePackage(bytes) !== OFFICE_MEDIA_TYPES[format])
+    throw new Error(
+      "不是有效的 Office 文件：文件可能损坏、内容与扩展名不符，或含不支持的加密和宏。",
     );
   const page = options.page ?? 1;
   if (!Number.isSafeInteger(page) || page < 1 || page > 200)
@@ -52,6 +62,7 @@ export async function readOfficeBytes(
   const file = join(directory, `document.${format}`),
     htmlFile = join(directory, "preview.html");
   let failure: unknown;
+  let result: { text: string; preview?: OfficePreview };
   let runner: Awaited<ReturnType<typeof createOfficeRunner>> | undefined;
   try {
     await writeFile(file, bytes);
@@ -61,7 +72,6 @@ export async function readOfficeBytes(
       deadline: Date.now() + 55000,
       maxOutputBytes: 4_000_000,
     });
-    let result: { text: string; preview?: OfficePreview };
     if (options.preview) {
       const structure = JSON.parse(
         await runner(["get", file, "/", "--json"]),
@@ -100,12 +110,17 @@ export async function readOfficeBytes(
       };
     } else {
       result = {
-        text: await runner(["view", file, "text", "--max-lines", "100000"]),
+        text:
+          format === "docx"
+            ? wordParagraphText(
+                await runner(["query", file, "paragraph", "--json"]),
+              )
+            : assertCompleteOfficeText(
+                await runner(["view", file, "text", "--max-lines", "100000"]),
+              ),
       };
     }
     options.signal?.throwIfAborted();
-    remember(key, JSON.stringify(result));
-    return result;
   } catch (error) {
     failure = error;
     throw error;
@@ -130,6 +145,8 @@ export async function readOfficeBytes(
       retryDelay: 100,
     });
   }
+  remember(key, JSON.stringify(result!));
+  return result!;
 }
 
 export async function readOfficeFile(

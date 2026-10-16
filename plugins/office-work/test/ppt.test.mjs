@@ -20,6 +20,7 @@ test('real OfficeCLI: editable objects, exact read paths, safe revisions and rol
     const created = parse(await call('OfficePptCreate', { path: 'demo.pptx', slides: [
       { title: '第一页', body: '保留内容', images:[{src:'pixel.png',x:'25cm',y:'12cm',width:'1cm',height:'1cm'}] },
       { title: '第二页', shapes: [{ text: '待修改', name: 'editable', x: '1cm', y: '3cm', width: '8cm', height: '2cm' }], tables: [{ rows: [['方案','状态'],['一','重要边界说明，需要保留原子写入和迁移限制，不可直接删除。']], x:'1cm',y:'6cm',width:'20cm',colWidths:'6cm,14cm' }] },
+      { title: '第三页', body: '其他页面保持不变' },
     ] }));
     const before = await readFile(created.path);
     const read = parse(await call('OfficePptRead', { path: created.path, target: '/slide[2]' }));
@@ -27,6 +28,8 @@ test('real OfficeCLI: editable objects, exact read paths, safe revisions and rol
     assert.ok(shape?.path.includes('@id='));
     const edited = parse(await call('OfficePptEdit', { path: created.path, expected_sha256: read.sha256, operations: [{ path: shape.path, props: { text: '修改完成' } }] }));
     assert.equal(edited.path, created.path);
+    assert.deepEqual(edited.page_diff,{checked:true,requested_pages:[2],changed_pages:[2],unchanged_pages:[1,3]});
+    assert.deepEqual(JSON.parse(await readFile(join(context.plugin.dataDir,'presentations',digest(created.path.toLowerCase())+'.json'),'utf8')).page_diff,edited.page_diff);
     const after = parse(await call('OfficePptRead', { path: edited.path, target: shape.path }));
     assert.equal(after.document.data.results[0].text, '修改完成');
     assert.match(JSON.stringify(parse(await call('OfficePptRead', {path:edited.path,target:'/slide[1]'}))), /保留内容/);

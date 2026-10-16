@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { tableLayout } from '../tools/table-layout.mjs';
+import { tableLayout, assertTableTextClearance } from '../tools/table-layout.mjs';
 import { withFiles, assertFileAvailable } from '../tools/file-access.mjs';
 
 test('table layout reserves readable font and content-dependent row heights within the canvas', () => {
@@ -15,6 +15,25 @@ test('table layout reserves readable font and content-dependent row heights with
   assert.throws(()=>tableLayout({rows:[['标题'],['长内容'.repeat(300)]],width:'5cm',y:'3.5cm'}),/精简|拆页/);
   assert.throws(()=>tableLayout({rows:[['标题'],['长内容'.repeat(30)]],height:'1cm'}),/行高|高度/);
   assert.throws(()=>tableLayout({rows:[['a','b']],width:'10cm',colWidths:'2cm,3cm'}),/列宽/);
+});
+
+test('table clearance uses final row heights and rejects the v023 evidence-note overlap',()=>{
+  const layout=tableLayout({rows:[['方案','定位','关键边界'],['1｜dataDir 自管文件','大文件、二进制、超量数据','VS Code 定位本地目录存大文件；Raycast 指引大量数据写入 support 目录'],['2｜宿主结构化存储','配置与小型业务状态','Chrome local 10 MB、sync 约 100 KB／项 8 KB；Raycast 限 string / number / boolean'],['3｜工具结果引用','由宿主契约决定','缺少直接实现证据；淘汰规则属缓存自身契约，不可推广']],colWidths:'4.6cm,15cm,11.1cm',width:'30.7cm',x:'1.6cm',y:'3.5cm',size:'16pt'});
+  const note={text:'证据限制',x:'1.6cm',y:'10.6cm',width:'30.7cm',height:'3.6cm'};
+  assert.equal(layout.height,237);
+  assert.throws(()=>assertTableTextClearance(layout,[note],3,1),/第 3 页.*第 1 个表格.*第 1 个文本框.*12\.08cm/);
+  assert.doesNotThrow(()=>assertTableTextClearance(layout,[{...note,y:'12.1cm'}],3,1));
+  assert.equal(note.y,'10.6cm','validation must not move author content');
+});
+
+test('table clearance allows separate text and decorative backgrounds',()=>{
+  const layout={x:100,y:100,width:200,height:200};
+  assert.doesNotThrow(()=>assertTableTextClearance(layout,[
+    {text:'heading',x:'100pt',y:'20pt',width:'200pt',height:'50pt'},
+    {text:'side note',x:'320pt',y:'100pt',width:'100pt',height:'200pt'},
+    {fill:'eeeeee',x:'100pt',y:'100pt',width:'200pt',height:'200pt'},
+  ],1,1));
+  assert.throws(()=>assertTableTextClearance(layout,[{text:'too tall',x:'100pt',y:'200pt',width:'200pt',height:'250pt'}],1,1),/精简.*拆页/);
 });
 
 test('same-file calls wait, release after errors, respect deadline and cancellation without removing another lock', async () => {

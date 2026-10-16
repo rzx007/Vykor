@@ -37,3 +37,24 @@ export function tableLayout(table) {
   const finalRows=rowHeights.map(h=>h+extra);
   return {size,x,y,width,height:finalRows.reduce((a,b)=>a+b,0),widths,rowHeights:finalRows};
 }
+
+// Only explicit text boxes can be checked without guessing OfficeCLI defaults.
+// Keep backgrounds and horizontally separate content out of this narrow guard.
+export function assertTableTextClearance(table,shapes,page,tableNumber) {
+  const points=value=>{
+    const match=String(value??'').match(/^(\d+(?:\.\d+)?)\s*(cm|mm|in|pt|pc|px|q|emu)$/i);
+    return match?Number(match[1])*({cm,mm:cm/10,in:72,pt:1,pc:12,px:0.75,q:cm/40,emu:1/12700}[match[2].toLowerCase()]):undefined;
+  };
+  const gap=6, bottom=table.y+table.height;
+  for(const [i,shape] of (shapes??[]).entries()) {
+    if(shape.text===undefined||!String(shape.text).trim()) continue;
+    const [x,y,width,height]=['x','y','width','height'].map(key=>points(shape[key]));
+    if([x,y,width,height].some(value=>value===undefined)||width<=0||height<=0) continue;
+    if(x>=table.x+table.width||x+width<=table.x||y>=bottom+gap||y+height+gap<=table.y) continue;
+    const start=Math.ceil((bottom+gap)/cm*100)/100;
+    const advice=start*cm+height<=540-24
+      ?`请将下方文本框的 y 调整到至少 ${start.toFixed(2)}cm，或重新安排表格与文字。`
+      :'本页下方空间不足，请精简文字或拆页。';
+    throw new Error(`第 ${page} 页第 ${tableNumber} 个表格（底部 ${(bottom/cm).toFixed(2)}cm）与第 ${i+1} 个文本框${shape.name?`（${shape.name}）`:''}重叠或间距不足 6pt。${advice}`);
+  }
+}

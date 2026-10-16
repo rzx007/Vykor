@@ -8,7 +8,11 @@ import {
   hash,
   officeBinaryPath,
 } from "./office-engine.mjs";
-import { readOfficeFile, readOfficeBytes } from "./office-documents.js";
+import {
+  readOfficeFile,
+  readOfficeBytes,
+  MAX_OFFICE_BYTES,
+} from "./office-documents.js";
 import { sniffOfficePackage } from "./office-package.js";
 import { OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 import { AttachmentBlobStore } from "../attachments/storage/attachment-blob-store.js";
@@ -19,8 +23,23 @@ it("rejects renamed binary and legacy files before invoking the engine", async (
     readOfficeBytes(Buffer.from("fake"), "fake.docx"),
   ).rejects.toThrow("不是有效");
   await expect(readOfficeBytes(Buffer.from("fake"), "old.doc")).rejects.toThrow(
-    "不是有效",
+    "仅支持",
   );
+});
+
+it("reports size, encryption and damaged Office files before invoking the engine", async () => {
+  await expect(
+    readOfficeBytes(new Uint8Array(MAX_OFFICE_BYTES + 1), "large.docx"),
+  ).rejects.toThrow("超过 64 MB");
+  await expect(
+    readOfficeBytes(
+      Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      "password.docx",
+    ),
+  ).rejects.toThrow("先解密");
+  await expect(
+    readOfficeBytes(Buffer.from("PK damaged archive"), "broken.docx"),
+  ).rejects.toThrow("损坏");
 });
 
 const availableEngine = await officeBinaryPath().catch(() => undefined);
@@ -54,6 +73,24 @@ it.skipIf(!availableEngine)(
                   parent: "/body",
                   type: "paragraph",
                   props: { text: "正文验收 Alpha" },
+                },
+                {
+                  command: "add",
+                  parent: "/body",
+                  type: "table",
+                  props: { data: "工作项,负责人,金额;表格专属,周宁,731" },
+                },
+                {
+                  command: "add",
+                  parent: "/body/tbl[1]/tr[2]/tc[2]",
+                  type: "paragraph",
+                  props: { text: "单元格第二段陈禾" },
+                },
+                {
+                  command: "add",
+                  parent: "/body",
+                  type: "paragraph",
+                  props: { text: "正文结尾 Omega" },
                 },
               ]
             : format === "xlsx"
@@ -124,7 +161,18 @@ it.skipIf(!availableEngine)(
         });
         expect(stored.mediaType).toBe(OFFICE_MEDIA_TYPES[format]);
         expect(stored.sha256).toBe(before);
-        expect((await readOfficeFile(file)).text).toContain("Alpha");
+        const parsed = (await readOfficeFile(file)).text;
+        expect(parsed).toContain("Alpha");
+        if (format === "docx") {
+          expect(parsed).toContain("周宁");
+          expect(parsed).toContain("731");
+          expect(parsed).toContain("单元格第二段陈禾");
+          expect(parsed).toContain("/body/tbl[1]/tr[2]/tc[2]/p[");
+          expect(parsed).not.toContain("[Table:");
+          expect(parsed.indexOf("周宁")).toBeLessThan(
+            parsed.indexOf("正文结尾 Omega"),
+          );
+        }
         const preview = (await readOfficeFile(file, { preview: true }))
           .preview!;
         expect(preview.html).toContain("Alpha");

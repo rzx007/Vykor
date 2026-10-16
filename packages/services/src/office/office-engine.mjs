@@ -39,6 +39,8 @@ export async function officeBinaryPath() {
   if (!asset) throw new Error("当前平台不支持内置 Office 引擎。");
   const roots = [
     process.resourcesPath && join(process.resourcesPath, "office-engine"),
+    // Electron development argv points at the app directory, not the bundled main script.
+    fileURLToPath(new URL("../office-engine/", import.meta.url)),
     join(dirname(process.execPath), "resources/office-engine"),
     resolve(dirname(process.execPath), "../Resources/office-engine"),
     process.argv[1] && resolve(dirname(process.argv[1]), "../office-engine"),
@@ -141,7 +143,9 @@ export function createRunner(binary, context) {
       const collect = (chunk, error) => {
         size += Buffer.byteLength(chunk);
         if (size > (context.maxOutputBytes || 512000)) {
-          failure = new Error("Office 返回过大，请缩小读取范围。");
+          failure = new Error(
+            "Office 引擎输出超过读取上限，本次未返回完整内容；请拆分文档后重试。",
+          );
           kill();
           return;
         }

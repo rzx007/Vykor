@@ -24,6 +24,7 @@
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
+    "verify:office": "node scripts/verify-office-packaging.mjs",
     "verify:attachment-ocr": "node scripts/verify-attachment-ocr-packaging.mjs",
     "verify:attachment-ocr:artifact": "node scripts/verify-attachment-ocr-packaging.mjs --artifact",
     "verify:update-packaging": "node scripts/verify-update-packaging.mjs",
