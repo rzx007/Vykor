@@ -49,6 +49,32 @@ function readBlock(filePath: string): string {
 }
 
 describe("createDsmlRecoveryScanner", () => {
+  it.each([
+    '<parameter name="command">export</｜｜DSML｜｜ parameter></｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>',
+    '</｜｜DSML｜｜ parameter></｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>',
+    '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path">a.txt',
+  ])("rejects incomplete protocol for every stream split: %s", source => {
+    for (let size = 1; size <= source.length; size++) {
+      const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Read"]), rejectMalformed: true });
+      let visible = "";
+      for (let i = 0; i < source.length; i += size) {
+        const result = scanner.push(source.slice(i, i + size));
+        visible += result.visible;
+        expect(result.toolCalls).toEqual([]);
+      }
+      expect(visible).toBe("");
+      expect(() => scanner.flush()).toThrow("工具调用标记不完整");
+    }
+  });
+
+  it("preserves ordinary parameter XML when there is no DSML evidence", () => {
+    const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Read"]), rejectMalformed: true });
+    const source = '<parameter name="example">a &lt; b</parameter>';
+    let visible = "";
+    for (const char of source) visible += scanner.push(char).visible;
+    visible += scanner.flush().visible;
+    expect(visible).toBe(source);
+  });
   it.each(["C:/fixture/a<b>c.html", "C:/fixture/a<b<c>d.html"])("preserves ordinary angle brackets in a split path: %s", filePath => {
     const scanner = createDsmlRecoveryScanner({ declaredToolNames: new Set(["Read"]) });
     const source = readBlock(filePath);

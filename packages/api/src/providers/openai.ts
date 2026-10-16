@@ -193,6 +193,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       declaredTools?.length && !envFlagEnabled(DSML_RECOVERY_DISABLE_ENV)
         ? createDsmlRecoveryScanner({
             declaredToolNames: new Set(declaredTools.map((tool) => tool.name)),
+            rejectMalformed: true,
           })
         : undefined;
 

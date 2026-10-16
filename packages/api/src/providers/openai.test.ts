@@ -552,6 +552,18 @@ describe("OpenAICompatibleClient DSML tool-call recovery", () => {
     expect(events.find((event) => event.type === "complete")!.stopReason).toBe("tool_use");
   });
 
+  it.each([1, 7, 1000])("rejects orphan DSML parameters without displaying or executing them (chunk=%s)", async size => {
+    const leaked = '<parameter name="command">export</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>';
+    const chunks = Array.from({ length: Math.ceil(leaked.length / size) }, (_, i) => leaked.slice(i * size, (i + 1) * size));
+    const events: any[] = [];
+    await expect((async () => {
+      for await (const event of contentClient(chunks).streamMessage({ model: "deepseek-flash",
+        messages: [{ type: "user", content: "continue" }], tools: [READ_TOOL] })) events.push(event);
+    })()).rejects.toMatchObject({ info: { kind: "stream_incomplete", retryable: true } });
+    expect(textOf(events)).toBe("");
+    expect(events.some(event => event.type === "tool_use_start" || event.type === "complete")).toBe(false);
+  });
+
   it("keeps DSML-like markup inside think blocks out of tool-call recovery", async () => {
     const hidden = '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">secret.json</｜DSML｜parameter></｜DSML｜invoke>';
     const client = contentClient([`<think>${hidden}</think>答案`]);

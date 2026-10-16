@@ -38,7 +38,7 @@ function dsmlCall(file: string, content: string) {
   ];
 }
 
-function replay(cwd: string, attempts: unknown[][]) {
+function replay(cwd: string, attempts: unknown[][], maxTotalRetries = 5) {
   const requests: ReplayRequest[] = [];
   const client = new OpenAICompatibleClient({ apiKey: "offline-fixture", baseURL: "https://offline.invalid/v1" });
   vi.spyOn(client.client as unknown as { fetch: typeof fetch }, "fetch").mockImplementation(async (url, init) => {
@@ -67,13 +67,51 @@ function replay(cwd: string, attempts: unknown[][]) {
   const engine = new QueryEngine(client, registry, permissions,
     { register() {}, execute: async () => ({ blocked: false }) }, {
       cwd, model: "fixture", trajectoryTrackerFactory: false,
-      modelRetry: { baseDelayMs: 0, maxDelayMs: 0 },
+      modelRetry: { baseDelayMs: 0, maxDelayMs: 0, maxTotalRetries },
       settings: { model: "fixture", apiFormat: "openai", maxTurns: 4, permission: { mode: "default" }, sandbox: { enabled: false } },
     });
   return { engine, requests };
 }
 
 describe("offline protocol replay through real file tools", () => {
+  it("fails after the retry budget instead of completing a broken DSML reply", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "oh-dsml-exhausted-"));
+    try {
+      const broken = '<parameter name="command">export</｜｜DSML｜｜ parameter></｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>';
+      const { engine, requests } = replay(directory, [
+        [frame({ content: broken }, "stop")], [frame({ content: broken }, "stop")],
+      ], 1);
+      const events: StreamEvent[] = [];
+      await expect((async () => {
+        for await (const event of engine.submitMessage("write fixture")) events.push(event);
+      })()).rejects.toMatchObject({ info: { kind: "stream_incomplete" } });
+      expect(requests).toHaveLength(2);
+      expect(events.some(event => event.type === "tool_use_start" || event.type === "complete")).toBe(false);
+      expect(JSON.stringify(engine.getHistory())).not.toContain("DSML");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+  it("retries orphan DSML without executing it and commits only the recovered attempt", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "oh-dsml-orphan-"));
+    try {
+      const file = join(directory, "fixture.txt");
+      await writeFile(file, original);
+      const broken = '<parameter name="command">export</｜｜DSML｜｜ parameter></｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>';
+      const { engine, requests } = replay(directory, [
+        [frame({ content: broken }, "stop")],
+        [nativeCall("recovered", file, "retry succeeded"), frame({}, "tool_calls")],
+        [frame({ content: "done" }, "stop")],
+      ]);
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("write fixture")) events.push(event);
+      expect(requests).toHaveLength(3);
+      expect(events.filter(event => event.type === "model_retry")).toMatchObject([{ reason: "stream_incomplete", retryNumber: 1 }]);
+      expect(events.filter(event => event.type === "tool_use_start")).toMatchObject([{ toolUse: { id: "recovered", name: "Write" } }]);
+      expect(events.filter(event => event.type === "tool_use_start")).toHaveLength(1);
+      expect(JSON.stringify(engine.getHistory())).not.toContain("DSML");
+      expect(JSON.stringify(events.filter(event => event.type === "text_delta"))).not.toContain("parameter");
+      expect(await readFile(file, "utf8")).toBe("retry succeeded");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
   it("continues after a wrapped DSML Write and preserves its tool-call identity through execution", async () => {
     const directory = await mkdtemp(join(tmpdir(), "oh-dsml-file-replay-"));
     try {

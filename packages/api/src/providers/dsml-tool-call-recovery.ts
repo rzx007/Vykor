@@ -1,5 +1,6 @@
 import type { ToolGenerationProgressEvent } from "@vykor/core";
 import { isFileTool, safeFilePath } from "./tool-path-summary.js";
+import { streamIncompleteFailure } from "../errors/index.js";
 
 export interface RecoveredToolCall {
   id: string;
@@ -235,7 +236,7 @@ type Candidate =
   | { kind: "release"; index: number; end: number }
   | { kind: "call"; index: number; name: string; input: Record<string, unknown>; end: number };
 
-function findCandidate(s: string, declared: ReadonlySet<string>): Candidate {
+function findCandidate(s: string, declared: ReadonlySet<string>, rejectMalformed: boolean): Candidate {
   let searchFrom = 0;
 
   for (;;) {
@@ -244,14 +245,28 @@ function findCandidate(s: string, declared: ReadonlySet<string>): Candidate {
 
     const open = readInvokeOpen(s, start);
     if (open.kind === "no") {
+      // Keep orphan parameters until EOF: a later DSML close proves this is
+      // broken tool syntax rather than ordinary XML. Never guess the tool.
+      if (rejectMalformed) {
+        const tail = s.slice(start);
+        const marker = /^<\/?[|｜▁\s]*/i.exec(tail)![0];
+        const rest = tail.slice(marker.length).toLowerCase();
+        if ("<parameter".startsWith(tail.toLowerCase()) ||
+          /^<parameter(?:\s|>)/i.test(tail) ||
+          "dsml".startsWith(rest) || /^dsml[|｜▁\s]/i.test(rest)) {
+          return { kind: "hold", index: start };
+        }
+      }
       searchFrom = start + 1;
       continue;
     }
     if (open.kind === "prefix") return { kind: "hold", index: start };
-    if (!declared.has(open.name)) return { kind: "release", index: start, end: open.end };
+    if (!declared.has(open.name) && !rejectMalformed) return { kind: "release", index: start, end: open.end };
 
     const close = INVOKE_CLOSE_RE.exec(s.slice(open.end));
-    if (!close) return { kind: "hold", index: start, name: open.name, bodyStart: open.end };
+    if (!close) return declared.has(open.name)
+      ? { kind: "hold", index: start, name: open.name, bodyStart: open.end }
+      : { kind: "hold", index: start };
 
     const body = s.slice(open.end, open.end + close.index);
     let end = open.end + close.index + close[0].length;
@@ -259,12 +274,15 @@ function findCandidate(s: string, declared: ReadonlySet<string>): Candidate {
     const wrapperClose = TRAILING_WRAPPER_CLOSE_RE.exec(s.slice(end + trailing[0].length));
     if (wrapperClose) end += trailing[0].length + wrapperClose[0].length;
 
+    if (!declared.has(open.name)) return { kind: "release", index: start, end };
+
     return { kind: "call", index: start, name: open.name, input: parseParameters(body), end };
   }
 }
 
 export function createDsmlRecoveryScanner(options: {
   declaredToolNames: ReadonlySet<string>;
+  rejectMalformed?: boolean;
 }): DsmlRecoveryScanner {
   const declared = options.declaredToolNames;
   let buffer = "";
@@ -355,7 +373,7 @@ export function createDsmlRecoveryScanner(options: {
         afterCall = false;
       }
 
-      const candidate = findCandidate(buffer, declared);
+      const candidate = findCandidate(buffer, declared, options.rejectMalformed === true);
       if (candidate.kind === "none") {
         visible += buffer;
         buffer = "";
@@ -402,6 +420,9 @@ export function createDsmlRecoveryScanner(options: {
     push(chunk: string): DsmlScanResult {
       buffer += chunk;
       if (buffer.length > MAX_HELD_CHARS) {
+        if (options.rejectMalformed && /<\/?[|｜▁\s]*DSML[|｜▁\s]/i.test(buffer)) {
+          throw streamIncompleteFailure("工具调用标记不完整或超过解析上限，请重新生成完整调用");
+        }
         const released = buffer;
         buffer = "";
         afterCall = false;
@@ -411,6 +432,9 @@ export function createDsmlRecoveryScanner(options: {
     },
 
     flush(): DsmlScanResult {
+      if (options.rejectMalformed && /<\/?[|｜▁\s]*DSML[|｜▁\s]/i.test(buffer)) {
+        throw streamIncompleteFailure("工具调用标记不完整，未执行工具，请重新生成完整调用");
+      }
       const held = buffer;
       buffer = "";
       afterCall = false;
