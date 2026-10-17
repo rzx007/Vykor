@@ -54,7 +54,6 @@ import {
 } from "@renderer/stores/desktop-session/selectors"
 import { Composer } from "./composer/composer"
 import { pluginMentionsEnabled } from "./composer/plugin-mentions-feature"
-import { resolveComposerPluginSelection } from "./composer/plugin-selection"
 import { GoalBanner } from "./composer/goal-banner"
 import {
   emptyGoalComposer,
@@ -174,7 +173,6 @@ function ConversationPane({
     (state) => state.updateSessionPermissionMode
   )
   const updateSessionEffort = useDesktopSessionStore((state) => state.updateSessionEffort)
-  const updateSessionPluginSelection = useDesktopSessionStore((state) => state.updateSessionPluginSelection)
   const refreshContextUsage = useDesktopSessionStore((state) => state.refreshContextUsage)
   const resyncActiveSessionSnapshot = useDesktopSessionStore(
     (state) => state.resyncActiveSessionSnapshot
@@ -332,14 +330,6 @@ function ConversationPane({
     pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd
       ? (pluginSnapshot.error ?? null)
       : null
-  const composerPluginSelection = resolveComposerPluginSelection(activeSession, sessionView?.runs ?? [], pluginCatalog)
-  const savePluginSelection = (preferences: { pluginAutoSelectionEnabled?: boolean; clearActivePlugin?: boolean }): void => {
-    if (!activeSessionId) return
-    setComposerValidationError(null)
-    void updateSessionPluginSelection(activeSessionId, preferences).catch((error: unknown) => {
-      setComposerValidationError(error instanceof Error ? error.message : "无法保存插件选择设置")
-    })
-  }
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&
     Boolean(draftText.trim() || attachments.length > 0)
@@ -848,9 +838,6 @@ function ConversationPane({
                 commands={applicationCommands}
                 conversations={sessions}
                 activeSessionId={activeSessionId}
-                {...composerPluginSelection}
-                onPluginAutoSelectionChange={(enabled) => savePluginSelection({ pluginAutoSelectionEnabled: enabled })}
-                onClearManualPlugin={() => savePluginSelection({ clearActivePlugin: true })}
                 goalMode={goalMode}
                 goalEditing={goalMode && Boolean(goalComposer.editingGoal)}
                 onGoalModeChange={changeGoalMode}

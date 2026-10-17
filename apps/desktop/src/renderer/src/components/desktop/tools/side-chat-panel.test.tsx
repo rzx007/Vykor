@@ -1496,30 +1496,13 @@ it("a side event reconciles its pending ordinary send without changing the prima
   await act(async () => finish())
 })
 
-it("plugin selection preferences apply only to the verified side session", async () => {
+it("does not show plugin selection controls in the side chat composer", async () => {
   sideChatTargets.set("main", "side-main")
-  const primary = useDesktopSessionStore.getState().sessionView
-  Object.assign(window.desktop.sessions, {
-    updatePluginSelection: async (input: { sessionId: string; clearActivePlugin?: boolean }) => {
-      if (input.sessionId !== "side-main") throw new Error("设置写入了错误的会话")
-      return {
-        ...sideView().session,
-        metadata: {
-          activePluginId: input.clearActivePlugin ? null : "dev.quality",
-          runtime: { pluginAutoSelectionEnabled: Boolean(input.clearActivePlugin) },
-        },
-      }
-    },
-  })
   await mount()
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="插件选择设置"]')!.click())
-  await act(async () => document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="自动选择插件"]')!.click())
-  expect(container.textContent).toContain("自动选择已关闭")
-  expect(container.textContent).toContain("手动：dev.quality")
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="清除手动插件，恢复自动选择"]')!.click())
-  expect(container.textContent).not.toContain("手动：dev.quality")
-  expect(container.textContent).toContain("自动选择插件")
-  expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+  expect(container.querySelector('[aria-label="插件选择设置"]')).toBeNull()
+  expect(container.textContent).not.toContain("自动选择插件")
+  expect(container.textContent).not.toContain("手动：")
+  expect(container.textContent).not.toContain("本轮自动：")
 })
 
 it("model and effort selections update the explicit side session and leave primary settings alone", async () => {
