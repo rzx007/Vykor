@@ -603,6 +603,35 @@ describe("VykorHttpServer", () => {
     }
   });
 
+  it("exposes the dedicated MCP configuration tool to daemon-managed agents", async () => {
+    let found = false;
+    await withServer(async ({ baseUrl, token }) => {
+      await fetch(`${baseUrl}/sessions`, {
+        method: "POST", headers: { ...auth(token), "content-type": "application/json" },
+        body: JSON.stringify({ id: "mcp-setup", cwd: process.cwd(), model: "m" }),
+      });
+      const response = await fetch(`${baseUrl}/sessions/mcp-setup/prompts`, {
+        method: "POST", headers: { ...auth(token), "content-type": "application/json" },
+        body: JSON.stringify({ content: "configure an MCP" }),
+      });
+      expect(response.status).toBe(202);
+      await waitForEvent(baseUrl, token, (event) => event.type === "session.run.updated" &&
+        (event.payload?.run as { status?: string } | undefined)?.status === "completed");
+      expect(found).toBe(true);
+    }, { runtimeFactory: {
+      async createRuntime({ options, session }) {
+        const tool = options.tools?.find((definition) => definition.name === "McpConfigure");
+        found = !!tool;
+        if (tool) {
+          expect(tool.execution).toMatchObject({ domain: "control_plane" });
+          const denied = await tool.execute({ action: "add", name: "child", config: { type: "stdio", command: "node" } }, { cwd: session.cwd, sessionId: "child" });
+          expect(denied.isError).toBe(true);
+        }
+        return { async runPrompt() {}, async close() {} };
+      },
+    } });
+  });
+
   it("can use an injected application without creating or closing its resources", async () => {
     const ready = vi.fn(async () => {});
     const close = vi.fn(async () => {});

@@ -131,6 +131,8 @@ import {
 import { createBrowserDeveloperTool, createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
 import { createDefaultPluginService } from "./default-services/plugin-service.js";
 import { createPluginInstallTool } from "./plugin-install-tool.js";
+import { createMcpConfigureTool } from "./mcp-configure-tool.js";
+import { McpConfigApplicationService } from "./mcp-config-application-service.js";
 
 export interface DaemonApplicationOptions {
   store: SessionStore;
@@ -567,9 +569,10 @@ export class DaemonApplication implements DurableAgentApplication {
             jobs: this.jobs.createDetachedProcessAgentHost(session),
           })),
         workflowRepository: this.workflows,
-        tools: async () => {
+        tools: async ({ session }) => {
           const pluginSettings = options.getSettings?.() ?? options.settings;
           return [
+            createMcpConfigureTool(new McpConfigApplicationService({ coordinator: this.mcpRuntimes }), session.id),
             ...(pluginSettings
               ? [
                   createPluginInstallTool(

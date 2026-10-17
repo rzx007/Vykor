@@ -124,7 +124,7 @@ describe("McpConfigApplicationService", () => {
       config: { type: "stdio", command: "npx", args: ["beui"] },
     });
 
-    expect(result).toEqual({ persisted: true, credentialRemoved: false, runtimeFailures: [] });
+    expect(result).toEqual({ persisted: true, credentialRemoved: false, runtimeFailures: [], runtimeSync: unavailable });
     expect(world.getSettings().mcpServers?.beui).toEqual({
       type: "stdio",
       command: "npx",

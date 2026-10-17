@@ -13,6 +13,7 @@ import {
   type McpRemoteServerConfig,
   type McpRuntimeConnectionCoordinator,
   type McpRuntimeStatus,
+  type McpRuntimeSyncResult,
   type McpServerConfig,
   type Settings,
 } from "@vykor/core";
@@ -128,7 +129,7 @@ export class McpConfigApplicationService {
     return { mcpServers: { ...(settings.mcpServers ?? {}) } };
   }
 
-  async add(input: { name: string; config: unknown }): Promise<McpConfigOperationResult> {
+  async add(input: { name: string; config: unknown }): Promise<McpConfigOperationResult & { runtimeSync: McpRuntimeSyncResult }> {
     const name = assertName(input.name);
     const config = this.validate(name, input.config);
     await this.persist((current) => {
@@ -140,7 +141,8 @@ export class McpConfigApplicationService {
         mcpServers: { ...(current.mcpServers ?? {}), [name]: config },
       };
     });
-    return this.result(true, false, name);
+    const runtimeSync = await this.reconcileResult(name);
+    return { persisted: true, credentialRemoved: false, runtimeFailures: runtimeSync.failures, runtimeSync };
   }
 
   async update(input: {
@@ -278,11 +280,14 @@ export class McpConfigApplicationService {
   }
 
   private async reconcile(name: string): Promise<Array<{ runtimeId: string; message: string }>> {
+    return (await this.reconcileResult(name)).failures;
+  }
+
+  private async reconcileResult(name: string): Promise<McpRuntimeSyncResult> {
     try {
-      const result = await this.deps.coordinator.reconcileGlobal(name);
-      return result.failures;
+      return await this.deps.coordinator.reconcileGlobal(name);
     } catch {
-      return [{ runtimeId: "daemon", message: "MCP runtime control request failed" }];
+      return { status: "error", affectedRuntimes: 0, failures: [{ runtimeId: "daemon", message: "MCP runtime control request failed" }] };
     }
   }
 }
