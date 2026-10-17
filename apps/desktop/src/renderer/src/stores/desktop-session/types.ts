@@ -146,6 +146,11 @@ export interface SessionActions {
     isCurrent?: () => boolean
   ) => Promise<void>
   selectEffort: (effort: string) => void
+  updateSessionPluginSelection: (
+    sessionId: string,
+    preferences: { pluginAutoSelectionEnabled?: boolean; clearActivePlugin?: boolean },
+    isCurrent?: () => boolean
+  ) => Promise<void>
   openSession: (sessionId: string) => Promise<void>
   resyncActiveSessionSnapshot: () => Promise<void>
   startConversationFrom: (session: DesktopSessionRecord) => Promise<void>

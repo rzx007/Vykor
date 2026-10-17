@@ -34,6 +34,7 @@ import type {
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
   UpdateDesktopSessionEffortInput,
+  UpdateDesktopSessionPluginSelectionInput,
   GetDesktopContextUsageInput,
   GetDesktopSessionGoalInput,
   CreateDesktopSessionGoalInput,
@@ -459,6 +460,28 @@ export class SessionOperations {
     return toDesktopSessionRecord(
       await client.sessions.update(sessionId, {
         metadata: { runtime: { effort } },
+      })
+    )
+  }
+
+  async updateSessionPluginSelection(
+    client: SessionOperationsClient,
+    input: UpdateDesktopSessionPluginSelectionInput
+  ): Promise<DesktopSessionRecord> {
+    const sessionId = requireString(input.sessionId, "会话 ID")
+    if (
+      (input.pluginAutoSelectionEnabled !== undefined && typeof input.pluginAutoSelectionEnabled !== "boolean") ||
+      (input.clearActivePlugin !== undefined && typeof input.clearActivePlugin !== "boolean") ||
+      (input.pluginAutoSelectionEnabled === undefined && input.clearActivePlugin !== true)
+    ) throw new Error("插件选择设置无效")
+    return toDesktopSessionRecord(
+      await client.sessions.update(sessionId, {
+        metadata: {
+          ...(input.clearActivePlugin ? { activePluginId: null } : {}),
+          runtime: {
+            pluginAutoSelectionEnabled: input.clearActivePlugin ? true : input.pluginAutoSelectionEnabled,
+          },
+        },
       })
     )
   }

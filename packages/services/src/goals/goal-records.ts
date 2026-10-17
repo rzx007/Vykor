@@ -78,7 +78,9 @@ export function sessionGoalFromRow(
       ? { currentRunId: row.currentRunId }
       : {}),
     ...(typeof row.reason === "string" ? { reason: row.reason } : {}),
-    ...(typeof row.stopReasonJson === "string" ? { stopReason: JSON.parse(row.stopReasonJson) as GoalStopReason } : {}),
+    ...(typeof row.stopReasonJson === "string"
+      ? { stopReason: JSON.parse(row.stopReasonJson) as GoalStopReason }
+      : {}),
     ...(wait ? { wait } : {}),
     createdAt: Number(row.createdAt),
     updatedAt: Number(row.updatedAt),

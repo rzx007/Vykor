@@ -45,6 +45,7 @@ import {
 import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
 import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
+import type { PluginSelectionCatalog } from "./plugin-selection.js";
 
 interface AgentCompositionOptions extends VykorAgentConfiguration {
   settings?: Settings;
@@ -78,6 +79,7 @@ export interface AgentCompositionContext {
 
 export interface AgentComposition {
   runtime: RuntimeBundle;
+  pluginSelection: PluginSelectionCatalog;
   session: AgentSession;
   mcpConnections: () => ReturnType<McpClientManager["getConnections"]>;
   retainMcpConnectionsForRun: () => () => void;
@@ -219,6 +221,7 @@ async function composeVykorAgentInternal(
 
   return {
     runtime,
+    pluginSelection: mcpIntegration.pluginSelection,
     session,
     mcpConnections: mcpIntegration.getConnections,
     retainMcpConnectionsForRun: mcpIntegration.retainConnectionsForRun,

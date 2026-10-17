@@ -1,5 +1,6 @@
 import type { AutoReviewMode, SessionRecord } from "@vykor/protocol";
 import { readSessionModelRetryState } from "@vykor/protocol";
+import { resolveRunPluginSelection } from "./session-plugin-selection.js";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError, type GoalRunBinding, type GoalReadSnapshot } from "@vykor/agent-runtime";
 import { isAgentExecutionLimitError, type AgentExecutionLimits, type ContentBlock, type ModelInputCapabilities } from "@vykor/core";
@@ -130,6 +131,8 @@ export class SessionRunExecutor {
       const admitted = this.context.data.conversations.getInput(inputId);
       if (!admitted) throw new Error(`Session input not found: ${inputId}`);
       const storedRun = this.context.data.runs.getRun(runId);
+      if (!storedRun) throw new Error(`Run not found: ${runId}`);
+      workContext.signal.throwIfAborted();
       const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context" || (item.type === "capability" && item.kind === "plugin_agent"));
       const hasExplicitSkills = admitted.items.some((item) => item.type === "skill");
 
@@ -169,10 +172,48 @@ export class SessionRunExecutor {
         };
       }
 
+      const goalId = typeof storedRun?.metadata?.goalId === "string" ? storedRun.metadata.goalId : undefined;
+      const goalObjectiveVersion = typeof storedRun?.metadata?.goalObjectiveVersion === "number" ? storedRun.metadata.goalObjectiveVersion : undefined;
+      let goalBinding: GoalRunBinding | undefined;
+      if (goalId) {
+        const goal = this.context.goals.getGoal(goalId);
+        if (!goal || goal.sessionId !== sessionId || goal.objectiveVersion !== goalObjectiveVersion || goal.status !== "active" || goal.currentRunId !== runId) {
+          throw new Error("session_goal_run_is_stale");
+        }
+        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion,
+          submitUpdate: (input) => this.context.submitGoalUpdate ? this.context.submitGoalUpdate(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal update handler is unavailable")),
+          readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
+      }
+      const bindLimits = (boundRunId: string, parent?: AgentExecutionLimits): AgentExecutionLimits => {
+        let starting = Boolean(parent);
+        const bound: AgentExecutionLimits = {
+          // The child's first check precedes run.started and its durable projection.
+          // Authorize that start through the parent, then check the child's own Run.
+          check: (boundary, tool) => {
+            if (starting && boundary === "run") {
+              starting = false;
+              return parent!.check("child");
+            }
+            starting = false;
+            return this.context.checkGoalRunExecution
+              ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, boundRunId, boundary, tool)
+              : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion);
+          },
+          forChildRun: childRunId => bindLimits(childRunId, bound),
+        };
+        return bound;
+      };
+      const limits = goalBinding && this.context.checkGoalExecution ? bindLimits(runId) : undefined;
+      await limits?.check("run");
+
       // 先拿到实际 Agent，路由才能看见 allow/deny 过滤后的工具和真实宿主能力。
       agentTouched = true;
       const agent = await this.context.agentPool.acquireSession(sessionId);
-      const pluginId = typeof storedRun?.metadata?.pluginId === "string" ? storedRun.metadata.pluginId : undefined;
+      const selection = await resolveRunPluginSelection({ session, run: storedRun, input: admitted, agent,
+        signal: workContext.signal, traceId: this.context.traceIdForRun(runId), limits });
+      this.context.data.runs.updateRun(runId, { metadata: {
+        pluginId: selection.pluginId, pluginSelection: selection } });
+      const pluginId = selection.pluginId ?? undefined;
       const capabilityView = agent.createRunCapabilityView?.(pluginId);
       if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");
       if (capabilityView) this.context.pluginUi?.registerRunView(runId, capabilityView);
@@ -240,40 +281,6 @@ export class SessionRunExecutor {
           materialized,
         );
       }
-      const goalId = typeof storedRun?.metadata?.goalId === "string" ? storedRun.metadata.goalId : undefined;
-      const goalObjectiveVersion = typeof storedRun?.metadata?.goalObjectiveVersion === "number" ? storedRun.metadata.goalObjectiveVersion : undefined;
-      let goalBinding: GoalRunBinding | undefined;
-      if (goalId) {
-        const goal = this.context.goals.getGoal(goalId);
-        if (!goal || goal.sessionId !== sessionId || goal.objectiveVersion !== goalObjectiveVersion || goal.status !== "active" || goal.currentRunId !== runId) {
-          throw new Error("session_goal_run_is_stale");
-        }
-        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion,
-          submitUpdate: (input) => this.context.submitGoalUpdate ? this.context.submitGoalUpdate(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal update handler is unavailable")),
-          readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
-      }
-      const bindLimits = (boundRunId: string, parent?: AgentExecutionLimits): AgentExecutionLimits => {
-        let starting = Boolean(parent);
-        const bound: AgentExecutionLimits = {
-          // The child's first check precedes run.started and its durable projection.
-          // Authorize that start through the parent, then check the child's own Run.
-          check: (boundary, tool) => {
-            if (starting && boundary === "run") {
-              starting = false;
-              return parent!.check("child");
-            }
-            starting = false;
-            return this.context.checkGoalRunExecution
-              ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, boundRunId, boundary, tool)
-              : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion);
-          },
-          forChildRun: childRunId => bindLimits(childRunId, bound),
-        };
-        return bound;
-      };
-      const limits = goalBinding && this.context.checkGoalExecution ? bindLimits(runId) : undefined;
-      await limits?.check("run");
-
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
       await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
 

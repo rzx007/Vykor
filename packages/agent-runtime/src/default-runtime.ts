@@ -387,6 +387,7 @@ export async function createVykorRuntime(
   bundle.trustedToolOverrides = new Map([...engineOptions.trustedToolOverrides].map(([name, definition]) => [
     name, Object.freeze({ identity: toolDefinitionIdentity(definition), execute: definition.execute }),
   ]));
+  bundle.resolveRequestConfiguration = resolveRequestConfiguration;
   await attachSandboxRuntime(
     bundle,
     hostCwd,

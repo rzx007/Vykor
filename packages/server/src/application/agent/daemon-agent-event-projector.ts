@@ -143,6 +143,19 @@ export class DaemonAgentEventProjector {
 
   private async project(event: AgentEvent): Promise<void> {
     switch (event.type) {
+      case "model.attempt.started":
+        if (event.data.purpose === "plugin_selection" && event.context.runId) this.projectAtomicEvent(() => {
+          const run = this.context.store.runs.getRun(event.context.runId!);
+          if (!run || !["pending", "running"].includes(run.status)) return;
+          const duplicate = this.context.store.conversations.listEvents({ sessionId: run.sessionId }).some(item =>
+            item.type === "session.model.attempt.started" && item.payload.runId === run.id
+            && item.payload.generationId === event.data.generationId && item.payload.attempt === event.data.attempt);
+          if (duplicate) return;
+          this.context.store.runs.updateRun(run.id, { metadata: { pluginSelection: { status: "selecting", source: "auto" } } });
+          this.context.store.conversations.appendEvent({ type: "session.model.attempt.started", sessionId: run.sessionId,
+            payload: { runId: run.id, ...event.data } });
+        });
+        return;
       case "child.created":
         await this.projectChildCreated(event);
         return;

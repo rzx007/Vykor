@@ -22,6 +22,14 @@ const versionedFixture: DurableEventDefinition = {
 };
 
 describe("DurableEventRegistry", () => {
+  it("accepts the plugin-selection purpose while rejecting invalid attempt purposes and extra fields", () => {
+    const payload = { runId: "r", generationId: "g", attempt: 1, purpose: "plugin_selection" };
+    expect(defaultDurableEventRegistry.prepareWrite("session.model.attempt.started", payload, "s").payload).toEqual(payload);
+    expect(() => defaultDurableEventRegistry.prepareWrite("session.model.attempt.started", { ...payload, purpose: "arbitrary" }, "s"))
+      .toThrow("purpose is invalid");
+    expect(() => defaultDurableEventRegistry.prepareWrite("session.model.attempt.started", { ...payload, unsafe: true }, "s"))
+      .toThrow("unsafe is not allowed");
+  });
   it("rejects unregistered event types instead of accepting typos", () => {
     expect(() => defaultDurableEventRegistry.prepareWrite(
       "session.mesage.created",

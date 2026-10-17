@@ -9,7 +9,9 @@ export {
   type VykorAgentState,
   type VykorAgentSubmitOptions,
   type VykorAgentRunToolOptions,
+  type PluginSelectionRunOptions,
 } from "./agent.js";
+export type { PluginSelectionResult } from "./plugin-selection.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
 export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";

@@ -7,14 +7,15 @@ import type {
   SessionMessageRecord,
   SessionRunRecord,
 } from "@vykor/protocol";
-import { sessionUserInputText } from "@vykor/protocol";
+import { readRuntimeMetadata, sessionUserInputText } from "@vykor/protocol";
 import { AttachmentError } from "@vykor/services";
 import { normalizeTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
+import type { RunPluginSelection } from "./session-plugin-selection.js";
 
 export interface RunControlDurableSessions {
-  getSession(sessionId: string): { id: string; cwd?: string; status?: string } | undefined;
+  getSession(sessionId: string): { id: string; cwd?: string; status?: string; metadata?: Record<string, unknown> } | undefined;
   listSessions(options?: { cwd?: string; includeArchived?: boolean }): Array<{ id: string; cwd?: string; status?: string }>;
 }
 
@@ -324,7 +325,15 @@ export class RunControlService {
     ) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
     const inputPluginId = typeof input.metadata.pluginId === "string" ? input.metadata.pluginId : undefined;
     const activePluginId = typeof activeRun.metadata.pluginId === "string" ? activeRun.metadata.pluginId : undefined;
-    if (inputPluginId !== activePluginId) {
+    const activeSelection = activeRun.metadata.pluginSelection as RunPluginSelection | undefined;
+    const queuedSelection = queuedRun.metadata.pluginSelection as RunPluginSelection | undefined;
+    // “立即补充” joins the existing Run; it never selects or expands that Run's capabilities.
+    const inheritAutomaticScope = !inputPluginId && activePluginId
+      && typeof queuedRun.metadata.pluginId !== "string" && queuedSelection?.status !== "resolved"
+      && activeSelection?.status === "resolved" && activeSelection.source === "auto"
+      && !input.items?.some(item => item.type === "capability" || item.type === "skill")
+      && readRuntimeMetadata(this.options.durableSessions.getSession(sessionId)?.metadata).pluginsEnabled !== false;
+    if (inputPluginId !== activePluginId && !inheritAutomaticScope) {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
     const content = await this.materializeSteerInput(sessionId, input.items);

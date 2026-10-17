@@ -216,10 +216,13 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
     requireRecord(payload, "attemptUsage");
   }),
   sessionDefinition("session.model.attempt.started", (payload) => {
-    for (const key of Object.keys(payload)) if (!["runId", "generationId", "attempt", "provider", "model"].includes(key)) throw new Error(`${key} is not allowed`);
+    for (const key of Object.keys(payload)) if (!["runId", "generationId", "attempt", "provider", "model", "purpose"].includes(key)) throw new Error(`${key} is not allowed`);
     requireString(payload, "runId"); requireString(payload, "generationId");
     if (!Number.isSafeInteger(payload.attempt) || (payload.attempt as number) < 1) throw new Error("attempt must be a positive integer");
     for (const key of ["provider", "model"]) if (payload[key] !== undefined) requireString(payload, key);
+    if (payload.purpose !== undefined && !["generation", "compaction", "finalization", "memory", "plugin_selection"].includes(payload.purpose as string)) {
+      throw new Error("purpose is invalid");
+    }
   }),
   sessionDefinition("session.auto_review.updated", (payload) => {
     for (const key of Object.keys(payload)) {

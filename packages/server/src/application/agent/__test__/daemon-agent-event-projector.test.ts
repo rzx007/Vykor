@@ -78,6 +78,20 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("records plugin selection purpose and usage while the main Run is pending", async () => {
+    const { store, goal, projector } = goalProjector();
+    store.runs.createRun({ id: "selecting", sessionId: "parent", metadata: { goalId: goal.id, goalObjectiveVersion: 1 } });
+    const context = { sessionId: "parent", runId: "selecting" };
+    await projector.apply(event("model.attempt.started", { generationId: "select", attempt: 1, model: "m", purpose: "plugin_selection" }, context));
+    expect(store.runs.getRun("selecting")?.metadata.pluginSelection).toMatchObject({ status: "selecting", source: "auto" });
+    expect(store.conversations.listEvents({ sessionId: "parent" })).toContainEqual(expect.objectContaining({
+      type: "session.model.attempt.started", payload: expect.objectContaining({ purpose: "plugin_selection", runId: "selecting" }),
+    }));
+    await projector.apply(event("model.attempt.finished", { generationId: "select", attempt: 1, status: "completed", usageStatus: "complete",
+      usage: { inputTokens: 8, outputTokens: 2, metering: { knownInputTokens: 8, knownOutputTokens: 2, inputIncludesCache: true, completeness: "complete", raw: {} } } }, context));
+    expect(store.runs.getRun("selecting")?.metadata.usage).toMatchObject({ inputTokens: 8, outputTokens: 2 });
+    expect(store.goals.getGoal(goal.id)?.usage.knownTokens).toBe(10);
+  });
   function goalProjector() {
     const directory = mkdtempSync(join(tmpdir(), "vk-child-goal-binding-"));
     const store = new SessionStore({ path: join(directory, "store.db") });

@@ -40,6 +40,8 @@ describe("session runtime metadata", () => {
     { maxTurns: "10" },
     { allowedTools: ["read", 42] },
     { pluginsEnabled: "false" },
+    { pluginAutoSelectionEnabled: "false" },
+    { pluginAutoSelectionEnabled: null },
   ])("rejects invalid runtime structure before defaults can hide it: %j", (invalid) => {
     expect(() => readSessionRuntimeConfig(session({ runtime: { model: "m", ...invalid } }), { effort: "medium" }))
       .toThrow(expect.objectContaining({ name: "ProtocolDataError" }));
@@ -107,6 +109,23 @@ describe("session runtime metadata", () => {
       session({ runtime: { model: "runtime-model", pluginsEnabled: false } }),
       { pluginsEnabled: true },
     )).toMatchObject({ model: "runtime-model", pluginsEnabled: false });
+  });
+
+  it("reads and patches the automatic plugin selection flag without losing false", () => {
+    const metadata = patchSessionRuntimeMetadata(
+      { activePluginId: "dev.quality", runtime: { model: "m", effort: "high" } },
+      { pluginAutoSelectionEnabled: false },
+    );
+    expect(metadata).toEqual({
+      activePluginId: "dev.quality",
+      runtime: { model: "m", effort: "high", pluginAutoSelectionEnabled: false },
+    });
+    const disabled = readSessionRuntimeConfig(session(metadata), { pluginAutoSelectionEnabled: true });
+    expect(disabled.pluginAutoSelectionEnabled).toBe(false);
+    const enabled = readSessionRuntimeConfig(session({ runtime: { model: "m", pluginAutoSelectionEnabled: true } }));
+    expect(enabled.pluginAutoSelectionEnabled).toBe(true);
+    expect(changedSessionRuntimeKeys(disabled, enabled)).toEqual(["effort", "pluginAutoSelectionEnabled"]);
+    expect(() => patchSessionRuntimeMetadata(metadata, { pluginAutoSelectionEnabled: 0 } as never)).toThrow();
   });
 
   it("patches runtime fields without discarding unrelated metadata", () => {

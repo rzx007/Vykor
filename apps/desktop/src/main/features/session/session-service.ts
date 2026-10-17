@@ -50,6 +50,7 @@ import type {
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
   UpdateDesktopSessionEffortInput,
+  UpdateDesktopSessionPluginSelectionInput,
   GetDesktopContextUsageInput,
   GetDesktopSessionGoalInput,
   CreateDesktopSessionGoalInput,
@@ -448,6 +449,11 @@ export class DesktopSessionService {
   async updateSessionEffort(input: UpdateDesktopSessionEffortInput): Promise<DesktopSessionRecord> {
     const client = await this.getClient()
     return await this.operations.updateSessionEffort(client, input)
+  }
+
+  async updateSessionPluginSelection(input: UpdateDesktopSessionPluginSelectionInput): Promise<DesktopSessionRecord> {
+    const client = await this.getClient()
+    return await this.operations.updateSessionPluginSelection(client, input)
   }
 
   async getContextUsage(input: GetDesktopContextUsageInput): Promise<DesktopContextUsageSnapshot> {

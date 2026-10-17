@@ -238,5 +238,5 @@ export interface ModelAttemptFinishedEvent extends GenerationIdentity {
 export interface ModelAttemptStarted extends GenerationIdentity {
   model: string;
   provider?: string;
-  purpose: "generation" | "compaction" | "finalization" | "memory";
+  purpose: "generation" | "compaction" | "finalization" | "memory" | "plugin_selection";
 }

@@ -433,6 +433,7 @@ export class RuntimeBundle {
   sandboxStatus?: RuntimeSandboxStatus;
   /** Factory installed by the runtime host; never reloads components from disk. */
   createRunCapabilityView?: (pluginId?: string) => RunCapabilityView;
+  resolveRequestConfiguration?: QueryEngineOptions["resolveRequestConfiguration"];
   /** Exact host-validated builtin replacements; source remains agent for identity checks. */
   trustedToolOverrides?: ReadonlyMap<string, Readonly<{
     identity: symbol; execute: import("./tools").ToolDefinition["execute"];

@@ -43,14 +43,14 @@ function emptySessionView(sessionId: string, cursor = 0): DesktopSessionView {
   }
 }
 
-it.each(["model", "permission", "effort"])("does not apply a late side %s setting once its target is invalidated", async (kind) => {
+it.each(["model", "permission", "effort", "plugin"])("does not apply a late side %s setting once its target is invalidated", async (kind) => {
   resetDesktopSessionStore()
   let current = true
   let finish!: () => void
   const delayed = () => new Promise<DesktopSessionView["session"]>((resolve) => {
     finish = () => resolve({ ...emptySessionView("side").session, parentId: "main", storage: "memory" })
   })
-  vi.stubGlobal("window", { desktop: { sessions: { updateModel: delayed, updatePermissionMode: delayed, updateEffort: delayed } } })
+  vi.stubGlobal("window", { desktop: { sessions: { updateModel: delayed, updatePermissionMode: delayed, updateEffort: delayed, updatePluginSelection: delayed } } })
   try {
     const main = emptySessionView("main")
     useDesktopSessionStore.setState({ activeSessionId: "main", sessionView: main, sessions: [main.session] })
@@ -59,7 +59,8 @@ it.each(["model", "permission", "effort"])("does not apply a late side %s settin
     const request = kind === "model"
       ? actions.updateSessionModel("side", { id: "m", label: "M", provider: "test", providerName: "test" }, isCurrent)
       : kind === "permission" ? actions.updateSessionPermissionMode("side", "default", isCurrent)
-      : actions.updateSessionEffort("side", "high", isCurrent)
+      : kind === "effort" ? actions.updateSessionEffort("side", "high", isCurrent)
+      : actions.updateSessionPluginSelection("side", { pluginAutoSelectionEnabled: false }, isCurrent)
     current = false
     finish()
     await request
@@ -1379,6 +1380,45 @@ describe("desktop session actions", () => {
 
     expect(updateEffort).toHaveBeenCalledWith({ sessionId: "session-1", effort: "max" })
     expect(useDesktopSessionStore.getState().selectedEffort).toBe("max")
+  })
+
+  it("applies saved plugin selection preferences to the active session view", async () => {
+    const view = emptySessionView("session-1")
+    vi.stubGlobal("window", { desktop: { sessions: {
+      updatePluginSelection: async (input: { pluginAutoSelectionEnabled: boolean }) => ({
+        ...view.session,
+        metadata: { runtime: { pluginAutoSelectionEnabled: input.pluginAutoSelectionEnabled } },
+      }),
+    } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: view, sessions: [view.session] })
+
+    await useDesktopSessionStore.getState().updateSessionPluginSelection("session-1", {
+      pluginAutoSelectionEnabled: false,
+    })
+
+    expect(useDesktopSessionStore.getState().sessionView?.session.metadata).toEqual({
+      runtime: { pluginAutoSelectionEnabled: false },
+    })
+    expect(useDesktopSessionStore.getState().sessions[0]?.metadata).toEqual({
+      runtime: { pluginAutoSelectionEnabled: false },
+    })
+  })
+
+  it("does not discard a pending model change when plugin selection is updated", async () => {
+    const view = emptySessionView("session-1")
+    let finishModel!: (value: DesktopSessionView["session"]) => void
+    vi.stubGlobal("window", { desktop: { sessions: {
+      updateModel: () => new Promise((resolve) => { finishModel = resolve }),
+      updatePluginSelection: async () => ({ ...view.session, metadata: { runtime: { pluginAutoSelectionEnabled: false } } }),
+    } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: view, sessions: [view.session] })
+    const changingModel = useDesktopSessionStore.getState().updateSessionModel("session-1", {
+      id: "new-model", label: "New", providerName: "provider", provider: "Provider",
+    })
+    await useDesktopSessionStore.getState().updateSessionPluginSelection("session-1", { pluginAutoSelectionEnabled: false })
+    finishModel({ ...view.session, model: "new-model", metadata: { runtime: { model: "new-model", pluginAutoSelectionEnabled: false } } })
+    await changingModel
+    expect(useDesktopSessionStore.getState().selectedModel).toBe("new-model")
   })
 
   it("reads the three effort states from session metadata", () => {

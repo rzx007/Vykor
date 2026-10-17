@@ -1,4 +1,4 @@
-import { ChevronDown, Goal, Mic, ShieldCheck, X, Undo2 } from "lucide-react"
+import { ChevronDown, Goal, Mic, Puzzle, ShieldCheck, X, Undo2 } from "lucide-react"
 import { IconPlus } from "@tabler/icons-react"
 import { useState, type ReactNode } from "react"
 
@@ -41,6 +41,11 @@ export function Composer({
   skills = [],
   plugins = [],
   pluginMentionsEnabled = defaultPluginMentionsEnabled,
+  pluginAutoSelectionEnabled = true,
+  manualPluginName = null,
+  automaticPluginName = null,
+  onPluginAutoSelectionChange,
+  onClearManualPlugin,
   commands = [],
   conversations = [],
   activeSessionId = null,
@@ -89,6 +94,11 @@ export function Composer({
   skills?: readonly ComposerSkill[]
   plugins?: readonly DesktopPluginCatalogEntry[]
   pluginMentionsEnabled?: boolean
+  pluginAutoSelectionEnabled?: boolean
+  manualPluginName?: string | null
+  automaticPluginName?: string | null
+  onPluginAutoSelectionChange?: (enabled: boolean) => void
+  onClearManualPlugin?: () => void
   commands?: readonly ComposerPickerItem[]
   conversations?: readonly DesktopSessionRecord[]
   activeSessionId?: string | null
@@ -125,7 +135,7 @@ export function Composer({
   contextContent?: ReactNode
 }): React.JSX.Element {
   const [activePicker, setActivePicker] = useState<
-    "model" | "permission" | "effort" | "goal" | null
+    "model" | "permission" | "effort" | "goal" | "plugin" | null
   >(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
@@ -310,6 +320,88 @@ export function Composer({
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
       />
+      {pluginMentionsEnabled && onPluginAutoSelectionChange ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-1 text-xs text-muted-foreground">
+          <Popover
+            open={activePicker === "plugin"}
+            onOpenChange={(open) => setActivePicker(open ? "plugin" : null)}
+          >
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  shape="pill"
+                  className="h-7 gap-1 px-2 text-xs font-normal"
+                  aria-label="插件选择设置"
+                  disabled={sending}
+                />
+              }
+            >
+              <Puzzle data-icon="inline-start" className="size-3.5" strokeWidth={1.75} />
+              {pluginAutoSelectionEnabled ? "自动选择插件" : "自动选择已关闭"}
+              <ChevronDown data-icon="inline-end" className="size-3" />
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="w-64 gap-2 rounded-2xl p-3"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto w-full justify-between px-2 py-2 text-sm"
+                role="switch"
+                aria-label="自动选择插件"
+                aria-checked={pluginAutoSelectionEnabled}
+                disabled={sending}
+                onClick={() => onPluginAutoSelectionChange(!pluginAutoSelectionEnabled)}
+              >
+                <span>自动选择插件</span>
+                <span className="text-xs text-muted-foreground">
+                  {pluginAutoSelectionEnabled ? "开启" : "关闭"}
+                </span>
+              </Button>
+              <p className="px-2 text-xs leading-relaxed text-muted-foreground">
+                根据每轮内容选择合适的插件。关闭后仍可通过 @ 手动选择。
+              </p>
+              {manualPluginName ? (
+                <p className="px-2 text-xs leading-relaxed text-muted-foreground">
+                  当前沿用手动选择的插件；清除后恢复自动选择。
+                </p>
+              ) : null}
+            </PopoverContent>
+          </Popover>
+          {manualPluginName ? (
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="max-w-48 truncate" title={manualPluginName}>
+                手动：{manualPluginName}
+              </span>
+              {onClearManualPlugin ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  shape="circle"
+                  className="size-7"
+                  disabled={sending}
+                  aria-label="清除手动插件，恢复自动选择"
+                  title="清除手动插件，恢复自动选择"
+                  onClick={onClearManualPlugin}
+                >
+                  <X className="size-3.5" strokeWidth={1.75} />
+                </Button>
+              ) : null}
+            </span>
+          ) : automaticPluginName ? (
+            <span className="max-w-56 truncate" title={automaticPluginName}>
+              本轮自动：{automaticPluginName}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex h-12 min-w-0 items-center gap-1 px-3 pb-2">
         <Button
           type="button"

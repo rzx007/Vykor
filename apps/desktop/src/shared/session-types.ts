@@ -471,6 +471,12 @@ export interface UpdateDesktopSessionEffortInput {
   effort: string
 }
 
+export interface UpdateDesktopSessionPluginSelectionInput {
+  sessionId: string
+  pluginAutoSelectionEnabled?: boolean
+  clearActivePlugin?: boolean
+}
+
 export interface GetDesktopContextUsageInput {
   cwd: string
   sessionId?: string

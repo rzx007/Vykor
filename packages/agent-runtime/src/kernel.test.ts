@@ -21,6 +21,33 @@ const settings: Settings = {
 };
 
 describe("createAgentKernel", () => {
+  it("uses only the plugin catalog explicitly prepared by its host", async () => {
+    let requests = 0;
+    const validate = vi.fn(async () => {});
+    const agent = await createAgentKernel({
+      settings, cwd: "D:/explicit-workspace", sessionId: "kernel-selection",
+      capabilities: unavailableCapabilities(), effects: { requestPermission: async () => ({ status: "denied" }) },
+      createRuntime: async context => ({
+        ...createBasicAgentKernelRuntime({ settings: context.settings, cwd: context.cwd, client: {
+          async *streamMessage() {
+            requests++;
+            yield { type: "text_delta" as const, delta: '{"pluginId":"office"}' };
+            yield { type: "complete" as const, stopReason: "end_turn" as const };
+          },
+        } }),
+        pluginSelection: { candidates: [{ pluginId: "office", displayName: "Office", description: "slides", version: "1", behaviorDigest: "digest" }], validate },
+      }),
+    });
+    try {
+      await expect(agent.selectPluginForRun("create slides", { runId: "r1", inputId: "i1", traceId: "t1", signal: new AbortController().signal }))
+        .resolves.toMatchObject({ pluginId: "office", version: "1", behaviorDigest: "digest" });
+      expect(requests).toBe(1);
+      expect(validate).toHaveBeenCalledOnce();
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("只使用调用方给出的 runtime 和能力，不安装本地 fallback", async () => {
     const effects = {
       requestPermission: vi.fn(async () => ({ status: "approved" as const })),

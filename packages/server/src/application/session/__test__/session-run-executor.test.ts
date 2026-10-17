@@ -10,6 +10,59 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("automatically selects one plugin for this Run without changing the session or exposing another plugin", async () => {
+    const f = autoSelectionFixture();
+    await f.execute();
+    expect(f.observed).toEqual([["office", "Public", "Office"]]);
+    expect(f.store.spies.getRun()).toMatchObject({ metadata: { pluginId: "office", pluginSelection: { status: "resolved", source: "auto" } } });
+    expect(f.store.spies.getSession().metadata).not.toHaveProperty("activePluginId");
+    expect(f.store.spies.getInput().metadata).not.toHaveProperty("pluginId");
+  });
+  it("reuses a resolved no-plugin result instead of selecting again on retry", async () => {
+    const f = autoSelectionFixture(null);
+    await f.execute();
+    await f.execute();
+    expect(f.requests).toBe(1);
+    expect(f.observed).toEqual([[undefined, "Public"], [undefined, "Public"]]);
+  });
+  it("does not inherit the previous automatic decision into a new Run", async () => {
+    const f = autoSelectionFixture();
+    await f.execute();
+    Object.assign(f.store.spies.getRun(), { metadata: {} });
+    await f.execute();
+    expect(f.requests).toBe(2);
+  });
+  it("does not replace a saved automatic selection with public capabilities when plugins are disabled before recovery", async () => {
+    const f = autoSelectionFixture();
+    await f.execute();
+    const previous = (f.store.spies.getRun() as any).metadata.pluginSelection;
+    f.observed.length = 0;
+    f.store.spies.getSession.mockReturnValue({ ...f.store.spies.getSession(), metadata: {
+      runtime: { model: "gpt-test", pluginsEnabled: false },
+    } } as any);
+    await f.execute();
+    expect(f.requests).toBe(1);
+    expect(f.observed).toEqual([]);
+    expect(f.store.spies.getRun()).toMatchObject({ status: "failed", metadata: { pluginId: "office", pluginSelection: previous } });
+  });
+  it.each(["manual", "disabled", "auto-disabled", "unavailable-manual"])("does not make a selection request for %s", async kind => {
+    const f = autoSelectionFixture();
+    if (kind === "manual") Object.assign(f.store.spies.getRun(), { metadata: { pluginId: "knowledge" } });
+    else f.store.spies.getSession.mockReturnValue({ ...f.store.spies.getSession(), metadata: {
+      runtime: { model: "gpt-test", ...(kind === "disabled" ? { pluginsEnabled: false } : kind === "auto-disabled" ? { pluginAutoSelectionEnabled: false } : {}) },
+      ...(kind === "unavailable-manual" ? { activePluginId: "removed" } : {}),
+    } } as any);
+    await f.execute();
+    expect(f.requests).toBe(0);
+    expect(f.observed[0]).toEqual(kind === "manual" ? ["knowledge", "Public", "Knowledge"] : [undefined, "Public"]);
+  });
+  it("does not submit the main model after cancellation during selection", async () => {
+    const f = autoSelectionFixture();
+    f.controller.abort(new Error("cancelled"));
+    await f.execute();
+    expect(f.observed).toEqual([]);
+    expect(f.store.spies.getRun()).toMatchObject({ status: "interrupted" });
+  });
   it.each([false, true])("binds goal callbacks to the admitted Run only when it has a Goal (goal=%s)", async goalRun => {
     const store = createStore();
     const snapshot: GoalReadSnapshot = { goalId: "g1", objectiveVersion: 2, objective: "finish the current work", status: "active",
@@ -785,6 +838,30 @@ function capabilitySnapshot(
   };
 }
 
+function autoSelectionFixture(pluginId: string | null = "office") {
+  const store = createStore();
+  const controller = new AbortController();
+  const registry = new ToolRegistry();
+  for (const [name, owner] of [["Public", undefined], ["Office", "office"], ["Knowledge", "knowledge"]] as const) {
+    registry.register({ name, description: name, inputSchema: {}, execute: async () => ({ content: [] }) }, owner ? { kind: "plugin", id: owner } : { kind: "builtin" });
+  }
+  let requests = 0;
+  const observed: Array<Array<string | undefined>> = [];
+  const executor = new SessionRunExecutor({
+    data: store.data, attachments: store.attachments, goals: store.goals,
+    agentPool: { configured: true, acquireSession: async () => ({
+      getHistory: () => [],
+      selectPluginForRun: async () => { requests++; return { pluginId, reason: pluginId ? "matched" : "no_match", version: "1", behaviorDigest: "digest" }; },
+      createRunCapabilityView: (id?: string) => createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["office", "knowledge"]) }, id),
+      submitMessage: (_content: unknown, options: any) => { observed.push([options.capabilityView.pluginId, ...options.capabilityView.tools.keys()]); return completedHandle(); },
+    }), close: async () => {}, closeIfStale: async () => {} } as any,
+    events: { checkpoint: () => 1, publishSince: () => {} },
+    transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
+  });
+  return { store, controller, observed, get requests() { return requests; },
+    execute: () => executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" }, { signal: controller.signal, registerHandle: async () => {} }) };
+}
+
 function createStore(options: {
   attachments?: ReturnType<typeof attachment>[];
   metadata?: Record<string, unknown>;
@@ -808,7 +885,7 @@ function createStore(options: {
   }));
   const getRun = vi.fn(() => run);
   const appendEvent = vi.fn();
-  const updateRun = vi.fn((id, update) => Object.assign(run, update, { id }));
+  const updateRun = vi.fn((id, update) => Object.assign(run, update, { id, metadata: { ...(run as any).metadata, ...update.metadata } }));
   const data = {
     transaction: <T>(work: () => T) => work(),
     sessions: { get: getSession },

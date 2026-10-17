@@ -133,7 +133,8 @@ export function createMcpConfigureTool(
           config.type === "stdio"
             ? `启动命令：${JSON.stringify([config.command, ...(config.args ?? [])])}\n环境变量名：${Object.keys(config.env ?? {}).join("、") || "无"}`
             : `服务地址：${summarizeMcpEndpoint(config.url)}\n请求头名称：${Object.keys(config.headers ?? {}).join("、") || "无"}`;
-        const confirmed = await askInstallConfirmation(context.askUserPrompt,
+        const confirmed = await askInstallConfirmation(
+          context.askUserPrompt,
           [
             `确认添加全局 MCP 服务 ${JSON.stringify(name)}？这会影响其他会话。`,
             target,
@@ -144,8 +145,7 @@ export function createMcpConfigureTool(
           ].join("\n"),
           "确认添加",
         );
-        if (!confirmed)
-          return reply("已取消添加，未保存或启动 MCP 服务。");
+        if (!confirmed) return reply("已取消添加，未保存或启动 MCP 服务。");
         if (context.abortSignal?.aborted || context.runAbortSignal?.aborted)
           return reply("操作已取消，未保存 MCP 配置。", true);
         const result = await service.add({ name, config });

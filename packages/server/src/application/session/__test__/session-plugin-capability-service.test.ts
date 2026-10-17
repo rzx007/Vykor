@@ -11,6 +11,31 @@ const agentId = `${pluginId}:reviewer`;
 const session = { id: "s1", cwd: "/repo" } as SessionRecord;
 
 describe("SessionPluginCapabilityService", () => {
+  it.each([pluginId, null])("preserves a resolved automatic choice on recovery (%s)", async selected => {
+    const sourceInput = { id: "auto-input", sessionId: "s1", items: [{ type: "text", text: "hello" }], attachments: [], metadata: {} };
+    const selection = { status: "resolved", source: "auto", pluginId: selected, version: "1", behaviorDigest: "digest" };
+    const sourceRun = { id: "auto-source", sessionId: "s1", inputId: sourceInput.id, status: "interrupted", metadata: { pluginSelection: selection, pluginId: selected } };
+    const { application, replayInput } = applicationService(inventory(), { sourceInput, sourceRun });
+    await application.resumeRun("s1", sourceRun.id, { id: "auto-replay" });
+    expect(replayInput.mock.calls[0]?.[1].metadata).toMatchObject({ pluginSelection: selection });
+  });
+  it("keeps an ordinary steer inside the active automatically selected plugin", async () => {
+    const { application, admitPromptAndMaybeRun } = applicationService(inventory(), {
+      activeRun: { id: "auto-run", metadata: { pluginId, pluginSelection: { source: "auto", status: "resolved" } } },
+    });
+    await application.admitPrompt("s1", { id: "steer-auto", delivery: "steer", items: [{ type: "text", text: "保留引用" }] });
+    const admitted = admitPromptAndMaybeRun.mock.calls[0]?.[1];
+    expect(admitted?.metadata).toMatchObject({ pluginSelectionPolicy: "auto" });
+    expect(admitted?.metadata).not.toHaveProperty("pluginId");
+    expect(admitted?.runMetadata ?? {}).not.toHaveProperty("pluginId");
+  });
+  it("strips caller-forged automatic selection metadata", async () => {
+    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const forged = { status: "resolved", source: "auto", pluginId: "forged" };
+    await application.admitPrompt("s1", { id: "forged-selection", items: [{ type: "text", text: "hello" }],
+      metadata: { pluginSelection: forged }, runMetadata: { pluginSelection: forged } });
+    expect(admitPromptAndMaybeRun.mock.calls[0]?.[1]).toMatchObject({ metadata: {}, runMetadata: {} });
+  });
   it.each(["bundled", "user", "project"] as const)(
     "returns an empty admission for an ordinary %s Skill",
     async (source) => {
@@ -195,7 +220,7 @@ describe("SessionPluginCapabilityService", () => {
     expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
       id: "ordinary-input",
       items: [{ type: "text", text: "hello" }],
-      metadata: { source: "desktop" },
+      metadata: { source: "desktop", pluginSelectionPolicy: "auto" },
       runMetadata: { source: "desktop" },
     });
   });
@@ -430,6 +455,7 @@ function inventory(options: {
 }
 
 function applicationService(current: PluginCapabilityInventory, options: {
+  activeRun?: Record<string, any>;
   sourceInput?: Record<string, any>;
   sourceRun?: Record<string, any>;
   existingInput?: Record<string, any>;
@@ -441,7 +467,7 @@ function applicationService(current: PluginCapabilityInventory, options: {
     getInput: vi.fn((id) => id === options.sourceInput?.id
       ? options.sourceInput
       : id === options.existingInput?.id ? options.existingInput : undefined),
-    getRun: vi.fn((id) => id === options.sourceRun?.id
+    getRun: vi.fn((id) => id === options.activeRun?.id ? options.activeRun : id === options.sourceRun?.id
       ? options.sourceRun
       : id === options.existingRun?.id ? options.existingRun : undefined),
     listRunsByInput: vi.fn(() => []),
@@ -487,6 +513,7 @@ function applicationService(current: PluginCapabilityInventory, options: {
     },
     control: {
       hasWork: vi.fn(() => false),
+      activeRunId: () => options.activeRun?.id,
     } as never,
     operationRunner: { run: async (_id, work) => work() },
     agentPool: agentPool as never,

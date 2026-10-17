@@ -606,6 +606,8 @@ export const desktopAPI = {
     ) => invoke(IpcChannels.sessionUpdatePermissionMode, input),
     updateEffort: (input: IpcInvokeMap[typeof IpcChannels.sessionUpdateEffort]["args"][0]) =>
       invoke(IpcChannels.sessionUpdateEffort, input),
+    updatePluginSelection: (input: IpcInvokeMap[typeof IpcChannels.sessionUpdatePluginSelection]["args"][0]) =>
+      invoke(IpcChannels.sessionUpdatePluginSelection, input),
     getContextUsage: (input: IpcInvokeMap[typeof IpcChannels.sessionGetContextUsage]["args"][0]) =>
       invoke(IpcChannels.sessionGetContextUsage, input),
     rename: (input: IpcInvokeMap[typeof IpcChannels.sessionRename]["args"][0]) =>

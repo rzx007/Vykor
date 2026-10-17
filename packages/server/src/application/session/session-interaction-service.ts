@@ -7,6 +7,7 @@ import {
   sessionUserInputText,
   assertPromptMetadataAllowed,
   readPluginUiAction,
+  readRuntimeMetadata,
   type SessionInputRecord,
   type SessionRecord,
   type SessionRunRecord,
@@ -26,6 +27,7 @@ import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
+import { capturePluginSelectionPolicy } from "./session-plugin-selection.js";
 import type { RunControlService } from "./run-control-service.js";
 import type {
   CancelQueuedPromptInput,
@@ -54,15 +56,25 @@ function inputItems(input: {
   items?: readonly SessionUserInputItem[];
   content?: string;
 }): SessionUserInputItem[] {
-  return input.items ? [...input.items] : [{ type: "text", text: input.content ?? "" }];
+  return input.items
+    ? [...input.items]
+    : [{ type: "text", text: input.content ?? "" }];
 }
 
 function withoutPluginId(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
-  if (!metadata || !Object.hasOwn(metadata, "pluginId")) return metadata;
+  if (
+    !metadata ||
+    !["pluginId", "pluginSelection", "pluginSelectionPolicy"].some((key) =>
+      Object.hasOwn(metadata, key),
+    )
+  )
+    return metadata;
   const sanitized = { ...metadata };
   delete sanitized.pluginId;
+  delete sanitized.pluginSelection;
+  delete sanitized.pluginSelectionPolicy;
   return sanitized;
 }
 
@@ -93,7 +105,10 @@ export class SessionInteractionService {
       const content = sessionUserInputText(items).trim();
       const attachments = normalizePromptAttachments(input.attachments);
       if (!content && attachments.length === 0) {
-        throw new SessionApplicationError(400, "content or attachments are required");
+        throw new SessionApplicationError(
+          400,
+          "content or attachments are required",
+        );
       }
       const existingInput = this.context.conversations.getInput(input.id);
       if (existingInput) {
@@ -115,22 +130,30 @@ export class SessionInteractionService {
           edit?.kind !== "latest_prompt" ||
           edit.sourceMessageId !== input.sourceMessageId
         ) {
-          throw new SessionApplicationError(409, `Prompt id is already used: ${input.id}`);
+          throw new SessionApplicationError(
+            409,
+            `Prompt id is already used: ${input.id}`,
+          );
         }
         return promptResult(this.context.runs, existingInput);
       }
-      const hasPluginCandidates = items.some((item) =>
-        item.type === "capability" || item.type === "skill"
+      const hasPluginCandidates = items.some(
+        (item) => item.type === "capability" || item.type === "skill",
       );
-      const requiresPluginService = items.some((item) =>
-        item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+      const requiresPluginService = items.some(
+        (item) =>
+          item.type === "capability" ||
+          (item.type === "skill" && item.source === "plugin"),
       );
       if (requiresPluginService && !this.context.pluginCapabilities) {
         throw new Error("session_plugin_capability_unavailable");
       }
-      const capability = (hasPluginCandidates || typeof session.metadata?.activePluginId === "string") && this.context.pluginCapabilities
-        ? await this.context.pluginCapabilities.admit(session, items)
-        : {};
+      const capability =
+        (hasPluginCandidates ||
+          typeof session.metadata?.activePluginId === "string") &&
+        this.context.pluginCapabilities
+          ? await this.context.pluginCapabilities.admit(session, items)
+          : {};
       if (this.context.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
@@ -138,13 +161,21 @@ export class SessionInteractionService {
         );
       }
       if (this.context.liveChildren.has(sessionId)) {
-        throw new SessionApplicationError(409, "Editing a live child session is not supported");
+        throw new SessionApplicationError(
+          409,
+          "Editing a live child session is not supported",
+        );
       }
-      const latestUserMessage = [...this.context.conversations.listMessages(sessionId)]
+      const latestUserMessage = [
+        ...this.context.conversations.listMessages(sessionId),
+      ]
         .reverse()
         .find((message) => message.role === "user");
       if (!latestUserMessage) {
-        throw new SessionApplicationError(409, "No user prompt is available to edit");
+        throw new SessionApplicationError(
+          409,
+          "No user prompt is available to edit",
+        );
       }
       if (latestUserMessage.id !== input.sourceMessageId) {
         throw new SessionApplicationError(
@@ -153,27 +184,38 @@ export class SessionInteractionService {
         );
       }
       await this.context.agentPool.close(sessionId);
-      return this.context.admission.replaceLatestPrompt(sessionId, latestUserMessage.id, {
-        id: input.id,
-        items,
-        attachments,
-        traceId: input.traceId,
-        metadata: {
-          ...(withoutPluginId(input.metadata) ?? {}),
-          ...(capability.pluginId ? { pluginId: capability.pluginId } : {}),
-          edit: {
-            kind: "latest_prompt",
-            sourceMessageId: latestUserMessage.id,
+      return this.context.admission.replaceLatestPrompt(
+        sessionId,
+        latestUserMessage.id,
+        {
+          id: input.id,
+          items,
+          attachments,
+          traceId: input.traceId,
+          metadata: {
+            ...(withoutPluginId(input.metadata) ?? {}),
+            ...(capability.pluginId
+              ? { pluginId: capability.pluginId }
+              : {
+                  pluginSelectionPolicy: capturePluginSelectionPolicy(session),
+                }),
+            edit: {
+              kind: "latest_prompt",
+              sourceMessageId: latestUserMessage.id,
+            },
           },
+          ...(capability.pluginId
+            ? { runMetadata: { pluginId: capability.pluginId } }
+            : {}),
         },
-        ...(capability.pluginId
-          ? { runMetadata: { pluginId: capability.pluginId } }
-          : {}),
-      });
+      );
     });
   }
 
-  async admitPrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult> {
+  async admitPrompt(
+    sessionId: string,
+    input: AdmitPromptInput,
+  ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
     return this.context.operationRunner.run(sessionId, () =>
       this.admitPromptWork(this.requireSession(sessionId), input),
@@ -186,11 +228,13 @@ export class SessionInteractionService {
   ): Promise<AdmitPromptResult> {
     const sessionId = session.id;
     const items = inputItems(originalInput);
-    const hasPluginCandidates = items.some((item) =>
-      item.type === "capability" || item.type === "skill"
+    const hasPluginCandidates = items.some(
+      (item) => item.type === "capability" || item.type === "skill",
     );
-    const requiresPluginService = items.some((item) =>
-      item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+    const requiresPluginService = items.some(
+      (item) =>
+        item.type === "capability" ||
+        (item.type === "skill" && item.source === "plugin"),
     );
     if (requiresPluginService && !this.context.pluginCapabilities) {
       throw new Error("session_plugin_capability_unavailable");
@@ -201,16 +245,47 @@ export class SessionInteractionService {
     // Retries keep their original selection, including an ordinary input with
     // no plugin, rather than picking up a later session selection.
     const capability = existingInput
-      ? { pluginId: typeof existingInput.metadata.pluginId === "string" ? existingInput.metadata.pluginId : undefined }
-      : (hasPluginCandidates || typeof session.metadata?.activePluginId === "string") && this.context.pluginCapabilities
+      ? {
+          pluginId:
+            typeof existingInput.metadata.pluginId === "string"
+              ? existingInput.metadata.pluginId
+              : undefined,
+        }
+      : (hasPluginCandidates ||
+            typeof session.metadata?.activePluginId === "string") &&
+          this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
     if (!existingInput && originalInput.delivery === "steer") {
       const activeRunId = this.context.control.activeRunId?.(sessionId);
-      const activeRun = activeRunId ? this.context.runs.getRun(activeRunId) : undefined;
-      const activePluginId = typeof activeRun?.metadata?.pluginId === "string" ? activeRun.metadata.pluginId : undefined;
-      if ((capability.pluginId && hasPluginCandidates) || capability.pluginId !== activePluginId) {
-        throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+      const activeRun = activeRunId
+        ? this.context.runs.getRun(activeRunId)
+        : undefined;
+      const activePluginId =
+        typeof activeRun?.metadata?.pluginId === "string"
+          ? activeRun.metadata.pluginId
+          : undefined;
+      const inheritAutomaticScope =
+        !hasPluginCandidates &&
+        !capability.pluginId &&
+        activePluginId &&
+        isRecord(activeRun?.metadata.pluginSelection) &&
+        activeRun.metadata.pluginSelection.source === "auto" &&
+        activeRun.metadata.pluginSelection.status === "resolved" &&
+        readRuntimeMetadata(session.metadata).pluginsEnabled !== false;
+      // Borrow only the active Run's scope. Never persist an automatic plugin
+      // as an inherited Input identity if delivery later creates a new Run.
+      const steerPluginId = inheritAutomaticScope
+        ? activePluginId
+        : capability.pluginId;
+      if (
+        (capability.pluginId && hasPluginCandidates) ||
+        steerPluginId !== activePluginId
+      ) {
+        throw new SessionApplicationError(
+          409,
+          "session_capability_requires_queued_run",
+        );
       }
     }
     const sanitizedInput = {
@@ -222,30 +297,61 @@ export class SessionInteractionService {
         ? { runMetadata: withoutPluginId(originalInput.runMetadata) }
         : {}),
     };
-    const input = capability.pluginId
+    const selectedInput = capability.pluginId
       ? {
           ...sanitizedInput,
           items,
-          metadata: { ...(sanitizedInput.metadata ?? {}), pluginId: capability.pluginId },
-          runMetadata: { ...(sanitizedInput.runMetadata ?? {}), pluginId: capability.pluginId },
+          metadata: {
+            ...(sanitizedInput.metadata ?? {}),
+            pluginId: capability.pluginId,
+          },
+          runMetadata: {
+            ...(sanitizedInput.runMetadata ?? {}),
+            pluginId: capability.pluginId,
+          },
         }
       : sanitizedInput;
+    const policy = existingInput
+      ? existingInput.metadata.pluginSelectionPolicy
+      : !capability.pluginId
+        ? capturePluginSelectionPolicy(session)
+        : undefined;
+    const input =
+      policy === "auto" || policy === "none"
+        ? {
+            ...selectedInput,
+            metadata: {
+              ...(selectedInput.metadata ?? {}),
+              pluginSelectionPolicy: policy,
+            },
+          }
+        : selectedInput;
     const delivery = input.delivery ?? "queue";
     const metadata = {
       ...(input.metadata ?? {}),
       ...(input.traceId ? { traceId: input.traceId } : {}),
     };
     const hasAttachments = (input.attachments?.length ?? 0) > 0;
-    if (!hasAttachments && this.context.liveChildren.has(sessionId) && input.id) {
+    if (
+      !hasAttachments &&
+      this.context.liveChildren.has(sessionId) &&
+      input.id
+    ) {
       const existing = existingInput;
       if (existing) {
         if (
           existing.sessionId !== sessionId ||
           !jsonEqual(inputItems(existing), inputItems(input)) ||
           existing.delivery !== delivery ||
-          !jsonEqual(withoutTraceId(existing.metadata), withoutTraceId(metadata))
+          !jsonEqual(
+            withoutTraceId(existing.metadata),
+            withoutTraceId(metadata),
+          )
         ) {
-          throw new SessionApplicationError(409, `Prompt id is already used: ${input.id}`);
+          throw new SessionApplicationError(
+            409,
+            `Prompt id is already used: ${input.id}`,
+          );
         }
         return promptResult(this.context.runs, existing);
       }
@@ -268,22 +374,24 @@ export class SessionInteractionService {
           {
             getSession: (id) => this.context.sessions.get(id),
             listMessages: (id) => this.context.conversations.listMessages(id),
-            listMessageParts: (id) => this.context.conversations.listMessageParts(id),
+            listMessageParts: (id) =>
+              this.context.conversations.listMessageParts(id),
           },
           sessionId,
         ),
       ).instruction;
     }
-    const live = hasAttachments || capability.pluginId
-      ? undefined
-      : await this.context.liveChildren.send(sessionId, {
-          id: input.id,
-          content: liveContent,
-          inputItems: items,
-          delivery,
-          traceId: input.traceId,
-          metadata: input.metadata,
-        });
+    const live =
+      hasAttachments || capability.pluginId
+        ? undefined
+        : await this.context.liveChildren.send(sessionId, {
+            id: input.id,
+            content: liveContent,
+            inputItems: items,
+            delivery,
+            traceId: input.traceId,
+            metadata: input.metadata,
+          });
     if (live) {
       const admitted = this.context.conversations.getInput(live.inputId);
       const run = this.context.runs.getRun(live.runId);
@@ -317,11 +425,16 @@ export class SessionInteractionService {
       return {
         input: admitted,
         run,
-        ...(run.status === "running" ? { queue_state: "running" as const } : {}),
+        ...(run.status === "running"
+          ? { queue_state: "running" as const }
+          : {}),
         ...(run.status === "pending" ? { queue_state: "queued" as const } : {}),
       };
     }
-    return await this.context.admission.admitPromptAndMaybeRun(sessionId, input);
+    return await this.context.admission.admitPromptAndMaybeRun(
+      sessionId,
+      input,
+    );
   }
 
   async resumeRun(
@@ -335,20 +448,37 @@ export class SessionInteractionService {
         throw new SessionApplicationError(404, "Interrupted run not found");
       }
       if (readPluginUiAction(sourceRun.metadata)) {
-        throw new ApplicationError(409, "插件操作不能通过继续运行重放；请检查实际结果后重新发起操作", "plugin_ui_action_not_resumable");
+        throw new ApplicationError(
+          409,
+          "插件操作不能通过继续运行重放；请检查实际结果后重新发起操作",
+          "plugin_ui_action_not_resumable",
+        );
       }
       if (sourceRun.status !== "interrupted") {
-        throw new SessionApplicationError(409, "Only interrupted runs can be resumed");
+        throw new SessionApplicationError(
+          409,
+          "Only interrupted runs can be resumed",
+        );
       }
       if (!sourceRun.inputId) {
-        throw new SessionApplicationError(409, "This interrupted run has no prompt to replay");
+        throw new SessionApplicationError(
+          409,
+          "This interrupted run has no prompt to replay",
+        );
       }
-      const sourceInput = this.context.conversations.getInput(sourceRun.inputId);
+      const sourceInput = this.context.conversations.getInput(
+        sourceRun.inputId,
+      );
       if (!sourceInput || sourceInput.sessionId !== sessionId) {
-        throw new SessionApplicationError(409, "The original prompt is unavailable");
+        throw new SessionApplicationError(
+          409,
+          "The original prompt is unavailable",
+        );
       }
 
-      const requestedRecovery = input.id ? this.context.runs.getRun(input.id) : undefined;
+      const requestedRecovery = input.id
+        ? this.context.runs.getRun(input.id)
+        : undefined;
       if (requestedRecovery) {
         const requestedLink = isRecord(requestedRecovery.metadata.recovery)
           ? requestedRecovery.metadata.recovery
@@ -376,8 +506,12 @@ export class SessionInteractionService {
         return {
           input: sourceInput,
           run: existingRecovery,
-          ...(existingRecovery.status === "running" ? { queue_state: "running" as const } : {}),
-          ...(existingRecovery.status === "pending" ? { queue_state: "queued" as const } : {}),
+          ...(existingRecovery.status === "running"
+            ? { queue_state: "running" as const }
+            : {}),
+          ...(existingRecovery.status === "pending"
+            ? { queue_state: "queued" as const }
+            : {}),
           source_run: sourceRun,
         };
       }
@@ -388,7 +522,10 @@ export class SessionInteractionService {
         );
       }
       if (!this.hasRuntime) {
-        throw new SessionApplicationError(409, "Session runtime is unavailable");
+        throw new SessionApplicationError(
+          409,
+          "Session runtime is unavailable",
+        );
       }
       if (this.context.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
@@ -402,14 +539,24 @@ export class SessionInteractionService {
         sourceRunId: sourceRun.id,
         sourceInputId: sourceInput.id,
       };
-      const pluginId = typeof sourceInput.metadata.pluginId === "string"
-        ? sourceInput.metadata.pluginId
-        : undefined;
+      const selection =
+        isRecord(sourceRun.metadata.pluginSelection) &&
+        sourceRun.metadata.pluginSelection.status === "resolved"
+          ? sourceRun.metadata.pluginSelection
+          : undefined;
+      const pluginId = selection
+        ? typeof selection.pluginId === "string"
+          ? selection.pluginId
+          : undefined
+        : typeof sourceInput.metadata.pluginId === "string"
+          ? sourceInput.metadata.pluginId
+          : undefined;
       const resumed = this.context.admission.replayInput(sourceInput.id, {
         id: input.id,
         metadata: {
           ...(withoutPluginId(input.metadata) ?? {}),
           ...(pluginId ? { pluginId } : {}),
+          ...(selection ? { pluginSelection: selection } : {}),
           recovery,
         },
         traceId: input.traceId,
@@ -432,12 +579,25 @@ export class SessionInteractionService {
     sessionId: string,
     expectedRunId?: string,
     source: "user" | "system" = "user",
-  ): Promise<{ activeRunId?: string; queuedRunIds: string[]; interrupted: boolean }> {
+  ): Promise<{
+    activeRunId?: string;
+    queuedRunIds: string[];
+    interrupted: boolean;
+  }> {
     return this.context.operationRunner.run(sessionId, async () => {
       if (expectedRunId) {
         const requestedAt = Date.now();
-        const result = this.context.control.interruptRun(sessionId, expectedRunId);
-        this.recordInterruption(sessionId, result, requestedAt, source, expectedRunId);
+        const result = this.context.control.interruptRun(
+          sessionId,
+          expectedRunId,
+        );
+        this.recordInterruption(
+          sessionId,
+          result,
+          requestedAt,
+          source,
+          expectedRunId,
+        );
         return result;
       }
       const requestedAt = Date.now();
@@ -449,17 +609,34 @@ export class SessionInteractionService {
           targets.map(async (target) => {
             // 子会话的运行可能由 live handle 管理；在停止前保存实际活动的运行 ID。
             const ids = this.context.liveChildren.has(target)
-              ? [...new Set(this.context.conversations.listMessages(target).map(message => message.runId))]
+              ? [
+                  ...new Set(
+                    this.context.conversations
+                      .listMessages(target)
+                      .map((message) => message.runId),
+                  ),
+                ]
                   .filter((id): id is string => Boolean(id))
-                  .filter(id => {
+                  .filter((id) => {
                     const run = this.context.runs.getRun(id);
-                    return run?.status === "pending" || run?.status === "running";
+                    return (
+                      run?.status === "pending" || run?.status === "running"
+                    );
                   })
               : [];
-            const interrupted = await this.context.liveChildren.interrupt(target, "Session interrupted");
-            if (interrupted) for (const id of ids) {
-              this.recordInterruption(target, { interrupted: true, activeRunId: id, queuedRunIds: [] }, requestedAt, source);
-            }
+            const interrupted = await this.context.liveChildren.interrupt(
+              target,
+              "Session interrupted",
+            );
+            if (interrupted)
+              for (const id of ids) {
+                this.recordInterruption(
+                  target,
+                  { interrupted: true, activeRunId: id, queuedRunIds: [] },
+                  requestedAt,
+                  source,
+                );
+              }
             return interrupted;
           }),
         )
@@ -472,25 +649,42 @@ export class SessionInteractionService {
 
   private recordInterruption(
     sessionId: string,
-    result: { interrupted: boolean; activeRunId?: string; queuedRunIds: string[] },
+    result: {
+      interrupted: boolean;
+      activeRunId?: string;
+      queuedRunIds: string[];
+    },
     requestedAt: number,
     source: "user" | "system",
     targetRunId?: string,
   ): void {
     if (!result.interrupted) return;
-    const ids = new Set([targetRunId ?? result.activeRunId, ...result.queuedRunIds]);
+    const ids = new Set([
+      targetRunId ?? result.activeRunId,
+      ...result.queuedRunIds,
+    ]);
     for (const id of ids) {
       if (!id) continue;
       const run = this.context.runs.getRun(id);
-      if (!run || run.sessionId !== sessionId || run.status === "completed" || run.status === "failed") continue;
+      if (
+        !run ||
+        run.sessionId !== sessionId ||
+        run.status === "completed" ||
+        run.status === "failed"
+      )
+        continue;
       const previous = run.metadata.interruption;
       if (isRecord(previous) && previous.runId === id) continue;
       this.context.runs.updateRun(id, {
         metadata: {
           ...run.metadata,
           interruption: {
-            source, runId: id, requestedAt,
-            wasPending: !Number.isFinite(run.startedAt) && (result.queuedRunIds.includes(id) || run.status === "pending"),
+            source,
+            runId: id,
+            requestedAt,
+            wasPending:
+              !Number.isFinite(run.startedAt) &&
+              (result.queuedRunIds.includes(id) || run.status === "pending"),
           },
         },
       });
@@ -501,7 +695,9 @@ export class SessionInteractionService {
     sessionId: string,
     inputId: string,
     command: PromoteQueuedPromptInput,
-  ): Promise<NonNullable<Awaited<ReturnType<RunControlService["promoteQueuedRun"]>>>> {
+  ): Promise<
+    NonNullable<Awaited<ReturnType<RunControlService["promoteQueuedRun"]>>>
+  > {
     return this.context.operationRunner.run(sessionId, async () => {
       const promoted = await this.context.control.promoteQueuedRun(
         sessionId,
@@ -509,7 +705,11 @@ export class SessionInteractionService {
         command.queuedRunId,
         command.expectedActiveRunId,
       );
-      if (!promoted) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
+      if (!promoted)
+        throw new SessionApplicationError(
+          409,
+          "The prompt or active run changed before promotion completed",
+        );
       return promoted;
     });
   }
@@ -529,12 +729,18 @@ export class SessionInteractionService {
         throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
       }
       if (!run || run.sessionId !== sessionId || run.inputId !== inputId) {
-        throw new SessionApplicationError(404, `Queued run not found: ${command.queuedRunId}`);
+        throw new SessionApplicationError(
+          404,
+          `Queued run not found: ${command.queuedRunId}`,
+        );
       }
       const cancellation = isRecord(run.metadata.cancellation)
         ? run.metadata.cancellation
         : undefined;
-      if (run.status === "interrupted" && cancellation?.kind === "user_cancelled_pending") {
+      if (
+        run.status === "interrupted" &&
+        cancellation?.kind === "user_cancelled_pending"
+      ) {
         return { input, run };
       }
       if (run.status !== "pending") {
@@ -567,9 +773,7 @@ export class SessionInteractionService {
     });
   }
 
-  private warmWhenAdmitted(
-    session: Pick<SessionRecord, "id" | "cwd">,
-  ): void {
+  private warmWhenAdmitted(session: Pick<SessionRecord, "id" | "cwd">): void {
     let lease: DaemonOperationLease;
     try {
       lease = this.context.operationGate.enter({

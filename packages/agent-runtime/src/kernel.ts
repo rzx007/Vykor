@@ -29,6 +29,7 @@ import {
 import type { AgentChildEnvironmentProvider } from "./child-environment.js";
 import type { AgentIdentity } from "./agent-composition.js";
 import { AgentEventBus } from "./event-source.js";
+import type { PluginSelectionCatalog } from "./plugin-selection.js";
 
 export interface AgentKernelRuntimeContext {
   cwd: string;
@@ -42,6 +43,8 @@ export interface AgentKernelRuntimeContext {
 
 export interface AgentKernelRuntime {
   runtime: RuntimeBundle;
+  /** Optional host-prepared catalog; Kernel never discovers plugins itself. */
+  pluginSelection?: PluginSelectionCatalog;
   model?: string;
 }
 
@@ -201,6 +204,7 @@ async function createAgentKernelInternal(
       childDirectory: tree.childDirectory,
       capabilities: options.capabilities,
       model: prepared.model ?? configuration.model ?? options.settings.model,
+      pluginSelection: prepared.pluginSelection,
     });
   } catch (error) {
     try {

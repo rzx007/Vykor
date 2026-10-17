@@ -349,6 +349,35 @@ describe("RunControlService", () => {
     }
   });
 
+  it.each([
+    { name: "ordinary pending input", allowed: true },
+    { name: "explicit capability", items: [{ type: "capability", kind: "plugin", pluginId: "P" }], allowed: false },
+    { name: "explicit skill", items: [{ type: "skill", name: "write", source: "plugin", pluginId: "P" }], allowed: false },
+    { name: "resolved different plugin", selection: { status: "resolved", pluginId: "Q" }, allowed: false },
+    { name: "resolved no plugin", selection: { status: "resolved", pluginId: null }, allowed: false },
+    { name: "disabled plugins", disabled: true, allowed: false },
+    { name: "manual active run", source: "inherited", allowed: false },
+  ])("promotes $name into an automatic Run only when the current scope can be inherited", async scenario => {
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    sessions.set("s1", { id: "s1", cwd: "/project", metadata: { runtime: { pluginsEnabled: !scenario.disabled } } });
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: scenario.items ?? [{ type: "text", text: "continue" }],
+      delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending",
+      metadata: scenario.selection ? { pluginSelection: scenario.selection } : {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: { pluginId: "P",
+      pluginSelection: { status: "resolved", source: scenario.source ?? "auto", pluginId: "P" } }, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    if (scenario.allowed) {
+      await expect(result).resolves.toMatchObject({ active_run: { id: "r-act", metadata: { pluginId: "P" } } });
+      expect(options.runtime.promoteQueuedRun).toHaveBeenCalledOnce();
+      expect(inputs.get("inp-1")?.metadata).not.toHaveProperty("pluginId");
+    } else {
+      await expect(result).rejects.toThrow("session_capability_requires_queued_run");
+      expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+    }
+  });
+
   it("returns an already promoted queued run idempotently", async () => {
     const { options, runs, inputs } = createMockControlOptions();
     inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);

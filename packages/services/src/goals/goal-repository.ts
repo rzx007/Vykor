@@ -18,7 +18,12 @@ import {
   type UpdateSessionGoalStoreInput,
 } from "./goal-records.js";
 
-const openGoalStatuses = new Set(["active", "waiting_user", "blocked", "paused"]);
+const openGoalStatuses = new Set([
+  "active",
+  "waiting_user",
+  "blocked",
+  "paused",
+]);
 
 export class GoalRepository {
   constructor(private readonly storage: StorageContext) {}
@@ -43,33 +48,50 @@ export class GoalRepository {
   }
 
   getGoal(id: string): SessionGoal | undefined {
-    const row = this.temporary?.goals.get(id) ?? this.database
-      .select()
-      .from(sessionGoals)
-      .where(eq(sessionGoals.id, id))
-      .get();
+    const row =
+      this.temporary?.goals.get(id) ??
+      this.database
+        .select()
+        .from(sessionGoals)
+        .where(eq(sessionGoals.id, id))
+        .get();
     return row ? sessionGoalFromRow(row) : undefined;
   }
 
-  getCurrentGoal(sessionId: string, includeTerminal = false): SessionGoal | undefined {
+  getCurrentGoal(
+    sessionId: string,
+    includeTerminal = false,
+  ): SessionGoal | undefined {
     const row = this.isTemporary(sessionId)
       ? [...this.temporaryRecords().goals.values()]
-        .filter((row) =>
-          row.sessionId === sessionId && (includeTerminal || openGoalStatuses.has(row.status)),
-        )
-        .sort((left, right) => (includeTerminal ? right.createdAt - left.createdAt : 0) || right.updatedAt - left.updatedAt)[0]
+          .filter(
+            (row) =>
+              row.sessionId === sessionId &&
+              (includeTerminal || openGoalStatuses.has(row.status)),
+          )
+          .sort(
+            (left, right) =>
+              (includeTerminal ? right.createdAt - left.createdAt : 0) ||
+              right.updatedAt - left.updatedAt,
+          )[0]
       : this.database
-      .select()
-      .from(sessionGoals)
-      .where(
-        and(
-          eq(sessionGoals.sessionId, sessionId),
-          includeTerminal ? undefined : inArray(sessionGoals.status, [...openGoalStatuses]),
-        ),
-      )
-      .orderBy(...(includeTerminal ? [desc(sessionGoals.createdAt), desc(sessionGoals.updatedAt)] : [desc(sessionGoals.updatedAt)]))
-      .limit(1)
-      .get();
+          .select()
+          .from(sessionGoals)
+          .where(
+            and(
+              eq(sessionGoals.sessionId, sessionId),
+              includeTerminal
+                ? undefined
+                : inArray(sessionGoals.status, [...openGoalStatuses]),
+            ),
+          )
+          .orderBy(
+            ...(includeTerminal
+              ? [desc(sessionGoals.createdAt), desc(sessionGoals.updatedAt)]
+              : [desc(sessionGoals.updatedAt)]),
+          )
+          .limit(1)
+          .get();
     if (!row) return undefined;
     return sessionGoalFromRow(row);
   }
@@ -87,8 +109,16 @@ export class GoalRepository {
       status: "active",
       maxAutoTurns: input.maxAutoTurns,
       tokenBudget: input.tokenBudget ?? null,
-      usageJson: JSON.stringify({ knownTokens: 0, incomplete: false, unknownAttempts: 0, partialAttempts: 0,
-        inFlightAttempts: 0, runTimeMs: 0, seq: 0, updatedAt: timestamp } satisfies GoalUsage),
+      usageJson: JSON.stringify({
+        knownTokens: 0,
+        incomplete: false,
+        unknownAttempts: 0,
+        partialAttempts: 0,
+        inFlightAttempts: 0,
+        runTimeMs: 0,
+        seq: 0,
+        updatedAt: timestamp,
+      } satisfies GoalUsage),
       autoTurnsUsed: 0,
       currentRunId: null,
       reason: null,
@@ -109,10 +139,7 @@ export class GoalRepository {
       return this.getGoal(id)!;
     }
     try {
-      this.database
-        .insert(sessionGoals)
-        .values(row)
-        .run();
+      this.database.insert(sessionGoals).values(row).run();
     } catch (error) {
       if (String(error).includes("session_goal_session_open_unique")) {
         throw new Error(`Session already has an open goal: ${input.sessionId}`);
@@ -130,8 +157,16 @@ export class GoalRepository {
     if (!current) throw new Error(`Session goal not found: ${id}`);
     if (current.revision !== input.expectedRevision)
       throw new Error("session_goal_revision_conflict");
-    const nextVersion = current.objectiveVersion + (input.objective !== undefined && input.objective !== current.objective ? 1 : 0);
-    if (!Number.isSafeInteger(nextVersion) || (input.objectiveVersion !== undefined && input.objectiveVersion !== nextVersion))
+    const nextVersion =
+      current.objectiveVersion +
+      (input.objective !== undefined && input.objective !== current.objective
+        ? 1
+        : 0);
+    if (
+      !Number.isSafeInteger(nextVersion) ||
+      (input.objectiveVersion !== undefined &&
+        input.objectiveVersion !== nextVersion)
+    )
       throw new Error("goal_version_binding_invalid");
     const next = {
       objective: input.objective ?? current.objective,
@@ -156,13 +191,21 @@ export class GoalRepository {
       revision: current.revision + 1,
       status: next.status,
       maxAutoTurns: next.maxAutoTurns,
-      tokenBudget: input.tokenBudget === undefined ? (current.tokenBudget ?? null) : input.tokenBudget,
+      tokenBudget:
+        input.tokenBudget === undefined
+          ? (current.tokenBudget ?? null)
+          : input.tokenBudget,
       autoTurnsUsed: next.autoTurnsUsed,
       currentRunId: next.currentRunId ?? null,
       reason: next.reason ?? null,
-      stopReasonJson: input.stopReason === undefined
-        ? (current.stopReason ? JSON.stringify(current.stopReason) : null)
-        : (input.stopReason ? JSON.stringify(input.stopReason) : null),
+      stopReasonJson:
+        input.stopReason === undefined
+          ? current.stopReason
+            ? JSON.stringify(current.stopReason)
+            : null
+          : input.stopReason
+            ? JSON.stringify(input.stopReason)
+            : null,
       waitJson: next.wait ? JSON.stringify(next.wait) : null,
       updatedAt: Date.now(),
     };
@@ -171,9 +214,12 @@ export class GoalRepository {
       const existingOpen = this.getCurrentGoal(current.sessionId);
       if (
         openGoalStatuses.has(changes.status) &&
-        existingOpen && existingOpen.id !== id
+        existingOpen &&
+        existingOpen.id !== id
       ) {
-        throw new Error(`Session already has an open goal: ${current.sessionId}`);
+        throw new Error(
+          `Session already has an open goal: ${current.sessionId}`,
+        );
       }
       this.temporaryRecords().capture(this.temporaryRecords().goals, id);
       this.temporaryRecords().goals.set(id, { ...temporaryRow, ...changes });
@@ -194,11 +240,13 @@ export class GoalRepository {
   }
 
   getRequest(requestId: string): SessionGoalRequestRecord | undefined {
-    const row = this.temporary?.requests.get(requestId) ?? this.database
-      .select()
-      .from(sessionGoalRequests)
-      .where(eq(sessionGoalRequests.requestId, requestId))
-      .get();
+    const row =
+      this.temporary?.requests.get(requestId) ??
+      this.database
+        .select()
+        .from(sessionGoalRequests)
+        .where(eq(sessionGoalRequests.requestId, requestId))
+        .get();
     return row ? goalRequestFromRow(row) : undefined;
   }
 
@@ -229,14 +277,14 @@ export class GoalRepository {
       updatedAt: timestamp,
     };
     if (this.isTemporary(input.sessionId)) {
-      this.temporaryRecords().capture(this.temporaryRecords().requests, input.requestId);
+      this.temporaryRecords().capture(
+        this.temporaryRecords().requests,
+        input.requestId,
+      );
       this.temporaryRecords().requests.set(input.requestId, row);
       return this.getRequest(input.requestId)!;
     }
-    this.database
-      .insert(sessionGoalRequests)
-      .values(row)
-      .run();
+    this.database.insert(sessionGoalRequests).values(row).run();
     return this.getRequest(input.requestId)!;
   }
 
@@ -258,8 +306,14 @@ export class GoalRepository {
     };
     const temporaryRow = this.temporary?.requests.get(requestId);
     if (temporaryRow) {
-      this.temporaryRecords().capture(this.temporaryRecords().requests, requestId);
-      this.temporaryRecords().requests.set(requestId, { ...temporaryRow, ...changes });
+      this.temporaryRecords().capture(
+        this.temporaryRecords().requests,
+        requestId,
+      );
+      this.temporaryRecords().requests.set(requestId, {
+        ...temporaryRow,
+        ...changes,
+      });
       return this.getRequest(requestId)!;
     }
     const result = this.database
@@ -292,37 +346,66 @@ export class GoalRepository {
       updatedAt: timestamp,
     };
     if (this.temporary?.goals.has(input.goalId)) {
-      if (Number.isNaN(input.revision) || input.revision == null || input.previousRunId == null) return false;
+      if (
+        Number.isNaN(input.revision) ||
+        input.revision == null ||
+        input.previousRunId == null
+      )
+        return false;
       const records = this.temporaryRecords();
-      if ([...records.continuations.values()].some((row) =>
-        row.goalId === input.goalId &&
-        row.revision === input.revision && row.previousRunId === input.previousRunId,
-      )) return false;
+      if (
+        [...records.continuations.values()].some(
+          (row) =>
+            row.goalId === input.goalId &&
+            row.revision === input.revision &&
+            row.previousRunId === input.previousRunId,
+        )
+      )
+        return false;
       records.capture(records.continuations, row.id);
       records.continuations.set(row.id, row);
       return true;
     }
     try {
-      return this.database
-        .insert(sessionGoalContinuations)
-        .values(row)
-        .onConflictDoNothing()
-        .run().changes === 1;
+      return (
+        this.database
+          .insert(sessionGoalContinuations)
+          .values(row)
+          .onConflictDoNothing()
+          .run().changes === 1
+      );
     } catch (error) {
       // 保留原忽略约束违规的行为；外键、触发器等异常仍正常抛出。
-      if (error instanceof Error && "code" in error && (
-        error.code === "SQLITE_CONSTRAINT_NOTNULL" || error.code === "SQLITE_CONSTRAINT_CHECK"
-      )) return false;
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error.code === "SQLITE_CONSTRAINT_NOTNULL" ||
+          error.code === "SQLITE_CONSTRAINT_CHECK")
+      )
+        return false;
       throw error;
     }
   }
 
   findContinuation(runId: string): GoalContinuationRecord | undefined {
-    const row = [...this.temporary?.continuations.values() ?? []].find((row) => row.runId === runId)
-      ?? this.database.select().from(sessionGoalContinuations).where(eq(sessionGoalContinuations.runId, runId)).get();
+    const row =
+      [...(this.temporary?.continuations.values() ?? [])].find(
+        (row) => row.runId === runId,
+      ) ??
+      this.database
+        .select()
+        .from(sessionGoalContinuations)
+        .where(eq(sessionGoalContinuations.runId, runId))
+        .get();
     if (!row || !row.inputId || !row.runId) return undefined;
-    return { goalId: row.goalId, revision: row.revision, previousRunId: row.previousRunId,
-      inputId: row.inputId, runId: row.runId, status: row.status as GoalContinuationRecord["status"] };
+    return {
+      goalId: row.goalId,
+      revision: row.revision,
+      previousRunId: row.previousRunId,
+      inputId: row.inputId,
+      runId: row.runId,
+      status: row.status as GoalContinuationRecord["status"],
+    };
   }
 
   markContinuation(runId: string, status: "dispatched" | "cancelled"): void {
@@ -350,17 +433,20 @@ export class GoalRepository {
       .where(eq(sessionGoals.status, "active"))
       .all()
       .map((row) => row.id);
-    const temporary = [...this.temporary?.goals.values() ?? []]
+    const temporary = [...(this.temporary?.goals.values() ?? [])]
       .filter((row) => row.status === "active")
       .map((row) => row.id);
     return [...stored, ...temporary];
   }
 
   listGoalIds(includeTemporary = true): string[] {
-    const stored = this.database.select({ id: sessionGoals.id }).from(sessionGoals).all().map(row => row.id);
+    const stored = this.database
+      .select({ id: sessionGoals.id })
+      .from(sessionGoals)
+      .all()
+      .map((row) => row.id);
     if (!includeTemporary) return stored;
-    return [...stored,
-      ...this.temporary?.goals.keys() ?? []];
+    return [...stored, ...(this.temporary?.goals.keys() ?? [])];
   }
 
   updateUsage(id: string, usage: GoalUsage): void {
@@ -371,7 +457,11 @@ export class GoalRepository {
       this.temporary!.goals.set(id, { ...temporaryRow, ...changes });
       return;
     }
-    this.database.update(sessionGoals).set(changes).where(eq(sessionGoals.id, id)).run();
+    this.database
+      .update(sessionGoals)
+      .set(changes)
+      .where(eq(sessionGoals.id, id))
+      .run();
   }
 
   listActiveExternalWaitGoals(): SessionGoal[] {
@@ -379,11 +469,15 @@ export class GoalRepository {
       .select()
       .from(sessionGoals)
       .where(
-        and(eq(sessionGoals.status, "active"), isNotNull(sessionGoals.waitJson)),
+        and(
+          eq(sessionGoals.status, "active"),
+          isNotNull(sessionGoals.waitJson),
+        ),
       )
       .all();
-    const temporary = [...this.temporary?.goals.values() ?? []]
-      .filter((row) => row.status === "active" && row.waitJson !== null);
+    const temporary = [...(this.temporary?.goals.values() ?? [])].filter(
+      (row) => row.status === "active" && row.waitJson !== null,
+    );
     return [...stored, ...temporary]
       .map(sessionGoalFromRow)
       .filter((goal) => goal.wait?.kind === "external");
@@ -393,34 +487,55 @@ export class GoalRepository {
     if (goalIds?.length === 0) return;
     const records = this.temporary?.continuations;
     for (const [id, row] of records ?? []) {
-      if (row.status === "pending" && (!goalIds || goalIds.includes(row.goalId))) {
+      if (
+        row.status === "pending" &&
+        (!goalIds || goalIds.includes(row.goalId))
+      ) {
         this.temporary!.capture(records!, id);
-        records!.set(id, { ...row, status: "cancelled", updatedAt: Date.now() });
+        records!.set(id, {
+          ...row,
+          status: "cancelled",
+          updatedAt: Date.now(),
+        });
       }
     }
     this.database
       .update(sessionGoalContinuations)
       .set({ status: "cancelled", updatedAt: Date.now() })
-      .where(and(eq(sessionGoalContinuations.status, "pending"),
-        goalIds ? inArray(sessionGoalContinuations.goalId, goalIds) : undefined))
+      .where(
+        and(
+          eq(sessionGoalContinuations.status, "pending"),
+          goalIds
+            ? inArray(sessionGoalContinuations.goalId, goalIds)
+            : undefined,
+        ),
+      )
       .run();
   }
 
   findGoalIdByCurrentRun(runId: string): string | undefined {
-    const temporary = [...this.temporary?.goals.values() ?? []]
-      .find((row) => row.currentRunId === runId);
-    return temporary?.id ?? this.database
-      .select({ id: sessionGoals.id })
-      .from(sessionGoals)
-      .where(eq(sessionGoals.currentRunId, runId))
-      .get()?.id;
+    const temporary = [...(this.temporary?.goals.values() ?? [])].find(
+      (row) => row.currentRunId === runId,
+    );
+    return (
+      temporary?.id ??
+      this.database
+        .select({ id: sessionGoals.id })
+        .from(sessionGoals)
+        .where(eq(sessionGoals.currentRunId, runId))
+        .get()?.id
+    );
   }
 
   clearCurrentRun(id: string): void {
     const temporaryRow = this.temporary?.goals.get(id);
     if (temporaryRow) {
       this.temporary!.capture(this.temporary!.goals, id);
-      this.temporary!.goals.set(id, { ...temporaryRow, currentRunId: null, updatedAt: Date.now() });
+      this.temporary!.goals.set(id, {
+        ...temporaryRow,
+        currentRunId: null,
+        updatedAt: Date.now(),
+      });
       return;
     }
     this.database
@@ -456,7 +571,9 @@ export class GoalRepository {
         autoTurnsUsed: sql`${sessionGoals.autoTurnsUsed} + ${automatic ? 1 : 0}`,
         updatedAt: Date.now(),
       })
-      .where(and(eq(sessionGoals.id, goalId), eq(sessionGoals.revision, revision)))
+      .where(
+        and(eq(sessionGoals.id, goalId), eq(sessionGoals.revision, revision)),
+      )
       .run();
   }
 }

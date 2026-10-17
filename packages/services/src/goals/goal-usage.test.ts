@@ -28,6 +28,15 @@ function report(input: number, output: number, completeness: "partial" | "comple
 }
 
 describe("Goal model attempt ledger", () => {
+  it("meters plugin selection before the main Run starts without allowing other pending requests", () => {
+    withStore(store => {
+      store.runs.updateRun("r1", { status: "pending" });
+      expect(store.goals.beginGoalModelAttempt(start)).toMatchObject({ allowed: false });
+      expect(store.goals.beginGoalModelAttempt({ ...start, purpose: "plugin_selection" })).toMatchObject({ allowed: true, changed: true });
+      store.goals.recordGoalModelAttempt(report(10, 3));
+      expect(store.goals.getGoal("g1")?.usage).toMatchObject({ knownTokens: 13, incomplete: false });
+    });
+  });
   it.each([false, true])("reads the latest terminal Goal and its late usage without changing open-only queries (memory=%s)", (memory) => {
     const clock = vi.spyOn(Date, "now").mockReturnValue(1_000);
     withStore((store) => {

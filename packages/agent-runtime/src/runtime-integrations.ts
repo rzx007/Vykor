@@ -34,6 +34,7 @@ import { createMcpAuthHost } from "./mcp-auth.js";
 import { createRememberTool } from "./remember-tool.js";
 import { getInternalToolRegistry } from "./default-runtime.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
+import type { PluginSelectionCatalog } from "./plugin-selection.js";
 
 export interface InstallRuntimeIntegrationsOptions {
   cwd: string;
@@ -53,12 +54,26 @@ export interface InstallRuntimeIntegrationsOptions {
 export async function installRuntimeIntegrations(
   options: InstallRuntimeIntegrationsOptions,
 ): Promise<{
+  pluginSelection: PluginSelectionCatalog;
   getConnections: () => ReturnType<McpClientManager["getConnections"]>;
   retainConnectionsForRun: () => () => void;
 }> {
   const { runtime } = options;
   const memory = options.memory;
   const inventory = options.discovery.pluginCapabilityInventory;
+  const pluginSelection: PluginSelectionCatalog = {
+    candidates: [...inventory.plugins.values()].map(({ pluginId, displayName, description, version, behaviorDigest }) =>
+      Object.freeze({ pluginId, displayName, description, version, behaviorDigest })),
+    validate: async candidate => {
+      const current = inventory.plugins.get(candidate.pluginId);
+      const plugin = options.discovery.plugins.find(item => item.manifest.id === candidate.pluginId);
+      if (!plugin || current?.version !== candidate.version || !candidate.behaviorDigest
+        || current.behaviorDigest !== candidate.behaviorDigest
+        || await computePluginBehaviorDigest(plugin.root) !== candidate.behaviorDigest) {
+        throw new Error(`Plugin changed during selection: ${candidate.pluginId}`);
+      }
+    },
+  };
   assertPluginMcpServerNamesAvailable(options);
   const toolActivations = await activateDiscoveredPlugins({
     plugins: options.discovery.plugins,
@@ -381,6 +396,7 @@ export async function installRuntimeIntegrations(
   };
 
   return {
+    pluginSelection,
     getConnections: () => mcpManager.getConnections(),
     retainConnectionsForRun: () => mcpManager.retainCurrentConnections(),
   };

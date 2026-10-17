@@ -24,6 +24,7 @@ import type {
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
   UpdateDesktopSessionEffortInput,
+  UpdateDesktopSessionPluginSelectionInput,
   GetDesktopContextUsageInput,
   SearchSessionsOptions,
 } from "../../../shared/session-types"
@@ -254,6 +255,11 @@ export const sessionIpcContribution: IpcContribution = {
         channel: IpcChannels.sessionUpdateEffort,
         handler: (_event, input) =>
           desktopSessionService.updateSessionEffort(input as UpdateDesktopSessionEffortInput),
+      },
+      {
+        channel: IpcChannels.sessionUpdatePluginSelection,
+        handler: (_event, input) =>
+          desktopSessionService.updateSessionPluginSelection(input as UpdateDesktopSessionPluginSelectionInput),
       },
       {
         channel: IpcChannels.sessionGetContextUsage,

@@ -16,6 +16,7 @@ export type SessionRuntimeConfig = {
   allowedTools?: string[];
   disallowedTools?: string[];
   pluginsEnabled?: boolean;
+  pluginAutoSelectionEnabled?: boolean;
 };
 
 export type SessionRuntimeConfigPatch = Partial<SessionRuntimeConfig>;
@@ -33,6 +34,7 @@ const RUNTIME_CONFIG_KEYS: Array<keyof SessionRuntimeConfig> = [
   "allowedTools",
   "disallowedTools",
   "pluginsEnabled",
+  "pluginAutoSelectionEnabled",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,7 +91,8 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
       case "effort": valid = effortValue(value) !== undefined; break;
       case "sessionMode": valid = sessionModeValue(value) !== undefined; break;
       case "maxTurns": valid = numberValue(value) !== undefined; break;
-      case "pluginsEnabled": valid = booleanValue(value) !== undefined; break;
+      case "pluginsEnabled": case "pluginAutoSelectionEnabled":
+        valid = booleanValue(value) !== undefined; break;
       case "allowedTools": case "disallowedTools":
         valid = Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim().length > 0); break;
     }
@@ -161,6 +164,9 @@ export function readSessionRuntimeConfig(
       : {}),
     ...((booleanValue(runtime.pluginsEnabled) ?? defaults?.pluginsEnabled) !== undefined
       ? { pluginsEnabled: booleanValue(runtime.pluginsEnabled) ?? defaults?.pluginsEnabled }
+      : {}),
+    ...((booleanValue(runtime.pluginAutoSelectionEnabled) ?? defaults?.pluginAutoSelectionEnabled) !== undefined
+      ? { pluginAutoSelectionEnabled: booleanValue(runtime.pluginAutoSelectionEnabled) ?? defaults?.pluginAutoSelectionEnabled }
       : {}),
   };
 }

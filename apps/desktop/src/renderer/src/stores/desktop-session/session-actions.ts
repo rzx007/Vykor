@@ -45,6 +45,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
   let defaultSettingsGeneration = 0
   let contextUsageGeneration = 0
   const runtimeConfigGeneration = new Map<string, number>()
+  const pluginSelectionGeneration = new Map<string, number>()
   const nextRuntimeConfigGeneration = (sessionId: string): number => {
     const generation = (runtimeConfigGeneration.get(sessionId) ?? 0) + 1
     runtimeConfigGeneration.set(sessionId, generation)
@@ -337,6 +338,21 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         sessions: upsertSession(state.sessions, session),
         selectedEffort:
           state.activeSessionId === sessionId ? sessionEffort(session) : state.selectedEffort,
+        sessionView:
+          state.sessionView?.session.id === sessionId
+            ? { ...state.sessionView, session }
+            : state.sessionView,
+      }))
+    },
+
+    async updateSessionPluginSelection(sessionId, preferences, isCurrent) {
+      const generation = (pluginSelectionGeneration.get(sessionId) ?? 0) + 1
+      pluginSelectionGeneration.set(sessionId, generation)
+      const session = await window.desktop.sessions.updatePluginSelection({ sessionId, ...preferences })
+      if (isCurrent && !isCurrent()) return
+      if (pluginSelectionGeneration.get(sessionId) !== generation) return
+      set((state) => ({
+        sessions: upsertSession(state.sessions, session),
         sessionView:
           state.sessionView?.session.id === sessionId
             ? { ...state.sessionView, session }

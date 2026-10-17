@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { type McpServerConfig, type RuntimeBundle } from "@vykor/core";
-import { loadNativePlugin, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
+import { computePluginBehaviorDigest, loadNativePlugin, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
 import { SkillRegistry } from "@vykor/skills";
 import { createVykorRuntime } from "./default-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
@@ -34,23 +34,35 @@ async function plugin(id: string, source?: string, servers?: Record<string, McpS
 
 async function install(plugins: LoadedNativePlugin[], hostServers: Record<string, McpServerConfig> = {}) {
   const skillRegistry = new SkillRegistry();
+  const digests = await Promise.all(plugins.map(item => computePluginBehaviorDigest(item.root)));
   const runtime = await createVykorRuntime({
     cwd: roots[0]!, skillRegistry,
     settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: false }, mcpServers: hostServers },
     configuration: { client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" }; } } },
   });
   runtimes.push(runtime);
-  const { getConnections } = await installRuntimeIntegrations({ cwd: roots[0]!, sessionId: "readiness", settings: runtime.settings, runtime,
+  const integration = await installRuntimeIntegrations({ cwd: roots[0]!, sessionId: "readiness", settings: runtime.settings, runtime,
     discovery: { skillRegistry, plugins, agentDefinitions: [], warnings: [],
       mcpServers: Object.assign({}, ...plugins.map(item => item.components.mcpServers?.value ?? {}), hostServers),
-      pluginCapabilityInventory: createPluginCapabilityInventory(plugins.map(item => ({ plugin: item, record: {
+      pluginCapabilityInventory: createPluginCapabilityInventory(plugins.map((item, index) => ({ plugin: item, record: {
         id: item.manifest.id, scope: "user", enabled: true, currentVersion: "1.0.0", cachePath: item.root,
-        origin: "native", requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
+        origin: "native", behaviorDigest: digests[index], requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
       } }))),
     },
   });
-  return { runtime, getConnections };
+  return { runtime, ...integration };
 }
+
+it("returns the plugin catalog and source validation to the agent host without attaching them to core runtime", async () => {
+  const loaded = await plugin("dev.selection", nativeSource);
+  const { runtime, pluginSelection } = await install([loaded]);
+  expect(runtime).not.toHaveProperty("pluginSelection");
+  expect(pluginSelection.candidates).toEqual([expect.objectContaining({ pluginId: "dev.selection", version: "1.0.0", behaviorDigest: expect.any(String) })]);
+  const candidate = pluginSelection.candidates[0]!;
+  await expect(pluginSelection.validate(candidate)).resolves.toBeUndefined();
+  appendFileSync(join(loaded.root, ".vykor-plugin/plugin.json"), "\n");
+  await expect(pluginSelection.validate(candidate)).rejects.toThrow("Plugin changed during selection");
+});
 
 const nativeSource = `export function registerTools() { return [{ name: "ReadyTool", description: "ready", inputSchema: {},
   invoke(input) { if (input.crash) process.exit(17); return { content: [{ type: "text", text: "ready" }] }; }

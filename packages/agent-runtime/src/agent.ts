@@ -39,6 +39,7 @@ import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
 import { createRunCapabilityView, readonlyMap } from "./run-capability-view.js";
+import { selectPlugin, type PluginSelectionCatalog, type PluginSelectionResult } from "./plugin-selection.js";
 import type { GoalRunBinding } from "./goal-extension.js";
 import {
   AgentOperationConflictError,
@@ -121,6 +122,16 @@ export interface VykorAgentRunToolOptions {
   onToolEvent?: (event: AgentEventInput) => Promise<void>;
 }
 
+export interface PluginSelectionRunOptions {
+  runId: string;
+  inputId: string;
+  traceId: string;
+  signal: AbortSignal;
+  limits?: AgentExecutionLimits;
+  context?: string;
+  resolvedSelection?: PluginSelectionResult;
+}
+
 export interface AgentCompactResult {
   history: Message[];
   beforeMessageCount: number;
@@ -163,6 +174,7 @@ export interface VykorAgent {
   readonly state: VykorAgentState;
   readonly children: AgentChildDirectory;
   createRunCapabilityView(pluginId?: string): RunCapabilityView;
+  selectPluginForRun(text: string, options: PluginSelectionRunOptions): Promise<PluginSelectionResult>;
   /** Subscribe to ordered observations. Observer failures never fail agent execution. */
   subscribe(listener: AgentEventListener): AgentEventSubscription;
   submitMessage(
@@ -214,7 +226,7 @@ class DefaultVykorAgent implements VykorAgent {
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
-    kind: "compact" | "remember" | "post_run_child" | "tool";
+    kind: "compact" | "remember" | "post_run_child" | "tool" | "plugin_selection";
     settled: Promise<void>;
     controller?: AbortController;
   };
@@ -236,6 +248,7 @@ class DefaultVykorAgent implements VykorAgent {
     private readonly capabilities: ResolvedAgentCapabilities,
     private model: string,
     private readonly requestConfigurationStore: AgentRequestConfigurationReader,
+    private readonly pluginSelection?: PluginSelectionCatalog,
   ) {}
 
   get id(): string {
@@ -302,6 +315,34 @@ class DefaultVykorAgent implements VykorAgent {
   createRunCapabilityView(pluginId?: string): RunCapabilityView {
     return this.runtime.createRunCapabilityView?.(pluginId)
       ?? createRunCapabilityView({ toolRegistry: this.runtime.toolRegistry }, pluginId);
+  }
+
+  selectPluginForRun(text: string, options: PluginSelectionRunOptions): Promise<PluginSelectionResult> {
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, options.signal]);
+    return this.runMaintenance("plugin_selection", async () => {
+      signal.throwIfAborted();
+      const catalog = this.pluginSelection;
+      if (!catalog?.candidates.length && !options.resolvedSelection?.pluginId) return { pluginId: null, reason: "no_candidates" };
+      const request = options.resolvedSelection ? undefined : await this.runtime.resolveRequestConfiguration?.({ signal });
+      const result = options.resolvedSelection ?? await selectPlugin({
+        client: request?.client ?? this.runtime.apiClient,
+        model: request?.model ?? this.model, provider: request?.provider,
+        candidates: catalog?.candidates ?? [], text, context: options.context,
+        signal, limits: options.limits,
+        emit: async event => { await this.eventBus.emit(event, { agentId: this.id, sessionId: this.id,
+          runId: options.runId, inputId: options.inputId, traceId: options.traceId, ...this.identity }); },
+      });
+      if (result.pluginId) {
+        const candidate = catalog?.candidates.find(item => item.pluginId === result.pluginId);
+        if (!candidate || candidate.version !== result.version || candidate.behaviorDigest !== result.behaviorDigest) {
+          throw new Error(`Plugin changed since selection: ${result.pluginId}`);
+        }
+        await catalog!.validate(candidate);
+      }
+      signal.throwIfAborted();
+      return result;
+    }, controller);
   }
 
   async runMessage(
@@ -577,7 +618,7 @@ class DefaultVykorAgent implements VykorAgent {
   }
 
   private runMaintenance<T>(
-    kind: "compact" | "remember" | "post_run_child" | "tool",
+    kind: "compact" | "remember" | "post_run_child" | "tool" | "plugin_selection",
     work: () => Promise<T>,
     controller?: AbortController,
   ): Promise<T> {
@@ -603,6 +644,7 @@ class DefaultVykorAgent implements VykorAgent {
 
 export interface AssembledAgentOptions {
   runtime: RuntimeBundle;
+  pluginSelection?: PluginSelectionCatalog;
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
   retainMcpConnectionsForRun?: () => () => void;
@@ -641,6 +683,7 @@ export function createAssembledAgent(
         { model: options.model },
         async (next) => next,
       ),
+    options.pluginSelection,
   );
 }
 
