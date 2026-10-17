@@ -359,7 +359,7 @@ describe("buildRuntimeSystemPrompt", () => {
     expect(result).toContain(
       "Use tables only when repeated fields benefit from comparison",
     );
-    expect(result).toContain("[label](/absolute/path/to/file.ts:42)");
+    expect(result).toContain("[消息继承判定](/absolute/path/to/file.ts:42)");
     expect(result).toContain("/D:/repo/src/file.ts:42");
     expect(result).toContain("Do not invent a file path or line number");
     expect(result).toContain(

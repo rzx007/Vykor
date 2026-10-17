@@ -167,7 +167,7 @@ export function buildMarkdownPresentationSection(): string {
 - Use only a few major sections for complex answers; do not turn every point into a heading.
 - Use tables only when repeated fields benefit from comparison. Put long explanations in prose or lists.
 - Use descriptive link text instead of placing long raw URLs on separate lines.
-- When citing a file you have located, use a Markdown link such as [label](/absolute/path/to/file.ts:42). Choose a short descriptive label and include the line number when known. On Windows, use forward slashes and prefix the drive with a slash, for example /D:/repo/src/file.ts:42.
+- When citing a file you have located, use a Markdown link such as [消息继承判定](/absolute/path/to/file.ts:42). Choose a short semantic label in the user's language that describes the referenced code's purpose or behavior, rather than a generic label or file path, and include the line number when known. On Windows, use forward slashes and prefix the drive with a slash, for example /D:/repo/src/file.ts:42.
 - Do not invent a file path or line number. Leave unverified paths as plain text or inline code.
 - Use inline code for file names, commands, identifiers, and short paths; do not wrap whole sentences in code spans.
 - Always tag fenced code blocks with a language.
