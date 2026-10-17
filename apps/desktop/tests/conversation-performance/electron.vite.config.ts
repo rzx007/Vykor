@@ -14,6 +14,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    worker: { format: "es" },
     root: resolve("tests/conversation-performance"),
     plugins: [react()],
     resolve: {

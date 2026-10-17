@@ -67,6 +67,22 @@ void (async () => {
         })
       )
     }
+    for (const count of [1000, 10000]) {
+      console.log(
+        JSON.stringify({
+          scenario: "streaming-code-continuity",
+          history: count,
+          result: await run(`window.transcriptPerformance.streamingCode(${count})`),
+        })
+      )
+    }
+    console.log(
+      JSON.stringify({
+        scenario: "large-streaming-code-stable-handler",
+        history: 10000,
+        result: await run("window.transcriptPerformance.streamingCode(10000, true)"),
+      })
+    )
     window.setSize(1500, 700)
     await window.loadFile(join(__dirname, "../renderer/panels.html"))
     for (const count of [1000, 10000]) {

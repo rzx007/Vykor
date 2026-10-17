@@ -12,6 +12,8 @@ import {
   ConversationScrollerButton,
 } from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroller"
 import { useConversationScroller } from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroll-context"
+import { AssistantMarkdown } from "../../src/renderer/src/components/desktop/conversation-page/message/assistant-markdown"
+import { AppearanceProvider } from "../../src/renderer/src/components/appearance/appearance-provider"
 
 const style = document.createElement("style")
 style.textContent = `[data-slot=message-scroller-viewport]{width:960px;height:480px;overflow-y:auto;overflow-anchor:none}[data-slot=message-scroller-content]{min-height:100%}[data-virtual-transcript]{position:relative;width:100%}[data-transcript-row]{position:absolute;top:0;left:0;width:100%}`
@@ -28,6 +30,10 @@ export function Probe() {
 let rows: TranscriptRow[] = []
 let height = 120
 let chat = 0
+let markdown: string | null = null
+let streaming = true
+let freshFileHandler = true
+const openFile = () => {}
 const viewport = () =>
   document.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -43,11 +49,22 @@ function render() {
           <ConversationScrollerContent>
             <VirtualTranscript
               rows={rows}
-              renderRow={(index) => (
-                <div style={{ height: index === rows.length - 1 ? height : 120 }}>
-                  {rows[index].id}
-                </div>
-              )}
+              renderRow={(index) =>
+                index === rows.length - 1 && markdown !== null ? (
+                  <AppearanceProvider>
+                    <AssistantMarkdown
+                      text={markdown}
+                      streaming={streaming}
+                      animateInitialText={false}
+                      onOpenFile={freshFileHandler ? () => {} : openFile}
+                    />
+                  </AppearanceProvider>
+                ) : (
+                  <div style={{ height: index === rows.length - 1 ? height : 120 }}>
+                    {rows[index].id}
+                  </div>
+                )
+              }
             />
           </ConversationScrollerContent>
         </ConversationScrollerViewport>
@@ -62,6 +79,7 @@ function require(condition: boolean, message: string) {
 const api = {
   async prepare(count: number) {
     chat++
+    markdown = null
     height = 120
     rows = Array.from({ length: count }, (_, index) => ({
       id: `turn-${index}`,
@@ -93,6 +111,52 @@ const api = {
       1, "stream not at bottom")
     require(maxMounted < 25, "unbounded mounted history")
     return { updates, maxSettledGap, maxMounted }
+  },
+  async streamingCode(count: number, large = false) {
+    await api.prepare(count)
+    freshFileHandler = !large
+    const first = "const first = 1;"
+    markdown = `\`\`\`ts\n${first}\n\`\`\``
+    streaming = true
+    render()
+    const deadline = performance.now() + 10_000
+    while (!document.querySelector('pre code span[style*="color"]') && performance.now() < deadline)
+      await frame()
+    const firstPre = document.querySelector("pre")!
+    require(!!firstPre?.querySelector('span[style*="color"]'), "initial code was not colored")
+    let updates = 0
+    for (let block = 1; block <= 3; block++) {
+      markdown += "\n\n```ts\n"
+      let code = ""
+      for (let line = 0; line < 35; line++) {
+        const chunk =
+          `const block${block}line${line} = "中文😀 streaming code should stay visible while growing";\n`.repeat(
+            large ? 10 : 1
+          )
+        code += chunk
+        markdown += chunk
+        render()
+        await frame()
+        await frame()
+        updates++
+        require(document.querySelector("pre") === firstPre, "earlier code block remounted")
+        require(!!firstPre.querySelector('span[style*="color"]'), "earlier code lost its colors")
+        const active = document.querySelectorAll("pre code")[block]
+        require(active?.textContent === code.trimEnd(), "live source waited for highlighting")
+      }
+      markdown += "```"
+      render()
+      await settle()
+    }
+    require(controller.getSnapshot().following, "code growth lost following")
+    require(document.querySelectorAll("pre").length === 4, "missing sequential code blocks")
+    streaming = false
+    render()
+    await settle()
+    require(document.querySelector("pre") === firstPre, "completion remounted earlier code")
+    require(!!firstPre.querySelector('span[style*="color"]'), "completion cleared earlier colors")
+    require(document.querySelectorAll("pre").length === 4, "completion lost code blocks")
+    return { updates, blocks: 4, passed: true }
   },
   async regress() {
     require(controller.scrollToMessage("prompt-400"), "history navigation unavailable")

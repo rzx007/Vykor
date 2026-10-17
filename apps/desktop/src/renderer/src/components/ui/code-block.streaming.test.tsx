@@ -181,3 +181,22 @@ it("keeps source and copy usable when workers are unavailable", async () => {
   )
   expect(clipboard).toHaveBeenLastCalledWith(code)
 })
+
+it("retains colors on earlier lines after a multiline worker result replaces the prefix", async () => {
+  await act(async () => render("const first = 1;"))
+  await vi.waitFor(() => expect(colored()).not.toBeNull(), { timeout: 10_000 })
+  const latest = "const first = 1;\nconst second = 2;\nconst third = 3;"
+  await act(async () => render(latest, false))
+  await vi.waitFor(
+    () => {
+      const highlighted = [...container.querySelectorAll('pre code span[style*="color"]')]
+        .map((element) => element.textContent)
+        .join("")
+      expect(highlighted).toContain("first")
+      expect(highlighted).toContain("second")
+      expect(highlighted).toContain("third")
+    },
+    { timeout: 10_000 }
+  )
+  expect(source()).toBe(latest)
+})
