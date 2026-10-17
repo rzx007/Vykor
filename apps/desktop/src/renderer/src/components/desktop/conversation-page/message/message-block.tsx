@@ -160,7 +160,7 @@ function UserMessageBlock({
               编辑最新消息
             </label>
             {attachmentParts.length > 0 ? (
-              <AttachmentGroup aria-label="原消息附件" className="max-w-full justify-end">
+              <AttachmentGroup aria-label="原消息附件" className="max-w-full" style={{ justifyContent: "safe flex-end" }}>
                 {attachmentParts.map((part) => (
                   <MessageAttachment
                     key={part.id}
@@ -209,7 +209,7 @@ function UserMessageBlock({
     <Message align="end" className="group/msg">
       <MessageContent className="items-end">
         {attachmentParts.length > 0 ? (
-          <AttachmentGroup aria-label="消息附件" className="max-w-[78%] justify-end">
+          <AttachmentGroup aria-label="消息附件" className="max-w-[78%]" style={{ justifyContent: "safe flex-end" }}>
             {attachmentParts.map((part) => (
               <MessageAttachment
                 key={part.id}

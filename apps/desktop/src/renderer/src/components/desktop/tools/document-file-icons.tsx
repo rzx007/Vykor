@@ -41,8 +41,9 @@ export const PdfFileIcon = documentIcon("pdf")
 
 // The tree uses SVG symbols in its shadow DOM; keep them sourced from the same glyphs.
 export const documentTreeIcons: FileTreeIconConfig = {
-  set: "standard",
-  spriteSheet: `<svg xmlns="http://www.w3.org/2000/svg"><defs>${Object.entries(glyphs).map(
+  set: "complete",
+  colored: true,
+  spriteSheet: `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false"><defs>${Object.entries(glyphs).map(
     ([kind, glyph]) => `<symbol id="document-${kind}" viewBox="64 64 896 896"><path fill="${glyph.color}" stroke="none" d="${glyph.path}"/></symbol>`
   ).join("")}</defs></svg>`,
   byFileExtension: {

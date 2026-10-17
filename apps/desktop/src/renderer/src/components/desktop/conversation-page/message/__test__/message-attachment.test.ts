@@ -193,9 +193,11 @@ describe("MessageAttachment", () => {
       )
     )
 
+    expect(container.querySelector<HTMLElement>('[aria-label="消息附件"]')?.style.justifyContent).toBe("safe flex-end")
     await act(async () =>
       container.querySelector<HTMLButtonElement>('button[aria-label="重新编辑"]')?.click()
     )
+    expect(container.querySelector<HTMLElement>('[aria-label="原消息附件"]')?.style.justifyContent).toBe("safe flex-end")
     const editor = container.querySelector<HTMLElement>('[role="textbox"]')
     expect(editor).not.toBeNull()
     expect(editor?.textContent?.trim() ?? "").toBe("")
