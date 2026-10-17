@@ -13,7 +13,7 @@ test('Word exposes six document tools',()=>{
   assert.deepEqual(names,['OfficeWordCreate','OfficeWordRead','OfficeWordEdit','OfficeWordCheck','OfficeWordPreview','OfficeWordReview']);
 });
 
-test('real Word tools preserve other paragraphs, version checks and user originals',async()=>{
+test('real OfficeCLI: Word tools preserve other paragraphs, version checks and user originals',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'office-word-tools-'));
   const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
   const tools=Object.fromEntries(registerTools().map(tool=>[tool.name,tool]));
