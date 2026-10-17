@@ -5,6 +5,7 @@ import {
 } from "@vykor/core";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { PermissionChecker } from "@vykor/permissions";
+import { askInstallConfirmation } from "./ask-install-confirmation.js";
 import {
   McpConfigApplicationError,
   type McpConfigApplicationService,
@@ -132,7 +133,7 @@ export function createMcpConfigureTool(
           config.type === "stdio"
             ? `启动命令：${JSON.stringify([config.command, ...(config.args ?? [])])}\n环境变量名：${Object.keys(config.env ?? {}).join("、") || "无"}`
             : `服务地址：${summarizeMcpEndpoint(config.url)}\n请求头名称：${Object.keys(config.headers ?? {}).join("、") || "无"}`;
-        const answer = await context.askUserPrompt(
+        const confirmed = await askInstallConfirmation(context.askUserPrompt,
           [
             `确认添加全局 MCP 服务 ${JSON.stringify(name)}？这会影响其他会话。`,
             target,
@@ -141,8 +142,9 @@ export function createMcpConfigureTool(
               : "连接时会向该第三方服务发送请求。",
             "本工具不安装系统依赖，也不代替你完成 OAuth 授权。回复“确认添加”才会继续。",
           ].join("\n"),
+          "确认添加",
         );
-        if (answer.trim() !== "确认添加")
+        if (!confirmed)
           return reply("已取消添加，未保存或启动 MCP 服务。");
         if (context.abortSignal?.aborted || context.runAbortSignal?.aborted)
           return reply("操作已取消，未保存 MCP 配置。", true);

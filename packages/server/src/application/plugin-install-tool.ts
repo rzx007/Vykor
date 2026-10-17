@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolResult } from "@vykor/core";
 import type { PluginService } from "./settings-api.js";
+import { askInstallConfirmation } from "./ask-install-confirmation.js";
 
 const reply = (text: string, isError = false): ToolResult => ({
   content: [{ type: "text", text }],
@@ -49,8 +50,7 @@ export function createPluginInstallTool(
           `申请权限：${candidate.requestedPermissions.length ? candidate.requestedPermissions.join("、") : "无"}`,
           "回复“确认安装”才会继续。",
         ].join("\n");
-        const answer = (await context.askUserPrompt(question)).trim();
-        if (answer !== "确认安装") return reply("已取消插件安装。");
+        if (!await askInstallConfirmation(context.askUserPrompt, question, "确认安装")) return reply("已取消插件安装。");
         const approvedPermissions = candidate.approvalRequired ? candidate.requestedPermissions : [];
         return await withMutation(async () => {
         const result = source === "archive" && "archiveDigest" in candidate

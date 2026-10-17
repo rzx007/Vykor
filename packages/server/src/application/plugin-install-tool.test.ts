@@ -22,6 +22,19 @@ function service(): PluginService {
 }
 
 describe("PluginInstall", () => {
+  it.each([
+    JSON.stringify({ selected: { 0: [0] }, custom: {} }),
+    JSON.stringify({ selected: {}, custom: { 0: "确认安装" } }),
+  ])("accepts desktop selection or typed installation confirmation: %s", async (answer) => {
+    const plugins = service();
+    const ask = vi.fn(async (_question: string) => answer);
+    const result = await createPluginInstallTool(plugins, async () => {}).execute(
+      { source: "archive", path: "C:/plugin.zip" }, { cwd: "C:/work", askUserPrompt: ask },
+    );
+    expect(result.isError).toBeUndefined();
+    expect(plugins.installArchive).toHaveBeenCalledOnce();
+    expect(JSON.parse(ask.mock.calls[0]![0]).questions[0].options).toEqual(["确认安装", "取消"]);
+  });
   it("previews, asks for the exact plugin permissions, installs, and invalidates runtimes", async () => {
     const plugins = service();
     const invalidate = vi.fn(async () => {});

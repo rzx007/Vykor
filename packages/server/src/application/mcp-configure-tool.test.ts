@@ -25,6 +25,30 @@ const local = { action: "add", name: "blender", config: { type: "stdio", command
 const text = (result: Awaited<ReturnType<ReturnType<typeof createMcpConfigureTool>["execute"]>>) => JSON.stringify(result);
 
 describe("McpConfigure", () => {
+  it.each([
+    JSON.stringify({ selected: {}, custom: { 0: "确认添加" } }),
+    JSON.stringify({ selected: { 0: [0] }, custom: {} }),
+  ])("accepts actual desktop confirmation replies: %s", async (answer) => {
+    const w = world();
+    w.ask.mockResolvedValue(answer);
+    await w.tool.execute(local, w.context);
+    expect(w.settings().mcpServers?.blender).toEqual(local.config);
+    const prompt = JSON.parse(w.ask.mock.calls[0]![0]);
+    expect(prompt.questions).toEqual([expect.objectContaining({ type: "radio", options: ["确认添加", "取消"] })]);
+  });
+
+  it.each([
+    { selected: { 0: [1] }, custom: {} },
+    { selected: {}, custom: {} },
+    { selected: { 0: [0, 1] }, custom: {} },
+    { selected: { 0: [0] }, custom: { 0: "取消" } },
+  ])("never approves cancellation, skip or conflicting desktop replies: %j", async (answer) => {
+    const w = world();
+    w.ask.mockResolvedValue(JSON.stringify(answer));
+    await w.tool.execute(local, w.context);
+    expect(w.settings().mcpServers).toEqual({});
+    expect(w.coordinator.reconcileGlobal).not.toHaveBeenCalled();
+  });
   it("confirms global process execution, persists one entry and reports an unverified connection honestly", async () => {
     const w = world();
     const result = await w.tool.execute(local, w.context);
