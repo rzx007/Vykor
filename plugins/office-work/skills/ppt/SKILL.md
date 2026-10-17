@@ -62,3 +62,5 @@ OfficePptEdit 传入最新 expected_sha256 与 operations，每项仅 path、pro
 记录位于插件 dataDir/visual-reviews，按文件路径与 sha256 区分版本。同版本分批查看的页面合并，重新检查某页仅替换该页记录。OfficePptCheck 只附带当前摘要匹配的 visual_review；文件变更后没有新版本记录就视为尚未记录视觉检查，不套用旧结论。交付中说明 sha256、checked_pages 和逐页发现，scope=checked_pages_only，不把部分页面通过说成全稿通过。记录来源为 model_reported，表示模型报告的观察，不代表程序能证明模型实际看过图片。
 
 工具记录实际路径、sha256 和结构检查状态于插件 dataDir/presentations，供后续修改识别当前成果；PPT 保存在工作区，不放插件安装目录。报告当前 PPTX 路径与修改范围，分别说明结构检查、页面差异核对和实际查看过的页码；字体替换、动画与目标软件兼容性仍由用户在 PowerPoint/WPS 中验收。
+
+每次 Review 返回的 record_path 指向独立检查快照，后续复查不会覆盖它；当前汇总结果另存，复查仅更新当前汇总中的对应页。已有历史文件保留。交付请引用本轮返回的 record_path。

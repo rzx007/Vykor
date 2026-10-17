@@ -8,6 +8,16 @@ import {withWorkingFile} from '../tools/working-file.mjs';
 
 const context=()=>({cwd:process.cwd(),signal:new AbortController().signal,deadline:Date.now()+30000});
 
+test('Word working copies keep the .docx extension',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'office-word-copy-'));
+  try {
+    await withWorkingFile(join(dir,'source.docx'),async()=>{},context(),async work=>{
+      assert.ok(work.endsWith('.docx'));await writeFile(work,'private');return {};
+    });
+    assert.deepEqual(await readdir(dir),[]);
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
 test('close tolerates startup slower than two seconds, including after caller cancellation',async()=>{
   const ctx=context();const controller=new AbortController();controller.abort();ctx.signal=controller.signal;
   const run=createRunner(process.execPath,ctx);

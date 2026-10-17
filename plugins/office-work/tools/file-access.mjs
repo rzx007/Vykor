@@ -7,7 +7,7 @@ export async function assertFileAvailable(file) {
   const owner=join(dirname(file),'~$'+basename(file));
   try { await access(owner); }
   catch (error) { if (error.code==='ENOENT') return; throw error; }
-  throw Object.assign(new Error('检测到 Office 占用标记。请关闭 PowerPoint/WPS 中的此文件后重试；若已关闭，请先确认标记是否残留，不要反复自动重试或删除占用标记。'),{code:'office_file_in_use'});
+  throw Object.assign(new Error('检测到 Office 占用标记。请关闭 Word/PowerPoint/WPS 中的此文件后重试；若已关闭，请先确认标记是否残留，不要反复自动重试或删除占用标记。'),{code:'office_file_in_use'});
 }
 
 // Sidecar locks coordinate both parallel calls and separate plugin hosts.
@@ -38,7 +38,7 @@ export function operationError(error) {
   if (error.code==='office_cleanup_failed') return {code:error.code,error:error.message,cleanup_complete:false,temporary_directory:error.temporary_directory,requires_user_action:true};
   if (error.code==='office_file_in_use'||error.code==='office_file_busy') return {code:error.code,error:error.message,requires_user_action:true};
   if (['EBUSY','EPERM','EACCES'].includes(error.code)||/being used by another process|used by another process|sharing violation|另一进程|另一个进程/i.test(error.message)) {
-    return {code:'office_file_unavailable',error:'文件可能被 PowerPoint/WPS 或其他程序占用，或目录没有访问权限。请关闭此文件并确认目录权限后重试；源文件未被强制覆盖。',requires_user_action:true};
+    return {code:'office_file_unavailable',error:'文件可能被 Word/PowerPoint/WPS 或其他程序占用，或目录没有访问权限。请关闭此文件并确认目录权限后重试；源文件未被强制覆盖。',requires_user_action:true};
   }
   return {error:error.message};
 }

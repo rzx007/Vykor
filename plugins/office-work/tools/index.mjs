@@ -1,5 +1,7 @@
-import { readFile, writeFile, mkdir, realpath, copyFile, rename, access, link, stat } from 'node:fs/promises';
-import { resolve, relative, dirname, basename, join, extname, isAbsolute } from 'node:path';
+import { exists, under, filePath, known, receipt } from './document-files.mjs';
+import { registerWordTools } from './word.mjs';
+import { readFile, realpath, copyFile, rename, link, stat } from 'node:fs/promises';
+import { resolve, extname } from 'node:path';
 import { engine, hash } from './engine.mjs';
 import { tableLayout, assertTableTextClearance } from './table-layout.mjs';
 import { assertFileAvailable, withFiles, operationError } from './file-access.mjs';
@@ -9,7 +11,7 @@ import { previewPage } from './preview.mjs';
 import { recordVisualReview, readVisualReview } from './visual-review.mjs';
 
 const json = value => ({content:[{type:'text',text:JSON.stringify(value)}],executionState:'completed'});
-const exists = async path => { try { await access(path); return true; } catch { return false; } };
+
 const bounded = (array, max, label) => { if (!Array.isArray(array) || !array.length || array.length > max) throw new Error(`${label} 数量须为 1–${max}。`); return array; };
 const keys = (obj,allowed) => { if (!obj || typeof obj !== 'object' || Array.isArray(obj) || Object.keys(obj).some(k=>!allowed.includes(k))) throw new Error('包含不支持的字段。'); };
 const text = value => { if (typeof value !== 'string' || value.length > 12000) throw new Error('文本须为字符串且不超过 12000 字符。'); return value; };
@@ -25,25 +27,6 @@ function target(value, root=false) {
   if (root && (value === undefined || value === '/')) return '/';
   if (typeof value !== 'string' || !/^\/slide\[[1-9]\d*\](?:\/(?:shape|table|picture|paragraph|run|tr|tc)\[(?:[1-9]\d*|@id=[1-9]\d*)\])*$/.test(value) || value.length>240) throw new Error('请使用读取工具返回的具体元素路径。');
   return value;
-}
-function under(root, path) { const rel=relative(root,path); return !rel.startsWith('..')&&!isAbsolute(rel); }
-async function filePath(context, raw, output=false) {
-  if (typeof raw !== 'string' || !raw || raw.length>1000 || extname(raw).toLowerCase()!=='.pptx') throw new Error('仅支持工作区内的 .pptx 路径。');
-  const cwd=await realpath(context.cwd), requested=resolve(cwd,raw);
-  if (!under(cwd,requested)) throw new Error('文件须位于当前工作区。');
-  if (await exists(requested)) {
-    const actual=await realpath(requested);
-    if (!under(cwd,actual)) throw new Error('文件链接指向工作区之外。');
-    const info=await stat(actual);
-    if (!info.isFile()||info.size>64*1024*1024) throw new Error('仅支持不超过 64 MB 的 PPTX 文件。');
-    return actual;
-  }
-  if (!output) throw new Error('文件不存在。');
-  let ancestor=dirname(requested);
-  while (!await exists(ancestor)) ancestor=dirname(ancestor);
-  if (!under(cwd,await realpath(ancestor))) throw new Error('输出目录链接指向工作区之外。');
-  await mkdir(dirname(requested),{recursive:true});
-  return join(await realpath(dirname(requested)),basename(requested));
 }
 function build(slides) {
   const ops=[];
@@ -78,15 +61,6 @@ function build(slides) {
   if (JSON.stringify(ops).length>160000) throw new Error('内容过多，请缩小本次演示稿。');
   return ops;
 }
-async function recordPath(context,file) { return join(context.plugin.dataDir,'presentations',`${hash(file.toLowerCase())}.json`); }
-async function known(context,file) { try { const r=JSON.parse(await readFile(await recordPath(context,file),'utf8')); return r.path===file&&r.cwd===await realpath(context.cwd); } catch { return false; } }
-async function receipt(context,file,sha256,pageDiff) {
-  const result={path:file,sha256,structure_checked:true,visual_checked:false,...(pageDiff?{page_diff:pageDiff}:{})};
-  try { const p=await recordPath(context,file); await mkdir(dirname(p),{recursive:true}); await writeFile(p,JSON.stringify({...result,cwd:await realpath(context.cwd),updated_at:new Date().toISOString()})); }
-  catch { result.warning='文件已保存，但当前成果记录保存失败；后续编辑会另存副本。'; }
-  return result;
-}
-
 async function execute(kind,input,context) {
   const writing=kind==='Create'||kind==='Edit'||kind==='Preview'||kind==='Review';
   if (!context.permissions.filesystem?.includes('read') || (writing&&!context.permissions.filesystem?.includes('write')) || !context.permissions.process?.includes('officecli')) throw new Error('插件缺少文件或 OfficeCLI 进程权限。');
@@ -152,7 +126,7 @@ async function execute(kind,input,context) {
       if (kind==='Edit'&&hash(await readFile(source))!==original) throw new Error('修改期间源文件已变化，未替换目标文件。');
       const sha256=hash(savedBytes);
       if (inPlace) await rename(work,destination); else await link(work,destination);
-      return await receipt(context,destination,sha256,pageDiff);
+      return await receipt(context,destination,sha256,pageDiff?{page_diff:pageDiff}:{});
     });
   });
 }
@@ -190,5 +164,5 @@ export function registerTools() {
       return reply;
     }
     catch(error) { return {...json(operationError(error)),isError:true,failureKind:'precondition'}; }
-  }}));
+  }})).concat(registerWordTools());
 }

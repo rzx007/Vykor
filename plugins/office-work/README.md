@@ -1,8 +1,22 @@
-# office-work：演示文稿
+# office-work：办公文档
 
-独立原生插件，支持 Windows x64、macOS arm64 和 Linux x64（后两者待实机验收）。六个工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
+独立原生插件，支持 Windows x64、macOS arm64 和 Linux x64（后两者待实机验收）。PPT 工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview；Word 工具：OfficeWordCreate、OfficeWordRead、OfficeWordEdit、OfficeWordCheck、OfficeWordPreview、OfficeWordReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
 
-支持可编辑文字、基础形状、表格及工作区 PNG/JPEG；修改只支持元素文字与基础样式。不包含 Word/Excel/PDF、旧格式、图表、页增删重排、复杂模板、自动渲染审查。用户已有文件另存；插件成果以摘要检查后继续修改。结构验证不等于 PowerPoint/WPS 保真或视觉验收。
+PPT 支持可编辑文字、基础形状、表格及工作区 PNG/JPEG，修改支持元素文字与基础样式。Word 支持 A4 报告、命名标题样式、有序正文与表格，修改支持正文或单元格内段落唯一字面替换和整段格式，以及正文段落增删，并回读核对修改范围。还支持普通段落唯一文字的局部格式，以及矩形表格列宽、表头、跨页和行列增删。用户已有文件另存；插件成果以摘要检查后继续修改。不包含 Excel/PDF、旧格式、复杂模板或自动修复循环；Word 不做复杂表格重构、浮动图片、修订、批注、任意字段或复杂页眉页脚修改；预览仅支持 A4 纵向 HTML 渲染页。结构验证不等于 Office/WPS 保真或视觉验收。
+
+0.7.2：Word 截图预留页面外边距和滚动条宽度，防止响应式缩放让首张裁切带入灰边或下一页；截图标记升级为 word-paginated-strip-v2，旧截图需重新生成。每次视觉检查返回独立、不可覆盖的 JSON 快照；当前结果单独原子更新，已有历史文件保持原样。
+
+0.7.1：Word 预览改为先分页再提取指定页像素，避开单页截图快速路径造成的正文越过页脚、截断和后续页缺页眉；不改 DOCX。WordReview 改为正文、页眉、页脚、分页四项状态与观察，由工具汇总结论，问题或不确定项不能通过。旧截图需重做，旧自由文字检查历史保留但不作为新版有效记录。仍不能代替模型真实看图或 Word/WPS 验收。
+
+0.7.0：Word 增加段前分页、与后文同页、段内不拆页及孤行控制；创建和修改支持单节默认页眉页脚、真实 PAGE 域及打开时更新字段。支持工作区 PNG/JPEG、等比尺寸框、独立图注来源，核对嵌入图片摘要；可在已有正文段落后插图并核对无关正文。设置及图片结果绑定文件版本；HTML 中的页码缓存不代表 Word/WPS 最终分页；本机实测后续页 HTML 截图可能缺少重复页眉，默认页眉引用已核对，实际显示仍需 Word/WPS 验收。
+
+0.6.0：Word 增加唯一文字的段内加粗、斜体、字号和颜色，按字符范围回读核对，保护范围外文字。新增矩形表格列宽、首行重复表头、行跨页设置与行列增删；删除核对整行／列原文，增删列要求明确调整后的全部列宽。沿用现有工作副本、版本校验及正文差异核对，记录表格路径和实际文字范围。不支持合并单元格、嵌套表格、多行表头或复杂内嵌对象的文字拆分。
+
+0.5.0：Word 增加正文段落前后插入、按原文核对删除，以及整段对齐、字号、颜色、加粗、斜体和间距调整。编辑前绑定稳定段落，保存前对完整正文回读树核对目标与无关内容；change_check 记录实际段落路径、源与新版本摘要。此检查不覆盖全部 OOXML 部件，不承诺其他页面不重新分页；仍需新版本截图检查。
+
+0.4.0：Word 创建改用有序 blocks（paragraph/table），明确 A4 页边距、段落间距、列宽与重复表头，表格及证据说明按文档流排列。增加 Word 单页截图与逐页检查记录，复用版本、截图摘要校验和历史保留。页码明确基于 OfficeCLI HTML 渲染，不假报总页数或 Word/WPS 原生分页；无有效单页截图时拒绝保存证据。
+
+0.3.0：增加 Word 四工具与独立 Word 专家、技能。新文档使用 Title、Heading1、Heading2、Normal 样式和明确中文字体；创建与修改均经过结构验证后发布。复用插件内路径校验、文件锁、工作副本、版本摘要及成果记录；工作副本保留 .docx 扩展名。Word 成果记录放 dataDir/documents，PPT 原有记录路径和工具协议保持不变。Excel 尚未接入。
 
 0.1.1：表格默认 16pt、按内容估算行高，支持列宽与行高设置，放不下时要求精简或拆页；同文件调用有期限地等待而非立即报争锁；读取与检查只在工作副本运行；发现 Office 占用标记时明确提示关闭文件。不会自动修改已生成的 PPT，也不会清理旧的失败工作目录。
 
@@ -18,15 +32,15 @@
 
 0.2.4：创建前按最终表格行高检查与显式定位文本框的重叠，预留 6pt 间距。冲突时拒绝创建，返回具体页码、表格、文本框及下方文本最小 y；放不下时要求精简或拆页。仅检查明确尺寸的文本框，不检查装饰背景，不自动移动内容，不扫描或修改已有 PPT，仍需截图检查实际排版。
 
-Windows x64、macOS arm64 和 Linux x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面插件市场的“演示文稿”条目点击“添加”，按提示确认权限即可安装，无需手动选取 ZIP。已安装同版本或更新版本时不重复安装，旧版本可点击“更新”；安装后新建会话选择“演示文稿”。其他系统或架构暂不提供内置安装。
+Windows x64、macOS arm64 和 Linux x64 桌面构建会自动生成并携带 `office-work.zip`；在桌面插件市场的 office-work 条目点击“添加”，按提示确认权限即可安装，无需手动选取 ZIP。已安装同版本或更新版本时不重复安装，旧版本可点击“更新”；安装后新建会话选择“办公文档”，按任务使用演示助手或 Word 专家。其他系统或架构暂不提供内置安装。
 
 单独构建 ZIP 仍可使用 Windows PowerShell：`powershell -ExecutionPolicy Bypass -File plugins/office-work/scripts/build.ps1`。下载固定版本并核对 SHA256，统一输出 `apps/desktop/out/bundled-plugins/office-work.zip`，可手动导入。二进制不提交 Git。
 
 测试：先构建准备引擎，再 `node --test plugins/office-work/test/*.test.mjs`。真实引擎测试在临时目录运行，不修改用户材料。
 
-成果在当前工作区；内部当前成果记录在稳定 plugin.dataDir/presentations。仅允许工作区内路径，声明文件读写和 officecli 进程权限。该权限声明不是操作系统沙箱。异常退出遗留 `.office-work.lock` 时，先确认相应操作与引擎已退出，再人工移除对应锁；工具不会自动抢锁覆盖。
+成果在当前工作区；内部当前成果记录位于稳定 plugin.dataDir，PPT 使用 presentations，Word 使用 documents。仅允许工作区内路径，声明文件读写和 officecli 进程权限。该权限声明不是操作系统沙箱。异常退出遗留 `.office-work.lock` 时，先确认相应操作与引擎已退出，再人工移除对应锁；工具不会自动抢锁覆盖。
 
-设计参考 Orkas 的 PPT 工作流程与 OfficeCLI 适配经验，采用独立实现；相关许可见 THIRD-PARTY-NOTICES.md。
+设计参考 Orkas 的 PPT、Word 工作流程与 OfficeCLI 适配经验，采用独立实现；相关许可见 THIRD-PARTY-NOTICES.md。
 
 ## 平台与构建
 

@@ -1,10 +1,10 @@
 import {mkdtemp,rm,access} from 'node:fs/promises';
-import {dirname,join} from 'node:path';
+import {dirname,join,extname} from 'node:path';
 
 async function exists(file) {try{await access(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
 
 export async function withWorkingFile(file,run,context,operation,remove=rm) {
-  const temp=await mkdtemp(join(dirname(file),'.office-work-')), work=join(temp,'working.pptx');
+  const temp=await mkdtemp(join(dirname(file),'.office-work-')), work=join(temp,'working'+extname(file).toLowerCase());
   let closed=false, closeAttempts=0, closeError, result, failure;
   const close=async()=>{
     if (closed) return;
