@@ -54,7 +54,7 @@ test('explicit column widths replace grid-derived widths without accepting other
   assert.throws(()=>checkTableChange(before,after,op,(a,b)=>{assert.deepEqual(a,b);return true;}));
 });
 
-test('real Word table layout, row/column changes and inline formatting preserve surrounding content',async()=>{
+test('real OfficeCLI: Word table layout, row/column changes and inline formatting preserve surrounding content',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'office-word-advanced-'));
   const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
   const tools=Object.fromEntries(registerWordTools().map(t=>[t.name,t]));

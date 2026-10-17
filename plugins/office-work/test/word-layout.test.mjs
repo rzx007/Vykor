@@ -44,7 +44,7 @@ test('Word images are copied, hash-bound and fitted to the requested box',async(
     await assert.rejects(()=>prepareWordImages([{type:'picture',props:{src:'wrong.jpg'}}],context,join(cwd,'working.docx')),/扩展名/);
   }finally{await rm(cwd,{recursive:true,force:true});}
 });
-test('real Word pagination, default stories, PAGE fields and image edits preserve the source',async()=>{
+test('real OfficeCLI: Word pagination, default stories, PAGE fields and image edits preserve the source',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'office-word-layout-'));
   const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
   const tools=Object.fromEntries(registerWordTools().map(t=>[t.name,t]));
