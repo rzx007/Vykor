@@ -26,10 +26,11 @@ import {
 export function createDefaultModelService(
   ref?: DaemonSettingsRef,
 ): ModelService {
-  const storage = new CredentialStorage();
   const catalogService = createModelCatalogService();
   return {
     async list(): Promise<ModelProviderInfo[]> {
+      // Auth/provider mutations use separate instances; do not retain their old credentials across requests.
+      const storage = new CredentialStorage();
       const catalog = await catalogService.load();
       const result: ModelProviderInfo[] = [];
 
