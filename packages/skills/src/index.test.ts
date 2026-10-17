@@ -45,6 +45,21 @@ const mockedStat = vi.mocked(fs.stat);
 const mockedHomedir = vi.mocked(os.homedir);
 
 describe("SkillRegistry", () => {
+  it("keeps qualified plugin skills resolvable when a user skill wins the short name", () => {
+    const reg = new SkillRegistry();
+    const plugin = makeSkill({name:"officecli", source:"plugin", commandName:"office-work:officecli", path:"/plugin/SKILL.md"});
+    const user = makeSkill({name:"officecli", source:"user", path:"/user/SKILL.md"});
+    reg.register(plugin); reg.register(user);
+    expect(reg.resolve("officecli")).toBe(user);
+    expect(reg.resolve("office-work:officecli")).toBe(plugin);
+    expect(reg.resolvePath(plugin.path)).toBe(plugin);
+    expect(reg.getAll()).toContain(plugin);
+    expect(reg.getRunCandidates()).toContain(plugin);
+    expect(reg.modelVisibleList()).toContainEqual({name:"office-work:officecli",description:""});
+    reg.unregister("office-work:officecli");
+    expect(reg.resolve("office-work:officecli")).toBeUndefined();
+    expect(reg.resolve("officecli")).toBe(user);
+  });
   it("registers and retrieves a skill", () => {
     const reg = new SkillRegistry();
     const skill = makeSkill({ name: "test", description: "desc", content: "body", path: "/test.md" });

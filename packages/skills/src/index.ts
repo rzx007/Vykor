@@ -66,6 +66,7 @@ export interface CreateSkillRegistrySnapshotOptions {
 export class SkillRegistry {
   private skills = new Map<string, SkillDefinition>();
   private nonPluginSkills = new Map<string, SkillDefinition>();
+  private pluginCommands = new Map<string, SkillDefinition>();
 
   /**
    * 注册一个技能定义到注册表中。
@@ -73,6 +74,9 @@ export class SkillRegistry {
    */
   register(skill: SkillDefinition): void {
     this.skills.set(skill.name, skill);
+    if (skill.source === "plugin" && skill.commandName) {
+      this.pluginCommands.set(skill.commandName, skill);
+    }
     if (skill.source !== "plugin") this.nonPluginSkills.set(skill.name, skill);
   }
 
@@ -100,6 +104,8 @@ export class SkillRegistry {
   resolve(name: string): SkillDefinition | undefined {
     const trimmed = name.trim();
     if (!trimmed) return undefined;
+    const plugin = this.pluginCommands.get(trimmed);
+    if (plugin) return plugin;
     const skill =
       this.get(trimmed) ??
       this.get(trimmed.toLowerCase()) ??
@@ -109,8 +115,8 @@ export class SkillRegistry {
   }
 
   /**
-   * 根据已注册技能当前赢家的文件路径解析技能。
-   * 同名技能被覆盖后，旧路径不会保留为可解析目标。
+   * 根据当前技能或具有插件完整命令名的技能路径解析。
+   * 普通同名技能仍只保留赢家；插件可通过完整命令名明确选择。
    */
   resolvePath(pathValue: string): SkillDefinition | undefined {
     if (!pathValue.trim()) return undefined;
@@ -125,7 +131,7 @@ export class SkillRegistry {
    * @returns 只读的技能定义数组。
    */
   getAll(): readonly SkillDefinition[] {
-    return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...new Set([...this.skills.values(), ...this.pluginCommands.values()])].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** Keep the ordinary winner even when a plugin overrides its name. */
@@ -152,8 +158,17 @@ export class SkillRegistry {
    * @param name - 要注销的技能名称。
    */
   unregister(name: string): void {
+    const qualified = this.pluginCommands.get(name);
+    if (qualified) {
+      this.pluginCommands.delete(name);
+      if (this.skills.get(qualified.name) === qualified) this.skills.delete(qualified.name);
+      return;
+    }
     this.skills.delete(name);
     this.nonPluginSkills.delete(name);
+    for (const [command, skill] of this.pluginCommands) {
+      if (skill.name === name) this.pluginCommands.delete(command);
+    }
   }
 
   /**
@@ -174,7 +189,7 @@ export class SkillRegistry {
   modelVisibleList(): Array<{ name: string; description: string }> {
     return this.getAll()
       .filter((s) => s.disableModelInvocation !== true)
-      .map((s) => ({ name: s.name, description: s.description }));
+      .map((s) => ({ name: s.source === "plugin" && s.commandName ? s.commandName : s.name, description: s.description }));
   }
 }
 

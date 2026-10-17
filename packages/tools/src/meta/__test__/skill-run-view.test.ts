@@ -31,3 +31,15 @@ it("loads the captured Skill after registry replacement and checks its name/path
   expect((await skillTool.execute({ name: "foreign", path: definition.path }, context)).isError).toBe(true);
   expect((await skillTool.execute({ name: "private", path: "/replacement/SKILL.md" }, context)).isError).toBe(true);
 });
+
+it("resolves a qualified plugin Skill only inside its captured capability view", async () => {
+ const plugin = {...definition, commandName:"office-work:private"};
+ const capabilityView = view("owner", "owner");
+ const binding = capabilityView.skills.get("private")!;
+ const own = {...capabilityView, skills:new Map([["private", {...binding, definition:plugin}]])};
+ const result = await skillTool.execute({name:"office-work:private",path:plugin.path},{cwd:process.cwd(),capabilityView:own});
+ expect(result.isError).not.toBe(true);
+ expect(JSON.stringify(result)).toContain("private body");
+ const foreign={...own,pluginId:"other"};
+ expect((await skillTool.execute({name:"office-work:private"},{cwd:process.cwd(),capabilityView:foreign})).isError).toBe(true);
+});

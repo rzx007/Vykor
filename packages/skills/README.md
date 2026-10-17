@@ -81,6 +81,7 @@ Loaded skills are tagged with `source` where known:
 `SkillRegistry.resolve(name)` is the shared lookup path for skill invocation. It
 checks:
 
+0. Exact plugin `commandName` (for example `office-work:officecli`), retained even when a user/project skill wins the short name
 1. Exact `name`
 2. Lowercase `name`
 3. Title-case first character

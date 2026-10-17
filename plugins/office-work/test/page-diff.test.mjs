@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {deflateRawSync} from 'node:zlib';
-import {snapshotPptx, checkPageDiff} from '../tools/page-diff.mjs';
+import {snapshotPptx, checkPageDiff,checkObjectDiff} from '../tools/page-diff.mjs';
 
 // Small in-memory ZIPs isolate package changes from OfficeCLI serialization.
 function zip(parts, compressed=false) {
@@ -23,6 +23,18 @@ function deck() {return new Map([
   ['ppt/media/image1.png','shared image'],['docProps/core.xml','timestamp'],
 ]);}
 const snapshot=(parts,compressed=false)=>snapshotPptx(zip(parts,compressed));
+
+test('PPT requested objects do not authorize changes to their neighbors on the same slide',()=>{
+  const slide=(a,b)=>`<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="a"/></p:nvSpPr><p:txBody>${a}</p:txBody></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="b"/></p:nvSpPr><p:txBody>${b}</p:txBody></p:sp></p:spTree></p:cSld></p:sld>`;
+  const snap=(a,b)=>({pages:['ppt/slides/slide1.xml'],xml:new Map([['ppt/slides/slide1.xml',slide(a,b)]])});
+  const ops=[{path:'/slide[1]/shape[@id=2]',props:{text:'new'}}];
+  assert.equal(checkObjectDiff(snap('old','keep'),snap('new','keep'),ops).other_objects_unchanged,true);
+  assert.throws(()=>checkObjectDiff(snap('old','keep'),snap('new','wrong'),ops),/对象/);
+  assert.throws(()=>checkObjectDiff(snap('old','keep'),snap('new','keep'),[{path:'/slide[1]/shape[@id=9]'}]),/对象/);
+  assert.throws(()=>checkObjectDiff(snap('old','keep'),snap('new','keep'),[{path:'/slide[1]/paragraph[1]'}]),/路径/);
+  const whole=checkObjectDiff(snap('old','keep'),snap('new','wrong'),[{path:'/slide[1]'}]);
+  assert.equal(whole.other_objects_unchanged,false);assert.deepEqual(whole.whole_slide_pages,[1]);
+});
 
 test('page numbers follow presentation order, not slide filenames; repacking is ignored',()=>{
   const before=deck(), after=new Map(before);after.set('ppt/slides/slide1.xml','changed style');after.set('docProps/core.xml','new timestamp');

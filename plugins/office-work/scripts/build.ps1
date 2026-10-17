@@ -2,6 +2,8 @@ param([switch]$PrepareOnly)
 $ErrorActionPreference = 'Stop'
 $pluginRoot = Split-Path $PSScriptRoot -Parent
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $pluginRoot '../..'))
+& node (Join-Path $PSScriptRoot 'verify-official-skills.mjs') $pluginRoot
+if ($LASTEXITCODE -ne 0) { throw 'Official skill integrity verification failed; archive not rebuilt' }
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'packages/services/src/office/office-engine.mjs') -Destination (Join-Path $pluginRoot 'tools/office-engine.mjs') -Force
 $engineDirectory = Join-Path $pluginRoot 'bin'
 $enginePath = Join-Path $engineDirectory 'officecli-win-x64.exe'
@@ -35,4 +37,6 @@ try {
     }
   }
 } finally { $archive.Dispose(); $stream.Dispose() }
+& node (Join-Path $PSScriptRoot 'verify-official-skills.mjs') $pluginRoot $zipPath
+if ($LASTEXITCODE -ne 0) { throw 'Packaged official skill verification failed; do not distribute this archive' }
 Write-Output $zipPath

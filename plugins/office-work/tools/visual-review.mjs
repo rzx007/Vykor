@@ -48,7 +48,7 @@ export async function recordVisualReview(source,input,context) {
       catch {throw new Error('找不到有效截图记录，请重新生成该页截图。');}
       if(preview.preview_id!==item.preview_id||preview.path!==source||preview.sha256!==sha256||preview.renderer!=='officecli-html'||
         !Number.isSafeInteger(preview.page)||preview.page<1||preview.page>200||
-        (word?(preview.document_kind!=='word'||preview.page_number_basis!=='officecli-html'||preview.capture_method!=='word-paginated-strip-v2'||!preview.expected_elements):(!Number.isSafeInteger(preview.page_count)||preview.page>preview.page_count))) throw new Error('截图不属于当前文件版本或仍为旧版分页截图，请重新生成后检查。');
+        (word?(preview.document_kind!=='word'||preview.page_number_basis!=='officecli-html'||!['word-paginated-strip-v2','word-grid-page-v3'].includes(preview.capture_method)||!preview.expected_elements):(!Number.isSafeInteger(preview.page_count)||preview.page>preview.page_count))) throw new Error('截图不属于当前文件版本或仍为旧版分页截图，请重新生成后检查。');
       const imagePath=join(context.plugin.dataDir,'previews',`${sha256}-page-${preview.page}-${item.preview_id}.png`);
       if(hash(await readFile(imagePath))!==preview.image_sha256) throw new Error('截图内容已变化，请重新截图检查。');
       if(checked.has(preview.page)) throw new Error('同一页不能重复提交检查结论。');

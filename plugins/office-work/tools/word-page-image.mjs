@@ -27,23 +27,15 @@ function decode(bytes) {
   return {width,height,channels,stride,raw,header};
 }
 function paeth(a,b,c){const p=a+b-c,pa=Math.abs(p-a),pb=Math.abs(p-b),pc=Math.abs(p-c);return pa<=pb&&pa<=pc?a:pb<=pc?b:c;}
-// OfficeCLI 1.0.139: at a 850px capture width the unscaled 794px A4 page
-// is centered at x=28, with 20px vertical padding and 40px wrapper gaps.
-// Fail closed if that pinned renderer's geometry changes.
-// Reading PNG rows here only extracts the existing pixels; it does not reflow text.
+// The official contact-sheet renderer paginates before composing the grid,
+// preserving inherited headers/footers. Locate its complete white A4 boxes
+// rather than depending on viewport size, fixed offsets or screenshot scaling.
 export function extractWordPage(bytes,page) {
-  const png=decode(bytes),pageWidth=794,pageHeight=1123,nativeHeight=841.9*4/3;
-  if(png.width===pageWidth&&png.height===pageHeight) {
-    if(page!==1)throw new Error('截图页码超出实际渲染范围，未保存检查证据。');
-    return {bytes,rendered_pages:1};
-  }
-  const count=Math.round((png.height-40)/(nativeHeight+40));
-  if(png.width!==850||count<1||Math.abs(png.height-(40+count*(nativeHeight+40)))>2)throw invalid();
-  if(page>count)throw new Error('截图页码超出实际渲染范围，未保存检查证据。');
-  const left=28,top=Math.round(20+(page-1)*(nativeHeight+40));
-  if(left+pageWidth>png.width||top+pageHeight>png.height)throw invalid();
-  const rowBytes=pageWidth*png.channels,out=Buffer.alloc((rowBytes+1)*pageHeight);let previous=Buffer.alloc(png.stride);
-  for(let y=0;y<top+pageHeight;y++) {
+  const png=decode(bytes),rows=[],white=(x,y)=>{
+    const i=x*png.channels,r=rows[y];return r[i]===255&&r[i+1]===255&&r[i+2]===255;
+  };
+  let previous=Buffer.alloc(png.stride);
+  for(let y=0;y<png.height;y++) {
     const offset=y*(png.stride+1),filter=png.raw[offset],row=png.raw.subarray(offset+1,offset+1+png.stride);
     if(filter>4)throw invalid();
     for(let x=0;x<row.length;x++) {
@@ -51,9 +43,37 @@ export function extractWordPage(bytes,page) {
       const predictor=filter===0?0:filter===1?a:filter===2?b:filter===3?Math.floor((a+b)/2):paeth(a,b,c);
       row[x]=(row[x]+predictor)&255;
     }
-    if(y>=top)row.copy(out,(y-top)*(rowBytes+1)+1,left*png.channels,(left+pageWidth)*png.channels);
-    previous=row;
+    rows.push(row);previous=row;
   }
-  const header=Buffer.from(png.header);header.writeUInt32BE(pageWidth);header.writeUInt32BE(pageHeight,4);
-  return {bytes:Buffer.concat([signature,chunk('IHDR',header),chunk('IDAT',deflateSync(out)),chunk('IEND',Buffer.alloc(0))]),rendered_pages:count};
+  const boxes=[];
+  for(let y=0;y<png.height;) {
+    const columns=[];
+    for(let x=0;x<png.width;) {
+      if(!white(x,y)){x++;continue;}
+      const left=x;while(x<png.width&&white(x,y))x++;
+      if(x-left>=100)columns.push({left,width:x-left});
+    }
+    if(!columns.length){y++;continue;}
+    let bottom=y;
+    for(const column of columns) {
+      // Measure below antialiased corners. The final grid row may be centered
+      // differently, so locate each row independently instead of fixed columns.
+      const middle=column.left+Math.floor(column.width/2),edgeY=Math.min(png.height-1,y+5);
+      let left=middle,right=middle;
+      while(left>0&&white(left-1,edgeY))left--;while(right<png.width&&white(right,edgeY))right++;
+      let end=y;while(end<png.height&&white(left+5,end))end++;
+      const height=end-y,width=right-left;
+      if(height<100||Math.abs(width/height-794/1123)>0.005)throw invalid();
+      boxes.push({left,top:y,width,height});bottom=Math.max(bottom,end);
+    }
+    y=bottom+1;
+  }
+  boxes.sort((a,b)=>a.top-b.top||a.left-b.left);
+  if(!boxes.length)throw invalid();
+  const box=boxes[page-1];
+  if(!box)throw new Error('截图页码超出实际渲染范围，未保存检查证据。');
+  const rowBytes=box.width*png.channels,out=Buffer.alloc((rowBytes+1)*box.height);
+  for(let y=0;y<box.height;y++)rows[box.top+y].copy(out,y*(rowBytes+1)+1,box.left*png.channels,(box.left+box.width)*png.channels);
+  const header=Buffer.from(png.header);header.writeUInt32BE(box.width);header.writeUInt32BE(box.height,4);
+  return {bytes:Buffer.concat([signature,chunk('IHDR',header),chunk('IDAT',deflateSync(out)),chunk('IEND',Buffer.alloc(0))]),rendered_pages:boxes.length};
 }

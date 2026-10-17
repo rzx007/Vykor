@@ -1,0 +1,33 @@
+{
+  "repository": "https://github.com/iOfficeAI/OfficeCLI",
+  "ref": "v1.0.139",
+  "license": "Apache-2.0",
+  "files": [
+    {
+      "path": "skills/officecli/SKILL.md",
+      "source_path": "SKILL.md",
+      "git_blob_sha": "6c299f334a2e004ff5dda05641e75f7ec4453f37",
+      "sha256": "c950d285ce60021712b4753fb2d9f592308d5622bab776229061dfecb1ce55d4",
+      "materialized_link": {
+        "source_path": "skills/officecli/SKILL.md",
+        "target": "../../SKILL.md",
+        "git_blob_sha": "4215faefef7c42813299933e45201ad9c2301681"
+      }
+    },
+    {
+      "path": "skills/officecli-docx/SKILL.md",
+      "git_blob_sha": "86b91e1da309ff58e108ba111241edebdfbb3a61",
+      "sha256": "1da56ed53a308222ab2516a2974ae98c6703b7d504fa5158348c39a18e85a4f1"
+    },
+    {
+      "path": "skills/officecli-pptx/SKILL.md",
+      "git_blob_sha": "a33eac5587b94b8cc53c4dad9ef44e0177471981",
+      "sha256": "0d53192751d5770984f16f3c34f9923377651555c667150d7f96e16e8c9757b3"
+    },
+    {
+      "path": "skills/officecli-xlsx/SKILL.md",
+      "git_blob_sha": "0cc7d9b0f0b324623cd6b651fb53e8801b8a3d1e",
+      "sha256": "5cd79d2c7398525acb9ffb431f5ff52f124a796f3b1a061f1f9f54f99bd367f3"
+    }
+  ]
+}
