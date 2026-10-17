@@ -79,9 +79,12 @@ export async function createOfficeRunner(context) {
 
 export function createRunner(binary, context) {
   return async (args, operations, closing = false) => {
+    const commandLimit = Number.isFinite(context.commandTimeoutMs)
+      ? Math.max(1000, Math.min(60000, context.commandTimeoutMs))
+      : 20000;
     const timeout = closing
       ? Math.min(4000, context.deadline - Date.now() - 500)
-      : Math.min(20000, context.deadline - Date.now() - 14000);
+      : Math.min(commandLimit, context.deadline - Date.now() - 14000);
     if (timeout <= 0 || (!closing && context.signal.aborted))
       throw new Error("Office 操作已取消或超时。");
     return new Promise((resolveResult, reject) => {

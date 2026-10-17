@@ -8,6 +8,8 @@ export interface OfficeRunnerContext {
   deadline: number;
   binaryPath?: string;
   maxOutputBytes?: number;
+  /** Optional per-command limit, bounded to 1–60 seconds; default 20 seconds. */
+  commandTimeoutMs?: number;
 }
 export function createOfficeRunner(
   context: OfficeRunnerContext,

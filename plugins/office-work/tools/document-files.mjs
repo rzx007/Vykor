@@ -64,7 +64,7 @@ export async function filePath(
 const recordPath = (context, file) =>
   join(
     context.plugin.dataDir,
-    extname(file).toLowerCase() === ".docx" ? "documents" : "presentations",
+    extname(file).toLowerCase() === ".docx" ? "documents" : extname(file).toLowerCase() === ".xlsx" ? "spreadsheets" : "presentations",
     `${hash(file.toLowerCase())}.json`,
   );
 export async function currentReceipt(context, file, sha256) {

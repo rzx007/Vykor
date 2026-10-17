@@ -3,11 +3,15 @@
   "id": "vykor.office-work",
   "name": "office-work",
   "displayName": "办公文档",
-  "version": "0.7.2",
-  "description": "创建、读取和局部修改 DOCX 报告与 PPTX，支持表格、HTML 截图和版本绑定检查记录；复杂排版需在 Office/WPS 中验收。",
+  "version": "0.8.1",
+  "description": "创建、读取和局部修改 DOCX、PPTX 与普通 XLSX 报表，支持公式检查、区域截图和版本绑定检查记录。",
   "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3QgeD0iOCIgeT0iMTAiIHdpZHRoPSI0OCIgaGVpZ2h0PSIzNCIgcng9IjciIGZpbGw9IiNlZmY2ZmYiIHN0cm9rZT0iIzI1NjNlYiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTMyIDQ1djltLTExIDMgMTEtNSAxMSA1IiBmaWxsPSJub25lIiBzdHJva2U9IiMyNTYzZWIiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHBhdGggZD0iTTE5IDM0di03bTkgN1YyMG05IDE0VjI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMzYjgyZjYiIHN0cm9rZS13aWR0aD0iNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0ibTQzIDE4IDUgNC01IDQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2Y1OWUwYiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=",
   "license": "MIT",
   "prompts": [
+    {
+      "title": "制作 Excel 报表",
+      "prompt": "请根据我提供的资料生成可编辑 XLSX 报表，保留来源、单位和公式，保存到新的 office-work/ 输出目录；检查公式与结构，并实际查看需要的区域后交付。"
+    },
     {
       "title": "把报告变成 Word",
       "prompt": "请读取我指定的调研报告，生成可编辑 DOCX，使用清楚的章节标题，保留来源与证据限制。保存到新的 office-work/ 输出目录，完成后检查结构并交付实际路径。"

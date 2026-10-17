@@ -1,8 +1,12 @@
 # office-work：办公文档
 
-独立原生插件，支持 Windows x64、macOS arm64 和 Linux x64（后两者待实机验收）。PPT 工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview；Word 工具：OfficeWordCreate、OfficeWordRead、OfficeWordEdit、OfficeWordCheck、OfficeWordPreview、OfficeWordReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
+独立原生插件，支持 Windows x64、macOS arm64 和 Linux x64（后两者待实机验收）。PPT 工具：OfficePptCreate、OfficePptRead、OfficePptEdit、OfficePptCheck、OfficePptPreview、OfficePptReview；Excel 工具：OfficeExcelCreate、OfficeExcelRead、OfficeExcelEdit、OfficeExcelCheck、OfficeExcelPreview、OfficeExcelReview；Word 工具：OfficeWordCreate、OfficeWordRead、OfficeWordEdit、OfficeWordCheck、OfficeWordPreview、OfficeWordReview。OfficeCLI v1.0.139 随 ZIP 打包，不自动安装依赖。
 
-PPT 支持可编辑文字、基础形状、表格及工作区 PNG/JPEG，修改支持元素文字与基础样式。Word 支持 A4 报告、命名标题样式、有序正文与表格，修改支持正文或单元格内段落唯一字面替换和整段格式，以及正文段落增删，并回读核对修改范围。还支持普通段落唯一文字的局部格式，以及矩形表格列宽、表头、跨页和行列增删。用户已有文件另存；插件成果以摘要检查后继续修改。不包含 Excel/PDF、旧格式、复杂模板或自动修复循环；Word 不做复杂表格重构、浮动图片、修订、批注、任意字段或复杂页眉页脚修改；预览仅支持 A4 纵向 HTML 渲染页。结构验证不等于 Office/WPS 保真或视觉验收。
+PPT 支持可编辑文字、基础形状、表格及工作区 PNG/JPEG，修改支持元素文字与基础样式。Word 支持 A4 报告、命名标题样式、有序正文与表格，修改支持正文或单元格内段落唯一字面替换和整段格式，以及正文段落增删，并回读核对修改范围。还支持普通段落唯一文字的局部格式，以及矩形表格列宽、表头、跨页和行列增删。用户已有文件另存；插件成果以摘要检查后继续修改。不包含 PDF、旧格式、复杂模板或自动修复循环；Word 不做复杂表格重构、浮动图片、修订、批注、任意字段或复杂页眉页脚修改；预览仅支持 A4 纵向 HTML 渲染页。结构验证不等于 Office/WPS 保真或视觉验收。
+
+0.8.1：PPT／Word／Excel 共用锁增加本机进程编号和随机操作标识，工作副本登记所属文件与持有者；后续调用只在确认原进程退出后恢复。先关闭该操作登记的副本，再清理目录和回收锁；并发恢复先串行核对锁身份，避免删除新操作的锁。清理失败后已释放锁的登记副本也可在重启后恢复。不按文件年龄删除，不强杀进程；活跃或无法确认的持有者、其他主机、旧版空锁、缺少登记的临时目录及异常恢复标记均保留并提示。不会扫描删除用户成果或历史检查记录。
+
+0.8.0：增加普通 XLSX 报表的多工作表创建、指定区域读取、单元格局部修改、基础格式／列宽／冻结／筛选、公式缓存与预测检查，以及区域截图和独立检查快照。用户文件另存，修改核对范围外单元格内容与公式；复杂工作簿、行列增删、图表与宏暂不编辑。列宽使用 set，避免误插列。区域截图实测约31秒，仅此调用使用公共执行器可选45秒命令期限，仍受宿主总期限及清理预留限制，默认命令期限不变。公式检查不等于 Excel/WPS 重算，发现缓存过期或无法计算时明确报告。
 
 0.7.2：Word 截图预留页面外边距和滚动条宽度，防止响应式缩放让首张裁切带入灰边或下一页；截图标记升级为 word-paginated-strip-v2，旧截图需重新生成。每次视觉检查返回独立、不可覆盖的 JSON 快照；当前结果单独原子更新，已有历史文件保持原样。
 
@@ -16,7 +20,7 @@ PPT 支持可编辑文字、基础形状、表格及工作区 PNG/JPEG，修改�
 
 0.4.0：Word 创建改用有序 blocks（paragraph/table），明确 A4 页边距、段落间距、列宽与重复表头，表格及证据说明按文档流排列。增加 Word 单页截图与逐页检查记录，复用版本、截图摘要校验和历史保留。页码明确基于 OfficeCLI HTML 渲染，不假报总页数或 Word/WPS 原生分页；无有效单页截图时拒绝保存证据。
 
-0.3.0：增加 Word 四工具与独立 Word 专家、技能。新文档使用 Title、Heading1、Heading2、Normal 样式和明确中文字体；创建与修改均经过结构验证后发布。复用插件内路径校验、文件锁、工作副本、版本摘要及成果记录；工作副本保留 .docx 扩展名。Word 成果记录放 dataDir/documents，PPT 原有记录路径和工具协议保持不变。Excel 尚未接入。
+0.3.0：增加 Word 四工具与独立 Word 专家、技能。新文档使用 Title、Heading1、Heading2、Normal 样式和明确中文字体；创建与修改均经过结构验证后发布。复用插件内路径校验、文件锁、工作副本、版本摘要及成果记录；工作副本保留 .docx 扩展名。Word 成果记录放 dataDir/documents，PPT 原有记录路径和工具协议保持不变。Excel 见 0.8.0 范围。
 
 0.1.1：表格默认 16pt、按内容估算行高，支持列宽与行高设置，放不下时要求精简或拆页；同文件调用有期限地等待而非立即报争锁；读取与检查只在工作副本运行；发现 Office 占用标记时明确提示关闭文件。不会自动修改已生成的 PPT，也不会清理旧的失败工作目录。
 

@@ -7,7 +7,6 @@ import {
   GitBranchPlus,
   PencilLine,
   ShieldCheck,
-  X,
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -148,7 +147,7 @@ function UserMessageBlock({
       <Message align="end" className="group/msg">
         <MessageContent className="items-end">
           <form
-            className="flex w-full max-w-[78%] flex-col items-end gap-2"
+            className="flex min-h-36 w-full min-w-0 flex-col gap-2 rounded-2xl bg-muted pb-3"
             onSubmit={(event) => {
               event.preventDefault()
               if (!canSubmitEdit) return
@@ -183,20 +182,20 @@ function UserMessageBlock({
                 setEditing(false)
                 userActions.onEdit(draft)
               }}
-              className="text-chat min-h-20 w-full resize-y rounded-xl bg-user-message/70 px-4 py-3 whitespace-pre-wrap text-foreground outline-none"
+              className="text-chat w-full resize-y bg-transparent px-4 py-3 whitespace-pre-wrap text-foreground outline-none"
             />
-            <div className="flex items-center gap-1">
-              <MessageActionButton label="取消编辑" onClick={() => setEditing(false)}>
-                <X />
-              </MessageActionButton>
+            <div className="mt-auto flex shrink-0 items-center justify-end gap-2 px-3">
+              <Button type="button" variant="outline" size="sm" shape="pill" aria-label="取消编辑" onClick={() => setEditing(false)}>
+                取消
+              </Button>
               <Button
                 type="submit"
                 size="sm"
+                shape="pill"
                 disabled={!canSubmitEdit}
                 className="bg-foreground text-background hover:bg-foreground/85"
               >
-                <Check data-icon="inline-start" />
-                重新生成
+                发送
               </Button>
             </div>
           </form>

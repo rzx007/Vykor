@@ -1,5 +1,6 @@
 import {mkdtemp,rm,access} from 'node:fs/promises';
 import {dirname,join,extname} from 'node:path';
+import {markWorkingFile} from './lock-recovery.mjs';
 
 async function exists(file) {try{await access(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
 
@@ -16,7 +17,7 @@ export async function withWorkingFile(file,run,context,operation,remove=rm) {
     }
     throw closeError||new Error('关闭工作副本的剩余时间不足。');
   };
-  try {result=await operation(work,close);}catch(error){failure=error;}
+  try {await markWorkingFile(file,temp);result=await operation(work,close);}catch(error){failure=error;}
   try {await close();}
   catch(error) {
     const primary=failure?`${failure.message} `:'';

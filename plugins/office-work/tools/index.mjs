@@ -1,3 +1,4 @@
+import { registerExcelTools } from './excel.mjs';
 import { exists, under, filePath, known, receipt } from './document-files.mjs';
 import { registerWordTools } from './word.mjs';
 import { readFile, realpath, copyFile, rename, link, stat } from 'node:fs/promises';
@@ -164,5 +165,5 @@ export function registerTools() {
       return reply;
     }
     catch(error) { return {...json(operationError(error)),isError:true,failureKind:'precondition'}; }
-  }})).concat(registerWordTools());
+  }})).concat(registerWordTools(),registerExcelTools());
 }

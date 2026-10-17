@@ -52,6 +52,31 @@ describe("MessageAttachment", () => {
       .IS_REACT_ACT_ENVIRONMENT
   })
 
+  it("keeps a short message editor full-width with visible cancel and send actions", async () => {
+    const onEdit = vi.fn()
+    const message: DesktopSessionMessage = {
+      id: "message-1", sessionId: "session-1", seq: 1, role: "user", inputId: "input-1",
+      metadata: {}, createdAt: 1, updatedAt: 1,
+    }
+    await act(async () => root.render(createElement(MessageBlock, {
+      message, parts: [{ id: "text-1", sessionId: "session-1", messageId: "message-1", seq: 0,
+        type: "text", text: "好", status: "completed", metadata: {}, createdAt: 1, updatedAt: 1 }],
+      inputItems: [{ type: "text", text: "好" }], streaming: false,
+      userActions: { canEdit: true, onEdit }, onOpenFile: () => {}, canOpenReview: false,
+      onOpenReview: () => {}, onOpenTerminal: () => {},
+    })))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="重新编辑"]')!.click())
+    const form = container.querySelector("form")!
+    expect(form.className).toContain("w-full")
+    expect(form.className).not.toContain("max-w-[78%]")
+    expect(form.className).not.toContain("items-end")
+    expect(container.querySelector('[role="textbox"]')?.textContent).toBe("好")
+    expect(container.querySelector('[aria-label="取消编辑"]')?.textContent).toBe("取消")
+    expect(container.querySelector('button[type="submit"]')?.textContent).toBe("发送")
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+    expect(onEdit).toHaveBeenCalledWith({ version: 1, items: [{ type: "text", text: "好" }] })
+  })
+
   it("loads safe bitmap previews and revokes each Blob URL on asset changes and unmount", async () => {
     await act(async () => root.render(createElement(MessageAttachment, { part: imagePart("a") })))
 
@@ -207,7 +232,7 @@ describe("MessageAttachment", () => {
 
     await act(async () =>
       [...container.querySelectorAll("button")]
-        .find((button) => button.textContent?.includes("重新生成"))
+        .find((button) => button.textContent?.includes("发送"))
         ?.click()
     )
     expect(onEdit).toHaveBeenCalledWith({ version: 1, items: [] })
