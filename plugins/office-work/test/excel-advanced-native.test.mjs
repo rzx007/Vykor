@@ -28,7 +28,7 @@ async function fixture() {
     },
   };
 }
-test("native API keeps chart bindings through data and title edits", async () => {
+test("real OfficeCLI: native API keeps chart bindings through data and title edits", async () => {
   const { cwd, call } = await fixture();
   try {
     let r = await call("Create", {
@@ -85,7 +85,7 @@ test("native API keeps chart bindings through data and title edits", async () =>
     await rm(cwd, { recursive: true, force: true });
   }
 });
-test("native API verifies row and column index mapping and cross-sheet reference changes", async () => {
+test("real OfficeCLI: native API verifies row and column index mapping and cross-sheet reference changes", async () => {
   const { cwd, call } = await fixture();
   try {
     let r = await call("Create", {

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { registerTools } from "../tools/index.mjs";
 import { hash } from "../tools/engine.mjs";
-test("real Excel lifecycle preserves originals, formulas and immutable region reviews", async () => {
+test("real OfficeCLI: Excel lifecycle preserves originals, formulas and immutable region reviews", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "office-excel-080-"));
   const base = {
     cwd,
