@@ -52,7 +52,7 @@ import {
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
 const RECOVERY_TOOL_TURNS = 2;
-const TOOL_CORRECTION_LIMITS = { invalid_input: 3, precondition: 5 } as const;
+const TOOL_CORRECTION_LIMITS = { invalid_input: 8, precondition: 5 } as const;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =

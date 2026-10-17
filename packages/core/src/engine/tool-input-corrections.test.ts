@@ -30,7 +30,7 @@ function scenario(validTurns: number[] = [], companion?: "completed" | "unknown"
   const client = {
     async *streamMessage(): AsyncIterable<StreamEvent> {
       const attempt = ++requests;
-      if (attempt > (validTurns.length ? 6 : 3)) {
+      if (attempt > (validTurns.length ? 6 : 8)) {
         yield { type: "text_delta", delta: validTurns.length ? "finished" : "<｜DSML｜invoke name=\"Shell\">unexecuted</｜DSML｜invoke>" };
         yield { type: "complete", stopReason: "end_turn" };
         return;
@@ -93,9 +93,10 @@ describe("terminal input correction failures", () => {
   });
 
   it("does not reset parameter correction allowance by switching tools or failure categories", async () => {
-    const fixture = await corrections(["invalid_input", "precondition", "invalid_input", "precondition", "invalid_input"]);
+    const fixture = await corrections(["invalid_input", "precondition", "invalid_input", "precondition", "invalid_input",
+      "precondition", "invalid_input", "invalid_input", "invalid_input", "invalid_input", "invalid_input"]);
     expect(fixture.error).toMatchObject({ name: "ToolInputCorrectionsExceeded" });
-    expect(fixture.requests).toBe(5);
+    expect(fixture.requests).toBe(11);
   });
 
   it("allows format correction separately but bounds alternating failure categories", async () => {
@@ -134,14 +135,14 @@ describe("terminal input correction failures", () => {
       expect(failure).toMatchObject({ name: "ToolInputCorrectionsExceeded",
         message: expect.stringContaining("修正调用参数格式") });
       expect(String((failure as Error).message)).not.toContain("SENSITIVE-RESULT-BODY");
-      expect(fixture.requests()).toBe(3);
-      expect(fixture.executions).toEqual([1, 2, 3]);
+      expect(fixture.requests()).toBe(8);
+      expect(fixture.executions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       const ends = events.filter(event => event.type === "tool_use_end");
-      expect(ends.filter(event => event.toolUseId.startsWith("write-"))).toHaveLength(3);
+      expect(ends.filter(event => event.toolUseId.startsWith("write-"))).toHaveLength(8);
       expect(ends.filter(event => event.toolUseId.startsWith("write-")).every(event =>
         event.result.executionState === "not_started")).toBe(true);
-      if (companion) expect(ends.at(-1)).toMatchObject({ toolUseId: "companion", result: { executionState: companion } });
-      expect(fixture.engine.getHistory().filter(message => message.type === "tool_result")).toHaveLength(companion ? 4 : 3);
+      if (companion) expect(ends.find(event => event.toolUseId === "companion")).toMatchObject({ toolUseId: "companion", result: { executionState: companion } });
+      expect(fixture.engine.getHistory().filter(message => message.type === "tool_result")).toHaveLength(companion ? 9 : 8);
       expect(events.some(event => event.type === "text_delta" && event.delta.includes("DSML"))).toBe(false);
     },
   );

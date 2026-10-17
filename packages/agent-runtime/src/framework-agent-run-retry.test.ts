@@ -32,7 +32,7 @@ function runWith(script: StreamEvent[], usage: { inputTokens: number; outputToke
 
 describe("FrameworkAgentRun model retry projection", () => {
   it.each([
-    { kind: "invalid_input" as const, limit: 3, errorName: "ToolInputCorrectionsExceeded", hint: "修正参数格式。", sameInput: false, maxTurns: 20 },
+    { kind: "invalid_input" as const, limit: 8, errorName: "ToolInputCorrectionsExceeded", hint: "修正参数格式。", sameInput: false, maxTurns: 20 },
     { kind: "precondition" as const, limit: 5, errorName: "ToolPreconditionsExceeded", hint: "确认当前目标内容。", sameInput: false, maxTurns: 20 },
     { kind: "precondition" as const, limit: 4, errorName: "ToolRecoveryExceeded", hint: "恢复额度", sameInput: true, maxTurns: 20 },
     { kind: "precondition" as const, limit: 2, errorName: "MaxTurnsExceeded", hint: "Exceeded maximum agentic turns", sameInput: true, maxTurns: 2 },

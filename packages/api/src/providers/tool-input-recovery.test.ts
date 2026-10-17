@@ -180,13 +180,13 @@ describe("native tool input recovery", () => {
     });
   });
 
-  it.each([3, 50])("fails after two corrections without requesting model finalization (maxTurns=%s)", async (maxTurns) => {
+  it.each([10, 50])("fails once the parameter correction allowance is exhausted without requesting model finalization (maxTurns=%s)", async (maxTurns) => {
     let toolRequests = 0;
     let finalRequests = 0;
     const client = openAIClient((params) => {
       if (!params.tools?.length) { finalRequests++; return []; }
       toolRequests++;
-      if (toolRequests > 5) return []; // Bound the regression on the old implementation.
+      if (toolRequests > 12) return []; // Bound the regression on the old implementation.
       return [{ name: "Write", arguments: `broken ${toolRequests}` }];
     });
     const registry = new ToolRegistry();
@@ -201,9 +201,9 @@ describe("native tool input recovery", () => {
       for await (const event of engine.submitMessage("Build the page")) events.push(event);
     };
     await expect(consume()).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
-    expect(toolRequests).toBe(3);
+    expect(toolRequests).toBe(8);
     expect(finalRequests).toBe(0);
-    expect(events.filter((event) => event.type === "tool_use_end")).toHaveLength(3);
+    expect(events.filter((event) => event.type === "tool_use_end")).toHaveLength(8);
   });
 
   it("keeps a valid sibling tool call when another call has malformed arguments", async () => {
@@ -298,7 +298,7 @@ describe("native tool input recovery", () => {
       { trajectoryTrackerFactory: false },
     );
     await expect(collect(engine.submitMessage("Write"))).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
-    expect(requests).toBe(3);
+    expect(requests).toBe(8);
     expect(executions).toBe(0);
   });
 });
