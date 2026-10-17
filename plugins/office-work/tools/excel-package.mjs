@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 // Bounded read-only XLSX package inspection. Never rewrites XML or ZIP entries.
 export function workbookParts(bytes) {
@@ -28,6 +29,7 @@ export function workbookParts(bytes) {
   let at = start,
     total = 0;
   const out = new Map();
+  out.rawHashes = new Map();
   for (let i = 0; i < count; i++) {
     if (at + 46 > end || bytes.readUInt32LE(at) !== 0x02014b50) fail();
     const flags = bytes.readUInt16LE(at + 8),
@@ -72,26 +74,11 @@ export function workbookParts(bytes) {
           : inflateRawSync(packed, { maxOutputLength: Math.max(1, raw) });
     if (data.length !== raw) fail();
     out.set(name, data.toString("utf8"));
+    out.rawHashes.set(name, createHash("sha256").update(data).digest("hex"));
     at = next;
   }
   if (at !== end || !out.has("xl/workbook.xml")) fail();
   return out;
-}
-export function simpleWorkbook(parts) {
-  for (const [name, xml] of parts) {
-    if (
-      /xl\/(?:vba|externalLinks|connections|pivot|drawings|charts|tables|comments|threadedComments|richData|slicer|embeddings|queryTables)|_xmlsignatures/i.test(
-        name,
-      ) ||
-      (/\.xml$/i.test(name) &&
-        /<(?:\w+:)?(?:mergeCells|conditionalFormatting|dataValidations|sheetProtection|workbookProtection|extLst)\b/.test(
-          xml,
-        ))
-    )
-      throw new Error(
-        "首版仅编辑普通单元格工作簿；检测到合并、保护、图表、外链或其他复杂结构，请先简化副本。",
-      );
-  }
 }
 const unescape = (s) =>
   s.replace(/&#(x[0-9a-f]+|\d+);|&(amp|lt|gt|quot|apos);/gi, (_, num, key) =>

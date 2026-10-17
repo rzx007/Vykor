@@ -1,3 +1,4 @@
+import { workbookSupport } from "../tools/excel-preservation.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -111,17 +112,13 @@ test("Excel audit allows dependent formula results, rejects unrelated values/for
   ]);
   assert.equal(formulaReport(unknown).unverified_cells.length, 1);
 });
-import {
-  workbookParts,
-  simpleWorkbook,
-  verifyWrittenCells,
-} from "../tools/excel-package.mjs";
+import { workbookParts, verifyWrittenCells } from "../tools/excel-package.mjs";
 import { verifyCellFormats } from "../tools/excel-content.mjs";
 test("Excel raw readback distinguishes text identifiers, formula content and unsupported structures", () => {
   assert.throws(() => workbookParts(Buffer.alloc(40)), /文件包/);
   assert.throws(
-    () => simpleWorkbook(new Map([["xl/tables/table1.xml", ""]])),
-    /复杂/,
+    () => workbookSupport(new Map([["xl/vbaProject.bin", ""]])),
+    /宏/,
   );
   const parts = new Map([
     [

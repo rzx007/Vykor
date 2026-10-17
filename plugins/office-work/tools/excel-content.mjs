@@ -18,7 +18,9 @@ export function sheetName(value) {
     value.startsWith("'") ||
     value.endsWith("'")
   )
-    throw new Error("工作表名须为 1–31 字符，不能含路径或 Excel 禁用字符；首版另不支持含 ! 的表名。");
+    throw new Error(
+      "工作表名须为 1–31 字符，不能含路径或 Excel 禁用字符；首版另不支持含 ! 的表名。",
+    );
   return value;
 }
 const colNumber = (s) =>
@@ -132,7 +134,12 @@ export function buildWorkbook(input) {
     ops = [];
   let cells = 0;
   for (const [i, s] of sheets.entries()) {
-    only(s, ["name", "rows", "columns", "freeze", "filter"]);
+    only(s, ["name", "rows", "columns", "freeze", "filter", "charts"]);
+    if (
+      s.charts !== undefined &&
+      (!Array.isArray(s.charts) || s.charts.length > 4)
+    )
+      throw new Error("每张表最多4张图表。");
     sheetName(s.name);
     if (seen.has(s.name.toLowerCase())) throw new Error("工作表名不能重复。");
     seen.add(s.name.toLowerCase());
@@ -208,6 +215,10 @@ export function cellsOf(root) {
   let count = 0;
   const walk = (n) => {
     if (++count > 15000) throw new Error("工作簿过大，请拆分后处理。");
+    if (
+      !["workbook", "sheet", "row", "column", "range", "cell"].includes(n.type)
+    )
+      return;
     if (n.type === "cell") {
       if (n.children?.length) throw new Error("不支持复杂单元格修改。");
       cells.set(n.path, n);
