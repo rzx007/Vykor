@@ -14,6 +14,9 @@ const streamingTextAnimation = {
   stagger: 0,
 } as const
 
+// 行首（最多缩进三个空格）的三反引号或三波浪号表示代码围栏。
+const codeFence = /(?:^|\n)[ \t]{0,3}(?:`{3,}|~{3,})/
+
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   text,
   phase,
@@ -55,6 +58,11 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // 可能含引用定义/脚注时保守沿用全文路径，避免自行识别嵌套、跨行等 Markdown 语法。
   // 只在完成时检查，流式 token 不重复扫描全文。
   const fullDocument = !streaming && hasStreamed && rendered.text.includes("]:")
+  // streaming/static 是两棵不同的组件树。完成后只有正文含代码块时才沿用 streaming 树，
+  // 这样既保留已高亮的代码块身份（避免重新高亮），又让纯文本回复切回 static 树
+  // ——否则相同文字的收尾渲染不会提交，字符动画的 <span> 包裹会残留在正式回复里。
+  const keepStreamingTree =
+    hasStreamed && !fullDocument && (streaming || codeFence.test(rendered.text))
 
   return (
     <div
@@ -68,7 +76,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           className="desktop-streamdown space-y-0"
           animated={animated ? streamingTextAnimation : false}
           isAnimating={streaming}
-          mode={hasStreamed && !fullDocument ? "streaming" : "static"}
+          mode={keepStreamingTree ? "streaming" : "static"}
           controls
           lineNumbers={false}
           parseIncompleteMarkdown={streaming}
