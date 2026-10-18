@@ -1,4 +1,4 @@
-import { createWorkflowNotification, createWorkflowResultFromSnapshot, type WorkflowRunSnapshot } from "@vykor/coordinator";
+import { createWorkflowNotification, createWorkflowResultFromSnapshot, type WorkflowRunSnapshot, type WorkflowRunEvent } from "@vykor/coordinator";
 import type { JobKind, JobReadResult, JobSnapshot, JobStatus } from "@vykor/jobs";
 import type { SessionExecutionRecord } from "@vykor/protocol";
 import type { TerminalSessionInfo } from "@vykor/terminal";
@@ -121,12 +121,13 @@ export function formatWorkflowOutput(workflow: WorkflowRunSnapshot): string {
   }, null, 2);
 }
 
-export function workflowDetails(workflow: WorkflowRunSnapshot): Record<string, unknown> {
+export function workflowDetails(workflow: WorkflowRunSnapshot, events?: WorkflowRunEvent[]): Record<string, unknown> {
   const notification = createWorkflowNotification(createWorkflowResultFromSnapshot(workflow));
   return {
     status: workflow.status,
     termination: workflow.termination,
     plan: workflow.plan,
+    failurePolicy: workflow.spec.failurePolicy ?? "skip-dependents",
     pendingTaskIds: workflow.pendingTaskIds,
     blockedTaskIds: workflow.blockedTaskIds,
     blockedTasks: workflow.blockedTasks,
@@ -138,6 +139,7 @@ export function workflowDetails(workflow: WorkflowRunSnapshot): Record<string, u
     reconciliationIssues: notification.reconciliationIssues,
     reconciliationSummary: notification.reconciliationSummary,
     reconciliationPlan: notification.reconciliationPlan,
+    ...(events ? { events: events.slice(-200).map(({ type, timestamp, taskId, summary }) => ({ type, timestamp, taskId, summary })), eventsTruncated: events.length > 200 } : {}),
   };
 }
 

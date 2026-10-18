@@ -42,6 +42,12 @@ const invoke = <C extends IpcChannel>(
 ): Promise<IpcInvokeMap[C]["result"]> => ipcRenderer.invoke(channel, ...args)
 
 export const desktopAPI = {
+  workflows: {
+    read: (input: IpcInvokeMap[typeof IpcChannels.workflowRead]["args"][0]) =>
+      invoke(IpcChannels.workflowRead, input),
+    cancel: (input: IpcInvokeMap[typeof IpcChannels.workflowCancel]["args"][0]) =>
+      invoke(IpcChannels.workflowCancel, input),
+  },
   pluginUi: {
     capabilities: () => invoke(IpcChannels.pluginUiCapabilities),
     mount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiMount]["args"][0]) =>
@@ -118,7 +124,10 @@ export const desktopAPI = {
     setMaterial: (preference: DesktopWindowMaterialPreference) =>
       invoke(IpcChannels.windowSetMaterial, preference),
     onMaterialChanged: (listener: (state: DesktopWindowMaterialState) => void): (() => void) => {
-      const wrapped = (_event: Electron.IpcRendererEvent, state: DesktopWindowMaterialState): void => listener(state)
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        state: DesktopWindowMaterialState
+      ): void => listener(state)
       ipcRenderer.on(IpcEvents.windowMaterialChanged, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.windowMaterialChanged, wrapped)
     },
@@ -606,8 +615,9 @@ export const desktopAPI = {
     ) => invoke(IpcChannels.sessionUpdatePermissionMode, input),
     updateEffort: (input: IpcInvokeMap[typeof IpcChannels.sessionUpdateEffort]["args"][0]) =>
       invoke(IpcChannels.sessionUpdateEffort, input),
-    updatePluginSelection: (input: IpcInvokeMap[typeof IpcChannels.sessionUpdatePluginSelection]["args"][0]) =>
-      invoke(IpcChannels.sessionUpdatePluginSelection, input),
+    updatePluginSelection: (
+      input: IpcInvokeMap[typeof IpcChannels.sessionUpdatePluginSelection]["args"][0]
+    ) => invoke(IpcChannels.sessionUpdatePluginSelection, input),
     getContextUsage: (input: IpcInvokeMap[typeof IpcChannels.sessionGetContextUsage]["args"][0]) =>
       invoke(IpcChannels.sessionGetContextUsage, input),
     rename: (input: IpcInvokeMap[typeof IpcChannels.sessionRename]["args"][0]) =>

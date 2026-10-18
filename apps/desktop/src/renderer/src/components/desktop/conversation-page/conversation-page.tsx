@@ -77,6 +77,7 @@ import { AskUserCard } from "./message/ask-user-card"
 import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionSummaryPopover } from "./session/session-summary-popover"
+import { WorkflowPanelButton } from "../tools/workflows/workflow-summary"
 import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
@@ -377,6 +378,7 @@ function ConversationPane({
     const handleAddToComposer = (event: Event): void => {
       const detail = (event as CustomEvent<AddToComposerEventDetail>).detail
       if (!detail?.text) return
+      if (detail.sessionId && detail.sessionId !== activeSessionId) return
       setDraft(composerDocument([...draft.items, { type: "text", text: detail.text }]))
       window.requestAnimationFrame(() => {
         const composer = document.querySelector<HTMLTextAreaElement>(
@@ -388,7 +390,7 @@ function ConversationPane({
 
     window.addEventListener("desktop:add-to-composer", handleAddToComposer)
     return () => window.removeEventListener("desktop:add-to-composer", handleAddToComposer)
-  }, [draft.items, setDraft])
+  }, [activeSessionId, draft.items, setDraft])
 
   useEffect(() => {
     if (!commandCwd || loadStatus !== "ready") {
@@ -541,6 +543,7 @@ function ConversationPane({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <WorkflowPanelButton />
             <OpenWithSplitButton folderPath={sessionView?.session.cwd ?? selectedProject?.path} />
             <SessionSummaryPopover
               view={sessionView?.session.id === activeSessionId ? sessionView : null}

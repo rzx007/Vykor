@@ -48,6 +48,7 @@ import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 import { readImagePath } from "./read-image-preview"
 import { ToolDetails } from "./tool-details"
+import { WorkflowSummary } from "../../tools/workflows/workflow-summary"
 import { ReadToolRow } from "./tool-details/read-tool-row"
 import { readFileReference } from "./tool-details/read-tool-model"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
@@ -162,6 +163,9 @@ export const AssistantMessage = memo(function AssistantMessage({
           )
         }
         const unit = block.unit
+        if (unit.type === "workflow") {
+          return <WorkflowSummary key={unit.id} call={unit.call} result={unit.result} />
+        }
         if (unit.type === "plugin-ui") {
           return (
             <PluginUiCard

@@ -1,4 +1,5 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { findWorkflowSourcePart } from "../../tools/workflows/workflow-model"
 import {
   readSessionModelRetryState,
   readSessionModelUsage,
@@ -79,6 +80,17 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   tasks = emptyTasks,
   onOpenAgents,
 }: ConversationTranscriptProps): React.JSX.Element {
+  const workflowScroller = useConversationScroller()
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId: string; runId: string }>).detail
+      if (!detail) return
+      const source = findWorkflowSourcePart(parts, detail.sessionId, detail.runId)
+      if (source) workflowScroller?.scrollToMessage(source.messageId)
+    }
+    window.addEventListener("desktop:workflow-source", reveal)
+    return () => window.removeEventListener("desktop:workflow-source", reveal)
+  }, [parts, workflowScroller])
   const modelCache = useRef<TranscriptModelCache | null>(null)
   const { entries, streamingPart, activityLabel, activeRun, activeRunGrouped } = useTranscriptModel(
     modelCache,

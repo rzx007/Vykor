@@ -198,6 +198,7 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  workflows: import("./workflow-types").DesktopWorkflowAPI
   terminalSettings: TerminalSettingsAPI
   gitSettings: GitSettingsAPI
   maintenance: MaintenanceSettingsAPI

@@ -13,13 +13,18 @@ type StreamdownComponents = NonNullable<ComponentProps<typeof Streamdown>["compo
 export function createStreamdownComponents({
   onOpenFile,
   codeBlockVariant = "default",
+  fileLinkMode = "open",
 }: {
   onOpenFile?: (path: string, line?: number) => void
   codeBlockVariant?: "default" | "conversation"
+  fileLinkMode?: "open" | "text"
 } = {}): StreamdownComponents {
   return {
     a: ({ href, children, ...props }) => {
       const file = href ? parseFileReference(href) : null
+      if (file && fileLinkMode === "text") {
+        return <span title={file.path}>{children}</span>
+      }
       if (!file || !onOpenFile) {
         const isExternal = href ? HTTP_LINK.test(href) : false
         return (

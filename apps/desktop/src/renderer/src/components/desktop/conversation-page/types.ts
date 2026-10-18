@@ -13,6 +13,7 @@ export type ConversationPaneProps = {
 
 export interface AddToComposerEventDetail {
   text: string
+  sessionId?: string
 }
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error"

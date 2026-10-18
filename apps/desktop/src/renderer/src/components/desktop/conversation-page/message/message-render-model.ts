@@ -19,6 +19,7 @@ export type AssistantContentUnit =
       instance: PluginUiInstanceRecord
     }
   | { id: string; type: "agent"; call: DesktopSessionPart; result?: DesktopSessionPart }
+  | { id: string; type: "workflow"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
       id: string
       type: "image_generation"
@@ -129,7 +130,15 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
       }
       units.push({
         id: part.id,
-        type: part.toolName === "Agent" ? "agent" : "tool",
+        type:
+          part.toolName === "Agent"
+            ? "agent"
+            : part.toolName === "Workflow" &&
+                ["run", "resume"].includes(
+                  typeof part.input?.action === "string" ? part.input.action : "run"
+                )
+              ? "workflow"
+              : "tool",
         call: part,
         result: part.toolUseId ? results.get(part.toolUseId) : undefined,
       })
@@ -194,10 +203,11 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
     if (toolCallStatus(part, result) !== "completed") continue
     if (part.bodyView?.input === "preview" && collectPaths(part.input).length === 0) {
       const facts = recordValue(result?.metadata.changedFiles ?? part.metadata.changedFiles)
-      if (Array.isArray(facts?.files)) for (const file of facts.files) {
-        const identity = recordValue(file)
-        if (typeof identity?.path === "string") addChange(changes, identity.path, 0, 0, false)
-      }
+      if (Array.isArray(facts?.files))
+        for (const file of facts.files) {
+          const identity = recordValue(file)
+          if (typeof identity?.path === "string") addChange(changes, identity.path, 0, 0, false)
+        }
       continue
     }
     const patch = findPatch(part.input)

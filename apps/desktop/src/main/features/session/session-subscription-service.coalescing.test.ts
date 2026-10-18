@@ -103,6 +103,20 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("invalidates workflows when the first run starts in an empty session stream", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield { ...sessionUpdated(2), type: "workflow.workflow_started", payload: { event: { runId: "new-workflow" } } }
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent[0]?.payload).toMatchObject({ kind: "snapshot", view: { workflowRevision: 2 } })
+    } finally { service.clearAll() }
+  })
   it("turns an isolated usage event into the existing snapshot delivery after ACK", async () => {
     vi.useFakeTimers();
     const stream = new EventEmitter();

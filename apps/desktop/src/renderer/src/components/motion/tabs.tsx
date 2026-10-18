@@ -10,6 +10,8 @@ import {
   motion,
   MotionConfig,
   useReducedMotion,
+  useSpring,
+  type MotionValue,
   type Transition,
 } from "motion/react"
 import {
@@ -23,16 +25,22 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { EASE_OUT } from "@renderer/lib/ease"
+import { EASE_OUT, SPRING_SWAP } from "@renderer/lib/ease"
 import { cn } from "@renderer/lib/utils"
 
 type Variant = "pill" | "underline" | "segment"
+type IconDisplay = "always" | "selected"
+type Track = Record<"x" | "y" | "width" | "height", MotionValue<number>>
 
 type Ctx = {
   value: string
   setValue: (v: string) => void
   layoutId: string
   variant: Variant
+  icons: IconDisplay
+  track: Track
+  placed: boolean
+  setPlaced(placed: boolean): void
 }
 
 const TabsCtx = createContext<Ctx | null>(null)
@@ -58,6 +66,7 @@ export function Tabs({
   value,
   onValueChange,
   variant = "pill",
+  icons = "always",
   children,
   className,
 }: {
@@ -65,6 +74,7 @@ export function Tabs({
   value?: string
   onValueChange?: (v: string) => void
   variant?: Variant
+  icons?: IconDisplay
   children: ReactNode
   className?: string
 }) {
@@ -80,9 +90,15 @@ export function Tabs({
     },
     [controlled, onValueChange]
   )
+  const x = useSpring(0, transition)
+  const y = useSpring(0, transition)
+  const width = useSpring(0, transition)
+  const height = useSpring(0, transition)
+  const track = useMemo(() => ({ x, y, width, height }), [x, y, width, height])
+  const [placed, setPlaced] = useState(false)
   const contextValue = useMemo(
-    () => ({ value: current, setValue, layoutId, variant }),
-    [current, layoutId, setValue, variant]
+    () => ({ value: current, setValue, layoutId, variant, icons, track, placed, setPlaced }),
+    [current, layoutId, setValue, variant, icons, track, placed]
   )
   return (
     <MotionConfig transition={reduce ? { duration: 0 } : transition}>
@@ -120,8 +136,9 @@ export function TabsList({
   className?: string
   wrapperClassName?: string
 } & Omit<TabsPrimitive.List.Props, "children" | "className">) {
-  const { variant, value } = useTabs()
+  const { variant, value, icons, track, placed, setPlaced } = useTabs()
   const reduce = useReducedMotion()
+  const tracked = icons === "selected" && variant !== "underline"
   const rootRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -207,6 +224,48 @@ export function TabsList({
   }, [children, value, edges.overflow, measure, reveal])
 
   useLayoutEffect(() => {
+    // beUI's selected-only icon changes a trigger's width. Track its settled
+    // destination so the pill does not squeeze while the icon is opening.
+    if (!tracked) return
+    const list = listRef.current
+    if (!list) return
+    const place = () => {
+      const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'))
+      const target = tabs.find((tab) => tab.dataset.tabsValue === value)?.parentElement
+      if (!target) return
+      const slots = Array.from(
+        list.querySelectorAll<HTMLElement>('[role="tab"] > [data-tabs-icon]')
+      )
+      const saved = slots.map((slot) => [slot.style.width, slot.style.marginRight])
+      for (const slot of slots) {
+        const open = slot.parentElement?.parentElement === target
+        slot.style.width = open ? "auto" : "0px"
+        slot.style.marginRight = open ? `${ICON_GAP}px` : "0px"
+      }
+      const box = {
+        x: target.offsetLeft,
+        y: target.offsetTop,
+        width: target.getBoundingClientRect().width,
+        height: target.offsetHeight,
+      }
+      slots.forEach((slot, index) => {
+        ;[slot.style.width, slot.style.marginRight] = saved[index]
+      })
+      const instant = reduce || track.width.get() === 0
+      for (const key of ["x", "y", "width", "height"] as const) {
+        if (instant) track[key].jump(box[key])
+        else track[key].set(box[key])
+      }
+      if (box.width > 0) setPlaced(true)
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    for (const tab of list.querySelectorAll('[role="tab"]'))
+      if (tab.parentElement) observer.observe(tab.parentElement)
+    return () => observer.disconnect()
+  }, [tracked, value, children, reduce, track, setPlaced])
+
+  useLayoutEffect(() => {
     if (variant === "underline") return
     const list = listRef.current
     if (!list) return
@@ -248,9 +307,21 @@ export function TabsList({
     }
     // One shared pass after Motion paints the projected pill keeps every label
     // in sync, including labels crossed during a long or interrupted glide.
-    frame.postRender(syncClips, true)
-    return () => cancelFrame(syncClips)
-  }, [value, children, variant, reduce])
+    const resync = () => {
+      frames = 0
+      stillFrames = 0
+      previous = undefined
+      cancelFrame(syncClips)
+      frame.postRender(syncClips, true)
+    }
+    resync()
+    const observer = new ResizeObserver(resync)
+    observer.observe(list)
+    return () => {
+      observer.disconnect()
+      cancelFrame(syncClips)
+    }
+  }, [value, children, variant, reduce, placed])
 
   const scroll = (direction: number) => {
     const viewport = viewportRef.current
@@ -308,7 +379,7 @@ export function TabsList({
       >
         <TabsPrimitive.List
           ref={listRef}
-          className={cn(listClasses[variant], "w-max", className)}
+          className={cn(listClasses[variant], "w-max", tracked && "relative", className)}
           {...props}
         >
           {children}
@@ -342,20 +413,60 @@ export function TabsList({
   )
 }
 
+const ICON_GAP = 6
+
+function TriggerIcon({ icon, active }: { icon: ReactNode; active: boolean }) {
+  const { icons } = useTabs()
+  const reduce = useReducedMotion()
+  if (icons === "always")
+    return (
+      <span aria-hidden="true" className="mr-1.5 inline-flex shrink-0 items-center">
+        {icon}
+      </span>
+    )
+  return (
+    <motion.span
+      aria-hidden="true"
+      data-tabs-icon=""
+      initial={false}
+      animate={{
+        width: active ? "auto" : 0,
+        marginRight: active ? ICON_GAP : 0,
+        opacity: active ? 1 : 0,
+        scale: active ? 1 : 0.6,
+      }}
+      transition={reduce ? { duration: 0 } : SPRING_SWAP}
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden"
+    >
+      {icon}
+    </motion.span>
+  )
+}
+
 export function TabsTrigger({
   value,
+  icon,
   children,
   className,
   indicatorClassName,
   ...props
 }: {
   value: string
+  icon?: ReactNode
   children: ReactNode
   className?: string
   indicatorClassName?: string
 } & Omit<TabsPrimitive.Tab.Props, "value" | "children" | "className">) {
-  const { value: current, layoutId, variant } = useTabs()
+  const { value: current, layoutId, variant, icons, track, placed } = useTabs()
   const active = current === value
+  const content = icon ? (
+    <>
+      <TriggerIcon icon={icon} active={active} />
+      {children}
+    </>
+  ) : (
+    children
+  )
   // React owns the initial mask only; TabsList synchronizes subsequent masks.
   const [initialClip] = useState(() => (active ? "inset(0)" : "inset(0 100% 0 0)"))
 
@@ -371,7 +482,7 @@ export function TabsTrigger({
         )}
         {...props}
       >
-        {children}
+        {content}
         {active ? (
           <motion.span
             layoutId={layoutId}
@@ -384,11 +495,20 @@ export function TabsTrigger({
   }
 
   const radius = variant === "pill" ? "rounded-full" : "rounded-md"
+  const tracked = icons === "selected" && placed
 
   return (
-    <div className="relative shrink-0">
-      {active ? (
+    <div className={cn("shrink-0", !tracked && "relative")}>
+      {active && tracked ? (
         <motion.span
+          key="tracked"
+          data-tabs-indicator=""
+          style={{ ...track, borderRadius: variant === "pill" ? 9999 : 8 }}
+          className={cn("absolute top-0 left-0 bg-primary", radius, indicatorClassName)}
+        />
+      ) : active ? (
+        <motion.span
+          key="layout"
           data-tabs-indicator=""
           layoutId={layoutId}
           layout
@@ -408,7 +528,7 @@ export function TabsTrigger({
         )}
         {...props}
       >
-        {children}
+        {content}
         <span
           data-tabs-label=""
           aria-hidden="true"
@@ -416,7 +536,7 @@ export function TabsTrigger({
           className="pointer-events-none absolute inset-0 inline-flex items-center justify-center [gap:inherit] [padding:inherit] text-primary-foreground"
           style={{ clipPath: initialClip }}
         >
-          {children}
+          {content}
         </span>
       </TabsPrimitive.Tab>
     </div>
@@ -427,6 +547,7 @@ export function TabsContent({
   value,
   children,
   className,
+  style,
   ...props
 }: { value: string; children: ReactNode; className?: string } & Omit<
   TabsPrimitive.Panel.Props,
@@ -435,19 +556,25 @@ export function TabsContent({
   const { value: current } = useTabs()
   const reduce = useReducedMotion()
   const active = current === value
-  // Base UI keeps the same panel node mounted, preserving category-local drafts.
+  // Base UI can retain a panel while Motion finishes its exit. Hide it from
+  // layout immediately so it cannot push the newly selected panel downward.
   return (
     <TabsPrimitive.Panel
       value={value}
       render={
         <motion.div
           initial={false}
-          animate={{ opacity: active ? 1 : 0, y: active || reduce ? 0 : 4 }}
+          animate={{ opacity: active ? 1 : 0, y: 0 }}
           transition={{ duration: reduce ? 0 : 0.18, ease: EASE_OUT }}
         />
       }
       className={cn("mt-4", className)}
       {...props}
+      hidden={!active}
+      style={(state) => {
+        const custom = typeof style === "function" ? style(state) : style
+        return active ? (custom ?? {}) : { ...custom, display: "none" }
+      }}
     >
       {children}
     </TabsPrimitive.Panel>

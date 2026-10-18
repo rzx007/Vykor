@@ -1,6 +1,16 @@
 import { expect, it } from "vitest";
 import { summarizePart, summarizePartEvent } from "./part-wire-view.js";
 import type { SessionMessagePartRecord } from "@vykor/protocol";
+import { formatWorkflowNotification } from "@vykor/coordinator";
+
+it("preserves Workflow action and run identity when a synchronous result is reduced to a preview", () => {
+  const notification = formatWorkflowNotification({ runId: "sync-run", status: "completed", summary: "done", mode: "parallel", totalTasks: 1, completedTasks: 1, failedTasks: 0, needsReconciliation: false, reconciliationIssues: [], reconciliationSummary: { totalIssues: 0, actualConflicts: 0, declaredScopeOverlaps: 0, files: [], tasks: [] }, reconciliationPlan: { needed: false, summary: "", actions: [] }, budget: { tasks: {} }, tasks: [{ taskId: "a", status: "completed", summary: "done", result: "x".repeat(8000), attempts: 1, dependencies: [], startedAt: 1, finishedAt: 2 }] });
+  const summary = summarizePart({ ...part, toolName: "Workflow", input: { action: "resume", prompt: "x".repeat(8000) }, output: { content: [{ type: "text", text: notification }] } });
+  expect(summary.bodyView).toMatchObject({ input: "preview", output: "preview" });
+  expect(summary.input?.action).toBe("resume");
+  expect(summary.metadata.workflowRunId).toBe("sync-run");
+  expect(JSON.stringify(summary)).not.toContain("x".repeat(1000));
+});
 
 const part: SessionMessagePartRecord = { id: "p", sessionId: "s", messageId: "m", seq: 1, type: "tool", toolName: "UnknownTool", status: "failed", isError: true, input: { hidden: "x".repeat(20_000) }, output: { content: [{ type: "text", text: "failure".repeat(3000) + " shell-output://00000000-0000-4000-8000-000000000001" }], isError: true, failureKind: "command", executionState: "completed", recoveryHint: "inspect log" }, metadata: { failureKind: "command", executionState: "completed", pluginUi: { id: "business-ui" } }, createdAt: 1, updatedAt: 1 };
 

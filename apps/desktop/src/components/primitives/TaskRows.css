@@ -1,0 +1,70 @@
+/* The installed Task Rows palette is bound locally to the desktop theme.
+   Its original layout, radii, badges and card shadow stay in the component. */
+.task-rows {
+  --line: var(--border);
+  --ink-3: var(--muted-foreground);
+}
+.task-rows .bg-surface {
+  background-color: var(--background);
+}
+.task-rows .bg-line {
+  background-color: var(--border);
+}
+.task-rows .border-line {
+  border-color: var(--border);
+}
+.task-rows .text-ink {
+  color: var(--foreground);
+}
+.task-rows .text-ink-2,
+.task-rows .text-ink-3 {
+  color: var(--muted-foreground);
+}
+.task-rows .bg-green {
+  background-color: var(--status-success);
+  color: var(--background);
+}
+.task-rows .text-green {
+  color: var(--status-success);
+}
+.task-rows .bg-green-tint {
+  background-color: color-mix(in srgb, var(--status-success) 10%, transparent);
+}
+.task-rows .bg-red {
+  background-color: var(--destructive);
+  color: var(--background);
+}
+.task-rows .text-red {
+  color: var(--destructive);
+}
+.task-rows .bg-red-tint {
+  background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+.task-rows [class~="hover:bg-inset"]:hover {
+  background-color: color-mix(in srgb, var(--background) 98%, var(--foreground));
+}
+.task-rows .shadow-card {
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow-sm, 0 2px 8px rgb(0 0 0 / 0.06));
+}
+.task-rows .rounded-card {
+  border-radius: 14px;
+}
+@keyframes task-rows-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-rows,
+  .task-rows * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
