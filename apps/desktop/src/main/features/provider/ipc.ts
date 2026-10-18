@@ -15,7 +15,12 @@ export const providerIpcContribution: IpcContribution = {
   id: "provider",
   register() {
     return [
-      { channel: IpcChannels.providerSnapshot, handler: () => desktopProviderService.snapshot() },
+      {
+        channel: IpcChannels.providerSnapshot,
+        handler: (_event, input) => desktopProviderService.snapshot({
+          refresh: (input as { refresh?: boolean } | undefined)?.refresh === true,
+        }),
+      },
       {
         channel: IpcChannels.providerConnect,
         handler: (_event, input) =>

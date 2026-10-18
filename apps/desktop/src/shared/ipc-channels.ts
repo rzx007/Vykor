@@ -1065,7 +1065,7 @@ export interface IpcInvokeMap
   }
   [IpcChannels.noteRemove]: { args: [id: string]; result: void }
   [IpcChannels.noteOpenDirectory]: { args: []; result: void }
-  [IpcChannels.providerSnapshot]: { args: []; result: DesktopProviderSnapshot }
+  [IpcChannels.providerSnapshot]: { args: [input?: { refresh?: boolean }]; result: DesktopProviderSnapshot }
   [IpcChannels.providerConnect]: {
     args: [input: ConnectDesktopProviderInput]
     result: DesktopProviderSnapshot

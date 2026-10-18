@@ -106,7 +106,7 @@ export interface ModelProviderInfo {
 }
 
 export interface ModelService {
-  list(): Promise<ModelProviderInfo[]> | ModelProviderInfo[];
+  list(options?: { refresh?: boolean }): Promise<ModelProviderInfo[]> | ModelProviderInfo[];
 }
 
 export interface McpServerStatus {

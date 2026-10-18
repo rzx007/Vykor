@@ -1,9 +1,10 @@
 import type { ModelsDevCatalog } from "@vykor/api";
-import type { CustomProviderModelSettings, CustomProviderSettings } from "@vykor/core";
+import type { CustomProviderModelSettings, CustomProviderSettings, Settings } from "@vykor/core";
 
 import {
   catalogModelContextWindow,
   catalogModelOutputLimit,
+  catalogModelReasoningEfforts,
   findCatalogModelById,
   positiveLimit,
 } from "./catalog-provider-mapping.js";
@@ -16,6 +17,22 @@ export interface ModelLimitResolutionInput {
   customProviders?: CustomProviderSettings[] | undefined;
   provider?: string | undefined;
   model?: string | undefined;
+}
+
+/** 当前任务保留创建时的模型信息，下次重建时再读取新设置和目录。 */
+export function createModelMetadataResolvers(
+  settings: Pick<Settings, "customProviders">,
+  catalog: ModelsDevCatalog,
+) {
+  const customProviders = structuredClone(settings.customProviders);
+  const limit = (kind: ModelLimitKind, input: { provider?: string; model: string }) =>
+    resolveModelLimit(kind, { catalog, customProviders, ...input });
+  return {
+    resolveReasoningEfforts: async ({ provider, model }: { provider?: string; model: string }) =>
+      provider ? catalogModelReasoningEfforts(catalog, provider, model) : undefined,
+    resolveModelContextWindow: async (input: { provider?: string; model: string }) => limit("context", input),
+    resolveModelOutputLimit: async (input: { provider?: string; model: string }) => limit("output", input),
+  };
 }
 
 /**

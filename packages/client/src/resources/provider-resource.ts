@@ -124,11 +124,11 @@ export class ProviderResource {
 
   /** `GET /models` */
   async listModels(
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; refresh?: boolean } = {},
   ): Promise<ModelProviderInfo[]> {
     const response = await this.transport.request<{ providers: ModelProviderInfo[] }>(
       "/models",
-      { signal: options.signal },
+      { signal: options.signal, ...(options.refresh ? { query: { refresh: true } } : {}) },
     );
     return response.providers;
   }

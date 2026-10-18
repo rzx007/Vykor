@@ -18,13 +18,14 @@ import { resolveDesktopRuntimeSnapshot } from "../session/runtime-selection"
 type ProviderClient = Pick<VykorClient, "providers" | "auth" | "system">
 
 export class DesktopProviderService {
-  snapshot(): Promise<DesktopProviderSnapshot> {
+  snapshot(options: { refresh?: boolean } = {}): Promise<DesktopProviderSnapshot> {
     return withDaemonRetry(async (client) => {
       const [providers, auth, settings, models] = await Promise.all([
         client.providers.listProviders(),
         client.auth.getStatus(),
         client.system.getSettings(),
-        client.providers.listModels().catch(() => []),
+        (options.refresh ? client.providers.listModels({ refresh: true }) : client.providers.listModels())
+          .catch((error) => { if (options.refresh) throw error; return [] }),
       ])
       return buildDesktopProviderSnapshot({ providers, auth, settings, models })
     })

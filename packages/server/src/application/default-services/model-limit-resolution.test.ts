@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveModelLimit } from "./model-limit-resolution.js";
+import { resolveModelLimit, createModelMetadataResolvers } from "./model-limit-resolution.js";
 
 const catalog = {
   anthropic: {
@@ -38,6 +38,40 @@ function customProvider(
     },
   ];
 }
+
+describe("model metadata snapshots", () => {
+  it("keeps an agent's model limits after the saved provider is edited", async () => {
+    const provider = {
+      id: "gateway", displayName: "Gateway", apiFormat: "openai" as const,
+      baseUrl: "https://gateway.example/v1",
+      models: [{ id: "chat", displayName: "Chat", contextWindow: 100_000, maxOutputTokens: 8_000 }],
+    };
+    const settings = { customProviders: [provider] };
+    const running = createModelMetadataResolvers(settings as never, {});
+    provider.models[0]!.contextWindow = 200_000;
+    provider.models[0]!.maxOutputTokens = 16_000;
+    const next = createModelMetadataResolvers(settings as never, {});
+    await expect(running.resolveModelContextWindow!({ provider: "gateway", model: "chat" })).resolves.toBe(100_000);
+    await expect(running.resolveModelOutputLimit!({ provider: "gateway", model: "chat" })).resolves.toBe(8_000);
+    await expect(next.resolveModelOutputLimit!({ provider: "gateway", model: "chat" })).resolves.toBe(16_000);
+  });
+
+  it("keeps catalog limits and reasoning options until the agent is rebuilt", async () => {
+    const oldCatalog = { gateway: { models: { chat: {
+      limit: { context: 100_000, output: 8_000 },
+      reasoning_options: [{ type: "effort", values: ["low"] }],
+    } } } };
+    const running = createModelMetadataResolvers({} as never, oldCatalog);
+    const refreshed = { gateway: { models: { chat: {
+      limit: { context: 200_000, output: 16_000 },
+      reasoning_options: [{ type: "effort", values: ["low", "high"] }],
+    } } } };
+    const next = createModelMetadataResolvers({} as never, refreshed);
+    await expect(running.resolveModelOutputLimit!({ provider: "gateway", model: "chat" })).resolves.toBe(8_000);
+    await expect(running.resolveReasoningEfforts!({ provider: "gateway", model: "chat" })).resolves.toEqual(["low"]);
+    await expect(next.resolveReasoningEfforts!({ provider: "gateway", model: "chat" })).resolves.toEqual(["low", "high"]);
+  });
+});
 
 describe("resolveModelLimit", () => {
   it("prefers the value the user typed in the custom provider", () => {

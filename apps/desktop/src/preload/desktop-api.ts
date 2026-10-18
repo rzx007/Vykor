@@ -309,7 +309,9 @@ export const desktopAPI = {
     openDirectory: () => invoke(IpcChannels.noteOpenDirectory),
   },
   providers: {
-    snapshot: () => invoke(IpcChannels.providerSnapshot),
+    snapshot: (input?: { refresh?: boolean }) => input
+      ? invoke(IpcChannels.providerSnapshot, input)
+      : invoke(IpcChannels.providerSnapshot),
     connect: (input: IpcInvokeMap[typeof IpcChannels.providerConnect]["args"][0]) =>
       invoke(IpcChannels.providerConnect, input),
     activate: (input: IpcInvokeMap[typeof IpcChannels.providerActivate]["args"][0]) =>
