@@ -382,6 +382,15 @@ export interface MemoryRetriever {
 }
 
 export interface QueryEngineOptions {
+  /** Optional host policy. Omission preserves full authorized tool exposure. */
+  toolDiscovery?: {
+    searchTool: import("./tools").ToolDefinition;
+    shouldDefer: (tool: import("./tools").ToolDefinition, source?: import("./tools").ToolRegistrationSource) => boolean;
+    /** Deferral starts when either threshold is reached. Default: 20 tools. */
+    minToolCount?: number;
+    /** Serialized deferred definitions (name, description, schema). Default: 32 KiB. */
+    minSchemaBytes?: number;
+  };
   /** Current runtime permission owner; omitted when mode tools are unsupported. */
   setPlanMode?: import("./tools").ToolContext["setPlanMode"];
   /** Exact tool definitions validated by the host as trusted builtin replacements. */

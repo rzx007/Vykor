@@ -19,6 +19,7 @@ catalog:
   diff: ^7.0.0
   hono: ^4.12.12
   js-yaml: ^4.1.0
+  minisearch: 7.2.0
   openai: ^4.91.0
   react: ^19.2.0
   undici: ^7.7.0

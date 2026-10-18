@@ -19,7 +19,7 @@ import {
   READ_ONLY_TOOLS,
 } from "@vykor/permissions";
 import { HookExecutor } from "@vykor/hooks";
-import { createDefaultToolRegistry, createShellOutputLogHost } from "@vykor/tools";
+import { createDefaultToolRegistry, createShellOutputLogHost, toolSearchTool } from "@vykor/tools";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
 import type { SkillRegistry } from "@vykor/skills";
@@ -351,6 +351,11 @@ export async function createVykorRuntime(
     : undefined;
 
   const engineOptions = {
+    toolDiscovery: {
+      searchTool: toolSearchTool,
+      shouldDefer: (_tool: ToolDefinition, source?: import("@vykor/core").ToolRegistrationSource) =>
+        source?.kind === "plugin" || source?.kind === "mcp",
+    },
     setPlanMode: (enabled: boolean) => {
       permissionChecker.setMode(enabled ? "plan" : mode);
       return permissionChecker.getMode();

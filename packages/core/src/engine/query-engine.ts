@@ -17,6 +17,7 @@ import type {
 } from "../index";
 import type {
   ToolContext,
+  ToolDiscovery,
   ToolDefinition,
   ToolExecutionResult,
   ToolRegistry as IToolRegistry,
@@ -42,6 +43,7 @@ import { applyToolOutputBudget } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
+import { RunToolDiscovery } from "./tool-discovery";
 import { runToolRegistry as runToolRegistryForRun, toolRegistryView, visibleToolRegistry } from "./tool-registry";
 import {
   applyTrajectoryTracker,
@@ -310,6 +312,7 @@ export class QueryEngine implements IQueryEngine {
     const runToolRegistry = runToolRegistryForRun(
       this.toolRegistry, this.allowedTools, contribution, options.execution?.capabilityView,
     );
+    const toolDiscovery = RunToolDiscovery.create(runToolRegistry, this.options.toolDiscovery, options.execution?.capabilityView);
     const internalTools = new Set(
       contribution?.tools
         ?.filter((item) => item.permission === "host-internal")
@@ -400,10 +403,10 @@ export class QueryEngine implements IQueryEngine {
         childFinalizing = true;
       }
       const forcedFinalTurn = forceFinalResponse || childFinalizing;
-      const visibleTools = runToolRegistry.getAll();
-      const tools = forcedFinalTurn
-        ? []
-        : visibleTools.filter((tool) => !trajectoryControl.hiddenTools.includes(tool.name));
+      const requestToolRegistry = toolDiscovery?.requestRegistry(trajectoryControl.hiddenTools, forcedFinalTurn)
+        ?? visibleToolRegistry(runToolRegistry, forcedFinalTurn ? [] : runToolRegistry.getAll()
+          .filter(tool => !trajectoryControl.hiddenTools.includes(tool.name)).map(tool => tool.name));
+      const tools = requestToolRegistry.getAll();
       const runSystemPrompt = requestConfiguration.systemPromptForTools
         ? await requestConfiguration.systemPromptForTools(tools)
         : requestConfiguration.systemPrompt
@@ -413,7 +416,10 @@ export class QueryEngine implements IQueryEngine {
               ? await this.options.systemPromptForRun(options.execution.capabilityView)
               : this.systemPrompt);
       this.lastRunPrompt = { systemPrompt: runSystemPrompt };
-      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
+      const discoveryGuidance = toolDiscovery && requestToolRegistry.has(toolDiscovery.searchToolName)
+        ? `Additional authorized tool definitions are deferred. Use ${toolDiscovery.searchToolName} to find relevant tools by task or exact name. Selected definitions become callable in the next model request, not in the search batch. Search does not grant permissions. Do not scan installation directories or unpack plugin archives to discover tools.`
+        : undefined;
+      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, discoveryGuidance ? appendSystemGuidance(runSystemPrompt, discoveryGuidance) : runSystemPrompt);
       const turnSystemPrompt = contribution?.systemGuidance
         ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
         : baseSystemPrompt;
@@ -667,7 +673,7 @@ export class QueryEngine implements IQueryEngine {
       if (toolUses.length > 0) {
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
-        const { results, failure } = await this.executeTools(
+        const { results, failure, discoveryBlockedCalls } = await this.executeTools(
           toolUses,
           options.signal,
           options.execution,
@@ -677,13 +683,14 @@ export class QueryEngine implements IQueryEngine {
             ...(requestConfiguration.apiFormat ? { apiFormat: requestConfiguration.apiFormat } : {}),
           },
           failedToolCalls,
-          runToolRegistry,
+          requestToolRegistry,
           internalTools,
+          toolDiscovery,
         );
         const deliveredResults: ToolExecutionResult[] = [];
         for (let i = 0; i < results.length; i++) {
           const toolUse = toolUses[i]!;
-          const tool = runToolRegistry.get(toolUse.name);
+          const tool = requestToolRegistry.get(toolUse.name);
           const rawResult = withToolInputReuseHint(tool, toolUse, results[i]!, this.messages);
           const result = { ...rawResult, content: formatToolResultForModel(rawResult, contribution?.exposeToolResultIds) };
           const recoveryGuard = result.metadata?.recoveryGuard;
@@ -692,7 +699,10 @@ export class QueryEngine implements IQueryEngine {
           // the "new evidence unlocks a retry" contract whenever the evidence arrives earlier
           // in the same batch — leaving the recovered call blocked and burning the recovery
           // budget until the engine forces a blocker report.
-          if (result.isError && !toolUse.inputError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
+          // An unloaded definition has not failed at execution. Search can make
+          // the identical direct/proxy call valid on the very next request.
+          const awaitingDefinition = discoveryBlockedCalls.has(toolUse.id) && result.executionState === "not_started";
+          if (!awaitingDefinition && result.isError && !toolUse.inputError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
             failedToolCalls.recordFailure(toolUse.name, toolUse.input);
           }
           if (recoveryGuard) {
@@ -999,18 +1009,29 @@ export class QueryEngine implements IQueryEngine {
     failedToolCalls?: ToolFailureMemory,
     toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
     internalTools: ReadonlySet<string> = new Set(),
-  ): Promise<{ results: ToolExecutionResult[]; failure?: { error: unknown } }> {
+    toolDiscovery?: RunToolDiscovery,
+  ): Promise<{ results: ToolExecutionResult[]; failure?: { error: unknown }; discoveryBlockedCalls: ReadonlySet<string> }> {
+    const discoveryBlockedCalls = new Set<string>();
+    const catalogNames = new Set(toolDiscovery?.catalog.map(row => row.name));
     const outcome = await executeCheckedTools({
       toolUses, toolRegistry, messages: this.messages, permissionChecker: this.permissionChecker,
       hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
       internalTools, failedToolCalls,
       createToolContext: (toolUse, toolAttemptId) => this.createToolContext(
         toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration,
+        toolUse.name === toolDiscovery?.searchToolName ? toolDiscovery : undefined,
+        name => { if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id); },
       ),
       isTrustedSummary: (toolUse, definition) => this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
     });
+    if (toolDiscovery) outcome.results = outcome.results.map(result => {
+      if (!toolRegistry.has(result.toolName) && catalogNames.has(result.toolName)) discoveryBlockedCalls.add(result.toolUseId);
+      return discoveryBlockedCalls.has(result.toolUseId) ? {
+        ...result, recoveryHint: `Use ${toolDiscovery.searchToolName} to discover authorized tools, then call a returned tool in the next request.`,
+      } : result;
+    });
     outcome.results = this.retainToolResults(outcome.results, execution);
-    return outcome;
+    return { ...outcome, discoveryBlockedCalls };
   }
 
   /** Executes one captured tool without requesting a model or changing conversation history. */
@@ -1064,6 +1085,8 @@ export class QueryEngine implements IQueryEngine {
     signal?: AbortSignal,
     execution?: AgentExecutionContext,
     requestConfiguration?: ToolContext["requestConfiguration"],
+    toolDiscovery?: ToolDiscovery,
+    onUnexposedMcpTool?: (name: string) => void,
   ): ToolContext {
     return {
       cwd: this.cwd,
@@ -1088,9 +1111,11 @@ export class QueryEngine implements IQueryEngine {
       setPlanMode: this.options.setPlanMode,
       ...(requestConfiguration ? { requestConfiguration } : {}),
       toolRegistry: toolRegistryView(toolRegistry),
+      ...(toolDiscovery ? { toolDiscovery } : {}),
       ...(toolUse.name === "McpToolCall" ? {
         callMcpTool: async (name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal; deadlineAt?: number }) => {
           if (!name.startsWith("mcp__") || toolRegistry.inspect(name)?.source.kind !== "mcp") {
+            if (name.startsWith("mcp__") && !toolRegistry.has(name)) onUnexposedMcpTool?.(name);
             return { content: [{ type: "text" as const, text: `Unknown or disallowed MCP tool: ${name}` }], isError: true, failureKind: "policy" as const, executionState: "not_started" as const };
           }
           const innerSignal = AbortSignal.any([...(signal ? [signal] : []), ...(options?.signal ? [options.signal] : [])]);

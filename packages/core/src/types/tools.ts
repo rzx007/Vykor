@@ -106,6 +106,8 @@ export interface ToolContext {
   };
   /** Actual tools available to the current QueryEngine after host injection and allow/deny filtering. */
   toolRegistry?: ToolRegistryView;
+  /** Host-owned, Run-local discovery; supplied only to the trusted search tool. */
+  toolDiscovery?: ToolDiscovery;
   /** MCP proxy only: invoke one captured MCP tool through ordinary authorization. */
   callMcpTool?: (
     name: string,
@@ -219,6 +221,20 @@ export interface ToolDescriptor {
 export interface ToolRegistrationSource {
   readonly kind: "builtin" | "agent" | "extension" | "plugin" | "mcp" | "runtime";
   readonly id?: string;
+}
+
+/** Search metadata excludes schemas and execution handles; descriptions are untrusted data. */
+export interface ToolDiscoveryEntry {
+  readonly name: string;
+  readonly description: string;
+  readonly source?: ToolRegistrationSource;
+}
+
+export interface ToolDiscovery {
+  readonly catalog: readonly ToolDiscoveryEntry[];
+  getEligibleNames(): ReadonlySet<string>;
+  /** Request schemas for the next model request; never changes Run authorization. */
+  expose(names: readonly string[]): readonly string[];
 }
 
 export interface RegisteredToolInspection {

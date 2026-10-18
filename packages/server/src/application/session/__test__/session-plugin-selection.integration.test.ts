@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ToolRegistry } from "@vykor/core";
+import { QueryEngine, ToolRegistry, type AgentExecutionContext, type Message, type RunCapabilityView, type StreamMessageParams } from "@vykor/core";
+import { toolSearchTool } from "@vykor/tools";
 import { createRunCapabilityView, type PluginCapabilityInventory } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
 import type { SessionInputRecord, SessionRunRecord } from "@vykor/protocol";
@@ -15,14 +16,14 @@ import { resolveRunPluginSelection } from "../session-plugin-selection.js";
 const cleanup: Array<() => void> = [];
 afterEach(() => { for (const dispose of cleanup.splice(0)) dispose(); });
 
-function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged") {
+function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged", discovery = false) {
   const directory = mkdtempSync(join(tmpdir(), "vk-plugin-selection-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   cleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
   store.sessions.create({ id: "s1", cwd: directory, model: "test" });
   let activeRun: SessionRunRecord | undefined;
   const events = { checkpoint: () => 0, publishSince() {} };
-  const admission = new RunAdmissionService({
+  const admission: RunAdmissionService = new RunAdmissionService({
     conversationTransactions: {
       admitPrompt: (input, config) => store.conversationTransactions.admitPrompt(input, config),
       admitPromptWithRun: (input, config) => store.conversationTransactions.admitPromptWithRun(input, config),
@@ -71,10 +72,12 @@ function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged") {
     }
   };
   const registry = new ToolRegistry();
-  for (const name of ["Public", "P", "Q"]) registry.register({ name, description: name, inputSchema: {}, execute: async () => ({ content: [] }) },
+  const invoked: string[] = [];
+  for (const name of ["Public", "P", "Q"]) registry.register({ name, description: name, inputSchema: {}, execute: async () => { invoked.push(name); return { content: [] }; } },
     name === "Public" ? { kind: "builtin" } : { kind: "plugin", id: name });
+  if (discovery) registry.register(toolSearchTool, { kind: "builtin" });
   return {
-    store, application, selectPluginForRun, inventory,
+    store, application, selectPluginForRun, inventory, invoked,
     startAutomaticRun() {
       activeRun = store.runs.createRun({ sessionId: "s1", metadata: { pluginSelection: {
         status: "resolved", source: "auto", scopeVersion: 2, pluginId: null, pluginIds: ["P", "Q"], candidates: candidates(), reason: "matched",
@@ -87,14 +90,75 @@ function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged") {
         agent: { getPluginCandidates: candidates, validatePluginScope }, signal: new AbortController().signal, traceId: "test" });
       const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["P", "Q"]) },
         selection.scopeVersion === 2 ? selection.pluginIds : selection.pluginId ?? undefined);
-      return { selection, tools: [...view.tools.keys()] };
+      return { selection, tools: [...view.tools.keys()], view };
     },
     ordinary: (id: string, delivery: "queue" | "steer" = "queue") => application.admitPrompt("s1", { id, delivery, items: [{ type: "text", text: "do this task" }] }),
     mention: (pluginId: string) => application.admitPrompt("s1", { id: `mention-${pluginId}`, items: [{ type: "capability", kind: "plugin", pluginId, displayName: pluginId }] }),
   };
 }
 
+// Exercises the real discovery/execution pipeline against the scope produced by admission/recovery.
+async function runWithSearch(view: RunCapabilityView, script: Array<{ name: string; input?: Record<string, unknown> }>, history: Message[] = []) {
+  const requests: StreamMessageParams[] = [];
+  const engine = new QueryEngine({ async *streamMessage(params) {
+    const step = script[requests.length];
+    requests.push({ ...params, messages: structuredClone(params.messages) });
+    if (step) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `search-test-${requests.length}`, input: {}, ...step } };
+    yield { type: "complete" as const, stopReason: step ? "tool_use" : "end_turn" };
+  } }, new ToolRegistry(), { checkTool: async () => ({ action: "allow" }) },
+  { register() {}, execute: async () => ({ blocked: false }) }, { toolDiscovery: {
+    searchTool: toolSearchTool, minToolCount: 1, shouldDefer: (_tool, source) => source?.kind === "plugin",
+  } });
+  engine.loadMessages(history);
+  const execution = { capabilityView: view, scope: { runId: "discovery-test", signal: new AbortController().signal },
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    emit: async () => {}, takeSteeredInputs: async () => [], closeSteering() {},
+  } as unknown as AgentExecutionContext;
+  const results = [];
+  for await (const event of engine.submitMessage("task", { execution })) if (event.type === "tool_use_end") results.push(event.result);
+  return { requests, results, history: engine.getHistory() };
+}
+
 describe("plugin selection across admission, queue and recovery", () => {
+  it.each(["unmerged", "recovered"] as const)("keeps ToolSearch within a promoted steer's captured scope after a later @ (%s)", async delivery => {
+    const f = fixture(delivery, true);
+    f.startAutomaticRun();
+    const queued = await f.ordinary("search-steer", "steer");
+    await f.mention("Q");
+    const captured = await f.resolve(queued);
+    const run = await runWithSearch(captured.view, [{ name: "ToolSearch", input: { query: "P", limit: 1 } }, { name: "P" }]);
+    expect(captured.selection).toMatchObject({ source: "auto", pluginIds: ["P", "Q"] });
+    expect(run.requests[0]!.tools?.map(t => t.name)).toEqual(["Public", "ToolSearch"]);
+    expect(run.requests[1]!.tools?.map(t => t.name)).toContain("P");
+    expect(f.invoked).toEqual(["P"]);
+    expect(f.store.sessions.get("s1")!.metadata.activePluginId).toBe("Q");
+    const inherited = await f.resolve(await f.ordinary("after-search"));
+    const limited = await runWithSearch(inherited.view, [{ name: "ToolSearch", input: { query: "P" } }, { name: "P" }]);
+    expect(limited.requests.flatMap(r => r.tools?.map(t => t.name) ?? [])).not.toContain("P");
+    expect(limited.results[1]).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(f.invoked).toEqual(["P"]);
+  });
+
+  it("cold recovery searches the saved scope again without replaying settled calls and rejects disabled sources", async () => {
+    const f = fixture("unmerged", true);
+    const earlier = await f.ordinary("search-before-interruption");
+    const captured = await f.resolve(earlier);
+    const first = await runWithSearch(captured.view, [{ name: "ToolSearch", input: { query: "P", limit: 1 } }, { name: "P" }]);
+    f.store.runs.updateRun(earlier.run!.id, { status: "interrupted", metadata: { pluginSelection: captured.selection } });
+    await f.mention("Q");
+    const replay = await f.application.resumeRun("s1", earlier.run!.id, { id: "search-replay", traceId: "replay" });
+    const recovered = await f.resolve(replay);
+    const next = await runWithSearch(recovered.view, [{ name: "ToolSearch", input: { query: "Q", limit: 1 } }, { name: "Q" }], first.history);
+    expect(next.requests[0]!.tools?.map(t => t.name)).not.toContain("P");
+    expect(next.requests[0]!.tools?.map(t => t.name)).not.toContain("Q");
+    expect(next.requests[0]!.messages.some(m => m.type === "tool_result")).toBe(true);
+    expect(f.invoked).toEqual(["P", "Q"]);
+    expect(recovered.selection).toMatchObject({ pluginIds: ["P", "Q"] });
+    (f.inventory.plugins as Map<string, unknown>).delete("P");
+    await expect(f.resolve(replay)).rejects.toThrow("Plugin changed or disabled: P");
+    expect(f.invoked).toEqual(["P", "Q"]);
+  });
+
   it.each(["unmerged", "recovered"] as const)("does not inherit an automatic plugin when a steer becomes a new Run (%s)", async delivery => {
     const f = fixture(delivery);
     const active = f.startAutomaticRun();

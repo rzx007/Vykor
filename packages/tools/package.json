@@ -27,7 +27,8 @@
     "@vykor/services": "workspace:*",
     "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
-    "diff": "catalog:"
+    "diff": "catalog:",
+    "minisearch": "catalog:"
   },
   "devDependencies": {
     "@types/diff": "catalog:",

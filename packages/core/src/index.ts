@@ -56,6 +56,8 @@ export {
 export type {
   ToolDefinition,
   ToolContext,
+  ToolDiscovery,
+  ToolDiscoveryEntry,
   ToolResult,
   ToolExecutionResult,
   HostFileFacts,

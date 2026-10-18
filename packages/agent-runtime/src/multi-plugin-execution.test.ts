@@ -4,6 +4,7 @@ import { skillTool } from "../../tools/src/meta/skill.js";
 import { createAgentKernel, createBasicAgentKernelRuntime } from "./kernel.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { unavailableCapability } from "./capability-resolution.js";
+import { createVykorRuntime } from "./default-runtime.js";
 
 const settings: Settings = {
   model: "scripted-client", apiFormat: "anthropic", maxTurns: 8,
@@ -22,7 +23,7 @@ const skills = candidates.map(({ pluginId }) => ({
   },
 }));
 
-async function fixture(script: Array<{ name: string; input: Record<string, unknown> }>) {
+async function fixture(script: Array<{ name: string; input: Record<string, unknown> }>, deferred = false) {
   const requests: StreamMessageParams[] = [];
   const events: AgentEvent[] = [];
   const files = new Map<string, string>();
@@ -30,7 +31,9 @@ async function fixture(script: Array<{ name: string; input: Record<string, unkno
   const validate = vi.fn(async () => {});
   let makeView!: (scope?: string | readonly string[]) => ReturnType<typeof createRunCapabilityView>;
   const define = (name: string, owner: string, execute: ToolDefinition["execute"]): ToolDefinition => ({
-    name, description: `${owner} operation`, inputSchema: { type: "object" }, execute,
+    name, description: `${owner} operation`, inputSchema: { type: "object",
+      ...(deferred ? { description: "SCHEMA_ONLY_SENTINEL ".repeat(1800) } : {}),
+    }, execute,
   });
   const agent = await createAgentKernel({
     settings, cwd: "D:/workspace", sessionId: "handoff-test",
@@ -43,8 +46,8 @@ async function fixture(script: Array<{ name: string; input: Record<string, unkno
     effects: { requestPermission: async () => ({ status: "approved" }) },
     onEvent: event => { events.push(event); },
     createRuntime: async context => {
-      const prepared = createBasicAgentKernelRuntime({ settings: context.settings, cwd: context.cwd, tools: [skillTool], client: {
-        async *streamMessage(params) {
+      const client = {
+        async *streamMessage(params: StreamMessageParams) {
           const step = script[requests.length];
           // QueryEngine later appends results to its message array; preserve what this request actually saw.
           requests.push({ ...params, messages: structuredClone(params.messages) });
@@ -52,7 +55,11 @@ async function fixture(script: Array<{ name: string; input: Record<string, unkno
           else yield { type: "text_delta" as const, delta: "done" };
           yield { type: "complete" as const, stopReason: step ? "tool_use" as const : "end_turn" as const };
         },
-      } });
+      };
+      const prepared = deferred ? { runtime: await createVykorRuntime({
+        settings: context.settings, cwd: context.cwd, sessionId: context.sessionId,
+        capabilities: context.capabilities, configuration: { ...context.configuration, client },
+      }) } : createBasicAgentKernelRuntime({ settings: context.settings, cwd: context.cwd, tools: [skillTool], client });
       prepared.runtime.toolRegistry.register(define("KnowledgeWrite", "knowledge-work", async () => {
         used.push("knowledge-work");
         files.set("report.md", "Internal assumptions S1-S4; 300 min/week; target savings 81 min/week.");
@@ -76,6 +83,53 @@ async function fixture(script: Array<{ name: string; input: Record<string, unkno
 }
 
 describe("multi-plugin execution through the real Agent and query engine", () => {
+  it("discovers and calls both plugins through the default runtime without changing the Run view", async () => {
+    const f = await fixture([
+      { name: "Skill", input: { name: "knowledge-work/actual", path: skills[0]!.path } },
+      { name: "ToolSearch", input: { query: "KnowledgeWrite", limit: 1 } },
+      { name: "KnowledgeWrite", input: {} },
+      { name: "Skill", input: { name: "office-work/actual", path: skills[1]!.path } },
+      { name: "ToolSearch", input: { query: "OfficeMakeSlides", limit: 1 } },
+      { name: "OfficeMakeSlides", input: { report: "report.md" } },
+    ], true);
+    try {
+      const view = f.makeView(["knowledge-work", "office-work"]);
+      expect((await f.agent.runMessage("report then slides", { capabilityView: view })).status).toBe("completed");
+      expect(f.used).toEqual(["knowledge-work", "office-work"]);
+      expect(f.files.get("presentation.pptx")).toBe(f.files.get("report.md"));
+      expect(f.requests).toHaveLength(7);
+      expect(JSON.stringify(f.requests[0])).not.toContain("SCHEMA_ONLY_SENTINEL");
+      expect(JSON.stringify(f.requests[0])).not.toContain("PRIVATE_SKILL_BODY_");
+      expect(f.requests[2]!.tools?.map(t => t.name)).toContain("KnowledgeWrite");
+      expect(f.requests[2]!.tools?.map(t => t.name)).not.toContain("OfficeMakeSlides");
+      expect(f.requests[5]!.tools?.map(t => t.name)).toEqual(expect.arrayContaining(["KnowledgeWrite", "OfficeMakeSlides"]));
+      expect([...view.pluginIds!]).toEqual(["knowledge-work", "office-work"]);
+      expect(f.events.filter(event => event.type === "tool.completed").every(event => !event.data.result.isError)).toBe(true);
+      expect(f.events.some(event => event.type === "model.attempt.started" && event.data.purpose === "plugin_selection")).toBe(false);
+    } finally { await f.agent.close(); }
+  });
+
+  it("does not discover a foreign tool or Skill through an explicitly limited Run", async () => {
+    const f = await fixture([
+      { name: "ToolSearch", input: { query: "OfficeMakeSlides" } },
+      { name: "OfficeMakeSlides", input: {} },
+      { name: "Skill", input: { name: "office-work/actual", path: skills[1]!.path } },
+      { name: "ToolSearch", input: { query: "KnowledgeWrite", limit: 1 } },
+      { name: "KnowledgeWrite", input: {} },
+    ], true);
+    try {
+      await f.agent.runMessage("knowledge only", { capabilityView: f.makeView("knowledge-work") });
+      expect(f.used).toEqual(["knowledge-work"]);
+      expect(JSON.stringify(f.requests)).not.toContain("PRIVATE_SKILL_BODY_office-work");
+      expect(f.requests.flatMap(r => r.tools?.map(t => t.name) ?? [])).not.toContain("OfficeMakeSlides");
+      expect(f.requests[0]!.system).not.toContain("office-work capability summary");
+      const completed = f.events.filter(event => event.type === "tool.completed");
+      expect(JSON.stringify(completed[0])).toContain("no matches");
+      expect(completed[1]).toMatchObject({ data: { result: { isError: true, executionState: "not_started" } } });
+      expect(completed.at(-1)).toMatchObject({ data: { result: { executionState: "completed" } } });
+    } finally { await f.agent.close(); }
+  });
+
   it("uses knowledge then office in one Run, loading each actual Skill on demand without a selector request", async () => {
     const f = await fixture([
       { name: "Skill", input: { name: "knowledge-work/actual", path: skills[0]!.path } },

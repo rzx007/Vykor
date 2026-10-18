@@ -21,13 +21,16 @@ const settings: Settings = {
 const pluginId = "test.coordinator";
 const foreignId = "test.foreign";
 const mcpTool = "mcp__ready__ping";
+type ScriptStep = string | { name: string; input: Record<string, unknown> };
 
 async function fixture(options: {
   child?: Partial<AgentChildSpawnInput>;
   hostToolCeiling?: string[];
   disallowedTools?: string[];
-  workerScript?: string[];
-  parentScript?: string[];
+  workerScript?: ScriptStep[];
+  parentScript?: ScriptStep[];
+  manyTools?: boolean;
+  coordinatorSearch?: boolean;
   childIdleTtlMs?: number;
   beforeSpawn?: (root: string) => Promise<void>;
   ui?: boolean;
@@ -38,7 +41,7 @@ async function fixture(options: {
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
   const marker = join(root, "native-calls.jsonl");
   const mcpMarker = join(root, "mcp-calls.jsonl");
-  for (const [id, names] of [[pluginId, ["NativeWork", "HostDenied", "NativeDenied"]], [foreignId, ["ForeignWork"]]] as const) {
+  for (const [id, names] of [[pluginId, ["NativeWork", "HostDenied", "NativeDenied", ...(options.manyTools ? Array.from({ length: 20 }, (_, i) => `Extra${i}`) : [])]], [foreignId, ["ForeignWork"]]] as const) {
     const source = join(root, id);
     mkdirSync(join(source, ".vykor-plugin"), { recursive: true });
     writeFileSync(join(source, ".vykor-plugin/plugin.json"), JSON.stringify({
@@ -78,7 +81,7 @@ async function fixture(options: {
       `],
     } } }));
     expect((await installLocalNativePlugin({ sourcePath: source, cwd: root, scope: "user",
-      ...(options.ui && id === pluginId ? { approvedPermissions: ["ui:render", "ui:invoke-own-tools"] } : {}),
+      approvedPermissions: options.ui && id === pluginId ? ["ui:render", "ui:invoke-own-tools"] : [],
     })).status).toBe("installed");
   }
   const requests: Array<{ worker: boolean; tools: string[]; messages: StreamMessageParams["messages"] }> = [];
@@ -91,7 +94,7 @@ async function fixture(options: {
   let childError: unknown;
   const agentOptions: VykorAgentOptions = {
     cwd: root, sessionId: "coordinator", settings,
-    systemPrompt: "COORDINATOR_TEST", roleAllowedTools: ["Delegate"],
+    systemPrompt: "COORDINATOR_TEST", roleAllowedTools: ["Delegate", ...(options.coordinatorSearch ? ["ToolSearch"] : [])],
     hostToolCeiling: options.hostToolCeiling,
     disallowedTools: options.disallowedTools,
     childIdleTtlMs: options.childIdleTtlMs,
@@ -100,8 +103,10 @@ async function fixture(options: {
     client: { async *streamMessage(params) {
       const worker = params.system?.includes("WORKER_TEST") ?? false;
       requests.push({ worker, tools: params.tools?.map(tool => tool.name) ?? [], messages: structuredClone(params.messages) });
-      const name = worker ? workerScript[workerTurns++ % (workerScript.length + 1)] : parentScript[parentTurns++];
-      if (name) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `call-${requests.length}`, name, input: {} } };
+      const step = worker ? workerScript[workerTurns++ % (workerScript.length + 1)] : parentScript[parentTurns++];
+      const name = typeof step === "string" ? step : step?.name;
+      const input = typeof step === "string" ? {} : step?.input ?? {};
+      if (name) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `call-${requests.length}`, name, input } };
       else yield { type: "text_delta" as const, delta: "done" };
       yield { type: "complete" as const, stopReason: name ? "tool_use" as const : "end_turn" as const };
     } },
@@ -134,6 +139,30 @@ function nativeCalls(path: string): Array<{ name: string; sessionId: string }> {
 }
 
 describe("Coordinator delegates authorized plugin tools without widening its own role", () => {
+  it("searches only the Coordinator's executable tools while a real worker discovers its own Native and MCP bindings", async () => {
+    const f = await fixture({ manyTools: true, coordinatorSearch: true,
+      parentScript: [{ name: "ToolSearch", input: { query: "NativeWork" } }, "Delegate"],
+      workerScript: [{ name: "ToolSearch", input: { query: "NativeWork", limit: 1 } }, "NativeWork",
+        { name: "ToolSearch", input: { query: mcpTool, limit: 1 } }, mcpTool],
+    });
+    await f.agent.runMessage("delegate with discovery", { capabilityView: f.agent.createRunCapabilityView(pluginId) });
+    expect(f.childResult?.status).toBe("completed");
+    expect(f.requests.filter(request => !request.worker).every(request => !request.tools.includes("NativeWork") && !request.tools.includes(mcpTool))).toBe(true);
+    const parentResults = f.agent.getHistory().filter(message => message.type === "tool_result");
+    const searchText = parentResults[0]!.content.map(block => block.type === "text" ? block.text : "").join("\n");
+    expect(searchText).not.toContain('"name":"NativeWork"');
+    expect(searchText).not.toContain(`"name":"${mcpTool}"`);
+    expect(searchText).not.toContain("Extra0");
+    const worker = f.requests.filter(request => request.worker);
+    expect(worker[0]!.tools).toContain("ToolSearch");
+    expect(worker[0]!.tools).not.toContain("NativeWork");
+    expect(worker[1]!.tools).toContain("NativeWork");
+    expect(worker[1]!.tools).not.toContain(mcpTool);
+    expect(worker[3]!.tools).toContain(mcpTool);
+    expect(nativeCalls(f.marker).map(call => call.name)).toEqual(["NativeWork"]);
+    expect(readFileSync(f.mcpMarker, "utf8")).toBe("original-source\n");
+  });
+
   it("gives a real worker its captured UI without granting UI or Native actions to the Coordinator", async () => {
     const captured: Parameters<NonNullable<VykorAgentOptions["onRunCapabilities"]>>[0][] = [];
     const f = await fixture({ ui: true, workerScript: ["NativeWork"], onRunCapabilities: snapshot => { captured.push(snapshot); } });
@@ -275,6 +304,6 @@ async function changeInstallation(root: string, change: string) {
   } else {
     const manifestPath = join(root, pluginId, ".vykor-plugin/plugin.json");
     writeFileSync(manifestPath, JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, "utf8")), version: "2.0.0" }));
-    expect((await installLocalNativePlugin({ sourcePath: join(root, pluginId), cwd: root, scope: "user" })).status).toBe("installed");
+    expect((await installLocalNativePlugin({ sourcePath: join(root, pluginId), cwd: root, scope: "user", approvedPermissions: [] })).status).toBe("installed");
   }
 }
