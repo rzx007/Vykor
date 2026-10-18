@@ -1640,6 +1640,7 @@ test("useServerSync drives a real daemon session through prompt, permission, and
           model: "m",
           permissionMode: "default",
           maxTurns: 9,
+          pluginsEnabled: false,
         },
         },
         (message) => errors.push(message),
