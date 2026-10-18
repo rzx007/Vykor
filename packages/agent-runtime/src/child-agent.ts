@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import type { AgentJobAuthorization } from "@vykor/jobs";
 
 import type {
   AgentChildBudgetSnapshot,
@@ -45,6 +46,8 @@ import {
   resolveChildMaxTurns,
 } from "./child-agent-options.js";
 import { applyChildActivityEvent, partialResultFields, type ChildActivityState } from "./child-activity.js";
+import { readonlyMap } from "./run-capability-view.js";
+import type { PluginSelectionCandidate } from "./plugin-selection.js";
 
 export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-environment.js";
 export { AgentChildRegistry, DEFAULT_AGENT_CHILD_BUDGET } from "./child-registry.js";
@@ -61,6 +64,7 @@ interface ChildRecord {
   /** Trusted host-owned system child (post-run review); never set from Agent tool input. */
   system: boolean;
   capabilityView?: RunCapabilityView;
+  pluginCandidates?: readonly PluginSelectionCandidate[];
   lease: AgentChildEnvironmentLease;
   createAgent(): Promise<VykorAgent>;
   agent?: VykorAgent;
@@ -89,6 +93,61 @@ interface ChildRecord {
 }
 
 const MAX_CHILD_REQUEST_HISTORY = 256;
+
+function authorizesChildView(child: RunCapabilityView, parent?: AgentJobAuthorization): boolean {
+  const owners = child.pluginIds ?? new Set(child.pluginId ? [child.pluginId] : []);
+  if (!owners.size) return true;
+  const allowed = parent?.pluginIds ?? new Set(parent?.pluginId ? [parent.pluginId] : []);
+  for (const owner of owners) if (!allowed.has(owner)) return false;
+  for (const [name, binding] of child.tools) {
+    if (binding.ownerPluginId === undefined) continue;
+    const current = parent?.tools?.get(name) as typeof binding | undefined;
+    if (!current || current.ownerPluginId !== binding.ownerPluginId || current.serverId !== binding.serverId
+      || !isDeepStrictEqual(current.source, binding.source)
+      || current.definitionIdentity !== binding.definitionIdentity || current.definition.execute !== binding.definition.execute
+      || (!binding.definitionIdentity && current.invoke !== binding.invoke)) return false;
+  }
+  for (const kind of ["skills", "agents", "mcpServers", "pluginUi"] as const) {
+    for (const [name, binding] of child[kind] ?? []) {
+      if (kind !== "pluginUi" && !("ownerPluginId" in binding && binding.ownerPluginId !== undefined)) continue;
+      if (!isDeepStrictEqual(parent?.[kind]?.get(name), binding)) return false;
+    }
+  }
+  return true;
+}
+
+/** Workers rebuild their own role's baseline; plugin functions stay bound to the parent. */
+function rebuildChildCapabilityView(
+  baseline: RunCapabilityView,
+  inherited: RunCapabilityView | undefined,
+  child: AgentChildSpawnInput,
+): RunCapabilityView {
+  if (!inherited) return deriveChildCapabilityView(baseline, child)!;
+  const owners = inherited.pluginIds ?? new Set(inherited.pluginId ? [inherited.pluginId] : []);
+  const owns = (owner: string | undefined) => owner !== undefined && owners.has(owner);
+  const tools = [...baseline.tools].filter(([, binding]) => {
+    if (binding.ownerPluginId !== undefined || binding.source?.kind === "plugin") return false;
+    if (binding.source?.kind !== "mcp") return true;
+    const server = binding.serverId && baseline.mcpServers.get(binding.serverId);
+    const captured = binding.serverId && inherited.mcpServers.get(binding.serverId);
+    return Boolean(server && captured && captured.ownerPluginId === undefined && isDeepStrictEqual(server, captured));
+  });
+  for (const [name, binding] of inherited.tools) {
+    if (!owns(binding.ownerPluginId)) continue;
+    const native = binding.source?.kind === "plugin" && binding.source.id === binding.ownerPluginId;
+    const mcp = binding.source?.kind === "mcp" && binding.serverId
+      && inherited.mcpServers.get(binding.serverId)?.ownerPluginId === binding.ownerPluginId;
+    if (native || mcp) tools.push([name, binding]);
+  }
+  const skills = [...baseline.skills].filter(([, binding]) => binding.ownerPluginId === undefined && binding.definition.source !== "plugin");
+  skills.push(...[...inherited.skills].filter(([, binding]) => owns(binding.ownerPluginId) && binding.definition.source === "plugin"));
+  const agents = [...baseline.agents].filter(([, binding]) => binding.ownerPluginId === undefined && binding.definition.source !== "plugin");
+  agents.push(...[...inherited.agents].filter(([, binding]) => owns(binding.ownerPluginId) && binding.definition.source === "plugin"));
+  return deriveChildCapabilityView(Object.freeze({
+    ...inherited, tools: readonlyMap(tools), skills: readonlyMap(skills), agents: readonlyMap(agents),
+  }), child)!;
+}
+
 export interface AgentChildManagerOptions {
   settings: Settings;
   configuration: VykorAgentConfiguration;
@@ -125,10 +184,12 @@ export class AgentChildManager implements AgentChildDirectory {
     return this.options.cwd;
   }
 
-  createController(parentScope: AgentRunScope & { limits?: AgentExecutionLimits }, parentView?: RunCapabilityView): AgentChildController {
+  createController(parentScope: AgentRunScope & { limits?: AgentExecutionLimits }, parentView?: RunCapabilityView,
+    pluginCandidates?: readonly PluginSelectionCandidate[]): AgentChildController {
+    const capturedCandidates = pluginCandidates && Object.freeze(pluginCandidates.map(candidate => Object.freeze({ ...candidate })));
     return {
       hasChildAgent: (childId) => this.find(childId) !== undefined,
-      spawnChildAgent: (input) => this.spawn(parentScope, input, parentView),
+      spawnChildAgent: (input) => this.spawn(parentScope, input, parentView, capturedCandidates),
       sendChildInput: (childId, input) => this.send(childId, input, parentView, captureParent(parentScope)),
       interruptChildAgent: (childId, reason) => this.interrupt(childId, reason),
       awaitChildAgent: (childId) => this.awaitResult(childId),
@@ -194,8 +255,9 @@ export class AgentChildManager implements AgentChildDirectory {
     parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
     input: AgentChildSpawnInput,
     parentView?: RunCapabilityView,
+    pluginCandidates?: readonly PluginSelectionCandidate[],
   ): Promise<AgentChildInvocation> {
-    return await this.spawnInternal(parentScope, input, { parentView });
+    return await this.spawnInternal(parentScope, input, { parentView, pluginCandidates });
   }
 
   private async spawnInternal(
@@ -204,6 +266,7 @@ export class AgentChildManager implements AgentChildDirectory {
     options: {
       parentView?: RunCapabilityView;
       capabilityView?: RunCapabilityView;
+      pluginCandidates?: readonly PluginSelectionCandidate[];
       system?: boolean;
       initialContent?: string;
     },
@@ -273,6 +336,7 @@ export class AgentChildManager implements AgentChildDirectory {
       spawn: resolvedSpawn,
       parentScope,
       system,
+      pluginCandidates: options.pluginCandidates,
       lease,
       // The child session exists only after child.created has been projected.
       createAgent: () => this.options.createAgent({
@@ -323,10 +387,10 @@ export class AgentChildManager implements AgentChildDirectory {
       if (environmentFailure) throw environmentFailure.error;
       // A normal Coordinator role is not the host ceiling for its workers.
       // Normal children rebuild their non-plugin baseline under their own role;
-      // a selected plugin keeps the parent's captured bindings and cannot widen.
+      // plugin bindings remain captured from the parent's scope.
       record.capabilityView = system
         ? options.capabilityView
-        : parentView?.pluginId
+        : parentView?.pluginId || parentView?.pluginIds?.size
           ? deriveChildCapabilityView(parentView, input)
           : undefined;
       await this.ensureAgent(record, false);
@@ -353,12 +417,12 @@ export class AgentChildManager implements AgentChildDirectory {
     }
   }
 
-  async send(childId: string, input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">, parent: TrustedChildRunParent | null = null): Promise<AgentInputReceipt> {
+  async send(childId: string, input: AgentChildInput, authorization?: AgentJobAuthorization, parent: TrustedChildRunParent | null = null): Promise<AgentInputReceipt> {
     const record = this.require(childId);
     if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${childId}`);
-    const pluginId = record.capabilityView?.pluginId;
-    if (pluginId !== undefined && pluginId !== authorization?.pluginId) {
-      throw new Error(`Child plugin ${pluginId} is not authorized for this Run.`);
+    const childView = record.capabilityView;
+    if (childView && !authorizesChildView(childView, authorization)) {
+      throw new Error("Child plugin capabilities are not authorized for this Run.");
     }
     if (input.id) {
       const existing = record.requests.get(input.id);
@@ -506,7 +570,10 @@ export class AgentChildManager implements AgentChildDirectory {
       run = agent.submitMessage(input.content, {
         childRunParent: parent,
         limits: parent?.limits?.forChildRun?.(ids.runId) ?? parent?.limits,
-        capabilityView: record.capabilityView,
+        // The child's role supplies its own baseline without opening its plugin catalog.
+        capabilityView: record.system ? record.capabilityView ?? agent.createRunCapabilityView()
+          : rebuildChildCapabilityView(agent.createRunCapabilityView(), record.capabilityView, record.spawn),
+        pluginCandidates: record.pluginCandidates,
         ids,
         inputItems: input.inputItems,
         signal: controller.signal,
@@ -799,7 +866,7 @@ class ChildHandle implements AgentChildHandle {
       ...(snapshot.usage ? { usage: { ...snapshot.usage } } : {}),
     };
   }
-  send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt> {
+  send(input: AgentChildInput, authorization?: AgentJobAuthorization): Promise<AgentInputReceipt> {
     return this.manager.send(this.id, input, authorization);
   }
   interrupt(reason?: string): Promise<void> { return this.manager.interrupt(this.id, reason); }

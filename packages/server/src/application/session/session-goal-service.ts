@@ -11,6 +11,7 @@ import type { SessionPluginCapabilityService } from "./session-plugin-capability
 import type { RunAdmissionService } from "./run-admission-service.js";
 import type { RunControlService } from "./run-control-service.js";
 import { GoalExternalWaitObserver, sameGoalExternalWait, type GoalWaitObservationResult } from "./goal-external-wait-observer.js";
+import { emptyPluginScope, readInputPluginScope, type InputPluginScope } from "./session-plugin-selection.js";
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
@@ -37,7 +38,7 @@ export class SessionGoalService {
       control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork" | "stopGoalChildren">;
       events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
       waitVerifier?: Pick<GoalWaitVerifier, "check">;
-      pluginCapabilities: Pick<SessionPluginCapabilityService, "admit">;
+      pluginCapabilities: Pick<SessionPluginCapabilityService, "admit"> & Partial<Pick<SessionPluginCapabilityService, "captureScope">>;
     },
   ) {
     this.admission = context.admission;
@@ -171,6 +172,7 @@ export class SessionGoalService {
   }
   create(sessionId: string, input: CreateSessionGoalInput): Promise<SessionGoal> {
     let pluginId: string | undefined;
+    let pluginScope: InputPluginScope | undefined;
     return this.command(sessionId, input.requestId, { operation: "create", ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
@@ -181,21 +183,24 @@ export class SessionGoalService {
         });
         this.context.goals.beginGoalVersion({ goalId: created.id, objectiveVersion: 1, objective: created.objective,
           requestId: input.requestId, actor: { kind: "local_user" }, createdAt: Date.now() });
-        this.persistRun(created, input.requestId, "initial", input);
+        this.persistRun(created, input.requestId, "initial", { ...input, pluginScope });
         return created;
       });
       return this.finishDispatch(input.requestId, goal);
     }, async () => {
       ({ pluginId } = await this.context.pluginCapabilities.admit(this.requireSession(sessionId), input.items ?? []));
+      if (!pluginId) pluginScope = await this.context.pluginCapabilities.captureScope?.(this.requireSession(sessionId)) ?? emptyPluginScope();
     });
   }
 
   update(sessionId: string, goalId: string, input: UpdateSessionGoalInput): Promise<SessionGoal> {
     let pluginId: string | undefined;
+    let pluginScope: InputPluginScope | undefined;
     return this.command(sessionId, input.requestId, { operation: "update", goalId, ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
       let request = this.context.goals.getGoalRequest(input.requestId)!;
+      pluginScope ??= readInputPluginScope(request.result?.pluginScope);
       const original = this.requireGoal(sessionId, goalId);
       this.assertOpen(original);
       if (original.revision !== input.expectedRevision && request.result?.phase !== "stopping")
@@ -218,6 +223,7 @@ export class SessionGoalService {
           this.context.goals.settleGoalRequest(input.requestId, { status: "pending", goalId, result: {
             phase: "stopping", revision: changed.revision, previousStatus: original.status,
             previousReason: original.reason, previousStopReason: original.stopReason,
+            ...(pluginScope ? { pluginScope } : {}),
           } });
           return changed;
         });
@@ -239,13 +245,15 @@ export class SessionGoalService {
         this.context.goals.beginGoalVersion({ goalId, objectiveVersion: goal.objectiveVersion,
           previousVersion: current.objectiveVersion, objective: goal.objective, requestId: input.requestId,
           actor: { kind: "local_user" }, createdAt: Date.now() });
-        if (goal.status === "active") this.persistRun(goal, input.requestId, "edit", input);
-        else this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal } });
+        if (goal.status === "active") this.persistRun(goal, input.requestId, "edit", { ...input, pluginScope });
+        else this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal, ...(pluginScope ? { pluginScope } : {}) } });
         return goal;
       });
       return updated.status === "active" ? this.finishDispatch(input.requestId, updated) : updated;
     }, async () => {
       ({ pluginId } = await this.context.pluginCapabilities.admit(this.requireSession(sessionId), input.items ?? []));
+      if (!pluginId && !this.requireGoal(sessionId, goalId).pluginId)
+        pluginScope = await this.context.pluginCapabilities.captureScope?.(this.requireSession(sessionId)) ?? emptyPluginScope();
     });
   }
 
@@ -643,6 +651,7 @@ export class SessionGoalService {
       items?: AdmitPromptInput["items"];
       attachments?: AdmitPromptInput["attachments"];
       transcriptVisibility?: "hidden";
+      pluginScope?: InputPluginScope;
     },
   ): void {
     this.checkExecution(goal.id, goal.objectiveVersion);
@@ -661,14 +670,17 @@ export class SessionGoalService {
       items?: AdmitPromptInput["items"];
       attachments?: AdmitPromptInput["attachments"];
       transcriptVisibility?: "hidden";
+      pluginScope?: InputPluginScope;
     },
   ): AdmitPromptInput {
+    const pluginScope = goal.pluginId ? undefined : input.pluginScope ?? this.savedPluginScope(goal);
     const metadata = {
       goalId: goal.id,
       goalObjectiveVersion: goal.objectiveVersion,
       goalRunKind: kind,
       ...(input.transcriptVisibility ? { transcriptVisibility: input.transcriptVisibility } : {}),
       ...(goal.pluginId ? { pluginId: goal.pluginId } : {}),
+      ...(pluginScope ? { pluginScope, pluginSelectionPolicy: pluginScope.source } : {}),
     };
     return {
       id: requestId,
@@ -678,6 +690,36 @@ export class SessionGoalService {
       metadata,
       runMetadata: metadata,
     };
+  }
+
+  /** Continuations reuse durable host evidence, including any narrowed resolved scope. */
+  private savedPluginScope(goal: SessionGoal): InputPluginScope {
+    const roots = this.context.runs.listGoalRuns(goal.id, goal.objectiveVersion)
+      .filter(run => run.sessionId === goal.sessionId && run.metadata.parentRunId === undefined)
+      .reverse().sort((left, right) => right.createdAt - left.createdAt);
+    for (const run of roots) {
+      const selection = run.metadata.pluginSelection as { status?: string; scopeVersion?: number; source?: string;
+        pluginIds?: string[]; pluginId?: string | null; version?: string; behaviorDigest?: string } | undefined;
+      if (selection?.status === "resolved" && selection.scopeVersion === 2) {
+        const scope = readInputPluginScope({ ...selection, source: selection.source === "none" ? "none" : "auto" })!;
+        return { scopeVersion: 2, source: scope.source, pluginIds: scope.pluginIds, candidates: scope.candidates };
+      }
+      if (selection?.status === "resolved" && selection.scopeVersion === undefined && selection.source === "auto") {
+        if (selection.pluginId === null) return emptyPluginScope();
+        if (typeof selection.pluginId !== "string" || !selection.version || !selection.behaviorDigest)
+          throw new Error("旧版目标插件范围缺少来源信息，请重新发送目标");
+        return { scopeVersion: 2, source: "auto", pluginIds: [selection.pluginId], candidates: [{
+          pluginId: selection.pluginId, displayName: selection.pluginId, description: "",
+          version: selection.version, behaviorDigest: selection.behaviorDigest,
+        }] };
+      }
+      const captured = readInputPluginScope(run.metadata.pluginScope);
+      if (captured) return captured;
+    }
+    // A paused objective edit may have a saved scope before its first Run exists.
+    const version = this.context.goals.getGoalVersion(goal.id, goal.objectiveVersion);
+    const request = version && this.context.goals.getGoalRequest(version.requestId);
+    return readInputPluginScope(request?.result?.pluginScope) ?? emptyPluginScope();
   }
   private finishDispatch(requestId: string, goal: SessionGoal): SessionGoal {
     const request = this.context.goals.getGoalRequest(requestId)!;

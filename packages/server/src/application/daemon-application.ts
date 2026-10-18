@@ -827,8 +827,11 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runAdmission = runServices.admission;
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
+      const pluginCapabilities = new SessionPluginCapabilityService({
+        resolveInventory: runtimeDiscovery.resolvePluginInventory,
+      });
       this.pluginUiConversation = new SessionPluginUiConversationService({ store, source: this.pluginUi,
-        operations: this.operationRunner, admission: this.runAdmission,
+        operations: this.operationRunner, admission: this.runAdmission, pluginCapabilities,
         modelAvailable: async sessionId => {
           if (!this.agentPool.configured) return false;
           const session = store.sessions.get(sessionId);
@@ -901,9 +904,6 @@ export class DaemonApplication implements DurableAgentApplication {
        * 3. 与其他服务交互（如控制服务、维护服务）
        * 4. 提供会话相关的查询和操作接口
        */
-      const pluginCapabilities = new SessionPluginCapabilityService({
-        resolveInventory: runtimeDiscovery.resolvePluginInventory,
-      });
       this.queries = new SessionQueryService({
         getSession: (id) => store.sessions.get(id),
         listSessions: (input) => store.sessions.list(input),

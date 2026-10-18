@@ -7,6 +7,7 @@ import type {
 } from "@vykor/protocol";
 import { readRuntimeMetadata } from "@vykor/protocol";
 import { SessionApplicationError } from "./session-application-error.js";
+import { capturePluginSelectionPolicy, emptyPluginScope, type InputPluginScope } from "./session-plugin-selection.js";
 
 export interface SessionPluginCapabilityServiceContext {
   resolveInventory(session: SessionRecord): Promise<PluginCapabilityInventory>;
@@ -14,6 +15,16 @@ export interface SessionPluginCapabilityServiceContext {
 
 export class SessionPluginCapabilityService {
   constructor(private readonly context: SessionPluginCapabilityServiceContext) {}
+
+  /** Freeze automatic eligibility before persistence, using the approved inventory. */
+  async captureScope(session: SessionRecord): Promise<InputPluginScope> {
+    if (capturePluginSelectionPolicy(session) === "none") return emptyPluginScope();
+    const inventory = await this.context.resolveInventory(session);
+    const candidates = [...inventory.plugins.values()].map(({ pluginId, displayName, description, version, behaviorDigest }) => ({
+      pluginId, displayName, description, version, ...(behaviorDigest ? { behaviorDigest } : {}),
+    }));
+    return { scopeVersion: 2, source: "auto", pluginIds: candidates.map(candidate => candidate.pluginId), candidates };
+  }
 
   async admit(
     session: SessionRecord,

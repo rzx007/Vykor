@@ -8,11 +8,18 @@ import { abortError, serializeError } from "./agent-errors.js";
 import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 import { createGoalRunContribution } from "./goal-extension.js";
 import type { GoalRunBinding } from "./goal-extension.js";
+import type { PluginSelectionCandidate } from "./plugin-selection.js";
 
 interface FrameworkAgentRunOptions {
   limits?: AgentExecutionContext["limits"];
   profile?: AgentExecutionContext["profile"];
   capabilityView?: AgentExecutionContext["capabilityView"];
+  pluginGuidance?: string;
+  prepareCapabilities?: (signal: AbortSignal) => Promise<{
+    capabilityView: AgentExecutionContext["capabilityView"];
+    pluginCandidates?: readonly PluginSelectionCandidate[];
+    pluginGuidance?: string;
+  }>;
   goal?: GoalRunBinding;
   agentId: string;
   session: AgentSession;
@@ -193,20 +200,20 @@ export class FrameworkAgentRun implements AgentRunHandle {
       traceId: this.traceId,
       signal: this.controller.signal,
     };
-    let execution: AgentExecutionContext = {
+    const createExecution = (capabilityView: AgentExecutionContext["capabilityView"], pluginCandidates?: readonly PluginSelectionCandidate[]): AgentExecutionContext => ({
       scope,
       limits: this.options.limits,
       profile: this.options.profile,
-      capabilityView: this.options.capabilityView,
+      capabilityView,
       ...(this.options.hardMaxTurns !== undefined ? { hardMaxTurns: this.options.hardMaxTurns } : {}),
       effects: this.options.effects,
-      children: this.options.children.createController({ ...scope, limits: this.options.limits }, this.options.capabilityView),
+      children: this.options.children.createController({ ...scope, limits: this.options.limits }, capabilityView, pluginCandidates),
       emit: (event) => this.emit(event),
       takeSteeredInputs: (options) => this.takeSteeredInputs(options),
       closeSteering: () => {
         this.acceptingInput = false;
       },
-    };
+    });
 
     try {
       await this.emit({
@@ -219,7 +226,15 @@ export class FrameworkAgentRun implements AgentRunHandle {
         },
       });
       await this.options.limits?.check("run");
+      const prepared = await this.options.prepareCapabilities?.(this.controller.signal);
+      this.controller.signal.throwIfAborted();
+      let execution = createExecution(prepared ? prepared.capabilityView : this.options.capabilityView, prepared?.pluginCandidates);
       if (this.options.goal) execution = { ...execution, contribution: await createGoalRunContribution(this.options.goal) };
+      const pluginGuidance = prepared ? prepared.pluginGuidance : this.options.pluginGuidance;
+      if (pluginGuidance) execution = { ...execution, contribution: {
+        ...execution.contribution,
+        systemGuidance: [execution.contribution?.systemGuidance, pluginGuidance].filter(Boolean).join("\n\n"),
+      } };
       await this.emit({ type: "run.started", data: {} });
       this.start.resolve({
         sessionId: this.sessionId,

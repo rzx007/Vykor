@@ -38,8 +38,9 @@ import type {
 import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
-import { createRunCapabilityView, readonlyMap } from "./run-capability-view.js";
-import { selectPlugin, type PluginSelectionCatalog, type PluginSelectionResult } from "./plugin-selection.js";
+import { createRunCapabilityView, readonlyMap, readonlySet } from "./run-capability-view.js";
+import type { PluginSelectionCatalog, PluginSelectionCandidate } from "./plugin-selection.js";
+import { renderPluginDiscoveryContext } from "./plugin-discovery-context.js";
 import type { GoalRunBinding } from "./goal-extension.js";
 import {
   AgentOperationConflictError,
@@ -100,6 +101,10 @@ export interface VykorAgentSubmitOptions {
   profile?: AgentExecutionProfile;
   childRunParent?: TrustedChildRunParent | null;
   capabilityView?: RunCapabilityView;
+  /** Host-captured source identities inherited by child Runs; never read from model input. */
+  pluginCandidates?: readonly PluginSelectionCandidate[];
+  /** Model-only plugin summaries; never grants execution capabilities. */
+  pluginGuidance?: string;
   goal?: GoalRunBinding;
   signal?: AbortSignal;
   /** Trusted Run-scoped turn ceiling resolved by the host; later configuration cannot raise it. */
@@ -120,16 +125,6 @@ export interface VykorAgentRunToolOptions {
   signal?: AbortSignal;
   /** Reliable sink for the independent operation; rejection fails execution. */
   onToolEvent?: (event: AgentEventInput) => Promise<void>;
-}
-
-export interface PluginSelectionRunOptions {
-  runId: string;
-  inputId: string;
-  traceId: string;
-  signal: AbortSignal;
-  limits?: AgentExecutionLimits;
-  context?: string;
-  resolvedSelection?: PluginSelectionResult;
 }
 
 export interface AgentCompactResult {
@@ -173,8 +168,9 @@ export interface VykorAgent {
   readonly id: string;
   readonly state: VykorAgentState;
   readonly children: AgentChildDirectory;
-  createRunCapabilityView(pluginId?: string): RunCapabilityView;
-  selectPluginForRun(text: string, options: PluginSelectionRunOptions): Promise<PluginSelectionResult>;
+  createRunCapabilityView(pluginId?: string | readonly string[]): RunCapabilityView;
+  getPluginCandidates(): readonly PluginSelectionCandidate[];
+  validatePluginScope(candidates: readonly PluginSelectionCandidate[], signal: AbortSignal): Promise<void>;
   /** Subscribe to ordered observations. Observer failures never fail agent execution. */
   subscribe(listener: AgentEventListener): AgentEventSubscription;
   submitMessage(
@@ -274,7 +270,9 @@ class DefaultVykorAgent implements VykorAgent {
       runId: `run_${randomUUID()}`,
       traceId: randomUUID(),
     };
-    const capabilityView = options.capabilityView ?? this.createRunCapabilityView();
+    const candidates = this.getPluginCandidates();
+    const inheritedCandidates = options.pluginCandidates && Object.freeze(options.pluginCandidates.map(candidate => Object.freeze({ ...candidate })));
+    const capabilityView = options.capabilityView ?? this.createRunCapabilityView(candidates.length ? candidates.map(item => item.pluginId) : undefined);
     const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
       agentId: this.id,
@@ -298,6 +296,34 @@ class DefaultVykorAgent implements VykorAgent {
       metadata: options.metadata,
       goal: options.goal,
       capabilityView,
+      prepareCapabilities: async signal => {
+        let prepared = capabilityView;
+        const ids = capabilityView.pluginIds ?? new Set(capabilityView.pluginId ? [capabilityView.pluginId] : []);
+        const scoped = (inheritedCandidates ?? candidates).filter(candidate => ids.has(candidate.pluginId));
+        if (options.capabilityView) {
+          // A default runtime owns a catalog even when every plugin was revoked.
+          // Kernel hosts without a catalog may still supply their own trusted bindings.
+          if (this.pluginSelection) {
+            for (const id of ids) {
+              if (!scoped.some(candidate => candidate.pluginId === id)) throw new Error(`Plugin owner is not available: ${id}`);
+            }
+            await this.validatePluginScope(scoped, signal);
+          }
+        } else {
+          const available: string[] = [];
+          for (const candidate of scoped) {
+            try { await this.validatePluginScope([candidate], signal); available.push(candidate.pluginId); }
+            catch { signal.throwIfAborted(); }
+          }
+          prepared = this.createRunCapabilityView(available);
+        }
+        signal.throwIfAborted();
+        const discovery = renderPluginDiscoveryContext({ candidates,
+          allowedPluginIds: prepared.pluginIds ?? new Set(prepared.pluginId ? [prepared.pluginId] : []), capabilityView: prepared });
+        const preparedIds = prepared.pluginIds ?? new Set(prepared.pluginId ? [prepared.pluginId] : []);
+        return { capabilityView: prepared, pluginCandidates: scoped.filter(candidate => preparedIds.has(candidate.pluginId)),
+          pluginGuidance: [discovery, options.pluginGuidance].filter(Boolean).join("\n\n") || undefined };
+      },
       onSettled: (result, toolActivity) => {
         releaseMcpConnections();
         if (this.activeRun !== run) return;
@@ -312,37 +338,25 @@ class DefaultVykorAgent implements VykorAgent {
     return run;
   }
 
-  createRunCapabilityView(pluginId?: string): RunCapabilityView {
+  createRunCapabilityView(pluginId?: string | readonly string[]): RunCapabilityView {
     return this.runtime.createRunCapabilityView?.(pluginId)
       ?? createRunCapabilityView({ toolRegistry: this.runtime.toolRegistry }, pluginId);
   }
 
-  selectPluginForRun(text: string, options: PluginSelectionRunOptions): Promise<PluginSelectionResult> {
-    const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, options.signal]);
-    return this.runMaintenance("plugin_selection", async () => {
-      signal.throwIfAborted();
-      const catalog = this.pluginSelection;
-      if (!catalog?.candidates.length && !options.resolvedSelection?.pluginId) return { pluginId: null, reason: "no_candidates" };
-      const request = options.resolvedSelection ? undefined : await this.runtime.resolveRequestConfiguration?.({ signal });
-      const result = options.resolvedSelection ?? await selectPlugin({
-        client: request?.client ?? this.runtime.apiClient,
-        model: request?.model ?? this.model, provider: request?.provider,
-        candidates: catalog?.candidates ?? [], text, context: options.context,
-        signal, limits: options.limits,
-        emit: async event => { await this.eventBus.emit(event, { agentId: this.id, sessionId: this.id,
-          runId: options.runId, inputId: options.inputId, traceId: options.traceId, ...this.identity }); },
-      });
-      if (result.pluginId) {
-        const candidate = catalog?.candidates.find(item => item.pluginId === result.pluginId);
-        if (!candidate || candidate.version !== result.version || candidate.behaviorDigest !== result.behaviorDigest) {
-          throw new Error(`Plugin changed since selection: ${result.pluginId}`);
-        }
-        await catalog!.validate(candidate);
+  getPluginCandidates(): readonly PluginSelectionCandidate[] {
+    return Object.freeze((this.pluginSelection?.candidates ?? []).map(candidate => Object.freeze({ ...candidate })));
+  }
+
+  async validatePluginScope(candidates: readonly PluginSelectionCandidate[], signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    for (const candidate of candidates) {
+      const current = this.pluginSelection?.candidates.find(item => item.pluginId === candidate.pluginId);
+      if (!current || current.version !== candidate.version || current.behaviorDigest !== candidate.behaviorDigest) {
+        throw new Error(`Plugin changed since scope capture: ${candidate.pluginId}`);
       }
+      await this.pluginSelection!.validate(current);
       signal.throwIfAborted();
-      return result;
-    }, controller);
+    }
   }
 
   async runMessage(
@@ -358,7 +372,7 @@ class DefaultVykorAgent implements VykorAgent {
     }
     this.assertIdle("run a UI tool");
     const requested = options.capabilityView.tools.get(toolUse.name);
-    const current = this.createRunCapabilityView(options.capabilityView.pluginId);
+    const current = this.createRunCapabilityView(options.capabilityView.pluginIds ? [...options.capabilityView.pluginIds] : options.capabilityView.pluginId);
     const ui = [...(options.capabilityView.pluginUi?.values() ?? [])].find(binding => {
       const trusted = current.pluginUi?.get(`${binding.pluginId}:${binding.componentId}`);
       return trusted && trusted.pluginDigest === binding.pluginDigest && trusted.componentDigest === binding.componentDigest
@@ -366,14 +380,14 @@ class DefaultVykorAgent implements VykorAgent {
     });
     const trustedUi = ui && current.pluginUi?.get(`${ui.pluginId}:${ui.componentId}`);
     const tool = trustedUi?.actionTools.find(binding => binding.definition.name === toolUse.name);
-    if (!tool || !requested || requested.definitionIdentity !== tool.definitionIdentity
+    if (!trustedUi || !tool || !requested || requested.definitionIdentity !== tool.definitionIdentity
       || requested.definition.execute !== tool.definition.execute || tool.source?.kind !== "plugin"
-      || tool.ownerPluginId !== current.pluginId) {
+      || tool.ownerPluginId !== trustedUi?.pluginId || tool.source.id !== trustedUi.pluginId) {
       throw new Error("Tool is not a captured Native UI action for this Agent");
     }
     // Never execute caller-supplied functions or expose other tools through ToolContext.
     const capabilityView: RunCapabilityView = Object.freeze({
-      pluginId: current.pluginId, tools: readonlyMap([[toolUse.name, tool]]),
+      pluginId: trustedUi!.pluginId, pluginIds: readonlySet([trustedUi!.pluginId]), tools: readonlyMap([[toolUse.name, tool]]),
       skills: readonlyMap<never>([]), agents: readonlyMap<never>([]), mcpServers: readonlyMap<never>([]),
       pluginUi: readonlyMap([[`${trustedUi!.pluginId}:${trustedUi!.componentId}`, trustedUi!]]),
     });
@@ -388,6 +402,8 @@ class DefaultVykorAgent implements VykorAgent {
     return await this.runMaintenance("tool", async () => {
       const releaseConnections = this.retainMcpConnectionsForRun();
       try {
+        const candidate = this.getPluginCandidates().find(item => item.pluginId === trustedUi.pluginId);
+        if (candidate) await this.validatePluginScope([candidate], signal);
         await options.onToolEvent?.({ type: "tool.started", data: { toolUse } });
         const result = await this.runtime.queryEngine.executeTool(toolUse, { signal, execution: {
           scope, capabilityView, effects: this.effects,

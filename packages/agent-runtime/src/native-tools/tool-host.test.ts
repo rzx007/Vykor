@@ -56,13 +56,18 @@ describe("NativeToolHost", () => {
     const cleanups: Array<() => Promise<void> | void> = [];
     await activateNativePluginTools(plugin, { cwd: plugin.root, toolRegistry: registry, addCleanup: cleanup => cleanups.push(cleanup) });
     try {
-      const sources = { toolRegistry: registry, pluginIds: new Set([plugin.manifest.id]) };
+      const sources = { toolRegistry: registry, pluginIds: new Set([plugin.manifest.id, "other"]) };
       const definition = registry.get("PrivateNative")!;
       const denied = await definition.execute({}, { cwd: plugin.root, capabilityView: createRunCapabilityView(sources) });
       expect(denied.isError).toBe(true);
       expect(JSON.stringify(denied)).not.toContain("native secret");
       const allowed = await definition.execute({}, { cwd: plugin.root, capabilityView: createRunCapabilityView(sources, plugin.manifest.id) });
       expect(allowed.content).toEqual([{ type: "text", text: "native secret" }]);
+      const multi = createRunCapabilityView(sources, [plugin.manifest.id, "other"]);
+      expect((await definition.execute({}, { cwd: plugin.root, capabilityView: multi })).content).toEqual([{ type: "text", text: "native secret" }]);
+      const captured = multi.tools.get("PrivateNative")!;
+      const forged = { ...multi, tools: new Map([["PrivateNative", { ...captured, source: { kind: "plugin" as const, id: "other" } }]]) };
+      expect((await definition.execute({}, { cwd: plugin.root, capabilityView: forged })).isError).toBe(true);
     } finally { for (const cleanup of cleanups.reverse()) await cleanup(); }
   });
   it("runs forked tool hosts in Node mode when the parent runtime is Electron", () => {

@@ -10,11 +10,12 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
-  it("automatically selects one plugin for this Run without changing the session or exposing another plugin", async () => {
+  it("exposes multiple eligible plugins without a selection request or a manual session selection", async () => {
     const f = autoSelectionFixture();
     await f.execute();
-    expect(f.observed).toEqual([["office", "Public", "Office"]]);
-    expect(f.store.spies.getRun()).toMatchObject({ metadata: { pluginId: "office", pluginSelection: { status: "resolved", source: "auto" } } });
+    expect(f.observed).toEqual([[["office", "knowledge"], "Public", "Office", "Knowledge"]]);
+    expect(f.requests).toBe(0);
+    expect(f.store.spies.getRun()).toMatchObject({ metadata: { pluginId: null, pluginSelection: { status: "resolved", source: "auto", scopeVersion: 2, pluginIds: ["office", "knowledge"] } } });
     expect(f.store.spies.getSession().metadata).not.toHaveProperty("activePluginId");
     expect(f.store.spies.getInput().metadata).not.toHaveProperty("pluginId");
   });
@@ -22,15 +23,34 @@ describe("SessionRunExecutor", () => {
     const f = autoSelectionFixture(null);
     await f.execute();
     await f.execute();
-    expect(f.requests).toBe(1);
-    expect(f.observed).toEqual([[undefined, "Public"], [undefined, "Public"]]);
+    expect(f.requests).toBe(0);
+    expect(f.observed).toEqual([[[], "Public"], [[], "Public"]]);
   });
   it("does not inherit the previous automatic decision into a new Run", async () => {
     const f = autoSelectionFixture();
     await f.execute();
     Object.assign(f.store.spies.getRun(), { metadata: {} });
     await f.execute();
-    expect(f.requests).toBe(2);
+    expect(f.requests).toBe(0);
+    expect(f.observed).toHaveLength(2);
+  });
+  it("persists only healthy plugins when automatic plugin preparation fails", async () => {
+    const f = autoSelectionFixture();
+    f.preparationFailures.add("office");
+    await f.execute();
+    expect(f.observed).toEqual([[["knowledge"], "Public", "Knowledge"]]);
+    expect(f.store.spies.getRun()).toMatchObject({ metadata: { pluginSelection: {
+      pluginIds: ["knowledge"], candidates: [expect.objectContaining({ pluginId: "knowledge" })],
+    } } });
+  });
+  it("fails recovery when a previously prepared plugin can no longer prepare", async () => {
+    const f = autoSelectionFixture();
+    await f.execute();
+    f.observed.length = 0;
+    f.preparationFailures.add("office");
+    await f.execute();
+    expect(f.observed).toEqual([]);
+    expect(f.store.spies.getRun()).toMatchObject({ status: "failed", metadata: { pluginSelection: { pluginIds: ["office", "knowledge"] } } });
   });
   it("does not replace a saved automatic selection with public capabilities when plugins are disabled before recovery", async () => {
     const f = autoSelectionFixture();
@@ -41,9 +61,9 @@ describe("SessionRunExecutor", () => {
       runtime: { model: "gpt-test", pluginsEnabled: false },
     } } as any);
     await f.execute();
-    expect(f.requests).toBe(1);
+    expect(f.requests).toBe(0);
     expect(f.observed).toEqual([]);
-    expect(f.store.spies.getRun()).toMatchObject({ status: "failed", metadata: { pluginId: "office", pluginSelection: previous } });
+    expect(f.store.spies.getRun()).toMatchObject({ status: "failed", metadata: { pluginId: null, pluginSelection: previous } });
   });
   it.each(["manual", "disabled", "auto-disabled", "unavailable-manual"])("does not make a selection request for %s", async kind => {
     const f = autoSelectionFixture();
@@ -52,9 +72,12 @@ describe("SessionRunExecutor", () => {
       runtime: { model: "gpt-test", ...(kind === "disabled" ? { pluginsEnabled: false } : kind === "auto-disabled" ? { pluginAutoSelectionEnabled: false } : {}) },
       ...(kind === "unavailable-manual" ? { activePluginId: "removed" } : {}),
     } } as any);
+    if (kind === "unavailable-manual" || kind === "auto-disabled") f.store.spies.getInput.mockReturnValue({ ...f.store.spies.getInput(), metadata: {
+      pluginScope: { scopeVersion: 2, source: "none", pluginIds: [], candidates: [] },
+    } } as any);
     await f.execute();
     expect(f.requests).toBe(0);
-    expect(f.observed[0]).toEqual(kind === "manual" ? ["knowledge", "Public", "Knowledge"] : [undefined, "Public"]);
+    expect(f.observed[0]).toEqual(kind === "manual" ? [["knowledge"], "Public", "Knowledge"] : [[], "Public"]);
   });
   it("does not submit the main model after cancellation during selection", async () => {
     const f = autoSelectionFixture();
@@ -839,26 +862,35 @@ function capabilitySnapshot(
 }
 
 function autoSelectionFixture(pluginId: string | null = "office") {
-  const store = createStore();
+  const candidates = pluginId === null ? [] : ["office", "knowledge"].map(pluginId => ({ pluginId,
+    displayName: pluginId, description: pluginId, version: "1", behaviorDigest: `${pluginId}-digest` }));
+  const store = createStore({ metadata: { pluginScope: { scopeVersion: 2, source: "auto",
+    pluginIds: candidates.map(candidate => candidate.pluginId), candidates } } });
   const controller = new AbortController();
   const registry = new ToolRegistry();
   for (const [name, owner] of [["Public", undefined], ["Office", "office"], ["Knowledge", "knowledge"]] as const) {
     registry.register({ name, description: name, inputSchema: {}, execute: async () => ({ content: [] }) }, owner ? { kind: "plugin", id: owner } : { kind: "builtin" });
   }
   let requests = 0;
-  const observed: Array<Array<string | undefined>> = [];
+  const preparationFailures = new Set<string>();
+  const observed: unknown[][] = [];
   const executor = new SessionRunExecutor({
     data: store.data, attachments: store.attachments, goals: store.goals,
     agentPool: { configured: true, acquireSession: async () => ({
       getHistory: () => [],
+      getPluginCandidates: () => candidates,
+      validatePluginScope: async () => {},
       selectPluginForRun: async () => { requests++; return { pluginId, reason: pluginId ? "matched" : "no_match", version: "1", behaviorDigest: "digest" }; },
-      createRunCapabilityView: (id?: string) => createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["office", "knowledge"]) }, id),
-      submitMessage: (_content: unknown, options: any) => { observed.push([options.capabilityView.pluginId, ...options.capabilityView.tools.keys()]); return completedHandle(); },
+      createRunCapabilityView: (id?: string | readonly string[]) => createRunCapabilityView({ toolRegistry: registry,
+        pluginIds: new Set(["office", "knowledge"]),
+        pluginPreparationErrors: new Map([...preparationFailures].map(pluginId => [pluginId, [`prepare failed: ${pluginId}`]])),
+      }, id),
+      submitMessage: (_content: unknown, options: any) => { observed.push([[...options.capabilityView.pluginIds], ...options.capabilityView.tools.keys()]); return completedHandle(); },
     }), close: async () => {}, closeIfStale: async () => {} } as any,
     events: { checkpoint: () => 1, publishSince: () => {} },
     transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
   });
-  return { store, controller, observed, get requests() { return requests; },
+  return { store, controller, observed, preparationFailures, get requests() { return requests; },
     execute: () => executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" }, { signal: controller.signal, registerHandle: async () => {} }) };
 }
 

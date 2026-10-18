@@ -6,8 +6,125 @@ import { AgentChildManager, AgentChildRegistry } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { ToolRegistry } from "@vykor/core";
+import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
+import { resolveEffectiveAllowedTools } from "./default-runtime.js";
 
 describe("AgentChildManager", () => {
+  it("rebuilds worker tools behind a Coordinator's plugin scope without reopening foreign plugins or host-denied tools", async () => {
+    const define = (name: string) => ({ name, description: name, inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
+    const parentRegistry = new ToolRegistry();
+    parentRegistry.register(define("Agent"), { kind: "builtin" });
+    const parent = createRunCapabilityView({ toolRegistry: parentRegistry, pluginIds: new Set(["P"]) }, ["P"]);
+    let submitted: any;
+    const manager = createManager(new AgentEventBus(), async options => {
+      const registry = new ToolRegistry();
+      for (const name of ["Read", "Edit", "HostDenied"]) registry.register(define(name), { kind: "builtin" });
+      registry.register(define("ForeignPlugin"), { kind: "plugin", id: "foreign" });
+      const toolRegistry = createVisibilityToolRegistry(registry, resolveEffectiveAllowedTools({
+        hostToolCeiling: options.hostToolCeiling, roleAllowedTools: options.roleAllowedTools,
+        knownToolNames: registry.getAll().map(tool => tool.name),
+      }), new Set(options.disallowedTools ?? []));
+      return { ...fakeAgent((_content: unknown, input: any) => { submitted = input.capabilityView; return completedRun("done"); }),
+        createRunCapabilityView: (scope?: string | readonly string[]) => createRunCapabilityView({ toolRegistry, pluginIds: new Set(["foreign"]) }, scope) };
+    }, undefined, undefined, false, { hostToolCeiling: ["Agent", "Read", "Edit"] });
+    try {
+      const child = await manager.createController(parentScope(), parent).spawnChildAgent({
+        description: "worker", prompt: "read", agent: "worker", cwd: "/other",
+        allowedTools: ["Read", "Edit", "HostDenied", "ForeignPlugin"], disallowedTools: ["Edit"],
+      });
+      await child.result;
+      expect([...submitted.tools.keys()]).toEqual(["Read"]);
+      expect([...submitted.pluginIds]).toEqual(["P"]);
+      await manager.createController(parentScope(), parent).sendChildInput(child.id, { content: "continue" });
+      await manager.get(child.id)!.result;
+      expect([...submitted.tools.keys()]).toEqual(["Read"]);
+    } finally { await manager.closeAll(); }
+  });
+  it("keeps captured plugin bindings and only rebuilds MCP tools for the parent's matching required servers", async () => {
+    const define = (name: string) => ({ name, description: name, inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
+    const server = (name: string, command = "node") => ({ serverId: `mcp:${name}`, serverName: name,
+      definition: { type: "stdio" as const, command } });
+    const parentRegistry = new ToolRegistry();
+    parentRegistry.register(define("ParentNative"), { kind: "plugin", id: "P" });
+    const parent = createRunCapabilityView({ toolRegistry: parentRegistry, pluginIds: new Set(["P"]),
+      mcpServers: [server("keep"), server("changed"), server("not-required")],
+      skills: [{ ownerPluginId: "P", path: "/P/SKILL.md", definition: { name: "parent-skill", path: "/P/SKILL.md",
+        description: "parent", content: "parent", source: "plugin", userInvocable: true, disableModelInvocation: false } }],
+      agents: [{ ownerPluginId: "P", definition: { name: "parent-agent", description: "parent", source: "plugin" } }],
+    }, ["P"]);
+    let submitted: any;
+    const manager = createManager(new AgentEventBus(), async () => {
+      const registry = new ToolRegistry();
+      registry.register(define("Read"), { kind: "builtin" });
+      registry.register(define("ParentNative"), { kind: "plugin", id: "P" });
+      for (const name of ["keep", "changed", "not-required", "foreign"]) {
+        registry.register(define(`mcp__${name}__read`), { kind: "mcp", id: name });
+      }
+      return { ...fakeAgent((_content: unknown, input: any) => { submitted = input.capabilityView; return completedRun("done"); }),
+        createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["P", "foreign"]),
+          mcpServers: [server("keep"), server("changed", "different"), server("not-required"), server("foreign")],
+          skills: [{ path: "/local/SKILL.md", definition: { name: "local-skill", path: "/local/SKILL.md", description: "local",
+            content: "local", source: "project", userInvocable: true, disableModelInvocation: false } }],
+          agents: [{ definition: { name: "local-agent", description: "local", source: "user" } }],
+        }) };
+    });
+    try {
+      const child = await manager.createController(parentScope(), parent).spawnChildAgent({ description: "worker", prompt: "work",
+        agent: "worker", cwd: "/other", requiredMcpServers: ["keep", "changed"] });
+      await child.result;
+      expect([...submitted.tools.keys()].sort()).toEqual(["ParentNative", "Read", "mcp__keep__read"]);
+      expect(submitted.tools.get("ParentNative")).toBe(parent.tools.get("ParentNative"));
+      expect([...submitted.mcpServers.keys()]).toEqual(["mcp:keep", "mcp:changed"]);
+      expect([...submitted.skills.keys()].sort()).toEqual(["local-skill", "parent-skill"]);
+      expect(submitted.skills.get("parent-skill")).toBe(parent.skills.get("parent-skill"));
+      expect([...submitted.agents.keys()].sort()).toEqual(["local-agent", "parent-agent"]);
+      expect(submitted.agents.get("parent-agent")).toBe(parent.agents.get("parent-agent"));
+    } finally { await manager.closeAll(); }
+  });
+  it("rebuilds a worker baseline under its own role without reopening plugins from its catalog", async () => {
+    const childRegistry = new ToolRegistry();
+    for (const name of ["ChildRead", "PluginWork"]) childRegistry.register({ name, description: name,
+      inputSchema: { type: "object" }, execute: async () => ({ content: [] }) },
+    name === "PluginWork" ? { kind: "plugin", id: "P" } : { kind: "builtin" });
+    const childView = (scope?: string | readonly string[]) => createRunCapabilityView({ toolRegistry: childRegistry, pluginIds: new Set(["P"]) }, scope);
+    const manager = createManager(new AgentEventBus(), async () => ({
+      ...fakeAgent((_content: unknown, options: any) => completedRun([...(options.capabilityView ?? childView(["P"])).tools.keys()].join(","))),
+      createRunCapabilityView: childView,
+    }));
+    const parent = createRunCapabilityView({ toolRegistry: new ToolRegistry() }, []);
+    try {
+      const child = await manager.createController(parentScope(), parent).spawnChildAgent({ description: "d", prompt: "work", agent: "worker", cwd: "/repo" });
+      expect((await child.result).output).toBe("ChildRead");
+      expect(parent.tools.size).toBe(0);
+    } finally { await manager.closeAll(); }
+  });
+  it("inherits multiple plugin bindings and only accepts follow-ups from a containing scope with the original bindings", async () => {
+    const submitted: any[] = [];
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent((_content: unknown, options: unknown) => {
+      submitted.push(options); return completedRun("done");
+    }));
+    const registry = new ToolRegistry();
+    for (const id of ["P", "Q"]) registry.register({ name: id, description: id, inputSchema: { type: "object" }, execute: async () => ({ content: [] }) }, { kind: "plugin", id });
+    const sources = { toolRegistry: registry, pluginIds: new Set(["P", "Q"]) };
+    const parent = createRunCapabilityView(sources, ["P", "Q"]);
+    const controller = manager.createController(parentScope(), parent);
+    try {
+      const child = await controller.spawnChildAgent({ description: "d", prompt: "initial", agent: "worker", cwd: "/other", allowedTools: ["Q"] });
+      await child.result;
+      expect([...submitted[0].capabilityView.tools.keys()]).toEqual(["Q"]);
+      expect([...submitted[0].capabilityView.pluginIds]).toEqual(["P", "Q"]);
+      await controller.sendChildInput(child.id, { content: "same scope" });
+      await manager.get(child.id)!.result;
+      const narrowed = { ...parent, tools: new Map([["Q", parent.tools.get("Q")!]]) };
+      await manager.get(child.id)!.send({ content: "subset bindings" }, narrowed);
+      await manager.get(child.id)!.result;
+      for (const unauthorized of [createRunCapabilityView(sources, "P"), { ...parent, tools: new Map() },
+        { ...parent, tools: new Map([["Q", { ...parent.tools.get("Q")!, definitionIdentity: Symbol("replacement") }]]) }]) {
+        await expect(manager.get(child.id)!.send({ content: "forbidden" }, unauthorized)).rejects.toThrow("not authorized for this Run");
+      }
+      expect(submitted).toHaveLength(3);
+    } finally { await manager.closeAll(); }
+  });
   it("binds inherited limits to each framework-created child Run, including reused children", async () => {
     const submissions: any[] = [];
     const bind = vi.fn((runId: string) => ({ check: vi.fn(), runId }));
@@ -1560,6 +1677,7 @@ function parentScope(signal = new AbortController().signal): AgentRunScope {
 function fakeAgent(submitMessage: any, close = vi.fn(async () => {})) {
   return {
     submitMessage,
+    createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: new ToolRegistry() }),
     getHistory: vi.fn(() => []),
     loadHistory: vi.fn(),
     close,

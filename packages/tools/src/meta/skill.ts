@@ -28,7 +28,9 @@ export const skillTool: ToolDefinition = {
   },
   async execute(input, context) {
     const name = input.name as string;
-    const requestedPath = input.path;
+    const requestedPath = typeof input.path === "string"
+      ? context.environment?.paths?.toHostPath?.(input.path) ?? input.path
+      : input.path;
 
     const registry = await resolveSkillRegistry(context, { refreshFilesystem: true });
 
@@ -61,24 +63,45 @@ export const listSkillsTool: ToolDefinition = {
         description:
           "Which skills to list. 'model' lists skills visible to the model, 'user' lists slash-command skills, and 'all' lists every loaded skill.",
       },
+      ownerPluginId: { type: "string", description: "List only Skills owned by this stable plugin ID." },
+      pluginId: { type: "string", description: "Alias for ownerPluginId." },
+      offset: { type: "integer", minimum: 0, description: "Zero-based offset after visibility and owner filters; default 0." },
+      limit: { type: "integer", minimum: 1, maximum: 100, description: "Page size; default 50, maximum 100." },
     },
   },
   async execute(input, context) {
     const visibility = parseVisibility(input.visibility);
+    const ownerPluginId = input.ownerPluginId ?? input.pluginId;
+    if ([input.ownerPluginId, input.pluginId].some(value => value !== undefined && (typeof value !== "string" || !value.trim()))
+      || (input.ownerPluginId !== undefined && input.pluginId !== undefined && input.ownerPluginId !== input.pluginId)
+      || (input.offset !== undefined && (!Number.isSafeInteger(input.offset) || (input.offset as number) < 0))
+      || (input.limit !== undefined && (!Number.isSafeInteger(input.limit) || (input.limit as number) < 1))) {
+      return { content: [{ type: "text", text: "Invalid ListSkills filter or pagination: use one matching plugin ID, offset >= 0 and limit >= 1." }], isError: true };
+    }
+    const offset = (input.offset as number | undefined) ?? 0;
+    const limit = Math.min((input.limit as number | undefined) ?? 50, 100);
     const registry = await resolveSkillRegistry(context, { refreshFilesystem: true });
-    const skills = filterSkills(registry.getAll(), visibility);
+    const skills = filterSkills(registry.getAll(), visibility).filter(skill =>
+      ownerPluginId === undefined || skillOwner(skill, context) === ownerPluginId);
 
     if (skills.length === 0) {
       return {
         content: [{ type: "text", text: `No ${visibility} skills available.` }],
       };
     }
+    const page = skills.slice(offset, offset + limit);
+    if (!page.length) return { content: [{ type: "text", text: `No ${visibility} skills on this page (offset=${offset}, total=${skills.length}).` }] };
+    const nextOffset = offset + page.length;
+    const nextInput = { visibility, ...(ownerPluginId !== undefined ? { ownerPluginId } : {}), offset: nextOffset, limit };
 
     return {
       content: [
         {
           type: "text",
-          text: formatSkillList(skills, visibility),
+          text: [formatSkillList(page, visibility, context),
+            `Showing ${offset + 1}-${nextOffset} of ${skills.length} skills (offset=${offset}, limit=${limit}).`,
+            ...(nextOffset < skills.length ? [`More skills available. Call ListSkills with ${JSON.stringify(nextInput)}.`] : []),
+          ].join("\n"),
         },
       ],
     };
@@ -93,7 +116,9 @@ async function resolveSkillRegistry(
     const registry = new SkillRegistry();
     for (const [name, binding] of context.capabilityView.skills) {
       if (binding.definition.name !== name || binding.path !== binding.definition.path) continue;
-      if (binding.ownerPluginId !== undefined && binding.ownerPluginId !== context.capabilityView.pluginId) continue;
+      if (binding.ownerPluginId !== undefined && !(context.capabilityView.pluginIds
+        ? context.capabilityView.pluginIds.has(binding.ownerPluginId)
+        : binding.ownerPluginId === context.capabilityView.pluginId)) continue;
       if (binding.definition.source === "plugin" && !binding.ownerPluginId) continue;
       registry.register(binding.definition);
     }
@@ -130,7 +155,20 @@ function filterSkills(
   return skills.filter((skill) => skill.disableModelInvocation !== true);
 }
 
-function formatSkillList(skills: readonly SkillDefinition[], visibility: SkillVisibility): string {
+function skillOwner(skill: SkillDefinition, context: Parameters<ToolDefinition["execute"]>[1]): string | undefined {
+  if (context.capabilityView) {
+    const binding = context.capabilityView.skills.get(skill.name);
+    return binding?.path === skill.path ? binding.ownerPluginId : undefined;
+  }
+  return skill.source === "plugin" && typeof skill.metadata?.pluginId === "string" ? skill.metadata.pluginId : undefined;
+}
+
+function catalogText(value: string): string {
+  return JSON.stringify(value).slice(1, -1).replace(/[<>&]/g, character =>
+    `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+function formatSkillList(skills: readonly SkillDefinition[], visibility: SkillVisibility, context: Parameters<ToolDefinition["execute"]>[1]): string {
   const title =
     visibility === "model"
       ? "Model-visible skills"
@@ -141,12 +179,16 @@ function formatSkillList(skills: readonly SkillDefinition[], visibility: SkillVi
     `${title}:`,
     ...skills.map((skill) => {
       const command = skill.commandName ?? skill.name;
+      const owner = skillOwner(skill, context);
+      const path = skill.path ? context.environment?.paths?.presentHostPath(skill.path) ?? skill.path : "(embedded)";
       const metadata = [
         skill.source ? `source=${skill.source}` : null,
-        skill.userInvocable ? `command=/${command}` : null,
+        owner ? `ownerPluginId="${catalogText(owner)}"` : null,
+        `path="${catalogText(path)}"`,
+        skill.userInvocable ? `command=/${catalogText(command)}` : null,
         skill.disableModelInvocation ? "model=hidden" : null,
       ].filter(Boolean);
-      return `- ${skill.name}${skill.description ? ` — ${skill.description}` : ""}${
+      return `- ${catalogText(skill.name)}${skill.description ? ` — ${catalogText(skill.description.length > 300 ? `${skill.description.slice(0, 299)}…` : skill.description)}` : ""}${
         metadata.length ? ` (${metadata.join(", ")})` : ""
       }`;
     }),

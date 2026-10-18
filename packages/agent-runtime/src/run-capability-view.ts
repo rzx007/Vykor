@@ -17,14 +17,21 @@ export class PluginPreparationError extends Error {
   }
 }
 
-export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?: string): RunCapabilityView {
-  if (pluginId !== undefined && !sources.pluginIds?.has(pluginId)) {
-    throw new Error(`Plugin is not available in this runtime: ${pluginId}`);
+export function createRunCapabilityView(sources: RunCapabilitySources, scope?: string | readonly string[]): RunCapabilityView {
+  const requested = typeof scope === "string" ? [scope] : scope ?? [];
+  const allowed = new Set<string>();
+  for (const id of requested) {
+    if (!sources.pluginIds?.has(id)) throw new Error(`Plugin is not available in this runtime: ${id}`);
+    const errors = sources.pluginPreparationErrors?.get(id);
+    if (errors?.length) {
+      if (typeof scope === "string") throw new PluginPreparationError(id, errors);
+      continue;
+    }
+    allowed.add(id);
   }
-  const preparationErrors = pluginId === undefined ? undefined : sources.pluginPreparationErrors?.get(pluginId);
-  if (preparationErrors?.length) throw new PluginPreparationError(pluginId!, preparationErrors);
+  const pluginId = typeof scope === "string" ? scope : undefined;
   const visible = (binding: { ownerPluginId?: string }) =>
-    binding.ownerPluginId === undefined || binding.ownerPluginId === pluginId;
+    binding.ownerPluginId === undefined || allowed.has(binding.ownerPluginId);
   const visibleDefinition = (binding: RunSkillBinding | RunAgentBinding) =>
     !(binding.definition.source === "plugin" && !binding.ownerPluginId) && visible(binding);
   const servers = sources.mcpServers ?? [];
@@ -50,23 +57,37 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
     })]);
   }
   const toolMap = readonlyMap(tools);
-  const pluginUi = (sources.pluginUi ?? []).filter(binding => binding.pluginId === pluginId
+  const pluginUi = (sources.pluginUi ?? []).filter(binding => allowed.has(binding.pluginId)
     && binding.definition.actions.every(action => {
       const captured = binding.actionTools.find(tool => tool.definition.name === action.tool);
       const current = toolMap.get(action.tool);
-      return captured?.source?.kind === "plugin" && captured.source.id === pluginId
-        && captured.ownerPluginId === pluginId && current?.source?.kind === "plugin"
-        && current.ownerPluginId === pluginId && current.definitionIdentity === captured.definitionIdentity
+      return captured?.source?.kind === "plugin" && captured.source.id === binding.pluginId
+        && captured.ownerPluginId === binding.pluginId && current?.source?.kind === "plugin"
+        && current.source.id === binding.pluginId && current.ownerPluginId === binding.pluginId && current.definitionIdentity === captured.definitionIdentity
         && current.definition.execute === captured.definition.execute;
     }));
   return Object.freeze({
     pluginId,
+    pluginIds: readonlySet(allowed),
     tools: toolMap,
     pluginUi: readonlyMap(pluginUi.map(binding => [`${binding.pluginId}:${binding.componentId}`, frozenCopy(binding)])),
     skills: readonlyMap((sources.skills ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     agents: readonlyMap((sources.agents ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     mcpServers: readonlyMap(servers.filter(visible).map((binding) => [binding.serverId, frozenCopy(binding)])),
   });
+}
+
+/** Expose set membership without allowing callers to widen the captured scope. */
+export function readonlySet<T>(values: Iterable<T>): ReadonlySet<T> {
+  const inner = new Set(values);
+  const view: ReadonlySet<T> = Object.freeze({
+    size: inner.size,
+    has: (value: T) => inner.has(value), keys: () => inner.keys(), values: () => inner.values(),
+    entries: () => inner.entries(), [Symbol.iterator]: () => inner[Symbol.iterator](),
+    forEach: (callback: (value: T, key: T, set: ReadonlySet<T>) => void, thisArg?: unknown) =>
+      inner.forEach(value => callback.call(thisArg, value, value, view)),
+  });
+  return view;
 }
 
 function frozenCopy<T>(value: T): T {

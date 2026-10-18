@@ -12,7 +12,7 @@ import { AttachmentError } from "@vykor/services";
 import { normalizeTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
-import type { RunPluginSelection } from "./session-plugin-selection.js";
+import { readInputPluginScope, type RunPluginSelection } from "./session-plugin-selection.js";
 
 export interface RunControlDurableSessions {
   getSession(sessionId: string): { id: string; cwd?: string; status?: string; metadata?: Record<string, unknown> } | undefined;
@@ -284,9 +284,9 @@ export class RunControlService {
     if (!input || input.sessionId !== sessionId) {
       throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
     }
-    if (typeof input.metadata?.pluginId === "string" && (!input.items || input.items.some(item =>
+    if ((typeof input.metadata?.pluginId === "string" && !input.items) || input.items?.some(item =>
       item.type === "capability" || (item.type === "skill" && item.source === "plugin")
-    ))) {
+    )) {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
     if (input.attachments.length > 0) {
@@ -325,15 +325,32 @@ export class RunControlService {
     ) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
     const inputPluginId = typeof input.metadata.pluginId === "string" ? input.metadata.pluginId : undefined;
     const activePluginId = typeof activeRun.metadata.pluginId === "string" ? activeRun.metadata.pluginId : undefined;
-    const activeSelection = activeRun.metadata.pluginSelection as RunPluginSelection | undefined;
+    const storedActiveSelection = activeRun.metadata.pluginSelection as RunPluginSelection | undefined;
+    const activeInputScope = storedActiveSelection?.status !== "resolved" && !activePluginId && activeRun.inputId
+      ? readInputPluginScope(this.options.durableInputs.getInput(activeRun.inputId)?.metadata.pluginScope)
+      : undefined;
+    const activeSelection = activeInputScope ?? storedActiveSelection;
     const queuedSelection = queuedRun.metadata.pluginSelection as RunPluginSelection | undefined;
-    // “立即补充” joins the existing Run; it never selects or expands that Run's capabilities.
-    const inheritAutomaticScope = !inputPluginId && activePluginId
-      && typeof queuedRun.metadata.pluginId !== "string" && queuedSelection?.status !== "resolved"
-      && activeSelection?.status === "resolved" && activeSelection.source === "auto"
-      && !input.items?.some(item => item.type === "capability" || item.type === "skill")
-      && readRuntimeMetadata(this.options.durableSessions.getSession(sessionId)?.metadata).pluginsEnabled !== false;
-    if (inputPluginId !== activePluginId && !inheritAutomaticScope) {
+    const activeIds = activeSelection?.scopeVersion === 2 ? activeSelection.pluginIds ?? []
+      : activePluginId ? [activePluginId] : [];
+    const queuedScope = queuedSelection?.scopeVersion === 2
+      ? readInputPluginScope({ ...queuedSelection, source: queuedSelection.source === "none" ? "none" : "auto" })
+      : readInputPluginScope(input.metadata.pluginScope);
+    const queuedIds = queuedSelection?.status === "resolved"
+      ? queuedSelection.scopeVersion === 2 ? queuedSelection.pluginIds ?? [] : queuedSelection.pluginId ? [queuedSelection.pluginId] : []
+      : inputPluginId ? [inputPluginId] : queuedScope?.pluginIds ?? [];
+    // Promotion joins an existing Run: both Inputs must already own the same
+    // scope. It cannot borrow a wider automatic scope from a later input.
+    let compatible = activeIds.length === queuedIds.length && activeIds.every(id => queuedIds.includes(id));
+    if (compatible && activeIds.length && (queuedScope || activeSelection?.source === "auto")) {
+      compatible = activeSelection?.scopeVersion === 2 && queuedScope?.source === "auto" &&
+        activeSelection.candidates?.length === queuedScope.candidates.length &&
+        queuedScope.candidates.every(candidate => activeSelection.candidates?.some(active =>
+          active.pluginId === candidate.pluginId && active.version === candidate.version && active.behaviorDigest === candidate.behaviorDigest)) === true;
+    }
+    if ((activeIds.length || queuedIds.length) &&
+      readRuntimeMetadata(this.options.durableSessions.getSession(sessionId)?.metadata).pluginsEnabled === false) compatible = false;
+    if (!compatible) {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
     const content = await this.materializeSteerInput(sessionId, input.items);

@@ -7,11 +7,16 @@ import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
 import { SessionTranscriptProjection } from "../transcript-projection.js";
 import { SessionPluginUiService, type PluginUiCurrentState } from "../session-plugin-ui-service.js";
+import { SessionPluginUiConversationService } from "../session-plugin-ui-conversation-service.js";
+import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
+import { SessionOperationRunner } from "../session-operation-runner.js";
+import { RunAdmissionService } from "../run-admission-service.js";
+import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { for (const close of cleanup.splice(0).reverse()) close(); });
 const pluginId = "example.ui-fixture";
-function fixture() {
+function fixture(scope: string | readonly string[] = pluginId) {
   const registry = new ToolRegistry();
   registry.register({ name: "Inspect", description: "Inspect text", inputSchema: { type: "object" },
     execute: async () => ({ content: [{ type: "text", text: "done" }] }) }, { kind: "plugin", id: pluginId });
@@ -25,7 +30,7 @@ function fixture() {
       actions: [{ id: "fix", label: "Fix", tool: "Fix", completion: "resolve" }] },
     actionTools: [tools.get("Fix")!],
   };
-  const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set([pluginId]), pluginUi: [binding] }, pluginId);
+  const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(typeof scope === "string" ? [scope] : scope), pluginUi: [binding] }, scope);
   return { binding, view };
 }
 function result(): ToolResult {
@@ -33,7 +38,7 @@ function result(): ToolResult {
     metadata: { ui: { schemaVersion: 2, componentId: "findings", data: { count: 1 } },
       pluginUi: { instanceId: "forged" }, uiAction: { instanceId: "forged" }, pluginUiSubmission: { inputId: "forged" }, custom: "retained" } };
 }
-function harness() {
+function harness(automaticOwners?: 1 | 2) {
   const directory = mkdtempSync(join(tmpdir(), "vykor-ui-instance-"));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, "session.db");
@@ -41,8 +46,12 @@ function harness() {
   cleanup.push(() => store.close());
   const session = store.sessions.create({ id: "s1", cwd: directory, model: "test" });
   const input = store.conversationTransactions.admitPrompt({ sessionId: session.id, content: "inspect" });
-  store.runs.createRun({ id: "run", sessionId: session.id, inputId: input.id, metadata: { pluginId } });
-  const { binding, view } = fixture();
+  const owners = automaticOwners === 2 ? [pluginId, "other.plugin"] : [pluginId];
+  const selection = { status: "resolved", scopeVersion: 2, source: "auto", pluginId: null, reason: "matched", pluginIds: owners,
+    candidates: owners.map(id => ({ pluginId: id, displayName: id, description: "", version: "1.0.0", behaviorDigest: "a".repeat(64) })) };
+  store.runs.createRun({ id: "run", sessionId: session.id, inputId: input.id, metadata: automaticOwners
+    ? { pluginId: null, pluginSelection: selection } : { pluginId } });
+  const { binding, view } = fixture(automaticOwners ? owners : pluginId);
   let current: PluginUiCurrentState = { enabled: true, uiEnabled: true, permissionsApproved: true,
     snapshot: "valid", binding, runtimeAvailable: true };
   const diagnostics: unknown[] = [];
@@ -55,7 +64,7 @@ function harness() {
   projection.projectStreamEvent(state, { type: "generation_started", generationId: "gen", attempt: 1 });
   projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { type: "tool_use", id: "call", name: "Inspect", input: {} } });
   projection.projectStreamEvent(state, { type: "complete", stopReason: "tool_use" });
-  return { store, session, service, projection, state, binding, view, diagnostics,
+  return { get store() { return store; }, session, service, projection, state, binding, view, diagnostics,
     setCurrent: (patch: Partial<PluginUiCurrentState>) => { current = { ...current, ...patch }; },
     part: () => store.conversations.listMessageParts(session.id).find(p => p.id === "call")!,
     finish: (output = result()) => store.transaction(() => projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result: output })),
@@ -64,6 +73,54 @@ function harness() {
 }
 
 describe("trusted plugin UI source projection", () => {
+  it.each([1, 2] as const)("creates automatic UI with %s owners and submits after releasing the view and reopening SQLite", async owners => {
+    const h = harness(owners); h.finish();
+    const instance = h.part().metadata.pluginUi as { instanceId: string } | undefined;
+    expect(instance).toMatchObject({ pluginId, pluginVersion: "1.0.0", pluginDigest: "a".repeat(64) });
+    h.service.releaseRunView("run");
+    const source = h.reopen();
+    expect((await source.get("s1", instance!.instanceId)).availability.canRender).toBe(true);
+    const events = { checkpoint: () => 0, publishSince: () => {} };
+    const operations = new SessionOperationRunner({ sessions: h.store.sessions, events, operationGate: new DaemonOperationGate() });
+    const admission = new RunAdmissionService({ conversationTransactions: h.store.conversationTransactions,
+      runOperations: h.store.runs, events, runtimeQueue: { hasRuntime: true, enqueueRun: () => "queued", steer: () => ({ merged: false }) } });
+    const pluginCapabilities = new SessionPluginCapabilityService({ resolveInventory: async () => ({
+      plugins: new Map(), skills: new Map(), agents: new Map(), mcpServers: new Map(), nativeToolEntries: new Map(), diagnostics: [],
+    }) });
+    const conversation = new SessionPluginUiConversationService({ store: h.store, source, operations, admission,
+      pluginCapabilities, modelAvailable: async () => true });
+    const receipt = await conversation.submit("s1", instance!.instanceId, { requestId: "00000000-0000-0000-0000-000000000001",
+      expectedRevision: 1, text: "Continue from this result", data: { count: 1 } });
+    expect(h.store.conversations.getInput(receipt.inputId)!.content).toContain("Continue from this result");
+    expect(receipt).toMatchObject({ revision: 2, status: "pending" });
+  });
+
+  it.each(["uncaptured-owner", "foreign-tool-source", "foreign-tool-owner", "foreign-ui"])("rejects automatic UI with %s", reason => {
+    const h = harness(2);
+    const tool = h.view.tools.get("Inspect")!;
+    const view = reason === "uncaptured-owner" ? { ...h.view, pluginIds: new Set<string>() }
+      : reason === "foreign-ui" ? { ...h.view, pluginUi: new Map([[`${pluginId}:findings`, { ...h.binding, pluginId: "other.plugin" }]]) }
+      : { ...h.view, tools: new Map(h.view.tools).set("Inspect", reason === "foreign-tool-source"
+        ? { ...tool, source: { kind: "plugin" as const, id: "other.plugin" } } : { ...tool, ownerPluginId: "other.plugin" }) };
+    h.service.registerRunView("run", view); h.finish();
+    expect(h.part().metadata).not.toHaveProperty("pluginUi");
+    expect(h.diagnostics).toHaveLength(1);
+  });
+
+  it.each(["owner", "version", "digest", "malformed"])("rejects automatic durable UI after its saved %s changes", async field => {
+    const h = harness(2); h.finish();
+    const instance = h.part().metadata.pluginUi as { instanceId: string } | undefined;
+    expect(instance).toBeDefined();
+    const selection = h.store.runs.getRun("run")!.metadata.pluginSelection as { pluginIds: string[]; candidates: Array<Record<string, unknown>> };
+    const changed = field === "owner" ? { ...selection, pluginIds: selection.pluginIds.slice(1), candidates: selection.candidates.slice(1) }
+      : field === "malformed" ? { ...selection, candidates: [] }
+      : { ...selection, candidates: selection.candidates.map((candidate, index) => index === 0
+        ? { ...candidate, [field === "version" ? "version" : "behaviorDigest"]: "changed" } : candidate) };
+    h.store.runs.updateRun("run", { metadata: { pluginSelection: changed } });
+    h.service.releaseRunView("run");
+    await expect(h.reopen().get("s1", instance!.instanceId)).rejects.toMatchObject({ code: "plugin_ui_not_found" });
+  });
+
   it("rejects a current definition whose surface differs from the persisted instance", async () => {
     const h = harness(); h.finish();
     h.setCurrent({ binding: { ...h.binding, definition: { ...h.binding.definition, surface: "session-sidebar" } } });

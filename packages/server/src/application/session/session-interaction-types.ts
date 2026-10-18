@@ -47,7 +47,7 @@ export interface SessionInteractionServiceContext {
   liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;
   operationGate: Pick<DaemonOperationGate, "enter">;
   resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
-  pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit">;
+  pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit"> & Partial<Pick<SessionPluginCapabilityService, "captureScope">>;
 }
 
 export interface EditLatestPromptInput {

@@ -100,8 +100,9 @@ export async function activateNativePluginTools(
         ...definition,
         execute: (input, toolContext) => {
           const view = toolContext.capabilityView;
-          if (view && (view.pluginId !== plugin.manifest.id ||
-            view.tools.get(definition.name)?.ownerPluginId !== plugin.manifest.id)) {
+          const captured = view?.tools.get(definition.name);
+          if (view && (!(view.pluginIds ? view.pluginIds.has(plugin.manifest.id) : view.pluginId === plugin.manifest.id) ||
+            captured?.ownerPluginId !== plugin.manifest.id || captured.source?.kind !== "plugin" || captured.source.id !== plugin.manifest.id)) {
             return Promise.resolve({ isError: true, content: [{ type: "text" as const, text: "Native Tool is not available in this Run." }] });
           }
           if (definition.execution?.network && (toolContext.environment?.info.networkMode === "none" ||

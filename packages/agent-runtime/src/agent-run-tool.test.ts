@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AgentEventInput, type AgentRunScope, type Settings, type ToolDefinition } from "@vykor/core";
-import { installLocalNativePlugin } from "@vykor/plugins";
+import { getInstalledPluginStorePath, type AgentEventInput, type AgentRunScope, type Settings, type ToolDefinition } from "@vykor/core";
+import { installLocalNativePlugin, updateInstalledPluginStore } from "@vykor/plugins";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureNativeUiLogs } from "../test-helpers/native-ui-logs.js";
 import { createDefaultNodeAgent } from "./default-agent.js";
@@ -83,6 +83,47 @@ function scope(agent: VykorAgent): AgentRunScope {
 const call = { type: "tool_use" as const, id: "ui-call", name: "NativeAction", input: {} };
 
 describe("captured Native UI and independent Agent tools", () => {
+  it.each(["disabled", "upgraded"])("rejects an inherited plugin view after its owner is %s before a new default Agent is created", async change => {
+    const { agent, root } = await fixture();
+    let child: VykorAgent | undefined;
+    let childModelCalls = 0;
+    try {
+      const capabilityView = agent.createRunCapabilityView(pluginId);
+      const pluginCandidates = agent.getPluginCandidates();
+      if (change === "disabled") {
+        await updateInstalledPluginStore(getInstalledPluginStorePath(), store => { store.plugins[`user::${pluginId}`]!.enabled = false; });
+      } else {
+        const manifestPath = join(root, "source/.vykor-plugin/plugin.json");
+        writeFileSync(manifestPath, JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, "utf8")), version: "2.0.0" }));
+        const replacement = await installLocalNativePlugin({ sourcePath: join(root, "source"), cwd: root, scope: "user",
+          approvedPermissions: ["ui:render", "ui:invoke-own-tools"] });
+        expect(replacement.status).toBe("installed");
+      }
+      child = await createDefaultNodeAgent({ cwd: root, sessionId: "session-ui", settings: { ...settings, maxTurns: 3 },
+        capabilityOverrides: { terminal: false, memory: false },
+        client: { async *streamMessage() {
+          childModelCalls++;
+          if (childModelCalls === 1) yield { type: "tool_use_start" as const, toolUse: { ...call, id: "child-native" } };
+          else yield { type: "text_delta" as const, delta: "done" };
+          yield { type: "complete" as const, stopReason: childModelCalls === 1 ? "tool_use" as const : "end_turn" as const };
+        } },
+      });
+      if (change === "disabled") expect(child.getPluginCandidates()).toEqual([]);
+      else expect(child.getPluginCandidates()).toEqual([expect.objectContaining({ version: "2.0.0" })]);
+      await expect(child.runMessage("Use the inherited tool", { capabilityView, pluginCandidates })).rejects.toThrow(/available|disabled|owner|changed/);
+      expect(childModelCalls).toBe(0);
+      expect(existsSync(join(root, "native-started"))).toBe(false);
+    } finally { await child?.close(); await agent.close(); }
+  });
+  it("refuses a captured UI action after its installed plugin is disabled", async () => {
+    const { agent, root } = await fixture();
+    try {
+      const capabilityView = agent.createRunCapabilityView(pluginId);
+      await updateInstalledPluginStore(getInstalledPluginStorePath(), store => { store.plugins[`user::${pluginId}`]!.enabled = false; });
+      await expect(agent.runTool(call, { capabilityView, scope: scope(agent) })).rejects.toThrow(/available|disabled/);
+      expect(existsSync(join(root, "native-started"))).toBe(false);
+    } finally { await agent.close(); }
+  });
   it.each([false, true])("captures approved UI provenance without exposing it to baseline (linked=%s)", async link => {
     const { agent, installed } = await fixture("NativeAction", link);
     try {

@@ -87,6 +87,8 @@ describe("SessionInteractionService editLatestPrompt", () => {
       traceId: "trace-edit",
       metadata: {
         origin: { component: "latest-message-editor" },
+        pluginSelectionPolicy: "auto",
+        pluginScope: { scopeVersion: 2, source: "none", pluginIds: [], candidates: [] },
         edit: { kind: "latest_prompt", sourceMessageId: "message-1" },
       },
     });

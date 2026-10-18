@@ -66,6 +66,7 @@ it.each([false, true])("keeps plugin delegation in the root run and lets it fini
       childPrompt = options.systemPrompt;
       if (fail) throw new Error("child startup failed");
       return {
+        createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: new ToolRegistry() }),
         submitMessage: (content: string, submit: any) => new FrameworkAgentRun({
           agentId: "child-agent", identity, ids: submit.ids, content, delivery: "queue", eventBus: bus,
           capabilityView: submit.capabilityView, runtime, effects: {} as any,
@@ -233,6 +234,34 @@ it("scopes the goal tools and binding to each run without mutating the runtime r
   ]);
 });
 
+it.each([false, true])("keeps plugin discovery guidance model-only alongside goal=%s", async (withGoal) => {
+  let contribution: any;
+  const events: AgentEvent[] = [];
+  const run = new FrameworkAgentRun({
+    agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" }, content: "user request", delivery: "queue",
+    pluginGuidance: "PLUGIN DISCOVERY SOURCE DATA",
+    ...(withGoal ? { goal: { goalId: "g", objectiveVersion: 1,
+      readSnapshot: async () => ({ goalId: "g", objectiveVersion: 1, status: "active" as const, objective: "GOAL OBJECTIVE", autoTurnsUsed: 0, maxAutoTurns: 0, knownTokens: 0, usageIncomplete: false }),
+      submitUpdate: async () => ({ recorded: true as const }),
+    } } : {}),
+    eventBus: new AgentEventBus(event => { events.push(event); }),
+    session: { id: "s", getHistory: () => [], submitMessage: async function* (content: string, options: any) {
+      expect(content).toBe("user request");
+      contribution = options.execution.contribution;
+      yield { type: "complete", stopReason: "end_turn" };
+    } } as any,
+    runtime: { queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) } } as any,
+    effects: {} as any, children: { cwd: "/repo", createController: () => ({}) } as any, onSettled: () => {},
+  });
+  await run.result;
+  expect(contribution.systemGuidance).toContain("PLUGIN DISCOVERY SOURCE DATA");
+  if (withGoal) {
+    expect(contribution.systemGuidance).toContain("GOAL OBJECTIVE");
+    expect(contribution.tools.map((item: any) => item.definition.name)).toEqual(["GoalUpdate", "GoalRead"]);
+  }
+  expect(JSON.stringify(events)).not.toContain("PLUGIN DISCOVERY SOURCE DATA");
+});
+
 it("settles a stale snapshot callback as run failure before invoking the engine", async () => {
   const error = new Error("goal_run_stale");
   const events: AgentEvent[] = [];
@@ -249,4 +278,27 @@ it("settles a stale snapshot callback as run failure before invoking the engine"
   await expect(run.started).rejects.toBe(error);
   expect(events.map(event => event.type)).toEqual(["input.accepted", "run.failed"]);
   expect(calls).toBe(0);
+});
+
+it("uses the prepared plugin scope for both model execution and child delegation", async () => {
+  const preparedView = { tools: new Map(), skills: new Map(), agents: new Map(), mcpServers: new Map() };
+  let delegatedView: unknown;
+  let observed: any;
+  let preparations = 0;
+  const run = new FrameworkAgentRun({ agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" }, content: "work", delivery: "queue",
+    pluginGuidance: "stale summary",
+    prepareCapabilities: async signal => { signal.throwIfAborted(); preparations++; return { capabilityView: preparedView, pluginGuidance: "prepared summary" }; },
+    eventBus: new AgentEventBus(() => {}),
+    session: { id: "s", getHistory: () => [], submitMessage: async function* (_: string, options: any) {
+      observed = options.execution;
+      yield { type: "complete", stopReason: "end_turn" };
+    } } as any,
+    runtime: { queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) } } as any,
+    effects: {} as any, children: { cwd: "/repo", createController: (_: unknown, view: unknown) => { delegatedView = view; return {}; } } as any, onSettled: () => {},
+  });
+  await run.result;
+  expect(preparations).toBe(1);
+  expect(observed.capabilityView).toBe(preparedView);
+  expect(delegatedView).toBe(preparedView);
+  expect(observed.contribution.systemGuidance).toBe("prepared summary");
 });

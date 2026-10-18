@@ -12,7 +12,7 @@ import type {
   ToolDefinition,
 } from "@vykor/core";
 import { loadProjectSettings, loadSettings } from "@vykor/core";
-import { computePluginBehaviorDigest, loadNativeUiMetadata } from "@vykor/plugins";
+import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeUiMetadata, verifyInstalledNativePlugin } from "@vykor/plugins";
 import {
   createMcpServerIdentity,
   McpClientManager,
@@ -35,6 +35,7 @@ import { createRememberTool } from "./remember-tool.js";
 import { getInternalToolRegistry } from "./default-runtime.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import type { PluginSelectionCatalog } from "./plugin-selection.js";
+import { selectPluginInstallationWinners } from "./plugin-capability-inventory.js";
 
 export interface InstallRuntimeIntegrationsOptions {
   cwd: string;
@@ -72,6 +73,13 @@ export async function installRuntimeIntegrations(
         || await computePluginBehaviorDigest(plugin.root) !== candidate.behaviorDigest) {
         throw new Error(`Plugin changed during selection: ${candidate.pluginId}`);
       }
+      const latest = selectPluginInstallationWinners(await discoverInstalledNativePlugins({ cwd: options.cwd })).winners
+        .find(item => item.id === candidate.pluginId);
+      if (!latest || latest.scope !== current.scope || latest.cachePath !== plugin.root || latest.currentVersion !== current.version) {
+        throw new Error(`Plugin is no longer available: ${candidate.pluginId}`);
+      }
+      const verified = await verifyInstalledNativePlugin(latest);
+      if (verified.status !== "valid") throw new Error(`Plugin permissions or installation changed: ${candidate.pluginId}`);
     },
   };
   assertPluginMcpServerNamesAvailable(options);
@@ -350,9 +358,11 @@ export async function installRuntimeIntegrations(
     })),
   ];
 
-  runtime.createRunCapabilityView = (pluginId) => {
-    const errors: string[] = [];
-    if (pluginId !== undefined) {
+  runtime.createRunCapabilityView = (scope) => {
+    const preparationErrors = new Map<string, string[]>();
+    for (const pluginId of typeof scope === "string" ? [scope] : scope ?? []) {
+      const errors: string[] = [];
+      preparationErrors.set(pluginId, errors);
       const plugin = options.discovery.plugins.find((item) => item.manifest.id === pluginId);
       errors.push(...(plugin?.diagnostics.filter((item) => item.severity === "error" && item.component !== "ui").map((item) => item.message) ?? []));
       const activation = toolActivations.find((item) => item.pluginId === pluginId);
@@ -390,9 +400,9 @@ export async function installRuntimeIntegrations(
     return createRunCapabilityView({
       toolRegistry: runtime.toolRegistry,
       pluginIds: new Set(inventory.plugins.keys()),
-      pluginPreparationErrors: pluginId === undefined ? undefined : new Map([[pluginId, errors]]),
+      pluginPreparationErrors: preparationErrors,
       skills, agents, mcpServers: connectedServers, pluginUi,
-    }, pluginId);
+    }, scope);
   };
 
   return {

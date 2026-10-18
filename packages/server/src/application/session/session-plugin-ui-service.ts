@@ -34,6 +34,7 @@ import { ApplicationError } from "../../shared/application-error.js";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunWorkContext } from "../../runtime/run-coordinator.js";
+import { readInputPluginScope } from "./session-plugin-selection.js";
 
 /** Current host facts, resolved from install/settings/Runtime; never supplied by a client. */
 export interface PluginUiCurrentState {
@@ -1055,7 +1056,7 @@ export class SessionPluginUiService {
       !proposal ||
       !pluginId ||
       tool?.ownerPluginId !== pluginId ||
-      view?.pluginId !== pluginId ||
+      !(view?.pluginIds ? view.pluginIds.has(pluginId) : view?.pluginId === pluginId) ||
       !binding ||
       binding.pluginId !== pluginId ||
       binding.componentId !== proposal.componentId ||
@@ -1065,7 +1066,6 @@ export class SessionPluginUiService {
       binding.definition.id !== proposal.componentId ||
       !run ||
       run.sessionId !== input.sessionId ||
-      run.metadata.pluginId !== pluginId ||
       Object.hasOwn(run.metadata, "uiAction") ||
       input.result.isError ||
       input.result.executionState !== "completed" ||
@@ -1080,6 +1080,8 @@ export class SessionPluginUiService {
         sourceToolUseId: input.toolUseId,
         sourceToolName: input.toolName,
         pluginId,
+        pluginVersion: binding.pluginVersion,
+        pluginDigest: binding.pluginDigest,
       })
     )
       return invalid();
@@ -1166,6 +1168,8 @@ export class SessionPluginUiService {
       | "sourceToolUseId"
       | "sourceToolName"
       | "pluginId"
+      | "pluginVersion"
+      | "pluginDigest"
     >,
   ): boolean {
     const run = this.options.store.runs.getRun(instance.sourceRunId);
@@ -1186,12 +1190,32 @@ export class SessionPluginUiService {
       part.toolUseId === instance.sourceToolUseId &&
       part.toolName === instance.sourceToolName &&
       run?.sessionId === instance.sessionId &&
-      run.metadata.pluginId === instance.pluginId &&
+      this.sourcePluginMatches(run, instance) &&
       !Object.hasOwn(run.metadata, "uiAction") &&
       message?.sessionId === instance.sessionId &&
       message.role === "assistant" &&
       message.runId === run.id
     );
+  }
+
+  private sourcePluginMatches(
+    run: SessionRunRecord,
+    instance: Pick<PluginUiInstanceRecord, "pluginId" | "pluginVersion" | "pluginDigest">,
+  ): boolean {
+    const selection = run.metadata.pluginSelection as {
+      status?: string; scopeVersion?: number; source?: string; pluginId?: string | null;
+    } | undefined;
+    if (selection?.status === "resolved" && selection.scopeVersion === 2 && selection.source === "auto") {
+      try {
+        const scope = readInputPluginScope(selection);
+        const candidate = scope?.candidates.find(item => item.pluginId === instance.pluginId);
+        return selection.pluginId === null && run.metadata.pluginId === null && candidate?.version === instance.pluginVersion
+          && candidate.behaviorDigest === instance.pluginDigest;
+      } catch {
+        return false;
+      }
+    }
+    return run.metadata.pluginId === instance.pluginId;
   }
 
   private availability(

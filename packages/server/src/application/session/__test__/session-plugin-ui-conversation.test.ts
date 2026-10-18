@@ -11,6 +11,7 @@ import { RunAdmissionService } from "../run-admission-service.js";
 import { SessionOperationRunner } from "../session-operation-runner.js";
 import { SessionPluginUiService, type PluginUiCurrentState } from "../session-plugin-ui-service.js";
 import { SessionPluginUiConversationService } from "../session-plugin-ui-conversation-service.js";
+import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { vi.restoreAllMocks(); cleanup.splice(0).reverse().forEach(fn => fn()); });
@@ -46,8 +47,14 @@ export function conversationHarness() {
     events, goals: { getCurrentGoal: () => ({ id: "goal", status: "active", revision: 1 }), cancelGoalRuns: () => { priority++; return []; } } });
   const makeSource = () => new SessionPluginUiService({ store, transaction: work => store.transaction(work), resolveCurrent: async () => { await duringResolve?.(); return current; } });
   let source = makeSource();
+  const pluginCapabilities = new SessionPluginCapabilityService({ resolveInventory: async () => ({
+    plugins: new Map(["example.panel", "office-work"].map(pluginId => [pluginId, {
+      pluginId, displayName: pluginId, description: pluginId, version: "1.0.0", behaviorDigest: `${pluginId}-digest`,
+      scope: "user" as const, origin: "native" as const, skillNames: [], agentNames: [], mcpServerIds: [], nativeToolEntries: [],
+    }])), skills: new Map(), agents: new Map(), mcpServers: new Map(), nativeToolEntries: new Map(), diagnostics: [],
+  }) });
   const makeService = () => new SessionPluginUiConversationService({ store, source, operations, admission,
-    modelAvailable: async () => model });
+    pluginCapabilities, modelAvailable: async () => model });
   const service = makeService();
   const part = () => store.conversations.listMessageParts(session.id).find(p => p.id === "source")!;
   const patchInstance = (patch: Partial<PluginUiInstanceRecord>) => { const p = part(); store.conversations.upsertMessagePart({ ...p, metadata: { ...p.metadata, pluginUi: { ...readPluginUiInstance(p.metadata)!, ...patch } } }); };
@@ -175,6 +182,28 @@ it("accepts ordinary input while a model Run is busy", async () => {
   const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
   expect(receipt.status).toBe("pending"); expect(h.store.runs.getRun(active.id)?.status).toBe("running");
   expect(h.store.conversations.listInputs(h.session.id)).toHaveLength(1);
+});
+
+it("captures the UI handoff's automatic plugin scope before later manual choices", async () => {
+  const h = conversationHarness();
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  h.store.sessions.update(h.session.id, { metadata: { activePluginId: "office-work" } });
+  const saved = h.store.conversations.getInput(receipt.inputId)!;
+  expect(saved.metadata).toMatchObject({ pluginScope: { scopeVersion: 2, source: "auto", pluginIds: ["example.panel", "office-work"] } });
+  expect(saved.metadata).not.toHaveProperty("pluginId");
+  expect(h.store.runs.getRun(receipt.runId)!.metadata).not.toHaveProperty("pluginId");
+});
+
+it.each([true, false])("keeps manual and disabled-auto restrictions for a UI handoff: manual=%s", async manual => {
+  const h = conversationHarness();
+  h.store.sessions.update(h.session.id, { metadata: manual
+    ? { activePluginId: "office-work" } : { runtime: { pluginAutoSelectionEnabled: false } } });
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  const saved = h.store.conversations.getInput(receipt.inputId)!;
+  if (manual) {
+    expect(saved.metadata.pluginId).toBe("office-work");
+    expect(h.store.runs.getRun(receipt.runId)!.metadata.pluginId).toBe("office-work");
+  } else expect(saved.metadata).toMatchObject({ pluginScope: { source: "none", pluginIds: [] } });
 });
 
 it("does not open capabilities for a stale availability view after generation changes", async () => {

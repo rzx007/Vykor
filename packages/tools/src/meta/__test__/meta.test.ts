@@ -311,6 +311,21 @@ describe("skillTool", () => {
   });
 });
 
+async function listAllSkillPages(
+  input: Parameters<typeof listSkillsTool.execute>[0],
+  context: Parameters<typeof listSkillsTool.execute>[1],
+) {
+  const pages: string[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const result = await listSkillsTool.execute({ ...input, offset, limit: 100 }, context);
+    const text = (result.content[0] as { text: string }).text;
+    pages.push(text);
+    if (result.isError || !text.includes("More skills available.")) {
+      return { ...result, content: [{ type: "text" as const, text: pages.join("\n") }] };
+    }
+  }
+}
+
 describe("listSkillsTool", () => {
   it("lists model-visible skills by default", async () => {
     const registry = new SkillRegistry();
@@ -326,7 +341,7 @@ describe("listSkillsTool", () => {
       source: "user",
     }));
 
-    const result = await listSkillsTool.execute!({}, {
+    const result = await listAllSkillPages({}, {
       cwd: process.cwd(),
       skillRegistry: registry,
     });
@@ -352,7 +367,7 @@ describe("listSkillsTool", () => {
       disableModelInvocation: true,
     }));
 
-    const result = await listSkillsTool.execute!({ visibility: "all" }, {
+    const result = await listAllSkillPages({ visibility: "all" }, {
       cwd: process.cwd(),
       skillRegistry: registry,
     });
@@ -391,7 +406,7 @@ describe("listSkillsTool", () => {
         description: "Existing runtime skill",
       }));
 
-      const result = await listSkillsTool.execute!({ visibility: "all" }, {
+      const result = await listAllSkillPages({ visibility: "all" }, {
         cwd: dir,
         skillRegistry: staleRegistry,
       });
@@ -422,7 +437,7 @@ describe("listSkillsTool", () => {
         "utf-8",
       );
 
-      const result = await listSkillsTool.execute!({ visibility: "all" }, {
+      const result = await listAllSkillPages({ visibility: "all" }, {
         cwd: dir,
         skillRegistry: new SkillRegistry(),
       });
@@ -447,7 +462,7 @@ describe("listSkillsTool", () => {
       await fs.mkdir(skillDir, { recursive: true });
       await fs.writeFile(path.join(skillDir, "SKILL.md"), "---\ndescription: WSL project skill\n---\n\nBody.", "utf8");
 
-      const result = await listSkillsTool.execute!({ visibility: "all" }, {
+      const result = await listAllSkillPages({ visibility: "all" }, {
         cwd: "/mnt/c/host-project",
         skillRegistry: new SkillRegistry(),
         environment: { workspace: { hostRoot: dir } },

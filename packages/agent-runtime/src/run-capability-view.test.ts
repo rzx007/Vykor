@@ -35,10 +35,45 @@ function createExecutionContext(
 }
 
 describe("run capability execution boundary", () => {
+  it("distinguishes an automatic singleton scope from an explicit single-plugin restriction", () => {
+    const registry = new ToolRegistry();
+    registry.register(tool("Alpha"), { kind: "plugin", id: "alpha" });
+    const sources = { toolRegistry: registry, pluginIds: new Set(["alpha"]) };
+    const automatic = createRunCapabilityView(sources, ["alpha"]);
+    const explicit = createRunCapabilityView(sources, "alpha");
+    expect(automatic.pluginId).toBeUndefined();
+    expect(explicit.pluginId).toBe("alpha");
+    expect([...automatic.pluginIds!]).toEqual(["alpha"]);
+    expect([...automatic.tools.keys()]).toEqual([...explicit.tools.keys()]);
+    expect(automatic.tools.get("Alpha")!.ownerPluginId).toBe("alpha");
+  });
+  it("captures multiple exact plugin owners while excluding unavailable and foreign bindings", async () => {
+    const registry = new ToolRegistry();
+    registry.register(tool("Read"));
+    for (const owner of ["alpha", "beta", "foreign", "unavailable"]) registry.register(tool(owner), { kind: "plugin", id: owner });
+    const sources = {
+      toolRegistry: registry, pluginIds: new Set(["alpha", "beta", "foreign", "unavailable"]),
+      pluginPreparationErrors: new Map([["unavailable", ["host stopped"]]]),
+      skills: [skill("Common"), skill("AlphaSkill", "alpha"), skill("BetaSkill", "beta"), skill("ForeignSkill", "foreign")],
+      agents: [{ ownerPluginId: "beta", definition: { name: "BetaAgent", description: "beta", source: "plugin" as const } }],
+      mcpServers: [{ ownerPluginId: "beta", serverId: "beta:mcp", serverName: "beta-server", definition: { type: "stdio" as const, command: "node" } }],
+    };
+    const view = createRunCapabilityView(sources, ["alpha", "beta", "unavailable"]);
+    expect(view.pluginId).toBeUndefined();
+    expect([...view.pluginIds!]).toEqual(["alpha", "beta"]);
+    expect((view.pluginIds as Set<string>).add).toBeUndefined();
+    expect([...view.tools.keys()]).toEqual(["Read", "alpha", "beta"]);
+    expect([...view.skills.keys()]).toEqual(["Common", "AlphaSkill", "BetaSkill"]);
+    expect([...view.agents.keys()]).toEqual(["BetaAgent"]);
+    expect([...view.mcpServers.keys()]).toEqual(["beta:mcp"]);
+    expect([...createRunCapabilityView(sources, []).tools.keys()]).toEqual(["Read"]);
+    expect(() => createRunCapabilityView(sources, "unavailable")).toThrow(/host stopped/);
+    expect(() => createRunCapabilityView(sources, ["missing"])).toThrow(/not available/);
+  });
   it("withdraws UI after Native definition replacement without rebinding an old component", async () => {
     const registry = new ToolRegistry();
     registry.register(tool("Alpha", "original"), { kind: "plugin", id: "alpha" });
-    const sources = { toolRegistry: registry, pluginIds: new Set(["alpha"]) };
+    const sources = { toolRegistry: registry, pluginIds: new Set(["alpha", "beta"]) };
     const original = createRunCapabilityView(sources, "alpha").tools.get("Alpha")!;
     const ui = { pluginId: "alpha", pluginVersion: "1", pluginDigest: "digest", componentId: "panel",
       componentDigest: "component", htmlSha256: "html", root: "/plugin", entryPath: "/plugin/ui.html",
@@ -46,6 +81,7 @@ describe("run capability execution boundary", () => {
         actions: [{ id: "go", label: "Go", tool: "Alpha", completion: "keep-open" as const }] }, actionTools: [original] };
     const captured = createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha");
     expect(captured.pluginUi?.size).toBe(1);
+    expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, ["alpha", "beta"]).pluginUi?.size).toBe(1);
     registry.override(tool("Alpha", "replacement"), { kind: "plugin", id: "alpha" });
     expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
     ui.definition.title = "mutated";
@@ -65,6 +101,7 @@ describe("run capability execution boundary", () => {
         definition: { id: "panel", title: "Panel", entry: "./ui.html", surfaces: ["tool-result" as const],
           actions: [{ id: "go", label: "Go", tool: "Action", completion: "keep-open" as const }] }, actionTools: [candidate] };
       expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
+      expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, ["alpha", "other"]).pluginUi?.size).toBe(0);
     });
   it.each([false, true])("enforces normalized Bash restrictions during View invocation: denied=%s", async (denied) => {
     let invocations = 0;

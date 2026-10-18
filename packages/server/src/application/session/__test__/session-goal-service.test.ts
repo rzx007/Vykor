@@ -9,6 +9,7 @@ import { SessionGoalService } from "../session-goal-service.js";
 import type { AdmitPromptInput } from "../run-admission-service.js";
 import type { GoalWaitCheck } from "../goal-wait-verifier.js";
 import { GoalWaitVerifier } from "../goal-wait-verifier.js";
+import type { InputPluginScope } from "../session-plugin-selection.js";
 
 const disposals: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of disposals.splice(0)) await dispose(); });
@@ -48,7 +49,8 @@ function harness(realWaitVerifier = false) {
     stopGoalChildren: vi.fn(async () => {}),
     hasUserWork: () => hasUserWork,
   };
-  const pluginCapabilities = { admit: vi.fn(async () => ({} as { pluginId?: string })) };
+  const pluginCapabilities = { admit: vi.fn(async () => ({} as { pluginId?: string })),
+    captureScope: vi.fn(async (): Promise<InputPluginScope> => ({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] })) };
   const service = new SessionGoalService({
     transaction: store, sessions: store.sessions, runs: store.runs,
     permissions: store.permissions, goals: store.goals, events, admission, control, pluginCapabilities,
@@ -89,6 +91,86 @@ function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-r
 }
 
 describe("SessionGoalService simple lifecycle", () => {
+  it("captures a new goal's plugin scope and keeps the resolved upper bound for continuation and resume", async () => {
+    const h = harness();
+    const candidates = ["P", "Q"].map(pluginId => ({ pluginId, displayName: pluginId, description: pluginId, version: "1", behaviorDigest: `${pluginId}-digest` }));
+    const initial: InputPluginScope = { scopeVersion: 2, source: "auto", pluginIds: ["P", "Q"], candidates };
+    h.pluginCapabilities.captureScope.mockResolvedValue(initial);
+    await h.create();
+    const first = h.run();
+    expect(first.metadata.pluginScope).toEqual(initial);
+    expect(h.store.conversations.getInput(first.inputId!)!.metadata.pluginScope).toEqual(initial);
+    const resolved = { scopeVersion: 2 as const, source: "auto" as const, pluginIds: ["Q"], candidates: [candidates[1]!] };
+    h.store.runs.updateRun(first.id, { metadata: { pluginSelection: { ...resolved, status: "resolved", pluginId: null, reason: "matched" } } });
+    h.pluginCapabilities.captureScope.mockResolvedValue({ ...initial, pluginIds: ["foreign"], candidates: [{ ...candidates[0]!, pluginId: "foreign" }] });
+    await h.finish();
+    expect(h.run().metadata.pluginScope).toEqual(resolved);
+    await h.finish({ status: "paused", reason: "check later" });
+    await h.service.action("s1", h.current().id, { requestId: "resume-scope", action: "resume", expectedRevision: h.current().revision });
+    expect(h.run().metadata.pluginScope).toEqual(resolved);
+    expect(h.pluginCapabilities.captureScope).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists a newly captured scope when editing a paused goal, then uses it after resume", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "stop" });
+    const candidates = [{ pluginId: "Q", displayName: "Q", description: "Q", version: "2", behaviorDigest: "new-digest" }];
+    const scope: InputPluginScope = { scopeVersion: 2, source: "auto", pluginIds: ["Q"], candidates };
+    h.pluginCapabilities.captureScope.mockResolvedValue(scope);
+    await h.service.update("s1", h.current().id, { requestId: "edit-scope", expectedRevision: h.current().revision, objective: "new objective" });
+    h.pluginCapabilities.captureScope.mockResolvedValue({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] });
+    await h.service.action("s1", h.current().id, { requestId: "resume-edit", action: "resume", expectedRevision: h.current().revision });
+    expect(h.run().metadata.pluginScope).toEqual(scope);
+    expect(h.pluginCapabilities.captureScope).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not discover plugins when resuming a goal whose original run had no saved plugin scope", async () => {
+    const h = harness(); await h.create();
+    const first = h.run();
+    await h.finish({ status: "paused", reason: "stop" });
+    h.store.runs.updateRun(first.id, { metadata: { pluginScope: undefined, pluginSelectionPolicy: undefined } });
+    h.pluginCapabilities.captureScope.mockResolvedValue({ scopeVersion: 2, source: "auto", pluginIds: ["new"], candidates: [
+      { pluginId: "new", displayName: "New", description: "New", version: "1" },
+    ] });
+    await h.service.action("s1", h.current().id, { requestId: "resume-legacy", action: "resume", expectedRevision: h.current().revision });
+    expect(h.run().metadata.pluginScope).toEqual({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] });
+    expect(h.pluginCapabilities.captureScope).toHaveBeenCalledTimes(1);
+  });
+  it("continues a legacy automatic singleton using its saved identity without discovering other plugins", async () => {
+    const h = harness(); await h.create();
+    const first = h.run();
+    h.store.runs.updateRun(first.id, { metadata: { pluginScope: undefined,
+      pluginSelection: { status: "resolved", source: "auto", pluginId: "P", version: "1", behaviorDigest: "P-digest", reason: "matched" },
+    } });
+    await h.finish();
+    const scope = { scopeVersion: 2, source: "auto", pluginIds: ["P"], candidates: [
+      { pluginId: "P", displayName: "P", description: "", version: "1", behaviorDigest: "P-digest" },
+    ] };
+    expect(h.run().metadata.pluginScope).toEqual(scope);
+    await h.finish({ status: "paused", reason: "stop" });
+    await h.service.action("s1", h.current().id, { requestId: "resume-legacy-plugin", action: "resume", expectedRevision: h.current().revision });
+    expect(h.run().metadata.pluginScope).toEqual(scope);
+    expect(h.pluginCapabilities.captureScope).toHaveBeenCalledTimes(1);
+  });
+  it("stops legacy plugin continuation when the saved source identity is incomplete", async () => {
+    const h = harness(); await h.create();
+    h.store.runs.updateRun(h.run().id, { metadata: { pluginScope: undefined,
+      pluginSelection: { status: "resolved", source: "auto", pluginId: "P", version: "1", reason: "matched" },
+    } });
+    await h.finish();
+    expect(h.current().status).toBe("paused");
+    expect(h.current().reason).toMatch(/插件范围|plugin scope/);
+    expect(h.admission.dispatchPersistedRun).toHaveBeenCalledTimes(1);
+  });
+  it("retains an empty legacy resolved selection instead of reviving its earlier candidate scope", async () => {
+    const h = harness();
+    h.pluginCapabilities.captureScope.mockResolvedValue({ scopeVersion: 2, source: "auto", pluginIds: ["P"], candidates: [
+      { pluginId: "P", displayName: "P", description: "P", version: "1", behaviorDigest: "digest" },
+    ] });
+    await h.create();
+    h.store.runs.updateRun(h.run().id, { metadata: { pluginSelection: { status: "resolved", source: "auto", pluginId: null, reason: "no_match" } } });
+    await h.finish();
+    expect(h.run().metadata.pluginScope).toEqual({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] });
+  });
   it("keeps the child live across a settled parent, wakes once, then automatically continues to completion", async () => {
     const h = harness(true); await h.create();
     const goal = h.current(), root = h.run();
@@ -345,6 +427,18 @@ describe("SessionGoalService simple lifecycle", () => {
     h.pluginCapabilities.admit.mockResolvedValueOnce({ pluginId: "plugin" });
     await h.create({ requestId: "selected" });
     expect(h.run().metadata.pluginId).toBe("plugin");
+    expect(h.pluginCapabilities.captureScope).not.toHaveBeenCalled();
+  });
+  it("does not create a goal until its asynchronous plugin scope has been captured", async () => {
+    const h = harness();
+    let release!: (scope: InputPluginScope) => void;
+    h.pluginCapabilities.captureScope.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const pending = h.create();
+    await vi.waitFor(() => expect(h.pluginCapabilities.captureScope).toHaveBeenCalledOnce());
+    expect(h.store.goals.getCurrentGoal("s1")).toBeUndefined();
+    release({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] });
+    await pending;
+    expect(h.run().metadata.pluginScope).toEqual({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] });
   });
   it("registers a precise task wait and resumes only once after completion", async () => {
     const h = harness(); await h.create();

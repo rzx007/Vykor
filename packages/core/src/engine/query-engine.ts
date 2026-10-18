@@ -153,7 +153,7 @@ export interface SubmitMessageOptions {
 export class QueryEngine implements IQueryEngine {
   private messages: Message[] = [];
   // Short-lived result access, not a second persistent transcript or plugin storage service.
-  private readonly recentToolResults = new Map<string, { runId: string; result: ToolExecutionResult; bytes: number }>();
+  private readonly recentToolResults = new Map<string, { runId: string; result: ToolExecutionResult; bytes: number; binding: import("../types/runtime.js").RunToolBinding }>();
   private compactService: CompactService;
   private costTracker: CostTracker;
   private systemPrompt: string | undefined;
@@ -1035,16 +1035,19 @@ export class QueryEngine implements IQueryEngine {
   private retainToolResults(results: ToolExecutionResult[], execution?: AgentExecutionContext): ToolExecutionResult[] {
     if (!execution) return results;
     for (const [id, entry] of this.recentToolResults) if (entry.runId !== execution.scope.runId) this.recentToolResults.delete(id);
-    if (!execution.capabilityView?.pluginId) return results;
+    const view = execution.capabilityView;
+    if (!view || !(view.pluginIds?.size || view.pluginId)) return results;
     return results.map(result => {
       this.recentToolResults.delete(result.toolUseId);
       if (result.executionState === "not_started") return result;
+      const binding = view.tools.get(result.toolName);
+      if (!binding) return result;
       const actual = { toolUseId: result.toolUseId, toolName: result.toolName, content: result.content, isError: result.isError };
       let json: string;
       try { json = JSON.stringify(actual); } catch { return result; }
       const bytes = Buffer.byteLength(json);
       if (bytes > 256_000) return result;
-      this.recentToolResults.set(result.toolUseId, { runId: execution.scope.runId, result: JSON.parse(json), bytes });
+      this.recentToolResults.set(result.toolUseId, { runId: execution.scope.runId, result: JSON.parse(json), bytes, binding });
       let size = [...this.recentToolResults.values()].reduce((total, entry) => total + entry.bytes, 0);
       while (size > 1_000_000 || this.recentToolResults.size > 16) {
         const id = this.recentToolResults.keys().next().value!;
@@ -1071,8 +1074,13 @@ export class QueryEngine implements IQueryEngine {
       toolAttemptId,
       readToolResult: id => {
         const entry = this.recentToolResults.get(id);
+        const binding = entry && execution?.capabilityView?.tools.get(entry.result.toolName);
         if (!execution || !entry || entry.runId !== execution.scope.runId ||
-            !execution.capabilityView?.tools.has(entry.result.toolName)) return undefined;
+            !binding || binding.ownerPluginId !== entry.binding.ownerPluginId
+            || binding.serverId !== entry.binding.serverId || binding.source?.kind !== entry.binding.source?.kind
+            || binding.source?.id !== entry.binding.source?.id || binding.definitionIdentity !== entry.binding.definitionIdentity
+            || binding.definition.execute !== entry.binding.definition.execute
+            || (!binding.definitionIdentity && binding.invoke !== entry.binding.invoke)) return undefined;
         return structuredClone(entry.result);
       },
       runAbortSignal: signal,

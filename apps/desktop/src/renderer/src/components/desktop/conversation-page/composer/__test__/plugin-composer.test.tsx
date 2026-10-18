@@ -110,11 +110,11 @@ it("lets users turn off automatic selection while retaining @ plugin mentions", 
   })
   await render(undefined, true, "plugin-test", selection())
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="插件选择设置"]')!.click())
-  const toggle = document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="自动选择插件"]')!
+  const toggle = document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="自动使用可用能力"]')!
   expect(toggle.getAttribute("aria-checked")).toBe("true")
   await act(async () => toggle.click())
   await render(undefined, true, "plugin-test", selection())
-  expect(container.textContent).toContain("自动选择已关闭")
+  expect(container.textContent).toContain("自动使用已关闭")
   await act(async () => plus().click())
   expect(pluginOption()).toBeDefined()
 })
@@ -126,8 +126,8 @@ it("shows the manual plugin and lets users clear it to return to automatic selec
     onPluginAutoSelectionChange: () => {},
     onClearManualPlugin: () => { cleared = true },
   })
-  expect(container.textContent).toContain("手动：Quality")
-  const clear = container.querySelector<HTMLButtonElement>('[aria-label="清除手动插件，恢复自动选择"]')!
+  expect(container.textContent).toContain("仅使用：Quality")
+  const clear = container.querySelector<HTMLButtonElement>('[aria-label="清除手动插件，恢复自动使用"]')!
   await act(async () => clear.click())
   expect(cleared).toBe(true)
 })
@@ -136,7 +136,7 @@ it("labels a resolved automatic plugin separately from a manual selection", asyn
     automaticPluginName: "Quality", onPluginAutoSelectionChange: () => {},
   })
   expect(container.textContent).toContain("本轮自动：Quality")
-  expect(container.textContent).not.toContain("手动：")
+  expect(container.textContent).not.toContain("仅使用：")
 })
 it.each(["plus", "at"])("selects a structured plugin through %s", async (entry) => {
   await render({ version: 1, items: entry === "at" ? [{ type: "text", text: "@Qua" }] : [] }, true)

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Settings } from "@vykor/core";
+import { createRunCapabilityView } from "./run-capability-view.js";
 
 import {
   createAgentKernel,
@@ -21,7 +22,62 @@ const settings: Settings = {
 };
 
 describe("createAgentKernel", () => {
-  it("uses only the plugin catalog explicitly prepared by its host", async () => {
+  it("keeps a trusted explicit plugin view usable when the Kernel host does not supply a catalog", async () => {
+    let invoked = 0;
+    let requests = 0;
+    const agent = await createAgentKernel({ settings, cwd: "D:/explicit-workspace", capabilities: unavailableCapabilities(),
+      effects: { requestPermission: async () => ({ status: "approved" }) }, createRuntime: async context => {
+        const prepared = createBasicAgentKernelRuntime({ settings: context.settings, cwd: context.cwd, client: {
+          async *streamMessage() {
+            requests++;
+            if (requests === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "plugin", name: "Trusted", input: {} } };
+            yield { type: "complete" as const, stopReason: requests === 1 ? "tool_use" as const : "end_turn" as const };
+          },
+        } });
+        prepared.runtime.toolRegistry.register({ name: "Trusted", description: "host-owned", inputSchema: { type: "object" },
+          execute: async () => { invoked++; return { content: [] }; } }, { kind: "plugin", id: "P" });
+        prepared.runtime.createRunCapabilityView = scope => createRunCapabilityView({ toolRegistry: prepared.runtime.toolRegistry, pluginIds: new Set(["P"]) }, scope);
+        return prepared;
+      } });
+    try {
+      await agent.runMessage("use trusted capability", { capabilityView: agent.createRunCapabilityView("P") });
+      expect(invoked).toBe(1);
+      expect(requests).toBe(2);
+    } finally { await agent.close(); }
+  });
+  it.each(["disabled", "upgraded"])("rejects a newly spawned child before its model executes after its inherited plugin is %s", async change => {
+    let rootRequests = 0;
+    let childRequests = 0;
+    let childFailure = "";
+    const initial = { pluginId: "P", displayName: "P", description: "P", version: "1", behaviorDigest: "digest-1" };
+    const capabilities = unavailableCapabilities();
+    capabilities.childEnvironment = { status: "available", source: "override", value: createInProcessChildEnvironmentProvider() };
+    const agent = await createAgentKernel({ settings, cwd: "D:/explicit-workspace", capabilities,
+      effects: { requestPermission: async () => ({ status: "approved" }) }, createRuntime: async context => {
+        const isChild = Boolean(context.identity);
+        const prepared = createBasicAgentKernelRuntime({ settings: context.settings, cwd: context.cwd, client: {
+          async *streamMessage() {
+            if (isChild) { childRequests++; yield { type: "text_delta" as const, delta: "child executed" }; }
+            else if (++rootRequests === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "delegate", name: "Delegate", input: {} } };
+            yield { type: "complete" as const, stopReason: !isChild && rootRequests === 1 ? "tool_use" as const : "end_turn" as const };
+          },
+        }, tools: [{ name: "Delegate", description: "spawn child", inputSchema: { type: "object" }, execute: async (_input, toolContext) => {
+          try {
+            const child = await toolContext.agent!.children!.spawnChildAgent({ description: "work", prompt: "work", agent: "worker", cwd: context.cwd });
+            childFailure = (await child.result).output;
+          } catch (error) { childFailure = String(error); }
+          return { content: [{ type: "text", text: childFailure }] };
+        } }] });
+        prepared.runtime.createRunCapabilityView = scope => createRunCapabilityView({ toolRegistry: prepared.runtime.toolRegistry, pluginIds: new Set(["P"]) }, scope);
+        return { ...prepared, pluginSelection: { candidates: !isChild ? [initial] : change === "disabled" ? [] : [{ ...initial, version: "2", behaviorDigest: "digest-2" }], validate: async () => {} } };
+      } });
+    try {
+      await agent.runMessage("delegate");
+      expect(childRequests).toBe(0);
+      expect(childFailure).toMatch(/changed|available|owner/);
+    } finally { await agent.close(); }
+  });
+  it("exposes and validates only the host catalog without a selection model request", async () => {
     let requests = 0;
     const validate = vi.fn(async () => {});
     const agent = await createAgentKernel({
@@ -39,10 +95,11 @@ describe("createAgentKernel", () => {
       }),
     });
     try {
-      await expect(agent.selectPluginForRun("create slides", { runId: "r1", inputId: "i1", traceId: "t1", signal: new AbortController().signal }))
-        .resolves.toMatchObject({ pluginId: "office", version: "1", behaviorDigest: "digest" });
-      expect(requests).toBe(1);
-      expect(validate).toHaveBeenCalledOnce();
+      const candidates = agent.getPluginCandidates();
+      expect(candidates).toEqual([{ pluginId: "office", displayName: "Office", description: "slides", version: "1", behaviorDigest: "digest" }]);
+      await agent.validatePluginScope(candidates, new AbortController().signal);
+      expect(requests).toBe(0);
+      expect(validate).toHaveBeenCalledWith(candidates[0]);
     } finally {
       await agent.close();
     }

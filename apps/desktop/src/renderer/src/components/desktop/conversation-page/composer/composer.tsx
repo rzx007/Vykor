@@ -340,7 +340,7 @@ export function Composer({
               }
             >
               <Puzzle data-icon="inline-start" className="size-3.5" strokeWidth={1.75} />
-              {pluginAutoSelectionEnabled ? "自动选择插件" : "自动选择已关闭"}
+              {pluginAutoSelectionEnabled ? "自动使用可用能力" : "自动使用已关闭"}
               <ChevronDown data-icon="inline-end" className="size-3" />
             </PopoverTrigger>
             <PopoverContent
@@ -354,22 +354,22 @@ export function Composer({
                 variant="ghost"
                 className="h-auto w-full justify-between px-2 py-2 text-sm"
                 role="switch"
-                aria-label="自动选择插件"
+                aria-label="自动使用可用能力"
                 aria-checked={pluginAutoSelectionEnabled}
                 disabled={sending}
                 onClick={() => onPluginAutoSelectionChange(!pluginAutoSelectionEnabled)}
               >
-                <span>自动选择插件</span>
+                <span>自动使用可用能力</span>
                 <span className="text-xs text-muted-foreground">
                   {pluginAutoSelectionEnabled ? "开启" : "关闭"}
                 </span>
               </Button>
               <p className="px-2 text-xs leading-relaxed text-muted-foreground">
-                根据每轮内容选择合适的插件。关闭后仍可通过 @ 手动选择。
+                根据当前任务使用已启用的插件能力，可在一次对话中配合使用。关闭后仍可通过 @ 手动选择。
               </p>
               {manualPluginName ? (
                 <p className="px-2 text-xs leading-relaxed text-muted-foreground">
-                  当前沿用手动选择的插件；清除后恢复自动选择。
+                  当前仅使用手动选择的插件；清除后恢复自动使用可用能力。
                 </p>
               ) : null}
             </PopoverContent>
@@ -377,7 +377,7 @@ export function Composer({
           {manualPluginName ? (
             <span className="flex min-w-0 items-center gap-1">
               <span className="max-w-48 truncate" title={manualPluginName}>
-                手动：{manualPluginName}
+                仅使用：{manualPluginName}
               </span>
               {onClearManualPlugin ? (
                 <Button
@@ -387,8 +387,8 @@ export function Composer({
                   shape="circle"
                   className="size-7"
                   disabled={sending}
-                  aria-label="清除手动插件，恢复自动选择"
-                  title="清除手动插件，恢复自动选择"
+                  aria-label="清除手动插件，恢复自动使用"
+                  title="清除手动插件，恢复自动使用"
                   onClick={onClearManualPlugin}
                 >
                   <X className="size-3.5" strokeWidth={1.75} />

@@ -350,7 +350,7 @@ describe("RunControlService", () => {
   });
 
   it.each([
-    { name: "ordinary pending input", allowed: true },
+    { name: "legacy pending input without a captured scope", allowed: false },
     { name: "explicit capability", items: [{ type: "capability", kind: "plugin", pluginId: "P" }], allowed: false },
     { name: "explicit skill", items: [{ type: "skill", name: "write", source: "plugin", pluginId: "P" }], allowed: false },
     { name: "resolved different plugin", selection: { status: "resolved", pluginId: "Q" }, allowed: false },
@@ -376,6 +376,53 @@ describe("RunControlService", () => {
       await expect(result).rejects.toThrow("session_capability_requires_queued_run");
       expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
     }
+  });
+
+  it.each([false, true])("checks the primary Input scope before an active Run resolves (same scope: %s)", async sameScope => {
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    const scope = { scopeVersion: 2, source: "auto", pluginIds: ["P", "Q"], candidates: ["P", "Q"].map(pluginId => ({
+      pluginId, displayName: pluginId, description: pluginId, version: "1", behaviorDigest: `${pluginId}-digest`,
+    })) };
+    sessions.set("s1", { id: "s1", cwd: "/project", metadata: {} });
+    inputs.set("inp-active", { id: "inp-active", sessionId: "s1", metadata: { pluginScope: scope } } as any);
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [{ type: "text", text: "continue" }],
+      delivery: "queue", attachments: [], metadata: { pluginScope: sameScope ? scope : {
+        scopeVersion: 2, source: "none", pluginIds: [], candidates: [],
+      } }, createdAt: 1 } as any);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", inputId: "inp-active", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    if (sameScope) await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
+    else await expect(result).rejects.toThrow("session_capability_requires_queued_run");
+  });
+
+  it.each([
+    { name: "same automatic scope", queuedIds: ["P", "Q"], allowed: true },
+    { name: "narrower captured scope", queuedIds: ["P"], allowed: false },
+    { name: "wider captured scope", queuedIds: ["P", "Q", "R"], allowed: false },
+    { name: "disabled automatic scope", queuedIds: ["P", "Q"], disabled: true, allowed: false },
+    { name: "changed plugin identity", queuedIds: ["P", "Q"], changed: true, allowed: false },
+    { name: "manual plugin scope", queuedIds: ["P", "Q"], manual: true, allowed: false },
+    { name: "changed single-plugin snapshot into manual Run", queuedIds: ["P"], activeIds: ["P"], activeSource: "inherited", changed: true, allowed: false },
+  ])("only promotes compatible multi-plugin scopes: $name", async scenario => {
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    const candidates = (ids: string[], changed = false) => ids.map(pluginId => ({ pluginId,
+      displayName: pluginId, description: pluginId, version: changed ? "2" : "1", behaviorDigest: `${pluginId}-digest` }));
+    sessions.set("s1", { id: "s1", cwd: "/project", metadata: { runtime: { pluginsEnabled: !scenario.disabled } } });
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [{ type: "text", text: "continue" }],
+      delivery: "queue", attachments: [], metadata: scenario.manual ? { pluginId: "P" } : { pluginScope: {
+        scopeVersion: 2, source: "auto", pluginIds: scenario.queuedIds, candidates: candidates(scenario.queuedIds, scenario.changed),
+      } }, createdAt: 1 } as any);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: { pluginSelection: {
+      status: "resolved", source: scenario.activeSource ?? "auto", scopeVersion: 2, pluginId: scenario.activeSource ? "P" : null,
+      pluginIds: scenario.activeIds ?? ["P", "Q"], candidates: candidates(scenario.activeIds ?? ["P", "Q"]),
+    } }, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    if (scenario.allowed) await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
+    else await expect(result).rejects.toThrow("session_capability_requires_queued_run");
   });
 
   it("returns an already promoted queued run idempotently", async () => {

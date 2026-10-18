@@ -11,6 +11,14 @@ const agentId = `${pluginId}:reviewer`;
 const session = { id: "s1", cwd: "/repo" } as SessionRecord;
 
 describe("SessionPluginCapabilityService", () => {
+  it("captures the eligible plugin identities before an ordinary Input is persisted", async () => {
+    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    await application.admitPrompt("s1", { id: "auto-multi", items: [{ type: "text", text: "hello" }],
+      metadata: { pluginScope: { scopeVersion: 2, source: "auto", pluginIds: ["forged"], candidates: [] } } });
+    expect(admitPromptAndMaybeRun.mock.calls[0]?.[1].metadata).toMatchObject({
+      pluginScope: { scopeVersion: 2, source: "auto", pluginIds: [pluginId], candidates: [expect.objectContaining({ pluginId })] },
+    });
+  });
   it.each([pluginId, null])("preserves a resolved automatic choice on recovery (%s)", async selected => {
     const sourceInput = { id: "auto-input", sessionId: "s1", items: [{ type: "text", text: "hello" }], attachments: [], metadata: {} };
     const selection = { status: "resolved", source: "auto", pluginId: selected, version: "1", behaviorDigest: "digest" };
@@ -28,6 +36,20 @@ describe("SessionPluginCapabilityService", () => {
     expect(admitted?.metadata).toMatchObject({ pluginSelectionPolicy: "auto" });
     expect(admitted?.metadata).not.toHaveProperty("pluginId");
     expect(admitted?.runMetadata ?? {}).not.toHaveProperty("pluginId");
+  });
+  it("keeps a manual single-plugin steer compatible with a versioned Run scope", async () => {
+    const current = inventory();
+    const { application, store, admitPromptAndMaybeRun } = applicationService(current, {
+      activeRun: { id: "manual-run", metadata: { pluginId, pluginSelection: {
+        status: "resolved", source: "inherited", scopeVersion: 2, pluginId, pluginIds: [pluginId],
+        candidates: [...current.plugins.values()],
+      } } },
+      pluginCapabilities: new SessionPluginCapabilityService({ resolveInventory: async () => current }),
+    });
+    store.getSession.mockReturnValue({ ...session, metadata: { activePluginId: pluginId } });
+    await expect(application.admitPrompt("s1", { id: "manual-steer", delivery: "steer",
+      items: [{ type: "text", text: "continue" }] })).resolves.toMatchObject({ input: { metadata: { pluginId } } });
+    expect(admitPromptAndMaybeRun).toHaveBeenCalledOnce();
   });
   it("strips caller-forged automatic selection metadata", async () => {
     const { application, admitPromptAndMaybeRun } = applicationService(inventory());
@@ -220,7 +242,9 @@ describe("SessionPluginCapabilityService", () => {
     expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
       id: "ordinary-input",
       items: [{ type: "text", text: "hello" }],
-      metadata: { source: "desktop", pluginSelectionPolicy: "auto" },
+      metadata: { source: "desktop", pluginSelectionPolicy: "auto", pluginScope: expect.objectContaining({
+        scopeVersion: 2, source: "auto", pluginIds: [pluginId],
+      }) },
       runMetadata: { source: "desktop" },
     });
   });

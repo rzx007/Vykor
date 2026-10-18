@@ -55,12 +55,24 @@ export interface JobListRequest {
 }
 
 /** Host-owned job controller exposed to an Agent. */
+export interface AgentJobAuthorization {
+  readonly pluginId?: string;
+  readonly pluginIds?: ReadonlySet<string>;
+  /** Host-captured binding evidence, forwarded without interpreting it in jobs. */
+  readonly tools?: ReadonlyMap<string, unknown>;
+  readonly skills?: ReadonlyMap<string, unknown>;
+  readonly agents?: ReadonlyMap<string, unknown>;
+  readonly mcpServers?: ReadonlyMap<string, unknown>;
+  readonly pluginUi?: ReadonlyMap<string, unknown>;
+}
+
+/** Host-owned job controller exposed to an Agent. */
 export interface AgentJobHost {
   list(input: JobListRequest): Promise<JobSnapshot[]>;
   read(input: JobReadRequest): Promise<JobReadResult>;
   wait(input: JobWaitRequest): Promise<JobWaitResult>;
   /** Authorization comes from the current host Run, never from model-provided input. */
-  send(input: JobSendRequest, authorization?: { readonly pluginId?: string }): Promise<void>;
+  send(input: JobSendRequest, authorization?: AgentJobAuthorization): Promise<void>;
   cancel(input: JobCancelRequest): Promise<JobSnapshot>;
 }
 

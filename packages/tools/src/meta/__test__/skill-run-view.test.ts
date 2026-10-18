@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
-import type { RunCapabilityView } from "@vykor/core";
+import type { RunCapabilityView, ToolContext } from "@vykor/core";
 import { skillTool, listSkillsTool } from "../skill.js";
 
 const definition: SkillDefinition = { name: "private", source: "plugin", path: "/plugin/private/SKILL.md",
@@ -30,6 +30,42 @@ it("loads the captured Skill after registry replacement and checks its name/path
   expect(JSON.stringify(result)).not.toContain("replacement body");
   expect((await skillTool.execute({ name: "foreign", path: definition.path }, context)).isError).toBe(true);
   expect((await skillTool.execute({ name: "private", path: "/replacement/SKILL.md" }, context)).isError).toBe(true);
+});
+
+it("loads each authorized owner in a multi-plugin view and rejects forged owner or path bindings", async () => {
+  const first = { ownerPluginId: "first", definition, path: definition.path };
+  const secondDefinition = { ...definition, name: "second", path: "/second/SKILL.md", content: "second body" };
+  const capabilityView: RunCapabilityView = { ...view(), pluginIds: new Set(["first", "second"]), skills: new Map([
+    ["private", first], ["second", { ownerPluginId: "second", definition: secondDefinition, path: secondDefinition.path }],
+  ]) };
+  for (const name of ["private", "second"]) expect((await skillTool.execute({ name }, { cwd: process.cwd(), capabilityView })).isError).not.toBe(true);
+  for (const forged of [{ ...first, ownerPluginId: "foreign" }, { ...first, path: "/forged/SKILL.md" }]) {
+    const result = await skillTool.execute({ name: "private" }, { cwd: process.cwd(), capabilityView: { ...capabilityView, skills: new Map([["private", forged]]) } });
+    expect(result.isError).toBe(true);
+  }
+});
+
+it("loads a captured Skill using the environment path returned by ListSkills without widening its source", async () => {
+  const hostPath = "C:/approved/private/SKILL.md";
+  const executionPath = "/mnt/c/approved/private/SKILL.md";
+  const captured = { ...definition, path: hostPath };
+  const capabilityView = { ...view("owner", "owner"), skills: new Map([
+    [captured.name, { ownerPluginId: "owner", definition: captured, path: hostPath }],
+  ]) };
+  const context = { cwd: "/mnt/d/workspace", capabilityView, environment: { paths: {
+    presentHostPath: (path: string) => path.replace("C:/", "/mnt/c/"),
+    toHostPath: (path: string) => path.startsWith("/mnt/c/") ? path.replace("/mnt/c/", "C:/") : undefined,
+  } } } as ToolContext;
+  const listing = JSON.stringify(await listSkillsTool.execute({}, context));
+  expect(listing).toContain(executionPath);
+  const loaded = await skillTool.execute({ name: captured.name, path: executionPath }, context);
+  expect(loaded.isError).not.toBe(true);
+  expect(JSON.stringify(loaded)).toContain("private body");
+  expect((await skillTool.execute({ name: "foreign", path: executionPath }, context)).isError).toBe(true);
+  expect((await skillTool.execute({ name: captured.name, path: "/mnt/c/foreign/SKILL.md" }, context)).isError).toBe(true);
+  expect((await skillTool.execute({ name: captured.name, path: executionPath }, {
+    ...context, capabilityView: { ...capabilityView, pluginId: "other" },
+  })).isError).toBe(true);
 });
 
 it("resolves a qualified plugin Skill only inside its captured capability view", async () => {

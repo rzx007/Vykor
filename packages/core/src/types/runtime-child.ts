@@ -1,4 +1,5 @@
-import type { AgentExecutionLimits, RunCapabilityView } from "./runtime.js";
+import type { AgentExecutionLimits } from "./runtime.js";
+import type { AgentJobAuthorization } from "@vykor/jobs";
 
 export interface AgentChildSpawnInput {
   description: string;
@@ -174,7 +175,7 @@ export interface AgentChildHandle {
   /** Read-only bounded activity of the current Run; undefined without observed events. */
   readonly activity?: ChildActivitySnapshot;
   /** Host-owned current Run selection, separate from user input and metadata. */
-  send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt>;
+  send(input: AgentChildInput, authorization?: AgentJobAuthorization): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;
   /** Interrupts only the matching current Run, leaving the child available for reuse. */
   interruptRun(expectedRunId: string, reason?: string): Promise<boolean>;

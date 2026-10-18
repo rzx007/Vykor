@@ -288,7 +288,10 @@ export interface RunPluginUiBinding {
 }
 
 export interface RunCapabilityView {
+  /** Explicit single-plugin restriction; automatic scopes use pluginIds even for one owner. */
   readonly pluginId?: string;
+  /** Exact allowed plugin owners. Individual bindings remain the execution authority. */
+  readonly pluginIds?: ReadonlySet<string>;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
   readonly skills: ReadonlyMap<string, RunSkillBinding>;
   readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
@@ -432,7 +435,7 @@ export class RuntimeBundle {
   private syncCleanupCallbacks: Array<() => void> = [];
   sandboxStatus?: RuntimeSandboxStatus;
   /** Factory installed by the runtime host; never reloads components from disk. */
-  createRunCapabilityView?: (pluginId?: string) => RunCapabilityView;
+  createRunCapabilityView?: (pluginId?: string | readonly string[]) => RunCapabilityView;
   resolveRequestConfiguration?: QueryEngineOptions["resolveRequestConfiguration"];
   /** Exact host-validated builtin replacements; source remains agent for identity checks. */
   trustedToolOverrides?: ReadonlyMap<string, Readonly<{

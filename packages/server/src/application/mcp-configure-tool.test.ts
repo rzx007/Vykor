@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpRuntimeSyncResult, Settings, ToolContext } from "@vykor/core";
+import { ToolRegistry, type McpRuntimeSyncResult, type Settings, type ToolContext } from "@vykor/core";
+import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { PermissionChecker } from "@vykor/permissions";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
 import { McpConfigApplicationService } from "./mcp-config-application-service.js";
@@ -101,6 +102,29 @@ describe("McpConfigure", () => {
     expect((await w.tool.execute(local, { ...w.context, capabilityView: { pluginId: "plugin" } as any })).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
     expect(w.ask).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { ids: ["knowledge-work"], location: "direct" },
+    { ids: ["knowledge-work"], location: "agent" },
+    { ids: ["knowledge-work", "office-work"], location: "direct" },
+    { ids: ["knowledge-work", "office-work"], location: "agent" },
+  ])("keeps root MCP management available for automatic plugins: $location $ids", async ({ ids, location }) => {
+    const w = world();
+    const view = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(ids) }, ids);
+    const scope = location === "direct" ? { capabilityView: view } : { agent: { capabilityView: view } };
+    const context = { ...w.context, ...scope } as ToolContext;
+    expect((await w.tool.execute({ action: "list" }, context)).isError).not.toBe(true);
+    expect(w.ask).not.toHaveBeenCalled();
+    expect((await w.tool.execute(local, context)).isError).not.toBe(true);
+    expect(w.ask).toHaveBeenCalledOnce();
+    expect(w.settings().mcpServers?.blender).toEqual(local.config);
+    const blocked = world();
+    expect((await blocked.tool.execute(local, { ...blocked.context, ...scope, sessionId: "child" } as ToolContext)).isError).toBe(true);
+    expect(blocked.ask).not.toHaveBeenCalled();
+    const explicit = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(ids) }, ids[0]!);
+    expect((await blocked.tool.execute(local, { ...blocked.context, capabilityView: explicit })).isError).toBe(true);
+    expect(blocked.settings().mcpServers).toEqual({});
   });
 
   it("remains a normal permission-checked mutating tool, denied under plan mode", async () => {

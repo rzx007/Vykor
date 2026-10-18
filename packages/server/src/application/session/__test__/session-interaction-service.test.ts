@@ -79,12 +79,15 @@ function createService(options: {
   const broadcastSince = vi.fn();
   const liveChildren = {
     has: vi.fn(() => options.live ?? false),
-    send: vi.fn(async () => options.live ? {
+    send: vi.fn(async (_sessionId, sent) => {
+      if (options.input) Object.assign(options.input, { metadata: sent.metadata, items: sent.inputItems });
+      return options.live ? {
       sessionId: "s1",
       inputId: options.input?.id,
       runId: options.run?.id,
       result: Promise.resolve({ status: "completed" as const, output: "done" }),
-    } : undefined),
+      } : undefined;
+    }),
     interrupt: vi.fn(async () => false),
   };
   const operationGate = new DaemonOperationGate();
@@ -189,7 +192,7 @@ describe("SessionInteractionService", () => {
     let deliveredContent = "";
     liveChildren.send.mockImplementation(async (_sessionId, sent) => {
       deliveredContent = sent.content;
-      store.getInput.mockReturnValue({ id: "live-input", sessionId: "s1", delivery: "queue", items: sent.inputItems ?? [{ type: "text", text: sent.content }], metadata: {} });
+      store.getInput.mockReturnValue({ id: "live-input", sessionId: "s1", delivery: "queue", items: sent.inputItems ?? [{ type: "text", text: sent.content }], metadata: sent.metadata });
       return { sessionId: "s1", inputId: "live-input", runId: "live-run" } as any;
     });
     const result = await service.admitPrompt("s1", { id: "live-input", items });
@@ -227,7 +230,7 @@ describe("SessionInteractionService", () => {
       id: "live-input",
       delivery: "queue",
       content: "follow up",
-      metadata: { requestedBy: "test" },
+      metadata: expect.objectContaining({ requestedBy: "test", pluginScope: expect.objectContaining({ scopeVersion: 2, pluginIds: [] }) }),
     }));
     expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
     expect(admitted).toMatchObject({ input, run, queue_state: "running" });
@@ -325,6 +328,7 @@ describe("SessionInteractionService", () => {
       sessionId: "s1",
       inputId: "source-input",
       status: "interrupted",
+      metadata: {},
     };
     const sourceInput = {
       id: "source-input",

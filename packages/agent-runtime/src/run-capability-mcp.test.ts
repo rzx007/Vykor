@@ -43,6 +43,28 @@ function createExecutionContext(capabilityView: AgentExecutionContext["capabilit
   };
 }
 
+it("captures each allowed plugin MCP owner without exposing a third server through tools or resources", async () => {
+  const manager = new McpClientManager();
+  try {
+    for (const id of ["first", "second", "foreign"]) expect((await manager.connect(id, config(`${id}-data`))).status).toBe("connected");
+    const registry = new ToolRegistry();
+    for (const id of ["first", "second", "foreign"]) {
+      for (const definition of manager.getAsToolDefinitions().filter(tool => tool.name.startsWith(`mcp__${id}__`))) registry.register(definition, { kind: "mcp", id });
+    }
+    const sources = { toolRegistry: registry, pluginIds: new Set(["first", "second", "foreign"]),
+      mcpServers: ["first", "second", "foreign"].map(id => ({ ownerPluginId: id, serverId: `plugin:${id}:mcp:${id}`, serverName: id, definition: config(`${id}-data`) })) };
+    const view = createRunCapabilityView(sources, ["first", "second"]);
+    expect([...view.tools.keys()]).toEqual(["mcp__first__version", "mcp__second__version"]);
+    expect([...view.mcpServers.keys()]).toEqual(["plugin:first:mcp:first", "plugin:second:mcp:second"]);
+    for (const id of ["first", "second"]) {
+      expect((await view.tools.get(`mcp__${id}__version`)!.invoke({}, { cwd: process.cwd(), capabilityView: view })).content).toEqual([{ type: "text", text: `${id}-data` }]);
+    }
+    const foreign = await readMcpResourceTool.execute({ server: "foreign", uri: "test://secret" }, { cwd: process.cwd(), capabilityView: view, mcpManager: manager });
+    expect(foreign.isError).toBe(true);
+    expect(JSON.stringify(foreign)).not.toContain("foreign-data");
+  } finally { await manager.disconnectAll(); }
+});
+
 it("never redirects a captured MCP Tool to a reconnected client", async () => {
   const manager = new McpClientManager();
   try {

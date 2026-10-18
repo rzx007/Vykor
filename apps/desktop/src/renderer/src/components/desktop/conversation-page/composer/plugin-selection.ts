@@ -23,7 +23,8 @@ export function resolveComposerPluginSelection(
     )
   const selection = latestRun?.metadata.pluginSelection as Record<string, unknown> | undefined
   const automaticId =
-    selection?.status === "resolved" && selection.source === "auto" ? selection.pluginId : null
+    selection?.status === "resolved" && selection.source === "auto" && selection.scopeVersion !== 2 && !Array.isArray(selection.pluginIds)
+      ? selection.pluginId : null
   const name = (id: unknown): string | null =>
     typeof id === "string" && id.trim()
       ? (catalog.find((plugin) => plugin.pluginId === id)?.displayName ?? id)

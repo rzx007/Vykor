@@ -61,22 +61,32 @@ function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged") {
     pluginCapabilities: new SessionPluginCapabilityService({ resolveInventory: async () => inventory }),
   });
   const selectPluginForRun = vi.fn(async () => ({ pluginId: "P", reason: "matched" as const, version: "1", behaviorDigest: "P-digest" }));
+  const candidates = () => [...inventory.plugins.values()].map(({ pluginId, displayName, description, version, behaviorDigest }) =>
+    ({ pluginId, displayName, description, version, behaviorDigest }));
+  const validatePluginScope = async (selected: ReturnType<typeof candidates>) => {
+    for (const candidate of selected) {
+      const current = inventory.plugins.get(candidate.pluginId);
+      if (!current || current.version !== candidate.version || current.behaviorDigest !== candidate.behaviorDigest)
+        throw new Error(`Plugin changed or disabled: ${candidate.pluginId}`);
+    }
+  };
   const registry = new ToolRegistry();
   for (const name of ["Public", "P", "Q"]) registry.register({ name, description: name, inputSchema: {}, execute: async () => ({ content: [] }) },
     name === "Public" ? { kind: "builtin" } : { kind: "plugin", id: name });
   return {
-    store, application, selectPluginForRun,
+    store, application, selectPluginForRun, inventory,
     startAutomaticRun() {
-      activeRun = store.runs.createRun({ sessionId: "s1", metadata: { pluginId: "P", pluginSelection: {
-        status: "resolved", source: "auto", pluginId: "P", reason: "matched", version: "1", behaviorDigest: "P-digest",
+      activeRun = store.runs.createRun({ sessionId: "s1", metadata: { pluginSelection: {
+        status: "resolved", source: "auto", scopeVersion: 2, pluginId: null, pluginIds: ["P", "Q"], candidates: candidates(), reason: "matched",
       } } });
       activeRun = store.runs.updateRun(activeRun.id, { status: "running" });
       return activeRun;
     },
     async resolve(result: { input: SessionInputRecord; run?: SessionRunRecord }) {
       const selection = await resolveRunPluginSelection({ session: store.sessions.get("s1")!, input: result.input, run: result.run!,
-        agent: { getHistory: () => [], selectPluginForRun }, signal: new AbortController().signal, traceId: "test" });
-      const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["P", "Q"]) }, selection.pluginId ?? undefined);
+        agent: { getPluginCandidates: candidates, validatePluginScope }, signal: new AbortController().signal, traceId: "test" });
+      const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["P", "Q"]) },
+        selection.scopeVersion === 2 ? selection.pluginIds : selection.pluginId ?? undefined);
       return { selection, tools: [...view.tools.keys()] };
     },
     ordinary: (id: string, delivery: "queue" | "steer" = "queue") => application.admitPrompt("s1", { id, delivery, items: [{ type: "text", text: "do this task" }] }),
@@ -90,9 +100,8 @@ describe("plugin selection across admission, queue and recovery", () => {
     const active = f.startAutomaticRun();
     const result = await f.ordinary("follow-up", "steer");
     expect(result.run!.id).not.toBe(active.id);
-    f.selectPluginForRun.mockResolvedValueOnce({ pluginId: "Q", reason: "matched", version: "1", behaviorDigest: "Q-digest" });
-    expect(await f.resolve(result)).toMatchObject({ selection: { pluginId: "Q", source: "auto" }, tools: ["Public", "Q"] });
-    expect(f.selectPluginForRun).toHaveBeenCalledOnce();
+    expect(await f.resolve(result)).toMatchObject({ selection: { pluginIds: ["P", "Q"], source: "auto" }, tools: ["Public", "P", "Q"] });
+    expect(f.selectPluginForRun).not.toHaveBeenCalled();
     expect(result.input.metadata).not.toHaveProperty("pluginId");
     expect(result.run!.metadata).not.toHaveProperty("pluginId");
     expect(f.store.sessions.get("s1")!.metadata).not.toHaveProperty("activePluginId");
@@ -102,7 +111,7 @@ describe("plugin selection across admission, queue and recovery", () => {
     const f = fixture("same");
     const active = f.startAutomaticRun();
     const result = await f.ordinary("same-run", "steer");
-    expect(result.run).toMatchObject({ id: active.id, metadata: { pluginId: "P" } });
+    expect(result.run).toMatchObject({ id: active.id, metadata: { pluginSelection: { pluginIds: ["P", "Q"] } } });
     expect(result.input.metadata).not.toHaveProperty("pluginId");
     expect(f.selectPluginForRun).not.toHaveBeenCalled();
   });
@@ -114,10 +123,10 @@ describe("plugin selection across admission, queue and recovery", () => {
     expect(f.store.sessions.get("s1")!.metadata.activePluginId).toBe("Q");
     const retry = await f.ordinary("earlier");
     expect(retry.run!.id).toBe(earlier.run!.id);
-    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginId: "P", source: "auto" }, tools: ["Public", "P"] });
+    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginIds: ["P", "Q"], source: "auto" }, tools: ["Public", "P", "Q"] });
     expect(await f.resolve(explicit)).toMatchObject({ selection: { pluginId: "Q", source: "explicit" }, tools: ["Public", "Q"] });
     expect(await f.resolve(await f.ordinary("after-mention"))).toMatchObject({ selection: { pluginId: "Q", source: "inherited" } });
-    expect(f.selectPluginForRun).toHaveBeenCalledOnce();
+    expect(f.selectPluginForRun).not.toHaveBeenCalled();
   });
 
   it("preserves automatic eligibility when replaying an interrupted queued turn after a later @", async () => {
@@ -127,7 +136,7 @@ describe("plugin selection across admission, queue and recovery", () => {
     const later = await f.mention("Q");
     f.store.runs.updateRun(later.run!.id, { status: "completed" });
     const replay = await f.application.resumeRun("s1", earlier.run!.id, { id: "replay", traceId: "replay" });
-    expect(await f.resolve(replay)).toMatchObject({ selection: { pluginId: "P", source: "auto" }, tools: ["Public", "P"] });
+    expect(await f.resolve(replay)).toMatchObject({ selection: { pluginIds: ["P", "Q"], source: "auto" }, tools: ["Public", "P", "Q"] });
   });
 
   it("still checks disabled plugins at execution even when automatic selection was allowed at admission", async () => {
@@ -147,6 +156,14 @@ describe("plugin selection across admission, queue and recovery", () => {
     expect(f.selectPluginForRun).not.toHaveBeenCalled();
   });
 
+  it("keeps a queued automatic scope after automatic selection is switched off", async () => {
+    const f = fixture();
+    const earlier = await f.ordinary("auto-captured");
+    f.store.sessions.update("s1", { metadata: { runtime: { pluginAutoSelectionEnabled: false } } });
+    await f.mention("Q");
+    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginIds: ["P", "Q"], source: "auto" }, tools: ["Public", "P", "Q"] });
+  });
+
   it("keeps an already inherited manual plugin after a later @ switches the session", async () => {
     const f = fixture();
     await f.mention("P");
@@ -161,7 +178,7 @@ describe("plugin selection across admission, queue and recovery", () => {
     const earlier = await f.application.admitPrompt("s1", { id: "forged-policy", items: [{ type: "text", text: "task" }],
       metadata: { pluginSelectionPolicy: policy }, runMetadata: { pluginSelectionPolicy: policy } });
     await f.mention("Q");
-    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginId: "P", source: "auto" }, tools: ["Public", "P"] });
+    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginIds: ["P", "Q"], source: "auto" }, tools: ["Public", "P", "Q"] });
   });
 
   it("does not let caller metadata enable automatic selection when it was disabled at admission", async () => {
@@ -171,5 +188,29 @@ describe("plugin selection across admission, queue and recovery", () => {
       metadata: { pluginSelectionPolicy: "auto" }, runMetadata: { pluginSelectionPolicy: "auto" } });
     expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginId: null }, tools: ["Public"] });
     expect(f.selectPluginForRun).not.toHaveBeenCalled();
+  });
+
+  it("captures only plugins available at admission and ignores forged scope metadata", async () => {
+    const f = fixture();
+    (f.inventory.plugins as Map<string, unknown>).delete("Q");
+    const earlier = await f.application.admitPrompt("s1", { id: "before-install", items: [{ type: "text", text: "task" }],
+      metadata: { pluginScope: { scopeVersion: 2, source: "auto", pluginIds: ["Q"], candidates: [] } },
+      runMetadata: { pluginScope: { scopeVersion: 2, source: "auto", pluginIds: ["Q"], candidates: [] } } });
+    (f.inventory.plugins as Map<string, unknown>).set("Q", { ...f.inventory.plugins.get("P"), pluginId: "Q", behaviorDigest: "Q-digest" });
+    expect(earlier.input.metadata).toMatchObject({ pluginScope: { scopeVersion: 2, pluginIds: ["P"] } });
+    expect(earlier.run!.metadata).not.toHaveProperty("pluginScope");
+    expect(await f.resolve(earlier)).toMatchObject({ selection: { pluginIds: ["P"] }, tools: ["Public", "P"] });
+  });
+
+  it("keeps the resolved multi-plugin scope through recovery and rejects changed sources", async () => {
+    const f = fixture();
+    const earlier = await f.ordinary("resolved-before-interruption");
+    const { selection } = await f.resolve(earlier);
+    f.store.runs.updateRun(earlier.run!.id, { status: "interrupted", metadata: { pluginSelection: selection } });
+    await f.mention("Q");
+    const replay = await f.application.resumeRun("s1", earlier.run!.id, { id: "strict-replay", traceId: "replay" });
+    expect(replay.run!.metadata).toMatchObject({ pluginSelection: { pluginIds: ["P", "Q"] } });
+    (f.inventory.plugins as Map<string, unknown>).delete("P");
+    await expect(f.resolve(replay)).rejects.toThrow("Plugin changed or disabled: P");
   });
 });

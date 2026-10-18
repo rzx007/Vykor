@@ -1,9 +1,9 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
-import { type McpServerConfig, type RuntimeBundle } from "@vykor/core";
-import { computePluginBehaviorDigest, loadNativePlugin, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
+import { afterEach, expect, it, vi } from "vitest";
+import { getInstalledPluginStorePath, type McpServerConfig, type RuntimeBundle } from "@vykor/core";
+import { computePluginBehaviorDigest, installedPluginKey, loadNativePlugin, updateInstalledPluginStore, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
 import { SkillRegistry } from "@vykor/skills";
 import { createVykorRuntime } from "./default-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
@@ -15,6 +15,7 @@ const runtimes: RuntimeBundle[] = [];
 afterEach(async () => {
   for (const runtime of runtimes.splice(0)) await runtime.close();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
 async function plugin(id: string, source?: string, servers?: Record<string, McpServerConfig>) {
@@ -35,6 +36,16 @@ async function plugin(id: string, source?: string, servers?: Record<string, McpS
 async function install(plugins: LoadedNativePlugin[], hostServers: Record<string, McpServerConfig> = {}) {
   const skillRegistry = new SkillRegistry();
   const digests = await Promise.all(plugins.map(item => computePluginBehaviorDigest(item.root)));
+  const configRoot = mkdtempSync(join(tmpdir(), "plugin-host-config-"));
+  roots.push(configRoot);
+  vi.stubEnv("VYKOR_CONFIG_DIR", configRoot);
+  const installations = plugins.map((item, index) => ({ plugin: item, record: {
+    id: item.manifest.id, scope: "user" as const, enabled: true, currentVersion: "1.0.0", cachePath: item.root,
+    origin: "native" as const, linkedSourcePath: item.root, behaviorDigest: digests[index], requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
+  }, behaviorDigest: digests[index] }));
+  await updateInstalledPluginStore(getInstalledPluginStorePath(), store => {
+    for (const { record } of installations) store.plugins[installedPluginKey(record)] = record;
+  });
   const runtime = await createVykorRuntime({
     cwd: roots[0]!, skillRegistry,
     settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: false }, mcpServers: hostServers },
@@ -44,10 +55,7 @@ async function install(plugins: LoadedNativePlugin[], hostServers: Record<string
   const integration = await installRuntimeIntegrations({ cwd: roots[0]!, sessionId: "readiness", settings: runtime.settings, runtime,
     discovery: { skillRegistry, plugins, agentDefinitions: [], warnings: [],
       mcpServers: Object.assign({}, ...plugins.map(item => item.components.mcpServers?.value ?? {}), hostServers),
-      pluginCapabilityInventory: createPluginCapabilityInventory(plugins.map((item, index) => ({ plugin: item, record: {
-        id: item.manifest.id, scope: "user", enabled: true, currentVersion: "1.0.0", cachePath: item.root,
-        origin: "native", behaviorDigest: digests[index], requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
-      } }))),
+      pluginCapabilityInventory: createPluginCapabilityInventory(installations),
     },
   });
   return { runtime, ...integration };
@@ -62,6 +70,19 @@ it("returns the plugin catalog and source validation to the agent host without a
   await expect(pluginSelection.validate(candidate)).resolves.toBeUndefined();
   appendFileSync(join(loaded.root, ".vykor-plugin/plugin.json"), "\n");
   await expect(pluginSelection.validate(candidate)).rejects.toThrow("Plugin changed during selection");
+});
+
+it("revalidates installed enablement and permissions after a candidate snapshot", async () => {
+  const loaded = await plugin("dev.revoked", nativeSource);
+  const { pluginSelection } = await install([loaded]);
+  const candidate = pluginSelection.candidates[0]!;
+  await expect(pluginSelection.validate(candidate)).resolves.toBeUndefined();
+  await updateInstalledPluginStore(getInstalledPluginStorePath(), store => { store.plugins["user::dev.revoked"]!.enabled = false; });
+  await expect(pluginSelection.validate(candidate)).rejects.toThrow(/available|changed|disabled/);
+  await updateInstalledPluginStore(getInstalledPluginStorePath(), store => {
+    const record = store.plugins["user::dev.revoked"]!; record.enabled = true; record.requestedPermissions = ["network:fetch"];
+  });
+  await expect(pluginSelection.validate(candidate)).rejects.toThrow(/permission|changed/);
 });
 
 const nativeSource = `export function registerTools() { return [{ name: "ReadyTool", description: "ready", inputSchema: {},
@@ -102,6 +123,10 @@ it("keeps failed MCP diagnostics, rejects a partially prepared plugin, and exclu
   const selected = runtime.createRunCapabilityView!("dev.working");
   expect([...selected.mcpServers.keys()]).toEqual(["plugin:dev.working:mcp:ready"]);
   expect((await selected.tools.get("mcp__ready__ping")!.invoke({}, { cwd: roots[0]! })).content).toEqual([{ type: "text", text: "pong" }]);
+  const multiple = runtime.createRunCapabilityView!(["dev.partial", "dev.working"]);
+  expect([...multiple.pluginIds!]).toEqual(["dev.working"]);
+  expect(multiple.tools.has("ReadyTool")).toBe(false);
+  expect([...multiple.mcpServers.keys()]).toEqual(["plugin:dev.working:mcp:ready"]);
 });
 
 it("allows a prepared Native Tool and rejects the next Run after its host crashes", async () => {

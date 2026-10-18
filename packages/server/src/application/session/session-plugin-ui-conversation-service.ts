@@ -21,6 +21,7 @@ import type { PreparedPluginUiConversationSource } from "./session-plugin-ui-ser
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { RunAdmissionService } from "./run-admission-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
+import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 
 export class SessionPluginUiConversationService {
   constructor(
@@ -29,6 +30,7 @@ export class SessionPluginUiConversationService {
       source: SessionPluginUiService;
       operations: SessionOperationRunner;
       admission: RunAdmissionService;
+      pluginCapabilities: Pick<SessionPluginCapabilityService, "admit" | "captureScope">;
       modelAvailable(sessionId: string): Promise<boolean>;
     },
   ) {}
@@ -130,13 +132,19 @@ export class SessionPluginUiConversationService {
         { generation },
       );
       await this.assertModel(source);
-      this.options.source.assertConversationSourceCurrent(source);
+      const current = this.options.source.assertConversationSourceCurrent(source);
+      const { pluginId } = await this.options.pluginCapabilities.admit(current.session, []);
+      const metadata = pluginId
+        ? { pluginId }
+        : { pluginScope: await this.options.pluginCapabilities.captureScope(current.session) };
       const prepared = this.preparedText(source, { mode: "submit", ...input });
       const accepted = this.options.store.transaction(() => {
         const latest =
           this.options.source.assertConversationSourceCurrent(source);
         const saved = this.options.admission.persistQueuedPrompt(sessionId, {
           items: [{ type: "text", text: prepared.promptText }],
+          metadata,
+          ...(pluginId ? { runMetadata: { pluginId } } : {}),
         });
         this.writeSubmission(latest, input, fingerprint, saved);
         return saved;

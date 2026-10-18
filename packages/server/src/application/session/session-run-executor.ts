@@ -209,13 +209,25 @@ export class SessionRunExecutor {
       // 先拿到实际 Agent，路由才能看见 allow/deny 过滤后的工具和真实宿主能力。
       agentTouched = true;
       const agent = await this.context.agentPool.acquireSession(sessionId);
-      const selection = await resolveRunPluginSelection({ session, run: storedRun, input: admitted, agent,
+      const hadResolvedSelection = (storedRun.metadata?.pluginSelection as { status?: string } | undefined)?.status === "resolved";
+      let selection = await resolveRunPluginSelection({ session, run: storedRun, input: admitted, agent,
         signal: workContext.signal, traceId: this.context.traceIdForRun(runId), limits });
       this.context.data.runs.updateRun(runId, { metadata: {
         pluginId: selection.pluginId, pluginSelection: selection } });
       const pluginId = selection.pluginId ?? undefined;
-      const capabilityView = agent.createRunCapabilityView?.(pluginId);
-      if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");
+      const automaticScope = selection.scopeVersion === 2 && selection.source === "auto";
+      const capabilityView = agent.createRunCapabilityView?.(automaticScope ? selection.pluginIds ?? [] : pluginId);
+      if ((pluginId || selection.pluginIds?.length) && !capabilityView) throw new Error("Plugin capability view is unavailable");
+      if (automaticScope && capabilityView) {
+        const readyIds = (selection.pluginIds ?? []).filter(id => capabilityView.pluginIds?.has(id) ?? capabilityView.pluginId === id);
+        if (readyIds.length !== selection.pluginIds?.length) {
+          if (hadResolvedSelection) throw new Error("Saved plugin scope could not be prepared; recovery cannot change its plugin scope");
+          selection = { ...selection, pluginIds: readyIds,
+            candidates: selection.candidates?.filter(candidate => readyIds.includes(candidate.pluginId)),
+            reason: readyIds.length ? "matched" : "no_candidates" };
+          this.context.data.runs.updateRun(runId, { metadata: { pluginSelection: selection } });
+        }
+      }
       if (capabilityView) this.context.pluginUi?.registerRunView(runId, capabilityView);
       const materialized = hasStructuredContext
         ? materializeSessionInput(

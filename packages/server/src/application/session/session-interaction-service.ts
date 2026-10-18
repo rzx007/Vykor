@@ -27,7 +27,7 @@ import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
-import { capturePluginSelectionPolicy } from "./session-plugin-selection.js";
+import { capturePluginSelectionPolicy, emptyPluginScope } from "./session-plugin-selection.js";
 import type { RunControlService } from "./run-control-service.js";
 import type {
   CancelQueuedPromptInput,
@@ -66,7 +66,7 @@ function withoutPluginId(
 ): Record<string, unknown> | undefined {
   if (
     !metadata ||
-    !["pluginId", "pluginSelection", "pluginSelectionPolicy"].some((key) =>
+    !["pluginId", "pluginIds", "pluginSelection", "pluginSelectionPolicy", "pluginScope"].some((key) =>
       Object.hasOwn(metadata, key),
     )
   )
@@ -75,6 +75,8 @@ function withoutPluginId(
   delete sanitized.pluginId;
   delete sanitized.pluginSelection;
   delete sanitized.pluginSelectionPolicy;
+  delete sanitized.pluginScope;
+  delete sanitized.pluginIds;
   return sanitized;
 }
 
@@ -184,6 +186,9 @@ export class SessionInteractionService {
         );
       }
       await this.context.agentPool.close(sessionId);
+      const pluginScope = !capability.pluginId
+        ? await this.context.pluginCapabilities?.captureScope?.(session) ?? emptyPluginScope()
+        : undefined;
       return this.context.admission.replaceLatestPrompt(
         sessionId,
         latestUserMessage.id,
@@ -198,6 +203,7 @@ export class SessionInteractionService {
               ? { pluginId: capability.pluginId }
               : {
                   pluginSelectionPolicy: capturePluginSelectionPolicy(session),
+                  pluginScope,
                 }),
             edit: {
               kind: "latest_prompt",
@@ -256,6 +262,11 @@ export class SessionInteractionService {
           this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
+    const pluginScope = existingInput
+      ? existingInput.metadata.pluginScope
+      : !capability.pluginId
+        ? await this.context.pluginCapabilities?.captureScope?.(session) ?? emptyPluginScope()
+        : undefined;
     if (!existingInput && originalInput.delivery === "steer") {
       const activeRunId = this.context.control.activeRunId?.(sessionId);
       const activeRun = activeRunId
@@ -265,13 +276,15 @@ export class SessionInteractionService {
         typeof activeRun?.metadata?.pluginId === "string"
           ? activeRun.metadata.pluginId
           : undefined;
+      const activeSelection = isRecord(activeRun?.metadata.pluginSelection) ? activeRun.metadata.pluginSelection : undefined;
+      const activePluginIds = activeSelection?.scopeVersion === 2 && Array.isArray(activeSelection.pluginIds)
+        ? activeSelection.pluginIds : activePluginId ? [activePluginId] : [];
       const inheritAutomaticScope =
         !hasPluginCandidates &&
         !capability.pluginId &&
-        activePluginId &&
-        isRecord(activeRun?.metadata.pluginSelection) &&
-        activeRun.metadata.pluginSelection.source === "auto" &&
-        activeRun.metadata.pluginSelection.status === "resolved" &&
+        activePluginIds.length > 0 &&
+        activeSelection?.source === "auto" &&
+        activeSelection.status === "resolved" &&
         readRuntimeMetadata(session.metadata).pluginsEnabled !== false;
       // Borrow only the active Run's scope. Never persist an automatic plugin
       // as an inherited Input identity if delivery later creates a new Run.
@@ -280,7 +293,8 @@ export class SessionInteractionService {
         : capability.pluginId;
       if (
         (capability.pluginId && hasPluginCandidates) ||
-        steerPluginId !== activePluginId
+        steerPluginId !== activePluginId ||
+        (activeSelection?.scopeVersion === 2 && activeSelection.source === "auto" && activePluginIds.length > 0 && !inheritAutomaticScope)
       ) {
         throw new SessionApplicationError(
           409,
@@ -323,6 +337,7 @@ export class SessionInteractionService {
             metadata: {
               ...(selectedInput.metadata ?? {}),
               pluginSelectionPolicy: policy,
+              ...(pluginScope ? { pluginScope } : {}),
             },
           }
         : selectedInput;

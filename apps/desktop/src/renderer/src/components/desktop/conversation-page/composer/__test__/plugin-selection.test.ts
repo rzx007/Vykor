@@ -14,6 +14,13 @@ const run = (pluginSelection: unknown, createdAt = 1) =>
   }) as DesktopSessionRun
 const catalog = [{ pluginId: "dev.quality", displayName: "Quality" }] as never
 
+it("does not present an automatic capability scope as a selected singleton plugin", () => {
+  const automatic = run({ status: "resolved", source: "auto", scopeVersion: 2,
+    pluginId: "dev.quality", pluginIds: ["dev.quality", "dev.other"] })
+  expect(resolveComposerPluginSelection(session({}), [automatic], catalog).automaticPluginName).toBeNull()
+  expect(resolveComposerPluginSelection(session({}), [run({ status: "resolved", source: "auto", pluginId: "dev.quality", pluginIds: ["dev.quality"] })], catalog).automaticPluginName).toBeNull()
+})
+
 it("defaults automatic selection on and reads a manual plugin from the session", () => {
   expect(
     resolveComposerPluginSelection(session({ activePluginId: "dev.quality" }), [], catalog)
