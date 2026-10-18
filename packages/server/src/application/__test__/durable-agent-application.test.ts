@@ -583,7 +583,7 @@ describe("DaemonApplication", () => {
     }
   });
 
-  it("不经过 HTTP 也能完成创建会话、提交输入、运行和读取结果", async () => {
+  it("缺省 settings 的宿主仍可完成普通会话，并拒绝显式插件引用", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vykor-application-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
@@ -611,6 +611,12 @@ describe("DaemonApplication", () => {
       await expect(
         application.runControl.awaitRun(session.id, admission.run!.id),
       ).resolves.toEqual({ status: "completed", output: "echo: hello" });
+      expect(store.conversations.getInput(admission.input.id)?.metadata).toMatchObject({
+        pluginScope: { scopeVersion: 2, pluginIds: [], candidates: [] },
+      });
+      expect(store.runs.getRun(admission.run!.id)?.metadata.pluginSelection).toMatchObject({
+        status: "resolved", pluginId: null, pluginIds: [], candidates: [],
+      });
       expect(application.queries.getSessionState(session.id)).toMatchObject({
         session: { id: session.id },
         runs: [{ id: admission.run!.id, status: "completed" }],
@@ -619,9 +625,17 @@ describe("DaemonApplication", () => {
         application.events.list({ sessionId: session.id }).length,
       ).toBeGreaterThan(0);
 
+      await expect(application.interactions.admitPrompt(session.id, {
+        id: "unavailable-plugin-input",
+        items: [{ type: "capability", kind: "plugin", pluginId: "unavailable.plugin", displayName: "Unavailable" }],
+      })).rejects.toMatchObject({ status: 409, message: "session_plugin_capability_unavailable" });
+      expect(store.conversations.getInput("unavailable-plugin-input")).toBeUndefined();
+      expect(application.queries.getSessionState(session.id)?.runs).toHaveLength(1);
+
       await application.close();
       await application.close();
     } finally {
+      await application.close();
       store.close();
       rmSync(dir, { recursive: true, force: true });
     }
