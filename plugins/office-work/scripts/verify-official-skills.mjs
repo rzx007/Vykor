@@ -17,7 +17,7 @@ export async function verifyOfficialSkills(root,archive) {
  const source=JSON.parse((await read(prefix+'SOURCE.json')).toString('utf8'));
  if(source.repository!=='https://github.com/iOfficeAI/OfficeCLI'||source.ref!=='v1.0.139'||source.files.length!==names.length)throw Error('Unexpected official skill source manifest');
  const manifest=JSON.parse((await read('.vykor-plugin/plugin.json')).toString('utf8'));
- if(JSON.stringify(manifest.components.skills)!==JSON.stringify(['./vendor/officecli/skills']))throw Error('Official skill entry directory changed');
+ if(JSON.stringify(manifest.components.skills)!==JSON.stringify(['./skills/office-work-entry','./vendor/officecli/skills']))throw Error('Official skill entry directory changed');
  for(const name of names) {
   const path='skills/'+name+'/SKILL.md',entries=source.files.filter(f=>f.path===path);
   if(entries.length!==1)throw Error('Missing or duplicate official skill source: '+name);

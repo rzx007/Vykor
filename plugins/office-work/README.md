@@ -1,5 +1,7 @@
 # office-work：办公文档
 
+主 Agent 与工作 Agent 均先加载 `office-work-entry`，再加载官方基础与对应格式 Skill。入口说明工具尚未暴露时通过 ToolSearch 查找 OfficeCLI，并在下一次请求调用；不可用时停止，不通过 Shell 调用全局引擎。官方 Skill 原文保持不变。
+
 0.12.0 使用固定版本 OfficeCLI 官方 Skill 创建、读取和修改 Word、Excel、PPT。四份官方技能原文位于 vendor/officecli/skills，与内置 v1.0.139 引擎一致，来源和摘要见 vendor/officecli/SOURCE.json；不安装全局技能，不下载第二份引擎。
 
 编辑入口只有 **OfficeCLI**：原生命令放 command，文件放 path，其余参数放 args，原生 batch 数组放 operations。模型先查官方 help，再按官方技能操作，不经过 shell，也不维护编辑属性白名单。原 Create／Read／Edit 工具、对应重复实现和三个旧自定义 Skill 已删除。
