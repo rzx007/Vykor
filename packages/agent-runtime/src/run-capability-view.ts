@@ -167,14 +167,9 @@ function filterPluginUiBindings(
 /** Expose set membership without allowing callers to widen the captured scope. */
 export function readonlySet<T>(values: Iterable<T>): ReadonlySet<T> {
   const inner = new Set(values);
-  const view: ReadonlySet<T> = Object.freeze({
-    size: inner.size,
-    has: (value: T) => inner.has(value), keys: () => inner.keys(), values: () => inner.values(),
-    entries: () => inner.entries(), [Symbol.iterator]: () => inner[Symbol.iterator](),
-    forEach: (callback: (value: T, key: T, set: ReadonlySet<T>) => void, thisArg?: unknown) =>
-      inner.forEach(value => callback.call(thisArg, value, value, view)),
-  });
-  return view;
+  // Object.freeze(Set) still permits add/delete/clear; shadow them so only reads remain.
+  Object.assign(inner, { add: undefined, delete: undefined, clear: undefined });
+  return Object.freeze(inner);
 }
 
 function frozenCopy<T>(value: T): T {
