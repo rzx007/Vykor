@@ -36,10 +36,13 @@ function fixture(surface: "tool-result" | "session-sidebar" = "tool-result") {
   let drift = false; let documentRead = false;
   let changeGeneration = false;
   let changeSurface = false;
+  let childToken: object | undefined;
+  const rootToken = {};
   const submissions: unknown[] = [];
   const html = "<p>private verified document</p>";
   const client = new VykorClient({ baseUrl: "http://127.0.0.1:4000", fetch: async (url, options) => {
     const path = new URL(String(url)).pathname;
+    const sourceSession = path.split("/")[2] === "child" ? "child" : "session";
     let body: unknown;
     if (path === "/capabilities") body = { serverVersion: "test", protocol: { version: 5 },
       features: { pluginUi: pluginUiVersion, ...(lifecycle ? { pluginUiLifecycle: 1 } : {}) } };
@@ -54,7 +57,7 @@ function fixture(surface: "tool-result" | "session-sidebar" = "tool-result") {
       }
       body = { html, sha256: createHash("sha256").update(html).digest("hex") };
     } else if (path.endsWith("/state")) body = { cursor: 1,
-      session: { id: "session", cwd: "/test", title: "", model: "test", status: "idle",
+      session: { id: sourceSession, cwd: "/test", title: "", model: "test", status: "idle",
         metadata: { pluginUiGeneration: changeGeneration && documentRead ? "next" : "first" }, createdAt: 1, updatedAt: 1 },
       inputs: [], messages: [], parts: [], runs: [], attempts: [], permissions: [] };
     else if (path.endsWith("/actions")) {
@@ -63,8 +66,9 @@ function fixture(surface: "tool-result" | "session-sidebar" = "tool-result") {
     } else if (path.endsWith("/dismiss")) { submissions.push("dismiss"); body = { instance: { ...instance, status: "dismissed", revision: 2 } }; }
     else {
       const current = instances.find(item => path.endsWith("/" + item.instanceId)) ?? instances[0]!;
-      body = { instance: drift && documentRead ? { ...current, componentDigest: "c".repeat(64) }
-        : changeSurface && documentRead ? { ...current, surface: "session-sidebar" } : current,
+      const scoped = { ...current, sessionId: sourceSession };
+      body = { instance: drift && documentRead ? { ...scoped, componentDigest: "c".repeat(64) }
+        : changeSurface && documentRead ? { ...scoped, surface: "session-sidebar" } : scoped,
       conversation, availability: { code: "available", canRender: true, canInvoke: true },
       actions: [{ id: "apply", label: "应用", toolName: "Inspect", inputSchema: {}, completion: "keep-open" }] };
     }
@@ -75,10 +79,15 @@ function fixture(surface: "tool-result" | "session-sidebar" = "tool-result") {
   const documents = new PluginUiDocumentStore();
   const service = new DesktopPluginUiService({
     documents, getClient: async () => client, getOwnerSessionId: () => currentSession,
+    getOwnerSessionToken: (ownerId, sessionId) => ownerId === 42
+      ? sessionId === currentSession ? rootToken : sessionId === "child" ? childToken : undefined
+      : undefined,
     localAvailable: () => true,
   });
   service.registerOwner(owner as unknown as WebContents, "file:///trusted.html");
   return { service, documents, owner, submissions, html, documentEntered,
+    openChild: () => { childToken = {}; },
+    closeChild: () => { childToken = undefined; service.invalidateSession(42, "child"); },
     setSession: (id?: string) => { currentSession = id; service.invalidateOwner(42); },
     withoutLifecycle: () => { lifecycle = false; },
     version: (value: number) => { pluginUiVersion = value; },
@@ -107,6 +116,36 @@ it("mounts only verified current data and invokes the declared action with the o
   f.service.unmount(42, { mountId: mount.mountId });
   expect(f.documents.owns(mount.mountId, 42)).toBe(false);
   expect(f.submissions).toHaveLength(1);
+});
+it("mounts an owned open child alongside its root and revokes only the child on aux close", async () => {
+  const f = fixture();
+  const root = await f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" });
+  await expect(f.service.mount(42, { sessionId: "child", instanceId: otherInstance.instanceId, surface: "tool-result" }))
+    .rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  f.openChild();
+  const child = await f.service.mount(42, { sessionId: "child", instanceId: otherInstance.instanceId, surface: "tool-result" });
+  f.service.observeSession(42, ownerView("first") as never);
+  f.service.observeSession(42, { ...ownerView("child-generation"), session: { id: "child", status: "idle", metadata: { pluginUiGeneration: "child-generation" } },
+    parts: [{ id: "other-part", metadata: { pluginUi: { ...otherInstance, sessionId: "child" } } }] } as never);
+  expect(f.documents.owns(root.mountId, 42)).toBe(true);
+  expect(f.documents.owns(child.mountId, 42)).toBe(true);
+  await expect(f.service.getState(43, { sessionId: "child", instanceId: otherInstance.instanceId }))
+    .rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  f.closeChild(); f.openChild();
+  expect(f.documents.owns(child.mountId, 42)).toBe(false);
+  expect(f.documents.owns(root.mountId, 42)).toBe(true);
+  await expect(f.service.invokeAction(42, { mountId: child.mountId, input: { requestId, expectedRevision: 1, actionId: "apply", args: {} } }))
+    .rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  await expect(f.service.getState(42, { sessionId: "session", instanceId })).resolves.toBeDefined();
+});
+it("rejects a late child document across close and reopen even for the same source session", async () => {
+  const f = fixture(); f.openChild(); f.holdDocument();
+  const pending = f.service.mount(42, { sessionId: "child", instanceId: otherInstance.instanceId, surface: "tool-result" });
+  const rejected = expect(pending).rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  await f.documentEntered;
+  f.closeChild(); f.openChild(); f.releaseDocument();
+  await rejected;
+  expect(f.submissions).toEqual([]);
 });
 it("rejects a wrong surface before reading the document", async () => {
  const f=fixture(); await expect(f.service.mount(42,{sessionId:"session",instanceId,surface:"session-sidebar"})).rejects.toMatchObject({code:"plugin_ui_surface_not_supported"});

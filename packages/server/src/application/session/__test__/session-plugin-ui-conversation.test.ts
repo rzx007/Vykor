@@ -15,12 +15,20 @@ import { SessionPluginCapabilityService } from "../session-plugin-capability-ser
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { vi.restoreAllMocks(); cleanup.splice(0).reverse().forEach(fn => fn()); });
-export function conversationHarness() {
+export function conversationHarness(options: { child?: boolean; fork?: boolean; ownerParent?: string } = {}) {
   const root = mkdtempSync(join(tmpdir(), "vykor-ui-conversation-"));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "session.db");
   let store = new SessionStore({ path }); cleanup.push(() => store.close());
-  const session = store.sessions.create({ id: "opaque / session", cwd: root, model: "test" });
+  const owner = options.child || options.fork ? store.sessions.create({ id: "root owner", cwd: root, model: "test",
+    ...(options.ownerParent ? { parentId: options.ownerParent } : {}),
+    ...(options.ownerParent === "opaque / session" ? { metadata: { childId: "owner-worker" } } : {}) }) : undefined;
+  const session = store.sessions.create({ id: "opaque / session", cwd: root, model: "test",
+    ...(owner ? { parentId: owner.id } : {}), ...(options.child ? { metadata: { childId: "source-worker" } } : {}) });
+  if (options.child && owner) store.runs.createSessionTask({ id: "source-worker", type: "agent", sessionId: owner.id,
+    childSessionId: session.id, cwd: root, description: "Source worker" });
+  if (owner && options.ownerParent === session.id) store.runs.createSessionTask({ id: "owner-worker", type: "agent", sessionId: session.id,
+    childSessionId: owner.id, cwd: root, description: "Owner worker" });
   const sourceRun = store.runs.createRun({ id: "source-run", sessionId: session.id, metadata: { pluginId: "example.panel" } });
   store.runs.updateRun(sourceRun.id, { status: "completed" });
   const message = store.conversations.createMessage({ sessionId: session.id, role: "assistant", runId: sourceRun.id });
@@ -59,12 +67,123 @@ export function conversationHarness() {
   const part = () => store.conversations.listMessageParts(session.id).find(p => p.id === "source")!;
   const patchInstance = (patch: Partial<PluginUiInstanceRecord>) => { const p = part(); store.conversations.upsertMessagePart({ ...p, metadata: { ...p.metadata, pluginUi: { ...readPluginUiInstance(p.metadata)!, ...patch } } }); };
   const input = { requestId: randomUUID(), expectedRevision: 1, text: "请检查", data: { z: 1, a: "外部数据" } };
-  return { get store() { return store; }, source, service, operations, admission, session, instance, input, part, patchInstance,
+  return { get store() { return store; }, source, service, operations, admission, session, owner: owner ?? session, instance, input, part, patchInstance,
     counts: () => ({ priority, dispatched }), setModel: (value: boolean) => { model = value; },
     setCurrent: (patch: Partial<PluginUiCurrentState>) => { current = { ...current, ...patch }; },
     duringResolve: (fn: typeof duringResolve) => { duringResolve = fn; }, failDispatch: () => { failDispatch = true; },
     reopen: () => { store.close(); store = new SessionStore({ path }); source = makeSource(); return makeService(); } };
 }
+
+it("prepares and submits a child's card to its root owner while preserving the actual child source and root manual restriction", async () => {
+  const h = conversationHarness({ child: true });
+  h.store.sessions.update(h.owner.id, { metadata: { activePluginId: "office-work" } });
+  h.store.sessions.update(h.session.id, { metadata: { ...h.session.metadata, activePluginId: "example.panel" } });
+  const { requestId: _, ...payload } = h.input;
+  const prepared = await h.service.prepare(h.session.id, h.instance.instanceId, { mode: "draft", ...payload });
+  expect(prepared.targetSessionId).toBe(h.owner.id);
+  expect(h.source.readConversationSource(h.session.id, h.instance.instanceId).instance.sessionId).toBe(h.session.id);
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  expect(receipt.targetSessionId).toBe(h.owner.id);
+  expect(h.store.conversations.listInputs(h.session.id)).toEqual([]);
+  expect(h.store.conversations.getInput(receipt.inputId)).toMatchObject({ sessionId: h.owner.id, metadata: { pluginId: "office-work" } });
+  expect(h.store.runs.getRun(receipt.runId)).toMatchObject({ sessionId: h.owner.id, metadata: { pluginId: "office-work" } });
+  expect(h.part().metadata).toMatchObject({ pluginUi: { sessionId: h.session.id }, pluginUiSubmission: { targetSessionId: h.owner.id } });
+  h.store.sessions.update(h.owner.id, { metadata: { activePluginId: "example.panel" } });
+  expect(h.store.conversations.getInput(receipt.inputId)!.metadata.pluginId).toBe("office-work");
+  const restarted = h.reopen();
+  expect(restarted.getSubmission(h.session.id, h.instance.instanceId, h.input.requestId)).toEqual(receipt);
+});
+
+it.each([true, false])("captures the root's automatic policy for a child handoff independently of child selection and later @: auto=%s", async automatic => {
+  const h = conversationHarness({ child: true });
+  h.store.sessions.update(h.session.id, { metadata: { ...h.session.metadata, activePluginId: "example.panel" } });
+  if (!automatic) h.store.sessions.update(h.owner.id, { metadata: { runtime: { pluginAutoSelectionEnabled: false } } });
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  h.store.sessions.update(h.owner.id, { metadata: { activePluginId: "office-work" } });
+  expect(h.store.conversations.getInput(receipt.inputId)).toMatchObject({ sessionId: h.owner.id,
+    metadata: { pluginScope: { source: automatic ? "auto" : "none", pluginIds: automatic ? ["example.panel", "office-work"] : [] } } });
+  expect(h.store.conversations.listInputs(h.session.id)).toEqual([]);
+});
+
+it("uses the root operation lane while rechecking child source generation after waiting", async () => {
+  const h = conversationHarness({ child: true });
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const earlier = h.operations.run(h.owner.id, async () => { entered(); await new Promise<void>(resolve => { release = resolve; }); });
+  await started;
+  const pending = h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  h.store.sessions.update(h.session.id, { metadata: { pluginUiGeneration: "changed while root lane held" } });
+  release();
+  await earlier;
+  await expect(pending).rejects.toMatchObject({ code: "plugin_ui_snapshot_changed" });
+  expect(h.store.conversations.listInputs(h.owner.id)).toEqual([]);
+});
+
+it.each(["archived", "closing", "missing", "cycle"])("rejects a child's handoff to an %s root without creating input", async state => {
+  const h = conversationHarness({ child: true, ...(state === "cycle" ? { ownerParent: "opaque / session" } : {}) });
+  if (state === "missing") {
+    const get = h.store.sessions.get.bind(h.store.sessions);
+    vi.spyOn(h.store.sessions, "get").mockImplementation(id => id === h.owner.id ? undefined : get(id));
+  }
+  if (state === "archived") h.store.sessions.archive(h.owner.id);
+  if (state === "closing") h.store.sessions.beginArchive(h.owner.id);
+  await expect(h.service.submit(h.session.id, h.instance.instanceId, h.input)).rejects.toBeDefined();
+  expect(h.store.conversations.listInputs(h.session.id)).toEqual([]);
+  expect(h.store.conversations.listInputs(h.owner.id)).toEqual([]);
+});
+
+it("keeps a new card in an ordinary fork in that fork instead of handing it to the original chat", async () => {
+  const h = conversationHarness({ fork: true });
+  h.store.sessions.update(h.session.id, { metadata: { activePluginId: "office-work" } });
+  h.store.sessions.update(h.owner.id, { metadata: { activePluginId: "example.panel" } });
+  const { requestId: _, ...payload } = h.input;
+  const prepared = await h.service.prepare(h.session.id, h.instance.instanceId, { mode: "draft", ...payload });
+  expect(prepared.targetSessionId).toBeUndefined();
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  expect(receipt.targetSessionId).toBeUndefined();
+  expect(h.store.conversations.getInput(receipt.inputId)).toMatchObject({ sessionId: h.session.id, metadata: { pluginId: "office-work" } });
+  expect(h.store.conversations.listInputs(h.owner.id)).toEqual([]);
+  expect(h.reopen().getSubmission(h.session.id, h.instance.instanceId, h.input.requestId)).toEqual(receipt);
+});
+
+it("hands a real worker's card to its owning fork without following the fork's ordinary parent", async () => {
+  const h = conversationHarness({ child: true, ownerParent: "original chat" });
+  const original = h.store.sessions.create({ id: "original chat", cwd: h.owner.cwd, model: "test" });
+  // A normal fork can copy a worker marker, but its task still belongs to the original worker.
+  h.store.sessions.update(h.owner.id, { metadata: { activePluginId: "office-work", childId: "source-worker" } });
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  expect(receipt.targetSessionId).toBe(h.owner.id);
+  expect(h.store.conversations.getInput(receipt.inputId)).toMatchObject({ sessionId: h.owner.id, metadata: { pluginId: "office-work" } });
+  expect(h.store.conversations.listInputs(original.id)).toEqual([]);
+});
+
+it.each(["missing", "other-child", "other-parent", "other-type"])("does not grant upward handoff authority from a copied or mismatched child marker: %s", async mismatch => {
+  const h = conversationHarness({ fork: true });
+  h.store.sessions.update(h.session.id, { metadata: { childId: "copied-worker" } });
+  const get = h.store.runs.getSessionTask.bind(h.store.runs);
+  vi.spyOn(h.store.runs, "getSessionTask").mockImplementation(id => id !== "copied-worker" ? get(id) : mismatch === "missing" ? undefined : ({
+    id, type: mismatch === "other-type" ? "shell" : "agent", sessionId: mismatch === "other-parent" ? "another parent" : h.owner.id,
+    childSessionId: mismatch === "other-child" ? "original worker" : h.session.id,
+  } as ReturnType<typeof get>));
+  const receipt = await h.service.submit(h.session.id, h.instance.instanceId, h.input);
+  expect(receipt.targetSessionId).toBeUndefined();
+  expect(h.store.conversations.getInput(receipt.inputId)?.sessionId).toBe(h.session.id);
+  expect(h.store.conversations.listInputs(h.owner.id)).toEqual([]);
+});
+
+it("rechecks the child's root owner before acceptance and rejects a forged saved target", async () => {
+  const h = conversationHarness({ child: true });
+  h.duringResolve(() => { h.store.sessions.beginArchive(h.owner.id); });
+  await expect(h.service.submit(h.session.id, h.instance.instanceId, h.input)).rejects.toBeDefined();
+  expect(h.store.conversations.listInputs(h.owner.id)).toEqual([]);
+  const other = conversationHarness({ child: true });
+  await other.service.submit(other.session.id, other.instance.instanceId, other.input);
+  const source = other.part();
+  other.store.conversations.upsertMessagePart({ ...source, metadata: { ...source.metadata,
+    pluginUiSubmission: { ...(source.metadata.pluginUiSubmission as object), targetSessionId: other.session.id } } });
+  expect(() => other.service.getSubmission(other.session.id, other.instance.instanceId, other.input.requestId)).toThrow();
+});
 
 it("prepares verified static draft without model or writes and serializes complete plain text", async () => {
   const h = conversationHarness(); h.setModel(false); h.patchInstance({ status: "resolved" });

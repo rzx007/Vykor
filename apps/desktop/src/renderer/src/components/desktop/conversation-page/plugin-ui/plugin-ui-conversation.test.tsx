@@ -12,6 +12,9 @@ import { PluginUiProvider } from "./plugin-ui-provider"
 import { usePluginUiHost } from "./plugin-ui-context"
 import { PluginUiFrame } from "./plugin-ui-frame"
 import { instance, snapshot, sourcePart, mountId } from "./plugin-ui-fixtures.test-support"
+import type { DesktopSessionView } from "@shared/session-types"
+let scopedView: DesktopSessionView | undefined
+let sourceInstance = instance
 let root: Root, container: HTMLDivElement, host: NonNullable<ReturnType<typeof usePluginUiHost>>
 let api: any, port: MessagePort, packets: any[], prepares: number, posts: any[], queries: string[]
 const scope = sessionComposerScope("session")
@@ -20,10 +23,17 @@ function Harness({ visible }: { visible: boolean }) {
   return <>{host.displays.map(display => <PluginUiFrame key={display.key} display={display} visible={visible} />)}</>
 }
 async function render(visible = true) {
-  await act(async () => root.render(<PluginUiProvider onOpenSidebar={() => {}}><Harness visible={visible} /></PluginUiProvider>))
+  await act(async () => root.render(<PluginUiProvider view={scopedView} onOpenSidebar={() => {}}><Harness visible={visible} /></PluginUiProvider>))
+}
+function selectChildCard() {
+  const primary = useDesktopSessionStore.getState().sessionView!
+  sourceInstance = { ...instance, sessionId: "child" }
+  scopedView = { ...primary, session: { ...primary.session, id: "child", parentId: "session" },
+    parts: [{ ...sourcePart, sessionId: "child", metadata: { pluginUi: sourceInstance } }] }
+  useDesktopSessionStore.setState({ sessionView: { ...primary, parts: [] } })
 }
 async function send(mode = "draft", id = "1") {
-  await render(); await act(async () => host.open(instance, "tool-result"))
+  await render(); await act(async () => host.open(sourceInstance, "tool-result"))
   const frame = container.querySelector("iframe")!
   vi.spyOn(frame.contentWindow!, "postMessage").mockImplementation((_message, _origin?: any, transferred?: any) => {
     port = transferred[0]; port.on("message", data => packets.push(JSON.parse(data)))
@@ -40,6 +50,7 @@ async function decide(label = "确认加入输入框") {
   await act(async () => { button.click(); await new Promise(resolve => setTimeout(resolve, 20)) })
 }
 beforeEach(() => {
+  scopedView = undefined; sourceInstance = instance
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("MessageChannel", MessageChannel)
   vi.stubGlobal("crypto", webcrypto)
   container = document.createElement("div"); document.body.append(container); root = createRoot(container)
@@ -55,6 +66,81 @@ beforeEach(() => {
   Object.defineProperty(window, "desktop", { configurable: true, value: { pluginUi: api } })
 })
 afterEach(() => { act(() => root.unmount()); container.remove(); port?.close(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT") })
+it("hands a child card draft to the server-selected root composer while retaining the child source", async () => {
+  sourceInstance = { ...instance, sessionId: "child" }
+  scopedView = {
+    ...useDesktopSessionStore.getState().sessionView!,
+    session: {
+      ...useDesktopSessionStore.getState().sessionView!.session,
+      id: "child",
+      parentId: "session",
+    },
+    parts: [{ ...sourcePart, sessionId: "child", metadata: { pluginUi: sourceInstance } }],
+  }
+  useDesktopSessionStore.setState({
+    sessionView: { ...useDesktopSessionStore.getState().sessionView!, parts: [] },
+  })
+  api.prepareConversation = async ({ input }) => ({
+    mode: input.mode,
+    instanceId: instance.instanceId,
+    revision: 1,
+    promptText: "来自工作智能体的所选数据",
+    targetSessionId: "session",
+  })
+  await send()
+  await decide()
+  expect(selectDraftDocument(useDesktopSessionStore.getState(), scope).items).toEqual([
+    { type: "text", text: "\n\n来自工作智能体的所选数据" },
+  ])
+  expect(
+    selectDraftDocument(useDesktopSessionStore.getState(), sessionComposerScope("child")).items
+  ).toEqual([])
+})
+it("accepts a child card submission receipt for the server-selected root without sending a client-selected target", async () => {
+  selectChildCard()
+  api.prepareConversation = async ({ input }) => ({ mode: input.mode, instanceId: instance.instanceId, revision: 1,
+    promptText: "工作智能体交接", targetSessionId: "session" })
+  const submit = api.submitConversation
+  api.submitConversation = async value => ({ ...await submit(value), targetSessionId: "session" })
+  await send("submit"); await decide("确认交给助手")
+  await act(async () => vi.waitFor(() => expect(packets.find(packet => packet.id === "1")?.result?.targetSessionId).toBe("session")))
+  expect(posts[0].input).toEqual({ expectedRevision: 1, text: "分析选择", data: { selected: true } })
+  expect(host.view?.session.id).toBe("child")
+  expect(host.conversationStatus?.message).toBe("已交给助手。")
+})
+it("rejects a child handoff to any target other than the current root composer", async () => {
+  selectChildCard()
+  api.prepareConversation = async ({ input }) => ({ mode: input.mode, instanceId: instance.instanceId, revision: 1,
+    promptText: "不能转交给其他会话", targetSessionId: "unrelated" })
+  await send()
+  expect(document.body.textContent).not.toContain("确认加入输入框")
+  expect(packets.some(packet => packet.error?.code === "plugin_ui_conversation_unavailable")).toBe(true)
+  expect(selectDraftDocument(useDesktopSessionStore.getState(), scope).items).toEqual([])
+  expect(posts).toHaveLength(0)
+})
+it("revokes a child card when the owner switches away and does not revive its old mount", async () => {
+  sourceInstance = { ...instance, sessionId: "child" }
+  scopedView = {
+    ...useDesktopSessionStore.getState().sessionView!,
+    session: {
+      ...useDesktopSessionStore.getState().sessionView!.session,
+      id: "child",
+      parentId: "session",
+    },
+    parts: [{ ...sourcePart, sessionId: "child", metadata: { pluginUi: sourceInstance } }],
+  }
+  useDesktopSessionStore.setState({
+    sessionView: { ...useDesktopSessionStore.getState().sessionView!, parts: [] },
+  })
+  await render()
+  await act(async () => host.open(sourceInstance, "tool-result"))
+  expect(container.querySelector("iframe")).not.toBeNull()
+  await act(async () =>
+    useDesktopSessionStore.setState({ activeSessionId: "other", sessionView: null })
+  )
+  expect(container.querySelector("iframe")).toBeNull()
+  expect(host.isCurrent(instance.instanceId)).toBe(false)
+})
 it("previews the final prompt and appends to the latest real composer document without losing attachments", async () => {
   await send()
   expect(document.body.textContent).toContain("最终完整提示\n包含所选数据")

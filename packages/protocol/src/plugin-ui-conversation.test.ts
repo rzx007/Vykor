@@ -5,6 +5,25 @@ const instanceId = "10000000-0000-4000-8000-000000000001";
 const requestId = "30000000-0000-4000-8000-000000000001";
 const request = { mode: "draft", expectedRevision: 0, text: "解释", data: { count: 1 } };
 
+it("accepts a server-derived handoff target in responses and durable records, never in client input", () => {
+  const prepared = { mode: "draft", instanceId, revision: 1, promptText: "source", targetSessionId: "root owner" };
+  const receipt = { kind: "conversation", mode: "submit", instanceId, revision: 2, requestId,
+    inputId: "input", runId: "run", status: "pending", targetSessionId: "root owner" };
+  const record = { schemaVersion: 2, requestId, requestFingerprint: "a".repeat(64), expectedRevision: 1,
+    inputId: "input", runId: "run", pluginDigest: "b".repeat(64), componentDigest: "c".repeat(64), acceptedAt: 0, targetSessionId: "root owner" };
+  expect(protocol.parsePluginUiConversationPrepared(prepared)).toEqual(prepared);
+  expect(protocol.parsePluginUiConversationReceipt(receipt)).toEqual(receipt);
+  expect(protocol.parsePluginUiSubmissionRecord(record)).toEqual(record);
+  for (const targetSessionId of ["", " ", null, 12]) {
+    expect(() => protocol.parsePluginUiConversationPrepared({ ...prepared, targetSessionId })).toThrow();
+    expect(() => protocol.parsePluginUiConversationReceipt({ ...receipt, targetSessionId })).toThrow();
+    expect(() => protocol.parsePluginUiSubmissionRecord({ ...record, targetSessionId })).toThrow();
+  }
+  expect(() => protocol.parsePluginUiConversationRequest({ ...request, targetSessionId: "foreign" })).toThrow();
+  const { mode: _, ...input } = request;
+  expect(() => protocol.parseSubmitPluginUiConversationInput({ ...input, requestId, targetSessionId: "foreign" })).toThrow();
+});
+
 it.each(["request", "http"] as const)("bounds %s conversation data at exactly 32KiB", entry => {
   // {"text":""} contributes 11 bytes; the CJK text contributes 32757 bytes.
   const data = { text: "中".repeat(10919) };

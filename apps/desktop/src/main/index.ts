@@ -81,11 +81,13 @@ function startDesktopApplication(): void {
       documents: desktopPluginUiDocuments,
       getClient: () => desktopSessionService.daemonClient(),
       getOwnerSessionId: id => desktopSessionService.subscriptions.getOwnerSessionId(id),
+      getOwnerSessionToken: (id, sessionId) => desktopSessionService.subscriptions.getOwnerSessionToken(id, sessionId),
       localAvailable: contents => pluginUiDocumentProtocolAvailable(contents.session),
     })
     setDesktopPluginUiService(pluginUi)
     desktopSessionService.connection.onInvalidated(() => pluginUi.invalidateConnection())
     desktopSessionService.subscriptions.onOwnerInvalidated(id => pluginUi.invalidateOwner(id))
+    desktopSessionService.subscriptions.onSessionInvalidated((id, sessionId) => pluginUi.invalidateSession(id, sessionId))
     desktopSessionService.subscriptions.onOwnerSnapshot((id, view) => pluginUi.observeSession(id, view))
 
     ipcRegistry = new IpcRegistry(ctx)

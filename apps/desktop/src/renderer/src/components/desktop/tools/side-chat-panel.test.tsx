@@ -1496,29 +1496,20 @@ it("a side event reconciles its pending ordinary send without changing the prima
   await act(async () => finish())
 })
 
-it("plugin selection preferences apply only to the verified side session", async () => {
+it("keeps plugin selection controls hidden without changing stored side-session restrictions", async () => {
   sideChatTargets.set("main", "side-main")
   const primary = useDesktopSessionStore.getState().sessionView
-  Object.assign(window.desktop.sessions, {
-    updatePluginSelection: async (input: { sessionId: string; clearActivePlugin?: boolean }) => {
-      if (input.sessionId !== "side-main") throw new Error("设置写入了错误的会话")
-      return {
-        ...sideView().session,
-        metadata: {
-          activePluginId: input.clearActivePlugin ? null : "dev.quality",
-          runtime: { pluginAutoSelectionEnabled: Boolean(input.clearActivePlugin) },
-        },
-      }
-    },
-  })
+  const metadata = { activePluginId: "dev.quality", runtime: { pluginAutoSelectionEnabled: false } }
+  openAux.mockResolvedValueOnce({ ...sideView(), session: { ...sideView().session, metadata } })
+  const updatePluginSelection = vi.fn()
+  Object.assign(window.desktop.sessions, { updatePluginSelection })
   await mount()
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="插件选择设置"]')!.click())
-  await act(async () => document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="自动使用可用能力"]')!.click())
-  expect(container.textContent).toContain("自动使用已关闭")
-  expect(container.textContent).toContain("仅使用：dev.quality")
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="清除手动插件，恢复自动使用"]')!.click())
+  expect(container.querySelector('[aria-label="插件选择设置"]')).toBeNull()
+  expect(container.querySelector('[aria-label="清除手动插件，恢复自动使用"]')).toBeNull()
+  expect(container.textContent).not.toContain("自动使用已关闭")
+  expect(container.textContent).not.toContain("自动使用可用能力")
   expect(container.textContent).not.toContain("仅使用：dev.quality")
-  expect(container.textContent).toContain("自动使用可用能力")
+  expect(updatePluginSelection).not.toHaveBeenCalled()
   expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
 })
 

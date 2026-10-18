@@ -48,6 +48,8 @@ export interface CreateDaemonAgentContext {
 /**
  * 造 Agent 的最低层缝：测试和嵌入式宿主可以自己 new，不走 createDefaultNodeAgent。
  * 真正生产路径由 loader 调 createDefaultNodeAgent。
+ * 使用插件 UI 的宿主必须遵守 options.onRunCapabilities 生命周期：可靠投影
+ * run.started 后交出实际准备的范围，并在终止后调用返回的释放函数。
  */
 export type CreateDaemonAgent = (
   context: CreateDaemonAgentContext,
@@ -85,6 +87,8 @@ export type DaemonToolsProvider = (
 ) => Promise<ToolDefinition[]> | ToolDefinition[];
 
 export interface DaemonAgentLoaderOptions {
+  /** Host-only actual Run bindings, including delegated workers; never serialized into events. */
+  onRunCapabilities?: VykorAgentOptions["onRunCapabilities"];
   executionSurface?: "desktop_managed" | "cli_advanced";
   acquireEnvironment?(
     session: SessionRecord,
@@ -210,6 +214,7 @@ export function createDaemonAgentLoader(
         ? chosenEffort
         : undefined;
     const agentOptions: VykorAgentOptions = {
+      ...(options.onRunCapabilities ? { onRunCapabilities: options.onRunCapabilities } : {}),
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
       memoryRoot: settingsRoot,

@@ -18,6 +18,7 @@ export { createCompactContextProvider, type CompactContextSources } from "./comp
 export type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
+  AgentRunCapabilitySnapshot,
   CapabilityOverride,
   ObservableJobProducer,
   VykorAgentConfiguration,

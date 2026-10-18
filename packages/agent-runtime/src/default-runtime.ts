@@ -183,6 +183,12 @@ export async function createVykorRuntime(
     effectiveAllowed,
     effectiveDenied,
     options.executionEnvironment,
+    resolveEffectiveAllowedTools({
+      hostToolCeiling: configuration.hostToolCeiling,
+      settingsAllowedTools: settings.permission.allowedTools,
+      knownToolNames,
+      internalTextOnly: configuration.internalTextOnly,
+    }),
   );
 
   const mode = configuration.permissionMode ?? settings.permission.mode;

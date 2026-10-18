@@ -39,7 +39,7 @@ const DEFAULT_RUN_STALL_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_RUN_STALL_CHECK_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
-  pluginUi?: Pick<SessionPluginUiService, "registerRunView" | "releaseRunView"> & Partial<Pick<SessionPluginUiService, "summarizeForInput">>;
+  pluginUi?: Pick<SessionPluginUiService, "summarizeForInput">;
   data: Pick<SessionStore,
     "conversations" | "conversationTransactions" | "permissions" | "runs" | "sessions" | "transaction"
   >;
@@ -228,7 +228,6 @@ export class SessionRunExecutor {
           this.context.data.runs.updateRun(runId, { metadata: { pluginSelection: selection } });
         }
       }
-      if (capabilityView) this.context.pluginUi?.registerRunView(runId, capabilityView);
       const materialized = hasStructuredContext
         ? materializeSessionInput(
             admitted.items,
@@ -532,7 +531,6 @@ export class SessionRunExecutor {
       // Terminal timestamps were already recorded by the Run owner.
       try { await this.context.workspaceChanges?.settle(runId, workContext.signal); }
       catch (error) { this.context.log({ level: "warn", event: "workspace_changes.settle_failed", runId, error: String(error) }); }
-      this.context.pluginUi?.releaseRunView(runId);
       watchdog?.dispose();
       if (cleanupAttachmentResources) {
         try {

@@ -35,6 +35,51 @@ function createExecutionContext(
 }
 
 describe("run capability execution boundary", () => {
+  it("captures authorized plugin tools for delegation without exposing them to the Coordinator", async () => {
+    const registry = new ToolRegistry();
+    registry.register(tool("Agent"));
+    registry.register(tool("OfficeCLI", "captured office"), { kind: "plugin", id: "office" });
+    registry.register(tool("Foreign"), { kind: "plugin", id: "foreign" });
+    registry.register(tool("mcp__office__render"), { kind: "mcp", id: "office-server" });
+    registry.register(tool("mcp__host__read"), { kind: "mcp", id: "host" });
+    const sources = {
+      toolRegistry: createVisibilityToolRegistry(registry, { kind: "only" as const, names: new Set(["Agent"]) }, new Set()),
+      delegatableToolRegistry: registry,
+      pluginIds: new Set(["office", "foreign"]),
+      mcpServers: [
+        { ownerPluginId: "office", serverId: "office:mcp", serverName: "office-server", definition: { type: "stdio" as const, command: "node" } },
+        { serverId: "host:mcp", serverName: "host", definition: { type: "stdio" as const, command: "node" } },
+      ],
+    };
+    const view = createRunCapabilityView(sources, ["office"]);
+    expect([...view.tools.keys()]).toEqual(["Agent"]);
+    expect([...view.delegatableTools!.keys()]).toEqual(["OfficeCLI", "mcp__office__render"]);
+    expect(view.delegatableTools!.get("OfficeCLI")!.ownerPluginId).toBe("office");
+    expect(view.delegatableTools!.get("mcp__office__render")!.serverId).toBe("office:mcp");
+    expect([...createRunCapabilityView(sources, []).delegatableTools!.keys()]).toEqual([]);
+    expect((view.delegatableTools as Map<string, unknown>).set).toBeUndefined();
+    registry.override(tool("OfficeCLI", "replacement"), { kind: "plugin", id: "office" });
+    expect(await view.delegatableTools!.get("OfficeCLI")!.invoke({}, { cwd: "." }))
+      .toEqual({ content: [{ type: "text", text: "captured office" }] });
+  });
+
+  it("applies a child's tool and MCP limits to every further delegation", () => {
+    const registry = new ToolRegistry();
+    registry.register(tool("OfficeCLI"), { kind: "plugin", id: "office" });
+    registry.register(tool("mcp__office__render"), { kind: "mcp", id: "office-server" });
+    const sources = { toolRegistry: registry, delegatableToolRegistry: registry, pluginIds: new Set(["office"]),
+      mcpServers: [{ ownerPluginId: "office", serverId: "office:mcp", serverName: "office-server", definition: { type: "stdio" as const, command: "node" } }] };
+    const parent = createRunCapabilityView(sources, ["office"]);
+    for (const limits of [
+      { allowedTools: ["OfficeCLI"], disallowedTools: ["OfficeCLI"] },
+      { allowedTools: ["mcp__office__render"], requiredMcpServers: [] },
+    ]) {
+      const child = deriveChildCapabilityView(parent, { description: "restricted worker", prompt: "work", agent: "worker", cwd: ".", ...limits })!;
+      expect([...child.tools.keys()]).toEqual([]);
+      expect([...child.delegatableTools!.keys()]).toEqual([]);
+    }
+  });
+
   it("distinguishes an automatic singleton scope from an explicit single-plugin restriction", () => {
     const registry = new ToolRegistry();
     registry.register(tool("Alpha"), { kind: "plugin", id: "alpha" });

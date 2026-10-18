@@ -99,18 +99,20 @@ function authorizesChildView(child: RunCapabilityView, parent?: AgentJobAuthoriz
   if (!owners.size) return true;
   const allowed = parent?.pluginIds ?? new Set(parent?.pluginId ? [parent.pluginId] : []);
   for (const owner of owners) if (!allowed.has(owner)) return false;
-  for (const [name, binding] of child.tools) {
+  for (const [name, binding] of [...child.tools, ...(child.delegatableTools ?? [])]) {
     if (binding.ownerPluginId === undefined) continue;
-    const current = parent?.tools?.get(name) as typeof binding | undefined;
+    const current = (parent?.delegatableTools?.get(name) ?? parent?.tools?.get(name)) as typeof binding | undefined;
     if (!current || current.ownerPluginId !== binding.ownerPluginId || current.serverId !== binding.serverId
       || !isDeepStrictEqual(current.source, binding.source)
       || current.definitionIdentity !== binding.definitionIdentity || current.definition.execute !== binding.definition.execute
       || (!binding.definitionIdentity && current.invoke !== binding.invoke)) return false;
   }
-  for (const kind of ["skills", "agents", "mcpServers", "pluginUi"] as const) {
+  for (const kind of ["skills", "agents", "mcpServers", "pluginUi", "delegatablePluginUi"] as const) {
     for (const [name, binding] of child[kind] ?? []) {
-      if (kind !== "pluginUi" && !("ownerPluginId" in binding && binding.ownerPluginId !== undefined)) continue;
-      if (!isDeepStrictEqual(parent?.[kind]?.get(name), binding)) return false;
+      const ui = kind === "pluginUi" || kind === "delegatablePluginUi";
+      if (!ui && !("ownerPluginId" in binding && binding.ownerPluginId !== undefined)) continue;
+      const current = ui ? (parent?.delegatablePluginUi?.get(name) ?? parent?.pluginUi?.get(name)) : parent?.[kind]?.get(name);
+      if (!isDeepStrictEqual(current, binding)) return false;
     }
   }
   return true;
@@ -132,7 +134,7 @@ function rebuildChildCapabilityView(
     const captured = binding.serverId && inherited.mcpServers.get(binding.serverId);
     return Boolean(server && captured && captured.ownerPluginId === undefined && isDeepStrictEqual(server, captured));
   });
-  for (const [name, binding] of inherited.tools) {
+  for (const [name, binding] of inherited.delegatableTools ?? inherited.tools) {
     if (!owns(binding.ownerPluginId)) continue;
     const native = binding.source?.kind === "plugin" && binding.source.id === binding.ownerPluginId;
     const mcp = binding.source?.kind === "mcp" && binding.serverId
@@ -143,8 +145,10 @@ function rebuildChildCapabilityView(
   skills.push(...[...inherited.skills].filter(([, binding]) => owns(binding.ownerPluginId) && binding.definition.source === "plugin"));
   const agents = [...baseline.agents].filter(([, binding]) => binding.ownerPluginId === undefined && binding.definition.source !== "plugin");
   agents.push(...[...inherited.agents].filter(([, binding]) => owns(binding.ownerPluginId) && binding.definition.source === "plugin"));
+  const toolMap = readonlyMap(tools);
   return deriveChildCapabilityView(Object.freeze({
-    ...inherited, tools: readonlyMap(tools), skills: readonlyMap(skills), agents: readonlyMap(agents),
+    ...inherited, tools: toolMap, skills: readonlyMap(skills), agents: readonlyMap(agents),
+    pluginUi: inherited.delegatablePluginUi ?? inherited.pluginUi,
   }), child)!;
 }
 

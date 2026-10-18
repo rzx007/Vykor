@@ -1,6 +1,6 @@
 import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@vykor/core";
 import { canonicalToolName, canonicalToolNames } from "@vykor/core";
-import { readonlyMap } from "./run-capability-view.js";
+import { readonlyMap, restrictRunCapabilityView } from "./run-capability-view.js";
 
 import type { VykorAgentOptions } from "./agent.js";
 import type {
@@ -124,9 +124,5 @@ export function deriveChildCapabilityView(
     !denied.has("*") && !denied.has(canonicalToolName(name));
   const mcpServers = child.requiredMcpServers === undefined ? parent.mcpServers
     : readonlyMap([...parent.mcpServers].filter(([id]) => serverIds.has(id)));
-  return Object.freeze({
-    ...parent,
-    tools: readonlyMap([...parent.tools].filter(([name, binding]) => permits(name) && (!binding.serverId || mcpServers.has(binding.serverId)))),
-    mcpServers,
-  });
+  return restrictRunCapabilityView({ ...parent, mcpServers }, permits);
 }

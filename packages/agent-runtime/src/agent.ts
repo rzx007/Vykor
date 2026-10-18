@@ -41,6 +41,7 @@ import type { AgentIdentity } from "./agent-composition.js";
 import { createRunCapabilityView, readonlyMap, readonlySet } from "./run-capability-view.js";
 import type { PluginSelectionCatalog, PluginSelectionCandidate } from "./plugin-selection.js";
 import { renderPluginDiscoveryContext } from "./plugin-discovery-context.js";
+import { constrainRunCapabilityTools } from "./default-runtime-tools.js";
 import type { GoalRunBinding } from "./goal-extension.js";
 import {
   AgentOperationConflictError,
@@ -245,6 +246,7 @@ class DefaultVykorAgent implements VykorAgent {
     private model: string,
     private readonly requestConfigurationStore: AgentRequestConfigurationReader,
     private readonly pluginSelection?: PluginSelectionCatalog,
+    private readonly onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"],
   ) {}
 
   get id(): string {
@@ -296,11 +298,13 @@ class DefaultVykorAgent implements VykorAgent {
       metadata: options.metadata,
       goal: options.goal,
       capabilityView,
+      onRunCapabilities: this.onRunCapabilities,
       prepareCapabilities: async signal => {
         let prepared = capabilityView;
         const ids = capabilityView.pluginIds ?? new Set(capabilityView.pluginId ? [capabilityView.pluginId] : []);
         const scoped = (inheritedCandidates ?? candidates).filter(candidate => ids.has(candidate.pluginId));
         if (options.capabilityView) {
+          prepared = constrainRunCapabilityTools(this.runtime.toolRegistry, prepared);
           // A default runtime owns a catalog even when every plugin was revoked.
           // Kernel hosts without a catalog may still supply their own trusted bindings.
           if (this.pluginSelection) {
@@ -661,6 +665,7 @@ class DefaultVykorAgent implements VykorAgent {
 export interface AssembledAgentOptions {
   runtime: RuntimeBundle;
   pluginSelection?: PluginSelectionCatalog;
+  onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
   retainMcpConnectionsForRun?: () => () => void;
@@ -700,6 +705,7 @@ export function createAssembledAgent(
         async (next) => next,
       ),
     options.pluginSelection,
+    options.onRunCapabilities,
   );
 }
 

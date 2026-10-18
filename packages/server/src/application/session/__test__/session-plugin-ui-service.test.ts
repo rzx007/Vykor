@@ -38,7 +38,7 @@ function result(): ToolResult {
     metadata: { ui: { schemaVersion: 2, componentId: "findings", data: { count: 1 } },
       pluginUi: { instanceId: "forged" }, uiAction: { instanceId: "forged" }, pluginUiSubmission: { inputId: "forged" }, custom: "retained" } };
 }
-function harness(automaticOwners?: 1 | 2) {
+function harness(automaticOwners?: 1 | 2, verifySourceBinding?: (binding: RunPluginUiBinding) => Promise<boolean>) {
   const directory = mkdtempSync(join(tmpdir(), "vykor-ui-instance-"));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, "session.db");
@@ -56,15 +56,20 @@ function harness(automaticOwners?: 1 | 2) {
     snapshot: "valid", binding, runtimeAvailable: true };
   const diagnostics: unknown[] = [];
   const makeService = () => new SessionPluginUiService({ store, transaction: work => store.transaction(work), resolveCurrent: async () => current,
-    diagnose: diagnostic => diagnostics.push(diagnostic) });
+    ...(verifySourceBinding ? { verifySourceBinding } : {}), diagnose: diagnostic => diagnostics.push(diagnostic) });
   const service = makeService();
-  service.registerRunView("run", view);
+  const releaseRootView = service.registerRunView("run", view);
   const projection = new SessionTranscriptProjection(store, service);
   const state = projection.beginRun(session.id, input.id, "run", input);
   projection.projectStreamEvent(state, { type: "generation_started", generationId: "gen", attempt: 1 });
   projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { type: "tool_use", id: "call", name: "Inspect", input: {} } });
   projection.projectStreamEvent(state, { type: "complete", stopReason: "tool_use" });
-  return { get store() { return store; }, session, service, projection, state, binding, view, diagnostics,
+  return { get store() { return store; }, session, service, projection, state, binding, view, diagnostics, releaseRootView,
+    registerRunCapabilities: (snapshot: Parameters<SessionPluginCapabilityService["authorizeRun"]>[0]) => {
+      const capabilities = new SessionPluginCapabilityService({ store, resolveInventory: async () => { throw new Error("No discovery during Run capture"); } });
+      capabilities.authorizeRun(snapshot);
+      return service.registerRunView(snapshot.scope.runId, snapshot.capabilityView);
+    },
     setCurrent: (patch: Partial<PluginUiCurrentState>) => { current = { ...current, ...patch }; },
     part: () => store.conversations.listMessageParts(session.id).find(p => p.id === "call")!,
     finish: (output = result()) => store.transaction(() => projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result: output })),
@@ -73,11 +78,168 @@ function harness(automaticOwners?: 1 | 2) {
 }
 
 describe("trusted plugin UI source projection", () => {
+  it("keeps a newer card view when an older registration of the same view releases", () => {
+    const h = harness();
+    const first = h.service.registerRunView("run", h.view);
+    const second = h.service.registerRunView("run", h.view);
+    first();
+    h.finish();
+    expect(h.part().metadata).toHaveProperty("pluginUi");
+    second();
+  });
+
+  it("does not carry an in-flight source check into a new registration of the same view", async () => {
+    let verified!: () => void;
+    const verification = new Promise<boolean>(resolve => { verified = () => resolve(true); });
+    const h = harness(undefined, () => verification);
+    const preflight = h.service.preflightSource({ runId: "run", toolUseId: "call", toolName: "Inspect", result: result() });
+    h.releaseRootView();
+    const release = h.service.registerRunView("run", h.view);
+    verified();
+    await preflight;
+    h.finish();
+    expect(h.part().metadata).not.toHaveProperty("pluginUi");
+    release();
+  });
+
+  function childRun(h: ReturnType<typeof harness>, explicit = false) {
+    const child = h.store.sessions.create({ id: "worker", parentId: h.session.id, cwd: h.session.cwd,
+      model: "test", metadata: { childId: "worker-handle" } });
+    const input = h.store.conversationTransactions.admitPrompt({ sessionId: child.id, content: "inspect child" });
+    h.store.runs.createRun({ id: "child-run", sessionId: child.id, inputId: input.id,
+      metadata: { parentRunId: "run" } });
+    h.store.runs.updateRun("child-run", { status: "running" });
+    const { view } = fixture(explicit ? pluginId : [pluginId]);
+    const snapshot = { scope: { agentId: child.id, sessionId: child.id, inputId: input.id, runId: "child-run",
+      traceId: "child-trace", cwd: child.cwd, signal: new AbortController().signal },
+      identity: { childId: "worker-handle", parentSessionId: h.session.id, parentRunId: "run" },
+      capabilityView: view,
+      pluginCandidates: [{ pluginId, displayName: pluginId, description: "", version: "1.0.0", behaviorDigest: "a".repeat(64) }] };
+    const state = h.projection.beginRun(child.id, input.id, "child-run", input);
+    h.projection.projectStreamEvent(state, { type: "generation_started", generationId: "child-gen", attempt: 1 });
+    h.projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { type: "tool_use", id: "child-call", name: "Inspect", input: {} } });
+    h.projection.projectStreamEvent(state, { type: "complete", stopReason: "tool_use" });
+    return { child, input, snapshot,
+      part: () => h.store.conversations.listMessageParts(child.id).find(p => p.id === "child-call")!,
+      finish: () => h.store.transaction(() => h.projection.projectStreamEvent(state,
+        { type: "tool_use_end", toolUseId: "child-call", result: result() })) };
+  }
+
+  it.each([false, true])("captures the actual worker view and keeps durable UI provenance after release (explicit=%s)", async explicit => {
+    const h = harness(explicit ? undefined : 2);
+    const child = childRun(h, explicit);
+    const release = h.registerRunCapabilities(child.snapshot);
+    child.finish();
+    const instance = (await import("@vykor/protocol")).readPluginUiInstance(child.part().metadata);
+    expect(instance).toMatchObject({ sessionId: child.child.id, sourceRunId: "child-run", pluginId,
+      pluginVersion: "1.0.0", pluginDigest: "a".repeat(64) });
+    expect(h.store.runs.getRun("child-run")?.metadata).toMatchObject({ parentRunId: "run",
+      pluginSelection: { status: "resolved", scopeVersion: 2, pluginIds: [pluginId],
+        candidates: [{ pluginId, version: "1.0.0", behaviorDigest: "a".repeat(64) }] } });
+    release();
+    const service = h.reopen();
+    expect((await service.get(child.child.id, instance!.instanceId)).availability.canRender).toBe(true);
+    const { actionTools: _actionTools, ...documentBinding } = h.binding;
+    h.setCurrent({ binding: undefined, documentBinding, runtimeAvailable: false });
+    expect((await service.get(child.child.id, instance!.instanceId)).availability)
+      .toEqual({ code: "runtime-unavailable", canRender: true, canInvoke: false });
+    const source = await service.prepareConversationSource(child.child.id, instance!.instanceId, "submit", 1);
+    expect(source.instance.sourceToolName).toBe("Inspect");
+    await expect(service.get(h.session.id, instance!.instanceId)).rejects.toMatchObject({ code: "plugin_ui_not_found" });
+  });
+
+  it.each(["session", "input", "cwd", "child", "parent-session", "parent-run", "owner", "version", "digest"])(
+    "rejects a worker capability capture with mismatched %s", field => {
+      const h = harness(2), child = childRun(h);
+      const snapshot = child.snapshot;
+      if (field === "session") snapshot.scope.sessionId = h.session.id;
+      if (field === "input") snapshot.scope.inputId = "foreign-input";
+      if (field === "cwd") snapshot.scope.cwd = join(h.session.cwd, "outside");
+      if (field === "child") snapshot.identity.childId = "foreign-child";
+      if (field === "parent-session") snapshot.identity.parentSessionId = "foreign-session";
+      if (field === "parent-run") snapshot.identity.parentRunId = "foreign-run";
+      if (field === "owner") snapshot.pluginCandidates[0]!.pluginId = "other.plugin";
+      if (field === "version") snapshot.pluginCandidates[0]!.version = "2.0.0";
+      if (field === "digest") snapshot.pluginCandidates[0]!.behaviorDigest = "d".repeat(64);
+      expect(() => h.registerRunCapabilities(snapshot)).toThrow("Run plugin capability identity mismatch");
+      child.finish();
+      expect(child.part().metadata).not.toHaveProperty("pluginUi");
+      expect(h.store.runs.getRun("child-run")?.metadata).not.toHaveProperty("pluginSelection");
+    });
+
+  it("does not let a root callback replace its saved authorized owner set", () => {
+    const h = harness(1), child = childRun(h);
+    const snapshot = { ...child.snapshot, identity: undefined, scope: { ...child.snapshot.scope,
+      agentId: h.session.id, sessionId: h.session.id, inputId: h.state.inputId, runId: "run" },
+      capabilityView: fixture([pluginId, "other.plugin"]).view };
+    snapshot.pluginCandidates.push({ ...snapshot.pluginCandidates[0]!, pluginId: "other.plugin" });
+    expect(() => h.registerRunCapabilities(snapshot)).toThrow();
+    expect(h.store.runs.getRun("run")?.metadata.pluginSelection).toMatchObject({ pluginIds: [pluginId] });
+  });
+
+  it("does not broaden an already captured worker Run on repeated registration", () => {
+    const h = harness(2), child = childRun(h);
+    const release = h.registerRunCapabilities(child.snapshot);
+    const widened = { ...child.snapshot, capabilityView: fixture([pluginId, "other.plugin"]).view,
+      pluginCandidates: [...child.snapshot.pluginCandidates, { ...child.snapshot.pluginCandidates[0]!, pluginId: "other.plugin" }] };
+    expect(() => h.registerRunCapabilities(widened)).toThrow("Run plugin capability identity mismatch");
+    expect(h.store.runs.getRun("child-run")?.metadata.pluginSelection).toMatchObject({ pluginIds: [pluginId] });
+    release();
+  });
+
+  it.each(["valid", "missing-task", "foreign-child", "task-run", "task-kind", "task-source", "plugin", "forged-parent"])(
+    "checks durable ownership for a parentless baseline host followup: %s", reason => {
+      const h = harness(2), child = childRun(h);
+      const input = h.store.conversationTransactions.admitPrompt({ sessionId: child.child.id, content: "host followup" });
+      h.store.runs.createRun({ id: "host-followup", sessionId: child.child.id, inputId: input.id,
+        ...(reason === "forged-parent" ? { metadata: { parentRunId: "run" } } : {}) });
+      h.store.runs.updateRun("host-followup", { status: "running" });
+      if (reason !== "missing-task") {
+        const other = reason === "foreign-child" ? h.store.sessions.create({ parentId: h.session.id, cwd: h.session.cwd, model: "test" }) : undefined;
+        h.store.runs.createSessionTask({ id: "worker-handle", sessionId: h.session.id, childSessionId: other?.id ?? child.child.id,
+          ...(other ? {} : { runId: reason === "task-run" ? "child-run" : "host-followup" }),
+          type: reason === "task-kind" ? "shell" : "agent", description: "worker", cwd: child.child.cwd, status: "running",
+          metadata: { origin: "child_session", executionBackend: "child_agent", runtimeExecutionId: reason === "task-source" ? "foreign" : "worker-handle" } });
+      }
+      const snapshot = { ...child.snapshot, scope: { ...child.snapshot.scope, inputId: input.id, runId: "host-followup" },
+        identity: { childId: "worker-handle" }, capabilityView: reason === "plugin" ? child.snapshot.capabilityView : fixture([]).view,
+        pluginCandidates: reason === "plugin" ? child.snapshot.pluginCandidates : [] };
+      if (reason === "valid") {
+        const release = h.registerRunCapabilities(snapshot);
+        expect(h.store.runs.getRun("host-followup")?.metadata).toMatchObject({ pluginId: null,
+          pluginSelection: { source: "none", pluginIds: [], candidates: [] } });
+        release();
+      } else {
+        expect(() => h.registerRunCapabilities(snapshot)).toThrow("Run plugin capability identity mismatch");
+        expect(h.store.runs.getRun("host-followup")?.metadata).not.toHaveProperty("pluginSelection");
+      }
+    });
+
+  it.each([false, true])("requires fresh source verification for a worker UI result (verified=%s)", async verified => {
+    const h = harness(2, async () => verified), child = childRun(h);
+    const release = h.registerRunCapabilities(child.snapshot);
+    await h.service.preflightSource({ runId: "child-run", toolUseId: "child-call", toolName: "Inspect", result: result() });
+    child.finish();
+    expect(Boolean(child.part().metadata.pluginUi)).toBe(verified);
+    release();
+  });
+
+  it.each([false, true])("rejects durable worker UI after its saved source changes (explicit=%s)", async explicit => {
+    const h = harness(explicit ? undefined : 2), child = childRun(h, explicit);
+    const release = h.registerRunCapabilities(child.snapshot);
+    child.finish(); release();
+    const instance = (await import("@vykor/protocol")).readPluginUiInstance(child.part().metadata)!;
+    const selection = h.store.runs.getRun("child-run")!.metadata.pluginSelection as Record<string, unknown>;
+    h.store.runs.updateRun("child-run", { metadata: { pluginSelection: { ...selection,
+      candidates: [{ ...child.snapshot.pluginCandidates[0], version: "2.0.0" }] } } });
+    await expect(h.reopen().get(child.child.id, instance.instanceId)).rejects.toMatchObject({ code: "plugin_ui_not_found" });
+  });
+
   it.each([1, 2] as const)("creates automatic UI with %s owners and submits after releasing the view and reopening SQLite", async owners => {
     const h = harness(owners); h.finish();
     const instance = h.part().metadata.pluginUi as { instanceId: string } | undefined;
     expect(instance).toMatchObject({ pluginId, pluginVersion: "1.0.0", pluginDigest: "a".repeat(64) });
-    h.service.releaseRunView("run");
+    h.releaseRootView();
     const source = h.reopen();
     expect((await source.get("s1", instance!.instanceId)).availability.canRender).toBe(true);
     const events = { checkpoint: () => 0, publishSince: () => {} };
@@ -117,7 +279,7 @@ describe("trusted plugin UI source projection", () => {
       : { ...selection, candidates: selection.candidates.map((candidate, index) => index === 0
         ? { ...candidate, [field === "version" ? "version" : "behaviorDigest"]: "changed" } : candidate) };
     h.store.runs.updateRun("run", { metadata: { pluginSelection: changed } });
-    h.service.releaseRunView("run");
+    h.releaseRootView();
     await expect(h.reopen().get("s1", instance!.instanceId)).rejects.toMatchObject({ code: "plugin_ui_not_found" });
   });
 
@@ -158,7 +320,7 @@ describe("trusted plugin UI source projection", () => {
     expect(h.part().metadata).not.toHaveProperty("pluginUiSubmission");
     expect(h.part().output).toEqual(savedOriginal);
     expect(original).toEqual(savedOriginal);
-    h.service.releaseRunView("run");
+    h.releaseRootView();
     const response = await h.reopen().get("s1", instance.instanceId);
     expect(response).toMatchObject({ instance, availability: { code: "available", canRender: true, canInvoke: true },
       actions: [{ id: "fix", label: "Fix", toolName: "Fix", inputSchema: { type: "object" }, completion: "resolve" }] });
@@ -186,7 +348,7 @@ describe("trusted plugin UI source projection", () => {
 
   it.each(["uncaptured", "foreign-source", "ui-action", "uncommitted", "superseded"])("rejects %s provenance", (reason) => {
     const h = harness();
-    if (reason === "uncaptured") h.service.releaseRunView("run");
+    if (reason === "uncaptured") h.releaseRootView();
     if (reason === "foreign-source") h.service.registerRunView("run", { ...h.view, tools: new Map([
       ["Inspect", { ...h.view.tools.get("Inspect")!, source: { kind: "mcp", id: pluginId } }],
     ]) });
@@ -228,7 +390,7 @@ describe("trusted plugin UI source projection", () => {
     const h = harness(); h.finish(); const source = h.part();
     const resolved = { ...(source.metadata.pluginUi as object), status, revision: 4, data: { count: 0 } };
     h.store.conversations.upsertMessagePart({ ...source, metadata: { pluginUi: resolved } });
-    h.service.releaseRunView("run");
+    h.releaseRootView();
     h.finish({ ...result(), content: [{ type: "text", text: "duplicate delivery" }] });
     expect(h.part().metadata.pluginUi).toEqual(resolved);
     expect(h.part().output).toEqual(source.output);

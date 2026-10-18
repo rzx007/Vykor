@@ -60,10 +60,12 @@ export interface AgentJobAuthorization {
   readonly pluginIds?: ReadonlySet<string>;
   /** Host-captured binding evidence, forwarded without interpreting it in jobs. */
   readonly tools?: ReadonlyMap<string, unknown>;
+  readonly delegatableTools?: ReadonlyMap<string, unknown>;
   readonly skills?: ReadonlyMap<string, unknown>;
   readonly agents?: ReadonlyMap<string, unknown>;
   readonly mcpServers?: ReadonlyMap<string, unknown>;
   readonly pluginUi?: ReadonlyMap<string, unknown>;
+  readonly delegatablePluginUi?: ReadonlyMap<string, unknown>;
 }
 
 /** Host-owned job controller exposed to an Agent. */
