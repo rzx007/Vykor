@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import type { OrbState } from "thinking-orbs"
 import { LoadingState } from "@renderer/components/ui/loading-state"
 import { formatElapsedTime, taskTimingLabel, type TaskTiming } from "./task-timing"
 
@@ -35,10 +36,13 @@ export function ElapsedTime({
 export function TaskDuration({
   timing,
   label,
+  state,
   placement = "footer",
 }: {
   timing?: TaskTiming
   label?: string
+  /** 调用方知道当前具体在做什么时传入，否则按运行状态取默认动画 */
+  state?: OrbState
   placement?: "header" | "footer"
 }): React.JSX.Element | null {
   if (!timing) return null
@@ -57,7 +61,11 @@ export function TaskDuration({
     >
       {active ? (
         <>
-          <LoadingState label={status} variant="Dots" showElapsed={false} />
+          <LoadingState
+            label={status}
+            state={state ?? (timing.status === "pending" ? "breathing" : "working")}
+            showElapsed={false}
+          />
           <ElapsedTime key={`${timing.startedAt}:${active}`} startedAt={timing.startedAt} running />
         </>
       ) : (

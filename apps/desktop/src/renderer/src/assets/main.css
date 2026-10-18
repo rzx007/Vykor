@@ -1033,16 +1033,6 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .b
   min-height: 100%;
 }
 
-@keyframes pixel-on {
-  0%,
-  100% {
-    opacity: 0.15;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 @keyframes pop-in {
   from {
     opacity: 0;

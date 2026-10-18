@@ -1,3 +1,5 @@
+import type { OrbState } from "thinking-orbs"
+
 import type {
   DesktopAttachmentSessionPart,
   DesktopSessionMessage,
@@ -246,33 +248,55 @@ function toolExecutionState(
   return undefined
 }
 
-const toolPhaseLabels: Record<string, string> = {
-  preparing: "正在准备工具",
-  waiting_permission: "等待你的确认",
-  queued: "等待前一个工具",
-  running: "",
-  completed: "工具已返回，等待本轮结果",
-  failed: "工具失败，等待本轮结果",
-  unknown: "结果不确定",
+/** 一次活动的中文说明，加上与它对应的 orb 动画。 */
+export interface ActivityStep {
+  label: string
+  orb: OrbState
+}
+
+/**
+ * 每个工具阶段的中文说明和 orb 动画放在同一张表里：改文案时不会漏掉动画，
+ * 两者也不可能各说各话。等待类阶段用 breathing，真正在执行的用 solving。
+ */
+const toolPhases: Record<string, ActivityStep> = {
+  preparing: { label: "正在准备工具", orb: "solving" },
+  waiting_permission: { label: "等待你的确认", orb: "breathing" },
+  queued: { label: "等待前一个工具", orb: "breathing" },
+  running: { label: "", orb: "solving" },
+  completed: { label: "工具已返回，等待本轮结果", orb: "working" },
+  failed: { label: "工具失败，等待本轮结果", orb: "working" },
+  unknown: { label: "结果不确定", orb: "working" },
+}
+
+export function toolActivity(
+  call: DesktopSessionPart,
+  result?: DesktopSessionPart
+): ActivityStep | undefined {
+  if (toolExecutionState(call, result) === "unknown")
+    return import.meta.env.DEV ? { label: "结果不确定", orb: "working" } : undefined
+  const status = toolCallStatus(call, result)
+  if (status === "failed")
+    return import.meta.env.DEV ? { label: "失败", orb: "working" } : undefined
+  if (status === "interrupted")
+    return import.meta.env.DEV ? { label: "已中断", orb: "working" } : undefined
+  if (status === "completed") return undefined
+  if (isToolGenerationPresentation(call)) return { label: "准备中", orb: "composing" }
+  const phase = recordValue(call.metadata.toolProgress)?.phase
+  if (!import.meta.env.DEV && (phase === "failed" || phase === "unknown")) return undefined
+  // phase 是外部字符串，直接索引对象字面量会命中 Object.prototype（如 "constructor"）。
+  const known =
+    typeof phase === "string" && Object.hasOwn(toolPhases, phase) ? toolPhases[phase] : undefined
+  return (
+    known ??
+    (status === "pending" ? { label: "等待执行", orb: "breathing" } : { label: "", orb: "solving" })
+  )
 }
 
 export function toolActivityLabel(
   call: DesktopSessionPart,
   result?: DesktopSessionPart
 ): string | undefined {
-  if (toolExecutionState(call, result) === "unknown")
-    return import.meta.env.DEV ? "结果不确定" : undefined
-  const status = toolCallStatus(call, result)
-  if (status === "failed") return import.meta.env.DEV ? "失败" : undefined
-  if (status === "interrupted") return import.meta.env.DEV ? "已中断" : undefined
-  if (status === "completed") return undefined
-  if (isToolGenerationPresentation(call)) return "准备中"
-  const phase = recordValue(call.metadata.toolProgress)?.phase
-  if (!import.meta.env.DEV && (phase === "failed" || phase === "unknown")) return undefined
-  return (
-    (typeof phase === "string" ? toolPhaseLabels[phase] : undefined) ??
-    (status === "pending" ? "等待执行" : "")
-  )
+  return toolActivity(call, result)?.label
 }
 
 export function isToolActivityActive(
@@ -287,9 +311,9 @@ export function isToolActivityActive(
   )
 }
 
-export function toolGroupActivityLabel(
+export function toolGroupActivity(
   tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
-): string | undefined {
+): ActivityStep | undefined {
   const active = tools.filter((tool) =>
     ["running", "pending"].includes(toolCallStatus(tool.call, tool.result))
   )
@@ -306,16 +330,22 @@ export function toolGroupActivityLabel(
     const tool = active.find(
       (tool) => recordValue(tool.call.metadata.toolProgress)?.phase === phase
     )
-    if (tool) return toolActivityLabel(tool.call, tool.result)
+    if (tool) return toolActivity(tool.call, tool.result)
   }
-  return active[0] ? toolActivityLabel(active[0].call, active[0].result) : undefined
+  return active[0] ? toolActivity(active[0].call, active[0].result) : undefined
 }
 
-export function conversationActivityLabel(
+export function toolGroupActivityLabel(
+  tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
+): string | undefined {
+  return toolGroupActivity(tools)?.label
+}
+
+export function conversationActivity(
   runs: DesktopSessionRun[],
   messages: DesktopSessionMessage[],
   parts: DesktopSessionPart[]
-): string | undefined {
+): ActivityStep | undefined {
   const activeRuns = runs.filter((run) => run.status === "pending" || run.status === "running")
   if (!activeRuns.length) return undefined
   const activeIds = new Set(activeRuns.map((run) => run.id))
@@ -329,9 +359,10 @@ export function conversationActivityLabel(
   const tools = currentParts
     .filter((part) => part.type === "tool")
     .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
-  const toolLabel = toolGroupActivityLabel(tools)
-  if (toolLabel === "准备中") return "正在处理"
-  if (toolLabel !== undefined) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
+  const tool = toolGroupActivity(tools)
+  // 工具正在执行时标签为空串：只转圈，不重复一句没有信息量的文字。
+  if (tool?.label === "准备中") return { label: "正在处理", orb: tool.orb }
+  if (tool) return { label: tool.label === "运行中" ? "正在处理工具" : tool.label, orb: tool.orb }
   const generating = activeRuns
     .flatMap((run) =>
       Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : []
@@ -340,8 +371,8 @@ export function conversationActivityLabel(
       (entry) =>
         recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0
     )
-  if (generating.length) return "正在处理"
-  return "等待模型响应"
+  if (generating.length) return { label: "正在处理", orb: "composing" }
+  return { label: "等待模型响应", orb: "working" }
 }
 
 export function isTurnComplete(parts: DesktopSessionPart[]): boolean {

@@ -444,6 +444,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
+      thinking-orbs:
+        specifier: ^0.3.2
+        version: 0.3.2(react@19.2.7)
       tinykeys:
         specifier: ^4.0.0
         version: 4.0.0
@@ -1023,12 +1026,12 @@ importers:
       '@vykor/output-styles':
         specifier: workspace:*
         version: link:../output-styles
-      '@vykor/personalization':
-        specifier: workspace:*
-        version: link:../personalization
       '@vykor/permissions':
         specifier: workspace:*
         version: link:../permissions
+      '@vykor/personalization':
+        specifier: workspace:*
+        version: link:../personalization
       '@vykor/plugin-sources':
         specifier: workspace:*
         version: link:../plugin-sources
@@ -8462,6 +8465,11 @@ packages:
   temp@0.9.4:
     resolution: {integrity: sha512-yYrrsWnrXMcdsnu/7YMYAofM1ktpL5By7vZhf15CrXijWWrEYZks5AXBudalfSWJLlnen/QUJUB5aoB0kqZUGA==}
     engines: {node: '>=6.0.0'}
+
+  thinking-orbs@0.3.2:
+    resolution: {integrity: sha512-QZFeBaPEzqhjiZoXy961EvDgaXk2WgXacF3Rbz+Sj5IfzDzBvTC86vdREUHniBffYibJFKSwbfllxLUdI/Xv6g==}
+    peerDependencies:
+      react: '>=18.0.0'
 
   throttle-debounce@5.0.2:
     resolution: {integrity: sha512-B71/4oyj61iNH0KeCamLuE2rmKuTO5byTOSVwECM5FA7TiAiAW+UqTKZ9ERueC4qvgSttUhdmq1mXC3kJqGX7A==}
@@ -17344,6 +17352,10 @@ snapshots:
     dependencies:
       mkdirp: 0.5.6
       rimraf: 2.6.3
+
+  thinking-orbs@0.3.2(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   throttle-debounce@5.0.2: {}
 

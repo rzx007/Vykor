@@ -111,7 +111,9 @@ it.each(["pending", "running"] as const)(
   "shows preparation for %s even when the Run already has user text",
   (phase) => {
     const html = render(phase === "pending" ? view : running)
-    expect(html.match(/data-task-duration[\s\S]*?<\/div>/)?.[0]).toContain("正在准备 Quality")
+    const block = html.match(/data-task-duration[\s\S]*?<\/div>/)?.[0]
+    expect(block).toContain("正在准备 Quality")
+    expect(block).toContain('data-orb-state="connecting"')
     expect(html.match(/data-task-duration/g)).toHaveLength(1)
   }
 )

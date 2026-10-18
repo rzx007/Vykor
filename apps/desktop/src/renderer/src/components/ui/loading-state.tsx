@@ -1,69 +1,51 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { ThinkingOrb, type OrbSize, type OrbState } from "thinking-orbs"
 
 import { cn } from "@renderer/lib/utils"
 
 /* ─────────────────────────────────────────────────────────
- * LOADING STATE — pixel-grid loader for long-running work
+ * LOADING STATE — thought-orb indicator for long-running work
  *
- * Variants:
- *   Drive  — square cells, chevron wavefront driving right;
- *            the 650ms cycle is shorter than the sweep, so
- *            two fronts are always in flight
- *   Dots   — same wavefront, circular cells
- *   Orbit  — a comet lapping the grid perimeter
- *   Surfer — the Drive loader paired with a meme video below
+ * The orb (thinking-orbs) draws nine hand-tuned animations on a
+ * plain 2D canvas. It picks its light/dark ink from the
+ * `dark`/`light` class the appearance provider puts on <html>,
+ * renders a static frame when the OS asks to reduce motion, and
+ * pauses instances that scroll offscreen.
  *
- * Paired with a shimmering label and a live elapsed timer in
- * mono tabular figures. Reduced motion freezes the grid to its
- * dim state; the timer still ticks.
+ * The app's own 减少动态效果 preference is a separate switch, and a
+ * canvas is invisible to the CSS rule in main.css that freezes
+ * everything else — `useAppReducedMotion` pauses the orb itself,
+ * which is what the old CSS loader got for free.
+ *
+ * `state` names what the run is doing; `size` 20 fits inline text
+ * and 64 fits an avatar. Each size is tuned on its own, not scaled.
+ *
+ * Paired with a shimmering label and a live elapsed timer in mono
+ * tabular figures. The orb carries no text, so the label stays the
+ * single thing a screen reader announces for this region.
  * ───────────────────────────────────────────────────────── */
 
-const chevron = Array.from({ length: 9 }, (_, i) => {
-  const r = Math.floor(i / 3),
-    c = i % 3
-  return (c + Math.abs(r - 1)) * 90
-})
+/** 跟随 <html data-reduced-motion>，与 terminal-tool 读这个属性的方式一致。 */
+function useAppReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(readReducedMotion)
+  useEffect(() => {
+    const sync = () => setReduced(readReducedMotion())
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-reduced-motion"],
+    })
+    return () => observer.disconnect()
+  }, [])
+  return reduced
+}
 
-const ORBIT_ORDER = [0, 1, 2, 5, 8, 7, 6, 3]
-const orbit = Array.from({ length: 9 }, (_, i) => {
-  const k = ORBIT_ORDER.indexOf(i)
-  return k === -1 ? null : k * 110
-})
-
-const PATTERNS = {
-  Drive: { delays: chevron, dur: 650, round: false },
-  Dots: { delays: chevron, dur: 650, round: true },
-  Orbit: { delays: orbit, dur: 950, round: false },
-} as const
-
-export type LoadingStateVariant = keyof typeof PATTERNS | "Surfer"
-
-function LoaderGrid({
-  delays,
-  dur,
-  round,
-}: {
-  delays: readonly (number | null)[]
-  dur: number
-  round: boolean
-}) {
-  return (
-    <span aria-hidden className="grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px]">
-      {delays.map((delay, index) => (
-        <span
-          key={index}
-          className={cn("size-[4px] bg-foreground", round ? "rounded-full" : "rounded-[1px]")}
-          style={{
-            opacity: delay === null ? 0.07 : 0.15,
-            animation:
-              delay === null ? "none" : `pixel-on ${dur}ms ease-in-out ${delay}ms infinite`,
-          }}
-        />
-      ))}
-    </span>
-  )
+function readReducedMotion(): boolean {
+  if (typeof document === "undefined") return false
+  return document.documentElement.dataset.reducedMotion === "true"
 }
 
 function useElapsed(enabled: boolean) {
@@ -79,80 +61,48 @@ function useElapsed(enabled: boolean) {
 }
 
 export function LoadingState({
-  label,
-  variant = "Drive",
-  /** the meme feed for the Surfer variant; hosted on Vercel Blob so it plays in
-   *  production (the local /public/subway-surfers.mp4 stays gitignored) */
-  videoSrc = "https://95dnc2a95qgwt9ff.public.blob.vercel-storage.com/subway-surfers.mp4",
+  label = "Churning",
+  state = "working",
+  size = 20,
+  speed,
+  paused = false,
   showElapsed = true,
   className,
 }: {
   label?: string
-  variant?: LoadingStateVariant
-  videoSrc?: string
+  state?: OrbState
+  /** 20 for inline text, 64 for an avatar slot; both are tuned designs */
+  size?: OrbSize
+  /** multiplier on the state's baked animation speed */
+  speed?: number
+  /** freeze the orb on its current frame */
+  paused?: boolean
   showElapsed?: boolean
   className?: string
 }) {
   const elapsed = useElapsed(showElapsed)
-  const surfer = variant === "Surfer"
-  const resolvedLabel = label ?? (surfer ? "Subway surfing" : "Churning")
-  const [videoOk, setVideoOk] = useState(true)
-  const pattern = surfer ? PATTERNS.Drive : PATTERNS[variant]
-
-  const labelEl = (
-    <span className="shimmer text-[13px] font-medium text-muted-foreground">{resolvedLabel}</span>
-  )
-  const elapsedEl = showElapsed ? (
-    <span className="font-mono text-[12px] text-muted-foreground/70 tabular-nums">{elapsed}</span>
-  ) : null
-
-  if (surfer) {
-    return (
-      <div role="status" className={cn("flex w-fit flex-col items-start", className)}>
-        <div className="flex items-center gap-2.5">
-          <LoaderGrid {...pattern} />
-          {labelEl}
-          {elapsedEl}
-        </div>
-
-        {/* the context card follows the status text it is illustrating */}
-        <div
-          className="mt-2 w-56 overflow-hidden rounded-[10px] shadow-lg"
-          style={{
-            animation: "pop-in 200ms cubic-bezier(0.16,1,0.3,1) both",
-            transformOrigin: "top left",
-          }}
-        >
-          <div className="relative aspect-video w-full bg-popover">
-            {videoOk ? (
-              <video
-                src={videoSrc}
-                autoPlay
-                muted
-                loop
-                playsInline
-                onError={() => setVideoOk(false)}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-1.5">
-                <LoaderGrid {...PATTERNS.Drive} />
-                <span className="px-3 text-center font-mono text-[10px] text-muted-foreground">
-                  Video unavailable
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const appReducedMotion = useAppReducedMotion()
+  const frozen = paused || appReducedMotion
 
   return (
     <div role="status" className={cn("flex w-fit items-center gap-2.5", className)}>
-      <LoaderGrid {...pattern} />
-      {labelEl}
-      {elapsedEl}
+      {/* aria-hidden: the shimmer label below already carries the text */}
+      <ThinkingOrb
+        state={state}
+        size={size}
+        speed={speed}
+        paused={frozen}
+        aria-hidden
+        data-orb-state={state}
+        data-orb-paused={String(frozen)}
+        className="shrink-0"
+      />
+      <span className="shimmer text-[13px] font-medium text-muted-foreground">{label}</span>
+      {showElapsed ? (
+        <span className="font-mono text-[12px] text-muted-foreground/70 tabular-nums">
+          {elapsed}
+        </span>
+      ) : null}
     </div>
   )
 }

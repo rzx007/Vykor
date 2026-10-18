@@ -1,4 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState } from "react"
+import type { OrbState } from "thinking-orbs"
+
 import {
   readSessionModelRetryState,
   readSessionModelUsage,
@@ -20,7 +22,7 @@ import { selectRunNotices } from "./run-notices"
 import { pluginPreparationLabel } from "./plugin-preparation-label"
 import { TaskDuration } from "../message/task-duration"
 import { taskTiming } from "../message/task-timing"
-import { conversationActivityLabel } from "../message/message-render-model"
+import { conversationActivity, type ActivityStep } from "../message/message-render-model"
 import {
   isToolGenerationPresentation,
   withToolGenerationPresentation,
@@ -80,7 +82,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   onOpenAgents,
 }: ConversationTranscriptProps): React.JSX.Element {
   const modelCache = useRef<TranscriptModelCache | null>(null)
-  const { entries, streamingPart, activityLabel, activeRun, activeRunGrouped } = useTranscriptModel(
+  const { entries, streamingPart, activity, activeRun, activeRunGrouped } = useTranscriptModel(
     modelCache,
     { messages, parts, runs, running, showReasoning }
   )
@@ -107,7 +109,12 @@ export const ConversationTranscript = memo(function ConversationTranscript({
     return undefined
   }, [runs])
   const preparationLabel = pluginPreparationLabel(activeRun, { messages, parts, inputs, tasks })
-  const runningLabel = modelRetry ? "等待重试" : (preparationLabel ?? activityLabel ?? "进行中")
+  // 这行文字和 orb 动画来自同一个判断，防止文案和动效各说各话。
+  const runningActivity: ActivityStep = modelRetry
+    ? { label: "等待重试", orb: "breathing" }
+    : preparationLabel !== undefined
+      ? { label: preparationLabel, orb: "connecting" }
+      : (activity ?? { label: "进行中", orb: "working" })
   const turnDataById = useMemo(
     () => buildTurnData(entries, inputs, runs, noticeRuns, running, lastTurn),
     [entries, inputs, runs, noticeRuns, running, lastTurn]
@@ -195,7 +202,8 @@ export const ConversationTranscript = memo(function ConversationTranscript({
             <MessageScrollerItem messageId={row.id}>
               <TaskDuration
                 timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
-                label={runningLabel}
+                label={runningActivity.label}
+                state={runningActivity.orb}
               />
             </MessageScrollerItem>
           )
@@ -233,7 +241,8 @@ export const ConversationTranscript = memo(function ConversationTranscript({
             streamingPart={entry === lastTurn ? streamingPart : undefined}
             userMessageIsAnchor={userMessageIsAnchor}
             canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
-            runningLabel={data.finished ? undefined : runningLabel}
+            runningLabel={data.finished ? undefined : runningActivity.label}
+            runningState={data.finished ? undefined : runningActivity.orb}
             initialPartIds={initialPartIds}
             tasks={tasks}
             onOpenAgents={onOpenAgents}
@@ -337,6 +346,7 @@ type TranscriptTurnProps = Pick<
   userMessageIsAnchor: boolean
   canEditUserMessage: boolean
   runningLabel?: string
+  runningState?: OrbState
   initialPartIds: ReadonlySet<string>
   tasks: DesktopSessionTask[]
 }
@@ -347,6 +357,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
   userMessageIsAnchor,
   canEditUserMessage,
   runningLabel,
+  runningState,
   initialPartIds,
   tasks,
   onOpenAgents,
@@ -444,7 +455,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
                   onOpenTerminal={onOpenTerminal}
                 />
                 {item.key === lastAssistantKey && !folded && !finished ? (
-                  <TaskDuration timing={timing} label={runningLabel} />
+                  <TaskDuration timing={timing} label={runningLabel} state={runningState} />
                 ) : null}
                 {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
                   <AssistantMessageActions
@@ -480,6 +491,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
               <TaskDuration
                 timing={timing}
                 label={runningLabel}
+                state={runningState}
                 placement={finished ? "header" : "footer"}
               />
             </MessageScrollerItem>
@@ -510,7 +522,7 @@ interface TranscriptModelCache {
   entries: ConversationEntry[]
   visiblePartIds: Set<string>
   lastAssistantMessageId?: string
-  activityLabel?: string
+  activity?: ActivityStep
   activeRun?: DesktopSessionRun
   activeRunGrouped: boolean
   streamingPart?: DesktopSessionPart
@@ -527,7 +539,7 @@ function useTranscriptModel(
 ): {
   entries: ConversationEntry[]
   streamingPart?: DesktopSessionPart
-  activityLabel?: string
+  activity?: ActivityStep
   activeRun?: DesktopSessionRun
   activeRunGrouped: boolean
 } {
@@ -561,14 +573,14 @@ function useTranscriptModel(
         entries: previous.entries,
         visiblePartIds: previous.visiblePartIds,
         lastAssistantMessageId: previous.lastAssistantMessageId,
-        activityLabel: previous.activityLabel,
+        activity: previous.activity,
         activeRun: previous.activeRun,
         activeRunGrouped: previous.activeRunGrouped,
         streamingPart,
       }
       return {
         entries: previous.entries,
-        activityLabel: previous.activityLabel,
+        activity: previous.activity,
         activeRun: previous.activeRun,
         activeRunGrouped: previous.activeRunGrouped,
         streamingPart,
@@ -581,7 +593,7 @@ function useTranscriptModel(
     ? withToolGenerationPresentation(input.runs, input.messages, visibleParts)
     : { messages: input.messages, parts: visibleParts }
   const entries = buildConversationEntries(presentation.messages, presentation.parts, input.runs)
-  const activityLabel = conversationActivityLabel(input.runs, input.messages, visibleParts)
+  const activity = conversationActivity(input.runs, input.messages, visibleParts)
   const activeRun =
     input.runs.find((run) => run.status === "running") ??
     input.runs.find((run) => run.status === "pending")
@@ -595,11 +607,11 @@ function useTranscriptModel(
     entries,
     visiblePartIds: new Set(visibleParts.map((part) => part.id)),
     lastAssistantMessageId: findLastAssistantMessageId(entries),
-    activityLabel,
+    activity,
     activeRun,
     activeRunGrouped,
   }
-  return { entries, activityLabel, activeRun, activeRunGrouped }
+  return { entries, activity, activeRun, activeRunGrouped }
 }
 
 function findSingleTextAppend(
