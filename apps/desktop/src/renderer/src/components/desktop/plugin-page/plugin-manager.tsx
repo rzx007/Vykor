@@ -287,12 +287,12 @@ export function PluginManager({
     }
   }
   useEffect(() => {
-    if (refreshRequest === previousRefresh.current || !api || lock.current) return
+    if (refreshRequest === previousRefresh.current || !api || busy || lock.current) return
     previousRefresh.current = refreshRequest
     lock.current = true
     setBusy(true)
     void api
-      .reload({ cwd: projectPath })
+      .snapshot({ cwd: projectPath })
       .then((value) => {
         if (mounted.current) {
           setSnapshot(value)
@@ -306,7 +306,7 @@ export function PluginManager({
         lock.current = false
         if (mounted.current) setBusy(false)
       })
-  }, [api, notify, projectPath, refreshRequest])
+  }, [api, notify, projectPath, refreshRequest, busy])
   async function mutate(plugin: DesktopPluginInfo, uninstall = false): Promise<void> {
     if (!api || lock.current || plugin.scope === "managed") return
     lock.current = true

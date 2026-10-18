@@ -429,7 +429,7 @@ describe("memory routes", () => {
 });
 
 describe("auth routes", () => {
-  it("rejects login while runs are active", async () => {
+  it("allows login while runs are active", async () => {
     const app = createAuthRoutes({
       authService: {
         status: async () => ({ providers: [] }),
@@ -445,10 +445,8 @@ describe("auth routes", () => {
       body: JSON.stringify({ provider: "openai", apiKey: "sk-test" }),
     });
 
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
-      error: "Cannot update authentication while session runs are active",
-    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 });
 

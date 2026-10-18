@@ -4,6 +4,7 @@ import type { CustomProviderSettings } from "@vykor/core";
 import {
   catalogProviderModelIds,
   catalogModelReasoningEfforts,
+  readCatalogProvider,
 } from "../default-services/catalog-provider-mapping.js";
 
 export function validateRequestSelection(input: {
@@ -18,7 +19,9 @@ export function validateRequestSelection(input: {
   if (!model) throw new Error("Model is required");
   const custom = input.customProviders?.find((item) => item.id === input.provider);
   const availableModels = custom
-    ? custom.models.map((item) => item.id)
+    ? custom.source === "models.dev" && readCatalogProvider(input.catalog, custom.id)
+      ? catalogProviderModelIds(input.catalog, custom.id)
+      : custom.models.map((item) => item.id)
     : input.provider
       ? catalogProviderModelIds(input.catalog, input.provider)
       : [];

@@ -387,6 +387,16 @@ describe("DesktopProviderService catalog headers", () => {
     })
   })
 
+  it("requests fresh models for an explicit provider snapshot refresh", async () => {
+    await service.snapshot({ refresh: true })
+    expect(daemon.providers.listModels).toHaveBeenCalledWith({ refresh: true })
+  })
+
+  it("surfaces a failed explicit refresh instead of replacing the models with an empty list", async () => {
+    daemon.providers.listModels.mockRejectedValueOnce(new Error("model refresh failed"))
+    await expect(service.snapshot({ refresh: true })).rejects.toThrow("model refresh failed")
+  })
+
   it("requires explicit default disabling before disconnecting the current credential", async () => {
     daemon.system.getSettings.mockResolvedValue({ provider: "openai" })
     daemon.system.patchSettings.mockResolvedValue({})

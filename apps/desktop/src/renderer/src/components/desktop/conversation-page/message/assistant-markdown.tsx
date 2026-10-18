@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
+import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Streamdown } from "streamdown"
 import { createStreamdownComponents } from "./streamdown-components"
 import { streamdownPlugins } from "./streamdown-plugins"
@@ -23,23 +23,28 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   streaming,
   animateInitialText,
   onOpenFile,
+  fileLinkMode = "open",
 }: {
   text: string
   phase?: "commentary" | "final_answer"
   streaming: boolean
   animateInitialText: boolean
   onOpenFile: (path: string, line?: number) => void
+  fileLinkMode?: "open" | "text"
 }): React.JSX.Element {
   const openFileRef = useRef(onOpenFile)
   useLayoutEffect(() => {
     openFileRef.current = onOpenFile
   }, [onOpenFile])
   // Streamdown 会据此创建代码渲染组件。回调更新不能重建组件、丢掉颜色并重排后台任务。
-  const [components] = useState(() =>
-    createStreamdownComponents({
-      onOpenFile: (path, line) => openFileRef.current(path, line),
-      codeBlockVariant: "conversation",
-    })
+  const components = useMemo(
+    () =>
+      createStreamdownComponents({
+        onOpenFile: (path, line) => openFileRef.current(path, line),
+        codeBlockVariant: "conversation",
+        fileLinkMode,
+      }),
+    [fileLinkMode]
   )
   const [codeActivity] = useState(createCodeFenceActivity)
   const liveCode = useSyncExternalStore(

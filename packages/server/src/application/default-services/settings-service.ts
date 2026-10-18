@@ -15,7 +15,7 @@ import { normalizeSandboxConfig } from "@vykor/sandbox";
 import { importPortableSettings, parsePortableSettings, type PortableSettings } from "../../settings-transfer.js";
 import { validateRuntimeEnvironmentConfig } from "../../runtime/runtime-settings.js";
 import { validateRequestSelection } from "../session/request-selection-validation.js";
-import { catalogProviderModelIds } from "./catalog-provider-mapping.js";
+import { catalogProviderModelIds, readCatalogProvider } from "./catalog-provider-mapping.js";
 import {
   mergeSettingsPatch,
   readCurrentSettings,
@@ -275,6 +275,7 @@ async function resolveProviderModelSelection(input: {
   const customModelIds = customProviderModelIds(
     input.customProviders,
     input.provider,
+    input.catalog,
   );
   if (customModelIds.length > 0) {
     return pickPreferredModel(
@@ -321,6 +322,7 @@ function pickPreferredModel(
 function customProviderModelIds(
   customProviders: unknown,
   providerName: string,
+  catalog: ModelsDevCatalog,
 ): string[] {
   if (!Array.isArray(customProviders)) return [];
   const match = customProviders.find(
@@ -330,6 +332,9 @@ function customProviderModelIds(
       (item as Record<string, unknown>).id === providerName,
   );
   if (!match || typeof match !== "object") return [];
+  if ((match as Record<string, unknown>).source === "models.dev" && readCatalogProvider(catalog, providerName)) {
+    return catalogProviderModelIds(catalog, providerName);
+  }
   const models = (match as Record<string, unknown>).models;
   if (!Array.isArray(models)) return [];
   return models.flatMap((model) => {

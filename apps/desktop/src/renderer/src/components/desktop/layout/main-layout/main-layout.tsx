@@ -41,6 +41,7 @@ import { Sidebar } from "./sidebar"
 import { UtilityPanel, useUtilityPanelController } from "./utility-panel"
 import { ConversationStatus } from "./conversation-status/conversation-status"
 import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
+import { WorkflowProvider } from "@renderer/components/desktop/tools/workflows/workflow-provider"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
 const conversationMinimumWidth = 350
@@ -59,6 +60,14 @@ export function MainLayout(): React.JSX.Element {
   const chooseProject = useDesktopSessionStore((state) => state.chooseProject)
   const sessions = useDesktopSessionStore(selectSessions)
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
+  const workflowRevision = useDesktopSessionStore(
+    (state) => state.sessionView?.workflowRevision ?? 0
+  )
+  const workflowSyncStatus = useDesktopSessionStore((state) =>
+    state.sessionView?.session.id === state.activeSessionId
+      ? state.sessionView.syncStatus
+      : "reconnecting"
+  )
   const selectedProjectId = useDesktopSessionStore((state) => state.selectedProject?.id ?? null)
   const selectedProjectOperationError = useDesktopSessionStore((state) =>
     selectProjectOperationError(state, state.selectedProject?.id ?? null)
@@ -127,6 +136,7 @@ export function MainLayout(): React.JSX.Element {
   const openReview = utilityPanel.openReview
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
+  const openWorkflowPanel = useCallback(() => openUtilityTool("workflows"), [openUtilityTool])
 
   useEffect(
     () => window.desktop.browser.onOpenRequest(() => openUtilityTool("browser")),
@@ -387,6 +397,7 @@ export function MainLayout(): React.JSX.Element {
           }}
         >
           <UtilityPanel
+            onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
             key={utilityPanelInstanceKey}
             scopeId={utilityPanelScopeId}
             open={panelOpen}
@@ -442,89 +453,96 @@ export function MainLayout(): React.JSX.Element {
   )
 
   return (
-    <ImageViewerProvider onOpenImage={utilityPanel.openImage}>
-      <PluginUiProvider onOpenSidebar={utilityPanel.restore}>
-        <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
-          <TitleBar
-            sidebarOpen={sidebarOpen}
-            panelOpen={panelOpen}
-            isMaximized={isMaximized}
-            hasActiveSession={Boolean(activeSessionId)}
-            canGoBack={router.history.canGoBack()}
-            canGoForward={historyIndex < router.history.length - 1}
-            canOpenPreviousSession={Boolean(previousSession)}
-            canOpenNextSession={Boolean(nextSession)}
-            zoomLevel={zoomLevel}
-            onGoBack={() => router.history.back()}
-            onGoForward={() => router.history.forward()}
-            onNewConversation={startNewConversationRoute}
-            onChooseProject={() => {
-              showCurrentConversation()
-              void chooseProject()
-            }}
-            onCloseConversation={startNewConversationRoute}
-            onOpenPreviousSession={openPreviousSession}
-            onOpenNextSession={openNextSession}
-            onToggleSidebar={toggleSidebar}
-            onTogglePanel={togglePanel}
-            onOpenUtilityTool={openUtilityTool}
-            onZoomIn={zoomIn}
-            onZoomOut={zoomOut}
-            onResetZoom={resetZoom}
-            onMinimize={minimize}
-            onToggleMaximize={toggleMaximize}
-            onClose={close}
-          />
-          {selectedProjectOperationError ? (
-            <div className="absolute inset-x-4 top-12 z-40 mx-auto w-full max-w-190">
-              <ScopedOperationError error={selectedProjectOperationError} />
-            </div>
-          ) : null}
-          <MainLayoutContext.Provider
-            value={{
-              conversationWorkspace,
-              openFile: openWorkspaceFile,
-              startNewConversation: startNewConversationRoute,
-              openSideChat: (sourceId, text) => {
-                if (sourceId !== activeSessionId) return
-                appendSideChatQuote(sourceId, text)
-                openUtilityTool("side-chat")
-              },
-            }}
-          >
-            {renderPage(
-              <Sidebar
-                open={sidebarOpen}
-                onOpenSearch={() => setSearchOpen(true)}
-                onOpenNotes={() => void navigate({ to: "/notes" })}
-                onOpenScheduled={() => void navigate({ to: "/scheduled" })}
-                onOpenPlugins={() => void navigate({ to: "/plugins" })}
-                onOpenConversation={openConversationRoute}
-                onOpenSettings={() =>
-                  void navigate({
-                    to: "/settings/$section",
-                    params: { section: defaultSettingsSection },
-                  })
-                }
-              />
-            )}
-          </MainLayoutContext.Provider>
-          <DesktopSearchDialog
-            open={searchOpen}
-            onOpenChange={setSearchOpen}
-            onOpenConversation={openConversationRoute}
-            onNewConversation={startNewConversationRoute}
-            onChooseProject={() => {
-              showCurrentConversation()
-              void chooseProject()
-            }}
-            onSearchFiles={() => openUtilityTool("files")}
-            onOpenSettings={(section) =>
-              void navigate({ to: "/settings/$section", params: { section } })
-            }
-          />
-        </main>
-      </PluginUiProvider>
-    </ImageViewerProvider>
+    <WorkflowProvider
+      sessionId={activeSessionId}
+      revision={workflowRevision}
+      syncStatus={workflowSyncStatus}
+      onOpen={openWorkflowPanel}
+    >
+      <ImageViewerProvider onOpenImage={utilityPanel.openImage}>
+        <PluginUiProvider onOpenSidebar={utilityPanel.restore}>
+          <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
+            <TitleBar
+              sidebarOpen={sidebarOpen}
+              panelOpen={panelOpen}
+              isMaximized={isMaximized}
+              hasActiveSession={Boolean(activeSessionId)}
+              canGoBack={router.history.canGoBack()}
+              canGoForward={historyIndex < router.history.length - 1}
+              canOpenPreviousSession={Boolean(previousSession)}
+              canOpenNextSession={Boolean(nextSession)}
+              zoomLevel={zoomLevel}
+              onGoBack={() => router.history.back()}
+              onGoForward={() => router.history.forward()}
+              onNewConversation={startNewConversationRoute}
+              onChooseProject={() => {
+                showCurrentConversation()
+                void chooseProject()
+              }}
+              onCloseConversation={startNewConversationRoute}
+              onOpenPreviousSession={openPreviousSession}
+              onOpenNextSession={openNextSession}
+              onToggleSidebar={toggleSidebar}
+              onTogglePanel={togglePanel}
+              onOpenUtilityTool={openUtilityTool}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              onResetZoom={resetZoom}
+              onMinimize={minimize}
+              onToggleMaximize={toggleMaximize}
+              onClose={close}
+            />
+            {selectedProjectOperationError ? (
+              <div className="absolute inset-x-4 top-12 z-40 mx-auto w-full max-w-190">
+                <ScopedOperationError error={selectedProjectOperationError} />
+              </div>
+            ) : null}
+            <MainLayoutContext.Provider
+              value={{
+                conversationWorkspace,
+                openFile: openWorkspaceFile,
+                startNewConversation: startNewConversationRoute,
+                openSideChat: (sourceId, text) => {
+                  if (sourceId !== activeSessionId) return
+                  appendSideChatQuote(sourceId, text)
+                  openUtilityTool("side-chat")
+                },
+              }}
+            >
+              {renderPage(
+                <Sidebar
+                  open={sidebarOpen}
+                  onOpenSearch={() => setSearchOpen(true)}
+                  onOpenNotes={() => void navigate({ to: "/notes" })}
+                  onOpenScheduled={() => void navigate({ to: "/scheduled" })}
+                  onOpenPlugins={() => void navigate({ to: "/plugins" })}
+                  onOpenConversation={openConversationRoute}
+                  onOpenSettings={() =>
+                    void navigate({
+                      to: "/settings/$section",
+                      params: { section: defaultSettingsSection },
+                    })
+                  }
+                />
+              )}
+            </MainLayoutContext.Provider>
+            <DesktopSearchDialog
+              open={searchOpen}
+              onOpenChange={setSearchOpen}
+              onOpenConversation={openConversationRoute}
+              onNewConversation={startNewConversationRoute}
+              onChooseProject={() => {
+                showCurrentConversation()
+                void chooseProject()
+              }}
+              onSearchFiles={() => openUtilityTool("files")}
+              onOpenSettings={(section) =>
+                void navigate({ to: "/settings/$section", params: { section } })
+              }
+            />
+          </main>
+        </PluginUiProvider>
+      </ImageViewerProvider>
+    </WorkflowProvider>
   )
 }

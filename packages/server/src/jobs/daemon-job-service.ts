@@ -246,7 +246,7 @@ export class DaemonJobService {
       ...limited,
       cursor: snapshot.updatedAt,
       snapshot,
-      details: workflowDetails(source.value),
+      details: workflowDetails(source.value, source.repository.loadEvents(source.value.runId)),
     };
   }
 

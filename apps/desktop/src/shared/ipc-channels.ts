@@ -206,6 +206,8 @@ import type {
 } from "./window-material-types"
 
 export const IpcChannels = {
+  workflowRead: "workflow:read",
+  workflowCancel: "workflow:cancel",
   pluginUiCapabilities: "plugin-ui:capabilities",
   pluginUiMount: "plugin-ui:mount",
   pluginUiGetState: "plugin-ui:get-state",
@@ -767,6 +769,14 @@ export interface IpcInvokeMap
     args: [input: GetDesktopSessionGoalInput]
     result: SessionGoal | null
   }
+  [IpcChannels.workflowRead]: {
+    args: [input: import("./workflow-types").DesktopWorkflowInput]
+    result: import("./workflow-types").DesktopWorkflowSnapshot
+  }
+  [IpcChannels.workflowCancel]: {
+    args: [input: import("./workflow-types").DesktopWorkflowCancelInput]
+    result: void
+  }
   [IpcChannels.sessionMessagePartGet]: {
     args: [input: import("./session-types").GetDesktopMessagePartInput]
     result: import("./session-types").DesktopSessionPart
@@ -1055,7 +1065,7 @@ export interface IpcInvokeMap
   }
   [IpcChannels.noteRemove]: { args: [id: string]; result: void }
   [IpcChannels.noteOpenDirectory]: { args: []; result: void }
-  [IpcChannels.providerSnapshot]: { args: []; result: DesktopProviderSnapshot }
+  [IpcChannels.providerSnapshot]: { args: [input?: { refresh?: boolean }]; result: DesktopProviderSnapshot }
   [IpcChannels.providerConnect]: {
     args: [input: ConnectDesktopProviderInput]
     result: DesktopProviderSnapshot

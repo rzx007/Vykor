@@ -1,5 +1,6 @@
 import {
   Bot,
+  GitBranch,
   FileText,
   FileImage,
   Folder,
@@ -14,11 +15,11 @@ import type { FileViewerTab } from "@renderer/components/desktop/tools/file-view
 import type { ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
 
 export type UtilityTool =
-  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "plugin-ui" | "image"
+  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "workflows" | "plugin-ui" | "image"
 
 export type UtilityToolRequest = Extract<
   UtilityTool,
-  "terminal" | "files" | "browser" | "agents" | "side-chat"
+  "terminal" | "files" | "browser" | "agents" | "workflows" | "side-chat"
 >
 
 export type UtilityTab = {
@@ -43,11 +44,13 @@ export const utilityToolMeta: Record<
   files: { icon: Folder, label: "文件", shortcut: "Ctrl+P" },
   "side-chat": { icon: MessageCirclePlus, label: "侧边聊天", shortcut: "Ctrl+Alt+S" },
   agents: { icon: Bot, label: "子智能体" },
+  workflows: { icon: GitBranch, label: "编排" },
   "plugin-ui": { icon: PanelsTopLeft, label: "插件交互" },
   image: { icon: FileImage, label: "图片" },
 }
 
 export const utilityToolOrder: UtilityTool[] = [
+  "workflows",
   "agents",
   "review",
   "terminal",

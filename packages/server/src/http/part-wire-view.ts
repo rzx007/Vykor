@@ -5,6 +5,17 @@ const previewChars = 512;
 const byteLength = (value: unknown): number => Buffer.byteLength(JSON.stringify(value) ?? "");
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
+// Keep this wire-view module usable by client-side rendering contract tests.
+// Only recover bounded identity here; the canonical result remains unchanged.
+function workflowNotificationRunId(text: string): string | undefined {
+  const match = text.match(/<workflow-notification>\s*<payload>([\s\S]*?)<\/payload>\s*<\/workflow-notification>/);
+  if (!match) return undefined;
+  try {
+    const payload = record(JSON.parse(match[1]!.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")));
+    return typeof payload.runId === "string" && ["completed", "failed"].includes(String(payload.status)) && Array.isArray(payload.tasks) ? payload.runId : undefined;
+  } catch { return undefined; }
+}
+
 /** Only HTTP summary consumers opt in. Canonical parts and durable events remain full. */
 export function summarizePart(part: SessionMessagePartRecord): SessionMessagePartRecord {
   if (part.type !== "tool" && part.type !== "tool_result") return part;
@@ -12,6 +23,20 @@ export function summarizePart(part: SessionMessagePartRecord): SessionMessagePar
   const outputView = part.output === undefined ? "unavailable" : byteLength(part.output) > fullBodyByteLimit ? "preview" : "full";
   let input = part.input;
   let output = part.output;
+  let metadata = part.metadata;
+  if (part.toolName === "Workflow" || (!part.toolName && part.type === "tool_result")) {
+    const result = record(part.output);
+    const blocks = Array.isArray(result.content) ? result.content : [];
+    const text = typeof part.output === "string" ? part.output : blocks.map(block => record(block).text).filter((value): value is string => typeof value === "string").join("\n");
+    let runId = workflowNotificationRunId(text);
+    if (!runId && part.toolName === "Workflow") {
+      try {
+        const job = record(JSON.parse(text));
+        if (job.kind === "job" && job.jobKind === "workflow" && job.action === "created" && typeof job.jobId === "string" && job.jobId.startsWith("workflow:")) runId = job.jobId.slice(9);
+      } catch { /* Other domain actions keep their normal result. */ }
+    }
+    if (runId && runId.length <= 256) metadata = { ...metadata, workflowRunId: runId };
+  }
   const references = new Set<string>();
   if (inputView === "preview") {
     input = {};
@@ -34,6 +59,12 @@ export function summarizePart(part: SessionMessagePartRecord): SessionMessagePar
       if (typeof value === "string" && value.length <= 256) context[key] = value;
     }
     const ratio = part.input?.ratio;
+    if (part.toolName === "Workflow") {
+      for (const key of ["action", "runId"]) {
+        const value = part.input?.[key];
+        if (typeof value === "string" && value.length <= 256) input[key] = value;
+      }
+    }
     if (part.toolName === "ImageGeneration" && typeof ratio === "string" && ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"].includes(ratio)) input.ratio = ratio;
   }
   if (outputView === "preview") {
@@ -74,7 +105,7 @@ export function summarizePart(part: SessionMessagePartRecord): SessionMessagePar
     if (typeof uri === "string" && /^shell-output:\/\/[a-zA-Z0-9-]{1,64}$/.test(uri)) references.add(uri);
     output = preview;
   }
-  return { ...part, input, output, bodyView: { input: inputView, output: outputView, ...(references.size ? { outputReferences: [...references].slice(0, 8) } : {}) } };
+  return { ...part, input, output, metadata, bodyView: { input: inputView, output: outputView, ...(references.size ? { outputReferences: [...references].slice(0, 8) } : {}) } };
 }
 
 export function summarizePartEvent(event: SessionEventRecord): SessionEventRecord {

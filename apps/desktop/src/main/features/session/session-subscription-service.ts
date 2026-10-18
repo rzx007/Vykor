@@ -73,6 +73,18 @@ const maxPendingDeltaBytes = 1024 * 1024
 const maxRememberedAcknowledgements = 128
 
 export class SessionSubscriptionService {
+  private readonly workflowRevisions = new Map<string, number>()
+
+  private toView(
+    state: VykorClientState,
+    sessionId: string,
+    source: SyncEventUpdate["source"]
+  ): DesktopSessionView {
+    return {
+      ...toDesktopSessionView(state, sessionId, source),
+      workflowRevision: this.workflowRevisions.get(sessionId) ?? 0,
+    }
+  }
   private readonly subscriptions = new SessionSubscriptionRegistry()
   private readonly pendingPrimaryOpens = new Map<
     number,
@@ -303,7 +315,7 @@ export class SessionSubscriptionService {
     if (!state || !state.buckets[live.sessionId]?.session) return
     let view: DesktopSessionView
     try {
-      view = toDesktopSessionView(state, live.sessionId, source)
+      view = this.toView(state, live.sessionId, source)
     } catch (error) {
       console.error(`[session] failed to build recovery snapshot for ${live.sessionId}`, error)
       return
@@ -344,6 +356,7 @@ export class SessionSubscriptionService {
   clearAll(): void {
     const ownerIds = [...this.primaryOwners]
     this.primaryOwners.clear()
+    this.workflowRevisions.clear()
     this.subscriptions.clearAll()
     for (const ownerId of ownerIds)
       for (const listener of this.invalidationListeners) listener(ownerId)
@@ -436,7 +449,7 @@ export class SessionSubscriptionService {
       )
     }, 0)
 
-    const initialView = toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    const initialView = this.toView(snapshot.state, sessionId, snapshot.source)
     this.observeAgentTasks(webContents.id, subscription, snapshot.state)
     for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
     return initialView
@@ -495,7 +508,7 @@ export class SessionSubscriptionService {
         subscriptionId
       )
     }, 0)
-    const initialView = toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    const initialView = this.toView(snapshot.state, sessionId, snapshot.source)
     if (this.getOwnerSessionToken(webContents.id, sessionId))
       for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
     return initialView
@@ -615,6 +628,12 @@ export class SessionSubscriptionService {
           Boolean(subscription) &&
           this.subscriptions.isCurrent(webContents.id, slot, subscription!),
         onUpdate: (update) => {
+          if (update.event?.sessionId === sessionId && update.event.type.startsWith("workflow.")) {
+            this.workflowRevisions.set(
+              sessionId,
+              Math.max(this.workflowRevisions.get(sessionId) ?? 0, update.event.seq)
+            )
+          }
           if (!update.state.buckets[sessionId]?.session) {
             if (slot === primarySubscriptionSlot)
               for (const listener of this.invalidationListeners) listener(webContents.id)
@@ -644,10 +663,7 @@ export class SessionSubscriptionService {
               this.getOwnerSessionToken(webContents.id, sessionId)
             )
               for (const listener of this.snapshotListeners)
-                listener(
-                  webContents.id,
-                  toDesktopSessionView(update.state, sessionId, update.source)
-                )
+                listener(webContents.id, this.toView(update.state, sessionId, update.source))
           }
           if (update.source === "reconnecting") {
             requireSnapshot()
@@ -663,7 +679,7 @@ export class SessionSubscriptionService {
             this.getOwnerSessionToken(webContents.id, sessionId)
           )
             for (const listener of this.snapshotListeners)
-              listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
+              listener(webContents.id, this.toView(last.state, sessionId, "reconnecting"))
           live.latestState = last.state
           requireSnapshot()
           coalescer.flushNow(last.state, "reconnecting")

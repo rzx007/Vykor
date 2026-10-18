@@ -54,6 +54,24 @@ const session = {
 } as any;
 
 describe("createDaemonAgentLoader", () => {
+  it("prepares model metadata once for each newly created agent", async () => {
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
+    let limit = 8_000;
+    const prepareModelMetadata = vi.fn(async () => {
+      const captured = limit;
+      return { resolveModelOutputLimit: async () => captured };
+    });
+    const loader = createDaemonAgentLoader({ settings: { model: "chat" } as any, createAgent, prepareModelMetadata })!;
+    await loader({ session, history: [], parts: [] });
+    limit = 16_000;
+    await loader({ session: { ...session, id: "next" }, history: [], parts: [] });
+    const first = createAgent.mock.calls[0]![0].options;
+    const second = createAgent.mock.calls[1]![0].options;
+    await expect(first.resolveModelOutputLimit!({ model: "chat" })).resolves.toBe(8_000);
+    await expect(second.resolveModelOutputLimit!({ model: "chat" })).resolves.toBe(16_000);
+    expect(prepareModelMetadata).toHaveBeenCalledTimes(2);
+  });
+
   it("executes a task in its worktree while loading settings and memory from the owning project", async () => {
     const root = resolve("/owning-project");
     const cwd = resolve("/tasks/worktree");

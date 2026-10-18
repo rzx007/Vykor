@@ -280,6 +280,8 @@ export interface DesktopCompactSessionResult {
 export type DesktopSessionSyncStatus = "connected" | "reconnecting"
 
 export interface DesktopSessionView {
+  /** Durable workflow events invalidate the separately read authoritative Job snapshot. */
+  workflowRevision?: number
   cursor: number
   syncStatus: DesktopSessionSyncStatus
   session: DesktopSessionRecord

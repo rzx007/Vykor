@@ -6,8 +6,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createDefaultNodeAgent,
+  createRunCapabilityView,
+  type AgentCapabilitySnapshot,
   type VykorAgent,
 } from "@vykor/agent-runtime";
+import { ToolRegistry } from "@vykor/core";
 import type {
   AgentBackgroundShellHost,
   AgentEvent,
@@ -32,6 +35,16 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
   let history: Message[] = [];
   let sequence = 0;
   let state: VykorAgent["state"] = "idle";
+  const toolRegistry = new ToolRegistry();
+  const capabilities: AgentCapabilitySnapshot = {
+    terminal: { status: "disabled" },
+    backgroundShell: { status: "disabled" },
+    jobs: { status: "disabled" },
+    memory: { status: "disabled" },
+    childEnvironment: { status: "disabled" },
+    workflowRepository: { status: "disabled" },
+    schedules: { status: "disabled" },
+  };
 
   const emit = async (
     input: AgentEventInput,
@@ -55,6 +68,11 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
       get: () => undefined,
       getBySessionId: () => undefined,
       list: () => [],
+    },
+    createRunCapabilityView: (pluginIds) => createRunCapabilityView({ toolRegistry }, pluginIds),
+    getPluginCandidates: () => [],
+    validatePluginScope: async (candidates) => {
+      if (candidates.length > 0) throw new Error("Echo test agent does not provide plugins");
     },
     subscribe: () => () => {},
     submitMessage(content, options = {}) {
@@ -120,6 +138,9 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
     async runMessage(content, options) {
       return await this.submitMessage(content, options).result;
     },
+    runTool: async () => {
+      throw new Error("Echo test agent does not execute tools");
+    },
     getHistory: () => [...history],
     loadHistory: (messages) => {
       history = [...messages];
@@ -128,6 +149,9 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
       history = [];
     },
     setModel: () => {},
+    updateConfiguration: async () => {
+      throw new Error("Echo test agent does not support configuration updates");
+    },
     setCompactContextProvider: () => {},
     compact: async () => ({
       history,
@@ -135,8 +159,26 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
       afterMessageCount: history.length,
     }),
     remember: async () => ({ skipped: true, writtenIds: [], titles: [] }),
+    runChildForCompletedRun: async () => {
+      throw new Error("Echo test agent does not spawn children");
+    },
     getUsage: () => ({ inputTokens: 0, outputTokens: 0 }),
-    inspect: () => ({ model: context.session.model, tools: [], hooks: [], mcpServers: [] }),
+    getCapabilities: () => capabilities,
+    inspect: () => ({
+      model: context.session.model,
+      tools: [],
+      hooks: [],
+      mcpServers: [],
+      childBudget: {
+        maxDepth: 0,
+        maxActiveChildren: 0,
+        maxTotalChildren: 0,
+        activeChildren: 0,
+        totalChildren: 0,
+      },
+      capabilities,
+    }),
+    listModelVisibleTools: () => [],
     close: async () => {
       state = "closed";
     },
@@ -326,7 +368,7 @@ describe("DaemonApplication", () => {
         attachments: [{ assetId: attachment.id, intent: "tool_resource" }],
       });
       const rootAdmission = await application.interactions.admitPrompt(rootSession.id, {
-        content: "delegate the attachment read",
+        items: [{ type: "text", text: "delegate the attachment read" }],
       });
       await expect(
         application.runControl.awaitRun(rootSession.id, rootAdmission.run!.id),
@@ -367,7 +409,7 @@ describe("DaemonApplication", () => {
         model: "child-attachment-e2e-model",
       });
       const otherAdmission = await application.interactions.admitPrompt(otherSession.id, {
-        content: "try the other session attachment",
+        items: [{ type: "text", text: "try the other session attachment" }],
       });
       await expect(
         application.runControl.awaitRun(otherSession.id, otherAdmission.run!.id),
@@ -418,7 +460,7 @@ describe("DaemonApplication", () => {
         model: "test-model",
       });
       const admission = await application.interactions.admitPrompt(session.id, {
-        content: "preserve this checkpoint detail",
+        items: [{ type: "text", text: "preserve this checkpoint detail" }],
       });
       await expect(
         application.runControl.awaitRun(session.id, admission.run!.id),
@@ -466,11 +508,11 @@ describe("DaemonApplication", () => {
       createAgent: async (context) => {
         const backgroundShell = context.options.capabilityOverrides?.backgroundShell;
         const terminal = context.options.capabilityOverrides?.terminal;
-        if (backgroundShell && backgroundShell !== false) {
+        if (backgroundShell) {
           backgroundShellHost = backgroundShell.value;
           backgroundShellJobs = backgroundShell.jobs;
         }
-        if (terminal && terminal !== false) terminalJobs = terminal.jobs;
+        if (terminal) terminalJobs = terminal.jobs;
         return await createEchoAgent(context);
       },
       log: () => {},
@@ -482,7 +524,9 @@ describe("DaemonApplication", () => {
         cwd: process.cwd(),
         model: "test-model",
       });
-      const admission = await application.interactions.admitPrompt(session.id, { content: "initialize" });
+      const admission = await application.interactions.admitPrompt(session.id, {
+        items: [{ type: "text", text: "initialize" }],
+      });
       await application.runControl.awaitRun(session.id, admission.run!.id);
 
       expect(backgroundShellJobs).not.toBe(terminalJobs);
@@ -536,7 +580,11 @@ describe("DaemonApplication", () => {
     const dir = mkdtempSync(join(tmpdir(), "vykor-attachment-boundary-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const recognize = vi.spyOn(LightOcrEngine.prototype, "recognize").mockResolvedValue({
-      lines: [{ text: "invoice 123", confidence: 1, box: [] }],
+      lines: [{
+        text: "invoice 123",
+        confidence: 1,
+        box: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+      }],
       timing: { totalMs: 1 },
       modelProfile: "small",
     });
@@ -552,7 +600,9 @@ describe("DaemonApplication", () => {
     try {
       await application.ready();
       const session = application.commands.createSession({ cwd: dir, model: "test-model" });
-      const admission = await application.interactions.admitPrompt(session.id, { content: "hello" });
+      const admission = await application.interactions.admitPrompt(session.id, {
+        items: [{ type: "text", text: "hello" }],
+      });
       await application.runControl.awaitRun(session.id, admission.run!.id);
       expect(imageToText).toBeDefined();
       const png = Buffer.from(
@@ -604,7 +654,7 @@ describe("DaemonApplication", () => {
         model: "test-model",
       });
       const admission = await application.interactions.admitPrompt(session.id, {
-        content: "hello",
+        items: [{ type: "text", text: "hello" }],
       });
 
       expect(admission.run).toBeDefined();

@@ -26,6 +26,7 @@ import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
 import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
 import { AgentsTool } from "@renderer/components/desktop/tools/agents/agents-tool"
+import { WorkflowTool } from "@renderer/components/desktop/tools/workflows/workflow-tool"
 import type {
   TerminalPanelCommand,
   TerminalSessionTabInfo,
@@ -70,8 +71,13 @@ type UtilityPanelProps = {
   toolOpenRequest: { id: number; tool: UtilityToolRequest; taskId?: string } | null
   imageOpenRequest?: ImageOpenRequest | null
   onOpenFile: (path: string, line?: number) => void
-  onOpenReview: (path?: string) => void
+  onOpenReview: (
+    path?: string,
+    scope?: import("@shared/git-types").DesktopGitDiffScope,
+    rootPath?: string
+  ) => void
   onOpenTerminal: (terminalId: string) => void
+  onOpenAgents?: (taskId: string) => void
 }
 
 const filesTabId = "files-tab"
@@ -91,7 +97,9 @@ export function UtilityPanel({
   onOpenFile,
   onOpenReview,
   onOpenTerminal,
+  onOpenAgents,
 }: UtilityPanelProps): React.JSX.Element {
+  const workflowAgentTasks = useDesktopSessionStore((state) => state.sessionView?.tasks)
   const pluginUi = usePluginUiDisplays()
   const pluginSidebar = pluginUi?.displays.find((display) => display.surface === "session-sidebar")
   const pluginTab: UtilityTab | null = pluginSidebar
@@ -833,6 +841,15 @@ export function UtilityPanel({
               canOpenReview={activeWorkspaceIsGit === true}
               onOpenReview={onOpenReview}
               onOpenTerminal={onOpenTerminal}
+            />
+          ) : null}
+          {activeTab?.tool === "workflows" && open ? (
+            <WorkflowTool
+              active
+              agentTasks={workflowAgentTasks}
+              onOpenFile={onOpenFile}
+              onOpenAgents={onOpenAgents ?? (() => addTab("agents"))}
+              onOpenReview={(path, rootPath) => onOpenReview(path, "uncommitted", rootPath)}
             />
           ) : null}
         </div>

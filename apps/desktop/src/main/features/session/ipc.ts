@@ -36,6 +36,22 @@ export const sessionIpcContribution: IpcContribution = {
   register() {
     return [
       {
+        channel: IpcChannels.workflowRead,
+        handler: (event, input) =>
+          desktopSessionService.readWorkflows(
+            event.sender,
+            input as import("../../../shared/workflow-types").DesktopWorkflowInput
+          ),
+      },
+      {
+        channel: IpcChannels.workflowCancel,
+        handler: (event, input) =>
+          desktopSessionService.cancelWorkflow(
+            event.sender,
+            input as import("../../../shared/workflow-types").DesktopWorkflowCancelInput
+          ),
+      },
+      {
         channel: IpcChannels.activityOpen,
         handler: (event) => desktopSessionService.openActivity(event.sender),
       },
@@ -88,11 +104,17 @@ export const sessionIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.sessionMessagePartGet,
-        handler: (_event, input) => desktopSessionService.getMessagePart(input as import("../../../shared/session-types").GetDesktopMessagePartInput),
+        handler: (_event, input) =>
+          desktopSessionService.getMessagePart(
+            input as import("../../../shared/session-types").GetDesktopMessagePartInput
+          ),
       },
       {
         channel: IpcChannels.sessionToolImagePreview,
-        handler: (_event, input) => desktopSessionService.readToolImagePreview(input as import("../../../shared/session-types").GetDesktopMessagePartInput),
+        handler: (_event, input) =>
+          desktopSessionService.readToolImagePreview(
+            input as import("../../../shared/session-types").GetDesktopMessagePartInput
+          ),
       },
       {
         channel: IpcChannels.sessionGoalCreate,
@@ -173,20 +195,20 @@ export const sessionIpcContribution: IpcContribution = {
           ),
       },
       {
-          channel: IpcChannels.sessionUpdateAck,
-          handler: (event, ack) =>
-            desktopSessionService.acknowledgeSessionUpdate(
-              event.sender.id,
-              ack as DesktopSessionUpdateAck
-            ),
+        channel: IpcChannels.sessionUpdateAck,
+        handler: (event, ack) =>
+          desktopSessionService.acknowledgeSessionUpdate(
+            event.sender.id,
+            ack as DesktopSessionUpdateAck
+          ),
       },
       {
-          channel: IpcChannels.sessionUpdateResync,
-          handler: (event, request) =>
-            desktopSessionService.requestSessionUpdateResync(
-              event.sender.id,
-              request as DesktopSessionResyncRequest
-            ),
+        channel: IpcChannels.sessionUpdateResync,
+        handler: (event, request) =>
+          desktopSessionService.requestSessionUpdateResync(
+            event.sender.id,
+            request as DesktopSessionResyncRequest
+          ),
       },
       {
         channel: IpcChannels.sessionFork,
@@ -259,7 +281,9 @@ export const sessionIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.sessionUpdatePluginSelection,
         handler: (_event, input) =>
-          desktopSessionService.updateSessionPluginSelection(input as UpdateDesktopSessionPluginSelectionInput),
+          desktopSessionService.updateSessionPluginSelection(
+            input as UpdateDesktopSessionPluginSelectionInput
+          ),
       },
       {
         channel: IpcChannels.sessionGetContextUsage,

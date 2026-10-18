@@ -97,10 +97,21 @@ function withSpecialProviders(catalog: ModelsDevCatalog): ModelsDevCatalog {
 
 export class ModelCatalogService {
   private loaded: ModelsDevCatalog | undefined;
+  private loading: Promise<ModelsDevCatalog> | undefined;
 
-  async load(): Promise<ModelsDevCatalog> {
-    if (this.loaded) return this.loaded;
+  async load(options: { refresh?: boolean } = {}): Promise<ModelsDevCatalog> {
+    if (this.loading) return this.loading;
+    if (this.loaded && !options.refresh) return this.loaded;
+    const pending = this.loadFresh();
+    this.loading = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.loading === pending) this.loading = undefined;
+    }
+  }
 
+  private async loadFresh(): Promise<ModelsDevCatalog> {
     const configuredPath = configuredCatalogPath();
     if (configuredPath) {
       const configured = await readJsonFile(configuredPath);
@@ -110,7 +121,7 @@ export class ModelCatalogService {
       }
     }
 
-    const cached = await readJsonFile(modelsCachePath());
+    const cached = this.loaded ?? await readJsonFile(modelsCachePath());
     if (process.env.VYKOR_DISABLE_MODELS_FETCH) {
       this.loaded = withSpecialProviders(BUNDLED_FALLBACK_CATALOG);
       return this.loaded;
@@ -144,6 +155,16 @@ export class ModelCatalogService {
   }
 }
 
+const catalogServices = new Map<string, ModelCatalogService>();
+
 export function createModelCatalogService(): ModelCatalogService {
-  return new ModelCatalogService();
+  const key = JSON.stringify([
+    getConfigDir(), configuredCatalogPath(), modelsUrl(), !!process.env.VYKOR_DISABLE_MODELS_FETCH,
+  ]);
+  let service = catalogServices.get(key);
+  if (!service) {
+    service = new ModelCatalogService();
+    catalogServices.set(key, service);
+  }
+  return service;
 }

@@ -70,6 +70,12 @@ import {
 import { isChannelSessionMetadata } from "../../../shared/channel-types"
 import { workspaceService } from "../workspace/workspace-service"
 import { readToolImagePreview } from "./read-tool-image-preview"
+import { readDesktopWorkflows } from "./read-workflows"
+import type {
+  DesktopWorkflowInput,
+  DesktopWorkflowCancelInput,
+  DesktopWorkflowSnapshot,
+} from "../../../shared/workflow-types"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { browserAgentService } from "../browser/browser-agent-service"
@@ -85,6 +91,39 @@ import {
 } from "./session-operations"
 
 export class DesktopSessionService {
+  async readWorkflows(
+    owner: WebContents,
+    input: DesktopWorkflowInput
+  ): Promise<DesktopWorkflowSnapshot> {
+    const sessionId = requireString(input?.sessionId, "会话 ID")
+    const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
+    if (!token || this.subscriptions.getOwnerSessionId(owner.id) !== sessionId)
+      throw new Error("请先打开所属会话。")
+    const client = await this.getClient()
+    if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
+      throw new Error("会话已切换。")
+    if (input.jobId && !input.jobId.startsWith("workflow:")) throw new Error("无效的编排 ID。")
+    const snapshot = await readDesktopWorkflows(client, sessionId, input.jobId)
+    if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
+      throw new Error("会话已切换。")
+    return snapshot
+  }
+
+  async cancelWorkflow(owner: WebContents, input: DesktopWorkflowCancelInput): Promise<void> {
+    const sessionId = requireString(input?.sessionId, "会话 ID")
+    const jobId = requireString(input?.jobId, "编排 ID")
+    const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
+    if (
+      !jobId.startsWith("workflow:") ||
+      !token ||
+      this.subscriptions.getOwnerSessionId(owner.id) !== sessionId
+    )
+      throw new Error("只能停止当前会话所属的编排。")
+    const client = await this.getClient()
+    if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
+      throw new Error("会话已切换。")
+    await client.jobs.cancel(jobId, { sessionId, reason: "用户在编排面板中停止了执行" })
+  }
   readonly connection = new DaemonConnectionService({
     browserHost: browserAgentService,
   })
@@ -149,7 +188,8 @@ export class DesktopSessionService {
       model: settings["model"],
       provider: settings["provider"],
     })
-    const defaultModel = settings.modelDisabled === true ? null : runtimeSnapshot.defaultModel ?? null
+    const defaultModel =
+      settings.modelDisabled === true ? null : (runtimeSnapshot.defaultModel ?? null)
     const defaultProvider = runtimeSnapshot.defaultProvider
     const defaultPermissionMode = readSettingsPermissionMode(settings)
 
@@ -227,15 +267,24 @@ export class DesktopSessionService {
     return await this.operations.getGoal(client, input)
   }
 
-  async getMessagePart(input: import("../../../shared/session-types").GetDesktopMessagePartInput): Promise<import("../../../shared/session-types").DesktopSessionPart> {
+  async getMessagePart(
+    input: import("../../../shared/session-types").GetDesktopMessagePartInput
+  ): Promise<import("../../../shared/session-types").DesktopSessionPart> {
     const client = await this.getClient()
     for (const value of [input.sessionId, input.messageId, input.partId]) {
-      if (typeof value !== "string" || !value.trim()) throw new Error("会话、消息和内容 ID 不能为空。")
+      if (typeof value !== "string" || !value.trim())
+        throw new Error("会话、消息和内容 ID 不能为空。")
     }
-    return await client.sessions.getMessagePart(input.sessionId, input.messageId, input.partId) as import("../../../shared/session-types").DesktopSessionPart
+    return (await client.sessions.getMessagePart(
+      input.sessionId,
+      input.messageId,
+      input.partId
+    )) as import("../../../shared/session-types").DesktopSessionPart
   }
 
-  async readToolImagePreview(input: import("../../../shared/session-types").GetDesktopMessagePartInput): Promise<import("../../../shared/attachment-types").DesktopAttachmentPreview> {
+  async readToolImagePreview(
+    input: import("../../../shared/session-types").GetDesktopMessagePartInput
+  ): Promise<import("../../../shared/attachment-types").DesktopAttachmentPreview> {
     const part = await this.getMessagePart(input)
     const url = this.connection.getDaemonStatus().url
     if (!url || !["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname))
@@ -402,10 +451,14 @@ export class DesktopSessionService {
     const model = requireString(input.model, "模型")
     const client = await this.getClient()
     const provider = await resolveProviderForModel(client, model, input.provider)
-    if (input.effort !== undefined && typeof input.effort !== "string") throw new Error("推理强度必须是文本。")
+    if (input.effort !== undefined && typeof input.effort !== "string")
+      throw new Error("推理强度必须是文本。")
     if (input.effort) {
-      const known = (await client.providers.listModels()).flatMap(item => item.models).find(item => item.id === model && (!provider || item.providerName === provider))
-      if (!known?.reasoningEfforts?.includes(input.effort)) throw new Error("所选模型不支持这一推理强度。")
+      const known = (await client.providers.listModels())
+        .flatMap((item) => item.models)
+        .find((item) => item.id === model && (!provider || item.providerName === provider))
+      if (!known?.reasoningEfforts?.includes(input.effort))
+        throw new Error("所选模型不支持这一推理强度。")
     }
     await client.system.patchSettings({
       model,
@@ -451,7 +504,9 @@ export class DesktopSessionService {
     return await this.operations.updateSessionEffort(client, input)
   }
 
-  async updateSessionPluginSelection(input: UpdateDesktopSessionPluginSelectionInput): Promise<DesktopSessionRecord> {
+  async updateSessionPluginSelection(
+    input: UpdateDesktopSessionPluginSelectionInput
+  ): Promise<DesktopSessionRecord> {
     const client = await this.getClient()
     return await this.operations.updateSessionPluginSelection(client, input)
   }
@@ -482,7 +537,9 @@ export class DesktopSessionService {
     const client = await this.getClient()
     const session = toDesktopSessionRecord(await client.sessions.archive(sessionId))
     const { gitSettingsService } = await import("../settings/git-settings-service")
-    await gitSettingsService.autoCleanup().catch(() => console.warn("[git] 自动清理未完成，可在 Git 设置中重新检查。"))
+    await gitSettingsService
+      .autoCleanup()
+      .catch(() => console.warn("[git] 自动清理未完成，可在 Git 设置中重新检查。"))
     return session
   }
 
@@ -523,18 +580,25 @@ export class DesktopSessionService {
     const client = await this.connection.restart(options)
     await this.activitySubscriptions.replaceClient(client)
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDaemonRestarted)
+      if (!window.webContents.isDestroyed())
+        window.webContents.send(IpcEvents.sessionDaemonRestarted)
     }
   }
 
-  async switchDataDirectory(directory: string, options: { stopActive?: boolean; storePath?: string } = {}): Promise<void> {
+  async switchDataDirectory(
+    directory: string,
+    options: { stopActive?: boolean; storePath?: string } = {}
+  ): Promise<void> {
     let invalidated = false
-    const detach = this.connection.onInvalidated(() => { invalidated = true })
+    const detach = this.connection.onInvalidated(() => {
+      invalidated = true
+    })
     try {
       const client = await this.connection.switchDataDirectory(directory, options)
       await this.activitySubscriptions.replaceClient(client)
       for (const window of BrowserWindow.getAllWindows()) {
-        if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDataDirectoryChanged)
+        if (!window.webContents.isDestroyed())
+          window.webContents.send(IpcEvents.sessionDataDirectoryChanged)
       }
     } catch (error) {
       // A failed switch can have restarted the original database during rollback.
@@ -543,12 +607,15 @@ export class DesktopSessionService {
         await (async () => {
           await this.activitySubscriptions.replaceClient(await this.connection.getClient())
           for (const window of BrowserWindow.getAllWindows()) {
-            if (!window.webContents.isDestroyed()) window.webContents.send(IpcEvents.sessionDaemonRestarted)
+            if (!window.webContents.isDestroyed())
+              window.webContents.send(IpcEvents.sessionDaemonRestarted)
           }
         })().catch(() => undefined)
       }
       throw error
-    } finally { detach() }
+    } finally {
+      detach()
+    }
   }
 
   get clientPromise(): Promise<VykorClient> | null {

@@ -445,6 +445,33 @@ describe("PluginManager archive import", () => {
     expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project" })
   })
 
+  it("refreshes the market through a read instead of reloading active runtimes", async () => {
+    await render();
+    api().reload.mockRejectedValue(new Error("Cannot reload plugins while session runs are active"));
+    api().snapshot.mockResolvedValue(populatedSnapshot);
+
+    await render({ refreshRequest: 1 });
+
+    expect(host.textContent).toContain("Alpha");
+    expect(api().snapshot).toHaveBeenCalledTimes(2);
+    expect(api().reload).not.toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("handles a refresh requested while an archive import is still in progress", async () => {
+    let finishImport!: (value: { status: "cancelled" }) => void;
+    api().importArchive.mockImplementationOnce(() => new Promise(resolve => { finishImport = resolve; }));
+    await render();
+    await requestImport();
+    await render({ refreshRequest: 1 });
+    api().snapshot.mockResolvedValue(populatedSnapshot);
+
+    await act(async () => { finishImport({ status: "cancelled" }); });
+
+    expect(host.textContent).toContain("Alpha");
+    expect(api().snapshot).toHaveBeenCalledTimes(2);
+  });
+
   it("starts only one archive import while the picker request is busy", async () => {
     let resolveImport!: (value: { status: "cancelled" }) => void
     api().importArchive.mockImplementation(

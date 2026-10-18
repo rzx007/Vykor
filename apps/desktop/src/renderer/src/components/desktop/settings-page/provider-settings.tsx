@@ -76,8 +76,9 @@ export function ProviderSettings(): React.JSX.Element {
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setSnapshot(await window.desktop.providers.snapshot())
+      setSnapshot(await window.desktop.providers.snapshot({ refresh: true }))
       setDefaults(await window.desktop.providerDefaults.snapshot())
+      await useDesktopSessionStore.getState().refreshBootstrap()
     } catch (loadError) {
       toast.error(errorMessage(loadError))
     } finally {

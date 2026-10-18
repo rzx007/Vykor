@@ -198,6 +198,7 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  workflows: import("./workflow-types").DesktopWorkflowAPI
   terminalSettings: TerminalSettingsAPI
   gitSettings: GitSettingsAPI
   maintenance: MaintenanceSettingsAPI
@@ -336,7 +337,7 @@ export type DesktopAPI = {
     openDirectory: () => Promise<void>
   }
   providers: {
-    snapshot: () => Promise<DesktopProviderSnapshot>
+    snapshot: (input?: { refresh?: boolean }) => Promise<DesktopProviderSnapshot>
     connect: (input: ConnectDesktopProviderInput) => Promise<DesktopProviderSnapshot>
     activate: (input: ActivateDesktopProviderInput) => Promise<DesktopProviderSnapshot>
     disconnect: (input: DisconnectDesktopProviderInput) => Promise<DesktopProviderSnapshot>

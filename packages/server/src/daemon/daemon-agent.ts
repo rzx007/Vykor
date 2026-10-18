@@ -87,6 +87,10 @@ export type DaemonToolsProvider = (
 ) => Promise<ToolDefinition[]> | ToolDefinition[];
 
 export interface DaemonAgentLoaderOptions {
+  prepareModelMetadata?(settings: Settings): Promise<Pick<
+    VykorAgentOptions,
+    "resolveReasoningEfforts" | "resolveModelContextWindow" | "resolveModelOutputLimit"
+  >>;
   /** Host-only actual Run bindings, including delegated workers; never serialized into events. */
   onRunCapabilities?: VykorAgentOptions["onRunCapabilities"];
   executionSurface?: "desktop_managed" | "cli_advanced";
@@ -192,6 +196,7 @@ export function createDaemonAgentLoader(
       ? await options.acquireEnvironment(session, settings)
       : undefined;
     const configuration = agentConfigurationFromSession(session, settings);
+    const modelMetadata = settings ? await options.prepareModelMetadata?.(settings) : undefined;
     const requestConfigurationStore = createDaemonRequestConfigurationStore({
       session,
       settings,
@@ -201,9 +206,9 @@ export function createDaemonAgentLoader(
     });
     let declaredEfforts: string[] | undefined;
     try {
-      declaredEfforts = await options.resolveReasoningEfforts?.({
+      declaredEfforts = await (modelMetadata?.resolveReasoningEfforts ?? options.resolveReasoningEfforts)?.({
         provider: configuration.provider,
-        model: configuration.model,
+        model: configuration.model ?? session.model,
       });
     } catch {
       declaredEfforts = undefined;
@@ -248,6 +253,7 @@ export function createDaemonAgentLoader(
         ? { resolveModelOutputLimit: async (input) =>
             await options.resolveModelOutputLimit!(input) }
         : {}),
+      ...modelMetadata,
       reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),

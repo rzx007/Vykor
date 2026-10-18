@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { withProviderConfigurationUpdate } from "../provider-configuration-update.js";
 
 import {
   mergeCommandCatalog,
@@ -62,6 +63,10 @@ export interface SystemRoutesContext {
 
 export function createSystemRoutes(context: SystemRoutesContext): Hono {
   return new Hono()
+    .use("/providers/*", async (c, next) => {
+      if (c.req.method === "GET") return next();
+      await withProviderConfigurationUpdate(context.control, next);
+    })
     .use("/settings", async (c, next) => {
       if (c.req.method !== "PATCH" || !context.pluginUi) return next();
       let body: Record<string, unknown>;
@@ -304,22 +309,14 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
     .post("/providers/custom", async (c) => {
       if (!context.providerService?.create)
         return errorResponse(501, "Custom provider creation is not configured");
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease)
-        return errorResponse(
-          409,
-          "Cannot update providers while session runs are active",
-        );
       try {
         const provider = await context.providerService.create(
           (await readJson(c)) as never,
         );
-        await context.control.closeAllRuntimes();
+        await context.control.invalidateRuntimes();
         return jsonResponse({ provider }, 201);
       } catch (error) {
         return providerMutationErrorResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .post("/providers/catalog/:id/connect", async (c) => {
@@ -329,12 +326,6 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           "Catalog provider connections are not configured",
         );
       }
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease)
-        return errorResponse(
-          409,
-          "Cannot update providers while session runs are active",
-        );
       try {
         const body = (await readJson(c)) as {
           apiKey?: unknown;
@@ -352,12 +343,10 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           c.req.param("id"),
           input,
         );
-        await context.control.closeAllRuntimes();
+        await context.control.invalidateRuntimes();
         return jsonResponse({ provider });
       } catch (error) {
         return providerMutationErrorResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .patch("/providers/catalog/:id", async (c) => {
@@ -367,12 +356,6 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           "Catalog provider header updates are not configured",
         );
       }
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease)
-        return errorResponse(
-          409,
-          "Cannot update providers while session runs are active",
-        );
       try {
         const body = (await readJson(c)) as { headers?: unknown; secretHeaders?: unknown };
         if (!("headers" in body)) {
@@ -383,12 +366,10 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           (body.headers ?? {}) as Record<string, string>,
           ...((body.secretHeaders !== undefined ? [body.secretHeaders as Record<string, string | null>] : []) as [Record<string, string | null>?]),
         );
-        await context.control.closeAllRuntimes();
+        await context.control.invalidateRuntimes();
         return jsonResponse({ provider });
       } catch (error) {
         return providerMutationErrorResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .delete("/providers/catalog/:id/connect", async (c) => {
@@ -417,23 +398,15 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
     .patch("/providers/custom/:id", async (c) => {
       if (!context.providerService?.update)
         return errorResponse(501, "Custom provider updates are not configured");
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease)
-        return errorResponse(
-          409,
-          "Cannot update providers while session runs are active",
-        );
       try {
         const provider = await context.providerService.update(
           c.req.param("id"),
           (await readJson(c)) as never,
         );
-        await context.control.closeAllRuntimes();
+        await context.control.invalidateRuntimes();
         return jsonResponse({ provider });
       } catch (error) {
         return providerMutationErrorResponse(error);
-      } finally {
-        lease.release();
       }
     })
     .delete("/providers/custom/:id", async (c) => {
@@ -455,11 +428,15 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         lease.release();
       }
     })
-    .get("/models", async () => {
+    .get("/models", async (c) => {
       if (!context.modelService)
         return errorResponse(501, "Model service is not configured");
       try {
-        return jsonResponse({ providers: await context.modelService.list() });
+        const providers = c.req.query("refresh") === "true"
+          ? await context.modelService.list({ refresh: true })
+          : await context.modelService.list();
+        if (c.req.query("refresh") === "true") await context.control.invalidateRuntimes();
+        return jsonResponse({ providers });
       } catch (error) {
         return errorResponse(
           500,

@@ -25,6 +25,41 @@ async function createConfigDirectory(): Promise<string> {
 }
 
 describe("ModelCatalogService sources", () => {
+  it("refreshes a loaded catalog and exposes it to other consumers", async () => {
+    await createConfigDirectory();
+    let id = "first";
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      remote: { models: { [id]: { id, name: id } } },
+    })));
+    const { createModelCatalogService } = await import("./catalog");
+    const firstConsumer = createModelCatalogService();
+    const secondConsumer = createModelCatalogService();
+    await firstConsumer.load();
+    await secondConsumer.load();
+    id = "second";
+
+    const refreshed = await firstConsumer.load({ refresh: true });
+
+    expect(Object.keys(refreshed.remote!.models!)).toEqual(["second"]);
+    expect(Object.keys((await secondConsumer.load()).remote!.models!)).toEqual(["second"]);
+  });
+
+  it("coalesces concurrent refreshes and retains the last catalog when offline", async () => {
+    await createConfigDirectory();
+    const fetchCatalog = vi.fn(async () => Response.json({ remote: { models: { first: {} } } }));
+    vi.stubGlobal("fetch", fetchCatalog);
+    const { createModelCatalogService } = await import("./catalog");
+    const service = createModelCatalogService();
+    await service.load();
+    fetchCatalog.mockImplementation(async () => Response.json({ remote: { models: { second: {} } } }));
+    const [first, second] = await Promise.all([service.load({ refresh: true }), service.load({ refresh: true })]);
+    expect(Object.keys(first.remote!.models!)).toEqual(["second"]);
+    expect(second).toBe(first);
+    expect(fetchCatalog).toHaveBeenCalledTimes(2);
+    fetchCatalog.mockRejectedValue(new Error("offline"));
+    expect(Object.keys((await service.load({ refresh: true })).remote!.models!)).toEqual(["second"]);
+  });
+
   it("uses models.dev as the authority for regular online providers", async () => {
     await createConfigDirectory();
     vi.stubGlobal(

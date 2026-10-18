@@ -6,6 +6,7 @@ import {
   type ModelsDevModel,
 } from "@vykor/api";
 import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
+import type { CustomProviderModelSettings } from "@vykor/core";
 
 import type {
   ModelInfo,
@@ -15,6 +16,7 @@ import type {
 import { readCurrentSettings, type DaemonSettingsRef } from "./shared.js";
 import {
   readCatalogProvider,
+  catalogProviderModelIds,
   reasoningEffortsFromModel,
 } from "./catalog-provider-mapping.js";
 import { resolveModelLimit } from "./model-limit-resolution.js";
@@ -28,10 +30,10 @@ export function createDefaultModelService(
 ): ModelService {
   const catalogService = createModelCatalogService();
   return {
-    async list(): Promise<ModelProviderInfo[]> {
+    async list(options = {}): Promise<ModelProviderInfo[]> {
       // Auth/provider mutations use separate instances; do not retain their old credentials across requests.
       const storage = new CredentialStorage();
-      const catalog = await catalogService.load();
+      const catalog = await catalogService.load(options);
       const result: ModelProviderInfo[] = [];
 
       for (const spec of PROVIDERS) {
@@ -62,6 +64,11 @@ export function createDefaultModelService(
           provider.source === "models.dev"
             ? indexCatalogModels(catalog, provider.id)
             : undefined;
+        const configuredModels: CustomProviderModelSettings[] = catalogModels
+          ? catalogProviderModelIds(catalog, provider.id).map(id => ({
+              id, displayName: catalogModels.get(id)?.name ?? id,
+            }))
+          : provider.models;
         const limitInput = (providerId: string, modelId: string) => ({
           catalog,
           customProviders: current?.customProviders,
@@ -71,7 +78,7 @@ export function createDefaultModelService(
         result.push({
           name: provider.id,
           displayName: provider.displayName,
-          models: provider.models.map((model) => {
+          models: configuredModels.map((model) => {
             const catalogModel = catalogModels?.get(model.id);
             const contextWindow = resolveModelLimit(
               "context",
