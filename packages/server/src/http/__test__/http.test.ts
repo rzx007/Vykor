@@ -3306,6 +3306,7 @@ describe("VykorHttpServer", () => {
   it("forwards catalog connect headers and patch updates through system routes", async () => {
     const release = vi.fn();
     const closeAllRuntimes = vi.fn(async () => {});
+    const invalidateRuntimes = vi.fn(async () => {});
     const connectCatalog = vi.fn(async () => ({
       name: "remote",
       displayName: "Remote AI",
@@ -3333,7 +3334,7 @@ describe("VykorHttpServer", () => {
       control: {
         acquireGlobalMutation: vi.fn(() => ({ release })),
         closeAllRuntimes,
-        invalidateRuntimes: vi.fn(async () => {}),
+        invalidateRuntimes,
         runtimeSnapshot: () => ({
           startedAt: 0,
           uptimeMs: 0,
@@ -3370,9 +3371,11 @@ describe("VykorHttpServer", () => {
       apiKey: "secret",
       headers: { "X-Session": "{{sessionId}}" },
     });
-    expect(closeAllRuntimes).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledOnce();
+    expect(invalidateRuntimes).toHaveBeenCalledOnce();
+    expect(closeAllRuntimes).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
 
+    invalidateRuntimes.mockClear();
     closeAllRuntimes.mockClear();
     release.mockClear();
     const missingHeaders = await routes.request("/providers/catalog/remote", {
@@ -3382,9 +3385,11 @@ describe("VykorHttpServer", () => {
     });
     expect(missingHeaders.status).toBe(400);
     expect(updateCatalogHeaders).not.toHaveBeenCalled();
+    expect(invalidateRuntimes).not.toHaveBeenCalled();
     expect(closeAllRuntimes).not.toHaveBeenCalled();
-    expect(release).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
 
+    invalidateRuntimes.mockClear();
     closeAllRuntimes.mockClear();
     release.mockClear();
     const cleared = await routes.request("/providers/catalog/remote", {
@@ -3394,9 +3399,11 @@ describe("VykorHttpServer", () => {
     });
     expect(cleared.status).toBe(200);
     expect(updateCatalogHeaders).toHaveBeenCalledWith("remote", {});
-    expect(closeAllRuntimes).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledOnce();
+    expect(invalidateRuntimes).toHaveBeenCalledOnce();
+    expect(closeAllRuntimes).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
 
+    invalidateRuntimes.mockClear();
     closeAllRuntimes.mockClear();
     release.mockClear();
     connectCatalog.mockRejectedValueOnce(
@@ -3411,8 +3418,9 @@ describe("VykorHttpServer", () => {
       }),
     });
     expect(invalid.status).toBe(400);
+    expect(invalidateRuntimes).not.toHaveBeenCalled();
     expect(closeAllRuntimes).not.toHaveBeenCalled();
-    expect(release).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
   });
 
   it("compacts a session transcript through the runtime and store", async () => {
@@ -4574,7 +4582,7 @@ describe("VykorHttpServer", () => {
     );
   });
 
-  it("rejects runtime-restarting resource mutations before they write state", async () => {
+  it("blocks runtime-restarting resource mutations before they write state while allowing provider auth saves", async () => {
     const started = deferred();
     const stopped = deferred();
     const closed: string[] = [];
@@ -4650,7 +4658,7 @@ describe("VykorHttpServer", () => {
         ]);
 
         expect(requests.map((response) => response.status)).toEqual([
-          409, 409, 409, 409, 409, 409,
+          409, 200, 409, 409, 409, 409,
         ]);
         expect({
           memoryWrites,
@@ -4660,7 +4668,7 @@ describe("VykorHttpServer", () => {
           closed,
         }).toEqual({
           memoryWrites: 0,
-          authWrites: 0,
+          authWrites: 1,
           pluginWrites: 0,
           profileWrites: 0,
           closed: [],
