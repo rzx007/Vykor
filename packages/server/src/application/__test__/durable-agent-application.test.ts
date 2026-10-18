@@ -73,7 +73,12 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
         await emit(
           {
             type: "input.accepted",
-            data: { content, delivery: options.delivery ?? "queue" },
+            data: {
+              content,
+              delivery: options.delivery ?? "queue",
+              ...(options.inputItems ? { inputItems: options.inputItems } : {}),
+              ...(options.metadata ? { metadata: options.metadata } : {}),
+            },
           },
           eventContext,
         );
@@ -282,6 +287,7 @@ describe("DaemonApplication", () => {
         maxTurns: 5,
         permission: { mode: "full_auto" },
         sandbox: { enabled: false },
+        plugins: { enabled: false },
         memory: { enabled: false },
       },
       createAgent: async (context) => {
@@ -389,6 +395,7 @@ describe("DaemonApplication", () => {
         apiFormat: "openai",
         maxTurns: 10,
         permission: { mode: "default" },
+        plugins: { enabled: false },
         memory: {
           enabled: true,
           sessionMemoryEnabled: true,

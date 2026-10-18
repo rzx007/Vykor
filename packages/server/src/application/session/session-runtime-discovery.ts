@@ -1,4 +1,4 @@
-import { discoverVykorExtensions } from "@vykor/agent-runtime";
+import { createPluginCapabilityInventory, discoverVykorExtensions } from "@vykor/agent-runtime";
 import type { Settings } from "@vykor/core";
 import type { SessionRecord } from "@vykor/protocol";
 import { resolveSessionModelContextLimits } from "../assemble-session-context-usage.js";
@@ -33,7 +33,12 @@ export function createSessionRuntimeDiscovery(options: SessionRuntimeDiscoveryOp
       (await discoverVykorExtensions(cwd, settings)).skillRegistry.modelVisibleList(),
     resolveSkillCatalog: async (session: SessionRecord) =>
       (await discover(session.cwd, "session_input_skill_catalog_unavailable")).extensions.skillRegistry,
-    resolvePluginInventory: async (session: SessionRecord) =>
-      (await discover(session.cwd, "session_plugin_capability_unavailable")).extensions.pluginCapabilityInventory,
+    resolvePluginInventory: async (session: SessionRecord) => {
+      const settings = await resolveSettings(session.cwd);
+      // A host that cannot resolve settings simply has no plugin inventory; ordinary
+      // chat must keep working, while explicit plugin references still fail in admit().
+      if (!settings) return createPluginCapabilityInventory([]);
+      return (await discoverVykorExtensions(session.cwd, settings)).pluginCapabilityInventory;
+    },
   };
 }

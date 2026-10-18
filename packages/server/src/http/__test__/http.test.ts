@@ -1453,6 +1453,8 @@ describe("VykorHttpServer", () => {
               data: {
                 content: input.content,
                 delivery: input.delivery ?? "queue",
+                ...(input.inputItems ? { inputItems: input.inputItems } : {}),
+                ...(input.metadata ? { metadata: input.metadata } : {}),
               },
             },
             {
