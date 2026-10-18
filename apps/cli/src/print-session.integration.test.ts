@@ -91,7 +91,12 @@ function testAgent(
         const context = { agentId: session.id, sessionId: session.id, inputId: ids.inputId, runId: ids.runId, traceId: ids.traceId };
         let output = "";
         const result = Promise.resolve().then(async () => {
-          await publish({ type: "input.accepted", data: { content, delivery: options.delivery ?? "queue" } }, context);
+          await publish({ type: "input.accepted", data: {
+            content,
+            ...(options.inputItems ? { inputItems: options.inputItems } : {}),
+            delivery: options.delivery ?? "queue",
+            ...(options.metadata ? { metadata: options.metadata } : {}),
+          } }, context);
           await publish({ type: "run.started", data: {} }, context);
           await run(typeof content === "string" ? content : "", {
             emit: async (event) => {
@@ -176,6 +181,9 @@ function disabledCapabilities(): AgentCapabilitySnapshot {
 
 describe("runPrintSession daemon integration", () => {
   let exitSpy: MockInstance<(code?: string | number | null) => never>;
+  // These tests exercise the daemon transport without plugin tooling, so plugin
+  // scope capture must stay off: the stubbed agent cannot validate candidates.
+  const printSettings = { model: "m", outputStyle: "default", plugins: { enabled: false } } as never;
 
   afterEach(() => {
     exitSpy?.mockRestore();
@@ -194,7 +202,7 @@ describe("runPrintSession daemon integration", () => {
 
     await withPrintServer(createAgent, async ({ server, url, token }) => {
       await runPrintSession(
-        { model: "m", outputStyle: "default" } as never,
+        printSettings,
         "hello daemon",
         { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token },
       );
@@ -230,7 +238,7 @@ describe("runPrintSession daemon integration", () => {
 
     await withPrintServer(createAgent, async ({ server, url, token }) => {
       await runPrintSession(
-        { model: "m", outputStyle: "default" } as never,
+        printSettings,
         "try edit",
         { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token },
       );
@@ -268,10 +276,10 @@ describe("runPrintSession daemon integration", () => {
     let streamed = "";
     let plain = "";
     await withPrintServer(createAgent, async ({ url, token }) => {
-      await runPrintSession({ model: "m", outputStyle: "default" } as never, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token, outputFormat: "stream-json" });
+      await runPrintSession(printSettings, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token, outputFormat: "stream-json" });
       streamed = stdout.chunks.join("");
       stdout.chunks.length = 0;
-      await runPrintSession({ model: "m", outputStyle: "default" } as never, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token });
+      await runPrintSession(printSettings, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token });
       plain = stdout.chunks.join("");
     });
 
