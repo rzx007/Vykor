@@ -54,13 +54,19 @@ async function validateOpenAICompatibleCredential(
     input.baseUrl,
     input.backendType,
   );
+  // OpenCode serves the shared models list outside its OpenAI inference path.
+  // Keep the inference base URL unchanged for actual model requests.
+  const modelsBaseUrl = baseUrl.replace(
+    /^(https:\/\/opencode\.ai\/inference(?:\/go)?)\/openai\/v1$/,
+    "$1/v1",
+  );
   const expandedHeaders = expandRequestHeaderTemplates(
     input.headers,
     VALIDATION_HEADER_CONTEXT,
   );
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/models`, {
+    response = await fetch(`${modelsBaseUrl}/models`, {
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
         "User-Agent": VALIDATION_USER_AGENT,

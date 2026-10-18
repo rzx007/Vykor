@@ -74,6 +74,10 @@ const maxRememberedAcknowledgements = 128
 
 export class SessionSubscriptionService {
   private readonly subscriptions = new SessionSubscriptionRegistry()
+  private readonly pendingPrimaryOpens = new Map<
+    number,
+    { sessionId: string; promise: Promise<DesktopSessionView> }
+  >()
   private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
   private readonly invalidationListeners = new Set<(ownerId: number) => void>()
   private readonly primaryOwners = new Set<number>()
@@ -341,6 +345,30 @@ export class SessionSubscriptionService {
     const controller = new AbortController()
     const subscription = { controller, sessionId }
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
+    const pending = this.pendingPrimaryOpens.get(webContents.id)
+    if (pending?.sessionId === sessionId && this.getOwnerSessionId(webContents.id) === sessionId) {
+      return pending.promise
+    }
+
+    // Concurrent opens of the same view share its initial snapshot instead of
+    // replacing the subscription and aborting a request another caller awaits.
+    const promise = this.openPrimarySession(client, webContents, sessionId)
+    const entry = { sessionId, promise }
+    this.pendingPrimaryOpens.set(webContents.id, entry)
+    try {
+      return await promise
+    } finally {
+      if (this.pendingPrimaryOpens.get(webContents.id) === entry) {
+        this.pendingPrimaryOpens.delete(webContents.id)
+      }
+    }
+  }
+
+  private async openPrimarySession(
+    client: SessionSubscriptionClient,
+    webContents: WebContents,
+    sessionId: string
+  ): Promise<DesktopSessionView> {
       this.subscriptions,
       webContents.id,
       slot,

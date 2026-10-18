@@ -3,7 +3,47 @@ import { VYKOR_USER_AGENT } from "@vykor/api";
 
 import { validateProviderCredential } from "./credential-validation.js";
 
-describe("validateProviderCredential header templates", () => {
+describe("validateProviderCredential", () => {
+  it.each([
+    {
+      provider: "opencode-go",
+      baseUrl: "https://opencode.ai/inference/go/openai/v1/",
+      modelsUrl: "https://opencode.ai/inference/go/v1/models",
+    },
+    {
+      provider: "opencode",
+      baseUrl: "https://opencode.ai/inference/openai/v1",
+      modelsUrl: "https://opencode.ai/inference/v1/models",
+    },
+    {
+      provider: "opencode-go",
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      modelsUrl: "https://opencode.ai/zen/go/v1/models",
+    },
+    {
+      provider: "gateway",
+      baseUrl: "https://gateway.example/inference/go/openai/v1",
+      modelsUrl: "https://gateway.example/inference/go/openai/v1/models",
+    },
+  ])("validates $provider using the models endpoint for $baseUrl", async ({ provider, baseUrl, modelsUrl }) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      if (url !== modelsUrl) return new Response(null, { status: 404 });
+      if (new Headers(init?.headers).get("authorization") !== "Bearer fixture-key") {
+        return new Response(null, { status: 401 });
+      }
+      return Response.json({ data: [{ id: "kimi-k3" }] });
+    }));
+
+    await expect(validateProviderCredential({
+      providerName: provider,
+      providerDisplayName: "OpenCode",
+      backendType: "openai_compat",
+      apiKey: "fixture-key",
+      baseUrl,
+      model: "kimi-k3",
+    })).resolves.toBeUndefined();
+  });
+
   it("checks the selected model against the real endpoint list", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [{ id: "available-model" }] }), { status: 200 })))
     const input = { providerName: "gateway", providerDisplayName: "Gateway", backendType: "openai_compat" as const, apiKey: "fixture-key", baseUrl: "https://gateway.example/v1" }
