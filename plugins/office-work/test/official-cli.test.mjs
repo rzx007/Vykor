@@ -11,7 +11,7 @@ test('official skills remain byte-identical to their pinned source and are the a
   const source=JSON.parse(await readFile(join(root,'vendor/officecli/SOURCE.json'),'utf8'));
   const manifest=JSON.parse(await readFile(join(root,'.vykor-plugin/plugin.json'),'utf8'));
   assert.equal(source.ref,'v1.0.139');assert.equal(source.files.length,4);
-  assert.deepEqual(manifest.components.skills,['./vendor/officecli/skills']);
+  assert.deepEqual(manifest.components.skills,['./skills/office-work-entry','./vendor/officecli/skills']);
   for(const file of source.files) {
     const bytes=await readFile(join(root,'vendor/officecli',file.path));
     const text=bytes.toString('utf8');
