@@ -13,7 +13,13 @@ import {
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
 import { Skeleton } from "@renderer/components/ui/skeleton"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { ProviderDefaultsControl } from "./provider-defaults-control"
 import type { ProviderDefaultsSnapshot } from "@shared/provider-defaults-types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
@@ -30,7 +36,11 @@ import {
   type ProviderConnectionSubmitValue,
 } from "./provider-connection-dialog"
 import { CustomProviderDialog } from "./custom-provider-dialog"
-import { MoreProvidersDialog, ProviderListCard, providerDisplayName } from "./provider-settings-list"
+import {
+  MoreProvidersDialog,
+  ProviderListCard,
+  providerDisplayName,
+} from "./provider-settings-list"
 
 const popularProviderNames = [
   "openai",
@@ -88,7 +98,14 @@ export function ProviderSettings(): React.JSX.Element {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    void window.desktop.providerDefaults.snapshot().then((value) => { if (!cancelled) setDefaults(value) }).catch((failure) => { if (!cancelled) toast.error(`默认模型状态读取失败：${errorMessage(failure)}`) })
+    void window.desktop.providerDefaults
+      .snapshot()
+      .then((value) => {
+        if (!cancelled) setDefaults(value)
+      })
+      .catch((failure) => {
+        if (!cancelled) toast.error(`默认模型状态读取失败：${errorMessage(failure)}`)
+      })
     return () => {
       cancelled = true
     }
@@ -157,6 +174,7 @@ export function ProviderSettings(): React.JSX.Element {
       toast.success(successMessage)
       return true
     } catch (mutationError) {
+      console.error("供应商设置失败", mutationError)
       toast.error(errorMessage(mutationError))
       return false
     } finally {
@@ -166,18 +184,30 @@ export function ProviderSettings(): React.JSX.Element {
   }
 
   const connect = (value: ProviderConnectionSubmitValue): void => {
-    if (!connectTarget || (!value.apiKey.trim() && !(connectTarget.source === "catalog" && value.headers !== undefined)) || busyProvider) return
+    if (
+      !connectTarget ||
+      (!value.apiKey.trim() &&
+        !(connectTarget.source === "catalog" && value.headers !== undefined)) ||
+      busyProvider
+    )
+      return
     const target = connectTarget
     void runMutation(
       target.name,
       () =>
-        value.apiKey.trim() ? window.desktop.providers.connect({
-          provider: target.name,
-          apiKey: value.apiKey,
-          ...(value.headers !== undefined ? { headers: value.headers } : {}),
-          ...(value.secretHeaders !== undefined ? { secretHeaders: value.secretHeaders } : {}),
-          setActive: false,
-        }) : window.desktop.providers.updateCatalogHeaders({ provider: target.name, headers: value.headers ?? {}, ...(value.secretHeaders !== undefined ? { secretHeaders: value.secretHeaders } : {}) }),
+        value.apiKey.trim()
+          ? window.desktop.providers.connect({
+              provider: target.name,
+              apiKey: value.apiKey,
+              ...(value.headers !== undefined ? { headers: value.headers } : {}),
+              ...(value.secretHeaders !== undefined ? { secretHeaders: value.secretHeaders } : {}),
+              setActive: false,
+            })
+          : window.desktop.providers.updateCatalogHeaders({
+              provider: target.name,
+              headers: value.headers ?? {},
+              ...(value.secretHeaders !== undefined ? { secretHeaders: value.secretHeaders } : {}),
+            }),
       `已配置 ${providerDisplayName(target)}。`
     ).then((succeeded) => {
       if (!succeeded) return
@@ -229,7 +259,9 @@ export function ProviderSettings(): React.JSX.Element {
 
   function removalChoice() {
     if (replacementKey === "__disabled") return { disableDefault: true }
-    const model = defaults?.models.find((item) => `${item.providerName}:${item.id}` === replacementKey)
+    const model = defaults?.models.find(
+      (item) => `${item.providerName}:${item.id}` === replacementKey
+    )
     return model ? { replacement: { provider: model.providerName, model: model.id } } : {}
   }
 
@@ -237,35 +269,90 @@ export function ProviderSettings(): React.JSX.Element {
     if (!testTarget || !testModel || busyProvider) return
     setBusyProvider(testTarget.name)
     try {
-      const result = await window.desktop.providerDefaults.test({ provider: testTarget.name, model: testModel })
+      const result = await window.desktop.providerDefaults.test({
+        provider: testTarget.name,
+        model: testModel,
+      })
       if (result.status === "verified") toast.success(result.detail)
-      else toast.error(`${({ authentication: "认证", address: "服务地址", network: "网络", model: "模型", unsupported: "不支持", service: "服务异常" })[result.category ?? "service"]}：${result.detail}`)
+      else
+        toast.error(
+          `${{ authentication: "认证", address: "服务地址", network: "网络", model: "模型", unsupported: "不支持", service: "服务异常" }[result.category ?? "service"]}：${result.detail}`
+        )
       setDefaults(await window.desktop.providerDefaults.snapshot())
-    } catch (failure) { toast.error(errorMessage(failure)) }
-    finally { setBusyProvider(null); setTestTarget(null) }
+    } catch (failure) {
+      toast.error(errorMessage(failure))
+    } finally {
+      setBusyProvider(null)
+      setTestTarget(null)
+    }
   }
 
   function replacementControl(target: DesktopProviderInfo | null) {
     if (!target?.active) return null
-    if (!defaults) return <p role="alert" className="text-sm text-destructive">默认模型状态尚未读取，请先重新检测供应商后选择替代结果。</p>
+    if (!defaults)
+      return (
+        <p role="alert" className="text-sm text-destructive">
+          默认模型状态尚未读取，请先重新检测供应商后选择替代结果。
+        </p>
+      )
     const models = defaults?.models.filter((model) => model.providerName !== target.name) ?? []
-    return <div className="space-y-2 text-sm"><p>这是当前默认连接。请选择替代默认模型；删除后已有会话保留自己的模型，后续请求可能因连接移除失败。</p><Select value={replacementKey} onValueChange={(key) => { if (typeof key === "string") setReplacementKey(key) }}><SelectTrigger aria-label="移除连接后的默认模型" disabled={busyProvider !== null}><SelectValue placeholder="明确选择替代结果" /></SelectTrigger><SelectContent>{models.map((model) => <SelectItem key={`${model.providerName}:${model.id}`} value={`${model.providerName}:${model.id}`}>{model.provider} / {model.label}</SelectItem>)}{!models.length && <SelectItem value="__disabled">关闭新任务默认模型</SelectItem>}</SelectContent></Select>{!models.length && <p className="text-xs text-destructive">没有可替代连接。确认关闭后，新模型任务无法启动，直到重新选择可用默认模型；不会自动发送到其他供应商。</p>}</div>
+    return (
+      <div className="space-y-2 text-sm">
+        <p>
+          这是当前默认连接。请选择替代默认模型；删除后已有会话保留自己的模型，后续请求可能因连接移除失败。
+        </p>
+        <Select
+          value={replacementKey}
+          onValueChange={(key) => {
+            if (typeof key === "string") setReplacementKey(key)
+          }}
+        >
+          <SelectTrigger aria-label="移除连接后的默认模型" disabled={busyProvider !== null}>
+            <SelectValue placeholder="明确选择替代结果" />
+          </SelectTrigger>
+          <SelectContent>
+            {models.map((model) => (
+              <SelectItem
+                key={`${model.providerName}:${model.id}`}
+                value={`${model.providerName}:${model.id}`}
+              >
+                {model.provider} / {model.label}
+              </SelectItem>
+            ))}
+            {!models.length && <SelectItem value="__disabled">关闭新任务默认模型</SelectItem>}
+          </SelectContent>
+        </Select>
+        {!models.length && (
+          <p className="text-xs text-destructive">
+            没有可替代连接。确认关闭后，新模型任务无法启动，直到重新选择可用默认模型；不会自动发送到其他供应商。
+          </p>
+        )}
+      </div>
+    )
   }
 
   if (loading && !snapshot) return <ProviderSettingsSkeleton />
 
   return (
     <div className="flex flex-col gap-8">
-      <ProviderDefaultsControl key={JSON.stringify([snapshot?.activeProvider, snapshot?.activeModel, snapshot?.providers.map((provider) => [provider.name, provider.models.map((model) => model.id)])])} onChanged={load} />
+      <ProviderDefaultsControl
+        key={JSON.stringify([
+          snapshot?.activeProvider,
+          snapshot?.activeModel,
+          snapshot?.providers.map((provider) => [
+            provider.name,
+            provider.models.map((model) => model.id),
+          ]),
+        ])}
+        onChanged={load}
+      />
       <section className="flex flex-col gap-4" aria-labelledby="provider-heading">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <h2 id="provider-heading" className="font-heading text-base tracking-tight">
               模型连接
             </h2>
-            <p className="text-xs leading-5 text-muted-foreground">
-              接入你常用的模型服务。
-            </p>
+            <p className="text-xs leading-5 text-muted-foreground">接入你常用的模型服务。</p>
           </div>
           <Tooltip>
             <TooltipTrigger
@@ -292,9 +379,15 @@ export function ProviderSettings(): React.JSX.Element {
           busyProvider={busyProvider}
           onShowMore={() => setMoreProvidersOpen(true)}
           onConnect={openConnectDialog}
-          onDisconnect={(provider) => { setDisconnectTarget(provider); setReplacementKey("") }}
+          onDisconnect={(provider) => {
+            setDisconnectTarget(provider)
+            setReplacementKey("")
+          }}
           verified={defaults?.verified ?? {}}
-          onTest={(provider) => { setTestTarget(provider); setTestModel(provider.models[0]?.id ?? "") }}
+          onTest={(provider) => {
+            setTestTarget(provider)
+            setTestModel(provider.models[0]?.id ?? "")
+          }}
           onAddCustom={() => {
             setCustomEditTarget(null)
             setCustomDialogOpen(true)
@@ -303,7 +396,10 @@ export function ProviderSettings(): React.JSX.Element {
             setCustomEditTarget(provider)
             setCustomDialogOpen(true)
           }}
-          onRemoveCustom={(provider) => { setCustomRemoveTarget(provider); setReplacementKey("") }}
+          onRemoveCustom={(provider) => {
+            setCustomRemoveTarget(provider)
+            setReplacementKey("")
+          }}
         />
       </section>
 
@@ -359,7 +455,10 @@ export function ProviderSettings(): React.JSX.Element {
             <AlertDialogCancel disabled={busyProvider !== null}>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={busyProvider !== null || Boolean(disconnectTarget?.active && (!replacementKey || !defaults))}
+              disabled={
+                busyProvider !== null ||
+                Boolean(disconnectTarget?.active && (!replacementKey || !defaults))
+              }
               onClick={disconnect}
             >
               {busyProvider ? "断开中..." : "断开连接"}
@@ -384,7 +483,10 @@ export function ProviderSettings(): React.JSX.Element {
             <AlertDialogCancel disabled={busyProvider !== null}>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={busyProvider !== null || Boolean(customRemoveTarget?.active && (!replacementKey || !defaults))}
+              disabled={
+                busyProvider !== null ||
+                Boolean(customRemoveTarget?.active && (!replacementKey || !defaults))
+              }
               onClick={removeCustomProvider}
             >
               {busyProvider ? "删除中..." : "删除供应商"}
@@ -392,7 +494,47 @@ export function ProviderSettings(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={testTarget !== null} onOpenChange={(open) => { if (!open && !busyProvider) setTestTarget(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>测试 {testTarget?.displayName} 连接</AlertDialogTitle><AlertDialogDescription>将使用已保存的认证向服务请求模型列表并检查所选模型，不发送任务正文或模型生成请求。上游可能按自己的规则收取费用。验证不保证未来生成请求成功，结果仅在本次启动内保留。</AlertDialogDescription></AlertDialogHeader><Select value={testModel} onValueChange={(model) => { if (typeof model === "string") setTestModel(model) }}><SelectTrigger aria-label="连接测试模型"><SelectValue /></SelectTrigger><SelectContent>{testTarget?.models.map((model) => <SelectItem key={model.id} value={model.id}>{model.label}</SelectItem>)}</SelectContent></Select><AlertDialogFooter><AlertDialogCancel disabled={busyProvider !== null}>取消</AlertDialogCancel><AlertDialogAction disabled={busyProvider !== null || !testModel} onClick={() => void testConnection()}>发送测试请求</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog
+        open={testTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !busyProvider) setTestTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>测试 {testTarget?.displayName} 连接</AlertDialogTitle>
+            <AlertDialogDescription>
+              将使用已保存的认证向服务请求模型列表并检查所选模型，不发送任务正文或模型生成请求。上游可能按自己的规则收取费用。验证不保证未来生成请求成功，结果仅在本次启动内保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Select
+            value={testModel}
+            onValueChange={(model) => {
+              if (typeof model === "string") setTestModel(model)
+            }}
+          >
+            <SelectTrigger aria-label="连接测试模型">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {testTarget?.models.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyProvider !== null}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busyProvider !== null || !testModel}
+              onClick={() => void testConnection()}
+            >
+              发送测试请求
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -411,7 +553,10 @@ function ProviderSettingsSkeleton(): React.JSX.Element {
 
 function errorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
-  if (raw.includes("Cannot update authentication while session runs are active") || raw.includes("Cannot update providers while session runs are active")) {
+  if (
+    raw.includes("Cannot update authentication while session runs are active") ||
+    raw.includes("Cannot update providers while session runs are active")
+  ) {
     return "当前有任务正在运行。请等待任务结束或停止任务后，再修改供应商认证。"
   }
   return raw.replace(/^Error invoking remote method '[^']+': Error: /, "")
