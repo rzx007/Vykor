@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef } from "react"
-import { ChevronLeft, ChevronRight, RefreshCw, Minus, Plus } from "lucide-react"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { ChevronLeft, ChevronRight, RefreshCw, Minus, Plus, MoveHorizontal } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Spinner } from "@renderer/components/ui/spinner"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
-import { officePreviewHtml } from "./office-preview-html"
+import {
+  officePreviewHtml,
+  officePreviewWidth,
+  OFFICE_MIN_ZOOM,
+  OFFICE_MAX_ZOOM,
+} from "./office-preview-html"
 
 export function OfficeDocumentPreview({
   preview,
@@ -15,8 +20,37 @@ export function OfficeDocumentPreview({
   const [document, setDocument] = useState(preview.officePreview!)
   const [loading, setLoading] = useState(false),
     [error, setError] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(preview.officePreview?.format === "pptx" ? 0.5 : 0.75)
+  const [manualZoom, setManualZoom] = useState<number | null>(null)
+  const [viewportWidth, setViewportWidth] = useState(0)
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  const width = useMemo(
+    () => officePreviewWidth(document.html, document.format),
+    [document.html, document.format]
+  )
+  // Leave room for the iframe's vertical scrollbar to avoid horizontal overflow.
+  const fitZoom = viewportWidth > 0 ? Math.max(1, viewportWidth - 16) / width : 1
+  const zoom = Math.min(OFFICE_MAX_ZOOM, Math.max(OFFICE_MIN_ZOOM, manualZoom ?? fitZoom))
+  const html = useMemo(
+    () => officePreviewHtml(document.html, zoom, preview.name, document.format),
+    [document.html, document.format, zoom, preview.name]
+  )
   const generation = useRef(0)
+  useEffect(() => {
+    setManualZoom(null)
+  }, [rootPath, preview.path])
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return
+    const update = () => setViewportWidth(frame.clientWidth)
+    update()
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update)
+      return () => window.removeEventListener("resize", update)
+    }
+    const observer = new ResizeObserver(([entry]) => setViewportWidth(entry.contentRect.width))
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [])
   useEffect(() => {
     setDocument(preview.officePreview!)
     setError(null)
@@ -46,8 +80,11 @@ export function OfficeDocumentPreview({
     }
   }
   return (
-    <section className="flex h-full min-h-0 flex-col" aria-label={`${preview.name} 只读预览`}>
-      <div className="flex shrink-0 items-center gap-1 border-b p-2">
+    <section
+      className="flex h-full min-h-0 min-w-0 flex-col"
+      aria-label={`${preview.name} 只读预览`}
+    >
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b p-2 [&>button]:shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -79,19 +116,35 @@ export function OfficeDocumentPreview({
           variant="ghost"
           size="icon"
           aria-label="缩小预览"
-          disabled={zoom <= 0.25}
-          onClick={() => setZoom((v) => Math.max(0.25, v - 0.1))}
+          disabled={zoom <= OFFICE_MIN_ZOOM}
+          onClick={() => setManualZoom(Math.max(OFFICE_MIN_ZOOM, zoom - 0.1))}
         >
           <Minus />
         </Button>
+        <span
+          className="w-11 text-center text-xs text-muted-foreground tabular-nums"
+          aria-label="缩放比例"
+        >
+          {Math.round(zoom * 100)}%
+        </span>
         <Button
           variant="ghost"
           size="icon"
           aria-label="放大预览"
-          disabled={zoom >= 2}
-          onClick={() => setZoom((v) => Math.min(2, v + 0.1))}
+          disabled={zoom >= OFFICE_MAX_ZOOM}
+          onClick={() => setManualZoom(Math.min(OFFICE_MAX_ZOOM, zoom + 0.1))}
         >
           <Plus />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="适应宽度"
+          title="适应宽度"
+          aria-pressed={manualZoom === null}
+          onClick={() => setManualZoom(null)}
+        >
+          <MoveHorizontal />
         </Button>
         <Button
           variant="ghost"
@@ -102,7 +155,12 @@ export function OfficeDocumentPreview({
         >
           {loading ? <Spinner /> : <RefreshCw />}
         </Button>
-        <span className="ml-auto text-xs text-muted-foreground">只读 · 近似排版</span>
+        <span
+          className="ml-auto text-xs text-muted-foreground"
+          title="只读预览，排版可能与 Office/WPS 不同"
+        >
+          只读
+        </span>
       </div>
       {error ? (
         <p role="alert" className="p-3 text-sm break-words text-destructive">
@@ -110,10 +168,11 @@ export function OfficeDocumentPreview({
         </p>
       ) : null}
       <iframe
+        ref={frameRef}
         title={`${preview.name} 文档内容`}
         sandbox=""
         referrerPolicy="no-referrer"
-        srcDoc={officePreviewHtml(document.html, zoom)}
+        srcDoc={html}
         className="min-h-0 w-full flex-1 border-0 bg-white"
       />
     </section>
