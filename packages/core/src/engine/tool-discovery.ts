@@ -1,7 +1,7 @@
 import type { QueryEngineOptions, RunCapabilityView } from "../types/runtime.js";
 import type { ToolDiscovery, ToolDiscoveryEntry, ToolRegistry } from "../types/tools.js";
 import { toolDefinitionIdentity } from "./tool-definition-identity.js";
-import { visibleToolRegistry } from "./tool-registry.js";
+import { toolRegistryForNames } from "./tool-registry.js";
 
 /** One submitMessage lifetime. Authorization and captured bindings stay in the original registry. */
 export class RunToolDiscovery implements ToolDiscovery {
@@ -51,6 +51,6 @@ export class RunToolDiscovery implements ToolDiscovery {
   requestRegistry(hidden: readonly string[], forcedFinal: boolean): ToolRegistry {
     const excluded = new Set(hidden);
     this.eligible = new Set(this.catalog.filter(row => !forcedFinal && !excluded.has(row.name) && this.registry.has(row.name)).map(row => row.name));
-    return visibleToolRegistry(this.registry, [...this.exposed].filter(name => this.eligible.has(name)));
+    return toolRegistryForNames(this.registry, [...this.exposed].filter(name => this.eligible.has(name)));
   }
 }

@@ -44,7 +44,7 @@ import { ToolFailureMemory } from "./tool-failure-memory";
 import { formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
 import { RunToolDiscovery } from "./tool-discovery";
-import { runToolRegistry as runToolRegistryForRun, toolRegistryView, visibleToolRegistry } from "./tool-registry";
+import { runToolRegistry as runToolRegistryForRun, toolRegistryForNames, toolRegistryView, visibleToolRegistry } from "./tool-registry";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -404,7 +404,7 @@ export class QueryEngine implements IQueryEngine {
       }
       const forcedFinalTurn = forceFinalResponse || childFinalizing;
       const requestToolRegistry = toolDiscovery?.requestRegistry(trajectoryControl.hiddenTools, forcedFinalTurn)
-        ?? visibleToolRegistry(runToolRegistry, forcedFinalTurn ? [] : runToolRegistry.getAll()
+        ?? toolRegistryForNames(runToolRegistry, forcedFinalTurn ? [] : runToolRegistry.getAll()
           .filter(tool => !trajectoryControl.hiddenTools.includes(tool.name)).map(tool => tool.name));
       const tools = requestToolRegistry.getAll();
       const runSystemPrompt = requestConfiguration.systemPromptForTools

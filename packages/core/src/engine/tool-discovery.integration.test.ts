@@ -18,6 +18,7 @@ function fixture(options: {
   minToolCount?: number;
   largeSchema?: boolean;
   retryAt?: number;
+  starSource?: "builtin" | "plugin";
   engineOptions?: Partial<QueryEngineOptions>;
 } = {}) {
   const invoked: string[] = [], checked: string[] = [], requests: StreamMessageParams[] = [], compactRequests: StreamMessageParams[] = [];
@@ -38,6 +39,8 @@ function fixture(options: {
   registry.register(define("Read"), { kind: "builtin" });
   registry.register(define("Deferred"), { kind: "plugin", id: "office" });
   registry.register(define("mcp__server__edit"), { kind: "mcp", id: "server" });
+  if (options.starSource) registry.register(define("*"), options.starSource === "plugin"
+    ? { kind: "plugin", id: "office" } : { kind: "builtin" });
   registry.register({ ...define("McpToolCall"), async execute(input, context) {
     return context.callMcpTool!("mcp__server__edit", input);
   } }, { kind: "builtin" });
@@ -73,6 +76,40 @@ function fixture(options: {
 }
 
 describe("Run-local tool discovery", () => {
+  it("loads a literal star without exposing or invoking other deferred tools, including via MCP", async () => {
+    const f = fixture({ starSource: "plugin", batches: [
+      [call("Search", { query: "*" })], [call("*"), call("Deferred"), call("McpToolCall")],
+    ] });
+    f.engine.setAllowedTools(["*"]);
+    const results = await f.run();
+    expect(f.requests[1]!.tools?.map(t => t.name)).toEqual(["Read", "*", "McpToolCall", "Search"]);
+    expect(results[1]!.isError).not.toBe(true);
+    expect(results.slice(2)).toMatchObject([
+      { isError: true, executionState: "not_started" }, { isError: true, executionState: "not_started" },
+    ]);
+    expect(f.invoked).toEqual(["*"]);
+    expect(f.checked).not.toContain("Deferred");
+    expect(f.checked).not.toContain("mcp__server__edit");
+    expect(f.registry.inspect("*")?.source).toEqual({ kind: "plugin", id: "office" });
+  });
+
+  it("does not let a baseline star expose deferred schemas before a search", async () => {
+    const f = fixture({ starSource: "builtin" }); await f.run();
+    expect(f.requests[0]!.tools?.map(t => t.name)).toEqual(["Read", "*", "McpToolCall", "Search"]);
+  });
+
+  it.each([true, false])("keeps trajectory-hidden tools blocked beside a literal star (discovery=%s)", async policy => {
+    const f = fixture({ policy, starSource: "builtin", batches: [[call("Read")], [call("*"), call("Deferred")]], engineOptions: {
+      trajectoryTrackerFactory: () => ({ observe(_event, control) { control.hiddenTools = ["Deferred"]; } }),
+    } });
+    const results = await f.run();
+    expect(f.requests[1]!.tools?.map(t => t.name)).toContain("*");
+    expect(f.requests[1]!.tools?.map(t => t.name)).not.toContain("Deferred");
+    expect(results[2]).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(f.invoked).toEqual(["Read", "*"]);
+    expect(f.checked).not.toContain("Deferred");
+  });
+
   it("defers a small catalog with large schemas", async () => {
     const f = fixture({ minToolCount: 20, largeSchema: true }); await f.run();
     expect(JSON.stringify(f.requests[0]!.tools)).not.toContain("large-schema-only");

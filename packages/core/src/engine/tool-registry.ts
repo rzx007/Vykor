@@ -140,13 +140,22 @@ function sameSource(a: ToolRegistrationSource, b: ToolRegistrationSource): boole
   return a.kind === b.kind && a.id === b.id;
 }
 
+/** Apply authorization rules: null or a grant of "*" retains the full inner registry. */
 export function visibleToolRegistry(
   inner: IToolRegistry,
   allowedTools: readonly string[] | null,
   alwaysAllowed: readonly string[] = [],
 ): IToolRegistry {
   if (!allowedTools || allowedTools.includes("*")) return inner;
-  const allowed = new Set([...allowedTools, ...alwaysAllowed]);
+  return toolRegistryForNames(inner, [...allowedTools, ...alwaysAllowed]);
+}
+
+/** Filter by actual names, including a literal "*". Never expands the inner scope. */
+export function toolRegistryForNames(
+  inner: IToolRegistry,
+  names: Iterable<string>,
+): IToolRegistry {
+  const allowed = new Set(names);
   return {
     register(tool: ToolDefinition, source): void {
       inner.register(tool, source);
