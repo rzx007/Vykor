@@ -39,12 +39,22 @@ function hasSource(view: DesktopSessionView | null, instanceId: string): boolean
 export function PluginUiProvider({
   children,
   onOpenSidebar,
+  view: auxiliaryView,
 }: {
   children: ReactNode
   onOpenSidebar(): void
+  /** An existing auxiliary session stream, owned by the current primary session. */
+  view?: DesktopSessionView
 }) {
-  const view = useDesktopSessionStore((state) => state.sessionView)
-  const sessionId = useDesktopSessionStore((state) => state.activeSessionId)
+  const primaryView = useDesktopSessionStore((state) => state.sessionView)
+  const primarySessionId = useDesktopSessionStore((state) => state.activeSessionId)
+  const auxiliaryOwner = useRef(primarySessionId)
+  const view = auxiliaryView
+    ? auxiliaryOwner.current === primarySessionId && primaryView?.syncStatus === "connected"
+      ? auxiliaryView
+      : null
+    : primaryView
+  const sessionId = auxiliaryView ? (view?.session.id ?? null) : primarySessionId
   const [available, setAvailable] = useState(false)
   const [displays, setDisplays] = useState<PluginUiDisplay[]>([])
   const [confirmation, setConfirmation] = useState<PluginUiConfirmationDetails | null>(null)
@@ -143,7 +153,12 @@ export function PluginUiProvider({
       opener?: HTMLElement,
       forceReload = false
     ) => {
-      if (!availableRef.current || !isCurrent(instance.instanceId) || instance.surface !== surface)
+      if (
+        !availableRef.current ||
+        !isCurrent(instance.instanceId) ||
+        instance.surface !== surface ||
+        instance.sessionId !== viewRef.current?.session.id
+      )
         return
       const current = displaysRef.current
       const existing = current.find(
@@ -195,7 +210,7 @@ export function PluginUiProvider({
     },
     [isCurrent]
   )
-  const conversation = usePluginUiConversation(confirm)
+  const conversation = usePluginUiConversation(confirm, view)
   useLayoutEffect(() => {
     displaysRef.current = []
     pending.current?.decide(false)

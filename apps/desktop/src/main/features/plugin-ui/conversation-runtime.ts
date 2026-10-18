@@ -15,6 +15,8 @@ export interface ConversationBinding {
   ownerId: number
   owner: object
   sessionId: string
+  sessionToken: object | string
+  targetSessionId: string
   sessionEpoch: number
   generation: number
   client: VykorClient
@@ -56,6 +58,8 @@ export class PluginUiConversationRuntime {
         previous.generation !== binding.generation ||
         previous.sessionEpoch !== binding.sessionEpoch ||
         previous.sessionId !== binding.sessionId ||
+        previous.sessionToken !== binding.sessionToken ||
+        previous.targetSessionId !== binding.targetSessionId ||
         previous.instanceId !== source.instanceId ||
         previous.fingerprint !== fingerprint
       )
@@ -89,7 +93,8 @@ export class PluginUiConversationRuntime {
       receipt.mode !== "submit" ||
       receipt.requestId !== pending.requestId ||
       receipt.instanceId !== pending.instanceId ||
-      receipt.revision !== pending.expectedRevision + 1
+      receipt.revision !== pending.expectedRevision + 1 ||
+      (receipt.targetSessionId ?? pending.sessionId) !== pending.targetSessionId
     )
       throw new PluginUiBridgeError("plugin_ui_invalid_message")
     return receipt
@@ -101,14 +106,18 @@ export class PluginUiConversationRuntime {
   release(binding: ConversationBinding): void {
     for (const [id, pending] of this.pending) if (pending === binding) this.pending.delete(id)
   }
-  retainSession(ownerId: number, sessionId: string | undefined): void {
+  retainSessions(ownerId: number, permits: (sessionId: string, sessionToken: object | string) => boolean): void {
     for (const [id, pending] of this.pending)
-      if (pending.ownerId === ownerId && pending.sessionId !== sessionId) this.pending.delete(id)
+      if (pending.ownerId === ownerId && !permits(pending.sessionId, pending.sessionToken)) this.pending.delete(id)
+  }
+  releaseSession(ownerId: number, sessionId: string): void {
+    for (const [id, pending] of this.pending)
+      if (pending.ownerId === ownerId && pending.sessionId === sessionId) this.pending.delete(id)
   }
   observe(ownerId: number, view: DesktopSessionView): void {
     for (const [id, pending] of this.pending) {
-      if (pending.ownerId !== ownerId) continue
-      if (pending.sessionId !== view.session.id || view.syncStatus !== "connected") {
+      if (pending.ownerId !== ownerId || pending.sessionId !== view.session.id) continue
+      if (view.syncStatus !== "connected") {
         this.pending.delete(id)
         continue
       }
@@ -122,6 +131,7 @@ export class PluginUiConversationRuntime {
           fact.requestId === id &&
           fact.requestFingerprint === pending.fingerprint &&
           fact.expectedRevision === pending.expectedRevision &&
+          (fact.targetSessionId ?? pending.sessionId) === pending.targetSessionId &&
           fact.pluginDigest === pending.pluginDigest &&
           fact.componentDigest === pending.componentDigest
         )

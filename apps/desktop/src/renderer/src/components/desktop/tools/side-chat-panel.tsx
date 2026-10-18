@@ -4,7 +4,6 @@ import { Composer } from "../conversation-page/composer/composer"
 import { toComposerSkills } from "../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../conversation-page/composer/plugin-mentions-feature"
-import { resolveComposerPluginSelection } from "../conversation-page/composer/plugin-selection"
 import { PermissionCard } from "../conversation-page/message/message-block"
 import { AskUserCard } from "../conversation-page/message/ask-user-card"
 import { isAskUserPermission } from "../conversation-page/message/ask-user-payload"
@@ -823,17 +822,6 @@ export function SideChatPanel({
               commands={commands}
               conversations={sessions}
               activeSessionId={targetId}
-              {...resolveComposerPluginSelection(session, view?.runs ?? [], catalog && catalog.cwd === cwd ? catalog.plugins : [])}
-              onPluginAutoSelectionChange={verifiedTargetId ? (enabled) => {
-                if (creating || unavailable) return
-                update(actions.updateSessionPluginSelection(verifiedTargetId,
-                  { pluginAutoSelectionEnabled: enabled }, () => isCurrentTarget(verifiedTargetId)))
-              } : undefined}
-              onClearManualPlugin={verifiedTargetId ? () => {
-                if (creating || unavailable) return
-                update(actions.updateSessionPluginSelection(verifiedTargetId,
-                  { clearActivePlugin: true }, () => isCurrentTarget(verifiedTargetId)))
-              } : undefined}
               canSubmit={
                 !unavailable &&
                 areDesktopAttachmentsSendable(attachments) &&

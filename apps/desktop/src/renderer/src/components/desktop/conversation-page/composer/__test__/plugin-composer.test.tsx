@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement, type ComponentProps } from "react"
+import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { $getRoot, COPY_COMMAND, PASTE_COMMAND, getNearestEditorFromDOMNode } from "lexical"
@@ -48,7 +48,6 @@ async function render(
   draft: ComposerDocument = { version: 1, items: [] },
   enabled?: boolean,
   id = "plugin-test",
-  selection: Partial<ComponentProps<typeof Composer>> = {},
 ) {
   await act(async () =>
     root.render(
@@ -69,7 +68,6 @@ async function render(
         onSelectModel: () => {},
         onSelectPermissionMode: () => {},
         onSelectEffort: () => {},
-        ...selection,
       })
     )
   )
@@ -102,41 +100,15 @@ it("keeps plugin entries hidden when the flag is disabled", async () => {
   await act(async () => plus().click())
   expect(pluginOption()).toBeUndefined()
 })
-it("lets users turn off automatic selection while retaining @ plugin mentions", async () => {
-  let enabled = true
-  const selection = () => ({
-    pluginAutoSelectionEnabled: enabled,
-    onPluginAutoSelectionChange: (next: boolean) => { enabled = next },
-  })
-  await render(undefined, true, "plugin-test", selection())
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="插件选择设置"]')!.click())
-  const toggle = document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="自动使用可用能力"]')!
-  expect(toggle.getAttribute("aria-checked")).toBe("true")
-  await act(async () => toggle.click())
-  await render(undefined, true, "plugin-test", selection())
-  expect(container.textContent).toContain("自动使用已关闭")
-  await act(async () => plus().click())
-  expect(pluginOption()).toBeDefined()
-})
-it("shows the manual plugin and lets users clear it to return to automatic selection", async () => {
-  let cleared = false
-  await render(undefined, true, "plugin-test", {
-    manualPluginName: "Quality",
-    pluginAutoSelectionEnabled: false,
-    onPluginAutoSelectionChange: () => {},
-    onClearManualPlugin: () => { cleared = true },
-  })
-  expect(container.textContent).toContain("仅使用：Quality")
-  const clear = container.querySelector<HTMLButtonElement>('[aria-label="清除手动插件，恢复自动使用"]')!
-  await act(async () => clear.click())
-  expect(cleared).toBe(true)
-})
-it("labels a resolved automatic plugin separately from a manual selection", async () => {
-  await render(undefined, true, "plugin-test", {
-    automaticPluginName: "Quality", onPluginAutoSelectionChange: () => {},
-  })
-  expect(container.textContent).toContain("本轮自动：Quality")
+it("keeps automatic plugin use implicit while preserving explicit @ references", async () => {
+  await render({ version: 1, items: [reference] }, true)
+  expect(container.querySelector('[aria-label="插件选择设置"]')).toBeNull()
+  expect(container.querySelector('[aria-label="清除手动插件，恢复自动使用"]')).toBeNull()
+  expect(container.textContent).not.toContain("自动使用可用能力")
+  expect(container.textContent).not.toContain("本轮自动：")
   expect(container.textContent).not.toContain("仅使用：")
+  expect(editor().getEditorState().read(composerDocumentFromLexical).items).toEqual([reference])
+  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("@Quality")
 })
 it.each(["plus", "at"])("selects a structured plugin through %s", async (entry) => {
   await render({ version: 1, items: entry === "at" ? [{ type: "text", text: "@Qua" }] : [] }, true)

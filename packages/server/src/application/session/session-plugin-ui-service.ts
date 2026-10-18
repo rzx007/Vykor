@@ -34,7 +34,7 @@ import { ApplicationError } from "../../shared/application-error.js";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunWorkContext } from "../../runtime/run-coordinator.js";
-import { readInputPluginScope } from "./session-plugin-selection.js";
+import { runPluginSourceMatches } from "./session-plugin-selection.js";
 
 /** Current host facts, resolved from install/settings/Runtime; never supplied by a client. */
 export interface PluginUiCurrentState {
@@ -101,7 +101,7 @@ export interface PreparedPluginUiConversationSource {
 }
 
 export class SessionPluginUiService {
-  private readonly runViews = new Map<string, RunCapabilityView>();
+  private readonly runViews = new Map<string, { view: RunCapabilityView }>();
   private readonly checkedSources = new Map<
     string,
     Map<string, RunPluginUiBinding>
@@ -963,15 +963,16 @@ export class SessionPluginUiService {
     return latest;
   }
 
-  /** Host-only entry: pass the acquired Agent's captured view before submitMessage. */
-  registerRunView(runId: string, view: RunCapabilityView): void {
-    this.runViews.set(runId, view);
+  /** A host-validated executable view; the returned lease owns its registration. */
+  registerRunView(runId: string, view: RunCapabilityView): () => void {
+    const registration = { view };
+    this.runViews.set(runId, registration);
     this.checkedSources.delete(runId);
-  }
-
-  releaseRunView(runId: string): void {
-    this.runViews.delete(runId);
-    this.checkedSources.delete(runId);
+    return () => {
+      if (this.runViews.get(runId) !== registration) return;
+      this.runViews.delete(runId);
+      this.checkedSources.delete(runId);
+    };
   }
 
   /** Reliable event sink calls this just before entering the synchronous Part transaction. */
@@ -984,7 +985,8 @@ export class SessionPluginUiService {
     if (!this.options.verifySourceBinding) return;
     this.checkedSources.get(input.runId)?.delete(input.toolUseId);
     const proposal = readPluginUiProposal(input.result.metadata);
-    const view = this.runViews.get(input.runId);
+    const registration = this.runViews.get(input.runId);
+    const view = registration?.view;
     const tool = view?.tools.get(input.toolName);
     const pluginId =
       tool?.source?.kind === "plugin" ? tool.source.id : undefined;
@@ -1001,7 +1003,7 @@ export class SessionPluginUiService {
     try {
       if (
         !(await this.options.verifySourceBinding(binding)) ||
-        this.runViews.get(input.runId) !== view
+        this.runViews.get(input.runId) !== registration
       )
         return;
       const checked =
@@ -1040,7 +1042,7 @@ export class SessionPluginUiService {
       return undefined;
     };
     const proposal = readPluginUiProposal(input.result.metadata);
-    const view = this.runViews.get(input.runId);
+    const view = this.runViews.get(input.runId)?.view;
     const tool = view?.tools.get(input.toolName);
     const pluginId =
       tool?.source?.kind === "plugin" ? tool.source.id : undefined;
@@ -1190,32 +1192,12 @@ export class SessionPluginUiService {
       part.toolUseId === instance.sourceToolUseId &&
       part.toolName === instance.sourceToolName &&
       run?.sessionId === instance.sessionId &&
-      this.sourcePluginMatches(run, instance) &&
+      runPluginSourceMatches(run, instance) &&
       !Object.hasOwn(run.metadata, "uiAction") &&
       message?.sessionId === instance.sessionId &&
       message.role === "assistant" &&
       message.runId === run.id
     );
-  }
-
-  private sourcePluginMatches(
-    run: SessionRunRecord,
-    instance: Pick<PluginUiInstanceRecord, "pluginId" | "pluginVersion" | "pluginDigest">,
-  ): boolean {
-    const selection = run.metadata.pluginSelection as {
-      status?: string; scopeVersion?: number; source?: string; pluginId?: string | null;
-    } | undefined;
-    if (selection?.status === "resolved" && selection.scopeVersion === 2 && selection.source === "auto") {
-      try {
-        const scope = readInputPluginScope(selection);
-        const candidate = scope?.candidates.find(item => item.pluginId === instance.pluginId);
-        return selection.pluginId === null && run.metadata.pluginId === null && candidate?.version === instance.pluginVersion
-          && candidate.behaviorDigest === instance.pluginDigest;
-      } catch {
-        return false;
-      }
-    }
-    return run.metadata.pluginId === instance.pluginId;
   }
 
   private availability(

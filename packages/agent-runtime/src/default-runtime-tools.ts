@@ -1,10 +1,11 @@
-import type { IToolRegistry, ToolDefinition } from "@vykor/core";
+import type { IToolRegistry, RunCapabilityView, ToolDefinition } from "@vykor/core";
 import { resolveToolExecution, ToolRegistrationError } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 import type { VykorAgentConfiguration } from "./agent-options.js";
 import { GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
 import { GOAL_READ_TOOL_NAME } from "./goal-read-tool.js";
+import { restrictRunCapabilityView } from "./run-capability-view.js";
 
 export type ToolLimit =
   | { kind: "all" }
@@ -88,8 +89,9 @@ export function createVisibilityToolRegistry(
   allowedTools: ToolLimit,
   deniedTools: ReadonlySet<string>,
   environment?: ExecutionEnvironmentHandle,
+  delegationAllowedTools?: ToolLimit,
 ): IToolRegistry {
-  return new RuntimeToolRegistry(inner, allowedTools, deniedTools, environment);
+  return new RuntimeToolRegistry(inner, allowedTools, deniedTools, environment, delegationAllowedTools);
 }
 
 class RuntimeToolRegistry implements IToolRegistry {
@@ -98,6 +100,7 @@ class RuntimeToolRegistry implements IToolRegistry {
     private readonly allowedTools: ToolLimit,
     private readonly deniedTools: ReadonlySet<string>,
     private readonly environment?: ExecutionEnvironmentHandle,
+    private readonly delegationAllowedTools: ToolLimit = allowedTools,
   ) {}
 
   register(tool: ToolDefinition, source?: Parameters<IToolRegistry["register"]>[1]): void {
@@ -141,7 +144,16 @@ class RuntimeToolRegistry implements IToolRegistry {
     return this.inner;
   }
 
-  private isVisible(tool: ToolDefinition): boolean {
+  delegationRegistry(): RuntimeToolRegistry {
+    return new RuntimeToolRegistry(
+      this.inner,
+      this.delegationAllowedTools,
+      this.deniedTools,
+      this.environment,
+    );
+  }
+
+  isVisible(tool: ToolDefinition): boolean {
     if (this.allowedTools.kind === "none") return false;
     if (this.deniedTools.has(tool.name)) return false;
     const execution = resolveToolExecution(tool);
@@ -152,6 +164,29 @@ class RuntimeToolRegistry implements IToolRegistry {
       this.allowedTools.kind === "all" || this.allowedTools.names.has(tool.name)
     );
   }
+}
+
+/** Host-only registry used to capture child permissions, never exposed to the model. */
+export function getDelegationToolRegistry(
+  registry: IToolRegistry,
+): IToolRegistry {
+  return registry instanceof RuntimeToolRegistry
+    ? registry.delegationRegistry()
+    : registry;
+}
+
+/** Recheck inherited definitions under this runtime's own tool and environment limits. */
+export function constrainRunCapabilityTools(
+  registry: IToolRegistry,
+  view: RunCapabilityView,
+): RunCapabilityView {
+  if (!(registry instanceof RuntimeToolRegistry)) return view;
+  const delegation = registry.delegationRegistry();
+  return restrictRunCapabilityView(
+    view,
+    (_name, binding) => registry.isVisible(binding.definition),
+    (_name, binding) => delegation.isVisible(binding.definition),
+  );
 }
 
 export function getInternalToolRegistry(registry: IToolRegistry): IToolRegistry {

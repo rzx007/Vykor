@@ -293,10 +293,14 @@ export interface RunCapabilityView {
   /** Exact allowed plugin owners. Individual bindings remain the execution authority. */
   readonly pluginIds?: ReadonlySet<string>;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
+  /** Host-captured bindings for child delegation; never executable by this Run. */
+  readonly delegatableTools?: ReadonlyMap<string, RunToolBinding>;
   readonly skills: ReadonlyMap<string, RunSkillBinding>;
   readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
   readonly agents: ReadonlyMap<string, RunAgentBinding>;
   readonly pluginUi?: ReadonlyMap<string, RunPluginUiBinding>;
+  /** Host-captured UI evidence for child delegation, separate from this Run's UI. */
+  readonly delegatablePluginUi?: ReadonlyMap<string, RunPluginUiBinding>;
 }
 
 /** Framework-internal execution capabilities shared with tool packages. */

@@ -9,11 +9,13 @@ import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 import { createGoalRunContribution } from "./goal-extension.js";
 import type { GoalRunBinding } from "./goal-extension.js";
 import type { PluginSelectionCandidate } from "./plugin-selection.js";
+import type { VykorAgentConfiguration } from "./agent-options.js";
 
 interface FrameworkAgentRunOptions {
   limits?: AgentExecutionContext["limits"];
   profile?: AgentExecutionContext["profile"];
   capabilityView?: AgentExecutionContext["capabilityView"];
+  onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
   pluginGuidance?: string;
   prepareCapabilities?: (signal: AbortSignal) => Promise<{
     capabilityView: AgentExecutionContext["capabilityView"];
@@ -184,6 +186,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
   }
 
   private async execute(): Promise<AgentRunResult> {
+    let releaseCapabilities: (() => void | Promise<void>) | undefined;
     let output = "";
     // Only text that survived a successful `complete` may be reported as an
     // unfinished result; retries and in-flight fragments never reach it.
@@ -236,6 +239,28 @@ export class FrameworkAgentRun implements AgentRunHandle {
         systemGuidance: [execution.contribution?.systemGuidance, pluginGuidance].filter(Boolean).join("\n\n"),
       } };
       await this.emit({ type: "run.started", data: {} });
+      if (this.options.onRunCapabilities) {
+        if (!execution.capabilityView)
+          throw new Error(
+            "A prepared capability view is required for host Run registration",
+          );
+        const release = await this.options.onRunCapabilities(
+          Object.freeze({
+            scope: Object.freeze({ ...scope }),
+            ...(this.options.identity
+              ? { identity: Object.freeze({ ...this.options.identity }) }
+              : {}),
+            capabilityView: execution.capabilityView,
+            pluginCandidates: Object.freeze(
+              (prepared?.pluginCandidates ?? []).map((candidate) =>
+                Object.freeze({ ...candidate }),
+              ),
+            ),
+          }),
+        );
+        if (typeof release === "function") releaseCapabilities = release;
+      }
+      this.controller.signal.throwIfAborted();
       this.start.resolve({
         sessionId: this.sessionId,
         inputId: this.inputId,
@@ -297,6 +322,10 @@ export class FrameworkAgentRun implements AgentRunHandle {
         }).catch(() => {});
       }
       throw error;
+    } finally {
+      // A host cleanup failure rejects the handle after the terminal event; it
+      // must not fabricate a second failed terminal for an already durable Run.
+      await releaseCapabilities?.();
     }
   }
 

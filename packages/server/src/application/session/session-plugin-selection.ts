@@ -47,6 +47,38 @@ export function readInputPluginScope(value: unknown): InputPluginScope | undefin
   return scope;
 }
 
+/** Read the immutable, versioned authorization saved for an executing Run. */
+export function readRunPluginScope(run: SessionRunRecord): InputPluginScope | undefined {
+  const selection = run.metadata.pluginSelection as {
+    status?: string; scopeVersion?: number; source?: string; pluginId?: string | null; pluginIds?: unknown;
+  } | undefined;
+  if (selection?.scopeVersion !== 2) return undefined;
+  const manual = selection.source === "explicit" || selection.source === "inherited";
+  if (selection.status !== "resolved" || (manual
+    ? typeof selection.pluginId !== "string" || run.metadata.pluginId !== selection.pluginId ||
+      !Array.isArray(selection.pluginIds) || selection.pluginIds.length !== 1 || selection.pluginIds[0] !== selection.pluginId
+    : selection.pluginId !== null || run.metadata.pluginId !== null)) {
+    throw new Error("Invalid saved plugin source scope");
+  }
+  return readInputPluginScope(manual ? { ...selection, source: "auto" } : selection);
+}
+
+/** Legacy single-plugin Runs remain readable; versioned Runs require exact provenance. */
+export function runPluginSourceMatches(run: SessionRunRecord, source: {
+  pluginId: string; pluginVersion: string; pluginDigest: string | undefined;
+}): boolean {
+  try {
+    const scope = readRunPluginScope(run);
+    if (scope) {
+      const candidate = scope.candidates.find(item => item.pluginId === source.pluginId);
+      return candidate?.version === source.pluginVersion && candidate.behaviorDigest === source.pluginDigest;
+    }
+    return run.metadata.pluginId === source.pluginId;
+  } catch {
+    return false;
+  }
+}
+
 /** The executor validates host snapshots; this path never makes a model request. */
 export async function resolveRunPluginSelection(options: {
   session: SessionRecord;

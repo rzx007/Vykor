@@ -20,6 +20,8 @@ export interface PluginUiConversationPrepared {
   instanceId: string;
   revision: number;
   promptText: string;
+  /** Host-derived destination; omitted when the source session is also the target. */
+  targetSessionId?: string;
 }
 export type SubmitPluginUiConversationInput = Omit<
   PluginUiConversationRequest,
@@ -32,6 +34,7 @@ export type PluginUiConversationReceipt =
       instanceId: string;
       revision: number;
       added: true;
+      targetSessionId?: string;
     }
   | {
       kind: "conversation";
@@ -42,6 +45,7 @@ export type PluginUiConversationReceipt =
       inputId: string;
       runId: string;
       status: "pending" | "running" | "completed" | "failed" | "interrupted";
+      targetSessionId?: string;
     };
 export interface PluginUiSubmissionRecord {
   schemaVersion: 2;
@@ -53,6 +57,7 @@ export interface PluginUiSubmissionRecord {
   pluginDigest: string;
   componentDigest: string;
   acceptedAt: number;
+  targetSessionId?: string;
 }
 
 function invalid(field?: string): never {
@@ -61,11 +66,12 @@ function invalid(field?: string): never {
 function exact(
   value: unknown,
   keys: readonly string[],
+  optional: readonly string[] = [],
 ): Record<string, unknown> {
   if (
     !isPluginUiRecord(value) ||
     !keys.every((key) => Object.hasOwn(value, key)) ||
-    Object.keys(value).some((key) => !keys.includes(key))
+    Object.keys(value).some((key) => !keys.includes(key) && !optional.includes(key))
   )
     invalid();
   return value;
@@ -73,6 +79,9 @@ function exact(
 const nonempty = (value: unknown): value is string =>
   typeof value === "string" && !!value.trim();
 const mode = (value: unknown) => value === "draft" || value === "submit";
+function target(r: Record<string, unknown>): void {
+  if (Object.hasOwn(r, "targetSessionId") && !nonempty(r.targetSessionId)) invalid("targetSessionId");
+}
 const digest = (value: unknown) =>
   typeof value === "string" && /^[0-9a-f]{64}$/i.test(value);
 function payload(r: Record<string, unknown>): void {
@@ -108,7 +117,8 @@ export function parseSubmitPluginUiConversationInput(
 export function parsePluginUiConversationPrepared(
   value: unknown,
 ): PluginUiConversationPrepared {
-  const r = exact(value, ["mode", "instanceId", "revision", "promptText"]);
+  const r = exact(value, ["mode", "instanceId", "revision", "promptText"], ["targetSessionId"]);
+  target(r);
   if (
     !mode(r.mode) ||
     !isPluginUiUuid(r.instanceId) ||
@@ -142,7 +152,9 @@ export function parsePluginUiConversationReceipt(
           "runId",
           "status",
         ],
+    ["targetSessionId"],
   );
+  target(r);
   if (
     r.kind !== "conversation" ||
     !mode(r.mode) ||
@@ -177,7 +189,8 @@ export function parsePluginUiSubmissionRecord(
     "pluginDigest",
     "componentDigest",
     "acceptedAt",
-  ]);
+  ], ["targetSessionId"]);
+  target(r);
   if (
     r.schemaVersion !== 2 ||
     !isPluginUiUuid(r.requestId) ||

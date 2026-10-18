@@ -24,6 +24,7 @@ interface Dependencies {
   documents: PluginUiDocumentStore
   getClient(): Promise<VykorClient>
   getOwnerSessionId(ownerId: number): string | undefined
+  getOwnerSessionToken?(ownerId: number, sessionId: string): object | undefined
   localAvailable(owner: WebContents): boolean
 }
 interface Owner {
@@ -32,7 +33,8 @@ interface Owner {
   sessionEpoch: number
   sessionId: string | undefined
   trustedUrl: string
-  view?: { sessionId: string; generation: unknown; sources: Set<string> }
+  views: Map<string, { generation: unknown; sources: Set<string> }>
+  sourceEpochs: Map<string, number>
 }
 interface Scope {
   ownerId: number
@@ -41,6 +43,9 @@ interface Scope {
   sessionEpoch: number
   generation: number
   sessionId: string
+  sessionToken: object | string
+  sourceEpoch: number
+  targetSessionId: string
   client: VykorClient
 }
 interface Mount {
@@ -112,6 +117,8 @@ export class DesktopPluginUiService {
       epoch: 0,
       sessionEpoch: 0,
       sessionId: this.dependencies.getOwnerSessionId(contents.id),
+      views: new Map(),
+      sourceEpochs: new Map(),
       trustedUrl: location.href,
     })
     contents.once("destroyed", () => {
@@ -134,15 +141,32 @@ export class DesktopPluginUiService {
   invalidateOwner(ownerId: number): void {
     const owner = this.owners.get(ownerId)
     const sessionId = this.dependencies.getOwnerSessionId(ownerId)
-    this.conversations.retainSession(ownerId, sessionId)
+    this.conversations.retainSessions(ownerId, (id, token) => this.sessionToken(ownerId, id) === token)
     if (owner && owner.sessionId !== sessionId) {
       owner.sessionEpoch++
       owner.sessionId = sessionId
     }
-    if (owner) owner.epoch++
+    if (owner) { owner.epoch++; owner.views.clear(); owner.sourceEpochs.clear() }
     for (const [id, mount] of this.mounts)
       if (mount.scope.ownerId === ownerId) this.mounts.delete(id)
     this.dependencies.documents.revokeOwner(ownerId)
+  }
+  invalidateSession(ownerId: number, sessionId: string, releasePending = true): void {
+    const owner = this.owners.get(ownerId)
+    if (owner) {
+      owner.sourceEpochs.set(sessionId, (owner.sourceEpochs.get(sessionId) ?? 0) + 1)
+      owner.views.delete(sessionId)
+    }
+    if (releasePending) this.conversations.releaseSession(ownerId, sessionId)
+    for (const [id, mount] of this.mounts) if (mount.scope.ownerId === ownerId && mount.scope.sessionId === sessionId) {
+      this.mounts.delete(id)
+      this.dependencies.documents.revoke(id)
+    }
+  }
+  private sessionToken(ownerId: number, sessionId: string): object | string | undefined {
+    return this.dependencies.getOwnerSessionToken
+      ? this.dependencies.getOwnerSessionToken(ownerId, sessionId)
+      : this.dependencies.getOwnerSessionId(ownerId) === sessionId ? sessionId : undefined
   }
   invalidateConnection(): void {
     this.generation++
@@ -155,6 +179,10 @@ export class DesktopPluginUiService {
   observeSession(ownerId: number, view: DesktopSessionView): void {
     const owner = this.owners.get(ownerId)
     if (!owner) return
+    if (this.sessionToken(ownerId, view.session.id) === undefined) return
+    this.conversations.retainSessions(ownerId, (id, token) => this.sessionToken(ownerId, id) === token)
+    const currentRoot = this.dependencies.getOwnerSessionId(ownerId)
+    if (owner.sessionId !== currentRoot) this.invalidateOwner(ownerId)
     this.conversations.observe(ownerId, view)
     const sources = new Set(
       view.parts.flatMap((part) => {
@@ -163,17 +191,17 @@ export class DesktopPluginUiService {
       })
     )
     const generation = view.session.metadata.pluginUiGeneration
+    const previous = owner.views.get(view.session.id)
     if (
       view.syncStatus !== "connected" ||
       view.session.status === "archived" ||
       view.session.status === "closing" ||
-      (owner.view &&
-        (owner.view.sessionId !== view.session.id ||
-          owner.view.generation !== generation ||
-          [...owner.view.sources].some((id) => !sources.has(id))))
+      (previous &&
+        (previous.generation !== generation ||
+          [...previous.sources].some((id) => !sources.has(id))))
     )
-      this.invalidateOwner(ownerId)
-    owner.view = { sessionId: view.session.id, generation, sources }
+      this.invalidateSession(ownerId, view.session.id, false)
+    owner.views.set(view.session.id, { generation, sources })
   }
   dispose(): void {
     this.invalidateConnection()
@@ -205,27 +233,31 @@ export class DesktopPluginUiService {
       this.owners.get(scope.ownerId) !== scope.owner ||
       scope.owner.epoch !== scope.epoch ||
       !this.isOwner(scope.ownerId) ||
-      this.dependencies.getOwnerSessionId(scope.ownerId) !== scope.sessionId ||
+      this.sessionToken(scope.ownerId, scope.sessionId) !== scope.sessionToken ||
+      (scope.owner.sourceEpochs.get(scope.sessionId) ?? 0) !== scope.sourceEpoch ||
       this.client !== scope.client
     )
       fail("plugin_ui_mount_closed")
   }
   private async capture(ownerId: number, sessionId: string): Promise<Scope> {
     const owner = this.owners.get(ownerId)
+    const sessionToken = this.sessionToken(ownerId, sessionId)
     if (
       !owner ||
       !this.isOwner(ownerId) ||
-      this.dependencies.getOwnerSessionId(ownerId) !== sessionId
+      sessionToken === undefined
     )
       fail("plugin_ui_mount_closed")
     const epoch = owner!.epoch
     const generation = this.generation
+    const sourceEpoch = owner!.sourceEpochs.get(sessionId) ?? 0
     const client = await this.dependencies.getClient()
     if (
       generation !== this.generation ||
       owner!.epoch !== epoch ||
       this.owners.get(ownerId) !== owner ||
-      this.dependencies.getOwnerSessionId(ownerId) !== sessionId
+      this.sessionToken(ownerId, sessionId) !== sessionToken ||
+      (owner!.sourceEpochs.get(sessionId) ?? 0) !== sourceEpoch
     )
       fail("plugin_ui_mount_closed")
     if (this.client && this.client !== client) {
@@ -240,6 +272,9 @@ export class DesktopPluginUiService {
       sessionEpoch: owner!.sessionEpoch,
       generation,
       sessionId,
+      sessionToken: sessionToken!,
+      sourceEpoch,
+      targetSessionId: this.dependencies.getOwnerSessionId(ownerId)!,
       client,
     }
   }
@@ -477,7 +512,7 @@ export class DesktopPluginUiService {
       this.owners.get(binding.ownerId) !== binding.owner ||
       this.owners.get(binding.ownerId)?.sessionEpoch !== binding.sessionEpoch ||
       !this.isOwner(binding.ownerId) ||
-      this.dependencies.getOwnerSessionId(binding.ownerId) !== binding.sessionId ||
+      this.sessionToken(binding.ownerId, binding.sessionId) !== binding.sessionToken ||
       this.client !== binding.client
     ) {
       this.conversations.release(binding)
@@ -528,7 +563,8 @@ export class DesktopPluginUiService {
       if (
         prepared.mode !== owned.mode ||
         prepared.instanceId !== mount.instanceId ||
-        prepared.revision !== owned.expectedRevision
+        prepared.revision !== owned.expectedRevision ||
+        (prepared.targetSessionId ?? mount.scope.sessionId) !== mount.scope.targetSessionId
       )
         fail("plugin_ui_invalid_message")
       return prepared

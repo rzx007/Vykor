@@ -4,16 +4,31 @@ import type {
   AgentEffects,
   AgentRequestConfigurationReader,
   AgentScheduleEffects,
+  AgentRunScope,
   PermissionMode,
   Settings,
   StreamingMessageClient,
   ToolDefinition,
+  RunCapabilityView,
 } from "@vykor/core";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { WorkflowRunRepository } from "@vykor/coordinator";
 import type { AgentChildEnvironmentProvider } from "./child-environment.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
+import type { PluginSelectionCandidate } from "./plugin-selection.js";
+
+/** Trusted prepared bindings for one actual Run; never serialized into model context or events. */
+export interface AgentRunCapabilitySnapshot {
+  readonly scope: AgentRunScope;
+  readonly identity?: {
+    readonly childId?: string;
+    readonly parentSessionId?: string;
+    readonly parentRunId?: string;
+  };
+  readonly capabilityView: RunCapabilityView;
+  readonly pluginCandidates: readonly PluginSelectionCandidate[];
+}
 
 export type CapabilityOverride<T> = T | false;
 
@@ -41,6 +56,9 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Reliable host-only registration after durable Run start, before model dispatch. Return a terminal cleanup. */
+  onRunCapabilities?: (snapshot: AgentRunCapabilitySnapshot) =>
+    void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
   /** Host-owned project identity for memory, independent from a task worktree cwd. */
   memoryRoot?: string;
   client?: StreamingMessageClient;

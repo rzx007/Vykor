@@ -14,6 +14,7 @@ import { VykorHttpServer } from "../server.js";
 import { createSystemRoutes } from "../routes/system.js";
 import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
 import { createDefaultSettingsService } from "../../application/default-services/settings-service.js";
+import { SessionPluginUiService } from "../../application/session/session-plugin-ui-service.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
 let nativeLogs: ReturnType<typeof captureNativeUiLogs>;
@@ -148,8 +149,17 @@ async function harness(link = false) {
 }
 
 it("wires source capture, authenticated Client actions, durable retries, summaries and export through the real daemon", async () => {
+  const register = SessionPluginUiService.prototype.registerRunView;
+  const releases = vi.fn();
+  const registrations = vi.spyOn(SessionPluginUiService.prototype, "registerRunView").mockImplementation(function (this: SessionPluginUiService, runId, view) {
+    const release = register.call(this, runId, view);
+    return () => { releases(runId); release(); };
+  });
   const h = await harness();
   expect(h.instance()).toBeDefined();
+  expect(registrations).toHaveBeenCalledTimes(1);
+  expect(releases).toHaveBeenCalledTimes(1);
+  expect(releases).toHaveBeenCalledWith(h.instance()!.sourceRunId);
   const id = h.instance()!.instanceId;
   const client = h.client();
   expect((await client.protocol.capabilities()).features.pluginUi).toBe(2);

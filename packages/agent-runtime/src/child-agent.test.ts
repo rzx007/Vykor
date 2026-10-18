@@ -10,6 +10,54 @@ import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
 import { resolveEffectiveAllowedTools } from "./default-runtime.js";
 
 describe("AgentChildManager", () => {
+  it("reauthorizes hidden delegated bindings for follow-ups and preserves the captured function after idle recovery", async () => {
+    const define = (name: string, text = name) => ({ name, description: name, inputSchema: { type: "object" },
+      execute: async () => ({ content: [{ type: "text" as const, text }] }) });
+    const registry = new ToolRegistry();
+    registry.register(define("Agent"));
+    registry.register(define("OfficeCLI", "captured"), { kind: "plugin", id: "office" });
+    const parent = createRunCapabilityView({
+      toolRegistry: createVisibilityToolRegistry(registry, { kind: "only", names: new Set(["Agent"]) }, new Set()),
+      delegatableToolRegistry: registry, pluginIds: new Set(["office"]),
+    }, ["office"]);
+    let creations = 0;
+    const submissions: any[] = [];
+    const manager = createManager(new AgentEventBus(), async () => {
+      creations++;
+      return fakeAgent((_content: unknown, options: any) => {
+        submissions.push(options); return completedRun("done");
+      });
+    }, 1);
+    try {
+      const child = await manager.createController(parentScope(), parent).spawnChildAgent({
+        description: "office worker", prompt: "work", agent: "worker", cwd: "/other", allowedTools: ["OfficeCLI"],
+      });
+      await child.result;
+      await vi.waitFor(() => expect(manager.get(child.id)!.state).toBe("suspended"));
+      registry.override(define("OfficeCLI", "replacement"), { kind: "plugin", id: "office" });
+      await manager.get(child.id)!.send({ content: "continue" }, parent);
+      await manager.get(child.id)!.result;
+      expect(creations).toBe(2);
+      expect(submissions).toHaveLength(2);
+      for (const submission of submissions) {
+        expect([...submission.capabilityView.tools.keys()]).toEqual(["OfficeCLI"]);
+        expect(await submission.capabilityView.tools.get("OfficeCLI").invoke({}, { cwd: "/other" }))
+          .toEqual({ content: [{ type: "text", text: "captured" }] });
+      }
+      const original = parent.delegatableTools!.get("OfficeCLI")!;
+      for (const changes of [
+        { source: { kind: "plugin", id: "foreign" } }, { serverId: "different-server" },
+        { definitionIdentity: Symbol("replacement") }, { definition: { ...original.definition, execute: define("Other").execute } },
+      ]) {
+        const forged = { ...parent, delegatableTools: new Map([["OfficeCLI", { ...original, ...changes }]]) };
+        await expect(manager.get(child.id)!.send({ content: "forbidden" }, forged as any)).rejects.toThrow("not authorized");
+      }
+      await expect(manager.get(child.id)!.send({ content: "forbidden" }, { ...parent, delegatableTools: new Map() }))
+        .rejects.toThrow("not authorized");
+      expect(submissions).toHaveLength(2);
+    } finally { await manager.closeAll(); }
+  });
+
   it("rebuilds worker tools behind a Coordinator's plugin scope without reopening foreign plugins or host-denied tools", async () => {
     const define = (name: string) => ({ name, description: name, inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
     const parentRegistry = new ToolRegistry();

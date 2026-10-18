@@ -33,6 +33,7 @@ import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { createMcpAuthHost } from "./mcp-auth.js";
 import { createRememberTool } from "./remember-tool.js";
 import { getInternalToolRegistry } from "./default-runtime.js";
+import { getDelegationToolRegistry } from "./default-runtime-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import type { PluginSelectionCatalog } from "./plugin-selection.js";
 import { selectPluginInstallationWinners } from "./plugin-capability-inventory.js";
@@ -96,6 +97,7 @@ export async function installRuntimeIntegrations(
     },
   });
   const pluginUi: RunPluginUiBinding[] = [];
+  const hostToolRegistry = getDelegationToolRegistry(runtime.toolRegistry);
   for (const plugin of options.discovery.plugins) {
     if (options.settings.plugins?.uiEnabled === false) continue;
     const original = plugin.components.ui;
@@ -122,7 +124,7 @@ export async function installRuntimeIntegrations(
         continue;
       }
       const activation = toolActivations.find(item => item.pluginId === pluginId);
-      const captured = createRunCapabilityView({ toolRegistry: runtime.toolRegistry, pluginIds: new Set([pluginId]) }, pluginId);
+      const captured = createRunCapabilityView({ toolRegistry: hostToolRegistry, pluginIds: new Set([pluginId]) }, pluginId);
       const bindings: RunPluginUiBinding[] = [];
       for (const component of original.value) {
         const actionTools: RunToolBinding[] = [];
@@ -141,7 +143,7 @@ export async function installRuntimeIntegrations(
           htmlSha256: component.htmlSha256, root: plugin.root, entryPath: component.entryPath,
           definition: component.definition, actionTools });
       }
-      pluginUi.push(...createRunCapabilityView({ toolRegistry: runtime.toolRegistry,
+      pluginUi.push(...createRunCapabilityView({ toolRegistry: hostToolRegistry,
         pluginIds: new Set([pluginId]), pluginUi: bindings }, pluginId).pluginUi!.values());
     } catch {
       diagnostic("Plugin UI snapshot could not be verified.");
@@ -399,6 +401,7 @@ export async function installRuntimeIntegrations(
       });
     return createRunCapabilityView({
       toolRegistry: runtime.toolRegistry,
+      delegatableToolRegistry: getDelegationToolRegistry(runtime.toolRegistry),
       pluginIds: new Set(inventory.plugins.keys()),
       pluginPreparationErrors: preparationErrors,
       skills, agents, mcpServers: connectedServers, pluginUi,

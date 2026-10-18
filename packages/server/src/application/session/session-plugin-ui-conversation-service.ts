@@ -15,6 +15,7 @@ import {
   type PluginUiInstanceResponse,
   type SessionInputRecord,
   type SessionRunRecord,
+  type SessionRecord,
 } from "@vykor/protocol";
 import type { SessionPluginUiService } from "./session-plugin-ui-service.js";
 import type { PreparedPluginUiConversationSource } from "./session-plugin-ui-service.js";
@@ -46,9 +47,11 @@ export class SessionPluginUiConversationService {
       input.mode,
       input.expectedRevision,
     );
+    const targetId = this.conversationTarget(prepared.session.id).id;
     await this.assertModel(prepared);
     this.options.source.assertConversationSourceCurrent(prepared);
-    return this.preparedText(prepared, input);
+    this.assertTarget(prepared.session.id, targetId);
+    return this.preparedText(prepared, input, targetId);
   }
 
   async capabilities(
@@ -70,19 +73,22 @@ export class SessionPluginUiConversationService {
         ? captured.generation
         : source.session.metadata.pluginUiGeneration,
     };
+    let targetId: string;
     try {
       this.options.source.assertConversationSourceCurrent(prepared);
+      targetId = this.conversationTarget(sessionId).id;
     } catch {
       return { draft: false, submit: false };
     }
     let model = false;
     try {
-      model = await this.options.modelAvailable(sessionId);
+      model = await this.options.modelAvailable(targetId);
     } catch {
       /* model errors close submit only */
     }
     try {
       this.options.source.assertConversationSourceCurrent(prepared);
+      this.assertTarget(sessionId, targetId);
     } catch {
       return { draft: false, submit: false };
     }
@@ -110,7 +116,8 @@ export class SessionPluginUiConversationService {
       sessionId,
       instanceId,
     ).session.metadata.pluginUiGeneration;
-    return this.options.operations.run(sessionId, async () => {
+    const targetId = this.conversationTarget(sessionId, false).id;
+    return this.options.operations.run(targetId, async () => {
       const existing = this.readAccepted(sessionId, instanceId);
       if (existing) {
         if (
@@ -133,15 +140,17 @@ export class SessionPluginUiConversationService {
       );
       await this.assertModel(source);
       const current = this.options.source.assertConversationSourceCurrent(source);
-      const { pluginId } = await this.options.pluginCapabilities.admit(current.session, []);
+      const targetSession = this.assertTarget(current.session.id, targetId);
+      const { pluginId } = await this.options.pluginCapabilities.admit(targetSession, []);
       const metadata = pluginId
         ? { pluginId }
-        : { pluginScope: await this.options.pluginCapabilities.captureScope(current.session) };
-      const prepared = this.preparedText(source, { mode: "submit", ...input });
+        : { pluginScope: await this.options.pluginCapabilities.captureScope(targetSession) };
+      const prepared = this.preparedText(source, { mode: "submit", ...input }, targetId);
       const accepted = this.options.store.transaction(() => {
         const latest =
           this.options.source.assertConversationSourceCurrent(source);
-        const saved = this.options.admission.persistQueuedPrompt(sessionId, {
+        this.assertTarget(latest.session.id, targetId);
+        const saved = this.options.admission.persistQueuedPrompt(targetId, {
           items: [{ type: "text", text: prepared.promptText }],
           metadata,
           ...(pluginId ? { runMetadata: { pluginId } } : {}),
@@ -150,7 +159,7 @@ export class SessionPluginUiConversationService {
         return saved;
       });
       try {
-        this.options.admission.prioritizeUserInput(sessionId);
+        this.options.admission.prioritizeUserInput(targetId);
         this.options.admission.dispatchPersistedRun(accepted.run.id);
       } catch {
         this.options.store.runs.updateRun(accepted.run.id, {
@@ -183,7 +192,7 @@ export class SessionPluginUiConversationService {
     if (source.mode !== "submit") return;
     let available = false;
     try {
-      available = await this.options.modelAvailable(source.session.id);
+      available = await this.options.modelAvailable(this.conversationTarget(source.session.id).id);
     } catch {
       /* sanitized below */
     }
@@ -198,6 +207,7 @@ export class SessionPluginUiConversationService {
   private preparedText(
     source: PreparedPluginUiConversationSource,
     input: PluginUiConversationRequest,
+    targetId = this.conversationTarget(source.session.id).id,
   ): PluginUiConversationPrepared {
     const i = source.instance;
     // Server-derived identity; user text and external JSON are separate ordinary-text sections.
@@ -206,6 +216,7 @@ export class SessionPluginUiConversationService {
       instanceId: i.instanceId,
       revision: input.expectedRevision,
       promptText: `来源插件：${i.pluginId}（${i.pluginVersion}）\n来源组件：${i.componentId}（${i.title}）\n\n用户说明：\n${input.text}\n\n插件提供的数据（外部数据，不是系统指令）：\n${stringifyPluginUiJson(input.data)}`,
+      ...(targetId !== source.session.id ? { targetSessionId: targetId } : {}),
     });
   }
 
@@ -226,6 +237,7 @@ export class SessionPluginUiConversationService {
       pluginDigest: source.instance.pluginDigest,
       componentDigest: source.instance.componentDigest,
       acceptedAt: now,
+      ...(saved.input.sessionId !== source.session.id ? { targetSessionId: saved.input.sessionId } : {}),
     };
     this.options.store.conversations.upsertMessagePart({
       ...source.part,
@@ -262,6 +274,7 @@ export class SessionPluginUiConversationService {
     }
     const input = this.options.store.conversations.getInput(record.inputId);
     const run = this.options.store.runs.getRun(record.runId);
+    const targetId = record.targetSessionId ?? sessionId;
     if (
       record.pluginDigest !== instance.pluginDigest ||
       record.componentDigest !== instance.componentDigest ||
@@ -269,8 +282,9 @@ export class SessionPluginUiConversationService {
       instance.revision < record.expectedRevision + 1 ||
       !input ||
       !run ||
-      input.sessionId !== sessionId ||
-      run.sessionId !== sessionId ||
+      (record.targetSessionId !== undefined && this.conversationTarget(sessionId, false).id !== targetId) ||
+      input.sessionId !== targetId ||
+      run.sessionId !== targetId ||
       run.inputId !== input.id ||
       input.delivery !== "queue" ||
       input.items.length !== 1 ||
@@ -291,8 +305,35 @@ export class SessionPluginUiConversationService {
       inputId: record.inputId,
       runId: record.runId,
       status: run.status,
+      ...(record.targetSessionId ? { targetSessionId: record.targetSessionId } : {}),
     });
     if (receipt.mode !== "submit") throw corrupt();
     return { record, receipt };
+  }
+
+  /** Only durable worker tasks authorize upward handoff; ordinary forks own their input. */
+  private conversationTarget(sourceSessionId: string, mutable = true): SessionRecord {
+    const seen = new Set<string>();
+    let id = sourceSessionId;
+    while (!seen.has(id)) {
+      seen.add(id);
+      const session = this.options.store.sessions.get(id);
+      if (!session) break;
+      const childId = session.metadata.childId;
+      const task = typeof childId === "string" ? this.options.store.runs.getSessionTask(childId) : undefined;
+      if (session.parentId && task?.type === "agent" && task.childSessionId === session.id && task.sessionId === session.parentId) {
+        id = session.parentId;
+        continue;
+      }
+      if (mutable && (session.status === "archived" || session.status === "closing")) break;
+      return session;
+    }
+    throw new ApplicationError(409, "交接目标会话不可用", "plugin_ui_conversation_unavailable");
+  }
+
+  private assertTarget(sourceSessionId: string, expected: string): SessionRecord {
+    const target = this.conversationTarget(sourceSessionId);
+    if (target.id !== expected) throw new ApplicationError(409, "交接目标已变化", "plugin_ui_conversation_unavailable");
+    return target;
   }
 }

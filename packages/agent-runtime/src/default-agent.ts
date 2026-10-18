@@ -87,5 +87,6 @@ async function createDefaultNodeAgentInternal(
     effects,
     identity: internal.identity,
     childDirectory: internal.childDirectory,
+    onRunCapabilities: options.onRunCapabilities,
   });
 }

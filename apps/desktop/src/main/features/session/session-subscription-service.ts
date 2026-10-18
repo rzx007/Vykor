@@ -80,6 +80,15 @@ export class SessionSubscriptionService {
   >()
   private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
   private readonly invalidationListeners = new Set<(ownerId: number) => void>()
+  private readonly sessionInvalidationListeners = new Set<
+    (ownerId: number, sessionId: string) => void
+  >()
+  private readonly primaryTokens = new WeakMap<SessionSubscription, object>()
+  private readonly agentsDetailRoots = new WeakMap<
+    SessionSubscription,
+    { rootToken: object; childId: string }
+  >()
+  private readonly agentTasks = new WeakMap<object, ReadonlyMap<string, string>>()
   private readonly primaryOwners = new Set<number>()
   private readonly ownerDestroyWatchers = new WeakSet<WebContents>()
   private readonly snapshotListeners = new Set<
@@ -106,6 +115,67 @@ export class SessionSubscriptionService {
       : undefined
   }
 
+  /** A specific open view, never a caller-provided parent/session relationship. */
+  getOwnerSessionToken(ownerId: number, sessionId: string): object | undefined {
+    const root = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    if (!root || root.controller.signal.aborted) return undefined
+    const rootToken = this.primaryTokens.get(root)
+    if (!rootToken) return undefined
+    if (root.sessionId === sessionId) return rootToken
+    const child = this.subscriptions.get(ownerId, auxiliarySubscriptionSlot("agents:details"))
+    const worker = child && this.agentsDetailRoots.get(child)
+    return child &&
+      !child.controller.signal.aborted &&
+      child.sessionId === sessionId &&
+      worker?.rootToken === rootToken &&
+      this.agentTasks.get(rootToken)?.get(worker.childId) === sessionId
+      ? child
+      : undefined
+  }
+
+  private observeAgentTasks(
+    ownerId: number,
+    subscription: SessionSubscription,
+    state: VykorClientState
+  ): void {
+    if (!this.subscriptions.isCurrent(ownerId, primarySubscriptionSlot, subscription)) return
+    const rootToken = this.primaryTokens.get(subscription)
+    const bucket = state.buckets[subscription.sessionId]
+    if (!rootToken || !bucket?.session) return
+    const tasks = new Map<string, string>()
+    for (const task of Object.values(bucket.tasks)) {
+      if (
+        task.type === "agent" &&
+        task.sessionId === subscription.sessionId &&
+        typeof task.childSessionId === "string"
+      )
+        tasks.set(task.id, task.childSessionId)
+    }
+    const child = this.subscriptions.get(ownerId, auxiliarySubscriptionSlot("agents:details"))
+    const worker = child && this.agentsDetailRoots.get(child)
+    const previouslyAuthorized =
+      child &&
+      worker?.rootToken === rootToken &&
+      this.agentTasks.get(rootToken)?.get(worker.childId) === child.sessionId
+    this.agentTasks.set(rootToken, tasks)
+    if (previouslyAuthorized && tasks.get(worker!.childId) !== child!.sessionId)
+      this.invalidateAuxSession(ownerId, auxiliarySubscriptionSlot("agents:details"))
+  }
+
+  onSessionInvalidated(listener: (ownerId: number, sessionId: string) => void): () => void {
+    this.sessionInvalidationListeners.add(listener)
+    return () => {
+      this.sessionInvalidationListeners.delete(listener)
+    }
+  }
+
+  private invalidateAuxSession(ownerId: number, slot: string): void {
+    if (slot !== auxiliarySubscriptionSlot("agents:details")) return
+    const sessionId = this.subscriptions.get(ownerId, slot)?.sessionId
+    if (sessionId)
+      for (const listener of this.sessionInvalidationListeners) listener(ownerId, sessionId)
+  }
+
   onOwnerInvalidated(listener: (ownerId: number) => void): () => void {
     this.invalidationListeners.add(listener)
     return () => {
@@ -120,19 +190,23 @@ export class SessionSubscriptionService {
   }
 
   closeDeletedSessions(webContentsId: number, sessionIds: readonly string[]): void {
-    if (sessionIds.includes(this.getOwnerSessionId(webContentsId) ?? ""))
-      for (const listener of this.invalidationListeners) listener(webContentsId)
+    const rootDeleted = sessionIds.includes(this.getOwnerSessionId(webContentsId) ?? "")
+    const child = this.subscriptions.get(webContentsId, auxiliarySubscriptionSlot("agents:details"))
+    if (child && sessionIds.includes(child.sessionId))
+      this.invalidateAuxSession(webContentsId, auxiliarySubscriptionSlot("agents:details"))
     this.subscriptions.deleteMatchingSessions(webContentsId, new Set(sessionIds))
+    if (rootDeleted) for (const listener of this.invalidationListeners) listener(webContentsId)
   }
 
   closeSession(webContentsId: number): void {
-    for (const listener of this.invalidationListeners) listener(webContentsId)
     this.primaryOwners.delete(webContentsId)
     this.subscriptions.clearOwner(webContentsId)
+    for (const listener of this.invalidationListeners) listener(webContentsId)
   }
 
   closeAuxSession(webContentsId: number, input: CloseDesktopAuxSessionInput): void {
     const subscriptionId = requireString(input.subscriptionId, "辅助订阅 ID")
+    this.invalidateAuxSession(webContentsId, auxiliarySubscriptionSlot(subscriptionId))
     this.subscriptions.delete(webContentsId, auxiliarySubscriptionSlot(subscriptionId))
   }
 
@@ -268,10 +342,11 @@ export class SessionSubscriptionService {
   }
 
   clearAll(): void {
-    for (const ownerId of this.primaryOwners)
-      for (const listener of this.invalidationListeners) listener(ownerId)
+    const ownerIds = [...this.primaryOwners]
     this.primaryOwners.clear()
     this.subscriptions.clearAll()
+    for (const ownerId of ownerIds)
+      for (const listener of this.invalidationListeners) listener(ownerId)
   }
 
   /**
@@ -294,12 +369,44 @@ export class SessionSubscriptionService {
     sessionIdInput: string
   ): Promise<DesktopSessionView> {
     const sessionId = requireString(sessionIdInput, "会话 ID")
+    const pending = this.pendingPrimaryOpens.get(webContents.id)
+    if (pending?.sessionId === sessionId && this.getOwnerSessionId(webContents.id) === sessionId) {
+      return pending.promise
+    }
+
+    // Concurrent opens of the same view share its initial snapshot instead of
+    // replacing the subscription and aborting a request another caller awaits.
+    const promise = this.openPrimarySession(client, webContents, sessionId)
+    const entry = { sessionId, promise }
+    this.pendingPrimaryOpens.set(webContents.id, entry)
+    try {
+      return await promise
+    } finally {
+      if (this.pendingPrimaryOpens.get(webContents.id) === entry) {
+        this.pendingPrimaryOpens.delete(webContents.id)
+      }
+    }
+  }
+
+  private async openPrimarySession(
+    client: SessionSubscriptionClient,
+    webContents: WebContents,
+    sessionId: string
+  ): Promise<DesktopSessionView> {
     // Retire the primary view's UI bindings without closing auxiliary chats.
     for (const listener of this.invalidationListeners) listener(webContents.id)
 
     const controller = new AbortController()
     const subscriptionId = `primary:${this.nextPrimarySubscriptionId++}`
     const subscription = { controller, sessionId }
+    const previous = this.subscriptions.get(webContents.id, primarySubscriptionSlot)
+    // A snapshot resync for the same root keeps already-open auxiliary views;
+    // selecting another root or closing the root always starts a new identity.
+    const ownership =
+      previous?.sessionId === sessionId && !previous.controller.signal.aborted
+        ? (this.primaryTokens.get(previous) ?? {})
+        : {}
+    this.primaryTokens.set(subscription, ownership)
     this.primaryOwners.add(webContents.id)
     this.watchOwnerDestroyed(webContents)
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
@@ -330,6 +437,7 @@ export class SessionSubscriptionService {
     }, 0)
 
     const initialView = toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    this.observeAgentTasks(webContents.id, subscription, snapshot.state)
     for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
     return initialView
   }
@@ -342,33 +450,11 @@ export class SessionSubscriptionService {
     const subscriptionId = requireString(input.subscriptionId, "辅助订阅 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     const slot = auxiliarySubscriptionSlot(subscriptionId)
+    this.invalidateAuxSession(webContents.id, slot)
+    const root = this.subscriptions.get(webContents.id, primarySubscriptionSlot)
     const controller = new AbortController()
     const subscription = { controller, sessionId }
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
-    const pending = this.pendingPrimaryOpens.get(webContents.id)
-    if (pending?.sessionId === sessionId && this.getOwnerSessionId(webContents.id) === sessionId) {
-      return pending.promise
-    }
-
-    // Concurrent opens of the same view share its initial snapshot instead of
-    // replacing the subscription and aborting a request another caller awaits.
-    const promise = this.openPrimarySession(client, webContents, sessionId)
-    const entry = { sessionId, promise }
-    this.pendingPrimaryOpens.set(webContents.id, entry)
-    try {
-      return await promise
-    } finally {
-      if (this.pendingPrimaryOpens.get(webContents.id) === entry) {
-        this.pendingPrimaryOpens.delete(webContents.id)
-      }
-    }
-  }
-
-  private async openPrimarySession(
-    client: SessionSubscriptionClient,
-    webContents: WebContents,
-    sessionId: string
-  ): Promise<DesktopSessionView> {
       this.subscriptions,
       webContents.id,
       slot,
@@ -382,6 +468,22 @@ export class SessionSubscriptionService {
       },
       "无法加载辅助会话状态。"
     )
+    // Only the already-open Agents details pane may host a current root's
+    // direct worker. An arbitrary auxiliary chat/parentId grants no UI bridge.
+    const source = snapshot.state.buckets[sessionId]?.session
+    const childId = source?.metadata.childId
+    const rootToken = root && this.primaryTokens.get(root)
+    if (
+      subscriptionId === "agents:details" &&
+      root &&
+      source?.parentId === root.sessionId &&
+      rootToken &&
+      typeof childId === "string" &&
+      this.agentTasks.get(rootToken)?.get(childId) === source.id &&
+      this.subscriptions.isCurrent(webContents.id, primarySubscriptionSlot, root)
+    ) {
+      this.agentsDetailRoots.set(subscription, { rootToken, childId })
+    }
     setTimeout(() => {
       void this.pumpSession(
         client,
@@ -393,7 +495,10 @@ export class SessionSubscriptionService {
         subscriptionId
       )
     }, 0)
-    return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    const initialView = toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
+    if (this.getOwnerSessionToken(webContents.id, sessionId))
+      for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
+    return initialView
   }
 
   private async pumpSession(
@@ -513,6 +618,7 @@ export class SessionSubscriptionService {
           if (!update.state.buckets[sessionId]?.session) {
             if (slot === primarySubscriptionSlot)
               for (const listener of this.invalidationListeners) listener(webContents.id)
+            else this.invalidateAuxSession(webContents.id, slot)
             this.subscriptions.delete(webContents.id, slot)
             coalescer.dispose()
             return
@@ -532,6 +638,11 @@ export class SessionSubscriptionService {
           } else if (!delta) {
             requireSnapshot()
             if (slot === primarySubscriptionSlot)
+              this.observeAgentTasks(webContents.id, subscription, update.state)
+            if (
+              slot === primarySubscriptionSlot ||
+              this.getOwnerSessionToken(webContents.id, sessionId)
+            )
               for (const listener of this.snapshotListeners)
                 listener(
                   webContents.id,
@@ -547,7 +658,10 @@ export class SessionSubscriptionService {
         },
         onReconnecting: (last) => {
           live.reconnecting = true
-          if (slot === primarySubscriptionSlot)
+          if (
+            slot === primarySubscriptionSlot ||
+            this.getOwnerSessionToken(webContents.id, sessionId)
+          )
             for (const listener of this.snapshotListeners)
               listener(webContents.id, toDesktopSessionView(last.state, sessionId, "reconnecting"))
           live.latestState = last.state

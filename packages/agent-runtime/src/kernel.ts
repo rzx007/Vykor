@@ -205,6 +205,7 @@ async function createAgentKernelInternal(
       capabilities: options.capabilities,
       model: prepared.model ?? configuration.model ?? options.settings.model,
       pluginSelection: prepared.pluginSelection,
+      onRunCapabilities: configuration.onRunCapabilities,
     });
   } catch (error) {
     try {

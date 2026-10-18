@@ -68,6 +68,14 @@ describe("createDaemonAgentLoader", () => {
     expect(createDaemonAgentLoader({})).toBeUndefined();
   });
 
+  it("passes the host-only Run capability lifecycle unchanged into the runtime", async () => {
+    const onRunCapabilities = vi.fn(() => vi.fn());
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
+    const loader = createDaemonAgentLoader({ createAgent, onRunCapabilities })!;
+    await loader({ session, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.onRunCapabilities).toBe(onRunCapabilities);
+  });
+
   it("retains the warm default Agent's local execution evidence and rejects WSL/custom Agents", async () => {
     const local = { loadHistory: vi.fn(), close: vi.fn() } as any;
     vi.mocked(createDefaultNodeAgent).mockResolvedValueOnce(local);

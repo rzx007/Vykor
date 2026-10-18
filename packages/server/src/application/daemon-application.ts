@@ -367,6 +367,11 @@ export class DaemonApplication implements DurableAgentApplication {
       let actionExecutor: SessionPluginUiActionExecutor;
       const application = this;
       const pluginUiTransaction: SessionStore["transaction"] = work => store.transaction(work);
+      const runtimeDiscovery = createSessionRuntimeDiscovery(options);
+      const pluginCapabilities = new SessionPluginCapabilityService({
+        store,
+        resolveInventory: runtimeDiscovery.resolvePluginInventory,
+      });
       this.pluginUi = new SessionPluginUiService({
         store,
         transaction: pluginUiTransaction,
@@ -657,6 +662,12 @@ export class DaemonApplication implements DurableAgentApplication {
           trigger: async (id) => this.schedules.trigger(id),
           listRuns: async (taskId) => this.schedules.listRuns({ taskId }),
         },
+        onRunCapabilities: snapshot => {
+          pluginCapabilities.authorizeRun(snapshot);
+          if (snapshot.capabilityView.pluginUi?.size) {
+            return this.pluginUi.registerRunView(snapshot.scope.runId, snapshot.capabilityView);
+          }
+        },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
           const projector = new DaemonAgentEventProjector({
@@ -720,7 +731,6 @@ export class DaemonApplication implements DurableAgentApplication {
       });
 
       const contextUsageCache = sharedContextUsageCache;
-      const runtimeDiscovery = createSessionRuntimeDiscovery(options);
       const resolveSessionSettings = runtimeDiscovery.resolveSettings;
       const resolveSessionModelLimits = runtimeDiscovery.resolveModelLimits;
       const resolveSessionSkillsList = runtimeDiscovery.resolveSkillsList;
@@ -827,9 +837,6 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runAdmission = runServices.admission;
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
-      const pluginCapabilities = new SessionPluginCapabilityService({
-        resolveInventory: runtimeDiscovery.resolvePluginInventory,
-      });
       this.pluginUiConversation = new SessionPluginUiConversationService({ store, source: this.pluginUi,
         operations: this.operationRunner, admission: this.runAdmission, pluginCapabilities,
         modelAvailable: async sessionId => {
