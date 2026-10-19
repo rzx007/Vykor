@@ -14,7 +14,7 @@ import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
-import { OfficeDocumentPreview } from "./office-document-preview"
+import { LocalDocumentPreview } from "./local-document-preview"
 import {
   imageSourceKey,
   type ImageSource,
@@ -127,8 +127,8 @@ export function FileViewer({
           ) : (
             <DocumentPlaceholder preview={activeTab.preview} />
           )
-        ) : activeTab?.type === "office" ? (
-          <OfficeDocumentPreview key={activeTab.preview.path} preview={activeTab.preview} rootPath={activeTab.projectPath??"."}/>
+        ) : activeTab?.type === "local-document" ? (
+          <LocalDocumentPreview key={activeTab.preview.path} preview={activeTab.preview} />
         ) : activeTab?.type === "document" ? (
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (

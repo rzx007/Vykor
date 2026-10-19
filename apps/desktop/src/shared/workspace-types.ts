@@ -1,5 +1,5 @@
 import type { SafeImageMediaType } from "./safe-image-preview"
-import type { OfficePreview } from "@vykor/client"
+import type { LocalDocumentPreview } from "./document-preview"
 
 export interface WorkspaceListFilesInput {
   rootPath: string
@@ -19,14 +19,13 @@ export interface WorkspaceListFilesResult {
 export interface WorkspaceReadFileInput {
   rootPath: string
   path: string
-  officePage?: number
 }
 
 export type WorkspaceFileScope = "project" | "extra-root"
 export type WorkspaceImagePreviewError = "image_too_large" | "image_unsupported"
 
 export interface WorkspaceReadFileResult {
-  officePreview?: OfficePreview
+  documentPreview?: LocalDocumentPreview
   path: string
   name: string
   language: string

@@ -21,6 +21,7 @@ import {
 } from "../image-preview/safe-image-test-bytes"
 import * as officeEngine from "@vykor/server/daemon-host"
 import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
+import { MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 
 const temporaryDirectories: string[] = []
 
@@ -320,11 +321,38 @@ async function createSizedPng(path: string, size: number): Promise<void> {
   }
 }
 
-it("uses the public Office engine for read-only workspace previews",async()=>{
-  const rootPath=await createTemporaryDirectory();const file=join(rootPath,"sample.pptx");await writeFile(file,"original bytes");
-  const spy=vi.spyOn(officeEngine,"readOfficeFile").mockResolvedValue({text:"",preview:{html:"<p>slide</p>",format:"pptx",page:2,pageCount:2,sha256:"hash"}});
-  try {
-    const result=await workspaceService.readFile({rootPath,path:"sample.pptx",officePage:2});
-    expect(spy).toHaveBeenCalledWith(file,{preview:true,page:2});expect(result.officePreview?.page).toBe(2);expect(result.content).toBeNull();
-  }finally{spy.mockRestore();}
-});
+it.each(["pdf", "epub", "docx", "xlsx", "pptx"])(
+  "returns local %s bytes without calling OfficeCLI",
+  async (format) => {
+    const rootPath = await createTemporaryDirectory()
+    const name = `真实名称.${format}`
+    await writeFile(join(rootPath, name), "original bytes")
+    const spy = vi.spyOn(officeEngine, "readOfficeFile")
+    try {
+      const result = await workspaceService.readFile({ rootPath, path: name })
+      expect(result.name).toBe(name)
+      expect(result.documentPreview?.format).toBe(format)
+      expect(new TextDecoder().decode(result.documentPreview?.bytes)).toBe("original bytes")
+      expect(result.content).toBeNull()
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  }
+)
+
+it("rejects oversized documents before reading their bytes", async () => {
+  const rootPath = await createTemporaryDirectory()
+  const file = await open(join(rootPath, "huge.pdf"), "w")
+  await file.truncate(MAX_DOCUMENT_PREVIEW_BYTES + 1)
+  await file.close()
+  await expect(workspaceService.readFile({ rootPath, path: "huge.pdf" })).rejects.toThrow("64 MB")
+})
+
+it("rejects document symlinks leaving the allowed project root", async () => {
+  const rootPath = await createTemporaryDirectory()
+  const outside = await createTemporaryDirectory()
+  await writeFile(join(outside, "report.pdf"), "private")
+  await symlink(outside, join(rootPath, "linked"), "junction")
+  await expect(workspaceService.readFile({ rootPath, path: "linked/report.pdf" })).rejects.toThrow()
+})

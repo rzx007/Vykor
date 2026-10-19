@@ -39,6 +39,21 @@ describe("canOpenHtmlInBrowser", () => {
 })
 
 describe("fileViewerTypeForPreview", () => {
+  it.each(["pdf", "epub", "docx", "xlsx", "pptx"] as const)(
+    "routes %s bytes into the local viewer",
+    (format) => {
+      expect(
+        fileViewerTypeForPreview(
+          preview({
+            name: `report.${format}`,
+            binary: true,
+            content: null,
+            documentPreview: { format, bytes: new ArrayBuffer(1) },
+          })
+        )
+      ).toBe("local-document")
+    }
+  )
   it("classifies a complete validated image result as an image", () => {
     expect(
       fileViewerTypeForPreview(

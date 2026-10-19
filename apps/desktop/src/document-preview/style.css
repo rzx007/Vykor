@@ -1,0 +1,82 @@
+:root {
+  --preview-background: #f6f6f6;
+  --preview-foreground: #242424;
+  --preview-border: #dedede;
+  font-family: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  color: var(--preview-foreground);
+  background: var(--preview-background);
+}
+html,
+body,
+#viewer {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+#viewer {
+  --ofv-bg: var(--preview-background);
+  --ofv-text: var(--preview-foreground);
+  --ofv-text-muted: color-mix(in srgb, var(--preview-foreground), transparent 28%);
+  --ofv-border: var(--preview-border);
+  --ofv-accent: var(--preview-foreground);
+  --ofv-accent-soft: color-mix(in srgb, var(--preview-foreground), transparent 92%);
+  border: 0;
+  border-radius: 0;
+}
+#viewer .ofv-host,
+#viewer .ofv-viewport,
+#viewer .ofv-pdf {
+  background: var(--preview-background);
+}
+#viewer .ofv-toolbar {
+  min-height: 52px;
+  padding: 8px 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--preview-border);
+  background: var(--preview-background);
+  box-shadow: none;
+}
+#viewer .ofv-toolbar button,
+#viewer .ofv-toolbar input,
+#viewer .ofv-tabs button {
+  border: 1px solid var(--preview-border);
+  border-radius: 999px;
+  min-height: 30px;
+  color: var(--preview-foreground);
+  background: color-mix(in srgb, var(--preview-background), white 55%);
+  box-shadow: 0 1px 2px #00000008;
+}
+#viewer .ofv-toolbar svg {
+  stroke-width: 1.75;
+}
+#viewer :is(button, input):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+#viewer .ofv-panel {
+  border: 0;
+  box-shadow: none;
+}
+#viewer :is(.ofv-docx-page-frame, .ofv-slide, .ofv-pptx-page, .ofv-pdf-page) {
+  box-shadow: 0 1px 5px #00000012;
+}
+#viewer
+  :is(
+    .ofv-pdf-summary,
+    .ofv-sheet-summary,
+    .ofv-presentation-summary,
+    .ofv-epub-meta,
+    .ofv-sheet > h3
+  ) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #viewer *,
+  #viewer *::before,
+  #viewer *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

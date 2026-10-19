@@ -2,8 +2,7 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, extname, join, posix, relative, resolve, sep, win32 } from "node:path"
 import { clipboard, shell } from "electron"
-import { officeFormat } from "@vykor/client"
-import { readOfficeFile, readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/server/daemon-host"
+import { documentFormat, MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 import { desktopSessionService } from "../session/session-service"
 
 import type {
@@ -94,18 +93,19 @@ class WorkspaceService {
   }
 
   async readFile(input: WorkspaceReadFileInput): Promise<WorkspaceReadFileResult> {
-    if (input.path.startsWith("attachment://")) return await this.readOfficeAttachment(input)
+    if (input.path.startsWith("attachment://")) return await this.readDocumentAttachment(input)
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")
-    if (officeFormat(resolved.absolutePath)) {
-      const result = await readOfficeFile(resolved.absolutePath, {
-        preview: true,
-        page: input.officePage ?? 1,
-      })
+    const format = documentFormat(resolved.absolutePath)
+    if (format) {
+      if (info.size > MAX_DOCUMENT_PREVIEW_BYTES) throw new Error("文档超过 64 MB，无法直接预览。")
+      const bytes = await readFile(resolved.absolutePath)
+      if (bytes.byteLength > MAX_DOCUMENT_PREVIEW_BYTES)
+        throw new Error("文档超过 64 MB，无法直接预览。")
       return {
         ...toReadResult(resolved.classification, info.size, true, null),
-        officePreview: result.preview!,
+        documentPreview: { format, bytes: exactArrayBuffer(bytes) },
       }
     }
 
@@ -171,7 +171,7 @@ class WorkspaceService {
     shell.showItemInFolder(resolved.absolutePath)
   }
 
-  private async readOfficeAttachment(
+  private async readDocumentAttachment(
     input: WorkspaceReadFileInput
   ): Promise<WorkspaceReadFileResult> {
     const match = input.path.match(/^attachment:\/\/([^/]+)\//)
@@ -180,12 +180,12 @@ class WorkspaceService {
     const client = await desktopSessionService.daemonClient()
     const asset = await client.attachments.get(assetId)
     if (
-      !officeFormat(asset.displayName) ||
+      !documentFormat(asset.displayName) ||
       asset.status !== "ready" ||
       !asset.sizeBytes ||
-      asset.sizeBytes > MAX_OFFICE_BYTES
+      asset.sizeBytes > MAX_DOCUMENT_PREVIEW_BYTES
     )
-      throw new Error("附件不是可预览的 Office 文档或超过 64 MB。")
+      throw new Error("附件不是可预览的文档或超过 64 MB。")
     const response = await client.attachments.download(assetId)
     if (!response.body) throw new Error("无法读取附件。")
     const reader = response.body.getReader(),
@@ -196,7 +196,7 @@ class WorkspaceService {
         const part = await reader.read()
         if (part.done) break
         total += part.value.byteLength
-        if (total > MAX_OFFICE_BYTES) throw new Error("附件超过 64 MB。")
+        if (total > MAX_DOCUMENT_PREVIEW_BYTES) throw new Error("附件超过 64 MB。")
         chunks.push(part.value)
       }
     } finally {
@@ -204,10 +204,6 @@ class WorkspaceService {
       reader.releaseLock()
     }
     const bytes = Buffer.concat(chunks)
-    const result = await readOfficeBytes(bytes, asset.displayName, {
-      preview: true,
-      page: input.officePage ?? 1,
-    })
     return {
       path: input.path,
       name: asset.displayName,
@@ -221,7 +217,10 @@ class WorkspaceService {
       previewBytes: null,
       mediaType: null,
       imagePreviewError: null,
-      officePreview: result.preview!,
+      documentPreview: {
+        format: documentFormat(asset.displayName)!,
+        bytes: exactArrayBuffer(bytes),
+      },
     }
   }
 

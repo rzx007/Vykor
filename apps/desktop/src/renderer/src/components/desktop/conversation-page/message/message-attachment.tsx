@@ -1,7 +1,7 @@
 import { Download, ExternalLink, FileText } from "lucide-react"
 import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
 import { useContext, useEffect, useState } from "react"
-import { officeFormat } from "@vykor/client"
+import { documentFormat } from "@shared/document-preview"
 import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
 
 import {
@@ -48,7 +48,7 @@ export function MessageAttachment({
   const FileIcon = getFileIcon(part.displayName, part.mediaType)
   const layout=useContext(MainLayoutContext)
   const open=()=>{
-    if(officeFormat(part.displayName)&&layout?.openFile)layout.openFile(`attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`)
+    if(documentFormat(part.displayName)&&layout?.openFile)layout.openFile(`attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`)
     else void window.desktop.attachments.open({assetId:part.assetId})
   }
   const previewUrl = useMessageAttachmentPreview(part)
@@ -125,7 +125,7 @@ export function MessageAttachment({
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle title={part.displayName}>
-          {officeFormat(part.displayName)&&layout?.openFile?<button className="text-left hover:underline" onClick={open}>{part.displayName}</button>:part.displayName}
+          {documentFormat(part.displayName)&&layout?.openFile?<button className="text-left hover:underline" onClick={open}>{part.displayName}</button>:part.displayName}
         </AttachmentTitle>
         <AttachmentDescription>
           {fileKind(part.mediaType)} · {formatBytes(part.sizeBytes)}

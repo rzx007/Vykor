@@ -1,4 +1,6 @@
 import { app, BrowserWindow, Menu, session } from "electron"
+import { resolve } from "node:path"
+import { registerDocumentPreviewScheme, installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
 
 import { createAppContext, type AppContext } from "./core/app-context"
@@ -41,6 +43,7 @@ if (daemonMode) {
 }
 
 function startDesktopApplication(): void {
+  registerDocumentPreviewScheme()
   registerPluginUiScheme()
   if (process.platform === "linux") {
     app.commandLine.appendSwitch("enable-transparent-visuals")
@@ -52,6 +55,7 @@ function startDesktopApplication(): void {
   }
 
   app.whenReady().then(() => {
+    installDocumentPreviewProtocol(session.defaultSession, resolve(__dirname, "../document-preview"))
     installPluginUiDocumentProtocol(desktopPluginUiDocuments, session.defaultSession)
     electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
     app.setName("Vykor")

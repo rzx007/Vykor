@@ -11,6 +11,7 @@ import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-se
 import { packageKnowledgeWorkPlugin, packageOfficeWorkPlugin } from "./scripts/package-bundled-plugin"
 
 import { supportsBundledOfficePlugin } from "./src/shared/office-platform"
+import { buildDocumentPreview } from "./scripts/document-preview-build"
 
 function copyRuntimeResources(): Plugin {
   return {
@@ -56,7 +57,10 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [copyRuntimeResources(), browserAnnotationSelectorPlugin()],
+    plugins: [
+      { name: "build-document-preview", buildStart: buildDocumentPreview },
+      copyRuntimeResources(), browserAnnotationSelectorPlugin(),
+    ],
     build: {
       externalizeDeps: {
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树

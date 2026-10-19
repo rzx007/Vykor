@@ -4,7 +4,7 @@ import { isMarkdownPath } from "./file-icons"
 const largeHtmlLineThreshold = 5_000
 const documentExtensions = new Set(["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx"])
 
-export type FileViewerType = "code" | "document" | "image" | "markdown" | "office"
+export type FileViewerType = "code" | "document" | "image" | "markdown" | "local-document"
 
 export function isHtmlPath(path: string): boolean {
   return /\.html?$/i.test(path)
@@ -27,7 +27,7 @@ export function canOpenHtmlInBrowser(scope: WorkspaceFileScope | undefined): boo
 }
 
 export function fileViewerTypeForPreview(preview: WorkspaceReadFileResult): FileViewerType {
-  if(preview.officePreview)return "office"
+  if (preview.documentPreview) return "local-document"
   if (preview.previewBytes !== null && preview.mediaType !== null) return "image"
   if (isMarkdownPath(preview.path)) return "markdown"
 
