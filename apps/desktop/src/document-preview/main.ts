@@ -48,7 +48,15 @@ window.addEventListener("message", (event) => {
     fit: "width",
     locale: "zh-CN",
     theme: "light",
-    toolbar: { download: false, fullscreen: false, print: false, rotate: false, search: false },
+    toolbar: {
+      zoom: true,
+      order: ["zoom-out", "zoom-reset", "zoom-in"],
+      download: false,
+      fullscreen: false,
+      print: false,
+      rotate: false,
+      search: false,
+    },
     plugins: [
       pdfPlugin(pdfOptions),
       epubPlugin(),

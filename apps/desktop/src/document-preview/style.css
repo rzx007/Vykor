@@ -37,6 +37,12 @@ body,
   background: var(--preview-background);
   box-shadow: none;
 }
+#viewer
+  .ofv-toolbar:not(
+    :has(button:enabled:not([hidden]), input:enabled:not([hidden]), select:enabled:not([hidden]))
+  ) {
+  display: none;
+}
 #viewer .ofv-toolbar button,
 #viewer .ofv-toolbar input,
 #viewer .ofv-tabs button {
