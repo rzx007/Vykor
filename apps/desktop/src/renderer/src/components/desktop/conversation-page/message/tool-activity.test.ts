@@ -117,7 +117,7 @@ describe("real tool activity labels", () => {
     ["preparing", "正在准备工具", "solving"],
     ["waiting_permission", "等待你的确认", "breathing"],
     ["queued", "等待前一个工具", "breathing"],
-    ["running", "", "solving"],
+    ["running", "正在处理", "solving"],
     ["completed", "工具已返回，等待本轮结果", "working"],
     ["unknown", "结果不确定", "working"],
   ])("uses the expected activity label and orb for %s", (phase, want, orb) => {
@@ -126,7 +126,7 @@ describe("real tool activity labels", () => {
   })
   it("ignores a phase that only exists on Object.prototype", () => {
     const tool = { ...part, metadata: { toolProgress: { phase: "constructor" } } }
-    expect(conversationActivity([run], [message], [tool])).toEqual({ label: "", orb: "solving" })
+    expect(conversationActivity([run], [message], [tool])).toEqual({ label: "正在处理", orb: "solving" })
   })
   it("waits with breathing and thinks with working when no tool is involved", () => {
     expect(conversationActivity([run], [message], [])).toEqual({
@@ -141,8 +141,12 @@ describe("real tool activity labels", () => {
   it("stops reporting activity once no run is active", () => {
     expect(conversationActivity([], [message], [part])).toBeUndefined()
   })
-  it("leaves the default label blank while a tool is running", () => {
+  it("shows conversation feedback while keeping the tool row label blank", () => {
     expect(toolActivityLabel(part)).toBe("")
+    expect(conversationActivity([run], [message], [part])).toEqual({
+      label: "正在处理",
+      orb: "solving",
+    })
   })
   it("ignores terminal part metadata and tools from older runs", () => {
     const tool = { ...part, metadata: { toolProgress: { phase: "running" } } }

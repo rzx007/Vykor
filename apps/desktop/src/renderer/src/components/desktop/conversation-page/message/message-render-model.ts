@@ -370,9 +370,13 @@ export function conversationActivity(
     .filter((part) => part.type === "tool")
     .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
   const tool = toolGroupActivity(tools)
-  // 工具正在执行时标签为空串：只转圈，不重复一句没有信息量的文字。
+  // 工具行可省略执行文案，但会话底部始终保留状态说明。
   if (tool?.label === "准备中") return { label: "正在处理", orb: tool.orb }
-  if (tool) return { label: tool.label === "运行中" ? "正在处理工具" : tool.label, orb: tool.orb }
+  if (tool)
+    return {
+      label: tool.label === "运行中" ? "正在处理工具" : tool.label || "正在处理",
+      orb: tool.orb,
+    }
   const generating = activeRuns
     .flatMap((run) =>
       Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : []
