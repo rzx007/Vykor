@@ -1,5 +1,7 @@
 # Desktop 长对话性能优化复盘与维护约定
 
+> 状态：当前 Desktop 长对话性能优化复盘与维护说明。
+
 > 整理日期：2026-10-16。阶段：本轮优化收尾，用户已反馈实际使用明显流畅。本文记录当前实现、已测证据和维护边界；不代表所有会话、插件和硬件上的卡顿均已消除。
 
 ## 1. 问题与处理顺序
@@ -169,7 +171,7 @@ ESLint 的本轮目标是首轮记录的 7 个错误、10 个警告及本批涉�
 - 共享高亮配置放在 `lib/code-highlight-options.ts`，命名不再限定于文件预览；去掉旧的 `tools/code-preview-worker-options.ts` 转发层，配置测试跟随所属模块。
 - 普通代码块用 `FileCodeRenderer`，会话代码块用 `BackgroundCode`；去掉静态渲染器中永远为 false 的会话参数和残留样式分支。
 - 底部判定阈值只有一个来源，原生滚动与虚拟列表共同使用。
-- 原生回归统一放在 `tests/conversation-performance/`，通过 `test:conversation-performance` 构建和运行，不依赖上次留在本机的 bundle。
+- 原生回归统一放在 `apps/desktop/tests/conversation-performance/`，通过 `test:conversation-performance` 构建和运行，不依赖上次留在本机的 bundle。
 - 改名时检索了 `src` 之外的消费者，修正原生插件测试夹具的旧 Hook 导入。`tsconfig.web.json` 不覆盖这些 Electron 测试入口，单跑 Renderer 类型检查不足以确认它们能构建。
 
 没有引入通用的全局缓存、调度框架或另一份滚动状态；已有的专用机制继续由其所在层负责，避免为了抽象再增加隐含的生命周期。
