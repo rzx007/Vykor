@@ -58,3 +58,16 @@ it("keeps a caller-supplied pause when the app preference does not ask for one",
   act(() => root.render(<LoadingState label="进行中" state="working" showElapsed={false} paused />))
   expect(orb()?.dataset.orbPaused).toBe("true")
 })
+
+it("switches immediately with reduced motion and announces only the current status", () => {
+  document.documentElement.dataset.reducedMotion = "true"
+  act(() => root.render(<LoadingState label="等待模型响应" state="working" showElapsed={false} />))
+  act(() => root.render(<LoadingState label="" state="solving" showElapsed={false} />))
+  expect(container.textContent).toBe("")
+  expect(container.querySelectorAll("canvas")).toHaveLength(1)
+  expect(orb()?.dataset.orbState).toBe("solving")
+  expect(orb()?.dataset.orbPaused).toBe("true")
+  act(() => root.render(<LoadingState label="等待你的确认" state="breathing" showElapsed={false} />))
+  expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("等待你的确认")
+  expect(container.textContent).toBe("等待你的确认")
+})

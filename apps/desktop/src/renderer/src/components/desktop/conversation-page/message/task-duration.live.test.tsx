@@ -8,6 +8,8 @@ let root: Root
 let container: HTMLDivElement
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  // 这里只验证计时时钟，不把 Motion 的动画调度计入计时器数量。
+  document.documentElement.dataset.reducedMotion = "true"
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
   vi.setSystemTime(11_000)
   container = document.createElement("div")
@@ -17,6 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  delete document.documentElement.dataset.reducedMotion
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })

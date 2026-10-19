@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ThinkingOrb, type OrbSize, type OrbState } from "thinking-orbs"
 
 import { cn } from "@renderer/lib/utils"
@@ -82,11 +83,12 @@ export function LoadingState({
 }) {
   const elapsed = useElapsed(showElapsed)
   const appReducedMotion = useAppReducedMotion()
-  const frozen = paused || appReducedMotion
+  const systemReducedMotion = useReducedMotion()
+  const reducedMotion = appReducedMotion || !!systemReducedMotion
+  const frozen = paused || reducedMotion
 
-  return (
-    <div role="status" className={cn("flex w-fit items-center gap-2.5", className)}>
-      {/* aria-hidden: the shimmer label below already carries the text */}
+  const indicator = (
+    <>
       <ThinkingOrb
         state={state}
         size={size}
@@ -97,7 +99,36 @@ export function LoadingState({
         data-orb-paused={String(frozen)}
         className="shrink-0"
       />
-      <span className="shimmer text-[13px] font-medium text-muted-foreground">{label}</span>
+      {label ? (
+        <span className="shimmer text-[13px] font-medium text-muted-foreground">{label}</span>
+      ) : null}
+    </>
+  )
+
+  return (
+    <div
+      role="status"
+      aria-label={label || undefined}
+      className={cn("flex w-fit items-center gap-2.5", className)}
+    >
+      <span aria-hidden className="inline-grid items-center">
+        {reducedMotion ? (
+          <span className="inline-flex items-center gap-2.5">{indicator}</span>
+        ) : (
+          <AnimatePresence initial={false}>
+            <motion.span
+              key={`${state}:${label}`}
+              className="col-start-1 row-start-1 inline-flex items-center gap-2.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              {indicator}
+            </motion.span>
+          </AnimatePresence>
+        )}
+      </span>
       {showElapsed ? (
         <span className="font-mono text-[12px] text-muted-foreground/70 tabular-nums">
           {elapsed}
