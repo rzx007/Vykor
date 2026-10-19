@@ -10,14 +10,14 @@
 @custom-variant dark (&:is(.dark *));
 
 
-/* 采用 beUI Project Folder 示例的整张纸色，而不是给中性卡片轻微染色。 */
+/* 浅色纸面采用更淡的色阶并混入白色，保留颜色辨识度。 */
 :root {
-  --note-sand: var(--color-amber-100);
-  --note-clay: var(--color-orange-200);
-  --note-rose: var(--color-rose-200);
-  --note-mint: var(--color-emerald-200);
-  --note-sky: var(--color-sky-200);
-  --note-lilac: var(--color-violet-200);
+  --note-sand: color-mix(in oklab, var(--color-amber-100) 80%, white);
+  --note-clay: color-mix(in oklab, var(--color-orange-100) 80%, white);
+  --note-rose: color-mix(in oklab, var(--color-rose-100) 80%, white);
+  --note-mint: color-mix(in oklab, var(--color-emerald-100) 80%, white);
+  --note-sky: color-mix(in oklab, var(--color-sky-100) 80%, white);
+  --note-lilac: color-mix(in oklab, var(--color-violet-100) 80%, white);
   --note-ink: var(--color-slate-900);
   --note-muted-ink: var(--color-slate-600);
 }
