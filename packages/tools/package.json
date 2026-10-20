@@ -28,11 +28,14 @@
     "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
     "diff": "catalog:",
-    "minisearch": "catalog:"
+    "ignore": "7.0.6",
+    "minisearch": "catalog:",
+    "picomatch": "4.0.4"
   },
   "devDependencies": {
     "@types/diff": "catalog:",
     "@types/node": "catalog:",
+    "@types/picomatch": "4.0.3",
     "typescript": "^5.7.3",
     "vitest": "catalog:"
   }

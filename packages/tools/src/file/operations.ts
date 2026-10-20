@@ -1,21 +1,24 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, posix, relative } from "node:path";
+import { basename, dirname, join, posix, relative } from "node:path";
 import type { ToolContext } from "@vykor/core";
 import type {
   EnvironmentFileSystem,
+  EnvironmentGrepOptions,
+  EnvironmentGrepResult,
   ExecutionEnvironmentHandle,
 } from "@vykor/environment";
 import {
-  MAX_LINE_BYTES,
   filterGlobOutput,
-  filterGrepOutput,
-  findRipgrep,
   matchesGlob,
   grepArgs,
   runHostProcess,
+  startHostSearch,
+  SKIP_DIRS,
 } from "./host-search.js";
+import { checkGrepOptions, consumeGrepProcess, withGrepDeadline } from "./grep-search.js";
+import { FALLBACK_FILE_BYTES, searchFallback } from "./grep-fallback.js";
 
 export { globToRegex } from "./host-search.js";
 
@@ -29,11 +32,7 @@ export interface FileStat {
   isSymbolicLink?: boolean;
 }
 
-export interface GrepOptions {
-  include?: string;
-  caseSensitive: boolean;
-  limit: number;
-}
+export type GrepOptions = EnvironmentGrepOptions;
 
 /**
  * 明确表示“目标不存在”的结构化错误。
@@ -63,7 +62,7 @@ export interface FileOperations extends EnvironmentFileSystem {
   readText(path: string): Promise<string>;
   writeText(path: string, content: string): Promise<void>;
   glob(basePath: string, pattern: string, limit: number): Promise<string[]>;
-  grep(basePath: string, pattern: string, options: GrepOptions): Promise<string[]>;
+  grep(basePath: string, pattern: string, options: GrepOptions): Promise<EnvironmentGrepResult>;
 }
 
 export function fileOperationsFor(context: ToolContext): FileOperations {
@@ -177,9 +176,6 @@ export class HostFileOperations implements FileOperations {
   }
 
   async glob(basePath: string, pattern: string, limit: number): Promise<string[]> {
-    const rgPath = findRipgrep();
-    if (!rgPath) return await walkGlob(basePath, pattern, limit, this);
-
     const args = ["--files"];
     const gitignore = join(basePath, ".gitignore");
     if (existsSync(join(basePath, ".git")) || existsSync(gitignore)) args.push("--hidden");
@@ -187,24 +183,27 @@ export class HostFileOperations implements FileOperations {
     for (const directory of SKIP_DIRS) args.push("--glob", `!${directory}/**`);
     args.push(".");
 
-    const result = await runHostProcess(rgPath, args, { cwd: basePath });
+    const result = await runHostProcess("rg", args, { cwd: basePath });
     if (result.exitCode !== 0 && result.exitCode !== 1) {
       return await walkGlob(basePath, pattern, limit, this);
     }
     return filterGlobOutput(result.stdout, pattern, limit);
   }
 
-  async grep(basePath: string, pattern: string, options: GrepOptions): Promise<string[]> {
-    const rgPath = findRipgrep();
-    if (!rgPath) {
-      return await fallbackGrep(basePath, pattern, options.include, options.caseSensitive, options.limit, this);
-    }
-    const args = grepArgs(basePath, pattern, options);
-    const result = await runHostProcess(rgPath, args, { cwd: basePath });
-    if (result.exitCode !== 0 && result.exitCode !== 1) {
-      return await fallbackGrep(basePath, pattern, options.include, options.caseSensitive, options.limit, this);
-    }
-    return filterGrepOutput(result.stdout, options.limit);
+  async grep(basePath: string, pattern: string, options: GrepOptions): Promise<EnvironmentGrepResult> {
+    checkGrepOptions(pattern, options);
+    if (!options.limit) return { matches: [], truncated: false };
+    return await withGrepDeadline(options, async (options) => {
+      const stat = await this.stat(basePath);
+      const cwd = stat.isFile ? dirname(basePath) : basePath;
+      const args = grepArgs(pattern, options, stat.isFile ? basename(basePath) : ".");
+      try {
+        return await consumeGrepProcess((signal) => startHostSearch("rg", args, cwd, signal), options);
+      } catch (error) {
+        if (!isEnoent(error)) throw error;
+        return await fallbackGrep(basePath, pattern, options.include, options.caseSensitive, options.limit, this, options);
+      }
+    });
   }
 }
 
@@ -263,10 +262,10 @@ rm -- "$1"`;
 export class WslFileOperations implements FileOperations {
   constructor(private readonly environment: ExecutionEnvironmentHandle) {}
 
-  async stat(path: string): Promise<FileStat> {
+  async stat(path: string, signal?: AbortSignal): Promise<FileStat> {
     const result = await this.run([
       "/bin/sh", "-c", WSL_STAT_SCRIPT, "vk-stat", path,
-    ]);
+    ], undefined, false, undefined, signal);
     if (result.exitCode !== 0) {
       if (result.exitCode === 2) throw new FileNotFoundError(path);
       throw new Error(result.output || `Cannot stat path: ${path}`);
@@ -278,10 +277,10 @@ export class WslFileOperations implements FileOperations {
     };
   }
 
-  async listDir(path: string): Promise<FileEntry[]> {
+  async listDir(path: string, signal?: AbortSignal): Promise<FileEntry[]> {
     const result = await this.run([
       "/usr/bin/find", path, "-mindepth", "1", "-maxdepth", "1", "-printf", "%f\\t%y\\0",
-    ]);
+    ], undefined, false, undefined, signal);
     if (result.exitCode !== 0) throw new Error(result.output || `Cannot list directory: ${path}`);
     return result.output.split("\0").filter(Boolean).map((entry) => {
       const [name, type] = entry.split("\t");
@@ -289,12 +288,12 @@ export class WslFileOperations implements FileOperations {
     });
   }
 
-  async readText(path: string): Promise<string> {
-    return new TextDecoder().decode(await this.readBytes(path));
+  async readText(path: string, signal?: AbortSignal): Promise<string> {
+    return new TextDecoder().decode(await this.readBytes(path, signal));
   }
 
-  async readBytes(path: string): Promise<Uint8Array> {
-    const result = await this.run(["/bin/sh", "-c", WSL_READ_SCRIPT, "vk-read", path], undefined, true);
+  async readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+    const result = await this.run(["/bin/sh", "-c", WSL_READ_SCRIPT, "vk-read", path], undefined, true, undefined, signal);
     if (result.exitCode !== 0) {
       if (result.exitCode === 3) throw new FileNotFoundError(path);
       throw new Error(result.output || `Cannot read file: ${path}`);
@@ -347,30 +346,32 @@ export class WslFileOperations implements FileOperations {
     return files.filter((path) => matchesGlob(path, pattern)).slice(0, limit);
   }
 
-  async grep(basePath: string, pattern: string, options: GrepOptions): Promise<string[]> {
-    if (options.limit <= 0) return [];
-    const args = ["--hidden", "--no-heading", "--line-number", "--color", "never"];
-    if (!options.caseSensitive) args.push("-i");
-    if (options.include) args.push("--glob", options.include);
-    for (const directory of SKIP_DIRS) args.push("--glob", `!${directory}/**`);
-    args.push("--", pattern, ".");
-    const ripgrep = await this.run(wslRipgrepArgv(args), undefined, false, basePath);
-    if (ripgrep.exitCode === 0 || ripgrep.exitCode === 1) return filterGrepOutput(ripgrep.output, options.limit);
-    const files = await this.collectFiles(basePath);
-    const expression = new RegExp(pattern, options.caseSensitive ? "" : "i");
-    const results: string[] = [];
-    for (const file of files) {
-      if (options.include && !matchesGlob(file, options.include)) continue;
-      const content = await this.readText(posix.join(basePath, file)).catch(() => "");
-      if (content.includes("\0")) continue;
-      for (const [index, line] of content.split("\n").entries()) {
-        if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES) continue;
-        if (!expression.test(line)) continue;
-        results.push(`${file}:${index + 1}:${line}`);
-        if (results.length >= options.limit) return results;
+  async grep(basePath: string, pattern: string, options: GrepOptions): Promise<EnvironmentGrepResult> {
+    checkGrepOptions(pattern, options);
+    if (!options.limit) return { matches: [], truncated: false };
+    return await withGrepDeadline(options, async (options) => {
+      const stat = await this.stat(basePath, options.signal);
+      const cwd = stat.isFile ? posix.dirname(basePath) : basePath;
+      const args = grepArgs(pattern, options, stat.isFile ? posix.basename(basePath) : ".");
+      try {
+        return await consumeGrepProcess((signal) => this.environment.process.execProcess(wslRipgrepArgv(args), {
+          cwd, signal,
+        }), options);
+      } catch (error) {
+        if (!isEnoent(error)) throw error;
+        const files = {
+          stat: (path: string) => this.stat(path, options.signal),
+          listDir: (path: string) => this.listDir(path, options.signal),
+          readText: (path: string) => this.readText(path, options.signal),
+        };
+        return await searchFallback(basePath, pattern, options, files, async (path) => {
+          const result = await this.run(["/usr/bin/head", "-c", String(FALLBACK_FILE_BYTES + 4), "--", path], undefined, false,
+            this.environment.workspace.executionRoot, options.signal);
+          if (result.exitCode !== 0) throw new Error(result.output || `Cannot read file: ${path}`);
+          return result.output;
+        }, posix);
       }
-    }
-    return results;
+    });
   }
 
   private async collectFiles(basePath: string): Promise<string[]> {
@@ -389,9 +390,10 @@ export class WslFileOperations implements FileOperations {
     stdin?: Uint8Array,
     binary = false,
     cwd = this.environment.workspace.executionRoot,
+    signal?: AbortSignal,
   ): Promise<{ exitCode: number; output: string; bytes: Uint8Array }> {
     const process = await this.environment.process.execProcess(argv, {
-      cwd,
+      cwd, signal,
     });
     const chunks: Uint8Array[] = [];
     const errors: Uint8Array[] = [];
@@ -476,55 +478,24 @@ export async function fallbackGrep(
   caseSensitive: boolean,
   limit: number,
   operations: FileOperations = new HostFileOperations(),
-): Promise<string[]> {
-  const flags = caseSensitive ? "" : "i";
-  const regex = new RegExp(pattern, flags);
-  const results: string[] = [];
+  budgets: Pick<GrepOptions, "maxBytes" | "timeoutMs" | "signal"> = {},
+): Promise<EnvironmentGrepResult> {
+  return await searchFallback(basePath, pattern, { include, caseSensitive, limit, ...budgets }, operations,
+    operations instanceof HostFileOperations ? readSearchText : (path) => operations.readText(path));
+}
 
-  const matchLines = (content: string, displayPath: string): boolean => {
-    const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i]!;
-      if (Buffer.byteLength(line, "utf-8") > MAX_LINE_BYTES) continue;
-      if (regex.test(line)) {
-        results.push(`${displayPath}:${i + 1}:${line}`);
-        if (results.length >= limit) return true;
-      }
+async function readSearchText(path: string): Promise<string> {
+  const handle = await open(path, "r");
+  try {
+    const buffer = Buffer.alloc(Math.min(Math.max((await handle.stat()).size, 64 * 1024), FALLBACK_FILE_BYTES + 4));
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (!bytesRead) break;
+      offset += bytesRead;
     }
-    return false;
-  };
-
-  async function walk(dir: string): Promise<void> {
-    const entries = await operations.listDir(dir);
-    for (const entry of entries) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory) {
-        await walk(fullPath);
-        if (results.length >= limit) return;
-      } else {
-        if (include && !matchesGlob(relative(basePath, fullPath).replaceAll("\\", "/"), include)) continue;
-        try {
-          const content = await operations.readText(fullPath);
-          if (content.includes("\0")) continue;
-          const rel = relative(basePath, fullPath);
-          if (matchLines(content, rel)) return;
-        } catch {
-          // skip unreadable files
-        }
-      }
-    }
-  }
-
-  const st = await operations.stat(basePath);
-  if (st.isFile) {
-    const content = await operations.readText(basePath);
-    matchLines(content, basePath);
-  } else {
-    await walk(basePath);
-  }
-
-  return results;
+    return buffer.subarray(0, offset).toString("utf8");
+  } finally { await handle.close(); }
 }
 
 function wslRipgrepArgv(args: string[]): string[] {
@@ -532,15 +503,3 @@ function wslRipgrepArgv(args: string[]): string[] {
     'rg_path=$(command -v rg) || exit 127; case "$rg_path" in /mnt/*|*.exe) exit 127;; esac; exec "$rg_path" "$@"',
     "vykor-rg", ...args];
 }
-
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".venv",
-  "venv",
-  ".git",
-  "dist",
-  "build",
-  ".next",
-  ".turbo",
-  "__pycache__",
-]);

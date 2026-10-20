@@ -84,7 +84,7 @@ maybeDescribe("WSL execution environment e2e", () => {
       await expect(environment.files.readText(`${executionRoot}/src/a.ts`))
         .resolves.toBe("const marker = 'wsl-needle';\n");
       expect(await environment.files.grep(executionRoot, "wsl-needle", { caseSensitive: true, limit: 10 }))
-        .toEqual(["src/a.ts:1:const marker = 'wsl-needle';"]);
+        .toEqual({ matches: ["src/a.ts:1:const marker = 'wsl-needle';"], truncated: false });
 
       const task = await supervisor.startShellExecution({
         command: "printf background-wsl",

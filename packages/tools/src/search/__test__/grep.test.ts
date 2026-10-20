@@ -73,7 +73,47 @@ describe("grepTool", () => {
         { cwd: dir }
       );
       const text = (result.content[0] as any).text as string;
-      expect(text.split("\n").length).toBe(5);
+      expect(text.split("\n").filter((line) => /:\d+:/.test(line))).toHaveLength(5);
+      expect(text).toMatch(/limited|truncated/i);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, 201, null])("rejects invalid limit %s", async (limit) => {
+    const result = await grepTool.execute({ pattern: "needle", limit }, { cwd: process.cwd() });
+    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+  });
+
+  it("does not search when already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await grepTool.execute({ pattern: "needle" }, { cwd: process.cwd(), abortSignal: controller.signal });
+    expect(result).toMatchObject({ isError: true, failureKind: "interrupted" });
+  });
+
+  it("bounds UTF-8 output and reports truncation", async () => {
+    const dir = await makeTmpDir();
+    try {
+      await fs.writeFile(path.join(dir, "long.txt"), ("needle " + "中文😀".repeat(400) + "\n").repeat(10));
+      const result = await grepTool.execute({ pattern: "needle", path: dir }, { cwd: dir });
+      const text = (result.content[0] as { text: string }).text;
+      expect(result.isError).toBeFalsy();
+      expect(Buffer.byteLength(text)).toBeLessThanOrEqual(8192);
+      expect(text).toContain("needle");
+      expect(text).not.toContain("�");
+      expect(text).toMatch(/limited|truncated/i);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves matching line whitespace", async () => {
+    const dir = await makeTmpDir();
+    try {
+      await fs.writeFile(path.join(dir, "a.txt"), "  needle  \r\n");
+      const result = await grepTool.execute({ pattern: "needle", path: dir }, { cwd: dir });
+      expect((result.content[0] as { text: string }).text).toMatch(/:1:  needle  $/);
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }

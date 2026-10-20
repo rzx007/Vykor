@@ -124,6 +124,15 @@ export interface EnvironmentGrepOptions {
   include?: string;
   caseSensitive: boolean;
   limit: number;
+  maxBytes?: number;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentGrepResult {
+  matches: string[];
+  /** More matches exist, or a line/output budget prevented a complete search. */
+  truncated: boolean;
 }
 
 export interface EnvironmentFileSystem {
@@ -141,7 +150,7 @@ export interface EnvironmentFileSystem {
     basePath: string,
     pattern: string,
     options: EnvironmentGrepOptions,
-  ): Promise<string[]>;
+  ): Promise<EnvironmentGrepResult>;
 }
 
 export interface EnvironmentPathResolver {

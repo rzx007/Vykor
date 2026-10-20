@@ -2,6 +2,7 @@ import type { ToolDefinition } from "@vykor/core";
 import { fileOperationsFor } from "../file/operations.js";
 import { resolveToolPathInContext } from "../file/environment-path.js";
 import { sandboxPathError } from "../file/sandbox-guard.js";
+import { GREP_LIMIT_HINT, GREP_OUTPUT_BYTES, GrepSearchError } from "../file/grep-search.js";
 
 export const grepTool: ToolDefinition = {
   name: "Grep",
@@ -22,24 +23,34 @@ export const grepTool: ToolDefinition = {
         default: true,
       },
       limit: {
-        type: "number",
-        description: "Maximum number of matches. Default: 200.",
+        type: "integer",
+        description: "Maximum number of matches (1–200). Output is also limited to 8 KiB; narrow the search if results are limited. Default: 200.",
+        minimum: 1,
+        maximum: 200,
         default: 200,
       },
     },
     required: ["pattern"],
   },
   async execute(input, context) {
+    const invalid = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true, failureKind: "invalid_input" as const, executionState: "not_started" as const });
+    const limit = input.limit === undefined ? 200 : input.limit;
+    if (typeof input.pattern !== "string" || input.pattern.includes("\0") || input.pattern.length > 16384) return invalid("Provide a regular expression without NUL characters, up to 16384 characters.");
+    if (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) return invalid("limit must be an integer between 1 and 200.");
+    if (input.path !== undefined && typeof input.path !== "string") return invalid("path must be a string.");
+    if (input.include !== undefined && typeof input.include !== "string") return invalid("include must be a glob string.");
+    if (input.caseSensitive !== undefined && typeof input.caseSensitive !== "boolean") return invalid("caseSensitive must be a boolean.");
+    if (context.abortSignal?.aborted) return {
+      content: [{ type: "text", text: "Search interrupted." }], isError: true,
+      failureKind: "interrupted", executionState: "not_started",
+    };
     const pattern = input.pattern as string;
     if (typeof input.path === "string" && /^shell-output:/i.test(input.path)) {
-      const invalid = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true, failureKind: "invalid_input" as const, executionState: "not_started" as const });
       if (input.include !== undefined) return invalid("Remove include when searching a Shell output reference.");
       if (!context.shellOutputLogs || !context.sessionId) return {
         content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
         isError: true, failureKind: "configuration", executionState: "not_started",
       };
-      const requested = input.limit;
-      const limit = typeof requested === "number" && Number.isSafeInteger(requested) && requested > 0 ? Math.min(200, requested) : 200;
       const found = await context.shellOutputLogs.search({ sessionId: context.sessionId, reference: input.path, pattern, caseSensitive: input.caseSensitive !== false, signal: context.abortSignal });
       if (found.status !== "ok" && found.status !== "limit") {
         const reasons = { unavailable: "Shell output reference unavailable in this session.", invalid_pattern: "Invalid regular expression.", timeout: "Shell output search timed out.", search_unavailable: "Shell output search could not run." };
@@ -84,12 +95,11 @@ export const grepTool: ToolDefinition = {
       return { content: [{ type: "text", text: output + (truncated ? hint : "") }], executionState: "completed" };
     }
     const cwd = context.cwd ?? process.cwd();
-    const basePath = await resolveToolPathInContext((input.path as string) ?? cwd, context, "read");
     const include = input.include as string | undefined;
     const caseSensitive = (input.caseSensitive as boolean) ?? true;
-    const limit = (input.limit as number) ?? 200;
 
     try {
+      const basePath = await resolveToolPathInContext((input.path as string) ?? cwd, context, "read");
       const sandboxError = await sandboxPathError(basePath, cwd, "read", context.settings, context.environment);
       if (sandboxError) {
         return {
@@ -103,19 +113,25 @@ export const grepTool: ToolDefinition = {
         include,
         caseSensitive,
         limit,
+        maxBytes: GREP_OUTPUT_BYTES - Buffer.byteLength(GREP_LIMIT_HINT) - 1,
+        signal: context.abortSignal,
       });
       return {
         content: [
           {
             type: "text",
-            text: results.length > 0 ? results.join("\n") : "(no matches)",
+            text: (results.matches.join("\n") || (results.truncated ? "Search limited before a match location could be reported." : "(no matches)"))
+              + (results.truncated ? `\n${GREP_LIMIT_HINT}` : ""),
           },
         ],
+        executionState: "completed",
       };
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error: ${error}` }],
         isError: true,
+        failureKind: error instanceof GrepSearchError ? error.kind : "unknown_outcome",
+        executionState: "unknown",
       };
     }
   },

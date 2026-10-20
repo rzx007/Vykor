@@ -85,10 +85,11 @@ async function executeEnvironmentLsp(
   if (operation === "workspace_symbol") {
     const query = typeof input.query === "string" ? input.query : "";
     if (!query) return textResult("(no results)");
-    const matches = await environment.files.grep(root, query, {
+    const { matches } = await environment.files.grep(root, query, {
       include: "*.{ts,js,py}",
       caseSensitive: true,
       limit: 20,
+      signal: context.abortSignal,
     });
     return textResult(matches.length ? matches.map(formatSymbolMatch).join("\n") : "(no results)");
   }
@@ -107,10 +108,11 @@ async function executeEnvironmentLsp(
   if (operation === "find_references" || operation === "go_to_definition") {
     const symbol = typeof input.symbol === "string" ? input.symbol : "";
     if (!symbol) return textResult("(no results)");
-    const matches = await environment.files.grep(root, symbol, {
+    const { matches } = await environment.files.grep(root, symbol, {
       include: "*.{ts,js,py}",
       caseSensitive: true,
       limit: 20,
+      signal: context.abortSignal,
     });
     if (operation === "find_references") {
       return textResult(matches.length ? matches.join("\n") : "(no results)");

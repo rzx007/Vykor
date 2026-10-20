@@ -20,7 +20,7 @@ function context() {
       },
       files: {
         readText: vi.fn(async () => "export function review() {}\nexport const value = 1;"),
-        grep: vi.fn(async () => ["src/review.ts:1:export function review() {}"]),
+        grep: vi.fn(async () => ({ matches: ["src/review.ts:1:export function review() {}"], truncated: false })),
       },
     },
   } as any;
@@ -40,6 +40,7 @@ describe("Lsp execution environment", () => {
 
   it("searches workspace symbols through environment grep", async () => {
     const toolContext = context();
+    toolContext.abortSignal = new AbortController().signal;
     const result = await lspTool.execute(
       { operation: "workspace_symbol", query: "review" },
       toolContext,
@@ -48,7 +49,7 @@ describe("Lsp execution environment", () => {
     expect(toolContext.environment.files.grep).toHaveBeenCalledWith(
       "/workspace",
       "review",
-      expect.objectContaining({ limit: 20 }),
+      expect.objectContaining({ limit: 20, signal: toolContext.abortSignal }),
     );
     expect((result.content[0] as { text: string }).text).toContain("src/review.ts:1");
   });

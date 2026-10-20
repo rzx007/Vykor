@@ -1258,9 +1258,15 @@ importers:
       diff:
         specifier: 'catalog:'
         version: 7.0.0
+      ignore:
+        specifier: 7.0.6
+        version: 7.0.6
       minisearch:
         specifier: 'catalog:'
         version: 7.2.0
+      picomatch:
+        specifier: 4.0.4
+        version: 4.0.4
     devDependencies:
       '@types/diff':
         specifier: 'catalog:'
@@ -1268,6 +1274,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      '@types/picomatch':
+        specifier: 4.0.3
+        version: 4.0.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -4314,6 +4323,9 @@ packages:
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
+
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
   '@types/qrcode-terminal@0.12.2':
     resolution: {integrity: sha512-v+RcIEJ+Uhd6ygSQ0u5YYY7ZM+la7GgPbs0V/7l/kFs2uO4S8BcIUEMoP7za4DNIqNnUD5npf0A/7kBhrCKG5Q==}
@@ -12553,6 +12565,8 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/parse-json@4.0.2': {}
+
+  '@types/picomatch@4.0.3': {}
 
   '@types/qrcode-terminal@0.12.2': {}
 

@@ -79,7 +79,7 @@ class FakeFiles {
   }
 
   async grep() {
-    return [];
+    return { matches: [], truncated: false };
   }
 }
 
