@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react"
 
 import { messageTextContent } from "./message-content"
+import { PluginMentionIcon } from "./plugin-mention-icon"
 import { renderUserItems, type UserDisplayItem } from "./user-display-items"
 import { AssistantMessage } from "./assistant-message"
 import { formatMessageTime } from "./format-message-time"
@@ -282,11 +283,17 @@ function UserMessageBubble({
                 ) : (
                   <span
                     key={index}
-                    className="align-baseline font-medium !text-primary select-none"
+                    className={cn(
+                      "align-baseline !text-primary select-none",
+                      item.kind === "plugin" ? "font-semibold" : "font-medium"
+                    )}
                   >
-                    {item.kind !== "plugin" ? <Box className="mr-1 inline-block size-3.5 align-middle" /> : null}
+                    {item.kind === "plugin" ? (
+                      <PluginMentionIcon pluginId={item.name} />
+                    ) : (
+                      <Box className="mr-1 inline-block size-3.5 align-middle" />
+                    )}
                     <span>
-                      {item.kind === "plugin" ? "@" : ""}
                       {item.displayName}
                     </span>
                   </span>

@@ -14,6 +14,7 @@ import {
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Button } from "@renderer/components/ui/button"
 import { usePluginUiHost } from "./plugin-ui/plugin-ui-context"
+import { MessagePluginCatalog } from "./message/plugin-mention-icon"
 import {
   Select,
   SelectContent,
@@ -521,6 +522,7 @@ function ConversationPane({
   )
 
   return (
+    <MessagePluginCatalog.Provider value={pluginCatalog}>
     <section className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation">
       {hasSession ? (
         <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
@@ -932,6 +934,7 @@ function ConversationPane({
       ) : null}
       {sessionActions.dialogs}
     </section>
+    </MessagePluginCatalog.Provider>
   )
 }
 
