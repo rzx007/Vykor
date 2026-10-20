@@ -17,7 +17,7 @@ import type {
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { ComposerAttachments } from "./composer-attachments"
 import { readComposerDrop } from "./composer-file-input"
-import { ComposerIconButton, ComposerSendButton, PermissionModeMenu } from "./controls"
+import { ComposerIconButton, ComposerSendButton, PermissionModeMenu, permissionModeIcons } from "./controls"
 import { ContextUsageControl } from "./context-usage-control"
 import { EffortPicker, resolveEffortTiers } from "./effort-picker"
 import { ModelPicker } from "./model-picker"
@@ -152,6 +152,7 @@ export function Composer({
     await onCommand(command)
   }
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
+  const PermissionIcon = permissionModeIcons[permissionMode]
   const closePicker = (): void => setActivePicker(null)
   const allowSubmit = !modeChangePending && (canSubmit ?? draft.items.length > 0)
   const attachDisabled = attachmentReadOnly || sending
@@ -336,17 +337,6 @@ export function Composer({
         >
           <IconPlus className="size-5" />
         </Button>
-        {workMode === "plan" ? (
-          <div className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pr-3 text-xs">
-            <Button type="button" variant="ghost" size="icon-sm" className="rounded-full"
-              disabled={sending || modeChangePending} aria-label="退出计划模式"
-              onClick={() => onWorkModeChange?.("execute")}>
-              <X className="size-3.5" />
-            </Button>
-            <ShieldCheck className="size-3.5" />
-            计划模式
-          </div>
-        ) : null}
         {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
             <Button
@@ -442,12 +432,16 @@ export function Composer({
               <Button
                 type="button"
                 variant="ghost"
-                className="ml-1 h-8 max-w-36 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground"
+                shape="pill"
+                className={cn(
+                  "ml-1 h-8 max-w-36 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground",
+                  permissionMode === "full_access" && "text-status-warning hover:text-status-warning aria-expanded:text-status-warning"
+                )}
                 disabled={modeChangePending}
               />
             }
           >
-            <ShieldCheck data-icon="inline-start" />
+            <PermissionIcon data-icon="inline-start" />
             <span className="min-w-0 truncate">{permissionLabel}</span>
             <ChevronDown data-icon="inline-end" />
           </PopoverTrigger>
@@ -467,6 +461,17 @@ export function Composer({
             />
           </PopoverContent>
         </Popover>
+        {workMode === "plan" ? (
+          <div className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pr-3 text-xs">
+            <Button type="button" variant="ghost" size="icon-sm" className="rounded-full"
+              disabled={sending || modeChangePending} aria-label="退出计划模式"
+              onClick={() => onWorkModeChange?.("execute")}>
+              <X className="size-3.5" />
+            </Button>
+            <ShieldCheck className="size-3.5" />
+            计划模式
+          </div>
+        ) : null}
         <EffortPicker
           open={activePicker === "effort"}
           onOpenChange={(open) => setActivePicker(open ? "effort" : null)}

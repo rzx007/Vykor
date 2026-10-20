@@ -7,7 +7,6 @@ import { PermissionCard } from "../message-block"
 describe("PermissionCard", () => {
   it.each([
     ["reviewing", "正在自动审查"],
-    ["approved", "已自动批准"],
     ["ask_user", "需要你确认"],
     ["denied", "已拒绝"],
     ["timed_out", "审查超时"],
@@ -25,11 +24,17 @@ describe("PermissionCard", () => {
     expect(html).not.toContain("<script>")
   })
 
-  it.each(["approved", "denied", "expired"] as const)("shows settled %s before a pending review status", (status) => {
+  it.each([
+    { status: "approved", reviewStatus: "reviewing" },
+    { status: "denied", reviewStatus: "reviewing" },
+    { status: "expired", reviewStatus: "reviewing" },
+    { status: "denied", reviewStatus: "approved" },
+    { status: "expired", reviewStatus: "approved" },
+  ] as const)("shows settled $status before a stale $reviewStatus review status", ({ status, reviewStatus }) => {
     const html = renderToStaticMarkup(createElement(PermissionCard, {
       permission: {
         id: "review", sessionId: "session", toolName: "Shell", status,
-        payload: { approvalReview: { status: "reviewing", startedAt: 1 } },
+        payload: { approvalReview: { status: reviewStatus, startedAt: 1 } },
         createdAt: 1, updatedAt: 1,
       },
       onReply: vi.fn(),
@@ -39,17 +44,16 @@ describe("PermissionCard", () => {
     expect(html).not.toContain("<button")
   })
 
-  it("hides decision buttons for a settled automatic approval", () => {
+  it.each(["pending", "approved"] as const)("does not render an automatic approval result while the request is %s", (status) => {
     const html = renderToStaticMarkup(createElement(PermissionCard, {
       permission: {
-        id: "review", sessionId: "session", toolName: "Shell", status: "approved",
+        id: "review", sessionId: "session", toolName: "Shell", status,
         payload: { approvalReview: { status: "approved", startedAt: 1, reason: "符合已授权任务" } },
         createdAt: 1, updatedAt: 1,
       },
       onReply: vi.fn(),
     }))
-    expect(html).toContain("已自动批准")
-    expect(html).not.toContain("<button")
+    expect(html).toBe("")
   })
 
   it("disables both decisions and shows the scoped error while a reply is pending", () => {

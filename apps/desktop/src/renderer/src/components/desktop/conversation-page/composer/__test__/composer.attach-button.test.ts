@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { Composer } from "../composer"
+import { PermissionModeMenu } from "../controls"
 import { emptyComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 
 describe("Composer attach button", () => {
@@ -106,6 +107,26 @@ describe("Composer attach button", () => {
     expect(button?.disabled).toBe(false)
   })
 
+  it("requires confirmation after showing full-access scopes and preserves the mode on cancel", async () => {
+    const onSelect = vi.fn()
+    await act(async () => root.render(createElement(PermissionModeMenu, { selected: "ask", onSelect })))
+    const fullAccess = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((button) => button.textContent?.includes("完全访问权限"))!
+    await act(async () => fullAccess.click())
+    expect(onSelect).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[role="alertdialog"]')!
+    expect(dialog.textContent).toContain("文件和文件夹")
+    expect(dialog.textContent).toContain("终端命令")
+    expect(dialog.textContent).toContain("互联网和已连接的应用")
+    const cancel = dialog.querySelector<HTMLButtonElement>('[data-slot="alert-dialog-cancel"]')!
+    await act(async () => cancel.click())
+    expect(onSelect).not.toHaveBeenCalled()
+    await act(async () => fullAccess.click())
+    const confirm = document.querySelector<HTMLButtonElement>('[data-slot="alert-dialog-action"]')!
+    await act(async () => confirm.click())
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("full_access")
+  })
+
   it("enables and removes plan mode independently of full access", async () => {
     const onWorkModeChange = vi.fn()
     const onSelectPermissionMode = vi.fn()
@@ -123,6 +144,11 @@ describe("Composer attach button", () => {
     await act(async () => option!.click())
     expect(onWorkModeChange).toHaveBeenCalledWith("plan")
     await act(async () => root.render(createElement(Composer, { ...props, workMode: "plan" })))
+    const permissionTrigger = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "完全访问权限")
+    const planExit = container.querySelector<HTMLButtonElement>('[aria-label="退出计划模式"]')!
+    expect(permissionTrigger).toBeDefined()
+    expect(permissionTrigger!.compareDocumentPosition(planExit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="退出计划模式"]')!.click())
     expect(onWorkModeChange).toHaveBeenLastCalledWith("execute")
     expect(onSelectPermissionMode).not.toHaveBeenCalled()

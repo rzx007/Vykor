@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, ShieldCheck, Square } from "lucide-react"
+import { ArrowUp, Check, ChevronDown, Folder, Globe, Hand, ShieldAlert, ShieldCheck, Square, SquareTerminal, TriangleAlert } from "lucide-react"
 import { forwardRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -9,6 +9,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionMode } from "@shared/session-types"
 import type { PermissionModeOption } from "../shared/types"
+
+export const permissionModeIcons: Record<DesktopPermissionMode, typeof ShieldCheck> = {
+  ask: Hand,
+  auto_review: ShieldCheck,
+  full_access: ShieldAlert,
+}
 
 export const permissionModeOptions: PermissionModeOption[] = [
   {
@@ -43,7 +49,10 @@ export function PermissionModeMenu({
   return (
     <>
     <div role="menu" className={cn("text-popover-foreground", className)}>
-      {permissionModeOptions.map((mode) => (
+      {permissionModeOptions.map((mode) => {
+        const ModeIcon = permissionModeIcons[mode.value]
+        const warning = mode.value === "full_access"
+        return (
         <Button
           key={mode.value}
           type="button"
@@ -57,31 +66,72 @@ export function PermissionModeMenu({
           }}
           className={cn(
             "h-auto w-full items-start justify-start gap-2 px-2 py-2 text-left font-normal whitespace-normal",
-            selected === mode.value && "bg-muted"
+            selected === mode.value && "bg-muted",
+            warning && "text-status-warning hover:text-status-warning"
           )}
         >
-          <ShieldCheck className="mt-0.5 text-muted-foreground" />
+          <ModeIcon className={cn("mt-0.5", warning ? "text-status-warning" : "text-muted-foreground")} strokeWidth={1.75} />
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-medium text-foreground">{mode.label}</span>
-            <span className="text-ui-caption mt-0.5 block text-muted-foreground">
+            <span className={cn("block text-xs font-medium", warning ? "text-status-warning" : "text-foreground")}>{mode.label}</span>
+            <span className={cn("text-ui-caption mt-0.5 block", warning ? "text-status-warning" : "text-muted-foreground")}>
               {mode.description}
             </span>
           </span>
           {selected === mode.value ? <Check className="mt-0.5" /> : null}
         </Button>
-      ))}
+        )
+      })}
     </div>
     <AlertDialog open={confirm} onOpenChange={setConfirm}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>启用完全访问权限？</AlertDialogTitle>
-          <AlertDialogDescription>
-            当前聊天可在执行环境允许的范围内访问文件、命令和网络，普通操作通常不再请求批准。计划模式和强制禁止规则仍然生效。
+      <AlertDialogContent className="w-[calc(100%-2rem)] gap-4 rounded-3xl p-6 data-[size=default]:max-w-[36rem] data-[size=default]:sm:max-w-[36rem]">
+        <AlertDialogHeader className="place-items-start gap-3 text-left">
+          <AlertDialogTitle className="flex items-center gap-2 text-xl font-semibold">
+            <TriangleAlert aria-hidden="true" className="size-5 shrink-0" />
+            要开启完全访问权限吗？
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-left leading-6">
+            Vykor 可以在当前执行环境允许的范围内，无需逐次批准地进行以下操作：
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction disabled={disabled} onClick={() => onSelect("full_access")}>启用完全访问权限</AlertDialogAction>
+        <ul className="divide-y divide-border/60 rounded-2xl bg-muted/70 px-4">
+          <li className="flex items-center gap-3 py-3">
+            <Folder aria-hidden="true" className="size-6 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">文件和文件夹</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">读取、创建、修改、上传或删除当前环境中的文件</p>
+            </div>
+          </li>
+          <li className="flex items-center gap-3 py-3">
+            <SquareTerminal aria-hidden="true" className="size-6 shrink-0 text-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">终端命令</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">在系统权限允许的范围内运行命令、安装软件或修改设置</p>
+            </div>
+          </li>
+          <li className="flex items-center gap-3 py-3">
+            <Globe aria-hidden="true" className="size-6 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">互联网和已连接的应用</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">访问网站、发送数据，并使用已授权的应用和插件</p>
+            </div>
+          </li>
+        </ul>
+        <details className="text-sm leading-6 text-muted-foreground">
+          <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <span>这可能带来数据丢失、隐私泄露或误操作风险。你可以随时切换回其他授权模式。</span>
+            <span className="shrink-0 text-primary">了解更多</span>
+          </summary>
+          <p className="mt-2 text-xs leading-5">
+            此设置仅作用于当前聊天，不会提升系统权限。计划模式、明确禁止的操作和外部应用自己的登录授权仍然适用。
+          </p>
+        </details>
+        <AlertDialogFooter className="m-0 flex-row justify-end gap-3 rounded-none border-0 bg-transparent p-0">
+          <AlertDialogCancel variant="secondary" className="h-9 min-w-20 rounded-full px-5">取消</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" shape="pill" className="h-9 min-w-24" disabled={disabled}
+            onClick={() => { setConfirm(false); onSelect("full_access") }}>
+            <TriangleAlert data-icon="inline-start" />
+            确认
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
