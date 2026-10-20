@@ -62,7 +62,7 @@ export class SkillMentionNode extends DecoratorNode<React.JSX.Element> {
 
   createDOM(): HTMLElement {
     const element = document.createElement("span")
-    element.className = "inline-flex align-baseline"
+    element.className = "inline align-baseline"
     return element
   }
 
@@ -80,8 +80,8 @@ export class SkillMentionNode extends DecoratorNode<React.JSX.Element> {
 
   decorate(): React.JSX.Element {
     return (
-      <span className="inline-flex items-center gap-1 align-baseline font-medium !text-primary select-none">
-        <Box className="size-3.5 shrink-0" />
+      <span className="align-baseline font-medium !text-primary select-none">
+        <Box className="mr-1 inline-block size-3.5 align-middle" />
         <span>{this.__displayName}</span>
       </span>
     )

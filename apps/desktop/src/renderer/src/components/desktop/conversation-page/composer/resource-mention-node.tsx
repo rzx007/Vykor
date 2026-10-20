@@ -25,7 +25,7 @@ export class ResourceMentionNode extends DecoratorNode<React.JSX.Element> {
   }
   createDOM(): HTMLElement {
     const element = document.createElement("span")
-    element.className = "inline-flex align-baseline"
+    element.className = "inline align-baseline"
     return element
   }
   updateDOM(): false {
@@ -40,14 +40,14 @@ export class ResourceMentionNode extends DecoratorNode<React.JSX.Element> {
   decorate(): React.JSX.Element {
     if (this.__item.type === "context") {
       return (
-        <span className="inline-flex items-center gap-1 align-baseline font-medium !text-primary select-none">
-          <MessageSquare className="size-3.5 shrink-0" />
+        <span className="align-baseline font-medium !text-primary select-none">
+          <MessageSquare className="mr-1 inline-block size-3.5 align-middle" />
           <span>{this.__item.displayName}</span>
         </span>
       )
     }
     return (
-      <span className="inline-flex items-center align-baseline font-medium text-primary">
+      <span className="align-baseline font-medium text-primary">
         {this.__item.displayName ?? this.__item.name}
       </span>
     )

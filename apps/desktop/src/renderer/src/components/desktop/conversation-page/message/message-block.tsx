@@ -282,9 +282,9 @@ function UserMessageBubble({
                 ) : (
                   <span
                     key={index}
-                    className="inline-flex items-center gap-1 align-middle leading-5 font-medium !text-primary select-none"
+                    className="align-baseline font-medium !text-primary select-none"
                   >
-                    {item.kind !== "plugin" ? <Box className="size-3.5 shrink-0" /> : null}
+                    {item.kind !== "plugin" ? <Box className="mr-1 inline-block size-3.5 align-middle" /> : null}
                     <span>
                       {item.kind === "plugin" ? "@" : ""}
                       {item.displayName}
