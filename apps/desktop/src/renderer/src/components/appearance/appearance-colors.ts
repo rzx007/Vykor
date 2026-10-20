@@ -197,7 +197,11 @@ export function resolveAppearanceColors(
   const selection = mixColors(background, elevation, 0.18)
   const primary = ensureSurfaceContrast(color, background, 3)
   const sidebarPrimary = ensureSurfaceContrast(color, shellSolid, 3)
-  const ring = ensureSurfaceContrast(color, background, 3)
+  const ring = ensureSurfaceContrast(
+    darkSurface ? color : mixColors(color, background, 0.2),
+    background,
+    3
+  )
   const sidebarForeground = ensureSurfacesContrast(
     mixColors(shellSolid, foreground, 0.9),
     sidebarSurfaces,
@@ -219,8 +223,8 @@ export function resolveAppearanceColors(
       contentSurfaces,
       4.5
     ),
-    border: mixColors(background, elevation, 0.1),
-    input: mixColors(background, elevation, 0.18),
+    border: mixColors(background, elevation, darkSurface ? 0.1 : 0.06),
+    input: mixColors(background, elevation, darkSurface ? 0.18 : 0.08),
     shellSolid,
     uiForeground: ensureSurfacesContrast(
       mixColors(background, foreground, 0.9),
@@ -233,7 +237,7 @@ export function resolveAppearanceColors(
       sidebarSurfaces,
       4.5
     ),
-    sidebarBorder: mixColors(shellSolid, elevation, 0.1),
+    sidebarBorder: mixColors(shellSolid, elevation, darkSurface ? 0.1 : 0.06),
     selection,
     selectionForeground: ensureSurfaceContrast(foreground, selection, 4.5),
     primary,

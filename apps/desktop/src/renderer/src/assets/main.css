@@ -267,11 +267,11 @@
   --status-success: oklch(0.46 0.12 150);
   --status-warning: oklch(0.49 0.105 75);
   --diff-addition: oklch(0.627 0.194 149.214);
-  --border: color-mix(in srgb, var(--background), var(--surface-elevation-target) 10%);
-  --input: color-mix(in srgb, var(--background), var(--surface-elevation-target) 18%);
+  --border: color-mix(in srgb, var(--background), var(--surface-elevation-target) 6%);
+  --input: color-mix(in srgb, var(--background), var(--surface-elevation-target) 8%);
   --selection: color-mix(in srgb, var(--background), var(--surface-elevation-target) 18%);
   --selection-foreground: var(--foreground);
-  --ring: oklch(0.708 0 0);
+  --ring: color-mix(in srgb, var(--primary), var(--background) 20%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -310,7 +310,7 @@
   --sidebar-muted: color-mix(in srgb, var(--shell-solid), var(--foreground) 62%);
   --sidebar-selected-solid: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 8.5%);
   --sidebar-selected: var(--sidebar-selected-solid);
-  --sidebar-border: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 10%);
+  --sidebar-border: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 6%);
   --sidebar-ring: var(--ring);
 }
 
@@ -321,6 +321,9 @@
   --background: #181818;
   --foreground: #f2f2f2;
   --surface-elevation-target: #ffffff;
+  --border: color-mix(in srgb, var(--background), var(--surface-elevation-target) 10%);
+  --input: color-mix(in srgb, var(--background), var(--surface-elevation-target) 18%);
+  --sidebar-border: color-mix(in srgb, var(--shell-solid), var(--surface-elevation-target) 10%);
   --card: color-mix(in srgb, var(--background), white 2.5%);
   --popover: color-mix(in srgb, var(--background), white 4.5%);
   --primary: oklch(0.922 0 0);

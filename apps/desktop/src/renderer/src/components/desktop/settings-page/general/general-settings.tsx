@@ -48,7 +48,6 @@ export function GeneralSettings() {
   return (
     <div className="flex flex-col gap-8">
       <ProviderDefaultsControl key={`model-${revision}`} onChanged={refresh} />
-      <EditorSettings />
       <SettingsGroup
         title="对话与任务"
         action={
@@ -149,6 +148,7 @@ export function GeneralSettings() {
           />
         </summary>
         <div className="mt-4 flex flex-col gap-6">
+          <EditorSettings />
           <SettingsGroup title="任务与开发">
             <div key={`advanced-${revision}`} className="divide-y divide-border">
               <SettingsRow
