@@ -793,6 +793,16 @@ export function UtilityPanel({
               onLoadingPathChange={setLoadingFilePath}
               onOpenFileStart={startFileTab}
               onFileOpened={upsertFileTab}
+              onFileUpdated={(preview) => {
+                if (closeContext.current.scopeId !== scopeId) return
+                setFileTabs((current) =>
+                  current.map((tab) =>
+                    tab.projectPath === selectedProjectPath && tab.preview.path === preview.path
+                      ? { ...tab, preview }
+                      : tab
+                  )
+                )
+              }}
               restoreActivePath={persistedFileState?.activePath ?? null}
               restorePaths={persistedFileState?.paths ?? []}
               openRequest={fileOpenRequest}
@@ -819,7 +829,9 @@ export function UtilityPanel({
               }
             />
           )}
-          {activeTab?.tool === "review" && <ReviewTool openRequest={reviewOpenRequest} />}
+          {activeTab?.tool === "review" && (
+            <ReviewTool scopeId={scopeId} openRequest={reviewOpenRequest} />
+          )}
           {activeSessionId && tabs.some((tab) => tab.tool === "side-chat") ? (
             <SideChatPanel
               key={`side-chat:${activeSessionId}`}

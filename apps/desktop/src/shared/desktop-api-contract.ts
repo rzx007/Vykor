@@ -77,6 +77,7 @@ import type {
   WorkspaceListFilesResult,
   WorkspaceCopyPathInput,
   WorkspaceReadFileInput,
+  WorkspaceWriteFileInput,
   WorkspaceReadFileResult,
   WorkspaceRevealPathInput,
   WorkspaceOpenWithInput,
@@ -274,6 +275,7 @@ export type DesktopAPI = {
   workspace: {
     listFiles: (input: WorkspaceListFilesInput) => Promise<WorkspaceListFilesResult>
     readFile: (input: WorkspaceReadFileInput) => Promise<WorkspaceReadFileResult>
+    writeFile: (input: WorkspaceWriteFileInput) => Promise<WorkspaceReadFileResult>
     revealPath: (input: WorkspaceRevealPathInput) => Promise<void>
     copyPath: (input: WorkspaceCopyPathInput) => Promise<string>
     listOpeners: () => Promise<WorkspaceOpener[]>
@@ -512,7 +514,9 @@ export type DesktopAPI = {
       input: UpdateDesktopSessionPermissionModeInput
     ) => Promise<DesktopSessionRecord>
     updateEffort: (input: UpdateDesktopSessionEffortInput) => Promise<DesktopSessionRecord>
-    updatePluginSelection: (input: UpdateDesktopSessionPluginSelectionInput) => Promise<DesktopSessionRecord>
+    updatePluginSelection: (
+      input: UpdateDesktopSessionPluginSelectionInput
+    ) => Promise<DesktopSessionRecord>
     getContextUsage: (input: GetDesktopContextUsageInput) => Promise<DesktopContextUsageSnapshot>
     rename: (input: RenameDesktopSessionInput) => Promise<DesktopSessionRecord>
     setPinned: (input: PinDesktopSessionInput) => Promise<DesktopSessionRecord>

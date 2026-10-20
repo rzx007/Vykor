@@ -107,7 +107,7 @@ function FileCodeRenderer({
     }),
     [code, language]
   )
-  const options = useMemo<FileOptions<undefined>>(
+  const options = useMemo<FileOptions<undefined, undefined>>(
     () => ({
       disableFileHeader: true,
       disableLineNumbers: !showLineNumbers,

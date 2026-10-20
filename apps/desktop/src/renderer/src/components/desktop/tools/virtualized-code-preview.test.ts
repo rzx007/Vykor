@@ -4,6 +4,20 @@ import { createPreviewFile, resolvePreviewScrollTop } from "./virtualized-code-p
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 describe("createPreviewFile", () => {
+  it.each([
+    ["notes.txt", "txt", "text"],
+    [".env", "env", "dotenv"],
+    ["Cargo.lock", "lock", "text"],
+    [".gitignore", "gitignore", "text"],
+    ["custom.unknown", "unknown", "text"],
+    ["script.ps1", "ps1", "powershell"],
+    ["source.h", "h", "objective-cpp"],
+    ["CODEOWNERS", "text", "codeowners"],
+    ["COMMIT_EDITMSG", "text", "git-commit"],
+    ["Gemfile", "text", "ruby"],
+  ])("uses a supported language for %s", (path, language, expected) => {
+    expect(createPreviewFile({ ...preview(path), language }).lang).toBe(expected)
+  })
   it("preserves syntax highlighting metadata for a large source file", () => {
     expect(createPreviewFile(preview("large.ts"))).toMatchObject({
       name: "large.ts",

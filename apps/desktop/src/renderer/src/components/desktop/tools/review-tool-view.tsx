@@ -1,13 +1,33 @@
 import { DEFAULT_THEMES, type FileDiffOptions } from "@pierre/diffs"
-import { PatchDiff } from "@pierre/diffs/react"
-import { AlignJustify, Check, ChevronDown, Columns2, FileDiff, FileText } from "lucide-react"
+import {
+  AlignJustify,
+  Check,
+  ChevronDown,
+  Circle,
+  CircleCheck,
+  Columns2,
+  FileDiff,
+  FileText,
+} from "lucide-react"
 import type * as React from "react"
 import { Button } from "@renderer/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@renderer/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@renderer/components/ui/dropdown-menu"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
-import type { DesktopGitChangedFile, DesktopGitChangesResult, DesktopGitDiffScope, DesktopGitFileStatus } from "@shared/git-types"
+import { ReviewDiffPreview } from "./review-diff-preview"
+import type { ReviewSelectionSource } from "./review-diff-model"
+import type {
+  DesktopGitChangedFile,
+  DesktopGitChangesResult,
+  DesktopGitDiffScope,
+  DesktopGitFileStatus,
+} from "@shared/git-types"
 
 export type DiffState = "idle" | "loading" | "ready" | "error"
 export type DiffViewMode = "unified" | "split"
@@ -20,7 +40,7 @@ const reviewRangeOptions: Array<{ value: ReviewRange; label: string }> = [
   { value: "staged", label: "已暂存" },
 ]
 
-const diffOptions: FileDiffOptions<undefined> = {
+const diffOptions: FileDiffOptions<undefined, undefined> = {
   collapsedContextThreshold: 6,
   disableFileHeader: true,
   hunkSeparators: "line-info-basic",
@@ -32,7 +52,10 @@ const diffOptions: FileDiffOptions<undefined> = {
   unsafeCSS: `
     :host {
       display: block;
-      min-width: max-content;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       background: transparent;
       color: var(--content-foreground);
       font-family: var(--font-mono);
@@ -42,11 +65,22 @@ const diffOptions: FileDiffOptions<undefined> = {
 
     pre {
       margin: 0;
-      min-width: max-content;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       background: transparent !important;
       font-family: var(--font-mono) !important;
       font-size: var(--code-font-size) !important;
       line-height: var(--code-line-height) !important;
+    }
+
+    [data-diff-type="split"][data-overflow="scroll"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    [data-code] {
+      min-width: 0;
     }
   `,
 }
@@ -67,13 +101,14 @@ export function DiffModeToggle({
       type="button"
       variant="ghost"
       size="icon"
+      shape="circle"
       aria-label={label}
       title={label}
       aria-pressed={value === "split"}
       onClick={() => onChange(nextValue)}
       className="text-muted-foreground"
     >
-      <Icon />
+      <Icon strokeWidth={1.75} />
     </Button>
   )
 }
@@ -83,11 +118,13 @@ export function ReviewRangeSummary({
   loading,
   value,
   onChange,
+  reviewedCount = 0,
 }: {
   changes: DesktopGitChangesResult | null
   loading: boolean
   value: ReviewRange
   onChange: (value: ReviewRange) => void
+  reviewedCount?: number
 }): React.JSX.Element {
   const label = reviewRangeLabel(value)
 
@@ -118,6 +155,16 @@ export function ReviewRangeSummary({
           <span className="ml-1 text-rose-600 dark:text-rose-400">-{changes.totalDeletions}</span>
         </span>
       ) : null}
+      {changes && reviewedCount > 0 ? (
+        <span
+          className="ml-2 inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums"
+          title="已审阅文件"
+          aria-label={`已审阅 ${reviewedCount} / ${changes.files.length} 个文件`}
+        >
+          <CircleCheck className="size-3.5" strokeWidth={1.75} />
+          {reviewedCount}/{changes.files.length}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -127,37 +174,87 @@ export function ChangedFileStream({
   activePath,
   onSelect,
   diff,
+  reviewedPaths,
+  markingPath,
+  onToggleReviewed,
+  viewportRef,
+  onViewportScroll,
+  canMarkActive = true,
 }: {
   files: DesktopGitChangedFile[]
   activePath: string | null
   onSelect: (path: string) => void
   diff: React.ReactNode
+  reviewedPaths?: ReadonlySet<string>
+  markingPath?: string | null
+  onToggleReviewed?: (file: DesktopGitChangedFile) => void
+  viewportRef?: React.Ref<HTMLDivElement>
+  onViewportScroll?: (top: number, left: number) => void
+  canMarkActive?: boolean
 }): React.JSX.Element {
   return (
-    <ScrollArea className="min-h-0 flex-1 bg-background" viewportClassName="p-0">
-      <div className="pb-3">
+    <ScrollArea
+      horizontal={false}
+      className="min-h-0 min-w-0 flex-1 bg-background"
+      viewportClassName="p-0"
+      viewportRef={viewportRef}
+      onScrollCapture={(event) => {
+        const target = event.target as HTMLElement
+        if (target.dataset.slot === "scroll-area-viewport")
+          onViewportScroll?.(target.scrollTop, target.scrollLeft)
+      }}
+    >
+      <div className="w-full min-w-0 pb-3">
         {files.map((file) => {
           const active = file.path === activePath
           return (
-            <section key={file.path} aria-label={file.path}>
-              <button
-                type="button"
-                onClick={() => onSelect(file.path)}
+            <section key={file.path} aria-label={file.path} className="w-full min-w-0">
+              <div
                 className={cn(
-                  "flex h-10 w-full min-w-0 items-center gap-2 border-b border-border/35 px-3 text-left transition-colors",
-                  active
-                    ? "bg-background text-foreground"
-                    : "bg-panel/55 text-ui-muted hover:bg-muted/65 hover:text-foreground"
+                  "flex min-w-0 items-center border-b border-border/35",
+                  active ? "bg-background" : "bg-panel/55"
                 )}
-                aria-expanded={active}
               >
-                <FileText className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.8} />
-                <span className="text-ui-small min-w-0 flex-1 truncate" title={file.path}>
-                  <PathWithFileName path={file.path} />
-                </span>
-                <StatusBadge status={file.status} />
-                <LineStats file={file} />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelect(file.path)}
+                  className={cn(
+                    "flex h-10 min-w-0 flex-1 items-center gap-2 px-3 text-left transition-colors",
+                    active
+                      ? "bg-background text-foreground"
+                      : "bg-panel/55 text-ui-muted hover:bg-muted/65 hover:text-foreground"
+                  )}
+                  aria-expanded={active}
+                >
+                  <FileText className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.8} />
+                  <span className="text-ui-small min-w-0 flex-1 truncate" title={file.path}>
+                    <PathWithFileName path={file.path} />
+                  </span>
+                  <StatusBadge status={file.status} />
+                  <LineStats file={file} />
+                </button>
+                {onToggleReviewed ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    shape="circle"
+                    className="mr-1.5 shrink-0 text-muted-foreground"
+                    aria-label={reviewedPaths?.has(file.path) ? "标记为未审阅" : "标记为已审阅"}
+                    title={reviewedPaths?.has(file.path) ? "已审阅" : "标记已审阅"}
+                    aria-pressed={reviewedPaths?.has(file.path) ?? false}
+                    aria-busy={markingPath === file.path}
+                    disabled={!!markingPath || (active && !canMarkActive)}
+                    onClick={() => onToggleReviewed(file)}
+                  >
+                    {reviewedPaths?.has(file.path) ? (
+                      <CircleCheck strokeWidth={1.75} />
+                    ) : (
+                      <Circle strokeWidth={1.75} />
+                    )}
+                  </Button>
+                ) : null}
+              </div>
               {active ? diff : null}
             </section>
           )
@@ -185,6 +282,9 @@ export function InlineDiffPreview({
   error,
   themeType,
   diffViewMode,
+  source,
+  refreshing,
+  onOpenFile,
 }: {
   file: DesktopGitChangedFile | null
   patch: string
@@ -192,9 +292,12 @@ export function InlineDiffPreview({
   error: string | null
   themeType: "dark" | "light"
   diffViewMode: DiffViewMode
+  source: Pick<ReviewSelectionSource, "rootPath" | "range"> & { scopeId: string }
+  refreshing?: boolean
+  onOpenFile?: (path: string, line?: number) => void
 }): React.JSX.Element {
   return (
-    <div className="border-b border-border/45 bg-background">
+    <div className="w-full max-w-full min-w-0 border-b border-border/45 bg-background">
       <DiffPreviewContent
         file={file}
         patch={patch}
@@ -202,6 +305,9 @@ export function InlineDiffPreview({
         error={error}
         themeType={themeType}
         diffViewMode={diffViewMode}
+        source={source}
+        refreshing={refreshing}
+        onOpenFile={onOpenFile}
       />
     </div>
   )
@@ -214,6 +320,9 @@ function DiffPreviewContent({
   error,
   themeType,
   diffViewMode,
+  source,
+  refreshing,
+  onOpenFile,
 }: {
   file: DesktopGitChangedFile | null
   patch: string
@@ -221,6 +330,9 @@ function DiffPreviewContent({
   error: string | null
   themeType: "dark" | "light"
   diffViewMode: DiffViewMode
+  source: Pick<ReviewSelectionSource, "rootPath" | "range"> & { scopeId: string }
+  refreshing?: boolean
+  onOpenFile?: (path: string, line?: number) => void
 }): React.JSX.Element {
   if (!file) {
     return (
@@ -268,12 +380,22 @@ function DiffPreviewContent({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <PatchDiff
-        key={`${file.path}:${patch.length}:${themeType}:${diffViewMode}`}
+    <div className="w-full max-w-full min-w-0 overflow-hidden">
+      {error ? (
+        <p role="alert" className="px-3 py-1.5 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <ReviewDiffPreview
+        key={file.path}
+        file={file}
         patch={patch}
-        options={{ ...diffOptions, diffStyle: diffViewMode, themeType }}
-        className="desktop-review-diff min-w-max"
+        baseOptions={diffOptions}
+        diffViewMode={diffViewMode}
+        themeType={themeType}
+        source={source}
+        refreshing={refreshing}
+        onOpenFile={onOpenFile}
       />
     </div>
   )

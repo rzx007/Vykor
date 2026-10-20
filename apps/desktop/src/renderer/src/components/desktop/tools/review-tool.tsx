@@ -1,6 +1,14 @@
 import { FileDiff, GitPullRequestDraft, RefreshCw } from "lucide-react"
 import type * as React from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { DesktopEmptyState } from "@renderer/components/desktop/desktop-empty-state"
@@ -9,12 +17,21 @@ import { Button } from "@renderer/components/ui/button"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
+import { toast } from "@renderer/lib/toast"
+import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
+import {
+  revalidateReviewedFiles,
+  reviewFileKey,
+  reviewPatchFingerprint,
+  useReviewedFiles,
+} from "./reviewed-files"
 import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
 import type {
   DesktopGitChangesResult,
+  DesktopGitChangedFile,
   DesktopGitDiffScope,
   DesktopGitReviewRequest,
 } from "@shared/git-types"
@@ -33,20 +50,33 @@ import {
 type LoadState = "idle" | "loading" | "ready" | "error"
 export function ReviewTool({
   openRequest,
+  scopeId: providedScopeId,
 }: {
   openRequest?: DesktopGitReviewRequest | null
+  scopeId?: string
 }): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
+  const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
+  const layout = useContext(MainLayoutContext)
+  const scopeId =
+    providedScopeId ?? (activeSessionId ? `session:${activeSessionId}` : "draft:review")
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const selectedProjectPath = openRequest?.rootPath ?? selectedProject?.path
   const [loadState, setLoadState] = useState<LoadState>("idle")
-  const [diffState, setDiffState] = useState<DiffState>("idle")
+  const [diff, setDiff] = useState<{
+    key: string
+    state: DiffState
+    patch: string
+    error: string | null
+    refreshing: boolean
+    fingerprint?: string
+  }>({ key: "", state: "idle", patch: "", error: null, refreshing: false })
+  const [patchRevision, setPatchRevision] = useState(0)
   const [reviewRange, setReviewRange] = useState<ReviewRange>(openRequest?.scope ?? "uncommitted")
   const [changes, setChanges] = useState<DesktopGitChangesResult | null>(null)
+  const [loadedChangesKey, setLoadedChangesKey] = useState("")
   const [activePath, setActivePath] = useState<string | null>(null)
-  const [patch, setPatch] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [diffError, setDiffError] = useState<string | null>(null)
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("unified")
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false)
   const [preferenceError, setPreferenceError] = useState<string | null>(null)
@@ -54,6 +84,30 @@ export function ReviewTool({
   const handledOpenRequestRef = useRef<number | null>(null)
   const changesRequestVersionRef = useRef(0)
   const lastTurnFilePaths = useMemo(() => collectLastTurnFilePaths(sessionView), [sessionView])
+  const namespace = useMemo(
+    () => ({ scopeId, rootPath: selectedProjectPath ?? "", range: reviewRange, ignoreWhitespace }),
+    [scopeId, selectedProjectPath, reviewRange, ignoreWhitespace]
+  )
+  const changesKey = JSON.stringify([scopeId, selectedProjectPath, reviewRange, ignoreWhitespace])
+  const visibleChanges = loadedChangesKey === changesKey ? changes : null
+  const marks = useReviewedFiles((state) => state.marks)
+  const reviewedPaths = useMemo(
+    () =>
+      new Set(
+        (visibleChanges?.files ?? [])
+          .filter((file) => marks[reviewFileKey(namespace, file.path)])
+          .map((file) => file.path)
+      ),
+    [visibleChanges, marks, namespace]
+  )
+  const activePathRef = useRef(activePath)
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const refreshPosition = useRef<{ key: string; top: number; left: number } | null>(null)
+  const marking = useRef(false)
+  const [markingPath, setMarkingPath] = useState<string | null>(null)
+  useEffect(() => {
+    activePathRef.current = activePath
+  }, [activePath])
 
   useEffect(() => {
     let cancelled = false
@@ -101,19 +155,40 @@ export function ReviewTool({
             ? filterChangesByPaths(result, lastTurnFilePaths, selectedProjectPath)
             : result
         setChanges(visibleResult)
+        setLoadedChangesKey(changesKey)
         setActivePath((current) =>
           current && visibleResult.files.some((file) => file.path === current)
             ? current
             : (visibleResult.files[0]?.path ?? null)
         )
         setLoadState("ready")
+        if (force) setPatchRevision((current) => current + 1)
+        const nextActive = visibleResult.files.some((file) => file.path === activePathRef.current)
+          ? activePathRef.current
+          : (visibleResult.files[0]?.path ?? null)
+        void revalidateReviewedFiles(
+          namespace,
+          visibleResult.files.map((file) => file.path),
+          nextActive,
+          async (path) =>
+            (
+              await window.desktop.git.fileDiff({
+                rootPath: selectedProjectPath,
+                path,
+                status: visibleResult.files.find((file) => file.path === path)?.status,
+                scope: gitScopeForRange(reviewRange),
+                ...(ignoreWhitespace ? { ignoreWhitespace: true } : {}),
+              })
+            ).patch,
+          () => requestVersion === changesRequestVersionRef.current
+        )
       } catch (loadError) {
         if (requestVersion !== changesRequestVersionRef.current) return
         setError(errorMessage(loadError))
         setLoadState("error")
       }
     },
-    [ignoreWhitespace, lastTurnFilePaths, reviewRange, selectedProjectPath]
+    [ignoreWhitespace, lastTurnFilePaths, reviewRange, selectedProjectPath, namespace, changesKey]
   )
 
   useEffect(() => {
@@ -141,24 +216,59 @@ export function ReviewTool({
         setReviewRange(openRequest.scope)
         return
       }
-      if (!changes?.files.length || (path && !changes.files.some((file) => file.path === path))) {
+      if (
+        !visibleChanges?.files.length ||
+        (path && !visibleChanges.files.some((file) => file.path === path))
+      ) {
         void loadChanges()
       }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [changes?.files, loadChanges, openRequest, reviewRange, selectedProjectPath])
+  }, [visibleChanges?.files, loadChanges, openRequest, reviewRange, selectedProjectPath])
 
-  const activeFile = changes?.files.find((file) => file.path === activePath) ?? null
+  const activeFile = visibleChanges?.files.find((file) => file.path === activePath) ?? null
+  const diffKey = JSON.stringify([
+    selectedProjectPath,
+    reviewRange,
+    ignoreWhitespace,
+    activePath,
+    activeFile?.status,
+  ])
+  const currentDiff =
+    diff.key === diffKey
+      ? diff
+      : {
+          state: "loading" as const,
+          patch: "",
+          error: null,
+          refreshing: false,
+          fingerprint: undefined,
+        }
+  useLayoutEffect(() => {
+    const position = refreshPosition.current
+    if (!position || diff.key !== position.key || diff.refreshing) return
+    const viewport = viewportRef.current
+    if (viewport) {
+      viewport.scrollTop = position.top
+      viewport.scrollLeft = position.left
+    }
+    refreshPosition.current = null
+  }, [diff])
 
   useEffect(() => {
-    if (!selectedProjectPath || !activePath) {
+    if (!selectedProjectPath || !activePath || !activeFile) {
       return
     }
 
     let cancelled = false
     const timer = window.setTimeout(() => {
-      setDiffState("loading")
-      setDiffError(null)
+      const reviewKey = reviewFileKey(namespace, activePath)
+      const decision = useReviewedFiles.getState().decisions[reviewKey] ?? 0
+      setDiff((current) =>
+        current.key === diffKey && current.state === "ready"
+          ? { ...current, refreshing: true, error: null }
+          : { key: diffKey, patch: "", state: "loading", error: null, refreshing: true }
+      )
       void window.desktop.git
         .fileDiff({
           rootPath: selectedProjectPath,
@@ -167,16 +277,36 @@ export function ReviewTool({
           scope: gitScopeForRange(reviewRange),
           ...(ignoreWhitespace ? { ignoreWhitespace: true } : {}),
         })
-        .then((result) => {
+        .then(async (result) => {
           if (cancelled) return
-          setPatch(result.patch)
-          setDiffState("ready")
+          const fingerprint = result.patch.startsWith("diff --git")
+            ? await reviewPatchFingerprint(result.patch)
+            : undefined
+          if (cancelled) return
+          useReviewedFiles.getState().observe(reviewKey, fingerprint ?? "", decision)
+          setDiff({
+            key: diffKey,
+            patch: result.patch,
+            state: "ready",
+            error: null,
+            refreshing: false,
+            fingerprint,
+          })
         })
         .catch((loadError: unknown) => {
           if (cancelled) return
-          setPatch("")
-          setDiffError(errorMessage(loadError))
-          setDiffState("error")
+          useReviewedFiles.getState().observe(reviewKey, "", decision)
+          setDiff((current) =>
+            current.key === diffKey && current.state === "ready"
+              ? { ...current, error: errorMessage(loadError), refreshing: false }
+              : {
+                  key: diffKey,
+                  patch: "",
+                  state: "error",
+                  error: errorMessage(loadError),
+                  refreshing: false,
+                }
+          )
         })
     }, 0)
 
@@ -184,7 +314,58 @@ export function ReviewTool({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [activeFile?.status, activePath, ignoreWhitespace, reviewRange, selectedProjectPath])
+  }, [
+    activeFile?.status,
+    activePath,
+    ignoreWhitespace,
+    reviewRange,
+    selectedProjectPath,
+    diffKey,
+    patchRevision,
+    namespace,
+  ])
+
+  const toggleReviewed = async (file: DesktopGitChangedFile): Promise<void> => {
+    if (
+      !selectedProjectPath ||
+      marking.current ||
+      (file.path === activePath &&
+        (currentDiff.state !== "ready" || currentDiff.refreshing || currentDiff.error))
+    )
+      return
+    const key = reviewFileKey(namespace, file.path)
+    const store = useReviewedFiles.getState()
+    if (store.marks[key]) {
+      store.setReviewed(key, store.marks[key]!, false)
+      return
+    }
+    marking.current = true
+    const version = changesRequestVersionRef.current
+    setMarkingPath(file.path)
+    try {
+      const patch =
+        file.path === activePath
+          ? currentDiff.patch
+          : (
+              await window.desktop.git.fileDiff({
+                rootPath: selectedProjectPath,
+                path: file.path,
+                status: file.status,
+                scope: gitScopeForRange(reviewRange),
+                ...(ignoreWhitespace ? { ignoreWhitespace: true } : {}),
+              })
+            ).patch
+      if (!patch.startsWith("diff --git")) return
+      const fingerprint = await reviewPatchFingerprint(patch)
+      if (version !== changesRequestVersionRef.current) return
+      useReviewedFiles.getState().setReviewed(key, fingerprint, true)
+    } catch (failure) {
+      toast.error("无法更新审阅状态", errorMessage(failure))
+    } finally {
+      marking.current = false
+      setMarkingPath(null)
+    }
+  }
 
   if (!selectedProjectPath) {
     return (
@@ -198,13 +379,13 @@ export function ReviewTool({
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-background">
+    <section className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       {preferenceError && (
         <p className="px-3 py-1 text-xs text-destructive">
           Git 显示偏好读取失败，保留当前显示选择：{preferenceError}
         </p>
       )}
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/45 px-3">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/45 px-3">
         {openRequest?.rootPath ? (
           <span className="text-xs text-ui-muted" title={selectedProjectPath}>
             当前工作区差异
@@ -212,10 +393,11 @@ export function ReviewTool({
         ) : null}
         <div className="min-w-0 flex-1">
           <ReviewRangeSummary
-            changes={changes}
+            changes={visibleChanges}
             loading={loadState === "loading"}
             value={reviewRange}
             onChange={setReviewRange}
+            reviewedCount={reviewedPaths.size}
           />
         </div>
         <DiffModeToggle value={diffViewMode} onChange={setDiffViewMode} />
@@ -225,14 +407,30 @@ export function ReviewTool({
           size="icon"
           aria-label="刷新改动"
           title="刷新改动"
-          onClick={() => void loadChanges({ force: true })}
+          onClick={() => {
+            const viewport = viewportRef.current
+            if (viewport)
+              refreshPosition.current = {
+                key: diffKey,
+                top: viewport.scrollTop,
+                left: viewport.scrollLeft,
+              }
+            void loadChanges({ force: true })
+          }}
+          disabled={loadState === "loading" || currentDiff.refreshing}
           className="text-muted-foreground"
         >
-          <RefreshCw className={cn(loadState === "loading" && "animate-spin")} />
+          <RefreshCw
+            strokeWidth={1.75}
+            className={cn(
+              (loadState === "loading" || currentDiff.refreshing) &&
+                "animate-spin motion-reduce:animate-none"
+            )}
+          />
         </Button>
       </div>
 
-      {loadState === "loading" && !changes && (
+      {loadState === "loading" && !visibleChanges && (
         <div className="text-ui-small flex flex-1 items-center justify-center gap-2 text-ui-muted">
           <Spinner />
           正在读取改动...
@@ -248,7 +446,7 @@ export function ReviewTool({
         />
       )}
 
-      {loadState === "ready" && changes?.files.length === 0 && (
+      {loadState === "ready" && visibleChanges?.files.length === 0 && (
         <DesktopEmptyState
           icon={GitPullRequestDraft}
           size="sm"
@@ -257,19 +455,38 @@ export function ReviewTool({
         />
       )}
 
-      {changes && changes.files.length > 0 && (
+      {visibleChanges && visibleChanges.files.length > 0 && (
         <ChangedFileStream
-          files={changes.files}
+          files={visibleChanges.files}
           activePath={activePath}
           onSelect={setActivePath}
+          reviewedPaths={reviewedPaths}
+          markingPath={markingPath}
+          onToggleReviewed={(file) => void toggleReviewed(file)}
+          viewportRef={viewportRef}
+          canMarkActive={
+            currentDiff.state === "ready" &&
+            !currentDiff.refreshing &&
+            !currentDiff.error &&
+            !!currentDiff.fingerprint
+          }
+          onViewportScroll={(top, left) => {
+            if (refreshPosition.current)
+              refreshPosition.current = { ...refreshPosition.current, top, left }
+          }}
           diff={
             <InlineDiffPreview
-              file={changes.files.find((file) => file.path === activePath) ?? null}
-              patch={patch}
-              state={diffState}
-              error={diffError}
+              file={visibleChanges.files.find((file) => file.path === activePath) ?? null}
+              patch={currentDiff.patch}
+              state={currentDiff.state}
+              error={currentDiff.error}
               themeType={themeType}
               diffViewMode={diffViewMode}
+              source={namespace}
+              refreshing={currentDiff.refreshing}
+              onOpenFile={
+                selectedProjectPath === selectedProject?.path ? layout?.openFile : undefined
+              }
             />
           }
         />

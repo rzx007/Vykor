@@ -87,6 +87,7 @@ import type {
   WorkspaceListFilesResult,
   WorkspaceCopyPathInput,
   WorkspaceReadFileInput,
+  WorkspaceWriteFileInput,
   WorkspaceReadFileResult,
   WorkspaceRevealPathInput,
   WorkspaceOpenWithInput,
@@ -323,6 +324,7 @@ export const IpcChannels = {
 
   workspaceListFiles: "workspace:list-files",
   workspaceReadFile: "workspace:read-file",
+  workspaceWriteFile: "workspace:write-file",
   workspaceRevealPath: "workspace:reveal-path",
   workspaceCopyPath: "workspace:copy-path",
   workspaceListOpeners: "workspace:list-openers",
@@ -963,6 +965,10 @@ export interface IpcInvokeMap
     args: [input: WorkspaceReadFileInput]
     result: WorkspaceReadFileResult
   }
+  [IpcChannels.workspaceWriteFile]: {
+    args: [input: WorkspaceWriteFileInput]
+    result: WorkspaceReadFileResult
+  }
   [IpcChannels.workspaceRevealPath]: {
     args: [input: WorkspaceRevealPathInput]
     result: void
@@ -1065,7 +1071,10 @@ export interface IpcInvokeMap
   }
   [IpcChannels.noteRemove]: { args: [id: string]; result: void }
   [IpcChannels.noteOpenDirectory]: { args: []; result: void }
-  [IpcChannels.providerSnapshot]: { args: [input?: { refresh?: boolean }]; result: DesktopProviderSnapshot }
+  [IpcChannels.providerSnapshot]: {
+    args: [input?: { refresh?: boolean }]
+    result: DesktopProviderSnapshot
+  }
   [IpcChannels.providerConnect]: {
     args: [input: ConnectDesktopProviderInput]
     result: DesktopProviderSnapshot

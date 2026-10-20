@@ -8,6 +8,8 @@ import {
   type UtilityPanelViewStates,
 } from "./utility-panel-state"
 
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
+
 const persistedViewStatesKey = "vykor.desktop.utility-panel-states"
 const persistedFileTabsKey = "vykor.desktop.file-tabs"
 
@@ -102,6 +104,7 @@ export function moveUtilityPanelScope(
   viewStates: UtilityPanelViewStates
 ): UtilityPanelViewStates {
   if (fromScopeId === toScopeId) return viewStates
+  useCodePreviewDrafts.getState().moveScope(fromScopeId, toScopeId)
 
   let nextViewStates = viewStates
   if (!viewStates[toScopeId]) {

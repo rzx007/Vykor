@@ -1,6 +1,7 @@
-import { readdir, readFile, realpath, stat } from "node:fs/promises"
+import { randomUUID } from "node:crypto"
+import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, extname, join, posix, relative, resolve, sep, win32 } from "node:path"
+import { basename, dirname, extname, join, posix, relative, resolve, sep, win32 } from "node:path"
 import { clipboard, shell } from "electron"
 import { documentFormat, MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 import { desktopSessionService } from "../session/session-service"
@@ -12,6 +13,7 @@ import type {
   WorkspaceListFilesInput,
   WorkspaceListFilesResult,
   WorkspaceReadFileInput,
+  WorkspaceWriteFileInput,
   WorkspaceReadFileResult,
   WorkspaceRevealPathInput,
 } from "../../../shared/workspace-types"
@@ -46,6 +48,7 @@ const textDecoder = new TextDecoder("utf-8", { fatal: false })
 
 class WorkspaceService {
   private allowedRoots: { configDir: string; documentsPath: string } | null = null
+  private savingPaths = new Set<string>()
 
   configureAllowedRoots(input: { configDir: string; documentsPath: string }): void {
     this.allowedRoots = input
@@ -156,6 +159,82 @@ class WorkspaceService {
       binary,
       binary ? null : textDecoder.decode(buffer)
     )
+  }
+
+  async writeFile(input: WorkspaceWriteFileInput): Promise<WorkspaceReadFileResult> {
+    if (typeof input.content !== "string" || typeof input.originalContent !== "string")
+      throw new Error("保存内容必须是文本。")
+    const contentBytes = Buffer.from(input.content, "utf8")
+    if (contentBytes.byteLength > maxTextFileBytes) throw new Error("文件过大，无法在此编辑。")
+    const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
+    if (resolved.classification.kind !== "project") throw new Error("只能编辑当前项目内的文件。")
+    const pathKey =
+      process.platform === "win32" ? resolved.absolutePath.toLowerCase() : resolved.absolutePath
+    if (this.savingPaths.has(pathKey)) throw new Error("文件正在保存，请稍后重试。")
+    this.savingPaths.add(pathKey)
+    let temporaryPath: string | undefined
+    try {
+      // 不使用截断方式打开：先确认磁盘内容仍等于开始编辑时的内容。
+      const handle = await open(resolved.absolutePath, "r+")
+      let sourceClosed = false
+      try {
+        const info = await handle.stat()
+        if (!info.isFile() || info.size > maxTextFileBytes)
+          throw new Error("文件过大或不是文本文件。")
+        const current = await handle.readFile()
+        if (current.byteLength > maxTextFileBytes || isLikelyBinary(current))
+          throw new Error("只能编辑 UTF-8 文本文件。")
+        let original: string
+        try {
+          original = new TextDecoder("utf-8", { fatal: true }).decode(current)
+        } catch {
+          throw new Error("只能编辑 UTF-8 文本文件。")
+        }
+        if (original !== input.originalContent)
+          throw new Error("文件已被其他程序修改，请重新打开文件后合并改动。草稿仍已保留。")
+        const hasBom = current[0] === 0xef && current[1] === 0xbb && current[2] === 0xbf
+        const bytes = hasBom
+          ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), contentBytes])
+          : contentBytes
+        if (bytes.length > maxTextFileBytes) throw new Error("文件过大，无法在此编辑。")
+        temporaryPath = join(dirname(resolved.absolutePath), `.vykor-save-${randomUUID()}.tmp`)
+        const temporary = await open(temporaryPath, "wx", info.mode & 0o777)
+        try {
+          let written = 0
+          while (written < bytes.length) {
+            const part = await temporary.write(bytes, written, bytes.length - written, written)
+            if (part.bytesWritten === 0) throw new Error("文件写入失败。")
+            written += part.bytesWritten
+          }
+          if (process.platform !== "win32") await temporary.chmod(info.mode & 0o777)
+          await temporary.sync()
+        } finally {
+          await temporary.close()
+        }
+        // Windows 不允许替换仍被当前进程以写入模式打开的源文件。
+        await handle.close()
+        sourceClosed = true
+        // 完整写入后再替换；写入失败不会破坏源文件，准备期间的外部修改也不能覆盖。
+        const latest = await stat(resolved.absolutePath)
+        if (
+          latest.dev !== info.dev ||
+          latest.ino !== info.ino ||
+          latest.size !== info.size ||
+          latest.mtimeMs !== info.mtimeMs ||
+          latest.ctimeMs !== info.ctimeMs ||
+          !current.equals(await readFile(resolved.absolutePath))
+        )
+          throw new Error("文件已被其他程序修改，请重新打开文件后合并改动。草稿仍已保留。")
+        await rename(temporaryPath, resolved.absolutePath)
+        temporaryPath = undefined
+        return toReadResult(resolved.classification, bytes.length, false, input.content)
+      } finally {
+        if (!sourceClosed) await handle.close()
+      }
+    } finally {
+      this.savingPaths.delete(pathKey)
+      if (temporaryPath) await unlink(temporaryPath).catch(() => undefined)
+    }
   }
 
   async revealPath(input: WorkspaceRevealPathInput): Promise<void> {

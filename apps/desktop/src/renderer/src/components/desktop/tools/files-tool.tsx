@@ -22,6 +22,7 @@ import {
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/file-viewer"
 import { fileViewerTypeForPreview } from "@renderer/components/desktop/tools/file-viewer-model"
+import { useCodePreviewDrafts } from "./code-preview-drafts"
 import { Button } from "@renderer/components/ui/button"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -59,6 +60,7 @@ type FilesToolProps = {
   onLoadingPathChange: React.Dispatch<React.SetStateAction<string | null>>
   onOpenFileStart: (path: string) => void
   onFileOpened: (tab: FileViewerTab) => void
+  onFileUpdated?: (preview: WorkspaceReadFileResult) => void
   restoreActivePath: string | null
   restorePaths: string[]
   openRequest: { id: number; path: string; line?: number } | null
@@ -74,6 +76,7 @@ export function FilesTool({
   onLoadingPathChange,
   onOpenFileStart,
   onFileOpened,
+  onFileUpdated,
   restoreActivePath,
   restorePaths,
   openRequest,
@@ -95,7 +98,7 @@ export function FilesTool({
   const [fileTreeDefaultSizePx] = useState(() => fileTreeWidthStore.resolveDefault())
   const restoredProjectRef = useRef<string | null>(null)
   const handledOpenRequestRef = useRef<number | null>(null)
-  const resolvedOpenRequestPathRef = useRef<string | null>(null)
+  const [resolvedOpenRequestPath, setResolvedOpenRequestPath] = useState<string | null>(null)
   const attemptedPreviewPathRef = useRef<string | null>(null)
 
   useEffect(
@@ -117,11 +120,21 @@ export function FilesTool({
     [activePath, tabs]
   )
   const activeIsMarkdown = activeTab?.type === "markdown"
+  const codeEditing = useCodePreviewDrafts(
+    (state) =>
+      state.drafts[JSON.stringify([scopeId, activeTab?.projectPath, activeTab?.preview.path])]
+        ?.editing ?? false
+  )
+  const searchableContent = useCodePreviewDrafts((state) => {
+    const draft =
+      state.drafts[JSON.stringify([scopeId, activeTab?.projectPath, activeTab?.preview.path])]
+    return draft && !draft.editing ? draft.content : (activeTab?.preview.content ?? "")
+  })
   const activeViewMode: FileViewMode =
     activeIsMarkdown && activePath ? (viewModeByPath[activePath] ?? "preview") : "source"
   const searchMatches = useMemo(
-    () => findSearchMatches(activeTab?.preview.content ?? "", searchQuery),
-    [activeTab?.preview.content, searchQuery]
+    () => findSearchMatches(searchableContent, searchQuery),
+    [searchableContent, searchQuery]
   )
   const visibleSearchIndex =
     searchMatches.length === 0 ? -1 : Math.min(searchIndex, searchMatches.length - 1)
@@ -154,10 +167,15 @@ export function FilesTool({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || (codeEditing && activeViewMode === "source")) return
       const wantsFind = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f"
       if (wantsFind) {
         event.preventDefault()
-        if (activeTab?.preview.content) setSearchOpen(true)
+        if (typeof activeTab?.preview.content === "string") {
+          setSearchOpen(true)
+          if (activeIsMarkdown && activePath)
+            setViewModeByPath((current) => ({ ...current, [activePath]: "source" }))
+        }
         return
       }
 
@@ -169,7 +187,14 @@ export function FilesTool({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [activeTab?.preview.content, searchOpen])
+  }, [
+    activeTab?.preview.content,
+    searchOpen,
+    codeEditing,
+    activeViewMode,
+    activeIsMarkdown,
+    activePath,
+  ])
 
   const openFile = async (
     path: string,
@@ -196,7 +221,7 @@ export function FilesTool({
       onActivePathChange(result.path)
       onOpenFileStart(result.path)
       onFileOpened(toFileViewerTab(result))
-      if (options.fromOpenRequest) resolvedOpenRequestPathRef.current = result.path
+      if (options.fromOpenRequest) setResolvedOpenRequestPath(result.path)
     } catch (readError) {
       setError(errorMessage(readError))
     } finally {
@@ -225,10 +250,11 @@ export function FilesTool({
     if (!openRequest || loadState !== "ready" || handledOpenRequestRef.current === openRequest.id)
       return
     handledOpenRequestRef.current = openRequest.id
-    resolvedOpenRequestPathRef.current = null
     const requestedPath = openRequest.path.trim()
     const timer = window.setTimeout(() => {
-      if (requestedPath) void openFile(requestedPath, { requireListedFile: false, fromOpenRequest: true })
+      setResolvedOpenRequestPath(null)
+      if (requestedPath)
+        void openFile(requestedPath, { requireListedFile: false, fromOpenRequest: true })
     }, 0)
     return () => window.clearTimeout(timer)
   }, [fileEntries, loadState, openRequest, selectedProject?.path])
@@ -421,13 +447,13 @@ export function FilesTool({
             minSize={280}
             className="relative min-h-0 min-w-0 overflow-hidden"
           >
-            {searchOpen && (
+            {searchOpen && !(codeEditing && activeViewMode === "source") && (
               <div className="absolute top-3 right-3 z-40">
                 <FileSearchControls
                   query={searchQuery}
                   matchCount={searchMatches.length}
                   matchIndex={visibleSearchIndex}
-                  disabled={!activeTab?.preview.content}
+                  disabled={typeof activeTab?.preview.content !== "string"}
                   onQueryChange={(query) => {
                     setSearchQuery(query)
                     setSearchIndex(0)
@@ -448,11 +474,10 @@ export function FilesTool({
               searchMatchIndex={visibleSearchIndex}
               searchMatches={searchMatches}
               targetLine={
-                openRequest && resolvedOpenRequestPathRef.current === activePath
-                  ? openRequest.line
-                  : undefined
+                openRequest && resolvedOpenRequestPath === activePath ? openRequest.line : undefined
               }
               onOpenHtmlInBrowser={onOpenHtmlInBrowser}
+              onFileUpdated={onFileUpdated}
             />
           </Panel>
 

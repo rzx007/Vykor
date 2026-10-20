@@ -188,6 +188,8 @@ export const desktopAPI = {
       invoke(IpcChannels.workspaceListFiles, input),
     readFile: (input: IpcInvokeMap[typeof IpcChannels.workspaceReadFile]["args"][0]) =>
       invoke(IpcChannels.workspaceReadFile, input),
+    writeFile: (input: IpcInvokeMap[typeof IpcChannels.workspaceWriteFile]["args"][0]) =>
+      invoke(IpcChannels.workspaceWriteFile, input),
     revealPath: (input: IpcInvokeMap[typeof IpcChannels.workspaceRevealPath]["args"][0]) =>
       invoke(IpcChannels.workspaceRevealPath, input),
     copyPath: (input: IpcInvokeMap[typeof IpcChannels.workspaceCopyPath]["args"][0]) =>
@@ -309,9 +311,8 @@ export const desktopAPI = {
     openDirectory: () => invoke(IpcChannels.noteOpenDirectory),
   },
   providers: {
-    snapshot: (input?: { refresh?: boolean }) => input
-      ? invoke(IpcChannels.providerSnapshot, input)
-      : invoke(IpcChannels.providerSnapshot),
+    snapshot: (input?: { refresh?: boolean }) =>
+      input ? invoke(IpcChannels.providerSnapshot, input) : invoke(IpcChannels.providerSnapshot),
     connect: (input: IpcInvokeMap[typeof IpcChannels.providerConnect]["args"][0]) =>
       invoke(IpcChannels.providerConnect, input),
     activate: (input: IpcInvokeMap[typeof IpcChannels.providerActivate]["args"][0]) =>

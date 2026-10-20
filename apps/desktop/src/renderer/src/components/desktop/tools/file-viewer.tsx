@@ -13,6 +13,7 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
+import { useCodePreviewDrafts } from "./code-preview-drafts"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import { LocalDocumentPreview } from "./local-document-preview"
 import {
@@ -65,6 +66,7 @@ interface FileViewerProps {
   searchMatches: FileSearchMatch[]
   targetLine?: number
   onOpenHtmlInBrowser: (projectPath: string, relativePath: string, name: string) => void
+  onFileUpdated?: (preview: WorkspaceReadFileResult) => void
 }
 
 export function FileViewer({
@@ -78,9 +80,29 @@ export function FileViewer({
   searchMatches,
   targetLine,
   onOpenHtmlInBrowser,
+  onFileUpdated,
 }: FileViewerProps): React.JSX.Element {
   const { resolvedTheme: themeType } = useAppearance()
   const activeTab = tabs.find((tab) => tab.preview.path === activePath) ?? null
+  const markdownContent = useCodePreviewDrafts((state) => {
+    if (activeTab?.type !== "markdown" || viewMode !== "preview") return undefined
+    const draft =
+      state.drafts[JSON.stringify([scopeId, activeTab.projectPath, activeTab.preview.path])]
+    return draft &&
+      (draft.sourcePreview === activeTab.preview ||
+        draft.editing ||
+        draft.saving ||
+        draft.content !== draft.originalContent)
+      ? draft.content
+      : undefined
+  })
+  const markdownPreview = useMemo(
+    () =>
+      activeTab
+        ? { ...activeTab.preview, content: markdownContent ?? activeTab.preview.content }
+        : null,
+    [activeTab, markdownContent]
+  )
   // 保留来源对象，不让搜索、文件树等无关更新重新加载图片和批注。
   const imageSource = useMemo<ImageSource | null>(() => {
     const preview = activeTab?.preview
@@ -132,7 +154,7 @@ export function FileViewer({
         ) : activeTab?.type === "document" ? (
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (
-          <MarkdownPreview preview={activeTab.preview} />
+          <MarkdownPreview preview={markdownPreview ?? activeTab.preview} />
         ) : activeTab ? (
           <div className="flex h-full min-h-0 flex-col">
             {showLargeHtmlAction && activeTab.projectPath ? (
@@ -163,6 +185,9 @@ export function FileViewer({
               searchQuery={searchQuery}
               searchMatch={searchMatches[searchMatchIndex]}
               targetLine={targetLine}
+              scopeId={scopeId}
+              projectPath={activeTab.projectPath}
+              onSaved={onFileUpdated}
             />
           </div>
         ) : (

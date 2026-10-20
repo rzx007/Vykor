@@ -1,4 +1,4 @@
-import type { FileContents } from "@pierre/diffs"
+import { getFiletypeFromFileName, type FileContents } from "@pierre/diffs"
 
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
@@ -36,8 +36,10 @@ export function resolveActiveLineIndex({
 }
 
 function normalizeLanguage(language: string, path: string): FileContents["lang"] | undefined {
-  const normalized = languageFromPath(path) ?? language.toLowerCase()
-  if (!normalized || normalized === "text") return undefined
+  const exact = getFiletypeFromFileName(path)
+  const inferred = exact === "text" ? getFiletypeFromFileName(path.toLowerCase()) : exact
+  if (inferred !== "text") return inferred
+  const normalized = language.toLowerCase()
 
   const languageMap: Record<string, FileContents["lang"]> = {
     bash: "bash",
@@ -83,12 +85,5 @@ function normalizeLanguage(language: string, path: string): FileContents["lang"]
     zsh: "bash",
   }
 
-  return languageMap[normalized] ?? (normalized as FileContents["lang"])
-}
-
-function languageFromPath(path: string): string | null {
-  const name = path.split(/[\\/]/).filter(Boolean).pop()?.toLowerCase() ?? path.toLowerCase()
-  if (name === "dockerfile" || name.endsWith(".dockerfile")) return "dockerfile"
-  const extension = name.split(".").pop()
-  return extension && extension !== name ? extension : null
+  return languageMap[normalized] ?? "text"
 }

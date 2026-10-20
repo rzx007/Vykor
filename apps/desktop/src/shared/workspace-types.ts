@@ -21,6 +21,11 @@ export interface WorkspaceReadFileInput {
   path: string
 }
 
+export interface WorkspaceWriteFileInput extends WorkspaceReadFileInput {
+  originalContent: string
+  content: string
+}
+
 export type WorkspaceFileScope = "project" | "extra-root"
 export type WorkspaceImagePreviewError = "image_too_large" | "image_unsupported"
 

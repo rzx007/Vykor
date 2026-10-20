@@ -6,6 +6,7 @@ import {
   writeUtilityPanelRuntimeState,
 } from "./utility-panel-repository"
 import type { UtilityPanelRuntimeState } from "./utility-panel-state"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
 
 afterEach(() => resetUtilityPanelRuntimeStatesForTests())
 
@@ -45,12 +46,19 @@ describe("utility panel runtime state retention", () => {
   })
 
   it("移动 scope 时把运行时状态搬到目标 scope", () => {
+    const fromKey = JSON.stringify(["draft:p1", "/project", "a.ts"])
+    const toKey = JSON.stringify(["session:s1", "/project", "a.ts"])
+    useCodePreviewDrafts.getState().begin(fromKey, "old")
+    useCodePreviewDrafts.getState().change(fromKey, "unsaved")
     writeUtilityPanelRuntimeState("draft:p1", runtimeState("draft"))
 
     moveUtilityPanelScope("draft:p1", "session:s1", {})
 
     expect(readUtilityPanelRuntimeState("session:s1")?.activeFilePath).toBe("draft")
     expect(readUtilityPanelRuntimeState("draft:p1")).toBeUndefined()
+    expect(useCodePreviewDrafts.getState().drafts[toKey]?.content).toBe("unsaved")
+    expect(useCodePreviewDrafts.getState().drafts[fromKey]).toBeUndefined()
+    useCodePreviewDrafts.setState({ drafts: {} })
   })
 
   it("目标 scope 已有运行时状态时，源 scope 仍然被回收", () => {

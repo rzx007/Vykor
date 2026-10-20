@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 import { FileViewer, type FileViewerTab } from "./file-viewer"
+import { useCodePreviewDrafts } from "./code-preview-drafts"
 import { resetDesktopSessionStore } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
@@ -22,10 +23,13 @@ describe("FileViewer image rendering", () => {
   let root: Root
 
   beforeEach(() => {
+    // jsdom 没有动画查询 API；真实滚动容器会在异步滚动检查中调用它。
+    HTMLElement.prototype.getAnimations ??= () => []
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
     resetDesktopSessionStore()
+    useCodePreviewDrafts.setState({ drafts: {} })
     useDesktopSessionStore.setState({
       activeSessionId: "file-chat",
       attachmentSupport: {
@@ -164,7 +168,24 @@ describe("FileViewer image rendering", () => {
     expect(container.textContent).toContain(message)
   })
 
-  async function render(fileTab: FileViewerTab, searchQuery = ""): Promise<void> {
+  it("renders saved Markdown even when a background save outlives the old panel preview", async () => {
+    const fileTab = tab("markdown", { path: "README.md", content: "old Markdown" })
+    const key = JSON.stringify(["session:file-chat", "project", "README.md"])
+    const store = useCodePreviewDrafts.getState()
+    store.begin(key, "old Markdown", fileTab.preview)
+    store.change(key, "updated Markdown")
+    store.saved(key, "updated Markdown")
+    store.stop(key)
+    await render(fileTab, "", "preview")
+    expect(container.textContent).toContain("updated Markdown")
+    expect(container.textContent).not.toContain("old Markdown")
+  })
+
+  async function render(
+    fileTab: FileViewerTab,
+    searchQuery = "",
+    viewMode: "source" | "preview" = "source"
+  ): Promise<void> {
     await act(async () => {
       // 保留真实查看器；提前等待懒加载模块，避免在 act 中等待 DOM 导致提交被挂起。
       await import("../image-viewer/image-viewer")
@@ -174,7 +195,7 @@ describe("FileViewer image rendering", () => {
           tabs={[fileTab]}
           activePath={fileTab.preview.path}
           loadingPath={null}
-          viewMode="source"
+          viewMode={viewMode}
           searchQuery={searchQuery}
           searchMatchIndex={-1}
           searchMatches={[]}
