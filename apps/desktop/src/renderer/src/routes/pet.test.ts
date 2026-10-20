@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@renderer/components/desktop/pet-page", () => ({
+vi.mock("@renderer/components/desktop/pet-page/pet-page", () => ({
   PetWindow: () => null,
 }))
 

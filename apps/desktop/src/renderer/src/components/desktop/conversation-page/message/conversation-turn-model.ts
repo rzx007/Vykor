@@ -7,7 +7,7 @@ import type {
 import {
   readContextCompactionPresentation,
   type ContextCompactionPhase,
-} from "./compaction-presentation"
+} from "./notices/compaction-presentation"
 
 export interface ConversationTurn {
   id: string

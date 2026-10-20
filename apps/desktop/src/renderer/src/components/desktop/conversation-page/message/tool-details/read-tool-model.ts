@@ -1,6 +1,6 @@
 import type { DesktopSessionPart } from "@shared/session-types"
 import { toolOutputText } from "../message-content"
-import { readImagePath } from "../read-image-preview"
+import { readImagePath } from "../attachments/read-image-preview"
 
 export function readFileReference(call: DesktopSessionPart, result?: DesktopSessionPart) {
   if (call.toolName !== "Read" || readImagePath(call)) return null

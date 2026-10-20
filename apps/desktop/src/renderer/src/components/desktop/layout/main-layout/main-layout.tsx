@@ -10,12 +10,12 @@ import {
 } from "react-resizable-panels"
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
-import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat-panel"
+import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
 import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
-import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
-import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
-import { DesktopSearchDialog } from "@renderer/components/desktop/desktop-search-dialog"
+import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
+import { useDesktopShortcuts } from "@renderer/components/desktop/shell/use-desktop-shortcuts"
+import { DesktopSearchDialog } from "@renderer/components/desktop/search/desktop-search-dialog"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import type { DesktopGitDiffScope } from "@shared/git-types"
@@ -26,8 +26,8 @@ import {
   selectProjectOperationError,
   selectSessions,
 } from "@renderer/stores/desktop-session/selectors"
-import { TitleBar } from "../title-bar"
-import { useDesktopWindowChrome } from "../use-desktop-window-chrome"
+import { TitleBar } from "../window-chrome/title-bar"
+import { useDesktopWindowChrome } from "../window-chrome/use-desktop-window-chrome"
 import { MainLayoutContext } from "./main-layout-context"
 import { beginPanelToggleTransition } from "./panel-toggle-transition"
 import {
@@ -36,8 +36,8 @@ import {
   persistSidebarWidthPx,
   resolveSidebarDefaultWidthPx,
   shouldPersistSidebarWidth,
-} from "./sidebar-width"
-import { Sidebar } from "./sidebar"
+} from "./sidebar/sidebar-width"
+import { Sidebar } from "./sidebar/sidebar"
 import { UtilityPanel, useUtilityPanelController } from "./utility-panel"
 import { ConversationStatus } from "./conversation-status/conversation-status"
 import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"

@@ -3,9 +3,9 @@ import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/
 import { markStartupOverlayReady } from "@renderer/startup-overlay"
 import { toast } from "@renderer/lib/toast"
 
-import { DesktopSessionEventBridge } from "@renderer/components/desktop/desktop-session-event-bridge"
-import { shouldAttachDesktopSessionEvents } from "@renderer/components/desktop/desktop-session-event-bridge-path"
-import { DesktopToastHost } from "@renderer/components/desktop/desktop-toast-host"
+import { DesktopSessionEventBridge } from "@renderer/components/desktop/shell/desktop-session-event-bridge"
+import { shouldAttachDesktopSessionEvents } from "@renderer/components/desktop/shell/desktop-session-event-bridge-path"
+import { DesktopToastHost } from "@renderer/components/desktop/shell/desktop-toast-host"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectAppOperationError } from "@renderer/stores/desktop-session/selectors"

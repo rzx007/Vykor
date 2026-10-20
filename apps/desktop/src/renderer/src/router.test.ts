@@ -15,7 +15,7 @@ vi.mock("@renderer/components/desktop/layout/settings-layout", () => ({
 }))
 vi.mock("@renderer/components/desktop/settings-page/settings-content", () => ({ SettingsContent: () => null }))
 
-vi.mock("@renderer/components/desktop/pet-page", () => ({
+vi.mock("@renderer/components/desktop/pet-page/pet-page", () => ({
   PetWindow: () => null,
 }))
 

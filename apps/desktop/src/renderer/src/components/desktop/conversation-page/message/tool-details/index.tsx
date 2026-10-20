@@ -5,7 +5,7 @@ import {
   type AssistantContentUnit,
 } from "../message-render-model"
 import { useToolDetails } from "../use-tool-details"
-import { ReadImagePreview, readImagePath } from "../read-image-preview"
+import { ReadImagePreview, readImagePath } from "../attachments/read-image-preview"
 import { ShellToolDetails } from "./shell-tool-details"
 import { ToolResult } from "./tool-result"
 

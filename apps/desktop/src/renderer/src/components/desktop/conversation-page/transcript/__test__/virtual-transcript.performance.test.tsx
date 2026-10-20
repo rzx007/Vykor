@@ -7,7 +7,7 @@ import {
   ConversationScrollerProvider,
   ConversationScrollerViewport,
   ConversationScrollerContent,
-} from "../../conversation-scroller"
+} from "../conversation-scroller"
 
 const metrics = vi.hoisted(() => ({
   keys: 0,

@@ -1,6 +1,6 @@
 import { ArrowLeft, Search } from "lucide-react"
 import { useState } from "react"
-import { searchSettings } from "@renderer/components/desktop/settings-page/settings-search"
+import { searchSettings } from "@renderer/components/desktop/settings-page/navigation/settings-search"
 
 import {
   codingSettingsNavigation,
@@ -9,7 +9,7 @@ import {
   agentSettingsNavigation,
   maintenanceSettingsNavigation,
   type SettingsNavigationItem,
-} from "@renderer/components/desktop/settings-page/settings-navigation"
+} from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
 import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"

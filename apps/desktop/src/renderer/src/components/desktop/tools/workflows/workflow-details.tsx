@@ -7,7 +7,7 @@ import { workflowTaskLabel, workflowWaitText } from "./workflow-model"
 import { WorkflowStatusIcon } from "./workflow-status-icon"
 import { WorkflowDisclosure } from "./workflow-disclosure"
 import { WorkflowOutputFiles, WorkflowChangedFiles } from "./workflow-output"
-import { AssistantMarkdown } from "../../conversation-page/message/assistant-markdown"
+import { AssistantMarkdown } from "../../conversation-page/message/markdown/assistant-markdown"
 
 export function WorkflowDetails({
   run,

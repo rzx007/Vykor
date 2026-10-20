@@ -1,2 +1,2 @@
 export { ConversationPane } from "./conversation-page"
-export type { ConversationPaneProps } from "./types"
+export type { ConversationPaneProps } from "./shared/types"

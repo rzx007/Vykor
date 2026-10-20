@@ -7,8 +7,8 @@ import {
   ConversationScrollerViewport,
   ConversationScrollerContent,
   ConversationScrollerButton,
-} from "../../conversation-scroller"
-import { useConversationScroller } from "../../conversation-scroll-context"
+} from "../conversation-scroller"
+import { useConversationScroller } from "../conversation-scroll-context"
 import { VirtualTranscript, type TranscriptRow } from "../virtual-transcript"
 import { ConversationPreviewRail } from "../conversation-preview-rail"
 import { MessageBlock } from "../../message/message-block"

@@ -5,16 +5,16 @@ import { Group, Panel, type Layout, type LayoutChangedMeta, usePanelRef } from "
 import {
   settingsSectionLabel,
   settingsSectionSlug,
-} from "@renderer/components/desktop/settings-page/settings-navigation"
-import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
+} from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
+import { useDesktopShortcuts } from "@renderer/components/desktop/shell/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectActiveSessionId } from "@renderer/stores/desktop-session/selectors"
-import { TitleBar } from "../title-bar"
-import { useDesktopWindowChrome } from "../use-desktop-window-chrome"
+import { TitleBar } from "../window-chrome/title-bar"
+import { useDesktopWindowChrome } from "../window-chrome/use-desktop-window-chrome"
 import { beginPanelToggleTransition } from "../main-layout/panel-toggle-transition"
-import { createPanelWidthStore, shouldPersistPanelWidth } from "../panel-width-store"
+import { createPanelWidthStore, shouldPersistPanelWidth } from "../shared/panel-width-store"
 import { SettingsSidebar } from "./settings-sidebar"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }

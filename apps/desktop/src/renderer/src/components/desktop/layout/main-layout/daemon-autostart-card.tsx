@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Spinner } from "@renderer/components/ui/spinner"
 import type { DesktopDaemonAutoStartSnapshot } from "@shared/settings-types"
-import { errorMessage } from "../../settings-page/settings-error-message"
+import { errorMessage } from "../../settings-page/shared/settings-error-message"
 
 export function DaemonAutoStartCard(): React.JSX.Element | null {
   const [snapshot, setSnapshot] = useState<DesktopDaemonAutoStartSnapshot | null>(null)

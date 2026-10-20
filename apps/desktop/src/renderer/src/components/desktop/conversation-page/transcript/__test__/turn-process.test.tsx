@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { TurnProcess } from "../turn-process"
 import type { TurnBlockPlanItem } from "../turn-block-plan"
-import { ConversationScrollerProvider } from "../../conversation-scroller"
-import { useConversationScroller } from "../../conversation-scroll-context"
+import { ConversationScrollerProvider } from "../conversation-scroller"
+import { useConversationScroller } from "../conversation-scroll-context"
 
 const parts: DesktopSessionPart[] = ["commentary", "final_answer"].map((phase, i) => ({
   id: phase,

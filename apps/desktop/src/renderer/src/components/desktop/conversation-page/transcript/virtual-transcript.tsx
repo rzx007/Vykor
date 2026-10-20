@@ -13,11 +13,11 @@ import {
   type Range,
   type Virtualizer,
 } from "@tanstack/react-virtual"
-import { useConversationScroller } from "../conversation-scroll-context"
+import { useConversationScroller } from "./conversation-scroll-context"
 import {
   conversationEndThresholdPx,
   type ConversationScrollState,
-} from "../conversation-scroll-state"
+} from "./conversation-scroll-state"
 import { TranscriptRowContext } from "./virtual-transcript-row"
 
 export interface TranscriptRow {

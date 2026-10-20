@@ -8,7 +8,7 @@ import {
   type UtilityPanelViewStates,
 } from "./utility-panel-state"
 
-import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/editor/code-preview-drafts"
 
 const persistedViewStatesKey = "vykor.desktop.utility-panel-states"
 const persistedFileTabsKey = "vykor.desktop.file-tabs"

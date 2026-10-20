@@ -170,3 +170,9 @@ pnpm exec tsc --noEmit -p packages/protocol/tsconfig.json
 pnpm exec tsc --noEmit -p packages/server/tsconfig.json
 pnpm exec tsc --noEmit -p apps/desktop/tsconfig.json
 ```
+
+## 目录归类约定
+
+同一次输入交互所需的组件和插件相邻；消息渲染和记录滚动不放入这里。
+
+测试、测试辅助模块和基准测试放在同级 `__test__`。目录变动时同步维护入口和引用，完整规则见 [Desktop 协作约定](../../AGENTS.md)。

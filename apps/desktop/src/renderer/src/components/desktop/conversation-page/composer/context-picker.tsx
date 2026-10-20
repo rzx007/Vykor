@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
-import { ExtensionIcon } from "../../plugin-page/plugin-catalog"
+import { ExtensionIcon } from "../../plugin-page/shared/plugin-catalog"
 
 export interface ContextPickerItem {
   id: string

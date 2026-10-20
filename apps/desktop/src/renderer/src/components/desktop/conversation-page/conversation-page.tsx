@@ -3,14 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
-import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat-selection-actions"
+import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
 import {
   ConversationScroller as MessageScroller,
   ConversationScrollerButton as MessageScrollerButton,
   ConversationScrollerContent as MessageScrollerContent,
   ConversationScrollerProvider as MessageScrollerProvider,
   ConversationScrollerViewport as MessageScrollerViewport,
-} from "./conversation-scroller"
+} from "./transcript/conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { Button } from "@renderer/components/ui/button"
 import { usePluginUiHost } from "./plugin-ui/plugin-ui-context"
@@ -84,15 +84,15 @@ import { ScopedOperationError } from "./session/scoped-operation-errors"
 import { ConversationTranscriptSkeletonOverlay } from "./transcript/conversation-transcript-skeleton"
 import { ConversationPreviewRail } from "./transcript/conversation-preview-rail"
 import { ConversationTranscript } from "./transcript/transcript"
-import { useShowReasoning } from "./use-show-reasoning"
+import { useShowReasoning } from "./shared/use-show-reasoning"
 import { useTaskLocation } from "./session/use-task-location"
-import { openConversationTextMenu } from "./conversation-text-actions"
-import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
+import { openConversationTextMenu } from "./shared/conversation-text-actions"
+import type { AddToComposerEventDetail, ConversationPaneProps } from "./shared/types"
 import {
   resolveScrollerAgentStatus,
   type ScrollerAgentStatusKind,
 } from "./transcript/scroller-agent-status"
-import { resolveModelLabel } from "./utils"
+import { resolveModelLabel } from "./shared/utils"
 
 function ConversationPane({
   panelOpen,

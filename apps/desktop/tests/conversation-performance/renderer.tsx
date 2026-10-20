@@ -10,9 +10,9 @@ import {
   ConversationScrollerViewport,
   ConversationScrollerContent,
   ConversationScrollerButton,
-} from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroller"
-import { useConversationScroller } from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroll-context"
-import { AssistantMarkdown } from "../../src/renderer/src/components/desktop/conversation-page/message/assistant-markdown"
+} from "../../src/renderer/src/components/desktop/conversation-page/transcript/conversation-scroller"
+import { useConversationScroller } from "../../src/renderer/src/components/desktop/conversation-page/transcript/conversation-scroll-context"
+import { AssistantMarkdown } from "../../src/renderer/src/components/desktop/conversation-page/message/markdown/assistant-markdown"
 import { AppearanceProvider } from "../../src/renderer/src/components/appearance/appearance-provider"
 
 const style = document.createElement("style")

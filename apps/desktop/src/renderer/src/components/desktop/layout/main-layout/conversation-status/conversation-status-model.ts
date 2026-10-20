@@ -12,7 +12,7 @@ import {
 import {
   taskTiming,
   type TaskTiming,
-} from "@renderer/components/desktop/conversation-page/message/task-timing"
+} from "@renderer/components/desktop/conversation-page/message/activity/task-timing"
 
 export type ConversationStatusKind =
   | "processing"

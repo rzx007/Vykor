@@ -2,7 +2,7 @@ import { CirclePlus, Minimize2, PanelRightClose, X } from "lucide-react"
 import { useState } from "react"
 import { createPortal } from "react-dom"
 
-import type { BrowserToolTab } from "@renderer/components/desktop/tools/browser-tool"
+import type { BrowserToolTab } from "@renderer/components/desktop/tools/browser/browser-tool"
 import { Button } from "@renderer/components/ui/button"
 import { ButtonGroup } from "@renderer/components/ui/button-group"
 import {
@@ -22,8 +22,8 @@ import {
 import { Kbd } from "@renderer/components/ui/kbd"
 import { cn } from "@renderer/lib/utils"
 import { utilityToolMeta, type UtilityTab, type UtilityTool } from "./utility-panel-tabs"
-import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
-import { TreeFileIcon } from "@renderer/components/desktop/tools/tree-file-icon"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/editor/code-preview-drafts"
+import { TreeFileIcon } from "@renderer/components/desktop/tools/files/tree-file-icon"
 
 type UtilityPanelTabStripProps = {
   scopeId: string

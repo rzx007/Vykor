@@ -79,13 +79,13 @@ vi.mock("../../message/message-block", () => ({
   AssistantMessageActions: () => null,
   MessageBlock: () => null,
 }))
-vi.mock("../../message/context-compaction-divider", () => ({
+vi.mock("../../message/notices/context-compaction-divider", () => ({
   ContextCompactionDivider: () => null,
 }))
-vi.mock("../../message/model-retry-notice", () => ({ ModelRetryNotice: () => null }))
-vi.mock("../../message/model-usage-notice", () => ({ ModelUsageNotice: () => null }))
-vi.mock("../../message/task-duration", () => ({ TaskDuration: () => null }))
-vi.mock("../../message/run-error-notice", () => ({ RunErrorNotice: () => null }))
+vi.mock("../../message/notices/model-retry-notice", () => ({ ModelRetryNotice: () => null }))
+vi.mock("../../message/notices/model-usage-notice", () => ({ ModelUsageNotice: () => null }))
+vi.mock("../../message/activity/task-duration", () => ({ TaskDuration: () => null }))
+vi.mock("../../message/notices/run-error-notice", () => ({ RunErrorNotice: () => null }))
 vi.mock("../../message/content-entrance", () => ({
   ContentEntrance: ({ children }: { children?: ReactNode }) => children,
 }))

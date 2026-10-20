@@ -5,11 +5,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@renderer/components/motion/collapsible"
-import { taskTimingLabel, type TaskTiming } from "../message/task-timing"
+import { taskTimingLabel, type TaskTiming } from "../message/activity/task-timing"
 import type { TurnBlockPlanItem } from "./turn-block-plan"
 import { splitTurnProcess } from "./turn-process-plan"
 import type { DesktopSessionTask } from "@shared/session-types"
-import { useConversationScroller } from "../conversation-scroll-context"
+import { useConversationScroller } from "./conversation-scroll-context"
 
 export function TurnProcess({
   turnId,

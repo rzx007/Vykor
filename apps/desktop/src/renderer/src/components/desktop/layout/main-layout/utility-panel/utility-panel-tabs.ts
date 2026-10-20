@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import type { FileViewerTab } from "@renderer/components/desktop/tools/file-viewer"
+import type { FileViewerTab } from "@renderer/components/desktop/tools/files/file-viewer"
 import type { ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
 
 export type UtilityTool =

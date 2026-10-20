@@ -11,7 +11,7 @@ import {
 } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
-import { createPanelWidthStore } from "@renderer/components/desktop/layout/panel-width-store"
+import { createPanelWidthStore } from "@renderer/components/desktop/layout/shared/panel-width-store"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"

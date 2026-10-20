@@ -12,7 +12,7 @@ import { currentPluginUiFrame } from "./plugin-ui-frame-query"
 import {
   instance,
   sourcePart,
-} from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
+} from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support"
 
 export async function checkDesktopUi(
   owner: BrowserWindow,

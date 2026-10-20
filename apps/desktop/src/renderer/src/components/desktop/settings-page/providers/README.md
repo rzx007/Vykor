@@ -1,0 +1,19 @@
+# 模型供应商设置
+
+供应商列表、连接、自定义表单、默认模型与请求头。
+
+## 放置边界
+
+供应商专属的表单和校验归此类；模型实际调用和密钥存储留在已有服务。
+
+组件、模型、类型和 hook 按本功能共同维护。测试、测试辅助文件和基准测试统一放在同级 `__test__`，沿用被测功能的文件名。
+
+## 主要文件
+
+- [provider-settings.tsx](provider-settings.tsx)
+- [provider-settings-list.tsx](provider-settings-list.tsx)
+- [provider-connection-dialog.tsx](provider-connection-dialog.tsx)
+
+## 维护约定
+
+新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../AGENTS.md)。

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { DesktopSessionPart, DesktopSessionRun } from "@shared/session-types"
 import { MessageScroller, MessageScrollerProvider } from "@renderer/components/ui/message-scroller"
 import { ConversationTranscript } from "../transcript"
-import { AgentActivityMessage } from "../../message/agent-activity-message"
+import { AgentActivityMessage } from "../../message/activity/agent-activity-message"
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] })

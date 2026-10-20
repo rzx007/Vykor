@@ -1,5 +1,5 @@
 import { createContext, useContext, useLayoutEffect } from "react"
-import { useConversationScroller } from "../conversation-scroll-context"
+import { useConversationScroller } from "./conversation-scroll-context"
 
 export const TranscriptRowContext = createContext<string | null>(null)
 

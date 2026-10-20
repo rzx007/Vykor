@@ -6,7 +6,7 @@ import { Item, ItemActions } from "@renderer/components/ui/item"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionMode } from "@shared/session-types"
-import type { PermissionModeOption } from "../types"
+import type { PermissionModeOption } from "../shared/types"
 
 export const permissionModeOptions: PermissionModeOption[] = [
   {

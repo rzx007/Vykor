@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { createRoot } from "react-dom/client"
 import { AppearanceProvider, useAppearance } from "../../src/renderer/src/components/appearance/appearance-provider"
-import { BrowserTool, type BrowserToolTab } from "../../src/renderer/src/components/desktop/tools/browser-tool"
+import { BrowserTool, type BrowserToolTab } from "../../src/renderer/src/components/desktop/tools/browser/browser-tool"
 import "./ui-host.css"
 
 function Preview() {

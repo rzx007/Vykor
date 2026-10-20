@@ -4,7 +4,7 @@ import { SettingsContent } from "@renderer/components/desktop/settings-page"
 import {
   isSettingsSection,
   settingsSectionLabel,
-} from "@renderer/components/desktop/settings-page/settings-navigation"
+} from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
 export const Route = createFileRoute("/settings/$section")({

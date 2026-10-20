@@ -10,7 +10,7 @@ import type { SessionEventRecord, SessionStateSnapshot } from "@vykor/client"
 
 import { SessionSubscriptionService } from "./session-subscription-service"
 import { visibleTranscriptParts } from "../../../renderer/src/components/desktop/conversation-page/transcript/transcript-visibility"
-import { isToolGenerationPresentation, withToolGenerationPresentation } from "../../../renderer/src/components/desktop/conversation-page/message/tool-generation-presentation"
+import { isToolGenerationPresentation, withToolGenerationPresentation } from "../../../renderer/src/components/desktop/conversation-page/message/activity/tool-generation-presentation"
 import type {
   DesktopSessionUpdate,
   DesktopSessionUpdateAck,

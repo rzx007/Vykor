@@ -21,7 +21,7 @@ vi.mock("@renderer/components/desktop/layout/settings-layout", () => ({
 vi.mock("@renderer/components/desktop/settings-page", () => ({
   SettingsContent: () => <p>Settings</p>,
 }))
-vi.mock("@renderer/components/desktop/pet-page", () => ({
+vi.mock("@renderer/components/desktop/pet-page/pet-page", () => ({
   PetWindow: () => <p>Pet</p>,
 }))
 vi.mock("@renderer/components/desktop/plugin-page", () => ({

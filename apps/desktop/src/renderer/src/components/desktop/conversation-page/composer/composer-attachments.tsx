@@ -1,6 +1,6 @@
 import { RotateCcw, X } from "lucide-react"
 import { useEffect, useState } from "react"
-import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
+import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
 
 import {
   Attachment,

@@ -12,23 +12,23 @@ import type { DesktopSessionInput } from "@shared/session-types"
 import { messageTextContent } from "../message/message-content"
 import { AssistantMessage } from "../message/assistant-message"
 import { buildConversationEntries } from "../message/conversation-turn-model"
-import { ContextCompactionDivider } from "../message/context-compaction-divider"
-import { ModelRetryNotice } from "../message/model-retry-notice"
-import { ModelUsageNotice } from "../message/model-usage-notice"
+import { ContextCompactionDivider } from "../message/notices/context-compaction-divider"
+import { ModelRetryNotice } from "../message/notices/model-retry-notice"
+import { ModelUsageNotice } from "../message/notices/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { TurnProcess } from "./turn-process"
 import { selectRunNotices } from "./run-notices"
 import { pluginPreparationLabel } from "./plugin-preparation-label"
-import { TaskDuration } from "../message/task-duration"
-import { taskTiming } from "../message/task-timing"
+import { TaskDuration } from "../message/activity/task-duration"
+import { taskTiming } from "../message/activity/task-timing"
 import { conversationActivity, type ActivityStep } from "../message/message-render-model"
 import {
   isToolGenerationPresentation,
   withToolGenerationPresentation,
-} from "../message/tool-generation-presentation"
-import { ConversationScrollerItem as MessageScrollerItem } from "../conversation-scroller"
-import { useConversationScroller } from "../conversation-scroll-context"
+} from "../message/activity/tool-generation-presentation"
+import { ConversationScrollerItem as MessageScrollerItem } from "./conversation-scroller"
+import { useConversationScroller } from "./conversation-scroll-context"
 import { VirtualTranscript, type TranscriptRow } from "./virtual-transcript"
 import type {
   DesktopSessionMessage,
@@ -38,7 +38,7 @@ import type {
 } from "@shared/session-types"
 import type { ConversationTurn, ConversationEntry } from "../message/conversation-turn-model"
 import { AssistantMessageActions, MessageBlock } from "../message/message-block"
-import { RunErrorNotice } from "../message/run-error-notice"
+import { RunErrorNotice } from "../message/notices/run-error-notice"
 import { ContentEntrance } from "../message/content-entrance"
 
 const emptyInputs: DesktopSessionInput[] = []

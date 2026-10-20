@@ -13,7 +13,7 @@ import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/wi
 import { checkDesktopUi } from "./desktop-ui-check"
 import { checkNativeUi } from "./native-ui-check"
 import { desktopPluginUiDocuments } from "../../src/main/features/plugin-ui/document-runtime"
-import { snapshot as currentSnapshot } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
+import { snapshot as currentSnapshot } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support"
 
 const root = process.env.VYKOR_UI_TEST_ROOT!
 const profile = process.env.VYKOR_UI_TEST_PROFILE!

@@ -27,8 +27,8 @@ import { Composer } from "../composer/composer"
 import type { ComposerSkill } from "../composer/rich-prompt-input"
 import { HeaderIconButton, PickerMenuItem, StartPickerButton } from "../composer/controls"
 import { ScopedOperationError } from "./scoped-operation-errors"
-import type { LoadStatus, StartPicker } from "../types"
-import { resolveModelLabel } from "../utils"
+import type { LoadStatus, StartPicker } from "../shared/types"
+import { resolveModelLabel } from "../shared/utils"
 import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "../composer/plugin-mentions-feature"
 
 export function NewConversationStart({

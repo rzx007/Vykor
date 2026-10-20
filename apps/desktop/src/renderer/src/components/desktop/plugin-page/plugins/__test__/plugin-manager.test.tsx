@@ -1,0 +1,804 @@
+// @vitest-environment jsdom
+import { act } from "react"
+import { createRoot, type Root } from "react-dom/client"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { DesktopPluginInfo, DesktopPluginSnapshot } from "@shared/plugin-types"
+
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  show: vi.fn(),
+  update: vi.fn(),
+  dismiss: vi.fn(),
+}))
+
+vi.mock("@renderer/lib/toast", () => ({ toast: toastMocks }))
+vi.mock("streamdown", () => ({
+  Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+}))
+
+import { PluginManager, type PluginManagerProps } from "../plugin-manager"
+
+const snapshot = { cwd: "D:/project", plugins: [], warnings: [] }
+const plugin = (overrides: Partial<DesktopPluginInfo> = {}): DesktopPluginInfo => ({
+  identity: { id: "alpha", name: "alpha", version: "1.0.0", displayName: "Alpha" },
+  origin: "native",
+  scope: "user",
+  enabled: true,
+  installation: "installed",
+  activation: "active",
+  runtimeStatus: {
+    state: "pending_reload",
+    message: "已启用，下一次对话生效。",
+    action: "reload",
+  },
+  inventory: {},
+  permissions: { requested: [], approved: [], missing: [] },
+  diagnostics: [],
+  ...overrides,
+})
+const populatedSnapshot: DesktopPluginSnapshot = {
+  cwd: "D:/project",
+  warnings: [],
+  plugins: [
+    plugin(),
+    plugin({
+      identity: { id: "beta", name: "beta", version: "2.0.0", displayName: "Beta" },
+      enabled: false,
+      activation: "partial",
+      runtimeStatus: {
+        state: "failed",
+        code: "snapshot_missing",
+        message: "加载失败：插件文件不完整，请重新导入插件包。",
+        action: "reimport",
+      },
+    }),
+    plugin({
+      identity: { id: "managed", name: "managed", version: "1.0.0", displayName: "Managed" },
+      scope: "managed",
+    }),
+  ],
+}
+
+describe("PluginManager archive import", () => {
+  let root: Root
+  let host: HTMLDivElement
+  let props: PluginManagerProps
+
+  beforeEach(() => {
+    ;(
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+      }
+    )
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    vi.clearAllMocks()
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        plugins: {
+          loadIcon: vi.fn(async () => "data:image/png;base64,aGVsbG8="),
+          snapshot: vi.fn(async () => snapshot),
+          reload: vi.fn(async () => snapshot),
+          importArchive: vi.fn(),
+          confirmArchive: vi.fn(),
+          cancelArchive: vi.fn(),
+          importGit: vi.fn(),
+          confirmGit: vi.fn(),
+          cancelGit: vi.fn(),
+          enable: vi.fn(),
+          disable: vi.fn(),
+          uninstall: vi.fn(),
+        },
+      },
+    })
+    host = document.createElement("div")
+    document.body.append(host)
+    root = createRoot(host)
+    props = {
+      query: "",
+      addRequest: 0,
+      gitAddRequest: 0,
+      refreshRequest: 0,
+      projectPath: "D:/project",
+      notify: vi.fn(),
+    }
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    host.remove()
+    vi.unstubAllGlobals()
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT
+  })
+
+  const api = (): {
+    snapshot: ReturnType<typeof vi.fn>
+    reload: ReturnType<typeof vi.fn>
+    importArchive: ReturnType<typeof vi.fn>
+    confirmArchive: ReturnType<typeof vi.fn>
+    cancelArchive: ReturnType<typeof vi.fn>
+    importGit: ReturnType<typeof vi.fn>
+    confirmGit: ReturnType<typeof vi.fn>
+    cancelGit: ReturnType<typeof vi.fn>
+    enable: ReturnType<typeof vi.fn>
+    disable: ReturnType<typeof vi.fn>
+    uninstall: ReturnType<typeof vi.fn>
+  } => window.desktop!.plugins as never
+
+  async function render(next: Partial<PluginManagerProps> = {}): Promise<void> {
+    props = { ...props, ...next }
+    await act(async () => {
+      root.render(<PluginManager {...props} />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  async function click(label: string): Promise<void> {
+    const target = [
+      ...document.querySelectorAll<HTMLElement>("button, [aria-label], [role='menuitem']"),
+    ].find(
+      (item) => item.textContent?.trim() === label || item.getAttribute("aria-label") === label
+    )
+    expect(target, `interactive control: ${label}`).toBeTruthy()
+    await act(async () => {
+      target!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  async function requestImport(): Promise<void> {
+    await render({ addRequest: props.addRequest + 1 })
+  }
+
+  async function requestGitImport(): Promise<void> {
+    await render({ gitAddRequest: props.gitAddRequest + 1 })
+  }
+
+  async function typeInto(label: string, value: string): Promise<void> {
+    const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+    expect(input, `input: ${label}`).toBeTruthy()
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+    expect(setValue, "HTMLInputElement value setter").toBeTruthy()
+    await act(async () => {
+      setValue!.call(input, value)
+      input!.dispatchEvent(new Event("input", { bubbles: true }))
+      await Promise.resolve()
+    })
+  }
+
+  it("keeps install actions out of the plugin page body", async () => {
+    await render()
+
+    expect(host.textContent).not.toContain("安装插件")
+    expect(host.textContent).not.toContain("导入插件包")
+    expect(host.textContent).not.toContain("从 Git 安装")
+    expect(host.textContent).not.toContain("添加插件配置")
+  })
+
+  it("installs the included research and writing pack only after an explicit click", async () => {
+    const installed = plugin({
+      identity: {
+        id: "vykor.knowledge-work",
+        name: "knowledge-work",
+        displayName: "研究与写作",
+        version: "1.1.0",
+      },
+    })
+    api().importArchive.mockResolvedValue({
+      status: "installed",
+      pluginName: "研究与写作",
+      snapshot: { ...snapshot, plugins: [installed] },
+    })
+    await render()
+    expect(api().importArchive).not.toHaveBeenCalled()
+    await click("添加研究与写作")
+    expect(api().importArchive).toHaveBeenCalledWith({
+      cwd: "D:/project",
+      bundledPlugin: "knowledge-work",
+    })
+    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
+  })
+
+  it.each([["win32", "x64"], ["darwin", "arm64"], ["linux", "x64"]])("installs the included presentation plugin on %s/%s after an explicit click", async (platform, arch) => {
+    const previous = Object.getOwnPropertyDescriptor(window, "electron")
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform, arch } } })
+    try {
+      api().importArchive.mockResolvedValue({ status: "installed", pluginName: "演示文稿",
+        snapshot: { ...snapshot, plugins: [plugin({ identity: { id: "vykor.office-work", name: "office-work", version: "0.2.4" } })] } })
+      await render()
+      expect(api().importArchive).not.toHaveBeenCalled()
+      await click("添加演示文稿")
+      expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "office-work" })
+      expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
+    } finally {
+      if (previous) Object.defineProperty(window, "electron", previous)
+      else delete (window as unknown as { electron?: unknown }).electron
+    }
+  })
+
+  it("shows the presentation pack but prevents installation on unsupported architectures", async () => {
+    const previous = Object.getOwnPropertyDescriptor(window, "electron")
+    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "linux", arch: "arm64" } } })
+    try {
+      await render()
+      const button = host.querySelector<HTMLButtonElement>('[aria-label="添加演示文稿"]')
+      expect(button?.disabled).toBe(true)
+      expect(button?.textContent).toContain("当前系统暂不支持")
+      expect(api().importArchive).not.toHaveBeenCalled()
+    } finally {
+      if (previous) Object.defineProperty(window, "electron", previous)
+      else delete (window as unknown as { electron?: unknown }).electron
+    }
+  })
+
+  it.each(["0.2.4", "1.0.0"])("does not reinstall or downgrade the installed Office plugin %s", async version => {
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({ identity: {
+      id: "vykor.office-work", name: "office-work", version,
+    }, enabled: false })] })
+    await render()
+    expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
+    expect(host.querySelector('[aria-label="更新演示文稿"]')).toBeNull()
+    expect(api().importArchive).not.toHaveBeenCalled()
+  })
+
+  it("does not reinstall an included plugin that the user has disabled", async () => {
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          identity: {
+            id: "vykor.knowledge-work",
+            name: "knowledge-work",
+            displayName: "研究与写作",
+            version: "1.1.0",
+          },
+          enabled: false,
+        }),
+      ],
+    })
+    await render()
+    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+    expect(api().importArchive).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])(
+    "updates the old bundled plugin only after a click and permission approval (enabled=%s)",
+    async (enabled) => {
+      const installed = plugin({
+        identity: {
+          id: "vykor.knowledge-work",
+          name: "knowledge-work",
+          displayName: "研究与写作",
+          version: "1.0.0",
+        },
+        enabled,
+      })
+      api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
+      api().importArchive.mockResolvedValue({
+        status: "approval-required",
+        selectionId: "knowledge-update",
+        pluginName: "研究与写作",
+        requestedPermissions: ["network:api.openalex.org"],
+      })
+      api().confirmArchive.mockResolvedValue({
+        status: "installed",
+        pluginName: "研究与写作",
+        snapshot: {
+          ...snapshot,
+          plugins: [{ ...installed, identity: { ...installed.identity, version: "1.1.0" } }],
+        },
+      })
+      await render()
+      expect(host.querySelector('[aria-label="更新研究与写作"]')?.textContent).toBe("更新")
+      expect(api().importArchive).not.toHaveBeenCalled()
+      await click("更新研究与写作")
+      expect(api().importArchive).toHaveBeenCalledWith({
+        cwd: "D:/project",
+        bundledPlugin: "knowledge-work",
+      })
+      expect(document.body.textContent).toContain("网络访问")
+      expect(api().confirmArchive).not.toHaveBeenCalled()
+      await click("安装")
+      expect(api().confirmArchive).toHaveBeenCalledWith({
+        cwd: "D:/project",
+        selectionId: "knowledge-update",
+      })
+      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
+      expect(
+        host.querySelector(`[aria-label="${enabled ? "禁用" : "启用"} 研究与写作"]`)
+      ).not.toBeNull()
+      expect(api().enable).not.toHaveBeenCalled()
+      expect(api().disable).not.toHaveBeenCalled()
+      expect(props.notify).toHaveBeenCalledWith("研究与写作 已安装或更新，将在下次对话中生效。")
+    }
+  )
+
+  it.each(["1.1.0", "2.0.0"])(
+    "does not offer a bundled downgrade for installed version %s",
+    async (version) => {
+      api().snapshot.mockResolvedValue({
+        ...snapshot,
+        plugins: [
+          plugin({
+            identity: {
+              id: "vykor.knowledge-work",
+              name: "knowledge-work",
+              displayName: "研究与写作",
+              version,
+            },
+          }),
+        ],
+      })
+      await render()
+      expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
+      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
+      expect(api().importArchive).not.toHaveBeenCalled()
+    }
+  )
+
+  it("explains UI permissions and component counts in the host approval dialog", async () => {
+    api().importArchive.mockResolvedValue({
+      status: "approval-required",
+      selectionId: "ui-selection",
+      pluginName: "UI Fixture",
+      requestedPermissions: ["ui:render", "ui:invoke-own-tools"],
+      uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
+    })
+    await render()
+    await requestImport()
+    expect(document.body.textContent).toContain("显示插件的隔离交互界面")
+    expect(document.body.textContent).toContain("请求插件自身工具，执行前仍需确认")
+    expect(document.body.textContent).toContain("2 个 UI 定义")
+  })
+
+  it("shows validated UI metadata without claiming the interface is running", async () => {
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
+        }),
+      ],
+    })
+    await render()
+    await click("查看 Alpha 详情")
+    await click("管理")
+    expect(document.body.textContent).toContain("已校验 2 个 UI 定义")
+    expect(document.body.textContent).toContain("在工具结果中按需打开")
+  })
+
+  it("shows unverified component counts as unknown rather than zero", async () => {
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [
+        plugin({
+          uiInventory: { manifestCount: 1, componentCount: null, validatedComponentCount: 0 },
+        }),
+      ],
+    })
+    await render()
+    await click("查看 Alpha 详情")
+    await click("管理")
+    expect(document.body.textContent).toContain("UI 定义数量暂不可确认")
+    expect(document.body.textContent).not.toContain("已校验 0 个 UI 定义")
+  })
+
+  it("opens a Git install dialog from the top-menu request and installs with cwd", async () => {
+    api().importGit.mockResolvedValue({ status: "installed", pluginName: "Git Plugin", snapshot })
+    await render()
+    await requestGitImport()
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain("从 Git 安装插件")
+    expect(dialog?.textContent).toContain("branch、tag 或 commit 可不填")
+
+    await typeInto("Git 插件地址", "https://github.com/acme/plugin.git")
+    await typeInto("Git ref", "v1.0.0")
+    await click("安装")
+
+    expect(api().importGit).toHaveBeenCalledWith({
+      cwd: "D:/project",
+      url: "https://github.com/acme/plugin.git",
+      ref: "v1.0.0",
+    })
+    expect(props.notify).toHaveBeenCalledWith("Git Plugin 已安装或更新，将在下次对话中生效。")
+  })
+
+  it("runs a top-menu import request after the initial snapshot has finished", async () => {
+    let resolveSnapshot!: (value: typeof snapshot) => void
+    api().snapshot.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    api().importArchive.mockResolvedValue({ status: "cancelled" })
+    await render()
+    await render({ addRequest: 1 })
+
+    expect(api().importArchive).not.toHaveBeenCalled()
+    await act(async () => {
+      resolveSnapshot(snapshot)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project" })
+  })
+
+  it("refreshes the market through a read instead of reloading active runtimes", async () => {
+    await render();
+    api().reload.mockRejectedValue(new Error("Cannot reload plugins while session runs are active"));
+    api().snapshot.mockResolvedValue(populatedSnapshot);
+
+    await render({ refreshRequest: 1 });
+
+    expect(host.textContent).toContain("Alpha");
+    expect(api().snapshot).toHaveBeenCalledTimes(2);
+    expect(api().reload).not.toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("handles a refresh requested while an archive import is still in progress", async () => {
+    let finishImport!: (value: { status: "cancelled" }) => void;
+    api().importArchive.mockImplementationOnce(() => new Promise(resolve => { finishImport = resolve; }));
+    await render();
+    await requestImport();
+    await render({ refreshRequest: 1 });
+    api().snapshot.mockResolvedValue(populatedSnapshot);
+
+    await act(async () => { finishImport({ status: "cancelled" }); });
+
+    expect(host.textContent).toContain("Alpha");
+    expect(api().snapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts only one archive import while the picker request is busy", async () => {
+    let resolveImport!: (value: { status: "cancelled" }) => void
+    api().importArchive.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveImport = resolve
+        })
+    )
+    await render()
+    await requestImport()
+    await requestImport()
+
+    expect(api().importArchive).toHaveBeenCalledTimes(1)
+    expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project" })
+    await act(async () => resolveImport({ status: "cancelled" }))
+  })
+
+  it("keeps cancellation silent", async () => {
+    api().importArchive.mockResolvedValue({ status: "cancelled" })
+    await render()
+    await requestImport()
+
+    expect(props.notify).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  it("shows one accessible permission confirmation and confirms without resending permissions", async () => {
+    api().importArchive.mockResolvedValue({
+      status: "approval-required",
+      selectionId: "selection-1",
+      pluginName: "Archive Plugin",
+      requestedPermissions: [
+        "filesystem:read:workspace",
+        "network:api.example.com",
+        "network:api.example.com",
+      ],
+    })
+    api().confirmArchive.mockResolvedValue({ status: "installed", pluginName: "Archive Plugin" })
+    await render()
+    await requestImport()
+
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain("安装「Archive Plugin」？")
+    expect(dialog?.textContent).toContain("该插件需要以下权限才能正常工作。")
+    expect(dialog?.textContent).toContain("文件访问")
+    expect(dialog?.textContent).toContain("read:workspace")
+    expect(dialog?.textContent).toContain("网络访问")
+    const labelledBy = dialog?.getAttribute("aria-labelledby")
+    const describedBy = dialog?.getAttribute("aria-describedby")
+    expect(labelledBy).toBeTruthy()
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(labelledBy!)?.textContent).toContain("安装「Archive Plugin」？")
+    expect(document.getElementById(describedBy!)?.textContent).toContain(
+      "该插件需要以下权限才能正常工作。"
+    )
+
+    await click("安装")
+
+    expect(api().confirmArchive).toHaveBeenCalledWith({
+      cwd: "D:/project",
+      selectionId: "selection-1",
+    })
+    expect(api().cancelArchive).not.toHaveBeenCalled()
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("插件列表可刷新"))
+  })
+
+  it("cancels one pending permission selection exactly once", async () => {
+    api().importArchive.mockResolvedValue({
+      status: "approval-required",
+      selectionId: "selection-2",
+      pluginName: "Archive Plugin",
+      requestedPermissions: ["process:node"],
+    })
+    await render()
+    await requestImport()
+
+    await click("取消")
+
+    expect(api().cancelArchive).toHaveBeenCalledTimes(1)
+    expect(api().cancelArchive).toHaveBeenCalledWith({ selectionId: "selection-2" })
+  })
+
+  it("reports a failed import and allows another import", async () => {
+    api()
+      .importArchive.mockResolvedValueOnce({
+        status: "failed",
+        message: "压缩包无法安装",
+        details: [{ code: "plugin_archive_invalid", path: "plugin/manifest.json" }],
+      })
+      .mockResolvedValueOnce({ status: "installed", pluginName: "Retry Plugin", snapshot })
+    await render()
+    await requestImport()
+
+    expect(toastMocks.error).toHaveBeenCalledWith("压缩包无法安装", "plugin_archive_invalid")
+
+    await requestImport()
+    expect(api().importArchive).toHaveBeenCalledTimes(2)
+    expect(props.notify).toHaveBeenCalledWith("Retry Plugin 已安装或更新，将在下次对话中生效。")
+  })
+
+  it("treats an unknown result as a refreshable warning rather than installation", async () => {
+    api().importArchive.mockResolvedValue({
+      status: "unknown",
+      pluginName: "Uncertain Plugin",
+      message: "安装结果暂时无法确认，请刷新插件列表。",
+      details: [{ code: "plugin_archive_install_unknown" }],
+    })
+    await render()
+    await requestImport()
+
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "安装结果暂时无法确认，请刷新插件列表。",
+      "plugin_archive_install_unknown"
+    )
+    expect(props.notify).not.toHaveBeenCalled()
+  })
+
+  it("does not access legacy plugin localStorage while rendering or importing", async () => {
+    const getItem = vi.spyOn(Storage.prototype, "getItem")
+    const setItem = vi.spyOn(Storage.prototype, "setItem")
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem")
+    api().importArchive.mockResolvedValue({ status: "cancelled" })
+    await render()
+    await requestImport()
+
+    expect(getItem).not.toHaveBeenCalled()
+    expect(setItem).not.toHaveBeenCalled()
+    expect(removeItem).not.toHaveBeenCalled()
+  })
+
+  it("filters a populated plugin list by query and attention state", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render({ query: "beta" })
+
+    expect(host.querySelectorAll("[data-extension-row]")).toHaveLength(1)
+    expect(host.textContent).toContain("Beta")
+    expect(host.textContent).not.toContain("Alpha ·")
+
+    await render({ query: "" })
+    await click("需处理")
+
+    expect(host.querySelectorAll("[data-extension-row]")).toHaveLength(1)
+    expect(host.textContent).toContain("Beta")
+    expect(host.textContent).not.toContain("Managed ·")
+  })
+
+  it("shows runtime status in the plugin list and details", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render()
+
+    expect(host.textContent).toContain("已启用，下一次对话生效。")
+    expect(host.textContent).toContain("加载失败：插件文件不完整，请重新导入插件包。")
+
+    await click("查看 Beta 详情")
+    await click("管理")
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain("运行状态")
+    expect(dialog?.textContent).toContain("加载失败：插件文件不完整，请重新导入插件包。")
+    expect(dialog?.textContent).toContain("请重新导入插件包。")
+  })
+
+  it("disables a user plugin with its project context and updates the list snapshot", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    api().disable.mockResolvedValue({
+      ...populatedSnapshot,
+      plugins: populatedSnapshot.plugins.filter((item) => item.identity.id !== "alpha"),
+    })
+    await render()
+
+    await click("禁用 Alpha")
+
+    expect(api().disable).toHaveBeenCalledWith({ cwd: "D:/project", pluginId: "alpha" })
+    expect(host.textContent).not.toContain("Alpha ·")
+    expect(host.textContent).toContain("Beta")
+  })
+
+  it("uninstalls a user plugin through its confirmation dialog and updates the list snapshot", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    api().uninstall.mockResolvedValue({
+      ...populatedSnapshot,
+      plugins: populatedSnapshot.plugins.filter((item) => item.identity.id !== "alpha"),
+    })
+    await render()
+
+    await click("Alpha 更多操作")
+    await click("卸载")
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "卸载插件 Alpha？"
+    )
+    await click("确认卸载")
+
+    expect(api().uninstall).toHaveBeenCalledWith({ cwd: "D:/project", pluginId: "alpha" })
+    expect(host.textContent).not.toContain("Alpha ·")
+  })
+
+  it.each([
+    ["Cannot uninstall plugins while session runs are active", "当前有任务正在运行，请等待任务结束后再卸载插件。"],
+    ["Plugin not found for user: alpha", "Plugin not found for user: alpha"],
+  ])("shows the full uninstall failure in the confirmation dialog: %s", async (reason, expected) => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    api().uninstall.mockRejectedValue(new Error(`Error invoking remote method 'plugin:uninstall': VykorApiError: ${reason}`))
+    await render()
+    await click("Alpha 更多操作")
+    await click("卸载")
+    await click("确认卸载")
+
+    expect(document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent).toBe(expected)
+    expect(toastMocks.error).toHaveBeenCalledWith(expected, undefined)
+    expect(host.textContent).toContain("Alpha")
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toContain("Error invoking remote method")
+  })
+
+  it("keeps managed plugin controls disabled and never starts a mutation", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render()
+
+    const managedSwitch = document.querySelector<HTMLElement>('[aria-label="禁用 Managed"]')
+    expect(managedSwitch?.hasAttribute("data-disabled")).toBe(true)
+    await click("Managed 更多操作")
+    const uninstall = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === "卸载"
+    )
+    expect(uninstall?.getAttribute("data-disabled")).not.toBeNull()
+    await act(async () => uninstall?.click())
+
+    expect(api().enable).not.toHaveBeenCalled()
+    expect(api().disable).not.toHaveBeenCalled()
+    expect(api().uninstall).not.toHaveBeenCalled()
+  })
+
+  it("opens a detail page and keeps management in the manage dialog", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render()
+
+    await click("查看 Alpha 详情")
+
+    expect(host.querySelector('[aria-label="Alpha 插件详情"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    await click("管理")
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("alpha@1.0.0")
+  })
+
+  it("shows author content and icon, passes the full prompt with its plugin, and returns to the filtered list", async () => {
+    const alpha = plugin({
+      presentation: {
+        icon: "https://example.test/icon.png",
+        description: "整理资料",
+        introduction: "生成带来源的报告。",
+        author: { name: "Example" },
+        prompts: [{ title: "写报告", prompt: "根据资料生成完整报告。" }],
+      },
+    })
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [alpha, populatedSnapshot.plugins[1]!],
+    })
+    const onUse = vi.fn(async () => undefined)
+    await render({ query: "Alpha", onUse })
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,aGVsbG8=")
+    expect(window.desktop.plugins.loadIcon).toHaveBeenCalledWith({ src: alpha.presentation!.icon })
+    await click("查看 Alpha 详情")
+    expect(host.textContent).toContain("生成带来源的报告。")
+    expect(host.textContent).toContain("Example")
+    expect(host.textContent).not.toContain("已连接的账户")
+    await click("使用示例：写报告")
+    expect(onUse).toHaveBeenCalledExactlyOnceWith(alpha, "根据资料生成完整报告。")
+    await click("立即使用")
+    expect(onUse).toHaveBeenLastCalledWith(alpha, "")
+    await click("返回插件")
+    expect(host.querySelectorAll("[data-extension-row]")).toHaveLength(1)
+  })
+
+  it("disables quick use for a failed plugin", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    const onUse = vi.fn(async () => undefined)
+    await render({ onUse })
+    await click("查看 Beta 详情")
+    const button = [...host.querySelectorAll("button")].find(
+      (item) => item.textContent?.trim() === "立即使用"
+    )
+    expect(button?.disabled).toBe(true)
+    await click("立即使用")
+    expect(onUse).not.toHaveBeenCalled()
+  })
+
+  it("falls back when an author icon fails to load", async () => {
+    api().snapshot.mockResolvedValue({
+      ...snapshot,
+      plugins: [plugin({ presentation: { icon: "https://example.test/broken.png" } })],
+    })
+    await render()
+    const image = host.querySelector("img")!
+    const parent = image.parentElement!
+    await act(async () => image.dispatchEvent(new Event("error")))
+    expect(parent.querySelector("img")).toBeNull()
+    expect(parent.querySelector("svg")).not.toBeNull()
+  })
+
+  it("hides my-plugins and keeps a single empty prompt when nothing is installed", async () => {
+    await render()
+
+    expect(host.textContent).toContain("已安装")
+    expect(host.textContent).toContain("还没有插件")
+    expect(host.textContent).not.toContain("导入本地插件包")
+    expect(host.textContent).not.toContain("我的插件")
+    expect(host.textContent).not.toContain("还没有安装插件")
+    expect(
+      [...host.querySelectorAll("button")].filter((item) => item.textContent?.trim() === "导入插件")
+    ).toHaveLength(0)
+  })
+
+  it("does not flash my-plugins while the snapshot is still loading", async () => {
+    api().snapshot.mockImplementationOnce(() => new Promise(() => undefined))
+    await render()
+
+    expect(host.querySelector('[aria-label="正在加载插件"]')).not.toBeNull()
+    expect(host.textContent).not.toContain("我的插件")
+    expect(host.textContent).not.toContain("还没有插件")
+  })
+
+  it("keeps my-plugins when installed plugins are filtered to an empty list", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render({ query: "does-not-exist" })
+
+    expect(host.textContent).toContain("我的插件")
+    expect(host.textContent).toContain("没有找到匹配的插件")
+    expect(host.textContent).not.toContain("还没有插件")
+  })
+})

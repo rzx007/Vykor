@@ -1,6 +1,6 @@
 import type { DesktopSessionPart } from "@shared/session-types"
 
-import type { ContextCompactionPhase } from "../message/compaction-presentation"
+import type { ContextCompactionPhase } from "../message/notices/compaction-presentation"
 import type { ConversationTurn } from "../message/conversation-turn-model"
 
 export interface TurnBlockPlanItem {

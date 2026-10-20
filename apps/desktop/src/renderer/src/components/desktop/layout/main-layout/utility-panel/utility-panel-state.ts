@@ -1,5 +1,5 @@
-import type { BrowserToolTab } from "@renderer/components/desktop/tools/browser-tool"
-import type { FileViewerTab } from "@renderer/components/desktop/tools/file-viewer"
+import type { BrowserToolTab } from "@renderer/components/desktop/tools/browser/browser-tool"
+import type { FileViewerTab } from "@renderer/components/desktop/tools/files/file-viewer"
 
 import type { UtilityTab } from "./utility-panel-tabs"
 

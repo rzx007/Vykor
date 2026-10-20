@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { VykorClient } from "@vykor/client";
 import { DesktopPluginUiService } from "./plugin-ui-service";
 import { PluginUiDocumentStore } from "./document-store";
-import { instance } from "../../../renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support";
+import { instance } from "../../../renderer/src/components/desktop/conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support";
 
 const input = { expectedRevision: 1, text: "继续分析", data: { selected: 1 } };
 const requestId = "30000000-0000-4000-8000-000000000001";

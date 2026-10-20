@@ -17,8 +17,8 @@ import {
   ConversationScrollerProvider,
   ConversationScrollerViewport,
   ConversationScrollerContent,
-} from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroller"
-import { useConversationScroller } from "../../src/renderer/src/components/desktop/conversation-page/conversation-scroll-context"
+} from "../../src/renderer/src/components/desktop/conversation-page/transcript/conversation-scroller"
+import { useConversationScroller } from "../../src/renderer/src/components/desktop/conversation-page/transcript/conversation-scroll-context"
 import { useUtilityPanelController } from "../../src/renderer/src/components/desktop/layout/main-layout/utility-panel/use-utility-panel-controller"
 import { writeUtilityPanelViewStates } from "../../src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel-repository"
 import { beginPanelToggleTransition } from "../../src/renderer/src/components/desktop/layout/main-layout/panel-toggle-transition"

@@ -1,18 +1,18 @@
 import type * as React from "react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { BrowserTool, type BrowserToolTab } from "@renderer/components/desktop/tools/browser-tool"
-import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser-navigation"
+import { BrowserTool, type BrowserToolTab } from "@renderer/components/desktop/tools/browser/browser-tool"
+import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
-import { FilesTool } from "@renderer/components/desktop/tools/files-tool"
-import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
-import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
-import { saveCodePreviewDraft } from "@renderer/components/desktop/tools/code-preview-save"
+import { FilesTool } from "@renderer/components/desktop/tools/files/files-tool"
+import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/editor/code-preview-drafts"
+import { saveCodePreviewDraft } from "@renderer/components/desktop/tools/editor/code-preview-save"
 import {
   mergeFileViewerTabs,
   type FileViewerTab,
-} from "@renderer/components/desktop/tools/file-viewer"
-import { SideChatPanel, destroySideChat } from "@renderer/components/desktop/tools/side-chat-panel"
+} from "@renderer/components/desktop/tools/files/file-viewer"
+import { SideChatPanel, destroySideChat } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +25,7 @@ import {
 } from "@renderer/components/ui/alert-dialog"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { Button } from "@renderer/components/ui/button"
-import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
+import { ReviewTool } from "@renderer/components/desktop/tools/review/review-tool"
 import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
 import { AgentsTool } from "@renderer/components/desktop/tools/agents/agents-tool"

@@ -17,7 +17,7 @@ import type { ComposerSkill } from "./composer-types"
 import { ResourceMentionNode } from "./resource-mention-node"
 import { SkillMentionNode } from "./skill-mention-node"
 import { PluginMentionNode } from "./plugin-mention-node"
-import { openComposerTextMenu } from "../conversation-text-actions"
+import { openComposerTextMenu } from "../shared/conversation-text-actions"
 
 export type { ComposerSkill } from "./composer-types"
 export { composerDocumentFromLexical, restoreComposerDocument } from "./composer-lexical-document"

@@ -38,21 +38,21 @@ import {
   type AssistantContentUnit,
   type ChangedFile,
 } from "./message-render-model"
-import { AssistantMarkdown } from "./assistant-markdown"
+import { AssistantMarkdown } from "./markdown/assistant-markdown"
 import { truncateReasoning } from "./reasoning-text"
-import { MessageAttachment } from "./message-attachment"
-import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generation-message"
+import { MessageAttachment } from "./attachments/message-attachment"
+import { GeneratedImageGallery, ImageGenerationMessage } from "./attachments/image-generation-message"
 import { ContentEntrance } from "./content-entrance"
-import { AgentActivityMessage } from "./agent-activity-message"
+import { AgentActivityMessage } from "./activity/agent-activity-message"
 import { toolOutputText } from "./message-content"
-import { isToolGenerationPresentation } from "./tool-generation-presentation"
-import { readImagePath } from "./read-image-preview"
+import { isToolGenerationPresentation } from "./activity/tool-generation-presentation"
+import { readImagePath } from "./attachments/read-image-preview"
 import { ToolDetails } from "./tool-details"
 import { WorkflowSummary } from "../../tools/workflows/workflow-summary"
 import { ReadToolRow } from "./tool-details/read-tool-row"
 import { readFileReference } from "./tool-details/read-tool-model"
 import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
-import { TerminalActivityCard, type TerminalActivityInfo } from "./terminal-activity-card"
+import { TerminalActivityCard, type TerminalActivityInfo } from "./activity/terminal-activity-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
 const diagnosticToolLabels = new Set(["失败", "已中断", "结果不确定", "工具失败，等待本轮结果"])

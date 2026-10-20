@@ -15,7 +15,7 @@ import {
   selectDraftText,
   sessionComposerScope,
 } from "../../src/renderer/src/stores/desktop-session/composer-draft-state"
-import { sourcePart } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
+import { sourcePart } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support"
 import "../../src/renderer/src/assets/main.css"
 
 useDesktopSessionStore.setState({

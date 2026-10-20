@@ -25,16 +25,16 @@ import type {
   DesktopSessionPart,
   SessionUserInputItem,
 } from "@shared/session-types"
-import { MessageAttachment } from "./message-attachment"
+import { MessageAttachment } from "./attachments/message-attachment"
 import { RichPromptInput } from "../composer/rich-prompt-input"
 import {
   composerDocument,
   selectComposerDocumentText,
   type ComposerDocument,
 } from "@renderer/stores/desktop-session/composer-document"
-import { ModelSwitchDivider, readModelSwitchPresentation } from "./model-switch-divider"
-import { ContextCompactionDivider } from "./context-compaction-divider"
-import { readContextCompactionPresentation } from "./compaction-presentation"
+import { ModelSwitchDivider, readModelSwitchPresentation } from "./notices/model-switch-divider"
+import { ContextCompactionDivider } from "./notices/context-compaction-divider"
+import { readContextCompactionPresentation } from "./notices/compaction-presentation"
 import { useRetainTranscriptRow } from "../transcript/virtual-transcript-row"
 
 const collapsibleUserMessageChars = 900

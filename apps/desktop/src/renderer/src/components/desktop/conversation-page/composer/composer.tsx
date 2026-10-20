@@ -24,7 +24,7 @@ import { RichPromptInput } from "./rich-prompt-input"
 import type { ComposerSkill } from "./rich-prompt-input"
 import type { ComposerPickerCommand, ComposerPickerItem } from "./composer-picker"
 import type { ContextPickerItem } from "./context-picker"
-import { resolvePermissionModeLabel } from "../utils"
+import { resolvePermissionModeLabel } from "../shared/utils"
 import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "./plugin-mentions-feature"
 
 export function Composer({

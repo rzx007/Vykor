@@ -1,5 +1,5 @@
 import { FileText, ArrowUpRight } from "lucide-react"
-import { getFileIcon } from "../file-icons"
+import { getFileIcon } from "../files/file-icons"
 import type { DesktopWorkflowTask } from "@shared/workflow-types"
 import { Button } from "@renderer/components/ui/button"
 import { workflowOutputFiles } from "./workflow-model"
