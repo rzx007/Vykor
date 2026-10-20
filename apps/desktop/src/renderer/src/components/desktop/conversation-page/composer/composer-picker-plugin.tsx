@@ -119,12 +119,16 @@ export function ComposerPickerPlugin({
             const { pluginId, displayName } = item.action
             editor.update(
               () => {
-                const mention = new PluginMentionNode({
-                  type: "capability",
-                  kind: "plugin",
-                  pluginId,
-                  displayName,
-                })
+                const mention = new PluginMentionNode(
+                  {
+                    type: "capability",
+                    kind: "plugin",
+                    pluginId,
+                    displayName,
+                  },
+                  undefined,
+                  item.icon
+                )
                 if (trigger?.sigil === "@") replaceTriggerWithNode(trigger, mention)
                 else {
                   const selection = $getSelection()

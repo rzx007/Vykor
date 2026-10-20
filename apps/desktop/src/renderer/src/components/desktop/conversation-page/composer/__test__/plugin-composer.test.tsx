@@ -24,6 +24,7 @@ const plugin = {
   scope: "user" as const,
   origin: "native" as const,
   capabilities: ["skills" as const],
+  icon: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
 }
 const reference = {
   type: "capability" as const,
@@ -108,7 +109,7 @@ it("keeps automatic plugin use implicit while preserving explicit @ references",
   expect(container.textContent).not.toContain("本轮自动：")
   expect(container.textContent).not.toContain("仅使用：")
   expect(editor().getEditorState().read(composerDocumentFromLexical).items).toEqual([reference])
-  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("@Quality")
+  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("Quality")
 })
 it.each(["plus", "at"])("selects a structured plugin through %s", async (entry) => {
   await render({ version: 1, items: entry === "at" ? [{ type: "text", text: "@Qua" }] : [] }, true)
@@ -120,7 +121,8 @@ it.each(["plus", "at"])("selects a structured plugin through %s", async (entry) 
     reference,
     { type: "text", text: " " },
   ])
-  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("@Quality ")
+  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("Quality ")
+  expect(container.querySelector('[role="textbox"] img')?.getAttribute("src")).toBe(plugin.icon)
   expect(container.querySelector('[role="listbox"]')).toBeNull()
 })
 it.each(["escape", "outside", "plus"])(
