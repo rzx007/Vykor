@@ -1,3 +1,5 @@
+import { settingsForApprovalMode } from "@vykor/sandbox";
+import { normalizeApprovalMode } from "@vykor/protocol";
 import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 import {
   createDefaultNodeAgent,
@@ -165,7 +167,9 @@ export function createDaemonAgentLoader(
 
   return async ({ session, history, parts }) => {
     const settingsRoot = sessionSettingsRoot(session);
-    const settings = await resolveSettingsForSession(options, settingsRoot);
+    const storedSettings = await resolveSettingsForSession(options, settingsRoot);
+    const configuration = agentConfigurationFromSession(session, storedSettings);
+    const settings = storedSettings ? settingsForApprovalMode(storedSettings, configuration.approvalMode) : undefined;
     if (!options.createAgent && !settings)
       throw new Error("Agent settings are not configured");
 
@@ -195,7 +199,6 @@ export function createDaemonAgentLoader(
     const executionEnvironment = settings && options.acquireEnvironment
       ? await options.acquireEnvironment(session, settings)
       : undefined;
-    const configuration = agentConfigurationFromSession(session, settings);
     const modelMetadata = settings ? await options.prepareModelMetadata?.(settings) : undefined;
     const requestConfigurationStore = createDaemonRequestConfigurationStore({
       session,
@@ -458,7 +461,7 @@ function agentConfigurationFromSession(
     provider: settings?.provider,
     baseUrl: defaultBaseUrlForSession(session, settings),
     apiFormat: settings?.apiFormat,
-    permissionMode: settings?.permission?.mode,
+    approvalMode: normalizeApprovalMode(settings?.permission?.mode),
     maxTurns: settings?.maxTurns,
     sessionMode: "direct",
     pluginsEnabled: settings?.plugins?.enabled ?? true,
@@ -469,6 +472,8 @@ function agentConfigurationFromSession(
     baseUrl: runtime.baseUrl,
     apiFormat: runtime.apiFormat,
     permissionMode: runtime.permissionMode,
+    approvalMode: runtime.approvalMode,
+    workMode: runtime.workMode,
     systemPrompt: runtime.systemPrompt,
     maxTurns: runtime.maxTurns,
     hostToolCeiling: runtime.allowedTools,

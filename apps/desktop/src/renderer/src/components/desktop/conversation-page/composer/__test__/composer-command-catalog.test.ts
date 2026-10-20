@@ -18,7 +18,7 @@ const context = {
   running: false,
   canOpenReview: true,
   pinned: false,
-  permissionMode: "default" as const,
+  permissionMode: "ask" as const,
   hasModels: true,
   hasEffortTiers: true,
 }
@@ -94,7 +94,7 @@ describe("desktop slash commands", () => {
     const commands = toComposerCommands(catalog, {
       ...context,
       pinned: true,
-      permissionMode: "plan",
+      workMode: "plan",
     })
     expect(commands.find((item) => item.id === "pin")?.label).toBe("取消置顶")
     expect(commands.find((item) => item.id === "plan")?.label).toBe("退出计划模式")

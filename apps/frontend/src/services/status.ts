@@ -3,10 +3,11 @@
  *
  * status 是 Record<string, unknown>（协议宽松），此前 App / Footer / Sidebar /
  * AppView 各自 String(status.x ?? ...) 解析，默认值还不统一。集中到这里：
- * mode 统一缺省 "default"，token 统一 Number(... ?? 0)。
+ * mode 统一缺省 "ask"，token 统一 Number(... ?? 0)。
  */
+import { normalizeApprovalMode } from "@vykor/client";
 export interface ParsedStatus {
-  /** 权限模式，缺省 "default" */
+  /** 授权档位，缺省 "ask" */
   mode: string;
   model: string;
   /** 推理强度（空串表示无） */
@@ -17,7 +18,7 @@ export interface ParsedStatus {
 
 export function parseStatus(status: Record<string, unknown>): ParsedStatus {
   return {
-    mode: String(status.permission_mode ?? "default"),
+    mode: normalizeApprovalMode(status.approval_mode ?? status.permission_mode) ?? "ask",
     model: String(status.model ?? ""),
     effort: String(status.effort ?? ""),
     inputTokens: Number(status.input_tokens ?? 0),

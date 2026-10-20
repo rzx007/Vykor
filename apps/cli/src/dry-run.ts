@@ -1,6 +1,7 @@
 import type { Settings, McpServerConfig } from "@vykor/core";
 import { findByName } from "@vykor/api";
 import { checkApiKey } from "./doctor";
+import { resolveRuntimeModes } from "./runtime-modes.js";
 
 /**
  * dry-run 的 readiness 判定（纯函数，便于单测）。
@@ -64,6 +65,9 @@ export interface DryRunOptions {
   model?: string;
   provider?: string;
   permissionMode?: string;
+  workMode?: string;
+  plan?: boolean;
+  dangerouslySkipPermissions?: boolean;
   baseUrl?: string;
   apiFormat?: string;
   allowedTools?: string;
@@ -82,6 +86,8 @@ export interface DryRunReport {
   baseURL: string;
   apiFormat: string;
   permissionMode: string;
+  approvalMode: string;
+  workMode: string;
   toolCount: number;
   mcpServers: McpServerSummary[];
   skillCount: number;
@@ -115,7 +121,7 @@ export function buildDryRunReport(input: {
     (realProvider ? findByName(realProvider)?.defaultBaseURL : undefined) ??
     "(auto-detect)";
   const apiFormat = options.apiFormat ?? settings.apiFormat;
-  const permissionMode = options.permissionMode ?? settings.permission.mode;
+  const modes = resolveRuntimeModes(options, settings.permission.mode);
 
   const allowed = [
     ...(settings.permission.allowedTools ?? []),
@@ -139,7 +145,8 @@ export function buildDryRunReport(input: {
     keySource: keyCheck.source,
     baseURL,
     apiFormat,
-    permissionMode,
+    permissionMode: modes.approvalMode,
+    ...modes,
     toolCount,
     mcpServers,
     skillCount: input.skillCount,
@@ -185,7 +192,8 @@ export async function runDryRun(settings: Settings, options: DryRunOptions): Pro
   console.log(`${label("key source")}${chalk.white(report.keySource)}`);
   console.log(`${label("baseURL")}${chalk.white(report.baseURL)}`);
   console.log(`${label("apiFormat")}${chalk.white(report.apiFormat)}`);
-  console.log(`${label("permission")}${chalk.white(report.permissionMode)}`);
+  console.log(`${label("approval")}${chalk.white(report.approvalMode)}`);
+  console.log(`${label("work mode")}${chalk.white(report.workMode)}`);
   console.log(`${label("tools")}${chalk.white(String(report.toolCount))}`);
   console.log(`${label("skills")}${chalk.white(String(report.skillCount))}`);
   console.log(`${label("plugins")}${chalk.white(report.pluginsEnabled ? "enabled" : "disabled")}`);

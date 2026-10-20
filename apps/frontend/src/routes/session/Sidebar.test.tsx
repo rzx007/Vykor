@@ -44,7 +44,8 @@ test("Sidebar renders session info", async () => {
   const frame = captureCharFrame();
 
   expect(frame).toContain("claude-opus-4-5");
-  expect(frame).toContain("default");
+  expect(frame).toContain("approval: ask");
+  expect(frame).toContain("work: execute");
 
   renderer.destroy();
 });

@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util"
 import { isAbsolute } from "node:path"
-import type { VykorClient } from "@vykor/client"
+import { normalizeApprovalMode, type VykorClient } from "@vykor/client"
 import {
   checkPermissionConfiguration,
   inspectPermissionConfiguration,
@@ -39,8 +39,10 @@ export class DesktopPermissionSettingsService {
       client.system.getSettings(),
       client.permissions.listApprovals(),
     ])
+    const inspected = inspectPermissionConfiguration(settings)
     return {
-      ...inspectPermissionConfiguration(settings),
+      ...inspected,
+      permission: { ...inspected.permission, mode: normalizeApprovalMode(inspected.permission.mode) ?? "ask" },
       browserDeveloperMode: this.deps.getDeveloperMode(),
       toolApprovals: approvals.map(({ id, sessionId, toolName, updatedAt }) => ({
         id,

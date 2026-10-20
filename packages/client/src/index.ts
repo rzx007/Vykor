@@ -39,6 +39,8 @@ export {
   McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
+export { normalizeApprovalMode, isWorkMode } from "@vykor/protocol";
+export type { ApprovalMode, WorkMode, ApprovalReviewRecord } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
 export { parsePluginUiAppearance } from "@vykor/protocol";
 export { stringifyPluginUiJson, parsePluginUiConversationRequest, parsePluginUiConversationPrepared,

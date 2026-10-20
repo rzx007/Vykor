@@ -49,6 +49,21 @@ export class PermissionRepository {
     return this.write(() => this.replyPending(input));
   }
 
+  /** Durable progress for a still-pending request; terminal decisions are immutable. */
+  updatePayload(requestId: string, patch: Record<string, unknown>): PermissionRequestRecord {
+    return this.write(() => {
+      const request = this.options.storage.state.permissions[requestId];
+      if (!request) throw new Error(`Permission request not found: ${requestId}`);
+      if (request.status !== "pending") throw new Error(`Permission request already resolved: ${requestId}`);
+      this.options.storage.rollback?.capture(this.options.storage.state.permissions, requestId);
+      request.payload = { ...request.payload, ...clone(patch) };
+      request.updatedAt = Date.now();
+      this.options.storage.mutations.permissions.add(requestId);
+      this.emit("permission.asked", request);
+      return clone(request);
+    });
+  }
+
   expirePending(
     reason = "Daemon restarted before the permission was resolved",
   ): number {

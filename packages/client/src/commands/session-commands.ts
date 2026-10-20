@@ -62,7 +62,10 @@ export type SessionCommandHost = {
   cwd: string;
   /** Values used by /status */
   model?: string;
+  /** Legacy mode accepted while migrating older hosts. */
   permissionMode?: string;
+  approvalMode?: string;
+  workMode?: string;
   statusSessionId?: string;
   commandCatalog: CommandCatalogEntry[];
   clientState: VykorClientState;

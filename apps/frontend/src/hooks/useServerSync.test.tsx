@@ -1250,7 +1250,8 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
       runtime: {
         model: "m",
         provider: "openrouter",
-        permissionMode: "plan",
+        approvalMode: "ask",
+        workMode: "plan",
         maxTurns: 11,
         sessionMode: "coordinator",
       },
@@ -1268,13 +1269,17 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   await act(async () => {
     captured?.sendRequest({
       type: "set_permission_mode",
-      permission_mode: "full_auto",
+      permission_mode: "auto_review",
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
-  const permissionPatch = calls.find((call) => call.url === "http://daemon.test/sessions/s2" && call.init.method === "PATCH" && String(call.init.body ?? "").includes("permissionMode"));
+  const permissionPatch = calls.find((call) => call.url === "http://daemon.test/sessions/s2" && call.init.method === "PATCH" && String(call.init.body ?? "").includes("approvalMode"));
   expect(permissionPatch).toBeTruthy();
-  expect(captured?.status.permission_mode).toBe("full_auto");
+  expect(captured?.status.approval_mode).toBe("auto_review");
+  expect(captured?.status.work_mode).toBe("plan");
+  expect(JSON.parse(String(permissionPatch?.init.body ?? "{}"))).toMatchObject({
+    metadata: { runtime: { approvalMode: "auto_review" } },
+  });
 
   await act(async () => {
     captured?.sendRequest({ type: "list_sessions" });

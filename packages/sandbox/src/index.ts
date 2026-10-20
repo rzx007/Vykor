@@ -7,6 +7,7 @@ export type {
 } from "./types.js";
 export { SandboxUnavailableError } from "./errors.js";
 export { normalizeSandboxConfig } from "./config.js";
+export { settingsForApprovalMode } from "./approval-policy.js";
 export { ExecutionConfigError, resolveExecutionEnvironmentConfig } from "./execution-config.js";
 export { createExecutionEnvironment } from "./execution-environment.js";
 export type { CreateExecutionEnvironmentDependencies, CreateExecutionEnvironmentInput } from "./execution-environment.js";

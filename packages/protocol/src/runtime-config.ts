@@ -1,5 +1,6 @@
 import type { SessionRecord } from "./session.js";
 import { ProtocolDataError } from "./serialization.js";
+import { effectivePermissionMode, isWorkMode, normalizeApprovalMode, type ApprovalMode, type WorkMode } from "./approval-mode.js";
 
 export type SessionApiFormat = "anthropic" | "openai";
 
@@ -9,6 +10,8 @@ export type SessionRuntimeConfig = {
   baseUrl?: string;
   apiFormat?: SessionApiFormat;
   permissionMode?: "default" | "plan" | "full_auto";
+  approvalMode?: ApprovalMode;
+  workMode?: WorkMode;
   maxTurns?: number;
   effort?: string;
   sessionMode?: "direct" | "coordinator";
@@ -27,6 +30,8 @@ const RUNTIME_CONFIG_KEYS: Array<keyof SessionRuntimeConfig> = [
   "baseUrl",
   "apiFormat",
   "permissionMode",
+  "approvalMode",
+  "workMode",
   "maxTurns",
   "effort",
   "sessionMode",
@@ -88,6 +93,8 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
         valid = typeof value === "string"; break;
       case "apiFormat": valid = apiFormatValue(value) !== undefined; break;
       case "permissionMode": valid = permissionModeValue(value) !== undefined; break;
+      case "approvalMode": valid = value === "ask" || value === "auto_review" || value === "full_access"; break;
+      case "workMode": valid = isWorkMode(value); break;
       case "effort": valid = effortValue(value) !== undefined; break;
       case "sessionMode": valid = sessionModeValue(value) !== undefined; break;
       case "maxTurns": valid = numberValue(value) !== undefined; break;
@@ -130,8 +137,14 @@ export function readSessionRuntimeConfig(
   if (!model) {
     throw new Error(`Session runtime config is missing metadata.runtime.model: ${session.id}`);
   }
+  const approvalMode = normalizeApprovalMode(runtime.approvalMode ?? runtime.permissionMode)
+    ?? defaults?.approvalMode ?? normalizeApprovalMode(defaults?.permissionMode);
+  const workMode = isWorkMode(runtime.workMode) ? runtime.workMode
+    : runtime.permissionMode === "plan" ? "plan" : defaults?.workMode ?? "execute";
   return {
     model,
+    ...(approvalMode ? { approvalMode } : {}),
+    ...(approvalMode || isWorkMode(runtime.workMode) || defaults?.workMode ? { workMode } : {}),
     ...(stringValue(runtime.provider) ?? defaults?.provider
       ? { provider: stringValue(runtime.provider) ?? defaults?.provider }
       : {}),
@@ -141,8 +154,8 @@ export function readSessionRuntimeConfig(
     ...(apiFormatValue(runtime.apiFormat) ?? defaults?.apiFormat
       ? { apiFormat: apiFormatValue(runtime.apiFormat) ?? defaults?.apiFormat }
       : {}),
-    ...(permissionModeValue(runtime.permissionMode) ?? defaults?.permissionMode
-      ? { permissionMode: permissionModeValue(runtime.permissionMode) ?? defaults?.permissionMode }
+    ...(approvalMode
+      ? { permissionMode: effectivePermissionMode(approvalMode, workMode) }
       : {}),
     ...(numberValue(runtime.maxTurns) ?? defaults?.maxTurns
       ? { maxTurns: numberValue(runtime.maxTurns) ?? defaults?.maxTurns }
@@ -179,6 +192,12 @@ export function patchSessionRuntimeMetadata(
     ...readRuntimeMetadata(metadata),
     ...stripUndefined(patch),
   };
+  // Canonicalize legacy metadata when a caller writes either new mode field.
+  if (runtime.permissionMode !== undefined && (patch.approvalMode !== undefined || patch.workMode !== undefined)) {
+    runtime.approvalMode ??= normalizeApprovalMode(runtime.permissionMode) ?? "ask";
+    runtime.workMode ??= runtime.permissionMode === "plan" ? "plan" : "execute";
+    delete runtime.permissionMode;
+  }
   readRuntimeMetadata({ runtime });
   return {
     ...metadata,

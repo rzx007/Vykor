@@ -159,10 +159,10 @@ export function DefaultPermissionControl({ disabled = false }: { disabled?: bool
   return (
     <div className="flex flex-col items-end gap-1.5">
       <Select
-        value={permission?.mode ?? "default"}
+        value={permission?.mode ?? "ask"}
         onValueChange={(value) => {
-          if (value !== "default" && value !== "plan" && value !== "full_auto") return
-          if (value === "full_auto" && permission?.mode !== "full_auto") setConfirm(true)
+          if (value !== "ask" && value !== "auto_review" && value !== "full_access") return
+          if (value === "full_access" && permission?.mode !== "full_access") setConfirm(true)
           else void save(value)
         }}
       >
@@ -173,18 +173,18 @@ export function DefaultPermissionControl({ disabled = false }: { disabled?: bool
           className="min-w-36"
         >
           <SelectValue>
-            {permission?.mode === "full_auto"
-              ? "自动批准"
-              : permission?.mode === "plan"
-                ? "只读计划"
-                : "手动批准"}
+            {permission?.mode === "full_access"
+              ? "完全访问权限"
+              : permission?.mode === "auto_review"
+                ? "帮我批准"
+                : "请我批准"}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value="default">手动批准</SelectItem>
-            <SelectItem value="plan">只读计划</SelectItem>
-            <SelectItem value="full_auto">自动批准</SelectItem>
+            <SelectItem value="ask">请我批准</SelectItem>
+            <SelectItem value="auto_review">帮我批准</SelectItem>
+            <SelectItem value="full_access">完全访问权限</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>
@@ -196,15 +196,15 @@ export function DefaultPermissionControl({ disabled = false }: { disabled?: bool
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>启用自动批准？</AlertDialogTitle>
+            <AlertDialogTitle>启用完全访问权限？</AlertDialogTitle>
             <AlertDialogDescription>
-              新会话不再逐项询问，仍遵守禁止规则和访问边界。已有会话保持原设置。
+              新聊天会在执行环境允许的范围内扩大文件、命令与网络访问，普通操作通常不再请求批准。计划限制和强制禁止规则仍然生效。已有聊天保持原设置。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction disabled={disabled || busy} onClick={() => void save("full_auto")}>
-              启用自动批准
+            <AlertDialogAction disabled={disabled || busy} onClick={() => void save("full_access")}>
+              启用完全访问权限
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

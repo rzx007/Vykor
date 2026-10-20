@@ -1,3 +1,4 @@
+export type { ApprovalMode, WorkMode } from "./types/permissions";
 export type {
   Message,
   SystemMessage,

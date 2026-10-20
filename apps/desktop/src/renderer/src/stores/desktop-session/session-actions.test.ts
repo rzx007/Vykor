@@ -14,11 +14,67 @@ import {
   resetDesktopSessionStore,
   sessionRuntime,
 } from "./store-test-fixtures"
-import { sessionEffort } from "./helpers"
+import { sessionEffort, sessionPermissionMode, sessionWorkMode } from "./helpers"
+import { toast } from "@renderer/lib/toast"
 import { useDesktopSessionStore } from "./store"
 import { applyBootstrapData } from "./bootstrap-actions"
 import type { DesktopSessionRuntime } from "./types"
 import { composerDocument, emptyComposerDocument } from "./composer-document"
+
+it("stages plan mode without changing the default approval setting", async () => {
+  resetDesktopSessionStore()
+  useDesktopSessionStore.setState({ selectedPermissionMode: "full_access", defaultPermissionMode: "full_access" })
+  useDesktopSessionStore.getState().selectWorkMode("plan")
+  expect(useDesktopSessionStore.getState()).toMatchObject({
+    selectedWorkMode: "plan", selectedPermissionMode: "full_access", defaultPermissionMode: "full_access",
+  })
+  useDesktopSessionStore.getState().selectWorkMode("execute")
+  expect(useDesktopSessionStore.getState()).toMatchObject({ selectedWorkMode: "execute", selectedPermissionMode: "full_access" })
+})
+
+it("keeps the old work mode and blocks sending until the backend confirms a mode change", async () => {
+  resetDesktopSessionStore()
+  const view = emptySessionView("modes")
+  view.session.metadata = { runtime: { approvalMode: "full_access", workMode: "execute" } }
+  let finish!: (session: DesktopSessionView["session"]) => void
+  const sendPrompt = vi.fn()
+  vi.stubGlobal("window", { desktop: { sessions: {
+    updatePermissionMode: () => new Promise((resolve) => { finish = resolve }), sendPrompt,
+  } } })
+  try {
+    useDesktopSessionStore.setState({ activeSessionId: "modes", sessionView: view, sessions: [view.session], selectedPermissionMode: "full_access" })
+    const request = useDesktopSessionStore.getState().updateSessionWorkMode("modes", "plan")
+    expect(useDesktopSessionStore.getState().selectedWorkMode).toBe("execute")
+    await useDesktopSessionStore.getState().sendMessage("wait")
+    expect(sendPrompt).not.toHaveBeenCalled()
+    finish({ ...view.session, metadata: { runtime: { approvalMode: "full_access", workMode: "plan" } } })
+    await request
+    expect(useDesktopSessionStore.getState()).toMatchObject({ selectedPermissionMode: "full_access", selectedWorkMode: "plan" })
+  } finally { vi.unstubAllGlobals() }
+})
+
+it.each([
+  ["default", "ask", "execute"], ["plan", "ask", "plan"], ["full_auto", "auto_review", "execute"],
+])("restores legacy %s through the shared runtime reader", (legacy, approval, work) => {
+  const session = emptySessionView("legacy").session
+  session.metadata = { runtime: { permissionMode: legacy } }
+  expect(sessionPermissionMode(session)).toBe(approval)
+  expect(sessionWorkMode(session)).toBe(work)
+})
+
+it("keeps the old mode after a failed save and reports it through toast", async () => {
+  resetDesktopSessionStore()
+  const view = emptySessionView("failed-mode")
+  view.session.metadata = { runtime: { approvalMode: "auto_review", workMode: "execute" } }
+  const notification = vi.spyOn(toast, "error")
+  vi.stubGlobal("window", { desktop: { sessions: { updatePermissionMode: async () => { throw new Error("offline") } } } })
+  try {
+    useDesktopSessionStore.setState({ activeSessionId: view.session.id, sessionView: view, sessions: [view.session], selectedPermissionMode: "auto_review" })
+    await expect(useDesktopSessionStore.getState().updateSessionWorkMode(view.session.id, "plan")).rejects.toThrow("offline")
+    expect(useDesktopSessionStore.getState()).toMatchObject({ selectedWorkMode: "execute", selectedPermissionMode: "auto_review", pendingModeChanges: { "failed-mode": false } })
+    expect(notification).toHaveBeenCalledWith("模式未能保存", "offline")
+  } finally { notification.mockRestore(); vi.unstubAllGlobals() }
+})
 
 function emptySessionView(sessionId: string, cursor = 0): DesktopSessionView {
   return {
@@ -58,7 +114,7 @@ it.each(["model", "permission", "effort", "plugin"])("does not apply a late side
     const isCurrent = () => current
     const request = kind === "model"
       ? actions.updateSessionModel("side", { id: "m", label: "M", provider: "test", providerName: "test" }, isCurrent)
-      : kind === "permission" ? actions.updateSessionPermissionMode("side", "default", isCurrent)
+      : kind === "permission" ? actions.updateSessionPermissionMode("side", "ask", isCurrent)
       : kind === "effort" ? actions.updateSessionEffort("side", "high", isCurrent)
       : actions.updateSessionPluginSelection("side", { pluginAutoSelectionEnabled: false }, isCurrent)
     current = false
@@ -80,7 +136,9 @@ function resetNewConversationState(): void {
     selectedProvider: null,
     defaultModel: "test-model",
     defaultProvider: null,
-    selectedPermissionMode: "default",
+    selectedPermissionMode: "ask",
+    selectedWorkMode: "execute",
+    pendingModeChanges: {},
     activeSessionId: null,
     sessionView: null,
     newConversationRuntime: {
@@ -1191,19 +1249,19 @@ describe("desktop session actions", () => {
     )
     vi.stubGlobal("window", { desktop: { sessions: { setDefaultPermissionMode } } })
     resetNewConversationState()
-    const first = useDesktopSessionStore.getState().selectPermissionMode("plan")
-    const second = useDesktopSessionStore.getState().selectPermissionMode("full_auto")
+    const first = useDesktopSessionStore.getState().selectPermissionMode("ask")
+    const second = useDesktopSessionStore.getState().selectPermissionMode("auto_review")
 
     await vi.waitFor(() => expect(setDefaultPermissionMode).toHaveBeenCalledTimes(1))
-    resolveFirst({ ...refreshedBootstrap, defaultPermissionMode: "plan" })
+    resolveFirst({ ...refreshedBootstrap, defaultPermissionMode: "ask" })
     await first
     await vi.waitFor(() => expect(setDefaultPermissionMode).toHaveBeenCalledTimes(2))
-    resolveSecond({ ...refreshedBootstrap, defaultPermissionMode: "full_auto" })
+    resolveSecond({ ...refreshedBootstrap, defaultPermissionMode: "auto_review" })
     await second
 
     expect(useDesktopSessionStore.getState()).toMatchObject({
-      selectedPermissionMode: "full_auto",
-      defaultPermissionMode: "full_auto",
+      selectedPermissionMode: "auto_review",
+      defaultPermissionMode: "auto_review",
     })
   })
 
@@ -1520,7 +1578,7 @@ describe("desktop session store outside-project mode", () => {
       selectedProvider: "deepseek",
       defaultModel: "deepseek-chat",
       defaultProvider: "deepseek",
-      selectedPermissionMode: "default",
+      selectedPermissionMode: "ask",
       selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
@@ -1531,7 +1589,8 @@ describe("desktop session store outside-project mode", () => {
     expect(create).toHaveBeenCalledWith({
       model: "deepseek-chat",
       provider: "deepseek",
-      permissionMode: "default",
+      permissionMode: "ask",
+      workMode: "execute",
     })
     expect(sendPrompt).toHaveBeenCalledWith({
       id: expect.any(String),
@@ -1597,7 +1656,7 @@ describe("desktop session store outside-project mode", () => {
       selectedProvider: "deepseek",
       defaultModel: "deepseek-chat",
       defaultProvider: "deepseek",
-      selectedPermissionMode: "default",
+      selectedPermissionMode: "ask",
       selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
@@ -1739,7 +1798,7 @@ describe("desktop session store outside-project mode", () => {
       selectedProvider: null,
       defaultModel: "test-model",
       defaultProvider: null,
-      selectedPermissionMode: "default",
+      selectedPermissionMode: "ask",
       selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
@@ -1805,7 +1864,7 @@ describe("desktop session store outside-project mode", () => {
       },
       defaultModel: "deepseek-chat",
       defaultProvider: "deepseek",
-      defaultPermissionMode: "default",
+      defaultPermissionMode: "ask",
       activeSessionId: null,
       sessionView: null,
     })

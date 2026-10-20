@@ -4,6 +4,7 @@ import {
   isPlaceholderTitle,
   sessionEffort,
   sessionPermissionMode,
+  sessionWorkMode,
   sessionProvider,
   upsertSession,
 } from "./helpers"
@@ -76,6 +77,7 @@ export function createApplySessionUpdate(
         selectedProvider: sessionProvider(session, state.defaultProvider),
 
         selectedPermissionMode: sessionPermissionMode(session, state.defaultPermissionMode),
+        selectedWorkMode: sessionWorkMode(session),
 
         selectedEffort: sessionEffort(session),
 

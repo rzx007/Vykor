@@ -1,6 +1,7 @@
 import {
   createPromptRequestId,
   patchSessionRuntimeMetadata,
+  normalizeApprovalMode,
   type CommandCatalogEntry,
   type JobResource,
   type VykorClient,
@@ -365,11 +366,11 @@ export async function executeTuiAction(
 
     case "set_permission_mode": {
       if (!client) return;
-      const mode = action.permission_mode;
-      ctx.setStatus((current) => ({ ...current, permission_mode: mode }));
+      const mode = normalizeApprovalMode(action.permission_mode) ?? "ask";
+      ctx.setStatus((current) => ({ ...current, approval_mode: mode, permission_mode: mode }));
       if (sessionId) {
         await client.sessions.update(sessionId, {
-          metadata: patchSessionRuntimeMetadata({}, { permissionMode: mode }),
+          metadata: patchSessionRuntimeMetadata({}, { approvalMode: mode }),
         });
       }
       return;

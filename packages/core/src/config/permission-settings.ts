@@ -17,7 +17,7 @@ export function parsePermissionSettings(value: unknown): PermissionSettings {
     throw new Error("权限设置包含未知字段。");
   if (
     typeof settings.mode !== "string" ||
-    !["default", "plan", "full_auto"].includes(settings.mode)
+    !["default", "plan", "full_auto", "ask", "auto_review", "full_access"].includes(settings.mode)
   )
     throw new Error("请选择有效的批准方式。");
   for (const key of [

@@ -23,6 +23,7 @@ export function createStartSessionAction(
   const { get, set } = context
 
   return async (content, options) => {
+    if (get().pendingModeChanges.new) return null
     const document = options?.document ?? composerDocument([{ type: "text", text: content }])
     const items = document.items
     const prompt = selectComposerDocumentText(document)
@@ -50,6 +51,7 @@ export function createStartSessionAction(
       defaultModel,
       defaultProvider,
       selectedPermissionMode,
+      selectedWorkMode,
       selectedEffort,
     } = get()
     const model = selectedModel ?? defaultModel
@@ -94,12 +96,14 @@ export function createStartSessionAction(
               model,
               ...(provider ? { provider } : {}),
               permissionMode: selectedPermissionMode,
+              workMode: selectedWorkMode,
               ...(selectedEffort ? { effort: selectedEffort } : {}),
             }
           : {
               model,
               ...(provider ? { provider } : {}),
               permissionMode: selectedPermissionMode,
+              workMode: selectedWorkMode,
               ...(selectedEffort ? { effort: selectedEffort } : {}),
             }
       // 创建会话

@@ -18,9 +18,6 @@ export async function validateSandboxPath(
   const sandboxRoot = await canonicalizeExistingPath(resolve(configuredRoot));
   const resolvedPath = resolve(configuredRoot, targetPath);
   const canonicalPath = await canonicalizePossiblyMissingPath(resolvedPath);
-  if (options.policy?.mode === "off") {
-    return { allowed: true, decision: "allow", resolvedPath: canonicalPath };
-  }
 
   const roots = await allowedRootsForOperation(options, operation, sandboxRoot, config);
   const denyPatterns = operation === "read"
@@ -38,6 +35,9 @@ export async function validateSandboxPath(
     }
   }
 
+  if (options.policy?.mode === "off") {
+    return { allowed: true, decision: "allow", resolvedPath: canonicalPath };
+  }
   if (!roots.some((root) => isPathInside(canonicalPath, root))) {
     return deniedPathResult(
       canonicalPath,

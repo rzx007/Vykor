@@ -12,6 +12,7 @@ import type {
   DesktopModel,
   DesktopPluginCatalogEntry,
   DesktopPermissionMode,
+  DesktopWorkMode,
   DesktopProject,
   DesktopWorkspaceMode,
 } from "@shared/session-types"
@@ -46,6 +47,9 @@ export function NewConversationStart({
   selectedModel,
   selectedProvider,
   selectedPermissionMode,
+  workMode,
+  modeChangePending,
+  onWorkModeChange,
   effort,
   operationError,
   skills,
@@ -99,6 +103,9 @@ export function NewConversationStart({
   selectedModel: string | null
   selectedProvider: string | null
   selectedPermissionMode: DesktopPermissionMode
+  workMode?: DesktopWorkMode
+  modeChangePending?: boolean
+  onWorkModeChange?: (mode: DesktopWorkMode) => void
   effort: string | null
   operationError: string | null
   skills: readonly ComposerSkill[]
@@ -441,6 +448,9 @@ export function NewConversationStart({
             selectedProvider={selectedProvider}
             modelLabel={modelLabel}
             permissionMode={selectedPermissionMode}
+            workMode={workMode}
+            modeChangePending={modeChangePending}
+            onWorkModeChange={onWorkModeChange}
             effort={effort}
             skills={skills}
             plugins={plugins}

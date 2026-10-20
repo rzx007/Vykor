@@ -1,6 +1,8 @@
+import { readSessionRuntimeConfig } from "@vykor/client"
 import type {
   DesktopBootstrapData,
   DesktopPermissionMode,
+  DesktopWorkMode,
   DesktopProject,
   DesktopSessionRecord,
   DesktopWorkspaceMode,
@@ -115,12 +117,23 @@ export function resolveSessionWorkspace(
 
 export function sessionPermissionMode(
   session: DesktopSessionRecord,
-  fallback: DesktopPermissionMode = "default"
+  fallback: DesktopPermissionMode = "ask"
 ): DesktopPermissionMode {
-  const runtime = session.metadata["runtime"]
-  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) return fallback
-  const mode = (runtime as Record<string, unknown>)["permissionMode"]
-  return mode === "default" || mode === "plan" || mode === "full_auto" ? mode : fallback
+  return sessionModes(session, fallback).approvalMode ?? fallback
+}
+
+export function sessionWorkMode(session: DesktopSessionRecord): DesktopWorkMode {
+  return sessionModes(session, "ask").workMode ?? "execute"
+}
+
+function sessionModes(session: DesktopSessionRecord, approvalMode: DesktopPermissionMode) {
+  const value = session.metadata["runtime"]
+  const runtime = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  const model = typeof runtime.model === "string" && runtime.model.trim() ? runtime.model : session.model
+  return readSessionRuntimeConfig({
+    ...session,
+    metadata: { ...session.metadata, runtime: { ...runtime, model } },
+  }, { approvalMode, workMode: "execute" })
 }
 
 export function sessionEffort(session: DesktopSessionRecord): string | null {

@@ -141,7 +141,8 @@ test("Session keeps tool output collapsed by default and expands on click", asyn
 test("Footer renders plan indicator, MCP count, tokens, version", async () => {
   const status: Record<string, unknown> = {
     model: "claude-3-5-sonnet",
-    permission_mode: "plan",
+    approval_mode: "auto_review",
+    work_mode: "plan",
     session_mode: "coordinator",
     input_tokens: 12345,
     output_tokens: 678,

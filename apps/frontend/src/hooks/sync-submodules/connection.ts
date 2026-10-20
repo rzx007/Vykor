@@ -2,12 +2,16 @@ import {
   VykorClient,
   readSessionRuntimeConfig,
   type SessionRecord,
+  type ApprovalMode,
+  type WorkMode,
 } from "@vykor/client";
 
 import type { FrontendConfig } from "../../types";
 
 export interface DefaultRuntimeSettings {
   model: string;
+  approvalMode?: ApprovalMode;
+  workMode?: WorkMode;
   provider?: string;
   baseUrl?: string;
   apiFormat?: "anthropic" | "openai";

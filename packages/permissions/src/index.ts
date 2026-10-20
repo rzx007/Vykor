@@ -76,7 +76,8 @@ export class PermissionChecker implements IPermissionChecker {
   private pathStyle: "windows" | "posix";
 
   constructor(options: PermissionCheckOptions) {
-    this.mode = options.mode;
+    this.mode = options.mode === "full_access" ? "full_auto"
+      : options.mode === "ask" || options.mode === "auto_review" ? "default" : options.mode;
     this.rules = (options.rules ?? []).map((rule) => ({
       ...rule,
       ...(rule.tool ? { tool: canonicalToolName(rule.tool) } : {}),
@@ -235,7 +236,8 @@ export class PermissionChecker implements IPermissionChecker {
   }
 
   setMode(mode: PermissionMode): void {
-    this.mode = mode;
+    this.mode = mode === "full_access" ? "full_auto"
+      : mode === "ask" || mode === "auto_review" ? "default" : mode;
   }
 
   getMode(): PermissionMode {

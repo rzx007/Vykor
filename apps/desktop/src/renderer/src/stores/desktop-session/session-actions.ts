@@ -1,4 +1,5 @@
-import { applyBootstrapData } from "./bootstrap-actions"
+import { toast } from "@renderer/lib/toast"
+import type { UpdateDesktopSessionPermissionModeInput } from "@shared/session-types"
 import { forgetSessionActivity } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
 import { errorMessage } from "./error-state"
@@ -8,6 +9,7 @@ import {
   resolveSessionWorkspace,
   sessionEffort,
   sessionPermissionMode,
+  sessionWorkMode,
   sessionProvider,
   upsertProject,
   upsertSession,
@@ -125,6 +127,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           selectedModel: view.session.model,
           selectedProvider: sessionProvider(view.session, state.defaultProvider),
           selectedPermissionMode: sessionPermissionMode(view.session, state.defaultPermissionMode),
+          selectedWorkMode: sessionWorkMode(view.session),
           selectedEffort: sessionEffort(view.session),
           sessions:
             view.session.status === "archived"
@@ -216,6 +219,32 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     }
   }
 
+  const updateModes = async (
+    input: UpdateDesktopSessionPermissionModeInput,
+    isCurrent?: () => boolean
+  ): Promise<void> => {
+    const sessionId = input.sessionId
+    if (get().pendingModeChanges[sessionId]) throw new Error("模式正在保存，请稍后再试。")
+    set((state) => ({ pendingModeChanges: { ...state.pendingModeChanges, [sessionId]: true } }))
+    try {
+      const session = await window.desktop.sessions.updatePermissionMode(input)
+      if (isCurrent && !isCurrent()) return
+      set((state) => ({
+        sessions: upsertSession(state.sessions, session),
+        ...(state.activeSessionId === sessionId ? {
+          selectedPermissionMode: sessionPermissionMode(session, state.selectedPermissionMode),
+          selectedWorkMode: sessionWorkMode(session),
+        } : {}),
+        sessionView: state.sessionView?.session.id === sessionId ? { ...state.sessionView, session } : state.sessionView,
+      }))
+    } catch (error) {
+      toast.error("模式未能保存", errorMessage(error))
+      throw error
+    } finally {
+      set((state) => ({ pendingModeChanges: { ...state.pendingModeChanges, [sessionId]: false } }))
+    }
+  }
+
   return {
     async startNewConversation() {
       advancePrimaryNavigation()
@@ -233,6 +262,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
             ? sessionProvider(previous, state.selectedProvider)
             : state.selectedProvider ?? state.defaultProvider,
           selectedPermissionMode: state.defaultPermissionMode,
+          selectedWorkMode: "execute",
           selectedEffort: previous ? sessionEffort(previous) : state.selectedEffort,
           newConversationRuntime,
           sessionRuntimes: releaseActiveSessionAcknowledgements(state),
@@ -249,10 +279,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
 
     async selectPermissionMode(permissionMode) {
       const generation = ++defaultSettingsGeneration
-      set({
-        selectedPermissionMode: permissionMode,
-        defaultPermissionMode: permissionMode,
-      })
+      set((state) => ({ pendingModeChanges: { ...state.pendingModeChanges, new: true } }))
       try {
         const request = defaultSettingsWrite.then(() =>
           window.desktop.sessions.setDefaultPermissionMode({ permissionMode })
@@ -261,22 +288,27 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           () => undefined,
           () => undefined
         )
-        const data = await request
+        await request
         if (generation !== defaultSettingsGeneration) return
         set((state) => ({
-          ...applyBootstrapData(
-            data,
-            state.selectedProject,
-            state.workspaceMode,
-            state.selectedModel,
-            state.selectedProvider
-          ),
-          selectedPermissionMode: permissionMode,
+          selectedPermissionMode: state.activeSessionId ? state.selectedPermissionMode : permissionMode,
           defaultPermissionMode: permissionMode,
         }))
-      } catch {
+      } catch (error) {
         if (generation !== defaultSettingsGeneration) return
+        toast.error("批准方式未能保存", errorMessage(error))
+      } finally {
+        if (generation === defaultSettingsGeneration)
+          set((state) => ({ pendingModeChanges: { ...state.pendingModeChanges, new: false } }))
       }
+    },
+
+    selectWorkMode(workMode) {
+      set({ selectedWorkMode: workMode })
+    },
+
+    async updateSessionWorkMode(sessionId, workMode, isCurrent) {
+      await updateModes({ sessionId, workMode }, isCurrent)
     },
 
     async updateSessionModel(sessionId, model, isCurrent) {
@@ -311,22 +343,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     },
 
     async updateSessionPermissionMode(sessionId, permissionMode, isCurrent) {
-      const session = await window.desktop.sessions.updatePermissionMode({
-        sessionId,
-        permissionMode,
-      })
-      if (isCurrent && !isCurrent()) return
-      set((state) => ({
-        sessions: upsertSession(state.sessions, session),
-        selectedPermissionMode:
-          state.activeSessionId === sessionId
-            ? sessionPermissionMode(session)
-            : state.selectedPermissionMode,
-        sessionView:
-          state.sessionView?.session.id === sessionId
-            ? { ...state.sessionView, session }
-            : state.sessionView,
-      }))
+      await updateModes({ sessionId, permissionMode }, isCurrent)
     },
 
     async updateSessionEffort(sessionId, effort, isCurrent) {
@@ -401,6 +418,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedModel: session.model,
         selectedProvider: sessionProvider(session, get().defaultProvider),
         selectedPermissionMode: sessionPermissionMode(session, get().defaultPermissionMode),
+        selectedWorkMode: sessionWorkMode(session),
         selectedEffort: sessionEffort(session),
         selectedProjectGit: false,
         selectedProjectGitCheckedAt: null,
@@ -484,6 +502,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedPermissionMode: isActive
           ? sessionPermissionMode(existing, state.defaultPermissionMode)
           : state.selectedPermissionMode,
+        selectedWorkMode: isActive ? "execute" : state.selectedWorkMode,
         selectedEffort: isActive ? sessionEffort(existing) : state.selectedEffort,
       }))
       if (isActive) {
@@ -521,6 +540,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedPermissionMode: isActive
           ? sessionPermissionMode(existing, state.defaultPermissionMode)
           : state.selectedPermissionMode,
+        selectedWorkMode: isActive ? "execute" : state.selectedWorkMode,
         selectedEffort: isActive ? sessionEffort(existing) : state.selectedEffort,
       }))
       saveActivityPersistence(get().activity)

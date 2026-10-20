@@ -1,7 +1,7 @@
 import { getSkillsDir, type Settings } from "@vykor/core";
 import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@vykor/environment";
-import type { SessionRecord } from "@vykor/protocol";
-import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig } from "@vykor/sandbox";
+import { normalizeApprovalMode, readSessionRuntimeConfig, type SessionRecord } from "@vykor/protocol";
+import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig, settingsForApprovalMode } from "@vykor/sandbox";
 import { createEnvironmentFileSystem } from "@vykor/tools";
 import { loadRuntimeSecrets } from "./runtime-secrets.js";
 import { resolve } from "node:path";
@@ -9,6 +9,8 @@ import { sessionSettingsRoot } from "./session-settings-root.js";
 
 export function createSessionEnvironmentAcquirer(_input?: unknown) {
   return async (session: SessionRecord, settings: Settings): Promise<ExecutionEnvironmentHandle> => {
+    const runtime = readSessionRuntimeConfig(session, { approvalMode: normalizeApprovalMode(settings.permission.mode) });
+    settings = settingsForApprovalMode(settings, runtime.approvalMode);
     const config = resolveExecutionEnvironmentConfig({ surface: "desktop_managed", settings, cwd: session.cwd });
     const binding = createWorkspaceBinding({
       kind: config.kind,

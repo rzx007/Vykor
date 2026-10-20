@@ -15,7 +15,8 @@ export async function sandboxPathDecision(
 ): Promise<SandboxPathValidationResult | undefined> {
   const settings = settingsOverride ?? await loadSettings();
   const policy = resolveSandboxPolicy({ cwd, settings });
-  if (!policy.enabled) return undefined;
+  const denyPaths = operation === "read" ? policy.filesystem.denyRead : policy.filesystem.denyWrite;
+  if (!policy.enabled && denyPaths.length === 0) return undefined;
 
   return validateSandboxPath(filePath, {
     sandboxRoot: cwd,

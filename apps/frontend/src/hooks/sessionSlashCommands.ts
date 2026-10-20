@@ -75,6 +75,8 @@ export async function dispatchSessionSlashCommand(
     model: statusRef.current.model != null
       ? String(statusRef.current.model)
       : daemon?.model ?? undefined,
+    approvalMode: typeof statusRef.current.approval_mode === "string" ? statusRef.current.approval_mode : undefined,
+    workMode: typeof statusRef.current.work_mode === "string" ? statusRef.current.work_mode : undefined,
     permissionMode: typeof statusRef.current.permission_mode === "string"
       ? statusRef.current.permission_mode
       : undefined,

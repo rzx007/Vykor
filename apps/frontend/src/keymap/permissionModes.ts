@@ -1,21 +1,21 @@
 /** 权限模式选项（/permissions 选择器与 Tab 循环共用）。 */
 export const PERMISSION_MODES = [
   {
-    value: "default",
-    label: "default",
+    value: "ask",
+    label: "ask",
     description: "Ask for approval on sensitive operations",
   },
   {
-    value: "full_auto",
-    label: "full_auto",
-    description: "Allow all operations without asking",
+    value: "auto_review",
+    label: "auto_review",
+    description: "Automatically review operations and ask when approval is needed",
   },
   {
-    value: "plan",
-    label: "plan",
-    description: "Plan mode — propose changes before executing",
+    value: "full_access",
+    label: "full_access",
+    description: "Allow all operations without asking",
   },
 ] as const;
 
 /** Tab 循环顺序（与 PERMISSION_MODES 的 value 对应）。 */
-export const PERMISSION_MODE_ORDER: string[] = ["default", "full_auto", "plan"];
+export const PERMISSION_MODE_ORDER = ["ask", "auto_review", "full_access"] as const;

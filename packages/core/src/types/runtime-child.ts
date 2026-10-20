@@ -1,5 +1,6 @@
 import type { AgentExecutionLimits } from "./runtime.js";
 import type { AgentJobAuthorization } from "@vykor/jobs";
+import type { ApprovalMode, WorkMode } from "@vykor/protocol";
 
 export interface AgentChildSpawnInput {
   description: string;
@@ -11,6 +12,9 @@ export interface AgentChildSpawnInput {
   model?: string;
   systemPrompt?: string;
   permissionMode?: "default" | "plan" | "full_auto";
+  /** Host-derived constrained modes for durable child projection; never caller authorization. */
+  approvalMode?: ApprovalMode;
+  workMode?: WorkMode;
   allowedTools?: string[];
   requiredMcpServers?: string[];
   disallowedTools?: string[];

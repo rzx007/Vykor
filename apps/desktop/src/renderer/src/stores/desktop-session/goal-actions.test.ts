@@ -358,17 +358,20 @@ describe("goal actions", () => {
     expect(window.desktop.sessions.createGoal).not.toHaveBeenCalled()
   })
 
-  it("carries the selected effort into a goal-created session", async () => {
+  it("carries approval, plan mode and effort into a goal-created session", async () => {
     const scope = NEW_CONVERSATION_SCOPE
     draft(scope, "目标正文")
     useDesktopSessionStore.getState().setGoalMode(scope, true)
     useDesktopSessionStore.getState().selectEffort("high")
+    useDesktopSessionStore.getState().selectWorkMode("plan")
+    useDesktopSessionStore.setState({ selectedPermissionMode: "full_access" })
 
     await useDesktopSessionStore.getState().submitGoal(scope)
 
     expect(window.desktop.sessions.create).toHaveBeenCalledWith({
       model: "test",
-      permissionMode: "default",
+      permissionMode: "full_access",
+      workMode: "plan",
       effort: "high",
     })
   })

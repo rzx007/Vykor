@@ -1351,6 +1351,25 @@ it("a rare target draft collision preserves both drafts, reports it and reuses t
   )
 })
 
+it("side plan changes leave the main chat approval and work mode untouched", async () => {
+  sideChatTargets.set("main", "side-main")
+  const updatePermissionMode = vi.fn(async (input: { workMode?: string }) => ({
+    ...sideView().session,
+    metadata: { runtime: { approvalMode: "ask", workMode: input.workMode } },
+  }))
+  Object.assign(window.desktop.sessions, { updatePermissionMode })
+  useDesktopSessionStore.setState({ selectedPermissionMode: "full_access", selectedWorkMode: "execute" })
+  await mount()
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加上下文"]')!.click())
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    .find((button) => button.textContent?.includes("计划模式"))!.click())
+  expect(updatePermissionMode).toHaveBeenLastCalledWith({ sessionId: "side-main", workMode: "plan" })
+  expect(useDesktopSessionStore.getState()).toMatchObject({ selectedPermissionMode: "full_access", selectedWorkMode: "execute" })
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="退出计划模式"]')!.click())
+  expect(updatePermissionMode).toHaveBeenLastCalledWith({ sessionId: "side-main", workMode: "execute" })
+  expect(useDesktopSessionStore.getState()).toMatchObject({ selectedPermissionMode: "full_access", selectedWorkMode: "execute" })
+})
+
 it("side configuration reflects accepted session settings and rolls back a rejected permission change", async () => {
   sideChatTargets.set("main", "side-main")
   const updatePermissionMode = vi.fn().mockRejectedValueOnce(new Error("config offline"))
@@ -1358,58 +1377,58 @@ it("side configuration reflects accepted session settings and rolls back a rejec
   await mount()
   await act(async () =>
     [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((item) => item.textContent === "手动批准")!
+      .find((item) => item.textContent === "请我批准")!
       .click()
   )
   await act(async () =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
-      .find((item) => item.textContent?.includes("自动批准"))!
+      .find((item) => item.textContent?.includes("帮我批准"))!
       .click()
   )
   expect(updatePermissionMode).toHaveBeenCalledWith({
     sessionId: "side-main",
-    permissionMode: "full_auto",
+    permissionMode: "auto_review",
   })
   expect(container.textContent).toContain("config offline")
-  expect(container.textContent).toContain("手动批准")
+  expect(container.textContent).toContain("请我批准")
   await emit({
     ...sideView("main", 3),
-    session: { ...sideView().session, metadata: { runtime: { permissionMode: "plan" } } },
+    session: { ...sideView().session, metadata: { runtime: { approvalMode: "ask", workMode: "plan" } } },
   })
   expect(
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent === "计划模式"
+      (item) => item.getAttribute("aria-label") === "退出计划模式"
     )
   ).toBeDefined()
-  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("ask")
 })
 
 it("a newer auxiliary configuration replaces a successfully changed side permission while keeping immediate RPC feedback", async () => {
   sideChatTargets.set("main", "side-main")
   const updatePermissionMode = vi.fn(async () => ({
     ...sideView().session,
-    metadata: { runtime: { permissionMode: "full_auto" } },
+    metadata: { runtime: { approvalMode: "auto_review" } },
   }))
   Object.assign(window.desktop.sessions, { updatePermissionMode })
   await mount()
   await act(async () =>
     [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((item) => item.textContent === "手动批准")!
+      .find((item) => item.textContent === "请我批准")!
       .click()
   )
   await act(async () =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
-      .find((item) => item.textContent?.includes("自动批准"))!
+      .find((item) => item.textContent?.includes("帮我批准"))!
       .click()
   )
   expect(updatePermissionMode).toHaveBeenCalledWith({
     sessionId: "side-main",
-    permissionMode: "full_auto",
+    permissionMode: "auto_review",
   })
   // The normal RPC fixture has the same timestamp as the initial auxiliary snapshot.
   expect(
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent === "自动批准"
+      (item) => item.textContent === "帮我批准"
     )
   ).toBeDefined()
   await emit({
@@ -1417,15 +1436,15 @@ it("a newer auxiliary configuration replaces a successfully changed side permiss
     session: {
       ...sideView().session,
       updatedAt: 2,
-      metadata: { runtime: { permissionMode: "plan" } },
+      metadata: { runtime: { approvalMode: "ask", workMode: "plan" } },
     },
   })
   expect(
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent === "计划模式"
+      (item) => item.getAttribute("aria-label") === "退出计划模式"
     )
   ).toBeDefined()
-  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("ask")
 })
 
 it("quotes stay in this window's visible side draft if another window changes the saved association", async () => {

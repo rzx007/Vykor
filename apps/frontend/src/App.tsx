@@ -17,6 +17,7 @@ import { JobsPanel, type JobsPanelProps } from "./components/JobsPanel";
 import type { FrontendConfig } from "./types";
 import type { TuiAction } from "./hooks/sessionController";
 import { copySelectionToClipboard } from "./utils/selection";
+import { normalizeApprovalMode, type ApprovalMode } from "@vykor/client";
 
 type JobsPanelCallbacks = Omit<JobsPanelProps, "state" | "detailState">;
 
@@ -94,7 +95,7 @@ function AppInner({ config }: { config: FrontendConfig }) {
   }, []);
 
   const setPermissionMode = useCallback(
-    (mode: "default" | "plan" | "full_auto") => {
+    (mode: ApprovalMode) => {
       session.sendRequest({ type: "set_permission_mode", permission_mode: mode, });
     },
     [session],
@@ -176,7 +177,7 @@ function AppInner({ config }: { config: FrontendConfig }) {
 
       // /permissions or /permissions show — open permissions picker
       if (line.trim() === "/permissions" || line.trim() === "/permissions show") {
-        const currentMode = String(session.status.permission_mode ?? "default");
+        const currentMode = normalizeApprovalMode(session.status.approval_mode ?? session.status.permission_mode) ?? "ask";
         const currentIndex = PERMISSION_MODES.findIndex((m) => m.value === currentMode);
         dialog.replace(
           <DialogSelect
@@ -188,7 +189,7 @@ function AppInner({ config }: { config: FrontendConfig }) {
               active: m.value === currentMode,
             }))}
             onSelect={(value) => {
-              setPermissionMode(value as "default" | "plan" | "full_auto");
+              setPermissionMode(normalizeApprovalMode(value) ?? "ask");
               dialog.close();
             }}
             searchable={false}
@@ -200,8 +201,7 @@ function AppInner({ config }: { config: FrontendConfig }) {
 
       // /plan — toggle plan mode
       if (line.trim() === "/plan") {
-        const currentMode = String(session.status.permission_mode ?? "default");
-        const isPlan = currentMode === "plan";
+        const isPlan = session.status.work_mode === "plan";
         session.sendRequest({
           type: "submit_line",
           line: isPlan ? "/plan off" : "/plan on",
@@ -287,11 +287,11 @@ function AppInner({ config }: { config: FrontendConfig }) {
 
   // ────────────────────────────────── onCycleMode ──────────────────────────────
   const onCycleMode = useCallback(() => {
-    const currentMode = String(session.status.permission_mode ?? "default");
+    const currentMode = normalizeApprovalMode(session.status.approval_mode ?? session.status.permission_mode) ?? "ask";
     const idx = PERMISSION_MODE_ORDER.indexOf(currentMode);
-    const nextMode = PERMISSION_MODE_ORDER[(idx + 1) % PERMISSION_MODE_ORDER.length] ?? "default";
-    setPermissionMode(nextMode as "default" | "plan" | "full_auto");
-  }, [session.status.permission_mode, setPermissionMode]);
+    const nextMode = PERMISSION_MODE_ORDER[(idx + 1) % PERMISSION_MODE_ORDER.length] ?? "ask";
+    setPermissionMode(nextMode);
+  }, [session.status.approval_mode, session.status.permission_mode, setPermissionMode]);
 
   // ──────────────── Command registry for slashCommands prop ────────────────────
   const registry = useMemo(

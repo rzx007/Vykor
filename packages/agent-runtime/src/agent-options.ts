@@ -6,6 +6,8 @@ import type {
   AgentScheduleEffects,
   AgentRunScope,
   PermissionMode,
+  ApprovalMode,
+  WorkMode,
   Settings,
   StreamingMessageClient,
   ToolDefinition,
@@ -69,6 +71,8 @@ export interface VykorAgentConfiguration {
   model?: string;
   systemPrompt?: string;
   permissionMode?: PermissionMode;
+  approvalMode?: ApprovalMode;
+  workMode?: WorkMode;
   maxTurns?: number;
   /** Maximum tools granted by the SDK/host. Descendant agents inherit this ceiling. */
   hostToolCeiling?: string[];

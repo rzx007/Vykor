@@ -14,7 +14,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react"
 
-import type { DesktopCommandCatalogEntry, DesktopPermissionMode } from "@shared/session-types"
+import type { DesktopCommandCatalogEntry, DesktopPermissionMode, DesktopWorkMode } from "@shared/session-types"
 import type { ComposerPickerItem } from "./composer-picker-model"
 
 export type ComposerCommandContext = {
@@ -23,6 +23,7 @@ export type ComposerCommandContext = {
   canOpenReview: boolean
   pinned: boolean
   permissionMode: DesktopPermissionMode
+  workMode?: DesktopWorkMode
   hasModels: boolean
   hasEffortTiers: boolean
 }
@@ -126,8 +127,8 @@ export function toComposerCommands(
       const presentation =
         id === "pin" && context.pinned
           ? { title: "取消置顶", description: "将当前聊天移出置顶列表", icon: PinOff }
-          : id === "plan" && context.permissionMode === "plan"
-            ? { title: "退出计划模式", description: "恢复手动批准操作", icon: ShieldCheck }
+          : id === "plan" && context.workMode === "plan"
+            ? { title: "退出计划模式", description: "恢复执行，保留当前批准方式", icon: ShieldCheck }
             : definition
       return {
         id,

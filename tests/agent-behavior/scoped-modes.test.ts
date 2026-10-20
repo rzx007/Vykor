@@ -29,14 +29,14 @@ function context(runtime: Awaited<ReturnType<typeof createVykorRuntime>>, cwd: s
     children: { hasChildAgent: () => false, spawnChildAgent: async () => { throw new Error("No child in mode fixture"); }, sendChildInput: async () => { throw new Error("No child in mode fixture"); }, interruptChildAgent: async () => {}, awaitChildAgent: async () => { throw new Error("No child in mode fixture"); } },
   };
 }
-async function fixture(mode: PermissionMode, actions: Array<ToolUseBlock | ToolUseBlock[]> = []) {
+async function fixture(mode: PermissionMode, actions: Array<ToolUseBlock | ToolUseBlock[]> = [], workMode?: "execute" | "plan") {
   const cwd = directory();
   process.env.VYKOR_CONFIG_DIR = join(cwd, "config");
   const requests: StreamMessageParams[] = [];
   const approvals: string[] = [];
   const runtime = await createVykorRuntime({ cwd,
     settings: { model: "offline", apiFormat: "openai", maxTurns: 20, permission: { mode, autoApproveTools: ["Write", "EnterPlanMode", "ExitPlanMode"] }, sandbox: { enabled: false } },
-    configuration: { client: { async *streamMessage(params) {
+    configuration: { ...(workMode ? { workMode } : {}), client: { async *streamMessage(params) {
       requests.push({ ...params, messages: structuredClone(params.messages) });
       const action = actions.shift();
       for (const toolUse of action ? Array.isArray(action) ? action : [action] : []) yield { type: "tool_use_start", toolUse };
@@ -85,6 +85,15 @@ describe("scoped-mode-v1: actual checker, tools, requests and filesystem", () =>
       expect(sample.requests[1]!.system).toContain("Plan mode is enabled");
       expect(sample.requests[2]!.system).toContain(mode === "full_auto" ? "Full-auto permission mode" : "Default permission mode");
       expect(existsSync(join(sample.cwd, "config", "settings.json"))).toBe(false);
+    } finally { await sample.runtime.close(); }
+  });
+
+  it("keeps full access read-only while the user selects planning", async () => {
+    const sample = await fixture("full_access", [use("ExitPlanMode"), use("Write", { file_path: "blocked.txt", content: "forbidden" })], "plan");
+    try {
+      await run(sample);
+      expect(sample.runtime.permissionChecker.getMode!()).toBe("plan");
+      expect(existsSync(join(sample.cwd, "blocked.txt"))).toBe(false);
     } finally { await sample.runtime.close(); }
   });
 

@@ -5,6 +5,8 @@ import {
   createPromptRequestId,
   createInitialClientState,
   readSessionRuntimeConfig,
+  normalizeApprovalMode,
+  isWorkMode,
   readSessionModelUsage,
   selectSessionModelRetry,
   type CommandCatalogEntry,
@@ -59,10 +61,14 @@ const PRESENTATION_LOADING_TEXT = "Loading...";
 
 export function useServerSync(config: FrontendConfig, onError?: (message: string) => void): TuiSessionController {
   const daemon = config.daemon;
+  const initialApprovalMode = normalizeApprovalMode(daemon?.approvalMode ?? daemon?.permissionMode) ?? "ask";
+  const initialWorkMode = isWorkMode(daemon?.workMode) ? daemon.workMode : daemon?.permissionMode === "plan" ? "plan" : "execute";
   const [clientState, setClientState] = useState<VykorClientState>(() => createInitialClientState());
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [status, setStatus] = useState<Record<string, unknown>>({
-    permission_mode: daemon?.permissionMode ?? "default",
+    approval_mode: initialApprovalMode,
+    permission_mode: initialApprovalMode,
+    work_mode: initialWorkMode,
     model: daemon?.model ?? "default",
     session_mode: statusSessionMode(daemon?.sessionMode),
     ...(typeof daemon?.maxTurns === "number" ? { max_turns: daemon.maxTurns } : {}),
@@ -89,6 +95,8 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const commandCatalogRef = useRef<CommandCatalogEntry[]>([]);
   const defaultRuntimeRef = useRef<DefaultRuntimeSettings>({
     model: daemon?.model ?? "default",
+    approvalMode: initialApprovalMode,
+    workMode: initialWorkMode,
   });
   const nextSessionModeRef = useRef<"coordinator" | "direct">(statusSessionMode(daemon?.sessionMode));
   const statusRef = useRef(status);
@@ -434,7 +442,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         ...(runtime.provider ? { provider: runtime.provider } : {}),
         session_id: session.id,
         cwd: session.cwd,
-        permission_mode: typeof runtime.permissionMode === "string" ? runtime.permissionMode : current.permission_mode,
+        approval_mode: normalizeApprovalMode(runtime.approvalMode) ?? "ask",
+        permission_mode: normalizeApprovalMode(runtime.approvalMode) ?? "ask",
+        work_mode: runtime.workMode ?? "execute",
         ...(typeof runtime.maxTurns === "number" ? { max_turns: runtime.maxTurns } : {}),
         session_mode: statusSessionMode(runtime.sessionMode),
       }));
@@ -491,8 +501,15 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         const provider = stringSetting(settings.provider);
         const baseUrl = stringSetting(settings.baseUrl);
         const apiFormat = settings.apiFormat === "anthropic" || settings.apiFormat === "openai" ? settings.apiFormat : undefined;
+        const permission = settings.permission && typeof settings.permission === "object"
+          ? settings.permission as Record<string, unknown> : {};
+        const approvalMode = normalizeApprovalMode(daemon.approvalMode ?? daemon.permissionMode ?? permission.mode) ?? "ask";
+        const workMode = isWorkMode(daemon.workMode) ? daemon.workMode
+          : (daemon.permissionMode ?? permission.mode) === "plan" ? "plan" : "execute";
         defaultRuntimeRef.current = {
           model,
+          approvalMode,
+          workMode,
           ...(provider ? { provider } : {}),
           ...(baseUrl ? { baseUrl } : {}),
           ...(apiFormat ? { apiFormat } : {}),
@@ -505,7 +522,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
           model,
           ...(provider ? { provider } : {}),
           cwd,
-          permission_mode: daemon?.permissionMode ?? current.permission_mode,
+          approval_mode: approvalMode,
+          permission_mode: approvalMode,
+          work_mode: workMode,
           ...(typeof daemon?.maxTurns === "number" ? { max_turns: daemon.maxTurns } : {}),
           session_mode: statusSessionMode(daemon?.sessionMode),
         }));
@@ -526,7 +545,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       cancelled = true;
       clientRef.current = null;
     };
-  }, [activateSession, daemon?.cwd, daemon?.maxTurns, daemon?.model, daemon?.permissionMode, daemon?.pluginsEnabled, daemon?.sessionMode, daemon?.token, daemon?.url, reportError]);
+  }, [activateSession, daemon?.cwd, daemon?.maxTurns, daemon?.model, daemon?.approvalMode, daemon?.workMode, daemon?.permissionMode, daemon?.pluginsEnabled, daemon?.sessionMode, daemon?.token, daemon?.url, reportError]);
 
   useEffect(() => {
     const client = clientRef.current;
@@ -652,7 +671,8 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         provider: defaultRuntimeRef.current.provider,
         baseUrl: defaultRuntimeRef.current.baseUrl,
         apiFormat: defaultRuntimeRef.current.apiFormat,
-        permissionMode: statusRef.current.permission_mode ?? daemon?.permissionMode ?? "default",
+        approvalMode: statusRef.current.approval_mode ?? statusRef.current.permission_mode ?? initialApprovalMode,
+        workMode: statusRef.current.work_mode ?? initialWorkMode,
         maxTurns: statusRef.current.max_turns ?? daemon?.maxTurns,
         sessionMode: nextSessionModeRef.current,
         pluginsEnabled: daemon?.pluginsEnabled,
@@ -670,7 +690,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       pendingNewSessionTitleRef.current = undefined;
       return session;
     },
-    [activateSession, daemon?.cwd, daemon?.maxTurns, daemon?.model, daemon?.permissionMode, daemon?.pluginsEnabled, daemon?.sessionMode],
+    [activateSession, daemon?.cwd, daemon?.maxTurns, daemon?.model, daemon?.approvalMode, daemon?.workMode, daemon?.permissionMode, daemon?.pluginsEnabled, daemon?.sessionMode],
   );
 
   useEffect(() => {

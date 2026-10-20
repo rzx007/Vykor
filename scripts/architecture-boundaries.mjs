@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanForbiddenSurfaces } from "./forbidden-compatibility-surfaces.mjs";
+import ts from "typescript";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baselinePath = join(root, "scripts", "architecture-baseline.json");
@@ -16,14 +17,22 @@ const forbiddenPackageEdges = new Map([
 ]);
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
-const importPattern = /(?:(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?from\s+)?|import\s*\()\s*['"]([^'"]+)['"]/g;
-
-export function extractImports(source) {
-  const matches = [];
-  for (const match of source.matchAll(importPattern)) {
-    matches.push(match[1]);
+export function extractImports(source, file = "source.ts") {
+  const imports = new Set();
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false);
+  const add = (node) => {
+    if (node && ts.isStringLiteralLike(node)) imports.add(node.text);
+  };
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) add(node.moduleSpecifier);
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add(node.moduleReference.expression);
+    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) add(node.argument.literal);
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) add(node.arguments[0]);
+    ts.forEachChild(node, visit);
   }
-  return matches;
+  visit(ast);
+  return [...imports];
 }
 
 export function checkImportBoundary(fromFile, specifier) {
@@ -130,14 +139,14 @@ export function checkImportBoundary(fromFile, specifier) {
 
   const isDesktopRenderer = /(?:^|\/)apps\/desktop\/src\/renderer\//.test(normalized);
   if (isDesktopRenderer) {
-    if (/(?:^|\/)apps\/desktop\/src\/main\//.test(specifier) || /(?:^|\/|\.\.\/)main(?:\/|\.|$)/.test(specifier)) {
+    if (specifier.startsWith("@main/") || /(?:^|\/)apps\/desktop\/src\/main\//.test(specifier) || /(?:^|\/|\.\.\/)main(?:\/|$)/.test(specifier)) {
       return [`${fromFile} must not depend on Desktop main`];
     }
   }
 
   const isDesktopMain = /(?:^|\/)apps\/desktop\/src\/main\//.test(normalized);
   if (isDesktopMain) {
-    if (/(?:^|\/)apps\/desktop\/src\/renderer\//.test(specifier) || /(?:^|\/|\.\.\/)renderer(?:\/|\.|$)/.test(specifier)) {
+    if (specifier.startsWith("@renderer/") || /(?:^|\/)apps\/desktop\/src\/renderer\//.test(specifier) || /(?:^|\/|\.\.\/)renderer(?:\/|$)/.test(specifier)) {
       return [`${fromFile} must not depend on Desktop renderer`];
     }
   }
@@ -201,11 +210,11 @@ export function checkAttachmentLayout(path, source) {
   return errors;
 }
 
-function workspacePackagePaths() {
+function workspacePackagePaths(scanRoot = root) {
   return ["packages", "apps"].flatMap((parent) =>
-    readdirSync(join(root, parent), { withFileTypes: true })
+    readdirSync(join(scanRoot, parent), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => join(root, parent, entry.name, "package.json"))
+      .map((entry) => join(scanRoot, parent, entry.name, "package.json"))
       .filter(existsSync),
   );
 }
@@ -247,6 +256,53 @@ export function collectAttachmentLayoutErrors(scanRoot = root) {
   );
 }
 
+/** Report dependency paths that return to a package already on the current path. */
+export function findDependencyCycles(graph) {
+  const visited = new Set();
+  const active = new Set();
+  const stack = [];
+  const cycles = [];
+  function visit(name) {
+    if (active.has(name)) {
+      cycles.push([...stack.slice(stack.indexOf(name)), name]);
+      return;
+    }
+    if (visited.has(name)) return;
+    visited.add(name);
+    active.add(name);
+    stack.push(name);
+    for (const dependency of graph.get(name) ?? []) visit(dependency);
+    stack.pop();
+    active.delete(name);
+  }
+  for (const name of graph.keys()) visit(name);
+  return cycles;
+}
+
+/** Include source edges so an undeclared or type-only import cannot hide a cycle. */
+export function collectWorkspaceCycleErrors(scanRoot = root) {
+  const packages = workspacePackagePaths(scanRoot).map((file) => ({
+    directory: resolve(file, ".."),
+    json: JSON.parse(readFileSync(file, "utf8")),
+  }));
+  const names = new Set(packages.map(({ json }) => json.name));
+  const graph = new Map(packages.map(({ json }) => [
+    json.name, new Set(packageDependencies(json).filter((name) => names.has(name))),
+  ]));
+  for (const owner of packages) {
+    for (const file of sourceFiles(join(owner.directory, "src"))) {
+      for (const specifier of extractImports(readFileSync(file, "utf8"), file)) {
+        const targetPath = specifier.startsWith(".") ? resolve(file, "..", specifier) : undefined;
+        const target = targetPath
+          ? packages.find(({ directory }) => targetPath === directory || targetPath.startsWith(directory + sep))
+          : packages.find(({ json }) => specifier === json.name || specifier.startsWith(json.name + "/"));
+        if (target && target !== owner) graph.get(owner.json.name).add(target.json.name);
+      }
+    }
+  }
+  return findDependencyCycles(graph).map((cycle) => "Workspace dependency cycle: " + cycle.join(" -> "));
+}
+
 function collectArchitectureErrors() {
   const errors = [];
   for (const path of workspacePackagePaths()) {
@@ -257,7 +313,7 @@ function collectArchitectureErrors() {
       }
     }
   }
-  errors.push(...collectAttachmentLayoutErrors());
+  errors.push(...collectAttachmentLayoutErrors(), ...collectWorkspaceCycleErrors());
 
   const boundaryFiles = [
     ...sourceFiles(join(root, "packages", "services", "src", "sessions")),
@@ -279,7 +335,7 @@ function collectArchitectureErrors() {
   for (const path of boundaryFiles) {
     const rel = relative(root, path);
     const content = readFileSync(path, "utf8");
-    for (const specifier of extractImports(content)) {
+    for (const specifier of extractImports(content, rel)) {
       for (const error of checkImportBoundary(rel, specifier)) {
         errors.push(error);
       }

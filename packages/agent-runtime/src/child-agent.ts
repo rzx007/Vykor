@@ -331,7 +331,8 @@ export class AgentChildManager implements AgentChildDirectory {
       ...(system ? { internalTextOnly: true } : {}),
     });
     // Persist the same constrained mode used by the live child, never the raw request.
-    const resolvedSpawn = { ...input, permissionMode: childOptions.permissionMode };
+    const resolvedSpawn = { ...input, approvalMode: childOptions.approvalMode, workMode: childOptions.workMode, permissionMode: childOptions.permissionMode === "plan" ? "plan" as const
+      : childOptions.permissionMode === "full_auto" || childOptions.permissionMode === "full_access" ? "full_auto" as const : "default" as const };
     const handle = new ChildHandle(this, () => record);
     Object.assign(record, {
       id: childId,

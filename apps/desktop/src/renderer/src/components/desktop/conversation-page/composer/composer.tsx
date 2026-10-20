@@ -11,6 +11,7 @@ import type {
   DesktopModel,
   DesktopPluginCatalogEntry,
   DesktopPermissionMode,
+  DesktopWorkMode,
   DesktopSessionRecord,
 } from "@shared/session-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
@@ -37,6 +38,9 @@ export function Composer({
   selectedProvider,
   modelLabel,
   permissionMode,
+  workMode = "execute",
+  modeChangePending = false,
+  onWorkModeChange,
   effort,
   skills = [],
   plugins = [],
@@ -85,6 +89,9 @@ export function Composer({
   selectedProvider: string | null
   modelLabel: string
   permissionMode: DesktopPermissionMode
+  workMode?: DesktopWorkMode
+  modeChangePending?: boolean
+  onWorkModeChange?: (mode: DesktopWorkMode) => void
   effort: string | null
   skills?: readonly ComposerSkill[]
   plugins?: readonly DesktopPluginCatalogEntry[]
@@ -146,7 +153,7 @@ export function Composer({
   }
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
   const closePicker = (): void => setActivePicker(null)
-  const allowSubmit = canSubmit ?? draft.items.length > 0
+  const allowSubmit = !modeChangePending && (canSubmit ?? draft.items.length > 0)
   const attachDisabled = attachmentReadOnly || sending
   const contextItems: ContextPickerItem[] = [
     {
@@ -306,7 +313,7 @@ export function Composer({
         onContextPickerOpenChange={setContextPickerOpen}
         onContextAction={(item) => {
           if (item.action.kind === "files") onPickFiles?.()
-          if (item.action.kind === "plan") onSelectPermissionMode("plan")
+          if (item.action.kind === "plan" && !modeChangePending) onWorkModeChange?.("plan")
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
       />
@@ -329,6 +336,17 @@ export function Composer({
         >
           <IconPlus className="size-5" />
         </Button>
+        {workMode === "plan" ? (
+          <div className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pr-3 text-xs">
+            <Button type="button" variant="ghost" size="icon-sm" className="rounded-full"
+              disabled={sending || modeChangePending} aria-label="退出计划模式"
+              onClick={() => onWorkModeChange?.("execute")}>
+              <X className="size-3.5" />
+            </Button>
+            <ShieldCheck className="size-3.5" />
+            计划模式
+          </div>
+        ) : null}
         {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
             <Button
@@ -425,6 +443,7 @@ export function Composer({
                 type="button"
                 variant="ghost"
                 className="ml-1 h-8 max-w-36 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground"
+                disabled={modeChangePending}
               />
             }
           >
@@ -440,6 +459,7 @@ export function Composer({
           >
             <PermissionModeMenu
               selected={permissionMode}
+              disabled={modeChangePending}
               onSelect={(mode) => {
                 onSelectPermissionMode(mode)
                 closePicker()

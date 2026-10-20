@@ -9,6 +9,7 @@ import { discoverInstalledNativePlugins, loadNativePlugin, verifyInstalledNative
 import { isCoordinatorMode } from "@vykor/coordinator";
 import { resolveBun } from "./resolveBun";
 import { VERSION } from "../version";
+import { resolveRuntimeModes } from "../runtime-modes.js";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
@@ -27,6 +28,8 @@ interface MainOptions {
   name?: string;
   provider?: string;
   permissionMode?: string;
+  workMode?: string;
+  plan?: boolean;
   coordinator?: boolean;
   maxTurns?: number;
   systemPrompt?: string;
@@ -235,7 +238,9 @@ export async function mainAction(
   const overrides: Partial<Settings> = {};
   if (options.model) overrides.model = options.model;
   if (options.apiFormat) overrides.apiFormat = options.apiFormat as Settings["apiFormat"];
-  if (options.permissionMode) overrides.permission = { mode: options.permissionMode as Settings["permission"]["mode"] };
+  if (options.permissionMode || options.dangerouslySkipPermissions) {
+    overrides.permission = { mode: resolveRuntimeModes(options, undefined).approvalMode };
+  }
   if (options.maxTurns) overrides.maxTurns = options.maxTurns;
   if (options.plugins === false) overrides.plugins = { enabled: false };
 
@@ -278,6 +283,8 @@ async function runPrintMode(
     outputFormat: options.outputFormat,
     dangerouslySkipPermissions: options.dangerouslySkipPermissions,
     permissionMode: options.permissionMode,
+    workMode: options.workMode,
+    plan: options.plan,
     coordinator: options.coordinator,
     maxTurns: options.maxTurns ?? settings.maxTurns,
     systemPrompt: options.systemPrompt,
@@ -341,7 +348,7 @@ async function runTuiMode(
       token: daemon.token,
       cwd: options.cwd ? path.resolve(options.cwd) : process.cwd(),
       model: options.model ?? settings.model,
-      permissionMode: options.permissionMode ?? settings.permission.mode,
+      ...resolveRuntimeModes(options, settings.permission.mode),
       maxTurns: options.maxTurns ?? settings.maxTurns,
       sessionMode: isCoordinatorSessionRequested(options) ? "coordinator" : null,
       pluginsEnabled: options.plugins === false ? false : settings.plugins?.enabled,

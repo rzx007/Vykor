@@ -4,7 +4,7 @@ import { DesktopPermissionSettingsService } from "./permission-settings-service"
 
 function setup() {
   let settings: Record<string, unknown> = {
-    permission: { mode: "default", deniedTools: ["Write"] },
+    permission: { mode: "ask", deniedTools: ["Write"] },
   }
   let writes = 0
   const client = {
@@ -44,30 +44,30 @@ describe("DesktopPermissionSettingsService", () => {
     const previous = await ctx.service.snapshot()
     const result = await ctx.service.update({
       expectedPermission: previous.permission,
-      permission: { ...previous.permission, mode: "plan" },
+      permission: { ...previous.permission, mode: "ask" },
     })
-    expect(result.permission).toEqual({ mode: "plan", deniedTools: ["Write"] })
+    expect(result.permission).toEqual({ mode: "ask", deniedTools: ["Write"] })
     expect((await ctx.service.snapshot()).permission).toEqual(result.permission)
   })
   it("rejects stale edits without overwriting other settings", async () => {
     const ctx = setup()
     const previous = await ctx.service.snapshot()
-    ctx.change({ permission: { mode: "plan", deniedTools: ["Shell"] } })
+    ctx.change({ permission: { mode: "ask", deniedTools: ["Shell"] } })
     await expect(
       ctx.service.update({
         expectedPermission: previous.permission,
-        permission: { mode: "full_auto" },
+        permission: { mode: "auto_review" },
       })
     ).rejects.toThrow("重新读取")
     expect(ctx.writes()).toBe(0)
-    expect(ctx.current().permission).toEqual({ mode: "plan", deniedTools: ["Shell"] })
+    expect(ctx.current().permission).toEqual({ mode: "ask", deniedTools: ["Shell"] })
   })
   it("rejects invalid rules before any write", async () => {
     const ctx = setup()
     await expect(
       ctx.service.update({
-        expectedPermission: { mode: "default" },
-        permission: { mode: "default", deniedTools: [""] },
+        expectedPermission: { mode: "ask" },
+        permission: { mode: "ask", deniedTools: [""] },
       })
     ).rejects.toThrow()
     expect(ctx.writes()).toBe(0)
@@ -76,7 +76,7 @@ describe("DesktopPermissionSettingsService", () => {
     const ctx = setup()
     expect(
       await ctx.service.check({
-        permission: { mode: "full_auto", deniedCommands: ["rm -rf*"] },
+        permission: { mode: "auto_review", deniedCommands: ["rm -rf*"] },
         toolName: "Shell",
         command: "rm -rf data",
         cwd: process.cwd(),
@@ -86,7 +86,7 @@ describe("DesktopPermissionSettingsService", () => {
   })
   it("refuses WSL isolation instead of saving an unenforced combination", async () => {
     const ctx = setup()
-    ctx.change({ permission: { mode: "default" }, agentEnvironment: { kind: "wsl" } })
+    ctx.change({ permission: { mode: "ask" }, agentEnvironment: { kind: "wsl" } })
     const previous = await ctx.service.snapshot()
     expect(previous.isolationAvailable).toBe(false)
     await expect(

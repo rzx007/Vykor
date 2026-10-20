@@ -189,7 +189,7 @@ it("keeps goal limits hidden until settings open and preserves submit and exit b
     selectedModel: "test",
     selectedProvider: null,
     modelLabel: "test",
-    permissionMode: "default" as const,
+    permissionMode: "ask" as const,
     effort: null,
     canSubmit: true,
     onDraftChange: vi.fn(),
@@ -297,7 +297,7 @@ it("provides explicit save and cancel actions while editing a prefilled goal", a
     return createElement("div", null,
       !editing ? createElement("button", { onClick: () => changeMode(true) }, "编辑目标") : null,
       createElement(Composer, { id: "edit-goal", draft, sending: false, goalMode: editing, goalEditing: editing,
-        models: [], selectedModel: "test", selectedProvider: null, modelLabel: "test", permissionMode: "default", effort: null,
+        models: [], selectedModel: "test", selectedProvider: null, modelLabel: "test", permissionMode: "ask", effort: null,
         onDraftChange: setDraft, onSubmit, onGoalModeChange: changeMode, onSelectModel: vi.fn(), onSelectPermissionMode: vi.fn(), onSelectEffort: vi.fn() }))
   }
   await act(async () => root.render(createElement(EditableGoal)))

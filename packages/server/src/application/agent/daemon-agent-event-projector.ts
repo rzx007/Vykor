@@ -293,7 +293,9 @@ export class DaemonAgentEventProjector {
         sessionMode: "direct" as const,
         model,
         ...(spawn.systemPrompt !== undefined ? { systemPrompt: spawn.systemPrompt } : {}),
-        ...(spawn.permissionMode !== undefined ? { permissionMode: spawn.permissionMode } : {}),
+        approvalMode: spawn.approvalMode ?? (spawn.permissionMode === "default" && parentRuntime.approvalMode === "full_access"
+          ? "ask" as const : parentRuntime.approvalMode),
+        workMode: parentRuntime.workMode === "plan" || spawn.workMode === "plan" || spawn.permissionMode === "plan" ? "plan" as const : "execute" as const,
         ...(spawn.allowedTools !== undefined ? { allowedTools: spawn.allowedTools } : {}),
         ...(spawn.disallowedTools !== undefined ? { disallowedTools: spawn.disallowedTools } : {}),
         ...(spawn.maxTurns !== undefined ? { maxTurns: spawn.maxTurns } : {}),

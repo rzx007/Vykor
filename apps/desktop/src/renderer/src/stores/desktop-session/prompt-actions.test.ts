@@ -738,7 +738,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
     const primaryDocument = composerDocument([{ type: "text", text: "A draft" }])
     useDesktopSessionStore.setState({
       activeSessionId: "session-a", sessionView: primary,
-      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "plan",
+      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "ask",
       composerDraftsByScope: { "session:session-a": { document: primaryDocument, attachments: [] } },
       sessionRuntimes: { "session-b": {
         ...createEmptySessionRuntime(),
@@ -752,7 +752,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
     const state = useDesktopSessionStore.getState()
     expect(state).toMatchObject({
       activeSessionId: "session-a", sessionView: primary,
-      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "plan",
+      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "ask",
     })
     expect(state.composerDraftsByScope["session:session-a"]?.document).toEqual(primaryDocument)
     expect(readPersistedActiveSessionId()).toBe("session-a")
@@ -807,6 +807,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
 
 describe("desktop session store prompt intent boundaries", () => {
   beforeEach(() => {
+    resetDesktopSessionStore()
     useDesktopSessionStore.setState({
       activeSessionId: null,
       sessionView: null,
@@ -1128,6 +1129,20 @@ describe("desktop session store prompt intent boundaries", () => {
       content: "retry me",
       phase: "accepted",
     })
+  })
+
+  it("waits for the pending mode save before editing and resubmitting", async () => {
+    const editLatestPrompt = vi.fn(async () => undefined)
+    vi.stubGlobal("window", { desktop: { sessions: { editLatestPrompt } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-1", pendingModeChanges: { "session-1": true } })
+
+    await useDesktopSessionStore.getState().editLatestMessage("message-1", "replacement")
+    expect(editLatestPrompt).not.toHaveBeenCalled()
+    expect(sessionRuntime("session-1").pendingPromptEdit).toBeNull()
+
+    useDesktopSessionStore.setState({ pendingModeChanges: {} })
+    await useDesktopSessionStore.getState().editLatestMessage("message-1", "replacement")
+    expect(editLatestPrompt).toHaveBeenCalledTimes(1)
   })
 
   it("includes the selected source message when explicitly editing", async () => {

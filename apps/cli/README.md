@@ -53,7 +53,7 @@ vk --dry-run
 
 ```bash
 vk -m <model> "你的问题"
-vk --provider <name> --permission-mode full_auto "重构这段代码"
+vk --provider <name> --permission-mode auto_review "重构这段代码"
 vk --cwd /path/to/project
 vk --tui "带初始提示打开 TUI"
 ```
@@ -67,7 +67,9 @@ vk --tui "带初始提示打开 TUI"
 | `--tui`                           | 显式启动 TUI（无 prompt 时默认已是 TUI）       |
 | `-m, --model`                     | 模型名                                |
 | `--provider`                      | 强制指定 Provider                      |
-| `--permission-mode`               | `default` | `plan` | `full_auto`   |
+| `--permission-mode`               | `ask` / `auto_review` / `full_access` |
+| `--plan`                          | 独立开启计划模式，保留当前授权档位 |
+| `--work-mode`                     | `execute` / `plan` |
 | `--max-turns`                     | 最大 agent 轮次                        |
 | `--effort`                        | `low` | `medium` | `high`          |
 | `--no-plugins`                    | 本次会话不加载已安装插件贡献                     |

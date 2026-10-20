@@ -1,5 +1,6 @@
 import { resolve } from "node:path"
-import type { DesktopModel, DesktopPermissionMode, SendDesktopPromptInput, SessionUserInputItem } from "@shared/session-types"
+import { normalizeApprovalMode } from "@vykor/client"
+import type { DesktopModel, DesktopPermissionMode, DesktopWorkMode, SendDesktopPromptInput, SessionUserInputItem } from "@shared/session-types"
 import type { SessionOperationsClient } from "./session-operations"
 
 export function resolveRequiredPath(value: unknown): string {
@@ -12,13 +13,18 @@ export function requireString(value: unknown, label: string): string {
 }
 
 export function normalizePermissionMode(value: unknown): DesktopPermissionMode | undefined {
-  return value === "default" || value === "plan" || value === "full_auto" ? value : undefined
+  return normalizeApprovalMode(value)
 }
 
 export function requirePermissionMode(value: unknown): DesktopPermissionMode {
-  const mode = normalizePermissionMode(value)
-  if (!mode) throw new Error("权限模式必须是 default、plan 或 full_auto。")
-  return mode
+  if (value !== "ask" && value !== "auto_review" && value !== "full_access")
+    throw new Error("批准方式必须是 ask、auto_review 或 full_access。")
+  return value
+}
+
+export function requireWorkMode(value: unknown): DesktopWorkMode {
+  if (value !== "execute" && value !== "plan") throw new Error("工作模式必须是 execute 或 plan。")
+  return value
 }
 
 export function optionalProvider(value: unknown): string | undefined {

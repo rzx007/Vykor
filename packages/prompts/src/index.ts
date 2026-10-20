@@ -29,7 +29,7 @@ export {
   type UserProfilePendingUpdate,
 } from "./personal-prompt-files.js";
 
-export type PromptPermissionMode = "default" | "plan" | "full_auto";
+export type PromptPermissionMode = "default" | "plan" | "full_auto" | "ask" | "auto_review" | "full_access";
 
 export interface EnvironmentInfo {
   osName: string;
@@ -313,7 +313,9 @@ export function buildPermissionModeSection(mode: PromptPermissionMode): string {
       "Plan mode is enabled. Treat this session as read-only planning and analysis. " +
       "Do not call mutating tools such as file writes, edits, package installs, " +
       "state-changing shell commands, or task-spawning actions unless the user exits plan mode.";
-  } else if (mode === "full_auto") {
+  } else if (mode === "auto_review") {
+    guidance = "Automatic approval review is enabled. Operations needing authorization are independently reviewed; do not claim approval, bypass a refusal, or expand access. Continue with allowed work and ask the user when the reviewer requires it.";
+  } else if (mode === "full_auto" || mode === "full_access") {
     guidance =
       "Full-auto permission mode is enabled. You may use mutating tools when they are necessary " +
       "for the user's request, while still keeping changes scoped and intentional.";

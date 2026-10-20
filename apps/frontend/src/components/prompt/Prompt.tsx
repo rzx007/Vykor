@@ -1,3 +1,4 @@
+import { normalizeApprovalMode } from "@vykor/client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useKeyboard } from "@opentui/react";
 import { TextAttributes, decodePasteBytes, stripAnsiSequences } from "@opentui/core";
@@ -32,13 +33,13 @@ export type PromptProps = {
 const DEFAULT_PLACEHOLDER = 'Ask anything... "Fix broken tests"';
 
 const MODE_LABELS: Record<string, string> = {
-  default: "Default",
-  full_auto: "Auto",
-  plan: "Plan",
+  ask: "Ask",
+  auto_review: "Auto review",
+  full_access: "Full access",
 };
 
 function getModeLabel(mode: string): string {
-  return MODE_LABELS[mode] ?? mode;
+  return MODE_LABELS[normalizeApprovalMode(mode) ?? "ask"] ?? mode;
 }
 
 export function Prompt({

@@ -21,7 +21,7 @@ function makePrompt(overrides: Partial<React.ComponentProps<typeof Prompt>> = {}
     <ThemeProvider>
       <Prompt
         busy={false}
-        mode="default"
+        mode="ask"
         model="claude-3-opus"
         history={[]}
         slashCommands={sampleCommands}
@@ -49,8 +49,8 @@ test("renders placeholder and mode/model meta row", async () => {
   // Placeholder text
   expect(frame).toContain("Ask anything");
 
-  // Meta info row: Default (mode label) + model
-  expect(frame).toContain("Default");
+  // Meta info row: Ask (mode label) + model
+  expect(frame).toContain("Ask");
   expect(frame).toContain("claude-3-opus");
 
   renderer.destroy();
@@ -98,19 +98,19 @@ test("prompt keeps the same height for single-line edits and clear", async () =>
     await testRender(makePrompt(), { width: 80, height: 24 });
 
   await renderOnce();
-  const initialModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("Default"));
+  const initialModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("claude-3-opus"));
 
   await act(async () => {
     await mockInput.typeText("hello");
   });
   await waitForFrame((f) => f.includes("hello"));
-  const typedModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("Default"));
+  const typedModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("claude-3-opus"));
 
   await act(async () => {
     mockInput.pressEnter();
   });
   await waitForFrame((f) => f.includes("Ask anything"));
-  const clearedModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("Default"));
+  const clearedModeRow = captureCharFrame().split("\n").findIndex((line) => line.includes("claude-3-opus"));
 
   expect(typedModeRow).toBe(initialModeRow);
   expect(clearedModeRow).toBe(initialModeRow);

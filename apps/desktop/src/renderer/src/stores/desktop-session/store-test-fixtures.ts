@@ -35,7 +35,7 @@ export const refreshedBootstrap: DesktopBootstrapData = {
   ],
   defaultModel: "deepseek-chat",
   defaultProvider: "deepseek",
-  defaultPermissionMode: "default",
+  defaultPermissionMode: "ask",
   attachments: {
     daemonSupported: false,
     interactionEnabled: false,

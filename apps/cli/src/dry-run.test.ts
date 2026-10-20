@@ -96,7 +96,8 @@ describe("buildDryRunReport", () => {
     expect(report.keySource).toBe("credentials.json [deepseek]");
     expect(report.baseURL).toBe("https://api.deepseek.com/v1");
     expect(report.apiFormat).toBe("openai");
-    expect(report.permissionMode).toBe("default");
+    expect(report.approvalMode).toBe("ask");
+    expect(report.workMode).toBe("execute");
     expect(report.toolCount).toBe(3);
     expect(report.skillCount).toBe(5);
     expect(report.pluginsEnabled).toBe(true);
@@ -135,7 +136,8 @@ describe("buildDryRunReport", () => {
     });
     expect(report.model).toBe("gpt-5");
     expect(report.provider).toBe("anthropic");
-    expect(report.permissionMode).toBe("plan");
+    expect(report.approvalMode).toBe("ask");
+    expect(report.workMode).toBe("plan");
     expect(report.baseURL).toBe("https://override/v1");
     expect(report.apiFormat).toBe("anthropic");
   });

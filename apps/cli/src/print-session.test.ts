@@ -430,7 +430,7 @@ describe("runPrintSession", () => {
     stderrSpy.mockRestore();
   });
 
-  it("writes permissionMode and maxTurns into createSession metadata", async () => {
+  it("writes independent approval/work modes and maxTurns into createSession metadata", async () => {
     const createSession = vi.fn(async () => ({
       id: "s1",
       cwd: "/tmp",
@@ -507,7 +507,8 @@ describe("runPrintSession", () => {
       metadata: {
         runtime: {
           model: "m",
-          permissionMode: "plan",
+          approvalMode: "ask",
+          workMode: "plan",
           maxTurns: 7,
           systemPrompt: "be brief",
           allowedTools: ["Read", "Glob"],

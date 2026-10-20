@@ -84,3 +84,15 @@ permission resolver 只存在于创建它的 daemon 进程。新 daemon 启动�
 - callback 未配置或失效时绝不默认批准。
 - daemon callback 必须原样传递 `approved | denied | expired`，不得用 boolean 压平状态。
 - `permission.resolved` 在 callback settle 后发布，供日志与 projection 使用。
+
+## 三档授权与独立计划模式
+
+当前会话在 `metadata.runtime.approvalMode` 保存 `ask | auto_review | full_access`，在 `workMode` 保存 `execute | plan`。计划限制先于普通审批，进入、退出计划都保留授权选择。
+
+`auto_review` 将尚需审批的具体操作交给无工具的独立模型请求，决定和理由保存在授权记录的 `payload.approvalReview`。自动批准仅限一次；格式错误、超时、未知工具、凭据资料和缺可靠隔离的命令转用户确认。人工先答、取消及旧修订结果不得再次结算。
+
+`full_access` 使用当前会话的执行设置副本，统一传给文件、网络、终端和后台任务，不修改全局沙箱。现有禁止规则和计划限制继续先行。
+
+职责分工：`protocol` 定义状态和审查数据格式；`core` 定义工具审批请求；`agent-runtime` 在内部解析模型与凭据，只对外提供审查器；`server` 读取可信用户输入、保存操作参数快照并处理审批结果；`services` 保存记录和事件。审批业务服务通过注入的 `review` 函数调用审查，不导入运行时实现类型。
+
+架构检查同时读取包声明和实际源码导入，包含纯类型导入、动态导入及相对路径跨包引用；发现包依赖形成闭环时失败。

@@ -4,6 +4,8 @@ import type {
   CreateSessionGoalInput,
   UpdateSessionGoalInput,
   GoalActionInput,
+  ApprovalMode,
+  WorkMode,
 } from "@vykor/client"
 
 export type { SessionUserInputItem, SessionGoal } from "@vykor/client"
@@ -195,7 +197,8 @@ export interface DesktopPermissionRequest {
   updatedAt: number
 }
 
-export type DesktopPermissionMode = "default" | "plan" | "full_auto"
+export type DesktopPermissionMode = ApprovalMode
+export type DesktopWorkMode = WorkMode
 
 export type DesktopWorkspaceMode = "project" | "outside_project"
 
@@ -357,6 +360,7 @@ interface CreateDesktopSessionBaseInput {
   model: string
   provider?: string
   permissionMode?: DesktopPermissionMode
+  workMode?: DesktopWorkMode
   effort?: string
   taskLocation?: "current" | "worktree"
 }
@@ -465,7 +469,8 @@ export interface UpdateDesktopSessionModelInput {
 
 export interface UpdateDesktopSessionPermissionModeInput {
   sessionId: string
-  permissionMode: DesktopPermissionMode
+  permissionMode?: DesktopPermissionMode
+  workMode?: DesktopWorkMode
 }
 
 export interface UpdateDesktopSessionEffortInput {

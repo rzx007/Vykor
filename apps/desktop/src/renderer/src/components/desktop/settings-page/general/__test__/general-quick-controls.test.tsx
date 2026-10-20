@@ -10,7 +10,7 @@ vi.mock("@renderer/stores/desktop-session", () => ({
 }))
 import { DefaultPermissionControl, RuntimeDefaultControl } from "../general-quick-controls"
 let container: HTMLDivElement, root: Root
-const permission = { mode: "default" as const, deniedTools: ["Shell"] }
+const permission = { mode: "ask" as const, deniedTools: ["Shell"] }
 const update = vi.fn(async (input: { permission: typeof permission }) => ({
   permission: input.permission,
 }))
@@ -51,17 +51,17 @@ async function selectOption(label: string, option: string) {
       .click()
   )
 }
-it("requires confirmation for auto approval and preserves existing restrictions", async () => {
+it("requires confirmation for full access and preserves existing restrictions", async () => {
   await act(async () => root.render(<DefaultPermissionControl />))
-  await selectOption("默认批准方式", "自动批准")
+  await selectOption("默认批准方式", "完全访问权限")
   expect(update).not.toHaveBeenCalled()
   await act(async () =>
     [...document.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "启用自动批准")!
+      .find((button) => button.textContent === "启用完全访问权限")!
       .click()
   )
   expect(update).toHaveBeenCalledWith({
-    permission: { ...permission, mode: "full_auto" },
+    permission: { ...permission, mode: "full_access" },
     expectedPermission: permission,
   })
 })

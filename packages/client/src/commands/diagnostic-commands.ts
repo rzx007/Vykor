@@ -1,4 +1,4 @@
-import type { JobSnapshot } from "@vykor/protocol";
+import { normalizeApprovalMode, type JobSnapshot } from "@vykor/protocol";
 import { hasActiveRun, type SessionCommandHost, type SlashLine } from "./session-commands.js";
 
 type ReadPresentation = (key: string, title: string, load: () => Promise<string>) => Promise<void>;
@@ -23,7 +23,8 @@ export async function handleDiagnosticCommand(
       `  session: ${statusSessionId ?? "(none)"}`,
       `  model:   ${model ?? "(unknown)"}`,
       `  cwd:     ${cwd || "(unknown)"}`,
-      `  mode:    ${permissionMode ?? "default"}`,
+      `  approval: ${normalizeApprovalMode(host.approvalMode ?? permissionMode) ?? "ask"}`,
+      `  work:     ${host.workMode ?? (permissionMode === "plan" ? "plan" : "execute")}`,
       `  busy:    ${busy || hasActiveRun(clientState, sessionId) ? "yes" : "no"}`,
     ].join("\n"));
     return "handled";

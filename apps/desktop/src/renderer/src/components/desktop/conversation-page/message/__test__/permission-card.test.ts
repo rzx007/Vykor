@@ -5,6 +5,53 @@ import { describe, expect, it, vi } from "vitest"
 import { PermissionCard } from "../message-block"
 
 describe("PermissionCard", () => {
+  it.each([
+    ["reviewing", "正在自动审查"],
+    ["approved", "已自动批准"],
+    ["ask_user", "需要你确认"],
+    ["denied", "已拒绝"],
+    ["timed_out", "审查超时"],
+  ])("shows automatic review state %s and its escaped reason", (status, title) => {
+    const html = renderToStaticMarkup(createElement(PermissionCard, {
+      permission: {
+        id: "review", sessionId: "session", toolName: "Shell", status: "pending",
+        payload: { approvalReview: { status, startedAt: 1, reason: "<script>reason</script>" } },
+        createdAt: 1, updatedAt: 1,
+      },
+      onReply: vi.fn(),
+    }))
+    expect(html).toContain(title)
+    expect(html).toContain("&lt;script&gt;reason")
+    expect(html).not.toContain("<script>")
+  })
+
+  it.each(["approved", "denied", "expired"] as const)("shows settled %s before a pending review status", (status) => {
+    const html = renderToStaticMarkup(createElement(PermissionCard, {
+      permission: {
+        id: "review", sessionId: "session", toolName: "Shell", status,
+        payload: { approvalReview: { status: "reviewing", startedAt: 1 } },
+        createdAt: 1, updatedAt: 1,
+      },
+      onReply: vi.fn(),
+    }))
+    expect(html).toContain({ approved: "已批准", denied: "已拒绝", expired: "请求已失效" }[status])
+    expect(html).not.toContain("正在自动审查")
+    expect(html).not.toContain("<button")
+  })
+
+  it("hides decision buttons for a settled automatic approval", () => {
+    const html = renderToStaticMarkup(createElement(PermissionCard, {
+      permission: {
+        id: "review", sessionId: "session", toolName: "Shell", status: "approved",
+        payload: { approvalReview: { status: "approved", startedAt: 1, reason: "符合已授权任务" } },
+        createdAt: 1, updatedAt: 1,
+      },
+      onReply: vi.fn(),
+    }))
+    expect(html).toContain("已自动批准")
+    expect(html).not.toContain("<button")
+  })
+
   it("disables both decisions and shows the scoped error while a reply is pending", () => {
     const html = renderToStaticMarkup(
       createElement(PermissionCard, {

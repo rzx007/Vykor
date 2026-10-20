@@ -19,6 +19,7 @@ import { isCoordinatorMode } from "@vykor/coordinator";
 
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { EventRenderer } from "./renderer.js";
+import { resolveRuntimeModes } from "./runtime-modes.js";
 
 export interface PrintSessionOptions {
   model?: string;
@@ -27,6 +28,8 @@ export interface PrintSessionOptions {
   outputFormat?: string;
   dangerouslySkipPermissions?: boolean;
   permissionMode?: string;
+  workMode?: string;
+  plan?: boolean;
   coordinator?: boolean;
   maxTurns?: number;
   systemPrompt?: string;
@@ -45,9 +48,7 @@ export function buildPrintSessionMetadata(
   settings: Settings,
   options: PrintSessionOptions,
 ): Record<string, unknown> {
-  const permissionMode = options.dangerouslySkipPermissions
-    ? "full_auto"
-    : options.permissionMode ?? settings.permission?.mode;
+  const modes = resolveRuntimeModes(options, settings.permission?.mode);
   const maxTurns = options.maxTurns ?? settings.maxTurns;
   const systemPrompt = options.systemPrompt ?? settings.systemPrompt;
   const effort = options.effort ?? settings.effort;
@@ -63,7 +64,7 @@ export function buildPrintSessionMetadata(
     provider: settings.provider,
     baseUrl: settings.baseUrl,
     apiFormat: settings.apiFormat,
-    permissionMode: typeof permissionMode === "string" && permissionMode ? permissionMode as "default" | "plan" | "full_auto" : undefined,
+    ...modes,
     maxTurns: typeof maxTurns === "number" ? maxTurns : undefined,
     systemPrompt: typeof systemPrompt === "string" && systemPrompt ? systemPrompt : undefined,
     allowedTools: allowedTools && allowedTools.length > 0 ? allowedTools : undefined,

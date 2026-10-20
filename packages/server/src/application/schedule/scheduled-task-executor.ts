@@ -69,7 +69,8 @@ export class ScheduledTaskExecutor {
           metadata: {
             ...(outsideProject ? { desktop: { workspaceMode: "outside_project" } } : {}),
             runtime: {
-              model, permissionMode: permissionMode(task.permissionProfile.mode),
+              model, approvalMode: task.permissionProfile.mode === "full_access" ? "full_access" : "ask",
+              workMode: task.permissionProfile.mode === "read_only" ? "plan" : "execute",
               ...(isEffort(task.effort) ? { effort: task.effort } : {}),
               ...(task.permissionProfile.allowedTools?.length ? { allowedTools: task.permissionProfile.allowedTools } : {}),
               ...(deniedTools.size ? { disallowedTools: [...deniedTools] } : {}),

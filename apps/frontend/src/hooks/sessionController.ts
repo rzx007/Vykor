@@ -3,7 +3,7 @@ import type {
   SelectOptionPayload,
   TranscriptItem,
 } from "../types";
-import type { JobSnapshot, ModelProviderInfo, SessionModelRetryState, SessionModelUsageSummary } from "@vykor/client";
+import type { ApprovalMode, JobSnapshot, ModelProviderInfo, SessionModelRetryState, SessionModelUsageSummary } from "@vykor/client";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 
 export type JobRequestAction =
@@ -20,7 +20,7 @@ export type TuiAction =
   | { type: "permission_response"; request_id: string; allowed: boolean; scope?: "session" | "once" }
   | { type: "question_response"; request_id: string; answer: string }
   | { type: "list_sessions" }
-  | { type: "set_permission_mode"; permission_mode: "default" | "plan" | "full_auto" }
+  | { type: "set_permission_mode"; permission_mode: ApprovalMode }
   | { type: "set_session_mode"; session_mode: "coordinator" | "direct" }
   | JobRequestAction;
 

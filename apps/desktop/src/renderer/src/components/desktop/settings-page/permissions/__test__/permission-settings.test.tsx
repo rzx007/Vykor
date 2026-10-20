@@ -15,7 +15,7 @@ vi.mock("@renderer/stores/desktop-session", () => ({
 import { PermissionSettings } from "../permission-settings"
 
 const saved: DesktopPermissionSettingsSnapshot = {
-  permission: { mode: "default", deniedTools: ["Write"] },
+  permission: { mode: "ask", deniedTools: ["Write"] },
   environment: "native",
   sandbox: {
     enabled: false,

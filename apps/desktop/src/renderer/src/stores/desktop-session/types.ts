@@ -2,6 +2,7 @@ import type {
   DesktopDaemonStatus,
   DesktopModel,
   DesktopPermissionMode,
+  DesktopWorkMode,
   DesktopProject,
   DesktopSessionRecord,
   DesktopSessionView,
@@ -130,6 +131,12 @@ export interface SessionActions {
   startNewConversation: () => Promise<void>
   selectModel: (model: DesktopModel) => Promise<void>
   selectPermissionMode: (mode: DesktopPermissionMode) => Promise<void>
+  selectWorkMode: (mode: DesktopWorkMode) => void
+  updateSessionWorkMode: (
+    sessionId: string,
+    workMode: DesktopWorkMode,
+    isCurrent?: () => boolean
+  ) => Promise<void>
   updateSessionModel: (
     sessionId: string,
     model: DesktopModel,
@@ -279,6 +286,8 @@ export interface DesktopSessionState
   selectedModel: string | null
   selectedProvider: string | null
   selectedPermissionMode: DesktopPermissionMode
+  selectedWorkMode: DesktopWorkMode
+  pendingModeChanges: Record<string, boolean>
   selectedEffort: string | null
   workspaceMode: DesktopWorkspaceMode
   outsideProjectWorkspaceRoot: string

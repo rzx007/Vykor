@@ -575,6 +575,9 @@ importers:
       '@vykor/prompts':
         specifier: workspace:*
         version: link:../prompts
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox

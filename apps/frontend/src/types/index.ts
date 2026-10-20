@@ -5,6 +5,8 @@ export type FrontendConfig = {
     cwd?: string | null;
     model?: string | null;
     permissionMode?: string | null;
+    approvalMode?: string | null;
+    workMode?: string | null;
     maxTurns?: number | null;
     sessionMode?: string | null;
     pluginsEnabled?: boolean | null;

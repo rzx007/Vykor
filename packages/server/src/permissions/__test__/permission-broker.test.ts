@@ -2,17 +2,19 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "@vykor/services";
 
-import { StorePermissionBroker } from "../permission-broker.js";
+import type { ApprovalReviewOutcome } from "@vykor/protocol";
+import { StorePermissionBroker, type PermissionApprovalReviewHook, type StorePermissionBrokerOptions } from "../permission-broker.js";
 
 function withBroker(
-  test: (ctx: { broker: StorePermissionBroker; store: SessionStore; changes: number[] }) => Promise<void>,
+  test: (ctx: { broker: StorePermissionBroker; store: SessionStore; changes: number[]; path: string }) => Promise<void>,
 ): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), "vk-permission-broker-"));
-  const store = new SessionStore({ path: join(dir, "store.db") });
+  const path = join(dir, "store.db");
+  const store = new SessionStore({ path });
   const changes: number[] = [];
   const broker = new StorePermissionBroker({
     permissions: store.permissions,
@@ -23,7 +25,7 @@ function withBroker(
   store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
   const input = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
   store.runs.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
-  return test({ broker, store, changes }).finally(() => {
+  return test({ broker, store, changes, path }).finally(() => {
     store.close();
     rmSync(dir, { recursive: true, force: true });
   });
@@ -401,6 +403,159 @@ describe("StorePermissionBroker", () => {
 
       await expect(allowed).resolves.toMatchObject({ status: "expired" });
       expect(store.permissions.get(request.id)).toMatchObject({ status: "expired" });
+    });
+  });
+});
+
+const automaticInput = {
+  sessionId: "s1", runId: "r1", toolName: "Write", input: { path: "a.ts", content: "changed" },
+  approvalMode: "auto_review" as const, inputId: "i1", runtimeRevision: 1, isCurrent: () => true,
+};
+const automaticApproval: ApprovalReviewOutcome = { decision: "approve", risk: "low", authorization: "task_implied", reason: "用户要求的项目修改。" };
+
+function reviewBroker(store: SessionStore, review: PermissionApprovalReviewHook, extra: Partial<StorePermissionBrokerOptions> = {}) {
+  return new StorePermissionBroker({ permissions: store.permissions, getSession: id => store.sessions.get(id),
+    latestEventSeq: () => store.conversations.latestEventSeq(), review, ...extra });
+}
+
+describe("automatic permission review", () => {
+  it("persists the exact request and review reason, and never creates reusable approvals", async () => {
+    await withBroker(async ({ store, path }) => {
+      const review = vi.fn<PermissionApprovalReviewHook>(async ({ request, input }) => {
+        expect(request.status).toBe("pending");
+        expect(request.payload).toMatchObject({ input: automaticInput.input, runtimeRevision: 1, inputId: "i1" });
+        expect(input.input).toEqual(automaticInput.input);
+        return automaticApproval;
+      });
+      const broker = reviewBroker(store, review);
+      await expect(broker.ask(automaticInput)).resolves.toEqual({ status: "approved", decision: "once" });
+      await expect(broker.ask(automaticInput)).resolves.toEqual({ status: "approved", decision: "once" });
+      expect(review).toHaveBeenCalledTimes(2);
+      expect(broker.listApprovals()).toEqual([]);
+      const requests = store.permissions.list();
+      expect(requests[0]?.payload.approvalReview).toMatchObject({ status: "approved", reason: automaticApproval.reason });
+      const reopened = new SessionStore({ path });
+      try { expect(reopened.permissions.list()).toEqual(requests); } finally { reopened.close(); }
+    });
+  });
+
+  it("registers its waiter before a synchronous notification delivers a human reply", async () => {
+    await withBroker(async ({ store }) => {
+      const review = vi.fn<PermissionApprovalReviewHook>(async () => automaticApproval);
+      const broker = reviewBroker(store, review, { onChange: () => {
+        const request = store.permissions.list({ status: "pending" })[0];
+        if (request) broker.reply({ requestId: request.id, status: "denied", decision: "once" });
+      } });
+      await expect(broker.ask(automaticInput)).resolves.toEqual({ status: "denied", decision: "once" });
+      expect(review).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each(["approved", "denied", "expired"] as const)("keeps an earlier %s terminal state when review arrives late", async status => {
+    await withBroker(async ({ store }) => {
+      let finish!: (result: ApprovalReviewOutcome) => void;
+      const review = vi.fn<PermissionApprovalReviewHook>(() => new Promise(resolve => { finish = resolve; }));
+      const broker = reviewBroker(store, review);
+      const waiting = broker.ask(automaticInput);
+      const request = store.permissions.list()[0]!;
+      broker.reply({ requestId: request.id, status, decision: "once" });
+      await expect(waiting).resolves.toMatchObject({ status });
+      const before = store.permissions.get(request.id);
+      finish(automaticApproval);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(store.permissions.get(request.id)).toEqual(before);
+    });
+  });
+
+  it("expires review after cancellation and ignores a provider that still returns approval", async () => {
+    await withBroker(async ({ store }) => {
+      let finish!: (result: ApprovalReviewOutcome) => void;
+      const broker = reviewBroker(store, () => new Promise(resolve => { finish = resolve; }));
+      const controller = new AbortController();
+      const waiting = broker.ask({ ...automaticInput, signal: controller.signal });
+      controller.abort();
+      await expect(waiting).resolves.toMatchObject({ status: "expired" });
+      finish(automaticApproval);
+      await Promise.resolve();
+      expect(store.permissions.list()[0]?.status).toBe("expired");
+    });
+  });
+
+  it("expires an otherwise approved review when the host revision check changes", async () => {
+    await withBroker(async ({ store }) => {
+      let current = true;
+      let finish!: (result: ApprovalReviewOutcome) => void;
+      const broker = reviewBroker(store, () => new Promise(resolve => { finish = resolve; }));
+      const waiting = broker.ask({ ...automaticInput, isCurrent: () => current });
+      current = false;
+      finish(automaticApproval);
+      await expect(waiting).resolves.toMatchObject({ status: "expired" });
+      expect(store.permissions.list()[0]?.status).toBe("expired");
+    });
+  });
+
+  it.each([
+    { ...automaticApproval, decision: "ask_user" as const },
+    { ...automaticApproval, risk: "unknown" as const },
+    { ...automaticApproval, risk: "high" as const, authorization: "missing" as const },
+    { ...automaticApproval, decision: "ask_user" as const, failure: "timeout" as const },
+    { ...automaticApproval, reason: "" },
+  ])("leaves uncertain review pending for a human: %j", async outcome => {
+    await withBroker(async ({ store }) => {
+      const broker = reviewBroker(store, async () => outcome);
+      const waiting = broker.ask(automaticInput);
+      await Promise.resolve();
+      await Promise.resolve();
+      const request = store.permissions.list()[0]!;
+      expect(request.status).toBe("pending");
+      expect(request.payload.approvalReview).toMatchObject({ status: outcome.failure === "timeout" ? "timed_out" : "ask_user" });
+      broker.reply({ requestId: request.id, status: "denied" });
+      await expect(waiting).resolves.toMatchObject({ status: "denied" });
+    });
+  });
+
+  it.each(["AskUser", "BrowserDeveloper"])("never reviews %s", async toolName => {
+    await withBroker(async ({ store }) => {
+      const review = vi.fn<PermissionApprovalReviewHook>(async () => automaticApproval);
+      const broker = reviewBroker(store, review);
+      const waiting = broker.ask({ ...automaticInput, toolName });
+      const request = store.permissions.list()[0]!;
+      expect(review).not.toHaveBeenCalled();
+      broker.reply({ requestId: request.id, status: "approved", decision: "once" });
+      await waiting;
+    });
+  });
+
+  it("denies a reviewed invocation once and never opens another operation", async () => {
+    await withBroker(async ({ store }) => {
+      const broker = reviewBroker(store, async () => ({ ...automaticApproval, decision: "deny" }));
+      await expect(broker.ask(automaticInput)).resolves.toEqual({ status: "denied", decision: "once" });
+      expect(store.permissions.list()[0]?.payload.approvalReview).toMatchObject({ status: "denied" });
+    });
+  });
+
+  it("falls back to a durable human request when the reviewer throws", async () => {
+    await withBroker(async ({ store }) => {
+      const broker = reviewBroker(store, async () => { throw new Error("provider unavailable"); });
+      const waiting = broker.ask(automaticInput);
+      await Promise.resolve();
+      await Promise.resolve();
+      const request = store.permissions.list()[0]!;
+      expect(request).toMatchObject({ status: "pending", payload: { approvalReview: { status: "ask_user" } } });
+      broker.reply({ requestId: request.id, status: "approved", decision: "once" });
+      await expect(waiting).resolves.toEqual({ status: "approved", decision: "once" });
+    });
+  });
+
+  it("expires an old revision even if a human tries to approve it", async () => {
+    await withBroker(async ({ broker, store }) => {
+      let current = true;
+      const waiting = broker.ask({ sessionId: "s1", toolName: "Write", isCurrent: () => current });
+      const request = store.permissions.list()[0]!;
+      current = false;
+      expect(broker.reply({ requestId: request.id, status: "approved", decision: "once" }).status).toBe("expired");
+      await expect(waiting).resolves.toMatchObject({ status: "expired" });
     });
   });
 });

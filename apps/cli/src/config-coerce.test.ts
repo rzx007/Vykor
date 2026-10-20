@@ -13,7 +13,11 @@ describe("config coerce helpers", () => {
     expect(coerceConfigValue("memory.enabled", "false")).toBe(false);
     expect(coerceConfigValue("daemon.autoStart", "on")).toBe(true);
     expect(coerceConfigValue("plugins.enabled", "off")).toBe(false);
-    expect(coerceConfigValue("permission.mode", "plan")).toBe("plan");
+    expect(coerceConfigValue("permission.mode", "plan")).toBe("ask");
+    expect(coerceConfigValue("permission.mode", "full_auto")).toBe("auto_review");
+    for (const mode of ["ask", "auto_review", "full_access"]) {
+      expect(coerceConfigValue("permission.mode", mode)).toBe(mode);
+    }
     expect(coerceConfigValue("permission.mode", "nope")).toBeUndefined();
   });
 

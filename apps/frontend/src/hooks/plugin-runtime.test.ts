@@ -31,3 +31,16 @@ test("TUI does not reuse a session with a different plugin mode", () => {
   expect(shouldAutoActivateSession(session(false), "runtime-model", false)).toBe(true);
   expect(shouldAutoActivateSession(session(true), "runtime-model", false)).toBe(false);
 });
+
+
+test("TUI stores approval and plan modes independently and migrates legacy plan metadata", () => {
+  expect(sessionRuntimeMetadata({ approvalMode: "auto_review", workMode: "plan" })).toEqual({
+    runtime: { approvalMode: "auto_review", workMode: "plan" },
+  });
+  expect(sessionRuntimeMetadata({ permissionMode: "plan" })).toEqual({
+    runtime: { approvalMode: "ask", workMode: "plan" },
+  });
+  expect(sessionRuntimeMetadata({ permissionMode: "full_auto", workMode: "execute" })).toEqual({
+    runtime: { approvalMode: "auto_review", workMode: "execute" },
+  });
+});

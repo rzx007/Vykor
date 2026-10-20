@@ -83,6 +83,7 @@ import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-su
 import { GlobalActivitySubscriptionService } from "../activity/global-activity-subscription-service"
 import type { DesktopActivityUpdate } from "../../../shared/activity-types"
 import {
+  normalizePermissionMode,
   requirePermissionMode,
   requireString,
   resolveProviderForModel,
@@ -637,14 +638,10 @@ function sortSessions(sessions: DesktopSessionRecord[]): DesktopSessionRecord[] 
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-function normalizePermissionMode(value: unknown): DesktopPermissionMode | undefined {
-  return value === "default" || value === "plan" || value === "full_auto" ? value : undefined
-}
-
 function readSettingsPermissionMode(settings: Record<string, unknown>): DesktopPermissionMode {
   const permission = settings["permission"]
-  if (!permission || typeof permission !== "object" || Array.isArray(permission)) return "default"
-  return normalizePermissionMode((permission as Record<string, unknown>)["mode"]) ?? "default"
+  if (!permission || typeof permission !== "object" || Array.isArray(permission)) return "ask"
+  return normalizePermissionMode((permission as Record<string, unknown>)["mode"]) ?? "ask"
 }
 
 export const desktopSessionService = new DesktopSessionService()

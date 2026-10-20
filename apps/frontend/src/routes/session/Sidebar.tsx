@@ -1,5 +1,6 @@
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../../theme/ThemeContext";
+import { parseStatus } from "../../services/status";
 import type { TranscriptItem, McpServerSnapshot } from "../../types";
 
 export type ModifiedFile = {
@@ -234,11 +235,8 @@ export function Sidebar({
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const mode = String(status.permission_mode ?? "");
-  const model = String(status.model ?? "");
-  const effort = String(status.effort ?? "");
-  const inputTokens = Number(status.input_tokens ?? 0);
-  const outputTokens = Number(status.output_tokens ?? 0);
+  const { mode, model, effort, inputTokens, outputTokens } = parseStatus(status);
+  const workMode = status.work_mode ?? (status.permission_mode === "plan" ? "plan" : "execute");
 
   const modifiedFiles = computeModifiedFiles(transcript);
   const workflow = computeWorkflowPanel(transcript);
@@ -260,7 +258,8 @@ export function Sidebar({
     >
       <SectionHeader title="Session" muted={c.muted} />
       {model ? <text fg={c.foreground}>{" " + model}</text> : null}
-      {mode ? <text fg={c.muted}>{" mode: " + mode}</text> : null}
+      {mode ? <text fg={c.muted}>{" approval: " + mode}</text> : null}
+      <text fg={c.muted}>{" work: " + String(workMode)}</text>
       {effort ? <text fg={c.warning}>{" effort: " + effort}</text> : null}
       {(inputTokens > 0 || outputTokens > 0) ? (
         <text fg={c.muted}>{` ${inputTokens}↓ ${outputTokens}↑`}</text>

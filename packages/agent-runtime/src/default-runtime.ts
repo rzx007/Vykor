@@ -22,6 +22,8 @@ import { HookExecutor } from "@vykor/hooks";
 import { createDefaultToolRegistry, createShellOutputLogHost, toolSearchTool } from "@vykor/tools";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
+import { settingsForApprovalMode } from "@vykor/sandbox";
+import { effectivePermissionMode, normalizeApprovalMode } from "@vykor/protocol";
 import type { SkillRegistry } from "@vykor/skills";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
@@ -116,7 +118,8 @@ export function resolveEffectiveAllowedTools(options: {
 export async function createVykorRuntime(
   options: VykorRuntimeOptions,
 ): Promise<RuntimeBundle> {
-  const { settings } = options;
+  const settings = settingsForApprovalMode(options.settings,
+    options.configuration.approvalMode ?? normalizeApprovalMode(options.configuration.permissionMode ?? options.settings.permission.mode));
   const hostCwd = options.cwd ?? process.cwd();
   const cwd = options.executionEnvironment?.workspace.executionRoot ?? hostCwd;
   const configuration = options.configuration;
@@ -191,7 +194,11 @@ export async function createVykorRuntime(
     }),
   );
 
-  const mode = configuration.permissionMode ?? settings.permission.mode;
+  const selectedMode = configuration.permissionMode ?? settings.permission.mode;
+  const mode = configuration.workMode === "plan" ? "plan"
+    : configuration.approvalMode ? effectivePermissionMode(configuration.approvalMode, configuration.workMode ?? "execute")
+    : selectedMode === "ask" || selectedMode === "auto_review" ? "default"
+    : selectedMode === "full_access" ? "full_auto" : selectedMode;
 
   // 自动放行三来源合并:settings.permission.autoApproveTools(用户显式配置,
   // 此前从未接线)+ swarm worker / 无头只读模式注入非本地 READ_ONLY_TOOLS。
@@ -244,7 +251,7 @@ export async function createVykorRuntime(
       customPrompt: promptSettings.systemPrompt,
       cwd: hostCwd,
       environmentInfo: options.executionEnvironment?.info,
-      permissionMode: permissionChecker.getMode(),
+      permissionMode: permissionChecker.getMode() === "plan" ? "plan" : configuration.approvalMode ?? permissionChecker.getMode(),
       workStyle: promptSettings.workStyle,
       fastMode: promptSettings.fastMode,
       effort,

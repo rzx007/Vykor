@@ -4,7 +4,7 @@ import { Composer } from "../../conversation-page/composer/composer"
 import { toComposerSkills } from "../../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../../conversation-page/composer/plugin-mentions-feature"
-import { PermissionCard } from "../../conversation-page/message/message-block"
+import { PermissionCard, readPermissionReview } from "../../conversation-page/message/message-block"
 import { AskUserCard } from "../../conversation-page/message/ask-user-card"
 import { isAskUserPermission } from "../../conversation-page/message/ask-user-payload"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
@@ -51,6 +51,7 @@ import {
 import {
   sessionProvider,
   sessionPermissionMode,
+  sessionWorkMode,
   sessionEffort,
 } from "@renderer/stores/desktop-session/helpers"
 import {
@@ -69,6 +70,7 @@ import type {
   DesktopPluginCatalogEntry,
   DesktopModel,
   DesktopPermissionMode,
+  DesktopWorkMode,
 } from "@shared/session-types"
 
 export const sideChatTargets = new Map<string, string>()
@@ -254,6 +256,7 @@ export function SideChatPanel({
   const [preferences, setPreferences] = useState<{
     model?: DesktopModel
     mode?: DesktopPermissionMode
+    workMode?: DesktopWorkMode
     effort?: string
   }>({})
   const [subscriptionId] = useState(() => `side-chat:${crypto.randomUUID()}`)
@@ -269,6 +272,7 @@ export function SideChatPanel({
   const models = useDesktopSessionStore((state) => state.models)
   const sessions = useDesktopSessionStore((state) => state.sessions)
   const defaults = useDesktopSessionStore((state) => state.defaultPermissionMode)
+  const modeChangePending = useDesktopSessionStore((state) => Boolean(targetId && state.pendingModeChanges[targetId]))
   const providerDefault = useDesktopSessionStore((state) => state.defaultProvider)
   const support = useDesktopSessionStore((state) => state.attachmentSupport)
   const runtime = useDesktopSessionStore((state) => selectSessionRuntime(state, verifiedTargetId))
@@ -313,12 +317,17 @@ export function SideChatPanel({
     (session ? sessionPermissionMode(session, defaults) : defaults)
   const effort =
     (!targetId ? preferences.effort : undefined) ?? (session ? sessionEffort(session) : null)
+  const workMode = (!targetId ? preferences.workMode : undefined) ?? (session ? sessionWorkMode(session) : "execute")
   const running = Boolean(
     view?.runs.some((run) => run.status === "running" || run.status === "pending")
   )
   const archived = view?.session.status === "archived"
   const permissions =
     view?.permissions.filter((permission) => permission.status === "pending") ?? []
+  const displayedPermissions = [
+    ...(view?.permissions ?? []).filter((permission) => permission.status !== "pending" && readPermissionReview(permission)).slice(-3),
+    ...permissions,
+  ]
   const submissions = Object.values(runtime.pendingPromptSubmissions)
   const runtimeError = Object.values(runtime.operations)
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
@@ -534,6 +543,7 @@ export function SideChatPanel({
       closingSources.has(sourceId) ||
       creating ||
       submitPending.current ||
+      modeChangePending ||
       sending ||
       archived ||
       unavailable
@@ -569,6 +579,10 @@ export function SideChatPanel({
         }
         if (preferences.mode) {
           await actions.updateSessionPermissionMode(id, preferences.mode, isCurrent)
+          if (!isCurrent()) return
+        }
+        if (preferences.workMode !== undefined) {
+          await actions.updateSessionWorkMode(id, preferences.workMode, isCurrent)
           if (!isCurrent()) return
         }
         if (preferences.effort !== undefined)
@@ -630,11 +644,17 @@ export function SideChatPanel({
     canOpenReview,
     pinned: false,
     permissionMode: mode,
+    workMode,
     hasModels: !!models.length,
     hasEffortTiers: !!models.find((item) => item.id === model)?.reasoningEfforts?.length,
   }).filter(
-    (command) => command.id === "compact" || command.id === "model" || command.id === "effort"
+    (command) => command.id === "compact" || command.id === "model" || command.id === "effort" || command.id === "plan"
   )
+  const changeWorkMode = (next: DesktopWorkMode): void => {
+    if (creating || unavailable || modeChangePending) return
+    if (targetId) update(actions.updateSessionWorkMode(targetId, next, () => isCurrentTarget(targetId)))
+    else setPreferences((current) => ({ ...current, workMode: next }))
+  }
   return (
     <section
       ref={sectionRef}
@@ -706,7 +726,7 @@ export function SideChatPanel({
           </p>
         ) : null}
         {!archived
-          ? permissions.map((permission) => {
+          ? displayedPermissions.map((permission) => {
               const state = useDesktopSessionStore.getState()
               const pending = selectPermissionReplyPending(state, targetId!, permission.id)
               const replyError = selectPermissionReplyError(state, targetId!, permission.id)
@@ -816,6 +836,9 @@ export function SideChatPanel({
               selectedProvider={provider}
               modelLabel={resolveModelLabel(models, model, provider)}
               permissionMode={mode}
+              workMode={workMode}
+              modeChangePending={modeChangePending}
+              onWorkModeChange={changeWorkMode}
               effort={effort}
               skills={toComposerSkills(catalog && catalog.cwd === cwd ? catalog.commands : [])}
               plugins={catalog && catalog.cwd === cwd ? catalog.plugins : []}
@@ -844,7 +867,7 @@ export function SideChatPanel({
                 else setPreferences((current) => ({ ...current, model: next }))
               }}
               onSelectPermissionMode={(next) => {
-                if (creating || unavailable) return
+                if (creating || unavailable || modeChangePending) return
                 if (targetId)
                   update(
                     actions.updateSessionPermissionMode(targetId, next, () =>
@@ -862,6 +885,13 @@ export function SideChatPanel({
                 else setPreferences((current) => ({ ...current, effort: next }))
               }}
               onCommand={async (command) => {
+                if (command.id === "plan") {
+                  if (creating || unavailable || modeChangePending) throw new Error("模式正在保存或会话尚未就绪。")
+                  const next = workMode === "plan" ? "execute" : "plan"
+                  if (targetId) await actions.updateSessionWorkMode(targetId, next, () => isCurrentTarget(targetId))
+                  else setPreferences((current) => ({ ...current, workMode: next }))
+                  return
+                }
                 if (command.id === "compact") {
                   if (!verifiedTargetId || running) throw new Error("当前会话无法压缩。")
                   await window.desktop.sessions.compact({ sessionId: verifiedTargetId })

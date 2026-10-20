@@ -41,6 +41,8 @@ export async function authorizeToolCall(
       const requestId = `permission_${randomUUID()}`;
       const request = {
         toolName: toolUse.name,
+        toolSource: execution.capabilityView?.tools.get(toolUse.name)?.source?.kind ?? "unknown",
+        toolDescription: tool.description,
         reason: decision.reason,
         input: toolUse.input,
       };

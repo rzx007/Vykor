@@ -45,6 +45,8 @@ import { DaemonJobService, readPersistedChildActivity } from "../jobs/daemon-job
 import type { ObservabilityEvent } from "../shared/observability.js";
 import { DaemonTerminalService } from "../terminal/daemon-terminal-service.js";
 import { createSessionEnvironmentAcquirer } from "../runtime/session-execution-environment.js";
+import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
+import { sessionPermissionRequest } from "../permissions/session-approval.js";
 import { StorePermissionBroker } from "../permissions/permission-broker.js";
 import {
   DAEMON_RESTART_PERMISSION_REASON,
@@ -588,16 +590,11 @@ export class DaemonApplication implements DurableAgentApplication {
         ],
         trustedToolOverrides: ["Read"],
         requestPermission: async (request, context) => {
-          // 工具要写文件时，弹到会话的权限请求里，等人点允许。没有宿主就在 loader 里默认拒绝。
-          return await this.permissions.ask({
-            sessionId: context.sessionId,
-            runId: context.runId,
-            traceId: context.traceId,
-            toolName: request.toolName,
-            reason: request.reason,
-            input: request.input,
-            signal: context.signal,
-          });
+          const owner = store.sessions.get(context.sessionId);
+          const settings = owner && options.getSettingsForCwd
+            ? await options.getSettingsForCwd(sessionSettingsRoot(owner))
+            : options.getSettings?.() ?? options.settings;
+          return this.permissions.ask(sessionPermissionRequest({ store, settings, request, context }));
         },
         askUserPrompt: async (question, context) => {
           let input: Record<string, unknown> = { kind: "question", question };

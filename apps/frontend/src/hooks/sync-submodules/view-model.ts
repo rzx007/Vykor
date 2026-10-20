@@ -1,5 +1,7 @@
 import {
   patchSessionRuntimeMetadata,
+  normalizeApprovalMode,
+  isWorkMode,
   type SessionRuntimeConfigPatch,
   type VykorClientState,
   type SessionBucket,
@@ -17,6 +19,8 @@ export function sessionRuntimeMetadata(input: {
   baseUrl?: unknown;
   apiFormat?: unknown;
   permissionMode?: unknown;
+  approvalMode?: unknown;
+  workMode?: unknown;
   maxTurns?: unknown;
   sessionMode?: unknown;
   pluginsEnabled?: unknown;
@@ -34,8 +38,13 @@ export function sessionRuntimeMetadata(input: {
   if (input.apiFormat === "anthropic" || input.apiFormat === "openai") {
     runtime.apiFormat = input.apiFormat;
   }
-  if (input.permissionMode === "default" || input.permissionMode === "plan" || input.permissionMode === "full_auto") {
-    runtime.permissionMode = input.permissionMode;
+  if (input.approvalMode !== undefined || input.permissionMode !== undefined) {
+    runtime.approvalMode = normalizeApprovalMode(input.approvalMode ?? input.permissionMode) ?? "ask";
+  }
+  if (isWorkMode(input.workMode)) {
+    runtime.workMode = input.workMode;
+  } else if (runtime.approvalMode !== undefined) {
+    runtime.workMode = input.permissionMode === "plan" ? "plan" : "execute";
   }
   if (typeof input.maxTurns === "number" && Number.isFinite(input.maxTurns)) {
     runtime.maxTurns = input.maxTurns;

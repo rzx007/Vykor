@@ -1,4 +1,5 @@
 /** Shared config value coercion for `/config set` and daemon settings patches. */
+import { normalizeApprovalMode } from "@vykor/client";
 
 export function coerceConfigValue(key: string, value: string): unknown {
   switch (key) {
@@ -42,7 +43,7 @@ export function coerceConfigValue(key: string, value: string): unknown {
     }
 
     case "permission.mode":
-      if (["default", "plan", "full_auto"].includes(value)) return value;
+      if (["ask", "auto_review", "full_access", "default", "plan", "full_auto"].includes(value)) return normalizeApprovalMode(value);
       return undefined;
 
     case "autoReview.mode":

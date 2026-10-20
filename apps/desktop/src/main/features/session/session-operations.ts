@@ -55,6 +55,7 @@ import {
   normalizePermissionMode,
   normalizePromptAttachments,
   requirePermissionMode,
+  requireWorkMode,
   requirePromptItems,
   requireString,
   resolveProviderForModel,
@@ -212,8 +213,13 @@ export class SessionOperations {
     input: CreateDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const model = requireString(input.model, "模型")
-    if ((await client.system.getSettings()).modelDisabled === true) throw new Error("默认模型已停用。请先在模型供应商设置中选择可用的默认模型。")
-    const permissionMode = normalizePermissionMode(input.permissionMode)
+    const settings = await client.system.getSettings()
+    if (settings.modelDisabled === true) throw new Error("默认模型已停用。请先在模型供应商设置中选择可用的默认模型。")
+    const permission = settings.permission
+    const defaultApprovalMode = normalizePermissionMode(permission && typeof permission === "object"
+      ? (permission as Record<string, unknown>).mode : undefined) ?? "ask"
+    const approvalMode = input.permissionMode === undefined ? defaultApprovalMode : requirePermissionMode(input.permissionMode)
+    const workMode = input.workMode === undefined ? "execute" : requireWorkMode(input.workMode)
     const provider = await resolveProviderForModel(client, model, input.provider)
     const projectId = input.projectId ? requireString(input.projectId, "Project ID") : undefined
     const location = input.taskLocation ?? (projectId ? getGitPreferences().defaultTaskLocation : "current")
@@ -244,7 +250,8 @@ export class SessionOperations {
           runtime: {
             model,
             ...(provider ? { provider } : {}),
-            ...(permissionMode ? { permissionMode } : {}),
+            ...(approvalMode ? { approvalMode } : {}),
+            workMode,
             ...(input.effort?.trim() ? { effort: input.effort.trim() } : {}),
           },
         },
@@ -443,10 +450,15 @@ export class SessionOperations {
     input: UpdateDesktopSessionPermissionModeInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
-    const permissionMode = requirePermissionMode(input.permissionMode)
+    const approvalMode = input.permissionMode === undefined ? undefined : requirePermissionMode(input.permissionMode)
+    const workMode = input.workMode === undefined ? undefined : requireWorkMode(input.workMode)
+    if (approvalMode === undefined && workMode === undefined) throw new Error("请选择批准方式或工作模式。")
     return toDesktopSessionRecord(
       await client.sessions.update(sessionId, {
-        metadata: { runtime: { permissionMode } },
+        metadata: { runtime: {
+          ...(approvalMode ? { approvalMode } : {}),
+          ...(workMode ? { workMode } : {}),
+        } },
       })
     )
   }

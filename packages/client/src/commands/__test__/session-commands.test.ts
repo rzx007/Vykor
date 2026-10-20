@@ -615,7 +615,7 @@ describe("dispatchSessionCommand", () => {
     expect(outcome).toBe("local_ui");
   });
 
-  it("patches session runtime permissionMode for /plan", async () => {
+  it("patches only workMode for /plan while preserving approval mode", async () => {
     const updateSession = vi.fn(async (_id: string, input: { metadata?: Record<string, unknown> }) => ({
       id: "s1",
       cwd: "/tmp",
@@ -636,14 +636,27 @@ describe("dispatchSessionCommand", () => {
       },
     });
 
+    h.approvalMode = "auto_review";
     const outcome = await dispatchSessionCommand({ name: "/plan", args: "on" }, h);
 
     expect(outcome).toBe("handled");
     expect(updateSession).toHaveBeenCalledWith("s1", {
-      metadata: { runtime: { permissionMode: "plan" } },
+      metadata: { runtime: { workMode: "plan" } },
     });
-    expect(patches).toEqual([{ permission_mode: "plan" }]);
-    expect(emitted[0]).toBe("Permission mode: plan");
+    expect(patches).toEqual([{ work_mode: "plan" }]);
+    expect(h.approvalMode).toBe("auto_review");
+    expect(emitted[0]).toBe("Work mode: plan");
+
+    h.workMode = "plan";
+    await dispatchSessionCommand({ name: "/plan", args: "off" }, h);
+    expect(updateSession).toHaveBeenLastCalledWith("s1", {
+      metadata: { runtime: { workMode: "execute" } },
+    });
+    expect(patches[1]).toEqual({ work_mode: "execute" });
+    expect(h.approvalMode).toBe("auto_review");
+
+    await dispatchSessionCommand({ name: "/plan", args: "" }, h);
+    expect(patches[2]).toEqual({ work_mode: "execute" });
   });
 
   it("toggles showReasoning with no argument", async () => {

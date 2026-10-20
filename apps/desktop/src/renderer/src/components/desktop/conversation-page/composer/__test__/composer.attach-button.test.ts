@@ -37,7 +37,7 @@ describe("Composer attach button", () => {
           selectedModel: null,
           selectedProvider: null,
           modelLabel: "模型",
-          permissionMode: "default",
+          permissionMode: "ask",
           effort: null,
           onDraftChange: vi.fn(),
           onSubmit: vi.fn(),
@@ -87,7 +87,7 @@ describe("Composer attach button", () => {
           selectedModel: null,
           selectedProvider: null,
           modelLabel: "模型",
-          permissionMode: "default",
+          permissionMode: "ask",
           effort: null,
           onDraftChange: vi.fn(),
           onSubmit: vi.fn(),
@@ -104,5 +104,28 @@ describe("Composer attach button", () => {
       (item) => item.getAttribute("aria-label") === "添加上下文"
     )
     expect(button?.disabled).toBe(false)
+  })
+
+  it("enables and removes plan mode independently of full access", async () => {
+    const onWorkModeChange = vi.fn()
+    const onSelectPermissionMode = vi.fn()
+    const props = {
+      id: "plan-toggle", draft: emptyComposerDocument, sending: false, models: [],
+      selectedModel: null, selectedProvider: null, modelLabel: "模型",
+      permissionMode: "full_access" as const, effort: null,
+      onDraftChange: vi.fn(), onSubmit: vi.fn(), onSelectModel: vi.fn(),
+      onSelectPermissionMode, onSelectEffort: vi.fn(), onWorkModeChange,
+    }
+    await act(async () => root.render(createElement(Composer, props)))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加上下文"]')!.click())
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((button) => button.textContent?.includes("计划模式"))
+    await act(async () => option!.click())
+    expect(onWorkModeChange).toHaveBeenCalledWith("plan")
+    await act(async () => root.render(createElement(Composer, { ...props, workMode: "plan" })))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="退出计划模式"]')!.click())
+    expect(onWorkModeChange).toHaveBeenLastCalledWith("execute")
+    expect(onSelectPermissionMode).not.toHaveBeenCalled()
+    expect(container.textContent).toContain("完全访问权限")
   })
 })

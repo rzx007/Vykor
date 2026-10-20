@@ -13,6 +13,7 @@ export {
 export type { PluginSelectionCandidate, PluginSelectionCatalog, PluginSelectionResult } from "./plugin-selection.js";
 export { renderPluginDiscoveryContext } from "./plugin-discovery-context.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
+export { createConfiguredApprovalReviewer, type ConfiguredApprovalReviewerOptions } from "./configured-approval-reviewer.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
 export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";
 export type {

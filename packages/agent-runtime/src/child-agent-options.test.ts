@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
-import { ToolRegistry } from "@vykor/core";
+import { ToolRegistry, type Settings } from "@vykor/core";
+import { settingsForApprovalMode } from "@vykor/sandbox";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
 const addedTool = {
@@ -18,6 +19,20 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("honors explicit child permission narrowing and restores sandbox settings", () => {
+    const baseline = { sandbox: { enabled: true, network: { mode: "none" } } } as Settings;
+    const options = deriveChildAgentOptions({
+      configuration: { approvalMode: "full_access", permissionMode: "full_auto", workMode: "execute" },
+      settings: settingsForApprovalMode(baseline, "full_access"),
+      child: { description: "review", prompt: "review", agent: "review", cwd: "/repo", permissionMode: "default",
+        approvalMode: "full_access", workMode: "execute" },
+      cwd: "/repo", sessionId: "child-session",
+    });
+    expect(options.approvalMode).toBe("ask");
+    expect(options.permissionMode).toBe("default");
+    expect(options.settings).toBe(baseline);
+    expect(options.settings?.sandbox?.enabled).toBe(true);
+  });
   it("carries the trusted text-only constraint into the child runtime", () => {
     const input = {
       configuration: { pluginsEnabled: true },

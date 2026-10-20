@@ -393,7 +393,7 @@ function coerceConfigValue(key: string, value: string): unknown {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   if (key === "permission.mode") {
-    return ["default", "plan", "full_auto"].includes(value) ? value : undefined;
+    return ["default", "plan", "full_auto", "ask", "auto_review", "full_access"].includes(value) ? value : undefined;
   }
   return value;
 }

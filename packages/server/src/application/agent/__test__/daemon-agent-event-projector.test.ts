@@ -267,6 +267,34 @@ describe("DaemonAgentEventProjector", () => {
     });
   });
 
+  it.each([
+    { approvalMode: "ask", workMode: "execute", permissionMode: "default" },
+    { approvalMode: "full_access", workMode: "plan", permissionMode: "plan" },
+  ] as const)("persists the resolved child modes: $approvalMode/$workMode", async (modes) => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "model-a",
+      metadata: { runtime: { model: "model-a", approvalMode: "full_access", workMode: "execute" } },
+    }]]);
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: { createBridge: () => ({ registerChildExecution: (input: any) => input, bindChildExecutionRun: async () => {} }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
+    });
+    await projector.apply(event("child.created", {
+      childId: "child", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "work", prompt: "work", agent: "worker", cwd: "/repo", ...modes },
+    }, { sessionId: "parent", runId: "root-run", childId: "child" }));
+    expect(sessions.get("child-session")?.metadata.runtime).toMatchObject({
+      approvalMode: modes.approvalMode, workMode: modes.workMode,
+    });
+  });
+
   it("writes delegation scope and expected result into the parent task metadata", async () => {
     const sessions = new Map<string, any>([["parent", {
       id: "parent", cwd: "/repo", model: "model-b",

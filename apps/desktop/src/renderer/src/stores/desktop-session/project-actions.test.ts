@@ -63,7 +63,7 @@ describe("desktop session store provider refresh", () => {
   it("keeps the open session runtime selection while refreshing global defaults", async () => {
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
-      selectedPermissionMode: "plan",
+      selectedPermissionMode: "ask",
     })
 
     await useDesktopSessionStore.getState().refreshBootstrap()
@@ -74,7 +74,7 @@ describe("desktop session store provider refresh", () => {
       defaultProvider: "deepseek",
       selectedModel: "gpt-5.4",
       selectedProvider: "openai",
-      selectedPermissionMode: "plan",
+      selectedPermissionMode: "ask",
     })
   })
 

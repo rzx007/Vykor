@@ -466,6 +466,26 @@ function readDeveloperScope(
   return { reason, action, label: developerActionLabels[action]! }
 }
 
+const approvalReviewLabels = {
+  reviewing: "正在自动审查", approved: "已自动批准", ask_user: "需要你确认",
+  denied: "已拒绝", timed_out: "审查超时，需要你确认",
+} as const
+
+export function readPermissionReview(permission: DesktopPermissionRequest): { label: string; reason: string } | null {
+  const review = permission.payload.approvalReview
+  if (!review || typeof review !== "object" || Array.isArray(review)) return null
+  const record = review as Record<string, unknown>
+  if (typeof record.status !== "string" || !Object.hasOwn(approvalReviewLabels, record.status)) return null
+  const result = record.result && typeof record.result === "object" && !Array.isArray(record.result)
+    ? record.result as Record<string, unknown> : {}
+  const reason = typeof record.reason === "string" ? record.reason : result.reason
+  const label = permission.status === "expired" ? "请求已失效"
+    : permission.status === "denied" ? "已拒绝"
+    : permission.status === "approved" && record.status !== "approved" ? "已批准"
+    : approvalReviewLabels[record.status as keyof typeof approvalReviewLabels]
+  return { label, reason: typeof reason === "string" ? reason.slice(0, 1000) : "" }
+}
+
 export function PermissionCard({
   permission,
   onReply,
@@ -480,6 +500,7 @@ export function PermissionCard({
   className?: string
 }): React.JSX.Element {
   const developerScope = readDeveloperScope(permission)
+  const review = readPermissionReview(permission)
   return (
     <section className={cn("mt-6 rounded-xl border bg-background px-4 py-3 shadow-sm", className)}>
       <div className="flex items-start gap-3">
@@ -487,11 +508,12 @@ export function PermissionCard({
           <ShieldCheck className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-ui-small font-semibold text-foreground">需要你的批准</h3>
+          <h3 className="text-ui-small font-semibold text-foreground">{review?.label ?? "需要你的批准"}</h3>
           <p className="mt-1 text-xs text-ui-muted">
             {"Vykor 请求运行 "}
             {permission.toolName}
           </p>
+          {review?.reason ? <p className="mt-2 text-xs leading-snug break-words text-foreground">{review.reason}</p> : null}
           {developerScope ? (
             <div className="mt-2 space-y-1">
               {developerScope.reason ? (
@@ -519,6 +541,7 @@ export function PermissionCard({
             </p>
           ) : null}
         </div>
+        {permission.status === "pending" ? <>
         <Button
           type="button"
           variant="ghost"
@@ -537,6 +560,7 @@ export function PermissionCard({
         >
           {replyPending ? "正在提交" : developerScope ? "允许本次" : "允许"}
         </Button>
+        </> : null}
       </div>
     </section>
   )

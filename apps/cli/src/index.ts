@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { mainAction } from "./commands/main";
 import { createAuthCommand } from "./commands/auth";
 import { createMcpCommand } from "./commands/mcp";
@@ -34,10 +34,9 @@ program
   )
   .option("-n, --name <name>", "Name the session")
   .option("--provider <provider>", "API provider")
-  .option(
-    "--permission-mode <mode>",
-    "Permission mode (default | plan | full_auto)",
-  )
+  .addOption(new Option("--permission-mode <mode>", "Approval mode (ask | auto_review | full_access); legacy values are accepted").choices(["ask", "auto_review", "full_access", "default", "full_auto", "plan"]))
+  .addOption(new Option("--work-mode <mode>", "Work mode (execute | plan)").choices(["execute", "plan"]))
+  .option("--plan", "Start in plan mode while keeping the selected approval mode")
   .option("--coordinator", "Start new daemon sessions in coordinator mode")
   .option("--max-turns <n>", "Maximum agentic turns", parseInt)
   .option("-s, --system-prompt <prompt>", "Override system prompt")

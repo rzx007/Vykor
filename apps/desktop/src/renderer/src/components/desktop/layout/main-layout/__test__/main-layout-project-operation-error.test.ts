@@ -154,7 +154,7 @@ function stateWith(overrides: Partial<DesktopSessionState>): DesktopSessionState
     createAndCheckoutBranch: vi.fn(async () => undefined),
     daemonStatus: { phase: "ready", message: "已连接", updatedAt: 1 },
     defaultModel: null,
-    defaultPermissionMode: "default",
+    defaultPermissionMode: "ask",
     defaultProvider: null,
     deleteSession: vi.fn(async () => undefined),
     editLatestMessage: vi.fn(async () => undefined),
@@ -185,7 +185,7 @@ function stateWith(overrides: Partial<DesktopSessionState>): DesktopSessionState
     selectPermissionMode: vi.fn(async () => undefined),
     selectProject: vi.fn(async () => undefined),
     selectedModel: null,
-    selectedPermissionMode: "default",
+    selectedPermissionMode: "ask",
     selectedProject: null,
     selectedProjectGit: false,
     selectedProjectGitCheckedAt: null,
@@ -542,7 +542,7 @@ describe("desktop slash command actions", () => {
       {
         updatePermissionMode: async ({ permissionMode }: { permissionMode: string }) => ({
           ...session("slash-chat", "idle"),
-          metadata: { runtime: { permissionMode } },
+          metadata: { runtime: { approvalMode: permissionMode } },
         }),
       }
     )

@@ -66,7 +66,7 @@ async function openCommand(id: string, title: string): Promise<void> {
         selectedModel="test-model"
         selectedProvider="local"
         modelLabel="测试模型"
-        permissionMode="default"
+        permissionMode="ask"
         effort={null}
         commands={[command]}
         onDraftChange={() => {}}

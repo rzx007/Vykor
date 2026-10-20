@@ -1,5 +1,6 @@
 import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@vykor/core";
 import { canonicalToolName, canonicalToolNames } from "@vykor/core";
+import { settingsForApprovalMode } from "@vykor/sandbox";
 import { readonlyMap, restrictRunCapabilityView } from "./run-capability-view.js";
 
 import type { VykorAgentOptions } from "./agent.js";
@@ -53,16 +54,22 @@ export function deriveChildAgentOptions(
   const effortUnchanged = childEffort === configuration.effort;
   const { requestConfigurationStore: _parentReader, ...inherited } = configuration;
   const parentMode = configuration.permissionMode ?? input.settings.permission?.mode ?? "default";
+  const parentApprovalMode = configuration.approvalMode
+    ?? (parentMode === "ask" || parentMode === "auto_review" || parentMode === "full_access" ? parentMode : undefined);
+  const approvalMode = parentApprovalMode === "full_access" && child.permissionMode === "default"
+    ? "ask" : parentApprovalMode;
   return {
     ...inherited,
+    approvalMode,
     requestConfigurationStore: configuration.requestConfigurationStoreForSession?.(input.sessionId),
-    settings: input.settings,
+    settings: settingsForApprovalMode(input.settings, approvalMode),
     cwd: input.cwd,
     sessionId: input.sessionId,
     model: child.model ?? configuration.model,
     systemPrompt: child.systemPrompt ?? configuration.systemPrompt,
+    workMode: configuration.workMode === "plan" || parentMode === "plan" || child.permissionMode === "plan" ? "plan" : configuration.workMode,
     permissionMode: parentMode === "plan" || child.permissionMode === "plan" ? "plan"
-      : parentMode === "default" ? "default" : child.permissionMode ?? parentMode,
+      : parentMode !== "full_auto" && parentMode !== "full_access" ? parentMode : child.permissionMode ?? parentMode,
     hostToolCeiling: configuration.hostToolCeiling,
     roleAllowedTools: child.allowedTools,
     ...(input.internalTextOnly ? { internalTextOnly: true } : {}),

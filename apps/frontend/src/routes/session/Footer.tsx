@@ -58,8 +58,9 @@ export function Footer({ status, mcpServers, version }: FooterProps) {
   const c = theme.colors;
   const gitBranch = useGitBranch();
 
-  const { mode, inputTokens, outputTokens } = parseStatus(status);
-  const isPlan = mode === "plan" || mode === "Plan Mode";
+  const { inputTokens, outputTokens } = parseStatus(status);
+  const isPlan = status.work_mode === "plan"
+    || (status.work_mode == null && status.permission_mode === "plan");
   const isCoordinator = status.session_mode === "coordinator";
   const hasTokens = inputTokens > 0 || outputTokens > 0;
 

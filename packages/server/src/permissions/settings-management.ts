@@ -3,6 +3,7 @@ import {
   type PermissionSettings,
   type SandboxConfig,
 } from "@vykor/core";
+import { normalizeApprovalMode } from "@vykor/protocol";
 import { PermissionChecker } from "@vykor/permissions";
 import {
   getSandboxAvailability,
@@ -33,7 +34,7 @@ export function inspectPermissionConfiguration(
     : getSandboxAvailability({ ...sandbox, enabled: true });
   const { backend: _backend, ...configuration } = sandbox;
   return {
-    permission,
+    permission: { ...permission, mode: normalizeApprovalMode(permission.mode) ?? "ask" },
     sandbox: configuration,
     isolationAvailable: availability.available,
     isolationReason:

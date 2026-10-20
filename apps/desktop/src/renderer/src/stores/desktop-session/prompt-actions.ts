@@ -60,6 +60,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const items = [...(options?.contextItems ?? []), ...document.items]
       const prompt = selectComposerDocumentText({ ...document, items })
       const sessionId = options?.target?.sessionId ?? get().activeSessionId
+      if (sessionId && get().pendingModeChanges[sessionId]) return
       const attachmentDrafts = [...(options?.attachments ?? [])]
       if (!sessionId || attachmentDrafts.some((attachment) => attachment.status !== "ready")) return
       const attachments = attachmentDrafts.flatMap((attachment) =>
@@ -214,6 +215,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const items = document.items
       const current = get()
       const sessionId = current.activeSessionId
+      if (sessionId && current.pendingModeChanges[sessionId]) return
       const sourceMessage = current.sessionView?.messages.find(
         (message) => message.id === sourceMessageId && message.role === "user"
       )

@@ -100,6 +100,9 @@ export type QueryRequestConfiguration = {
 
 export interface AgentPermissionRequest {
   toolName: string;
+  /** Captured host registration; never supplied by the model. */
+  toolSource?: string;
+  toolDescription?: string;
   reason?: string;
   input?: Record<string, unknown>;
 }

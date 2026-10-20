@@ -16,7 +16,9 @@ import {
   createExecutionEnvironment,
   hostPathToWslPath,
   resolveExecutionEnvironmentConfig,
+  settingsForApprovalMode,
 } from "@vykor/sandbox";
+import { normalizeApprovalMode } from "@vykor/protocol";
 import { createEnvironmentFileSystem } from "@vykor/tools";
 
 import type {
@@ -117,7 +119,8 @@ async function composeVykorAgentInternal(
   rollback: CleanupStack,
 ): Promise<AgentComposition> {
   const cwd = options.cwd ?? process.cwd();
-  const settings = options.settings ?? (await loadSettings({}));
+  const settings = settingsForApprovalMode(options.settings ?? (await loadSettings({})),
+    options.approvalMode ?? normalizeApprovalMode(options.permissionMode ?? options.settings?.permission.mode));
   const discovery = await discoverVykorExtensions(cwd, settings, {
     pluginsEnabled: options.internalTextOnly ? false : options.pluginsEnabled,
   });
@@ -155,6 +158,7 @@ async function composeVykorAgentInternal(
       const applied = activeRuntime?.queryEngine.getAppliedRequestConfiguration?.();
       return {
         ...options,
+        workMode: activeRuntime?.permissionChecker.getMode?.() === "plan" ? "plan" : options.workMode,
         permissionMode: activeRuntime?.permissionChecker.getMode?.() ?? options.permissionMode ?? settings.permission.mode,
         ...(applied ? {
           model: applied.model,

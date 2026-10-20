@@ -72,7 +72,7 @@ import { HeaderIconButton } from "./composer/controls"
 import { resolveEffortTiers } from "./composer/effort-picker"
 import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 import { NewConversationStart } from "./session/new-conversation-start"
-import { PermissionCard } from "./message/message-block"
+import { PermissionCard, readPermissionReview } from "./message/message-block"
 import { AskUserCard } from "./message/ask-user-card"
 import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
@@ -129,6 +129,14 @@ function ConversationPane({
   const selectedModel = useDesktopSessionStore((state) => state.selectedModel)
   const selectedProvider = useDesktopSessionStore((state) => state.selectedProvider)
   const selectedPermissionMode = useDesktopSessionStore((state) => state.selectedPermissionMode)
+  const selectedWorkMode = useDesktopSessionStore((state) => state.selectedWorkMode)
+  const modeChangePending = useDesktopSessionStore((state) => Boolean(state.pendingModeChanges[state.activeSessionId ?? "new"]))
+  const selectWorkMode = useDesktopSessionStore((state) => state.selectWorkMode)
+  const updateSessionWorkMode = useDesktopSessionStore((state) => state.updateSessionWorkMode)
+  const changeWorkMode = (mode: import("@shared/session-types").DesktopWorkMode): void => {
+    if (activeSessionId) void updateSessionWorkMode(activeSessionId, mode).catch(() => {})
+    else selectWorkMode(mode)
+  }
   const selectedEffort = useDesktopSessionStore((state) => state.selectedEffort)
   const workspaceMode = useDesktopSessionStore((state) => state.workspaceMode)
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
@@ -227,7 +235,7 @@ function ConversationPane({
   const submitDraft = async (): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     const ready = areDesktopAttachmentsSendable(attachments)
-    if ((!content.trim() && attachments.length === 0) || !ready || sending || archived) return
+    if ((!content.trim() && attachments.length === 0) || !ready || sending || modeChangePending || archived) return
     setComposerValidationError(null)
     try {
       if (goalMode) {
@@ -276,6 +284,10 @@ function ConversationPane({
     })
   const pendingPermissions =
     sessionView?.permissions.filter((permission) => permission.status === "pending") ?? []
+  const displayedPermissions = [
+    ...(sessionView?.permissions ?? []).filter((permission) => permission.status !== "pending" && readPermissionReview(permission)).slice(-3),
+    ...pendingPermissions,
+  ]
   const singleAskUserPrompt =
     pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
@@ -322,6 +334,7 @@ function ConversationPane({
     canOpenReview,
     pinned: Boolean(activeSession && isSessionPinned(activeSession)),
     permissionMode: selectedPermissionMode,
+    workMode: selectedWorkMode,
     hasModels: models.length > 0,
     hasEffortTiers: resolveEffortTiers(models, currentModel, selectedProvider).length > 0,
   })
@@ -368,10 +381,10 @@ function ConversationPane({
 
   const editLatestUserMessage = useCallback(
     async (sourceMessageId: string, document: ComposerDocument): Promise<void> => {
-      if (archived || running) return
+      if (archived || running || modeChangePending) return
       await editLatestMessage(sourceMessageId, selectComposerDocumentText(document), document)
     },
-    [archived, running, editLatestMessage]
+    [archived, running, modeChangePending, editLatestMessage]
   )
 
   useEffect(() => {
@@ -455,9 +468,10 @@ function ConversationPane({
         return
       }
       if (command.id === "plan") {
-        const mode = selectedPermissionMode === "plan" ? "default" : "plan"
-        if (activeSessionId) await updateSessionPermissionMode(activeSessionId, mode)
-        else selectPermissionMode(mode)
+        if (modeChangePending) throw new Error("模式正在保存，请稍后再试。")
+        const mode = selectedWorkMode === "plan" ? "execute" : "plan"
+        if (activeSessionId) await updateSessionWorkMode(activeSessionId, mode)
+        else selectWorkMode(mode)
         return
       }
       if (command.id === "diff") {
@@ -497,9 +511,10 @@ function ConversationPane({
       resyncActiveSessionSnapshot,
       running,
       activeSession,
-      selectedPermissionMode,
-      updateSessionPermissionMode,
-      selectPermissionMode,
+      selectedWorkMode,
+      updateSessionWorkMode,
+      selectWorkMode,
+      modeChangePending,
       canOpenReview,
       onOpenReview,
       startConversationFrom,
@@ -584,6 +599,9 @@ function ConversationPane({
           selectedModel={selectedModel}
           selectedProvider={selectedProvider}
           selectedPermissionMode={selectedPermissionMode}
+          workMode={selectedWorkMode}
+          modeChangePending={modeChangePending}
+          onWorkModeChange={changeWorkMode}
           effort={selectedEffort}
           operationError={composerValidationError ?? newConversationError ?? pluginCatalogError}
           goalError={goalComposer.error}
@@ -656,7 +674,7 @@ function ConversationPane({
                         parts={transcript.parts}
                         runs={sessionView?.runs ?? []}
                         running={running}
-                        canEditLastUserMessage={!archived && !running && !sending}
+                        canEditLastUserMessage={!archived && !running && !sending && !modeChangePending}
                         onEditLastUserMessage={editLatestUserMessage}
                         onCopyAssistantMessage={copyAssistantMessage}
                         onForkAssistantMessage={forkFromAssistantMessage}
@@ -692,7 +710,7 @@ function ConversationPane({
             <SideChatSelectionActions sourceId={activeSessionId} viewportRef={messageViewportRef} />
           </div>
 
-          {!archived && pendingPermissions.length > 0 ? (
+          {!archived && displayedPermissions.length > 0 ? (
             <div
               role="region"
               aria-label="待处理的授权请求"
@@ -704,7 +722,7 @@ function ConversationPane({
               )}
             >
               <div className="space-y-2">
-                {pendingPermissions.map((permission) =>
+                {displayedPermissions.map((permission) =>
                   isAskUserPermission(permission) ? (
                     <AskUserCard
                       key={`${permission.id}:${permissionReplies[permission.id]?.error ?? "active"}`}
@@ -834,6 +852,9 @@ function ConversationPane({
                 selectedProvider={selectedProvider}
                 modelLabel={modelLabel}
                 permissionMode={selectedPermissionMode}
+                workMode={selectedWorkMode}
+                modeChangePending={modeChangePending}
+                onWorkModeChange={changeWorkMode}
                 effort={selectedEffort}
                 skills={skillCommands}
                 plugins={pluginCatalog}
@@ -880,7 +901,7 @@ function ConversationPane({
                 }}
                 onSelectPermissionMode={(permissionMode) => {
                   if (activeSessionId)
-                    void updateSessionPermissionMode(activeSessionId, permissionMode)
+                    void updateSessionPermissionMode(activeSessionId, permissionMode).catch(() => {})
                   else selectPermissionMode(permissionMode)
                 }}
                 onSelectEffort={(effort) => {

@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   checkImportBoundary,
+  extractImports,
   checkPackageDependency,
   countLegacyCalls,
   validateLegacyBaseline,
@@ -13,6 +14,8 @@ import {
   checkMaintenanceCapability,
   checkAttachmentLayout,
   collectAttachmentLayoutErrors,
+  findDependencyCycles,
+  collectWorkspaceCycleErrors,
 } from "./architecture-boundaries.mjs";
 
 test("services cannot depend on server", () => {
@@ -291,3 +294,65 @@ test("attachment layout scan covers package root barrels", (t) => {
   ]);
 });
 
+
+
+test("dependency graph rejects direct, indirect, and self cycles", () => {
+  assert.deepEqual(findDependencyCycles(new Map([["a", ["b"]], ["b", ["c"]], ["c", ["a"]]])), [["a", "b", "c", "a"]]);
+  assert.deepEqual(findDependencyCycles(new Map([["a", ["a"]]])), [["a", "a"]]);
+  assert.deepEqual(findDependencyCycles(new Map([["a", ["c"]], ["b", ["c"]], ["c", []]])), []);
+});
+
+test("workspace cycle checks include undeclared type imports and relative package imports", () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "oh-package-cycles-"));
+  try {
+    for (const name of ["a", "b"]) {
+      mkdirSync(join(fixtureRoot, "packages", name, "src"), { recursive: true });
+      writeFileSync(join(fixtureRoot, "packages", name, "package.json"), JSON.stringify({ name: "@test/" + name }));
+    }
+    mkdirSync(join(fixtureRoot, "apps"));
+    const a = join(fixtureRoot, "packages/a/src/index.ts");
+    const b = join(fixtureRoot, "packages/b/src/index.ts");
+    writeFileSync(a, 'import type { B } from "@test/b";');
+    writeFileSync(b, 'export { A } from "../../a/src/index.js";');
+    assert.deepEqual(collectWorkspaceCycleErrors(fixtureRoot), ["Workspace dependency cycle: @test/a -> @test/b -> @test/a"]);
+    writeFileSync(b, 'import A = require("../../a");');
+    assert.equal(collectWorkspaceCycleErrors(fixtureRoot).length, 1);
+    writeFileSync(a, 'import "@test/b";\nimport { X } from "./local.js";');
+    assert.equal(collectWorkspaceCycleErrors(fixtureRoot).length, 1);
+    writeFileSync(a, '// import { B } from "@test/b";\nexport const A = "no dependency";');
+    assert.deepEqual(collectWorkspaceCycleErrors(fixtureRoot), []);
+    writeFileSync(a, 'import type { B } from "@test/b";');
+    writeFileSync(b, 'export type B = string;');
+    assert.deepEqual(collectWorkspaceCycleErrors(fixtureRoot), []);
+    writeFileSync(join(fixtureRoot, "packages/b/package.json"), JSON.stringify({ name: "@test/b", dependencies: { "@test/a": "workspace:*" } }));
+    assert.equal(collectWorkspaceCycleErrors(fixtureRoot).length, 1);
+  } finally {
+    assert.ok(fixtureRoot.startsWith(join(tmpdir(), "oh-package-cycles-")));
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+
+test("import extraction follows syntax, including side effects, types, reexports, and dynamic imports", () => {
+  const source = [
+    'import "side-effect";',
+    'import type { B } from "types";',
+    'export { C } from "reexport";',
+    'type D = import("inline-type").D;',
+    'const mod = import("dynamic");',
+    'const cjs = require("commonjs");',
+    '// import { Fake } from "comment";',
+    'const text = \'import "string-only";\';',
+  ].join("\n");
+  assert.deepEqual(extractImports(source), ["side-effect", "types", "reexport", "inline-type", "dynamic", "commonjs"]);
+});
+
+
+test("desktop boundary checks allow local styles but reject process aliases", () => {
+  const renderer = "apps/desktop/src/renderer/src/main.tsx";
+  const main = "apps/desktop/src/main/index.ts";
+  assert.deepEqual(checkImportBoundary(renderer, "./assets/main.css"), []);
+  assert.deepEqual(checkImportBoundary(main, "./assets/renderer.css"), []);
+  assert.deepEqual(checkImportBoundary(renderer, "@main/features/session/session-service"), [renderer + " must not depend on Desktop main"]);
+  assert.deepEqual(checkImportBoundary(main, "@renderer/stores/desktop-session/store"), [main + " must not depend on Desktop renderer"]);
+});

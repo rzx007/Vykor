@@ -5,7 +5,7 @@ type ReadPresentation = (key: string, title: string, load: () => Promise<string>
 
 export async function handleSettingsCommand(
   slash: SlashLine,
-  host: Pick<SessionCommandHost, "client" | "cwd" | "sessionId" | "patchStatus">,
+  host: Pick<SessionCommandHost, "client" | "cwd" | "sessionId" | "patchStatus" | "workMode" | "permissionMode">,
   emit: (text: string) => void,
   readPresentation: ReadPresentation,
 ): Promise<"handled"> {
@@ -13,21 +13,22 @@ export async function handleSettingsCommand(
   const patchStatus = (patch: Record<string, unknown>) => host.patchStatus?.(patch);
 
   if (slash?.name === "/plan") {
-    const next =
-      slash.args === "on" ? "plan"
-        : slash.args === "off" ? "default"
-          : undefined;
+    const current = host.workMode ?? (host.permissionMode === "plan" ? "plan" : "execute");
+    const arg = slash.args.trim();
+    const next = arg === "on" ? "plan"
+      : arg === "off" ? "execute"
+        : arg === "" ? (current === "plan" ? "execute" : "plan") : undefined;
     if (!next) {
       emit("Usage: /plan [on|off]");
       return "handled";
     }
-    patchStatus({ permission_mode: next });
+    patchStatus({ work_mode: next });
     if (sessionId) {
       await client.sessions.update(sessionId, {
-        metadata: patchSessionRuntimeMetadata({}, { permissionMode: next }),
+        metadata: patchSessionRuntimeMetadata({}, { workMode: next }),
       });
     }
-    emit(`Permission mode: ${next}`);
+    emit(`Work mode: ${next}`);
     return "handled";
   }
 

@@ -177,6 +177,8 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
     },
     async submitGoal(scope) {
       const state = get()
+      const modeKey = scope.startsWith("session:") ? scope.slice(8) : "new"
+      if (state.pendingModeChanges[modeKey]) return
       const composer = state.goalComposersByScope[scope] ?? emptyGoalComposer
       if (!composer.mode || composer.busy) return
       const document = selectDraftDocument(state, scope)
@@ -224,6 +226,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
             model: state.selectedModel,
             ...(state.selectedProvider ? { provider: state.selectedProvider } : {}),
             permissionMode: state.selectedPermissionMode,
+            workMode: state.selectedWorkMode,
             ...(state.selectedEffort ? { effort: state.selectedEffort } : {}),
           }
           const session = await window.desktop.sessions.create(

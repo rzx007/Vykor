@@ -1,28 +1,30 @@
 import { ArrowUp, Check, ChevronDown, ShieldCheck, Square } from "lucide-react"
-import { forwardRef } from "react"
+import { forwardRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Item, ItemActions } from "@renderer/components/ui/item"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@renderer/components/ui/alert-dialog"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionMode } from "@shared/session-types"
 import type { PermissionModeOption } from "../shared/types"
 
 export const permissionModeOptions: PermissionModeOption[] = [
   {
-    value: "default",
-    label: "手动批准",
+    value: "ask",
+    label: "请我批准",
     description: "写入、命令等敏感操作会请求确认。",
   },
   {
-    value: "plan",
-    label: "计划模式",
-    description: "保持只读分析，适合先审方案。",
+    value: "auto_review",
+    label: "帮我批准",
+    description: "由独立审查判断操作，必要时再请你确认。",
   },
   {
-    value: "full_auto",
-    label: "自动批准",
-    description: "自动批准工具操作，仍遵守禁止规则和访问边界。",
+    value: "full_access",
+    label: "完全访问权限",
+    description: "扩大当前环境的访问权限，仍遵守计划限制和强制禁止规则。",
   },
 ]
 
@@ -30,12 +32,16 @@ export function PermissionModeMenu({
   selected,
   onSelect,
   className,
+  disabled = false,
 }: {
   selected: DesktopPermissionMode
   onSelect: (mode: DesktopPermissionMode) => void
   className?: string
+  disabled?: boolean
 }): React.JSX.Element {
+  const [confirm, setConfirm] = useState(false)
   return (
+    <>
     <div role="menu" className={cn("text-popover-foreground", className)}>
       {permissionModeOptions.map((mode) => (
         <Button
@@ -44,7 +50,11 @@ export function PermissionModeMenu({
           variant="ghost"
           role="menuitemradio"
           aria-checked={selected === mode.value}
-          onClick={() => onSelect(mode.value)}
+          disabled={disabled}
+          onClick={() => {
+            if (mode.value === "full_access" && selected !== "full_access") setConfirm(true)
+            else onSelect(mode.value)
+          }}
           className={cn(
             "h-auto w-full items-start justify-start gap-2 px-2 py-2 text-left font-normal whitespace-normal",
             selected === mode.value && "bg-muted"
@@ -61,6 +71,21 @@ export function PermissionModeMenu({
         </Button>
       ))}
     </div>
+    <AlertDialog open={confirm} onOpenChange={setConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>启用完全访问权限？</AlertDialogTitle>
+          <AlertDialogDescription>
+            当前聊天可在执行环境允许的范围内访问文件、命令和网络，普通操作通常不再请求批准。计划模式和强制禁止规则仍然生效。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction disabled={disabled} onClick={() => onSelect("full_access")}>启用完全访问权限</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 
