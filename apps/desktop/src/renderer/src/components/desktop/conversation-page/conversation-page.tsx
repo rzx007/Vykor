@@ -72,7 +72,7 @@ import { HeaderIconButton } from "./composer/controls"
 import { resolveEffortTiers } from "./composer/effort-picker"
 import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 import { NewConversationStart } from "./session/new-conversation-start"
-import { PermissionCard, readPermissionReview } from "./message/message-block"
+import { PermissionCard, requiresPermissionReply } from "./message/message-block"
 import { AskUserCard } from "./message/ask-user-card"
 import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
@@ -283,11 +283,7 @@ function ConversationPane({
       return input ? [{ input, run, ...(action ? { action } : {}) }] : []
     })
   const pendingPermissions =
-    sessionView?.permissions.filter((permission) => permission.status === "pending") ?? []
-  const displayedPermissions = [
-    ...(sessionView?.permissions ?? []).filter((permission) => permission.status !== "pending" && readPermissionReview(permission)).slice(-3),
-    ...pendingPermissions,
-  ]
+    sessionView?.permissions.filter(requiresPermissionReply) ?? []
   const singleAskUserPrompt =
     pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
@@ -710,7 +706,7 @@ function ConversationPane({
             <SideChatSelectionActions sourceId={activeSessionId} viewportRef={messageViewportRef} />
           </div>
 
-          {!archived && displayedPermissions.length > 0 ? (
+          {!archived && pendingPermissions.length > 0 ? (
             <div
               role="region"
               aria-label="待处理的授权请求"
@@ -722,7 +718,7 @@ function ConversationPane({
               )}
             >
               <div className="space-y-2">
-                {displayedPermissions.map((permission) =>
+                {pendingPermissions.map((permission) =>
                   isAskUserPermission(permission) ? (
                     <AskUserCard
                       key={`${permission.id}:${permissionReplies[permission.id]?.error ?? "active"}`}

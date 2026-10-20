@@ -471,7 +471,7 @@ const approvalReviewLabels = {
   denied: "已拒绝", timed_out: "审查超时，需要你确认",
 } as const
 
-export function readPermissionReview(permission: DesktopPermissionRequest): { status: keyof typeof approvalReviewLabels; label: string; reason: string } | null {
+function readPermissionReview(permission: DesktopPermissionRequest): { status: keyof typeof approvalReviewLabels; label: string; reason: string } | null {
   const review = permission.payload.approvalReview
   if (!review || typeof review !== "object" || Array.isArray(review)) return null
   const record = review as Record<string, unknown>
@@ -484,6 +484,12 @@ export function readPermissionReview(permission: DesktopPermissionRequest): { st
     : permission.status === "approved" && record.status !== "approved" ? "已批准"
     : approvalReviewLabels[record.status as keyof typeof approvalReviewLabels]
   return { status: record.status as keyof typeof approvalReviewLabels, label, reason: typeof reason === "string" ? reason.slice(0, 1000) : "" }
+}
+
+export function requiresPermissionReply(permission: DesktopPermissionRequest): boolean {
+  if (permission.status !== "pending") return false
+  const review = readPermissionReview(permission)
+  return !review || review.status === "ask_user" || review.status === "timed_out"
 }
 
 export function PermissionCard({
@@ -499,9 +505,9 @@ export function PermissionCard({
   replyError?: string | null
   className?: string
 }): React.JSX.Element | null {
+  if (!requiresPermissionReply(permission)) return null
   const developerScope = readDeveloperScope(permission)
   const review = readPermissionReview(permission)
-  if (review?.status === "approved" && (permission.status === "pending" || permission.status === "approved")) return null
   return (
     <section className={cn("mt-6 rounded-xl border bg-background px-4 py-3 shadow-sm", className)}>
       <div className="flex items-start gap-3">

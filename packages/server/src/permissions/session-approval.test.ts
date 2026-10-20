@@ -46,9 +46,36 @@ describe("session authorization host boundary", () => {
   it("invalidates a cancelled run", () => {
     const sample = fixture(); sample.abort.abort(); expect(sample.input.isCurrent!()).toBe(false);
   });
-  it("sends unknown commands to the user when no reliable isolation exists", async () => {
+  it.each(["Shell", "TerminalOpen"])("reviews a routine %s command without requiring system isolation first", async toolName => {
+    const sample = fixture(toolName);
+    const command = { command: "git status --short" };
+    sample.request.payload.input = command;
+    const review = vi.fn(async () => ({ decision: "approve" as const, risk: "low" as const, authorization: "task_implied" as const, reason: "Read project status" }));
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+    await expect(sample.input.review!({ request: sample.request, input: { ...sample.input, input: command } })).resolves.toMatchObject({ decision: "approve" });
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      input: command,
+      evidence: expect.objectContaining({ reliableIsolation: false, userInstruction: "Edit a.ts" }),
+    }), undefined);
+  });
+
+  it("reviews a user instruction in a forked conversation rather than treating it as an agent delegation", async () => {
+    const sample = fixture("Write");
+    Object.assign(sample.session, { parentId: "source-session" });
+    const review = vi.fn(async () => ({ decision: "approve" as const, risk: "low" as const, authorization: "task_implied" as const, reason: "Within the fork's own user task" }));
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+    await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toMatchObject({ decision: "approve" });
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "s", inputId: "i", evidence: expect.objectContaining({ userInstruction: "Edit a.ts" }),
+    }), undefined);
+  });
+
+  it("retains the reviewer's request for human confirmation of an unknown command", async () => {
     const sample = fixture();
+    const review = vi.fn(async () => ({ decision: "ask_user" as const, risk: "unknown" as const, authorization: "missing" as const, reason: "Unknown command effects" }));
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
     await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toMatchObject({ decision: "ask_user", risk: "unknown" });
+    expect(review).toHaveBeenCalledOnce();
   });
   it("does not auto-approve an unclassified plugin by its description", async () => {
     const sample = fixture("Publish", "plugin");

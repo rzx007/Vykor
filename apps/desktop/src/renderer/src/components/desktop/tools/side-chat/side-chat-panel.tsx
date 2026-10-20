@@ -4,7 +4,7 @@ import { Composer } from "../../conversation-page/composer/composer"
 import { toComposerSkills } from "../../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../../conversation-page/composer/plugin-mentions-feature"
-import { PermissionCard, readPermissionReview } from "../../conversation-page/message/message-block"
+import { PermissionCard, requiresPermissionReply } from "../../conversation-page/message/message-block"
 import { AskUserCard } from "../../conversation-page/message/ask-user-card"
 import { isAskUserPermission } from "../../conversation-page/message/ask-user-payload"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
@@ -323,11 +323,7 @@ export function SideChatPanel({
   )
   const archived = view?.session.status === "archived"
   const permissions =
-    view?.permissions.filter((permission) => permission.status === "pending") ?? []
-  const displayedPermissions = [
-    ...(view?.permissions ?? []).filter((permission) => permission.status !== "pending" && readPermissionReview(permission)).slice(-3),
-    ...permissions,
-  ]
+    view?.permissions.filter(requiresPermissionReply) ?? []
   const submissions = Object.values(runtime.pendingPromptSubmissions)
   const runtimeError = Object.values(runtime.operations)
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
@@ -726,7 +722,7 @@ export function SideChatPanel({
           </p>
         ) : null}
         {!archived
-          ? displayedPermissions.map((permission) => {
+          ? permissions.map((permission) => {
               const state = useDesktopSessionStore.getState()
               const pending = selectPermissionReplyPending(state, targetId!, permission.id)
               const replyError = selectPermissionReplyError(state, targetId!, permission.id)

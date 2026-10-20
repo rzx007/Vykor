@@ -817,6 +817,80 @@ it("normal authorization cards send approval to the side session and retain repl
   expect(container.textContent).toContain("permission offline")
 })
 
+it("keeps automatic review quiet and only shows an approval card when the reviewer needs the user", async () => {
+  draft("main", "question")
+  await mount()
+  await submit()
+  const view: DesktopSessionView = {
+    ...sideView("main", 1),
+    permissions: [{
+      id: "reviewing-shell", sessionId: "side-main", toolName: "Shell", status: "pending",
+      payload: { approvalReview: { status: "reviewing", startedAt: 1 } },
+      createdAt: 1, updatedAt: 1,
+    }],
+  }
+  await emit(view)
+  expect(container.textContent).not.toContain("Vykor 请求运行 Shell")
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许")).toBe(false)
+
+  await emit({
+    ...view, cursor: 2,
+    permissions: view.permissions.map((permission) => ({
+      ...permission, updatedAt: 2,
+      payload: { approvalReview: { status: "ask_user", startedAt: 1, reason: "需要你确认操作范围" } },
+    })),
+  })
+  expect(container.textContent).toContain("Vykor 请求运行 Shell")
+  expect(container.textContent).toContain("需要你确认操作范围")
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许")).toBe(true)
+})
+
+it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmation while retaining other pending requests", async (reviewStatus) => {
+  draft("main", "question")
+  await mount()
+  await submit()
+  const view: DesktopSessionView = {
+    ...sideView("main", 1),
+    permissions: [
+      {
+        id: "reviewed-shell", sessionId: "side-main", toolName: "Shell", status: "pending",
+        payload: { approvalReview: { status: reviewStatus, startedAt: 1 } },
+        createdAt: 1, updatedAt: 1,
+      },
+      {
+        id: "pending-fetch", sessionId: "side-main", toolName: "WebFetch", status: "pending",
+        payload: {}, createdAt: 1, updatedAt: 1,
+      },
+    ],
+  }
+  await emit(view)
+  expect(container.textContent).toContain("Vykor 请求运行 Shell")
+  const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === "允许"
+  )!
+  await act(async () => allow.click())
+  expect(replyPermission).toHaveBeenCalledWith({
+    permissionId: "reviewed-shell", status: "approved", decision: "once",
+  })
+
+  await emit({
+    ...view, cursor: 2,
+    permissions: view.permissions.map((permission) => permission.id === "reviewed-shell"
+      ? { ...permission, status: "approved", updatedAt: 2 }
+      : permission),
+  })
+  expect(container.textContent).not.toContain("Vykor 请求运行 Shell")
+  expect(container.textContent).not.toContain("已批准")
+  expect(container.textContent).toContain("Vykor 请求运行 WebFetch")
+  expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "允许")).toHaveLength(1)
+
+  await emit({
+    ...view, cursor: 3,
+    permissions: view.permissions.map((permission) => ({ ...permission, status: "denied", updatedAt: 3 })),
+  })
+  expect(container.textContent).not.toContain("Vykor 请求运行")
+})
+
 function SelectionHarness({
   revision = 0,
   sourceId = "main",

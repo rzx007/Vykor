@@ -33,14 +33,13 @@ export function sessionPermissionRequest(input: {
     runtimeRevision: revision, inputId: context.inputId, isCurrent,
     review: async ({ request: saved, input: captured, signal }) => {
       const toolInput = captured.input ?? {};
-      if (!settings || session.parentId || toolSource !== "builtin"
+      if (!settings || toolSource !== "builtin"
         || containsSecret(toolInput)) {
         return { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "无法核实工具来源或模型配置，需要你确认。" };
       }
       const reliableIsolation = settings.agentEnvironment?.kind !== "wsl" && getSandboxAvailability(settings.sandbox).active;
-      if (!reliableIsolation && /shell|bash|terminal|process|exec/i.test(saved.toolName)) {
-        return { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "当前没有可靠的系统隔离，命令执行需要你确认。" };
-      }
+      // Isolation is evidence for this exact invocation, not a prerequisite for review.
+      // The service separately rejects delegated runs without a direct user instruction.
       const reviewer = await createConfiguredApprovalReviewer({
         settings, sessionId: session.id,
         model: runtime.model, provider: runtime.provider,

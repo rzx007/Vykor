@@ -6,9 +6,7 @@ import { PermissionCard } from "../message-block"
 
 describe("PermissionCard", () => {
   it.each([
-    ["reviewing", "正在自动审查"],
     ["ask_user", "需要你确认"],
-    ["denied", "已拒绝"],
     ["timed_out", "审查超时"],
   ])("shows automatic review state %s and its escaped reason", (status, title) => {
     const html = renderToStaticMarkup(createElement(PermissionCard, {
@@ -24,31 +22,25 @@ describe("PermissionCard", () => {
     expect(html).not.toContain("<script>")
   })
 
-  it.each([
-    { status: "approved", reviewStatus: "reviewing" },
-    { status: "denied", reviewStatus: "reviewing" },
-    { status: "expired", reviewStatus: "reviewing" },
-    { status: "denied", reviewStatus: "approved" },
-    { status: "expired", reviewStatus: "approved" },
-  ] as const)("shows settled $status before a stale $reviewStatus review status", ({ status, reviewStatus }) => {
-    const html = renderToStaticMarkup(createElement(PermissionCard, {
-      permission: {
-        id: "review", sessionId: "session", toolName: "Shell", status,
-        payload: { approvalReview: { status: reviewStatus, startedAt: 1 } },
-        createdAt: 1, updatedAt: 1,
-      },
-      onReply: vi.fn(),
-    }))
-    expect(html).toContain({ approved: "已批准", denied: "已拒绝", expired: "请求已失效" }[status])
-    expect(html).not.toContain("正在自动审查")
-    expect(html).not.toContain("<button")
+  it.each(["approved", "denied", "expired"] as const)("does not render a settled %s request, regardless of review state", (status) => {
+    for (const reviewStatus of [undefined, "reviewing", "ask_user", "timed_out", "approved", "denied"]) {
+      const html = renderToStaticMarkup(createElement(PermissionCard, {
+        permission: {
+          id: "review", sessionId: "session", toolName: "Shell", status,
+          payload: reviewStatus ? { approvalReview: { status: reviewStatus, startedAt: 1 } } : {},
+          createdAt: 1, updatedAt: 2,
+        },
+        onReply: vi.fn(),
+      }))
+      expect(html, "settled " + status + " with review " + reviewStatus).toBe("")
+    }
   })
 
-  it.each(["pending", "approved"] as const)("does not render an automatic approval result while the request is %s", (status) => {
+  it.each(["reviewing", "approved", "denied"] as const)("does not ask for a human decision while automatic review is %s", (reviewStatus) => {
     const html = renderToStaticMarkup(createElement(PermissionCard, {
       permission: {
-        id: "review", sessionId: "session", toolName: "Shell", status,
-        payload: { approvalReview: { status: "approved", startedAt: 1, reason: "符合已授权任务" } },
+        id: "review", sessionId: "session", toolName: "Shell", status: "pending",
+        payload: { approvalReview: { status: reviewStatus, startedAt: 1, reason: "符合已授权任务" } },
         createdAt: 1, updatedAt: 1,
       },
       onReply: vi.fn(),
