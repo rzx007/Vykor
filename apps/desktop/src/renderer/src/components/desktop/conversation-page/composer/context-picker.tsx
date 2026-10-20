@@ -42,11 +42,15 @@ export function ContextPicker({
     [items, normalized]
   )
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [highlightedFor, setHighlightedFor] = useState({ query, count: options.length })
+  if (highlightedFor.query !== query || highlightedFor.count !== options.length) {
+    setHighlightedFor({ query, count: options.length })
+    setHighlightedIndex(0)
+  }
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([])
   const pickerRef = useRef<HTMLDivElement | null>(null)
   const activeIndex = Math.min(highlightedIndex, Math.max(options.length - 1, 0))
 
-  useEffect(() => setHighlightedIndex(0), [query, options.length])
   useEffect(
     () => optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" }),
     [activeIndex]
@@ -108,6 +112,7 @@ export function ContextPicker({
               variant="ghost"
               role="option"
               aria-selected={index === activeIndex}
+              title={`${item.label} — ${item.description}`}
               onMouseEnter={() => setHighlightedIndex(index)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onSelect(item)}
@@ -129,8 +134,10 @@ export function ContextPicker({
                   <MessageSquare className="size-4" />
                 )}
               </span>
-              <span className="min-w-0 truncate text-sm font-medium">{item.label}</span>
-              <span className="min-w-0 truncate text-sm text-muted-foreground">
+              <span className="max-w-[42%] min-w-0 shrink-0 truncate text-sm font-medium">
+                {item.label}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                 {item.description}
               </span>
               {item.sourceLabel ? (

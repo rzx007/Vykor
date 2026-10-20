@@ -6,6 +6,8 @@ import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser-navig
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import { FilesTool } from "@renderer/components/desktop/tools/files-tool"
 import { getFileIcon } from "@renderer/components/desktop/tools/file-icons"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
+import { saveCodePreviewDraft } from "@renderer/components/desktop/tools/code-preview-save"
 import {
   mergeFileViewerTabs,
   type FileViewerTab,
@@ -22,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@renderer/components/ui/alert-dialog"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
+import { Button } from "@renderer/components/ui/button"
 import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
 import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
@@ -164,6 +167,13 @@ export function UtilityPanel({
   } | null>(null)
   const [sideChatCloseError, setSideChatCloseError] = useState<string | null>(null)
   const [closingSideChat, setClosingSideChat] = useState(false)
+  const [pendingFileClose, setPendingFileClose] = useState<{
+    tabIds: string[]
+    preferredActiveTabId?: string
+  } | null>(null)
+  const [fileCloseError, setFileCloseError] = useState<string | null>(null)
+  const [savingBeforeClose, setSavingBeforeClose] = useState(false)
+  const fileCloseBusy = useRef(false)
   const closeInProgress = useRef(false)
   const latestCloseTabs = useRef<
     ((tabIds: string[], preferredActiveTabId?: string) => void) | null
@@ -403,6 +413,12 @@ export function UtilityPanel({
       pluginUi?.close(pluginSidebar!.instance.instanceId)
 
     const closingTabs = tabs.filter((tab) => closingIds.has(tab.id))
+    for (const tab of closingTabs) {
+      if (tab.filePath)
+        useCodePreviewDrafts
+          .getState()
+          .discard(JSON.stringify([scopeId, tab.projectPath, tab.filePath]))
+    }
     const closingFilePaths = new Set(
       closingTabs.map((tab) => tab.filePath).filter((path): path is string => Boolean(path))
     )
@@ -484,8 +500,21 @@ export function UtilityPanel({
     latestCloseTabs.current = finishCloseTabs
   })
 
-  const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
-    if (closeInProgress.current) return
+  const closeTabs = (tabIds: string[], preferredActiveTabId?: string, confirmed = false): void => {
+    if (closeInProgress.current || fileCloseBusy.current) return
+    const drafts = useCodePreviewDrafts.getState().drafts
+    if (
+      !confirmed &&
+      tabs.some((tab) => {
+        if (!tab.filePath || !tabIds.includes(tab.id)) return false
+        const draft = drafts[JSON.stringify([scopeId, tab.projectPath, tab.filePath])]
+        return !!draft && (draft.saving || draft.content !== draft.originalContent)
+      })
+    ) {
+      setFileCloseError(null)
+      setPendingFileClose({ tabIds, preferredActiveTabId })
+      return
+    }
     if (
       activeSessionId &&
       tabs.some((tab) => tab.tool === "side-chat" && tabIds.includes(tab.id))
@@ -496,15 +525,63 @@ export function UtilityPanel({
     }
     finishCloseTabs(tabIds, preferredActiveTabId)
   }
-  const [closeScope, setCloseScope] = useState({ scopeId, activeSessionId })
+  const [closeScope, setCloseScope] = useState({ scopeId, activeSessionId, selectedProjectPath })
   const closeContext = useRef(closeScope)
   useLayoutEffect(() => {
     closeContext.current = closeScope
   }, [closeScope])
-  if (closeScope.scopeId !== scopeId || closeScope.activeSessionId !== activeSessionId) {
-    setCloseScope({ scopeId, activeSessionId })
+  if (
+    closeScope.scopeId !== scopeId ||
+    closeScope.activeSessionId !== activeSessionId ||
+    closeScope.selectedProjectPath !== selectedProjectPath
+  ) {
+    setCloseScope({ scopeId, activeSessionId, selectedProjectPath })
     setPendingSideChatClose(null)
     setSideChatCloseError(null)
+    setPendingFileClose(null)
+    setFileCloseError(null)
+  }
+
+  const confirmFileClose = async (save: boolean): Promise<void> => {
+    const request = pendingFileClose
+    if (!request || fileCloseBusy.current) return
+    const context = closeContext.current
+    const closing = tabs.filter((tab) => request.tabIds.includes(tab.id) && tab.filePath)
+    fileCloseBusy.current = true
+    setSavingBeforeClose(true)
+    setFileCloseError(null)
+    try {
+      for (const tab of closing) {
+        const key = JSON.stringify([scopeId, tab.projectPath, tab.filePath])
+        if (useCodePreviewDrafts.getState().drafts[key]?.saving)
+          throw new Error("文件正在保存，请稍后重试。")
+        if (save) {
+          if (!tab.projectPath) throw new Error("找不到文件所在的项目，草稿仍已保留。")
+          const result = await saveCodePreviewDraft(key, tab.projectPath, tab.filePath!)
+          if (result && closeContext.current === context)
+            setFileTabs((current) =>
+              current.map((file) =>
+                file.projectPath === tab.projectPath && file.preview.path === tab.filePath
+                  ? { ...file, preview: result }
+                  : file
+              )
+            )
+          const draft = useCodePreviewDrafts.getState().drafts[key]
+          if (draft && draft.content !== draft.originalContent)
+            throw new Error("仍有未保存的修改，请再次保存。")
+        }
+      }
+      if (closeContext.current !== context) return
+      fileCloseBusy.current = false
+      setPendingFileClose(null)
+      closeTabs(request.tabIds, request.preferredActiveTabId, true)
+    } catch (error) {
+      if (closeContext.current === context)
+        setFileCloseError(error instanceof Error ? error.message : String(error))
+    } finally {
+      fileCloseBusy.current = false
+      setSavingBeforeClose(false)
+    }
   }
 
   const confirmSideChatClose = async (): Promise<void> => {
@@ -700,6 +777,17 @@ export function UtilityPanel({
 
   return (
     <aside
+      onKeyDownCapture={(event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.key.toLowerCase() === "w" &&
+          activeTab?.filePath
+        ) {
+          event.preventDefault()
+          event.stopPropagation()
+          closeTab(activeTab.id)
+        }
+      }}
       aria-hidden={!open}
       className={cn(
         "h-full min-h-0 w-full overflow-hidden bg-conversation transition-opacity duration-150 ease-out",
@@ -707,6 +795,37 @@ export function UtilityPanel({
       )}
     >
       <div className="flex h-full min-w-[320px] flex-col">
+        <AlertDialog
+          open={pendingFileClose !== null}
+          onOpenChange={(open) => {
+            if (!open && !fileCloseBusy.current) setPendingFileClose(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>保存文件修改？</AlertDialogTitle>
+              <AlertDialogDescription>关闭的文件包含未保存的修改。</AlertDialogDescription>
+            </AlertDialogHeader>
+            {fileCloseError ? (
+              <p role="alert" className="text-xs text-destructive">
+                {fileCloseError}
+              </p>
+            ) : null}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={savingBeforeClose}>取消</AlertDialogCancel>
+              <Button
+                variant="ghost"
+                disabled={savingBeforeClose}
+                onClick={() => void confirmFileClose(false)}
+              >
+                不保存
+              </Button>
+              <Button disabled={savingBeforeClose} onClick={() => void confirmFileClose(true)}>
+                {savingBeforeClose ? "正在保存…" : "保存"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AlertDialog
           open={pendingSideChatClose !== null}
           onOpenChange={(nextOpen) => {
@@ -738,6 +857,7 @@ export function UtilityPanel({
           </AlertDialogContent>
         </AlertDialog>
         <UtilityPanelTabStrip
+          scopeId={scopeId}
           tabs={visibleTabs}
           browserTabs={browserTabs}
           activeTab={activeTab}

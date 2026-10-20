@@ -6,6 +6,7 @@ import type { CodeViewProps } from "@pierre/diffs/react"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
 import { useCodePreviewDrafts } from "./code-preview-drafts"
+import { useEditorPreferences } from "@renderer/stores/editor-preferences"
 
 const codeView = vi.hoisted(() => ({
   props: null as CodeViewProps<undefined, undefined> | null,
@@ -65,6 +66,7 @@ describe("source preview editing lifecycle", () => {
   beforeEach(async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
     useCodePreviewDrafts.setState({ drafts: {} })
+    useEditorPreferences.setState({ readOnly: false, wordWrap: true, tabSize: 2 })
     saved.mockReset()
     write.mockReset()
     window.desktop = {
@@ -99,12 +101,27 @@ describe("source preview editing lifecycle", () => {
       await new Promise((resolve) => setTimeout(resolve, 1))
     })
   }
-  async function click(label: string) {
-    const button = Array.from(container.querySelectorAll("button")).find(
-      (node) => node.textContent === label
+  async function save() {
+    await act(async () =>
+      container.firstElementChild!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+      )
     )
-    expect(button, label).toBeTruthy()
-    await act(async () => button!.click())
+  }
+  async function menu(label: string) {
+    await act(async () =>
+      container.firstElementChild!.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, button: 2 })
+      )
+    )
+    const item = [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find(
+      (node) => node.textContent?.replace("✓ ", "") === label
+    )
+    expect(item, label).toBeTruthy()
+    await act(async () => item!.click())
+  }
+  async function readOnly(value: boolean) {
+    await act(async () => useEditorPreferences.getState().update({ readOnly: value }))
   }
   async function type(contents: string) {
     codeView.text = contents
@@ -116,8 +133,26 @@ describe("source preview editing lifecycle", () => {
     )
   }
 
+  it("opens editable and wrapped, saves by keyboard, and has no persistent editor toolbar", async () => {
+    expect(codeView.props!.items![0]!.edit).toBe(true)
+    expect(codeView.props!.options?.overflow).toBe("wrap")
+    expect(container.querySelector("button")).toBeNull()
+    write.mockResolvedValue({ ...preview, content: "draft" })
+    await type("draft")
+    await act(async () =>
+      container.firstElementChild!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+      )
+    )
+    expect(write).toHaveBeenCalledWith({
+      rootPath: "/project",
+      path: "a.ts",
+      originalContent: "original",
+      content: "draft",
+    })
+  })
+
   it("keeps live edits out of the controlled file until completion, and resumes drafts after remount", async () => {
-    await click("编辑")
     expect(codeView.props!.items![0]!.edit).toBe(true)
     await type("draft")
     const item = codeView.props!.items![0]!
@@ -130,6 +165,17 @@ describe("source preview editing lifecycle", () => {
     expect(restored.type === "file" && restored.file.contents).toBe("draft")
     expect(restored.edit).toBe(true)
   })
+  it("rereads a clean editable file without retaining stale text or history", async () => {
+    const id = useCodePreviewDrafts.getState().drafts[draftKey]!.id
+    await render({ ...preview, content: "external update" })
+    expect(codeView.text).toBe("external update")
+    expect(useCodePreviewDrafts.getState().drafts[draftKey]).toMatchObject({
+      originalContent: "external update",
+      content: "external update",
+      editing: true,
+    })
+    expect(useCodePreviewDrafts.getState().drafts[draftKey]!.id).not.toBe(id)
+  })
   it("retains newer typing while the saved snapshot becomes the next disk baseline", async () => {
     let finish!: (value: WorkspaceReadFileResult) => void
     write.mockImplementation(
@@ -138,9 +184,8 @@ describe("source preview editing lifecycle", () => {
           finish = resolve
         })
     )
-    await click("编辑")
     await type("snapshot")
-    await click("保存")
+    await save()
     await type("newer draft")
     await act(async () => finish({ ...preview, content: "snapshot" }))
     expect(write).toHaveBeenCalledWith({
@@ -154,13 +199,11 @@ describe("source preview editing lifecycle", () => {
       content: "newer draft",
     })
     expect(saved).toHaveBeenCalledWith(expect.objectContaining({ content: "snapshot" }))
-    expect(container.textContent).toContain("未保存")
   })
   it("preserves the draft and baseline when saving conflicts with an external update", async () => {
     write.mockRejectedValue(new Error("文件已被其他程序修改"))
-    await click("编辑")
     await type("draft")
-    await click("保存")
+    await save()
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("已被其他程序修改")
     expect(useCodePreviewDrafts.getState().drafts[draftKey]).toMatchObject({
       originalContent: "original",
@@ -176,17 +219,18 @@ describe("source preview editing lifecycle", () => {
           finish = resolve
         })
     )
-    await click("编辑")
     await type("saved snapshot")
-    await click("完成编辑")
-    await click("保存")
+    await readOnly(true)
+    await save()
     await act(async () => root.unmount())
     await act(async () => finish({ ...preview, content: "saved snapshot" }))
     root = createRoot(container)
     await render()
     const restored = codeView.props!.items![0]!
     expect(restored.type === "file" && restored.file.contents).toBe("saved snapshot")
-    expect(container.textContent).not.toContain("未保存")
+    expect(useCodePreviewDrafts.getState().drafts[draftKey]?.content).toBe(
+      useCodePreviewDrafts.getState().drafts[draftKey]?.originalContent
+    )
   })
   it("also preserves a late save after the preview was reread during editing", async () => {
     let finish!: (value: WorkspaceReadFileResult) => void
@@ -197,11 +241,10 @@ describe("source preview editing lifecycle", () => {
         })
     )
     const reread = { ...preview }
-    await click("编辑")
     await type("saved snapshot")
     await render(reread)
-    await click("完成编辑")
-    await click("保存")
+    await readOnly(true)
+    await save()
     await act(async () => root.unmount())
     await act(async () => finish({ ...preview, content: "saved snapshot" }))
     root = createRoot(container)
@@ -213,22 +256,20 @@ describe("source preview editing lifecycle", () => {
     expect(updated.type === "file" && updated.file.contents).toBe("external update")
   })
   it("keeps completed edits visible and installs the disk copy when a draft is explicitly discarded", async () => {
-    await click("编辑")
     await type("draft")
-    await click("完成编辑")
+    await menu("只读")
     const completed = codeView.props!.items![0]!
     expect(completed.type === "file" && completed.file.contents).toBe("draft")
-    await click("编辑")
-    await click("放弃改动")
+    await menu("只读")
+    await menu("放弃改动并重新载入")
     const confirm = Array.from(document.querySelectorAll("button")).find(
       (button) => button.textContent === "放弃并重新读取"
     )!
     await act(async () => confirm.click())
     const reset = codeView.props!.items![0]!
     expect(reset.type === "file" && reset.file.contents).toBe("disk content")
-    expect(reset.edit).toBe(false)
-    expect(useCodePreviewDrafts.getState().drafts[draftKey]).toBeUndefined()
-    await click("编辑")
+    expect(reset.edit).toBe(true)
+    expect(useCodePreviewDrafts.getState().drafts[draftKey]?.originalContent).toBe("disk content")
     expect(codeView.text).toBe("disk content")
   })
 })

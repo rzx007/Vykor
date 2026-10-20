@@ -25,7 +25,12 @@ import {
   sourcePart,
 } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-fixtures.test-support"
 import { utilityToolOrder } from "./utility-panel-tabs"
-import { readUtilityPanelRuntimeState } from "./utility-panel-repository"
+import {
+  readUtilityPanelRuntimeState,
+  writeUtilityPanelRuntimeState,
+} from "./utility-panel-repository"
+import { defaultUtilityPanelRuntimeState } from "./use-utility-panel-runtime"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
 import { imageSourceKey } from "@renderer/components/desktop/image-viewer/image-source"
 
 // 图片编辑器自身另有集成测试；这里验证真实 panel 的标签和会话缓存。
@@ -240,6 +245,87 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it.each(["cancel", "discard", "save", "failure"])(
+    "protects an inactive dirty file on close: %s",
+    async (action) => {
+      installProbe(async () => ({ isRepository: false, rootPath: null }))
+      const projectPath = "D:/plain-dir"
+      useOutsideProjectSession(projectPath)
+      const scopeId = `session:dirty-close-${action}`
+      const key = JSON.stringify([scopeId, projectPath, "a.ts"])
+      const preview = {
+        path: "a.ts",
+        name: "a.ts",
+        language: "typescript",
+        content: "original",
+        size: 8,
+        binary: false,
+        scope: "project" as const,
+        relativePath: "a.ts",
+        rootLabel: "project",
+        previewBytes: null,
+        mediaType: null,
+        imagePreviewError: null,
+      }
+      const writeFile = vi.fn(async () => ({ ...preview, content: "draft" }))
+      if (action === "failure") writeFile.mockRejectedValue(new Error("文件已被其他程序修改"))
+      Object.assign(window.desktop, { workspace: { writeFile } })
+      writeUtilityPanelRuntimeState(scopeId, {
+        ...defaultUtilityPanelRuntimeState(),
+        tabs: [
+          {
+            id: "image",
+            tool: "image",
+            title: "image.png",
+            imageSource: { kind: "attachment", assetId: "image", name: "image.png" },
+          },
+          { id: "file", tool: "files", title: "a.ts", filePath: "a.ts", projectPath },
+        ],
+        fileTabs: [{ preview, type: "code", projectPath }],
+        fileProjectPath: projectPath,
+        activeFilePath: "a.ts",
+        activeTabId: "image",
+      })
+      useCodePreviewDrafts.getState().begin(key, "original", preview)
+      useCodePreviewDrafts.getState().change(key, "draft")
+      const container = mountPanel(scopeId)
+      await settle()
+      expect(container.querySelector('[aria-label="未保存"]')).not.toBeNull()
+      // 文件 tab 与文件树复用同一套 SVG 图标。
+      expect(container.querySelector('button[title="a.ts"] use')?.getAttribute("href")).toContain(
+        "vykor-tree-icons-"
+      )
+      await act(async () =>
+        container.querySelectorAll<HTMLButtonElement>('button[aria-label="关闭标签"]')[1]!.click()
+      )
+      await settle()
+      expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+        "保存文件修改？"
+      )
+      const label = action === "cancel" ? "取消" : action === "discard" ? "不保存" : "保存"
+      const button = [
+        ...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'),
+      ].find((button) => button.textContent === label)!
+      await act(async () => button.click())
+      await settle()
+      const kept = action === "cancel" || action === "failure"
+      expect(readUtilityPanelRuntimeState(scopeId)?.tabs.some((tab) => tab.id === "file")).toBe(
+        kept
+      )
+      expect(useCodePreviewDrafts.getState().drafts[key]?.content).toBe(kept ? "draft" : undefined)
+      if (action === "save" || action === "failure")
+        expect(writeFile).toHaveBeenCalledWith({
+          rootPath: projectPath,
+          path: "a.ts",
+          originalContent: "original",
+          content: "draft",
+        })
+      else expect(writeFile).not.toHaveBeenCalled()
+      if (action === "failure")
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain("已被其他程序修改")
+      await act(async () => useCodePreviewDrafts.getState().discard(key))
+    }
+  )
   it("deduplicates an attachment image by identity and removes it through the normal tab close action", async () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     useOutsideProjectSession("D:/plain-dir")

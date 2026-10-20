@@ -22,8 +22,11 @@ import {
 import { Kbd } from "@renderer/components/ui/kbd"
 import { cn } from "@renderer/lib/utils"
 import { utilityToolMeta, type UtilityTab, type UtilityTool } from "./utility-panel-tabs"
+import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/code-preview-drafts"
+import { TreeFileIcon } from "@renderer/components/desktop/tools/tree-file-icon"
 
 type UtilityPanelTabStripProps = {
+  scopeId: string
   tabs: UtilityTab[]
   browserTabs: BrowserToolTab[]
   activeTab?: UtilityTab
@@ -39,6 +42,7 @@ type UtilityPanelTabStripProps = {
 }
 
 export function UtilityPanelTabStrip({
+  scopeId,
   tabs,
   browserTabs,
   activeTab,
@@ -81,6 +85,7 @@ export function UtilityPanelTabStrip({
             <UtilityTabButton
               key={tab.id}
               tab={tab}
+              scopeId={scopeId}
               active={tab.id === activeTab?.id}
               loading={browserTabs.find((item) => item.id === tab.id)?.loading}
               showSeparator={index < tabs.length - 1}
@@ -196,6 +201,7 @@ export function EmptyUtilityPanelState({
 
 function UtilityTabButton({
   tab,
+  scopeId,
   active,
   loading,
   showSeparator,
@@ -207,6 +213,7 @@ function UtilityTabButton({
   onCloseRight,
 }: {
   tab: UtilityTab
+  scopeId: string
   active: boolean
   loading?: boolean
   showSeparator: boolean
@@ -219,6 +226,10 @@ function UtilityTabButton({
 }): React.JSX.Element {
   const Icon = utilityToolMeta[tab.tool].icon
   const TabIcon = tab.fileIcon ?? Icon
+  const dirty = useCodePreviewDrafts((state) => {
+    const draft = state.drafts[JSON.stringify([scopeId, tab.projectPath, tab.filePath])]
+    return !!draft && draft.content !== draft.originalContent
+  })
 
   return (
     <ContextMenu>
@@ -238,10 +249,14 @@ function UtilityTabButton({
           className="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl px-2.5 pr-1 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={tab.title}
         >
-          <TabIcon
-            className={cn("size-3.5 shrink-0", loading && "animate-pulse")}
-            strokeWidth={1.75}
-          />
+          {tab.filePath ? (
+            <TreeFileIcon path={tab.filePath} className="size-3.5 shrink-0" />
+          ) : (
+            <TabIcon
+              className={cn("size-3.5 shrink-0", loading && "animate-pulse")}
+              strokeWidth={1.75}
+            />
+          )}
           <span className="utility-tab-title relative min-w-0 flex-1 overflow-hidden text-xs whitespace-nowrap">
             {tab.title}
           </span>
@@ -253,10 +268,20 @@ function UtilityTabButton({
           onClick={onClose}
           className={cn(
             "mr-1 grid size-6 shrink-0 place-items-center rounded-full text-ui-muted transition-opacity group-hover:opacity-100 hover:bg-background hover:text-ui-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-            active ? "opacity-75" : "opacity-0"
+            active || dirty ? "opacity-75" : "opacity-0"
           )}
         >
-          <X className="size-3.5" />
+          {dirty ? (
+            <>
+              <span
+                className="size-1.5 rounded-full bg-current group-focus-within:hidden group-hover:hidden"
+                aria-label="未保存"
+              />
+              <X className="hidden size-3.5 group-focus-within:block group-hover:block" />
+            </>
+          ) : (
+            <X className="size-3.5" />
+          )}
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44">

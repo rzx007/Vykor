@@ -12,6 +12,7 @@ import {
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopAppInfo } from "@shared/ipc-channels"
 import { SettingsGroup, SettingsRow } from "./settings-group"
+import { EditorSettings } from "./editor-settings"
 import { ProviderDefaultsControl } from "./provider-defaults-control"
 import {
   WorkStyleControl,
@@ -47,6 +48,7 @@ export function GeneralSettings() {
   return (
     <div className="flex flex-col gap-8">
       <ProviderDefaultsControl key={`model-${revision}`} onChanged={refresh} />
+      <EditorSettings />
       <SettingsGroup
         title="对话与任务"
         action={

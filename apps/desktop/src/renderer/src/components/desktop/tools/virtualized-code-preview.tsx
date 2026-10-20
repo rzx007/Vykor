@@ -7,10 +7,15 @@ import {
   type CodeViewProps,
   type CodeViewReactOptions,
 } from "@pierre/diffs/react"
-import { Check, MessageCirclePlus, Pencil, Save, Undo2, WrapText } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { Button } from "@renderer/components/ui/button"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@renderer/components/ui/context-menu"
+import { useEditorPreferences } from "@renderer/stores/editor-preferences"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +32,7 @@ import { toast } from "@renderer/lib/toast"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 import { createPreviewFile } from "./virtualized-code-preview-model"
 import { useCodePreviewDrafts } from "./code-preview-drafts"
+import { saveCodePreviewDraft } from "./code-preview-save"
 import { addCodeSelectionToComposer, createCodeSelectionAction } from "./code-selection-actions"
 import type { FileSearchMatch } from "./file-viewer"
 
@@ -43,6 +49,11 @@ interface VirtualizedCodePreviewProps {
 
 const createEditor: EditorFactory<undefined, undefined> = (type, options, key) =>
   new Editor(type, options, key)
+function textOffset(text: string, position: { line: number; character: number }): number {
+  let start = 0
+  for (let line = 0; line < position.line; line++) start = text.indexOf("\n", start) + 1
+  return start + position.character
+}
 const codeViewerCSS = `
   :host {
     display: block;
@@ -89,18 +100,22 @@ export function VirtualizedCodePreview({
 }: VirtualizedCodePreviewProps): React.JSX.Element {
   const draftKey = JSON.stringify([scopeId, projectPath, preview.path])
   const draft = useCodePreviewDrafts((state) => state.drafts[draftKey])
-  const editing = draft?.editing ?? false
   const dirty = !!draft && draft.content !== draft.originalContent
   const saving = draft?.saving ?? false
   const canEdit =
     !!projectPath && preview.scope === "project" && !preview.binary && preview.content !== null
+  const { readOnly, wordWrap, tabSize, update: updatePreferences } = useEditorPreferences()
+  const editing = canEdit && !readOnly && (draft?.editing ?? false)
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null)
-  const editButton = useRef<HTMLButtonElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const savingRef = useRef(false)
   const discarding = useRef(false)
+  const restoreEditorFocus = useRef(true)
   const [error, setError] = useState<string | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
-  const [wrap, setWrap] = useState(false)
+  const [history, setHistory] = useState({ undo: false, redo: false })
+  const [hasSelection, setHasSelection] = useState(false)
+  const [selectedText, setSelectedText] = useState("")
   const [epoch, setEpoch] = useState(0)
   const [selection, setSelection] = useState<{
     id: string
@@ -115,6 +130,17 @@ export function VirtualizedCodePreview({
     version: 0,
   }))
   const file = document.file
+  const line = searchQuery && searchMatch ? searchMatch.line + 1 : targetLine
+  const editStateKey = draft ? `desktop-code-draft:${draft.id}` : undefined
+  const getEditStateKey = useCallback(() => editStateKey, [editStateKey])
+  useEffect(() => {
+    if (!canEdit) return
+    const store = useCodePreviewDrafts.getState()
+    const current = store.drafts[draftKey]
+    if (readOnly) {
+      if (current?.editing) store.stop(draftKey)
+    } else if (!current?.editing) store.begin(draftKey, file.contents, preview)
+  }, [canEdit, readOnly, draftKey, file, preview])
   // 保存回传可能只更新元数据；内容未变时保留布局正在使用的文件对象。
   const setFile = useCallback(
     (next: FileContents) =>
@@ -139,14 +165,14 @@ export function VirtualizedCodePreview({
     () => ({
       disableFileHeader: true,
       enableLineSelection: true,
-      overflow: wrap ? "wrap" : "scroll",
+      overflow: wordWrap ? "wrap" : "scroll",
       preferredHighlighter: "shiki-js",
       theme: DEFAULT_THEMES,
       themeType,
       tokenizeMaxLineLength: codeHighlighterOptions.tokenizeMaxLineLength,
-      unsafeCSS: codeViewerCSS,
+      unsafeCSS: `${codeViewerCSS}\n:host, pre { tab-size: ${tabSize}; }`,
     }),
-    [themeType, wrap]
+    [themeType, wordWrap, tabSize]
   )
   const editorOptions = useMemo<EditorOptions<"file" | "file-diff", undefined, undefined>>(
     () => ({
@@ -163,9 +189,10 @@ export function VirtualizedCodePreview({
           return !!current && current.content !== current.originalContent
         },
       }),
-      onAttach: (editor) => editor.focus({ lineNumber: "first-visible", preventScroll: true }),
+      onAttach: (editor) =>
+        editor.focus({ lineNumber: line ?? "first-visible", preventScroll: !line }),
     }),
-    [scopeId, projectPath, preview.path, preview.language, draftKey]
+    [scopeId, projectPath, preview.path, preview.language, draftKey, line]
   )
 
   useEffect(() => {
@@ -175,25 +202,34 @@ export function VirtualizedCodePreview({
     if (current?.sourcePreview === preview) return
     if (
       current &&
-      (current.editing || current.saving || current.content !== current.originalContent)
+      (current.saving ||
+        current.content !== current.originalContent ||
+        preview.content === current.originalContent)
     ) {
       store.rememberPreview(draftKey, preview)
       return
     }
-    if (current) store.discard(draftKey)
-    const timer = window.setTimeout(
-      () => setFile({ ...createPreviewFile(preview), cacheKey: undefined }),
-      0
-    )
+    const timer = window.setTimeout(() => {
+      if (current) {
+        const latest = useCodePreviewDrafts.getState().drafts[draftKey]
+        if (latest?.id !== current.id || latest.saving || latest.content !== latest.originalContent)
+          return
+        // 干净文件收到新的磁盘内容时，重建编辑会话，避免旧撤销历史覆盖新内容。
+        discarding.current = true
+        store.discard(draftKey)
+        if (!readOnly && canEdit) store.begin(draftKey, preview.content ?? "", preview)
+        setEpoch((value) => value + 1)
+      }
+      setFile({ ...createPreviewFile(preview), cacheKey: undefined })
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [preview, draftKey, setFile])
+  }, [preview, draftKey, setFile, readOnly, canEdit])
   useEffect(() => {
     discarding.current = false
   }, [epoch])
 
-  const line = searchQuery && searchMatch ? searchMatch.line + 1 : targetLine
   useEffect(() => {
-    if (!line || editing) return
+    if (!line) return
     viewer.current?.scrollTo({
       type: "line",
       id: preview.path,
@@ -201,7 +237,8 @@ export function VirtualizedCodePreview({
       align: "center",
       behavior: "instant",
     })
-    viewer.current?.setSelectedLines({ id: preview.path, range: { start: line, end: line } })
+    if (editing) viewer.current?.getEditor(preview.path)?.focus({ lineNumber: line })
+    else viewer.current?.setSelectedLines({ id: preview.path, range: { start: line, end: line } })
   }, [line, searchMatch?.index, preview.path, editing])
 
   const change = useCallback<NonNullable<CodeViewProps<undefined, undefined>["onItemEditChange"]>>(
@@ -236,18 +273,10 @@ export function VirtualizedCodePreview({
     )
       return
     savingRef.current = true
-    useCodePreviewDrafts.getState().startSave(draftKey)
     setError(null)
     try {
-      const result = await window.desktop.workspace.writeFile({
-        rootPath: projectPath,
-        path: preview.path,
-        originalContent: current.originalContent,
-        content: current.content,
-      })
-      useCodePreviewDrafts.getState().saved(draftKey, current.content, current.id)
-      onSaved?.(result)
-      toast.success("文件已保存")
+      const result = await saveCodePreviewDraft(draftKey, projectPath, preview.path)
+      if (result) onSaved?.(result)
     } catch (saveError) {
       const message =
         saveError instanceof Error
@@ -257,11 +286,32 @@ export function VirtualizedCodePreview({
       toast.error("文件保存失败", message)
     } finally {
       savingRef.current = false
-      useCodePreviewDrafts.getState().finishSave(draftKey, current.id)
     }
   }
 
   const addSelectedLines = (): void => {
+    restoreEditorFocus.current = false
+    const editor = viewer.current?.getEditor(preview.path)
+    const range = editor
+      ?.getViewState()
+      .selections?.find(
+        ({ start, end }) => start.line !== end.line || start.character !== end.character
+      )
+    if (editor && range) {
+      const text = editor.getText()
+      addCodeSelectionToComposer(scopeId, {
+        projectPath,
+        path: preview.path,
+        language: preview.language,
+        startLine: range.start.line + 1,
+        endLine: range.end.line + 1,
+        startColumn: range.start.character + 1,
+        endColumn: range.end.character + 1,
+        text: text.slice(textOffset(text, range.start), textOffset(text, range.end)),
+        unsaved: dirty,
+      })
+      return
+    }
     if (!selection) return
     const lines = file.contents.split(/\r?\n/)
     const startLine = Math.min(selection.range.start, selection.range.end)
@@ -285,119 +335,213 @@ export function VirtualizedCodePreview({
     }
   }
 
-  return (
-    <div
-      className="flex h-full min-h-0 min-w-0 flex-col"
-      data-code-editing={editing}
-      onKeyDownCapture={(event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-          event.preventDefault()
-          event.stopPropagation()
-          void save()
+  const editorKey = (key: string) =>
+    window.requestAnimationFrame(() => {
+      viewer.current?.getEditor(preview.path)?.focus()
+      const shadow = containerRef.current?.querySelector("diffs-container")?.shadowRoot
+      const target = shadow?.activeElement
+      const mac = navigator.platform.toLowerCase().includes("mac")
+      target?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key,
+          ctrlKey: !mac,
+          metaKey: mac,
+          bubbles: true,
+          composed: true,
+        })
+      )
+    })
+  const clipboardAction = async (action: "copy" | "cut" | "paste") => {
+    const editor = viewer.current?.getEditor(preview.path)
+    if (!editor) {
+      if (action === "copy" && selectedText) {
+        try {
+          await window.desktop.clipboard.writeText(selectedText)
+        } catch {
+          toast.error("无法访问剪贴板")
         }
-        if (editing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "m") {
-          event.preventDefault()
-          event.stopPropagation()
-          editButton.current?.focus()
+      }
+      return
+    }
+    const ranges = editor.getViewState().selections ?? []
+    const text = editor.getText()
+    try {
+      if (action === "paste") {
+        const newText = await window.desktop.clipboard.readText()
+        if (viewer.current?.getEditor(preview.path) !== editor || editor.getText() !== text) return
+        editor.applyEdits(ranges.map((range) => ({ range, newText })))
+      } else {
+        const selected = ranges
+          .map((range) => text.slice(textOffset(text, range.start), textOffset(text, range.end)))
+          .join("\n")
+        if (!selected) return
+        await window.desktop.clipboard.writeText(selected)
+        if (
+          action === "cut" &&
+          viewer.current?.getEditor(preview.path) === editor &&
+          editor.getText() === text
+        )
+          editor.applyEdits(ranges.map((range) => ({ range, newText: "" })))
+      }
+      editor.focus()
+    } catch {
+      toast.error("无法访问剪贴板")
+    }
+  }
+  const shortcut = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+"
+
+  return (
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (open) {
+          restoreEditorFocus.current = true
+          const editor = viewer.current?.getEditor(preview.path)
+          setHistory({ undo: editor?.canUndo ?? false, redo: editor?.canRedo ?? false })
+          setHasSelection(
+            !!editor
+              ?.getViewState()
+              .selections?.some(
+                ({ start, end }) => start.line !== end.line || start.character !== end.character
+              )
+          )
+          setSelectedText(
+            window.getSelection()?.toString() ||
+              (selection
+                ? file.contents
+                    .split(/\r?\n/)
+                    .slice(
+                      Math.min(selection.range.start, selection.range.end) - 1,
+                      Math.max(selection.range.start, selection.range.end)
+                    )
+                    .join("\n")
+                : "")
+          )
         }
       }}
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-1 border-b border-border/45 px-2 text-xs text-muted-foreground">
-        {canEdit ? (
-          <Button
-            ref={editButton}
-            variant="ghost"
-            size="sm"
-            shape="pill"
-            aria-pressed={editing}
-            onClick={() => {
-              const store = useCodePreviewDrafts.getState()
-              if (editing) store.stop(draftKey)
-              else store.begin(draftKey, file.contents, preview)
-            }}
-          >
-            {editing ? <Check /> : <Pencil />}
-            {editing ? "完成编辑" : "编辑"}
-          </Button>
-        ) : (
-          <span className="px-2">只读</span>
-        )}
-        {draft ? (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              shape="pill"
-              disabled={!dirty || saving}
-              onClick={() => void save()}
-            >
-              <Save />
-              {saving ? "正在保存" : "保存"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              shape="pill"
-              disabled={!dirty || saving}
-              onClick={() => setDiscardOpen(true)}
-            >
-              <Undo2 />
-              放弃改动
-            </Button>
-            {dirty ? (
-              <span role="status" className="px-1">
-                未保存
-              </span>
-            ) : null}
-          </>
+      <ContextMenuTrigger
+        render={<div />}
+        ref={containerRef}
+        tabIndex={-1}
+        className="flex h-full min-h-0 min-w-0 flex-col"
+        data-code-editing={editing}
+        onKeyDownCapture={(event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+            event.preventDefault()
+            event.stopPropagation()
+            void save()
+          }
+          if (editing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "m") {
+            event.preventDefault()
+            event.stopPropagation()
+            containerRef.current?.focus()
+          }
+        }}
+      >
+        {error ? (
+          <div role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
         ) : null}
-        {!editing && selection ? (
-          <Button variant="ghost" size="sm" shape="pill" onClick={addSelectedLines}>
-            <MessageCirclePlus />
-            添加到输入框
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          shape="circle"
-          aria-label="自动换行"
-          title="自动换行"
-          aria-pressed={wrap}
-          onClick={() => setWrap((value) => !value)}
-          className="ml-auto"
+        <CodeHighlightingProvider>
+          <EditProvider createEditor={createEditor}>
+            <CodeView
+              key={epoch}
+              ref={viewer}
+              items={items}
+              options={options}
+              editorOptions={editorOptions}
+              getEditStateKey={getEditStateKey}
+              onItemEditChange={change}
+              onItemEditComplete={complete}
+              onSelectedLinesChange={setSelection}
+              className="desktop-code-file min-h-0 min-w-0 flex-1"
+            />
+          </EditProvider>
+        </CodeHighlightingProvider>
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="w-52"
+        finalFocus={() => {
+          if (discardOpen || !restoreEditorFocus.current) return false
+          if (editing) {
+            window.requestAnimationFrame(() => viewer.current?.getEditor(preview.path)?.focus())
+            return false
+          }
+          return containerRef.current
+        }}
+      >
+        <ContextMenuItem disabled={!dirty || saving} onClick={() => void save()}>
+          保存 <span className="ml-auto text-xs text-muted-foreground">{shortcut}S</span>
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={!editing || !history.undo}
+          onClick={() => {
+            viewer.current?.getEditor(preview.path)?.undo()
+          }}
         >
-          <WrapText />
-        </Button>
-        {editing ? (
-          <span
-            className="w-full px-2 pb-1"
-            title="Ctrl / Cmd + M 返回工具栏，再按 Tab 可离开编辑器"
-          >
-            Ctrl / Cmd + F 查找 · H 替换 · S 保存 · M 返回工具栏
-          </span>
-        ) : null}
-      </div>
-      {error ? (
-        <div role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
-      <CodeHighlightingProvider>
-        <EditProvider createEditor={createEditor}>
-          <CodeView
-            key={epoch}
-            ref={viewer}
-            items={items}
-            options={options}
-            editorOptions={editorOptions}
-            onItemEditChange={change}
-            onItemEditComplete={complete}
-            onSelectedLinesChange={setSelection}
-            className="desktop-code-file min-h-0 min-w-0 flex-1"
-          />
-        </EditProvider>
-      </CodeHighlightingProvider>
+          撤销 <span className="ml-auto text-xs text-muted-foreground">{shortcut}Z</span>
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={!editing || !history.redo}
+          onClick={() => {
+            viewer.current?.getEditor(preview.path)?.redo()
+          }}
+        >
+          重做 <span className="ml-auto text-xs text-muted-foreground">{shortcut}Shift+Z</span>
+        </ContextMenuItem>
+        <div role="separator" className="my-1 h-px bg-border/70" />
+        <ContextMenuItem
+          disabled={!editing || !hasSelection}
+          onClick={() => void clipboardAction("cut")}
+        >
+          剪切
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={!hasSelection && !selectedText}
+          onClick={() => void clipboardAction("copy")}
+        >
+          复制
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!editing} onClick={() => void clipboardAction("paste")}>
+          粘贴
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!editing} onClick={() => editorKey("a")}>
+          全选
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!editing} onClick={() => editorKey("f")}>
+          查找 <span className="ml-auto text-xs text-muted-foreground">{shortcut}F</span>
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!editing} onClick={() => editorKey("h")}>
+          替换 <span className="ml-auto text-xs text-muted-foreground">{shortcut}H</span>
+        </ContextMenuItem>
+        <ContextMenuItem disabled={editing ? !hasSelection : !selection} onClick={addSelectedLines}>
+          添加选区到输入框
+        </ContextMenuItem>
+        <div role="separator" className="my-1 h-px bg-border/70" />
+        <ContextMenuItem
+          role="menuitemcheckbox"
+          aria-checked={readOnly}
+          disabled={!canEdit}
+          onClick={() => updatePreferences({ readOnly: !readOnly })}
+        >
+          {readOnly ? "✓ " : ""}只读
+        </ContextMenuItem>
+        <ContextMenuItem
+          role="menuitemcheckbox"
+          aria-checked={wordWrap}
+          onClick={() => updatePreferences({ wordWrap: !wordWrap })}
+        >
+          {wordWrap ? "✓ " : ""}自动换行
+        </ContextMenuItem>
+        <ContextMenuItem
+          destructive
+          disabled={!dirty || saving}
+          onClick={() => setDiscardOpen(true)}
+        >
+          放弃改动并重新载入
+        </ContextMenuItem>
+      </ContextMenuContent>
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -434,6 +578,6 @@ export function VirtualizedCodePreview({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </ContextMenu>
   )
 }

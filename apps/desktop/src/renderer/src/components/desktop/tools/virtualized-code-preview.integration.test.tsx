@@ -14,6 +14,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
 import { useCodePreviewDrafts } from "./code-preview-drafts"
+import { useEditorPreferences } from "@renderer/stores/editor-preferences"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 vi.mock("@renderer/components/ui/code-highlighting-provider", () => ({
@@ -97,6 +98,7 @@ const resizes = new Set<ResizeObserverCallback>()
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   useCodePreviewDrafts.setState({ drafts: {} })
+  useEditorPreferences.setState({ readOnly: false, wordWrap: true, tabSize: 2 })
   holdHighlights = false
   pendingHighlights.length = 0
   vi.stubGlobal(
@@ -134,12 +136,22 @@ beforeEach(async () => {
     measureText: (text: string) => ({ width: text.length * 8 }),
   } as never)
   vi.spyOn(Editor.prototype, "edit")
+  // Pierre 使用浏览器允许省略 targetOrigin 的同窗口消息；jsdom 尚要求该参数。
+  const postMessage = window.postMessage.bind(window)
+  vi.spyOn(window, "postMessage").mockImplementation((message, options) =>
+    postMessage(message, typeof options === "string" ? options : (options?.targetOrigin ?? "*"))
+  )
   HTMLElement.prototype.scrollIntoView = vi.fn()
+  Range.prototype.getClientRects = vi.fn(() => {
+    const rect = new DOMRect(0, 0, 8, 16)
+    return Object.assign([rect], { item: (index: number) => (index === 0 ? rect : null) })
+  })
+  Range.prototype.getBoundingClientRect = vi.fn(() => new DOMRect())
   window.desktop = {
     workspace: {
       writeFile: vi.fn(async ({ content }: { content: string }) => ({ ...preview, content })),
     },
-    clipboard: { readText: vi.fn(async () => "") },
+    clipboard: { readText: vi.fn(async () => ""), writeText: vi.fn(async () => {}) },
   } as never
   container = document.createElement("div")
   document.body.append(container)
@@ -163,10 +175,15 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
-const click = async (text: string) => {
-  const button = [...container.querySelectorAll("button")].find((node) => node.textContent === text)
-  expect(button).toBeTruthy()
-  await act(async () => button!.click())
+const setReadOnly = async (readOnly: boolean) => {
+  await act(async () => useEditorPreferences.getState().update({ readOnly }))
+}
+const save = async () => {
+  await act(async () =>
+    container.firstElementChild!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    )
+  )
 }
 it.each([
   { path: "NOTES", saveWhileEditing: true, content: "const value = 2\n" },
@@ -194,10 +211,6 @@ it.each([
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
-    await click("编辑")
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    })
     const editor = vi.mocked(Editor.prototype.edit).mock.contexts.at(-1) as Editor
     expect(editor).toBeInstanceOf(Editor)
     await act(async () =>
@@ -210,9 +223,9 @@ it.each([
     )
     expect(editor.getText()).toBe(content)
     holdHighlights = true
-    if (!saveWhileEditing) await click("完成编辑")
-    await click("保存")
-    if (saveWhileEditing) await click("完成编辑")
+    if (!saveWhileEditing) await setReadOnly(true)
+    await save()
+    if (saveWhileEditing) await setReadOnly(true)
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
@@ -239,13 +252,44 @@ it.each([
       ?.shadowRoot?.querySelector("[data-code]")
     expect(rendered).toBeTruthy()
     expect(rendered!.textContent).toContain(content.trim())
-    expect(container.textContent).not.toContain("未保存")
-    await click("编辑")
+    const key = JSON.stringify(["session:chat", "/project", path])
+    expect(useCodePreviewDrafts.getState().drafts[key]?.originalContent).toBe(content)
+    // 切到别的文件再回来也保留撤销历史。
+    await act(async () => root.render(null))
+    await act(async () => root.render(<PreviewHarness initial={{ ...initial, content }} />))
+    await setReadOnly(false)
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
     })
     const resumed = vi.mocked(Editor.prototype.edit).mock.contexts.at(-1) as Editor
     expect(resumed.getText()).toBe(content)
+    expect(resumed.canUndo).toBe(true)
+    await act(async () => resumed.undo())
+    expect(resumed.getText()).toBe(initial.content)
+    await act(async () => resumed.redo())
+    expect(resumed.getText()).toBe(content)
+    if (path === "a.ts" && saveWhileEditing && content) {
+      await act(async () =>
+        resumed.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 5 },
+            direction: "forward",
+          },
+        ])
+      )
+      await act(async () =>
+        container.firstElementChild!.dispatchEvent(
+          new MouseEvent("contextmenu", { bubbles: true, button: 2 })
+        )
+      )
+      const copy = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent === "复制"
+      )!
+      expect(copy).toBeTruthy()
+      await act(async () => copy.click())
+      expect(window.desktop.clipboard.writeText).toHaveBeenCalledWith("const")
+    }
     await act(async () =>
       resumed.applyEdits([
         {
@@ -255,7 +299,7 @@ it.each([
       ])
     )
     expect(resumed.getText()).toBe(`again ${content}`)
-    expect(container.textContent).toContain("未保存")
+    expect(useCodePreviewDrafts.getState().drafts[key]?.content).toBe(`again ${content}`)
     expect(errors).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain("rendered a different file")
   }

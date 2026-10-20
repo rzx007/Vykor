@@ -143,6 +143,20 @@ export function ReviewDiffPreview({
       overflow: wrap ? "wrap" : "scroll",
       enableLineSelection: true,
       enableGutterUtility: true,
+      // 为操作按钮单独留位；Pierre 的行号文字有层级，不能与按钮共用同一区域。
+      unsafeCSS: `${baseOptions.unsafeCSS ?? ""}
+        [data-column-number], [data-gutter-buffer] {
+          padding-left: 32px;
+        }
+        [data-gutter-utility-slot] {
+          left: 4px;
+          right: auto;
+          width: 24px;
+          align-items: flex-start;
+          justify-content: center;
+          z-index: 2;
+        }
+      `,
       onLineSelected: select,
       onLineSelectionEnd: select,
       onPostRender: (node, api, phase) => {
@@ -385,6 +399,7 @@ export function ReviewDiffPreview({
               shape="circle"
               aria-label="添加选区到输入框"
               title="添加到输入框"
+              className="size-5 bg-popover text-popover-foreground hover:bg-accent [&_svg]:size-3.5"
               disabled={refreshing}
               onClick={() => {
                 const hovered = getHoveredLine()
