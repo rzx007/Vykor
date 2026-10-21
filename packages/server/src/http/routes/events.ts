@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { summarizePartEvent } from "../part-wire-view.js";
+import { publicPartEvent } from "../part-wire-view.js";
 
 import type { SessionEventRecord } from "@vykor/protocol";
 
@@ -37,7 +37,7 @@ export class HttpEventHub {
             afterSeq: readCursor(c),
             sessionId: c.req.query("sessionId") ?? undefined,
             limit: readLimit(c.req.query("limit")),
-          }).map(event => c.req.query("partView") === "summary" ? summarizePartEvent(event) : event),
+          }).map(event => publicPartEvent(event, c.req.query("partView") === "summary")),
         }),
       )
       .get("/stream", (c) => {
@@ -95,7 +95,7 @@ export class HttpEventHub {
       for await (const event of stream) {
         client.controller.enqueue(
           this.encoder.encode(
-            `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(summary ? summarizePartEvent(event) : event)}\n\n`,
+            `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(publicPartEvent(event, summary))}\n\n`,
           ),
         );
       }

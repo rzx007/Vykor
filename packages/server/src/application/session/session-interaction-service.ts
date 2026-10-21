@@ -6,7 +6,6 @@ import {
 import {
   sessionUserInputText,
   assertPromptMetadataAllowed,
-  readPluginUiAction,
   readRuntimeMetadata,
   type SessionInputRecord,
   type SessionRecord,
@@ -348,6 +347,7 @@ export class SessionInteractionService {
     };
     const hasAttachments = (input.attachments?.length ?? 0) > 0;
     if (
+      !input.pluginAppContexts?.length &&
       !hasAttachments &&
       this.context.liveChildren.has(sessionId) &&
       input.id
@@ -373,6 +373,7 @@ export class SessionInteractionService {
     }
     let liveContent = sessionUserInputText(items);
     if (
+      !input.pluginAppContexts?.length &&
       !hasAttachments &&
       this.context.liveChildren.has(sessionId) &&
       items.some((item) => item.type === "skill" || item.type === "context")
@@ -397,7 +398,7 @@ export class SessionInteractionService {
       ).instruction;
     }
     const live =
-      hasAttachments || capability.pluginId
+      hasAttachments || capability.pluginId || input.pluginAppContexts?.length
         ? undefined
         : await this.context.liveChildren.send(sessionId, {
             id: input.id,
@@ -462,7 +463,7 @@ export class SessionInteractionService {
       if (!sourceRun || sourceRun.sessionId !== sessionId) {
         throw new SessionApplicationError(404, "Interrupted run not found");
       }
-      if (readPluginUiAction(sourceRun.metadata)) {
+      if (Object.hasOwn(sourceRun.metadata, "uiAction") || Object.hasOwn(sourceRun.metadata, "pluginAppAction")) {
         throw new ApplicationError(
           409,
           "插件操作不能通过继续运行重放；请检查实际结果后重新发起操作",

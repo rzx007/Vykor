@@ -57,6 +57,13 @@
       "when": 1792018800000,
       "tag": "0007_goal_simplification",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792515110875,
+      "tag": "0008_session_plugin_apps",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@ import type { SessionDatabase } from "./session-database.js";
 import {
   sessions, sessionInputs, sessionInputAttachments, sessionMessages,
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
-  permissionRequests, sessionEvents, sessionEventSequence,
+  permissionRequests, sessionEvents, sessionEventSequence, sessionPluginApps,
 } from "../session-runtime/schema.js";
 import {
   normalizeSessionUserInputItems,
@@ -39,6 +39,17 @@ export function loadSessionReadModel(
   eventRegistry: DurableEventRegistry,
 ): LoadedSessionReadModel {
   const state = emptyState();
+  for (const row of database.select().from(sessionPluginApps).all()) {
+    const { originJson, activeActionRunId, lastActionRunId, ...fields } = row;
+    state.pluginApps[row.id] = {
+      ...fields,
+      backendKind: row.backendKind as import("@vykor/protocol").PluginAppBackendKind,
+      status: row.status as import("@vykor/protocol").PluginAppRecord["status"],
+      origin: JSON.parse(originJson) as import("@vykor/protocol").PluginAppOrigin,
+      ...(activeActionRunId === null ? {} : { activeActionRunId }),
+      ...(lastActionRunId === null ? {} : { lastActionRunId }),
+    };
+  }
   let reservedEventSeq = 0;
   for (const row of database.select().from(sessions).all()) {
     const session: SessionRecord = {

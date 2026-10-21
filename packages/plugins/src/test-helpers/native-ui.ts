@@ -1,12 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { PluginUiManifest } from "@vykor/protocol";
+
 import type { ValidatedNativePlugin } from "../types.js";
 
 /** Construct files only; tests choose the real validation/load/install entry to exercise. */
 export async function writeNativeUiFixture(
   root: string,
-  ui: PluginUiManifest = {
+  ui: { schemaVersion: number; components: Array<{ id: string; title: string; entry: string; surface: string; actions: Array<{ id: string; label: string; tool: string; completion: string }> }> } = {
     schemaVersion: 2,
     components: [
       {

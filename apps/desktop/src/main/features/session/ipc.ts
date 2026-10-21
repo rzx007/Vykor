@@ -1,3 +1,4 @@
+import { requireDesktopPluginAppService } from "../plugin-apps/service-runtime"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
   CheckoutDesktopProjectBranchInput,
@@ -221,8 +222,14 @@ export const sessionIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.sessionSendPrompt,
-        handler: (_event, input) =>
-          desktopSessionService.sendPrompt(input as SendDesktopPromptInput),
+        handler: async (event, input) => {
+          const prompt = input as SendDesktopPromptInput
+          if (!prompt.pluginAppContextIds?.length) return desktopSessionService.sendPrompt(prompt)
+          const apps = requireDesktopPluginAppService()
+          if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame || !apps.isOwner(event.sender.id)) throw new Error("plugin_app_owner_unavailable")
+          const contexts = await apps.composerContext(event.sender.id, prompt.sessionId, prompt.pluginAppContextIds)
+          return desktopSessionService.sendPrompt(prompt, contexts)
+        },
       },
       {
         channel: IpcChannels.sessionEditLatestPrompt,

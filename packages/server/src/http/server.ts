@@ -1,3 +1,4 @@
+import { createSessionPluginUiHistoryRoutes } from "./routes/session-plugin-ui-history.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 
@@ -64,8 +65,6 @@ import { createRunExecutionRoutes } from "./routes/run-execution.js";
 import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
 import { createSessionGoalRoutes } from "./routes/session-goal.js";
-import { createSessionPluginUiRoutes } from "./routes/session-plugin-ui.js";
-import { createSessionPluginUiConversationRoutes } from "./routes/session-plugin-ui-conversation.js";
 import { createSessionUtilityRoutes } from "./routes/session-utility.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { createMaintenanceRoutes } from "./routes/maintenance.js";
@@ -352,10 +351,8 @@ export class VykorHttpServer {
         retention: this.application.retention,
         attachmentLimits: this.application.attachments.limits,
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
-        pluginUiReady: this.application.pluginUi?.backendReady === true,
-        pluginUiLifecycleReady: this.application.pluginUi?.lifecycleReady === true,
-        pluginUiConversationReady: this.application.pluginUiConversation !== undefined,
-        pluginUi: this.application.pluginUi,
+        pluginAppsReady: !!this.application.pluginApps && !!this.application.pluginAppConversation,
+        pluginLifecycle: this.application.pluginLifecycle,
       }),
     );
     this.app.route("/", createMaintenanceRoutes({ store: this.store, control: this.application.control, commands: this.application.commands, terminals: this.application.terminals, settings: this.services.settings, readiness: () => this.application.diagnosticState, logs: () => this.maintenanceLogs,
@@ -399,7 +396,7 @@ export class VykorHttpServer {
         outputStyleService: this.services.outputStyle,
         projectInitService: this.services.projectInit,
         pluginService: this.services.plugin,
-        pluginUi: this.application.pluginUi,
+        pluginLifecycle: this.application.pluginLifecycle,
         skillService:
           this.services.skill ??
           createSkillManagementService({ projects: this.application.projects }),
@@ -471,9 +468,9 @@ export class VykorHttpServer {
       }),
     );
     this.app.route("/sessions", createSessionGoalRoutes(this.application.goals));
-    if (this.application.pluginUi) {
-      this.app.route("/sessions", createSessionPluginUiRoutes(this.application.pluginUi, this.application.pluginUiConversation));
-      if (this.application.pluginUiConversation) this.app.route("/sessions", createSessionPluginUiConversationRoutes(this.application.pluginUiConversation));
+    this.app.route("/sessions", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));
+    if (this.application.pluginApps && this.application.pluginAppConversation) {
+      this.app.route("/sessions", createSessionPluginAppsRoutes(this.application.pluginApps, this.application.pluginAppConversation));
     }
     this.app.route(
       "/sessions",
@@ -524,3 +521,4 @@ function throwFailures(failures: unknown[], message: string): void {
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) throw new AggregateError(failures, message);
 }
+import { createSessionPluginAppsRoutes } from "./routes/session-plugin-apps.js";

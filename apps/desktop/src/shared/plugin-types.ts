@@ -1,4 +1,4 @@
-import type { PluginInfo, PluginUiInventory } from "@vykor/client"
+import type { PluginInfo } from "@vykor/client"
 
 export type DesktopPluginInfo = PluginInfo
 
@@ -59,7 +59,6 @@ export type DesktopPluginArchiveImportResult =
       selectionId: string
       pluginName: string
       requestedPermissions: string[]
-      uiInventory?: PluginUiInventory
     }
   | DesktopPluginArchiveInstalledResult
   | DesktopPluginArchiveUnknownResult

@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { parsePluginAppToolRequest, type PluginAppRecord, type PluginAppToolRequest } from "@vykor/protocol";
+import { PluginAppRuntime, type PluginAppRuntimeHost } from "./plugin-app-runtime.js";
+import type { PluginAppBackendCatalogue } from "./plugin-app-backends.js";
 
 import type {
   CompactContextProvider,
@@ -166,6 +169,8 @@ export interface ContextUsagePromptSource {
 }
 
 export interface VykorAgent {
+  readonly pluginApps: PluginAppRuntimeHost;
+  runPluginAppTool(app: PluginAppRecord, request: PluginAppToolRequest, options: Omit<VykorAgentRunToolOptions, "capabilityView">): Promise<ToolExecutionResult>;
   readonly id: string;
   readonly state: VykorAgentState;
   readonly children: AgentChildDirectory;
@@ -182,7 +187,6 @@ export interface VykorAgent {
     content: string | ContentBlock[],
     options?: VykorAgentSubmitOptions,
   ): Promise<AgentRunResult>;
-  runTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions): Promise<ToolExecutionResult>;
   getHistory(): Message[];
   loadHistory(messages: Message[]): void;
   clear(): void;
@@ -220,6 +224,8 @@ export interface VykorAgent {
 }
 
 class DefaultVykorAgent implements VykorAgent {
+  private readonly appRuntime: PluginAppRuntime;
+  readonly pluginApps: PluginAppRuntimeHost;
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
@@ -247,7 +253,11 @@ class DefaultVykorAgent implements VykorAgent {
     private readonly requestConfigurationStore: AgentRequestConfigurationReader,
     private readonly pluginSelection?: PluginSelectionCatalog,
     private readonly onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"],
-  ) {}
+    appCatalogue?: PluginAppBackendCatalogue,
+  ) {
+    this.appRuntime = new PluginAppRuntime(session.id, appCatalogue);
+    this.pluginApps = this.appRuntime.host;
+  }
 
   get id(): string {
     return this.session.id;
@@ -277,6 +287,7 @@ class DefaultVykorAgent implements VykorAgent {
     const capabilityView = options.capabilityView ?? this.createRunCapabilityView(candidates.length ? candidates.map(item => item.pluginId) : undefined);
     const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
+      toolAppOrigin: binding => this.appRuntime.toolOrigin(binding),
       agentId: this.id,
       session: this.session,
       runtime: this.runtime,
@@ -370,31 +381,26 @@ class DefaultVykorAgent implements VykorAgent {
     return await this.submitMessage(content, options).result;
   }
 
-  async runTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions): Promise<ToolExecutionResult> {
-    if (options.scope.sessionId !== this.id || options.scope.agentId !== this.id) {
-      throw new Error("Tool operation scope does not belong to this Agent session");
-    }
-    this.assertIdle("run a UI tool");
-    const requested = options.capabilityView.tools.get(toolUse.name);
-    const current = this.createRunCapabilityView(options.capabilityView.pluginIds ? [...options.capabilityView.pluginIds] : options.capabilityView.pluginId);
-    const ui = [...(options.capabilityView.pluginUi?.values() ?? [])].find(binding => {
-      const trusted = current.pluginUi?.get(`${binding.pluginId}:${binding.componentId}`);
-      return trusted && trusted.pluginDigest === binding.pluginDigest && trusted.componentDigest === binding.componentDigest
-        && trusted.definition.actions.some(action => action.tool === toolUse.name);
-    });
-    const trustedUi = ui && current.pluginUi?.get(`${ui.pluginId}:${ui.componentId}`);
-    const tool = trustedUi?.actionTools.find(binding => binding.definition.name === toolUse.name);
-    if (!trustedUi || !tool || !requested || requested.definitionIdentity !== tool.definitionIdentity
-      || requested.definition.execute !== tool.definition.execute || tool.source?.kind !== "plugin"
-      || tool.ownerPluginId !== trustedUi?.pluginId || tool.source.id !== trustedUi.pluginId) {
-      throw new Error("Tool is not a captured Native UI action for this Agent");
-    }
-    // Never execute caller-supplied functions or expose other tools through ToolContext.
-    const capabilityView: RunCapabilityView = Object.freeze({
-      pluginId: trustedUi!.pluginId, pluginIds: readonlySet([trustedUi!.pluginId]), tools: readonlyMap([[toolUse.name, tool]]),
-      skills: readonlyMap<never>([]), agents: readonlyMap<never>([]), mcpServers: readonlyMap<never>([]),
-      pluginUi: readonlyMap([[`${trustedUi!.pluginId}:${trustedUi!.componentId}`, trustedUi!]]),
-    });
+  async runPluginAppTool(app: PluginAppRecord, value: PluginAppToolRequest, options: Omit<VykorAgentRunToolOptions, "capabilityView">): Promise<ToolExecutionResult> {
+    const request = parsePluginAppToolRequest(value);
+    if (app.sessionId !== this.id || options.scope.sessionId !== this.id || options.scope.agentId !== this.id)
+      throw new Error("plugin_app_scope_invalid");
+    this.assertIdle("run an app tool");
+    const prepared = await this.appRuntime.prepare(app, request, this.createRunCapabilityView(app.pluginId));
+    const toolUse: ToolUseBlock = { type: "tool_use", id: `app_tool_${options.scope.runId}`, name: prepared.name, input: request.args };
+    return this.executeIndependentTool(toolUse, { ...options, capabilityView: prepared.capabilityView,
+      onToolEvent: async event => {
+        if (event.type === "domain.event" && event.data.name === "tool.lifecycle" && event.data.payload?.phase === "running") {
+          // Approval may have waited while installation, policy or the exact backend changed.
+          await this.pluginApps.assertTool(app, request);
+        }
+        await options.onToolEvent?.(event);
+      },
+    }, "app");
+  }
+
+  private async executeIndependentTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions, audience: "model" | "app" = "model"): Promise<ToolExecutionResult> {
+    const capabilityView = options.capabilityView;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, options.scope.signal, ...(options.signal ? [options.signal] : [])]);
     const scope: AgentRunScope = {
@@ -406,16 +412,24 @@ class DefaultVykorAgent implements VykorAgent {
     return await this.runMaintenance("tool", async () => {
       const releaseConnections = this.retainMcpConnectionsForRun();
       try {
-        const candidate = this.getPluginCandidates().find(item => item.pluginId === trustedUi.pluginId);
+        const candidate = this.getPluginCandidates().find(item => item.pluginId === capabilityView.pluginId);
         if (candidate) await this.validatePluginScope([candidate], signal);
         await options.onToolEvent?.({ type: "tool.started", data: { toolUse } });
-        const result = await this.runtime.queryEngine.executeTool(toolUse, { signal, execution: {
+        let deliveryAttempted = false;
+        const deliverResult = async (result: ToolExecutionResult) => {
+          // Mark the attempt before awaiting: a failed durable save must propagate, never be retried as success.
+          if (deliveryAttempted) return;
+          deliveryAttempted = true;
+          await options.onToolEvent?.({ type: "tool.completed", data: { toolUseId: toolUse.id, result } });
+        };
+        const result = await this.runtime.queryEngine.executeTool(toolUse, { signal, audience, onResult: deliverResult, execution: {
           scope, capabilityView, effects: this.effects,
           children: this.childManager.createController(scope, capabilityView),
           emit: options.onToolEvent ?? (async () => {}),
           takeSteeredInputs: async () => [], closeSteering: () => {},
         } });
-        await options.onToolEvent?.({ type: "tool.completed", data: { toolUseId: toolUse.id, result } });
+        // Custom QueryEngine implementations may only return a result and ignore the optional callback.
+        if (!deliveryAttempted) await deliverResult(result);
         return result;
       } finally { releaseConnections(); }
     }, controller);
@@ -598,6 +612,7 @@ class DefaultVykorAgent implements VykorAgent {
     if (this.closePromise) return this.closePromise;
     if (this.lifecycleState === "closed") return Promise.resolve();
     this.lifecycleState = "closing";
+    this.pluginApps.clear();
     this.maintenance?.controller?.abort("Agent closed");
     const closing = (async () => {
       const failures: unknown[] = [];
@@ -664,6 +679,7 @@ class DefaultVykorAgent implements VykorAgent {
 
 export interface AssembledAgentOptions {
   runtime: RuntimeBundle;
+  pluginApps?: PluginAppBackendCatalogue;
   pluginSelection?: PluginSelectionCatalog;
   onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
   session: AgentSession;
@@ -706,6 +722,7 @@ export function createAssembledAgent(
       ),
     options.pluginSelection,
     options.onRunCapabilities,
+    options.pluginApps,
   );
 }
 

@@ -253,7 +253,7 @@ vk config set plugins.enabled false|true
 
 修改持久开关后，新建或重新加载的 Session 会应用新设置；正在执行的旧 Agent Runtime 不会在一轮任务中途卸载插件。完整的 Native Plugin 说明见 [packages/plugins/README.md](packages/plugins/README.md)。
 
-Native Plugin UI 已接入静态定义、安装授权，以及 daemon 中的可信实例和持久工具动作 API；Desktop 的自定义 HTML、卡片、侧栏和隔离消息接口仍待接入。后台 feature `pluginUi: 1` 不表示界面已经交付。作者接口与阶段范围见 [原生插件开发指南](docs/native-plugin-authoring.md)和[A2 验收记录](docs/superpowers/reviews/2026-10-03-native-plugin-ui-a2-verification.md)。
+页面统一使用官方 MCP Apps，由 `components.apps` 声明；Native Tool 与 MCP Server 后台复用原工具权限、审计和持久 Run。旧 Native UI 已退役，历史工具文字和回执保留，新导入不再接受 `components.ui`。见 [原生插件编写指南](docs/native-plugin-authoring.md)与 [MCP Apps 设计](docs/superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)。
 
 Auth、provider、model 的关系和本地存储规则见 [docs/auth-provider-model.md](docs/auth-provider-model.md)。
 Workflow CLI 和 TUI `/workflow`（统一 Jobs Panel 的别名）的完整用法见 [docs/workflow-cli.md](docs/workflow-cli.md)。

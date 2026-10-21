@@ -1,3 +1,7 @@
+import { usePluginApps, usePluginAppPages } from "@renderer/components/desktop/shell/plugin-apps/provider"
+import { canUseAppSidebar } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
+import { PluginAppAnchor, PluginAppCatalog } from "@renderer/components/desktop/shell/plugin-apps/panel"
+import { toast } from "@renderer/lib/toast"
 import type * as React from "react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
@@ -54,8 +58,6 @@ import {
   type UtilityTool,
 } from "./utility-panel-tabs"
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
-import { usePluginUiDisplays } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-context"
-import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import {
   imageSourceKey,
@@ -103,15 +105,9 @@ export function UtilityPanel({
   onOpenAgents,
 }: UtilityPanelProps): React.JSX.Element {
   const workflowAgentTasks = useDesktopSessionStore((state) => state.sessionView?.tasks)
-  const pluginUi = usePluginUiDisplays()
-  const pluginSidebar = pluginUi?.displays.find((display) => display.surface === "session-sidebar")
-  const pluginTab: UtilityTab | null = pluginSidebar
-    ? {
-        id: "plugin-ui:" + pluginSidebar.key,
-        tool: "plugin-ui",
-        title: pluginSidebar.instance.title,
-      }
-    : null
+  const pluginApps = usePluginApps()
+  const appPages = usePluginAppPages()
+  const [closingApp, setClosingApp] = useState<string | null>(null)
   const {
     state: {
       tabs,
@@ -202,7 +198,9 @@ export function UtilityPanel({
       (!tab.projectPath || tab.projectPath === selectedProjectPath) &&
       (activeWorkspaceIsGit === true || tab.tool !== "review")
   )
-  const visibleTabs = pluginTab ? [...storedVisibleTabs, pluginTab] : storedVisibleTabs
+  const appTabs: UtilityTab[] = appPages.filter(page => page.controller.state.source.sessionId === activeSessionId && canUseAppSidebar(page))
+    .map(page => ({ id: "plugin-app:" + page.id, tool: "plugin-app", title: page.title }))
+  const visibleTabs = [...storedVisibleTabs, ...appTabs]
   const visibleActiveFilePath =
     fileStateVisible || visibleTabs.some((tab) => tab.filePath === activeFilePath)
       ? activeFilePath
@@ -212,9 +210,6 @@ export function UtilityPanel({
       ? loadingFilePath
       : null
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0]
-  useEffect(() => {
-    if (pluginSidebar) setActiveTabId("plugin-ui:" + pluginSidebar.key)
-  }, [pluginSidebar, setActiveTabId])
   const terminalCommand = terminalCommands[0] ?? null
   const pendingTerminalOpenRequest =
     terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
@@ -407,10 +402,10 @@ export function UtilityPanel({
   }
 
   const finishCloseTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
-    const closingIds = new Set(tabIds)
+    const appId = tabIds.find(id => id.startsWith("plugin-app:"))
+    if (appId) setClosingApp(appId.slice("plugin-app:".length))
+    const closingIds = new Set(tabIds.filter(id => !id.startsWith("plugin-app:")))
     if (closingIds.size === 0) return
-    if (pluginTab && closingIds.has(pluginTab.id))
-      pluginUi?.close(pluginSidebar!.instance.instanceId)
 
     const closingTabs = tabs.filter((tab) => closingIds.has(tab.id))
     for (const tab of closingTabs) {
@@ -614,11 +609,7 @@ export function UtilityPanel({
   }
 
   const closeTab = (tabId: string): void => {
-    if (pluginTab?.id === tabId) {
-      pluginUi?.close(pluginSidebar!.instance.instanceId)
-      setActiveTabId(storedVisibleTabs[0]?.id ?? "")
-      return
-    }
+    if (tabId.startsWith("plugin-app:")) { setClosingApp(tabId.slice("plugin-app:".length)); return }
     closeTabs([tabId])
   }
 
@@ -856,6 +847,15 @@ export function UtilityPanel({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <AlertDialog open={closingApp !== null} onOpenChange={next => { if (!next) setClosingApp(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle>关闭插件应用？</AlertDialogTitle><AlertDialogDescription>页面中的未保存草稿将丢失，其他窗口也会停止使用此应用。</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => {
+              if (closingApp) void pluginApps?.remove(closingApp, true).catch(() => toast.error("未能关闭应用，页面草稿已保留。请查看最新状态后重试。"))
+              setClosingApp(null)
+            }}>关闭应用</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <UtilityPanelTabStrip
           scopeId={scopeId}
           tabs={visibleTabs}
@@ -875,21 +875,11 @@ export function UtilityPanel({
         />
 
         <div className="relative min-h-0 flex-1 bg-conversation">
+          {activeTab?.tool === "plugin-app" && (activeTab.id.startsWith("plugin-app:")
+            ? <PluginAppAnchor pageId={activeTab.id.slice("plugin-app:".length)} visible={open} mode="fullscreen" />
+            : <PluginAppCatalog sessionId={activeSessionId} onSelect={id => setActiveTabId("plugin-app:" + id)} />)}
           {open && activeTab?.tool === "image" && activeTab.imageSource && (
             <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />
-          )}
-          {pluginSidebar && (
-            <div
-              hidden={!open || activeTab?.id !== pluginTab?.id}
-              inert={!open || activeTab?.id !== pluginTab?.id}
-              className="h-full"
-            >
-              <PluginUiFrame
-                key={pluginSidebar.instance.instanceId}
-                display={pluginSidebar}
-                visible={open && activeTab?.id === pluginTab?.id}
-              />
-            </div>
           )}
           {!activeTab && !pendingTerminal && (
             <EmptyUtilityPanelState availableTools={availableTools} onAdd={addTab} />

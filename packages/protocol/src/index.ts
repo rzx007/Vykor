@@ -17,12 +17,12 @@ export * from "./mcp-oauth.js";
 export * from "./execution-observability.js";
 export * from "./auto-review.js";
 export * from "./workspace-changes.js";
-export * from "./plugin-ui.js";
 export * from "./plugin-presentation.js";
-export * from "./plugin-ui-requests.js";
-export * from "./plugin-ui-bridge.js";
-export * from "./plugin-ui-appearance.js";
-export * from "./plugin-ui-conversation.js";
 export * from "./notes.js";
 export * from "./memory.js";
 export * from "./office.js";
+export * from "./mcp-apps.js";
+export * from "./plugin-apps.js";
+
+export * from "./json.js";
+export * from "./plugin-ui-history.js";

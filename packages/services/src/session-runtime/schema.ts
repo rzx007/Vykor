@@ -36,6 +36,32 @@ export const projects = sqliteTable("project", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const sessionPluginApps = sqliteTable("session_plugin_app", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  pluginId: text("plugin_id").notNull(),
+  pluginVersion: text("plugin_version").notNull(),
+  pluginDigest: text("plugin_digest").notNull(),
+  definitionDigest: text("definition_digest").notNull(),
+  backendId: text("backend_id").notNull(),
+  backendKind: text("backend_kind").notNull(),
+  resourceUri: text("resource_uri").notNull(),
+  originJson: text("origin_json").notNull(),
+  logicalKey: text("logical_key").notNull(),
+  status: text("status").notNull(),
+  controlRevision: integer("control_revision").notNull(),
+  activeActionRunId: text("active_action_run_id"),
+  lastActionRunId: text("last_action_run_id"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, table => [
+  uniqueIndex("session_plugin_app_logical_key").on(table.sessionId, table.logicalKey),
+  index("session_plugin_app_session_status_idx").on(table.sessionId, table.status),
+  check("session_plugin_app_status", sql`${table.status} IN ('open', 'closed', 'revoked')`),
+  check("session_plugin_app_backend_kind", sql`${table.backendKind} IN ('native-tools', 'mcp-server')`),
+  check("session_plugin_app_revision", sql`${table.controlRevision} >= 0`),
+]);
+
 export const projectLocations = sqliteTable(
   "project_location",
   {

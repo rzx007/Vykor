@@ -1,36 +1,56 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig, ToolDefinition } from "@vykor/core";
+import type {
+  McpCallResultData,
+  McpToolAnnotations,
+  McpToolUiMetadata,
+} from "@vykor/protocol";
 
 export type McpTransportKind = "stdio" | "http" | "sse";
 
 /** Check transport config because settings and plugins enter as JSON. */
 export function resolveTransportKind(
-  config: McpServerConfig
+  config: McpServerConfig,
 ): McpTransportKind | { error: string } {
   const raw = config as unknown as Record<string, unknown>;
   const kind = raw.type;
 
   if (kind !== "stdio" && kind !== "http" && kind !== "sse") {
     return {
-      error: "Invalid MCP server config: `type` must be `stdio`, `http`, or `sse`",
+      error:
+        "Invalid MCP server config: `type` must be `stdio`, `http`, or `sse`",
     };
   }
 
-  if ((kind === "http" || kind === "sse") &&
-      (typeof raw.url !== "string" || raw.url.trim().length === 0)) {
+  if (
+    (kind === "http" || kind === "sse") &&
+    (typeof raw.url !== "string" || raw.url.trim().length === 0)
+  ) {
     return { error: `MCP ${kind} server requires a \`url\`` };
   }
-  if (kind === "stdio" &&
-      (typeof raw.command !== "string" || raw.command.trim().length === 0)) {
+  if (
+    kind === "stdio" &&
+    (typeof raw.command !== "string" || raw.command.trim().length === 0)
+  ) {
     return { error: "MCP stdio server requires a `command`" };
   }
-  if (kind === "stdio" && (raw.url !== undefined || raw.headers !== undefined)) {
+  if (
+    kind === "stdio" &&
+    (raw.url !== undefined || raw.headers !== undefined)
+  ) {
     return { error: "MCP stdio server cannot contain remote transport fields" };
   }
-  if (kind !== "stdio" &&
-      (raw.command !== undefined || raw.args !== undefined || raw.env !== undefined || raw.cwd !== undefined)) {
-    return { error: `MCP ${kind} server cannot contain stdio transport fields` };
+  if (
+    kind !== "stdio" &&
+    (raw.command !== undefined ||
+      raw.args !== undefined ||
+      raw.env !== undefined ||
+      raw.cwd !== undefined)
+  ) {
+    return {
+      error: `MCP ${kind} server cannot contain stdio transport fields`,
+    };
   }
 
   return kind;
@@ -63,11 +83,16 @@ export interface McpToolInfo {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  ui?: McpToolUiMetadata;
+  annotations?: McpToolAnnotations;
 }
 
 export interface McpToolCallResult {
   content: string;
   isError?: boolean;
+  mcpResult?: McpCallResultData;
+  executionState?: "completed" | "unknown";
+  failureKind?: "transport";
 }
 
 /** Discovered but not yet published to the manager's current connections. */

@@ -81,6 +81,7 @@ export type AgentEventInput =
       type: "tool.completed";
       data: {
         toolUseId: string;
+        pluginAppOrigin?: import("@vykor/protocol").PluginAppToolOrigin;
         result: {
           content: ContentBlock[];
           isError?: boolean;

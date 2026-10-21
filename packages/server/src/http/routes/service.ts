@@ -13,10 +13,10 @@ import type {
   SkillService,
 } from "../../application/index.js";
 import type { DaemonControlService } from "../../application/control/index.js";
-import type { SessionPluginUiService, PluginUiLifecycleScope } from "../../application/session/session-plugin-ui-service.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugin-lifecycle.js";
 
 export interface ServiceRoutesContext {
-  pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
+  pluginLifecycle?: PluginLifecycle;
   contextService?: ContextService;
   dreamService?: DreamService;
   profileService?: ProfileService;
@@ -47,19 +47,19 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
       // maintenance may interrupt current plugin UI actions.
       const mutation = c.req.method === "POST" && /^\/plugins\/(reload|[^/]+\/(enable|disable))$/.test(path)
         || c.req.method === "DELETE" && /^\/plugins\/[^/]+$/.test(path);
-      if (!mutation || !context.pluginUi || !context.pluginService) return next();
+      if (!mutation || !context.pluginLifecycle || !context.pluginService) return next();
       if (c.req.method === "DELETE" && !context.pluginService.uninstall) return next();
       let body: Record<string, unknown>;
       try { body = await readJson(c); } catch { return next(); }
       const cwd = typeof body.cwd === "string" ? body.cwd : path === "/plugins/reload" ? c.req.query("cwd") : undefined;
       if (!cwd) return next();
-      let scope: PluginUiLifecycleScope = { kind: "global" };
+      let scope: PluginLifecycleScope = { kind: "global" };
       if (path === "/plugins/reload") {
         scope = { kind: "cwd", cwd };
       } else if (c.req.method === "DELETE" || /\/(enable|disable)$/.test(path)) {
         scope = { kind: "global", pluginId: decodeURIComponent(path.split("/")[2]!) };
       }
-      await context.pluginUi.withPluginUiLifecycleMutation(scope, async () => { await next(); });
+      await context.pluginLifecycle.withMutation(scope, async () => { await next(); });
     })
     .get("/context/plugins", async (c) => {
       if (!context.contextService?.plugins)

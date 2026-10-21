@@ -271,6 +271,7 @@ export interface PermissionRequestRecord {
 
 /** Atomic, server-owned state used when a client attaches to one session. */
 export interface SessionStateSnapshot {
+  pluginApps?: import("./plugin-apps").PluginAppRecord[];
   cursor: number;
   session: SessionRecord;
   inputs: SessionInputRecord[];

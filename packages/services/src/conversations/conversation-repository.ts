@@ -36,6 +36,18 @@ export interface ConversationRepositoryOptions {
 }
 
 export class ConversationRepository {
+  /** Host-only provenance, written in the same admission transaction as Input and Run. */
+  setInputMetadata(id: string, metadata: Record<string, unknown>): void {
+    atomicWrite(this.storage, () => {
+      this.storage.assertWritable();
+      const input = this.storage.state.inputs[id];
+      if (!input) throw new Error("Input not found");
+      this.storage.rollback?.capture(this.storage.state.inputs, id);
+      input.metadata = structuredClone(metadata);
+      this.storage.mutations.inputs.add(id);
+      this.saveChanges?.();
+    });
+  }
   private readonly storage: StorageContext;
   private readonly eventRegistry: DurableEventRegistry;
   private readonly saveChanges?: () => void;

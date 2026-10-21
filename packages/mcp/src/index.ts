@@ -1,13 +1,30 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { randomUUID } from "node:crypto";
+import {
+  captureMcpAppResources,
+  type CapturedMcpAppResources,
+} from "./app-resources.js";
+export type { CapturedMcpAppResources } from "./app-resources.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { McpRemoteServerConfig, McpServerConfig, Settings, ToolDefinition } from "@vykor/core";
+import type {
+  McpRemoteServerConfig,
+  McpServerConfig,
+  Settings,
+  ToolDefinition,
+} from "@vykor/core";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 import { resolveTransportKind } from "./connection-types.js";
+import {
+  McpResultDataError,
+  mcpResultModelText,
+  normalizeMcpToolMetadata,
+  parseMcpCallResultData,
+} from "@vykor/protocol";
 import type {
   McpConnection,
   McpConnectionActivation,
@@ -34,18 +51,24 @@ export class McpClientManager {
   private connections = new Map<string, McpConnection>();
   private clients = new Map<string, Client>();
   private transports = new Map<string, Transport>();
+  private readonly appGenerations = new WeakMap<Client, string>();
   private readonly runLeases = new Map<Client, number>();
   private readonly retiredClients = new Map<Client, string>();
-  private readonly retiredClosures = new Map<Client, { name: string; work: Promise<void> }>();
+  private readonly retiredClosures = new Map<
+    Client,
+    { name: string; work: Promise<void> }
+  >();
 
-  constructor(private readonly options: {
-    cwd?: string;
-    settings?: Settings;
-    sessionId?: string;
-    policy?: SandboxPolicy;
-    processExecutor?: EnvironmentProcessExecutor;
-    oauthRuntime?: McpOAuthRuntime;
-  } = {}) {}
+  constructor(
+    private readonly options: {
+      cwd?: string;
+      settings?: Settings;
+      sessionId?: string;
+      policy?: SandboxPolicy;
+      processExecutor?: EnvironmentProcessExecutor;
+      oauthRuntime?: McpOAuthRuntime;
+    } = {},
+  ) {}
 
   async connect(name: string, config: McpServerConfig): Promise<McpConnection> {
     const kind = resolveTransportKind(config);
@@ -60,7 +83,8 @@ export class McpClientManager {
       authConfigured:
         transportKind === "stdio"
           ? !!config.env
-          : !!config.headers || (transportKind === "http" && !!this.options.oauthRuntime),
+          : !!config.headers ||
+            (transportKind === "http" && !!this.options.oauthRuntime),
       tools: [],
       resources: [],
     };
@@ -109,7 +133,8 @@ export class McpClientManager {
       authConfigured:
         kind === "stdio"
           ? !!config.env
-          : !!config.headers || (kind === "http" && !!this.options.oauthRuntime),
+          : !!config.headers ||
+            (kind === "http" && !!this.options.oauthRuntime),
       tools: [],
       resources: [],
     };
@@ -117,7 +142,7 @@ export class McpClientManager {
     const transport = this.createTransport(name, kind, config);
     const client = new Client(
       { name: "vykor", version: "0.1.0" },
-      { capabilities: {} }
+      { capabilities: {} },
     );
     let closed = false;
     client.onclose = () => {
@@ -136,8 +161,12 @@ export class McpClientManager {
 
       const toolsResult = await client.listTools().catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
-        if (!/Method not found/i.test(message) || client.getServerCapabilities?.()?.tools) {
-          connection.toolError = err instanceof Error ? err : new Error(message);
+        if (
+          !/Method not found/i.test(message) ||
+          client.getServerCapabilities?.()?.tools
+        ) {
+          connection.toolError =
+            err instanceof Error ? err : new Error(message);
         }
         return { tools: [] };
       });
@@ -159,6 +188,7 @@ export class McpClientManager {
           type: "object",
           properties: {},
         },
+        ...normalizeMcpToolMetadata(t),
       }));
 
       connection.resources = (resourcesResult.resources as any[]).map((r) => ({
@@ -168,14 +198,17 @@ export class McpClientManager {
         description: r.description ?? "",
       }));
 
-      if (closed) throw connection.error ?? new Error(`MCP connection closed: ${name}`);
+      if (closed)
+        throw connection.error ?? new Error(`MCP connection closed: ${name}`);
       connection.status = "connected";
       return {
         name,
         connection,
         client,
         transport,
-        tools: connection.tools.map((tool) => this.buildToolDefinition(tool, client)),
+        tools: connection.tools.map((tool) =>
+          this.buildToolDefinition(tool, client),
+        ),
       };
     } catch (err) {
       await client.close().catch(() => undefined);
@@ -193,7 +226,8 @@ export class McpClientManager {
     error: unknown,
   ): McpConnection {
     const kind = resolveTransportKind(config);
-    const transportKind: McpTransportKind = typeof kind === "string" ? kind : "stdio";
+    const transportKind: McpTransportKind =
+      typeof kind === "string" ? kind : "stdio";
     const connection: McpConnection = {
       name,
       config,
@@ -202,7 +236,8 @@ export class McpClientManager {
       authConfigured:
         transportKind === "stdio"
           ? !!config.env
-          : !!config.headers || (transportKind === "http" && !!this.options.oauthRuntime),
+          : !!config.headers ||
+            (transportKind === "http" && !!this.options.oauthRuntime),
       tools: [],
       resources: [],
       error: error instanceof Error ? error : new Error(String(error)),
@@ -290,21 +325,22 @@ export class McpClientManager {
   private createTransport(
     name: string,
     kind: McpTransportKind,
-    config: McpServerConfig
+    config: McpServerConfig,
   ): Transport {
     switch (kind) {
-      case "http":
-        {
-          const remote = config as McpRemoteServerConfig;
-          const hasExplicitAuthorization = Object.keys(remote.headers ?? {})
-            .some(key => key.toLowerCase() === "authorization");
+      case "http": {
+        const remote = config as McpRemoteServerConfig;
+        const hasExplicitAuthorization = Object.keys(remote.headers ?? {}).some(
+          (key) => key.toLowerCase() === "authorization",
+        );
         return new StreamableHTTPClientTransport(new URL(config.url!), {
           requestInit: { headers: config.headers },
-          fetch: !hasExplicitAuthorization && this.options.oauthRuntime
-            ? this.options.oauthRuntime.createFetch(name, remote)
-            : undefined,
+          fetch:
+            !hasExplicitAuthorization && this.options.oauthRuntime
+              ? this.options.oauthRuntime.createFetch(name, remote)
+              : undefined,
         });
-        }
+      }
       case "sse":
         return new SSEClientTransport(new URL(config.url!), {
           requestInit: { headers: config.headers },
@@ -326,7 +362,9 @@ export class McpClientManager {
 
   async connectAll(servers: Record<string, McpServerConfig>): Promise<void> {
     await Promise.allSettled(
-      Object.entries(servers).map(([name, config]) => this.connect(name, config))
+      Object.entries(servers).map(([name, config]) =>
+        this.connect(name, config),
+      ),
     );
   }
 
@@ -338,8 +376,12 @@ export class McpClientManager {
    */
   async disconnect(name: string): Promise<void> {
     const client = this.clients.get(name);
-    const retired = [...this.retiredClients].filter(([, owner]) => owner === name).map(([item]) => item);
-    const closing = [...this.retiredClosures.values()].filter((item) => item.name === name).map((item) => item.work);
+    const retired = [...this.retiredClients]
+      .filter(([, owner]) => owner === name)
+      .map(([item]) => item);
+    const closing = [...this.retiredClosures.values()]
+      .filter((item) => item.name === name)
+      .map((item) => item.work);
     const failures: unknown[] = [];
     try {
       const results = await Promise.allSettled([
@@ -347,7 +389,8 @@ export class McpClientManager {
         ...retired.map((item) => this.closeRetiredClient(item)),
         ...closing,
       ]);
-      for (const result of results) if (result.status === "rejected") failures.push(result.reason);
+      for (const result of results)
+        if (result.status === "rejected") failures.push(result.reason);
     } finally {
       this.clients.delete(name);
       this.transports.delete(name);
@@ -375,7 +418,10 @@ export class McpClientManager {
     if (failures.length) throw failures[0];
   }
 
-  async reconnect(name: string, config?: McpServerConfig): Promise<McpConnection | undefined> {
+  async reconnect(
+    name: string,
+    config?: McpServerConfig,
+  ): Promise<McpConnection | undefined> {
     if (config) {
       await this.disconnect(name);
       return this.connect(name, config);
@@ -392,19 +438,39 @@ export class McpClientManager {
     return this.connections.get(name);
   }
 
+  /** Resource-only host port bound to the original live connection generation. */
+  captureAppResources(name: string): CapturedMcpAppResources | undefined {
+    const client = this.clients.get(name);
+    const connection = this.connections.get(name);
+    if (!client || connection?.status !== "connected") return undefined;
+    let generation = this.appGenerations.get(client);
+    if (!generation) {
+      generation = randomUUID();
+      this.appGenerations.set(client, generation);
+    }
+    return captureMcpAppResources(
+      client,
+      generation,
+      () =>
+        this.clients.get(name) === client &&
+        this.connections.get(name) === connection &&
+        connection.status === "connected",
+    );
+  }
+
   getConnections(): readonly McpConnection[] {
     return [...this.connections.values()];
   }
 
   getConnectedTools(): McpToolInfo[] {
     return [...this.connections.values()].flatMap((c) =>
-      c.status === "connected" ? c.tools : []
+      c.status === "connected" ? c.tools : [],
     );
   }
 
   getConnectedResources(): McpResourceInfo[] {
     return [...this.connections.values()].flatMap((c) =>
-      c.status === "connected" ? c.resources : []
+      c.status === "connected" ? c.resources : [],
     );
   }
 
@@ -430,17 +496,36 @@ export class McpClientManager {
       name: `mcp__${serverName}__${name}`,
       description: `[${serverName}] ${tool.description}`,
       inputSchema: tool.inputSchema,
+      ...(tool.ui ? { ui: tool.ui } : {}),
+      ...(tool.annotations ? { annotations: tool.annotations } : {}),
       execute: async (input, context) => {
-        if (!client || (this.clients.get(serverName) !== client && this.retiredClients.get(client) !== serverName)) {
+        if (
+          !client ||
+          (this.clients.get(serverName) !== client &&
+            this.retiredClients.get(client) !== serverName)
+        ) {
           return {
-            content: [{ type: "text", text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.` }],
+            content: [
+              {
+                type: "text",
+                text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.`,
+              },
+            ],
             isError: true,
           };
         }
-        const result = await this.callClientTool(client, name, input, context.abortSignal);
+        const result = await this.callClientTool(
+          client,
+          name,
+          input,
+          context.abortSignal,
+        );
         return {
           content: [{ type: "text" as const, text: result.content }],
           isError: result.isError,
+          ...(result.mcpResult ? { mcpResult: result.mcpResult } : {}),
+          executionState: result.executionState,
+          failureKind: result.failureKind,
         };
       },
     };
@@ -459,7 +544,9 @@ export class McpClientManager {
     this.retiredClients.delete(client);
     const work = Promise.resolve().then(() => client.close());
     this.retiredClosures.set(client, { name, work });
-    void work.finally(() => this.retiredClosures.delete(client)).catch(() => undefined);
+    void work
+      .finally(() => this.retiredClosures.delete(client))
+      .catch(() => undefined);
     return work;
   }
 
@@ -489,33 +576,41 @@ export class McpClientManager {
         undefined,
         signal ? { signal } : undefined,
       );
-      const parts: string[] = [];
-      for (const item of result.content as any[]) {
-        if (item.type === "text") {
-          parts.push(item.text ?? "");
-        } else {
-          parts.push(JSON.stringify(item));
-        }
-      }
+      const mcpResult = parseMcpCallResultData(result);
       return {
-        content: parts.join("\n").trim() || "(no output)",
-        isError: !!(result.isError as boolean | undefined),
+        content: mcpResultModelText(mcpResult),
+        isError: mcpResult.isError === true,
+        mcpResult,
+        executionState: "completed",
       };
     } catch (err) {
       return {
-        content: err instanceof Error ? err.message : String(err),
+        // SDK validation errors may contain the rejected response's private _meta.
+        content:
+          err instanceof McpResultDataError
+            ? err.message
+            : "MCP tool call failed: response or transport error.",
         isError: true,
+        executionState: "unknown",
+        failureKind: "transport",
       };
     }
   }
 
-  async readResource(serverName: string, uri: string, signal?: AbortSignal): Promise<string> {
+  async readResource(
+    serverName: string,
+    uri: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
     const client = this.clients.get(serverName);
     if (!client) {
       throw new Error(`MCP server not found: ${serverName}`);
     }
 
-    const result = await client.readResource({ uri }, signal ? { signal } : undefined);
+    const result = await client.readResource(
+      { uri },
+      signal ? { signal } : undefined,
+    );
     const parts: string[] = [];
     for (const item of result.contents as any[]) {
       if (item.text !== undefined) {
@@ -531,8 +626,16 @@ export class McpClientManager {
 }
 
 export { McpOAuthError } from "./oauth/errors.js";
-export { assertIssuer, assertOAuthEndpoint, assertScopeSubset, parseScopes } from "./oauth/security.js";
-export { createOAuthCallback, type OAuthCallbackController } from "./oauth/callback.js";
+export {
+  assertIssuer,
+  assertOAuthEndpoint,
+  assertScopeSubset,
+  parseScopes,
+} from "./oauth/security.js";
+export {
+  createOAuthCallback,
+  type OAuthCallbackController,
+} from "./oauth/callback.js";
 export { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./oauth/status.js";
 export {
   buildMcpAuthServerSnapshot,

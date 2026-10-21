@@ -89,6 +89,17 @@ export async function activateNativePluginTools(
   });
   try {
     const definitions = await host.start();
+    if (plugin.components.apps && plugin.components.apps.status !== "loaded") {
+      throw new NativeToolHostError("plugin_app_invalid_definition", "Plugin app declarations are invalid.");
+    }
+    const appTools = new Map((plugin.components.apps?.value ?? []).flatMap(app =>
+      app.definition.backends.flatMap(backend => backend.kind === "native-tools" ? backend.tools.map(tool => [tool.tool, tool] as const) : [])));
+    // Check all mappings before registering anything. Never resolve a name from another plugin or builtin.
+    for (const name of appTools.keys()) {
+      if (!definitions.some(definition => definition.name === name)) {
+        throw new NativeToolHostError("plugin_app_invalid_definition", `App tool must be registered by this plugin: ${name}`);
+      }
+    }
     for (const definition of definitions) {
       if (RESERVED_SHELL_TOOL_NAMES.has(definition.name)) {
         throw new NativeToolHostError("tool_name_conflict", `Native Tool name is reserved: ${definition.name}`);
@@ -98,6 +109,10 @@ export async function activateNativePluginTools(
       }
       context.toolRegistry.register({
         ...definition,
+        // Unmapped Native tools remain model tools; apps obtain only explicitly mapped registrations.
+        ...(appTools.get(definition.name) ? { ui: {
+          ...appTools.get(definition.name)!.ui, visibility: [...appTools.get(definition.name)!.visibility],
+        } } : { ui: { visibility: ["model" as const] } }),
         execute: (input, toolContext) => {
           const view = toolContext.capabilityView;
           const captured = view?.tools.get(definition.name);

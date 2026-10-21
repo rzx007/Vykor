@@ -39,7 +39,7 @@ describe("HTTP request parsers", () => {
     });
   });
   it.each(["metadata", "runMetadata"])("rejects reserved host names in Prompt %s", namespace => {
-    for (const name of ["pluginUi", "uiAction"]) {
+    for (const name of ["pluginUi", "uiAction", "pluginUiSubmission", "pluginAppAction", "pluginAppSubmission", "pluginAppSource"]) {
       expectInvalid(() => parseAdmitPromptRequest({ content: "hello", [namespace]: { [name]: {} } }), `${namespace}.${name}`);
     }
     expect(parseAdmitPromptRequest({ content: "hello", metadata: { ui: { schemaVersion: 1, componentId: "findings", data: {} }, source: "desktop" } }).metadata)

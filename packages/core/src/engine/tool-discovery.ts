@@ -1,7 +1,7 @@
 import type { QueryEngineOptions, RunCapabilityView } from "../types/runtime.js";
 import type { ToolDiscovery, ToolDiscoveryEntry, ToolRegistry } from "../types/tools.js";
 import { toolDefinitionIdentity } from "./tool-definition-identity.js";
-import { toolRegistryForNames } from "./tool-registry.js";
+import { modelToolRegistry, toolRegistryForNames } from "./tool-registry.js";
 
 /** One submitMessage lifetime. Authorization and captured bindings stay in the original registry. */
 export class RunToolDiscovery implements ToolDiscovery {
@@ -26,6 +26,7 @@ export class RunToolDiscovery implements ToolDiscovery {
 
   static create(registry: ToolRegistry, policy?: QueryEngineOptions["toolDiscovery"], view?: RunCapabilityView): RunToolDiscovery | undefined {
     if (!policy) return undefined;
+    registry = modelToolRegistry(registry);
     const search = registry.get(policy.searchTool.name);
     const binding = view?.tools.get(policy.searchTool.name);
     // Same-name replacements must not strand deferred tools behind an unrelated search tool.

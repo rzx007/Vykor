@@ -7,6 +7,22 @@ import { describe, expect, it } from "vitest";
 import { writeSessionExport } from "../export-session.js";
 
 describe("writeSessionExport", () => {
+  it("omits page-private data in both exports even when short tool bodies fit entirely", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-private-export-"));
+    try {
+      const session = { id: "s", cwd: dir, title: "notes", model: "m", status: "idle" as const, metadata: {}, createdAt: 1, updatedAt: 1 };
+      const messages = [{ id: "m", sessionId: "s", seq: 1, role: "assistant" as const, metadata: {}, createdAt: 1, updatedAt: 1 }];
+      const output = { content: [{ type: "text", text: "saved" }], mcpResult: { content: [], _meta: { uiOnly: "PRIVATE_MCP" } }, metadata: { appData: { private: "PRIVATE_NATIVE" } } };
+      const parts = [{ id: "p", sessionId: "s", messageId: "m", seq: 1, type: "tool" as const, status: "completed" as const, toolUseId: "call", toolName: "Save", output, metadata: { appData: { private: "PRIVATE_NATIVE" } }, createdAt: 1, updatedAt: 1 }];
+      for (const format of ["md", "json"] as const) {
+        const result = await writeSessionExport({ session, inputs: [], messages, parts, format, filename: join(dir, `private.${format}`) });
+        const exported = readFileSync(result.filepath, "utf8");
+        expect(exported).toContain("saved");
+        expect(exported).not.toMatch(/PRIVATE_MCP|PRIVATE_NATIVE|mcpResult|appData/);
+      }
+      expect(output.mcpResult._meta.uiOnly).toBe("PRIVATE_MCP");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
   it.each(["sensitiveInput", "autoReviewSensitive"])("redacts sensitive sessions marked with %s in both export formats", async (marker) => {
     const dir = mkdtempSync(join(tmpdir(), "oh-review-export-"));
     try {

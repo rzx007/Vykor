@@ -7,7 +7,7 @@ import type { IncrementalOutput } from "../conversations/index.js";
 import {
   sessions, sessionInputs, sessionInputAttachments, sessionMessages,
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
-  permissionRequests, sessionEvents,
+  permissionRequests, sessionEvents, sessionPluginApps,
 } from "./schema.js";
 import { encode, isDurableEvent } from "./store-state.js";
 
@@ -26,6 +26,10 @@ export function persistSessionChanges(
   if (storage.deltaCheckpoint?.dirtyPartIds().length) output?.flushMessagePartDeltas();
 
   const database = storage.database.orm;
+  if (storage.mutations.deletedPluginApps.size > 0) {
+    const query = database.delete(sessionPluginApps).where(eq(sessionPluginApps.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedPluginApps) query.run({ id });
+  }
   if (storage.mutations.deletedInputAttachments.size > 0) {
     const query = database.delete(sessionInputAttachments)
       .where(eq(sessionInputAttachments.id, sql.placeholder("id"))).prepare();
@@ -263,6 +267,17 @@ export function persistSessionChanges(
     upsertPermission ??= database.insert(permissionRequests).values(namedPlaceholders({ id: value.id, ...fields }))
       .onConflictDoUpdate({ target: permissionRequests.id, set: namedPlaceholders(fields) }).prepare();
     upsertPermission.run({ id: value.id, ...fields });
+  }
+
+  let upsertPluginApp: PreparedInsert<typeof sessionPluginApps> | undefined;
+  for (const id of storage.mutations.pluginApps) {
+    const app = storage.state.pluginApps[id];
+    if (!app) continue;
+    const { id: appId, origin, activeActionRunId, lastActionRunId, ...rest } = app;
+    const fields = { ...rest, originJson: JSON.stringify(origin), activeActionRunId: activeActionRunId ?? null, lastActionRunId: lastActionRunId ?? null } satisfies Omit<typeof sessionPluginApps.$inferInsert, "id">;
+    upsertPluginApp ??= database.insert(sessionPluginApps).values(namedPlaceholders({ id: appId, ...fields }))
+      .onConflictDoUpdate({ target: sessionPluginApps.id, set: namedPlaceholders(fields) }).prepare();
+    upsertPluginApp.run({ id: appId, ...fields });
   }
 
   let insertEvent: PreparedInsert<typeof sessionEvents> | undefined;

@@ -1,4 +1,5 @@
 import type { CreateSessionInput, SessionInputRecord, SessionRecord } from "@vykor/protocol";
+import { withoutHostPluginMetadata } from "@vykor/protocol";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertSynchronousCommit } from "../database/chat-persistence.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
@@ -59,7 +60,7 @@ export function forkSessionWithHistory(input: {
           intent: attachment.intent,
           displayName: attachment.displayName,
         })),
-        metadata: sourceInput.metadata,
+        metadata: withoutHostPluginMetadata(sourceInput.metadata),
       });
       inputIdMap.set(sourceInput.id, copiedInput.id);
       sourceInput.attachments.forEach((attachment, index) => {
@@ -77,7 +78,7 @@ export function forkSessionWithHistory(input: {
         ...(message.inputId && inputIdMap.has(message.inputId)
           ? { inputId: inputIdMap.get(message.inputId)! }
           : {}),
-        metadata: message.metadata,
+        metadata: withoutHostPluginMetadata(message.metadata),
       });
       messageIdMap.set(message.id, copiedMessage.id);
     }
@@ -86,7 +87,7 @@ export function forkSessionWithHistory(input: {
     for (const part of sourceParts) {
       const messageId = messageIdMap.get(part.messageId);
       if (!messageId) continue;
-      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, ...copiedMetadata } = part.metadata;
+      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...copiedMetadata } = part.metadata;
       const sourceReferenceId = typeof part.metadata.inputAttachmentId === "string"
         ? part.metadata.inputAttachmentId
         : undefined;
@@ -197,6 +198,13 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
       context.storage.rollback?.capture(context.storage.state.permissions, id);
       delete context.storage.state.permissions[id];
       context.storage.mutations.permissions.delete(id);
+    }
+    for (const [id, row] of Object.entries(context.storage.state.pluginApps)) {
+      if (!sessionIdSet.has(row.sessionId)) continue;
+      context.storage.rollback?.capture(context.storage.state.pluginApps, id);
+      delete context.storage.state.pluginApps[id];
+      context.storage.mutations.pluginApps.delete(id);
+      context.storage.mutations.deletedPluginApps.delete(id);
     }
     const removedEventIds = new Set(
       context.storage.state.events

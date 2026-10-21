@@ -8,11 +8,12 @@ export * from "./components/hooks.js";
 export * from "./components/mcp.js";
 export * from "./components/skills.js";
 export * from "./components/tools.js";
-export * from "./components/ui.js";
-export * from "./components/ui-schema.js";
 export * from "./load-native-plugin.js";
 export * from "./installation/cache.js";
 export * from "./installation/installer.js";
 export * from "./installation/store.js";
 export * from "./installation/verify.js";
 export * from "./activation/activate.js";
+
+export * from "./components/apps.js";
+export * from "./components/app-resources.js";

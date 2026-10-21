@@ -6,7 +6,7 @@ import { requestedPluginPermissions } from "./installer.js";
 import type { InstalledPluginRecord } from "./store.js";
 
 export type InstalledNativePluginVerification =
-  | { status: "valid"; plugin: ValidatedNativePlugin; diagnostics: [] }
+  | { status: "valid"; plugin: ValidatedNativePlugin; diagnostics: PluginDiagnostic[] }
   | { status: "invalid"; plugin?: ValidatedNativePlugin; rootManifest?: VykorPluginManifestV1; diagnostics: PluginDiagnostic[] };
 
 function samePermissions(left: readonly string[], right: readonly string[]): boolean {
@@ -54,7 +54,7 @@ export async function verifyInstalledNativePlugin(
     }
   }
 
-  const validation = await validateNativePlugin(record.cachePath);
+  const validation = await validateNativePlugin(record.cachePath, { allowRetiredUi: true });
   if (validation.status !== "valid" || !validation.plugin) return {
     status: "invalid", diagnostics: validation.diagnostics,
     ...(validation.rootManifest ? { rootManifest: validation.rootManifest } : {}),
@@ -106,5 +106,5 @@ export async function verifyInstalledNativePlugin(
       );
     }
   }
-  return { status: "valid", plugin, diagnostics: [] };
+  return { status: "valid", plugin, diagnostics: validation.diagnostics };
 }

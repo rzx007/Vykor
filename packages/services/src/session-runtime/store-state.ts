@@ -1,4 +1,5 @@
 import type {
+  PluginAppRecord,
   PermissionRequestRecord,
   AttachmentLimits,
   SessionEventRecord,
@@ -26,6 +27,7 @@ export interface SessionState {
   attempts: Record<string, SessionRunAttemptRecord>;
   tasks: Record<string, SessionExecutionRecord>;
   permissions: Record<string, PermissionRequestRecord>;
+  pluginApps: Record<string, PluginAppRecord>;
 }
 
 export interface SessionStoreOptions {
@@ -58,6 +60,7 @@ export function emptyState(): SessionState {
     attempts: {},
     tasks: {},
     permissions: {},
+    pluginApps: {},
   };
 }
 

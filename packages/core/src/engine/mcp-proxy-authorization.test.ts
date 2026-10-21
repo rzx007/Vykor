@@ -3,6 +3,8 @@ import { mcpToolCallTool } from "../../../tools/src/mcp/mcp-tools.js";
 import type { AgentEventInput, AgentExecutionContext, IPermissionChecker, Message, StreamEvent, ToolDefinition } from "../index.js";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
+import { runToolRegistry, toolRegistryView } from "./tool-registry.js";
+import { RunToolDiscovery } from "./tool-discovery.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -51,6 +53,58 @@ function fixture(options: { captured?: boolean; source?: "mcp" | "agent"; decisi
 }
 
 describe("MCP proxy authorization", () => {
+  it("executes one trusted app-only captured tool through the checked pipeline while model/proxy stay denied", async () => {
+    const f = fixture();
+    const binding = f.execution.capabilityView!.tools.get("mcp__remote__query")!;
+    binding.definition.ui = { visibility: ["app"] };
+    const call = { type: "tool_use" as const, id: "app-call", name: binding.definition.name, input: { text: "hello" } };
+    expect((await f.engine.executeTool(call, { execution: f.execution, audience: "app" })).executionState).toBe("not_started");
+    f.execution.capabilityView = { ...f.execution.capabilityView!,
+      tools: new Map([...f.execution.capabilityView!.tools].filter(([name]) => name !== binding.definition.name)),
+      appTools: new Map([[binding.definition.name, binding]]) };
+    expect((await f.engine.executeTool(call, { execution: f.execution, audience: "app" })).executionState).toBe("completed");
+    expect(f.checked).toContain(binding.definition.name);
+    expect(f.hooks).toContain(`pre_tool_use:${binding.definition.name}`);
+    expect((await f.engine.executeTool(call, { execution: f.execution })).executionState).toBe("not_started");
+    expect((await f.call()).executionState).toBe("not_started");
+    expect(f.calls).toBe(1);
+  });
+  it("does not let app visibility override the actual tool permission deny", async () => {
+    const f = fixture({ decision: "deny" });
+    const binding = f.execution.capabilityView!.tools.get("mcp__remote__query")!;
+    binding.definition.ui = { visibility: ["app"] };
+    f.execution.capabilityView = { ...f.execution.capabilityView!, appTools: new Map([[binding.definition.name, binding]]) };
+    expect(await f.engine.executeTool({ type: "tool_use", id: "app-denied", name: binding.definition.name, input: { text: "hi" } },
+      { execution: f.execution, audience: "app" })).toMatchObject({ isError: true, failureKind: "permission", executionState: "not_started" });
+    expect(f.checked).toEqual([binding.definition.name]);
+    expect(f.calls).toBe(0);
+  });
+  it.each(["model", "app", "both"] as const)("enforces %s visibility in captured direct/proxy calls and descriptors", async audience => {
+    const f = fixture();
+    const binding = f.execution.capabilityView!.tools.get("mcp__remote__query")!;
+    binding.definition.ui = { visibility: audience === "both" ? ["model", "app"] : [audience] };
+    const registry = runToolRegistry(f.registry, null, undefined, f.execution.capabilityView);
+    expect(toolRegistryView(registry).has(binding.definition.name)).toBe(audience !== "app");
+    if (audience !== "app") expect(toolRegistryView(registry).get(binding.definition.name)?.ui).toEqual(binding.definition.ui);
+    const result = await f.call();
+    expect(result.executionState).toBe(audience === "app" ? "not_started" : "completed");
+    expect(f.calls).toBe(audience === "app" ? 0 : 1);
+    const direct = await f.engine.executeTool({ type: "tool_use", id: "direct", name: binding.definition.name, input: { text: "hi" } }, { execution: f.execution });
+    expect(direct.executionState).toBe(audience === "app" ? "not_started" : "completed");
+  });
+
+  it("hides app-only tools from search even without a resource and rejects malformed visibility", () => {
+    const registry = new ToolRegistry();
+    const search: ToolDefinition = { name: "Search", description: "search", inputSchema: {}, execute: async () => ({ content: [] }) };
+    registry.register(search, { kind: "builtin" });
+    for (const [name, visibility] of [["private", ["app"]], ["invalid", ["model", "invalid"]], ["public", ["model", "app"]]] as const) {
+      registry.register({ ...search, name, ui: { visibility: visibility as unknown as Array<"model" | "app"> } });
+    }
+    const discovery = RunToolDiscovery.create(registry, { searchTool: search, shouldDefer: () => true, minToolCount: 1 })!;
+    expect(discovery.catalog.map(row => row.name)).toEqual(["Search", "public"]);
+    expect(discovery.expose(["private", "invalid", "public"])).toEqual(["public"]);
+    expect(discovery.requestRegistry([], false).getAll().map(tool => tool.name)).toEqual(["Search", "public"]);
+  });
   it("cannot use the host MCP manager to bypass a visible target's formal deny", async () => {
     const f = fixture({ modelLoop: true, decision: "deny" });
     f.execution.capabilityView = undefined;

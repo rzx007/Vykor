@@ -43,6 +43,7 @@ export interface ToolGenerationProgressEvent {
 export interface ToolUseEndEvent {
   type: "tool_use_end";
   toolUseId: string;
+  pluginAppOrigin?: import("@vykor/protocol").PluginAppToolOrigin;
   result: {
     content: ContentBlock[];
     isError?: boolean;

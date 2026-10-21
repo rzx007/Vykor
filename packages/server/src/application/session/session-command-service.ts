@@ -16,7 +16,7 @@ import {
 } from "@vykor/protocol";
 import { isRecord, runtimeSessionMetadataChanged } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { SessionPluginUiService } from "./session-plugin-ui-service.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "./plugin-lifecycle.js";
 
 export type CreateSessionCommand = CreateSessionInput;
 
@@ -98,7 +98,7 @@ export interface SessionCommandEvents {
 }
 
 export interface SessionCommandServiceOptions {
-  pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
+  pluginLifecycle?: PluginLifecycle;
   sessions: SessionCommandStoreOperations;
   transactions: SessionCommandTransactions;
   runtimeControl: SessionCommandRuntimeControl;
@@ -296,7 +296,7 @@ export class SessionCommandService {
     const runtime = input.metadata?.runtime;
     const affectsPlugins = isRecord(runtime) && Object.hasOwn(runtime, "pluginsEnabled");
     const session = affectsPlugins && this.options.sessions.getSession(sessionId);
-    if (session && this.options.pluginUi) return this.options.pluginUi.withPluginUiLifecycleMutation(
+    if (session && this.options.pluginLifecycle) return this.options.pluginLifecycle.withMutation(
       { kind: "cwd", cwd: session.cwd, sessionId }, () => this.enqueueUpdateSession(sessionId, input));
     return this.enqueueUpdateSession(sessionId, input);
   }

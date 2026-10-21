@@ -12,6 +12,7 @@ import type { PluginSelectionCandidate } from "./plugin-selection.js";
 import type { VykorAgentConfiguration } from "./agent-options.js";
 
 interface FrameworkAgentRunOptions {
+  toolAppOrigin?(binding: import("@vykor/core").RunToolBinding | undefined): Promise<import("@vykor/protocol").PluginAppToolOrigin | undefined>;
   limits?: AgentExecutionContext["limits"];
   profile?: AgentExecutionContext["profile"];
   capabilityView?: AgentExecutionContext["capabilityView"];
@@ -270,6 +271,15 @@ export class FrameworkAgentRun implements AgentRunHandle {
         signal: this.controller.signal,
         execution,
       })) {
+        if (event.type === "tool_use_end") {
+          // Only this host-owned event field is projected. Free tool metadata cannot supply it.
+          delete event.pluginAppOrigin;
+          const call = this.toolActivity.toolUses.find(item => item.id === event.toolUseId);
+          if (call && !event.result.isError && event.result.executionState === "completed") {
+            try { event.pluginAppOrigin = await this.options.toolAppOrigin?.(execution.capabilityView?.tools.get(call.name)); }
+            catch { /* Changed or unavailable source keeps its ordinary tool result. */ }
+          }
+        }
         // Cancellation still owes full results for calls committed before the abort.
         const committedSettlement = event.type === "tool_use_end"
           && this.toolActivity.toolUses.some(call => call.id === event.toolUseId)
@@ -406,7 +416,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       });
       await this.emit({
         type: "tool.completed",
-        data: { toolUseId: event.toolUseId, result: event.result },
+        data: { toolUseId: event.toolUseId, result: event.result, ...(event.pluginAppOrigin ? { pluginAppOrigin: event.pluginAppOrigin } : {}) },
       });
     } else if (event.type === "error") {
       throw event.error;

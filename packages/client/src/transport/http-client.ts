@@ -1,3 +1,4 @@
+import { PluginAppResource } from "../resources/plugin-app-resource.js";
 /**
  * daemon HTTP/SSE 客户端。
  *
@@ -24,7 +25,7 @@ import {
   AuthResource,
   ProjectResource,
   PluginResource,
-  PluginUiResource,
+  PluginUiHistoryResource,
   DevelopmentResource,
   SessionResource,
   AttachmentResource,
@@ -68,7 +69,8 @@ export {
 
 /** 面向 daemon 的 typed fetch 客户端。 */
 export class VykorClient {
-  readonly pluginUi: PluginUiResource;
+  readonly pluginUiHistory: PluginUiHistoryResource;
+  readonly pluginApps: PluginAppResource;
   readonly protocol: ProtocolClient;
   readonly system: SystemResource;
   readonly providers: ProviderResource;
@@ -96,7 +98,8 @@ export class VykorClient {
     this.auth = new AuthResource(transport);
     this.projects = new ProjectResource(transport);
     this.plugins = new PluginResource(transport);
-    this.pluginUi = new PluginUiResource(transport);
+    this.pluginUiHistory = new PluginUiHistoryResource(transport);
+    this.pluginApps = new PluginAppResource(transport);
     this.development = new DevelopmentResource(transport);
     this.sessions = new SessionResource(transport);
     this.attachments = new AttachmentResource(transport);

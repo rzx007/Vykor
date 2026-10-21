@@ -1,5 +1,18 @@
 /* Inline this optional stylesheet into the plugin's standalone HTML at build time. */
 :root {
+  --ohs-background: var(--color-background-primary, Canvas);
+  --ohs-foreground: var(--color-text-primary, CanvasText);
+  --ohs-muted-foreground: var(--color-text-secondary, GrayText);
+  --ohs-border: var(--color-border-primary, GrayText);
+  --ohs-primary: var(--color-background-inverse, ButtonText);
+  --ohs-primary-foreground: var(--color-text-inverse, ButtonFace);
+  --ohs-accent: var(--color-background-secondary, ButtonFace);
+  --ohs-destructive: var(--color-text-danger, CanvasText);
+  --ohs-font-family: var(--font-sans, system-ui);
+  --ohs-font-size: var(--font-text-md-size, 14px);
+  --ohs-color-scheme: light;
+  --ohs-motion-duration: 150ms;
+
   font-family: var(--ohs-font-family), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: var(--ohs-font-size);
   color: var(--ohs-foreground);
@@ -84,3 +97,5 @@ hr {
     scroll-behavior: auto !important;
   }
 }
+:root[data-theme="dark"] { --ohs-color-scheme: dark; }
+@media (prefers-reduced-motion: reduce) { :root { --ohs-motion-duration: 0ms; } }

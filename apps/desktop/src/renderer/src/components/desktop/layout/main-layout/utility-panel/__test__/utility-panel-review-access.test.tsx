@@ -17,14 +17,11 @@ vi.mock("@renderer/components/desktop/tools/review/review-tool", async () => {
 })
 
 import { UtilityPanel } from "../utility-panel"
-import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
-import { PluginUiCard } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-card"
-import {
-  instance,
-  snapshot,
-  sourcePart,
-} from "@renderer/components/desktop/conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support"
-import { utilityToolOrder } from "../utility-panel-tabs"
+import { PluginAppController } from "@renderer/components/desktop/shell/plugin-apps/controller"
+import type { ResidentAppPage } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
+import { mount as appMount } from "@renderer/components/desktop/shell/plugin-apps/__test__/fixtures.test-support"
+const appFixture = vi.hoisted(() => ({ pages: [] as ResidentAppPage[] }))
+vi.mock("@renderer/components/desktop/shell/plugin-apps/provider", () => ({ usePluginApps: () => null, usePluginAppPages: () => appFixture.pages }))
 import {
   readUtilityPanelRuntimeState,
   writeUtilityPanelRuntimeState,
@@ -99,14 +96,13 @@ it.each([1000, 10000])(
     })
     Object.defineProperty(window, "desktop", {
       configurable: true,
-      value: { pluginUi: { capabilities: async () => ({ available: true }) } },
+      value: {},
     })
     mountedContainer = document.createElement("div")
     document.body.append(mountedContainer)
     mountedRoot = createRoot(mountedContainer)
     await act(async () =>
       mountedRoot!.render(
-        <PluginUiProvider onOpenSidebar={() => {}}>
           <UtilityPanel
             scopeId={`session:panel-perf-${count}`}
             open
@@ -121,7 +117,6 @@ it.each([1000, 10000])(
             onOpenReview={() => {}}
             onOpenTerminal={() => {}}
           />
-        </PluginUiProvider>
       )
     )
     await settle()
@@ -158,6 +153,7 @@ it.each([1000, 10000])(
 )
 
 beforeEach(() => {
+  appFixture.pages = []
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   useDesktopSessionStore.setState(initialStoreState, true)
   resetWorkspaceGitProbeCacheForTests()
@@ -363,79 +359,6 @@ describe("UtilityPanel review tool access", () => {
     await settle()
     expect(readUtilityPanelRuntimeState(scopeId)!.tabs).toEqual([])
   })
-  it("opens only a concrete plugin instance and closes its display without dismissing business", async () => {
-    installProbe(async () => ({ isRepository: true, rootPath: null }))
-    useOutsideProjectSession("D:/repo-one")
-    const actualInstance = { ...instance, sessionId: "s1", surface: "session-sidebar" as const }
-    const actualPart = { ...sourcePart, sessionId: "s1", metadata: { pluginUi: actualInstance } }
-    useDesktopSessionStore.setState((state) => ({
-      sessionView: { ...state.sessionView!, parts: [actualPart] },
-    }))
-    const hostState = {
-      snapshot,
-      plugin: { id: "example.ui", version: "1" },
-      title: "检查结果",
-      availability: { code: "available", canRender: true, canInvoke: true },
-      conversation: { draft: false, submit: false },
-      actions: [],
-    }
-    const unmount = vi.fn(async () => {}),
-      dismiss = vi.fn()
-    Object.assign(window.desktop, {
-      pluginUi: {
-        capabilities: async () => ({ available: true }),
-        mount: async () => ({
-          mountId: "20000000-0000-4000-8000-000000000001",
-          url: "vykor-plugin-ui://frame/20000000-0000-4000-8000-000000000001",
-          state: hostState,
-        }),
-        getState: async () => hostState,
-        onRevoked: () => () => {},
-        unmount,
-        dismiss,
-      },
-    })
-    const container = mountPanel("session:plugin-ui")
-    const panel = createElement(UtilityPanel, {
-      scopeId: "session:plugin-ui",
-      open: true,
-      maximized: false,
-      onToggleMaximized: vi.fn(),
-      onClose: vi.fn(),
-      fileOpenRequest: null,
-      reviewOpenRequest: null,
-      terminalOpenRequest: null,
-      toolOpenRequest: null,
-      onOpenFile: vi.fn(),
-      onOpenReview: vi.fn(),
-      onOpenTerminal: vi.fn(),
-    })
-    await act(async () =>
-      mountedRoot!.render(
-        <PluginUiProvider onOpenSidebar={() => {}}>
-          <PluginUiCard instance={actualInstance} call={actualPart} />
-          <div>{panel}</div>
-        </PluginUiProvider>
-      )
-    )
-    expect(utilityToolOrder).not.toContain("plugin-ui")
-    expect(container.querySelector("iframe")).toBeNull()
-    await act(async () => {
-      const button = [...container.querySelectorAll("button")].find(
-        (button) => button.textContent === "在侧栏打开"
-      )
-      button!.click()
-    })
-    await settle()
-    expect(container.querySelector("aside iframe")).not.toBeNull()
-    expect(container.querySelector(".utility-tab-strip")?.textContent).toContain("检查结果")
-    await act(async () =>
-      (container.querySelector('button[aria-label="关闭标签"]') as HTMLButtonElement).click()
-    )
-    expect(container.querySelector("iframe")).toBeNull()
-    expect(unmount).toHaveBeenCalledTimes(1)
-    expect(dismiss).not.toHaveBeenCalled()
-  })
   it("offers the review tool once the probe reports a repository", async () => {
     const isRepository = installProbe(async () => ({ isRepository: true, rootPath: null }))
     useOutsideProjectSession("D:/repo-one")
@@ -519,4 +442,13 @@ describe("UtilityPanel review tool access", () => {
 
     expect(container.textContent).not.toContain("审阅")
   })
+})
+
+it.each([undefined, ["inline"], ["inline", "fullscreen"]] as const)("shows only negotiated fullscreen pages as actual utility tabs: %j", async modes => {
+  useDesktopSessionStore.setState({ activeSessionId: "original", sessionView: emptySessionView("original"), selectedProject: null })
+  Object.defineProperty(window, "desktop", { configurable: true, value: {} })
+  appFixture.pages = [{ id: "mount", title: "MODE_ELIGIBILITY_APP", controller: new PluginAppController(appMount, {} as never, async () => false), modes: modes ? [...modes] : undefined }]
+  const container = mountPanel("session:mode-eligibility")
+  await settle()
+  expect(container.textContent?.includes("MODE_ELIGIBILITY_APP")).toBe(modes?.includes("fullscreen" as never) === true)
 })

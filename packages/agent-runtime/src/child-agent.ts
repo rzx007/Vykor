@@ -107,11 +107,10 @@ function authorizesChildView(child: RunCapabilityView, parent?: AgentJobAuthoriz
       || current.definitionIdentity !== binding.definitionIdentity || current.definition.execute !== binding.definition.execute
       || (!binding.definitionIdentity && current.invoke !== binding.invoke)) return false;
   }
-  for (const kind of ["skills", "agents", "mcpServers", "pluginUi", "delegatablePluginUi"] as const) {
+  for (const kind of ["skills", "agents", "mcpServers"] as const) {
     for (const [name, binding] of child[kind] ?? []) {
-      const ui = kind === "pluginUi" || kind === "delegatablePluginUi";
-      if (!ui && !("ownerPluginId" in binding && binding.ownerPluginId !== undefined)) continue;
-      const current = ui ? (parent?.delegatablePluginUi?.get(name) ?? parent?.pluginUi?.get(name)) : parent?.[kind]?.get(name);
+      if (!("ownerPluginId" in binding && binding.ownerPluginId !== undefined)) continue;
+      const current = parent?.[kind]?.get(name);
       if (!isDeepStrictEqual(current, binding)) return false;
     }
   }
@@ -148,7 +147,6 @@ function rebuildChildCapabilityView(
   const toolMap = readonlyMap(tools);
   return deriveChildCapabilityView(Object.freeze({
     ...inherited, tools: toolMap, skills: readonlyMap(skills), agents: readonlyMap(agents),
-    pluginUi: inherited.delegatablePluginUi ?? inherited.pluginUi,
   }), child)!;
 }
 

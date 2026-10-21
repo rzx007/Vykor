@@ -1,6 +1,8 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import JSZip from "jszip";
 import { afterEach, expect, it } from "vitest";
@@ -8,6 +10,26 @@ import { afterEach, expect, it } from "vitest";
 import { packageExamplePlugins } from "../scripts/package-example-plugins.mjs";
 
 const tempRoots: string[] = [];
+it("runs the actual packaged inspector outside the repository without install/build dependencies", async () => {
+  const { pluginsDir, outputDir } = await createFixture();
+  await cp(fileURLToPath(new URL("../../../examples/plugins/text-inspector/", import.meta.url)), join(pluginsDir, "text-inspector"),
+    { recursive: true, filter: path => !path.split(/[\\/]/).includes("node_modules") });
+  await packageExamplePlugins(pluginsDir, outputDir);
+  const zip = await JSZip.loadAsync(await readFile(join(outputDir, "text-inspector.zip")));
+  expect(Object.keys(zip.files).some(name => name.includes("node_modules") || name.endsWith("/sdk.js"))).toBe(false);
+  const extracted = join(outputDir, "extracted");
+  for (const [name, entry] of Object.entries(zip.files)) if (!entry.dir) {
+    const path = join(extracted, name);
+    await mkdir(join(path, ".."), { recursive: true }); await writeFile(path, await entry.async("nodebuffer"));
+  }
+  const plugin = join(extracted, "text-inspector");
+  const script = "import {registerTools} from './tools/index.mjs';const r=registerTools().find(t=>t.name==='TextInspectorPreview').invoke({text:'ok  ',selected:['1:trailing-whitespace']});if(r.metadata.appData.text!=='ok')throw Error('preview');console.log('offline native preview passed')";
+  const ran = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: plugin, encoding: "utf8" });
+  expect(ran.status, ran.stderr).toBe(0);
+  const html = await readFile(join(plugin, "ui/panel.html"), "utf8");
+  expect(html).not.toMatch(/<(?:script|link|iframe)\b[^>]*(?:src|href)=/i);
+  expect(html).not.toContain("VykorPluginUi");
+});
 
 async function createFixture(): Promise<{ pluginsDir: string; outputDir: string }> {
   const root = await mkdtemp(join(tmpdir(), "vykor-example-plugins-"));

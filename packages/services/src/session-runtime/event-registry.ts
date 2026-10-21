@@ -247,6 +247,7 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
       throw new Error("recoveryRunId must be a string");
     }
   }),
+  sessionDefinition("session.plugin_app.updated", objectPayload("app")),
   sessionDefinition("session.task.created", objectPayload("task")),
   sessionDefinition("session.task.updated", (payload) => {
     objectPayload("task")(payload);

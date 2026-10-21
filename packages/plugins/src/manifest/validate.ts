@@ -1,3 +1,4 @@
+import { loadNativeAppMetadata } from "../components/apps.js";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { PluginDiagnostic } from "../diagnostics.js";
@@ -11,7 +12,7 @@ import {
   type ValidatedNativePlugin,
 } from "../types.js";
 import { VykorPluginManifestV1Schema } from "./schema-v1.js";
-import { loadNativeUiMetadata } from "../components/ui.js";
+
 
 export type { NativePluginValidationResult } from "../types.js";
 
@@ -28,7 +29,7 @@ function getComponentSources(manifest: VykorPluginManifestV1): ComponentSource[]
     const declarations = manifest.components[kind] as
       | Array<string | NativeToolComponent>
       | undefined;
-    if (declarations === undefined) continue;
+    if (declarations === undefined || kind === "ui") continue;
     for (const declaration of declarations) {
       sources.push({
         kind,
@@ -44,7 +45,7 @@ function invalid(diagnostics: PluginDiagnostic[], rootManifest?: VykorPluginMani
 }
 
 /** 只接受 `.vykor-plugin/plugin.json`，并验证所有声明组件的真实路径边界。 */
-export async function validateNativePlugin(root: string): Promise<NativePluginValidationResult> {
+export async function validateNativePlugin(root: string, options: { allowRetiredUi?: boolean } = {}): Promise<NativePluginValidationResult> {
   const manifestPath = join(root, MANIFEST_RELATIVE_PATH);
   let source: string;
   try {
@@ -96,6 +97,10 @@ export async function validateNativePlugin(root: string): Promise<NativePluginVa
   }
 
   const diagnostics: PluginDiagnostic[] = [];
+  if (parsed.data.components.ui?.length) {
+    diagnostics.push({ severity: options.allowRetiredUi ? "warning" : "error", phase: "validate", code: "plugin_ui_retired", message: "components.ui has retired; migrate to components.apps", pluginId: parsed.data.id, component: "ui" });
+    if (!options.allowRetiredUi) return invalid(diagnostics, parsed.data);
+  }
   const seenSources = new Map<string, ComponentSource>();
   for (const sourceDeclaration of getComponentSources(parsed.data)) {
     let resolvedPath: string;
@@ -158,9 +163,9 @@ export async function validateNativePlugin(root: string): Promise<NativePluginVa
     manifestPath: await realpath(manifestPath),
     manifest: parsed.data,
   };
-  if (plugin.manifest.components.ui) {
-    const ui = await loadNativeUiMetadata(plugin);
-    if (ui.status !== "loaded") return invalid(ui.diagnostics, plugin.manifest);
+  if (plugin.manifest.components.apps) {
+    const apps = await loadNativeAppMetadata(plugin);
+    if (apps.status !== "loaded") return invalid(apps.diagnostics, plugin.manifest);
   }
   return { status: "valid", plugin, diagnostics };
 }

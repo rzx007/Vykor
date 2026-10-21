@@ -27,15 +27,13 @@ import {
   type ServerCapabilities,
 } from "@vykor/protocol";
 import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
-import type { SessionPluginUiService } from "../../application/session/session-plugin-ui-service.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugin-lifecycle.js";
 
 export interface SystemRoutesContext {
   restartPreparedHealth?: () => (VykorServerHealth & { ready: false; accepting: false; restartPrepared: true }) | undefined;
   memoryManagementReady?: boolean;
-  pluginUiReady?: boolean;
-  pluginUiLifecycleReady?: boolean;
-  pluginUiConversationReady?: boolean;
-  pluginUi?: Pick<SessionPluginUiService, "withPluginUiLifecycleMutation">;
+  pluginAppsReady?: boolean;
+  pluginLifecycle?: PluginLifecycle;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
   settingsService?: SettingsService;
@@ -68,11 +66,11 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
       await withProviderConfigurationUpdate(context.control, next);
     })
     .use("/settings", async (c, next) => {
-      if (c.req.method !== "PATCH" || !context.pluginUi) return next();
+      if (c.req.method !== "PATCH" || !context.pluginLifecycle) return next();
       let body: Record<string, unknown>;
       try { body = await readJson(c); } catch { return next(); }
       if (!Object.hasOwn(body, "plugins") && !(typeof body.path === "string" && body.path.startsWith("plugins."))) return next();
-      await context.pluginUi.withPluginUiLifecycleMutation({ kind: "global" }, async () => { await next(); });
+      await context.pluginLifecycle.withMutation({ kind: "global" }, async () => { await next(); });
     })
     .get("/capabilities", async () =>
       jsonResponse(
@@ -96,9 +94,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               safeRestart: 1,
               attachments: 1,
               pluginCapabilities: 1,
-              ...(context.pluginUiReady ? { pluginUi: 2 } : {}),
-              ...(context.pluginUiReady && context.pluginUiLifecycleReady ? { pluginUiLifecycle: 1 } : {}),
-              ...(context.pluginUiReady && context.pluginUiConversationReady ? { pluginUiConversation: 1 } : {}),
+              ...(context.pluginAppsReady ? { pluginApps: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
               ...(context.memoryManagementReady ? { memoryManagement: 1 } : {}),

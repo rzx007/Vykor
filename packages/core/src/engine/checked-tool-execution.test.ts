@@ -78,6 +78,27 @@ function fixture(options: {
 }
 
 describe("history-free checked tool execution", () => {
+  it("keeps original MCP data for persistence while post hooks only receive public tool feedback", async () => {
+    const raw = { content: [{ type: "text", text: "saved" }], structuredContent: { revision: 2 }, _meta: { uiOnly: { cursor: 8 } }, isError: false };
+    const hookPayloads: unknown[] = [];
+    const f = fixture({ invoke: async () => ({ content: [{ type: "text", text: "saved" }], mcpResult: raw, metadata: { appData: { privateView: true }, requestId: "forged", controlRevision: 99 } }),
+      hook: async (_event, payload) => { hookPayloads.push(payload); return { blocked: false }; } });
+    const result = await f.engine.executeTool(f.toolUse, { execution: f.execution });
+    expect(result.mcpResult).toEqual(raw);
+    expect(result.executionState).toBe("completed");
+    expect(result.metadata?.requestId).toBeUndefined();
+    expect(result.metadata?.controlRevision).toBeUndefined();
+    expect(JSON.stringify(hookPayloads)).not.toMatch(/uiOnly|privateView|mcpResult/);
+    expect(JSON.stringify(f.engine.getHistory())).not.toContain("uiOnly");
+    // Cross-tool import intentionally retains content only, not the page-private result.
+    expect(f.contexts[0]!.readToolResult?.(f.toolUse.id)?.mcpResult).toBeUndefined();
+  });
+
+  it("does not label a returned malformed MCP response as an unstarted tool", async () => {
+    const f = fixture({ invoke: async () => ({ content: [{ type: "text", text: "saved" }], mcpResult: { content: [], _meta: { bad: NaN } } }) });
+    expect(await f.engine.executeTool(f.toolUse, { execution: f.execution })).toMatchObject({ isError: true, executionState: "unknown" });
+    expect(f.inputs).toHaveLength(1);
+  });
   it.each(["plugin", "builtin"] as const)("only raises captured builtin file facts into host feedback: %s", async kind => {
     const facts = { environmentKey: "local:/runtime", files: [{ path: "/runtime/file", subjectKey: "file-1",
       operation: "read", afterDigest: `sha256:${"a".repeat(64)}`, completed: true, bodyVisible: true }] };
@@ -215,4 +236,29 @@ describe("history-free checked tool execution", () => {
     expect(f.contexts[0]!.abortSignal!.aborted).toBe(true);
     expect(f.hooks).toEqual(["pre_tool_use", "post_tool_use"]);
   });
+});
+
+it.each(["post-hook", "terminal-lifecycle"])("delivers a collected result exactly once before propagating %s failure", async failureAt => {
+  const failure = new Error(failureAt);
+  const f = fixture({ invoke: async () => ({ content: [{ type: "text", text: "Saved" }], isError: true, executionState: "completed", metadata: { appData: { saved: true } } }),
+    hook: async event => { if (failureAt === "post-hook" && event === "post_tool_use") throw failure; return { blocked: false }; } });
+  if (failureAt === "terminal-lifecycle") f.execution.emit = async event => {
+    if (event.type === "domain.event" && event.data.name === "tool.lifecycle" && event.data.payload?.phase === "failed") throw failure;
+  };
+  const delivered = vi.fn(async (_result: import("../types/tools.js").ToolExecutionResult) => {});
+  await expect(f.engine.executeTool(f.toolUse, { execution: f.execution, onResult: delivered })).rejects.toBe(failure);
+  expect(delivered).toHaveBeenCalledTimes(1);
+  expect(delivered.mock.calls[0]![0]).toMatchObject({ content: [{ type: "text", text: "Saved" }], isError: true, executionState: "completed", metadata: { appData: { saved: true } } });
+  expect(f.inputs).toHaveLength(1);
+});
+it("propagates result delivery failure once and retains both delivery and hook errors", async () => {
+  const saveFailure = new Error("disk save failed"), hookFailure = new Error("post hook failed");
+  for (const hookFails of [false, true]) {
+    const f = fixture({ hook: async event => { if (hookFails && event === "post_tool_use") throw hookFailure; return { blocked: false }; } });
+    const delivered = vi.fn(async () => { throw saveFailure; });
+    const call = f.engine.executeTool(f.toolUse, { execution: f.execution, onResult: delivered });
+    if (hookFails) await expect(call).rejects.toMatchObject({ errors: [hookFailure, saveFailure] });
+    else await expect(call).rejects.toBe(saveFailure);
+    expect(delivered).toHaveBeenCalledTimes(1); expect(f.inputs).toHaveLength(1);
+  }
 });

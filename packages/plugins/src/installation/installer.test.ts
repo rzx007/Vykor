@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { installLocalNativePlugin, requestedPluginPermissions } from "./installer.js";
-import { writeNativeUiFixture } from "../test-helpers/native-ui.js";
+import { writeNativeAppFixture } from "../test-helpers/native-app.js";
 import { readInstalledPluginStore, updateInstalledPluginStore } from "./store.js";
 
 const fixture = fileURLToPath(new URL("../../fixtures/native-v1/minimal-skill", import.meta.url));
@@ -13,9 +13,9 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-install-
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("installLocalNativePlugin", () => {
-  it("requires both inferred UI permissions and never executes the plugin", async () => {
+  it("requires both inferred App permissions and never executes the plugin", async () => {
     const sourcePath = join(root, "source");
-    const plugin = await writeNativeUiFixture(sourcePath);
+    const plugin = await writeNativeAppFixture(sourcePath);
     expect(requestedPluginPermissions(plugin.manifest)).toEqual(["ui:invoke-own-tools", "ui:render"]);
     const input = { sourcePath, scope: "user" as const, cwd: root,
       cacheDir: join(root, "cache"), storePath: join(root, "installed.json") };
@@ -24,14 +24,14 @@ describe("installLocalNativePlugin", () => {
     const installed = await installLocalNativePlugin({ ...input,
       approvedPermissions: ["ui:invoke-own-tools", "ui:render"] });
     expect(installed.status).toBe("installed");
-    if (installed.status !== "installed") throw new Error("expected installed UI fixture");
+    if (installed.status !== "installed") throw new Error("expected installed App fixture");
     expect(installed.record.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"]);
   });
 
-  it("rejects broken UI without publishing an installed record or snapshot", async () => {
+  it("rejects broken App without publishing an installed record or snapshot", async () => {
     const sourcePath = join(root, "source");
-    await writeNativeUiFixture(sourcePath);
-    await writeFile(join(sourcePath, "ui", "manifest.json"), "{");
+    await writeNativeAppFixture(sourcePath);
+    await writeFile(join(sourcePath, "ui", "apps.json"), "{");
     const input = { sourcePath, scope: "user" as const, cwd: root,
       cacheDir: join(root, "cache"), storePath: join(root, "installed.json"),
       approvedPermissions: ["ui:invoke-own-tools", "ui:render"] };

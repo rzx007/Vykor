@@ -11,18 +11,18 @@ const fixture = (name: string) =>
   fileURLToPath(new URL(`../fixtures/native-v1/${name}`, import.meta.url));
 
 describe("loadNativePlugin", () => {
-  it("loads UI metadata and preserves Skills if UI changes after validation", async () => {
+  it("diagnoses retired UI without parsing it and preserves Skills and Native tools", async () => {
     const root = await mkdtemp(join(tmpdir(), "vk-ui-load-"));
     try {
       await writeNativeUiFixture(root);
-      const validation = await validateNativePlugin(root);
+      const validation = await validateNativePlugin(root, { allowRetiredUi: true });
       const loaded = await loadNativePlugin(validation.plugin!);
-      expect(loaded.components.ui?.value).toHaveLength(1);
-      expect(loaded.components.unsupported?.ui).toBeUndefined();
+      expect(loaded.components.unsupported?.ui?.status).toBe("unsupported");
+      expect(loaded.components.tools?.value).toHaveLength(1);
       await writeFile(join(root, "ui", "manifest.json"), "{");
       const changed = await loadNativePlugin(validation.plugin!);
       expect(changed.status).toBe("degraded");
-      expect(changed.components.ui?.status).toBe("invalid");
+      expect(changed.components.unsupported?.ui?.diagnostics[0]?.code).toBe("plugin_ui_retired");
       expect(changed.components.skills?.value).toHaveLength(1);
     } finally {
       await rm(root, { recursive: true, force: true });

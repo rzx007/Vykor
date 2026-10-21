@@ -93,7 +93,7 @@ Vykor 截图是一段含表格、文件引用和大量代码标识的技术回�
 
 Codex 的行内代码声明为 `0.92em`、圆角 6px、padding `1px 6px`，并使用轻表面混色；多行片段有 `box-decoration-break: clone`，可以在换行处保持背景和内边距。（C15–C17）
 
-我们的 [自定义 inlineCode](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-components.tsx) 第 37–41 行实际上使用：
+我们的 [自定义 inlineCode](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/markdown/streamdown-components.tsx) 第 37–41 行实际上使用：
 
 ```text
 rounded-md bg-input/80 px-1.5 py-0.5 text-[0.87em]
@@ -107,7 +107,7 @@ rounded-md bg-input/80 px-1.5 py-0.5 text-[0.87em]
 
 Codex 的代码表面使用基础表面叠加轻色层，代码正文行高有 `max(1.5em, 20px)` 的声明。（C18、C19）本次没有观测实际展开的 Codex 代码块，不能只根据一条背景规则断言其全部外壳没有边框或阴影。
 
-我们的 [Markdown fence 渲染入口](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.tsx) 第 10 行替换为 [CodeBlock](../apps/desktop/src/renderer/src/components/ui/code-block.tsx)；后者第 230 行附近的实际外壳仍是圆角、边框、`bg-muted/40` 和 `shadow-sm`，工具栏高 44px。main.css 针对默认 `data-streamdown="code-block"` 的轻量规则没有命中这个自定义组件。
+我们的 [Markdown fence 渲染入口](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/markdown/streamdown-renderers.tsx) 第 10 行替换为 [CodeBlock](../apps/desktop/src/renderer/src/components/ui/code-block.tsx)；后者第 230 行附近的实际外壳仍是圆角、边框、`bg-muted/40` 和 `shadow-sm`，工具栏高 44px。main.css 针对默认 `data-streamdown="code-block"` 的轻量规则没有命中这个自定义组件。
 
 建议给实际 CodeBlock 增加会话阅读用途的轻量变体，控制背景、边框与阴影的叠加；工具栏可以更紧凑，保留语言、复制和键盘焦点。文件预览与差异审查仍按各自需求展示，不要因为改聊天代码块一起削弱其信息。
 

@@ -46,6 +46,22 @@ async function loadPlugin(root: string) {
 }
 
 describe("NativeToolHost", () => {
+  it("owns completed execution facts for returned plugin business errors", async () => {
+    const plugin = await loadPlugin(writePlugin(`
+      let calls = 0;
+      export function registerTools() { return [{ name: "ForgedFact", description: "test", inputSchema: {},
+        invoke() { calls++; return { content: [{ type: "text", text: String(calls) }], isError: true, executionState: "not_started" }; }
+      }]; }
+    `));
+    const cleanups: Array<() => Promise<void> | void> = [];
+    const activated = await activateNativePluginTools(plugin, { cwd: plugin.root, toolRegistry: new ToolRegistry(),
+      addCleanup: fn => cleanups.push(fn) });
+    try {
+      expect(await activated.host!.call("ForgedFact", {}, { cwd: plugin.root })).toMatchObject({
+        content: [{ type: "text", text: "1" }], isError: true, executionState: "completed",
+      });
+    } finally { for (const close of cleanups.reverse()) await close(); }
+  });
   it("rejects a native plugin call outside its captured Run owner", async () => {
     const plugin = await loadPlugin(writePlugin(`
       export function registerTools() { return [{ name: "PrivateNative", description: "private native", inputSchema: {},
@@ -159,7 +175,7 @@ describe("NativeToolHost", () => {
       controller.abort();
       await cancelled;
       await expect(registry.get("PluginCallerCancel")!.execute({}, { cwd: plugin.root }))
-        .resolves.toEqual({ content: [{ type: "text", text: "1" }] });
+        .resolves.toEqual({ content: [{ type: "text", text: "1" }], executionState: "completed" });
       expect(activation.host?.state).toBe("active");
     } finally { for (const cleanup of cleanups) await cleanup(); }
   });
@@ -181,7 +197,7 @@ describe("NativeToolHost", () => {
       await expect(registry.get("PluginPreCancelled")!.execute({}, { cwd: plugin.root, abortSignal: controller.signal }))
         .rejects.toMatchObject({ code: "tool_call_cancelled" });
       await expect(registry.get("PluginPreCancelled")!.execute({}, { cwd: plugin.root }))
-        .resolves.toEqual({ content: [{ type: "text", text: "1" }] });
+        .resolves.toEqual({ content: [{ type: "text", text: "1" }], executionState: "completed" });
     } finally { for (const cleanup of cleanups) await cleanup(); }
   });
 
@@ -217,6 +233,7 @@ describe("NativeToolHost", () => {
     await expect(registry.get("PluginFailure")!.execute({}, { cwd: plugin.root })).rejects.toMatchObject({ code: "tool_call_failed" });
     await expect(registry.get("PluginEcho")!.execute({ value: "ok" }, { cwd: plugin.root })).resolves.toEqual({
       content: [{ type: "text", text: "dev.vykor.runtime-tool:ok" }],
+      executionState: "completed",
     });
 
     await cleanups[0]!();
@@ -324,7 +341,7 @@ describe("NativeToolHost", () => {
     const first = registry.get("PluginWait")!.execute({}, { cwd: plugin.root });
     await expect(registry.get("PluginWait")!.execute({}, { cwd: plugin.root }))
       .rejects.toMatchObject({ code: "tool_concurrency_limit" });
-    await expect(first).resolves.toEqual({ content: [] });
+    await expect(first).resolves.toEqual({ content: [], executionState: "completed" });
     await activation.host?.stop();
   });
 

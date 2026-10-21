@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sessionUserInputText, type SessionUserInputItem } from "@vykor/protocol";
+import { normalizeSessionUserInputItems, sessionUserInputText, type SessionUserInputItem } from "@vykor/protocol";
 import { AttachmentError, normalizePromptAttachments, promptAttachmentFingerprint } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../support.js";
 import { RunInterruptedError } from "../../runtime/run-coordinator.js";
@@ -17,6 +17,15 @@ export async function admitPromptWork(
   sessionId: string,
   input: AdmitPromptInput,
 ): Promise<AdmitPromptResult> {
+  if (input.pluginAppContexts?.length) {
+    if (!options.materializePluginAppContexts || input.delivery === "steer") throw new Error("plugin_app_context_unavailable");
+    const contexts = await options.materializePluginAppContexts(sessionId, input.pluginAppContexts);
+    const { pluginAppContexts: _credentials, ...ordinaryInput } = input;
+    input = { ...ordinaryInput, items: normalizeSessionUserInputItems([
+      ...inputItems(input), { type: "text", text: "\n\n" }, ...contexts.items,
+    ]) };
+    contexts.assertCurrent();
+  }
   const attachments = normalizePromptAttachments(input.attachments);
   const delivery =
     attachments.length > 0 && input.delivery === "steer"

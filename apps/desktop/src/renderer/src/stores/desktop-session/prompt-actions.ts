@@ -1,3 +1,4 @@
+import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
 import { errorMessage } from "./error-state"
 import {
   acknowledgeOperation,
@@ -61,6 +62,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const prompt = selectComposerDocumentText({ ...document, items })
       const sessionId = options?.target?.sessionId ?? get().activeSessionId
       if (sessionId && get().pendingModeChanges[sessionId]) return
+      const appContexts = pluginAppModelContexts.forSession(sessionId ?? null)
       const attachmentDrafts = [...(options?.attachments ?? [])]
       if (!sessionId || attachmentDrafts.some((attachment) => attachment.status !== "ready")) return
       const attachments = attachmentDrafts.flatMap((attachment) =>
@@ -78,7 +80,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       )
       if (
         attachments.length !== attachmentDrafts.length ||
-        (!hasMeaningfulItems(items) && attachments.length === 0)
+        (!hasMeaningfulItems(items) && attachments.length === 0 && appContexts.length === 0)
       ) {
         return
       }
@@ -88,6 +90,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const retry = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
           submission.content === prompt &&
+          JSON.stringify(submission.pluginAppContextIds ?? []) === JSON.stringify(appContexts.map(entry => entry.id)) &&
           submission.phase === "failed" &&
           sameInputItems(submission.items, items) &&
           sameAttachmentSnapshot(submission.attachments, attachments)
@@ -98,6 +101,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
             id: globalThis.crypto.randomUUID(),
             sessionId,
             content: prompt,
+            ...(appContexts.length ? { pluginAppContextIds: appContexts.map(entry => entry.id) } : {}),
             items,
             attachments,
             createdAt: Date.now(),
@@ -132,12 +136,14 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           id: submission.id,
           sessionId,
           items,
+          ...(appContexts.length ? { pluginAppContextIds: appContexts.map(entry => entry.id) } : {}),
           attachments: attachments.map(({ assetId, intent, displayName }) => ({
             assetId,
             intent,
             displayName,
           })),
         })
+        for (const entry of appContexts) pluginAppModelContexts.remove(entry.id)
         if (!get().sessionRuntimes[sessionId]) return
         clearSubmittedDraft(sessionId, document, attachmentDrafts)
         const keepLocalAcknowledgement = get().activeSessionId === sessionId
@@ -164,7 +170,10 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         const message = errorMessage(error)
         const confirmed = promptSubmissionConfirmed(get(), sessionId, submission.id)
         const keepLocalAcknowledgement = get().activeSessionId === sessionId
-        if (confirmed) clearSubmittedDraft(sessionId, document, attachmentDrafts)
+        if (confirmed) {
+          clearSubmittedDraft(sessionId, document, attachmentDrafts)
+          for (const entry of appContexts) pluginAppModelContexts.remove(entry.id)
+        }
         replaceRuntime(sessionId, (currentRuntime) => {
           if (confirmed) {
             const acceptedSubmissions = updatePendingPromptSubmission(

@@ -6,7 +6,7 @@ import { SqliteChatPersistence } from "./sqlite-chat-persistence.js";
 import type { DurableEventRegistry } from "../session-runtime/event-registry.js";
 import type { TransactionJournal } from "./transaction-journal.js";
 
-const tables = ["sessions", "inputs", "inputAttachments", "messages", "parts", "runs", "attempts", "tasks", "permissions"] as const;
+const tables = ["sessions", "inputs", "inputAttachments", "messages", "parts", "runs", "attempts", "tasks", "permissions", "pluginApps"] as const;
 type ChatTable = typeof tables[number];
 
 /** Sync transactions must never announce a Promise-valued commit as successful. */
@@ -20,6 +20,7 @@ export function assertSynchronousCommit(result: unknown): void {
 const deletions = {
   deletedInputAttachments: "inputAttachments", deletedParts: "parts", deletedMessages: "messages",
   deletedAttempts: "attempts", deletedRuns: "runs", deletedInputs: "inputs",
+  deletedPluginApps: "pluginApps",
 } as const;
 
 /** Chat records use a separate persistence boundary from attachments and workflows. */

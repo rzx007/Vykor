@@ -4,12 +4,7 @@
  */
 import {
   VykorClient,
-  type InvokePluginUiActionInput,
-  type PluginUiInstanceResponse,
-  type PluginUiDocumentResponse,
-  type PluginUiActionReceipt,
   type PluginUiActionResponse,
-  type PluginUiInstanceRecord,
   VykorApiError,
   IncompatibleProtocolError,
   CURRENT_PROTOCOL_VERSION,
@@ -49,15 +44,10 @@ import {
   type McpRuntimeStatus,
 } from "@vykor/client";
 
-async function consumePluginUi(client: VykorClient, sessionId: string, instanceId: string,
-  input: InvokePluginUiActionInput, signal: AbortSignal): Promise<void> {
-  const instance: PluginUiInstanceResponse = await client.pluginUi.get(sessionId, instanceId, { signal });
-  const document: PluginUiDocumentResponse = await client.pluginUi.getDocument(sessionId, instanceId, { signal });
-  const receipt: PluginUiActionReceipt = await client.pluginUi.invokeAction(sessionId, instanceId, input, { signal });
-  const action: PluginUiActionResponse = await client.pluginUi.getAction(sessionId, instanceId, input.requestId, { signal });
-  const dismissed: PluginUiInstanceRecord = await client.pluginUi.dismiss(sessionId, instanceId,
-    { requestId: input.requestId, expectedRevision: instance.instance.revision }, { signal });
-  void [document, receipt, action, dismissed];
+async function consumePluginUiHistory(client: VykorClient, sessionId: string, instanceId: string,
+  requestId: string, signal: AbortSignal): Promise<void> {
+  const action: PluginUiActionResponse = await client.pluginUiHistory.getAction(sessionId, instanceId, requestId, { signal });
+  void action;
 }
 
 export async function consumePublicApi(client: VykorClient): Promise<void> {

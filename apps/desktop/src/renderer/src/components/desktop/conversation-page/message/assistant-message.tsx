@@ -51,7 +51,8 @@ import { ToolDetails } from "./tool-details"
 import { WorkflowSummary } from "../../tools/workflows/workflow-summary"
 import { ReadToolRow } from "./tool-details/read-tool-row"
 import { readFileReference } from "./tool-details/read-tool-model"
-import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
+import { PluginUiHistoryCard } from "./plugin-ui-history-card"
+import { PluginAppToolResultEntry } from "../../shell/plugin-apps/tool-result-entry"
 import { TerminalActivityCard, type TerminalActivityInfo } from "./activity/terminal-activity-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
@@ -135,6 +136,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <div className="group/assistant min-w-0 space-y-4">
+      {parts.filter(part => part.metadata.pluginAppSource).map(part => <PluginAppToolResultEntry key={`app:${part.id}`} part={part} />)}
       {blocks.map((block, index) => {
         if (block.type === "tool-group") {
           return (
@@ -168,7 +170,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         }
         if (unit.type === "plugin-ui") {
           return (
-            <PluginUiCard
+            <PluginUiHistoryCard
               key={unit.id}
               instance={unit.instance}
               call={unit.call}

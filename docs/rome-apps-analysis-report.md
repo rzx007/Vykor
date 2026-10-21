@@ -646,7 +646,7 @@ OHS 这里指当前 OpenHarness-ts / Vykor Native Plugin 实现，不是早期�
 | 未提交草稿 | 取决于组件、页面和挂载方式 | 当前未提供通用宿主草稿保存接口 |
 | 前端网络 | app fetchAppApi 调宿主 API | CSP 的 connect-src 为 none，须通过受控 bridge 请求工具操作 |
 
-依据：[OHS UI 协议](../packages/protocol/src/plugin-ui.ts)、[Bridge 协议](../packages/protocol/src/plugin-ui-bridge.ts)、[现有 UI SDK](../packages/plugins/src/ui-sdk.ts)、[展示管理](../apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-provider.tsx)、[Frame](../apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-frame.tsx)、[文档 CSP](../apps/desktop/src/main/features/plugin-ui/document-store.ts)、[当前实例校验](../packages/server/src/application/session/session-plugin-ui-current.ts)。
+依据：`OHS UI 协议`（旧实现已移除）、`Bridge 协议`（旧实现已移除）、`现有 UI SDK`（旧实现已移除）、`展示管理`（旧实现已移除）、`Frame`（旧实现已移除）、`文档 CSP`（旧实现已移除）、`当前实例校验`（旧实现已移除）。
 
 ### 17.1 OHS 应保留的已实现优势
 
@@ -664,7 +664,7 @@ UI 操作走宿主确认和服务端检查，并调用插件自己的受控工�
 
 此外，OHS 当前没有 Rome 同等的结构化“提交给聊天并继续”接口。这是现有规格的明确行为边界，不是漏接一个按钮。下一阶段若提供，必须按新业务行为设计。
 
-依据：[OHS 完整 UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)、[工具执行器](../packages/server/src/application/session/session-plugin-ui-action-executor.ts)、[示例 HTML](../examples/plugins/text-inspector/ui/panel.template.html)。
+依据：[OHS 完整 UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)、`工具执行器`（旧实现已移除）、[示例 HTML](../examples/plugins/text-inspector/ui/panel.template.html)。
 
 当前规格与 [A4 验证记录](./superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)还将用户人工验收与发布单列。本报告所说的已实现代码，不替代这两个验收步骤。
 

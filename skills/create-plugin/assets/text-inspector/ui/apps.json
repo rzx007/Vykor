@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "backends": [{
+    "id": "text-tools",
+    "kind": "native-tools",
+    "resources": [{ "uri": "ui://text-inspector/panel", "entry": "./ui/panel.html" }],
+    "tools": [
+      { "tool": "TextInspectorCheck", "visibility": ["model", "app"], "ui": { "resourceUri": "ui://text-inspector/panel" } },
+      { "tool": "TextInspectorPreview", "visibility": ["model", "app"], "ui": { "resourceUri": "ui://text-inspector/panel" } }
+    ]
+  }],
+  "surfaces": [{ "id": "text-inspector", "title": "文本格式检查", "backend": "text-tools", "resourceUri": "ui://text-inspector/panel", "availability": "session" }]
+}

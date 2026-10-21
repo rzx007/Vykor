@@ -20,11 +20,9 @@ vi.mock("electron", () => ({
 
 import { IpcChannels, IpcEvents } from "../shared/ipc-channels"
 import { desktopAPI } from "./desktop-api"
-it.each(["prepareConversation", "submitConversation", "getConversationSubmission"])("exposes the fixed %s conversation IPC channel", async name => {
-  const method = Reflect.get(desktopAPI.pluginUi, name)
-  expect(method).toBeTypeOf("function")
-  await method({ requestId: "original" })
-  expect(electron.invoke).toHaveBeenCalledWith(`plugin-ui:${name.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase())}`, { requestId: "original" })
+it("does not expose retired UI IPC", () => {
+  expect(desktopAPI).not.toHaveProperty("pluginUi")
+  expect(Object.values(IpcChannels).some(channel => channel.startsWith("plugin-ui:"))).toBe(false)
 })
 
 describe("desktop activity preload bridge", () => {

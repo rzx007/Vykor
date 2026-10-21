@@ -637,7 +637,7 @@ WSL 是 Windows 上运行 Linux 工具的环境，只在 Windows 显示。支持
 
 - [桌面设计基线](../apps/desktop/DESIGN.md)
 - [当前设置内容入口](../apps/desktop/src/renderer/src/components/desktop/settings-page/settings-content.tsx)
-- [设置导航](../apps/desktop/src/renderer/src/components/desktop/settings-page/settings-navigation.ts)
+- [设置导航](../apps/desktop/src/renderer/src/components/desktop/settings-page/navigation/settings-navigation.ts)
 - [桌面设置保存服务](../apps/desktop/src/main/features/settings/settings-service.ts)
 - [桌面设置快照](../apps/desktop/src/shared/settings-types.ts)
 - [共享配置类型](../packages/core/src/types/settings.ts)

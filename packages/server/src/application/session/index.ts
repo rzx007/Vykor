@@ -15,3 +15,4 @@ export * from "./session-execution-projector.js";
 export * from "./background-shell-service.js";
 export * from "./transcript-projection.js";
 export * from "./workflow-recovery.js";
+export * from "./session-plugin-app-service.js";

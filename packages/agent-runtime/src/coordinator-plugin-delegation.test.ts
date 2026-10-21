@@ -33,7 +33,6 @@ async function fixture(options: {
   coordinatorSearch?: boolean;
   childIdleTtlMs?: number;
   beforeSpawn?: (root: string) => Promise<void>;
-  ui?: boolean;
   onRunCapabilities?: VykorAgentOptions["onRunCapabilities"];
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "coordinator-plugin-delegation-"));
@@ -46,17 +45,8 @@ async function fixture(options: {
     mkdirSync(join(source, ".vykor-plugin"), { recursive: true });
     writeFileSync(join(source, ".vykor-plugin/plugin.json"), JSON.stringify({
       schemaVersion: 1, id, name: id.split(".").at(-1), version: "1.0.0",
-      components: { tools: ["./tools.mjs"], ...(id === pluginId ? { mcpServers: ["./mcp.json"] } : {}),
-        ...(options.ui && id === pluginId ? { ui: ["./ui/manifest.json"] } : {}) },
+      components: { tools: ["./tools.mjs"], ...(id === pluginId ? { mcpServers: ["./mcp.json"] } : {}) },
     }));
-    if (options.ui && id === pluginId) {
-      mkdirSync(join(source, "ui"));
-      writeFileSync(join(source, "ui/manifest.json"), JSON.stringify({ schemaVersion: 2, components: [{
-        id: "panel", title: "Worker panel", entry: "./ui/panel.html", surface: "tool-result",
-        actions: [{ id: "run", label: "Run", tool: "NativeWork", completion: "keep-open" }],
-      }] }));
-      writeFileSync(join(source, "ui/panel.html"), "<p>Original worker UI</p>");
-    }
     writeFileSync(join(source, "tools.mjs"), `
       import { appendFileSync } from 'node:fs';
       export function registerTools() { return ${JSON.stringify(names)}.map(name => ({
@@ -81,7 +71,7 @@ async function fixture(options: {
       `],
     } } }));
     expect((await installLocalNativePlugin({ sourcePath: source, cwd: root, scope: "user",
-      approvedPermissions: options.ui && id === pluginId ? ["ui:render", "ui:invoke-own-tools"] : [],
+      approvedPermissions: [],
     })).status).toBe("installed");
   }
   const requests: Array<{ worker: boolean; tools: string[]; messages: StreamMessageParams["messages"] }> = [];
@@ -161,22 +151,6 @@ describe("Coordinator delegates authorized plugin tools without widening its own
     expect(worker[3]!.tools).toContain(mcpTool);
     expect(nativeCalls(f.marker).map(call => call.name)).toEqual(["NativeWork"]);
     expect(readFileSync(f.mcpMarker, "utf8")).toBe("original-source\n");
-  });
-
-  it("gives a real worker its captured UI without granting UI or Native actions to the Coordinator", async () => {
-    const captured: Parameters<NonNullable<VykorAgentOptions["onRunCapabilities"]>>[0][] = [];
-    const f = await fixture({ ui: true, workerScript: ["NativeWork"], onRunCapabilities: snapshot => { captured.push(snapshot); } });
-    const parent = f.agent.createRunCapabilityView(pluginId);
-    expect(parent.pluginUi?.size).toBe(0);
-    expect(parent.delegatablePluginUi?.has(`${pluginId}:panel`)).toBe(true);
-    await f.agent.runMessage("delegate a UI-producing worker", { capabilityView: parent });
-    expect(f.childResult?.status).toBe("completed");
-    const worker = captured.find(snapshot => snapshot.identity?.childId);
-    expect(worker?.scope.sessionId).not.toBe("coordinator");
-    expect(worker?.capabilityView.pluginUi?.has(`${pluginId}:panel`)).toBe(true);
-    const action = worker!.capabilityView.pluginUi!.get(`${pluginId}:panel`)!.actionTools[0]!;
-    expect(action.definition.execute).toBe(parent.delegatableTools!.get("NativeWork")!.definition.execute);
-    expect(captured.find(snapshot => !snapshot.identity?.childId)?.capabilityView.pluginUi?.size).toBe(0);
   });
 
   it("rejects a Coordinator's direct calls to hidden Native and plugin MCP bindings despite their delegation grant", async () => {

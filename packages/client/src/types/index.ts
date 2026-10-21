@@ -154,6 +154,7 @@ export interface CancelQueuedPromptResponse {
 
 /** `POST /sessions/:id/prompts` 请求体。 */
 export interface AdmitClientPromptInput {
+  pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
   id?: string;
   items: SessionUserInputItem[];
   delivery?: InputDelivery;

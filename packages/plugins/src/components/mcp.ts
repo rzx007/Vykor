@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import type { McpServerConfig } from "@vykor/core";
+import { getPluginDataDir, type McpServerConfig } from "@vykor/core";
+import { join } from "node:path";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 
@@ -31,7 +32,12 @@ export async function loadNativeMcpServers(
       if (rows === null || typeof rows !== "object" || Array.isArray(rows)) throw new Error("MCP file requires a servers object");
       for (const [name, value] of Object.entries(rows)) {
         if (servers[name] !== undefined) throw new Error(`duplicate MCP server: ${name}`);
-        servers[name] = parseServer(name, value);
+        const server = parseServer(name, value);
+        servers[name] = server.type === "stdio" ? { ...server,
+          ...(server.cwd === "${VYKOR_PLUGIN_ROOT}" ? { cwd: plugin.root } : {}),
+          ...(server.env ? { env: Object.fromEntries(Object.entries(server.env).map(([key, entry]) => [key,
+            entry === "${VYKOR_PLUGIN_DATA_DIR}" ? join(getPluginDataDir(), plugin.manifest.id) : entry])) } : {}),
+        } : server;
       }
     }
     return { status: "loaded", value: servers, diagnostics: [] };

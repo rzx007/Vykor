@@ -4,6 +4,17 @@ import { CompactService } from "@vykor/core";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../agent-transcript.js";
 
 describe("agent transcript codec", () => {
+  it("keeps raw MCP results out of replayed, compacted and imported model history", () => {
+    const raw = { content: [{ type: "text", text: "saved" }], structuredContent: { revision: 2 }, _meta: { uiOnly: { cursor: 8 } } };
+    const history = buildAgentTranscript([{ id: "m", seq: 0, role: "assistant", metadata: {} } as any], [
+      { messageId: "m", seq: 0, type: "tool", toolUseId: "call", toolName: "Save", input: {}, output: { content: raw.content, mcpResult: raw, metadata: { appData: raw._meta } }, metadata: { toolFeedbackVersion: 1, executionState: "completed" } } as any,
+    ]).messages;
+    expect(JSON.stringify(history)).not.toMatch(/uiOnly|mcpResult|appData/);
+    expect(JSON.stringify(new CompactService(100_000, 1).microCompact(history))).not.toContain("uiOnly");
+    const result = history.find(message => message.type === "tool_result")!;
+    const imported = agentMessagesToTranscript([{ ...result, mcpResult: raw, metadata: { appData: raw._meta } } as any]);
+    expect(JSON.stringify(imported)).not.toMatch(/uiOnly|mcpResult|appData/);
+  });
   it("does not promote free legacy metadata to controlled tool facts", () => {
     const result = buildAgentTranscript(
       [{ id: "m", seq: 0, role: "assistant", metadata: {} } as any],

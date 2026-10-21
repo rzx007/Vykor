@@ -11,7 +11,7 @@ vi.mock("@renderer/stores/desktop-session", async (importOriginal) => {
 
 import { AssistantMessage } from "../assistant-message"
 import { TooltipProvider } from "@renderer/components/ui/tooltip"
-import { sourcePart as pluginSource } from "../../plugin-ui/__test__/plugin-ui-fixtures.test-support"
+import { sourcePart as pluginSource } from "./plugin-ui-history-fixture"
 import { summarizePart } from "../../../../../../../../../../packages/server/src/http/part-wire-view.js"
 import { buildAssistantContent } from "../message-render-model"
 import { useToolDetails } from "../use-tool-details"

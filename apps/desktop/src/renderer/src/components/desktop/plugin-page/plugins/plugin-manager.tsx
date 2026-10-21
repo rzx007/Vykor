@@ -679,13 +679,6 @@ export function PluginManager({
             <AlertDialogDescription>该插件需要以下权限才能正常工作。</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 text-sm">
-            {approval?.uiInventory ? (
-              <p className="text-muted-foreground">
-                {approval.uiInventory.componentCount === null
-                  ? "UI 定义数量暂不可确认"
-                  : `包含 ${approval.uiInventory.componentCount} 个 UI 定义。`}
-              </p>
-            ) : null}
             {groupPermissions(approval?.requestedPermissions ?? []).map((group) => (
               <div key={group.label} className="flex flex-col gap-1">
                 <p className="font-medium">{group.label}</p>

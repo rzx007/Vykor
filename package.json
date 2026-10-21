@@ -15,7 +15,7 @@
     "check-types": "turbo check-types --concurrency=2",
     "check-docs": "node scripts/check-docs.mjs",
     "check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/forbidden-compatibility-surfaces.test.mjs scripts/architecture-boundaries.test.mjs && pnpm --filter @vykor/client exec vitest run src/__test__/public-api.test.ts",
-    "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate",
+    "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate && pnpm check:retired-ui",
     "check:clean-slate": "node scripts/verify-clean-slate.mjs",
     "check:clean-slate:artifacts": "node scripts/verify-clean-slate.mjs --require-build-artifacts",
     "test": "turbo test --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins",
@@ -27,7 +27,8 @@
     "test:scripts": "node --test scripts/prepare-tag-release.test.mjs scripts/npm-release.test.mjs scripts/release-safety.test.mjs scripts/forbidden-compatibility-surfaces.test.mjs",
     "test:clean-slate": "node --import ./apps/cli/node_modules/tsx/dist/loader.mjs --test scripts/verify-clean-slate.test.mjs scripts/clean-slate-smoke.test.mjs",
     "smoke:clean-slate": "node --import ./apps/cli/node_modules/tsx/dist/loader.mjs scripts/clean-slate-smoke.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "check:retired-ui": "node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs"
   },
   "devDependencies": {
     "@types/node": "catalog:",

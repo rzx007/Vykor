@@ -2,7 +2,7 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含 Skill、Plugin Agent、独立 Node 工具和使用公开浏览器 SDK 的单文件 UI，没有外部服务或安装后的运行依赖。SDK 尚未作为独立 npm 产品发布。
+本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含 Skill、Plugin Agent、独立 Node 工具和使用公开浏览器 SDK 的单文件 UI，没有外部服务或安装后的运行依赖。页面使用官方 MCP Apps SDK，作者通过 npm 准备构建依赖。
 
 ## 从样例开始
 
@@ -79,7 +79,7 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
     "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
     "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }],
-    "ui": ["./ui/manifest.json"]
+    "apps": ["./ui/apps.json"]
   },
   "runtime": { "engine": "node", "isolation": "process" }
 }
@@ -89,85 +89,52 @@ ID 使用稳定的点分名称；name 使用小写连字符名称。版本用于
 
 manifest 描述插件包，不保存启用状态、批准记录、用户配置或进程状态。不要修改已安装快照；更新时重新安装一个经过校验的源目录。
 
-## UI 定义与后台工具操作
+## 插件应用（MCP Apps）
 
-UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
-仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。当前 Desktop 同时检查 backend 的 `pluginUi=2`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。A4 的正式参考插件见 [文本检查助手](../examples/plugins/text-inspector/README.md)，自动化桌面证据和未验证范围见 [A4 验证记录](superpowers/reviews/2026-10-04-native-plugin-ui-a4-verification.md)。自动化验证不等同用户人工验收或正式发布。
-下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
+根清单保持 schemaVersion 1，唯一新页面入口是 `components.apps: ["./ui/apps.json"]`。复制 `assets/text-inspector/ui/apps.json`：其 schemaVersion 为 1，backend 为 `native-tools`，resources 把精确 `ui://` URI 映射到插件内单文件 HTML，tools 引用实际注册的 `TextInspectorCheck`、`TextInspectorPreview`，surfaces 提供会话打开入口。参数 schema 来自 Native Tool 注册，不能复制、改写或增加工具别名。Native Tools 仍通过原 Tool Host、Guard 和权限执行，不需要额外 MCP 进程。
 
-Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
+工具保留普通 content 文字，页面数据写 `metadata.appData: { text, findings, truncated }`；宿主把它转为 MCP `structuredContent`。普通业务工具不生成可信 appId、requestId、版本或执行状态。注册 app-only 可见性不代表获得执行权限。
 
-```json
-{
-  "schemaVersion": 1,
-  "id": "example.ui-viewer",
-  "name": "ui-viewer",
-  "version": "1.0.0",
-  "components": { "ui": ["./ui/manifest.json"] }
-}
-```
-
-定义文件和工具返回的 UI 建议单独使用 schemaVersion 2。纯展示组件必须显式写 actions 空数组：
-
-```json
-{
-  "schemaVersion": 2,
-  "components": [{
-    "id": "findings",
-    "title": "检查结果",
-    "entry": "./ui/findings.html",
-    "surface": "session-sidebar",
-    "actions": []
-  }]
-}
-```
-
-entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/manifest.json。组件 ID 在插件内唯一，匹配 `^[a-z][a-z0-9-]{0,63}$`。组件与动作的字段严格校验，标签为非空纯文本且最多 80 个 Unicode 字符。一个定义文件至少包含一个组件；动作可以为空，声明动作时必须显式提供 id、label、精确 tool 注册名与 completion（keep-open / resolve），不在 UI 定义中复制 inputSchema。
-
-单插件最多 8 个定义文件、16 个组件，每组件最多 16 个动作；单个定义 JSON 最多 UTF-8 256 KiB，单个 HTML 最多 UTF-8 2 MiB。所有 UI 入口必须是普通 UTF-8 文件，禁止根目录外路径、文件 symlink 和目录 junction。HTML 应提前构建成单文件；校验和安装只读文件，不运行 HTML 或 Node Tool。
-
-只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。后台只绑定同插件的实际 Native Tool；builtin、其他插件和 MCP 工具不能作为 UI 动作。目标工具参数格式取自实际注册的 inputSchema，UI manifest 不另存一份。
-
-安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面：实际界面从工具结果中按需打开，仍需通过会话和隔离能力检查。
-
-### 工具结果如何产生实例
-
-成功的同插件 Native Tool 可以返回下列建议数据；宿主验证当前插件、组件和工具归属后，在原工具 Part 上保存一个可信实例。原始文字结果保持可用，建议无效时也不改变业务工具的成功结果。
+## 页面入口与结果
 
 ```js
-return {
-  content: [{ type: "text", text: "发现 1 项问题" }],
-  metadata: { ui: { schemaVersion: 2, componentId: "findings", data: { count: 1 } } }
+import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
+const app = new App({ name: "My App", version: "1.0.0" }, { availableDisplayModes: ["inline", "fullscreen"] });
+function show(result) {
+  if (result.isError) throw new Error("工具失败，请查看回执");
+  // 校验 structuredContent 后显示；这里不能再次调用工具或保存。
+}
+app.ontoolresult = show; // 只消费初始/模型主动推送
+app.onhostcontextchanged = context => {
+  if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
 };
+await app.connect();
+// 用户明确点击按钮后：主动返回值不会自动触发 ontoolresult。
+const result = await app.callServerTool({ name: "TextInspectorCheck", arguments: { text: "hello " } });
+show(result);
 ```
 
-`data` 必须是有限的 JSON 对象，最多 UTF-8 256 KiB。`pluginUi`、`uiAction`、实例 ID、revision 和执行状态由宿主保存，插件返回的同名保留 metadata 会被移除，不能取得可信身份。初始 Run 未选择该插件、源 Part 未提交或组件快照发生漂移时，不会生成可信实例。
+必须先登记通知再 connect。直接打开只有空表单，不伪造工具结果。完整处理错误、选区和 48,000 字节交互边界的代码见 `assets/text-inspector/ui/panel.mjs`。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
 
-### 已接入的 Client 后台接口
+## 可见上下文与普通消息
 
-`VykorClient.pluginUi` 提供 `get`、`getDocument`、`invokeAction`、`getAction` 和 `dismiss`。它们通过已有 daemon 认证访问当前会话的实例；调用方先读实例 revision，再为提交生成新的 UUID requestId。`invokeAction` 只接收声明的 actionId 和 JSON args（最多 UTF-8 64 KiB），不接收任意工具名称。重试必须沿用相同 requestId、revision 和参数；修改其中内容会返回冲突，同一请求跨 daemon 重启不会再次执行。
+`app.updateModelContext({ content: [{type:"text",text}], structuredContent: selection })` 把明确选中的内容加入原会话可见条目；不覆盖输入框，也不自动发送。普通发送时仍重新检查来源、授权和版本。用户可移除条目。
 
-动作使用原有参数检查、工具权限、Hook、超时和取消流程；它有自己的持久 Run，但不创建模型输入、不请求模型，也不唤醒 Goal。成功可按 completion 更新 data 或 resolve；失败保持准确结果，工具已经开始但无法确认结局时记为 unknown，恢复时不自动重放。下一次普通模型输入只获得有长度上限的外部工具结果摘要。
+`app.sendMessage({ role:"user", content:[{type:"text",text}] })` 经宿主确认后发送普通用户消息，成功保持应用打开。只支持文本角色 user，不发送主输入框已有草稿。先检查 `app.getHostCapabilities()` 的 message/updateModelContext 能力。消息总共最多 4096 个 Unicode 字符；上下文结构化 JSON 最多 32 KiB。只携带必要选区，超限提示用户减少选择，不静默裁剪。
 
-`dismiss` 只保存关闭状态，和取消运行分开；已经运行的动作不能通过 dismiss 撤销。当前会话忙、revision 过期、归档或实例终态时不能提交新动作。每次读取文档和动作准入都会核对实际安装、授权、启用状态和摘要；精确静态快照在 Native Host 暂不可用时可只读返回文档，但没有可调用动作。
+工具参数最多 64 KiB、Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、资源解码总量最多 8 MiB。样例原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果，省略交互数据。
 
-feature `pluginUi: 2` 只表示 daemon 已装配这些后台接口，不代表当前客户端能安全显示 UI。Desktop 还要求 `pluginUiLifecycle: 1` 和本地隔离能力；CLI/TUI 继续读取原文字，不等待界面。
+## 构建、安装和更新
 
-### 编写浏览器界面
+作者复制完整目录后执行 `npm ci`（首次新建锁文件用 `npm install`）和 `npm run build`。package.json/package-lock.json 锁定官方 `@modelcontextprotocol/ext-apps` 1.1.2，以 esbuild 正常打包模块。依赖准备需要 npm 或本地缓存；安装产物 `ui/panel.html` 是完整离线单文件，安装时不构建，也不下载依赖。不得分发 node_modules、使用 CDN、外部脚本/字体或私有页面 SDK。
 
-每组件选一个固定 surface：tool-result 是结果内联卡片，session-sidebar 是会话侧栏。“固定”不代表自动或始终显示；由用户从工具结果打开，不在位置之间移动。只接受 UI schema/bridge 2，没有旧 surfaces/openSidebar 别名。
+修改源码后重建 HTML，增加插件版本，按原 install-local/重新导入流程升级。不修改用户安装快照和 dataDir；新权限仍按原规则批准。安装需要 ui:render/ui:invoke-own-tools，仍需实际工具权限、角色 allowedTools、deny 与环境检查。
 
-浏览器用 getSnapshot/onSnapshot 直接读取 appearance/capabilities，并调用 applyPluginUiAppearance 应用宿主的公共颜色、字体和减少动画设置。同 revision 的外观或能力更新保留本地输入；业务 revision 变化才重建结果。作者管理自己的表单；隐藏侧栏保留 iframe，关闭显示销毁并重置，宿主不缓存表单。
+## 常驻页面边界
 
-requestAction 只请求已声明的同插件 Native Tool，经宿主确认后执行。requestConversation 主动提供 { mode, expectedRevision, text, data }：draft 确认后加入输入框，submit 确认后建立普通 Input/Run 交给助手；实际提交不发送输入框已有草稿。插件没有宿主草稿 getter，也不能访问父 DOM。后台构造最终来源文本并持久保存普通会话结果；回执只代表当前受理/运行状态，不自动重试未知提交。
+切换面板或会话仅隐藏同一 iframe，保留输入和光标。隐藏脚本不能发起新工具、消息或上下文请求；已发送工作继续结算。取消、丢响应和 unknown 不自动重放。unknown 持久阻止后续工具和消息，重开不能解除。
 
-交接 text 非空且最多 4096 Unicode 字符，data 为最多 JSON UTF-8 32 KiB 的有限对象；业务 snapshot.data 上限仍是 256 KiB。只发送用户实际选择的内容，超限明确提示，不能静默裁剪；失败/取消保留本地输入。按钮根据 snapshot.capabilities.draft/submit 显示，交接还要求 pluginUiConversation=1。
-
-仓库浏览器入口为 @vykor/plugins/ui-sdk，工具类型入口为 @vykor/plugins/sdk。独立作者复制 [create-plugin 离线样例](../skills/create-plugin/assets/text-inspector/) 后仅需 Node：node scripts/build-ui.mjs。附带 SDK（全局 VykorPluginUi）与 stylesheet 在构建时内联成 HTML，不依赖 npm 发布或源码仓库。维护者通过 node examples/plugins/text-inspector/scripts/build-ui.mjs --export-author-assets 从当前源机械导出两份 SDK/CSS，再运行各自构建脚本；不要手改 bundle/HTML。
-
-完整可运行的 getSnapshot/onSnapshot/applyPluginUiAppearance/requestConversation 例子、SDK 方法和边界见 [插件 UI 作者接口](../skills/create-plugin/references/plugin-ui.md)。Native preview 与主动交接共同使用的真实 panel 源码见 [文本检查样例](../examples/plugins/text-inspector/ui/panel.mjs)。UI 没有父 DOM、Node、preload、文件、网络、剪贴板或任意 IPC；不用 CDN、外部资源、手写协议或 innerHTML 渲染用户内容。
-
-当前设计见 [固定位置与会话交接](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)；[早期规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)保留历史交付事实。行为验证不等同用户查看样式或最终整合验收。
+官方 1.1.2 的实验能力 schema 会剥离自定义 namespace，当前不装配 widgetState。窗口关闭或重启不保证表单恢复；跨重启业务数据由插件自行使用原 dataDir 保存。页面没有 Node、preload、父 DOM、文件、网络、子 frame、任意 IPC 或剪贴板权限。不要手写通信协议或用 innerHTML 渲染用户数据。
 
 ## Node Tool 的公开接口
 
@@ -324,9 +291,11 @@ Call TextInspectorCheck with the text supplied by the user, then explain the fin
 }
 ```
 
-以上只说明格式，使用时须替换为真实服务地址。stdio 使用 command 和可选 args/env；http、sse 使用 url。当前不会为插件自动下载依赖、展开插件根变量或完成服务认证。静态加载成功只表示配置可读取，实际连接与工具发现发生在 MCP Runtime。
+以上只说明格式，使用时须替换为真实服务地址。stdio 使用 command 和可选 args/env；http、sse 使用 url。当前不会为插件自动下载依赖或完成服务认证。静态加载成功只表示配置可读取，实际连接与工具发现发生在 MCP Runtime。
 
 MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他插件或用户设置同名。此类配置没有 Node Tool 的 plugin.root 调用上下文，不能直接把相对脚本路径当作已绑定的插件文件。
+
+本地打包的 stdio 服务可显式设置 `cwd: "${VYKOR_PLUGIN_ROOT}"`，绑定实际安装根后使用相对 `args`。仅该完整标记值展开；未声明 cwd 的已有配置行为不变。env 值为完整 `${VYKOR_PLUGIN_DATA_DIR}` 时绑定已有插件数据目录；env 值为完整 `${VYKOR_SESSION_ID}` 时，运行时绑定原会话 ID 的 SHA-256 目录键。页面不能指定这些值，不进行 shell 展开或任意字符串插值。`notes-app` 使用插件 dataDir 下的 `sessions/<目录键>/welcome.json`，同一会话页面和模型共享，其他会话独立，安装快照不写入。
 
 ## 诊断与验证
 
@@ -358,4 +327,6 @@ pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.tes
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。
 
-Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。Native UI 已接入后台、Desktop 隔离文档、公开浏览器 SDK 与参考插件；是否可用仍取决于客户端、后台、授权和当前安装快照。A4 不增加转换诊断，也不修改或删除现有转换器。UI 阶段范围见 [Native Plugin UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。页面入口统一为 `components.apps`，使用官方 MCP Apps SDK；旧 `components.ui` 仅供已安装包诊断与历史读取，新导入明确拒绝。Native Tool 的 SDK、Host、权限和数据目录保持独立。页面范围见 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+
+页面通过官方 `App` 构造函数的 `availableDisplayModes` 声明支持的显示模式。宿主读取 SDK 1.1.2 的 `AppBridge.getAppCapabilities()` 握手结果；省略声明按 inline-only 处理，只有确认支持 fullscreen 的页面进入侧栏。工具结果的 inline-only 页面保留内联显示位置；菜单没有内联位置，因此会拒绝内联页面。对于本次新打开、没有其他查看器且控制版本未变的空闲应用，宿主会关闭其持久占位并释放查看器；已有、共享或出现操作变化时不自动关闭，在应用目录保留明确的关闭入口。位置切换同步 hostContext，保留同一 iframe 和草稿。

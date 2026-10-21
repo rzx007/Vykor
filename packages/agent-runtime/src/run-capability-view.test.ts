@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type StreamMessageParams, type ToolDefinition } from "@vykor/core";
-import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
-import { createRunCapabilityView } from "./run-capability-view.js";
+import { createVisibilityToolRegistry, getAppToolRegistry, constrainRunCapabilityTools } from "./default-runtime-tools.js";
+import { createRunCapabilityView, restrictRunCapabilityView } from "./run-capability-view.js";
 import { createAgentTool } from "../../tools/src/agent/agent-tools.js";
 import { deriveChildCapabilityView } from "./child-agent-options.js";
 
@@ -35,6 +35,28 @@ function createExecutionContext(
 }
 
 describe("run capability execution boundary", () => {
+  it("captures private app tools under the same role, deny and environment limits", async () => {
+    const registry = new ToolRegistry();
+    for (const name of ["model", "app", "both", "denied", "roleDenied", "environmentDenied", "networkDenied", "invalid"]) {
+      registry.register({ ...tool(name), ui: { visibility: name === "model" ? ["model"] : name === "both" ? ["model", "app"] : name === "invalid" ? [] : ["app"] },
+        ...(name === "environmentDenied" ? { execution: { domain: "environment" as const, supportedEnvironments: ["wsl" as const] } } : {}),
+        ...(name === "networkDenied" ? { execution: { domain: "control_plane" as const, supportedEnvironments: ["local" as const], network: true } } : {}),
+      }, { kind: "plugin", id: "office" });
+    }
+    const environment = { info: { kind: "local", networkMode: "none" } } as Parameters<typeof createVisibilityToolRegistry>[3];
+    const limited = createVisibilityToolRegistry(registry, { kind: "only", names: new Set(["model", "app", "both", "denied", "environmentDenied", "networkDenied", "invalid"]) }, new Set(["denied"]), environment, { kind: "all" });
+    const sources = { toolRegistry: limited, appToolRegistry: getAppToolRegistry(limited), pluginIds: new Set(["office"]) };
+    const view = createRunCapabilityView(sources, "office");
+    expect([...view.tools.keys()]).toEqual(["model", "both"]);
+    expect([...view.appTools!.keys()]).toEqual(["app", "both"]);
+    expect(view.appTools!.get("app")!.definition.ui?.resourceUri).toBeUndefined();
+    expect(await view.appTools!.get("app")!.invoke({}, { cwd: "." })).toEqual({ content: [{ type: "text", text: "app" }] });
+    expect((view.appTools as Map<string, unknown>).set).toBeUndefined();
+    expect(createRunCapabilityView(sources).appTools!.size).toBe(0);
+    expect(restrictRunCapabilityView(view, name => name !== "app").appTools!.has("app")).toBe(false);
+    const denied = createVisibilityToolRegistry(registry, { kind: "none" }, new Set());
+    expect(constrainRunCapabilityTools(denied, view).appTools!.size).toBe(0);
+  });
   it("captures authorized plugin tools for delegation without exposing them to the Coordinator", async () => {
     const registry = new ToolRegistry();
     registry.register(tool("Agent"));
@@ -115,39 +137,6 @@ describe("run capability execution boundary", () => {
     expect(() => createRunCapabilityView(sources, "unavailable")).toThrow(/host stopped/);
     expect(() => createRunCapabilityView(sources, ["missing"])).toThrow(/not available/);
   });
-  it("withdraws UI after Native definition replacement without rebinding an old component", async () => {
-    const registry = new ToolRegistry();
-    registry.register(tool("Alpha", "original"), { kind: "plugin", id: "alpha" });
-    const sources = { toolRegistry: registry, pluginIds: new Set(["alpha", "beta"]) };
-    const original = createRunCapabilityView(sources, "alpha").tools.get("Alpha")!;
-    const ui = { pluginId: "alpha", pluginVersion: "1", pluginDigest: "digest", componentId: "panel",
-      componentDigest: "component", htmlSha256: "html", root: "/plugin", entryPath: "/plugin/ui.html",
-      definition: { id: "panel", title: "Panel", entry: "./ui.html", surfaces: ["tool-result" as const],
-        actions: [{ id: "go", label: "Go", tool: "Alpha", completion: "keep-open" as const }] }, actionTools: [original] };
-    const captured = createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha");
-    expect(captured.pluginUi?.size).toBe(1);
-    expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, ["alpha", "beta"]).pluginUi?.size).toBe(1);
-    registry.override(tool("Alpha", "replacement"), { kind: "plugin", id: "alpha" });
-    expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
-    ui.definition.title = "mutated";
-    expect(captured.pluginUi?.get("alpha:panel")?.definition.title).toBe("Panel");
-    expect(await captured.tools.get("Alpha")!.invoke({}, { cwd: "." })).toEqual({ content: [{ type: "text", text: "original" }] });
-  });
-
-  it.each([undefined, { kind: "builtin" as const }, { kind: "mcp" as const, id: "server" }, { kind: "plugin" as const, id: "other" }])(
-    "does not admit a UI action with invalid provenance %j", source => {
-      const registry = new ToolRegistry();
-      registry.register(tool("Action"), source);
-      const sources = { toolRegistry: registry, pluginIds: new Set(["alpha", "other"]),
-        mcpServers: [{ serverId: "server", serverName: "server", definition: { type: "stdio" as const, command: "node" } }] };
-      const candidate = createRunCapabilityView(sources, source?.kind === "plugin" ? "other" : "alpha").tools.get("Action")!;
-      const ui = { pluginId: "alpha", pluginVersion: "1", pluginDigest: "digest", componentId: "panel",
-        componentDigest: "component", htmlSha256: "html", root: "/plugin", entryPath: "/plugin/ui.html",
-        definition: { id: "panel", title: "Panel", entry: "./ui.html", surfaces: ["tool-result" as const],
-          actions: [{ id: "go", label: "Go", tool: "Action", completion: "keep-open" as const }] }, actionTools: [candidate] };
-      expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, "alpha").pluginUi?.size).toBe(0);
-      expect(createRunCapabilityView({ ...sources, pluginUi: [ui] }, ["alpha", "other"]).pluginUi?.size).toBe(0);
-    });
   it.each([false, true])("enforces normalized Bash restrictions during View invocation: denied=%s", async (denied) => {
     let invocations = 0;
     const registry = new ToolRegistry();

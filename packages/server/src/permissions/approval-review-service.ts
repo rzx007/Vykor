@@ -10,6 +10,8 @@ export type ApprovalReviewServiceInput = Omit<ApprovalReviewInput, "evidence"> &
 export interface PermissionApprovalReviewServiceOptions {
   getInput(inputId: string): SessionInputRecord | undefined;
   getRun(runId: string): SessionRunRecord | undefined;
+  /** Resolves independent host-admitted app Runs, including exact tool/args and current ownership. */
+  appInstruction?(input: ApprovalReviewServiceInput, run: SessionRunRecord): string | undefined;
   review(input: ApprovalReviewInput, signal?: AbortSignal): Promise<ApprovalReviewOutcome>;
 }
 
@@ -20,18 +22,20 @@ export function createPermissionApprovalReviewService(options: PermissionApprova
       if (signal?.aborted) throw signal.reason ?? new Error("Approval review interrupted");
       const prompt = options.getInput(input.inputId);
       const run = input.runId ? options.getRun(input.runId) : undefined;
-      if (!prompt || prompt.sessionId !== input.sessionId || !prompt.content.trim()
+      const independent = !prompt && run ? options.appInstruction?.(input, run) : undefined;
+      const instruction = independent ?? prompt?.content;
+      if (!instruction?.trim() || (prompt && prompt.sessionId !== input.sessionId)
         || run?.metadata?.parentRunId !== undefined
-        || (input.runId && (!run || run.sessionId !== input.sessionId || run.inputId !== input.inputId
+        || (input.runId && (!run || run.sessionId !== input.sessionId || (independent ? run.inputId !== undefined || input.inputId !== run.id : run.inputId !== input.inputId)
           || (run.status !== "pending" && run.status !== "running")))
         || !input.requestId || !input.tool.name || !input.tool.source
         || !Number.isInteger(input.runtimeRevision) || input.runtimeRevision < 0) {
         return unavailable("无法核实本次操作对应的用户指令，需要你确认。");
       }
-      const evidence: ApprovalReviewEvidence = { ...input.evidence, userInstruction: prompt.content };
+      const evidence: ApprovalReviewEvidence = { ...input.evidence, userInstruction: instruction };
       const reviewInput: ApprovalReviewInput = { ...input, evidence };
       // Do not silently trim away qualifications that could change authorization.
-      if (prompt.content.length > 16_000 || JSON.stringify(reviewInput).length > 65_536) {
+      if (instruction.length > 16_000 || JSON.stringify(reviewInput).length > 65_536) {
         return unavailable("审查所需资料超出范围，需要你确认。");
       }
       try {

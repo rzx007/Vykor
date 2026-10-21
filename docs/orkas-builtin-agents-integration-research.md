@@ -164,7 +164,7 @@ Orkas 的 `workspace.read`、`office.presentation`、`media.image` 是能力分�
 
 对话里的成品卡片建议提供“打开”“继续修改”“导出”；展示真实执行的检查，例如“结构已检查，未检查视觉效果”。HTML 设计稿需明确采用受限预览或外部打开，现有静态插件 UI 不能直接等同于任意生成 HTML 的托管能力。
 
-证据：[文件变更汇总（第 185 行）](D:/code/personal-project/OpenHarness-ts/apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts)、[文件打开](D:/code/personal-project/OpenHarness-ts/apps/desktop/src/main/features/workspace/opener-service.ts)、[插件 UI](D:/code/personal-project/OpenHarness-ts/apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-frame.tsx)、[Orkas 办公产物版本回执（第 53 行）](D:/code/personal-project/Orkas/src/main/model/core-agent/office-tools.ts)。
+证据：[文件变更汇总（第 185 行）](D:/code/personal-project/OpenHarness-ts/apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts)、[文件打开](D:/code/personal-project/OpenHarness-ts/apps/desktop/src/main/features/workspace/opener-service.ts)、`插件 UI`（旧实现已移除）、[Orkas 办公产物版本回执（第 53 行）](D:/code/personal-project/Orkas/src/main/model/core-agent/office-tools.ts)。
 
 ### 5.5 专家记忆与自动学习后置
 

@@ -8,6 +8,7 @@ import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
 export interface SessionRunAssemblyOptions {
+  materializePluginAppContexts?(sessionId: string, value: unknown): Promise<{ items: SessionUserInputItem[]; assertCurrent(): void }>;
   children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> };
   pendingPermissionId?: (sessionId: string) => string | undefined;
   preemptAutoReview?: (sessionId: string) => void;
@@ -66,6 +67,7 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     materializeSteerInput: options.materializeSteerInput,
   });
   admission = new RunAdmissionService({
+    materializePluginAppContexts: options.materializePluginAppContexts,
     sessionQueries: { getSession: (sessionId) => options.store.sessions.get(sessionId) },
     conversationTransactions: {
       admitPrompt: (input, config) => options.store.conversationTransactions.admitPrompt(input, config),

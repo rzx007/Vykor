@@ -69,6 +69,7 @@ export interface ConversationTransactionTestHooks {
 }
 
 export interface ConversationTransactionsOptions {
+  listPluginApps?(sessionId: string): import("@vykor/protocol").PluginAppRecord[];
   storage: StorageContext;
   conversations: ConversationRepository;
   sessions?: SessionRepository;
@@ -465,7 +466,7 @@ export class ConversationTransactions {
           sessionId: input.sessionId,
           seq: ++messageSeq,
           role: row.role,
-          metadata: row.metadata ?? {},
+          metadata: withoutHostPluginMetadata(row.metadata ?? {}),
           createdAt: timestamp,
           updatedAt: timestamp,
         };
@@ -476,7 +477,7 @@ export class ConversationTransactions {
 
         for (const partInput of row.parts) {
           const partId = randomUUID();
-          const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, ...importedMetadata } = partInput.metadata ?? {};
+          const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...importedMetadata } = partInput.metadata ?? {};
           const part: SessionMessagePartRecord = {
             id: partId,
             sessionId: input.sessionId,
@@ -797,6 +798,7 @@ export class ConversationTransactions {
     const runs = this.requireRuns().listRuns(sessionId);
     return clone({
       cursor: this.conversations.latestEventSeq(),
+      ...(this.options.listPluginApps ? { pluginApps: this.options.listPluginApps(sessionId) } : {}),
       session,
       inputs: this.conversations.listInputs(sessionId),
       messages: this.conversations.listMessages(sessionId),
@@ -809,3 +811,4 @@ export class ConversationTransactions {
     });
   }
 }
+import { withoutHostPluginMetadata } from "@vykor/protocol";

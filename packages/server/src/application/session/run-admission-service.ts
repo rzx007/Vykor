@@ -24,6 +24,7 @@ function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
 }
 
 export interface AdmitPromptInput {
+  pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
   id?: string;
   delivery?: "queue" | "steer";
   items: SessionUserInputItem[];
@@ -177,6 +178,7 @@ export interface RunAdmissionMaterializer {
 }
 
 export interface RunAdmissionServiceOptions {
+  materializePluginAppContexts?(sessionId: string, value: unknown): Promise<{ items: SessionUserInputItem[]; assertCurrent(): void }>;
   sessionQueries?: RunAdmissionSessionQueries;
   conversationTransactions: RunAdmissionConversationTransactions;
   runOperations: RunAdmissionRunOperations;
@@ -201,6 +203,7 @@ export class RunAdmissionService {
       delivery: "queue" | "steer";
       items: SessionUserInputItem[];
       attachmentFingerprint: string;
+      pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
       metadata: Record<string, unknown>;
       promise: Promise<AdmitPromptResult>;
     }
@@ -530,6 +533,7 @@ export class RunAdmissionService {
         pending.delivery !== delivery ||
         !jsonEqual(pending.items, inputItems(input)) ||
         pending.attachmentFingerprint !== attachmentFingerprint ||
+        !jsonEqual(pending.pluginAppContexts, input.pluginAppContexts) ||
         !jsonEqual(pending.metadata, metadata)
       ) {
         throw new AttachmentError(
@@ -549,6 +553,7 @@ export class RunAdmissionService {
       delivery,
       items: inputItems(input),
       attachmentFingerprint,
+      pluginAppContexts: input.pluginAppContexts,
       metadata,
       promise,
     });

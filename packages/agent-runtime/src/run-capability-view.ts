@@ -1,7 +1,10 @@
-import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunPluginUiBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
+import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
+import { isToolVisibleTo } from "@vykor/core";
 
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;
+  /** Already restricted by the same role/host/deny/environment policy, before model hiding. */
+  appToolRegistry?: IToolRegistry;
   /** Same host permissions and environment, without the current role's tool limit. */
   delegatableToolRegistry?: IToolRegistry;
   pluginIds?: ReadonlySet<string>;
@@ -9,7 +12,6 @@ export interface RunCapabilitySources {
   skills?: readonly RunSkillBinding[];
   agents?: readonly RunAgentBinding[];
   mcpServers?: readonly RunMcpServerBinding[];
-  pluginUi?: readonly RunPluginUiBinding[];
 }
 
 export class PluginPreparationError extends Error {
@@ -44,9 +46,11 @@ export function createRunCapabilityView(sources: RunCapabilitySources, scope?: s
   }
   const captureTools = (
     registry: IToolRegistry,
+    audience: "model" | "app" = "model",
   ): Array<[string, RunToolBinding]> => {
     const tools: Array<[string, RunToolBinding]> = [];
     for (const definition of registry.getAll()) {
+      if (!isToolVisibleTo(definition, audience)) continue;
       const source = registry.inspect(definition.name)?.source;
       const server =
         source?.kind === "mcp" && source.id
@@ -74,6 +78,7 @@ export function createRunCapabilityView(sources: RunCapabilitySources, scope?: s
     return tools;
   };
   const tools = captureTools(sources.toolRegistry);
+  const appTools = readonlyMap(captureTools(sources.appToolRegistry ?? sources.toolRegistry, "app"));
   const delegatableTools = sources.delegatableToolRegistry
     ? readonlyMap(
         captureTools(sources.delegatableToolRegistry).filter(
@@ -82,21 +87,12 @@ export function createRunCapabilityView(sources: RunCapabilitySources, scope?: s
       )
     : undefined;
   const toolMap = readonlyMap(tools);
-  const pluginUi = filterPluginUiBindings(
-    sources.pluginUi ?? [],
-    toolMap,
-    allowed,
-  );
-  const delegatablePluginUi =
-    delegatableTools &&
-    filterPluginUiBindings(sources.pluginUi ?? [], delegatableTools, allowed);
   return Object.freeze({
     pluginId,
     pluginIds: readonlySet(allowed),
     tools: toolMap,
+    appTools,
     ...(delegatableTools ? { delegatableTools } : {}),
-    pluginUi,
-    ...(delegatablePluginUi ? { delegatablePluginUi } : {}),
     skills: readonlyMap((sources.skills ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     agents: readonlyMap((sources.agents ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     mcpServers: readonlyMap(servers.filter(visible).map((binding) => [binding.serverId, frozenCopy(binding)])),
@@ -117,51 +113,12 @@ export function restrictRunCapabilityView(
   ));
   const tools = filter(view.tools, permitsTool);
   const delegatableTools = view.delegatableTools && filter(view.delegatableTools, permitsDelegation);
-  const owners = view.pluginIds ?? new Set(view.pluginId ? [view.pluginId] : []);
   return Object.freeze({
     ...view,
     tools,
+    ...(view.appTools ? { appTools: filter(view.appTools, permitsTool) } : {}),
     ...(delegatableTools ? { delegatableTools } : {}),
-    pluginUi: filterPluginUiBindings(view.pluginUi?.values() ?? [], tools, owners),
-    ...(view.delegatablePluginUi ? {
-      delegatablePluginUi: filterPluginUiBindings(view.delegatablePluginUi.values(), delegatableTools ?? tools, owners),
-    } : {}),
   });
-}
-
-/** UI actions must be the exact Native bindings available in the corresponding tool scope. */
-function filterPluginUiBindings(
-  bindings: Iterable<RunPluginUiBinding>,
-  tools: ReadonlyMap<string, RunToolBinding>,
-  allowedPluginIds: ReadonlySet<string>,
-): ReadonlyMap<string, RunPluginUiBinding> {
-  return readonlyMap(
-    [...bindings]
-      .filter(
-        (binding) =>
-          allowedPluginIds.has(binding.pluginId) &&
-          binding.definition.actions.every((action) => {
-            const captured = binding.actionTools.find(
-              (tool) => tool.definition.name === action.tool,
-            );
-            const current = tools.get(action.tool);
-            return (
-              captured?.source?.kind === "plugin" &&
-              captured.source.id === binding.pluginId &&
-              captured.ownerPluginId === binding.pluginId &&
-              current?.source?.kind === "plugin" &&
-              current.source.id === binding.pluginId &&
-              current.ownerPluginId === binding.pluginId &&
-              current.definitionIdentity === captured.definitionIdentity &&
-              current.definition.execute === captured.definition.execute
-            );
-          }),
-      )
-      .map((binding) => [
-        `${binding.pluginId}:${binding.componentId}`,
-        frozenCopy(binding),
-      ]),
-  );
 }
 
 /** Expose set membership without allowing callers to widen the captured scope. */

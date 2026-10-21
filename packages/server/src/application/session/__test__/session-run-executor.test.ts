@@ -153,31 +153,12 @@ describe("SessionRunExecutor", () => {
     }
   });
 
-  it("adds UI facts only to the submitted normal input without changing the durable user prompt", async () => {
-    const store = createStore();
-    let submitted = "";
-    const executor = new SessionRunExecutor({
-      data: store.data, attachments: store.attachments, goals: store.goals,
-      pluginUi: { summarizeForInput: () => "[外部工具数据] interrupted unknown" },
-      agentPool: { configured: true, acquireSession: async () => ({
-        submitMessage: (content: string) => { submitted = content; return completedHandle(); },
-      }), close: async () => {}, closeIfStale: async () => {} } as any,
-      events: { checkpoint: () => 1, publishSince: () => {} },
-      transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
-    });
-    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
-      { signal: new AbortController().signal, registerHandle: async () => {} });
-    expect(submitted).toBe("hello\n\n[外部工具数据] interrupted unknown");
-    expect(store.spies.getInput().content).toBe("hello");
-  });
-  it.each([false, true])("passes the captured view to the Agent without pre-registering or releasing UI (failure=%s)", async (fail) => {
+  it.each([false, true])("passes the captured view to the Agent without extra execution (failure=%s)", async (fail) => {
     const store = createStore();
     const view = createRunCapabilityView({ toolRegistry: new ToolRegistry() });
-    const registerRunView = vi.fn(), releaseRunView = vi.fn();
     let submittedView: unknown;
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      pluginUi: { registerRunView, releaseRunView } as any,
       agentPool: { configured: true, acquireSession: async () => ({
         createRunCapabilityView: () => view,
         submitMessage: (_content: unknown, options: { capabilityView: unknown }) => {
@@ -193,8 +174,6 @@ describe("SessionRunExecutor", () => {
     await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
       { signal: new AbortController().signal, registerHandle: async () => {} });
     expect(submittedView).toBe(view);
-    expect(registerRunView).not.toHaveBeenCalled();
-    expect(releaseRunView).not.toHaveBeenCalled();
   });
   it("records a selected plugin preparation failure before submitting to the model", async () => {
     const store = createStore();

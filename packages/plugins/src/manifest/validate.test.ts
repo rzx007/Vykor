@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("validateNativePlugin", () => {
-  it("rejects invalid UI contents before installation", async () => {
+  it("rejects retired UI before installation without parsing its contents", async () => {
     await writeNativeUiFixture(root);
     await writeFile(join(root, "ui", "manifest.json"), "{");
     const result = await validateNativePlugin(root);
@@ -30,15 +30,15 @@ describe("validateNativePlugin", () => {
     expect(result.plugin).toBeUndefined();
     expect(result.rootManifest?.components.ui).toEqual(["./ui/manifest.json"]);
     expect(result.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ component: "ui", code: "plugin_ui_invalid_definition" }),
+      expect.objectContaining({ component: "ui", code: "plugin_ui_retired" }),
     ]));
   });
 
-  it("validates UI HTML as an ordinary bounded file", async () => {
+  it("does not inspect retired UI HTML on installed-package verification", async () => {
     await writeNativeUiFixture(root);
     await rm(join(root, "ui", "findings.html"));
     await mkdir(join(root, "ui", "findings.html"));
-    expect((await validateNativePlugin(root)).status).toBe("invalid");
+    expect((await validateNativePlugin(root, { allowRetiredUi: true })).status).toBe("valid");
   });
   it("returns a validated plugin and no diagnostics for a valid artifact", async () => {
     await mkdir(join(root, "skills"));

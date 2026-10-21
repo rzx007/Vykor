@@ -172,7 +172,7 @@ export function protocolValidationErrorResponse(error: unknown): Response {
           : String(error),
     );
   if (validationError.details?.field === "args" && validationError.details.reason === "payload_too_large") {
-    return jsonResponse({ ...validationError.toProtocolError(), code: "plugin_ui_payload_too_large" }, 413);
+    return jsonResponse({ ...validationError.toProtocolError(), code: "payload_too_large" }, 413);
   }
   return jsonResponse(validationError.toProtocolError() satisfies ProtocolError, 400);
 }

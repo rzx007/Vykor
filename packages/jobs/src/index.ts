@@ -64,8 +64,6 @@ export interface AgentJobAuthorization {
   readonly skills?: ReadonlyMap<string, unknown>;
   readonly agents?: ReadonlyMap<string, unknown>;
   readonly mcpServers?: ReadonlyMap<string, unknown>;
-  readonly pluginUi?: ReadonlyMap<string, unknown>;
-  readonly delegatablePluginUi?: ReadonlyMap<string, unknown>;
 }
 
 /** Host-owned job controller exposed to an Agent. */

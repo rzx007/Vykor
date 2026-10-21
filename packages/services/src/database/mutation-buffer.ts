@@ -8,6 +8,8 @@ export interface MutationBuffer {
   attempts: Set<string>;
   tasks: Set<string>;
   permissions: Set<string>;
+  pluginApps: Set<string>;
+  deletedPluginApps: Set<string>;
   events: Set<string>;
   deletedMessages: Set<string>;
   deletedParts: Set<string>;
@@ -28,6 +30,8 @@ export function createMutationBuffer(): MutationBuffer {
     attempts: new Set(),
     tasks: new Set(),
     permissions: new Set(),
+    pluginApps: new Set(),
+    deletedPluginApps: new Set(),
     events: new Set(),
     deletedMessages: new Set(),
     deletedParts: new Set(),
@@ -49,6 +53,8 @@ export function cloneMutationBuffer(value: MutationBuffer): MutationBuffer {
     attempts: new Set(value.attempts),
     tasks: new Set(value.tasks),
     permissions: new Set(value.permissions),
+    pluginApps: new Set(value.pluginApps),
+    deletedPluginApps: new Set(value.deletedPluginApps),
     events: new Set(value.events),
     deletedMessages: new Set(value.deletedMessages),
     deletedParts: new Set(value.deletedParts),

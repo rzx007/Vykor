@@ -154,7 +154,6 @@ export type { ModelTokenMetering, UsageSnapshot, CostTracker as ICostTracker } f
 export type {
   QueryEngine as IQueryEngine,
   RunCapabilityView,
-  RunPluginUiBinding,
   RunToolBinding,
   RunSkillBinding,
   RunMcpServerBinding,
@@ -234,7 +233,7 @@ export {
   type CheckedToolExecutionOptions,
   type CheckedToolExecutionResult,
 } from "./engine/checked-tool-execution";
-export { ToolRegistry, ToolRegistrationError, resolveToolExecution } from "./engine/tool-registry";
+export { ToolRegistry, ToolRegistrationError, resolveToolExecution, isToolVisibleTo } from "./engine/tool-registry";
 export { RuntimeBuilder } from "./engine/runtime-builder";
 export {
   CompactService,

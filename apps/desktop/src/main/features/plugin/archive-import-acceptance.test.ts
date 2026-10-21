@@ -65,6 +65,7 @@ afterEach(async () => {
 async function copyDirectory(source: string, destination: string): Promise<void> {
   await mkdir(destination, { recursive: true })
   for (const entry of await readdir(source, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".git") continue
     const target = join(destination, entry.name)
     if (entry.isDirectory()) await copyDirectory(join(source, entry.name), target)
     else if (entry.isFile()) await copyFile(join(source, entry.name), target)
@@ -146,9 +147,9 @@ describe("Desktop Native ZIP archive import acceptance", () => {
     const preview = await service.importArchive({} as never, { cwd: root })
 
     expect(preview.status).toBe("approval-required")
-    if (preview.status !== "approval-required") throw new Error("Expected the Native ZIP UI permissions to require approval")
+    if (preview.status !== "approval-required") throw new Error("Expected the Native ZIP App permissions to require approval")
     expect(preview.requestedPermissions).toEqual(["ui:invoke-own-tools", "ui:render"])
-    expect(preview.uiInventory).toEqual({ manifestCount: 1, componentCount: 1, validatedComponentCount: 1 })
+    expect(preview).not.toHaveProperty("uiInventory")
     expect(await discoverInstalledNativePlugins({ cwd: root })).toEqual([])
 
     const result = await service.confirmArchive({ cwd: root, selectionId: preview.selectionId })
@@ -174,7 +175,7 @@ describe("Desktop Native ZIP archive import acceptance", () => {
     expect(loaded.components.tools?.value).toMatchObject([
       { declaredEntry: "./tools/index.mjs", runtime: "node" },
     ])
-    expect(loaded.components.ui?.value).toHaveLength(1)
+    expect(loaded.components.apps?.value).toHaveLength(1)
     expect(await resolverRoots()).toEqual(resolverRootsBefore)
   }, 30_000)
 

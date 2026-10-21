@@ -15,7 +15,7 @@ import type { FileViewerTab } from "@renderer/components/desktop/tools/files/fil
 import type { ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
 
 export type UtilityTool =
-  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "workflows" | "plugin-ui" | "image"
+  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "workflows" | "plugin-app" | "image"
 
 export type UtilityToolRequest = Extract<
   UtilityTool,
@@ -45,11 +45,12 @@ export const utilityToolMeta: Record<
   "side-chat": { icon: MessageCirclePlus, label: "侧边聊天", shortcut: "Ctrl+Alt+S" },
   agents: { icon: Bot, label: "子智能体" },
   workflows: { icon: GitBranch, label: "编排" },
-  "plugin-ui": { icon: PanelsTopLeft, label: "插件交互" },
+  "plugin-app": { icon: PanelsTopLeft, label: "插件应用" },
   image: { icon: FileImage, label: "图片" },
 }
 
 export const utilityToolOrder: UtilityTool[] = [
+  "plugin-app",
   "workflows",
   "agents",
   "review",

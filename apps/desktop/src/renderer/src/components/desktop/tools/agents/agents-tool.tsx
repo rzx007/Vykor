@@ -2,9 +2,6 @@ import { AlertCircle, ArrowLeft, Bot, CircleCheck } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { ConversationTranscript } from "@renderer/components/desktop/conversation-page/transcript/transcript"
-import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
-import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
-import { usePluginUiDisplays } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-context"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
@@ -355,7 +352,6 @@ function AgentDetails({
           </Alert>
         </div>
       ) : view ? (
-        <PluginUiProvider view={view} onOpenSidebar={() => {}}>
           <MessageScrollerProvider
             key={view.session.id}
             autoScroll
@@ -381,33 +377,14 @@ function AgentDetails({
                     onOpenReview={onOpenReview}
                     onOpenTerminal={onOpenTerminal}
                   />
-                  <AgentPluginUiSidebar />
                 </MessageScrollerContent>
               </MessageScrollerViewport>
               <MessageScrollerButton />
             </MessageScroller>
           </MessageScrollerProvider>
-        </PluginUiProvider>
       ) : null}
     </>
   )
-}
-
-function AgentPluginUiSidebar() {
-  const host = usePluginUiDisplays()
-  return host?.displays
-    .filter((display) => display.surface === "session-sidebar")
-    .map((display) => (
-      <section
-        key={display.key}
-        className="min-h-80 overflow-hidden rounded-2xl border border-border/60"
-      >
-        <Button variant="ghost" size="sm" onClick={() => host.close(display.instance.instanceId)}>
-          关闭显示
-        </Button>
-        <PluginUiFrame display={display} />
-      </section>
-    ))
 }
 
 function errorMessage(error: unknown): string {
