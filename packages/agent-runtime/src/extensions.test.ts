@@ -616,6 +616,7 @@ describe("installed Native Tool activation", () => {
     });
     await expect(runtime.toolRegistry.get("InstalledPluginEcho")!.execute({ value: "hello" }, { cwd })).resolves.toEqual({
       content: [{ type: "text", text: "hello" }],
+      executionState: "completed",
     });
     await runtime.close();
     expect(runtime.toolRegistry.has("InstalledPluginEcho")).toBe(false);
