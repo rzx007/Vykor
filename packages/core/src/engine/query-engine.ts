@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { isAgentExecutionLimitError } from "../types/runtime";
 
-import type { Message, StreamEvent, ToolUseBlock, UsageSnapshot, ContentBlock, ModelAttemptFinishedEvent, ToolGenerationProgressEvent } from "../index";
+import type {
+  Message,
+  StreamEvent,
+  ToolUseBlock,
+  UsageSnapshot,
+  ContentBlock,
+  ModelAttemptFinishedEvent,
+  ToolGenerationProgressEvent,
+} from "../index";
 import type {
   AgentExecutionContext,
   StreamingMessageClient,
@@ -24,7 +32,11 @@ import type {
 } from "../types/tools";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
-import { CompactService, type CompactClient, type CompactContextProvider } from "./compact-service";
+import {
+  CompactService,
+  type CompactClient,
+  type CompactContextProvider,
+} from "./compact-service";
 import { CostTracker } from "./cost-tracker";
 import {
   ModelRequestFailure,
@@ -38,13 +50,25 @@ import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
 import { executeCheckedTools } from "./checked-tool-execution";
 import { withToolInputReuseHint } from "./tool-input-reuse";
-import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
+import {
+  attemptFinishedEvent,
+  createAttemptSignal,
+  describeModelFailure,
+} from "./query-model-attempt";
 import { applyToolOutputBudget } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
-import { formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
+import {
+  formatToolResultForModel,
+  toolFeedbackFields,
+} from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
 import { RunToolDiscovery } from "./tool-discovery";
-import { runToolRegistry as runToolRegistryForRun, toolRegistryForNames, toolRegistryView, visibleToolRegistry } from "./tool-registry";
+import {
+  runToolRegistry as runToolRegistryForRun,
+  toolRegistryForNames,
+  toolRegistryView,
+  visibleToolRegistry,
+} from "./tool-registry";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -86,7 +110,9 @@ function toCompactClient(
   model: string,
   options: {
     policy?: Partial<ModelRetryPolicy>;
-    onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
+    onAttemptFinished?: (
+      event: ModelAttemptFinishedEvent,
+    ) => void | Promise<void>;
     onAttemptStarted?: import("./buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
     limits?: import("../types/runtime").AgentExecutionLimits;
     maxOutputTokens?: number;
@@ -94,21 +120,31 @@ function toCompactClient(
   } = {},
 ): CompactClient {
   return {
-    submitMessage(content: string, submitOptions?: { signal?: AbortSignal }): AsyncIterable<StreamEvent> {
+    submitMessage(
+      content: string,
+      submitOptions?: { signal?: AbortSignal },
+    ): AsyncIterable<StreamEvent> {
       return streamBufferedModelWithRetry(
         apiClient,
         {
           model,
           messages: [{ type: "user", content }],
           system: COMPACT_SUMMARIZER_SYSTEM_PROMPT,
-          maxTokens: Math.min(MAX_COMPACT_OUTPUT_TOKENS, options.maxOutputTokens ?? MAX_COMPACT_OUTPUT_TOKENS),
+          maxTokens: Math.min(
+            MAX_COMPACT_OUTPUT_TOKENS,
+            options.maxOutputTokens ?? MAX_COMPACT_OUTPUT_TOKENS,
+          ),
           tools: undefined,
           abortSignal: submitOptions?.signal,
         },
         {
           ...(options.policy ? { policy: options.policy } : {}),
-          ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
-          ...(options.onAttemptStarted ? { onAttemptStarted: options.onAttemptStarted } : {}),
+          ...(options.onAttemptFinished
+            ? { onAttemptFinished: options.onAttemptFinished }
+            : {}),
+          ...(options.onAttemptStarted
+            ? { onAttemptStarted: options.onAttemptStarted }
+            : {}),
           ...(options.limits ? { limits: options.limits } : {}),
           ...(options.provider ? { provider: options.provider } : {}),
           purpose: "compaction",
@@ -134,16 +170,38 @@ export class MaxTurnsExceeded extends Error {
 }
 
 class ToolCorrectionsExceeded extends Error {
-  constructor(kind: keyof typeof TOOL_CORRECTION_LIMITS | "recovery_guard", turns: number, lastFailure?: ToolExecutionResult) {
+  constructor(
+    kind: keyof typeof TOOL_CORRECTION_LIMITS | "recovery_guard",
+    turns: number,
+    lastFailure?: ToolExecutionResult,
+  ) {
     const toolName = lastFailure?.toolName ?? "未知工具";
-    const displayName = toolName.length > 80 ? toolName.slice(0, 80) + "…" : toolName;
-    const hint = lastFailure ? toolFeedbackFields(lastFailure).recoveryHint : undefined;
-    const reason = kind === "recovery_guard" ? "重复失败调用的恢复额度（" + turns + "轮）已耗尽"
-      : (kind === "invalid_input" ? "工具参数" : "文件条件") + "在未完全成功的工具批次中累计 " + turns + " 轮失败";
-    super(reason + "，本轮已停止自动纠错。最后失败工具：" + displayName
-      + "。" + (hint ?? "请根据工具反馈检查参数和目标状态。") + " 此次停止不代表任务已完成。");
-    this.name = kind === "recovery_guard" ? "ToolRecoveryExceeded"
-      : kind === "invalid_input" ? "ToolInputCorrectionsExceeded" : "ToolPreconditionsExceeded";
+    const displayName =
+      toolName.length > 80 ? toolName.slice(0, 80) + "…" : toolName;
+    const hint = lastFailure
+      ? toolFeedbackFields(lastFailure).recoveryHint
+      : undefined;
+    const reason =
+      kind === "recovery_guard"
+        ? "重复失败调用的恢复额度（" + turns + "轮）已耗尽"
+        : (kind === "invalid_input" ? "工具参数" : "文件条件") +
+          "在未完全成功的工具批次中累计 " +
+          turns +
+          " 轮失败";
+    super(
+      reason +
+        "，本轮已停止自动纠错。最后失败工具：" +
+        displayName +
+        "。" +
+        (hint ?? "请根据工具反馈检查参数和目标状态。") +
+        " 此次停止不代表任务已完成。",
+    );
+    this.name =
+      kind === "recovery_guard"
+        ? "ToolRecoveryExceeded"
+        : kind === "invalid_input"
+          ? "ToolInputCorrectionsExceeded"
+          : "ToolPreconditionsExceeded";
   }
 }
 
@@ -155,7 +213,15 @@ export interface SubmitMessageOptions {
 export class QueryEngine implements IQueryEngine {
   private messages: Message[] = [];
   // Short-lived result access, not a second persistent transcript or plugin storage service.
-  private readonly recentToolResults = new Map<string, { runId: string; result: ToolExecutionResult; bytes: number; binding: import("../types/runtime.js").RunToolBinding }>();
+  private readonly recentToolResults = new Map<
+    string,
+    {
+      runId: string;
+      result: ToolExecutionResult;
+      bytes: number;
+      binding: import("../types/runtime.js").RunToolBinding;
+    }
+  >();
   private compactService: CompactService;
   private costTracker: CostTracker;
   private systemPrompt: string | undefined;
@@ -176,7 +242,10 @@ export class QueryEngine implements IQueryEngine {
   private sessionId: string | undefined;
   private reasoningEffort: string | undefined;
   private appliedRequestConfiguration: QueryRequestConfiguration | undefined;
-  private readonly trustedOverrides: ReadonlyMap<string, { identity: symbol; execute: ToolDefinition["execute"] }>;
+  private readonly trustedOverrides: ReadonlyMap<
+    string,
+    { identity: symbol; execute: ToolDefinition["execute"] }
+  >;
 
   constructor(
     private apiClient: StreamingMessageClient,
@@ -185,9 +254,15 @@ export class QueryEngine implements IQueryEngine {
     private hookExecutor: IHookExecutor,
     private options: QueryEngineOptions = {},
   ) {
-    this.trustedOverrides = new Map([...options.trustedToolOverrides ?? []].map(([name, definition]) => [
-      name, { identity: toolDefinitionIdentity(definition), execute: definition.execute },
-    ]));
+    this.trustedOverrides = new Map(
+      [...(options.trustedToolOverrides ?? [])].map(([name, definition]) => [
+        name,
+        {
+          identity: toolDefinitionIdentity(definition),
+          execute: definition.execute,
+        },
+      ]),
+    );
     this.model = options.model ?? "deepchat-chat";
     this.costTracker = new CostTracker();
     this.compactService = new CompactService(
@@ -245,7 +320,9 @@ export class QueryEngine implements IQueryEngine {
     this.jobs = jobs;
   }
 
-  setBackgroundShell(backgroundShell: AgentBackgroundShellHost | undefined): void {
+  setBackgroundShell(
+    backgroundShell: AgentBackgroundShellHost | undefined,
+  ): void {
     this.backgroundShell = backgroundShell;
   }
 
@@ -260,7 +337,10 @@ export class QueryEngine implements IQueryEngine {
    * streamMessage 调用，不写入 this.systemPrompt，也不进入 this.messages。
    * 注入风格参考 Python 的「# Relevant Memories」段（追加在 system 末尾）。
    */
-  private composeTurnSystemPrompt(memoryContext: string | null, systemPrompt = this.systemPrompt): string | undefined {
+  private composeTurnSystemPrompt(
+    memoryContext: string | null,
+    systemPrompt = this.systemPrompt,
+  ): string | undefined {
     if (!memoryContext || !memoryContext.trim()) {
       this.lastMemoryReminderText = undefined;
       return systemPrompt;
@@ -285,15 +365,18 @@ export class QueryEngine implements IQueryEngine {
     content: string | ContentBlock[],
     options: SubmitMessageOptions = {},
   ): AsyncIterable<StreamEvent> {
-    const initialRequestConfiguration = await this.resolveRequestConfiguration(options);
+    const initialRequestConfiguration =
+      await this.resolveRequestConfiguration(options);
     const preparedContent = await this.prepareUserContent(
       content,
       options.signal,
       initialRequestConfiguration.client,
     );
-    this.messages = sanitizeMessageHistory(this.messages).map((message) => message.type === "tool_result"
-      ? { ...message, content: applyToolOutputBudget(message.content) }
-      : message);
+    this.messages = sanitizeMessageHistory(this.messages).map((message) =>
+      message.type === "tool_result"
+        ? { ...message, content: applyToolOutputBudget(message.content) }
+        : message,
+    );
     this.messages.push({ type: "user", content: preparedContent });
 
     // per-turn 相关记忆检索：按本轮用户输入选相关记忆，作为瞬态上下文。
@@ -303,31 +386,47 @@ export class QueryEngine implements IQueryEngine {
     let memoryContext: string | null = null;
     if (this.memoryRetriever) {
       try {
-        memoryContext = await this.memoryRetriever(userContentToText(preparedContent));
+        memoryContext = await this.memoryRetriever(
+          userContentToText(preparedContent),
+        );
       } catch {
         // retriever failure is non-fatal; continue without memory context
       }
     }
     const contribution = options.execution?.contribution;
     const runToolRegistry = runToolRegistryForRun(
-      this.toolRegistry, this.allowedTools, contribution, options.execution?.capabilityView,
+      this.toolRegistry,
+      this.allowedTools,
+      contribution,
+      options.execution?.capabilityView,
     );
-    const toolDiscovery = RunToolDiscovery.create(runToolRegistry, this.options.toolDiscovery, options.execution?.capabilityView);
+    const toolDiscovery = RunToolDiscovery.create(
+      runToolRegistry,
+      this.options.toolDiscovery,
+      options.execution?.capabilityView,
+    );
     const internalTools = new Set(
       contribution?.tools
         ?.filter((item) => item.permission === "host-internal")
         .map((item) => item.definition.name) ?? [],
     );
-    const endRunDefinitions = new Set(contribution?.tools
-      ?.filter(item => item.permission === "host-internal" && item.endRunOnSuccess === true)
-      .map(item => item.definition) ?? []);
+    const endRunDefinitions = new Set(
+      contribution?.tools
+        ?.filter(
+          (item) =>
+            item.permission === "host-internal" &&
+            item.endRunOnSuccess === true,
+        )
+        .map((item) => item.definition) ?? [],
+    );
 
     let turnCount = 0;
     const failedToolCalls = new ToolFailureMemory();
     const trajectoryTracker =
       this.options.trajectoryTrackerFactory === false
         ? undefined
-        : (this.options.trajectoryTrackerFactory?.() ?? new DefaultTrajectoryTracker());
+        : (this.options.trajectoryTrackerFactory?.() ??
+          new DefaultTrajectoryTracker());
     const trajectoryControl = createTrajectoryLoopControl();
     let recoveryToolTurnsRemaining: number | null = null;
     const correctionTurns = { invalid_input: 0, precondition: 0 };
@@ -340,7 +439,9 @@ export class QueryEngine implements IQueryEngine {
     // can only move the reusable engine's baseline, never this Run's ceiling.
     const hardMaxTurns = options.execution?.hardMaxTurns;
     const maxTurnsLimit = (): number =>
-      hardMaxTurns === undefined ? this.maxTurns : Math.min(this.maxTurns, hardMaxTurns);
+      hardMaxTurns === undefined
+        ? this.maxTurns
+        : Math.min(this.maxTurns, hardMaxTurns);
 
     // 执行会话开始时的钩子函数
     if (options.execution?.profile?.executableHooks !== false) {
@@ -349,26 +450,42 @@ export class QueryEngine implements IQueryEngine {
 
     while (turnCount < maxTurnsLimit() || forceFinalResponse) {
       // The first request must use the same client that prepared its attachments.
-      const requestConfiguration = turnCount === 0
-        ? initialRequestConfiguration
-        : preparedNextRequestConfiguration ?? await this.resolveRequestConfiguration(options);
+      const requestConfiguration =
+        turnCount === 0
+          ? initialRequestConfiguration
+          : (preparedNextRequestConfiguration ??
+            (await this.resolveRequestConfiguration(options)));
       preparedNextRequestConfiguration = undefined;
       this.applyRequestMaxTurns(requestConfiguration.maxTurns);
       if (turnCount >= maxTurnsLimit() && !forceFinalResponse) {
         throw new MaxTurnsExceeded(maxTurnsLimit());
       }
       this.compactService.setClient(
-        this.createCompactClient(requestConfiguration.client, requestConfiguration.model, options.execution, requestConfiguration.provider, requestConfiguration.maxOutputTokens),
+        this.createCompactClient(
+          requestConfiguration.client,
+          requestConfiguration.model,
+          options.execution,
+          requestConfiguration.provider,
+          requestConfiguration.maxOutputTokens,
+        ),
       );
       if (requestConfiguration.contextWindow !== undefined) {
-        this.compactService.setContextWindow(requestConfiguration.contextWindow);
+        this.compactService.setContextWindow(
+          requestConfiguration.contextWindow,
+        );
       }
       if (requestConfiguration.maxOutputTokens !== undefined) {
-        this.compactService.setOutputReserve(requestConfiguration.maxOutputTokens);
+        this.compactService.setOutputReserve(
+          requestConfiguration.maxOutputTokens,
+        );
       }
       // 自动压缩消息历史以控制上下文长度
       try {
-        this.compactService.setHookExecutor(options.execution?.profile?.executableHooks === false ? undefined : this.hookExecutor);
+        this.compactService.setHookExecutor(
+          options.execution?.profile?.executableHooks === false
+            ? undefined
+            : this.hookExecutor,
+        );
         this.compactService.setProgressCallback((event) =>
           options.execution?.emit({
             type: "domain.event",
@@ -392,7 +509,10 @@ export class QueryEngine implements IQueryEngine {
         // Manual compaction after this turn must keep the resolved client/model
         // without retaining an emitter bound to this run.
         this.compactService.setClient(
-          this.createCompactClient(requestConfiguration.client, requestConfiguration.model),
+          this.createCompactClient(
+            requestConfiguration.client,
+            requestConfiguration.model,
+          ),
         );
       }
       this.messages = sanitizeMessageHistory(this.messages);
@@ -403,30 +523,57 @@ export class QueryEngine implements IQueryEngine {
         childFinalizing = true;
       }
       const forcedFinalTurn = forceFinalResponse || childFinalizing;
-      const requestToolRegistry = toolDiscovery?.requestRegistry(trajectoryControl.hiddenTools, forcedFinalTurn)
-        ?? toolRegistryForNames(runToolRegistry, forcedFinalTurn ? [] : runToolRegistry.getAll()
-          .filter(tool => !trajectoryControl.hiddenTools.includes(tool.name)).map(tool => tool.name));
+      const requestToolRegistry =
+        toolDiscovery?.requestRegistry(
+          trajectoryControl.hiddenTools,
+          forcedFinalTurn,
+        ) ??
+        toolRegistryForNames(
+          runToolRegistry,
+          forcedFinalTurn
+            ? []
+            : runToolRegistry
+                .getAll()
+                .filter(
+                  (tool) => !trajectoryControl.hiddenTools.includes(tool.name),
+                )
+                .map((tool) => tool.name),
+        );
       const tools = requestToolRegistry.getAll();
       const runSystemPrompt = requestConfiguration.systemPromptForTools
         ? await requestConfiguration.systemPromptForTools(tools)
-        : requestConfiguration.systemPrompt
-          ?? (this.options.systemPromptForTools
-            ? await this.options.systemPromptForTools(tools, options.execution?.capabilityView)
-            : options.execution?.capabilityView && this.options.systemPromptForRun
-              ? await this.options.systemPromptForRun(options.execution.capabilityView)
-              : this.systemPrompt);
+        : (requestConfiguration.systemPrompt ??
+          (this.options.systemPromptForTools
+            ? await this.options.systemPromptForTools(
+                tools,
+                options.execution?.capabilityView,
+              )
+            : options.execution?.capabilityView &&
+                this.options.systemPromptForRun
+              ? await this.options.systemPromptForRun(
+                  options.execution.capabilityView,
+                )
+              : this.systemPrompt));
       this.lastRunPrompt = { systemPrompt: runSystemPrompt };
-      const discoveryGuidance = toolDiscovery && requestToolRegistry.has(toolDiscovery.searchToolName)
-        ? `Additional authorized tool definitions are deferred. Use ${toolDiscovery.searchToolName} to find relevant tools by task or exact name. Selected definitions become callable in the next model request, not in the search batch. Search does not grant permissions. Do not scan installation directories or unpack plugin archives to discover tools.`
-        : undefined;
-      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, discoveryGuidance ? appendSystemGuidance(runSystemPrompt, discoveryGuidance) : runSystemPrompt);
+      const discoveryGuidance =
+        toolDiscovery && requestToolRegistry.has(toolDiscovery.searchToolName)
+          ? `Additional authorized tool definitions are deferred. Use ${toolDiscovery.searchToolName} to find relevant tools by task or exact name. Selected definitions become callable in the next model request, not in the search batch. Search does not grant permissions. Do not scan installation directories or unpack plugin archives to discover tools.`
+          : undefined;
+      const baseSystemPrompt = this.composeTurnSystemPrompt(
+        memoryContext,
+        discoveryGuidance
+          ? appendSystemGuidance(runSystemPrompt, discoveryGuidance)
+          : runSystemPrompt,
+      );
       const turnSystemPrompt = contribution?.systemGuidance
         ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
         : baseSystemPrompt;
       const recoverySystem = forcedFinalTurn
         ? appendSystemGuidance(
             turnSystemPrompt,
-            childFinalizing ? CHILD_FINALIZATION_PROMPT : RECOVERY_FINALIZATION_PROMPT,
+            childFinalizing
+              ? CHILD_FINALIZATION_PROMPT
+              : RECOVERY_FINALIZATION_PROMPT,
           )
         : turnSystemPrompt;
       const system = trajectoryControl.guidance
@@ -441,8 +588,12 @@ export class QueryEngine implements IQueryEngine {
             payload: {
               revision: requestConfiguration.revision,
               model: requestConfiguration.model,
-              ...(requestConfiguration.provider ? { provider: requestConfiguration.provider } : {}),
-              ...(requestConfiguration.effort !== undefined ? { effort: requestConfiguration.effort } : {}),
+              ...(requestConfiguration.provider
+                ? { provider: requestConfiguration.provider }
+                : {}),
+              ...(requestConfiguration.effort !== undefined
+                ? { effort: requestConfiguration.effort }
+                : {}),
             },
           },
         });
@@ -456,8 +607,13 @@ export class QueryEngine implements IQueryEngine {
       let assistantText = "";
       let assistantReasoning = "";
       let assistantReasoningReplay = "";
-      let assistantReasoningSegments: Array<{ source: "reasoning_content" | "think"; text: string }> = [];
-      let assistantPhase: import("../types/messages").AssistantMessagePhase | undefined;
+      let assistantReasoningSegments: Array<{
+        source: "reasoning_content" | "think";
+        text: string;
+      }> = [];
+      let assistantPhase:
+        | import("../types/messages").AssistantMessagePhase
+        | undefined;
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
 
@@ -474,7 +630,10 @@ export class QueryEngine implements IQueryEngine {
         toolUses = [];
         stopReason = "end_turn";
 
-        const attemptSignal = createAttemptSignal(options.signal, recoveryDeadlineAt);
+        const attemptSignal = createAttemptSignal(
+          options.signal,
+          recoveryDeadlineAt,
+        );
         const attemptToolUses: ToolUseBlock[] = [];
         let attemptUsage: UsageSnapshot | undefined;
         let completionSeen = false;
@@ -487,11 +646,18 @@ export class QueryEngine implements IQueryEngine {
 
         try {
           await options.execution?.limits?.check("model");
-          await options.execution?.emit({ type: "model.attempt.started", data: {
-            generationId, attempt, model: requestConfiguration.model,
-            ...(requestConfiguration.provider ? { provider: requestConfiguration.provider } : {}),
-            purpose: forcedFinalTurn ? "finalization" : "generation",
-          } });
+          await options.execution?.emit({
+            type: "model.attempt.started",
+            data: {
+              generationId,
+              attempt,
+              model: requestConfiguration.model,
+              ...(requestConfiguration.provider
+                ? { provider: requestConfiguration.provider }
+                : {}),
+              purpose: forcedFinalTurn ? "finalization" : "generation",
+            },
+          });
           registered = true;
           attemptSignal.signal.throwIfAborted();
           clientInvoked = true;
@@ -519,8 +685,13 @@ export class QueryEngine implements IQueryEngine {
             } else if (event.type === "reasoning_delta") {
               assistantReasoning += event.delta;
               const lastSegment = assistantReasoningSegments.at(-1);
-              if (lastSegment?.source === event.source) lastSegment.text += event.delta;
-              else assistantReasoningSegments.push({ source: event.source, text: event.delta });
+              if (lastSegment?.source === event.source)
+                lastSegment.text += event.delta;
+              else
+                assistantReasoningSegments.push({
+                  source: event.source,
+                  text: event.delta,
+                });
               if (event.source === "reasoning_content") {
                 assistantReasoningReplay += event.delta;
               }
@@ -566,27 +737,53 @@ export class QueryEngine implements IQueryEngine {
           if (!registered) throw error;
           if (isAgentExecutionLimitError(error)) {
             this.settleModelAttempt(attemptUsage, clientInvoked);
-            yield attemptFinishedEvent(generationId, attempt, "failed", attemptUsage, clientInvoked ? undefined : true);
+            yield attemptFinishedEvent(
+              generationId,
+              attempt,
+              "failed",
+              attemptUsage,
+              clientInvoked ? undefined : true,
+            );
             throw error;
           }
-          attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
+          attemptFailed = describeModelFailure(
+            error,
+            options.signal,
+            attemptSignal,
+          );
         } finally {
           attemptSignal.dispose();
           // A consumer can return() while we are suspended at a streamed delta.
           // It will ignore a finally yield, so settle directly through the host.
           if (registered && !requestExitedNormally) {
             this.settleModelAttempt(attemptUsage, clientInvoked);
-            const { type: _, ...data } = attemptFinishedEvent(generationId, attempt,
-              options.signal?.aborted ? "interrupted" : "failed", attemptUsage, clientInvoked ? undefined : true);
-            await options.execution?.emit({ type: "model.attempt.finished", data });
-            if (attemptUsage) await options.execution?.emit({ type: "usage.updated", data: { usage: attemptUsage } });
+            const { type: _, ...data } = attemptFinishedEvent(
+              generationId,
+              attempt,
+              options.signal?.aborted ? "interrupted" : "failed",
+              attemptUsage,
+              clientInvoked ? undefined : true,
+            );
+            await options.execution?.emit({
+              type: "model.attempt.finished",
+              data,
+            });
+            if (attemptUsage)
+              await options.execution?.emit({
+                type: "usage.updated",
+                data: { usage: attemptUsage },
+              });
           }
         }
 
         if (attemptFailed) {
           this.settleModelAttempt(attemptUsage, clientInvoked);
           yield attemptFinishedEvent(
-            generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage, clientInvoked ? undefined : true,
+            generationId,
+            attempt,
+            options.signal?.aborted ? "interrupted" : "failed",
+            attemptUsage,
+            clientInvoked ? undefined : true,
           );
 
           if (options.signal?.aborted) throw options.signal.reason;
@@ -632,14 +829,24 @@ export class QueryEngine implements IQueryEngine {
         if (forcedFinalTurn && toolUses.length > 0) {
           // A provider can still emit a tool call when tools were omitted.
           // Reject it before recording an unexecuted call as committed history.
-          yield attemptFinishedEvent(generationId, attempt, "failed", attemptUsage);
+          yield attemptFinishedEvent(
+            generationId,
+            attempt,
+            "failed",
+            attemptUsage,
+          );
           if (childFinalizing) throw new MaxTurnsExceeded(maxTurnsLimit());
           throw new ModelRequestFailure(
             "模型在停止工具调用后仍返回了工具请求，本次请求未执行",
             { kind: "protocol", phase: "stream", retryable: false },
           );
         }
-        yield attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
+        yield attemptFinishedEvent(
+          generationId,
+          attempt,
+          "completed",
+          attemptUsage,
+        );
 
         for (const progress of pendingProgress.values()) yield progress;
         if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
@@ -657,11 +864,17 @@ export class QueryEngine implements IQueryEngine {
           this.messages.push({
             type: "assistant",
             content: assistantText,
-            phase: assistantPhase ?? (toolUses.length > 0 ? "commentary" : "final_answer"),
+            phase:
+              assistantPhase ??
+              (toolUses.length > 0 ? "commentary" : "final_answer"),
             toolUses: toolUses.length > 0 ? toolUses : undefined,
             ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
-            ...(assistantReasoningReplay ? { reasoningReplay: assistantReasoningReplay } : {}),
-            ...(assistantReasoningSegments.length > 0 ? { reasoningSegments: assistantReasoningSegments } : {}),
+            ...(assistantReasoningReplay
+              ? { reasoningReplay: assistantReasoningReplay }
+              : {}),
+            ...(assistantReasoningSegments.length > 0
+              ? { reasoningSegments: assistantReasoningSegments }
+              : {}),
           });
         }
 
@@ -673,26 +886,42 @@ export class QueryEngine implements IQueryEngine {
       if (toolUses.length > 0) {
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
-        const { results, failure, discoveryBlockedCalls } = await this.executeTools(
-          toolUses,
-          options.signal,
-          options.execution,
-          {
-            model: requestConfiguration.model,
-            ...(requestConfiguration.provider ? { provider: requestConfiguration.provider } : {}),
-            ...(requestConfiguration.apiFormat ? { apiFormat: requestConfiguration.apiFormat } : {}),
-          },
-          failedToolCalls,
-          requestToolRegistry,
-          internalTools,
-          toolDiscovery,
-        );
+        const { results, failure, discoveryBlockedCalls } =
+          await this.executeTools(
+            toolUses,
+            options.signal,
+            options.execution,
+            {
+              model: requestConfiguration.model,
+              ...(requestConfiguration.provider
+                ? { provider: requestConfiguration.provider }
+                : {}),
+              ...(requestConfiguration.apiFormat
+                ? { apiFormat: requestConfiguration.apiFormat }
+                : {}),
+            },
+            failedToolCalls,
+            requestToolRegistry,
+            internalTools,
+            toolDiscovery,
+          );
         const deliveredResults: ToolExecutionResult[] = [];
         for (let i = 0; i < results.length; i++) {
           const toolUse = toolUses[i]!;
           const tool = requestToolRegistry.get(toolUse.name);
-          const rawResult = withToolInputReuseHint(tool, toolUse, results[i]!, this.messages);
-          const result = { ...rawResult, content: formatToolResultForModel(rawResult, contribution?.exposeToolResultIds) };
+          const rawResult = withToolInputReuseHint(
+            tool,
+            toolUse,
+            results[i]!,
+            this.messages,
+          );
+          const result = {
+            ...rawResult,
+            content: formatToolResultForModel(
+              rawResult,
+              contribution?.exposeToolResultIds,
+            ),
+          };
           const recoveryGuard = result.metadata?.recoveryGuard;
           // A rejected retry never ran, and its failure is already recorded. Re-recording it
           // would refresh the record to the current evidence revision, which silently voids
@@ -701,8 +930,16 @@ export class QueryEngine implements IQueryEngine {
           // budget until the engine forces a blocker report.
           // An unloaded definition has not failed at execution. Search can make
           // the identical direct/proxy call valid on the very next request.
-          const awaitingDefinition = discoveryBlockedCalls.has(toolUse.id) && result.executionState === "not_started";
-          if (!awaitingDefinition && result.isError && !toolUse.inputError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
+          const awaitingDefinition =
+            discoveryBlockedCalls.has(toolUse.id) &&
+            result.executionState === "not_started";
+          if (
+            !awaitingDefinition &&
+            result.isError &&
+            !toolUse.inputError &&
+            !recoveryGuard &&
+            (!tool || tool.safeToRetry !== true)
+          ) {
             failedToolCalls.recordFailure(toolUse.name, toolUse.input);
           }
           if (recoveryGuard) {
@@ -720,33 +957,54 @@ export class QueryEngine implements IQueryEngine {
           // Keep the model-only result formatting out of host-facing events for
           // retained plugin results. Ordinary results keep their existing
           // feedback blocks for consumers that rely on execution details.
-          deliveredResults.push(rawResult.metadata?.toolResultReadable === true ? rawResult : result);
+          deliveredResults.push(
+            rawResult.metadata?.toolResultReadable === true
+              ? rawResult
+              : result,
+          );
         }
         // Save the complete batch before a consumer can close this generator on delivery failure.
-        for (const result of deliveredResults) yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
+        for (const result of deliveredResults)
+          yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
         if (failure) throw failure.error;
         // Cancellation still owes every committed call its full result, in model order.
         options.signal?.throwIfAborted();
         options.execution?.scope?.signal.throwIfAborted();
-        if ([...endRunDefinitions].some(definition => runToolRegistry.get(definition.name) === definition
-          && results.some((result, index) => toolUses[index]?.name === definition.name
-            && !result.isError && result.executionState === "completed"))) {
+        if (
+          [...endRunDefinitions].some(
+            (definition) =>
+              runToolRegistry.get(definition.name) === definition &&
+              results.some(
+                (result, index) =>
+                  toolUses[index]?.name === definition.name &&
+                  !result.isError &&
+                  result.executionState === "completed",
+              ),
+          )
+        ) {
           options.execution?.closeSteering();
           return;
         }
         // Evaluate the whole batch so a successful alternative cancels recovery
         // regardless of whether it appears before or after a rejected retry.
-        if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
+        if (results.some((result) => !result.isError))
+          recoveryToolTurnsRemaining = null;
         // Only a fully successful batch resets allowances; switching tools or failure kinds does not.
-        if (results.every(result => !result.isError)) {
+        if (results.every((result) => !result.isError)) {
           correctionTurns.invalid_input = correctionTurns.precondition = 0;
         }
         for (const kind of ["invalid_input", "precondition"] as const) {
-          const failed = results.filter(result => result.isError && result.failureKind === kind);
+          const failed = results.filter(
+            (result) => result.isError && result.failureKind === kind,
+          );
           if (failed.length) correctionTurns[kind]++;
           // The entire batch is settled before stopping; no extra model finalization request.
           if (correctionTurns[kind] >= TOOL_CORRECTION_LIMITS[kind]) {
-            throw new ToolCorrectionsExceeded(kind, correctionTurns[kind], failed.at(-1));
+            throw new ToolCorrectionsExceeded(
+              kind,
+              correctionTurns[kind],
+              failed.at(-1),
+            );
           }
         }
         // Single removable integration point: commenting out this statement disables trajectory decisions.
@@ -764,12 +1022,17 @@ export class QueryEngine implements IQueryEngine {
         if (recoveringAtTurnStart && recoveryToolTurnsRemaining !== null) {
           recoveryToolTurnsRemaining--;
           if (recoveryToolTurnsRemaining <= 0) {
-            throw new ToolCorrectionsExceeded("recovery_guard", RECOVERY_TOOL_TURNS, results.filter(result => result.isError).at(-1));
+            throw new ToolCorrectionsExceeded(
+              "recovery_guard",
+              RECOVERY_TOOL_TURNS,
+              results.filter((result) => result.isError).at(-1),
+            );
           }
         }
         turnCount++;
         if (this.options.resolveRequestConfiguration) {
-          preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
+          preparedNextRequestConfiguration =
+            await this.resolveRequestConfiguration(options);
           this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
         }
         if (turnCount >= maxTurnsLimit()) {
@@ -788,7 +1051,8 @@ export class QueryEngine implements IQueryEngine {
 
       // 无工具调用：若 turn 边界有 follow-up，则继续同一 submitMessage
       if (this.options.resolveRequestConfiguration) {
-        preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
+        preparedNextRequestConfiguration =
+          await this.resolveRequestConfiguration(options);
         this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
       }
       if (turnCount + 1 >= maxTurnsLimit()) {
@@ -796,7 +1060,10 @@ export class QueryEngine implements IQueryEngine {
         // The reserved child finalization is never a success signal: it only
         // leaves committed text for the caller to treat as an incomplete result.
         if (childFinalizing) {
-          throw new MaxTurnsExceeded(maxTurnsLimit(), assistantText ? assistantText : undefined);
+          throw new MaxTurnsExceeded(
+            maxTurnsLimit(),
+            assistantText ? assistantText : undefined,
+          );
         }
         return;
       }
@@ -818,16 +1085,24 @@ export class QueryEngine implements IQueryEngine {
   private async consumeFollowUps(
     options: SubmitMessageOptions,
     closeIfEmpty = false,
-  ): Promise<{ accepted: boolean; requestConfiguration?: QueryRequestConfiguration }> {
+  ): Promise<{
+    accepted: boolean;
+    requestConfiguration?: QueryRequestConfiguration;
+  }> {
     const followUps = await (options.execution?.takeSteeredInputs({
       closeIfEmpty,
     }) ?? []);
     if (followUps.length === 0) return { accepted: false };
-    const requestConfiguration = await this.resolveRequestConfiguration(options);
+    const requestConfiguration =
+      await this.resolveRequestConfiguration(options);
     const preparedFollowUps = await Promise.all(
-      followUps.map((input) => this.prepareUserContent(
-        input.content, options.signal, requestConfiguration.client,
-      )),
+      followUps.map((input) =>
+        this.prepareUserContent(
+          input.content,
+          options.signal,
+          requestConfiguration.client,
+        ),
+      ),
     );
     this.messages.push(
       ...preparedFollowUps.map((preparedContent) => ({
@@ -843,26 +1118,37 @@ export class QueryEngine implements IQueryEngine {
     signal?: AbortSignal,
     client = this.apiClient,
   ): Promise<string | ContentBlock[]> {
-    return client.prepareUserContent?.(content, { signal }) ?? Promise.resolve(content);
+    return (
+      client.prepareUserContent?.(content, { signal }) ??
+      Promise.resolve(content)
+    );
   }
 
   private async resolveRequestConfiguration(
     options: SubmitMessageOptions,
   ): Promise<QueryRequestConfiguration> {
-    const configuration: QueryRequestConfiguration = this.options.resolveRequestConfiguration
+    const configuration: QueryRequestConfiguration = this.options
+      .resolveRequestConfiguration
       ? await this.options.resolveRequestConfiguration({
-        signal: options.signal,
-        capabilityView: options.execution?.capabilityView,
-      }) : {
-      revision: 0,
-      model: this.model,
-      client: this.apiClient,
-      ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
-    };
+          signal: options.signal,
+          capabilityView: options.execution?.capabilityView,
+        })
+      : {
+          revision: 0,
+          model: this.model,
+          client: this.apiClient,
+          ...(this.reasoningEffort
+            ? { reasoningEffort: this.reasoningEffort }
+            : {}),
+        };
     const cap = options.execution?.profile?.maxOutputTokens;
     if (cap === undefined) return configuration;
-    if (!Number.isSafeInteger(cap) || cap <= 0) throw new RangeError("Run output limit must be a positive safe integer");
-    return { ...configuration, maxOutputTokens: Math.min(configuration.maxOutputTokens ?? cap, cap) };
+    if (!Number.isSafeInteger(cap) || cap <= 0)
+      throw new RangeError("Run output limit must be a positive safe integer");
+    return {
+      ...configuration,
+      maxOutputTokens: Math.min(configuration.maxOutputTokens ?? cap, cap),
+    };
   }
 
   private applyRequestMaxTurns(maxTurns: number | undefined): void {
@@ -889,9 +1175,13 @@ export class QueryEngine implements IQueryEngine {
    * 每次实际请求恰好结算一次用量：已知快照累加一次，未知/不完整标记保留。
    * 不把适配器每次请求的累计快照重复相加。
    */
-  private settleModelAttempt(usage: UsageSnapshot | undefined, incomplete: boolean): void {
+  private settleModelAttempt(
+    usage: UsageSnapshot | undefined,
+    incomplete: boolean,
+  ): void {
     if (usage) this.costTracker.addUsage(usage);
-    if (incomplete || usage?.metering?.completeness !== "complete") this.costTracker.markUsageIncomplete();
+    if (incomplete || usage?.metering?.completeness !== "complete")
+      this.costTracker.markUsageIncomplete();
   }
 
   getHistory(): Message[] {
@@ -910,10 +1200,14 @@ export class QueryEngine implements IQueryEngine {
     systemPrompt?: string;
     memoryReminderText?: string;
   } {
-    const systemPrompt = this.lastRunPrompt ? this.lastRunPrompt.systemPrompt : this.systemPrompt;
+    const systemPrompt = this.lastRunPrompt
+      ? this.lastRunPrompt.systemPrompt
+      : this.systemPrompt;
     return {
       ...(systemPrompt ? { systemPrompt } : {}),
-      ...(this.lastMemoryReminderText ? { memoryReminderText: this.lastMemoryReminderText } : {}),
+      ...(this.lastMemoryReminderText
+        ? { memoryReminderText: this.lastMemoryReminderText }
+        : {}),
     };
   }
 
@@ -922,7 +1216,10 @@ export class QueryEngine implements IQueryEngine {
    */
   async compact(): Promise<void> {
     const microResult = this.compactService.microCompact(this.messages);
-    if (this.compactService.estimateTokens(microResult) < (this.options.maxTokens ?? 100_000)) {
+    if (
+      this.compactService.estimateTokens(microResult) <
+      (this.options.maxTokens ?? 100_000)
+    ) {
       this.messages = microResult;
       return;
     }
@@ -942,13 +1239,17 @@ export class QueryEngine implements IQueryEngine {
 
   setApiClient(client: StreamingMessageClient): void {
     this.apiClient = client;
-    this.compactService.setClient(this.createCompactClient(this.apiClient, this.model));
+    this.compactService.setClient(
+      this.createCompactClient(this.apiClient, this.model),
+    );
   }
 
   setModel(model: string): void {
     this.model = model;
     // Keep the summarizer client pointed at the current model.
-    this.compactService.setClient(this.createCompactClient(this.apiClient, this.model));
+    this.compactService.setClient(
+      this.createCompactClient(this.apiClient, this.model),
+    );
   }
 
   /**
@@ -956,25 +1257,48 @@ export class QueryEngine implements IQueryEngine {
    * 不能把主生成包进这里，避免双层重试或重复计费。
    */
   private createCompactClient(
-    client: StreamingMessageClient, model: string, execution?: AgentExecutionContext, provider?: string, maxOutputTokens?: number,
+    client: StreamingMessageClient,
+    model: string,
+    execution?: AgentExecutionContext,
+    provider?: string,
+    maxOutputTokens?: number,
   ): CompactClient {
     return toCompactClient(client, model, {
       policy: this.options.modelRetry,
       limits: execution?.limits,
-      maxOutputTokens: execution?.profile?.maxOutputTokens === undefined ? undefined
-        : Math.min(execution.profile.maxOutputTokens, maxOutputTokens ?? execution.profile.maxOutputTokens),
+      maxOutputTokens:
+        execution?.profile?.maxOutputTokens === undefined
+          ? undefined
+          : Math.min(
+              execution.profile.maxOutputTokens,
+              maxOutputTokens ?? execution.profile.maxOutputTokens,
+            ),
       provider,
-      onAttemptStarted: async (data) => { await execution?.emit({ type: "model.attempt.started", data }); },
+      onAttemptStarted: async (data) => {
+        await execution?.emit({ type: "model.attempt.started", data });
+      },
       onAttemptFinished: async (event) => {
         if (event.usage) this.costTracker.addUsage(event.usage);
-        if (event.usageStatus !== "complete") this.costTracker.markUsageIncomplete();
-        await execution?.emit({ type: "model.attempt.finished", data: {
-          generationId: event.generationId, attempt: event.attempt,
-          status: event.status, usageStatus: event.usageStatus,
-          ...(event.usage ? { usage: event.usage } : {}),
-          ...(event.notDispatched ? { notDispatched: event.notDispatched } : {}),
-        } });
-        if (event.usage) await execution?.emit({ type: "usage.updated", data: { usage: event.usage } });
+        if (event.usageStatus !== "complete")
+          this.costTracker.markUsageIncomplete();
+        await execution?.emit({
+          type: "model.attempt.finished",
+          data: {
+            generationId: event.generationId,
+            attempt: event.attempt,
+            status: event.status,
+            usageStatus: event.usageStatus,
+            ...(event.usage ? { usage: event.usage } : {}),
+            ...(event.notDispatched
+              ? { notDispatched: event.notDispatched }
+              : {}),
+          },
+        });
+        if (event.usage)
+          await execution?.emit({
+            type: "usage.updated",
+            data: { usage: event.usage },
+          });
       },
     });
   }
@@ -1007,29 +1331,62 @@ export class QueryEngine implements IQueryEngine {
     execution?: AgentExecutionContext,
     requestConfiguration?: ToolContext["requestConfiguration"],
     failedToolCalls?: ToolFailureMemory,
-    toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
+    toolRegistry: IToolRegistry = visibleToolRegistry(
+      this.toolRegistry,
+      this.allowedTools,
+    ),
     internalTools: ReadonlySet<string> = new Set(),
     toolDiscovery?: RunToolDiscovery,
-  ): Promise<{ results: ToolExecutionResult[]; failure?: { error: unknown }; discoveryBlockedCalls: ReadonlySet<string> }> {
+  ): Promise<{
+    results: ToolExecutionResult[];
+    failure?: { error: unknown };
+    discoveryBlockedCalls: ReadonlySet<string>;
+  }> {
     const discoveryBlockedCalls = new Set<string>();
-    const catalogNames = new Set(toolDiscovery?.catalog.map(row => row.name));
+    const catalogNames = new Set(toolDiscovery?.catalog.map((row) => row.name));
     const outcome = await executeCheckedTools({
-      toolUses, toolRegistry, messages: this.messages, permissionChecker: this.permissionChecker,
-      hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
-      internalTools, failedToolCalls,
-      createToolContext: (toolUse, toolAttemptId) => this.createToolContext(
-        toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration,
-        toolUse.name === toolDiscovery?.searchToolName ? toolDiscovery : undefined,
-        name => { if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id); },
-      ),
-      isTrustedSummary: (toolUse, definition) => this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
+      toolUses,
+      toolRegistry,
+      messages: this.messages,
+      permissionChecker: this.permissionChecker,
+      hookExecutor: this.hookExecutor,
+      signal,
+      execution,
+      timeoutMs: this.options.toolTimeoutMs,
+      internalTools,
+      failedToolCalls,
+      createToolContext: (toolUse, toolAttemptId) =>
+        this.createToolContext(
+          toolUse,
+          toolAttemptId,
+          toolRegistry,
+          signal,
+          execution,
+          requestConfiguration,
+          toolUse.name === toolDiscovery?.searchToolName
+            ? toolDiscovery
+            : undefined,
+          (name) => {
+            if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id);
+          },
+        ),
+      isTrustedSummary: (toolUse, definition) =>
+        this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
     });
-    if (toolDiscovery) outcome.results = outcome.results.map(result => {
-      if (!toolRegistry.has(result.toolName) && catalogNames.has(result.toolName)) discoveryBlockedCalls.add(result.toolUseId);
-      return discoveryBlockedCalls.has(result.toolUseId) ? {
-        ...result, recoveryHint: `Use ${toolDiscovery.searchToolName} to discover authorized tools, then call a returned tool in the next request.`,
-      } : result;
-    });
+    if (toolDiscovery)
+      outcome.results = outcome.results.map((result) => {
+        if (
+          !toolRegistry.has(result.toolName) &&
+          catalogNames.has(result.toolName)
+        )
+          discoveryBlockedCalls.add(result.toolUseId);
+        return discoveryBlockedCalls.has(result.toolUseId)
+          ? {
+              ...result,
+              recoveryHint: `Use ${toolDiscovery.searchToolName} to discover authorized tools, then call a returned tool in the next request.`,
+            }
+          : result;
+      });
     outcome.results = this.retainToolResults(outcome.results, execution);
     return { ...outcome, discoveryBlockedCalls };
   }
@@ -1037,44 +1394,122 @@ export class QueryEngine implements IQueryEngine {
   /** Executes one captured tool without requesting a model or changing conversation history. */
   async executeTool(
     toolUse: ToolUseBlock,
-    options: { signal?: AbortSignal; execution: AgentExecutionContext },
+    options: {
+      signal?: AbortSignal;
+      execution: AgentExecutionContext;
+      audience?: "model" | "app";
+      onResult?: (result: ToolExecutionResult) => Promise<void>;
+    },
   ): Promise<ToolExecutionResult> {
-    const { execution } = options;
+    const original = options.execution;
+    const appBinding =
+      options.audience === "app"
+        ? original.capabilityView?.appTools?.get(toolUse.name)
+        : undefined;
+    // Trusted app operations get exactly one captured app binding, with no model/delegation catalogue.
+    const execution: AgentExecutionContext =
+      options.audience === "app"
+        ? {
+            ...original,
+            capabilityView: original.capabilityView && {
+              ...original.capabilityView,
+              tools: new Map(appBinding ? [[toolUse.name, appBinding]] : []),
+              appTools: new Map(appBinding ? [[toolUse.name, appBinding]] : []),
+              delegatableTools: undefined,
+            },
+          }
+        : original;
     // Empty allowlist fails closed when no captured view was supplied. Contributions do not widen this entry.
-    const toolRegistry = runToolRegistryForRun(this.toolRegistry, [], undefined, execution.capabilityView);
-    const signal = AbortSignal.any([execution.scope.signal, ...(options.signal ? [options.signal] : [])]);
+    const toolRegistry = runToolRegistryForRun(
+      this.toolRegistry,
+      [],
+      undefined,
+      execution.capabilityView,
+      options.audience,
+    );
+    const signal = AbortSignal.any([
+      execution.scope.signal,
+      ...(options.signal ? [options.signal] : []),
+    ]);
     const { results, failure } = await executeCheckedTools({
-      toolUses: [{ ...toolUse }], toolRegistry, messages: [], permissionChecker: this.permissionChecker,
-      hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
-      createToolContext: (call, attemptId) => this.createToolContext(call, attemptId, toolRegistry, signal, execution),
-      isTrustedSummary: (call, definition) => this.isTrustedSummary(call, definition, toolRegistry, execution),
+      toolUses: [{ ...toolUse }],
+      toolRegistry,
+      messages: [],
+      permissionChecker: this.permissionChecker,
+      hookExecutor: this.hookExecutor,
+      signal,
+      execution,
+      timeoutMs: this.options.toolTimeoutMs,
+      createToolContext: (call, attemptId) =>
+        this.createToolContext(
+          call,
+          attemptId,
+          toolRegistry,
+          signal,
+          execution,
+        ),
+      isTrustedSummary: (call, definition) =>
+        this.isTrustedSummary(call, definition, toolRegistry, execution),
     });
+    const result = this.retainToolResults(results, execution)[0]!;
+    try {
+      await options.onResult?.(result);
+    } catch (error) {
+      if (failure) throw new AggregateError([failure.error, error], "Tool result delivery and execution lifecycle failed");
+      throw error;
+    }
     if (failure) throw failure.error;
-    return this.retainToolResults(results, execution)[0]!;
+    return result;
   }
 
-  private retainToolResults(results: ToolExecutionResult[], execution?: AgentExecutionContext): ToolExecutionResult[] {
+  private retainToolResults(
+    results: ToolExecutionResult[],
+    execution?: AgentExecutionContext,
+  ): ToolExecutionResult[] {
     if (!execution) return results;
-    for (const [id, entry] of this.recentToolResults) if (entry.runId !== execution.scope.runId) this.recentToolResults.delete(id);
+    for (const [id, entry] of this.recentToolResults)
+      if (entry.runId !== execution.scope.runId)
+        this.recentToolResults.delete(id);
     const view = execution.capabilityView;
     if (!view || !(view.pluginIds?.size || view.pluginId)) return results;
-    return results.map(result => {
+    return results.map((result) => {
       this.recentToolResults.delete(result.toolUseId);
       if (result.executionState === "not_started") return result;
       const binding = view.tools.get(result.toolName);
       if (!binding) return result;
-      const actual = { toolUseId: result.toolUseId, toolName: result.toolName, content: result.content, isError: result.isError };
+      const actual = {
+        toolUseId: result.toolUseId,
+        toolName: result.toolName,
+        content: result.content,
+        isError: result.isError,
+      };
       let json: string;
-      try { json = JSON.stringify(actual); } catch { return result; }
+      try {
+        json = JSON.stringify(actual);
+      } catch {
+        return result;
+      }
       const bytes = Buffer.byteLength(json);
       if (bytes > 256_000) return result;
-      this.recentToolResults.set(result.toolUseId, { runId: execution.scope.runId, result: JSON.parse(json), bytes, binding });
-      let size = [...this.recentToolResults.values()].reduce((total, entry) => total + entry.bytes, 0);
+      this.recentToolResults.set(result.toolUseId, {
+        runId: execution.scope.runId,
+        result: JSON.parse(json),
+        bytes,
+        binding,
+      });
+      let size = [...this.recentToolResults.values()].reduce(
+        (total, entry) => total + entry.bytes,
+        0,
+      );
       while (size > 1_000_000 || this.recentToolResults.size > 16) {
         const id = this.recentToolResults.keys().next().value!;
-        size -= this.recentToolResults.get(id)!.bytes; this.recentToolResults.delete(id);
+        size -= this.recentToolResults.get(id)!.bytes;
+        this.recentToolResults.delete(id);
       }
-      return { ...result, metadata: { ...result.metadata, toolResultReadable: true } };
+      return {
+        ...result,
+        metadata: { ...result.metadata, toolResultReadable: true },
+      };
     });
   }
 
@@ -1090,20 +1525,32 @@ export class QueryEngine implements IQueryEngine {
   ): ToolContext {
     return {
       cwd: this.cwd,
-      ...(this.options.executionEnvironment ? { environment: this.options.executionEnvironment } : {}),
+      ...(this.options.executionEnvironment
+        ? { environment: this.options.executionEnvironment }
+        : {}),
       sessionId: this.sessionId,
       shellOutputLogs: this.options.shellOutputLogs,
       toolCallId: toolUse.id,
       toolAttemptId,
-      readToolResult: id => {
+      readToolResult: (id) => {
         const entry = this.recentToolResults.get(id);
-        const binding = entry && execution?.capabilityView?.tools.get(entry.result.toolName);
-        if (!execution || !entry || entry.runId !== execution.scope.runId ||
-            !binding || binding.ownerPluginId !== entry.binding.ownerPluginId
-            || binding.serverId !== entry.binding.serverId || binding.source?.kind !== entry.binding.source?.kind
-            || binding.source?.id !== entry.binding.source?.id || binding.definitionIdentity !== entry.binding.definitionIdentity
-            || binding.definition.execute !== entry.binding.definition.execute
-            || (!binding.definitionIdentity && binding.invoke !== entry.binding.invoke)) return undefined;
+        const binding =
+          entry && execution?.capabilityView?.tools.get(entry.result.toolName);
+        if (
+          !execution ||
+          !entry ||
+          entry.runId !== execution.scope.runId ||
+          !binding ||
+          binding.ownerPluginId !== entry.binding.ownerPluginId ||
+          binding.serverId !== entry.binding.serverId ||
+          binding.source?.kind !== entry.binding.source?.kind ||
+          binding.source?.id !== entry.binding.source?.id ||
+          binding.definitionIdentity !== entry.binding.definitionIdentity ||
+          binding.definition.execute !== entry.binding.definition.execute ||
+          (!binding.definitionIdentity &&
+            binding.invoke !== entry.binding.invoke)
+        )
+          return undefined;
         return structuredClone(entry.result);
       },
       runAbortSignal: signal,
@@ -1112,30 +1559,79 @@ export class QueryEngine implements IQueryEngine {
       ...(requestConfiguration ? { requestConfiguration } : {}),
       toolRegistry: toolRegistryView(toolRegistry),
       ...(toolDiscovery ? { toolDiscovery } : {}),
-      ...(toolUse.name === "McpToolCall" ? {
-        callMcpTool: async (name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal; deadlineAt?: number }) => {
-          if (!name.startsWith("mcp__") || toolRegistry.inspect(name)?.source.kind !== "mcp") {
-            if (name.startsWith("mcp__") && !toolRegistry.has(name)) onUnexposedMcpTool?.(name);
-            return { content: [{ type: "text" as const, text: `Unknown or disallowed MCP tool: ${name}` }], isError: true, failureKind: "policy" as const, executionState: "not_started" as const };
+      ...(toolUse.name === "McpToolCall"
+        ? {
+            callMcpTool: async (
+              name: string,
+              input: Record<string, unknown>,
+              options?: { signal?: AbortSignal; deadlineAt?: number },
+            ) => {
+              if (
+                !name.startsWith("mcp__") ||
+                toolRegistry.inspect(name)?.source.kind !== "mcp"
+              ) {
+                if (name.startsWith("mcp__") && !toolRegistry.has(name))
+                  onUnexposedMcpTool?.(name);
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: `Unknown or disallowed MCP tool: ${name}`,
+                    },
+                  ],
+                  isError: true,
+                  failureKind: "policy" as const,
+                  executionState: "not_started" as const,
+                };
+              }
+              const innerSignal = AbortSignal.any([
+                ...(signal ? [signal] : []),
+                ...(options?.signal ? [options.signal] : []),
+              ]);
+              const innerExecution = execution
+                ? {
+                    ...execution,
+                    emit: async (
+                      event: Parameters<AgentExecutionContext["emit"]>[0],
+                    ) => {
+                      // The delegated target is not an additional model-issued tool part.
+                      if (
+                        event.type === "domain.event" &&
+                        event.data.name === "tool.lifecycle"
+                      )
+                        return;
+                      await execution.emit(event);
+                    },
+                  }
+                : undefined;
+              const { results, failure } = await executeCheckedTools({
+                toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
+                toolRegistry,
+                messages: [],
+                permissionChecker: this.permissionChecker,
+                hookExecutor: this.hookExecutor,
+                signal: innerSignal,
+                execution: innerExecution,
+                timeoutMs:
+                  options?.deadlineAt === undefined
+                    ? this.options.toolTimeoutMs
+                    : Math.max(1, options.deadlineAt - Date.now()),
+                createToolContext: (call, attemptId) =>
+                  this.createToolContext(
+                    call,
+                    attemptId,
+                    toolRegistry,
+                    innerSignal,
+                    innerExecution,
+                    requestConfiguration,
+                  ),
+                isTrustedSummary: () => false,
+              });
+              if (failure) throw failure.error;
+              return results[0]!;
+            },
           }
-          const innerSignal = AbortSignal.any([...(signal ? [signal] : []), ...(options?.signal ? [options.signal] : [])]);
-          const innerExecution = execution ? { ...execution, emit: async (event: Parameters<AgentExecutionContext["emit"]>[0]) => {
-            // The delegated target is not an additional model-issued tool part.
-            if (event.type === "domain.event" && event.data.name === "tool.lifecycle") return;
-            await execution.emit(event);
-          } } : undefined;
-          const { results, failure } = await executeCheckedTools({
-            toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
-            toolRegistry, messages: [], permissionChecker: this.permissionChecker,
-            hookExecutor: this.hookExecutor, signal: innerSignal, execution: innerExecution,
-            timeoutMs: options?.deadlineAt === undefined ? this.options.toolTimeoutMs : Math.max(1, options.deadlineAt - Date.now()),
-            createToolContext: (call, attemptId) => this.createToolContext(call, attemptId, toolRegistry, innerSignal, innerExecution, requestConfiguration),
-            isTrustedSummary: () => false,
-          });
-          if (failure) throw failure.error;
-          return results[0]!;
-        },
-      } : {}),
+        : {}),
       capabilityView: execution?.capabilityView,
       skillRegistry: this.skillRegistry,
       // Global MCP meta APIs bypass captured tools; Runs with a View fail closed.
@@ -1146,11 +1642,17 @@ export class QueryEngine implements IQueryEngine {
       backgroundShell: this.backgroundShell,
       schedules: this.schedules,
       ...(execution?.effects?.askUserPrompt
-        ? { askUserPrompt: (question: string) => execution.effects.askUserPrompt!(question, execution.scope) }
+        ? {
+            askUserPrompt: (question: string) =>
+              execution.effects.askUserPrompt!(question, execution.scope),
+          }
         : {}),
-      ...(execution?.effects?.requestPermission ? {
-        requestPermission: (request) => execution.effects.requestPermission!(request, execution.scope),
-      } : {}),
+      ...(execution?.effects?.requestPermission
+        ? {
+            requestPermission: (request) =>
+              execution.effects.requestPermission!(request, execution.scope),
+          }
+        : {}),
       agent: execution,
     };
   }
@@ -1162,23 +1664,42 @@ export class QueryEngine implements IQueryEngine {
     execution?: AgentExecutionContext,
   ): boolean {
     const source = toolRegistry.inspect(toolUse.name)?.source.kind;
-    return source === "builtin" || (source === "agent"
-      && this.isTrustedOverride(toolUse.name, definition, execution?.capabilityView));
+    return (
+      source === "builtin" ||
+      (source === "agent" &&
+        this.isTrustedOverride(
+          toolUse.name,
+          definition,
+          execution?.capabilityView,
+        ))
+    );
   }
 
-  private isTrustedOverride(name: string, tool: ToolDefinition, view?: AgentExecutionContext["capabilityView"]): boolean {
+  private isTrustedOverride(
+    name: string,
+    tool: ToolDefinition,
+    view?: AgentExecutionContext["capabilityView"],
+  ): boolean {
     const approved = this.trustedOverrides.get(name);
     if (!approved) return false;
     if (view) {
       const binding = view.tools.get(name);
-      return binding?.definitionIdentity === approved.identity
-        && binding.definition.execute === approved.execute
-        && tool.execute === binding.invoke;
+      return (
+        binding?.definitionIdentity === approved.identity &&
+        binding.definition.execute === approved.execute &&
+        tool.execute === binding.invoke
+      );
     }
-    return toolDefinitionIdentity(tool) === approved.identity && tool.execute === approved.execute;
+    return (
+      toolDefinitionIdentity(tool) === approved.identity &&
+      tool.execute === approved.execute
+    );
   }
 }
 
-function appendSystemGuidance(systemPrompt: string | undefined, guidance: string): string {
+function appendSystemGuidance(
+  systemPrompt: string | undefined,
+  guidance: string,
+): string {
   return systemPrompt?.trim() ? `${systemPrompt}\n\n${guidance}` : guidance;
 }

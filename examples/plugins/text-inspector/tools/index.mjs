@@ -24,7 +24,7 @@ function check(text) {
 function proposal(text) {
   // Reserve room for up to100 selection IDs and the bridge/request wrapper.
   if (new TextEncoder().encode(JSON.stringify(text)).length > 48000) return undefined;
-  return { ui: { schemaVersion: 2, componentId: "text-inspector", data: { text, ...check(text) } } };
+  return { appData: { text, ...check(text) } };
 }
 const textSchema = { type: "string", maxLength: 100000 };
 /** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
@@ -33,8 +33,10 @@ export const registerTools = () => [{
   description: "检查传入文本的行首制表符和行尾空白，返回行号与问题代码；较短文本也提供交互预览。",
   inputSchema: { type: "object", required: ["text"], properties: { text: textSchema }, additionalProperties: false },
   safeToRetry: true,
-  invoke(input) {
-    if (typeof input.text !== "string") throw new TypeError("text must be a string");
+  invoke(input, context) {
+    context?.signal.throwIfAborted();
+    if (typeof input.text !== "string" || input.text.length > 100000)
+      throw new TypeError("text must be a string of at most 100000 UTF-16 code units");
     const metadata = proposal(input.text);
     return { content: [{ type: "text", text: JSON.stringify(check(input.text)) }], ...(metadata ? { metadata } : {}) };
   },
@@ -50,8 +52,9 @@ export const registerTools = () => [{
     },
   },
   safeToRetry: true,
-  invoke(input) {
-    if (typeof input.text !== "string" || !Array.isArray(input.selected)
+  invoke(input, context) {
+    context?.signal.throwIfAborted();
+    if (typeof input.text !== "string" || input.text.length > 100000 || !Array.isArray(input.selected)
       || !input.selected.every(value => typeof value === "string")) throw new TypeError("Invalid preview input");
     const selected = new Set(input.selected);
     const existing = new Set(check(input.text).findings.map(item => item.line + ":" + item.code));

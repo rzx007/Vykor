@@ -554,13 +554,13 @@ describe("SessionSubscriptionService coalescing", () => {
   it("observes a lifecycle generation before the renderer's coalesced update", async () => {
     vi.useFakeTimers()
     const client = clientWithStream(async function* () {
-      yield { ...sessionUpdated(2), payload: { session: { ...session, metadata: { ...session.metadata, pluginUiGeneration: "new-generation" } } } }
+      yield { ...sessionUpdated(2), payload: { session: { ...session, metadata: { ...session.metadata, hostGeneration: "new-generation" } } } }
       await new Promise<never>(() => undefined)
     })
     const { contents, sent } = webContents()
     const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
     const observed: unknown[] = []
-    service.onOwnerSnapshot((_id, view) => observed.push(view.session.metadata.pluginUiGeneration))
+    service.onOwnerSnapshot((_id, view) => observed.push(view.session.metadata.hostGeneration))
     try {
       await service.openSession(client as never, contents as never, "s1")
       await vi.advanceTimersByTimeAsync(1)

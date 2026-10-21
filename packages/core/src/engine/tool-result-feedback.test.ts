@@ -3,6 +3,14 @@ import { externalToolMetadata, formatToolResultForModel } from "./tool-result-fe
 import type { ToolExecutionResult } from "../types/tools";
 
 describe("formatToolResultForModel", () => {
+  it("never promotes MCP private data or app data into model feedback or host execution facts", () => {
+    const result: ToolExecutionResult = { toolUseId: "mcp", toolName: "Save", content: [{ type: "text", text: "saved" }],
+      mcpResult: { content: [{ type: "text", text: "saved" }], _meta: { uiOnly: { cursor: 8 }, executionState: "not_started" } },
+      executionState: "completed", metadata: { appData: { uiOnly: "native private data" } } };
+    expect(formatToolResultForModel(result)).toEqual(result.content);
+    expect(JSON.stringify(formatToolResultForModel(result))).not.toContain("uiOnly");
+    expect(externalToolMetadata({ pluginApp: {}, pluginAppAction: {}, appId: "fake", backendGeneration: "fake", requestId: "fake", mcpResult: result.mcpResult, _meta: { uiOnly: 1 }, generic: 1 })).toEqual({ generic: 1 });
+  });
   it("exposes the actual result ID when the host requests evidence references", () => {
     expect(formatToolResultForModel({ toolUseId: "call_actual", toolName: "Shell", content: [{ type: "text", text: "passed" }] }, true)[0])
       .toEqual({ type: "text", text: "Tool-Result-Id: call_actual" });

@@ -76,6 +76,9 @@ export {
   type NativeToolRuntimeSnapshot,
 } from "./native-tools/status.js";
 export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-agent.js";
+export type { PluginAppBackendPort, PluginAppBackendCatalogue, CapturedPluginAppBackend, PluginAppResultView } from "./plugin-app-backends.js";
+export { nativeToolResultToAppResult } from "./native-plugin-app-backend.js";
+export { mcpToolResultToAppResult } from "./mcp-plugin-app-backend.js";
 export {
   buildChildAgentWorktreeSlug,
   computeChildAgentWorktreeBaseDir,
@@ -85,3 +88,4 @@ export {
   type ChildAgentWorktreeManager,
   type GitRunner,
 } from "./child-environment.js";
+export type { PluginAppRuntimeHost, PluginAppRuntimeFacts } from "./plugin-app-runtime.js";

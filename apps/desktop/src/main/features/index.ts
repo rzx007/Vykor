@@ -8,7 +8,7 @@ import { gitIpcContribution } from "./git/ipc"
 import { mcpIpcContribution } from "./mcp/ipc"
 import { petIpcContribution } from "./pet/ipc"
 import { pluginIpcContribution } from "./plugin/ipc"
-import { pluginUiIpcContribution } from "./plugin-ui/ipc"
+import { pluginAppsIpcContribution } from "./plugin-apps/ipc"
 import { providerIpcContribution } from "./provider/ipc"
 import { sessionIpcContribution } from "./session/ipc"
 import { scheduleIpcContribution } from "./schedule/ipc"
@@ -36,7 +36,7 @@ export const allIpcContributions: IpcContribution[] = [
   trayIpcContribution,
   petIpcContribution,
   pluginIpcContribution,
-  pluginUiIpcContribution,
+  pluginAppsIpcContribution,
   skillIpcContribution,
   providerIpcContribution,
   clipboardIpcContribution,

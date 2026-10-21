@@ -1,0 +1,8 @@
+{
+  "name": "example-text-inspector",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node scripts/build-ui.mjs" },
+  "devDependencies": { "@modelcontextprotocol/ext-apps": "1.1.2", "esbuild": "0.25.12" }
+}

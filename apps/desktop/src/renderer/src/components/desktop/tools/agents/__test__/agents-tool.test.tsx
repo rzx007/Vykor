@@ -5,8 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { AgentsTool } from "../agents-tool"
-import { PluginUiProvider } from "../../../conversation-page/plugin-ui/plugin-ui-provider"
-import { instance, snapshot, sourcePart, mountId } from "../../../conversation-page/plugin-ui/__test__/plugin-ui-fixtures.test-support"
+import { instance, sourcePart } from "../../../conversation-page/message/__test__/plugin-ui-history-fixture"
 import type {
   DesktopAuxSessionUpdate,
   DesktopSessionUpdate,
@@ -76,7 +75,7 @@ beforeEach(() => {
   document.body.append(container)
   root = createRoot(container)
 })
-it.each(["tool-result", "session-sidebar"] as const)("opens a child plugin card on %s in its own session and retires it when details close", async (surface) => {
+it.each(["tool-result", "session-sidebar"] as const)("shows a retired %s child card as text only", async (surface) => {
   const child = emptySessionView("child-1")
   const childInstance = { ...instance, sessionId: "child-1", surface }
   child.messages = [
@@ -92,54 +91,13 @@ it.each(["tool-result", "session-sidebar"] as const)("opens a child plugin card 
   ]
   child.parts = [{ ...sourcePart, sessionId: "child-1", metadata: { pluginUi: childInstance } }]
   openAux.mockResolvedValue(child)
-  const mount = vi.fn(async () => ({
-    mountId,
-    url: "vykor-plugin-ui://frame/" + mountId,
-    state: {
-      snapshot: { ...snapshot, surface },
-      plugin: { id: instance.pluginId, version: "1" },
-      title: instance.title,
-      availability: { code: "available", canRender: true, canInvoke: false },
-      conversation: { draft: true, submit: true },
-      actions: [],
-    },
-  }))
-  const unmount = vi.fn(async () => {})
-  Object.assign(window.desktop, {
-    pluginUi: {
-      capabilities: async () => ({ available: true }),
-      mount,
-      unmount,
-      getState: async () => (await mount()).state,
-      onRevoked: () => () => {},
-    },
-  })
-  await act(async () =>
-    root.render(
-      <PluginUiProvider onOpenSidebar={() => {}}>
-        <AgentsTool {...callbacks} active openRequest={{ id: 50, taskId: "task-1" }} />
-      </PluginUiProvider>
-    )
-  )
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 30))
-  })
-  const open = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === (surface === "tool-result" ? "打开交互" : "在侧栏打开")
-  )!
-  expect(open).toBeDefined()
-  await act(async () => open.click())
-  expect(container.querySelector("iframe")?.title).toBe("检查结果")
-  expect(mount).toHaveBeenCalledWith({
-    sessionId: "child-1",
-    instanceId: instance.instanceId,
-    surface,
-  })
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-label="返回子智能体列表"]')!.click()
-  )
+  await act(async () => root.render(<AgentsTool {...callbacks} active openRequest={{ id: 50, taskId: "task-1" }} />))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(container.textContent).toContain("旧插件界面已停用")
+  expect(container.textContent).toContain("原始结果，不应消失")
   expect(container.querySelector("iframe")).toBeNull()
-  expect(unmount).toHaveBeenCalledWith({ mountId })
+  expect(container.textContent).not.toContain("打开交互")
+  expect(container.textContent).not.toContain("在侧栏打开")
 })
 afterEach(() => {
   act(() => root.unmount())

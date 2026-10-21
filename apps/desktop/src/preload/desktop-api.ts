@@ -48,36 +48,37 @@ export const desktopAPI = {
     cancel: (input: IpcInvokeMap[typeof IpcChannels.workflowCancel]["args"][0]) =>
       invoke(IpcChannels.workflowCancel, input),
   },
-  pluginUi: {
-    capabilities: () => invoke(IpcChannels.pluginUiCapabilities),
-    mount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiMount]["args"][0]) =>
-      invoke(IpcChannels.pluginUiMount, input),
-    getState: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetState]["args"][0]) =>
-      invoke(IpcChannels.pluginUiGetState, input),
-    invokeAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiInvokeAction]["args"][0]) =>
-      invoke(IpcChannels.pluginUiInvokeAction, input),
-    getAction: (input: IpcInvokeMap[typeof IpcChannels.pluginUiGetAction]["args"][0]) =>
-      invoke(IpcChannels.pluginUiGetAction, input),
-    prepareConversation: (
-      input: IpcInvokeMap[typeof IpcChannels.pluginUiPrepareConversation]["args"][0]
-    ) => invoke(IpcChannels.pluginUiPrepareConversation, input),
-    submitConversation: (
-      input: IpcInvokeMap[typeof IpcChannels.pluginUiSubmitConversation]["args"][0]
-    ) => invoke(IpcChannels.pluginUiSubmitConversation, input),
-    getConversationSubmission: (
-      input: IpcInvokeMap[typeof IpcChannels.pluginUiGetConversationSubmission]["args"][0]
-    ) => invoke(IpcChannels.pluginUiGetConversationSubmission, input),
-    dismiss: (input: IpcInvokeMap[typeof IpcChannels.pluginUiDismiss]["args"][0]) =>
-      invoke(IpcChannels.pluginUiDismiss, input),
-    unmount: (input: IpcInvokeMap[typeof IpcChannels.pluginUiUnmount]["args"][0]) =>
-      invoke(IpcChannels.pluginUiUnmount, input),
-    onRevoked: (listener: (event: { mountId: string }) => void) => {
-      const wrapped = (_event: Electron.IpcRendererEvent, value: { mountId: string }): void =>
-        listener(value)
-      ipcRenderer.on(IpcEvents.pluginUiRevoked, wrapped)
-      return () => {
-        ipcRenderer.removeListener(IpcEvents.pluginUiRevoked, wrapped)
-      }
+  pluginApps: {
+    openToolResult: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsOpenToolResult]["args"][0]) => invoke(IpcChannels.pluginAppsOpenToolResult, input),
+    onResourcesChanged: (listener: (input: { mountId: string }) => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, input: { mountId: string }) => listener(input)
+      ipcRenderer.on("plugin-apps:resources-changed", wrapped)
+      return () => { ipcRenderer.removeListener("plugin-apps:resources-changed", wrapped) }
+    },
+    prepareMessage: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsPrepareMessage]["args"][0]) => invoke(IpcChannels.pluginAppsPrepareMessage, input),
+    submitMessage: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsSubmitMessage]["args"][0]) => invoke(IpcChannels.pluginAppsSubmitMessage, input),
+    getMessageSubmission: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsGetMessageSubmission]["args"][0]) => invoke(IpcChannels.pluginAppsGetMessageSubmission, input),
+    cancelMessage: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsCancelMessage]["args"][0]) => invoke(IpcChannels.pluginAppsCancelMessage, input),
+    updateModelContext: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsUpdateModelContext]["args"][0]) => invoke(IpcChannels.pluginAppsUpdateModelContext, input),
+
+    catalog: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsCatalog]["args"][0]) => invoke(IpcChannels.pluginAppsCatalog, input),
+    open: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsOpen]["args"][0]) => invoke(IpcChannels.pluginAppsOpen, input),
+    mount: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsMount]["args"][0]) => invoke(IpcChannels.pluginAppsMount, input),
+    refresh: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsRefresh]["args"][0]) => invoke(IpcChannels.pluginAppsRefresh, input),
+    prepareTool: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsPrepareTool]["args"][0]) => invoke(IpcChannels.pluginAppsPrepareTool, input),
+    invokeTool: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsInvokeTool]["args"][0]) => invoke(IpcChannels.pluginAppsInvokeTool, input),
+    getAction: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsGetAction]["args"][0]) => invoke(IpcChannels.pluginAppsGetAction, input),
+    cancelTool: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsCancelTool]["args"][0]) => invoke(IpcChannels.pluginAppsCancelTool, input),
+    readResource: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsReadResource]["args"][0]) => invoke(IpcChannels.pluginAppsReadResource, input),
+    listResources: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsListResources]["args"][0]) => invoke(IpcChannels.pluginAppsListResources, input),
+    listResourceTemplates: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsListResourceTemplates]["args"][0]) => invoke(IpcChannels.pluginAppsListResourceTemplates, input),
+    close: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsClose]["args"][0]) => invoke(IpcChannels.pluginAppsClose, input),
+    rejectMenuOpen: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsRejectMenuOpen]["args"][0]) => invoke(IpcChannels.pluginAppsRejectMenuOpen, input),
+    release: (input: IpcInvokeMap[typeof IpcChannels.pluginAppsRelease]["args"][0]) => invoke(IpcChannels.pluginAppsRelease, input),
+    onRevoked: (listener: (input: { mountId: string }) => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, value: { mountId: string }) => listener(value)
+      ipcRenderer.on("plugin-apps:revoked", wrapped)
+      return () => { ipcRenderer.removeListener("plugin-apps:revoked", wrapped) }
     },
   },
   activity: {

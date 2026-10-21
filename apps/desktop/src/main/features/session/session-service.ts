@@ -413,9 +413,9 @@ export class DesktopSessionService {
     this.subscriptions.closeAuxSession(webContentsId, input)
   }
 
-  async sendPrompt(input: SendDesktopPromptInput): Promise<void> {
+  async sendPrompt(input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/client").PluginAppConversationRequest[]): Promise<void> {
     const client = await this.getClient()
-    await this.operations.sendPrompt(client, input)
+    await this.operations.sendPrompt(client, input, pluginAppContexts)
   }
 
   async editLatestPrompt(input: EditLatestDesktopPromptInput): Promise<void> {

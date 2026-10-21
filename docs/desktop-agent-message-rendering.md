@@ -65,7 +65,7 @@ Markdown 链接和行内代码中的文件路径都可以成为文件入口。�
 
 正文由 `message/assistant-markdown.tsx` 组合尾部解析和流式显示策略；`ui/background-code.tsx` 即时显示源码，`lib/streaming-code-highlighter.ts` 只合并后台颜色计算。历史内容、完整复制、修正和收尾均须保持正确。
 
-插件宿主通过 `plugin-ui/plugin-ui-context.ts` 提供两个订阅范围：Frame 读取实时宿主，工具面板只读取显示列表和关闭操作。两者共享类型入口，不能合并成每次文本增量都变化的大 Context。
+插件应用由 `shell/plugin-apps/provider.tsx` 管理，页面固定在窗口根节点；面板与消息只放置 Anchor（页面显示位置）。旧插件结果使用只读历史卡，不再打开旧界面。
 
 ## 验收标准
 

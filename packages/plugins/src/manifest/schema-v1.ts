@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isPluginIconSource, PLUGIN_UI_LIMITS } from "@vykor/protocol";
+import { isPluginIconSource, PLUGIN_APP_LIMITS } from "@vykor/protocol";
 import type { VykorPluginManifestV1 } from "../types.js";
 
 const declaredPathSchema = z
@@ -28,7 +28,8 @@ const componentsSchema = z
     workflows: pathListSchema.optional(),
     channels: pathListSchema.optional(),
     providers: pathListSchema.optional(),
-    ui: pathListSchema.max(PLUGIN_UI_LIMITS.manifestCount).optional(),
+    ui: pathListSchema.max(8).optional(),
+    apps: pathListSchema.max(PLUGIN_APP_LIMITS.manifestCount).optional(),
     outputStyles: pathListSchema.optional(),
     themes: pathListSchema.optional(),
     monitors: pathListSchema.optional(),

@@ -37,10 +37,10 @@ flowchart TD
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | 增量应用       | [`session-view-state.ts`](../apps/desktop/src/renderer/src/stores/desktop-session/session-view-state.ts) 的 `applySessionPartDeltas`                                                                                                                                                                                                                                                                                 | 批内建立查找表；校验失败返回恢复同步信号，不提交半批数据             |
 | 轮次模型复用   | [`transcript.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/transcript.tsx) 的 `useTranscriptModel`、轮次组件                                                                                                                                                                                                                                                                | 缓存属于当前组件；仅在满足文本追加条件时复用，结构变化回到完整构建   |
-| 视口与滚动意图 | [`conversation-scroll-state.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-scroll-state.ts)、[`virtual-transcript.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/virtual-transcript.tsx)                                                                                                                                            | 前者保存阅读意图、导航与交互行状态；后者负责可见范围、测高和实际滚动 |
-| Markdown       | [`assistant-markdown.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-markdown.tsx)、[`incremental-markdown.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/incremental-markdown.ts)、[`use-streaming-markdown.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/use-streaming-markdown.ts)         | 每条回复保留自己的解析器和显示状态，不用全局 Map 保存各版全文        |
+| 视口与滚动意图 | [`conversation-scroll-state.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/conversation-scroll-state.ts)、[`virtual-transcript.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/virtual-transcript.tsx)                                                                                                                                            | 前者保存阅读意图、导航与交互行状态；后者负责可见范围、测高和实际滚动 |
+| Markdown       | [`assistant-markdown.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/markdown/assistant-markdown.tsx)、[`incremental-markdown.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/markdown/incremental-markdown.ts)、[`use-streaming-markdown.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/markdown/use-streaming-markdown.ts)         | 每条回复保留自己的解析器和显示状态，不用全局 Map 保存各版全文        |
 | 代码高亮       | [`code-highlight-options.ts`](../apps/desktop/src/renderer/src/lib/code-highlight-options.ts)、[`streaming-code-highlighter.ts`](../apps/desktop/src/renderer/src/lib/streaming-code-highlighter.ts)、[`background-code.tsx`](../apps/desktop/src/renderer/src/components/ui/background-code.tsx)                                                                                                                    | 配置共享；任务和结果归代码块实例；源码与颜色分开更新                 |
-| 插件 UI 订阅   | [`plugin-ui-context.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-context.ts)、[`plugin-ui-provider.tsx`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-provider.tsx)、[`use-plugin-ui-conversation.ts`](../apps/desktop/src/renderer/src/components/desktop/conversation-page/plugin-ui/use-plugin-ui-conversation.ts) | 类型和 Context 统一入口，完整宿主与面板显示列表保持两个订阅范围      |
+| 插件应用订阅 | [`provider.tsx`](../apps/desktop/src/renderer/src/components/desktop/shell/plugin-apps/provider.tsx)、[`page-manager.ts`](../apps/desktop/src/renderer/src/components/desktop/shell/plugin-apps/page-manager.ts) | 页面驻留在窗口根节点，位置锚点切换不重建 iframe |
 | 面板布局保存   | [`use-utility-panel-controller.ts`](../apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/use-utility-panel-controller.ts)、[`panel-toggle-transition.ts`](../apps/desktop/src/renderer/src/components/desktop/layout/main-layout/panel-toggle-transition.ts)                                                                                                                         | 分栏库负责实时宽度；controller 负责当前会话的最终比例与保存          |
 
 ### 增量与历史消息
@@ -83,7 +83,7 @@ flowchart TD
 
 左侧开合会改变右侧分栏组的可用宽度。分栏库仍逐帧调整布局，但这些中间比例不再逐帧触发整个工作区更新和同步写 `localStorage`；controller 在当前组或祖先开合动画结束后统一提交最终比例。新的手动调整、会话切换和卸载会取消旧的延后任务。
 
-异步结果还必须匹配生命周期身份：插件提交按会话、连接状态及 `pluginUiGeneration` 隔离；侧边聊天的关闭结果按当前 `closeScope` 身份校验。A→B→A 后仅比较会话字符串不足以识别旧回执，不能删除这些身份检查来消除 Hook 依赖。
+异步结果同时核对原会话、应用来源、固定 revision 和当前 mount。切换会话保留根 Provider 中的页面；显式关闭先撤准入，再有界回收。A→B→A 不只比较会话字符串，原任务和页面实例归属仍须一致。
 
 ## 3. 已测结果及其适用范围
 
@@ -125,7 +125,7 @@ flowchart TD
 上述遗留问题继续按可复现证据处理：
 
 - **resize 误停跟随。** 宽度变化让行高缩小时，TanStack 会自行补偿滚动位置。原来只记录应用层滚动，漏掉了库内部的写入，随后到达的 `scroll` 事件可能被误认为用户向上阅读。现在统一通过公开的 `scrollToFn` 写入并调用 `recordScrollAdjustment` 记录实际位置，不改变阅读意图。真实向上滚动、包括没有前置滚轮事件的滚动条拖动，仍会停止跟随。
-- **插件文档生命周期。** 用 `display.key` 标识文档：新文档整体重置高度、加载状态与错误状态；同一文档的流式更新和隐藏继续复用 iframe。宿主引用在提交后的 layout effect 中更新，异步结果仍保留身份和有效性校验。提交动作的重试与回执查询移至 `plugin-ui-action.ts`，不与组件导出混在一起。
+- **插件文档生命周期。** 用 `display.key` 标识文档：新文档整体重置高度、加载状态与错误状态；同一文档的流式更新和隐藏继续复用 iframe。宿主引用在提交后的 layout effect 中更新，异步结果仍保留身份和有效性校验。提交动作的重试与回执查询移至 `shell/plugin-apps/controller.ts`，不与组件导出混在一起。
 - **原生后端启动。** 测试原先在 Electron 的计时区间内用 tsx 加载整张依赖图；并发负载下可能超过 45 秒。入口改为先用 esbuild 从当前源码构建后端，再启动 Electron；保留真实 SQLite、原生依赖、迁移文件与工具子进程，不读取旧构建产物代替源码。原有启动与整套测试时限保持不变。
 - **关闭重开的旧 frame。** DOM 中 iframe 已关闭后，Electron 的 frame 列表仍可能短暂保留旧文档；直接取第一项并执行脚本可能一直等不到结果。测试改为读取当前 DOM iframe 的地址，匹配尚未分离的活动文档。
 - **测试退出顺序。** 先手动销毁测试窗口、再异步关闭探测服务器并发起退出，会与 Electron 的窗口退出流程交错。仅延后调用退出、换导航地址或换 profile 都不能解决。测试现在保留窗口直到服务器和后端清理完成，由 `app.quit()` 统一关闭窗口并退出；完整原生回归已正常返回 0。每次运行另建临时 profile，结束后删除，避免固定目录的缓存冲突。外层仍要求正常退出码 0，不能只凭 `passed` 日志判定成功。
@@ -167,7 +167,7 @@ ESLint 的本轮目标是首轮记录的 7 个错误、10 个警告及本批涉�
 
 ## 5. 本次代码收拢
 
-- 插件 UI 的类型、完整宿主 Context 和显示列表 Context 统一放在 `plugin-ui-context.ts`；两个订阅范围仍分开。Provider 只负责运行时，不再由 Context 反向导入组件文件中的类型。
+- 插件 UI 的类型、完整宿主 Context 和显示列表 Context 统一放在 `shell/plugin-apps/provider.tsx`；两个订阅范围仍分开。Provider 只负责运行时，不再由 Context 反向导入组件文件中的类型。
 - 共享高亮配置放在 `lib/code-highlight-options.ts`，命名不再限定于文件预览；去掉旧的 `tools/code-preview-worker-options.ts` 转发层，配置测试跟随所属模块。
 - 普通代码块用 `FileCodeRenderer`，会话代码块用 `BackgroundCode`；去掉静态渲染器中永远为 false 的会话参数和残留样式分支。
 - 底部判定阈值只有一个来源，原生滚动与虚拟列表共同使用。
@@ -206,13 +206,13 @@ $conversationRegression = @(
   "src/renderer/src/lib/code-highlight-options.test.ts",
   "src/renderer/src/stores/desktop-session/session-view-state.test.ts",
   "src/renderer/src/components/desktop/layout/main-layout",
-  "src/renderer/src/components/desktop/conversation-page/plugin-ui",
+  "src/renderer/src/components/desktop/shell/plugin-apps",
   "src/renderer/src/components/desktop/tools/side-chat-panel.test.tsx"
 )
 pnpm exec vitest run @conversationRegression --maxWorkers=4
 ```
 
-无需为改一段文档反复跑全部 Desktop 测试；按改动层选择上面的相关部分。修改 Context 导出或原生夹具导入时，还应构建并运行 `test:plugin-ui-electron`；重命名工具入口时，实际执行新的 package script，避免只检查文件存在。
+无需为改一段文档反复跑全部 Desktop 测试；按改动层选择上面的相关部分。修改 Context 导出或原生夹具导入时，还应构建并运行 `test:plugin-apps-electron`；重命名工具入口时，实际执行新的 package script，避免只检查文件存在。
 
 ## 7. 后续维护原则
 

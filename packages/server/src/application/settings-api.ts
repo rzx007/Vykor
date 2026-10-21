@@ -283,7 +283,6 @@ export interface PluginArchivePreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
-  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 
@@ -296,7 +295,6 @@ export interface PluginGitPreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
-  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 

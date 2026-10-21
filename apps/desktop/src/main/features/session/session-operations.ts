@@ -310,15 +310,16 @@ export class SessionOperations {
     return project.path
   }
 
-  async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput): Promise<void> {
+  async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/client").PluginAppConversationRequest[]): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     const items = requirePromptItems(input.items)
     const attachments = normalizePromptAttachments(input.attachments, true)
-    if (!hasPromptItems(items) && attachments.length === 0) {
+    if (!hasPromptItems(items) && attachments.length === 0 && !pluginAppContexts?.length) {
       throw new Error("消息内容和附件不能同时为空。")
     }
     await client.sessions.admitPrompt(sessionId, {
+      ...(pluginAppContexts?.length ? { pluginAppContexts } : {}),
       id,
       items,
       attachments,

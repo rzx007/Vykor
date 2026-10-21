@@ -91,16 +91,16 @@ describe("DesktopPluginService", () => {
     expect(daemon.plugins.list).toHaveBeenCalledWith({ cwd: resolve("C:/workspace/project") })
   })
 
-  it("passes safe UI definition counts through archive approval", async () => {
-    const uiInventory = { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 }
+  it("passes App permissions through archive approval without legacy UI definitions", async () => {
     daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "a".repeat(64), identity: { id: "ui", name: "UI Fixture", version: "1.0.0" },
       requestedPermissions: ["ui:render", "ui:invoke-own-tools"], approvalRequired: true,
-      inventory: { ui: 1 }, uiInventory, diagnostics: [],
+      inventory: { apps: 1 }, diagnostics: [],
     })
     const service = new DesktopPluginService({ chooseArchive: async () => "C:/private/ui.zip" })
     const result = await service.importArchive({} as never, { cwd: "C:/workspace" })
-    expect(result).toMatchObject({ status: "approval-required", uiInventory })
+    expect(result).toMatchObject({ status: "approval-required", requestedPermissions: ["ui:render", "ui:invoke-own-tools"] })
+    expect(result).not.toHaveProperty("uiInventory")
     expect(JSON.stringify(result)).not.toContain("C:/private")
     expect(JSON.stringify(result)).not.toContain("archiveDigest")
   })

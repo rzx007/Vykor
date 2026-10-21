@@ -2,6 +2,7 @@ import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core
 import { toolFeedbackFields } from "@vykor/core";
 import {
   isCommittedModelPart,
+  publicToolResult,
   type AttachmentIntent,
   type ReplaceTranscriptMessageInput,
   type ReplaceTranscriptPartInput,
@@ -115,7 +116,7 @@ function isPresentationOnlyMessage(message: SessionMessageRecord): boolean {
   }
   const value = presentation as Record<string, unknown>;
   return (
-    value.kind === "plugin_ui_action" ||
+    value.kind === "plugin_ui_action" || value.kind === "plugin_app_action" ||
     (value.kind === "model_switch" &&
       typeof value.fromModel === "string" &&
       Boolean(value.fromModel.trim()) &&
@@ -314,6 +315,7 @@ function attachmentsFromParts(
 }
 
 function contentBlocksFromOutput(output: unknown): ContentBlock[] {
+  output = publicToolResult(output);
   if (output && typeof output === "object" && !Array.isArray(output) && "content" in output) {
     const content = (output as { content?: unknown }).content;
     if (Array.isArray(content)) return content as ContentBlock[];

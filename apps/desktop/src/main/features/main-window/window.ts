@@ -20,12 +20,12 @@ import {
 } from "./window-material"
 import { attachWindowMaterialRuntime } from "./window-material-runtime"
 import { attachWindowsMaterialRepaint } from "./window-material-repaint"
-import { desktopPluginUiDocuments } from "../plugin-ui/document-runtime"
+import { desktopPluginAppDocuments } from "../plugin-apps/document-protocol"
+import { getDesktopPluginAppService } from "../plugin-apps/service-runtime"
 import {
-  attachPluginUiWindowPolicy,
-  isPluginUiExternalOpenBlocked,
-} from "../plugin-ui/window-policy"
-import { getDesktopPluginUiService } from "../plugin-ui/service-runtime"
+  attachPluginAppWindowPolicy,
+  isPluginAppExternalOpenBlocked,
+} from "../plugin-apps/window-policy"
 import { pathToFileURL } from "node:url"
 import {
   getWindowMaterialPreference,
@@ -98,11 +98,8 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       },
     },
     onCreated: (win) => {
-      getDesktopPluginUiService()?.registerOwner(
-        win.webContents,
-        ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href
-      )
-      attachPluginUiWindowPolicy(win.webContents, desktopPluginUiDocuments)
+      getDesktopPluginAppService()?.registerOwner(win.webContents, ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href)
+      attachPluginAppWindowPolicy(win.webContents, desktopPluginAppDocuments)
       attachMainWindowBehavior(ctx, win)
       attachMainWindowDiagnostics(win)
       const runtime = attachWindowMaterialRuntime(win, {
@@ -237,7 +234,7 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
   })
 
   win.webContents.setWindowOpenHandler(({ url, referrer }) => {
-    if (isPluginUiExternalOpenBlocked(referrer.url)) return { action: "deny" }
+    if (isPluginAppExternalOpenBlocked(referrer.url)) return { action: "deny" }
     if (url.startsWith("https:") || url.startsWith("http:")) {
       void shell.openExternal(url)
     }

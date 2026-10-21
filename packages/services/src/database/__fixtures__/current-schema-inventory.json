@@ -260,6 +260,18 @@
     },
     {
       "type": "index",
+      "name": "session_plugin_app_logical_key",
+      "tbl_name": "session_plugin_app",
+      "sql": "CREATE UNIQUE INDEX `session_plugin_app_logical_key` ON `session_plugin_app` (`session_id`,`logical_key`)"
+    },
+    {
+      "type": "index",
+      "name": "session_plugin_app_session_status_idx",
+      "tbl_name": "session_plugin_app",
+      "sql": "CREATE INDEX `session_plugin_app_session_status_idx` ON `session_plugin_app` (`session_id`,`status`)"
+    },
+    {
+      "type": "index",
       "name": "session_run_attempt_run_idx",
       "tbl_name": "session_run_attempt",
       "sql": "CREATE INDEX `session_run_attempt_run_idx` ON `session_run_attempt` (`run_id`)"
@@ -436,31 +448,31 @@
       "type": "table",
       "name": "session_goal",
       "tbl_name": "session_goal",
-      "sql": "CREATE TABLE `session_goal` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`session_id` text NOT NULL,\r\n\t`objective` text NOT NULL,\r\n\t`objective_version` integer DEFAULT 1 NOT NULL,\r\n\t`plugin_id` text,\r\n\t`revision` integer NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`max_auto_turns` integer NOT NULL,\r\n\t`token_budget` integer,\r\n\t`usage_json` text NOT NULL,\r\n\t`auto_turns_used` integer NOT NULL,\r\n\t`current_run_id` text,\r\n\t`reason` text,\r\n\t`stop_reason_json` text,\r\n\t`wait_json` text,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `session_goal` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`objective` text NOT NULL,\n\t`objective_version` integer DEFAULT 1 NOT NULL,\n\t`plugin_id` text,\n\t`revision` integer NOT NULL,\n\t`status` text NOT NULL,\n\t`max_auto_turns` integer NOT NULL,\n\t`token_budget` integer,\n\t`usage_json` text NOT NULL,\n\t`auto_turns_used` integer NOT NULL,\n\t`current_run_id` text,\n\t`reason` text,\n\t`stop_reason_json` text,\n\t`wait_json` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\n)"
     },
     {
       "type": "table",
       "name": "session_goal_continuation",
       "tbl_name": "session_goal_continuation",
-      "sql": "CREATE TABLE `session_goal_continuation` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`goal_id` text NOT NULL,\r\n\t`revision` integer NOT NULL,\r\n\t`previous_run_id` text NOT NULL,\r\n\t`input_id` text,\r\n\t`run_id` text,\r\n\t`status` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `session_goal_continuation` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`goal_id` text NOT NULL,\n\t`revision` integer NOT NULL,\n\t`previous_run_id` text NOT NULL,\n\t`input_id` text,\n\t`run_id` text,\n\t`status` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\n)"
     },
     {
       "type": "table",
       "name": "session_goal_model_attempt",
       "tbl_name": "session_goal_model_attempt",
-      "sql": "CREATE TABLE `session_goal_model_attempt` (\r\n\t`run_id` text NOT NULL,\r\n\t`generation_id` text NOT NULL,\r\n\t`attempt` integer NOT NULL,\r\n\t`goal_id` text NOT NULL,\r\n\t`objective_version` integer NOT NULL,\r\n\t`session_id` text NOT NULL,\r\n\t`provider` text,\r\n\t`model` text NOT NULL,\r\n\t`purpose` text NOT NULL,\r\n\t`state` text NOT NULL,\r\n\t`known_input_tokens` integer NOT NULL,\r\n\t`known_output_tokens` integer NOT NULL,\r\n\t`inconsistent` integer NOT NULL,\r\n\t`raw_usage_json` text,\r\n\t`started_at` integer NOT NULL,\r\n\t`finished_at` integer,\r\n\tPRIMARY KEY(`run_id`, `generation_id`, `attempt`),\r\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `session_goal_model_attempt` (\n\t`run_id` text NOT NULL,\n\t`generation_id` text NOT NULL,\n\t`attempt` integer NOT NULL,\n\t`goal_id` text NOT NULL,\n\t`objective_version` integer NOT NULL,\n\t`session_id` text NOT NULL,\n\t`provider` text,\n\t`model` text NOT NULL,\n\t`purpose` text NOT NULL,\n\t`state` text NOT NULL,\n\t`known_input_tokens` integer NOT NULL,\n\t`known_output_tokens` integer NOT NULL,\n\t`inconsistent` integer NOT NULL,\n\t`raw_usage_json` text,\n\t`started_at` integer NOT NULL,\n\t`finished_at` integer,\n\tPRIMARY KEY(`run_id`, `generation_id`, `attempt`),\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\n)"
     },
     {
       "type": "table",
       "name": "session_goal_request",
       "tbl_name": "session_goal_request",
-      "sql": "CREATE TABLE `session_goal_request` (\r\n\t`request_id` text PRIMARY KEY NOT NULL,\r\n\t`session_id` text NOT NULL,\r\n\t`fingerprint` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`goal_id` text,\r\n\t`result_json` text,\r\n\t`error` text,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `session_goal_request` (\n\t`request_id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`fingerprint` text NOT NULL,\n\t`status` text NOT NULL,\n\t`goal_id` text,\n\t`result_json` text,\n\t`error` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\n)"
     },
     {
       "type": "table",
       "name": "session_goal_version",
       "tbl_name": "session_goal_version",
-      "sql": "CREATE TABLE `session_goal_version` (\r\n\t`goal_id` text NOT NULL,\r\n\t`objective_version` integer NOT NULL,\r\n\t`previous_version` integer,\r\n\t`objective` text NOT NULL,\r\n\t`request_id` text NOT NULL,\r\n\t`actor_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\tPRIMARY KEY(`goal_id`, `objective_version`),\r\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `session_goal_version` (\n\t`goal_id` text NOT NULL,\n\t`objective_version` integer NOT NULL,\n\t`previous_version` integer,\n\t`objective` text NOT NULL,\n\t`request_id` text NOT NULL,\n\t`actor_json` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\tPRIMARY KEY(`goal_id`, `objective_version`),\n\tFOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade\n)"
     },
     {
       "type": "table",
@@ -485,6 +497,12 @@
       "name": "session_message_part",
       "tbl_name": "session_message_part",
       "sql": "CREATE TABLE `session_message_part` (\n\t`id` text PRIMARY KEY,\n\t`session_id` text NOT NULL,\n\t`message_id` text NOT NULL,\n\t`seq` integer NOT NULL,\n\t`type` text NOT NULL,\n\t`status` text NOT NULL,\n\t`text` text,\n\t`tool_use_id` text,\n\t`tool_name` text,\n\t`input_json` text,\n\t`output_json` text,\n\t`is_error` integer,\n\t`asset_id` text,\n\t`attachment_intent` text,\n\t`display_name` text,\n\t`media_type` text,\n\t`size_bytes` integer,\n\t`transformation_kind` text,\n\t`representation_id` text,\n\t`processor` text,\n\t`transformation_error` text,\n\t`metadata_json` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_plugin_app",
+      "tbl_name": "session_plugin_app",
+      "sql": "CREATE TABLE `session_plugin_app` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`plugin_id` text NOT NULL,\n\t`plugin_version` text NOT NULL,\n\t`plugin_digest` text NOT NULL,\n\t`definition_digest` text NOT NULL,\n\t`backend_id` text NOT NULL,\n\t`backend_kind` text NOT NULL,\n\t`resource_uri` text NOT NULL,\n\t`origin_json` text NOT NULL,\n\t`logical_key` text NOT NULL,\n\t`status` text NOT NULL,\n\t`control_revision` integer NOT NULL,\n\t`active_action_run_id` text,\n\t`last_action_run_id` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\n\tCONSTRAINT \"session_plugin_app_status\" CHECK(\"session_plugin_app\".\"status\" IN ('open', 'closed', 'revoked')),\n\tCONSTRAINT \"session_plugin_app_backend_kind\" CHECK(\"session_plugin_app\".\"backend_kind\" IN ('native-tools', 'mcp-server')),\n\tCONSTRAINT \"session_plugin_app_revision\" CHECK(\"session_plugin_app\".\"control_revision\" >= 0)\n)"
     },
     {
       "type": "table",
@@ -3306,6 +3324,159 @@
         }
       ],
       "foreignKeys": []
+    },
+    {
+      "name": "session_plugin_app",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "plugin_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "plugin_version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "plugin_digest",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "definition_digest",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "backend_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "backend_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "resource_uri",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "origin_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "logical_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "control_revision",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "active_action_run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "last_action_run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
     },
     {
       "name": "session_run",

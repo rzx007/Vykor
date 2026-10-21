@@ -86,12 +86,12 @@ describe("user-scoped plugin mutation routes", () => {
     const acquireGlobalMutation = vi.fn(() => undefined);
     const closeAllRuntimes = vi.fn(async () => {});
     const invalidateRuntimes = vi.fn(async () => {});
-    const withPluginUiLifecycleMutation = vi.fn(async <T>(_scope: unknown, work: () => Promise<T>): Promise<T> => work());
+    const withMutation = vi.fn(async <T>(_scope: unknown, work: () => Promise<T>): Promise<T> => work());
     const install = vi.fn(async () => ({ message: "Installed plugin 'dev.example'.", restartRuntimes: true }));
     const routes = createServiceRoutes({
       pluginService: { list: async () => ({ plugins: [], warnings: [] }), setEnabled: vi.fn(),
         installLocal: install, installArchive: install, installGit: install },
-      pluginUi: { withPluginUiLifecycleMutation },
+      pluginLifecycle: { withMutation },
       control: { ...createPluginControl(), acquireGlobalMutation, closeAllRuntimes, invalidateRuntimes },
     });
     const response = await routes.request(path, {
@@ -103,7 +103,7 @@ describe("user-scoped plugin mutation routes", () => {
     expect(install).toHaveBeenCalledOnce();
     expect(acquireGlobalMutation).not.toHaveBeenCalled();
     expect(closeAllRuntimes).not.toHaveBeenCalled();
-    expect(withPluginUiLifecycleMutation).not.toHaveBeenCalled();
+    expect(withMutation).not.toHaveBeenCalled();
     expect(invalidateRuntimes).toHaveBeenCalledOnce();
   });
   it.each([

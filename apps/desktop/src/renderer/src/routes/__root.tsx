@@ -1,3 +1,4 @@
+import { PluginAppsProvider } from "@renderer/components/desktop/shell/plugin-apps/provider"
 import { useEffect } from "react"
 import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import { markStartupOverlayReady } from "@renderer/startup-overlay"
@@ -39,7 +40,7 @@ function DesktopRoot(): React.JSX.Element {
   }, [routeReady])
 
   return (
-    <>
+    <PluginAppsProvider>
       <DesktopSessionEventBridge enabled={sessionEventsEnabled} />
       <Outlet />
       <DesktopToastHost />
@@ -48,6 +49,6 @@ function DesktopRoot(): React.JSX.Element {
           <ScopedOperationError error={appOperationError} />
         </div>
       ) : null}
-    </>
+    </PluginAppsProvider>
   )
 }

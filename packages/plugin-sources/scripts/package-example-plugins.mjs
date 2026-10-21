@@ -16,6 +16,7 @@ async function readPluginFiles(zip, sourceDir, archivePath) {
   }
 
   for (const entry of entries) {
+    if (entry.name === "node_modules") continue; // Author dependencies are bundled before distribution.
     const sourcePath = join(sourceDir, entry.name);
     const entryArchivePath = `${archivePath}/${entry.name}`;
 

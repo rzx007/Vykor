@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.notes-app",
+  "name": "notes-app",
+  "version": "1.0.0",
+  "description": "手工保存笔记，与助手按文档版本共同编辑。",
+  "components": { "mcpServers": ["./mcp.json"], "apps": ["./ui/apps.json"] }
+}

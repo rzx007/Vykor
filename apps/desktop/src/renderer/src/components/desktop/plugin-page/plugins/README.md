@@ -4,7 +4,7 @@
 
 ## 放置边界
 
-插件业务集中于此；会话中运行的插件卡片在 conversation-page/plugin-ui。
+插件业务集中于此；常驻应用由 shell/plugin-apps 承载；会话工具结果在 conversation-page/message 渲染。
 
 组件、模型、类型和 hook 按本功能共同维护。测试、测试辅助文件和基准测试统一放在同级 `__test__`，沿用被测功能的文件名。
 

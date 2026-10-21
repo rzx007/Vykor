@@ -194,19 +194,9 @@ export function PluginDetailsDialog({
             )}
           </DetailSection>
           {plugin.uiInventory ? (
-            <DetailSection title="插件界面定义">
-              <DetailRow label="定义文件" value={String(plugin.uiInventory.manifestCount)} />
-              <DetailRow
-                label="静态校验"
-                value={
-                  plugin.uiInventory.componentCount === null
-                    ? "UI 定义数量暂不可确认"
-                    : `已校验 ${plugin.uiInventory.validatedComponentCount} 个 UI 定义`
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                在工具结果中按需打开交互，是否可用以会话检查为准。
-              </p>
+            <DetailSection title="已退役的插件界面">
+              <DetailRow label="历史声明文件" value={String(plugin.uiInventory.manifestCount)} />
+              <p className="text-xs text-muted-foreground">旧插件界面已停用。历史结果保留，原生工具和 Skill 可继续使用。</p>
             </DetailSection>
           ) : null}
           <DetailSection title="权限">

@@ -11,7 +11,6 @@ import {
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
 import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
-import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/shell/use-desktop-shortcuts"
@@ -460,7 +459,6 @@ export function MainLayout(): React.JSX.Element {
       onOpen={openWorkflowPanel}
     >
       <ImageViewerProvider onOpenImage={utilityPanel.openImage}>
-        <PluginUiProvider onOpenSidebar={utilityPanel.restore}>
           <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
             <TitleBar
               sidebarOpen={sidebarOpen}
@@ -541,7 +539,6 @@ export function MainLayout(): React.JSX.Element {
               }
             />
           </main>
-        </PluginUiProvider>
       </ImageViewerProvider>
     </WorkflowProvider>
   )

@@ -1,9 +1,9 @@
+import { loadNativeAppMetadata } from "./components/apps.js";
 import { loadNativeAgents } from "./components/agents.js";
 import { loadNativeHooks } from "./components/hooks.js";
 import { loadNativeMcpServers } from "./components/mcp.js";
 import { loadNativeSkills } from "./components/skills.js";
 import { loadNativeToolMetadata } from "./components/tools.js";
-import { loadNativeUiMetadata } from "./components/ui.js";
 import type {
   LoadedNativePlugin,
   NativePluginComponentKind,
@@ -32,14 +32,17 @@ export async function loadNativePlugin(plugin: ValidatedNativePlugin): Promise<L
   if (plugin.manifest.components.tools) {
     components.tools = await loadNativeToolMetadata(plugin);
   }
-  if (plugin.manifest.components.ui) components.ui = await loadNativeUiMetadata(plugin);
+  if (plugin.manifest.components.apps) components.apps = await loadNativeAppMetadata(plugin);
+  if (plugin.manifest.components.ui?.length) {
+    components.unsupported = { ui: { status: "unsupported", diagnostics: [{ severity: "warning", phase: "load", code: "plugin_ui_retired", message: "components.ui has retired; Native tools and skills remain available", component: "ui", pluginId: plugin.manifest.id }] } };
+  }
   for (const kind of deferredKinds) {
     if (plugin.manifest.components[kind]) {
       components.unsupported ??= {};
       components.unsupported[kind] = unsupported(plugin, kind);
     }
   }
-  const results = [components.skills, components.agents, components.hooks, components.mcpServers, components.tools, components.ui,
+  const results = [components.skills, components.agents, components.hooks, components.mcpServers, components.tools, components.apps,
     ...Object.values(components.unsupported ?? {})].filter((value) => value !== undefined);
   const diagnostics = results.flatMap((result) => result.diagnostics);
   return {

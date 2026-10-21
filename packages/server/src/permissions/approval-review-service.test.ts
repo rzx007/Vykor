@@ -34,4 +34,15 @@ describe("permission approval review evidence", () => {
     await expect(service.review(input)).resolves.toMatchObject({ decision: "ask_user" });
     expect(review).not.toHaveBeenCalled();
   });
+  it("requires independently verified host attribution for a Run with no model Input", async () => {
+    const review = vi.fn(async (_: ApprovalReviewInput) => result);
+    const independent = { ...run, inputId: undefined, metadata: { pluginAppAction: { source: "not sufficient" } } };
+    const missing = createPermissionApprovalReviewService({ getInput: () => undefined, getRun: () => independent, review });
+    await expect(missing.review({ ...input, inputId: independent.id })).resolves.toMatchObject({ decision: "ask_user", authorization: "missing" });
+    expect(review).not.toHaveBeenCalled();
+    const verified = createPermissionApprovalReviewService({ getInput: () => undefined, getRun: () => independent,
+      appInstruction: () => "Confirmed exact source, SaveDocument and approved arguments", review });
+    await expect(verified.review({ ...input, inputId: independent.id })).resolves.toEqual(result);
+    expect(review.mock.calls[0]?.[0].evidence.userInstruction).toContain("SaveDocument");
+  });
 });

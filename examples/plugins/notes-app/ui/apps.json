@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "backends": [{ "id": "notes", "kind": "mcp-server", "server": "notes" }],
+  "surfaces": [{ "id": "notes", "title": "协作笔记", "backend": "notes", "resourceUri": "ui://notes/editor", "availability": "session" }]
+}

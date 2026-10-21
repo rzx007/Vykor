@@ -40,6 +40,7 @@ export interface ClearSessionWorktreeBindingInput {
 }
 
 export interface AdmitPromptInput {
+  pluginAppContexts?: import("./plugin-apps.js").PluginAppConversationRequest[];
   id?: string;
   sessionId: string;
   delivery?: InputDelivery;

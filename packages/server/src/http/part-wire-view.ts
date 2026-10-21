@@ -1,4 +1,5 @@
 import type { SessionEventRecord, SessionMessagePartRecord } from "@vykor/protocol";
+import { publicToolResult } from "@vykor/protocol";
 
 const fullBodyByteLimit = 4096;
 const previewChars = 512;
@@ -16,8 +17,14 @@ function workflowNotificationRunId(text: string): string | undefined {
   } catch { return undefined; }
 }
 
+/** Public transcript reads exclude page-private data; raw bodies stay in durable storage. */
+export function publicPart(part: SessionMessagePartRecord): SessionMessagePartRecord {
+  return { ...part, ...(part.output !== undefined ? { output: publicToolResult(part.output) } : {}), metadata: publicToolResult(part.metadata) as Record<string, unknown> };
+}
+
 /** Only HTTP summary consumers opt in. Canonical parts and durable events remain full. */
 export function summarizePart(part: SessionMessagePartRecord): SessionMessagePartRecord {
+  part = publicPart(part);
   if (part.type !== "tool" && part.type !== "tool_result") return part;
   const inputView = part.input === undefined ? "unavailable" : byteLength(part.input) > fullBodyByteLimit ? "preview" : "full";
   const outputView = part.output === undefined ? "unavailable" : byteLength(part.output) > fullBodyByteLimit ? "preview" : "full";
@@ -108,12 +115,17 @@ export function summarizePart(part: SessionMessagePartRecord): SessionMessagePar
   return { ...part, input, output, metadata, bodyView: { input: inputView, output: outputView, ...(references.size ? { outputReferences: [...references].slice(0, 8) } : {}) } };
 }
 
-export function summarizePartEvent(event: SessionEventRecord): SessionEventRecord {
+export function publicPartEvent(event: SessionEventRecord, summarize = false): SessionEventRecord {
+  const view = summarize ? summarizePart : publicPart;
   if (event.type === "session.message.part.updated") {
-    return { ...event, payload: { ...event.payload, part: summarizePart(event.payload.part as SessionMessagePartRecord) } };
+    return { ...event, payload: { ...event.payload, part: view(event.payload.part as SessionMessagePartRecord) } };
   }
   if (event.type === "session.transcript.replaced" && Array.isArray(event.payload.parts)) {
-    return { ...event, payload: { ...event.payload, parts: (event.payload.parts as SessionMessagePartRecord[]).map(summarizePart) } };
+    return { ...event, payload: { ...event.payload, parts: (event.payload.parts as SessionMessagePartRecord[]).map(view) } };
   }
   return event;
+}
+
+export function summarizePartEvent(event: SessionEventRecord): SessionEventRecord {
+  return publicPartEvent(event, true);
 }

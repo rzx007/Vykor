@@ -355,22 +355,21 @@ describe("PluginManager archive import", () => {
     }
   )
 
-  it("explains UI permissions and component counts in the host approval dialog", async () => {
+  it("explains App permissions in the host approval dialog", async () => {
     api().importArchive.mockResolvedValue({
       status: "approval-required",
       selectionId: "ui-selection",
       pluginName: "UI Fixture",
       requestedPermissions: ["ui:render", "ui:invoke-own-tools"],
-      uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },
     })
     await render()
     await requestImport()
     expect(document.body.textContent).toContain("显示插件的隔离交互界面")
     expect(document.body.textContent).toContain("请求插件自身工具，执行前仍需确认")
-    expect(document.body.textContent).toContain("2 个 UI 定义")
+    expect(document.body.textContent).not.toContain("UI 定义")
   })
 
-  it("shows validated UI metadata without claiming the interface is running", async () => {
+  it("shows old installed metadata as retired without an open instruction", async () => {
     api().snapshot.mockResolvedValue({
       ...snapshot,
       plugins: [
@@ -382,11 +381,11 @@ describe("PluginManager archive import", () => {
     await render()
     await click("查看 Alpha 详情")
     await click("管理")
-    expect(document.body.textContent).toContain("已校验 2 个 UI 定义")
-    expect(document.body.textContent).toContain("在工具结果中按需打开")
+    expect(document.body.textContent).toContain("旧插件界面已停用")
+    expect(document.body.textContent).not.toContain("按需打开")
   })
 
-  it("shows unverified component counts as unknown rather than zero", async () => {
+  it("does not parse or claim a component count for retired definitions", async () => {
     api().snapshot.mockResolvedValue({
       ...snapshot,
       plugins: [
@@ -398,7 +397,7 @@ describe("PluginManager archive import", () => {
     await render()
     await click("查看 Alpha 详情")
     await click("管理")
-    expect(document.body.textContent).toContain("UI 定义数量暂不可确认")
+    expect(document.body.textContent).toContain("旧插件界面已停用")
     expect(document.body.textContent).not.toContain("已校验 0 个 UI 定义")
   })
 

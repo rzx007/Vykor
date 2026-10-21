@@ -1,0 +1,11 @@
+import { build } from "esbuild";
+import { readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ui = await build({ entryPoints: [resolve(root, "ui/panel.mjs")], bundle: true, write: false, format: "iife", platform: "browser", target: "es2022", minify: true, supported: { "template-literal": false } });
+const template = await readFile(resolve(root, "ui/panel.template.html"), "utf8"), css = await readFile(resolve(root, "ui/styles.css"), "utf8");
+const html = template.replace("/* UI_STYLES */", () => css).replace("<!-- UI_SCRIPT -->", () => `<script>${ui.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script>`);
+await writeFile(resolve(root, "ui/panel.html"), html);
+await build({ entryPoints: [resolve(root, "src/server.mjs")], outfile: resolve(root, "server.mjs"), bundle: true, platform: "node", format: "esm", target: "node22", banner: { js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' } });
+console.log("Built official offline App and standalone stdio MCP service");

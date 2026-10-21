@@ -40,6 +40,7 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  pluginAppContextIds?: string[]
   id: string
   sessionId: string
   content: string

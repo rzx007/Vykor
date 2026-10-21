@@ -48,8 +48,7 @@ describe("text-inspector reference plugin (real child process)", () => {
   it("returns a real UI proposal for bounded input without changing ordinary result JSON", async () => {
     await withInspector(async (check, cwd) => {
       const result = await check.execute({ text: "ok  \n\titem\n" }, { cwd });
-      expect(result.metadata?.ui).toMatchObject({ schemaVersion: 2, componentId: "text-inspector",
-        data: { text: "ok  \n\titem\n", findings: [{ line: 1, code: "trailing-whitespace" }, { line: 2, code: "tab-indentation" }] } });
+      expect(result.metadata?.appData).toMatchObject({ text: "ok  \n\titem\n", findings: [{ line: 1, code: "trailing-whitespace" }, { line: 2, code: "tab-indentation" }] });
     });
   });
   it.each([
@@ -61,14 +60,14 @@ describe("text-inspector reference plugin (real child process)", () => {
       expect(preview).toBeDefined();
       const result = await preview!.execute({ text, selected }, { cwd });
       expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ text: want });
-      expect(result.metadata?.ui).toMatchObject({ componentId: "text-inspector", data: { text: want } });
+      expect(result.metadata?.appData).toMatchObject({ text: want });
       expect(readdirSync(cwd)).toEqual([]);
     });
   });
   it("keeps very large ordinary results usable without an oversized UI proposal", async () => {
     await withInspector(async (check, cwd) => {
       const result = await check.execute({ text: "中".repeat(90000) }, { cwd });
-      expect(result.metadata?.ui).toBeUndefined();
+      expect(result.metadata?.appData).toBeUndefined();
       expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual({ findings: [], truncated: false });
     });
   });

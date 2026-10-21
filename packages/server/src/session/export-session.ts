@@ -4,6 +4,7 @@ import { getDataDir } from "@vykor/core";
 
 import {
   isCommittedModelPart,
+  publicToolResult,
   readPluginUiAction,
   type SessionInputRecord,
   type SessionMessagePartRecord,
@@ -70,6 +71,7 @@ function markdownFromParts(parts: SessionMessagePartRecord[]): string {
 }
 
 function buildMarkdown(input: BuildSessionExportInput): string {
+  input = publicExportInput(input);
   const sensitiveSession = hasSensitiveInput(input.inputs);
   const lines = [
     "# Vykor Conversation Export",
@@ -133,6 +135,7 @@ function uiActionFacts(input: BuildSessionExportInput, sensitiveSession: boolean
 }
 
 function buildJson(input: BuildSessionExportInput): string {
+  input = publicExportInput(input);
   const sensitiveSession = hasSensitiveInput(input.inputs);
   const messages = [...input.messages]
     .sort((a, b) => a.seq - b.seq)
@@ -180,6 +183,13 @@ function buildJson(input: BuildSessionExportInput): string {
     null,
     2,
   );
+}
+
+function publicExportInput(input: BuildSessionExportInput): BuildSessionExportInput {
+  return { ...input, parts: input.parts.map(part => ({ ...part,
+    ...(part.output !== undefined ? { output: publicToolResult(part.output) } : {}),
+    metadata: publicToolResult(part.metadata) as Record<string, unknown>,
+  })) };
 }
 
 export async function writeSessionExport(input: BuildSessionExportInput): Promise<SessionExportResult> {

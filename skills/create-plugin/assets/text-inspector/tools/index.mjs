@@ -24,7 +24,7 @@ function check(text) {
 function proposal(text) {
   // Reserve room for up to100 selection IDs and the bridge/request wrapper.
   if (new TextEncoder().encode(JSON.stringify(text)).length > 48000) return undefined;
-  return { ui: { schemaVersion: 2, componentId: "text-inspector", data: { text, ...check(text) } } };
+  return { appData: { text, ...check(text) } };
 }
 const textSchema = { type: "string", maxLength: 100000 };
 /** @type {import('@vykor/plugins/sdk').NativeToolRegister} */

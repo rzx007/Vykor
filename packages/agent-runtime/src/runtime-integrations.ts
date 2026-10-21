@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
   ActiveMcpRuntimeHandle,
@@ -6,17 +6,17 @@ import type {
   McpServerConfig,
   McpServerIdentity,
   RuntimeBundle,
-  RunPluginUiBinding,
   RunToolBinding,
   Settings,
   ToolDefinition,
 } from "@vykor/core";
 import { loadProjectSettings, loadSettings } from "@vykor/core";
-import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeUiMetadata, verifyInstalledNativePlugin } from "@vykor/plugins";
+import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeAppMetadata, verifyInstalledNativePlugin } from "@vykor/plugins";
 import {
   createMcpServerIdentity,
   McpClientManager,
   McpOAuthRuntime,
+  type CapturedMcpAppResources,
 } from "@vykor/mcp";
 import { McpOAuthCredentialStore } from "@vykor/auth";
 import { getAllAgentDefinitions } from "@vykor/coordinator";
@@ -33,7 +33,10 @@ import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { createMcpAuthHost } from "./mcp-auth.js";
 import { createRememberTool } from "./remember-tool.js";
 import { getInternalToolRegistry } from "./default-runtime.js";
-import { getDelegationToolRegistry } from "./default-runtime-tools.js";
+import { getAppToolRegistry, getDelegationToolRegistry, getTrustedToolCatalogue } from "./default-runtime-tools.js";
+import { captureNativePluginAppBackend, createNativePluginAppResourceSnapshot, type NativePluginAppResourceSnapshot } from "./native-plugin-app-backend.js";
+import { captureMcpPluginAppBackend } from "./mcp-plugin-app-backend.js";
+import type { PluginAppBackendCatalogue } from "./plugin-app-backends.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import type { PluginSelectionCatalog } from "./plugin-selection.js";
 import { selectPluginInstallationWinners } from "./plugin-capability-inventory.js";
@@ -59,6 +62,8 @@ export async function installRuntimeIntegrations(
   pluginSelection: PluginSelectionCatalog;
   getConnections: () => ReturnType<McpClientManager["getConnections"]>;
   retainConnectionsForRun: () => () => void;
+  /** Agent-internal catalogue; executable captures must never enter HTTP/Client resources. */
+  pluginApps: PluginAppBackendCatalogue;
 }> {
   const { runtime } = options;
   const memory = options.memory;
@@ -96,59 +101,6 @@ export async function installRuntimeIntegrations(
       process.stderr.write(`[plugins] ${plugin.manifest.id}: ${diagnostic.message}\n`);
     },
   });
-  const pluginUi: RunPluginUiBinding[] = [];
-  const hostToolRegistry = getDelegationToolRegistry(runtime.toolRegistry);
-  for (const plugin of options.discovery.plugins) {
-    if (options.settings.plugins?.uiEnabled === false) continue;
-    const original = plugin.components.ui;
-    if (original?.status !== "loaded" || !original.value?.length) continue;
-    const pluginId = plugin.manifest.id;
-    const diagnostic = (message: string) => {
-      plugin.diagnostics.push({ severity: "error", phase: "activate", component: "ui", pluginId,
-        code: "plugin_ui_snapshot_unavailable", message });
-      process.stderr.write(`[plugins] ${pluginId}: ${message}\n`);
-    };
-    try {
-      const pluginDigest = inventory.plugins.get(pluginId)?.behaviorDigest;
-      if (!pluginDigest || await computePluginBehaviorDigest(plugin.root) !== pluginDigest) {
-        diagnostic("Plugin UI installation changed since discovery.");
-        continue;
-      }
-      const checked = await loadNativeUiMetadata({ root: plugin.root, manifest: plugin.manifest,
-        manifestPath: join(plugin.root, ".vykor-plugin", "plugin.json") });
-      if (checked.status !== "loaded" || checked.value?.length !== original.value.length
-        || original.value.some(component => !checked.value?.some(current =>
-          current.definition.id === component.definition.id && current.componentDigest === component.componentDigest
-          && current.htmlSha256 === component.htmlSha256 && current.entryPath === component.entryPath))) {
-        diagnostic("Plugin UI component changed since discovery.");
-        continue;
-      }
-      const activation = toolActivations.find(item => item.pluginId === pluginId);
-      const captured = createRunCapabilityView({ toolRegistry: hostToolRegistry, pluginIds: new Set([pluginId]) }, pluginId);
-      const bindings: RunPluginUiBinding[] = [];
-      for (const component of original.value) {
-        const actionTools: RunToolBinding[] = [];
-        for (const action of component.definition.actions) {
-          const tool = captured.tools.get(action.tool);
-          if (activation?.state !== "active" || !activation.toolNames.includes(action.tool)
-            || tool?.source?.kind !== "plugin" || tool.source.id !== pluginId) break;
-          actionTools.push(tool);
-        }
-        if (actionTools.length !== component.definition.actions.length) {
-          diagnostic(`Plugin UI component '${component.definition.id}' requires its own active Native tools.`);
-          continue;
-        }
-        bindings.push({ pluginId, pluginVersion: plugin.manifest.version, pluginDigest,
-          componentId: component.definition.id, componentDigest: component.componentDigest,
-          htmlSha256: component.htmlSha256, root: plugin.root, entryPath: component.entryPath,
-          definition: component.definition, actionTools });
-      }
-      pluginUi.push(...createRunCapabilityView({ toolRegistry: hostToolRegistry,
-        pluginIds: new Set([pluginId]), pluginUi: bindings }, pluginId).pluginUi!.values());
-    } catch {
-      diagnostic("Plugin UI snapshot could not be verified.");
-    }
-  }
   await installProgrammaticExtensions(options);
 
   const credentialStore = new McpOAuthCredentialStore();
@@ -174,9 +126,14 @@ export async function installRuntimeIntegrations(
     options.mcpServers ?? options.discovery.mcpServers,
     options.executionEnvironment?.info,
   );
-  const enabledMcpServers = filterEnabledMcpServers(mcpServers);
-
   const serverOwners = new Map([...inventory.mcpServers].map(([id, owner]) => [owner.serverName, { id, ...owner }]));
+  for (const [name, config] of Object.entries(mcpServers)) {
+    if (serverOwners.has(name) && config.type === "stdio" && config.env) {
+      mcpServers[name] = { ...config, env: Object.fromEntries(Object.entries(config.env).map(([key, value]) => [key,
+        value === "${VYKOR_SESSION_ID}" ? createHash("sha256").update(options.sessionId ?? randomUUID()).digest("hex") : value])) };
+    }
+  }
+  const enabledMcpServers = filterEnabledMcpServers(mcpServers);
   const projectDeclaresMcpServers = async (): Promise<boolean> => {
     const project = await loadProjectSettings(options.cwd);
     return project?.mcpServers !== undefined;
@@ -221,11 +178,16 @@ export async function installRuntimeIntegrations(
       ? { domain: "control_plane", supportedEnvironments: ["local", "wsl"], network: true }
       : { domain: "environment", supportedEnvironments: ["local", "wsl"] };
   };
+  const installedMcpApps = new Map<string, { resources: CapturedMcpAppResources; tools: ToolDefinition[] }>();
   const commitMcpTools = (name: string, tools: ToolDefinition[]): void => {
+    const installed = tools.map((tool) => ({ ...tool, execution: executionFor(name) }));
+    const resources = mcpManager.captureAppResources(name);
     runtime.toolRegistry.replaceBySource(
       { kind: "mcp", id: name },
-      tools.map((tool) => ({ ...tool, execution: executionFor(name) })),
+      installed,
     );
+    if (resources) installedMcpApps.set(name, { resources, tools: installed });
+    else installedMcpApps.delete(name);
   };
   const connectionErrors = new Map<string, string>();
 
@@ -262,6 +224,7 @@ export async function installRuntimeIntegrations(
   };
 
   const disconnectServer = async (name: string): Promise<void> => {
+    installedMcpApps.delete(name);
     runtime.toolRegistry.replaceBySource({ kind: "mcp", id: name }, []);
     await mcpManager.disconnect(name);
   };
@@ -401,15 +364,80 @@ export async function installRuntimeIntegrations(
       });
     return createRunCapabilityView({
       toolRegistry: runtime.toolRegistry,
+      appToolRegistry: getAppToolRegistry(runtime.toolRegistry),
       delegatableToolRegistry: getDelegationToolRegistry(runtime.toolRegistry),
       pluginIds: new Set(inventory.plugins.keys()),
       pluginPreparationErrors: preparationErrors,
-      skills, agents, mcpServers: connectedServers, pluginUi,
+      skills, agents, mcpServers: connectedServers,
     }, scope);
   };
 
+  const staticAppSnapshots = new Map<string, NativePluginAppResourceSnapshot>();
+  let pluginAppsActive = true;
+  runtime.addCleanup(() => {
+    pluginAppsActive = false;
+    for (const snapshot of staticAppSnapshots.values()) snapshot.revoke();
+    staticAppSnapshots.clear();
+  });
+  const pluginApps: PluginAppBackendCatalogue = Object.freeze({
+    list: () => Object.freeze(options.settings.plugins?.uiEnabled === false ? [] : options.discovery.plugins.flatMap(plugin => {
+      const pluginDigest = inventory.plugins.get(plugin.manifest.id)?.behaviorDigest;
+      if (!pluginDigest || plugin.components.apps?.status !== "loaded") return [];
+      return (plugin.components.apps.value ?? []).flatMap(metadata => metadata.definition.backends.map(backend => Object.freeze({
+        pluginId: plugin.manifest.id, pluginVersion: plugin.manifest.version, pluginDigest,
+        definitionDigest: metadata.definitionDigest, backend,
+        surfaces: Object.freeze(metadata.definition.surfaces.filter(surface => surface.backend === backend.id)),
+      })));
+    })),
+    capture: async (pluginId: string, backendId: string) => {
+      if (!pluginAppsActive || options.settings.plugins?.uiEnabled === false) return undefined;
+      const plugin = options.discovery.plugins.find(item => item.manifest.id === pluginId);
+      if (!plugin || plugin.components.apps?.status !== "loaded") return undefined;
+      const metadata = plugin.components.apps.value?.find(app => app.definition.backends.some(backend => backend.id === backendId));
+      const definition = metadata?.definition.backends.find(backend => backend.id === backendId);
+      const pluginDigest = inventory.plugins.get(pluginId)?.behaviorDigest;
+      if (!metadata || !definition || !pluginDigest) return undefined;
+      // Re-verify installed approval, winner and bytes without selecting/injecting this plugin into a model Run.
+      const snapshotKey = `${pluginId}:${backendId}`;
+      try {
+        await pluginSelection.validate({ pluginId, displayName: plugin.manifest.displayName ?? plugin.manifest.name,
+          description: plugin.manifest.description ?? "", version: plugin.manifest.version, behaviorDigest: pluginDigest });
+        const checked = await loadNativeAppMetadata({ root: plugin.root, manifest: plugin.manifest,
+          manifestPath: join(plugin.root, ".vykor-plugin", "plugin.json") });
+        if (checked.status !== "loaded" || !checked.value?.some(app => app.declaredManifest === metadata.declaredManifest
+          && app.definitionDigest === metadata.definitionDigest)) throw new Error("plugin_app_definition_changed");
+      } catch (error) {
+        staticAppSnapshots.get(snapshotKey)?.revoke();
+        staticAppSnapshots.delete(snapshotKey);
+        throw error;
+      }
+      // Closing a runtime during asynchronous verification must not mint a new live snapshot.
+      if (!pluginAppsActive) return undefined;
+      const common = { pluginId, pluginVersion: plugin.manifest.version, pluginDigest, metadata, definition,
+        toolRegistry: getTrustedToolCatalogue(runtime.toolRegistry) };
+      if (definition.kind === "native-tools") {
+        if (definition.tools.length === 0) {
+          let resourceSnapshot = staticAppSnapshots.get(snapshotKey);
+          if (!resourceSnapshot) {
+            resourceSnapshot = createNativePluginAppResourceSnapshot();
+            staticAppSnapshots.set(snapshotKey, resourceSnapshot);
+          }
+          return captureNativePluginAppBackend({ ...common, root: plugin.root, resourceSnapshot });
+        }
+        const activation = toolActivations.find(item => item.pluginId === pluginId);
+        if (!activation?.host || activation.host.state !== "active") return undefined;
+        return captureNativePluginAppBackend({ ...common, root: plugin.root, host: activation.host });
+      }
+      const owner = serverOwners.get(definition.server);
+      const installed = installedMcpApps.get(definition.server);
+      if (owner?.pluginId !== pluginId || connectionSource(definition.server) !== "plugin" || !installed?.resources.isCurrent()) return undefined;
+      return captureMcpPluginAppBackend({ ...common, serverId: owner.id, resources: installed.resources, installedTools: installed.tools });
+    },
+  });
+
   return {
     pluginSelection,
+    pluginApps,
     getConnections: () => mcpManager.getConnections(),
     retainConnectionsForRun: () => mcpManager.retainCurrentConnections(),
   };

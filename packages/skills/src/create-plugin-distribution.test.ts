@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { createContext, runInContext } from "node:vm";
 import { afterEach, expect, it } from "vitest";
 import { createSkillRegistrySnapshot } from "./index.js";
 
@@ -37,19 +36,21 @@ it("loads a separately copied distribution as one user skill, not a bundled skil
     .toEqual(["create-plugin"]);
 });
 
-it("builds the copied UI example with Node alone and runs its actual preview tool", async () => {
+it("installs author dependencies, builds outside the repository and runs the actual preview tool", async () => {
   const root = await workspace();
   const plugin = join(root, "text-inspector");
   await cp(join(distribution, "assets", "text-inspector"), plugin, { recursive: true });
+  const installed = spawnSync("npm", ["ci", "--no-audit", "--no-fund"], { cwd: plugin, encoding: "utf8", shell: process.platform === "win32" });
+  expect(installed.status, installed.stderr).toBe(0);
   const built = spawnSync(process.execPath, [join(plugin, "scripts", "build-ui.mjs")], { encoding: "utf8" });
   expect(built.status, built.stderr).toBe(0);
   const html = await readFile(join(plugin, "ui", "panel.html"), "utf8");
   expect(spawnSync(process.execPath, ["--check", join(plugin, "ui", "panel.mjs")]).status).toBe(0);
-  expect(Buffer.byteLength(html)).toBeLessThanOrEqual(2 * 1024 * 1024);
+  expect(Buffer.byteLength(html)).toBeLessThanOrEqual(16 * 1024 * 1024);
   expect(html).not.toMatch(/<(?:script|link|iframe)\b[^>]*(?:src|href)=/i);
-  const manifest = JSON.parse(await readFile(join(plugin, "ui", "manifest.json"), "utf8"));
-  expect(manifest).toMatchObject({ schemaVersion: 2, components: [{ surface: "session-sidebar" }] });
-  expect(manifest.components[0].surfaces).toBeUndefined();
+  const manifest = JSON.parse(await readFile(join(plugin, "ui", "apps.json"), "utf8"));
+  expect(manifest).toMatchObject({ schemaVersion: 1, backends: [{ kind: "native-tools" }], surfaces: [{ availability: "session" }] });
+  expect(JSON.stringify(manifest)).not.toContain("inputSchema");
   const { registerTools } = await import(/* @vite-ignore */ pathToFileURL(join(plugin, "tools", "index.mjs")).href);
   const tools = registerTools();
   const check = tools.find(tool => tool.name === "TextInspectorCheck");
@@ -60,58 +61,21 @@ it("builds the copied UI example with Node alone and runs its actual preview too
   ], truncated: false });
   const result = preview.invoke({ text: "ok  \n\titem\n", selected: ["1:trailing-whitespace"] });
   expect(JSON.parse(result.content[0].text).text).toBe("ok\n\titem\n");
-  expect(result.metadata.ui.componentId).toBe("text-inspector");
-  expect(checked.metadata.ui.schemaVersion).toBe(2);
-  expect(result.metadata.ui.schemaVersion).toBe(2);
-});
+  expect(result.metadata.appData.text).toBe("ok\n\titem\n");
+  expect(checked.metadata.appData.findings).toHaveLength(2);
+  expect(result.metadata.ui).toBeUndefined();
+  expect(check.invoke({ text: "x".repeat(47998) }).metadata.appData).toBeDefined();
+  expect(check.invoke({ text: "x".repeat(47999) }).metadata).toBeUndefined();
+}, 120_000);
 
-it("uses the same current SDK/CSS in both distributions and communicates over its real wire", async () => {
-  const sdk = await readFile(join(distribution, "assets/text-inspector/ui/sdk.js"), "utf8");
-  expect(sdk).toBe(await readFile(fileURLToPath(new URL("../../../examples/plugins/text-inspector/ui/sdk.js", import.meta.url)), "utf8"));
-  const styles = await readFile(fileURLToPath(new URL("../../plugins/src/ui-styles.css", import.meta.url)), "utf8");
-  expect(await readFile(join(distribution, "assets/text-inspector/ui/styles.css"), "utf8")).toBe(styles);
-  expect(await readFile(fileURLToPath(new URL("../../../examples/plugins/text-inspector/ui/styles.css", import.meta.url)), "utf8"))
-    .toBe(styles);
-  const mountId = "20000000-0000-4000-8000-000000000001";
-  const snapshot = { instanceId: "10000000-0000-4000-8000-000000000001", revision: 1,
-    status: "open", data: { choices: ["one", "two"] }, actions: [], readOnly: false, locale: "zh-CN", surface: "session-sidebar",
-    appearance: { theme: "dark", colors: { background: "#111", foreground: "#fff", muted: "#222", mutedForeground: "#aaa",
-      primary: "#eee", primaryForeground: "#111", accent: "#444", border: "#555", destructive: "#f00" }, fontFamily: "sans-serif", fontSizePx: 16, reducedMotion: true },
-    capabilities: { draft: true, submit: true } };
-  let initialize: (event: unknown) => void = () => {};
-  const ready: unknown[] = [], requests: Array<Record<string, any>> = [];
-  const parent = { postMessage: (value: unknown) => ready.push(value) };
-  const window = { parent, addEventListener: (_: string, listener: typeof initialize) => { initialize = listener }, removeEventListener() {} };
-  const variables = new Map<string, string>();
-  const context = { window, structuredClone, TextEncoder, TextDecoder, setTimeout, clearTimeout, queueMicrotask,
-    CSS: { supports: () => true }, document: { documentElement: { style: { setProperty: (key: string, value: string) => variables.set(key, value) } } } };
-  const realm = createContext(context);
-  const inRealm = (value: unknown) => runInContext("JSON.parse(" + JSON.stringify(JSON.stringify(value)) + ")", realm);
-  // Browser structuredClone returns objects in the calling realm. Node's injected
-  // implementation would return host-realm objects, which strict record checks reject.
-  realm.structuredClone = inRealm;
-  const api = runInContext(sdk + "\nVykorPluginUi", realm);
-  const connected = api.createPluginUiClient();
-  expect(ready).toEqual([{ version: 2, type: "plugin-ui-ready" }]);
-  const port = { onmessage: null as null | ((event: { data: string }) => void), onmessageerror: null, start() {}, close() {},
-    postMessage(wire: string) {
-      const request = JSON.parse(wire); requests.push(request);
-      const result = request.method === "getSnapshot" ? snapshot : { kind: "conversation", mode: "draft", instanceId: snapshot.instanceId, revision: 1, added: true };
-      queueMicrotask(() => port.onmessage?.({ data: JSON.stringify({ version: 2, mountId, id: request.id, result }) }));
-    } };
-  initialize({ source: parent, data: inRealm({ version: 2, type: "plugin-ui-init", mountId }), ports: [port] });
-  port.onmessage!({ data: JSON.stringify({ version: 2, mountId, type: "snapshot", snapshot }) });
-  const client = await connected;
-  expect(await client.getSnapshot()).toEqual(snapshot);
-  api.applyPluginUiAppearance(inRealm(snapshot.appearance));
-  expect(variables.get("--ohs-background")).toBe("#111");
-  expect(variables.get("--ohs-font-size")).toBe("16px");
-  expect(variables.get("--ohs-motion-duration")).toBe("0ms");
-  expect(await client.requestConversation({ mode: "draft", expectedRevision: 1, text: "Explain", data: { selection: "two" } }))
-    .toMatchObject({ kind: "conversation", mode: "draft", added: true });
-  expect(requests[1]).toMatchObject({ version: 2, mountId, method: "requestConversation",
-    params: { mode: "draft", expectedRevision: 1, text: "Explain", data: { selection: "two" } } });
-  client.dispose();
+it("ships identical official App sources and offline pages in both distributions", async () => {
+  const example = fileURLToPath(new URL("../../../examples/plugins/text-inspector/", import.meta.url));
+  for (const file of ["ui/panel.mjs", "ui/panel.html", "ui/styles.css", "ui/apps.json", "scripts/build-ui.mjs", "package.json", "package-lock.json", "tools/index.mjs"])
+    expect(await readFile(join(distribution, "assets/text-inspector", file), "utf8")).toBe(await readFile(join(example, file), "utf8"));
+  const panel = await readFile(join(example, "ui/panel.mjs"), "utf8");
+  expect(panel).toContain('from "@modelcontextprotocol/ext-apps"');
+  expect(panel).not.toMatch(/VykorPluginUi|requestAction|requestConversation/);
+  await expect(readFile(join(example, "ui/sdk.js"))).rejects.toThrow();
 });
 
 it.each([

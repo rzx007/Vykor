@@ -43,6 +43,8 @@ export interface NativeToolHostOptions {
 }
 
 export class NativeToolHost {
+  /** Changes at every process start, including a restart of the same host object. */
+  generation = randomUUID();
   private child: ChildProcess | undefined;
   private pending = new Map<string, PendingRequest>();
   private stopping = false;
@@ -59,6 +61,7 @@ export class NativeToolHost {
     if (this.child) throw new NativeToolHostError("tool_protocol_error", "Native Tool Host is already started");
     const entries = this.plugin.components.tools?.value ?? [];
     if (entries.length === 0) return [];
+    this.generation = randomUUID();
     this.state = "starting";
     const hostEntry = new URL("./host-entry.mjs", import.meta.url);
     const inheritedEnv = ["PATH", "Path", "SystemRoot", "WINDIR", "ComSpec", "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG"]
@@ -112,11 +115,17 @@ export class NativeToolHost {
   ): Promise<ToolResult> {
     if (this.state !== "active") throw new NativeToolHostError("tool_host_unavailable", `Native Tool Host is ${this.state}`);
     const timeoutMs = this.options.callTimeoutMs ?? 60_000;
-    return await this.request("callTool", {
+    const result = await this.request("callTool", {
       name,
       input,
       context: { ...context, deadline: Date.now() + timeoutMs },
     }, timeoutMs, signal) as ToolResult;
+    // Receipt of the original invoke response is a host fact, including business errors.
+    // Untrusted plugin fields cannot claim that this completed invocation never started.
+    // Core ToolResult also has an optional MCP-only field. Native results never establish MCP provenance.
+    // Drop it before checked execution can parse it; Native pages use text and metadata.appData only.
+    const { mcpResult: _mcpResult, ...nativeResult } = result;
+    return { ...nativeResult, executionState: "completed" };
   }
 
   async stop(): Promise<void> {

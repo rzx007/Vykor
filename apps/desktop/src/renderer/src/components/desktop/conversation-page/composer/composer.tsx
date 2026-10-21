@@ -15,6 +15,7 @@ import type {
   DesktopSessionRecord,
 } from "@shared/session-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
 import { ComposerAttachments } from "./composer-attachments"
 import { readComposerDrop } from "./composer-file-input"
 import { ComposerIconButton, ComposerSendButton, PermissionModeMenu, permissionModeIcons } from "./controls"
@@ -274,6 +275,7 @@ export function Composer({
         </div>
       ) : null}
       {contextContent}
+      {!goalEditing && !goalMode && <PluginAppComposerContext sessionId={activeSessionId} readOnly={sending} />}
       <ComposerAttachments
         attachments={attachments}
         readOnly={attachmentReadOnly || sending}

@@ -9,6 +9,7 @@ import type {
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { ExecutionEnvironmentHandle, ShellDescriptor } from "@vykor/environment";
+import type { McpCallResultData, McpToolAnnotations, McpToolUiMetadata } from "@vykor/protocol";
 
 export interface McpAuthConfigureInput {
   serverName: string;
@@ -140,6 +141,8 @@ export interface ToolContext {
 
 export interface ToolResult {
   content: ContentBlock[];
+  /** Original bounded MCP response; private to the authorized application host. */
+  mcpResult?: McpCallResultData;
   isError?: boolean;
   failureKind?: ToolFailureKind;
   executionState?: ToolExecutionState;
@@ -192,6 +195,9 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Presentation hints, never authorization. */
+  ui?: McpToolUiMetadata;
+  annotations?: McpToolAnnotations;
   /** Resolve one parameter from a settled same-tool call before validation and authorization. */
   inputReuse?: {
     property: string;
@@ -214,6 +220,8 @@ export interface ToolDescriptor {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Readonly<Record<string, unknown>>;
+  readonly ui?: McpToolUiMetadata;
+  readonly annotations?: McpToolAnnotations;
   readonly safeToRetry?: boolean;
   readonly execution?: ToolExecutionSpec;
 }

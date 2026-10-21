@@ -2,11 +2,11 @@ import type { PluginDiagnostic } from "./diagnostics.js";
 import type { HookDefinition, McpServerConfig } from "@vykor/core";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { SkillDefinition } from "@vykor/skills";
-import type { PluginPresentation, PluginUiComponentDefinition } from "@vykor/protocol";
+import type { PluginPresentation } from "@vykor/protocol";
 
 export const NATIVE_PLUGIN_COMPONENT_KINDS = [
   "skills", "agents", "hooks", "mcpServers", "lspServers", "tools", "workflows",
-  "channels", "providers", "ui", "outputStyles", "themes", "monitors", "binaries",
+  "channels", "providers", "ui", "apps", "outputStyles", "themes", "monitors", "binaries",
 ] as const;
 
 export type NativePluginComponentKind = (typeof NATIVE_PLUGIN_COMPONENT_KINDS)[number];
@@ -38,20 +38,11 @@ export interface VykorPluginComponents {
   channels?: string[];
   providers?: string[];
   ui?: string[];
+  apps?: string[];
   outputStyles?: string[];
   themes?: string[];
   monitors?: string[];
   binaries?: string[];
-}
-
-/** Static, host-only information. Absolute entry paths never enter the management response. */
-export interface NativeUiComponentMetadata {
-  definition: PluginUiComponentDefinition;
-  declaredManifest: string;
-  declaredEntry: string;
-  entryPath: string;
-  htmlSha256: string;
-  componentDigest: string;
 }
 
 export interface VykorPluginPermissions {
@@ -111,7 +102,7 @@ export interface NativePluginComponents {
   hooks?: PluginComponentResult<HookDefinition[]>;
   mcpServers?: PluginComponentResult<Record<string, McpServerConfig>>;
   tools?: PluginComponentResult<NativeToolMetadata[]>;
-  ui?: PluginComponentResult<NativeUiComponentMetadata[]>;
+  apps?: PluginComponentResult<import("./components/apps.js").NativeAppMetadata[]>;
   unsupported?: Partial<Record<NativePluginComponentKind, PluginComponentResult<never>>>;
 }
 

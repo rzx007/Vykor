@@ -25,7 +25,7 @@ export {
   AuthResource,
   ProjectResource,
   PluginResource,
-  PluginUiResource,
+  PluginUiHistoryResource,
   DevelopmentResource,
   SessionResource,
   AttachmentResource,
@@ -42,31 +42,9 @@ export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActi
 export { normalizeApprovalMode, isWorkMode } from "@vykor/protocol";
 export type { ApprovalMode, WorkMode, ApprovalReviewRecord } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
-export { parsePluginUiAppearance } from "@vykor/protocol";
-export { stringifyPluginUiJson, parsePluginUiConversationRequest, parsePluginUiConversationPrepared,
-  parsePluginUiConversationReceipt, parsePluginUiSubmissionRecord, ProtocolValidationError } from "@vykor/protocol";
-export type { PluginUiAppearance, PluginUiConversationReceipt, PluginUiConversationRequest, PluginUiConversationPrepared,
-  SubmitPluginUiConversationInput, PluginUiSubmissionRecord } from "@vykor/protocol";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
 export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
-export {
-  PLUGIN_UI_BRIDGE_LIMITS, PluginUiBridgeError, decodePluginUiBridgeMessage, encodePluginUiBridgeMessage,
-  parsePluginUiBridgeRequest, parsePluginUiBridgeSnapshot, parsePluginUiBridgeReceipt,
-  readPluginUiBridgeResponse, readPluginUiBridgeNotification, readPluginUiInstance, readPluginUiAction,
-} from "@vykor/protocol";
 export type {
-  JsonValue, PluginUiViewSnapshot, PluginUiSurface, PluginUiBridgeMethod,
-  PluginUiBridgeRequest, PluginUiBridgeResponse, PluginUiBridgeNotification,
-  PluginUiActionRunMetadata,
-  DismissPluginUiInput,
-  InvokePluginUiActionInput,
-  PluginUiActionReceipt,
-  PluginUiActionResponse,
-  PluginUiActionDescription,
-  PluginUiAvailability,
-  PluginUiDocumentResponse,
-  PluginUiInstanceRecord,
-  PluginUiInstanceResponse,
   PluginCatalogEntry,
   AgentEnvironmentCapabilities,
   AttachmentAssetRecord,
@@ -286,3 +264,11 @@ export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
 
 export { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 export type { OfficeFormat, OfficePreview } from "@vykor/protocol";
+
+export { PluginAppResource } from "./resources/plugin-app-resource.js";
+export type { PluginAppToolRequest, PluginAppConversationRequest, PluginAppActionResponse, PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppRecord, PluginAppSource, PluginAppRuntimeLease, PluginAppResponse } from "@vykor/protocol";
+export { PLUGIN_APP_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest, parseMcpCallResultData } from "@vykor/protocol";
+export { isPluginAppAdmissionRejection, type PluginAppAdmissionRejection } from "@vykor/protocol";
+
+export { readPluginUiInstance, readPluginUiAction, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, ProtocolValidationError } from "@vykor/protocol";
+export type { JsonValue, PluginUiInstanceRecord, PluginUiActionRunMetadata, PluginUiActionReceipt, PluginUiActionResponse, PluginUiSubmissionRecord, PluginUiConversationReceipt } from "@vykor/protocol";

@@ -1,4 +1,9 @@
+import { PluginUiHistoryService } from "./session/plugin-ui-history-service.js";
+import { retirePluginUiActions } from "./recovery/retire-plugin-ui-actions.js";
+import type { PluginLifecycle } from "./session/plugin-lifecycle.js";
 import { randomUUID } from "node:crypto";
+import { assemblePluginApps } from "./session/plugin-app-assembly.js";
+import { PluginAppConversationService } from "./session/plugin-app-conversation-service.js";
 
 import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
 import type { ChannelConfigStore } from "@vykor/auth";
@@ -85,10 +90,6 @@ import { createSessionRuntimeDiscovery } from "./session/session-runtime-discove
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
-import { SessionPluginUiService } from "./session/session-plugin-ui-service.js";
-import { SessionPluginUiConversationService } from "./session/session-plugin-ui-conversation-service.js";
-import { SessionPluginUiActionExecutor } from "./session/session-plugin-ui-action-executor.js";
-import { resolveSessionPluginUiCurrent } from "./session/session-plugin-ui-current.js";
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
 import { SessionExecutionProjector } from "./session/session-execution-projector.js";
 import { BackgroundShellService } from "./session/background-shell-service.js";
@@ -165,8 +166,10 @@ export interface DaemonApplicationOptions {
  */
 export interface DurableAgentApplication {
   readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
-  readonly pluginUi?: SessionPluginUiService;
-  readonly pluginUiConversation?: SessionPluginUiConversationService;
+  readonly pluginUiHistory?: PluginUiHistoryService;
+  readonly pluginLifecycle?: PluginLifecycle;
+  readonly pluginApps?: ReturnType<typeof assemblePluginApps>;
+  readonly pluginAppConversation?: PluginAppConversationService;
   readonly store: SessionStore;
   readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
@@ -212,8 +215,10 @@ function failMissingSettings(): never {
  * → onEvent 进投影 → 写成会话记录 → events 推给窗口。
  */
 export class DaemonApplication implements DurableAgentApplication {
-  readonly pluginUi: SessionPluginUiService;
-  readonly pluginUiConversation: SessionPluginUiConversationService;
+  readonly pluginUiHistory: PluginUiHistoryService;
+  readonly pluginLifecycle: PluginLifecycle;
+  readonly pluginApps: ReturnType<typeof assemblePluginApps>;
+  readonly pluginAppConversation: PluginAppConversationService;
   readonly store: SessionStore;
   readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
@@ -363,59 +368,22 @@ export class DaemonApplication implements DurableAgentApplication {
         sessions: store.sessions, operationGate: this.operationGate, events: this.eventPublisher,
         assertReady: () => this.assertReady(),
       });
-      let actionExecutor: SessionPluginUiActionExecutor;
       const application = this;
-      const pluginUiTransaction: SessionStore["transaction"] = work => store.transaction(work);
       const runtimeDiscovery = createSessionRuntimeDiscovery(options);
       const pluginCapabilities = new SessionPluginCapabilityService({
         store,
         resolveInventory: runtimeDiscovery.resolvePluginInventory,
       });
-      this.pluginUi = new SessionPluginUiService({
-        store,
-        transaction: pluginUiTransaction,
-        verifySourceBinding: async binding => await computePluginBehaviorDigest(binding.root) === binding.pluginDigest,
-        lifecycle: {
-          interruptRun: (sessionId, runId) => this.runControl.interruptRun(sessionId, runId, "plugin_ui_lifecycle_changed"),
-          waitForRuns: ids => this.runControl.waitForRuns(ids),
-          checkpoint: () => this.eventPublisher.checkpoint(),
-          publishSince: checkpoint => this.eventPublisher.publishSince(checkpoint),
-        },
-        resolveCurrent: async (session, instance) => {
-          this.assertReady();
-          // Protect settings/install verification as well as Runtime preparation from maintenance.
-          const lease = this.operationGate.enter({ sessionId: session.id, cwd: session.cwd });
-          try {
-            const current = await resolveSessionPluginUiCurrent(session, instance, {
-              settings: options.getSettingsForCwd ? await options.getSettingsForCwd(session.cwd) : (options.getSettings?.() ?? options.settings),
-              acquireSession: id => {
-                this.assertReady();
-                return this.agentPool.acquireSession(id);
-              },
-            });
-            // Shutdown can start at any await; it must not become a Host-failed read-only fallback.
-            this.assertReady();
-            return current;
-          } finally { lease.release(); }
-        },
-        diagnose: diagnostic => options.log({ level: "warn", event: diagnostic.code,
-          sessionId: diagnostic.sessionId, runId: diagnostic.runId }),
-        actions: {
-          operations: this.operationRunner,
-          // Resolve the existing engine after assembly; no second lane or coordinator.
-          engine: { enqueueHostWork: input => this.runEngine.enqueueHostWork(input),
-            get runtimeBridge() { return application.runEngine.runtimeBridge; } },
-          acquireSession: id => this.agentPool.acquireSession(id),
-          execute: (id, context) => actionExecutor.execute(id, context),
-        },
-      });
-      actionExecutor = new SessionPluginUiActionExecutor({ store, transaction: pluginUiTransaction, service: this.pluginUi,
-        operationGate: this.operationGate, events: this.eventPublisher });
+      this.pluginUiHistory = new PluginUiHistoryService({ store });
+      this.pluginLifecycle = { withMutation: async (scope, work) => {
+        const release = await this.pluginApps.revokeScope(scope);
+        try { return await work(); } finally { release(); }
+      } };
       this.transcriptProjection = new SessionTranscriptProjection({
         conversations: store.conversations,
         incrementalOutput: store.incrementalOutput,
         runs: store.runs,
-      }, this.pluginUi);
+      });
       this.executionProjector = new SessionExecutionProjector({
         store,
         getChildAgentExecutionRegistry: (scope) => getChildAgentExecutionRegistry(scope),
@@ -633,9 +601,6 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         onRunCapabilities: snapshot => {
           pluginCapabilities.authorizeRun(snapshot);
-          if (snapshot.capabilityView.pluginUi?.size) {
-            return this.pluginUi.registerRunView(snapshot.scope.runId, snapshot.capabilityView);
-          }
         },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
@@ -645,7 +610,6 @@ export class DaemonApplication implements DurableAgentApplication {
             rootAgent: agent,
             store,
             transcriptProjection: this.transcriptProjection,
-            pluginUi: this.pluginUi,
             executionProjector: this.executionProjector,
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
@@ -789,11 +753,12 @@ export class DaemonApplication implements DurableAgentApplication {
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
-        resolveSessionSettings, autoReview, workspaceChanges, pluginUi: this.pluginUi,
+        resolveSessionSettings, autoReview, workspaceChanges,
       });
       const runExecutor = runExecution.executor;
       const materializeSteerInput = runExecution.materializeSteerInput;
       const runServices = assembleSessionRunServices({
+        materializePluginAppContexts: (sessionId, value) => this.pluginApps.apps.materializeComposerContexts(sessionId, value),
         children: this.liveChildren,
         pendingPermissionId: (sessionId) => store.permissions.list({ sessionId, status: "pending" })[0]?.id,
         store, goals: store.goals, agentPool: this.agentPool, runExecutor, events: this.eventPublisher,
@@ -806,9 +771,13 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runAdmission = runServices.admission;
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
-      this.pluginUiConversation = new SessionPluginUiConversationService({ store, source: this.pluginUi,
-        operations: this.operationRunner, admission: this.runAdmission, pluginCapabilities,
-        modelAvailable: async sessionId => {
+      this.pluginApps = assemblePluginApps({ store, operations: this.operationRunner, engine: this.runEngine,
+        acquireSession: id => this.agentPool.acquireSession(id), operationGate: this.operationGate, events: this.eventPublisher,
+        settings: async cwd => await resolveSessionSettings(cwd),
+        interrupt: (sessionId, runId) => { this.runControl.interruptRun(sessionId, runId, "plugin_app_cancelled"); },
+        waitForRuns: ids => this.runControl.waitForRuns(ids),
+      });
+      const pluginAppModelAvailable = async (sessionId: string) => {
           if (!this.agentPool.configured) return false;
           const session = store.sessions.get(sessionId);
           if (!session) return false;
@@ -818,8 +787,9 @@ export class DaemonApplication implements DurableAgentApplication {
           validateRequestSelection({ catalog: await this.modelCatalog.load(), provider: runtime.provider,
             model: runtime.model, effort: runtime.effort, explicitEffort: false, customProviders: settings.customProviders });
           return true;
-        },
-      });
+      };
+      this.pluginAppConversation = new PluginAppConversationService({ store, apps: this.pluginApps.apps, actions: this.pluginApps.actions,
+        operations: this.operationRunner, admission: this.runAdmission, pluginCapabilities, modelAvailable: pluginAppModelAvailable });
       /**
        * 控制服务：
        * 1. 接收控制命令（如停止、重启）
@@ -889,7 +859,7 @@ export class DaemonApplication implements DurableAgentApplication {
         resolveSessionListTitle: (id) => store["resolveSessionListTitle"](id),
       });
       this.commands = new SessionCommandService({
-        pluginUi: this.pluginUi,
+        pluginLifecycle: this.pluginLifecycle,
         validateRequestSelection: async ({ session, next, explicitEffort }) => {
           const settings = options.getSettingsForCwd
             ? await options.getSettingsForCwd(session.cwd)
@@ -1039,7 +1009,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       // 构造可以立刻返回；workflow 恢复跑完才算 ready，避免一上来就对半截工作流动手。
       const recovery = new StartupRecoveryService({
-        recoverPluginUiActions: () => this.pluginUi.recover(),
+        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
         reconcileGoalModelAttempts: () => { store.goals.reconcileGoalModelAttempts(); },

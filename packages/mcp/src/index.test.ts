@@ -140,6 +140,50 @@ describe("McpClientManager", () => {
     expect(result.isError).toBe(false);
   });
 
+  it("preserves the complete MCP response through a tool definition without leaking private metadata into text", async () => {
+    await manager.connect("notes", { type: "stdio", command: "node" });
+    const client = manager["clients"].get("notes") as { callTool: ReturnType<typeof vi.fn> };
+    const raw = { content: [{ type: "text", text: " saved " }, { type: "image", data: "raw-image", mimeType: "image/png" }], structuredContent: { documentId: "note-1", revision: 2 }, _meta: { uiOnly: { cursor: 8 }, executionState: "not_started" }, isError: false };
+    client.callTool.mockResolvedValue(raw);
+    const result = await manager.getAsToolDefinitions()[0]!.execute({}, { cwd: "/work" });
+    expect(result.mcpResult).toEqual(raw);
+    expect(result.content).toEqual([{ type: "text", text: " saved " }]);
+    expect(result.executionState).toBe("completed");
+    expect(JSON.stringify(result.content)).not.toMatch(/uiOnly|raw-image|not_started/);
+  });
+
+  it("uses structured JSON as model text only without text and preserves completed business errors", async () => {
+    await manager.connect("notes", { type: "stdio", command: "node" });
+    const client = manager["clients"].get("notes") as { callTool: ReturnType<typeof vi.fn> };
+    client.callTool.mockResolvedValue({ content: [], structuredContent: { revision: 3 }, _meta: { uiOnly: "private" }, isError: true });
+    expect(await manager.callTool("notes", "save", {})).toMatchObject({ content: '{"revision":3}', isError: true, executionState: "completed" });
+  });
+
+  it("reports oversized results after execution as unknown without silently truncating or exposing SDK errors", async () => {
+    await manager.connect("notes", { type: "stdio", command: "node" });
+    const client = manager["clients"].get("notes") as { callTool: ReturnType<typeof vi.fn> };
+    client.callTool.mockResolvedValueOnce({ content: [], _meta: { uiOnly: "private".repeat(200_000) } });
+    const oversized = await manager.callTool("notes", "save", {});
+    expect(oversized).toMatchObject({ isError: true, executionState: "unknown", failureKind: "transport", content: expect.stringContaining("1 MiB") });
+    expect(oversized.mcpResult).toBeUndefined();
+    client.callTool.mockRejectedValueOnce(new Error('Invalid result: _meta.uiOnly="secret"'));
+    expect(JSON.stringify(await manager.callTool("notes", "save", {}))).not.toContain("secret");
+    expect(client.callTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains only normalized UI and annotations during discovery", async () => {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    vi.mocked(Client).mockImplementationOnce(() => ({
+      connect: vi.fn(), close: vi.fn(),
+      listTools: vi.fn().mockResolvedValue({ tools: [{ name: "save", inputSchema: { type: "object" }, _meta: { ui: { visibility: ["app"] }, uiOnly: "secret" }, annotations: { readOnlyHint: true } }] }),
+      listResources: vi.fn().mockResolvedValue({ resources: [] }),
+    } as any));
+    const connection = await manager.connect("notes", { type: "stdio", command: "node" });
+    expect(connection.tools[0]).toMatchObject({ ui: { visibility: ["app"] }, annotations: { readOnlyHint: true } });
+    expect(manager.getAsToolDefinitions()[0]).toMatchObject({ ui: { visibility: ["app"] } });
+    expect(JSON.stringify(connection.tools)).not.toContain("uiOnly");
+  });
+
   it("forwards a tool abort signal to MCP requests", async () => {
     await manager.connect("test", { type: "stdio", command: "node" });
     const controller = new AbortController();

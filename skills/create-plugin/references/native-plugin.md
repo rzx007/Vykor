@@ -24,11 +24,11 @@ ID 使用稳定的点分名称，name 使用小写连字符名称。组件路径
 | Hook | `"hooks": ["./hooks/hooks.json"]` | Native 事件名与执行配置 |
 | MCP | `"mcpServers": ["./mcp/servers.json"]` | `servers` 对象 |
 | Node 工具 | `"tools": [{"entry":"./tools/index.mjs","runtime":"node","permissions":[]}]` | 导出 `registerTools` |
-| 交互 UI | `"ui": ["./ui/manifest.json"]` | UI 定义，见 [插件 UI](plugin-ui.md) |
+| 交互 UI | `"apps": ["./ui/apps.json"]` | UI 定义，见 [插件 UI](plugin-apps.md) |
 
 有 Node 工具时，可同时声明 `"runtime":{"engine":"node","isolation":"process"}`。不要把 schema 中的预留组件或其他产品的插件格式当作已开放能力。
 
-Native 根 manifest 保持 schemaVersion 1；UI 定义与工具 metadata.ui 建议是 schemaVersion 2。UI 组件声明单个 surface；普通会话交接和当前浏览器快照字段见 [插件 UI](plugin-ui.md)。
+Native 根 manifest 保持 schemaVersion 1；apps.json 使用 schemaVersion 1，Native Tool 通过 metadata.appData 提供页面数据。页面使用官方 MCP Apps API，具体接口见 [插件 UI](plugin-apps.md)。
 
 ## Native Tool
 

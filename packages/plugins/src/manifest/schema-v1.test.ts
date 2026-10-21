@@ -10,6 +10,11 @@ const validManifest = {
 };
 
 describe("VykorPluginManifestV1Schema", () => {
+  it("accepts bounded apps declarations without replacing legacy UI in the migration phase", () => {
+    const apps = Array.from({ length: 8 }, (_, index) => `./ui/apps-${index}.json`);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, components: { apps, ui: ["./ui/manifest.json"] } }).success).toBe(true);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, components: { apps: [...apps, "./extra.json"] } }).success).toBe(false);
+  });
   it.each(["https://example.test/icon.png", "data:image/png;base64,aGVsbG8="])("accepts presentation with icon %s", (icon) => {
     const input = { ...validManifest, icon, introduction: "## 能做什么\n整理资料。",
       prompts: [{ title: "整理资料", prompt: "帮我整理这些资料，并标出来源。" }] };

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionStore } from "@vykor/services";
 import type { SessionInputRecord } from "@vykor/protocol";
 
 import { SessionTranscriptProjection } from "../transcript-projection.js";
@@ -71,6 +75,25 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
+  it("persists the full MCP result through tool completion and SQLite close/reopen", () => {
+    const directory = mkdtempSync(join(tmpdir(), "oh-mcp-result-"));
+    const path = join(directory, "store.db");
+    let store = new SessionStore({ path });
+    const raw = { content: [{ type: "text", text: "saved" }], structuredContent: { documentId: "note-1", revision: 2 }, _meta: { uiOnly: { cursor: 8 } }, isError: false };
+    try {
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.runs.createRun({ id: "r1", sessionId: "s1" });
+      const projection = new SessionTranscriptProjection(store);
+      const state = projection.beginRun("s1", "i1", "r1", createInput());
+      projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result: { content: [{ type: "text", text: "saved" }], mcpResult: raw, executionState: "completed" } });
+      store.close();
+      store = new SessionStore({ path });
+      const saved = store.conversations.listMessageParts("s1").find(part => part.type === "tool")!;
+      expect((saved.output as { mcpResult: unknown }).mcpResult).toEqual(raw);
+      expect(saved.metadata).toMatchObject({ executionState: "completed", toolFeedbackVersion: 1 });
+      expect(saved.metadata.mcpResult).toBeUndefined();
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it.each(["failed", "interrupted"] as const)("closes queued tools as not started when the run is %s", (status) => {
     const store = createStore();
     store.listMessages.mockReturnValue([{ id: "m1", runId: "r1" }] as any);

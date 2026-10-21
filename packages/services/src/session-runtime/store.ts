@@ -105,6 +105,7 @@ import {
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
 import { NoteRepository } from "../notes/note-repository.js";
+import { PluginAppRepository } from "../plugin-apps/index.js";
 import {
   type CreateSessionGoalStoreInput,
   type SessionGoalRequestRecord,
@@ -202,6 +203,7 @@ export class SessionStore {
   readonly projects!: ProjectRepository;
   readonly schedules!: ScheduleRepository;
   readonly notes!: NoteRepository;
+  readonly pluginApps!: PluginAppRepository;
   readonly workflows!: WorkflowRepository;
   readonly channels!: ChannelRepository;
   readonly permissions!: PermissionRepository;
@@ -278,6 +280,9 @@ export class SessionStore {
       this.projects = new ProjectRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.notes = new NoteRepository(this.storage);
+      this.pluginApps = new PluginAppRepository(this.storage, app => {
+        this.conversations.appendEventInMemory({ sessionId: app.sessionId, type: "session.plugin_app.updated", payload: { app } });
+      });
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
       this.conversations = new ConversationRepository({
@@ -326,6 +331,7 @@ export class SessionStore {
         appendEvent: (input) => this.conversations.appendEvent(input),
       });
       this.conversationTransactions = new ConversationTransactions({
+        listPluginApps: sessionId => this.pluginApps.list(sessionId),
         storage: this.storage,
         conversations: this.conversations,
         sessions: this.sessions,

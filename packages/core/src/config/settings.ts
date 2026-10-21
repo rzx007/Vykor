@@ -90,7 +90,7 @@ export async function loadSettings(
   cliOverrides?: Partial<Settings>,
   options: { projectRoot?: string; includeProject?: boolean; includeEnvironment?: boolean } = {},
 ): Promise<Settings> {
-  assertPluginUiEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
+  assertPluginAppsEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
   assertAgentEnvironment(cliOverrides?.agentEnvironment, "CLI overrides");
   // 从环境变量加载配置
   const envSettings = options.includeEnvironment === false ? {} : loadFromEnv();
@@ -491,7 +491,7 @@ function validateSettingsFields(
   }
   assertNestedFields(settings, "terminal", ["localShell"], configPath);
   assertNestedFields(settings, "plugins", ["enabled", "uiEnabled"], configPath);
-  assertPluginUiEnabled(recordValue(settings.plugins)?.uiEnabled, configPath);
+  assertPluginAppsEnabled(recordValue(settings.plugins)?.uiEnabled, configPath);
   assertNestedFields(settings, "daemon", ["autoStart"], configPath);
   assertNestedFields(settings, "autoReview", ["mode"], configPath);
   const autoReview = recordValue(settings.autoReview);
@@ -556,7 +556,7 @@ function assertAgentEnvironment(value: unknown, source: string): void {
   parseAgentEnvironmentSettings(environment);
 }
 
-function assertPluginUiEnabled(value: unknown, configPath: string): void {
+function assertPluginAppsEnabled(value: unknown, configPath: string): void {
   if (value !== undefined && typeof value !== "boolean") {
     throw new SettingsFileError("settings.plugins.uiEnabled", configPath);
   }

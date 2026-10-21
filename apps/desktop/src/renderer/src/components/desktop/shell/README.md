@@ -17,3 +17,5 @@
 ## 维护约定
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../AGENTS.md)。
+
+- [plugin-apps](plugin-apps/README.md)：根节点拥有 MCP Apps 常驻 iframe，侧栏只提供位置；Main 保留原会话、后台和操作权限。

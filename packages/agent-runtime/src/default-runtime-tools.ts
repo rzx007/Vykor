@@ -1,5 +1,5 @@
 import type { IToolRegistry, RunCapabilityView, ToolDefinition } from "@vykor/core";
-import { resolveToolExecution, ToolRegistrationError } from "@vykor/core";
+import { isToolVisibleTo, resolveToolExecution, ToolRegistrationError } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 import type { VykorAgentConfiguration } from "./agent-options.js";
@@ -101,6 +101,7 @@ class RuntimeToolRegistry implements IToolRegistry {
     private readonly deniedTools: ReadonlySet<string>,
     private readonly environment?: ExecutionEnvironmentHandle,
     private readonly delegationAllowedTools: ToolLimit = allowedTools,
+    private readonly audience: "model" | "app" | "host" = "model",
   ) {}
 
   register(tool: ToolDefinition, source?: Parameters<IToolRegistry["register"]>[1]): void {
@@ -153,7 +154,22 @@ class RuntimeToolRegistry implements IToolRegistry {
     );
   }
 
+  appRegistry(): RuntimeToolRegistry {
+    return new RuntimeToolRegistry(this.inner, this.allowedTools, this.deniedTools,
+      this.environment, this.delegationAllowedTools, "app");
+  }
+
+  trustedCatalogue(): RuntimeToolRegistry {
+    return new RuntimeToolRegistry(this.inner, this.allowedTools, this.deniedTools,
+      this.environment, this.delegationAllowedTools, "host");
+  }
+
   isVisible(tool: ToolDefinition): boolean {
+    return (this.audience === "host" || isToolVisibleTo(tool, this.audience)) && this.isPermitted(tool);
+  }
+
+  /** Shared execution policy, independent of model/app presentation. */
+  isPermitted(tool: ToolDefinition): boolean {
     if (this.allowedTools.kind === "none") return false;
     if (this.deniedTools.has(tool.name)) return false;
     const execution = resolveToolExecution(tool);
@@ -164,6 +180,16 @@ class RuntimeToolRegistry implements IToolRegistry {
       this.allowedTools.kind === "all" || this.allowedTools.names.has(tool.name)
     );
   }
+}
+
+/** Host-only registration catalogue: presentation-independent, with the original execution policy. */
+export function getTrustedToolCatalogue(registry: IToolRegistry): IToolRegistry {
+  return registry instanceof RuntimeToolRegistry ? registry.trustedCatalogue() : registry;
+}
+
+/** Private app directory retains the current role, host, deny and environment ceiling. */
+export function getAppToolRegistry(registry: IToolRegistry): IToolRegistry {
+  return registry instanceof RuntimeToolRegistry ? registry.appRegistry() : registry;
 }
 
 /** Host-only registry used to capture child permissions, never exposed to the model. */
@@ -184,8 +210,8 @@ export function constrainRunCapabilityTools(
   const delegation = registry.delegationRegistry();
   return restrictRunCapabilityView(
     view,
-    (_name, binding) => registry.isVisible(binding.definition),
-    (_name, binding) => delegation.isVisible(binding.definition),
+    (_name, binding) => registry.isPermitted(binding.definition),
+    (_name, binding) => delegation.isPermitted(binding.definition),
   );
 }
 

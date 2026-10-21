@@ -18,6 +18,35 @@ export function resolveToolExecution(tool: ToolDefinition): ToolExecutionSpec {
   return tool.execution ?? DEFAULT_TOOL_EXECUTION;
 }
 
+/** Presentation scope only. Malformed explicit metadata never widens either audience. */
+export function isToolVisibleTo(tool: ToolDefinition, audience: "model" | "app"): boolean {
+  if (tool.ui === undefined) return true;
+  const visibility = tool.ui?.visibility;
+  return Array.isArray(visibility) && visibility.length > 0
+    && visibility.every(value => value === "model" || value === "app")
+    && visibility.includes(audience);
+}
+
+function audienceToolRegistry(inner: IToolRegistry, audience: "model" | "app"): IToolRegistry {
+  const get = (name: string) => {
+    const tool = inner.get(name);
+    return tool && isToolVisibleTo(tool, audience) ? tool : undefined;
+  };
+  return {
+    register: (tool, source) => inner.register(tool, source),
+    override: (tool, source) => inner.override(tool, source),
+    replaceBySource: (source, tools) => inner.replaceBySource(source, tools),
+    unregister: name => inner.unregister?.(name) ?? false,
+    get, getAll: () => inner.getAll().filter(tool => isToolVisibleTo(tool, audience)),
+    has: name => get(name) !== undefined,
+    inspect: name => get(name) ? inner.inspect(name) : undefined,
+  };
+}
+
+export function modelToolRegistry(inner: IToolRegistry): IToolRegistry {
+  return audienceToolRegistry(inner, "model");
+}
+
 type ToolRegistrationErrorCode =
   | "tool_already_registered"
   | "tool_override_target_not_found";
@@ -189,8 +218,10 @@ export function runToolRegistry(
   allowedTools: readonly string[] | null,
   contribution: AgentExecutionContext["contribution"],
   view?: AgentExecutionContext["capabilityView"],
+  audience: "model" | "app" = "model",
 ): IToolRegistry {
-  const captured = view && new Map([...view.tools].map(([name, binding]) => [
+  const bindings = audience === "app" ? view?.appTools : view?.tools;
+  const captured = (view || audience === "app") && new Map([...(bindings ?? [])].map(([name, binding]) => [
     name, { ...binding.definition, execute: binding.invoke },
   ]));
   const base: IToolRegistry = captured ? {
@@ -201,19 +232,19 @@ export function runToolRegistry(
     getAll: () => [...captured.values()],
     has: (name) => captured.has(name),
     inspect: (name) => {
-      const binding = view!.tools.get(name);
+      const binding = bindings?.get(name);
       return binding ? { name, source: binding.source ?? { kind: "runtime" } } : undefined;
     },
   } : visibleToolRegistry(inner, allowedTools);
-  const contributed = contribution?.tools ?? [];
-  if (contributed.length === 0) return base;
+  const contributed = audience === "app" ? [] : contribution?.tools ?? [];
+  if (contributed.length === 0) return audienceToolRegistry(base, audience);
   const additions = new Map<string, ToolDefinition>();
   for (const { definition } of contributed) {
     if (base.has(definition.name) || additions.has(definition.name))
       throw new Error(`Run tool conflicts with an existing tool: ${definition.name}`);
     additions.set(definition.name, definition);
   }
-  return {
+  return modelToolRegistry({
     register: () => {
       throw new Error("Run-scoped tool registry is immutable");
     },
@@ -231,7 +262,7 @@ export function runToolRegistry(
       additions.has(name)
         ? { name, source: { kind: "runtime", id: "run-contribution" } }
         : base.inspect(name),
-  };
+  });
 }
 
 export function toolRegistryView(registry: IToolRegistry): ToolRegistryView {
@@ -251,6 +282,8 @@ function toolDescriptor(tool: ToolDefinition): ToolDescriptor {
     name: tool.name,
     description: tool.description,
     inputSchema: deepFrozenCopy(tool.inputSchema),
+    ...(tool.ui ? { ui: deepFrozenCopy(tool.ui) } : {}),
+    ...(tool.annotations ? { annotations: deepFrozenCopy(tool.annotations) } : {}),
     ...(tool.safeToRetry === undefined ? {} : { safeToRetry: tool.safeToRetry }),
   });
 }

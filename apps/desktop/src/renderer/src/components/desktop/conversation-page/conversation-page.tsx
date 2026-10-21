@@ -1,5 +1,7 @@
+import { submitConversationDraft } from "./session/submit-conversation-draft"
+import { pluginAppModelContexts } from "../shell/plugin-apps/plugin-app-model-context"
 import { Bot, MoreHorizontal, PanelRight, ShieldAlert } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
@@ -12,8 +14,6 @@ import {
   ConversationScrollerViewport as MessageScrollerViewport,
 } from "./transcript/conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { Button } from "@renderer/components/ui/button"
-import { usePluginUiHost } from "./plugin-ui/plugin-ui-context"
 import { MessagePluginCatalog } from "./message/plugin-mention-icon"
 import {
   Select,
@@ -104,7 +104,6 @@ function ConversationPane({
   onOpenTerminal,
   onOpenAgents,
 }: ConversationPaneProps): React.JSX.Element {
-  const pluginUiHost = usePluginUiHost()
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
   const [skillCommandSnapshot, setSkillCommandSnapshot] = useState<{
     cwd: string
@@ -236,27 +235,29 @@ function ConversationPane({
   const submitDraft = async (): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     const ready = areDesktopAttachmentsSendable(attachments)
-    if ((!content.trim() && attachments.length === 0) || !ready || sending || modeChangePending || archived) return
-    setComposerValidationError(null)
-    try {
-      if (goalMode) {
-        await submitGoal(composerScope)
-        return
+    return submitConversationDraft({ sessionId: activeSessionId, content, attachmentCount: attachments.length, ready,
+      blocked: sending || modeChangePending || Boolean(archived), goalMode }, async () => {
+      setComposerValidationError(null)
+      try {
+        if (goalMode) {
+          await submitGoal(composerScope)
+          return
+        }
+        if (hasSession) {
+          await sendMessage(content, { document: draft, attachments })
+        } else {
+          await startSession(content, {
+            document: draft,
+            attachments,
+            ...(taskLocation !== "default" ? { taskLocation } : {}),
+          })
+        }
+      } catch (error) {
+        if (goalMode)
+          setComposerValidationError(error instanceof Error ? error.message : String(error))
+        // The store keeps the error and the draft stays available for retry.
       }
-      if (hasSession) {
-        await sendMessage(content, { document: draft, attachments })
-      } else {
-        await startSession(content, {
-          document: draft,
-          attachments,
-          ...(taskLocation !== "default" ? { taskLocation } : {}),
-        })
-      }
-    } catch (error) {
-      if (goalMode)
-        setComposerValidationError(error instanceof Error ? error.message : String(error))
-      // The store keeps the error and the draft stays available for retry.
-    }
+    })
   }
 
   useEffect(() => {
@@ -341,9 +342,10 @@ function ConversationPane({
     pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd
       ? (pluginSnapshot.error ?? null)
       : null
+  const appContextEntries = useSyncExternalStore(pluginAppModelContexts.subscribe, pluginAppModelContexts.snapshot)
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&
-    Boolean(draftText.trim() || attachments.length > 0)
+    Boolean(draftText.trim() || attachments.length > 0 || appContextEntries.some(entry => entry.source.sessionId === activeSessionId))
 
   const pasteAttachments = async (files: readonly File[]): Promise<void> => {
     const payloads = await Promise.all(
@@ -776,27 +778,6 @@ function ConversationPane({
                 key={`error:${composerScope}`}
                 error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
               />
-              {pluginUiHost?.conversationStatus && (
-                <div
-                  role="status"
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                  <span>{pluginUiHost.conversationStatus.message}</span>
-                  {pluginUiHost.conversationStatus.requestId && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        void pluginUiHost
-                          .queryConversation(pluginUiHost.conversationStatus!.requestId!)
-                          .catch(() => {})
-                      }
-                    >
-                      查询原请求
-                    </Button>
-                  )}
-                </div>
-              )}
               <PendingPromptQueue
                 prompts={pendingPrompts}
                 activeRunId={activeRun?.id}

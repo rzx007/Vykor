@@ -81,7 +81,7 @@ import type {
 } from "./session-types"
 import type { DesktopContextUsageSnapshot } from "./context-usage-types"
 import type { DesktopActivityUpdate } from "./activity-types"
-import type { DesktopPluginUiAPI } from "./plugin-ui-types"
+import type { DesktopPluginAppsAPI } from "./plugin-app-types"
 import type {
   WorkspaceListFilesInput,
   WorkspaceListFilesResult,
@@ -209,16 +209,26 @@ import type {
 export const IpcChannels = {
   workflowRead: "workflow:read",
   workflowCancel: "workflow:cancel",
-  pluginUiCapabilities: "plugin-ui:capabilities",
-  pluginUiMount: "plugin-ui:mount",
-  pluginUiGetState: "plugin-ui:get-state",
-  pluginUiInvokeAction: "plugin-ui:invoke-action",
-  pluginUiGetAction: "plugin-ui:get-action",
-  pluginUiPrepareConversation: "plugin-ui:prepare-conversation",
-  pluginUiSubmitConversation: "plugin-ui:submit-conversation",
-  pluginUiGetConversationSubmission: "plugin-ui:get-conversation-submission",
-  pluginUiDismiss: "plugin-ui:dismiss",
-  pluginUiUnmount: "plugin-ui:unmount",
+  pluginAppsPrepareMessage: "plugin-apps:prepareMessage",
+  pluginAppsSubmitMessage: "plugin-apps:submitMessage",
+  pluginAppsGetMessageSubmission: "plugin-apps:getMessageSubmission",
+  pluginAppsCancelMessage: "plugin-apps:cancelMessage",
+  pluginAppsUpdateModelContext: "plugin-apps:updateModelContext",
+  pluginAppsCatalog: "plugin-apps:catalog",
+  pluginAppsOpen: "plugin-apps:open",
+  pluginAppsOpenToolResult: "plugin-apps:openToolResult",
+  pluginAppsMount: "plugin-apps:mount",
+  pluginAppsRefresh: "plugin-apps:refresh",
+  pluginAppsPrepareTool: "plugin-apps:prepareTool",
+  pluginAppsInvokeTool: "plugin-apps:invokeTool",
+  pluginAppsGetAction: "plugin-apps:getAction",
+  pluginAppsCancelTool: "plugin-apps:cancelTool",
+  pluginAppsReadResource: "plugin-apps:readResource",
+  pluginAppsListResources: "plugin-apps:listResources",
+  pluginAppsListResourceTemplates: "plugin-apps:listResourceTemplates",
+  pluginAppsClose: "plugin-apps:close",
+  pluginAppsRejectMenuOpen: "plugin-apps:rejectMenuOpen",
+  pluginAppsRelease: "plugin-apps:release",
   appGetInfo: "app:get-info",
   appGetPlatform: "app:get-platform",
   appQuit: "app:quit",
@@ -434,7 +444,6 @@ export const IpcChannels = {
 } as const
 
 export const IpcEvents = {
-  pluginUiRevoked: "plugin-ui:revoked",
   trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
@@ -510,43 +519,26 @@ export interface IpcInvokeMap
     PersonalizationManagementIpcMap,
     ConfigurationSettingsIpcMap,
     ProviderDefaultsIpcMap {
-  [IpcChannels.pluginUiCapabilities]: {
-    args: []
-    result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>>
-  }
-  [IpcChannels.pluginUiMount]: {
-    args: Parameters<DesktopPluginUiAPI["mount"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["mount"]>>
-  }
-  [IpcChannels.pluginUiGetState]: {
-    args: Parameters<DesktopPluginUiAPI["getState"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["getState"]>>
-  }
-  [IpcChannels.pluginUiInvokeAction]: {
-    args: Parameters<DesktopPluginUiAPI["invokeAction"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["invokeAction"]>>
-  }
-  [IpcChannels.pluginUiGetAction]: {
-    args: Parameters<DesktopPluginUiAPI["getAction"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>>
-  }
-  [IpcChannels.pluginUiPrepareConversation]: {
-    args: Parameters<DesktopPluginUiAPI["prepareConversation"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["prepareConversation"]>>
-  }
-  [IpcChannels.pluginUiSubmitConversation]: {
-    args: Parameters<DesktopPluginUiAPI["submitConversation"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["submitConversation"]>>
-  }
-  [IpcChannels.pluginUiGetConversationSubmission]: {
-    args: Parameters<DesktopPluginUiAPI["getConversationSubmission"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["getConversationSubmission"]>>
-  }
-  [IpcChannels.pluginUiDismiss]: {
-    args: Parameters<DesktopPluginUiAPI["dismiss"]>
-    result: Awaited<ReturnType<DesktopPluginUiAPI["dismiss"]>>
-  }
-  [IpcChannels.pluginUiUnmount]: { args: Parameters<DesktopPluginUiAPI["unmount"]>; result: void }
+  [IpcChannels.pluginAppsPrepareMessage]: { args: Parameters<DesktopPluginAppsAPI["prepareMessage"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["prepareMessage"]>> }
+  [IpcChannels.pluginAppsSubmitMessage]: { args: Parameters<DesktopPluginAppsAPI["submitMessage"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["submitMessage"]>> }
+  [IpcChannels.pluginAppsGetMessageSubmission]: { args: Parameters<DesktopPluginAppsAPI["getMessageSubmission"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["getMessageSubmission"]>> }
+  [IpcChannels.pluginAppsCancelMessage]: { args: Parameters<DesktopPluginAppsAPI["cancelMessage"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["cancelMessage"]>> }
+  [IpcChannels.pluginAppsUpdateModelContext]: { args: Parameters<DesktopPluginAppsAPI["updateModelContext"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["updateModelContext"]>> }
+  [IpcChannels.pluginAppsCatalog]: { args: Parameters<DesktopPluginAppsAPI["catalog"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["catalog"]>> }
+  [IpcChannels.pluginAppsOpen]: { args: Parameters<DesktopPluginAppsAPI["open"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["open"]>> }
+  [IpcChannels.pluginAppsOpenToolResult]: { args: Parameters<NonNullable<DesktopPluginAppsAPI["openToolResult"]>>; result: Awaited<ReturnType<NonNullable<DesktopPluginAppsAPI["openToolResult"]>>> }
+  [IpcChannels.pluginAppsMount]: { args: Parameters<DesktopPluginAppsAPI["mount"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["mount"]>> }
+  [IpcChannels.pluginAppsRefresh]: { args: Parameters<DesktopPluginAppsAPI["refresh"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["refresh"]>> }
+  [IpcChannels.pluginAppsPrepareTool]: { args: Parameters<DesktopPluginAppsAPI["prepareTool"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["prepareTool"]>> }
+  [IpcChannels.pluginAppsInvokeTool]: { args: Parameters<DesktopPluginAppsAPI["invokeTool"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["invokeTool"]>> }
+  [IpcChannels.pluginAppsGetAction]: { args: Parameters<DesktopPluginAppsAPI["getAction"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["getAction"]>> }
+  [IpcChannels.pluginAppsCancelTool]: { args: Parameters<DesktopPluginAppsAPI["cancelTool"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["cancelTool"]>> }
+  [IpcChannels.pluginAppsReadResource]: { args: Parameters<DesktopPluginAppsAPI["readResource"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["readResource"]>> }
+  [IpcChannels.pluginAppsListResources]: { args: Parameters<DesktopPluginAppsAPI["listResources"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["listResources"]>> }
+  [IpcChannels.pluginAppsListResourceTemplates]: { args: Parameters<DesktopPluginAppsAPI["listResourceTemplates"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["listResourceTemplates"]>> }
+  [IpcChannels.pluginAppsClose]: { args: Parameters<DesktopPluginAppsAPI["close"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["close"]>> }
+  [IpcChannels.pluginAppsRejectMenuOpen]: { args: Parameters<DesktopPluginAppsAPI["rejectMenuOpen"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["rejectMenuOpen"]>> }
+  [IpcChannels.pluginAppsRelease]: { args: Parameters<DesktopPluginAppsAPI["release"]>; result: Awaited<ReturnType<DesktopPluginAppsAPI["release"]>> }
   [IpcChannels.appGetInfo]: { args: []; result: DesktopAppInfo }
   [IpcChannels.appGetPlatform]: { args: []; result: PlatformInfo }
   [IpcChannels.appQuit]: { args: []; result: void }

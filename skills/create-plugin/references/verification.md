@@ -2,7 +2,7 @@
 
 ## 分开说明验证到哪一步
 
-1. 文件/语法：manifest 与组件路径存在，Node 入口能通过 `node --check`；构建 UI 成单文件。
+1. 文件/语法：manifest 与组件路径存在，Node 入口能通过 `node --check`；先 npm ci、npm run build，把官方 SDK 和 UI 构建为离线单文件。
 2. 静态插件校验：有可用 CLI 时运行 `vk plugin validate <目录>`，检查结构、UI 定义、HTML 路径和大小。它不执行工具或前端。
 3. 工具逻辑：用受控输入实际调用纯逻辑工具，检查返回、错误与副作用；不得以 import 成功代替业务验证。
 4. 宿主激活：用户授权安装或 link 后，检查 Tool Host、MCP 连接、Hook 与组件诊断。
@@ -47,7 +47,7 @@ tar -czf my-plugin.tgz my-plugin
 | 等待生效 | 新建对话；或在无任务时重新加载插件 |
 | 缺少权限 | 重新导入并确认新增权限，不修改批准记录 |
 | 工具不可用 | entry 路径、Node 语法、运行期 import、local 环境与 Tool Host 详情 |
-| 有文字没有 UI | metadata.ui、componentId、UI 授权、客户端/后台能力、数据大小 |
-| UI 操作失败 | actionId/tool 对应、真实 inputSchema、readOnly、当前 revision、会话忙状态 |
+| 有文字没有 UI | metadata.appData、apps.json 工具映射、UI 授权、客户端/后台能力、数据大小 |
+| UI 操作失败 | 实际注册工具名、真实 inputSchema、当前 availability/controlRevision、会话忙状态 |
 
 交付时写明目录、组件、权限、调用入口、已执行的检查和未验证项。发布到哪里、使用哪种许可证、由谁安装由用户决定；不要把未发布 SDK、未完成 GUI 验收或安装成功包装成完整运行验证。

@@ -1,6 +1,6 @@
 # Text Inspector 原生插件样例
 
-这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在原文字结果旁显示交互入口；用户选择问题，经宿主确认后生成修复文本预览。插件 ID 为 `example.text-inspector`，版本为 `1.1.1`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
+这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在原文字结果旁显示交互入口；用户选择问题，经宿主确认后生成修复文本预览。插件 ID 为 `example.text-inspector`，版本为 `1.2.0`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
 
 入口由 `.vykor-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
 
@@ -26,66 +26,52 @@
 
 工具只处理传入文本，无文件读写或额外进程调用，因此声明 `safeToRetry: true`。普通检查文字仍只包含问题行号；短文本另附 UI 数据，预览操作会返回修复后的完整文本。同步检查受输入长度限制；它不承诺在同步循环期间及时收到取消消息。
 
-## 交互界面如何工作
 
-`components.ui` 指向 `ui/manifest.json`，UI 定义与建议使用 schemaVersion 2；Native 根 manifest 仍为 1。组件 `text-inspector` 的 HTML 入口是 `./ui/panel.html`，固定声明 surface: session-sidebar，由用户打开。动作 `preview` 只绑定同插件的 `TextInspectorPreview`，完成后保持交互打开。
+# 插件应用（MCP Apps）
 
-`TextInspectorCheck` 返回原文字结果，另在 `metadata.ui` 放入组件 ID、原文本与问题列表。宿主保存可信实例、版本号与执行状态；插件不能自行伪造这些字段。文本经 JSON 转义后的 UTF-8 长度超过 48,000 字节时不生成 UI 数据，仍返回原检查结果；这是为 64 KiB 动作参数上限保留空间，不是工具的输入长度上限。
+根清单保持 schemaVersion 1，唯一新页面入口是 `components.apps: ["./ui/apps.json"]`。复制 `assets/text-inspector/ui/apps.json`：其 schemaVersion 为 1，backend 为 `native-tools`，resources 把精确 `ui://` URI 映射到插件内单文件 HTML，tools 引用实际注册的 `TextInspectorCheck`、`TextInspectorPreview`，surfaces 提供会话打开入口。参数 schema 来自 Native Tool 注册，不能复制、改写或增加工具别名。Native Tools 仍通过原 Tool Host、Guard 和权限执行，不需要额外 MCP 进程。
 
-在 Desktop 点击“在侧栏打开”，勾选问题后点“生成修复预览”。确认弹窗由主界面提供，默认焦点在“返回”；取消不会执行工具。确认才调用 `TextInspectorPreview`，只替换所选问题：每个行首制表符换为 2 个空格、删除所选行的行尾空白，保留其他内容及 CRLF。新结果存回原实例，页面从 SDK 的快照通知更新；预览不增加模型输入。
+工具保留普通 content 文字，页面数据写 `metadata.appData: { text, findings, truncated }`；宿主把它转为 MCP `structuredContent`。普通业务工具不生成可信 appId、requestId、版本或执行状态。注册 app-only 可见性不代表获得执行权限。
 
-填写给助手的说明后，可把勾选问题所在行“加入输入框”或“交给助手”。按钮按快照 capabilities 显示；requestConversation 只携带实际选择的行，JSON UTF-8 超过 32 KiB 时明确提示，不发送或裁剪。取消/失败保留说明和选择；submit 不发送主输入框已有草稿。同 revision 外观更新保留本地编辑，隐藏保留 iframe，关闭重开重置本地输入。
+## 页面入口与结果
 
-预览参数为 `{ "text": "原文本", "selected": ["1:trailing-whitespace"] }`。选项来自本次检查结果，最多 100 项，不允许重复、缺失或过期行号。插件工具会重新检查参数中的文本，不信任前端勾选值。
-
-文本框只读，但可以选中后手动复制；插件没有剪贴板接口。Tab、空格和 Enter 使用原生浏览器控件；主题跟随宿主，旧快照只读时禁止修复。关闭显示可以再打开；“结束此交互”经确认后保存结束状态。禁用、重装、卸载或重载由宿主撤销旧界面，原文字结果仍保留。
-
-## 修改与构建 UI
-
-编辑 `ui/panel.template.html`（结构与样式）和 `ui/panel.mjs`（交互），不要手工修改生成的 `ui/panel.html`。在仓库根目录执行：
-
-```sh
-node examples/plugins/text-inspector/scripts/build-ui.mjs --export-author-assets
-node skills/create-plugin/assets/text-inspector/scripts/build-ui.mjs
+```js
+import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
+const app = new App({ name: "My App", version: "1.0.0" }, {});
+function show(result) {
+  if (result.isError) throw new Error("工具失败，请查看回执");
+  // 校验 structuredContent 后显示；这里不能再次调用工具或保存。
+}
+app.ontoolresult = show; // 只消费初始/模型主动推送
+app.onhostcontextchanged = context => {
+  if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
+};
+await app.connect();
+// 用户明确点击按钮后：主动返回值不会自动触发 ontoolresult。
+const result = await app.callServerTool({ name: "TextInspectorCheck", arguments: { text: "hello " } });
+show(result);
 ```
 
---export-author-assets 使用已有 Vite 从当前 SDK 源机械生成两份 VykorPluginUi IIFE 和 stylesheet。各脚本把附带 SDK、CSS 与 panel 合成唯一 HTML；Skill 样例复制后只用 Node 构建，不需要本仓库、Vite 或网络。生成文件随源码交付，打包前重新构建；SDK 导出会拒绝 Node 依赖。
+必须先登记通知再 connect。直接打开只有空表单，不伪造工具结果。完整处理错误、选区和 48,000 字节交互边界的代码见 `assets/text-inspector/ui/panel.mjs`。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
 
-前端调用 createPluginUiClient/getSnapshot/onSnapshot/applyPluginUiAppearance/requestAction/requestConversation/dismiss/dispose。固定侧栏不调用 resize，没有 openSidebar。SDK 通过宿主提供的 MessagePort 通信；不要手写协议或访问父页面、Node、网络、preload。
+## 可见上下文与普通消息
 
-真实 `.mjs` 通过 JSDoc 引用 `@vykor/plugins/sdk` 的 `NativeToolRegister` 类型，无运行期 SDK 依赖，也无需安装样例依赖。在仓库根目录运行：
+`app.updateModelContext({ content: [{type:"text",text}], structuredContent: selection })` 把明确选中的内容加入原会话可见条目；不覆盖输入框，也不自动发送。普通发送时仍重新检查来源、授权和版本。用户可移除条目。
 
-```sh
-node node_modules/typescript/bin/tsc -p packages/plugins/tsconfig.sdk-examples.json
-```
+`app.sendMessage({ role:"user", content:[{type:"text",text}] })` 经宿主确认后发送普通用户消息，成功保持应用打开。只支持文本角色 user，不发送主输入框已有草稿。先检查 `app.getHostCapabilities()` 的 message/updateModelContext 能力。消息总共最多 4096 个 Unicode 字符；上下文结构化 JSON 最多 32 KiB。只携带必要选区，超限提示用户减少选择，不静默裁剪。
 
-在 `packages/agent-runtime` 目录运行真实子进程验收：
+工具参数最多 64 KiB、Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、资源解码总量最多 8 MiB。样例原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果，省略交互数据。
 
-```sh
-node ../../node_modules/vitest/vitest.mjs run src/native-tools/text-inspector.test.ts
-```
+## 构建、安装和更新
 
-`packages/plugins` 的 `check-types` 同时检查公开子路径类型用例和这份实际 `.mjs`。样例目录也参与相关测试与类型检查的 Turbo 缓存输入。
+作者复制完整目录后执行 `npm ci`（首次新建锁文件用 `npm install`）和 `npm run build`。package.json/package-lock.json 锁定官方 `@modelcontextprotocol/ext-apps` 1.1.2，以 esbuild 正常打包模块。依赖准备需要 npm 或本地缓存；安装产物 `ui/panel.html` 是完整离线单文件，安装时不构建，也不下载依赖。不得分发 node_modules、使用 CDN、外部脚本/字体或私有页面 SDK。
 
-## 打包后在 Desktop 导入
+修改源码后重建 HTML，增加插件版本，按原 install-local/重新导入流程升级。不修改用户安装快照和 dataDir；新权限仍按原规则批准。安装需要 ui:render/ui:invoke-own-tools，仍需实际工具权限、角色 allowedTools、deny 与环境检查。
 
-在仓库根目录执行以下命令，为 `examples/plugins` 下的所有插件生成 ZIP：
+## 常驻页面边界
 
-```sh
-pnpm --filter @vykor/plugin-sources package:examples
-```
+切换面板或会话仅隐藏同一 iframe，保留输入和光标。隐藏脚本不能发起新工具、消息或上下文请求；已发送工作继续结算。取消、丢响应和 unknown 不自动重放。unknown 持久阻止后续工具和消息，重开不能解除。
 
-ZIP 文件会生成在仓库根目录的 `.plugin-dist`，这个目录不会提交到 Git。Desktop 插件页也支持 `.tar`、`.tar.gz` 和 `.tgz`；这些格式需另行打包。导入 ZIP 后开一个新对话，再用 `/text-inspector:check-text` 或自然语言要求模型使用 `TextInspectorCheck`。
+官方 1.1.2 的实验能力 schema 会剥离自定义 namespace，当前不装配 widgetState。窗口关闭或重启不保证表单恢复；跨重启业务数据由插件自行使用原 dataDir 保存。页面没有 Node、preload、父 DOM、文件、网络、子 frame、任意 IPC 或剪贴板权限。不要手写通信协议或用 innerHTML 渲染用户数据。
 
-如果要验证插件自己的 Agent，先在本轮选择 `example.text-inspector` 插件，再要求模型使用 `example.text-inspector:reviewer` 检查一段文本。这个 Agent 只在插件被选中时可见，创建后仍只能使用当前 Run 允许的插件能力。
-
-重新打同一个插件 ID 的包并再次导入，就是手动更新或修复。由旧版 1.0.0 升级时需要批准新增的两项 UI 权限；声明中没有文件写入或网络权限。
-
-常见失败：
-
-- 找不到 manifest：确认插件包内有且只有一个 `.vykor-plugin/plugin.json`。
-- 导入成功但当前对话不能用：开新对话，或在没有运行中任务时执行 `/reload-plugins`。
-- Tool Host 启动失败：检查 `tools/index.mjs` 是否能被 Node 正常 import，不要普通 import `@vykor/plugins/sdk`。
-- 工具输入无效：只传 `{ "text": "..." }`，不要传字符串或额外字段。
-- 有文字但没有交互入口：检查当前 Desktop/后台是否支持 pluginUi=2、pluginUiLifecycle=1，是否关闭了 plugins.uiEnabled，以及文本是否超过 UI 的 48,000 字节限制；普通交接还需 pluginUiConversation=1。CLI/TUI 继续使用文字结果。
-- 已安装但 UI 不可用：在插件详情查看授权、启用状态和快照诊断；不要直接修改已安装快照。
+更新：重新打包同一插件 ID 并导入 1.2.0；沿用原批准规则，不增加文件或网络权限。

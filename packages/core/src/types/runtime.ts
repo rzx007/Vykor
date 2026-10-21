@@ -275,35 +275,19 @@ export interface RunMcpServerBinding {
   readonly definition: import("./settings").McpServerConfig;
 }
 
-/** Host-only installation snapshot; never serialize paths or invocation functions. */
-export interface RunPluginUiBinding {
-  readonly pluginId: string;
-  readonly pluginVersion: string;
-  readonly pluginDigest: string;
-  readonly componentId: string;
-  readonly componentDigest: string;
-  readonly htmlSha256: string;
-  readonly root: string;
-  readonly entryPath: string;
-  readonly definition: import("@vykor/protocol").PluginUiComponentDefinition;
-  /** Exact Native definitions captured when this component was installed in the Runtime. */
-  readonly actionTools: readonly RunToolBinding[];
-}
-
 export interface RunCapabilityView {
   /** Explicit single-plugin restriction; automatic scopes use pluginIds even for one owner. */
   readonly pluginId?: string;
   /** Exact allowed plugin owners. Individual bindings remain the execution authority. */
   readonly pluginIds?: ReadonlySet<string>;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
+  /** Host-only app directory under this Run's role/host/environment policy; never model execution. */
+  readonly appTools?: ReadonlyMap<string, RunToolBinding>;
   /** Host-captured bindings for child delegation; never executable by this Run. */
   readonly delegatableTools?: ReadonlyMap<string, RunToolBinding>;
   readonly skills: ReadonlyMap<string, RunSkillBinding>;
   readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
   readonly agents: ReadonlyMap<string, RunAgentBinding>;
-  readonly pluginUi?: ReadonlyMap<string, RunPluginUiBinding>;
-  /** Host-captured UI evidence for child delegation, separate from this Run's UI. */
-  readonly delegatablePluginUi?: ReadonlyMap<string, RunPluginUiBinding>;
 }
 
 /** Framework-internal execution capabilities shared with tool packages. */
@@ -345,7 +329,10 @@ export interface AgentRunHandle {
 export interface QueryEngine {
   executeTool(
     toolUse: ToolUseBlock,
-    options: { signal?: AbortSignal; execution: AgentExecutionContext },
+    options: { signal?: AbortSignal; execution: AgentExecutionContext; audience?: "model" | "app";
+      /** Reliable delivery of a collected result before a later execution-chain failure propagates. */
+      onResult?: (result: import("./tools").ToolExecutionResult) => Promise<void>;
+    },
   ): Promise<import("./tools").ToolExecutionResult>;
   submitMessage(
     content: string | ContentBlock[],

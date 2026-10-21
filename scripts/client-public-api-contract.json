@@ -2,75 +2,138 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
-    { "name": "ApprovalMode", "kind": "type-export" },
-    { "name": "ApprovalReviewRecord", "kind": "type-export" },
-    { "name": "WorkMode", "kind": "type-export" },
-    { "name": "isWorkMode", "kind": "runtime-export" },
-    { "name": "normalizeApprovalMode", "kind": "runtime-export" },
-    { "name": "OFFICE_MEDIA_TYPES", "kind": "runtime-export" },
-    { "name": "officeFormat", "kind": "runtime-export" },
-    { "name": "OfficeFormat", "kind": "type-export" },
-    { "name": "OfficePreview", "kind": "type-export" },
-    { "name": "CleanupCandidate", "kind": "type-export" },
-    { "name": "CleanupPreview", "kind": "type-export" },
-    { "name": "CleanupResult", "kind": "type-export" },
-    { "name": "ClearMemoryInput", "kind": "type-export" },
-    { "name": "ClearSessionWorktreeBindingInput", "kind": "type-export" },
-    { "name": "DaemonRestartPreview", "kind": "type-export" },
-    { "name": "MaintenanceBackupManifest", "kind": "type-export" },
-    { "name": "MemoryRevision", "kind": "type-export" },
-    { "name": "StorageCategory", "kind": "type-export" },
-    { "name": "StorageReport", "kind": "type-export" },
-    { "name": "StorageRetentionPolicy", "kind": "type-export" },
-    { "name": "UpdateMemoryEntryInput", "kind": "type-export" },
-    { "name": "UsageFilter", "kind": "type-export" },
-    { "name": "UsagePrice", "kind": "type-export" },
-    { "name": "UsageReport", "kind": "type-export" },
-    { "name": "UsageRequest", "kind": "type-export" },
-    { "name": "UsageSettings", "kind": "type-export" },
-    { "name": "PluginUiAppearance", "kind": "type-export" },
-    { "name": "PluginUiConversationPrepared", "kind": "type-export" },
-    { "name": "PluginUiConversationReceipt", "kind": "type-export" },
-    { "name": "PluginUiConversationRequest", "kind": "type-export" },
-    { "name": "PluginUiSubmissionRecord", "kind": "type-export" },
-    { "name": "SubmitPluginUiConversationInput", "kind": "type-export" },
-    { "name": "PLUGIN_UI_BRIDGE_LIMITS", "kind": "runtime-export" },
-    { "name": "PluginUiBridgeError", "kind": "runtime-export" },
-    { "name": "ProtocolValidationError", "kind": "runtime-export" },
-    { "name": "decodePluginUiBridgeMessage", "kind": "runtime-export" },
-    { "name": "encodePluginUiBridgeMessage", "kind": "runtime-export" },
-    { "name": "parsePluginUiAppearance", "kind": "runtime-export" },
-    { "name": "parsePluginUiConversationPrepared", "kind": "runtime-export" },
-    { "name": "parsePluginUiConversationReceipt", "kind": "runtime-export" },
-    { "name": "parsePluginUiConversationRequest", "kind": "runtime-export" },
-    { "name": "parsePluginUiSubmissionRecord", "kind": "runtime-export" },
-    { "name": "parsePluginUiBridgeRequest", "kind": "runtime-export" },
-    { "name": "parsePluginUiBridgeSnapshot", "kind": "runtime-export" },
-    { "name": "parsePluginUiBridgeReceipt", "kind": "runtime-export" },
-    { "name": "readPluginUiBridgeResponse", "kind": "runtime-export" },
-    { "name": "readPluginUiBridgeNotification", "kind": "runtime-export" },
-    { "name": "readPluginUiInstance", "kind": "runtime-export" },
-    { "name": "readPluginUiAction", "kind": "runtime-export" },
-    { "name": "stringifyPluginUiJson", "kind": "runtime-export" },
-    { "name": "JsonValue", "kind": "type-export" },
-    { "name": "PluginUiViewSnapshot", "kind": "type-export" },
-    { "name": "PluginUiSurface", "kind": "type-export" },
-    { "name": "PluginUiBridgeMethod", "kind": "type-export" },
-    { "name": "PluginUiBridgeRequest", "kind": "type-export" },
-    { "name": "PluginUiBridgeResponse", "kind": "type-export" },
-    { "name": "PluginUiBridgeNotification", "kind": "type-export" },
-    { "name": "PluginUiActionRunMetadata", "kind": "type-export" },
-    { "name": "PluginUiResource", "kind": "runtime-export" },
-    { "name": "pluginUi", "kind": "client-resource" },
-    { "name": "DismissPluginUiInput", "kind": "type-export" },
-    { "name": "InvokePluginUiActionInput", "kind": "type-export" },
-    { "name": "PluginUiActionReceipt", "kind": "type-export" },
-    { "name": "PluginUiActionResponse", "kind": "type-export" },
-    { "name": "PluginUiActionDescription", "kind": "type-export" },
-    { "name": "PluginUiAvailability", "kind": "type-export" },
-    { "name": "PluginUiDocumentResponse", "kind": "type-export" },
-    { "name": "PluginUiInstanceRecord", "kind": "type-export" },
-    { "name": "PluginUiInstanceResponse", "kind": "type-export" },
+    {
+      "name": "OFFICE_MEDIA_TYPES",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "officeFormat",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "OfficeFormat",
+      "kind": "type-export"
+    },
+    {
+      "name": "OfficePreview",
+      "kind": "type-export"
+    },
+    {
+      "name": "CleanupCandidate",
+      "kind": "type-export"
+    },
+    {
+      "name": "CleanupPreview",
+      "kind": "type-export"
+    },
+    {
+      "name": "CleanupResult",
+      "kind": "type-export"
+    },
+    {
+      "name": "ClearMemoryInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "ClearSessionWorktreeBindingInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "DaemonRestartPreview",
+      "kind": "type-export"
+    },
+    {
+      "name": "MaintenanceBackupManifest",
+      "kind": "type-export"
+    },
+    {
+      "name": "MemoryRevision",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageCategory",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageReport",
+      "kind": "type-export"
+    },
+    {
+      "name": "StorageRetentionPolicy",
+      "kind": "type-export"
+    },
+    {
+      "name": "UpdateMemoryEntryInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageFilter",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsagePrice",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageReport",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageRequest",
+      "kind": "type-export"
+    },
+    {
+      "name": "UsageSettings",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiConversationReceipt",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiSubmissionRecord",
+      "kind": "type-export"
+    },
+    {
+      "name": "ProtocolValidationError",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parsePluginUiConversationReceipt",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parsePluginUiSubmissionRecord",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "readPluginUiInstance",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "readPluginUiAction",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "JsonValue",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiActionRunMetadata",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiActionReceipt",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiActionResponse",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiInstanceRecord",
+      "kind": "type-export"
+    },
     {
       "name": "AttachmentResource",
       "kind": "runtime-export"
@@ -1025,6 +1088,114 @@
     },
     {
       "name": "SessionModelUsageSummary",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginUiHistoryResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "pluginUiHistory",
+      "kind": "client-resource"
+    },
+    {
+      "name": "pluginApps",
+      "kind": "client-resource"
+    },
+    {
+      "name": "PluginAppResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PLUGIN_APP_LIMITS",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parsePluginAppConversationRequest",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "copyPluginAppJson",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parseOpenPluginAppInput",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parsePluginAppSource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parsePluginAppToolRequest",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "parseMcpCallResultData",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "isPluginAppAdmissionRejection",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PluginAppToolRequest",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppConversationRequest",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppActionResponse",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppActionReceipt",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppSubmissionReceipt",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppRecord",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppSource",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppRuntimeLease",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppResponse",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppAdmissionRejection",
+      "kind": "type-export"
+    },
+    {
+      "name": "isWorkMode",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "normalizeApprovalMode",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ApprovalMode",
+      "kind": "type-export"
+    },
+    {
+      "name": "ApprovalReviewRecord",
+      "kind": "type-export"
+    },
+    {
+      "name": "WorkMode",
       "kind": "type-export"
     }
   ]

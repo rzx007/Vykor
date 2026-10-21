@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { summarizePart } from "../part-wire-view.js";
+import { publicPart, summarizePart } from "../part-wire-view.js";
 import {
   parseCreateSessionRequest,
   parseForkSessionRequest,
@@ -132,7 +132,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       if (!sessionId) return errorResponse(400, "sessionId is required");
       try {
         const snapshot = context.queries.getSessionState(sessionId);
-        return jsonResponse(c.req.query("partView") === "summary" ? { ...snapshot, parts: snapshot.parts.map(summarizePart) } : snapshot);
+        return jsonResponse({ ...snapshot, parts: snapshot.parts.map(c.req.query("partView") === "summary" ? summarizePart : publicPart) });
       } catch (error) {
         return errorResponse(
           sessionMutationErrorStatus(error),
@@ -186,7 +186,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
           messageId: c.req.query("messageId") ?? undefined,
           limit: readLimit(c.req.query("limit")),
         });
-        return jsonResponse({ parts: c.req.query("partView") === "summary" ? parts.map(summarizePart) : parts });
+        return jsonResponse({ parts: parts.map(c.req.query("partView") === "summary" ? summarizePart : publicPart) });
       } catch (error) {
         return errorResponse(
           404,
@@ -197,7 +197,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
     .get("/:sessionId/messages/:messageId/parts/:partId", (c) => {
       try {
         const part = context.queries.getMessagePart(c.req.param("sessionId"), c.req.param("messageId"), c.req.param("partId"));
-        return part ? jsonResponse({ part }) : errorResponse(404, "Message part unavailable");
+        return part ? jsonResponse({ part: publicPart(part) }) : errorResponse(404, "Message part unavailable");
       } catch {
         return errorResponse(404, "Message part unavailable");
       }

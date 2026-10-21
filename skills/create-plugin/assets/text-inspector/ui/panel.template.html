@@ -26,15 +26,15 @@
 <body>
   <h1>文本格式检查</h1>
   <p class="muted">勾选要修复的问题，确认后生成文本预览。不会修改文件。</p>
+  <button id="check-button" disabled>检查文本</button>
   <ul id="findings" aria-label="可选格式问题"></ul>
   <div class="actions"><button id="preview-button" disabled>生成修复预览</button><span id="selection-count" class="muted">请选择要修复的问题</span></div>
-  <p id="status" role="status" aria-live="polite">正在加载检查结果…</p>
-  <label for="preview">当前文本（可选中复制）</label>
-  <textarea id="preview" readonly spellcheck="false" aria-describedby="status"></textarea>
+  <p id="status" role="status" aria-live="polite">粘贴文本后点击检查；也可从工具结果打开。</p>
+  <label for="preview">待检查文本／当前预览</label>
+  <textarea id="preview" spellcheck="false" aria-describedby="status"></textarea>
   <label for="conversation-text">给助手的说明（只携带勾选问题所在行）</label>
   <textarea id="conversation-text" maxlength="4096">请解释所选格式问题并给出建议。</textarea>
-  <div class="actions"><button id="draft" hidden disabled>加入输入框</button><button id="submit" hidden disabled>交给助手</button></div>
-  <footer><button id="dismiss" class="danger" aria-describedby="finish-hint">结束此交互</button><small id="finish-hint">结束后仅供查看</small></footer>
+  <div class="actions"><button id="draft" hidden disabled>加入上下文</button><button id="submit" hidden disabled>交给助手</button></div>
   <!-- UI_SCRIPT -->
 </body>
 </html>
