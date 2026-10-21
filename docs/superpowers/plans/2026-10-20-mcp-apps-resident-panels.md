@@ -10,7 +10,7 @@
 
 **Spec:** [统一 MCP Apps 与会话常驻面板设计](../specs/2026-10-20-mcp-apps-resident-panels-design.md)。
 
-**实施进度（2026-10-21）：** 用户已授权自动实施全部任务，编码优先、每阶段集中测试。阶段 1 的任务 1、2 已完成：196 个定向测试、相关类型检查、官方 SDK 与 Native 定向 Electron 场景通过，独立复核通过；阶段 2 的任务 3–5 已完成：352 个不同定向测试、七个包类型检查及独立复核通过；阶段 3 从任务 6 开始编码，阶段 4、5 待开始。未生成 Git 提交。
+**实施进度（2026-10-21）：** 全部 5 个阶段、10 个任务已完成实现、分阶段验证和独立审查，包括 Native Tool 适配、权限与持久回执、常驻宿主、两个示例及旧 Native UI 活动实现的物理移除。核心迁移已提交为 bcbe0ce7，并通过 a246408e 合入 main；后续右侧固定面板与示例交互优化已提交为 5b48c58f。阶段 1、2 分别有 196、352 项定向测试证据；后续阶段已有真实 Electron、架构、退役和产物检查证据，最新复审累计 132 项宿主/布局、14 项示例测试及真实 Electron 回归通过，用户体验验收正常。widgetState 按任务 7 的可选能力规则不启用；远程平台等排除项不属于遗留任务。尚未推送或发布。
 
 ## Global Constraints
 
@@ -156,7 +156,7 @@ pnpm --filter @vykor/protocol --filter @vykor/mcp --filter @vykor/core --filter 
 
 - Modify: mcp `index.ts`、`connection-types.ts`；agent-runtime `runtime-integrations.ts`、`run-capability-view.ts`。
 - Modify: core `engine/tool-discovery.ts`、`checked-tool-execution.ts`。
-- Create: `apps/desktop/tests/plugin-ui-electron/mcp-apps-sdk-fixture.ts`、`mcp-apps-sdk.html`。
+- Create: `apps/desktop/tests/plugin-apps-electron/mcp-apps-sdk-fixture.ts`、`mcp-apps-sdk.html`。
 - Modify: Desktop package.json、lockfile、现有 Electron 测试入口。
 - Test: core `mcp-proxy-authorization.test.ts`、agent-runtime `run-capability-view.test.ts`。
 
@@ -171,7 +171,7 @@ pnpm --filter @vykor/protocol --filter @vykor/mcp --filter @vykor/core --filter 
 pnpm --filter @vykor/core exec vitest run src/engine/mcp-proxy-authorization.test.ts src/engine/tool-discovery.integration.test.ts
 pnpm --filter @vykor/agent-runtime exec vitest run src/run-capability-view.test.ts
 pnpm --filter @vykor/desktop typecheck
-pnpm --filter @vykor/desktop test:plugin-ui-electron
+pnpm --filter @vykor/desktop test:plugin-apps-electron
 ```
 
 **Gate:** SDK 可实际运行，app-only 工具无法被模型绕过调用。
@@ -327,7 +327,7 @@ pnpm --filter @vykor/agent-runtime --filter @vykor/server --filter @vykor/client
 ```sh
 pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin-apps src/renderer/src/components/desktop/shell/plugin-apps/__test__
 pnpm --filter @vykor/desktop typecheck
-pnpm --filter @vykor/desktop test:plugin-ui-electron
+pnpm --filter @vykor/desktop test:plugin-apps-electron
 ```
 
 **Gate:** 同一官方页面宿主服务两类后台；常驻依赖窗口 owner，授权依赖原会话。
@@ -372,7 +372,7 @@ pnpm --filter @vykor/desktop test:plugin-ui-electron
 pnpm --filter @vykor/plugins check-types
 pnpm --filter @vykor/skills exec vitest run src/create-plugin-distribution.test.ts
 pnpm --filter @vykor/plugin-sources exec vitest run src/package-example-plugins.test.ts
-pnpm --filter @vykor/desktop test:plugin-ui-electron
+pnpm --filter @vykor/desktop test:plugin-apps-electron
 ```
 
 **Gate:** 实际插件、复制模板、生成页面和文档全部使用官方 SDK；业务工具仍是 Native Tool。
@@ -397,8 +397,8 @@ type PluginAppResourceNotice =
 
 - [x] **Step 1: 写通知归属反例。** URI 相同但插件/会话/后台不同不能互收；迟到订阅成功需退订，旧后台代次通知丢弃。Native 静态资源后台未实现订阅时不宣告。
 - [x] **Step 2: 实施窗口共享通知流。** 鉴权后只转发 invalidation，不落聊天持久历史、不保存正文；断线先发 resync，再重读。不能每个 frame 另开连接或重放工具动作。SDK 1.1.2 由宿主管理已鉴权 read URI 的后台订阅，以标准 ResourceListChanged 触发页面重读；单 URI 明确不支持订阅不影响其他有效订阅，不能吞掉鉴权/传输失败。
-- [x] **Step 3: 实施工具入口复用。** 仅真实已提交成功结果与可信后台工具描述可产生入口；唯一匹配声明 surface 时复用，否则按 Part 隔离。Native 通过映射的 ui.resourceUri 识别，旧 metadata.ui 永不转换。失败/历史回放不自动开面板。用户显式打开另一个成功 Part 时按宿主 sourcePartId 去重并顺序投递，复用同一 frame；重复点击同 Part 不重复通知或执行。
-- [x] **Step 4: 验证模式和状态。** 页面支持 inline/fullscreen 才移动同一容器；不换 frame、不重握手。业务 revision 改变不冒充宿主控制版本改变。
+- [x] **Step 3: 实施工具入口复用。** 仅真实已提交成功结果与可信后台工具描述可产生入口；唯一匹配声明 surface 时复用，否则按 Part 隔离。Native 通过映射的 ui.resourceUri 识别，旧 metadata.ui 永不转换。失败/历史回放不自动开面板。实时新结果按宿主 sourcePartId 去重并顺序投递；显式查看已有页面只定位右侧标签，不重放旧正文。未知 Part 的页面身份由 Main 判定，不能仅凭资源地址合并；重复点击不重复通知或执行。
+- [x] **Step 4: 验证模式和状态。** 所有应用只在右侧面板展示，优先使用已协商的 inline 模式，fullscreen-only 也受面板边界约束；切换和收起不移动或重建 frame、不重握手。加载或错误状态保留可达标签，未完成握手不展示实际页面。业务 revision 改变不冒充宿主控制版本改变。
 - [x] **Step 5: 实施笔记样例。** read_note/apply_note_operations 为模型与页面可用，list_notes/save_note_draft 为 app-only；所有写入带 expectedRevision/operationId。冲突保留草稿，相同 operationId 异参数报冲突，保存确认来自服务端。样例使用插件 dataDir 的原会话目录；旧保存回执不能降低已观察的最高业务版本或消除较新资源的冲突。
 - [x] **Step 6: 真正运行协同验收。** 用户手工保存、引用选区让模型修改、页面收到通知刷新；工具调用后断连不重做。业务测试与真实 stdio/Electron 均执行。
 
@@ -449,7 +449,7 @@ pnpm check:client-api
 pnpm check:architecture
 pnpm --filter @vykor/protocol --filter @vykor/plugins --filter @vykor/agent-runtime --filter @vykor/services --filter @vykor/server --filter @vykor/client check-types
 pnpm --filter @vykor/desktop typecheck
-pnpm --filter @vykor/desktop test:plugin-ui-electron
+pnpm --filter @vykor/desktop test:plugin-apps-electron
 pnpm check-docs
 ```
 
@@ -497,4 +497,4 @@ pnpm check-docs
 - [x] 历史读取可保留，不能签发新 UI 或执行凭证。
 - [x] 已按用户最新授权进入全部阶段实施；编码优先、按阶段集中验证，不自动提交或发布。
 
-最终模式校验：SDK 1.1.2 的公开 `McpUiAppCapabilities.availableDisplayModes` 与 `AppBridge.getAppCapabilities()` 已验证可用。握手前无侧栏资格；未声明模式按 inline-only 处理。只有确认支持 fullscreen 后才显示侧栏标签，侧栏位置的 hostContext 为 fullscreen，工具卡位置为 inline；不支持的请求明确失败。直接菜单打开先隐藏握手；inline-only 或初始化失败时，Main 依据 Server 本次事务的 openedByRequest 事实、原控制版本和全窗口查看器状态，仅关闭本次新打开且没有操作的独占占位，然后释放查看器。同会话 open/mount/拒绝清理串行，已有、共享或出现操作竞态时保留应用目录中的明确关闭入口，不自动关闭，也不重建已有工具结果页面。已投递工具结果仅保留 sourcePartId 去重；Main 每个 mount 最多保留 64 条 settled 工具记录，prepared/sent 保留，持久回执与执行链不变。
+最终模式校验（已按后续用户确认的交互方案更新）：SDK 1.1.2 的公开 `McpUiAppCapabilities.availableDisplayModes` 与 `AppBridge.getAppCapabilities()` 已验证可用。所有应用统一在固定右侧面板展示，聊天仅保留具名入口；加载和错误标签仍可达，握手前实际页面隐藏。未声明模式按 inline-only 处理，面板优先使用 inline，fullscreen-only 使用其支持模式；所有模式请求均限制在面板边界，不支持的请求明确失败。直接菜单打开先隐藏握手，inline-only 可以正常进入；只有初始化失败或没有可用模式时，Main 才依据 Server 本次事务的 openedByRequest 事实、原控制版本和全窗口查看器状态，仅关闭本次新打开且没有操作的独占占位并释放查看器。同会话 open/mount/拒绝清理串行，已有、共享或出现操作竞态时保留明确关闭入口，不自动关闭。切标签、切会话、收起和恢复面板保留同一 frame 与草稿；隐藏时拒绝新操作、取消待确认请求，已接纳操作继续处理原回执。已投递工具结果仅保留 sourcePartId 去重；Main 每个 mount 最多保留 64 条 settled 工具记录，prepared/sent 保留，持久回执与执行链不变。

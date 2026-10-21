@@ -1,6 +1,6 @@
 # 统一 MCP Apps 与会话常驻面板设计
 
-> 状态：当前实施方案；按阶段交付，未完成阶段不代表现有客户端能力。
+> 状态：配套计划的 5 个阶段、10 个任务已完成实现与验收；本文已同步后续确认的右侧固定面板交互。可选 widgetState 按 SDK 兼容性规则不启用，远程平台等排除项不属于本轮交付。
 > 日期：2026-10-20。调研基线：OpenHarness-ts `af717317`；参考 ZCode `0ae51b1c`。
 > 本次修订：MCP Apps 是最终唯一的插件页面协议；Native UI 仅在有明确结束条件的迁移期存在。补齐去重键、控制版本、页面结果更新、app-only 权限和 unknown 后续操作限制。
 
@@ -132,7 +132,7 @@ Native Tool 插件的根清单示例：
 
 `components.apps`、backends/surfaces 是 Vykor 的插件包装定义；页面通信、工具 UI 元数据、资源 MIME 使用 MCP Apps。官方页面不需要导入 Vykor 私有 SDK。
 
-普通工具结果默认按工具调用隔离。只有同插件、同后台、同资源且唯一对应声明的 surface 时才复用面板；不能只因为 URI 字符串相同就合并不同来源。页面必须支持 fullscreen 才能作为侧栏面板；inline-only 保持内联，pip 首批不支持。用户显式打开另一个成功 Part 时，按宿主 sourcePartId 去重并顺序投递该 Part 的输入和结果；重复点击同一 Part 不重复通知，仍保持原 frame 和握手，也不执行工具。
+普通工具结果默认按工具调用隔离。只有同插件、同后台、同资源且唯一对应声明的 surface 时才复用面板；不能只因为 URI 字符串相同就合并不同来源，未知 Part 的页面身份由 Main 判定。所有应用统一在右侧面板展示，inline-only 同样可用，聊天只保留具名入口，pip 首批不支持。实时新结果按宿主 sourcePartId 去重并顺序投递；显式查看已有页面只定位右侧标签，不重放旧正文。重复点击不重复通知或执行，仍保持原 frame 和握手。
 
 ## 5. Native Tool 如何适配
 
@@ -255,7 +255,7 @@ controlRevision 使用以下规则，宿主通过现有 snapshot/SSE 接收最�
 - 原“加入输入框”迁为可见上下文条目，原“交给助手”迁为 ui/message。迁移不增加私有 draft/submit 别名；旧一次性交互结束语义不强行保留。
 - 消息说明最多 4096 个 Unicode 字符、结构数据 32 KiB。能力只在实际装配后声明。
 
-窗口级 PluginAppPageManager 放在 Desktop root，持有固定容器中的 frame；侧栏/内联位置只是展示锚点。切会话、切标签、收面板保留同一 frame、AppBridge、输入与已接纳操作。Main 使用原会话 lease，不能把目标替换成 activeSessionId。
+窗口级 PluginAppPageManager 放在 Desktop root，持有固定容器中的 frame；只有右侧面板提供展示锚点，聊天不创建内嵌显示区域。切会话、切标签、收面板保留同一 frame、AppBridge、输入与已接纳操作。Main 使用原会话 lease，不能把目标替换成 activeSessionId。
 
 | 事件 | 行为 |
 | --- | --- |
@@ -379,4 +379,4 @@ text-inspector 的检查/修复算法、注册名、参数和 Native Tool SDK �
 
 ZCode 对照依据是本地宿主代码；独立插件仓库未核验。其 surfaces、widgetState 和订阅扩展不自动视为官方标准。
 
-最终模式校验：SDK 1.1.2 的公开 `McpUiAppCapabilities.availableDisplayModes` 与 `AppBridge.getAppCapabilities()` 已验证可用。握手前无侧栏资格；未声明模式按 inline-only 处理。只有确认支持 fullscreen 后才显示侧栏标签，侧栏位置的 hostContext 为 fullscreen，工具卡位置为 inline；不支持的请求明确失败。直接菜单打开先隐藏握手；inline-only 或初始化失败时，Main 依据 Server 本次事务的 openedByRequest 事实、原控制版本和全窗口查看器状态，仅关闭本次新打开且没有操作的独占占位，然后释放查看器。同会话 open/mount/拒绝清理串行，已有、共享或出现操作竞态时保留应用目录中的明确关闭入口，不自动关闭，也不重建已有工具结果页面。已投递工具结果仅保留 sourcePartId 去重；Main 每个 mount 最多保留 64 条 settled 工具记录，prepared/sent 保留，持久回执与执行链不变。
+最终模式校验（已按后续用户确认的交互方案更新）：SDK 1.1.2 的公开 `McpUiAppCapabilities.availableDisplayModes` 与 `AppBridge.getAppCapabilities()` 已验证可用。所有应用统一在固定右侧面板展示，聊天仅保留具名入口；加载和错误标签仍可达，握手前实际页面隐藏。未声明模式按 inline-only 处理，面板优先使用 inline，fullscreen-only 使用其支持模式；所有模式请求均限制在面板边界，不支持的请求明确失败。直接菜单打开先隐藏握手，inline-only 可以正常进入；只有初始化失败或没有可用模式时，Main 才依据 Server 本次事务的 openedByRequest 事实、原控制版本和全窗口查看器状态，仅关闭本次新打开且没有操作的独占占位并释放查看器。同会话 open/mount/拒绝清理串行，已有、共享或出现操作竞态时保留明确关闭入口，不自动关闭。切标签、切会话、收起和恢复面板保留同一 frame 与草稿；隐藏时拒绝新操作、取消待确认请求，已接纳操作继续处理原回执。已投递工具结果仅保留 sourcePartId 去重；Main 每个 mount 最多保留 64 条 settled 工具记录，prepared/sent 保留，持久回执与执行链不变。

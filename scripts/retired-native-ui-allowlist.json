@@ -1656,18 +1656,6 @@
     },
     {
       "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
-      "line": 159,
-      "text": "- Create: `apps/desktop/tests/plugin-ui-electron/mcp-apps-sdk-fixture.ts`、`mcp-apps-sdk.html`。",
-      "reason": "Historical design, migration plan or recorded review; not a live interface."
-    },
-    {
-      "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
-      "line": 174,
-      "text": "pnpm --filter @vykor/desktop test:plugin-ui-electron",
-      "reason": "Historical design, migration plan or recorded review; not a live interface."
-    },
-    {
-      "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
       "line": 260,
       "text": "- Modify: 原 `session-plugin-ui-service.ts`、`session-plugin-ui-action-executor.ts`、`session-plugin-ui-conversation-service.ts`，迁出可靠性机制；旧入口仅为过渡使用，任务 10 删除。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
@@ -1680,26 +1668,14 @@
     },
     {
       "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
-      "line": 330,
-      "text": "pnpm --filter @vykor/desktop test:plugin-ui-electron",
-      "reason": "Historical design, migration plan or recorded review; not a live interface."
-    },
-    {
-      "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
       "line": 365,
       "text": "- [x] **Step 2: 改工具结果和声明。** 把 metadata.ui.data 改为明确 metadata.appData；根清单仅 components.apps。映射原两个工具名，inputSchema 仍取真实注册值，不复制到 apps.json。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
       "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
-      "line": 375,
-      "text": "pnpm --filter @vykor/desktop test:plugin-ui-electron",
-      "reason": "Historical design, migration plan or recorded review; not a live interface."
-    },
-    {
-      "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
       "line": 400,
-      "text": "- [x] **Step 3: 实施工具入口复用。** 仅真实已提交成功结果与可信后台工具描述可产生入口；唯一匹配声明 surface 时复用，否则按 Part 隔离。Native 通过映射的 ui.resourceUri 识别，旧 metadata.ui 永不转换。失败/历史回放不自动开面板。用户显式打开另一个成功 Part 时按宿主 sourcePartId 去重并顺序投递，复用同一 frame；重复点击同 Part 不重复通知或执行。",
+      "text": "- [x] **Step 3: 实施工具入口复用。** 仅真实已提交成功结果与可信后台工具描述可产生入口；唯一匹配声明 surface 时复用，否则按 Part 隔离。Native 通过映射的 ui.resourceUri 识别，旧 metadata.ui 永不转换。失败/历史回放不自动开面板。实时新结果按宿主 sourcePartId 去重并顺序投递；显式查看已有页面只定位右侧标签，不重放旧正文。未知 Part 的页面身份由 Main 判定，不能仅凭资源地址合并；重复点击不重复通知或执行。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
@@ -1790,12 +1766,6 @@
       "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
       "line": 445,
       "text": "- [x] **Step 8: 完成物理移除验收。** 构建与样例产物无私有 IIFE，public exports 无 ui-sdk/ui-styles；没有任意 POST 可调用旧 UI。允许清单中的历史解析不导入 AppBridge/runtime/执行器。维护中的所有页面和模板只使用 components.apps。",
-      "reason": "Historical design, migration plan or recorded review; not a live interface."
-    },
-    {
-      "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
-      "line": 452,
-      "text": "pnpm --filter @vykor/desktop test:plugin-ui-electron",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
