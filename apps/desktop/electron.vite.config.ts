@@ -52,10 +52,15 @@ function copyRuntimeResources(): Plugin {
 export default defineConfig({
   main: {
     resolve: {
-      alias: {
-        "@main": resolve("src/main"),
-        "@shared": resolve("src/shared"),
-      },
+      alias: [
+        { find: "@main", replacement: resolve("src/main") },
+        { find: "@shared", replacement: resolve("src/shared") },
+        // 与 server 的工作区源码一起构建，避免混用旧 dist 导致新增导出缺失。
+        {
+          find: /^@vykor\/agent-runtime$/,
+          replacement: resolve("../../packages/agent-runtime/src/index.ts"),
+        },
+      ],
     },
     plugins: [
       { name: "build-document-preview", buildStart: buildDocumentPreview },
