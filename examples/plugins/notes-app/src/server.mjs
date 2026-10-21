@@ -14,12 +14,14 @@ const subscriptions = new Set();
 const ui = { resourceUri: "ui://notes/editor", visibility: ["model", "app"] };
 const schema = properties => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const writes = { expectedRevision: { type: "integer", minimum: 0 }, operationId: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", maxLength: 48000 } };
-server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [
-  { name: "read_note", description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
-  { name: "apply_note_operations", description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
-  { name: "list_notes", description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
-  { name: "save_note_draft", description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } },
-] }));
+server.setRequestHandler(ListToolsRequestSchema, () => ({
+  tools: [
+    { name: "read_note", description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
+    { name: "apply_note_operations", description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
+    { name: "list_notes", description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
+    { name: "save_note_draft", description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } },
+  ]
+}));
 server.setRequestHandler(CallToolRequestSchema, async request => {
   try {
     const { name, arguments: args = {} } = request.params;
@@ -30,10 +32,12 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data, _meta: { editor: "notes-app" } };
   } catch (error) { return { content: [{ type: "text", text: error.message }], isError: true }; }
 });
-server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [
-  { uri: "ui://notes/editor", name: "协作笔记", mimeType: "text/html;profile=mcp-app" },
-  { uri: "notes://welcome", name: "Welcome", mimeType: "application/json" },
-] }));
+server.setRequestHandler(ListResourcesRequestSchema, () => ({
+  resources: [
+    { uri: "ui://notes/editor", name: "协作笔记", mimeType: "text/html;profile=mcp-app" },
+    { uri: "notes://welcome", name: "Welcome", mimeType: "application/json" },
+  ]
+}));
 server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates: [] }));
 server.setRequestHandler(ReadResourceRequestSchema, request => {
   const uri = request.params.uri;

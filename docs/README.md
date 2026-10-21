@@ -136,6 +136,7 @@
 - [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：运行诊断 v1、作者体验小修和 Git 来源完成后的接手说明；Agent 对话安装、`output_styles`、自动更新、Marketplace、npm 和归档 URL 继续暂缓。
 - [Native Plugin v1 与 Claude Code Converter 实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)：按 Native schema、安装激活、格式硬切、Converter core 和 Claude 转换闭环拆分的可执行任务。
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
+- [插件体系开发说明](./plugin-system.md)（[交互版](./plugin-system.html)）与 [MCP Apps 开发说明](./mcp-apps.md)（[交互版](./mcp-apps.html)）：插件结构、权限、工具执行与右侧应用面板的当前开发入口。
 - [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
 - [旧 Native UI 设计](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与 [旧固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)：历史资料，运行入口已退役；当前页面以 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)为准。
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop 本地插件包导入、安装调试与当前能力边界。

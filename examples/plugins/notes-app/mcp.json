@@ -1,1 +1,14 @@
-{ "servers": { "notes": { "type": "stdio", "command": "node", "args": ["server.mjs"], "cwd": "${VYKOR_PLUGIN_ROOT}", "env": { "VYKOR_NOTES_DATA_DIR": "${VYKOR_PLUGIN_DATA_DIR}", "VYKOR_NOTES_SESSION": "${VYKOR_SESSION_ID}" } } } }
+{
+  "servers": {
+    "notes": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["server.mjs"],
+      "cwd": "${VYKOR_PLUGIN_ROOT}",
+      "env": {
+        "VYKOR_NOTES_DATA_DIR": "${VYKOR_PLUGIN_DATA_DIR}",
+        "VYKOR_NOTES_SESSION": "${VYKOR_SESSION_ID}"
+      }
+    }
+  }
+}
