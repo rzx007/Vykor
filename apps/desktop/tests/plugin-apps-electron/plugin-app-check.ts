@@ -92,9 +92,14 @@ export async function checkResidentPluginApps(root: string, documents: PluginApp
       assert.ok(part.metadata.pluginAppSource)
       assert.equal(await evaluate(owner, `window.fixtureOpenResult(${JSON.stringify(ready.sessionId)},${JSON.stringify(part.id)})`), mountId, "successful model tool reuses unique declared surface")
       assert.equal(await evaluate(owner, "window.fixtureSavedWindow===document.querySelector('iframe').contentWindow"), true)
-      await appEvaluate(frame, "document.querySelector('#fullscreen').click()")
+      assert.equal(await appEvaluate(frame, "document.querySelector('#fullscreen')"), null, "example uses host panel controls")
+      await evaluate(owner, "window.fixtureVisible(false)")
+      assert.equal(await evaluate(owner, "document.querySelector('[data-plugin-app-mount]').style.visibility"), "hidden")
+      await evaluate(owner, "window.fixtureVisible(true)")
+      assert.equal(await evaluate(owner, "window.fixtureSavedWindow===document.querySelector('iframe').contentWindow"), true)
+      await evaluate(owner, "window.fixtureMode('fullscreen')")
       await wait(async () => await evaluate(owner, "document.querySelector('[data-plugin-app-mount]').dataset.displayMode==='fullscreen'"), "official fullscreen request")
-      await appEvaluate(frame, "document.querySelector('#fullscreen').click()")
+      await evaluate(owner, "window.fixtureMode('inline')")
       await wait(async () => await evaluate(owner, "document.querySelector('[data-plugin-app-mount]').dataset.displayMode==='inline'"), "official inline request")
       const beforeReconnectRead = client.pluginApps.readResource.bind(client.pluginApps)
       const beforeReconnectStream = client.pluginApps.notifications.bind(client.pluginApps)
@@ -200,7 +205,7 @@ export async function checkResidentPluginApps(root: string, documents: PluginApp
       assert.deepEqual(await appEvaluate(frame, "({hidden:document.querySelector('#submit').hidden,disabled:document.querySelector('#submit').disabled})"), { hidden: false, disabled: false })
       await appEvaluate(frame, "document.querySelector('#submit').click()")
       try {
-        await wait(async () => await evaluate(owner, "document.querySelector('[role=alertdialog]')?.textContent.includes('来自 example.text-inspector 的消息') && Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='发送' && !b.disabled)"), "ordinary message confirmation")
+        await wait(async () => await evaluate(owner, "document.querySelector('[role=alertdialog]')?.textContent.includes('发送到聊天') && document.querySelector('[role=alertdialog]')?.textContent.includes('example.text-inspector') && Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='发送' && !b.disabled)"), "ordinary message confirmation with original source")
       } catch (error) {
         throw new Error(`${error}; page=${await appEvaluate(frame, "document.querySelector('#status').textContent")}; dialog=${await evaluate(owner, "document.querySelector('[role=alertdialog]')?.textContent")}`)
       }

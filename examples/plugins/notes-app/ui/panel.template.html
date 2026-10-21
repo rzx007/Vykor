@@ -1,6 +1,24 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>/* UI_STYLES */</style></head><body>
-<header><h1>协作笔记</h1><span id="revision"></span><button id="fullscreen">展开</button></header>
-<label for="draft">笔记正文</label><textarea id="draft" rows="14"></textarea>
-<div><button id="save" disabled>保存草稿</button><button id="refresh">读取最新笔记</button><button id="selection">引用选区给助手</button></div>
-<p id="status" role="status">正在连接…</p><details id="conflict" hidden><summary>服务器最新内容（草稿保留）</summary><pre id="remote"></pre><button id="merge">我已手工合并，以最新版本继续编辑</button></details>
-<!-- UI_SCRIPT --></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>协作笔记</title><style>/* UI_STYLES */</style></head>
+<body>
+  <header><h1>协作笔记</h1><span id="revision"></span></header>
+  <p class="muted">在这里编辑正文，完成后手工保存。</p>
+  <div class="editor-heading"><label for="draft">笔记正文</label><span id="save-state" role="status" aria-live="polite">正在读取…</span></div>
+  <textarea id="draft" rows="14" aria-describedby="status" disabled></textarea>
+  <div class="actions"><button id="save" class="primary" disabled>保存草稿</button><button id="selection" hidden disabled>引用选区到聊天</button></div>
+  <p id="status" role="status" aria-live="polite">正在连接…</p>
+  <section id="conflict" hidden aria-label="远端更新">
+    <h2>远端笔记有更新</h2>
+    <p class="muted">本地草稿已保留。先查看新版本，再手工合并或选择采用新版。</p>
+    <details id="remote-details"><summary id="remote-version">查看远端新版</summary><pre id="remote"></pre></details>
+    <div class="actions"><button id="merge">我已手工合并，继续编辑</button><button id="adopt">采用远端新版</button></div>
+    <div id="adopt-confirmation" hidden>
+      <p>采用新版会替换当前本地草稿，无法恢复本地未保存的修改。</p>
+      <div class="actions"><button id="confirm-adopt" class="danger">确认采用新版</button><button id="cancel-adopt">保留本地草稿</button></div>
+    </div>
+  </section>
+  <footer><button id="refresh">读取最新笔记</button><span class="muted">有未保存修改时，读取新版本会保留本地草稿。</span></footer>
+  <!-- UI_SCRIPT -->
+</body>
+</html>

@@ -10,6 +10,10 @@ function Surface() {
   const manager = usePluginApps()!, pages = usePluginAppPages()
   const [visible, setVisible] = useState(true), [session, setSession] = useState("app-session")
   window.fixtureVisible = setVisible; window.fixtureSelect = setSession
+  Object.assign(window, { fixtureMode: (mode: "inline" | "fullscreen") => {
+    const page = manager.snapshot().find(item => item.controller.state.source.sessionId === session)
+    page?.requestDisplayMode?.(mode)
+  } })
   window.fixtureOpen = async (sessionId, pluginId, surfaceId = "editor") => (await manager.open(sessionId, pluginId, surfaceId, "Editor")).id
   window.fixtureMount = async source => (await manager.mount(source, "Editor")).id
   Object.assign(window, { fixtureContextIds: () => pluginAppModelContexts.forSession(session).map(item => item.id),

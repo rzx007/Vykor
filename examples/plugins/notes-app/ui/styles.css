@@ -1,1 +1,41 @@
-:root{font-family:var(--font-sans,system-ui);color:var(--color-text-primary,#202124);background:var(--color-background-primary,#fff);font-size:14px}body{margin:0;padding:20px}header{display:flex;align-items:center;gap:12px}h1{font-size:18px;font-weight:600;margin:0 auto 16px 0}label{display:block;margin:12px 0 6px}textarea{box-sizing:border-box;width:100%;font:inherit;line-height:1.65;padding:12px;border:1px solid var(--color-border-primary,#aaa);border-radius:12px;background:inherit;color:inherit;resize:vertical}button{font:inherit;border:1px solid var(--color-border-primary,#ccc);border-radius:18px;padding:6px 12px;margin:8px 6px 0 0;background:var(--color-background-secondary,#f5f5f5);color:inherit;cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible{outline:2px solid var(--color-ring-primary,#456bd9);outline-offset:2px}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status,#revision{font-size:12px;color:var(--color-text-secondary,#666)}
+:root {
+  --ohs-background: var(--color-background-primary, Canvas);
+  --ohs-foreground: var(--color-text-primary, CanvasText);
+  --ohs-muted-foreground: var(--color-text-secondary, GrayText);
+  --ohs-border: var(--color-border-primary, GrayText);
+  --ohs-primary: var(--color-background-inverse, ButtonText);
+  --ohs-primary-foreground: var(--color-text-inverse, ButtonFace);
+  --ohs-accent: var(--color-background-secondary, ButtonFace);
+  --ohs-destructive: var(--color-text-danger, CanvasText);
+  font-family: var(--font-sans, system-ui), "Segoe UI", sans-serif;
+  font-size: var(--font-text-md-size, 14px);
+  color: var(--ohs-foreground);
+  background: var(--ohs-background);
+  line-height: 1.5;
+  color-scheme: light;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; padding: 16px; }
+header, .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+header { margin-bottom: 8px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+.muted, #status, #revision, #save-state { color: var(--ohs-muted-foreground); font-size: 12px; }
+.editor-heading { margin: 16px 0 6px; }
+textarea { width: 100%; display: block; min-height: 280px; font: inherit; line-height: 1.65; padding: 12px; border: 1px solid var(--ohs-border); border-radius: 8px; background: inherit; color: inherit; resize: vertical; }
+button { font: inherit; min-height: 32px; border: 1px solid var(--ohs-border); border-radius: 999px; padding: 6px 12px; background: transparent; color: inherit; cursor: pointer; transition: background-color 150ms; }
+button.primary { background: var(--ohs-primary); color: var(--ohs-primary-foreground); }
+button.danger { color: var(--ohs-destructive); }
+button:hover:not(:disabled) { background: var(--ohs-accent); color: var(--ohs-foreground); }
+button:disabled { opacity: .6; cursor: default; }
+:focus-visible { outline: 2px solid var(--ohs-primary); outline-offset: 2px; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+#status { min-height: 18px; overflow-wrap: anywhere; }
+#conflict { margin-block: 16px; padding-block: 12px; border-block: 1px solid var(--ohs-border); }
+summary { cursor: pointer; width: fit-content; padding-block: 6px; }
+pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.65; }
+footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--ohs-border); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

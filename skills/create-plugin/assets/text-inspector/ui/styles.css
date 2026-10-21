@@ -30,6 +30,24 @@ body {
   padding: 16px;
 }
 
+[hidden] { display: none !important; }
+h1 { font-size: 20px; font-weight: 600; }
+label { display: block; margin-bottom: 6px; }
+.muted, #status { color: var(--ohs-muted-foreground); font-size: 13px; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-block: 10px 12px; }
+textarea { display: block; width: 100%; min-height: 80px; resize: vertical; line-height: 1.6; }
+#preview { min-height: 200px; tab-size: 2; }
+#findings { margin: 0 0 12px; padding: 0; list-style: none; max-height: 220px; overflow: auto; }
+#findings li { border-bottom: 1px solid var(--ohs-border); }
+#findings label { display: flex; align-items: start; gap: 8px; margin: 0; min-height: 40px; padding: 8px 0; cursor: pointer; }
+#findings input { margin-top: 4px; accent-color: var(--ohs-primary); }
+#selection-count { font-size: 12px; }
+#empty-state { font-size: 13px; }
+#status { min-height: 21px; overflow-wrap: anywhere; }
+summary { width: fit-content; cursor: pointer; color: var(--ohs-muted-foreground); font-size: 13px; padding-block: 6px; }
+details p { margin-block: 6px 10px; }
+footer { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ohs-border); }
+
 h1,
 h2,
 h3,
@@ -58,11 +76,18 @@ textarea {
 
 button {
   cursor: pointer;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ohs-foreground);
+  min-height: 32px;
+}
+
+button.primary {
   background: var(--ohs-primary);
   color: var(--ohs-primary-foreground);
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: var(--ohs-accent);
   color: var(--ohs-foreground);
 }

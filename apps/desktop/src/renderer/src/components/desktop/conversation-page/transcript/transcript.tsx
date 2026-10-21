@@ -40,6 +40,7 @@ import type { ConversationTurn, ConversationEntry } from "../message/conversatio
 import { AssistantMessageActions, MessageBlock } from "../message/message-block"
 import { RunErrorNotice } from "../message/notices/run-error-notice"
 import { ContentEntrance } from "../message/content-entrance"
+import { usePluginAppResults } from "../../shell/plugin-apps/use-plugin-app-results"
 
 const emptyInputs: DesktopSessionInput[] = []
 const emptyTasks: DesktopSessionTask[] = []
@@ -81,6 +82,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   tasks = emptyTasks,
   onOpenAgents,
 }: ConversationTranscriptProps): React.JSX.Element {
+  usePluginAppResults(parts)
   const workflowScroller = useConversationScroller()
   useEffect(() => {
     const reveal = (event: Event) => {

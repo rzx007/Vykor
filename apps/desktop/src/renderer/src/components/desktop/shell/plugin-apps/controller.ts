@@ -2,7 +2,8 @@ import type { DesktopPluginAppsAPI, PluginAppHostState, PluginAppMount, PluginAp
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
 import { pluginAppModelContexts } from "./plugin-app-model-context"
 import { parseMcpCallResultData } from "@vykor/client"
-export type AppConfirmation = (request: PluginAppConfirmation, signal: AbortSignal) => Promise<boolean>
+export interface AppConfirmationSource { title: string; pluginId: string; sessionId: string; description?: string }
+export type AppConfirmation = (request: PluginAppConfirmation, signal: AbortSignal, source?: AppConfirmationSource) => Promise<boolean>
 export class PluginAppController {
   state: PluginAppHostState
   private visible = true

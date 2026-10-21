@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router"
 import {
   Group,
@@ -10,6 +10,7 @@ import {
 } from "react-resizable-panels"
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
+import { usePluginApps, usePluginAppPanelRequest } from "@renderer/components/desktop/shell/plugin-apps/provider"
 import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/navigation/settings-navigation"
@@ -136,6 +137,18 @@ export function MainLayout(): React.JSX.Element {
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
   const openWorkflowPanel = useCallback(() => openUtilityTool("workflows"), [openUtilityTool])
+  const appPanelRequest = usePluginAppPanelRequest()
+  const pluginApps = usePluginApps()
+  useLayoutEffect(() => {
+    pluginApps?.setActiveSession(activeSessionId)
+    return () => pluginApps?.setActiveSession(null)
+  }, [pluginApps, activeSessionId])
+  const handledAppPanelRequest = useRef(0)
+  useEffect(() => {
+    if (!appPanelRequest || handledAppPanelRequest.current === appPanelRequest.sequence) return
+    handledAppPanelRequest.current = appPanelRequest.sequence
+    if (appPanelRequest.sessionId === activeSessionId) utilityPanel.restore()
+  }, [appPanelRequest, activeSessionId, utilityPanel.restore])
 
   useEffect(
     () => window.desktop.browser.onOpenRequest(() => openUtilityTool("browser")),

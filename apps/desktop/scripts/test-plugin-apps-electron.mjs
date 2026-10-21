@@ -21,7 +21,7 @@ const environment = {
 delete environment.ELECTRON_RUN_AS_NODE
 const child = spawn(
   executable,
-  ["--user-data-dir=" + profile, resolve(scratch, "electron-build/main/main.cjs")],
+  ["--disable-gpu", "--user-data-dir=" + profile, resolve(scratch, "electron-build/main/main.cjs")],
   {
     env: environment,
     windowsHide: true,

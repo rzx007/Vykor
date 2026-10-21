@@ -1,6 +1,8 @@
 # Text Inspector 原生插件样例
 
-这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在原文字结果旁显示交互入口；用户选择问题，经宿主确认后生成修复文本预览。插件 ID 为 `example.text-inspector`，版本为 `1.2.0`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
+这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在文字结果旁显示入口，打开右侧固定面板。用户编辑文本、检查、勾选问题，再经宿主确认生成修复预览。插件 ID 为 `example.text-inspector`，版本为 `1.2.1`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
+
+检查规则按需展开；无问题时直接显示无需修复。协作优先使用“引用到聊天”，直接发送收在“更多协作操作”中。编辑后旧问题选择失效；新的工具结果会保留当前编辑，只有明确点击“替换当前文本，查看新结果”才替换草稿。
 
 入口由 `.vykor-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
 
@@ -74,4 +76,4 @@ show(result);
 
 官方 1.1.2 的实验能力 schema 会剥离自定义 namespace，当前不装配 widgetState。窗口关闭或重启不保证表单恢复；跨重启业务数据由插件自行使用原 dataDir 保存。页面没有 Node、preload、父 DOM、文件、网络、子 frame、任意 IPC 或剪贴板权限。不要手写通信协议或用 innerHTML 渲染用户数据。
 
-更新：重新打包同一插件 ID 并导入 1.2.0；沿用原批准规则，不增加文件或网络权限。
+更新：重新打包同一插件 ID 并导入 1.2.1；沿用原批准规则，不增加文件或网络权限。

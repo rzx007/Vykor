@@ -22,6 +22,6 @@
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../../AGENTS.md)。
 
-MCP Apps 的“插件应用”入口显示当前会话的 surfaces，打开后生成独立页签。`PluginAppAnchor` 仅提供侧栏内容区的位置；实际 iframe 始终挂在根路由的 `PluginAppsProvider`。切标签、折叠或切换会话都不卸载页面。关闭应用需确认未保存草稿风险，并走明确的服务端 close；旧页面入口已移除，历史结果仅显示文字与停用提示。
+MCP Apps 的“应用”入口显示当前会话可打开的应用，打开后生成独立页签。聊天中的具名入口也只打开或定位此处的页签。`PluginAppAnchor` 仅提供右侧面板内容区的位置；实际 iframe 始终挂在根路由的 `PluginAppsProvider`。切标签、折叠或切换会话都不卸载页面。关闭应用需确认未保存草稿风险，并走明确的服务端 close；旧 Native UI 入口已移除，其历史结果仅显示文字与停用提示。
 
 旧 Native UI 已退役，历史记录只显示文字与停用提示；所有活页面由 `shell/plugin-apps` 使用官方 AppBridge 承载。

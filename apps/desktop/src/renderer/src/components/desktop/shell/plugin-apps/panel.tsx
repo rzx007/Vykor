@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { usePluginApps, usePluginAppPages } from "./provider"
-import type { AppDisplayMode } from "./page-manager"
+import { appPanelMode, type AppDisplayMode, type ResidentAppPage } from "./page-manager"
 import type { DesktopPluginAppsAPI } from "@shared/plugin-app-types"
 /** A measurement-only anchor. The frame remains attached to the root owner for its entire life. */
 export function PluginAppAnchor({ pageId, visible, mode = "inline" }: { pageId: string; visible: boolean; mode?: AppDisplayMode }) {
@@ -19,6 +19,21 @@ export function PluginAppAnchor({ pageId, visible, mode = "inline" }: { pageId: 
   }, [manager, pageId, visible, mode])
   return <div ref={ref} className="h-full w-full" aria-label="插件应用显示区域" />
 }
+/** 只在右侧工作区放置应用；页面本身始终由根节点持有。 */
+export function PluginAppPanel({ page, visible }: { page: ResidentAppPage; visible: boolean }) {
+  const [timedOut, setTimedOut] = useState(false)
+  useEffect(() => {
+    if (page.modes) return
+    const timer = setTimeout(() => setTimedOut(true), 10_000)
+    return () => clearTimeout(timer)
+  }, [page, page.modes])
+  const error = page.initializationError || (!page.modes && timedOut ? "应用加载超时，请关闭此标签后重新打开。" : page.modes?.length === 0 ? "应用没有可用的显示模式。" : undefined)
+  return <div className="relative h-full min-h-0">
+    {!page.modes && !error && <p role="status" className="px-4 py-6 text-sm text-muted-foreground">正在打开{page.title}…</p>}
+    {error && <p role="alert" className="px-4 py-6 text-sm text-destructive">{error}</p>}
+    <PluginAppAnchor pageId={page.id} visible={visible && !error} mode={appPanelMode(page)} />
+  </div>
+}
 export function PluginAppCatalog({ sessionId, onSelect }: { sessionId: string | null; onSelect(id: string): void }) {
   const manager = usePluginApps(), pages = usePluginAppPages()
   const rejected = pages.filter(page => page.menuRejection && page.controller.state.source.sessionId === sessionId)
@@ -31,7 +46,8 @@ export function PluginAppCatalog({ sessionId, onSelect }: { sessionId: string | 
     return () => { current = false }
   }, [manager, sessionId])
   return <div className="flex h-full flex-col gap-3 overflow-auto p-4">
-    <h2 className="text-sm font-medium">插件应用</h2>
+    <h2 className="text-sm font-medium">应用</h2>
+    <p className="text-xs text-muted-foreground">应用在右侧打开。切换标签或收起面板会保留当前草稿。</p>
     {!sessionId ? <p className="text-xs text-muted-foreground">请先打开一个会话。</p> : null}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     {rejected.map(page => <div key={page.id} className="space-y-2 text-xs">
@@ -46,7 +62,7 @@ export function PluginAppCatalog({ sessionId, onSelect }: { sessionId: string | 
       variant="ghost" disabled={busy} className="justify-start" onClick={() => {
         if (!manager || !sessionId) return
         setBusy(true)
-        void manager.open(sessionId, backend.pluginId, surface.id, surface.title).then(page => onSelect(page.id), cause => setError(String(cause))).finally(() => setBusy(false))
+        void manager.open(sessionId, backend.pluginId, surface.id, surface.title).then(page => { manager.focus(page); onSelect(page.id) }, cause => setError(String(cause))).finally(() => setBusy(false))
       }}>{surface.title}</Button>))}
     {catalog && !catalog.backends.some(backend => backend.surfaces.length) && <p className="text-xs text-muted-foreground">此会话没有可打开的插件应用。</p>}
   </div>

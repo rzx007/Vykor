@@ -1,6 +1,5 @@
 import { usePluginApps, usePluginAppPages } from "@renderer/components/desktop/shell/plugin-apps/provider"
-import { canUseAppSidebar } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
-import { PluginAppAnchor, PluginAppCatalog } from "@renderer/components/desktop/shell/plugin-apps/panel"
+import { PluginAppPanel, PluginAppCatalog } from "@renderer/components/desktop/shell/plugin-apps/panel"
 import { toast } from "@renderer/lib/toast"
 import type * as React from "react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
@@ -122,6 +121,7 @@ export function UtilityPanel({
       handledToolRequestId,
       handledImageRequestId,
       handledTerminalRequestId,
+      handledAppRequestId,
     },
     fileTabsRef,
     setTabs,
@@ -136,6 +136,7 @@ export function UtilityPanel({
     setHandledToolRequestId,
     setHandledImageRequestId,
     setHandledTerminalRequestId,
+    setHandledAppRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
 
@@ -198,7 +199,7 @@ export function UtilityPanel({
       (!tab.projectPath || tab.projectPath === selectedProjectPath) &&
       (activeWorkspaceIsGit === true || tab.tool !== "review")
   )
-  const appTabs: UtilityTab[] = appPages.filter(page => page.controller.state.source.sessionId === activeSessionId && canUseAppSidebar(page))
+  const appTabs: UtilityTab[] = appPages.filter(page => page.controller.state.source.sessionId === activeSessionId)
     .map(page => ({ id: "plugin-app:" + page.id, tool: "plugin-app", title: page.title }))
   const visibleTabs = [...storedVisibleTabs, ...appTabs]
   const visibleActiveFilePath =
@@ -210,6 +211,13 @@ export function UtilityPanel({
       ? loadingFilePath
       : null
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0]
+  const appPanelRequest = pluginApps?.panelRequest
+  useEffect(() => {
+    if (!appPanelRequest || appPanelRequest.sessionId !== activeSessionId || appPanelRequest.sequence === handledAppRequestId) return
+    setActiveTabId("plugin-app:" + appPanelRequest.pageId)
+    setHandledAppRequestId(appPanelRequest.sequence)
+  }, [appPanelRequest, activeSessionId, handledAppRequestId, setActiveTabId, setHandledAppRequestId])
+  const activeApp = activeTab?.tool === "plugin-app" ? appPages.find(page => "plugin-app:" + page.id === activeTab.id) : undefined
   const terminalCommand = terminalCommands[0] ?? null
   const pendingTerminalOpenRequest =
     terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
@@ -876,7 +884,7 @@ export function UtilityPanel({
 
         <div className="relative min-h-0 flex-1 bg-conversation">
           {activeTab?.tool === "plugin-app" && (activeTab.id.startsWith("plugin-app:")
-            ? <PluginAppAnchor pageId={activeTab.id.slice("plugin-app:".length)} visible={open} mode="fullscreen" />
+            ? activeApp && <PluginAppPanel key={activeApp.id} page={activeApp} visible={open} />
             : <PluginAppCatalog sessionId={activeSessionId} onSelect={id => setActiveTabId("plugin-app:" + id)} />)}
           {open && activeTab?.tool === "image" && activeTab.imageSource && (
             <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />

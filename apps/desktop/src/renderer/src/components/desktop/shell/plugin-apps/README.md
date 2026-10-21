@@ -2,6 +2,8 @@
 
 此目录拥有窗口级页面生命周期。`provider.tsx` 在根路由挂载，`page-manager.ts` 保存原会话与页面，`frame.tsx` 的 iframe 始终留在这个根节点；工具面板的 `panel.tsx` 只测量位置并改变 CSS，不使用 portal、不移动 DOM。
 
+所有应用只在主工作区右侧面板展示。聊天中的具名入口打开或定位右侧标签，不创建聊天内显示区域；查看已有页面时不重放旧结果正文。未知结果由 Main 决定页面身份，不能凭相同资源地址合并不同入口。首次实时结果可展开应用，之后的新结果更新原页面而不抢当前标签；历史消息渲染不会自动打开应用。面板使用应用支持的 inline 模式；仅支持 inline 的应用也可从目录打开，显示模式请求始终受面板边界约束。收起面板、切换应用或会话只隐藏页面，不销毁 iframe。
+
 `transport.ts` 使用 ext-apps 1.1.2 的官方 `AppBridge(null, ...)` 和 `PostMessageTransport(peer, peer)`，一个 iframe 一套协议。`handlers.ts` 将官方工具、资源请求转到有限 preload；真实 MCP Client、lease 和执行函数留在 Main。`controller.ts` 先取得 Main 固定的请求，再显示宿主确认，等待原回执终态后返回完整 MCP result。主题变化只更新 host context。
 
 `queueInitial` 按源 Part 保存初始/模型工具结果，初始化后每个不同的成功 Part 发送一次；重复 Part 不再次通知。页面主动工具调用直接响应其 promise，不发送第二份 tool-result。官方 message/model-context/widgetState handler 继续固定原会话和后台；不能给页面增加自定义协议、自由选会话或执行函数。

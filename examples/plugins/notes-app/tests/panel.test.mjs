@@ -13,6 +13,7 @@ for (const resourceFirst of [true, false]) test(`newer resource revision survive
   class App {
     connect() { return Promise.resolve(); }
     getHostContext() { return {}; }
+    getHostCapabilities() { return { updateModelContext: {} }; }
     setNotificationHandler(_schema, callback) { notify = callback; }
     request() { return new Promise(resolve => reads.push(resolve)); }
     callServerTool(request) { sent = request.arguments; return new Promise(resolve => { save = resolve; }); }

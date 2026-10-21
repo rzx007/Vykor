@@ -444,11 +444,18 @@ describe("UtilityPanel review tool access", () => {
   })
 })
 
-it.each([undefined, ["inline"], ["inline", "fullscreen"]] as const)("shows only negotiated fullscreen pages as actual utility tabs: %j", async modes => {
+it.each([
+  { modes: undefined }, { modes: [] }, { modes: ["inline"] }, { modes: ["fullscreen"] }, { modes: ["inline", "fullscreen"] },
+] as const)("keeps current-session application tabs reachable with display modes $modes", async ({ modes }) => {
   useDesktopSessionStore.setState({ activeSessionId: "original", sessionView: emptySessionView("original"), selectedProject: null })
   Object.defineProperty(window, "desktop", { configurable: true, value: {} })
-  appFixture.pages = [{ id: "mount", title: "MODE_ELIGIBILITY_APP", controller: new PluginAppController(appMount, {} as never, async () => false), modes: modes ? [...modes] : undefined }]
+  const foreignMount = { ...appMount, state: { ...appMount.state, source: { ...appMount.state.source, sessionId: "another" } } }
+  appFixture.pages = [
+    { id: "mount", title: "MODE_ELIGIBILITY_APP", controller: new PluginAppController(appMount, {} as never, async () => false), modes: modes ? [...modes] : undefined },
+    { id: "foreign", title: "FOREIGN_SESSION_APP", controller: new PluginAppController(foreignMount, {} as never, async () => false), modes: ["inline"] },
+  ]
   const container = mountPanel("session:mode-eligibility")
   await settle()
-  expect(container.textContent?.includes("MODE_ELIGIBILITY_APP")).toBe(modes?.includes("fullscreen" as never) === true)
+  expect(container.textContent).toContain("MODE_ELIGIBILITY_APP")
+  expect(container.textContent).not.toContain("FOREIGN_SESSION_APP")
 })

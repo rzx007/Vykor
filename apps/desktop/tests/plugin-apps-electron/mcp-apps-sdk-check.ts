@@ -65,7 +65,7 @@ async function checkDisplayModes(owner: BrowserWindow, store: PluginAppDocumentS
         await new Promise(resolve => setTimeout(resolve, 20))
       }
       assert.deepEqual(state.modes, mode === "fullscreen" ? ["inline", "fullscreen"] : ["inline"])
-      assert.equal(state.eligible, mode === "fullscreen")
+      assert.equal(state.eligible, true, "inline-only apps also belong in the fixed panel")
       assert.equal(state.visibility, "visible")
       const frame = owner.webContents.mainFrame.frames[0]!
       await frame.executeJavaScript("document.querySelector('#draft').value='edited after handshake'; window.modeDocumentToken='same-document'")
@@ -83,7 +83,7 @@ async function checkDisplayModes(owner: BrowserWindow, store: PluginAppDocumentS
         await owner.webContents.executeJavaScript("window.modePlace('inline')")
         await frame.executeJavaScript("window.modeApp.getHostContext().displayMode==='inline' ? true : new Promise(resolve => { window.modeApp.onhostcontextchanged = context => { if(context.displayMode==='inline') resolve(true) } })")
         assert.deepEqual(await frame.executeJavaScript("window.modeApp.requestDisplayMode({mode:'fullscreen'})"), { mode: "fullscreen" })
-        assert.equal((await owner.webContents.executeJavaScript("window.modeState()")).left, "0px")
+        assert.equal((await owner.webContents.executeJavaScript("window.modeState()")).left, "10px", "display requests remain inside the host panel")
         assert.deepEqual(await frame.executeJavaScript("window.modeApp.requestDisplayMode({mode:'inline'})"), { mode: "inline" })
       } else assert.equal(await frame.executeJavaScript("window.modeApp.requestDisplayMode({mode:'fullscreen'}).then(()=>false,()=>true)"), true)
       const final = await owner.webContents.executeJavaScript("window.modeState()")

@@ -6,35 +6,29 @@
   <title>文本格式检查</title>
   <style>
     /* UI_STYLES */
-    [hidden] { display:none !important; }
-    h1 { font-size:1.15rem; }
-    .muted { color:var(--ohs-muted-foreground); }
-    #findings { margin:0 0 16px; padding:0; list-style:none; max-height:190px; overflow:auto; border-block:1px solid var(--ohs-border); }
-    #findings label { display:flex; align-items:center; gap:8px; min-height:38px; padding:6px 0; cursor:pointer; }
-    input { accent-color:var(--ohs-primary); }
-    .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-    button { border-radius:999px; }
-    #selection-count { font-size:.85rem; }
-    textarea { width:100%; min-height:80px; resize:vertical; margin-bottom:12px; }
-    #preview { min-height:120px; max-height:250px; font-family:ui-monospace,monospace; tab-size:2; }
-    label { display:block; margin-bottom:6px; }
-    #status { min-height:21px; }
-    footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--ohs-border); }
-    .danger { color:var(--ohs-destructive); background:transparent; }
   </style>
 </head>
 <body>
   <h1>文本格式检查</h1>
-  <p class="muted">勾选要修复的问题，确认后生成文本预览。不会修改文件。</p>
-  <button id="check-button" disabled>检查文本</button>
-  <ul id="findings" aria-label="可选格式问题"></ul>
-  <div class="actions"><button id="preview-button" disabled>生成修复预览</button><span id="selection-count" class="muted">请选择要修复的问题</span></div>
+  <p class="muted">编辑文本，检查后勾选问题，生成修复预览。不会修改文件。</p>
+  <label id="text-state" for="preview">待检查文本</label>
+  <textarea id="preview" spellcheck="false" aria-describedby="status" placeholder="在这里粘贴待检查的文本"></textarea>
+  <div class="actions"><button id="check-button" class="primary" disabled>检查文本</button></div>
   <p id="status" role="status" aria-live="polite">粘贴文本后点击检查；也可从工具结果打开。</p>
-  <label for="preview">待检查文本／当前预览</label>
-  <textarea id="preview" spellcheck="false" aria-describedby="status"></textarea>
-  <label for="conversation-text">给助手的说明（只携带勾选问题所在行）</label>
-  <textarea id="conversation-text" maxlength="4096">请解释所选格式问题并给出建议。</textarea>
-  <div class="actions"><button id="draft" hidden disabled>加入上下文</button><button id="submit" hidden disabled>交给助手</button></div>
+  <div id="incoming-result" hidden><p class="muted">新的检查结果已准备好；查看会替换上方正在编辑的文本。</p><button id="apply-result">替换当前文本，查看新结果</button></div>
+  <section id="results" aria-label="检查结果" hidden>
+    <p id="empty-state" hidden>没有发现行首制表符或行尾空白，可以继续编辑或在聊天中讨论。</p>
+    <ul id="findings" aria-label="可选格式问题"></ul>
+    <div class="actions"><button id="preview-button" disabled>生成修复预览</button><span id="selection-count" class="muted">请选择要修复的问题</span></div>
+  </section>
+  <details id="rules"><summary>检查哪些规则</summary><p class="muted">行首制表符：每个替换为 2 个空格。行尾空白：删除行尾空格和制表符。只修复勾选项，预览显示在上方文本框中。</p></details>
+  <footer>
+    <label for="conversation-text">与助手协作</label>
+    <p class="muted">引用只携带勾选问题所在行；你可以在聊天中继续说明。</p>
+    <textarea id="conversation-text" maxlength="4096" aria-label="引用到聊天的说明">请解释所选格式问题并给出建议。</textarea>
+    <div class="actions"><button id="draft" hidden disabled>引用到聊天</button></div>
+    <details id="more-collaboration"><summary>更多协作操作</summary><p class="muted">直接发送会立即将说明和勾选的问题交给助手。</p><button id="submit" hidden disabled>直接发送给助手</button></details>
+  </footer>
   <!-- UI_SCRIPT -->
 </body>
 </html>

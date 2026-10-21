@@ -45,7 +45,7 @@ export const utilityToolMeta: Record<
   "side-chat": { icon: MessageCirclePlus, label: "侧边聊天", shortcut: "Ctrl+Alt+S" },
   agents: { icon: Bot, label: "子智能体" },
   workflows: { icon: GitBranch, label: "编排" },
-  "plugin-app": { icon: PanelsTopLeft, label: "插件应用" },
+  "plugin-app": { icon: PanelsTopLeft, label: "应用" },
   image: { icon: FileImage, label: "图片" },
 }
 

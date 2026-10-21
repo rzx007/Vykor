@@ -30,6 +30,7 @@ export type UtilityPanelRuntimeAction =
   | { type: "handledToolRequestId"; value: number | null }
   | { type: "handledImageRequestId"; value: number | null }
   | { type: "handledTerminalRequestId"; value: number | null }
+  | { type: "handledAppRequestId"; value: number | null }
 
 function resolveState<T>(current: T, value: SetStateAction<T>): T {
   return typeof value === "function" ? (value as (current: T) => T)(current) : value
@@ -64,6 +65,8 @@ export function utilityPanelRuntimeReducer(
       return { ...state, handledImageRequestId: action.value }
     case "handledTerminalRequestId":
       return { ...state, handledTerminalRequestId: action.value }
+    case "handledAppRequestId":
+      return { ...state, handledAppRequestId: action.value }
   }
 }
 
@@ -98,6 +101,7 @@ type UtilityPanelRuntimeController = {
   setHandledToolRequestId: (requestId: number | null) => void
   setHandledImageRequestId: (requestId: number | null) => void
   setHandledTerminalRequestId: (requestId: number | null) => void
+  setHandledAppRequestId: (requestId: number | null) => void
 }
 
 export function useUtilityPanelRuntime(scopeId: string): UtilityPanelRuntimeController {
@@ -150,6 +154,9 @@ export function useUtilityPanelRuntime(scopeId: string): UtilityPanelRuntimeCont
   const setHandledTerminalRequestId = useCallback((value: number | null) => {
     dispatch({ type: "handledTerminalRequestId", value })
   }, [])
+  const setHandledAppRequestId = useCallback((value: number | null) => {
+    dispatch({ type: "handledAppRequestId", value })
+  }, [])
 
   return {
     state,
@@ -166,5 +173,6 @@ export function useUtilityPanelRuntime(scopeId: string): UtilityPanelRuntimeCont
     setHandledToolRequestId,
     setHandledImageRequestId,
     setHandledTerminalRequestId,
+    setHandledAppRequestId,
   }
 }
