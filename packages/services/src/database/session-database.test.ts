@@ -51,7 +51,10 @@ describe("SessionDatabase", () => {
     mkdirSync(join(previousMigrations, "meta"), { recursive: true });
     const source = new URL("../session-runtime/migrations/", import.meta.url);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", source), "utf8"));
-    journal.entries = journal.entries.slice(0, -1);
+    const goalMigrationIndex = journal.entries.findIndex((entry: { tag: string }) => entry.tag === "0007_goal_simplification");
+    expect(goalMigrationIndex).toBeGreaterThan(0);
+    const goalMigration = journal.entries[goalMigrationIndex];
+    journal.entries = journal.entries.slice(0, goalMigrationIndex);
     writeFileSync(join(previousMigrations, "meta/_journal.json"), JSON.stringify(journal));
     for (const entry of journal.entries) copyFileSync(new URL(`${entry.tag}.sql`, source), join(previousMigrations, `${entry.tag}.sql`));
     let connection = new Database(path);
@@ -82,11 +85,16 @@ describe("SessionDatabase", () => {
         tables: value.tables.filter(row => !row.name.startsWith("session_goal")),
       });
       const originalInventory = nonGoalInventory(inventory(connection));
+      // 单独验证 Goal 迁移不改其他表，再验证后续完整迁移链。
+      journal.entries.push(goalMigration);
+      copyFileSync(new URL(`${goalMigration.tag}.sql`, source), join(previousMigrations, `${goalMigration.tag}.sql`));
+      writeFileSync(join(previousMigrations, "meta/_journal.json"), JSON.stringify(journal));
+      migrate(drizzle(connection), { migrationsFolder: previousMigrations });
+      expect(normalize(nonGoalInventory(inventory(connection)))).toEqual(normalize(originalInventory));
       connection.close();
       const upgraded = SessionDatabase.open({ path });
       connection = upgraded.connection;
       expect(retainedTables.map(table => connection.prepare(`SELECT * FROM ${table}`).all())).toEqual(saved);
-      expect(normalize(nonGoalInventory(inventory(connection)))).toEqual(normalize(originalInventory));
       expect(normalize(inventory(connection))).toEqual(normalize(expected));
       for (const table of ["session_goal", "session_goal_version", "session_goal_model_attempt", "session_goal_request", "session_goal_continuation"])
         expect(connection.prepare(`SELECT count(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
@@ -141,7 +149,7 @@ describe("SessionDatabase", () => {
         expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
         first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
         journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-        expect(journal).toHaveLength(8);
+        expect(journal).toHaveLength(9);
       } finally {
         first.close();
       }
@@ -163,6 +171,7 @@ describe("SessionDatabase", () => {
       "0005_note_attachments.sql",
       "0006_note_file_index.sql",
       "0007_goal_simplification.sql",
+      "0008_session_plugin_apps.sql",
     ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
     expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
@@ -174,6 +183,7 @@ describe("SessionDatabase", () => {
       "0005_note_attachments",
       "0006_note_file_index",
       "0007_goal_simplification",
+      "0008_session_plugin_apps",
     ]);
   });
 
