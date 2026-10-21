@@ -2,6 +2,9 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "ApprovalMode", "kind": "type-export" },
+    { "name": "ApprovalReviewRecord", "kind": "type-export" },
+    { "name": "WorkMode", "kind": "type-export" },
     { "name": "isWorkMode", "kind": "runtime-export" },
     { "name": "normalizeApprovalMode", "kind": "runtime-export" },
     { "name": "OFFICE_MEDIA_TYPES", "kind": "runtime-export" },
