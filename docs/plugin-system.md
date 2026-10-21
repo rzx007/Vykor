@@ -147,7 +147,7 @@ vk plugin details example.text-inspector
 | Native Tool Guard | 输入格式、并发控制和审计摘要 | 不能代替业务数据校验 |
 | 应用操作层 | 页面可见性、确认、原会话与固定来源 | 不能任意调用其他插件工具 |
 
-声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。
+声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。自身数据自动保存还需单独声明并批准 pluginData:write，且只对绑定的应用专用保存工具免重复确认；工作区导出和模型调用仍按原权限处理。
 
 Native Tool 入口导出 registerTools(context)，返回工具定义数组。工具定义提供名称、说明、inputSchema 和 invoke。
 

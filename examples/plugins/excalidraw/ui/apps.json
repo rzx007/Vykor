@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "backends": [
+    {
+      "id": "excalidraw",
+      "kind": "mcp-server",
+      "server": "excalidraw",
+      "toolPolicies": [
+        {
+          "tool": "commit_scene",
+          "authorization": "plugin-data-write",
+          "maxArgumentsBytes": 8388608
+        },
+        {
+          "tool": "save_copy",
+          "maxArgumentsBytes": 8388608
+        },
+        {
+          "tool": "save_image",
+          "maxArgumentsBytes": 25165824
+        }
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "excalidraw",
+      "title": "Excalidraw 画板",
+      "backend": "excalidraw",
+      "resourceUri": "ui://excalidraw/panel.html",
+      "availability": "session"
+    }
+  ]
+}

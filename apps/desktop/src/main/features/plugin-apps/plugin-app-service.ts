@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import type { WebContents } from "electron"
-import { VykorApiError, isPluginAppAdmissionRejection, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest,
+import { VykorApiError, isPluginAppAdmissionRejection, copyPluginAppJson, getPluginAppToolPolicy, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest,
   parsePluginAppConversationRequest, type PluginAppConversationRequest, type PluginAppSubmissionReceipt, type VykorClient, type PluginAppResponse, type PluginAppToolRequest, type PluginAppActionResponse } from "@vykor/client"
 import type { PluginAppHostState, PluginAppMount, PluginAppPreparedTool, PluginAppPreparedMessage, PluginAppModelContext } from "../../../shared/plugin-app-types"
 import { pluginAppText, pluginAppContextData } from "../../../shared/plugin-app-content"
@@ -15,6 +15,10 @@ export interface AppMountBinding {
 }
 interface Operation { mount: AppMountBinding; identity: PluginAppResponse["app"]; request: PluginAppToolRequest; phase: "prepared" | "sent" | "settled"; cancelled: boolean }
 interface MessageOperation { mount: AppMountBinding; client: VykorClient; request: PluginAppConversationRequest; phase: "prepared" | "sent" | "settled"; cancelled: boolean }
+/** Main-only proof: this request received an identity-verified non-admission response. */
+export class PluginAppBusyError extends Error {
+  constructor(readonly requestId: string) { super("plugin_app_busy") }
+}
 interface Dependencies {
   messageReady?(client: VykorClient, sessionId: string): Promise<boolean>
   documents: PluginAppDocumentStore
@@ -271,23 +275,32 @@ export class DesktopPluginAppService {
       await this.refresh(ownerId, { mountId: stored.mount.mountId }); this.assertMessage(stored.mount, false)
       if (this.contexts.get(stored.entry.id) !== stored) throw new Error("plugin_app_context_expired")
     }
-    for (const stored of selected) this.assertMessage(stored.mount, false)
-    return selected.map(({ request }) => structuredClone(request))
+    return selected.map(stored => {
+      this.assertMessage(stored.mount, false)
+      const { request, mount, entry } = stored, lease = mount.response.lease
+      if (this.contexts.get(entry.id) !== stored || entry.source.sessionId !== sessionId
+        || lease?.token !== request.lease.token || lease?.backendGeneration !== request.lease.backendGeneration)
+        throw new Error("plugin_app_context_expired")
+      // Renew only the host control version. The user's document/version/element snapshot stays fixed.
+      return parsePluginAppConversationRequest({ ...request, expectedRevision: mount.response.app.controlRevision })
+    })
   }
   async prepareTool(ownerId: number, value: unknown): Promise<PluginAppPreparedTool> {
     const input = object(value), mount = this.getBinding(ownerId, input.mountId)
-    const args = copyPluginAppJson(input.arguments, 64 * 1024), name = text(input.name)
-    if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("plugin_app_invalid_arguments")
+    const name = text(input.name)
     await this.refresh(ownerId, { mountId: mount.mountId })
     this.assertBinding(mount)
-    const response = mount.response
+    const response = mount.response, descriptor = response.tools?.find(tool => tool.name === name)
     if (mount.closing || !mount.online || !response.lease || !response.availability.canInvokeTools || response.app.status !== "open"
-      || !response.tools?.some(tool => tool.name === name)) throw new Error("plugin_app_tool_not_available")
+      || !descriptor) throw new Error("plugin_app_tool_not_available")
+    // Only the authenticated, refreshed descriptor sets this page's budget and confirmation policy.
+    const policy = getPluginAppToolPolicy(descriptor), args = copyPluginAppJson(input.arguments, policy.maxArgumentsBytes)
+    if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("plugin_app_invalid_arguments")
     if ([...this.operations.values()].some(operation => operation.mount === mount && operation.phase !== "settled")) throw new Error("plugin_app_action_pending")
     const request = parsePluginAppToolRequest({ source: response.source, lease: response.lease, requestId: randomUUID(),
       expectedRevision: response.app.controlRevision, toolName: name, args })
     this.operations.set(request.requestId, { mount, identity: structuredClone(response.app), request, phase: "prepared", cancelled: false })
-    return { requestId: request.requestId, toolName: name, args: structuredClone(args), expectedRevision: request.expectedRevision }
+    return { requestId: request.requestId, toolName: name, args: structuredClone(args), expectedRevision: request.expectedRevision, policy: structuredClone(policy) }
   }
   private operation(ownerId: number, value: unknown): Operation {
     const input = object(value), mount = this.getBinding(ownerId, input.mountId)
@@ -310,6 +323,9 @@ export class DesktopPluginAppService {
       if (error instanceof VykorApiError && error.status === 409 && isPluginAppAdmissionRejection(error.body, "tool", request)) {
         operation.phase = "settled"; operation.cancelled = true
         this.trimToolHistory(operation.mount)
+        // A proven busy response means nothing was admitted. Keep the original page online
+        // so it can retain its draft and schedule a fresh request after the session is free.
+        if (error.body.reason === "busy") throw new PluginAppBusyError(request.requestId)
       }
       mount.online = false; throw error
     }

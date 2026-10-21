@@ -36,6 +36,49 @@ function fixture() {
   }
   return { service, owner, mount, requests, messageReady, close, client, reconnect: () => { currentClient = Object.create(client) as VykorClient }, state: () => state, setState: (next: PluginAppResponse) => { state = next }, switchSession: () => { active = "other" } }
 }
+it("returns only the refreshed host tool policy and admits its declared argument budget", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  const policy = { confirmation: "granted" as const, maxArgumentsBytes: 128 * 1024, authorization: "plugin-data-write" as const }
+  f.setState({ ...f.state(), tools: [{ ...initial.tools![0]!, policy }] })
+  const args = { scene: "x".repeat(70 * 1024) }
+  const prepared = await f.service.prepareTool(42, { mountId, name: "save", arguments: args, policy: { confirmation: "required" } })
+  expect(prepared).toMatchObject({ policy, args })
+  args.scene = "changed"; prepared.args.scene = "changed again"
+  await f.service.invokeTool(42, { mountId, requestId: prepared.requestId })
+  expect(f.requests[0]).toMatchObject({ args: { scene: "x".repeat(70 * 1024) }, expectedRevision: 0 })
+})
+it("keeps default tools at 64 KiB and uses a smaller refreshed tool budget", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  await expect(f.service.prepareTool(42, { mountId, name: "save", arguments: { scene: "x".repeat(64 * 1024) },
+    policy: { confirmation: "granted", maxArgumentsBytes: 128 * 1024 } })).rejects.toThrow()
+  f.setState({ ...f.state(), tools: [{ ...initial.tools![0]!, policy: { confirmation: "required", maxArgumentsBytes: 1024 } }] })
+  await expect(f.service.prepareTool(42, { mountId, name: "save", arguments: { scene: "x".repeat(1024) } })).rejects.toThrow()
+  const prepared = await f.service.prepareTool(42, { mountId, name: "save", arguments: { scene: "small" } })
+  expect(prepared).toMatchObject({ policy: { confirmation: "required", maxArgumentsBytes: 1024 } })
+})
+it("keeps the mounted app online only for an identity-verified unaccepted busy tool", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  const first = await f.service.prepareTool(42, { mountId, name: "save", arguments: {} })
+  const invoke = vi.spyOn(f.client.pluginApps, "invoke").mockImplementation(async request => {
+    throw new VykorApiError("not accepted", 409, { code: "plugin_app_not_accepted", kind: "tool", source: request.source,
+      requestId: request.requestId, expectedRevision: request.expectedRevision, reason: "busy" })
+  })
+  await expect(f.service.invokeTool(42, { mountId, requestId: first.requestId })).rejects.toThrow("plugin_app_busy")
+  expect(f.service.getBinding(42, mountId).online).toBe(true)
+  await expect(f.service.invokeTool(42, { mountId, requestId: first.requestId })).rejects.toThrow("request_unavailable")
+  expect((await f.service.prepareTool(42, { mountId, name: "save", arguments: {} })).requestId).not.toBe(first.requestId)
+  expect(invoke).toHaveBeenCalledTimes(1)
+})
+it("does not trust a busy rejection for another request or release uncertain admission", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  const prepared = await f.service.prepareTool(42, { mountId, name: "save", arguments: {} })
+  vi.spyOn(f.client.pluginApps, "invoke").mockRejectedValue(new VykorApiError("unverified", 409, { code: "plugin_app_not_accepted", kind: "tool", source,
+    requestId: "another", expectedRevision: 0, reason: "busy" }))
+  vi.spyOn(f.client.pluginApps, "getAction").mockRejectedValue(new Error("unknown"))
+  await expect(f.service.invokeTool(42, { mountId, requestId: prepared.requestId })).rejects.toThrow("unverified")
+  expect(f.service.getBinding(42, mountId).online).toBe(false)
+  await expect(f.service.prepareTool(42, { mountId, name: "save", arguments: {} })).rejects.toThrow("action_pending")
+})
 it.each(["tool", "message"] as const)("releases only an exact trusted unaccepted %s request for a fresh explicit click", async kind => {
   const f = fixture(), { mountId } = await f.mount()
   const prepare = () => kind === "tool" ? f.service.prepareTool(42, { mountId, name: "save", arguments: {} })
@@ -123,6 +166,16 @@ it("creates context without sending, isolates its session, and rejects expired s
   await expect(f.service.composerContext(42, "other", [entry.id])).rejects.toThrow("context_expired")
   f.setState({ ...f.state(), availability: { canReadResource: true, canInvokeTools: false, canMessage: false, reason: "action-unconfirmed" } })
   await expect(f.service.composerContext(42, "session", [entry.id])).rejects.toThrow("message_unavailable")
+})
+it("refreshes only host context credentials after autosave and preserves the selected document snapshot", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  const data = { documentId: "diagram-a", revision: 3, elementIds: ["shape-a"] }
+  const entry = await f.service.updateModelContext(42, { mountId, content: [{ type: "text", text: "selection A" }], structuredContent: data })
+  f.setState({ ...f.state(), app: { ...f.state().app, controlRevision: 6 } })
+  const [context] = await f.service.composerContext(42, "session", [entry.id])
+  expect(context).toMatchObject({ source, expectedRevision: 6, text: "selection A", data, lease: initial.lease })
+  f.setState({ ...f.state(), lease: { token: "replacement", backendGeneration: "new-generation" } })
+  await expect(f.service.composerContext(42, "session", [entry.id])).rejects.toThrow("context_expired")
 })
 it("never delivers a late message receipt to a released frame", async () => {
   const f = fixture(), { mountId } = await f.mount()

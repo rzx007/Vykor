@@ -11,10 +11,10 @@ import { installAppFixture, appFixtureSettings } from "../../agent-runtime/test-
 import { createDefaultPluginService } from "../src/application/default-services/plugin-service.js";
 import { createDefaultSettingsService } from "../src/application/default-services/settings-service.js";
 
-export async function pluginAppHarness(kind: "native-tools" | "mcp-server", modelTool = false) {
+export async function pluginAppHarness(kind: "native-tools" | "mcp-server", modelTool = false, autosave = false) {
   const root = mkdtempSync(join(tmpdir(), "app-http-"));
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
-  const fixture = await installAppFixture(root, kind, undefined, modelTool);
+  const fixture = await installAppFixture(root, kind, undefined, modelTool, autosave);
   const reviews: ApprovalReviewInput[] = [];
   let beforeReview: (() => Promise<void>) | undefined;
   vi.spyOn(runtime, "createConfiguredApprovalReviewer").mockResolvedValue({

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { RunCapabilityView, RunToolBinding } from "@vykor/core";
 import type { PluginAppToolOrigin } from "@vykor/protocol";
+import { copyPluginAppJson, type PluginAppToolPolicy } from "@vykor/protocol";
+import { capturedAppToolPolicy } from "./plugin-app-backends.js";
 import type { PluginAppRecord, PluginAppRuntimeLease, PluginAppSource, PluginAppToolRequest, PluginAppToolDescriptor } from "@vykor/protocol";
 import type { CapturedPluginAppBackend, PluginAppBackendCatalogue, PluginAppBackendPort } from "./plugin-app-backends.js";
 import { readonlyMap, readonlySet } from "./run-capability-view.js";
@@ -22,6 +24,7 @@ export interface PluginAppRuntimeHost {
   clear(): void;
   resource(app: PluginAppRecord, lease: PluginAppRuntimeLease): PluginAppBackendPort;
   assertTool(app: PluginAppRecord, request: PluginAppToolRequest): Promise<string>;
+  prepareTool(app: PluginAppRecord, request: PluginAppToolRequest): Promise<{ name: string; policy: PluginAppToolPolicy }>;
   listTools(app: PluginAppRecord, lease: PluginAppRuntimeLease): PluginAppToolDescriptor[];
   resolveOrigin(origin: PluginAppToolOrigin): Promise<ReturnType<PluginAppRuntimeHost["list"]>[number] | undefined>;
 }
@@ -39,7 +42,7 @@ function matches(app: PluginAppRecord, capture: CapturedPluginAppBackend): boole
       || [...(capture.originTools ?? capture.tools).values()].some(t => t.definition.ui?.resourceUri === app.resourceUri));
 }
 function sameCapture(a: CapturedPluginAppBackend, b: CapturedPluginAppBackend): boolean {
-  return a.port.isCurrent() && a.port.generation === b.port.generation && a.tools.size === b.tools.size
+  return a.port.isCurrent() && a.port.generation === b.port.generation && a.pluginDataWriteApproved === b.pluginDataWriteApproved && a.tools.size === b.tools.size
     && [...a.tools].every(([name, binding]) => {
       const next = b.tools.get(name);
       return !!next && next.definitionIdentity === binding.definitionIdentity && next.definition.execute === binding.definition.execute
@@ -74,12 +77,18 @@ export class PluginAppRuntime {
       listTools: (app: PluginAppRecord, lease: PluginAppRuntimeLease) => {
         const capture = this.require(app, lease);
         return [...capture.tools].filter(([name]) => capture.isCurrentTool(name)).map(([name, tool]) => ({
-          name, description: tool.definition.description, inputSchema: structuredClone(tool.definition.inputSchema),
+          name, description: tool.definition.description, inputSchema: structuredClone(tool.definition.inputSchema), policy: capturedAppToolPolicy(capture, name),
         }));
       },
       assertTool: async (app: PluginAppRecord, request: PluginAppToolRequest) => {
+        return (await this.host.prepareTool(app, request)).name;
+      },
+      prepareTool: async (app: PluginAppRecord, request: PluginAppToolRequest) => {
         await this.refresh(app);
-        return this.tool(app, request).definition.name;
+        const tool = this.tool(app, request), capture = this.require(app, request.lease);
+        const policy = capturedAppToolPolicy(capture, request.toolName);
+        copyPluginAppJson(request.args, policy.maxArgumentsBytes);
+        return { name: tool.definition.name, policy };
       },
     });
   }
@@ -147,7 +156,7 @@ export class PluginAppRuntime {
     return tool;
   }
   async prepare(app: PluginAppRecord, request: PluginAppToolRequest, view: RunCapabilityView) {
-    await this.refresh(app);
+    const prepared = await this.host.prepareTool(app, request);
     const tool = this.tool(app, request);
     const server = tool.serverId ? view.mcpServers.get(tool.serverId) : undefined;
     if (app.backendKind === "mcp-server" && (!server || server.ownerPluginId !== app.pluginId)) throw new Error("plugin_app_server_unavailable");
@@ -155,6 +164,6 @@ export class PluginAppRuntime {
     const capabilityView: RunCapabilityView = Object.freeze({ pluginId: app.pluginId, pluginIds: readonlySet([app.pluginId]),
       tools, appTools: tools, mcpServers: readonlyMap(server ? [[server.serverId, server]] : []),
       skills: readonlyMap<never>([]), agents: readonlyMap<never>([]) });
-    return { name: tool.definition.name, capabilityView };
+    return { ...prepared, capabilityView, binding: tool };
   }
 }

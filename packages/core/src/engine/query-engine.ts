@@ -1418,7 +1418,7 @@ export class QueryEngine implements IQueryEngine {
               delegatableTools: undefined,
             },
           }
-        : original;
+        : { ...original, pluginAppToolApproval: undefined };
     // Empty allowlist fails closed when no captured view was supplied. Contributions do not widen this entry.
     const toolRegistry = runToolRegistryForRun(
       this.toolRegistry,

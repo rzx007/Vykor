@@ -16,6 +16,7 @@ export async function installAppFixture(
   kind: "native-tools" | "mcp-server",
   html = "<!doctype html><p>App</p>",
   modelTool = false,
+  autosave = false,
 ) {
   const source = join(root, "source"),
     pluginId = "example.app-operations";
@@ -28,6 +29,7 @@ export async function installAppFixture(
       id: pluginId,
       name: "app-operations",
       version: "1.0.0",
+      ...(autosave ? { permissions: { pluginData: ["write"] } } : {}),
       components: {
         apps: ["./ui/apps.json"],
         ...(kind === "native-tools"
@@ -41,7 +43,7 @@ export async function installAppFixture(
     JSON.stringify({
       schemaVersion: 1,
       backends: [
-        kind === "native-tools"
+        Object.assign(kind === "native-tools"
           ? {
               id: "editor",
               kind,
@@ -56,7 +58,8 @@ export async function installAppFixture(
                 },
               ],
             }
-          : { id: "editor", kind, server: "notes" },
+          : { id: "editor", kind, server: "notes" }, autosave ? { toolPolicies: [{ tool: kind === "native-tools" ? "SaveDocument" : "save",
+              authorization: "plugin-data-write", maxArgumentsBytes: 2 * 1024 * 1024 }] } : {}),
       ],
       surfaces: [
         {
@@ -124,7 +127,7 @@ export async function installAppFixture(
     sourcePath: source,
     cwd: root,
     scope: "user",
-    approvedPermissions: ["ui:render", "ui:invoke-own-tools"],
+    approvedPermissions: ["ui:render", "ui:invoke-own-tools", ...(autosave ? ["pluginData:write"] : [])],
   });
   if (installed.status !== "installed")
     throw new Error(JSON.stringify(installed));

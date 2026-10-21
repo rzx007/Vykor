@@ -10,6 +10,7 @@ import { McpOAuthRuntime, type McpClientManager } from "@vykor/mcp";
 
 import {
   createMcpRuntimeHandle,
+  resolvePluginMcpEnvironment,
   filterEnabledMcpServers,
   selectMcpServersForEnvironment,
   type McpConnectionSource,
@@ -20,6 +21,12 @@ const SERVERS = {
   local: { type: "stdio" as const, command: "node" },
   remote: { type: "http" as const, url: "https://mcp.example.test" },
 };
+
+it("resolves exact plugin workspace/session placeholders without interpolating arbitrary strings", () => {
+  expect(resolvePluginMcpEnvironment({ workspace: "${VYKOR_WORKSPACE_ROOT}", session: "${VYKOR_SESSION_ID}",
+    literal: "prefix-${VYKOR_WORKSPACE_ROOT}", data: "/data/plugin" }, { cwd: "D:/workspace", sessionId: "session" }))
+    .toEqual({ workspace: "D:/workspace", session: expect.stringMatching(/^[a-f0-9]{64}$/), literal: "prefix-${VYKOR_WORKSPACE_ROOT}", data: "/data/plugin" });
+});
 
 describe("MCP execution domains", () => {
   it("does not classify an explicitly supplied host server as global", async () => {

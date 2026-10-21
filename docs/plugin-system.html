@@ -960,7 +960,7 @@ Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 <td>不能任意调用其他插件工具</td>
 </tr>
 </tbody></table></div>
-<p>声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。</p>
+<p>声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。自身数据自动保存还需单独声明并批准 pluginData:write，且只对绑定的应用专用保存工具免重复确认；工作区导出和模型调用仍按原权限处理。</p>
 <p>Native Tool 入口导出 registerTools(context)，返回工具定义数组。工具定义提供名称、说明、inputSchema 和 invoke。</p>
 <p>一个插件版本共用一个 Tool Host 子进程。当前 Native Tool 在 local 环境激活。</p>
 </div>
@@ -1257,7 +1257,7 @@ vk plugin details example.text-inspector
 | Native Tool Guard | 输入格式、并发控制和审计摘要 | 不能代替业务数据校验 |
 | 应用操作层 | 页面可见性、确认、原会话与固定来源 | 不能任意调用其他插件工具 |
 
-声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。
+声明 Apps 会产生 ui:render 和 ui:invoke-own-tools 两项安装批准。实际工具仍需满足自己的权限要求。自身数据自动保存还需单独声明并批准 pluginData:write，且只对绑定的应用专用保存工具免重复确认；工作区导出和模型调用仍按原权限处理。
 
 Native Tool 入口导出 registerTools(context)，返回工具定义数组。工具定义提供名称、说明、inputSchema 和 invoke。
 

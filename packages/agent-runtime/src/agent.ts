@@ -13,6 +13,7 @@ import type {
   AgentEffects,
   AgentExecutionLimits,
   AgentExecutionProfile,
+  AgentExecutionContext,
   AgentEventInput,
   AgentEventListener,
   AgentEventSubscription,
@@ -396,10 +397,13 @@ class DefaultVykorAgent implements VykorAgent {
         }
         await options.onToolEvent?.(event);
       },
-    }, "app");
+    }, "app", prepared.policy.confirmation === "granted" ? {
+      runId: options.scope.runId, toolUseId: toolUse.id, binding: prepared.binding, argumentsJson: JSON.stringify(request.args),
+    } : undefined);
   }
 
-  private async executeIndependentTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions, audience: "model" | "app" = "model"): Promise<ToolExecutionResult> {
+  private async executeIndependentTool(toolUse: ToolUseBlock, options: VykorAgentRunToolOptions, audience: "model" | "app" = "model",
+    pluginAppToolApproval?: AgentExecutionContext["pluginAppToolApproval"]): Promise<ToolExecutionResult> {
     const capabilityView = options.capabilityView;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, options.scope.signal, ...(options.signal ? [options.signal] : [])]);
@@ -423,7 +427,7 @@ class DefaultVykorAgent implements VykorAgent {
           await options.onToolEvent?.({ type: "tool.completed", data: { toolUseId: toolUse.id, result } });
         };
         const result = await this.runtime.queryEngine.executeTool(toolUse, { signal, audience, onResult: deliverResult, execution: {
-          scope, capabilityView, effects: this.effects,
+          scope, capabilityView, effects: this.effects, ...(audience === "app" && pluginAppToolApproval ? { pluginAppToolApproval } : {}),
           children: this.childManager.createController(scope, capabilityView),
           emit: options.onToolEvent ?? (async () => {}),
           takeSteeredInputs: async () => [], closeSteering: () => {},

@@ -7,12 +7,38 @@ import { nativeAppDefinition, writeNativeAppFixture } from "../test-helpers/nati
 import { validateNativePlugin } from "../manifest/validate.js";
 import { loadNativePlugin } from "../load-native-plugin.js";
 import { requestedPluginPermissions } from "../installation/installer.js";
+import { PLUGIN_APP_LIMITS } from "@vykor/protocol";
 
 let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vykor-app-def-")); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("plugin apps metadata", () => {
+  it("requires declared plugin data permission and hashes exact tool policy", async () => {
+    const definition = nativeAppDefinition();
+    Object.assign(definition.backends[0]!, { toolPolicies: [{ tool: "SaveDocument", authorization: "plugin-data-write", maxArgumentsBytes: 1024 * 1024 }] });
+    const plugin = await writeNativeAppFixture(root, definition);
+    expect((await loadNativeAppMetadata(plugin)).status).toBe("invalid");
+    Object.assign(plugin.manifest, { permissions: { pluginData: ["write"] } });
+    const first = await loadNativeAppMetadata(plugin);
+    expect(first.status).toBe("loaded");
+    expect(requestedPluginPermissions(plugin.manifest)).toContain("pluginData:write");
+    Object.assign(definition.backends[0]!, { toolPolicies: [{ tool: "SaveDocument", authorization: "plugin-data-write", maxArgumentsBytes: 2 * 1024 * 1024 }] });
+    await writeFile(join(root, "ui/apps.json"), JSON.stringify(definition));
+    expect((await loadNativeAppMetadata(plugin)).value![0]!.definitionDigest).not.toBe(first.value![0]!.definitionDigest);
+  });
+  it.each(["unknown-tool", "duplicate", "too-large", "wildcard", "unknown-authorization"])("rejects unsafe exact tool policy %s", async failure => {
+    const definition = nativeAppDefinition();
+    const policy = { tool: "SaveDocument", maxArgumentsBytes: 1024 * 1024, authorization: "plugin-data-write" };
+    if (failure === "unknown-tool") policy.tool = "ForeignTool";
+    if (failure === "wildcard") policy.tool = "*";
+    if (failure === "too-large") policy.maxArgumentsBytes = PLUGIN_APP_LIMITS.maxArgsBytes + 1;
+    if (failure === "unknown-authorization") policy.authorization = "filesystem-write";
+    Object.assign(definition.backends[0]!, { toolPolicies: failure === "duplicate" ? [policy, policy] : [policy] });
+    const plugin = await writeNativeAppFixture(root, definition);
+    plugin.manifest.permissions = { pluginData: ["write"] };
+    expect((await loadNativeAppMetadata(plugin)).status).toBe("invalid");
+  });
   it("validates and loads immutable definitions without importing tool code, deriving existing UI approval", async () => {
     const plugin = await writeNativeAppFixture(root);
     plugin.manifest.permissions = { filesystem: ["write"] };

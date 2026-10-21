@@ -13,6 +13,17 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-install-
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("installLocalNativePlugin", () => {
+  it("requires explicit plugin data write approval before publishing an installed app", async () => {
+    const sourcePath = join(root, "autosave");
+    const plugin = await writeNativeAppFixture(sourcePath);
+    plugin.manifest.permissions = { pluginData: ["write"] };
+    await writeFile(plugin.manifestPath, JSON.stringify(plugin.manifest));
+    const input = { sourcePath, scope: "user" as const, cwd: root, cacheDir: join(root, "cache"), storePath: join(root, "installed.json") };
+    expect((await installLocalNativePlugin({ ...input, approvedPermissions: ["ui:render", "ui:invoke-own-tools"] })).status).toBe("blocked");
+    expect((await readInstalledPluginStore(input.storePath)).plugins).toEqual({});
+    const installed = await installLocalNativePlugin({ ...input, approvedPermissions: ["ui:render", "ui:invoke-own-tools", "pluginData:write"] });
+    expect(installed.status).toBe("installed");
+  });
   it("requires both inferred App permissions and never executes the plugin", async () => {
     const sourcePath = join(root, "source");
     const plugin = await writeNativeAppFixture(sourcePath);

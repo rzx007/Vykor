@@ -42,7 +42,7 @@ const timeout = setTimeout(() => {
   timedOut = true
   child.kill()
   process.exitCode = 2
-}, 130_000)
+}, process.env.VYKOR_UI_TEST_EXCALIDRAW_ONLY === "1" ? 490_000 : 130_000)
 child.on("error", (error) => {
   clearTimeout(timeout)
   console.error(error)

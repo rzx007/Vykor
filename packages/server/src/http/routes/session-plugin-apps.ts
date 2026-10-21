@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest, type PluginAppRuntimeLease } from "@vykor/protocol";
+import { PLUGIN_APP_LIMITS, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest, type PluginAppRuntimeLease } from "@vykor/protocol";
 import type { assemblePluginApps } from "../../application/session/plugin-app-assembly.js";
 import type { PluginAppConversationService } from "../../application/session/plugin-app-conversation-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
@@ -80,7 +80,8 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
       return jsonResponse({ app: await runtime.mutate(from.sessionId, async () => runtime.apps.close(from, input)) });
     })
     .post("/:sessionId/plugin-apps/:appId/actions", async c => {
-      const response = await runtime.actions.invoke(fixed(c, parsePluginAppToolRequest(await readJson(c))));
+      // Only app actions accept declared large payloads. Runtime still checks the captured tool's own quota.
+      const response = await runtime.actions.invoke(fixed(c, parsePluginAppToolRequest(await readJson(c, undefined, PLUGIN_APP_LIMITS.maxArgsBytes + 16 * 1024))));
       return jsonResponse(response, ["pending", "running"].includes(response.receipt.status) ? 202 : 200);
     })
     .get("/:sessionId/plugin-apps/:appId/actions/:requestId", c => jsonResponse(runtime.actions.read(source(c), c.req.param("requestId"))))

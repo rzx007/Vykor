@@ -12,12 +12,13 @@ import { installAppFixture, appFixtureSettings } from "../test-helpers/plugin-ap
 
 const cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
-async function fixture(kind: "native-tools" | "mcp-server") {
+async function fixture(kind: "native-tools" | "mcp-server", autosave = false, mode: "default" | "plan" | "full_auto" = "full_auto") {
   const root = mkdtempSync(join(tmpdir(), "app-agent-")); cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
-  const installed = await installAppFixture(root, kind);
+  const installed = await installAppFixture(root, kind, undefined, false, autosave);
   const model = vi.fn();
-  const agent = await createDefaultNodeAgent({ cwd: root, sessionId: "session", settings: appFixtureSettings,
+  const requestPermission = vi.fn(async () => ({ status: "denied" as const }));
+  const agent = await createDefaultNodeAgent({ cwd: root, sessionId: "session", settings: { ...appFixtureSettings, permission: { mode } }, effects: { requestPermission },
     capabilityOverrides: { terminal: false, memory: false },
     client: { async *streamMessage() { model(); throw new Error("Unexpected model"); } } });
   cleanup.push(() => agent.close());
@@ -29,8 +30,30 @@ async function fixture(kind: "native-tools" | "mcp-server") {
   const request: PluginAppToolRequest = { source: { sessionId: agent.id, appId: app.id }, lease, requestId: "request",
     expectedRevision: 0, toolName: installed.toolName, args: { value: "approved" } };
   const scope = { agentId: agent.id, sessionId: agent.id, runId: "run", inputId: "run", traceId: "run", cwd: root, signal: new AbortController().signal };
-  return { agent, app, request, scope, model, ...installed, effects: () => existsSync(installed.effectFile) ? Number(readFileSync(installed.effectFile, "utf8")) : 0 };
+  return { agent, app, request, scope, model, requestPermission, ...installed, effects: () => existsSync(installed.effectFile) ? Number(readFileSync(installed.effectFile, "utf8")) : 0 };
 }
+it.each(["native-tools", "mcp-server"] as const)("uses installed %s autosave approval only for the original app and exact argument limit", async kind => {
+  const h = await fixture(kind, true, "default");
+  expect((await h.agent.pluginApps.prepareTool(h.app, h.request)).policy).toEqual({ confirmation: "granted", authorization: "plugin-data-write", maxArgumentsBytes: 2 * 1024 * 1024 });
+  const large = { ...h.request, args: { value: "x".repeat(100_000) } };
+  expect((await h.agent.runPluginAppTool(h.app, large, { scope: h.scope })).executionState).toBe("completed");
+  expect(h.requestPermission).not.toHaveBeenCalled();
+  expect(h.effects()).toBe(1);
+  await expect(h.agent.runPluginAppTool(h.app, { ...large, args: { value: "x".repeat(2 * 1024 * 1024) } }, { scope: h.scope })).rejects.toThrow("too_large");
+  expect(h.agent.listModelVisibleTools().some(tool => tool.name === h.toolName)).toBe(false);
+  await updateInstalledPluginStore(getInstalledPluginStorePath(), store => { Object.values(store.plugins).forEach(p => { p.approvedPermissions = p.approvedPermissions.filter(permission => permission !== "pluginData:write"); }); });
+  await expect(h.agent.pluginApps.prepareTool(h.app, h.request)).rejects.toThrow();
+  expect(h.effects()).toBe(1);
+}, 30_000);
+it.each(["native-tools", "mcp-server"] as const)("keeps ordinary %s tools bounded and preserves the plan ceiling", async kind => {
+  const ordinary = await fixture(kind, false, "default");
+  await expect(ordinary.agent.pluginApps.prepareTool(ordinary.app, { ...ordinary.request, args: { value: "x".repeat(100_000) } })).rejects.toThrow("too_large");
+  expect((await ordinary.agent.runPluginAppTool(ordinary.app, ordinary.request, { scope: ordinary.scope })).failureKind).toBe("permission");
+  expect(ordinary.requestPermission).toHaveBeenCalledOnce();
+  const plan = await fixture(kind, true, "plan");
+  expect((await plan.agent.runPluginAppTool(plan.app, plan.request, { scope: plan.scope })).failureKind).toBe("permission");
+  expect(plan.effects()).toBe(0); expect(plan.requestPermission).not.toHaveBeenCalled();
+}, 30_000);
 it.each(["native-tools", "mcp-server"] as const)("runs one original %s binding without model calls or history", async kind => {
   const h = await fixture(kind);
   expect(h.agent.listModelVisibleTools().some(t => t.name === h.toolName)).toBe(false);

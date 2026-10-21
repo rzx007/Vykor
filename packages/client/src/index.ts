@@ -266,6 +266,8 @@ export { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 export type { OfficeFormat, OfficePreview } from "@vykor/protocol";
 
 export { PluginAppResource } from "./resources/plugin-app-resource.js";
+export { getPluginAppToolPolicy } from "@vykor/protocol";
+export type { PluginAppToolPolicy, PluginAppToolDescriptor } from "@vykor/protocol";
 export type { PluginAppToolRequest, PluginAppConversationRequest, PluginAppActionResponse, PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppRecord, PluginAppSource, PluginAppRuntimeLease, PluginAppResponse } from "@vykor/protocol";
 export { PLUGIN_APP_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest, parseMcpCallResultData } from "@vykor/protocol";
 export { isPluginAppAdmissionRejection, type PluginAppAdmissionRejection } from "@vykor/protocol";

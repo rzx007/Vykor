@@ -5,16 +5,25 @@ import { registerPluginAppScheme, installPluginAppDocumentProtocol, desktopPlugi
 import { attachPluginAppWindowPolicy } from "../../src/main/features/plugin-apps/window-policy"
 import { checkMcpAppsSdk } from "./mcp-apps-sdk-check"
 import { checkResidentPluginApps } from "./plugin-app-check"
+import { checkExcalidrawApp } from "./excalidraw-check"
 registerPluginAppScheme()
 app.on("window-all-closed", () => {})
 const root = process.env.VYKOR_UI_TEST_ROOT!
-const deadline = setTimeout(() => { console.error("Electron assertion deadline"); app.exit(2) }, 120_000)
+const deadline = setTimeout(() => { console.error("Electron assertion deadline"); app.exit(2) }, process.env.VYKOR_UI_TEST_EXCALIDRAW_ONLY === "1" ? 480_000 : 120_000)
 app.whenReady().then(async () => {
   let requests = 0
   const server = createServer((_req, res) => { requests++; res.end("outside") })
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve))
   const external = "http://127.0.0.1:" + (server.address() as { port: number }).port + "/escape"
   installPluginAppDocumentProtocol(desktopPluginAppDocuments, session.defaultSession)
+  if (process.env.VYKOR_UI_TEST_EXCALIDRAW_ONLY === "1") {
+    await checkExcalidrawApp(root, desktopPluginAppDocuments, external, () => requests)
+    await new Promise<void>(resolve => server.close(() => resolve()))
+    clearTimeout(deadline)
+    console.log(JSON.stringify({ result: "passed", scenario: "real-excalidraw-app", electron: process.versions.electron }))
+    app.quit()
+    return
+  }
   const owner = new BrowserWindow({ show: false, webPreferences: { preload: join(__dirname, "../preload/index.cjs"), nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: false, backgroundThrottling: false } })
   attachPluginAppWindowPolicy(owner.webContents, desktopPluginAppDocuments)
   console.log(JSON.stringify({ scenario: "official-mcp-apps-sdk", ...await checkMcpAppsSdk(owner, desktopPluginAppDocuments, root) }))

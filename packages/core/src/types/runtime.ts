@@ -292,6 +292,13 @@ export interface RunCapabilityView {
 
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
+  /** Host-only approval for one original app tool invocation; never inherited by model or child Runs. */
+  readonly pluginAppToolApproval?: {
+    readonly runId: string;
+    readonly toolUseId: string;
+    readonly binding: RunToolBinding;
+    readonly argumentsJson: string;
+  };
   readonly limits?: AgentExecutionLimits;
   readonly profile?: AgentExecutionProfile;
   readonly scope: AgentRunScope;

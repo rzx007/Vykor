@@ -55,6 +55,13 @@ export interface InstallRuntimeIntegrationsOptions {
   mcpRuntimeRegistry?: McpRuntimeRegistry;
 }
 
+/** Only exact host placeholders in an installed plugin's stdio environment are substituted. */
+export function resolvePluginMcpEnvironment(env: Record<string, string>, input: { cwd: string; sessionId?: string }): Record<string, string> {
+  return Object.fromEntries(Object.entries(env).map(([key, value]) => [key,
+    value === "${VYKOR_SESSION_ID}" ? createHash("sha256").update(input.sessionId ?? randomUUID()).digest("hex")
+      : value === "${VYKOR_WORKSPACE_ROOT}" ? input.cwd : value]));
+}
+
 /** Install integrations that need a fully constructed RuntimeBundle. */
 export async function installRuntimeIntegrations(
   options: InstallRuntimeIntegrationsOptions,
@@ -129,8 +136,7 @@ export async function installRuntimeIntegrations(
   const serverOwners = new Map([...inventory.mcpServers].map(([id, owner]) => [owner.serverName, { id, ...owner }]));
   for (const [name, config] of Object.entries(mcpServers)) {
     if (serverOwners.has(name) && config.type === "stdio" && config.env) {
-      mcpServers[name] = { ...config, env: Object.fromEntries(Object.entries(config.env).map(([key, value]) => [key,
-        value === "${VYKOR_SESSION_ID}" ? createHash("sha256").update(options.sessionId ?? randomUUID()).digest("hex") : value])) };
+      mcpServers[name] = { ...config, env: resolvePluginMcpEnvironment(config.env, options) };
     }
   }
   const enabledMcpServers = filterEnabledMcpServers(mcpServers);
@@ -414,6 +420,7 @@ export async function installRuntimeIntegrations(
       // Closing a runtime during asynchronous verification must not mint a new live snapshot.
       if (!pluginAppsActive) return undefined;
       const common = { pluginId, pluginVersion: plugin.manifest.version, pluginDigest, metadata, definition,
+        pluginDataWriteApproved: plugin.manifest.permissions?.pluginData?.includes("write") === true,
         toolRegistry: getTrustedToolCatalogue(runtime.toolRegistry) };
       if (definition.kind === "native-tools") {
         if (definition.tools.length === 0) {

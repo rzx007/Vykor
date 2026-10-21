@@ -1,9 +1,10 @@
 import type { DesktopPluginAppsAPI, PluginAppHostState, PluginAppMount, PluginAppConfirmation } from "@shared/plugin-app-types"
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
+import { CallToolResultSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import { pluginAppModelContexts } from "./plugin-app-model-context"
 import { parseMcpCallResultData } from "@vykor/client"
 export interface AppConfirmationSource { title: string; pluginId: string; sessionId: string; description?: string }
 export type AppConfirmation = (request: PluginAppConfirmation, signal: AbortSignal, source?: AppConfirmationSource) => Promise<boolean>
+const hiddenToolError = () => new McpError(ErrorCode.InvalidRequest, "页面当前隐藏，不能发起新操作。", { code: "plugin_app_hidden", notAccepted: true })
 export class PluginAppController {
   state: PluginAppHostState
   private visible = true
@@ -31,7 +32,10 @@ export class PluginAppController {
   }
   assertInteraction(tool = false): void {
     this.assertAvailable(tool)
-    if (!this.visible) throw new Error("页面当前隐藏，不能发起新操作。")
+    if (!this.visible) {
+      if (tool) throw hiddenToolError()
+      throw new Error("页面当前隐藏，不能发起新操作。")
+    }
   }
   setVisible(visible: boolean): void {
     this.visible = visible
@@ -53,16 +57,24 @@ export class PluginAppController {
     const input = { mountId: this.mounted.mountId, requestId: request.requestId }
     const abort = new AbortController()
     this.pending.set(request.requestId, abort)
-    this.confirming.add(request.requestId)
+    const needsConfirmation = request.policy?.confirmation !== "granted"
+    if (needsConfirmation) this.confirming.add(request.requestId)
     const cancel = () => { abort.abort(); void this.api.cancelTool(input).catch(() => {}) }
     signal.addEventListener("abort", cancel, { once: true })
     if (signal.aborted || this.closed || !this.visible) cancel()
     try {
-      if (abort.signal.aborted || !await this.confirm(request, abort.signal)) { cancel(); throw new Error("操作已取消") }
+      if (!this.visible && !signal.aborted && !this.closed) throw hiddenToolError()
+      if (abort.signal.aborted || (needsConfirmation && !await this.confirm(request, abort.signal))) { cancel(); throw new Error("操作已取消") }
       this.assertInteraction(true)
       if (abort.signal.aborted) throw new Error("操作已取消")
       this.confirming.delete(request.requestId)
-      let response = await this.api.invokeTool(input)
+      const invoked = await this.api.invokeTool(input)
+      if ("notAccepted" in invoked) {
+        if (invoked.code === "plugin_app_busy" && invoked.notAccepted === true && invoked.requestId === request.requestId)
+          throw new McpError(ErrorCode.InvalidRequest, "plugin_app_busy", { code: "plugin_app_busy", notAccepted: true })
+        throw new Error("plugin_app_invalid_admission_response")
+      }
+      let response = invoked
       while (response.receipt.status === "pending" || response.receipt.status === "running") {
         await new Promise<void>((resolve, reject) => {
           const timer = setTimeout(() => { abort.signal.removeEventListener("abort", cancelled); resolve() }, 350)

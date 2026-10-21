@@ -10,17 +10,26 @@ export interface PluginAppNativeToolDefinition {
   ui?: { resourceUri: string };
 }
 
+/** Exact installed declaration. It never grants authority on its own. */
+export interface PluginAppToolPolicyDefinition {
+  tool: string;
+  authorization?: "plugin-data-write";
+  maxArgumentsBytes?: number;
+}
+
 export interface PluginAppNativeBackendDefinition {
   id: string;
   kind: "native-tools";
   resources: PluginAppResourceDefinition[];
   tools: PluginAppNativeToolDefinition[];
+  toolPolicies?: PluginAppToolPolicyDefinition[];
 }
 
 export interface PluginAppMcpBackendDefinition {
   id: string;
   kind: "mcp-server";
   server: string;
+  toolPolicies?: PluginAppToolPolicyDefinition[];
 }
 
 export type PluginAppBackendDefinition = PluginAppNativeBackendDefinition | PluginAppMcpBackendDefinition;
@@ -48,6 +57,7 @@ export const PLUGIN_APP_LIMITS = Object.freeze({
   resourceBytes: 8 * 1024 * 1024,
   appDataBytes: 256 * 1024,
   argsBytes: 64 * 1024,
+  maxArgsBytes: 64 * 1024 * 1024,
   resultBytes: 1024 * 1024,
   widgetStateBytes: 32 * 1024,
   handoffBytes: 32 * 1024,
@@ -100,7 +110,22 @@ export interface PluginAppAvailability {
   canMessage: boolean;
   reason?: "closed" | "revoked" | "session-unavailable" | "snapshot-changed" | "permission-missing" | "runtime-unavailable" | "action-unconfirmed";
 }
-export interface PluginAppToolDescriptor { name: string; description: string; inputSchema: Record<string, unknown> }
+export interface PluginAppToolPolicy {
+  confirmation: "required" | "granted";
+  maxArgumentsBytes: number;
+  authorization?: "plugin-data-write";
+}
+export interface PluginAppToolDescriptor { name: string; description: string; inputSchema: Record<string, unknown>; policy?: PluginAppToolPolicy }
+/** Reads a host descriptor only; page-supplied policy is never accepted by the invoke parser. */
+export function getPluginAppToolPolicy(descriptor?: PluginAppToolDescriptor): PluginAppToolPolicy {
+  const policy = descriptor?.policy;
+  if (!policy) return { confirmation: "required", maxArgumentsBytes: PLUGIN_APP_LIMITS.argsBytes };
+  if (!Number.isSafeInteger(policy.maxArgumentsBytes) || policy.maxArgumentsBytes < 1 || policy.maxArgumentsBytes > PLUGIN_APP_LIMITS.maxArgsBytes
+    || !["required", "granted"].includes(policy.confirmation)
+    || (policy.authorization !== undefined && policy.authorization !== "plugin-data-write")
+    || (policy.confirmation === "granted" && policy.authorization !== "plugin-data-write")) throw new Error("plugin_app_invalid_policy");
+  return { ...policy };
+}
 export interface PluginAppResponse { source: PluginAppSource; app: PluginAppRecord; availability: PluginAppAvailability; lease?: PluginAppRuntimeLease; tools?: PluginAppToolDescriptor[] }
 export interface PluginAppListResponse { apps: PluginAppResponse[] }
 export interface PluginAppActionMetadata {
@@ -143,7 +168,7 @@ export interface PluginAppSubmissionReceipt {
 /** Only host-owned Run metadata can provide execution facts. External ingress reserves this key. */
 export function readPluginAppAction(metadata: Record<string, unknown>): PluginAppActionMetadata | undefined {
   try {
-    const value = record(copyPluginAppJson(metadata.pluginAppAction, PLUGIN_APP_LIMITS.argsBytes + 32 * 1024));
+    const value = record(copyPluginAppJson(metadata.pluginAppAction, PLUGIN_APP_LIMITS.maxArgsBytes + 32 * 1024));
     if (value.schemaVersion !== 1 || !["not_started", "completed", "unknown"].includes(String(value.executionState))
       || !["native-tools", "mcp-server"].includes(String(value.backendKind))) return undefined;
     parsePluginAppSource(value.source);
@@ -151,7 +176,7 @@ export function readPluginAppAction(metadata: Record<string, unknown>): PluginAp
     if (value.acceptedRevision !== (value.expectedRevision as number) + 1) return undefined;
     for (const key of ["requestId", "requestFingerprint", "pluginId", "pluginVersion", "pluginDigest", "definitionDigest",
       "backendId", "resourceUri", "toolName", "registeredToolName", "toolUseId"]) identifier(value[key]);
-    record(copyPluginAppJson(value.args, PLUGIN_APP_LIMITS.argsBytes));
+    record(copyPluginAppJson(value.args, PLUGIN_APP_LIMITS.maxArgsBytes));
     return value as unknown as PluginAppActionMetadata;
   } catch { return undefined; }
 }
@@ -234,10 +259,10 @@ export function parseClosePluginAppInput(value: unknown): ClosePluginAppInput {
   return { expectedRevision: revision(input.expectedRevision) };
 }
 export function parsePluginAppToolRequest(value: unknown): PluginAppToolRequest {
-  const input = record(copyPluginAppJson(value, PLUGIN_APP_LIMITS.argsBytes + 16 * 1024));
+  const input = record(copyPluginAppJson(value, PLUGIN_APP_LIMITS.maxArgsBytes + 16 * 1024));
   fields(input, ["requestId", "expectedRevision", "toolName", "args", "source", "lease"]);
   const lease = record(input.lease); fields(lease, ["token", "backendGeneration"]);
-  const args = record(copyPluginAppJson(input.args, PLUGIN_APP_LIMITS.argsBytes));
+  const args = record(copyPluginAppJson(input.args, PLUGIN_APP_LIMITS.maxArgsBytes));
   return { requestId: identifier(input.requestId), expectedRevision: revision(input.expectedRevision), toolName: identifier(input.toolName), args,
     source: parsePluginAppSource(input.source), lease: { token: identifier(lease.token), backendGeneration: identifier(lease.backendGeneration) } };
 }
@@ -250,6 +275,7 @@ export function parsePluginAppComposerContexts(value: unknown): PluginAppConvers
 /** A synchronous admission failure, not a missing receipt or an execution-state estimate. */
 export interface PluginAppAdmissionRejection {
   code: "plugin_app_not_accepted";
+  reason?: "busy";
   kind: "tool" | "message";
   source: PluginAppSource;
   requestId: string;
@@ -261,6 +287,7 @@ export function isPluginAppAdmissionRejection(value: unknown, kind: "tool" | "me
   if (!value || typeof value !== "object") return false;
   const proof = value as Partial<PluginAppAdmissionRejection>;
   return proof.code === "plugin_app_not_accepted" && proof.kind === kind
+    && (proof.reason === undefined || proof.reason === "busy")
     && proof.source?.sessionId === request.source.sessionId && proof.source?.appId === request.source.appId
     && proof.requestId === request.requestId && proof.expectedRevision === request.expectedRevision;
 }

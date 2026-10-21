@@ -13,6 +13,11 @@ import type { SessionRunWorkContext } from "../../runtime/run-coordinator.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { PluginAppAdmissionError } from "./plugin-app-admission-error.js";
 
+/** Only this rejection proves a request was not admitted because another Run owns the session. */
+class PluginAppBusyError extends ApplicationError {
+  constructor() { super(409, "会话正在处理其他操作"); }
+}
+
 export function pluginAppRequestId(source: PluginAppSource, requestId: string, kind = "action"): string {
   return `app_${kind}_${createHash("sha256").update(JSON.stringify([source.sessionId, source.appId, requestId])).digest("hex")}`;
 }
@@ -57,7 +62,7 @@ export class PluginAppOperationService {
       throw new ApplicationError(409, "应用状态或确认版本已变化");
     if ((bridge.hasWork(source.sessionId) && bridge.activeRunId(source.sessionId) !== ownerRunId)
       || (!ownerRunId && this.options.store.runs.listRuns(source.sessionId).some(run => run.status === "pending" || run.status === "running")))
-      throw new ApplicationError(409, "会话正在处理其他操作");
+      throw new PluginAppBusyError();
     return app;
   }
   async invoke(value: PluginAppToolRequest): Promise<PluginAppActionResponse> {
@@ -93,6 +98,7 @@ export class PluginAppOperationService {
         if (error instanceof ApplicationError && !this.options.store.runs.getRun(runId)) throw new PluginAppAdmissionError({
           code: "plugin_app_not_accepted", kind: "tool", source: request.source,
           requestId: request.requestId, expectedRevision: request.expectedRevision,
+          ...(error instanceof PluginAppBusyError ? { reason: "busy" as const } : {}),
         });
         throw error;
       }

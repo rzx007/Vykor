@@ -360,12 +360,12 @@ describe("PluginManager archive import", () => {
       status: "approval-required",
       selectionId: "ui-selection",
       pluginName: "UI Fixture",
-      requestedPermissions: ["ui:render", "ui:invoke-own-tools"],
+      requestedPermissions: ["ui:render", "ui:invoke-own-tools", "pluginData:write"],
     })
     await render()
     await requestImport()
     expect(document.body.textContent).toContain("显示插件的隔离交互界面")
-    expect(document.body.textContent).toContain("请求插件自身工具，执行前仍需确认")
+    expect(document.body.textContent).toMatch(/请求插件自身工具，按工具授权确认[\s\S]*允许已声明的应用专用工具自动保存插件自身数据；工作区导出仍单独确认/)
     expect(document.body.textContent).not.toContain("UI 定义")
   })
 

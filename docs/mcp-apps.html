@@ -1028,7 +1028,7 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 </thead>
 <tbody><tr>
 <td>安装批准</td>
-<td>ui:render、ui:invoke-own-tools 和实际工具权限</td>
+<td>ui:render、ui:invoke-own-tools 和实际工具权限；自身自动保存另需 pluginData:write</td>
 </tr>
 <tr>
 <td>页面交互</td>
@@ -1051,6 +1051,11 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <p>页面处于脚本沙箱和内容安全策略内。它不能直接使用父页面 DOM、Node、文件、任意网络或剪贴板。</p>
 <p>引用到聊天使用 updateModelContext，只加入可见上下文条目。用户可以移除，引用不会自动发送消息。</p>
 <p>sendMessage 需要宿主确认，并发送到原会话。它不附带主输入框已有的未发送草稿。</p>
+<h3>有限授权与大载荷</h3>
+<p>后台可在 toolPolicies 中按精确工具声明 authorization: &quot;plugin-data-write&quot; 和 maxArgumentsBytes。只有原安装明确批准 permissions.pluginData: [&quot;write&quot;]、真实工具为 app-only 且原绑定仍有效时，宿主才免除自身保存的重复确认。模型调用、工作区导出、deny、角色限制和 hook 不受此授权放宽。插件 Node 进程依然是受信任代码；工具声明不等于操作系统文件隔离。</p>
+<p>普通工具参数仍默认 64 KiB；已声明工具可在应用请求 64 MiB 硬上限内使用更高额度。HTML、单次资源和工具结果保留原额度，大画板通过资源读取，不在保存结果里回传整张图。</p>
+<p>会话忙且原操作尚未创建 Run 时，服务端才返回带原身份的 plugin_app_not_accepted / reason: busy。桌面核对后以标准 MCP 错误 data 返回 {code: &quot;plugin_app_busy&quot;, notAccepted: true}；调用前隐藏返回 plugin_app_hidden。应用据此保留未提交编辑并等待，其他未知情况不得重新发起操作。</p>
+
 </div></div>
 </section>
 <section class="am-panel" id="panel-G">
@@ -1071,6 +1076,14 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <li>手工合并后使用最新业务版本保存。</li>
 <li>采用远端正文需要单独确认。</li>
 <li>保存结果不确定时保留草稿，不自动重试。</li>
+</ul>
+<h3>Excalidraw</h3>
+<ul>
+<li>连续编辑合并为串行自动保存，收到服务端确认后才显示已保存。</li>
+<li>切换标签、收起面板或切换会话保留原页面草稿；隐藏期间的新保存等待恢复。</li>
+<li>版本冲突和未知结果暂停自动保存，保留本地内容供另存或明确采用远端版本。</li>
+<li>引用选区固定文档和元素 ID；Agent 修改前先读取最新业务版本。</li>
+<li>导出到工作区及覆盖已有文件继续单独确认，操作保留原 Run 与回执。</li>
 </ul>
 <div class="am-table-wrap"><table>
 <thead>
@@ -1134,7 +1147,7 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 </tr>
 <tr>
 <td>工具参数</td>
-<td>不超过 64 KiB</td>
+<td>默认 64 KiB；按精确工具声明提高，应用请求硬上限 64 MiB</td>
 </tr>
 <tr>
 <td>Native appData</td>
@@ -1293,7 +1306,7 @@ app-only 只表示模型看不到该工具。
 | --- | --- |
 | 右侧“应用”目录 | 打开或复用当前会话的应用标签 |
 | 聊天中的“查看…” | 打开或定位右侧标签，不嵌入聊天 |
-| 首次实时工具结果 | 可以展开右侧应用 |
+| 首次实时工具结果 | 优先展开右上角工作摘要；点击具名应用后才定位右侧面板 |
 | 后续实时结果 | 更新原页面，保留当前标签选择 |
 | 历史消息渲染 | 不自动打开应用 |
 | 查看已打开页面的旧结果 | 只定位，不补发旧正文覆盖当前内容 |
@@ -1374,7 +1387,7 @@ participants: 页面, 桌面宿主, 主进程, 会话服务, 原有后台
 
 | 层次 | 每次核对的内容 |
 | --- | --- |
-| 安装批准 | ui:render、ui:invoke-own-tools 和实际工具权限 |
+| 安装批准 | ui:render、ui:invoke-own-tools 和实际工具权限；自身自动保存另需 pluginData:write |
 | 页面交互 | 是否可见、在线、仍打开，是否有待核实操作 |
 | 主进程绑定 | 原窗口、页面挂载、原会话和固定请求 |
 | 服务端授权 | 插件版本、内容摘要、后台代次及 lease |
@@ -1387,6 +1400,14 @@ lease 是宿主保存的临时授权凭证。它把原会话、插件来源和�
 引用到聊天使用 updateModelContext，只加入可见上下文条目。用户可以移除，引用不会自动发送消息。
 
 sendMessage 需要宿主确认，并发送到原会话。它不附带主输入框已有的未发送草稿。
+
+### 有限授权与大载荷
+
+后台可在 toolPolicies 中按精确工具声明 authorization: "plugin-data-write" 和 maxArgumentsBytes。只有原安装明确批准 permissions.pluginData: ["write"]、真实工具为 app-only 且原绑定仍有效时，宿主才免除自身保存的重复确认。模型调用、工作区导出、deny、角色限制和 hook 不受此授权放宽。插件 Node 进程依然是受信任代码；工具声明不等于操作系统文件隔离。
+
+普通工具参数仍默认 64 KiB；已声明工具可在应用请求 64 MiB 硬上限内使用更高额度。HTML、单次资源和工具结果保留原额度，大画板通过资源读取，不在保存结果里回传整张图。
+
+会话忙且原操作尚未创建 Run 时，服务端才返回带原身份的 plugin_app_not_accepted / reason: busy。桌面核对后以标准 MCP 错误 data 返回 {code: "plugin_app_busy", notAccepted: true}；调用前隐藏返回 plugin_app_hidden。应用据此保留未提交编辑并等待，其他未知情况不得重新发起操作。
 
 ## G 草稿、冲突与两套版本怎样处理
 
@@ -1406,6 +1427,14 @@ sendMessage 需要宿主确认，并发送到原会话。它不附带主输入�
 - 手工合并后使用最新业务版本保存。
 - 采用远端正文需要单独确认。
 - 保存结果不确定时保留草稿，不自动重试。
+
+### Excalidraw
+
+- 连续编辑合并为串行自动保存，收到服务端确认后才显示已保存。
+- 切换标签、收起面板或切换会话保留原页面草稿；隐藏期间的新保存等待恢复。
+- 版本冲突和未知结果暂停自动保存，保留本地内容供另存或明确采用远端版本。
+- 引用选区固定文档和元素 ID；Agent 修改前先读取最新业务版本。
+- 导出到工作区及覆盖已有文件继续单独确认，操作保留原 Run 与回执。
 
 | 标识 | 由谁维护 | 解决什么问题 |
 | --- | --- | --- |
@@ -1435,7 +1464,7 @@ sendMessage 需要宿主确认，并发送到原会话。它不附带主输入�
 | --- | --- |
 | 单页 HTML | 不超过 16 MiB |
 | 资源解码总量 | 不超过 8 MiB |
-| 工具参数 | 不超过 64 KiB |
+| 工具参数 | 默认 64 KiB；按精确工具声明提高，应用请求硬上限 64 MiB |
 | Native appData | 不超过 256 KiB |
 | MCP 结果 | 不超过 1 MiB |
 | 消息文本 | 不超过 4096 个 Unicode 字符 |

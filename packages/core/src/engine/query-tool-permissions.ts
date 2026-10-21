@@ -35,7 +35,13 @@ export async function authorizeToolCall(
   }
 
   // 处理需要用户确认权限的情况
-  if (decision.action === "ask") {
+  const approval = execution?.pluginAppToolApproval;
+  const approvedAppCall = !!approval && approval.runId === execution?.scope.runId && approval.toolUseId === toolUse.id
+    && approval.binding.definition.name === toolUse.name
+    && execution?.capabilityView?.appTools?.get(toolUse.name) === approval.binding
+    && execution?.capabilityView?.tools.get(toolUse.name) === approval.binding
+    && approval.argumentsJson === JSON.stringify(toolUse.input);
+  if (decision.action === "ask" && !approvedAppCall) {
     let allowed = false;
     if (execution) {
       const requestId = `permission_${randomUUID()}`;

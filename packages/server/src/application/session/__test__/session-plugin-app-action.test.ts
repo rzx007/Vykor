@@ -7,6 +7,42 @@ const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 async function fixture(kind: "native-tools" | "mcp-server") { const h = await pluginAppHarness(kind); cleanups.push(h.close); return h; }
 
+it("reports busy only before admission and permits a fresh retry without duplicate effects", async () => {
+  const h = await fixture("native-tools");
+  h.store().runs.createRun({ id: "other-work", sessionId: h.session.id });
+  await expect(h.client().pluginApps.invoke(h.request)).rejects.toMatchObject({ status: 409, body: {
+    code: "plugin_app_not_accepted", kind: "tool", reason: "busy", source: h.request.source,
+    requestId: h.request.requestId, expectedRevision: h.request.expectedRevision,
+  } });
+  expect(h.store().runs.listRuns(h.session.id)).toHaveLength(1);
+  expect(h.effects()).toBe(0);
+  h.store().runs.updateRun("other-work", { status: "completed" });
+  const accepted = await h.client().pluginApps.invoke(h.request);
+  await h.wait(accepted.receipt.runId);
+  expect(h.effects()).toBe(1);
+  const stale = await h.client().pluginApps.invoke({ ...h.request, requestId: "stale" }).catch(error => error);
+  // A stale revision must not be advertised as safely retryable busy work.
+  expect(stale).toMatchObject({ status: 409, body: { code: "plugin_app_not_accepted" } });
+  expect(stale.body).not.toHaveProperty("reason", "busy");
+}, 30_000);
+
+it("admits a declared payload over 1 MiB with one original receipt and no repeated permission review", async () => {
+  const h = await pluginAppHarness("native-tools", false, true); cleanups.push(h.close);
+  // The saved result exceeds the page-result budget, while the original Run must remain completed.
+  const request = { ...h.request, args: { value: "x".repeat(1100 * 1024) } };
+  const accepted = await h.client().pluginApps.invoke(request);
+  await h.wait(accepted.receipt.runId);
+  const settled = await h.client().pluginApps.getAction(request.source, request.requestId);
+  expect(settled.receipt).toMatchObject({ status: "completed", executionState: "completed" });
+  expect(settled.dataError).toBeDefined();
+  expect((await h.client().pluginApps.invoke(request)).receipt).toEqual(settled.receipt);
+  const part = h.store().conversations.listMessageParts(h.session.id).find(p => p.type === "tool");
+  expect(part?.input).toEqual(request.args);
+  expect(h.effects()).toBe(1);
+  expect(h.reviews).toHaveLength(0);
+  expect(h.store().runs.listRuns(h.session.id)).toHaveLength(1);
+}, 30_000);
+
 it.each(["native-tools", "mcp-server"] as const)("deduplicates %s by stable identity, retains exact result, rejects revision drift", async kind => {
   const h = await fixture(kind);
   const [a, b] = await Promise.all([h.client().pluginApps.invoke(h.request), h.client().pluginApps.invoke(h.request)]);

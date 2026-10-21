@@ -6,7 +6,11 @@ export interface IsolatedDocumentPolicy {
 }
 const policies = new WeakMap<Session, Map<string, IsolatedDocumentPolicy>>()
 /** Electron permits one listener per session. All isolated schemes share this owner. */
-export function registerIsolatedDocumentPolicy(session: Session, scheme: string, policy: IsolatedDocumentPolicy): void {
+export function registerIsolatedDocumentPolicy(
+  session: Session,
+  scheme: string,
+  policy: IsolatedDocumentPolicy
+): void {
   let entries = policies.get(session)
   if (!entries) {
     entries = new Map()
@@ -19,15 +23,28 @@ export function registerIsolatedDocumentPolicy(session: Session, scheme: string,
         const owner = details.webContentsId
         const target = registered.get(new URL(details.url).protocol.slice(0, -1))
         // A registered app frame cannot load another app's scheme or a nested frame.
-        const isolated = owner !== undefined && frame && [...registered.values()].some(value =>
-          value.isPluginFrame(owner, frame.frameTreeNodeId) ||
-          (frame.parent && value.isPluginFrame(owner, frame.parent.frameTreeNodeId)))
+        const isolated =
+          owner !== undefined &&
+          frame &&
+          [...registered.values()].some(
+            (value) =>
+              value.isPluginFrame(owner, frame.frameTreeNodeId) ||
+              (frame.parent && value.isPluginFrame(owner, frame.parent.frameTreeNodeId))
+          )
         if (isolated) cancel = true
-        else if (target) cancel = !target.authorizeRequest({ ownerId: owner, url: details.url,
-          method: details.method, resourceType: details.resourceType,
-          frameTreeNodeId: frame?.frameTreeNodeId, parentFrameTreeNodeId: frame?.parent?.frameTreeNodeId,
-          mainFrameTreeNodeId: details.webContents?.mainFrame.frameTreeNodeId })
-      } catch { cancel = true }
+        else if (target)
+          cancel = !target.authorizeRequest({
+            ownerId: owner,
+            url: details.url,
+            method: details.method,
+            resourceType: details.resourceType,
+            frameTreeNodeId: frame?.frameTreeNodeId,
+            parentFrameTreeNodeId: frame?.parent?.frameTreeNodeId,
+            mainFrameTreeNodeId: details.webContents?.mainFrame.frameTreeNodeId,
+          })
+      } catch {
+        cancel = true
+      }
       callback({ cancel })
     })
   }
@@ -37,7 +54,7 @@ export function registerIsolatedDocumentPolicy(session: Session, scheme: string,
 }
 
 export const ISOLATED_DOCUMENT_DOCUMENT_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src data:; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
 export const ISOLATED_DOCUMENT_PERMISSIONS_POLICY =
   "camera=(), microphone=(), geolocation=(), clipboard-read=(), clipboard-write=(), fullscreen=()"
 export interface IsolatedDocumentRequest {

@@ -68,10 +68,12 @@ const permissionLabels: Record<string, string> = {
   secrets: "密钥访问",
   tool: "工具权限",
   ui: "插件界面",
+  pluginData: "插件自身数据",
 }
 const uiPermissionLabels: Record<string, string> = {
   "ui:render": "显示插件的隔离交互界面",
-  "ui:invoke-own-tools": "请求插件自身工具，执行前仍需确认",
+  "ui:invoke-own-tools": "请求插件自身工具，按工具授权确认",
+  "pluginData:write": "允许已声明的应用专用工具自动保存插件自身数据；工作区导出仍单独确认",
 }
 const displayName = (plugin: DesktopPluginInfo): string =>
   plugin.identity.displayName ?? plugin.identity.name ?? plugin.identity.id

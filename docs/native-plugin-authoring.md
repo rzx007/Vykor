@@ -122,7 +122,15 @@ show(result);
 
 `app.sendMessage({ role:"user", content:[{type:"text",text}] })` 经宿主确认后发送普通用户消息，成功保持应用打开。只支持文本角色 user，不发送主输入框已有草稿。先检查 `app.getHostCapabilities()` 的 message/updateModelContext 能力。消息总共最多 4096 个 Unicode 字符；上下文结构化 JSON 最多 32 KiB。只携带必要选区，超限提示用户减少选择，不静默裁剪。
 
-工具参数最多 64 KiB、Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、资源解码总量最多 8 MiB。样例原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果，省略交互数据。
+普通工具参数默认最多 64 KiB；应用后台可用 toolPolicies 为具体工具声明 maxArgumentsBytes，应用请求传输硬上限为 64 MiB。声明更大额度不会获得免确认授权。Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、单次资源解码总量最多 8 MiB。大页面可分块读取本插件资源；样例原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果，省略交互数据。
+
+### 自身数据自动保存
+
+Excalidraw 的完整例子见 [插件说明](../examples/plugins/excalidraw/README.md)。根清单声明 permissions.pluginData 为 ["write"]，安装时明确批准 pluginData:write；后台在 toolPolicies 中将具体的应用专用保存工具声明为 authorization: "plugin-data-write"。两者缺一不可，model/app 双可见工具不会得到该授权。
+
+宿主仍验证原插件快照、工具绑定、会话、参数和 Run；执行前先检查 deny、角色和运行环境，并继续执行 hook。授权只消除自身保存的重复确认，不能授权模型任务或工作区导出。插件进程仍是受信任的 Node 代码，这项声明本身不构成操作系统文件沙箱；作者必须固定数据目录，保存工具不接受任意文件路径。
+
+自动保存只合并尚未提交的编辑，保持单次在途调用。收到业务保存确认后才显示已保存；冲突和未知结果暂停且保留草稿。只有标准 MCP 错误 data 明确包含 notAccepted: true 和 plugin_app_busy 或 plugin_app_hidden 时，才可等待后重新准备。其他错误不重放；已接纳的调用只查原回执。隐藏页面可以读已授权资源，不能开始新工具调用。
 
 ## 构建、安装和更新
 
@@ -134,7 +142,7 @@ show(result);
 
 切换面板或会话仅隐藏同一 iframe，保留输入和光标。隐藏脚本不能发起新工具、消息或上下文请求；已发送工作继续结算。取消、丢响应和 unknown 不自动重放。unknown 持久阻止后续工具和消息，重开不能解除。
 
-官方 1.1.2 的实验能力 schema 会剥离自定义 namespace，当前不装配 widgetState。窗口关闭或重启不保证表单恢复；跨重启业务数据由插件自行使用原 dataDir 保存。页面没有 Node、preload、父 DOM、文件、网络、子 frame、任意 IPC 或剪贴板权限。不要手写通信协议或用 innerHTML 渲染用户数据。
+官方 1.1.2 的实验能力 schema 会剥离自定义 namespace，当前不装配 widgetState。窗口关闭或重启不保证表单恢复；跨重启业务数据由插件自行使用原 dataDir 保存。页面没有 Node、preload、父 DOM、文件、网络、子 frame、任意 IPC 或剪贴板权限。沙箱禁止默认表单提交；按钮使用 type="button" 直接调用受控操作，并单独处理 Enter、输入有效性和等待期间的重复点击。不要手写通信协议或用 innerHTML 渲染用户数据。
 
 ## Node Tool 的公开接口
 

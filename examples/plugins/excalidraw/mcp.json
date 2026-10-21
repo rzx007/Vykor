@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "excalidraw": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "dist/server.mjs"
+      ],
+      "cwd": "${VYKOR_PLUGIN_ROOT}",
+      "env": {
+        "VYKOR_EXCALIDRAW_DATA_DIR": "${VYKOR_PLUGIN_DATA_DIR}",
+        "VYKOR_EXCALIDRAW_SESSION": "${VYKOR_SESSION_ID}",
+        "VYKOR_EXCALIDRAW_WORKSPACE": "${VYKOR_WORKSPACE_ROOT}"
+      }
+    }
+  }
+}

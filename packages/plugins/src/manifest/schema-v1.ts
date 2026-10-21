@@ -76,6 +76,7 @@ export const VykorPluginManifestV1Schema: z.ZodType<VykorPluginManifestV1> = z
     components: componentsSchema,
     permissions: z
       .object({
+        pluginData: z.array(z.literal("write")).min(1).max(1).optional(),
         filesystem: permissionListSchema.optional(),
         network: permissionListSchema.optional(),
         process: permissionListSchema.optional(),

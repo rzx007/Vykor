@@ -1,7 +1,8 @@
-import type { PluginAppActionResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, VykorClient } from "@vykor/client"
+import type { PluginAppActionResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, PluginAppToolPolicy, VykorClient } from "@vykor/client"
 export type PluginAppHostState = Omit<PluginAppResponse, "lease"> & { online: boolean }
 export interface PluginAppMount { mountId: string; url: string; state: PluginAppHostState }
-export interface PluginAppPreparedTool { requestId: string; toolName: string; args: Record<string, unknown>; expectedRevision: number }
+export interface PluginAppPreparedTool { requestId: string; toolName: string; args: Record<string, unknown>; expectedRevision: number; policy?: PluginAppToolPolicy }
+export type PluginAppToolInvocationResult = PluginAppActionResponse | { code: "plugin_app_busy"; notAccepted: true; requestId: string }
 export interface PluginAppPreparedMessage { pluginId: string; source: PluginAppSource; requestId: string; text: string; data: unknown; expectedRevision: number }
 export type PluginAppConfirmation = PluginAppPreparedTool | PluginAppPreparedMessage
 export interface PluginAppModelContext { id: string; source: PluginAppSource; pluginId: string; text: string; data: unknown }
@@ -18,7 +19,7 @@ export interface DesktopPluginAppsAPI {
   mount(input: PluginAppSource): Promise<PluginAppMount>
   refresh(input: { mountId: string }): Promise<PluginAppHostState>
   prepareTool(input: { mountId: string; name: string; arguments: Record<string, unknown> }): Promise<PluginAppPreparedTool>
-  invokeTool(input: { mountId: string; requestId: string }): Promise<PluginAppActionResponse>
+  invokeTool(input: { mountId: string; requestId: string }): Promise<PluginAppToolInvocationResult>
   getAction(input: { mountId: string; requestId: string }): Promise<PluginAppActionResponse>
   cancelTool(input: { mountId: string; requestId: string }): Promise<void>
   readResource(input: { mountId: string; uri: string }): Promise<{ contents: unknown[] }>

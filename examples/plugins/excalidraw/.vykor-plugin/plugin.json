@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.vykor.excalidraw",
+  "name": "excalidraw",
+  "version": "1.0.0",
+  "description": "离线 Excalidraw 画板，连续绘图自动保存、选区协作和工作区导出。",
+  "permissions": {
+    "pluginData": [
+      "write"
+    ]
+  },
+  "components": {
+    "mcpServers": [
+      "./mcp.json"
+    ],
+    "apps": [
+      "./ui/apps.json"
+    ],
+    "skills": [
+      "./skills/excalidraw/SKILL.md"
+    ]
+  }
+}

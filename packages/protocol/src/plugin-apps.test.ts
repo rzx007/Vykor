@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyPluginAppJson, parsePluginAppToolRequest } from "./plugin-apps.js";
+import { copyPluginAppJson, parsePluginAppToolRequest, isPluginAppAdmissionRejection, readPluginAppAction, PLUGIN_APP_LIMITS } from "./plugin-apps.js";
 
 describe("plugin app wire data", () => {
   it("copies bounded finite JSON and rejects executable or lossy values", () => {
@@ -25,5 +25,24 @@ describe("plugin app wire data", () => {
     expect(() => parsePluginAppToolRequest({ ...request, expectedRevision: -1 })).toThrow();
     expect(() => parsePluginAppToolRequest({ ...request, targetTool: "foreign" })).toThrow();
     expect(() => parsePluginAppToolRequest({ ...request, args: [] })).toThrow();
+  });
+
+  it("admits large JSON at the wire boundary for a later trusted tool policy check", () => {
+    const request = { requestId: "r", expectedRevision: 0, toolName: "save", args: { text: "x".repeat(100_000) },
+      source: { sessionId: "s", appId: "a" }, lease: { token: "t", backendGeneration: "g" } };
+    expect(parsePluginAppToolRequest(request).args).toEqual(request.args);
+    expect(() => parsePluginAppToolRequest({ ...request, policy: { confirmation: "granted" } })).toThrow();
+    const metadata = { schemaVersion: 1, source: request.source, requestId: "r", requestFingerprint: "fp", expectedRevision: 0, acceptedRevision: 1,
+      pluginId: "p", pluginVersion: "1", pluginDigest: "p", definitionDigest: "d", backendId: "b", backendKind: "mcp-server",
+      resourceUri: "ui://page", toolName: "save", registeredToolName: "mcp__s__save", toolUseId: "call", args: request.args, executionState: "completed" };
+    expect(readPluginAppAction({ pluginAppAction: metadata })?.args).toEqual(request.args);
+    expect(() => parsePluginAppToolRequest({ ...request, args: { text: "x".repeat(PLUGIN_APP_LIMITS.maxArgsBytes) } })).toThrow("too_large");
+  });
+  it("accepts old or explicit busy rejection proof and rejects an invented reason", () => {
+    const request = { source: { sessionId: "s", appId: "a" }, requestId: "r", expectedRevision: 1 };
+    const rejection = { ...request, code: "plugin_app_not_accepted", kind: "tool" };
+    expect(isPluginAppAdmissionRejection(rejection, "tool", request)).toBe(true);
+    expect(isPluginAppAdmissionRejection({ ...rejection, reason: "busy" }, "tool", request)).toBe(true);
+    expect(isPluginAppAdmissionRejection({ ...rejection, reason: "invented" }, "tool", request)).toBe(false);
   });
 });

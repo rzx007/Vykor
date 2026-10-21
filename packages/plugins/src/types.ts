@@ -46,6 +46,8 @@ export interface VykorPluginComponents {
 }
 
 export interface VykorPluginPermissions {
+  /** Installation approval for exact reviewed app tools writing the plugin's own data. Not an OS sandbox. */
+  pluginData?: Array<"write">;
   filesystem?: string[];
   network?: string[];
   process?: string[];

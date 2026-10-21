@@ -11,8 +11,13 @@ const uri = z.string().max(2048).refine(value => {
   try { const parsed = new URL(value); return parsed.protocol === "ui:" && !!parsed.host && !parsed.username && !parsed.password && !parsed.search && !parsed.hash; }
   catch { return false; }
 }, "resource must be an exact ui:// URI");
+const toolPolicies = z.array(z.object({
+  tool: z.string().min(1).max(256), authorization: z.literal("plugin-data-write").optional(),
+  maxArgumentsBytes: z.number().int().min(1).max(PLUGIN_APP_LIMITS.maxArgsBytes).optional(),
+}).strict()).max(256).refine(items => new Set(items.map(item => item.tool)).size === items.length).optional();
 const nativeBackend = z.object({
   id, kind: z.literal("native-tools"),
+  toolPolicies,
   resources: z.array(z.object({ uri, entry: z.string().min(3).refine(value => value.startsWith("./")) }).strict()).min(1).max(32),
   tools: z.array(z.object({
     tool: z.string().min(1).max(256),
@@ -24,7 +29,7 @@ const nativeBackend = z.object({
 export const PluginAppManifestSchema: z.ZodType<PluginAppManifest> = z.object({
   schemaVersion: z.literal(1),
   backends: z.array(z.discriminatedUnion("kind", [nativeBackend,
-    z.object({ id, kind: z.literal("mcp-server"), server: z.string().min(1).max(256) }).strict(),
+    z.object({ id, kind: z.literal("mcp-server"), server: z.string().min(1).max(256), toolPolicies }).strict(),
   ])).min(1).max(PLUGIN_APP_LIMITS.backendCount),
   surfaces: z.array(z.object({ id, title: z.string().trim().min(1).max(256), backend: id,
     resourceUri: uri, availability: z.literal("session") }).strict()).min(1).max(PLUGIN_APP_LIMITS.surfaceCount),
@@ -61,6 +66,11 @@ export async function loadNativeAppMetadata(plugin: ValidatedNativePlugin): Prom
       const definition = PluginAppManifestSchema.parse(JSON.parse(file.bytes.toString("utf8")));
       const resources: PluginAppResourceMetadata[] = [];
       for (const backend of definition.backends) {
+        for (const policy of backend.toolPolicies ?? []) {
+          if (policy.authorization && !plugin.manifest.permissions?.pluginData?.includes("write")) throw new Error("plugin data write not declared");
+          if (backend.kind === "native-tools" && !backend.tools.some(tool => tool.tool === policy.tool && tool.visibility.includes("app")))
+            throw new Error("tool policy requires an exact app tool");
+        }
         if (backendIds.has(backend.id) || backendIds.size >= PLUGIN_APP_LIMITS.backendCount) throw new Error("duplicate backend");
         backendIds.add(backend.id);
         if (backend.kind === "mcp-server") {
