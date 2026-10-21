@@ -212,6 +212,31 @@ describe("WorkspaceService.readFile image preview", () => {
 })
 
 describe("WorkspaceService.readFile extra-root", () => {
+  it("previews an explicitly opened outside file without granting write or tree access", async () => {
+    const project = await createTemporaryDirectory()
+    const outside = await createTemporaryDirectory()
+    const path = join(outside, "report.txt")
+    await writeFile(path, "outside report")
+    expect(await workspaceService.readFile({ rootPath: project, path })).toMatchObject({
+      content: "outside report",
+      scope: "extra-root",
+      name: "report.txt",
+    })
+    await expect(
+      workspaceService.writeFile({
+        rootPath: project,
+        path,
+        originalContent: "outside report",
+        content: "changed",
+      })
+    ).rejects.toThrow()
+    expect((await workspaceService.listFiles({ rootPath: project })).entries).toEqual([])
+    await expect(workspaceService.readFile({ rootPath: project, path: outside })).rejects.toThrow()
+    await expect(
+      workspaceService.readFile({ rootPath: project, path: "../report.txt" })
+    ).rejects.toThrow()
+  })
+
   it("reads a personal skill from an extra root", async () => {
     const project = await createTemporaryDirectory()
     const configDir = await createTemporaryDirectory()

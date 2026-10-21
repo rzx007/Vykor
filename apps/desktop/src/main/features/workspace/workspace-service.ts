@@ -1,7 +1,18 @@
 import { randomUUID } from "node:crypto"
 import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, dirname, extname, join, posix, relative, resolve, sep, win32 } from "node:path"
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve,
+  sep,
+  win32,
+} from "node:path"
 import { clipboard, shell } from "electron"
 import { documentFormat, MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 import { desktopSessionService } from "../session/session-service"
@@ -26,6 +37,8 @@ import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-ima
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 import {
   classifyWorkspacePath,
+  isPathInside,
+  stripLocationSuffix,
   stillInsideAllowedRoot,
   type WorkspaceAllowedRoots,
   type WorkspacePathClassification,
@@ -97,7 +110,7 @@ class WorkspaceService {
 
   async readFile(input: WorkspaceReadFileInput): Promise<WorkspaceReadFileResult> {
     if (input.path.startsWith("attachment://")) return await this.readDocumentAttachment(input)
-    const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
+    const resolved = await this.resolveAllowedFile(input.rootPath, input.path, true)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")
     const format = documentFormat(resolved.absolutePath)
@@ -312,10 +325,40 @@ class WorkspaceService {
 
   private async resolveAllowedFile(
     projectRoot: string,
-    rawPath: string
+    rawPath: string,
+    allowExternalRead = false
   ): Promise<{ absolutePath: string; classification: WorkspacePathClassification }> {
     const rootPath = await resolveDirectory(projectRoot)
-    const classification = classifyWorkspacePath(rawPath, this.rootsFor(rootPath), { win32, posix })
+    const roots = this.rootsFor(rootPath)
+    const cleaned = stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, "")
+    const pathApi = process.platform === "win32" ? win32 : posix
+    const classification = classifyWorkspacePath(cleaned, roots, { win32, posix })
+    // 只扩大显式绝对文件路径的查看范围；写入、目录扫描和项目内链接仍走原边界。
+    if (
+      allowExternalRead &&
+      isAbsolute(cleaned) &&
+      classification?.kind !== "extra-root" &&
+      !isPathInside(cleaned, rootPath, pathApi)
+    ) {
+      if (/^(?:\\\\|\/\/)/.test(cleaned) || isPathInside(cleaned, roots.configDir, pathApi))
+        throw new Error("不支持预览该路径。")
+      const absolutePath = await realpath(cleaned).catch(() => undefined)
+      if (absolutePath) {
+        const configPath = await realpath(roots.configDir).catch(() => resolve(roots.configDir))
+        if (isPathInside(absolutePath, configPath, pathApi)) throw new Error("不支持预览该路径。")
+        if (!(await stat(absolutePath)).isFile()) throw new Error("只能预览文件。")
+        return {
+          absolutePath,
+          classification: {
+            kind: "extra-root",
+            rootPath: dirname(absolutePath),
+            relativePath: basename(absolutePath),
+            tabPath: absolutePath.split(sep).join("/"),
+            rootLabel: "项目外文件",
+          },
+        }
+      }
+    }
     if (!classification) throw new Error("文件必须位于当前项目目录内。")
 
     const candidate =
