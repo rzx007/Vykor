@@ -538,18 +538,24 @@ describe("desktop slash command actions", () => {
 
   it("toggles plan mode through the real session setting action", async () => {
     const { container } = await mountChat(
-      { updateSessionPermissionMode: initialStoreState.updateSessionPermissionMode },
       {
-        updatePermissionMode: async ({ permissionMode }: { permissionMode: string }) => ({
+        updateSessionWorkMode: initialStoreState.updateSessionWorkMode,
+        selectedWorkMode: "execute",
+        selectedPermissionMode: "ask",
+      },
+      {
+        updatePermissionMode: async ({ workMode }: { workMode: string }) => ({
           ...session("slash-chat", "idle"),
-          metadata: { runtime: { approvalMode: permissionMode } },
+          metadata: { runtime: { approvalMode: "ask", workMode } },
         }),
       }
     )
     await runSlash(container, "plan")
-    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("plan")
+    expect(useDesktopSessionStore.getState().selectedWorkMode).toBe("plan")
+    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("ask")
     await runSlash(container, "plan")
-    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+    expect(useDesktopSessionStore.getState().selectedWorkMode).toBe("execute")
+    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("ask")
   })
 
   it("pins and unpins the current chat without submitting a prompt", async () => {
