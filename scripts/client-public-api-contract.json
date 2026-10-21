@@ -2,6 +2,9 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "getPluginAppToolPolicy", "kind": "runtime-export" },
+    { "name": "PluginAppToolDescriptor", "kind": "type-export" },
+    { "name": "PluginAppToolPolicy", "kind": "type-export" },
     {
       "name": "OFFICE_MEDIA_TYPES",
       "kind": "runtime-export"
