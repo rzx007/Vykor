@@ -4326,79 +4326,79 @@
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 90,
+      "line": 93,
       "text": "      \"name\": \"PluginUiConversationReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 94,
+      "line": 97,
       "text": "      \"name\": \"PluginUiSubmissionRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 102,
+      "line": 105,
       "text": "      \"name\": \"parsePluginUiConversationReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 106,
+      "line": 109,
       "text": "      \"name\": \"parsePluginUiSubmissionRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 110,
+      "line": 113,
       "text": "      \"name\": \"readPluginUiInstance\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 114,
+      "line": 117,
       "text": "      \"name\": \"readPluginUiAction\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 122,
+      "line": 125,
       "text": "      \"name\": \"PluginUiActionRunMetadata\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 126,
+      "line": 129,
       "text": "      \"name\": \"PluginUiActionReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 130,
+      "line": 133,
       "text": "      \"name\": \"PluginUiActionResponse\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 134,
+      "line": 137,
       "text": "      \"name\": \"PluginUiInstanceRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 702,
+      "line": 705,
       "text": "      \"name\": \"PluginUiInventory\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 1094,
+      "line": 1097,
       "text": "      \"name\": \"PluginUiHistoryResource\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 1098,
+      "line": 1101,
       "text": "      \"name\": \"pluginUiHistory\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
