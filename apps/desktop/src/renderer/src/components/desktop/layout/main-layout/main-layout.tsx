@@ -473,7 +473,7 @@ export function MainLayout(): React.JSX.Element {
       onOpen={openWorkflowPanel}
     >
       <ImageViewerProvider onOpenImage={utilityPanel.openImage}>
-          <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
+          <main className="glass-shell-surface relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
             <TitleBar
               sidebarOpen={sidebarOpen}
               panelOpen={panelOpen}

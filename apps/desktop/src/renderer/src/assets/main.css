@@ -299,6 +299,8 @@
   --composer-shadow: 0 -8px 22px oklch(0.145 0 0 / 3.5%), 0 4px 12px oklch(0.145 0 0 / 5%);
   --workspace-shadow: -4px -2px 18px oklch(0.145 0 0 / 3%), -0px 0 10px oklch(0.145 0 0 / 2%);
   --workspace-top-shadow: -4px -4px 14px oklch(0.145 0 0 / 10%), 0 -1px 4px oklch(0.145 0 0 / 8%);
+  /* 玻璃层的细颗粒：只叠在外壳上，避免大面积半透明看起来是一块纯色。 */
+  --glass-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)' opacity='0.05'/%3E%3C/svg%3E");
 
   --sidebar: var(--shell);
   --sidebar-foreground: color-mix(in srgb, var(--shell-solid), var(--foreground) 90%);
@@ -357,7 +359,10 @@
    - translucent：macOS，vibrancy 之上再叠一层半透明染色。
    不透明档不匹配任何规则，保持上面 :root / .dark 的实色 token。 */
 html[data-window-shell="transparent"] {
-  --shell: color-mix(in srgb, var(--shell-solid) 50%, transparent);
+  /* Mica 自己已经染过一层壁纸颜色，这里的染色层按同一强度折算：
+     两层叠加才不会把壁纸压成灰白，侧栏也才留得住壁纸的层次。 */
+  --window-glass-tint-opacity: calc((100% - var(--window-glass-strength, 35%)) * 0.55);
+  --shell: color-mix(in srgb, var(--shell-solid) var(--window-glass-tint-opacity), transparent);
 }
 
 html[data-window-shell="translucent"] {
@@ -370,6 +375,31 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) {
   --sidebar-interaction-tint: oklch(from var(--surface-elevation-target) l 0 h);
   --sidebar-accent: color-mix(in oklab, var(--sidebar-interaction-tint) 3%, transparent);
   --sidebar-selected: color-mix(in oklab, var(--sidebar-interaction-tint) 5%, transparent);
+}
+
+/* 以下只给 Windows：Mica 是壁纸染色而不是真模糊，选中底色、边界和质感
+   都需要比 macOS 的 vibrancy 更明确一层；macOS 保持原有的磨玻璃观感。 */
+html[data-window-shell="transparent"] {
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-interaction-tint) 4%, transparent);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-interaction-tint) 8%, transparent);
+  /* 半透明外壳和实色正文之间需要比不透明档更清楚的一道边，否则两层会糊在一起。 */
+  --workspace-border: color-mix(in srgb, var(--surface-elevation-target) 12%, transparent);
+}
+
+/* 玻璃外壳的质感：顶部受光更亮、往下略沉，顶边一道极淡高光，
+   再铺一层几乎看不见的颗粒，让半透明区域有厚度而不是一块纯色。 */
+html[data-window-shell="transparent"] .glass-shell-surface {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 12%) 0%, rgb(255 255 255 / 0%) 26%, rgb(0 0 0 / 4%) 100%),
+    var(--glass-grain);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%);
+}
+
+html.dark[data-window-shell="transparent"] .glass-shell-surface {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 7%) 0%, rgb(255 255 255 / 0%) 26%, rgb(0 0 0 / 12%) 100%),
+    var(--glass-grain);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 9%);
 }
 
 /* 导航行本身和滑动悬停背景共用圆角，避免悬停、选中切换时轮廓变化。 */
