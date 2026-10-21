@@ -54,13 +54,13 @@ async function waitForPage(f: ReturnType<typeof fixture>) {
   for (let i = 0; i < 100 && !f.manager.snapshot().length; i++) await new Promise(resolve => setTimeout(resolve, 1));
   expect(f.manager.snapshot()).toHaveLength(1); return f.manager.snapshot()[0]!;
 }
-it("four distinct inline-only rejections release actual durable quota, including repeat opens, before a valid surface", async () => {
+it("four distinct missing-mode rejections release actual durable quota, including repeat opens, before a valid surface", async () => {
   const f = fixture();
   for (const surfaceId of ["a", "b", "c", "d", "a"]) {
     const opening = f.manager.open("s", "static", surfaceId, surfaceId);
-    const rejected = expect(opening).rejects.toThrow("仅支持内联");
+    const rejected = expect(opening).rejects.toThrow("没有可用的显示模式");
     const page = await waitForPage(f); expect(f.count()).toBe(1);
-    page.onModes!(["inline"]); await rejected;
+    page.onModes!([]); await rejected;
     expect(f.count()).toBe(0); expect(f.manager.snapshot()).toEqual([]);
     expect(f.store.pluginApps.get(page.controller.state.app.id)?.status).toBe("closed");
   }
@@ -70,15 +70,15 @@ it("four distinct inline-only rejections release actual durable quota, including
 });
 it("does not close an existing durable app merely because this renderer had no page", async () => {
   const f = fixture(), existing = await f.server.open("s", { pluginId: "static", surfaceId: "a" });
-  const opening = f.manager.open("s", "static", "a", "A"), rejected = expect(opening).rejects.toThrow("仅支持内联");
-  const page = await waitForPage(f); page.onModes!(["inline"]); await rejected;
+  const opening = f.manager.open("s", "static", "a", "A"), rejected = expect(opening).rejects.toThrow("没有可用的显示模式");
+  const page = await waitForPage(f); page.onModes!([]); await rejected;
   expect(f.closes).toEqual([]); expect(f.count()).toBe(1); expect(page.menuRejection).toBeTruthy();
   expect(f.store.pluginApps.get(existing.app.id)?.controlRevision).toBe(0);
 });
 it("preserves window 2's same-source viewer acquired before window 1 rejects", async () => {
-  const f = fixture(), opening = f.manager.open("s", "static", "a", "A"), rejected = expect(opening).rejects.toThrow("仅支持内联");
+  const f = fixture(), opening = f.manager.open("s", "static", "a", "A"), rejected = expect(opening).rejects.toThrow("没有可用的显示模式");
   const page = await waitForPage(f), other = await f.main.mount(43, page.controller.state.source);
-  page.onModes!(["inline"]); await rejected;
+  page.onModes!([]); await rejected;
   expect(f.closes).toEqual([]); expect(f.count()).toBe(1);
   expect(f.main.getBinding(43, other.mountId, false).admitted).toBe(true);
   expect(f.main.getBinding(42, page.id, false).admitted).toBe(true);

@@ -42,7 +42,7 @@ describe("application backup notes", () => {
         // newest row would leave 0006 recorded after later migrations were
         // added, so the table would never be recreated.
         Reflect.get(source, "storage").database.connection.exec(
-          "DROP TABLE note_file_index; DELETE FROM __drizzle_migrations WHERE created_at >= 1791186378776;",
+          "DROP TABLE session_plugin_app; DROP TABLE note_file_index; DELETE FROM __drizzle_migrations WHERE created_at >= 1791186378776;",
         );
         await source.backupDatabase(join(backup, "database.sqlite"));
         writeFileSync(

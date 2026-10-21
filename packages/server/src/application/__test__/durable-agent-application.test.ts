@@ -327,7 +327,8 @@ describe("DaemonApplication", () => {
         apiFormat: "anthropic",
         model: "child-attachment-e2e-model",
         maxTurns: 5,
-        permission: { mode: "full_auto" },
+        // 本例验证附件会话隔离，不运行交互审批或额外的模型审批请求。
+        permission: { mode: "full_access" },
         sandbox: { enabled: false },
         plugins: { enabled: false },
         memory: { enabled: false },

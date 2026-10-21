@@ -391,6 +391,7 @@ describe("SessionInteractionService", () => {
       sessionId: "s1",
       inputId: "source-input",
       status: "interrupted",
+      metadata: {},
     };
     const sourceInput = {
       id: "source-input",

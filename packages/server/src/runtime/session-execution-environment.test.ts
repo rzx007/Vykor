@@ -4,7 +4,7 @@ import { createSessionEnvironmentAcquirer } from "./session-execution-environmen
 describe("createSessionEnvironmentAcquirer", () => {
   it("creates a lightweight local handle without a shared lease", async () => {
     const handle = await createSessionEnvironmentAcquirer()(
-      { id: "s1", cwd: process.cwd() } as any,
+      { id: "s1", cwd: process.cwd(), metadata: { runtime: { model: "test" } } } as any,
       {
         model: "test",
         apiFormat: "openai",
