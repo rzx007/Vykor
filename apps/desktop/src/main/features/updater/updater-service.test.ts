@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events"
 import { describe, expect, it, vi } from "vitest"
 
-import { createUpdaterService } from "./updater-service"
+import { createUpdaterService, UPDATE_CHECK_DELAY_MS, UPDATE_CHECK_INTERVAL_MS } from "./updater-service"
 
 class FakeUpdater extends EventEmitter {
   autoDownload = true
@@ -20,6 +20,7 @@ describe("updater service startup", () => {
       isPackaged: true,
       platform: "win32",
       checkDelayMs: 2_000,
+      checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
       logger: { info: vi.fn(), error: vi.fn() },
       setForceQuit: vi.fn(),
     })
@@ -33,8 +34,74 @@ describe("updater service startup", () => {
     expect(updater.checkForUpdates).toHaveBeenCalledOnce()
 
     service.startAfterWindowShown()
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS - 1)
     expect(updater.checkForUpdates).toHaveBeenCalledOnce()
+    service.dispose()
+    vi.useRealTimers()
+  })
+
+  it("re-checks for updates every two hours while the app keeps running", async () => {
+    vi.useFakeTimers()
+    const updater = new FakeUpdater()
+    const service = createUpdaterService({
+      updater,
+      isPackaged: true,
+      platform: "win32",
+      checkDelayMs: UPDATE_CHECK_DELAY_MS,
+      checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
+      logger: { info: vi.fn(), error: vi.fn() },
+      setForceQuit: vi.fn(),
+    })
+
+    service.startAfterWindowShown()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_DELAY_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(3)
+
+    service.dispose()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS * 4)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(3)
+    vi.useRealTimers()
+  })
+
+  it("keeps a two-hour interval between checks", () => {
+    expect(UPDATE_CHECK_INTERVAL_MS).toBe(2 * 60 * 60 * 1_000)
+  })
+
+  it("does not interrupt a download that is already running", async () => {
+    vi.useFakeTimers()
+    const updater = new FakeUpdater()
+    const service = createUpdaterService({
+      updater,
+      isPackaged: true,
+      platform: "win32",
+      checkDelayMs: UPDATE_CHECK_DELAY_MS,
+      checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
+      logger: { info: vi.fn(), error: vi.fn() },
+      setForceQuit: vi.fn(),
+    })
+    const states: Array<{ status: string }> = []
+    service.subscribe((state) => states.push(state as { status: string }))
+
+    service.startAfterWindowShown()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_DELAY_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+    expect(states.filter((state) => state.status === "checking")).toHaveLength(1)
+
+    updater.emit("update-available", { version: "1.3.0" })
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+    expect(states.filter((state) => state.status === "checking")).toHaveLength(1)
+
+    updater.emit("update-downloaded", { version: "1.3.0" })
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+
     service.dispose()
     vi.useRealTimers()
   })
@@ -50,6 +117,7 @@ describe("updater service startup", () => {
       isPackaged,
       platform,
       checkDelayMs: 1,
+      checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
       logger: { info: vi.fn(), error: vi.fn() },
       setForceQuit: vi.fn(),
     })
@@ -117,7 +185,7 @@ describe("updater service state and commands", () => {
     service.subscribe((state) => states.push(state))
 
     service.startAfterWindowShown()
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_DELAY_MS)
 
     expect(service.getState()).toEqual({ status: "idle" })
     expect(states).not.toContainEqual(expect.objectContaining({ status: "error" }))
@@ -184,7 +252,8 @@ function createService(
     updater,
     isPackaged: true,
     platform: "win32",
-    checkDelayMs: 1_000,
+    checkDelayMs: UPDATE_CHECK_DELAY_MS,
+    checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
     logger,
     setForceQuit,
   })
