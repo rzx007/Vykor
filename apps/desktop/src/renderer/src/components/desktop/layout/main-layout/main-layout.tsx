@@ -389,6 +389,7 @@ export function MainLayout(): React.JSX.Element {
             canOpenReview={activeWorkspaceIsGit === true}
             onOpenReview={requestOpenReview}
             onOpenTerminal={openTerminal}
+            onOpenApps={() => openUtilityTool("plugin-app")}
             onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
           />
         </Panel>

@@ -13,6 +13,13 @@
 - [new-conversation-start.tsx](new-conversation-start.tsx)
 - [session-more-menu.tsx](session-more-menu.tsx)
 - [session-summary-popover.tsx](session-summary-popover.tsx)
+- [session-summary-work.tsx](session-summary-work.tsx)：展示当前聊天的应用、工作流、终端和后台命令；点击沿用原面板，后台命令只读展开原输出。
+- [session-summary-attention.ts](session-summary-attention.ts)：每次进入聊天按事项身份提醒一次，跳过已加载的应用和迟到历史任务；手动收起不清空记录。
+- [use-session-summary-terminals.ts](use-session-summary-terminals.ts)：在消息行外读取和订阅当前聊天的真实终端，摘要收起时继续跟踪；不执行命令。
+
+新事项优先展开右上角工作摘要，不自动打开右侧面板，也不抢编辑焦点。应用权限确认期间延后提醒；只有用户点击应用才定位原页面。变更、子智能体和资料来源继续使用原入口，消息列表保持原样。
+
+摘要采用紧凑列表，只展示已有内容或真实错误；空分组、零计数和“暂无”占位不渲染，分隔线只出现在实际分组之间。顶部图标保留应用目录入口，不依赖已有应用。
 
 ## 维护约定
 

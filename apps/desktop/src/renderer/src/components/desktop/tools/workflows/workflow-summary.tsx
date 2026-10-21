@@ -13,24 +13,6 @@ import {
   workflowToolRunId,
 } from "./workflow-model"
 
-export function WorkflowPanelButton() {
-  const context = useWorkflows()
-  const runs = context?.snapshot?.runs ?? []
-  if (!runs.length) return null
-  const active = runs.filter((run) => run.status === "running" || run.status === "stopping")
-  return (
-    <Button
-      variant="ghost"
-      shape="pill"
-      size="sm"
-      onClick={() => context?.open(active[0]?.id ?? runs[0].id)}
-    >
-      <GitBranch data-icon="inline-start" />
-      编排{active.length ? ` · ${active.length} 运行` : ""}
-    </Button>
-  )
-}
-
 export function WorkflowSummary({
   call,
   result,

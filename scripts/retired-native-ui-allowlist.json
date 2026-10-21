@@ -294,7 +294,7 @@
     },
     {
       "path": "docs/plugin-system.html",
-      "line": 1172,
+      "line": 1182,
       "text": "清单描述包内容，不保存用户批准、启用状态或进程状态。新包声明旧 components.ui 时，正常校验会拒绝。",
       "reason": "Embedded source of the same retirement documentation; no active declaration."
     },

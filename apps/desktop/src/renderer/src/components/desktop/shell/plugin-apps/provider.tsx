@@ -6,6 +6,8 @@ import { PluginAppFrame } from "./frame"
 import type { AppConfirmationSource } from "./controller"
 interface Confirmation { request: PluginAppConfirmation; source?: AppConfirmationSource; decide(accepted: boolean): void }
 const Context = createContext<PluginAppPageManager | null>(null)
+const ConfirmingContext = createContext(false)
+export function usePluginAppConfirming(): boolean { return useContext(ConfirmingContext) }
 export function usePluginApps(): PluginAppPageManager | null { return useContext(Context) }
 const emptyPages: ReturnType<PluginAppPageManager["snapshot"]> = []
 const emptySubscribe = () => () => {}
@@ -45,7 +47,9 @@ export function PluginAppsProvider({ children }: { children: React.ReactNode }) 
     return () => { clearInterval(timer); off(); queueMicrotask(() => { if (lifetime.current === generation) { current.current?.decide(false); void manager.dispose() } }) }
   }, [manager])
   return <Context.Provider value={manager}>
+    <ConfirmingContext.Provider value={!!confirmation}>
     {children}
+    </ConfirmingContext.Provider>
     <div data-plugin-app-owner>{pages.map(page => <PluginAppFrame key={page.id} page={page} />)}</div>
     <AlertDialog open={!!confirmation} onOpenChange={open => { if (!open) confirmation?.decide(false) }}>
       <AlertDialogContent>

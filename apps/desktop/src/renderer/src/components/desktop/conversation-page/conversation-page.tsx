@@ -78,7 +78,6 @@ import { AskUserCard } from "./message/ask-user-card"
 import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionSummaryPopover } from "./session/session-summary-popover"
-import { WorkflowPanelButton } from "../tools/workflows/workflow-summary"
 import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
@@ -102,6 +101,7 @@ function ConversationPane({
   canOpenReview,
   onOpenReview,
   onOpenTerminal,
+  onOpenApps,
   onOpenAgents,
 }: ConversationPaneProps): React.JSX.Element {
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
@@ -558,9 +558,10 @@ function ConversationPane({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            <WorkflowPanelButton />
             <OpenWithSplitButton folderPath={sessionView?.session.cwd ?? selectedProject?.path} />
             <SessionSummaryPopover
+              onOpenApps={onOpenApps}
+              onOpenTerminal={onOpenTerminal}
               view={sessionView?.session.id === activeSessionId ? sessionView : null}
               workspace={workspaceProject}
               canOpenReview={canOpenReview}

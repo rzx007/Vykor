@@ -9,6 +9,7 @@ import { PluginAppsProvider, usePluginApps } from "@renderer/components/desktop/
 import type { PluginAppPageManager } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
 import { mount } from "@renderer/components/desktop/shell/plugin-apps/__test__/fixtures.test-support"
 import { UtilityPanel } from "../utility-panel"
+import { SessionSummaryPopover } from "@renderer/components/desktop/conversation-page/session/session-summary-popover"
 
 const bridges = vi.hoisted(() => [] as Array<{ oninitialized?: () => void }>)
 vi.mock("@modelcontextprotocol/ext-apps/app-bridge", () => ({ AppBridge: class {
@@ -27,6 +28,7 @@ vi.hoisted(() => { HTMLCanvasElement.prototype.getContext = (() => null) as type
 const initialStore = useDesktopSessionStore.getState()
 let container: HTMLDivElement, root: Root, manager: PluginAppPageManager
 let renderedSession: string, renderedOpen: boolean
+let renderedSummary: boolean
 let calls: ReturnType<typeof createAPI>
 const animationFrames = new Map<number, FrameRequestCallback>()
 async function paint() {
@@ -61,11 +63,16 @@ function Panel({ sessionId, open }: { sessionId: string; open: boolean }) {
     onToggleMaximized={() => {}} onClose={() => {}} fileOpenRequest={null} reviewOpenRequest={null}
     terminalOpenRequest={null} toolOpenRequest={null} onOpenFile={() => {}} onOpenReview={() => {}} onOpenTerminal={() => {}} />
 }
-async function render(sessionId = renderedSession, open = renderedOpen) {
+async function render(sessionId = renderedSession, open = renderedOpen, summary = renderedSummary) {
   renderedSession = sessionId; renderedOpen = open
+  renderedSummary = summary
   await act(async () => {
     useDesktopSessionStore.setState({ activeSessionId: sessionId, sessionView: emptySessionView(sessionId) })
-    root.render(<PluginAppsProvider><Panel sessionId={sessionId} open={open} /></PluginAppsProvider>)
+    root.render(<PluginAppsProvider>
+      <Panel sessionId={sessionId} open={open} />
+      {summary && <SessionSummaryPopover view={emptySessionView(sessionId)} workspace={null} canOpenReview={false}
+        onOpenReview={() => {}} onOpenAgents={() => {}} onOpenFile={() => {}} />}
+    </PluginAppsProvider>)
   })
   await paint()
 }
@@ -81,6 +88,7 @@ async function openPage(sessionId: string, appId: string) {
   return page
 }
 beforeEach(() => {
+  renderedSummary = false
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   useDesktopSessionStore.setState(initialStore, true)
   calls = createAPI(); bridges.length = 0
@@ -128,6 +136,33 @@ it("keeps each frame, window and draft through actual tab, collapse and session 
   expect(calls.release).not.toHaveBeenCalled(); expect(calls.close).not.toHaveBeenCalled()
 })
 
+it("keeps an empty panel on its start page until the new live app is selected from the real summary", async () => {
+  await render("summary-live", true, true)
+  const mounted: PluginAppMount = { ...mount, mountId: "live-app", url: "about:blank", state: {
+    ...mount.state, source: { sessionId: "summary-live", appId: "live" },
+    app: { ...mount.state.app, id: "live", sessionId: "summary-live" },
+  } }
+  calls.mounts.set(mounted.mountId, mounted)
+  Object.assign(calls, { openToolResult: vi.fn(async () => ({ mounted, initial: { sourcePartId: "live-part", arguments: {}, result: { content: [] } } })) })
+  let page!: Awaited<ReturnType<typeof manager.openToolResult>>
+  await act(async () => { page = (await manager.presentToolResult("summary-live", "live-part", true))! })
+  await act(async () => { bridges.at(-1)!.oninitialized!() })
+  await paint()
+  const liveFrame = frame(page.id), peer = liveFrame.contentWindow!
+  peer.document.body.innerHTML = '<textarea>未保存草稿</textarea>'
+  expect(document.querySelector('[data-slot="popover-content"]')).not.toBeNull()
+  expect(manager.panelRequest).toBeUndefined()
+  assertVisible(page.id, false)
+  expect(container.querySelector('[aria-label="插件应用显示区域"]')).toBeNull()
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="打开插件应用"]')!.click())
+  await paint()
+  assertVisible(page.id, true)
+  expect(manager.panelRequest?.pageId).toBe(page.id)
+  expect(frame(page.id)).toBe(liveFrame)
+  expect(liveFrame.contentWindow).toBe(peer)
+  expect(peer.document.querySelector("textarea")!.value).toBe("未保存草稿")
+})
+
 it("cancels hidden confirmations but lets an accepted original operation finish while collapsed", async () => {
   await render("confirmations", true)
   const page = await openPage("confirmations", "editor")
@@ -150,4 +185,29 @@ it("cancels hidden confirmations but lets an accepted original operation finish 
   expect(calls.invokeTool).toHaveBeenCalledExactlyOnceWith({ mountId: page.id, requestId: "save" })
   expect(calls.cancelTool).not.toHaveBeenCalled()
   expect(calls.release).not.toHaveBeenCalled(); expect(calls.close).not.toHaveBeenCalled()
+})
+
+it("does not reveal a background app when the last ordinary tool tab closes", async () => {
+  await render("last-tool", true)
+  await act(async () => {
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "子智能体")!.click()
+  })
+  let page!: Awaited<ReturnType<typeof manager.mount>>
+  await act(async () => { page = await manager.mount({ sessionId: "last-tool", appId: "background" }, "后台应用") })
+  await act(async () => bridges.at(-1)!.oninitialized!())
+  await paint()
+  const originalFrame = frame(page.id)
+  originalFrame.contentWindow!.document.body.innerHTML = '<textarea>后台草稿</textarea>'
+  assertVisible(page.id, false)
+  const toolTab = container.querySelector<HTMLButtonElement>('button[title="子智能体"]')!
+  await act(async () => toolTab.parentElement!.querySelector<HTMLButtonElement>('[aria-label="关闭标签"]')!.click())
+  await paint()
+  assertVisible(page.id, false)
+  expect(manager.panelRequest).toBeUndefined()
+  expect(container.querySelector('[aria-label="插件应用显示区域"]')).toBeNull()
+  await act(async () => manager.focus(page))
+  await paint()
+  assertVisible(page.id, true)
+  expect(frame(page.id)).toBe(originalFrame)
+  expect(originalFrame.contentWindow!.document.querySelector("textarea")!.value).toBe("后台草稿")
 })

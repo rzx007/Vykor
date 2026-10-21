@@ -139,7 +139,7 @@ it("keeps rejected shared/changed apps reachable in the catalog for explicit clo
 it("updates live results once without taking focus from an existing application", async () => {
   const { manager } = fixture()
   const page = await manager.presentToolResult("original", "first", true)
-  expect(manager.panelRequest?.pageId).toBe(page!.id)
+  expect(manager.panelRequest).toBeUndefined()
   const firstRequest = manager.panelRequest
   const queueToolResult = vi.fn()
   page!.transport = { queueToolResult } as never
@@ -148,7 +148,7 @@ it("updates live results once without taking focus from an existing application"
   expect(queueToolResult).toHaveBeenCalledTimes(1)
   expect(manager.panelRequest).toBe(firstRequest)
   await manager.presentToolResult("original", "next")
-  expect(manager.panelRequest!.sequence).toBeGreaterThan(firstRequest!.sequence)
+  expect(manager.panelRequest).toMatchObject({ pageId: page!.id })
   expect(queueToolResult).toHaveBeenCalledTimes(1)
 })
 

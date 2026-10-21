@@ -142,13 +142,18 @@ it("closes on a chat switch and discards a late git response", async () => {
   expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
   changes.mockResolvedValueOnce({
     rootPath: "D:/other-repo",
-    files: [],
+    files: [{ path: "new.ts", additions: 7, deletions: 0, status: "modified", binary: false }],
     totalAdditions: 7,
     totalDeletions: 0,
   })
   await click("当前聊天的工作摘要")
   await act(async () => {
-    resolveChanges({ rootPath: "D:/repo", files: [], totalAdditions: 999, totalDeletions: 0 })
+    resolveChanges({
+      rootPath: "D:/repo",
+      files: [{ path: "old.ts", additions: 999, deletions: 0, status: "modified", binary: false }],
+      totalAdditions: 999,
+      totalDeletions: 0,
+    })
   })
   expect(document.body.textContent).not.toContain("+999")
   expect(document.body.textContent).toContain("+7")
@@ -260,7 +265,7 @@ it("shows Git failures with retry and does not query non-Git directories", async
   await click("当前聊天的工作摘要")
   expect(document.querySelector('section[aria-label="工作区变更"]')).toBeNull()
   expect(document.body.textContent).not.toContain("非 Git 仓库")
-  expect(document.querySelector('section[aria-label="聊天子智能体"]')).not.toBeNull()
+  expect(document.querySelector('section[aria-label="聊天子智能体"]')).toBeNull()
   expect(changes).not.toHaveBeenCalled()
   changes.mockRejectedValueOnce(new Error("git unavailable"))
   await renderSummary(emptySessionView("git-chat"))
@@ -269,8 +274,16 @@ it("shows Git failures with retry and does not query non-Git directories", async
   await click("刷新工作区变更")
   await vi.waitFor(() => {
     expect(document.body.textContent).not.toContain("git unavailable")
-    expect(document.body.textContent).toContain("暂无变更")
+    expect(document.querySelector('section[aria-label="工作区变更"]')).toBeNull()
   })
+})
+
+it("renders no empty sections, zero counters or placeholders when the chat has no work", async () => {
+  await renderSummary()
+  await click("当前聊天的工作摘要")
+  const popup = document.querySelector('[data-slot="popover-content"]')!
+  expect(popup.querySelectorAll("section")).toHaveLength(0)
+  expect(popup.textContent).not.toMatch(/暂无|正在读取任务|\+0|−0/)
 })
 
 it("expands sources, opens files, and adds files to the composer draft", async () => {

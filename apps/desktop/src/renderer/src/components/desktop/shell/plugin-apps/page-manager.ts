@@ -125,10 +125,9 @@ export class PluginAppPageManager {
     const key = `${sessionId}:${sourcePartId}`
     if (live && this.liveResults.has(key)) return
     if (live) this.liveResults.add(key)
-    const hadPage = this.pages.some(page => page.controller.state.source.sessionId === sessionId)
     const page = await this.openToolResult(sessionId, sourcePartId, !live)
-    // 新结果更新已存在的应用，不打断用户当前选择；历史消息只在点击后打开。
-    if (!live || !hadPage && this.pages.find(item => item.controller.state.source.sessionId === sessionId) === page) this.focus(page)
+    // 实时结果交给工作摘要提示；只有用户明确打开时才定位右侧面板。
+    if (!live) this.focus(page)
     return page
   }
   place(id: string, rect: DOMRect | null, anchor?: symbol, mode: AppDisplayMode = "inline"): void {

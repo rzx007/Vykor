@@ -19,7 +19,7 @@ export type UtilityTool =
 
 export type UtilityToolRequest = Extract<
   UtilityTool,
-  "terminal" | "files" | "browser" | "agents" | "workflows" | "side-chat"
+  "terminal" | "files" | "browser" | "agents" | "workflows" | "side-chat" | "plugin-app"
 >
 
 export type UtilityTab = {
