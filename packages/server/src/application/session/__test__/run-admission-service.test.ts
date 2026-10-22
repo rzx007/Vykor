@@ -170,6 +170,19 @@ function createStoredAdmission() {
 }
 
 describe("RunAdmissionService synchronous queued persistence", () => {
+  it.each([false, true])("notifies queued Goal resumes after clearing an admission, including preparation failure (%s)", async failed => {
+    const { options, conversationTransactions } = createMockOptions();
+    if (failed) vi.mocked(conversationTransactions.admitPromptWithRun).mockImplementationOnce(() => { throw new Error("prepare failed"); });
+    const observed: Array<{ sessionId: string; failed: boolean; pending: boolean }> = [];
+    const service = new RunAdmissionService(options);
+    options.goals = { userWorkSettled: async (sessionId, failed) => {
+      observed.push({ sessionId, failed, pending: service.hasPendingAdmission(sessionId) });
+    } };
+    const result = service.admitPromptAndMaybeRun("s1", { id: "preparing", items: [{ type: "text", text: "补充" }] });
+    if (failed) await expect(result).rejects.toThrow("prepare failed");
+    else await result;
+    expect(observed).toEqual([{ sessionId: "s1", failed, pending: false }]);
+  });
   it("starts an active Goal directly with its normal Run binding", () => {
     const { store, options, service } = createStoredAdmission();
     const goal = store.goals.createGoal({ sessionId: "s1", objective: "finish", maxAutoTurns: 0 });

@@ -159,6 +159,7 @@ export interface RunAdmissionEvents {
 }
 
 export interface RunAdmissionGoalControl {
+  userWorkSettled?(sessionId: string, failed: boolean): Promise<void>;
   checkExecution?(goalId: string, objectiveVersion: number): void;
   getCurrentGoal?(sessionId: string): { id: string; status: string; objectiveVersion: number } | undefined;
   getGoal?(goalId: string): { id: string; status: string; objectiveVersion: number } | undefined;
@@ -543,9 +544,15 @@ export class RunAdmissionService {
       }
       return pending.promise;
     }
-    const promise = admitPromptWork(this.options, sessionId, input).finally(() => {
+    let failed = false;
+    const promise = admitPromptWork(this.options, sessionId, input).catch(error => {
+      failed = true;
+      throw error;
+    }).finally(() => {
       if (this.pendingAdmissions.get(input.id!)?.promise === promise) {
         this.pendingAdmissions.delete(input.id!);
+        if (!input.runMetadata?.goalId)
+          void this.options.goals?.userWorkSettled?.(sessionId, failed).catch(() => {});
       }
     });
     this.pendingAdmissions.set(input.id, {

@@ -23,6 +23,19 @@ function withRepository(
 }
 
 describe("GoalRepository", () => {
+  it("lists only pending requests for the requested session, including temporary sessions", () => {
+    withRepository((repository, store) => {
+      store.sessions.create({ id: "temporary", cwd: process.cwd(), model: "m", storage: "memory" });
+      for (const [requestId, sessionId] of [["one", "s1"], ["two", "s2"], ["memory", "temporary"]]) {
+        store.goals.beginGoalRequest({ requestId, sessionId, fingerprint: requestId });
+      }
+      store.goals.beginGoalRequest({ requestId: "done", sessionId: "s1", fingerprint: "done" });
+      store.goals.settleGoalRequest("done", { status: "completed" });
+      expect(repository.listPendingRequests("s1").map(row => row.requestId)).toEqual(["one"]);
+      expect(repository.listPendingRequests("temporary").map(row => row.requestId)).toEqual(["memory"]);
+      expect(repository.listPendingRequests().map(row => row.requestId).sort()).toEqual(["memory", "one", "two"]);
+    });
+  });
   it("changes objectiveVersion only when objective changes", () => {
     withRepository((repository) => {
       const first = repository.insertGoal({ id: "versioned", sessionId: "s1", objective: "finish", maxAutoTurns: 2 });

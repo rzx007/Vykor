@@ -86,51 +86,57 @@ it.each([
   { patch: { status: "paused" as const }, label: "继续" },
   { patch: { status: "blocked" as const }, label: "检查并继续" },
   { patch: { status: "waiting_user" as const, wait: { kind: "approval" as const, permissionRequestId: "p" } }, label: "批准后继续" },
-])("waits for supplemental messages before resuming $label", async ({ patch, label }) => {
+])("queues $label once, displays accepted state and permits cancelling only the queue", async ({ patch, label }) => {
   const onAction = vi.fn()
   const props = { goal: { ...goal, maxAutoTurns: 0, ...patch }, busy: false, stopping: false,
     onAction, onEdit: vi.fn(), onDismiss: vi.fn() }
   await act(async () => root.render(createElement(GoalBanner, { ...props, userWorkPending: true })))
-  expect(button("等待消息处理…")).toBeDefined()
-  expect(button("等待消息处理…").disabled).toBe(true)
-  await act(async () => button("等待消息处理…").click())
+  expect(button("排队继续").disabled).toBe(false)
+  await act(async () => button("排队继续").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume" })
+  onAction.mockClear()
+  await act(async () => root.render(createElement(GoalBanner, { ...props,
+    goal: { ...props.goal, queuedResume: { requestId: "queued" } }, userWorkPending: true })))
+  expect(button("已排队，等待处理").disabled).toBe(true)
+  await act(async () => button("已排队，等待处理").click())
   expect(onAction).not.toHaveBeenCalled()
+  await act(async () => button("取消排队").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "cancel_resume" })
   await act(async () => root.render(createElement(GoalBanner, { ...props, userWorkPending: false })))
   expect(button(label).disabled).toBe(false)
-  expect(onAction).not.toHaveBeenCalled()
-  await act(async () => button(label).click())
-  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume" })
 })
 
-it("also blocks the expanded quota resume while a supplemental message is processing", async () => {
+it("queues the expanded quota resume without allowing duplicate submission", async () => {
   const onAction = vi.fn()
-  await act(async () => root.render(createElement(GoalBanner, {
-    goal, busy: false, stopping: false, userWorkPending: true, onAction, onEdit: vi.fn(), onDismiss: vi.fn(),
-  })))
+  const props = { goal, busy: false, stopping: false, userWorkPending: true, onAction, onEdit: vi.fn(), onDismiss: vi.fn() }
+  await act(async () => root.render(createElement(GoalBanner, props)))
   await act(async () => button("展开目标详情").click())
-  expect(button("增加次数并继续").disabled).toBe(true)
-  await act(async () => button("增加次数并继续").click())
-  expect(onAction).not.toHaveBeenCalled()
+  await act(async () => button("增加次数并排队").click())
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume", additionalAutoTurns: 20 })
+  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: { ...goal, queuedResume: { requestId: "queued" } } })))
+  expect(button("增加次数并排队").disabled).toBe(true)
 })
 
-it("preserves a drafted answer while waiting and guards form submission", async () => {
+it("keeps a queued answer intact and prevents form resubmission", async () => {
   const onAction = vi.fn()
   const props = { goal: { ...goal, maxAutoTurns: 0, status: "waiting_user" as const,
     wait: { kind: "user" as const, objectiveVersion: 1, questionId: "q-wait", question: "哪个模块？" } },
-    busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn() }
-  await act(async () => root.render(createElement(GoalBanner, { ...props, userWorkPending: true })))
+    busy: false, stopping: false, userWorkPending: true, onAction, onEdit: vi.fn(), onDismiss: vi.fn() }
+  await act(async () => root.render(createElement(GoalBanner, props)))
   const answer = container.querySelector<HTMLTextAreaElement>("textarea")!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(answer, "协议模块")
     answer.dispatchEvent(new Event("input", { bubbles: true }))
   })
-  expect(button("等待消息处理…").disabled).toBe(true)
-  await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
-  expect(onAction).not.toHaveBeenCalled()
-  await act(async () => root.render(createElement(GoalBanner, { ...props, userWorkPending: false })))
-  expect(answer.value).toBe("协议模块")
-  await act(async () => button("补充并继续").click())
+  await act(async () => button("排队继续").click())
   expect(onAction).toHaveBeenCalledExactlyOnceWith({ action: "resume", questionId: "q-wait", objectiveVersion: 1, response: "协议模块" })
+  await act(async () => root.render(createElement(GoalBanner, { ...props, goal: { ...props.goal, queuedResume: { requestId: "queued" } } })))
+  expect(button("已排队，等待处理").disabled).toBe(true)
+  expect(answer.value).toBe("协议模块")
+  await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+  expect(onAction).toHaveBeenCalledTimes(1)
+  await act(async () => button("取消排队").click())
+  expect(onAction).toHaveBeenLastCalledWith({ action: "cancel_resume" })
 })
 
 it("answers the displayed question with its objective version", async () => {

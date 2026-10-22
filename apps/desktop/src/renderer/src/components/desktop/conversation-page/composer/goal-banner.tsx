@@ -53,8 +53,9 @@ export function GoalBanner({
   const stopLabel = goalStopReasonLabel(goal)
   const terminal = goal.status === "completed" || goal.status === "cancelled"
   const approvalWait = goal.status === "waiting_user" && goal.wait?.kind === "approval"
+  const queued = Boolean(goal.queuedResume)
   const canResume = goal.status === "paused" || goal.status === "blocked" || approvalWait
-  const resumeLabel = userWorkPending ? "等待消息处理…" : approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"
+  const resumeLabel = queued ? "已排队，等待处理" : userWorkPending ? "排队继续" : approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"
   const explanation = goal.wait?.kind === "user" ? goal.wait.question : goal.reason
   const hasExplanation = Boolean(stopLabel || explanation || goal.wait?.kind === "approval")
   const explanationLabel = goal.status === "completed" ? "完成说明" : goal.status === "cancelled" ? "取消说明" : "状态说明"
@@ -64,7 +65,7 @@ export function GoalBanner({
     additionalAutoTurns > 0 &&
     goal.maxAutoTurns + additionalAutoTurns <= 1000
   const resume = (): void => {
-    if (busy || stopping || userWorkPending) return
+    if (busy || stopping || queued) return
     onAction({ action: "resume", ...(quotaExhausted ? { additionalAutoTurns } : {}) })
   }
   return (
@@ -90,26 +91,29 @@ export function GoalBanner({
               <Pause />
             </Button>
           ) : null}
-          {!editing && canResume ? (
+          {!editing && (canResume || queued) ? (
             <Button
               type="button"
               variant="control"
-              size={userWorkPending ? "sm" : "icon"}
-              shape={userWorkPending ? "pill" : "circle"}
+              size={queued || userWorkPending ? "sm" : "icon"}
+              shape={queued || userWorkPending ? "pill" : "circle"}
               aria-label={resumeLabel}
               title={resumeLabel}
-              disabled={busy || stopping || userWorkPending || (approvalWait && budgetClosed)}
+              disabled={busy || stopping || queued || (approvalWait && budgetClosed)}
               onClick={() => {
                 if (budgetClosed) { setExpanded(true); setMetricsExpanded(true) }
                 else if (quotaExhausted) setExpanded(true)
                 else resume()
               }}
             >
-              {userWorkPending ? <Hourglass /> : <Play />}
-              {userWorkPending ? <span>{resumeLabel}</span> : null}
+              {queued || userWorkPending ? <Hourglass /> : <Play />}
+              {queued || userWorkPending ? <span>{resumeLabel}</span> : null}
             </Button>
           ) : null}
           <ButtonGroup variant="toolbar" aria-label="目标操作">
+            {queued && !editing ? <Button type="button" variant="ghost" size="icon-sm" shape="circle"
+              aria-label="取消排队" title="取消排队继续" disabled={busy || stopping}
+              onClick={() => onAction({ action: "cancel_resume" })}><X /></Button> : null}
             {!terminal && !editing ? <Button type="button" variant="ghost" size="icon-sm" shape="circle"
               aria-label="编辑目标" title="编辑目标" disabled={busy || stopping} onClick={onEdit}><Pencil /></Button> : null}
             {!editing ? <Button
@@ -187,7 +191,7 @@ export function GoalBanner({
                   min={1}
                   max={1000 - goal.maxAutoTurns}
                   step={1}
-                  disabled={busy}
+                  disabled={busy || queued}
                   value={additionalAutoTurns}
                   onChange={(event) => setAdditionalAutoTurns(Number(event.target.value))}
                   className="w-16 rounded border px-1"
@@ -198,10 +202,10 @@ export function GoalBanner({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={busy || stopping || userWorkPending || !validQuota || budgetClosed}
+                  disabled={busy || stopping || queued || !validQuota || budgetClosed}
                   onClick={resume}
                 >
-                  增加次数并继续
+                  {userWorkPending ? "增加次数并排队" : "增加次数并继续"}
                 </Button>
               ) : null}
             </div>
@@ -242,7 +246,7 @@ export function GoalBanner({
             event.preventDefault()
             if (
               goal.wait?.kind !== "user" ||
-              busy || stopping || userWorkPending ||
+              busy || stopping || queued ||
               budgetClosed || !response.trim() ||
               goal.wait.objectiveVersion !== goal.objectiveVersion ||
               (quotaExhausted && (!expanded || !validQuota))
@@ -261,7 +265,7 @@ export function GoalBanner({
             aria-label="回答目标问题"
             placeholder="补充你的说明，可分行填写"
             rows={2}
-            disabled={busy || stopping}
+            disabled={busy || stopping || queued}
             value={response}
             onChange={(event) => setResponse(event.target.value)}
             className="max-h-36 min-h-20 resize-y"
@@ -271,9 +275,9 @@ export function GoalBanner({
             type="submit"
             size="sm"
             shape="pill"
-            disabled={busy || stopping || userWorkPending || budgetClosed || !response.trim() || goal.wait.objectiveVersion !== goal.objectiveVersion || (quotaExhausted && (!expanded || !validQuota))}
+            disabled={busy || stopping || queued || budgetClosed || !response.trim() || goal.wait.objectiveVersion !== goal.objectiveVersion || (quotaExhausted && (!expanded || !validQuota))}
           >
-            {busy ? "正在提交…" : userWorkPending ? "等待消息处理…" : "补充并继续"}
+            {busy ? "正在提交…" : queued ? "已排队，等待处理" : userWorkPending ? "排队继续" : "补充并继续"}
           </Button></div>
           {quotaExhausted && !expanded ? (
             <span className="text-xs">自动续跑次数已用完，请先展开详情增加次数。</span>

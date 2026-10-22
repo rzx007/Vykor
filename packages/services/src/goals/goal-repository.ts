@@ -250,6 +250,15 @@ export class GoalRepository {
     return row ? goalRequestFromRow(row) : undefined;
   }
 
+  listPendingRequests(sessionId?: string): SessionGoalRequestRecord[] {
+    const rows = this.database.select().from(sessionGoalRequests)
+      .where(and(eq(sessionGoalRequests.status, "pending"),
+        sessionId === undefined ? undefined : eq(sessionGoalRequests.sessionId, sessionId))).all();
+    const temporary = [...(this.temporary?.requests.values() ?? [])]
+      .filter(row => row.status === "pending" && (sessionId === undefined || row.sessionId === sessionId));
+    return [...rows, ...temporary].map(goalRequestFromRow);
+  }
+
   beginRequest(input: {
     requestId: string;
     sessionId: string;

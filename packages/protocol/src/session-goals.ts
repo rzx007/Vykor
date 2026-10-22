@@ -14,7 +14,7 @@ export interface GoalVersion {
   createdAt: number;
 }
 
-export type GoalAction = "pause" | "resume" | "cancel" | "budget";
+export type GoalAction = "pause" | "resume" | "cancel" | "budget" | "cancel_resume";
 
 export interface GoalUsage {
   knownTokens: number;
@@ -77,6 +77,8 @@ export interface SessionGoal {
   usage: GoalUsage;
   autoTurnsUsed: number;
   currentRunId?: string;
+  /** A single accepted resume waiting for user work to finish. */
+  queuedResume?: { requestId: string };
   reason?: string;
   stopReason?: GoalStopReason;
   wait?: GoalWait;
@@ -151,7 +153,7 @@ export function parseUpdateSessionGoalInput(value: unknown): UpdateSessionGoalIn
 
 export function parseGoalActionInput(value: unknown): GoalActionInput {
   const record = goalRecord(value);
-  if (record.action !== "pause" && record.action !== "resume" && record.action !== "cancel" && record.action !== "budget") {
+  if (record.action !== "pause" && record.action !== "resume" && record.action !== "cancel" && record.action !== "budget" && record.action !== "cancel_resume") {
     throw new ProtocolValidationError("invalid_goal_action", "action");
   }
   const common = {
