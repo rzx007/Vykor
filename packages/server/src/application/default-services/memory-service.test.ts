@@ -1,8 +1,10 @@
+import { afterAll as releaseExecutionOwner } from "vitest";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getProjectMemoryDir } from "@vykor/core";
+import { getProjectMemoryDir } from "@vykor/host-config";
 import { MemoryManager } from "@vykor/memory";
 import { describe, expect, it } from "vitest";
 
@@ -16,7 +18,7 @@ describe("default memory service", () => {
     try {
       const cwd = join(configDir, "project");
       const otherCwd = join(configDir, "other-project");
-      const service = createDefaultMemoryService();
+      const service = createDefaultMemoryService(executionOwner);
       const original = await service.add({ cwd, content: "Use SQLite" });
       const other = await service.add({
         cwd: otherCwd,
@@ -94,7 +96,7 @@ describe("default memory service", () => {
         source_session_id: "session-123",
         source_message_sha256: "verified-message-hash",
       });
-      const service = createDefaultMemoryService();
+      const service = createDefaultMemoryService(executionOwner);
       const expected = {
         type: "user_message",
         sessionId: "session-123",
@@ -114,3 +116,7 @@ describe("default memory service", () => {
     }
   });
 });
+
+const executionOwner = new ExecutionRuntimeOwner();
+
+releaseExecutionOwner(() => executionOwner.close());

@@ -1,4 +1,4 @@
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type {
   CommandCatalogEntry,
   CommandCatalogProvider,

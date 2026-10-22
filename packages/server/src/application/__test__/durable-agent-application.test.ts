@@ -1,3 +1,5 @@
+import { createFileReadTool } from "@vykor/tools";
+import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,18 +13,9 @@ import {
   type VykorAgent,
 } from "@vykor/agent-runtime";
 import { ToolRegistry } from "@vykor/core";
-import type {
-  AgentBackgroundShellHost,
-  AgentEvent,
-  AgentEventContext,
-  AgentEventInput,
-  AgentRunHandle,
-  AgentRunResult,
-  CompactContextProvider,
-  Message,
-  StreamingMessageClient,
-  ToolDefinition,
-} from "@vykor/core";
+import type { AgentBackgroundShellHost, CompactContextProvider } from "@vykor/core";
+import type { AgentEvent, AgentEventContext, AgentEventInput, AgentRunHandle, AgentRunResult, StreamingMessageClient, ToolDefinition } from "@vykor/agent-contracts";
+import type { Message } from "@vykor/agent-contracts";
 import type { AgentJobHost } from "@vykor/jobs";
 import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@vykor/services";
 
@@ -333,9 +326,9 @@ describe("DaemonApplication", () => {
         plugins: { enabled: false },
         memory: { enabled: false },
       },
-      createAgent: async (context) => {
-        attachmentReadTool = context.options.toolOverrides?.find((tool) => tool.name === "Read");
-        if (!attachmentReadTool) throw new Error("attachment Read override missing");
+      createAgent: hostedAgentFactory(async (context) => {
+        attachmentReadTool = context.options.toolDecorators?.find((tool) => tool.name === "Read")?.decorate(createFileReadTool({ settings: context.options.settings }));
+        if (!attachmentReadTool) throw new Error("attachment Read decorator missing");
         const agent = await createDefaultNodeAgent({
           ...context.options,
           client,
@@ -346,7 +339,7 @@ describe("DaemonApplication", () => {
         });
         agents.set(context.session.id, agent);
         return agent;
-      },
+      }),
       log: () => {},
     });
 
@@ -445,12 +438,12 @@ describe("DaemonApplication", () => {
           autoExtractEnabled: false,
         },
       },
-      createAgent: async (context) => ({
+      createAgent: hostedAgentFactory(async (context) => ({
         ...(await createEchoAgent(context)),
         setCompactContextProvider: (provider) => {
           compactContextProvider = provider;
         },
-      }),
+      })),
       log: () => {},
     });
 
@@ -506,7 +499,7 @@ describe("DaemonApplication", () => {
     let terminalJobs: AgentJobHost | undefined;
     const application = new DaemonApplication({
       store,
-      createAgent: async (context) => {
+      createAgent: hostedAgentFactory(async (context) => {
         const backgroundShell = context.options.capabilityOverrides?.backgroundShell;
         const terminal = context.options.capabilityOverrides?.terminal;
         if (backgroundShell) {
@@ -515,7 +508,7 @@ describe("DaemonApplication", () => {
         }
         if (terminal) terminalJobs = terminal.jobs;
         return await createEchoAgent(context);
-      },
+      }),
       log: () => {},
     });
 
@@ -592,10 +585,10 @@ describe("DaemonApplication", () => {
     let imageToText: ToolDefinition | undefined;
     const application = new DaemonApplication({
       store,
-      createAgent: async (context) => {
+      createAgent: hostedAgentFactory(async (context) => {
         imageToText = context.options.tools?.find((tool) => tool.name === "ImageToText");
         return await createEchoAgent(context);
-      },
+      }),
       log: () => {},
     });
     try {
@@ -639,7 +632,7 @@ describe("DaemonApplication", () => {
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
       store,
-      createAgent: createEchoAgent,
+      createAgent: hostedAgentFactory(createEchoAgent),
       log: () => {},
     });
     try {
@@ -698,7 +691,7 @@ describe("DaemonApplication", () => {
     let store = new SessionStore({ path });
     let application = new DaemonApplication({
       store,
-      createAgent: createEchoAgent,
+      createAgent: hostedAgentFactory(createEchoAgent),
       log: () => {},
     });
     const message = {
@@ -759,7 +752,7 @@ describe("DaemonApplication", () => {
       store = new SessionStore({ path });
       application = new DaemonApplication({
         store,
-        createAgent: createEchoAgent,
+        createAgent: hostedAgentFactory(createEchoAgent),
         log: () => {},
       });
       await application.ready();
@@ -783,7 +776,7 @@ describe("DaemonApplication", () => {
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
       store,
-      createAgent: createEchoAgent,
+      createAgent: hostedAgentFactory(createEchoAgent),
       log: () => {},
     });
     const bytes = new Uint8Array([1, 2, 3, 4]);

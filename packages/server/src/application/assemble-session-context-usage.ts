@@ -1,20 +1,11 @@
-import {
-  assembleContextUsageSnapshot,
-  createTip,
-  messagesToLedgerSegments,
-  toolSchemasToLedgerSegments,
-  type ContextLedgerSegment,
-  type ContextUsageSnapshot,
-  type Message,
-  type Settings,
-  type ToolRegistrationSource,
-  type ToolSchemaInput,
-} from "@vykor/core";
+import type {HostedAgent} from "@vykor/agent-runtime";
+import { assembleContextUsageSnapshot, createTip, messagesToLedgerSegments, toolSchemasToLedgerSegments, type ContextUsageSnapshot, type ToolSchemaInput } from "@vykor/core";
+import { type ToolRegistrationSource } from "@vykor/agent-contracts";
+import { type ContextLedgerSegment, type Message } from "@vykor/agent-contracts";
+import { type Settings } from "@vykor/host-config";
 import { buildPromptLedgerSegments } from "@vykor/prompts";
-import {
-  readSessionRuntimeConfig,
-  type SessionRecord,
-} from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "./session/runtime-configuration.js";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import type { ContextUsageCache } from "./context-usage-cache.js";
 import type { ModelInfo, ModelProviderInfo } from "./settings-api.js";
@@ -293,4 +284,9 @@ export async function tryAssembleSessionContextUsageLive(input: {
 /** Tip helper kept next to assembly for static fallback paths. */
 export function conversationOmittedTip() {
   return createTip("conversation_omitted");
+}
+
+/** Combine host catalog facts with the Kernel-owned conversation. */
+export function hostedContextUsageAgent({agent,host}:HostedAgent):SessionContextUsageAgent {
+ return {getHistory:()=>agent.getHistory(),getContextUsagePromptSource:()=>agent.getContextUsagePromptSource(),listModelVisibleTools:()=>host?.plugins.listModelVisibleTools()??[]};
 }

@@ -30,8 +30,8 @@
 - Test: `packages/api/src/providers/registry.test.ts`
 - Modify: `packages/api/src/providers/openai.ts`
 - Test: `packages/api/src/providers/openai.test.ts`
-- Modify: `packages/agent-runtime/src/default-runtime.ts`
-- Test: `packages/agent-runtime/src/default-runtime.test.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- Test: `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 
 **Interfaces:**
 - Produces `CustomProviderSettings`, `CustomProviderModelSettings`, and `Settings.customProviders?: CustomProviderSettings[]`.

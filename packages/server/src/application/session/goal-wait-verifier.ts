@@ -1,4 +1,4 @@
-import type { GoalExternalWait } from "@vykor/protocol";
+import type { GoalExternalWait } from "@vykor/domain-contracts/goals";
 import type { SessionStore } from "@vykor/services";
 
 export type GoalWaitCheck =

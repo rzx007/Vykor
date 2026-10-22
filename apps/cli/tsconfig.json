@@ -3,9 +3,20 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "../..",
-    "types": ["bun"],
+    "types": [
+      "bun"
+    ],
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": [
+        "../../packages/coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../../packages/coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../../packages/coordinator/src/workflow/index.ts"
+      ],
       "@vykor/coordinator": [
         "../../packages/coordinator/src/index.ts"
       ],

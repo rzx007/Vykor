@@ -1,8 +1,5 @@
-import type {
-  ContextBucketId,
-  ContextLedgerSegment,
-  WorkStyle,
-} from "@vykor/core";
+import type { ContextBucketId, ContextLedgerSegment } from "@vykor/agent-contracts";
+import type { WorkStyle } from "@vykor/host-config";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import { loadLocalRules } from "@vykor/personalization";
 import type { PromptLayers, PromptPermissionMode } from "./index.js";

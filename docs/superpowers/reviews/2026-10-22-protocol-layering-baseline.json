@@ -1,0 +1,3983 @@
+{
+  "version": 1,
+  "capturedCommit": "01035993",
+  "capturedDate": "2026-10-22",
+  "protocolVersion": 5,
+  "dependencyInventory": {
+    "manifests": [
+      {
+        "file": "packages/agent-runtime/package.json",
+        "package": "@vykor/agent-runtime",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/channels/package.json",
+        "package": "@vykor/channels",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/host-config/package.json",
+        "package": "@vykor/host-config",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/jobs/package.json",
+        "package": "@vykor/jobs",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/mcp/package.json",
+        "package": "@vykor/mcp",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/plugins/package.json",
+        "package": "@vykor/plugins",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/sandbox/package.json",
+        "package": "@vykor/sandbox",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/services/package.json",
+        "package": "@vykor/services",
+        "sections": [
+          "dependencies"
+        ]
+      },
+      {
+        "file": "packages/terminal/package.json",
+        "package": "@vykor/terminal",
+        "sections": [
+          "dependencies"
+        ]
+      }
+    ],
+    "imports": [
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/agent-run-plugin-app-tool.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "PluginAppToolRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/native-plugin-app-backend.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/native-plugin-app-backend.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-backends.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-backends.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppBackendDefinition",
+          "PluginAppSurfaceDefinition",
+          "PluginAppToolPolicy"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-policy.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-runtime.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-runtime.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-runtime.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "copyPluginAppJson"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-runtime.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolPolicy"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/plugin-apps/plugin-app-runtime.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "PluginAppRuntimeLease",
+          "PluginAppSource",
+          "PluginAppToolRequest",
+          "PluginAppToolDescriptor"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/review/approval-reviewer.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalReviewInput",
+          "ApprovalReviewResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/review/approval-reviewer.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalReviewInput",
+          "ApprovalReviewOutcome",
+          "ApprovalReviewResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/review/configured-approval-reviewer.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalReviewInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/agent-composition.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "normalizeApprovalMode"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/agent-options.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalMode",
+          "WorkMode"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/agent-options.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/agent.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parsePluginAppToolRequest"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/agent.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "PluginAppToolRequest",
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/agent-runtime/src/node/runtime/default-runtime.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "effectivePermissionMode",
+          "normalizeApprovalMode"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/channels/src/core/durable-bridge.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChannelDeliveryRecord",
+          "DurableChannelMessageInput",
+          "DurableChannelMessageResult",
+          "RecordChannelDeliveryInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/channels/src/__test__/durable-bridge.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChannelDeliveryRecord",
+          "DurableChannelMessageResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/channels/src/__test__/durable-thread-reply.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChannelDeliveryRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/host-config/src/permissions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalMode"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobKind",
+          "JobReadResult",
+          "JobSnapshot",
+          "JobStatus",
+          "JobWaitResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobCapabilities"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobKind"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobReadResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobSnapshot"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobStatus"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/jobs/src/index.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "JobWaitResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/mcp/src/app-resources.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/mcp/src/app-resources.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/components/app-resources.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/components/app-resources.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/components/app-resources.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppResourceDefinition"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/plugins/src/components/apps.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/components/apps.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_LIMITS",
+          "stringifyCanonicalJson"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/components/apps.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppManifest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/plugins/src/manifest/schema-v1.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isPluginIconSource",
+          "PLUGIN_APP_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/plugins/src/test-helpers/native-app.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppManifest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/plugins/src/types.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginPresentation"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/sandbox/src/approval-policy.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ApprovalMode"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/persistence/attachment-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseAttachmentAssetRecord"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/attachments/persistence/attachment-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord",
+          "AttachmentRepresentationRecord",
+          "AttachmentRepresentationKind"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/persistence/attachment-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord",
+          "AttachmentRepresentationRecord",
+          "AttachmentRepresentationKind",
+          "ChatResourceSource"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/persistence/attachment-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseAttachmentAssetRecord",
+          "parseChatResourceSource"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/attachments/persistence/attachment-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord",
+          "AttachmentRepresentationRecord",
+          "AttachmentRepresentationKind",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/processing/local-ocr-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentRepresentationRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/storage/attachment-integrity-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/attachments/storage/attachment-media-type.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/attachments/storage/attachment-media-type.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "OfficeFormat"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/channels/channel-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChannelDeliveryRecord",
+          "ChannelDeliveryStatus",
+          "ExternalConversationRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/channels/channel-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChannelDeliveryRecord",
+          "ChannelDeliveryStatus",
+          "ExternalConversationRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "CreateMessageInput",
+          "ListEventsOptions",
+          "ListMessagePartsOptions",
+          "ListMessagesOptions",
+          "SessionEventRecord",
+          "SessionInputAttachmentRecord",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "UpsertMessagePartInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "normalizeSessionUserInputItems",
+          "sessionUserInputText",
+          "parseAttachmentLimits",
+          "DEFAULT_ATTACHMENT_LIMITS",
+          "settleSessionToolMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptInput",
+          "AdmitPromptWithRunInput",
+          "AttachmentAssetRecord",
+          "AttachmentLimits",
+          "CreateSessionInput",
+          "ListPermissionRequestsOptions",
+          "PermissionRequestRecord",
+          "ReplaceTranscriptInput",
+          "SessionInputAttachmentRecord",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionRunRecord",
+          "SessionStateSnapshot",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "withoutHostPluginMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-tree-operations.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateSessionInput",
+          "SessionInputRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/conversations/conversation-tree-operations.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "withoutHostPluginMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/conversations/incremental-output.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "AppendMessagePartDeltaInput",
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/database/read-model.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "normalizeSessionUserInputItems",
+          "sessionUserInputText"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/database/read-model.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PermissionRequestRecord",
+          "SessionEventRecord",
+          "SessionExecutionRecord",
+          "SessionInputAttachmentRecord",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionRunAttemptRecord",
+          "SessionRunRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/database/read-model.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppBackendKind"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/database/read-model.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/database/read-model.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalStatus",
+          "GoalStopReason",
+          "GoalWait",
+          "GoalUsage",
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalUsage",
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-transactions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "SessionEventRecord",
+          "SessionGoal",
+          "SessionRecord",
+          "SessionRunRecord",
+          "GoalUsage",
+          "GoalVersion"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-usage.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalModelAttemptKey",
+          "GoalUsage",
+          "SessionGoal",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-version.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalVersion"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/goals/goal-version.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalVersion"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/notes/markdown-note-files.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "MAX_NOTE_CONTENT_LENGTH"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/notes/note-repository.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateNoteInput",
+          "NoteRecord",
+          "UpdateNoteInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/notes/note-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateNoteInput",
+          "NoteRecord",
+          "UpdateNoteInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/notes/note-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseCreateNoteInput",
+          "parseUpdateNoteInput"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/office/office-documents.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/office/office-documents.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "officeFormat",
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/office/office-documents.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "OfficePreview"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/permissions/permission-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "CreatePermissionRequestInput",
+          "ListPermissionRequestsOptions",
+          "PermissionRequestRecord",
+          "SessionEventRecord",
+          "SessionRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/permissions/permission-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreatePermissionRequestInput",
+          "ListPermissionRequestsOptions",
+          "PermissionRequestRecord",
+          "ReplyPermissionInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/plugin-apps/repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/projects/project-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ProjectRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/projects/project-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "ProjectRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/runs/run-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "CreateRunAttemptInput",
+          "CreateRunInput",
+          "CreateSessionTaskInput",
+          "SessionEventRecord",
+          "SessionExecutionRecord",
+          "SessionRecord",
+          "SessionRunAttemptRecord",
+          "SessionRunRecord",
+          "UpdateRunAttemptInput",
+          "UpdateRunInput",
+          "UpdateSessionTaskInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/schedules/schedule-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ScheduledRunRecord",
+          "ScheduledTaskRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/schedules/schedule-repository.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ScheduledRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/schedules/schedule-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "CreateScheduledRunInput",
+          "CreateScheduledTaskInput",
+          "ScheduledRunRecord",
+          "ScheduledTaskRecord",
+          "UpdateScheduledRunInput",
+          "UpdateScheduledTaskInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/event-registry.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/projection-settlements.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateProjectionSettlementInput",
+          "ListProjectionSettlementsOptions",
+          "ProjectionSettlementRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/prompt-attachments.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptAttachmentInput",
+          "AttachmentIntent"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/store-state.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "PermissionRequestRecord",
+          "AttachmentLimits",
+          "SessionEventRecord",
+          "SessionInputAttachmentRecord",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionRunRecord",
+          "SessionRunAttemptRecord",
+          "SessionExecutionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/store.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "DEFAULT_ATTACHMENT_LIMITS",
+          "normalizeSessionUserInputItems",
+          "parseAttachmentLimits",
+          "sessionUserInputText"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/session-runtime/store.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptInput",
+          "AdmitPromptWithRunInput",
+          "AppendEventInput",
+          "AppendMessagePartDeltaInput",
+          "CreateMessageInput",
+          "CreatePermissionRequestInput",
+          "CreateProjectionSettlementInput",
+          "CreateRunInput",
+          "CreateRunAttemptInput",
+          "CreateSessionTaskInput",
+          "CreateSessionInput",
+          "ListEventsOptions",
+          "ListMessagePartsOptions",
+          "ListMessagesOptions",
+          "ListPermissionRequestsOptions",
+          "ListProjectionSettlementsOptions",
+          "ListSessionsOptions",
+          "PermissionRequestRecord",
+          "ProjectionSettlementRecord",
+          "ReplyPermissionInput",
+          "SessionMessagePartRecord",
+          "SessionEventRecord",
+          "SessionInputRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionRunRecord",
+          "SessionRunAttemptRecord",
+          "SessionExecutionRecord",
+          "SessionStateSnapshot",
+          "UpsertMessagePartInput",
+          "UpdateRunInput",
+          "UpdateRunAttemptInput",
+          "UpdateSessionTaskInput",
+          "UpdateSessionInput",
+          "ReplaceTranscriptInput",
+          "AttachmentAssetRecord",
+          "AttachmentRepresentationRecord",
+          "AttachmentRepresentationKind",
+          "AttachmentLimits",
+          "SessionInputAttachmentRecord",
+          "SessionUserInputItem",
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/sessions/session-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "CreateSessionInput",
+          "ListSessionsOptions",
+          "ProjectRecord",
+          "SessionEventRecord",
+          "SessionRecord",
+          "UpdateSessionInput",
+          "ClearSessionWorktreeBindingInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/workflows/workflow-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseChatResourceSource"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/services/src/workflows/workflow-records.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ChatResourceSource"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/services/src/workflows/workflow-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseChatResourceSource"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/terminal/src/events.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalEvent"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/events.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalEvent"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalCreateRequest",
+          "TerminalReadRequest",
+          "TerminalReadResult",
+          "TerminalResizeRequest",
+          "TerminalSessionInfo",
+          "TerminalSignalRequest",
+          "TerminalWaitResult",
+          "TerminalWriteRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalCreateRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalReadRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalReadResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalResizeRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalRuntime"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalSessionInfo"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalSessionStatus"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalSignal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalSignalRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalScope"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalSource"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalWaitResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/terminal/src/provider.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "TerminalWriteRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/agent-pool.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/agent-transcript.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isCommittedModelPart"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/agent-transcript.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentIntent",
+          "ReplaceTranscriptMessageInput",
+          "ReplaceTranscriptPartInput",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/daemon-agent-event-projector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/daemon-agent-event-projector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "patchSessionRuntimeMetadata",
+          "readSessionModelUsage",
+          "readSessionRuntimeConfig",
+          "parseSessionInputItems"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/daemon-agent-event-projector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/projection-settlement-recovery.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateProjectionSettlementInput",
+          "ProjectionSettlementRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/tool-app-origin-projector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/__test__/child-mode-recovery.integration.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "patchSessionRuntimeMetadata",
+          "readSessionRuntimeConfig"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/assemble-session-context-usage.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readSessionRuntimeConfig"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/assemble-session-context-usage.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/attachment-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "officeFormat",
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/attachment-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "DEFAULT_ATTACHMENT_LIMITS",
+          "parseAttachmentLimits"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/attachment-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord",
+          "AttachmentLimits"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/daemon-attachment-services.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentLimits"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/resources/compact-attachment-catalog.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentAssetRecord",
+          "AttachmentRepresentationRecord",
+          "SessionInputAttachmentRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/routing/attachment-capabilities.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRuntimeConfig"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/routing/attachment-capability-router.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "officeFormat",
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/routing/attachment-routing-types.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputAttachmentRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/routing/__test__/attachment-capability-router.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputAttachmentRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/tools/attachment-access.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputAttachmentRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/tools/attachment-access.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "officeFormat",
+          "OFFICE_MEDIA_TYPES"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/attachments/tools/attachment-read-tool.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "officeFormat"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/auto-review-policy.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AutoReviewReason",
+          "AutoReviewRiskLevel"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/auto-review-result.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AutoReviewSeverity",
+          "AutoReviewVerdict"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/auto-review.integration.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/git-run-change-inspector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AutoReviewReason"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/session-auto-review-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/session-auto-review-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "SessionEventRecord",
+          "SessionRunRecord",
+          "UpdateRunInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/session-auto-review-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/auto-review/session-auto-review-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AutoReviewMode",
+          "AutoReviewReason",
+          "AutoReviewRunMetadata",
+          "AutoReviewSeverity",
+          "AutoReviewStatus"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/channel/channel-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "durableChannelInputId"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/channel/channel-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptAttachmentInput",
+          "ChannelDeliveryRecord",
+          "ChannelStatusSnapshot",
+          "DurableChannelMessageInput",
+          "DurableChannelMessageResult",
+          "ExternalConversationRecord",
+          "RecordChannelDeliveryInput",
+          "SessionInputRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/channel/channel-onboarding-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "FeishuChannelSnapshot",
+          "FeishuRegistrationSnapshot"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/channel/__test__/channel-application-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "DurableChannelMessageInput",
+          "ExternalConversationRecord",
+          "ChannelDeliveryRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/control/daemon-control-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ExecutionObservationExport",
+          "ExecutionObservationFilter"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/control/run-inspector.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PermissionRequestRecord",
+          "ProjectionSettlementRecord",
+          "SessionEventRecord",
+          "SessionInputRecord",
+          "SessionMessagePartRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/daemon-application.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readSessionRuntimeConfig"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/daemon-application.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentLimits",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/default-services/settings-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AgentEnvironmentCapabilities"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/events/application-event-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/events/__test__/application-event-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/cleanup-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CleanupPreview",
+          "CleanupResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/cleanup-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CleanupCandidate"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/cleanup-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CleanupPreview"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/cleanup-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CleanupResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/maintenance-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "StorageRetentionPolicy"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/maintenance-policy-repository.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "StorageRetentionPolicy"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/maintenance-restart.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CURRENT_PROTOCOL_VERSION"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/storage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "StorageCategory",
+          "StorageReport"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/storage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "StorageCategory"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/storage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "StorageReport"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readSessionModelAttemptUsage"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsageFilter",
+          "UsageRequest",
+          "UsagePrice",
+          "UsageSettings",
+          "UsageReport"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsageFilter"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsageRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsagePrice"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsageSettings"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/maintenance/usage-settings.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "UsageReport"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/notes/note-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ProtocolValidationError"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/notes/note-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateNoteInput",
+          "UpdateNoteInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/execution-observation-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ExecutionKind",
+          "ExecutionObservation",
+          "ExecutionObservationWarning",
+          "ExecutionOutcome"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/execution-observation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "EXECUTION_KINDS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/execution-observation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ExecutionKind",
+          "ExecutionKindSummary",
+          "ExecutionObservation",
+          "ExecutionObservationExport",
+          "ExecutionObservationFilter",
+          "ExecutionObservationWarning"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/session-execution-observation-reader.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata",
+          "readSessionModelUsage"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/session-execution-observation-reader.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ExecutionObservation",
+          "ExecutionObservationWarning",
+          "ExecutionOutcome",
+          "ExecutionUsageCompleteness",
+          "RunStatus",
+          "SessionExecutionRecord",
+          "SessionRecord",
+          "SessionRunAttemptRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/observability/workflow-execution-observation-reader.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ExecutionObservation",
+          "ExecutionObservationWarning",
+          "ExecutionUsageCompleteness"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/project-application-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ProjectRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/recovery/retire-plugin-ui-actions.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readPluginUiAction",
+          "readPluginUiInstance"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/schedule/scheduled-task-executor.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ScheduledRunRecord",
+          "ScheduledTaskRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/background-shell-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionExecutionRecord",
+          "SessionRecord",
+          "SessionStatus",
+          "SessionTaskStatus"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/goal-external-wait-observer.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalExternalWait",
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/goal-wait-verifier.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalExternalWait"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-admission-error.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppAdmissionRejection"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isCommittedModelPart",
+          "readSessionRuntimeConfig"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppSource"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin",
+          "SessionMessagePartRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-conversation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parsePluginAppConversationRequest",
+          "stringifyCanonicalJson"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-conversation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppConversationRequest",
+          "PluginAppSource",
+          "PluginAppSubmissionReceipt"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-notifications.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppResourceNotice"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-operation-executor.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readPluginAppAction"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-operation-executor.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-operation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parsePluginAppToolRequest",
+          "readPluginAppAction",
+          "stringifyCanonicalJson"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-operation-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppActionMetadata",
+          "PluginAppActionResponse",
+          "PluginAppRecord",
+          "PluginAppSource",
+          "PluginAppToolRequest",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-static-resources.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PLUGIN_APP_HTML_MIME_TYPE"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-app-static-resources.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-ui-history-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isCommittedModelPart",
+          "isJsonObject",
+          "readPluginUiAction",
+          "readPluginUiInstance",
+          "parsePluginUiSubmissionRecord",
+          "parsePluginUiConversationReceipt"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/plugin-ui-history-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginUiActionReceipt",
+          "PluginUiActionResponse",
+          "PluginUiInstanceRecord",
+          "PluginUiSubmissionRecord",
+          "PluginUiConversationReceipt",
+          "SessionMessagePartRecord",
+          "SessionRunRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "assertPromptMetadataAllowed"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptAttachmentInput",
+          "AttachmentLimits",
+          "ReplaceTranscriptMessageInput",
+          "SessionInputRecord",
+          "SessionRunRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppConversationRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppConversationRequest"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-work.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "normalizeSessionUserInputItems",
+          "sessionUserInputText"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-admission-work.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-control-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "SessionEventRecord",
+          "SessionGoal",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/run-control-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readRuntimeMetadata",
+          "sessionUserInputText"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-command-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateSessionInput",
+          "ForkSessionInput",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionMessageRole",
+          "SessionRecord",
+          "UpsertMessagePartInput",
+          "ClearSessionWorktreeBindingInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-command-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "changedSessionRuntimeKeys",
+          "readSessionRuntimeConfig",
+          "readSessionRuntimeRevision"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-conversation-context.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-event-publisher.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-goal-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "DEFAULT_GOAL_AUTO_TURNS",
+          "MAX_GOAL_AUTO_TURNS",
+          "parseGoalUpdateInput"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-goal-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CreateSessionGoalInput",
+          "GoalActionInput",
+          "GoalExternalWait",
+          "PermissionRequestRecord",
+          "SessionGoal",
+          "SessionRecord",
+          "SessionRunRecord",
+          "UpdateSessionGoalInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-goal-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parseGoalActionInput"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-input-materializer.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "normalizeSessionUserInputItems",
+          "sessionUserInputText"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-input-materializer.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-interaction-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "sessionUserInputText",
+          "assertPromptMetadataAllowed",
+          "readRuntimeMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-interaction-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord",
+          "SessionRecord",
+          "SessionRunRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-interaction-types.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AppendEventInput",
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionRunRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-interaction-types.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptAttachmentInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-maintenance-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionMessagePartRecord",
+          "SessionMessageRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-operation-runner.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-app-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "parsePluginAppComposerContexts",
+          "PLUGIN_APP_LIMITS",
+          "parseClosePluginAppInput",
+          "parseOpenPluginAppInput",
+          "parsePluginAppSource"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-app-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppAvailability",
+          "PluginAppBackendKind",
+          "PluginAppExecutionState",
+          "PluginAppOrigin",
+          "PluginAppRecord",
+          "PluginAppResponse",
+          "PluginAppRuntimeLease",
+          "PluginAppSource",
+          "PluginAppSurfaceDefinition",
+          "SessionMessagePartRecord",
+          "SessionRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-app-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isCommittedModelPart"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-app-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolDescriptor"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-app-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-capability-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-capability-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readRuntimeMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-selection.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readRuntimeMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-plugin-selection.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord",
+          "SessionRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-query-service.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ListMessagePartsOptions",
+          "ListMessagesOptions",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRecord",
+          "SessionStateSnapshot",
+          "SearchSessionsOptions",
+          "SessionSearchResult"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AttachmentLimits",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-engine.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-executor-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readSessionRuntimeConfig"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-executor-assembly.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-executor.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AutoReviewMode",
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-run-executor.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readSessionModelRetryState"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-runtime-discovery.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-workspace-changes.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readWorkspaceChangesMetadata",
+          "WORKSPACE_CHANGE_MAX_FILES",
+          "WORKSPACE_CHANGE_MAX_PATH_LENGTH",
+          "WORKSPACE_CHANGE_REASONS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/session-workspace-changes.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "WorkspaceChangesMetadata"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/transcript-projection.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppToolOrigin"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/transcript-projection.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord",
+          "SessionInputRecord",
+          "SessionMessagePartStatus"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/transcript-projection.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "isCommittedModelPart",
+          "readPluginUiInstance",
+          "settleSessionToolMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/goal-external-wait-observer.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/goal-wait-verifier.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalExternalWait"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AdmitPromptAttachmentInput",
+          "SessionInputRecord",
+          "SessionRunRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "DEFAULT_ATTACHMENT_LIMITS"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/run-control-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord",
+          "SessionMessagePartRecord",
+          "SessionMessageRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-goal-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "GoalUpdateInput",
+          "SessionGoal"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-operation-runner.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionEventRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-plugin-app-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginAppRecord",
+          "PluginAppRuntimeLease"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-plugin-capability-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord",
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-plugin-continuity.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionUserInputItem"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-plugin-scope.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord",
+          "SessionRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-plugin-selection.integration.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord",
+          "SessionRunRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-run-assembly.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readAutoReviewRunMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-runtime-discovery.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/session-workspace-changes.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "readWorkspaceChangesMetadata"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/session/__test__/transcript-projection.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "SessionInputRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/settings-api.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginUiInventory",
+          "MemoryEntryRecord",
+          "UpdateMemoryEntryInput",
+          "ClearMemoryInput"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/settings-api.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "MemoryEntryRecord"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/settings-api.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "AgentEnvironmentCapabilities"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/settings-api.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginCatalogEntry"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/settings-api.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "PluginPresentation"
+        ],
+        "typeOnly": true
+      },
+      {
+        "fromFile": "packages/server/src/application/support.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "runtimeMetadataChanged"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/__test__/daemon-channel-assembly.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "CURRENT_PROTOCOL_VERSION",
+          "PROTOCOL_VERSION_HEADER"
+        ],
+        "typeOnly": false
+      },
+      {
+        "fromFile": "packages/server/src/application/__test__/project-application-service.test.ts",
+        "specifier": "@vykor/protocol",
+        "importedNames": [
+          "ProjectRecord"
+        ],
+        "typeOnly": true
+      }
+    ],
+    "exceptionCounts": {
+      "M38/P11": 3011,
+      "M37/P10": 13,
+      "M32/P8": 32,
+      "M33/P8": 56,
+      "M34/P9": 79,
+      "M35/P10": 982
+    },
+    "exceptionTotal": 4173
+  },
+  "types": [
+    {
+      "file": "packages/protocol/src/session.ts",
+      "symbol": "SessionRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "storage",
+          "optional": true,
+          "type": "SessionStorage"
+        },
+        {
+          "name": "parentId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "projectId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "cwd",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "cwdRelative",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "model",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "agent",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "SessionStatus"
+        },
+        {
+          "name": "metadata",
+          "optional": false,
+          "type": "Record<string, unknown>"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "archivedAt",
+          "optional": true,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session.ts",
+      "symbol": "SessionInputRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "sessionId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "delivery",
+          "optional": false,
+          "type": "InputDelivery"
+        },
+        {
+          "name": "items",
+          "optional": false,
+          "type": "SessionUserInputItem[]"
+        },
+        {
+          "name": "content",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "attachments",
+          "optional": false,
+          "type": "SessionInputAttachmentRecord[]"
+        },
+        {
+          "name": "promotedMessageId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "optional": false,
+          "type": "Record<string, unknown>"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session.ts",
+      "symbol": "SessionEventRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "type",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "schemaVersion",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "sessionId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "optional": false,
+          "type": "Record<string, unknown>"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session.ts",
+      "symbol": "SessionRunRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "sessionId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "inputId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "RunStatus"
+        },
+        {
+          "name": "startedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "finishedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "error",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "optional": false,
+          "type": "Record<string, unknown>"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session.ts",
+      "symbol": "SessionRunAttemptRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "runId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "sequence",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "RunAttemptStatus"
+        },
+        {
+          "name": "provider",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "model",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "retryReason",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "errorKind",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "error",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "inputTokens",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "outputTokens",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "startedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "finishedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session-goals.ts",
+      "symbol": "SessionGoal",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "sessionId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "objective",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "objectiveVersion",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "pluginId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "revision",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "GoalStatus"
+        },
+        {
+          "name": "maxAutoTurns",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "tokenBudget",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "usage",
+          "optional": false,
+          "type": "GoalUsage"
+        },
+        {
+          "name": "autoTurnsUsed",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "currentRunId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "queuedResume",
+          "optional": true,
+          "type": "{ requestId: string }"
+        },
+        {
+          "name": "reason",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "stopReason",
+          "optional": true,
+          "type": "GoalStopReason"
+        },
+        {
+          "name": "wait",
+          "optional": true,
+          "type": "GoalWait"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session-goals.ts",
+      "symbol": "GoalUsage",
+      "extends": [],
+      "fields": [
+        {
+          "name": "knownTokens",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "incomplete",
+          "optional": false,
+          "type": "boolean"
+        },
+        {
+          "name": "unknownAttempts",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "partialAttempts",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "inFlightAttempts",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "runTimeMs",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "seq",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/session-goals.ts",
+      "symbol": "GoalAction",
+      "type": "\"pause\" | \"resume\" | \"cancel\" | \"budget\" | \"cancel_resume\""
+    },
+    {
+      "file": "packages/protocol/src/session-goals.ts",
+      "symbol": "GoalWait",
+      "type": "| {\n      kind: \"user\";\n      questionId: string;\n      question: string;\n      objectiveVersion: number;\n      replyInputId?: string;\n      /** Accepted answer restored after a queued Run could not be dispatched. */\n      response?: string;\n    }\n  | { kind: \"approval\"; permissionRequestId: string }\n  | GoalExternalWait"
+    },
+    {
+      "file": "packages/protocol/src/attachment.ts",
+      "symbol": "AttachmentAssetRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "displayName",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "declaredMediaType",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "mediaType",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "sizeBytes",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "sha256",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "AttachmentAssetStatus"
+        },
+        {
+          "name": "failureCode",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "deletedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "chatSources",
+          "optional": true,
+          "type": "ChatResourceSource[]"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/attachment.ts",
+      "symbol": "AttachmentLimits",
+      "extends": [],
+      "fields": [
+        {
+          "name": "maxFilesPerPrompt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "maxBytesPerFile",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "maxBytesPerPrompt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "maxSessionReferencedBytes",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "resumableThresholdBytes",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "uploadSessionTtlMs",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "stagingTtlMs",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/plugin-apps.ts",
+      "symbol": "PluginAppRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "sessionId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "pluginId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "pluginVersion",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "pluginDigest",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "definitionDigest",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "backendId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "backendKind",
+          "optional": false,
+          "type": "PluginAppBackendKind"
+        },
+        {
+          "name": "resourceUri",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "origin",
+          "optional": false,
+          "type": "PluginAppOrigin"
+        },
+        {
+          "name": "logicalKey",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "\"open\" | \"closed\" | \"revoked\""
+        },
+        {
+          "name": "controlRevision",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "activeActionRunId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "lastActionRunId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/plugin-apps.ts",
+      "symbol": "PluginAppActionMetadata",
+      "extends": [],
+      "fields": [
+        {
+          "name": "schemaVersion",
+          "optional": false,
+          "type": "1"
+        },
+        {
+          "name": "source",
+          "optional": false,
+          "type": "PluginAppSource"
+        },
+        {
+          "name": "requestId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "requestFingerprint",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "expectedRevision",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "acceptedRevision",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "pluginId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "pluginVersion",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "pluginDigest",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "definitionDigest",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "backendId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "backendKind",
+          "optional": false,
+          "type": "PluginAppBackendKind"
+        },
+        {
+          "name": "resourceUri",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "toolName",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "registeredToolName",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "toolUseId",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "args",
+          "optional": false,
+          "type": "Record<string, PluginAppJson>"
+        },
+        {
+          "name": "executionState",
+          "optional": false,
+          "type": "PluginAppExecutionState"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/plugin-apps.ts",
+      "symbol": "PluginAppRuntimeLease",
+      "extends": [],
+      "fields": [
+        {
+          "name": "token",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "backendGeneration",
+          "optional": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/plugin-apps.ts",
+      "symbol": "PluginAppToolPolicy",
+      "extends": [],
+      "fields": [
+        {
+          "name": "confirmation",
+          "optional": false,
+          "type": "\"required\" | \"granted\""
+        },
+        {
+          "name": "maxArgumentsBytes",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "authorization",
+          "optional": true,
+          "type": "\"plugin-data-write\""
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/approval-review.ts",
+      "symbol": "ApprovalReviewOutcome",
+      "extends": [
+        "extends ApprovalReviewResult"
+      ],
+      "fields": [
+        {
+          "name": "failure",
+          "optional": true,
+          "type": "\"timeout\" | \"invalid_response\" | \"unavailable\""
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/approval-review.ts",
+      "symbol": "ApprovalReviewRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "status",
+          "optional": false,
+          "type": "\"reviewing\" | \"approved\" | \"ask_user\" | \"denied\" | \"timed_out\""
+        },
+        {
+          "name": "startedAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "completedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "reason",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "result",
+          "optional": true,
+          "type": "ApprovalReviewResult"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/job.ts",
+      "symbol": "JobSnapshot",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "optional": false,
+          "type": "JobKind"
+        },
+        {
+          "name": "label",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "ownerSession",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "JobStatus"
+        },
+        {
+          "name": "capabilities",
+          "optional": false,
+          "type": "JobCapabilities"
+        },
+        {
+          "name": "cwd",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "startedAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "finishedAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "exitCode",
+          "optional": true,
+          "type": "number | null"
+        },
+        {
+          "name": "detail",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "optional": true,
+          "type": "Record<string, unknown>"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/job.ts",
+      "symbol": "JobStatus",
+      "type": "| \"running\"\n  | \"stopping\"\n  | \"completed\"\n  | \"killed\"\n  | \"failed\""
+    },
+    {
+      "file": "packages/protocol/src/terminal.ts",
+      "symbol": "TerminalScope",
+      "type": "| { kind: \"project\"; projectId: string }\n  | { kind: \"session\"; sessionId: string }"
+    },
+    {
+      "file": "packages/protocol/src/terminal.ts",
+      "symbol": "TerminalSessionInfo",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "scope",
+          "optional": false,
+          "type": "TerminalScope"
+        },
+        {
+          "name": "projectId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "runtime",
+          "optional": false,
+          "type": "TerminalRuntime"
+        },
+        {
+          "name": "environmentKind",
+          "optional": true,
+          "type": "\"native\" | \"wsl\""
+        },
+        {
+          "name": "distribution",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "optional": false,
+          "type": "TerminalSource"
+        },
+        {
+          "name": "sessionId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "TerminalSessionStatus"
+        },
+        {
+          "name": "cwd",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "shell",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "command",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "cols",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "rows",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "exitedAt",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "exitCode",
+          "optional": true,
+          "type": "number | null"
+        }
+      ]
+    },
+    {
+      "file": "packages/protocol/src/scheduled.ts",
+      "symbol": "ScheduledTaskRecord",
+      "extends": [],
+      "fields": [
+        {
+          "name": "id",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "prompt",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "recurrence",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "recurrenceFormat",
+          "optional": false,
+          "type": "ScheduledRecurrenceFormat"
+        },
+        {
+          "name": "timezone",
+          "optional": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "optional": false,
+          "type": "ScheduledTaskStatus"
+        },
+        {
+          "name": "destination",
+          "optional": false,
+          "type": "ScheduledTaskDestination"
+        },
+        {
+          "name": "sessionId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "projectPaths",
+          "optional": false,
+          "type": "string[]"
+        },
+        {
+          "name": "executionMode",
+          "optional": false,
+          "type": "ScheduledTaskExecutionMode"
+        },
+        {
+          "name": "model",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "effort",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "skillNames",
+          "optional": false,
+          "type": "string[]"
+        },
+        {
+          "name": "pluginNames",
+          "optional": false,
+          "type": "string[]"
+        },
+        {
+          "name": "permissionProfile",
+          "optional": false,
+          "type": "ScheduledPermissionProfile"
+        },
+        {
+          "name": "overlapPolicy",
+          "optional": false,
+          "type": "ScheduledOverlapPolicy"
+        },
+        {
+          "name": "missedRunPolicy",
+          "optional": false,
+          "type": "ScheduledMissedRunPolicy"
+        },
+        {
+          "name": "stopPolicy",
+          "optional": true,
+          "type": "ScheduledStopPolicy"
+        },
+        {
+          "name": "createdBy",
+          "optional": false,
+          "type": "\"user\" | \"agent\""
+        },
+        {
+          "name": "createdFromSessionId",
+          "optional": true,
+          "type": "string"
+        },
+        {
+          "name": "lastRunAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "nextRunAt",
+          "optional": true,
+          "type": "number"
+        },
+        {
+          "name": "runCount",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "createdAt",
+          "optional": false,
+          "type": "number"
+        },
+        {
+          "name": "updatedAt",
+          "optional": false,
+          "type": "number"
+        }
+      ]
+    }
+  ],
+  "jsonSamples": [
+    {
+      "name": "numeric-prototype-utf8",
+      "inputJson": "{\"z\":\"测试\",\"2\":2,\"10\":10,\"__proto__\":{\"safe\":true}}",
+      "canonical": "{\"10\":10,\"2\":2,\"__proto__\":{\"safe\":true},\"z\":\"测试\"}",
+      "utf8Bytes": 54,
+      "sha256": "8b91623f38c34f4e34c97ffa5d9ecb99e1923fc6bc9ef709bc49d4cc093e12f9"
+    },
+    {
+      "name": "finite-arrays",
+      "inputJson": "{\"b\":[true,null,-0,1.25],\"a\":{}}",
+      "canonical": "{\"a\":{},\"b\":[true,null,0,1.25]}",
+      "utf8Bytes": 31,
+      "sha256": "7cbcc2b0d40e6ca906282b512582de4126985d91e0ffb9592b9bf15f788aeb2b"
+    },
+    {
+      "name": "empty",
+      "inputJson": "{}",
+      "canonical": "{}",
+      "utf8Bytes": 2,
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "jsonBoundaries": {
+    "canonicalArrayNesting": 20,
+    "pluginArrayNesting": 32,
+    "mcpDepthRejectAbove": 32,
+    "mcpMaxNodes": 100000
+  },
+  "validationErrors": [
+    {
+      "input": "invalid cwd",
+      "expected": {
+        "code": "invalid_request",
+        "message": "cwd is required",
+        "details": {
+          "field": "cwd"
+        }
+      }
+    },
+    {
+      "input": "reserved metadata",
+      "expectedField": "metadata.pluginAppSource"
+    },
+    {
+      "input": "reason envelope",
+      "expected": {
+        "code": "invalid_request",
+        "message": "too large",
+        "details": {
+          "field": "args",
+          "reason": "payload_too_large"
+        }
+      }
+    }
+  ],
+  "approvalModes": [
+    [
+      "ask",
+      "ask"
+    ],
+    [
+      "auto_review",
+      "auto_review"
+    ],
+    [
+      "full_access",
+      "full_access"
+    ],
+    [
+      "default",
+      "ask"
+    ],
+    [
+      "plan",
+      "ask"
+    ],
+    [
+      "full_auto",
+      "auto_review"
+    ],
+    [
+      "unknown",
+      null
+    ]
+  ],
+  "effectiveModes": [
+    [
+      "ask",
+      "execute",
+      "default"
+    ],
+    [
+      "auto_review",
+      "execute",
+      "default"
+    ],
+    [
+      "full_access",
+      "execute",
+      "full_auto"
+    ],
+    [
+      "ask",
+      "plan",
+      "plan"
+    ],
+    [
+      "auto_review",
+      "plan",
+      "plan"
+    ],
+    [
+      "full_access",
+      "plan",
+      "plan"
+    ]
+  ],
+  "typeConsumers": [
+    {
+      "file": "tests/client-public-api/consumer.ts",
+      "sha256": "6ef69358eac5faff93181c4c4158c39ad7f97a5898d0881aba6dc00d6b772e83"
+    },
+    {
+      "file": "packages/agent-runtime/scripts/verify-pack.mjs",
+      "sha256": "a113e13aba0e53fcfed795334dbaf2e94f20064cecd7123d5b254452ea68696c"
+    },
+    {
+      "file": "packages/protocol/src/terminal.type-test.ts",
+      "sha256": "c3c80f377146716bd98fd199924189081f0c482f44600a9b901a1da88b7168fb"
+    }
+  ],
+  "sourceTextNormalization": "LF"
+}

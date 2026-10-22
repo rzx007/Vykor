@@ -23,20 +23,20 @@
 |------|------|
 | `packages/agent-runtime/src/index.ts` | 默认入口再导出两个错误类 |
 | `packages/agent-runtime/src/kernel-entry.ts` | Kernel 入口再导出同一组错误类 |
-| `packages/agent-runtime/src/public-surface.test.ts` | 锁定两个入口的导出面与 `instanceof` |
-| `packages/agent-runtime/src/default-runtime-tools.ts` | 工具新增/覆盖校验、`RuntimeToolRegistry`、内部 registry 取出 |
-| `packages/agent-runtime/src/default-runtime-provider.ts` | API client / backend 解析 |
-| `packages/agent-runtime/src/default-runtime-sandbox.ts` | sandbox 挂接与 `process.exit` 清理登记 |
-| `packages/agent-runtime/src/default-runtime.ts` | 只编排：校验 → client → tools → permissions → prompt → engine → sandbox |
-| `packages/agent-runtime/src/agent-errors.test.ts` | `abortError` / `serializeError` 单测 |
+| `packages/agent-runtime/src/node/runtime/public-surface.test.ts` | 锁定两个入口的导出面与 `instanceof` |
+| `packages/agent-runtime/src/node/runtime/default-runtime-tools.ts` | 工具新增/覆盖校验、`RuntimeToolRegistry`、内部 registry 取出 |
+| `packages/agent-runtime/src/node/runtime/default-runtime-provider.ts` | API client / backend 解析 |
+| `packages/agent-runtime/src/node/runtime/default-runtime-sandbox.ts` | sandbox 挂接与 `process.exit` 清理登记 |
+| `packages/agent-runtime/src/node/runtime/default-runtime.ts` | 只编排：校验 → client → tools → permissions → prompt → engine → sandbox |
+| `packages/agent-runtime/src/kernel/agent-errors.test.ts` | `abortError` / `serializeError` 单测 |
 | `docs/agent-sdk.md` | 文档化可 `instanceof` 的错误类与 peer 语义摘要 |
 | `docs/agent-framework-capability-boundary.md` | 发布形态小节补 peerDeps 说明 |
 
 信任边界基线（只跑、不改产品语义）：
 
-- `packages/agent-runtime/src/default-runtime.test.ts`
-- `packages/agent-runtime/src/extensions.test.ts`
-- `packages/agent-runtime/src/mcp-auth.test.ts`
+- `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- `packages/agent-runtime/src/node/plugins/extensions.test.ts`
+- `packages/agent-runtime/src/node/mcp/mcp-auth.test.ts`
 
 ---
 
@@ -69,12 +69,12 @@ pnpm --filter @vykor/agent-runtime exec vitest run \
 
 - 修改：`packages/agent-runtime/src/index.ts`
 - 修改：`packages/agent-runtime/src/kernel-entry.ts`
-- 创建：`packages/agent-runtime/src/public-surface.test.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/public-surface.test.ts`
 - 修改：`docs/agent-sdk.md`（错误类小节，见步骤 5）
 
 - [ ] **步骤 1：编写失败的导出面测试**
 
-创建 `packages/agent-runtime/src/public-surface.test.ts`：
+创建 `packages/agent-runtime/src/node/runtime/public-surface.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -160,7 +160,7 @@ pnpm --filter @vykor/agent-runtime exec vitest run src/public-surface.test.ts
 ```bash
 git add packages/agent-runtime/src/index.ts \
   packages/agent-runtime/src/kernel-entry.ts \
-  packages/agent-runtime/src/public-surface.test.ts \
+  packages/agent-runtime/src/node/runtime/public-surface.test.ts \
   docs/agent-sdk.md
 git commit -m "$(cat <<'EOF'
 fix(agent-runtime): re-export steer and budget errors from stable entries
@@ -185,10 +185,10 @@ EOF
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/default-runtime-tools.ts`
-- 创建：`packages/agent-runtime/src/default-runtime-provider.ts`
-- 创建：`packages/agent-runtime/src/default-runtime-sandbox.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`（变薄为编排）
+- 创建：`packages/agent-runtime/src/node/runtime/default-runtime-tools.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/default-runtime-provider.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/default-runtime-sandbox.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`（变薄为编排）
 
 - [ ] **步骤 1：先跑现有 default-runtime 测试作对照**
 
@@ -297,10 +297,10 @@ pnpm --filter @vykor/agent-runtime exec vitest run \
 - [ ] **步骤 7：Commit**
 
 ```bash
-git add packages/agent-runtime/src/default-runtime.ts \
-  packages/agent-runtime/src/default-runtime-tools.ts \
-  packages/agent-runtime/src/default-runtime-provider.ts \
-  packages/agent-runtime/src/default-runtime-sandbox.ts
+git add packages/agent-runtime/src/node/runtime/default-runtime.ts \
+  packages/agent-runtime/src/node/runtime/default-runtime-tools.ts \
+  packages/agent-runtime/src/node/runtime/default-runtime-provider.ts \
+  packages/agent-runtime/src/node/runtime/default-runtime-sandbox.ts
 git commit -m "$(cat <<'EOF'
 refactor(agent-runtime): split createVykorRuntime helpers
 
@@ -366,12 +366,12 @@ EOF
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/agent-errors.test.ts`
+- 创建：`packages/agent-runtime/src/kernel/agent-errors.test.ts`
 - 可选修改：`packages/agent-runtime/src/default-runtime-tools.test.ts`（若步骤 3 需要）
 
 - [ ] **步骤 1：编写 `agent-errors` 失败测试**
 
-创建 `packages/agent-runtime/src/agent-errors.test.ts`：
+创建 `packages/agent-runtime/src/kernel/agent-errors.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -453,7 +453,7 @@ pnpm --filter @vykor/agent-runtime exec vitest run src/agent-errors.test.ts
 
 ```bash
 # 应只有 interface/type，无 function/class 实现
-rg "^(export )?(async )?function|^(export )?class" packages/agent-runtime/src/native-tools/protocol.ts
+rg "^(export )?(async )?function|^(export )?class" packages/agent-runtime/src/node/plugins/native-tools/protocol.ts
 ```
 
 预期：无匹配。在 PR/提交说明写一句：审查项 4 中 protocol 为类型文件，不新增单测。
@@ -461,7 +461,7 @@ rg "^(export )?(async )?function|^(export )?class" packages/agent-runtime/src/na
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/agent-runtime/src/agent-errors.test.ts
+git add packages/agent-runtime/src/kernel/agent-errors.test.ts
 # 若创建了 default-runtime-tools.test.ts 一并加入
 git commit -m "$(cat <<'EOF'
 test(agent-runtime): unit-cover agent-errors helpers

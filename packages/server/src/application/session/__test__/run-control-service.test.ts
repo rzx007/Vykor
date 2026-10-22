@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRunRecord,
-} from "@vykor/protocol";
+import type { SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import {
   RunControlService,
   type RunControlServiceOptions,

@@ -1,5 +1,6 @@
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { ChannelConfigStore } from "@vykor/auth";
-import { loadSettings, loadProjectSettings, mergeAgentEnvironmentSettings } from "@vykor/core";
+import { loadSettings, loadProjectSettings, mergeAgentEnvironmentSettings } from "@vykor/host-config";
 
 import {
   createDefaultApplicationServices,
@@ -39,24 +40,31 @@ export async function startVykorDaemon(
   };
   const startupAgentEnvironment = settingsRef.current.agentEnvironment;
   const kindOverride = process.env.VYKOR_AGENT_ENVIRONMENT === "native" || process.env.VYKOR_AGENT_ENVIRONMENT === "wsl" ? process.env.VYKOR_AGENT_ENVIRONMENT : undefined;
-  return await startVykorServer({
-    ...options,
-    executionSurface: options.executionSurface ?? "desktop_managed",
-    channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
-    settings: settingsRef.current,
-    getSettings: () => settingsRef.current,
-    getSettingsForCwd: async (cwd) => {
-      const effective = await loadSettings(undefined, {
-        includeProject: true,
-        projectRoot: cwd,
-      });
-      const project = (await loadProjectSettings(cwd))?.agentEnvironment;
-      return { ...effective, agentEnvironment: mergeAgentEnvironmentSettings(startupAgentEnvironment,
-        project, kindOverride ? { kind: kindOverride } : undefined) };
-    },
-    services: {
-      commandCatalog: createDefaultCommandCatalog(() => settingsRef.current),
-      ...createDefaultApplicationServices(settingsRef, startupAgentEnvironment),
-    },
-  });
+  const executionOwner = new ExecutionRuntimeOwner();
+  try {
+    return await startVykorServer({
+      executionOwner,
+      ...options,
+      executionSurface: options.executionSurface ?? "desktop_managed",
+      channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
+      settings: settingsRef.current,
+      getSettings: () => settingsRef.current,
+      getSettingsForCwd: async (cwd) => {
+        const effective = await loadSettings(undefined, {
+          includeProject: true,
+          projectRoot: cwd,
+        });
+        const project = (await loadProjectSettings(cwd))?.agentEnvironment;
+        return { ...effective, agentEnvironment: mergeAgentEnvironmentSettings(startupAgentEnvironment,
+          project, kindOverride ? { kind: kindOverride } : undefined) };
+      },
+      services: {
+        commandCatalog: createDefaultCommandCatalog(() => settingsRef.current),
+        ...createDefaultApplicationServices(settingsRef, startupAgentEnvironment, executionOwner),
+      },
+    });
+  } catch (error) {
+    await executionOwner.close();
+    throw error;
+  }
 }

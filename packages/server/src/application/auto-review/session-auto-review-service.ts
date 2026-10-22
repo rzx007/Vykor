@@ -1,19 +1,10 @@
-import type {
-  AppendEventInput,
-  SessionEventRecord,
-  SessionRunRecord,
-  UpdateRunInput,
-} from "@vykor/protocol";
-import {
-  readAutoReviewRunMetadata,
-  type AutoReviewMode,
-  type AutoReviewReason,
-  type AutoReviewRunMetadata,
-  type AutoReviewSeverity,
-  type AutoReviewStatus,
-} from "@vykor/protocol";
+import type { AppendEventInput, UpdateRunInput } from "@vykor/services";
+import type { SessionEventRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
+import type { AutoReviewMode, AutoReviewReason, AutoReviewRunMetadata, AutoReviewSeverity, AutoReviewStatus } from "@vykor/domain-contracts/approvals";
 import { getBuiltinAgentDefinitions } from "@vykor/coordinator";
-import type { AgentExecutionLimits, RunCapabilityView } from "@vykor/core";
+import { readonlyMap } from "@vykor/agent-contracts";
+import type { AgentExecutionLimits } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime";
 
 import { classifyAutoReviewRisk, type AutoReviewChangeSet } from "./auto-review-policy.js";
@@ -301,7 +292,7 @@ export class SessionAutoReviewService {
         },
         { inputId: input.inputId, runId: input.runId, traceId: input.traceId, signal: input.signal, limits: input.limits },
         sensitiveInitialContent,
-        emptyCapabilityView(),
+        readonlyMap(new Map()),
       );
       invocationId = outcome.invocation.id;
       childResult = outcome.result;
@@ -491,29 +482,6 @@ function highestSeverity(severities: AutoReviewSeverity[]): AutoReviewSeverity |
     }
   }
   return best;
-}
-
-function emptyCapabilityView(): RunCapabilityView {
-  const inner = new Map<string, never>();
-  return Object.freeze({
-    tools: emptyReadonlyMap(inner),
-    skills: emptyReadonlyMap(inner),
-    agents: emptyReadonlyMap(inner),
-    mcpServers: emptyReadonlyMap(inner),
-  });
-}
-
-function emptyReadonlyMap<T>(inner: Map<string, T>): ReadonlyMap<string, T> {
-  return Object.freeze({
-    size: 0,
-    get: () => undefined,
-    has: () => false,
-    keys: () => inner.keys(),
-    values: () => inner.values(),
-    entries: () => inner.entries(),
-    [Symbol.iterator]: () => inner[Symbol.iterator](),
-    forEach: () => undefined,
-  }) as ReadonlyMap<string, T>;
 }
 
 function errorText(error: unknown): string {

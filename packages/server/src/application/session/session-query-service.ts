@@ -1,13 +1,6 @@
-import type {
-  ListMessagePartsOptions,
-  ListMessagesOptions,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionStateSnapshot,
-  SearchSessionsOptions,
-  SessionSearchResult,
-} from "@vykor/protocol";
+import type { ListMessagePartsOptions, ListMessagesOptions } from "@vykor/services";
+import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SearchSessionsOptions, SessionSearchResult } from "@vykor/domain-contracts/sessions";
+import type { SessionStateSnapshot } from "./query-models.js";
 import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
 
 export interface ListSessionsQuery {

@@ -111,10 +111,10 @@ type GoalWaitCheck =
 **文件：**
 
 - 修改 `packages/core/src/types/runtime.ts`、`engine/query-engine.ts`、`engine/goal-context.test.ts`。
-- 修改 `packages/agent-runtime/src/agent.ts`、`framework-agent-run.ts`、`extensions.ts`、`default-runtime-tools.ts`。
-- 新建 `packages/agent-runtime/src/goal-extension.ts`：构造目标提示和绑定当前 Run 的评估工具，复用任务 1 的工具。
+- 修改 `packages/agent-runtime/src/kernel/agent.ts`、`framework-agent-run.ts`、`extensions.ts`、`default-runtime-tools.ts`。
+- 新建 `packages/server/src/application/goals/goal-run-contribution.ts`：构造目标提示和绑定当前 Run 的评估工具，复用任务 1 的工具。
 - 修改 `packages/server/src/application/session/session-run-executor.ts`：宿主装配 Goal 扩展。
-- 修改 `packages/agent-runtime/src/framework-agent-run-input.test.ts`、`scripts/verify-pack.mjs`。
+- 修改 `packages/agent-runtime/src/node/runtime/framework-agent-run-input.test.ts`、`scripts/verify-pack.mjs`。
 
 本轮只需要一个通用的每次运行配置，不建立完整的扩展生命周期框架：
 

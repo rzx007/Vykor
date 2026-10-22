@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "../../../../test-helpers/hosted-agent.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,7 +46,8 @@ function createControl() {
   const agentPool = {
     configured: true,
     size: 1,
-    acquireSession: vi.fn(async () => agent),
+    acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => agent),
     hasActiveWork: vi.fn(() => false),
     hasActiveWorkForCwd: vi.fn(() => false),
     closeAll: vi.fn(async () => {}),

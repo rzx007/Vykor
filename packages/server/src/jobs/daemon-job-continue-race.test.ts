@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "@vykor/services";
-import { ChildAgentExecutionRegistry } from "@vykor/services/executions";
+import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
+import {
+  ChildAgentExecutionRegistry,
+} from "@vykor/execution-node";
 import { expect, it } from "vitest";
 import { DaemonJobService } from "./daemon-job-service.js";
 import { SessionExecutionProjector } from "../application/session/session-execution-projector.js";
@@ -40,7 +43,7 @@ it.each(["cancel", "complete", "progress", "unchanged"] as const)(
         updateSessionTask: store.updateSessionTask.bind(store),
         transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store),
         waitForSessionTaskChange: store.waitForSessionTaskChange.bind(store),
-      }, { list: async () => [] } as any, () => registry, () => registry, {} as any);
+      }, { list: async () => [] } as any, () => registry, () => registry, new WorkflowHost({} as any));
       sending = service.send({ sessionId: "parent", jobId: "child", data: "continue" }).catch(error => error);
       await started;
       const reopened = store.getSessionTask("child")!;

@@ -54,5 +54,5 @@ local_rules/
 
 - `packages/personalization/src/index.test.ts`：10 类抽取、来源校验、损坏文件保护、项目隔离、旧键取代和重扫防复活、已有目标关联及来源保留、凭据风险与缓存写入失败。
 - `packages/prompts/src/index.test.ts`：即使 `rules.md` 缓存仍含旧值，提示词也只读有效事实。
-- `packages/server/src/http/routes/facts.test.ts` 与 `packages/server/src/http/__test__/http.test.ts`：显式操作的输入、锁、来源 cwd、状态码和真实 daemon 路由。
+- `packages/server/src/application/personalization/facts.routes.test.ts` 与 `tests/server-client/http.test.ts`：显式操作的输入、锁、来源 cwd、状态码和真实 daemon 路由。
 - `packages/client/src/commands/__test__/session-commands.test.ts`：`/facts` 列表和替换命令的呈现与参数解析。

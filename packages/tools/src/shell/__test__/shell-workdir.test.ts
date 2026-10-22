@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { describe, expect, it } from "vitest";
 import { createWslPathResolver } from "@vykor/sandbox";
 import { createShellTool } from "../shell.js";
@@ -23,14 +25,14 @@ function context() {
 describe("Shell workdir boundaries", () => {
   it("keeps supervisor ownership at the host workspace and passes a relative WSL subdirectory separately", async () => {
     const ctx = context();
-    const result = await createShellTool().execute({ command: "npm install", workdir: "sub" }, ctx.value);
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "npm install", workdir: "sub" }, ctx.value);
     expect(result).toMatchObject({ executionState: "completed" });
     expect(ctx.created).toEqual([expect.objectContaining({ cwd: "D:\\repo", executionCwd: "/mnt/d/repo/sub", shellDescriptor: descriptor })]);
   });
 
   it.each(["pwd", "npm install"])("rejects an outside workdir before starting %s", async (command) => {
     const ctx = context();
-    const result = await createShellTool().execute({ command, workdir: "../outside" }, ctx.value);
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command, workdir: "../outside" }, ctx.value);
     expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
     expect(ctx.launched).toEqual([]);
     expect(ctx.created).toEqual([]);
@@ -38,7 +40,7 @@ describe("Shell workdir boundaries", () => {
 
   it("runs a foreground command in the resolved WSL subdirectory", async () => {
     const ctx = context();
-    const result = await createShellTool().execute({ command: "pwd", workdir: "sub" }, ctx.value);
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "pwd", workdir: "sub" }, ctx.value);
     expect(result.content[0]).toMatchObject({ text: "/mnt/d/repo/sub" });
     expect(ctx.launched).toEqual(["/mnt/d/repo/sub"]);
   });

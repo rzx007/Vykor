@@ -31,35 +31,11 @@ export { NoteRepository, NoteRevisionConflictError } from "./notes/index.js";
 export { estimateTokens } from "./token-estimation";
 export type { TokenEstimate } from "./token-estimation";
 
-export { LspClient } from "./lsp";
-export type { LspServerConfig } from "./lsp";
 
-export {
-  ChildAgentExecutionRegistry,
-  closeExecutionRuntimes,
-  DetachedProcessSupervisor,
-  getChildAgentExecutionRegistry,
-  getDetachedProcessSupervisor,
-  resetExecutionRuntimes,
-} from "./executions";
-export type {
-  AwaitExecutionResult,
-  ChildAgentExecution,
-  ChildAgentExecutionListener,
-  CompleteChildAgentExecutionInput,
-  DetachedProcessExecution,
-  ExecutionBackend,
-  ExecutionEvent,
-  ExecutionRuntimeScope,
-  ExecutionSnapshot,
-  ExecutionStatus,
-  ExecutionType,
-  ProcessCompletionListener,
-  ProcessExecutionListener,
-  RegisterChildAgentExecutionOptions,
-  StartAgentProcessOptions,
-  StartShellExecutionOptions,
-} from "./executions";
+
+
+
+
 
 export {
   DEFAULT_TOOL_OUTPUT_INLINE_CHARS,
@@ -101,3 +77,18 @@ export type { GoalOperations } from "./goals/index.js";
 export { goalBudgetStopCode } from "./goals/index.js";
 export type { GoalAttemptStart, GoalAttemptReport, GoalBudgetStopCode } from "./goals/index.js";
 export * from "./office/index.js";
+
+export type * from "./sessions/commands.js";
+
+export type * from "./conversations/commands.js";
+
+export type * from "./runs/commands.js";
+
+export type * from "./permissions/commands.js";
+
+export type * from "./session-runtime/commands.js";
+
+export type * from "./conversations/query-models.js";
+export type * from "./schedules/commands.js";
+
+export type * from "./notes/commands.js";

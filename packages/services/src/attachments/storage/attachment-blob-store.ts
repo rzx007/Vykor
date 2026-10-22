@@ -15,7 +15,7 @@ import { Readable } from "node:stream";
 
 import { AttachmentError, isAttachmentError } from "../attachment-errors.js";
 import { sniffAttachmentMediaType } from "./attachment-media-type.js";
-import { sniffOfficePackage } from "../../office/office-package.js";
+import { sniffOfficePackage } from "./attachment-media-type.js";
 
 const MIME_PREFIX_BYTES = 4_100;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;

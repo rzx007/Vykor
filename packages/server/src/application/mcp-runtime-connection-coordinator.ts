@@ -1,11 +1,9 @@
 import type {
   ActiveMcpRuntimeHandle,
   McpRuntimeConnectionCoordinator as McpRuntimeConnectionCoordinatorContract,
-  McpRuntimeStatus,
-  McpRuntimeSyncResult,
   McpRuntimeRegistry,
-  McpServerIdentity,
-} from "@vykor/core";
+} from "@vykor/mcp";
+import type { McpRuntimeStatus, McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 
 /**
  * Process-wide coordinator over the active MCP Runtimes.

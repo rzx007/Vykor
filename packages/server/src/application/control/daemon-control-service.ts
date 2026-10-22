@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SessionStore } from "@vykor/services";
-import type { ExecutionObservationExport, ExecutionObservationFilter } from "@vykor/protocol";
+import type { ExecutionObservationExport, ExecutionObservationFilter } from "../observability/query-models.js";
 
 import type { HookInfo } from "../settings-api.js";
 import type { RunControlService } from "../session/run-control-service.js";
@@ -26,7 +26,7 @@ export interface DaemonControlServiceContext {
     | "size"
     | "hasActiveWork"
     | "hasActiveWorkForCwd"
-    | "acquireSession"
+    | "acquireHostedSession"
     | "closeAll"
     | "closeForCwd"
     | "invalidateWarmAgents"
@@ -203,8 +203,8 @@ export class DaemonControlService {
       cwd: session.cwd,
     });
     try {
-      const agent = await this.context.agentPool.acquireSession(sessionId);
-      return agent.inspect().hooks.map((hook) => ({ ...hook, origin: "runtime" as const }));
+      const {host} = await this.context.agentPool.acquireHostedSession(sessionId);
+      return (host?.inspect().hooks ?? []).map((hook) => ({ ...hook, origin: "runtime" as const }));
     } finally {
       lease.release();
     }

@@ -1,6 +1,6 @@
 # Vykor 架构总览
 
-> 状态：当前实现的权威鸟瞰。最后核对：2026-09-17。
+> 状态：当前实现的权威鸟瞰。最后核对：2026-10-22。
 
 ## 一句话说明
 
@@ -37,7 +37,7 @@ await client.sessions.admitPrompt(sessionId, { content: "hello" });
 await client.permissions.reply(requestId, decision);
 ```
 
-Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把一个领域动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量。
+Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把一个领域动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量。Client 只直接依赖 Protocol；本地的运行配置、权限模式和插件描述辅助函数用于展示与构造请求，执行授权仍由 Server 和 Node 判断。
 
 ### 2. Daemon Application
 
@@ -51,11 +51,11 @@ HTTP route 只解析请求并调用窄应用服务。当前 Session 主链路包
 - `SessionMaintenanceService`：compact、rewind、remember、export 和 usage；
 - `SessionOperationRunner`：在同一 session 内串行操作，等待 ready、取得 operation lease，并在成功提交后发布事件。
 
-`DaemonApplication` 组装这些服务并管理启动/关闭。它不是一个继续承接所有业务方法的万能类。
+`DaemonApplication` 组装这些服务并管理启动/关闭。HTTP 解码结果经 `http/mappers` 转为应用用例输入；应用层使用自己的输入和查询模型，不依赖 Protocol。写入 Repository 时再构造 Services 自己的存储命令。
 
 ### 3. Services / Storage
 
-一份 SQLite 保存 Session、Input、Message、Part、Run、Attempt、Permission、Goal、Attachment、Schedule、Workflow、Channel 和 durable event。
+一份 SQLite 保存 Session、Input、Message、Part、Run、Attempt、Permission、Goal、Attachment、Schedule、Workflow、Channel 和 durable event。记录与纯数据校验由 `domain-contracts` 对应业务子入口提供；Services 的 `commands.ts` 定义写入命令，存储实现不依赖 Protocol。
 
 - Repository 拥有单个领域的数据读写；
 - Transaction 拥有跨领域的原子操作；
@@ -79,13 +79,13 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 ```text
 1. 产品调用 client.sessions.admitPrompt(sessionId, input)
-2. Client 在首个业务请求前确认协议版本 4
+2. Client 在首个业务请求前确认协议版本 5
 3. POST /sessions/:id/prompts 进入 SessionInteractionService
 4. SessionOperationRunner 串行该 session，等待 ready 并取得 shared lease
 5. RunAdmissionService 在一个 Transaction 中保存 Input 和 pending Run
 6. Session lane 把 Run 交给 SessionRunExecutor
 7. AgentPool 取得或创建该 session 的 VykorAgent
-8. Agent Runtime 执行模型和 Tool，持续发出 AgentEvent
+8. Node 准备本轮捕获工具；Kernel 调 Core，每次模型请求先经 GoalModelAttemptService 准入，结束先结算再发布 AgentEvent
 9. DaemonAgentEventProjector 将事件写入 Repository/Transaction
 10. 已提交事件经 SSE 返回，Client reducer 合并到 snapshot
 11. terminal projection 完成后，Run Handle 才把最终结果交回应用层
@@ -107,29 +107,33 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 | 包或目录 | 当前定位 |
 | --- | --- |
-| `@vykor/protocol` | 跨进程请求、响应、事件、公共 DTO、错误码和协议版本 |
-| `@vykor/services` | SQLite Repository/Transaction、Memory 和 Node 本地持久服务 |
-| `@vykor/agent-runtime` | 可独立嵌入的 Agent Kernel、Run/Child handle 和事件/effect 契约 |
+| `@vykor/protocol` | HTTP/SSE 请求、响应、事件、错误码、协议版本与编解码；显式再导出通信使用的数据 |
+| `@vykor/json-data/json` | 通用 JSON 检查、确定性序列化与显式有界复制，无业务默认值 |
+| `@vykor/plugin-contracts/*` | 作者清单、展示、硬上限、后端绑定和不透明 lease 数据 |
+| `@vykor/domain-contracts/*` | 按 sessions、goals、attachments 等业务子入口提供记录和数据不变量，无根汇总入口 |
+| `@vykor/jobs/contracts` / `@vykor/terminal/contracts` | 能力的纯数据参数、状态和结果，不含取消信号或宿主接口 |
+| `@vykor/services` | SQLite Repository/Transaction；Office/Memory 辅助子域与存储模块隔离 |
+| `@vykor/agent-contracts` | 通用消息、工具数据、执行契约和错误；只类型引用 environment |
+| `@vykor/host-config` / `@vykor/permissions` | 本机配置与旧模式归一化 / 有效执行模式和权限判断 |
+| `@vykor/execution-node` | 本地进程、输出捕获、执行观察记录和 LSP |
+| `@vykor/core` | 唯一历史、模型重试/压缩、工具检查与执行 |
+| `@vykor/agent-runtime` | Kernel 运行 Run/Child；Node 负责默认能力和资源生命周期 |
 | `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
 | `@vykor/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
 | `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |
 | `apps/*` | CLI、TUI、Desktop、Website 等产品入口 |
 
-依赖方向不是一条简单直线，而是两条能力在 Server 汇合：
+依赖按数据、通信与执行的职责分开：
 
 ```text
-@vykor/protocol
-      ^
-@vykor/services       @vykor/agent-runtime
-      ^                           ^
-      +------ @vykor/server-+
-                      ^
-              @vykor/client
-                      ^
-                    apps
+Client / Server HTTP -> Protocol -> 领域、插件、JSON、Job/Terminal 纯数据子入口
+Server application -> domain-contracts + Services + Node 宿主
+Services -> domain-contracts + 自己的存储命令
+Node -> plugin-contracts + Job/Terminal contracts + 执行/配置/权限模块
+Kernel -> agent-contracts + Core + environment
 ```
 
-约束是：Protocol 不依赖上层；Services 不依赖 Server/Client/UI；Agent Runtime 不依赖 daemon；Repository 不依赖 Application；Application 不依赖 HTTP transport；UI 不直接访问 Repository。
+Protocol 不引用实现或策略。Services、能力包和 Node 不依赖 Protocol；Node 也不依赖产品领域记录。Client 通过 Protocol 消费公开通信数据，应用层与存储层不能借 HTTP 类型定义自己的输入。Repository 不依赖 Application，UI 不直接访问 Repository。
 
 ## 三条可靠性主线
 

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  assembleContextUsageSnapshot,
-  estimateTokens,
-  type Settings,
-} from "@vykor/core";
+import { assembleContextUsageSnapshot, estimateTokens } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 
 import { assembleSessionContextUsage } from "./assemble-session-context-usage.js";
 import { ContextUsageCache } from "./context-usage-cache.js";

@@ -20,8 +20,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/core": "workspace:*",
-    "@vykor/environment": "workspace:*"
+    "@vykor/environment": "workspace:*",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

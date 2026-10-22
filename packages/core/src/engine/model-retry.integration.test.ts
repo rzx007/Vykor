@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import { ModelRequestFailure } from "./model-retry.js";
-import { AgentExecutionLimitError, type AgentExecutionContext, type AgentEventInput } from "../types/runtime.js";
-import type { StreamEvent, ToolDefinition } from "../index.js";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
+import { AgentExecutionLimitError, type AgentExecutionContext, type AgentEventInput } from "@vykor/agent-contracts";
+import type { StreamEvent, ToolDefinition } from "@vykor/agent-contracts";
 
 function allowAll(): any {
   return { checkTool: async () => ({ action: "allow", reason: "test" }) };
@@ -99,7 +99,7 @@ describe("QueryEngine model network retry", () => {
   });
   it("retries a failure created by a separate copy of the core module", async () => {
     vi.resetModules();
-    const { ModelRequestFailure: ForeignFailure } = await import("./model-retry.js");
+    const { ModelRequestFailure: ForeignFailure } = await import("@vykor/agent-contracts");
     const failure = new ForeignFailure("upstream closed", {
       kind: "stream_incomplete", phase: "stream", retryable: true, requestId: "cross-module",
     });
@@ -122,7 +122,7 @@ describe("QueryEngine model network retry", () => {
 
   it("preserves a separate module's permanent failure without retrying", async () => {
     vi.resetModules();
-    const { ModelRequestFailure: ForeignFailure } = await import("./model-retry.js");
+    const { ModelRequestFailure: ForeignFailure } = await import("@vykor/agent-contracts");
     const failure = new ForeignFailure("invalid credentials", {
       kind: "authentication", phase: "request", retryable: false, statusCode: 401, requestId: "auth-request",
     });

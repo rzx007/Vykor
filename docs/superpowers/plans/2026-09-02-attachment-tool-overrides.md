@@ -18,18 +18,18 @@
 
 ### `@vykor/agent-runtime`
 
-- 修改 `packages/agent-runtime/src/agent-options.ts`：声明 `trustedToolOverrides`，删除附件/OCR Capability override。
-- 修改 `packages/agent-runtime/src/default-runtime.ts`：校验第一方可信覆盖，恢复可信 builtin 权限分类；删除附件 Host、视觉 Capability 和附件目录挂载接线。
-- 修改 `packages/agent-runtime/src/default-runtime.test.ts`：锁定可信/不可信覆盖和 cwd 权限边界。
-- 修改 `packages/agent-runtime/src/child-agent-options.ts` 与 `child-agent-options.test.ts`：Root 的可信覆盖只读继承给 Child。
-- 修改 `packages/agent-runtime/src/capability-resolution.ts`、`capability-resolution.test.ts`、`default-agent-capabilities.ts`：删除 `attachments`、`imageToText` 能力快照与解析。
-- 修改 `packages/agent-runtime/src/kernel.ts`、`kernel.test.ts`：删除 QueryEngine 的附件/OCR setter 接线。
-- 修改 `packages/agent-runtime/src/agent.ts`、`agent-composition.ts`、相关测试：删除 `attachmentResourceRoot`。
-- 修改 `packages/agent-runtime/src/compact-context.ts` 与测试：只组合 `sessionMemory` 和通用 `supplementalSections`。
+- 修改 `packages/agent-runtime/src/node/runtime/agent-options.ts`：声明 `trustedToolOverrides`，删除附件/OCR Capability override。
+- 修改 `packages/agent-runtime/src/node/runtime/default-runtime.ts`：校验第一方可信覆盖，恢复可信 builtin 权限分类；删除附件 Host、视觉 Capability 和附件目录挂载接线。
+- 修改 `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`：锁定可信/不可信覆盖和 cwd 权限边界。
+- 修改 `packages/agent-runtime/src/node/runtime/child-agent-options.ts` 与 `child-agent-options.test.ts`：Root 的可信覆盖只读继承给 Child。
+- 修改 `packages/agent-runtime/src/node/capabilities/capability-resolution.ts`、`capability-resolution.test.ts`、`default-agent-capabilities.ts`：删除 `attachments`、`imageToText` 能力快照与解析。
+- 修改 `packages/agent-runtime/src/kernel/index.ts`、`kernel.test.ts`：删除 QueryEngine 的附件/OCR setter 接线。
+- 修改 `packages/agent-runtime/src/kernel/agent.ts`、`agent-composition.ts`、相关测试：删除 `attachmentResourceRoot`。
+- 修改 `packages/agent-runtime/src/node/runtime/compact-context.ts` 与测试：只组合 `sessionMemory` 和通用 `supplementalSections`。
 
 ### `@vykor/core`
 
-- 修改 `packages/core/src/types/tools.ts`：删除附件/OCR Host 类型和 `ToolContext` 字段。
+- 修改 `packages/agent-contracts/src/tools.ts`：删除附件/OCR Host 类型和 `ToolContext` 字段。
 - 修改 `packages/core/src/types/runtime.ts`：删除 `setAttachments()`、`setImageToText()`。
 - 修改 `packages/core/src/engine/query-engine.ts` 与测试：删除 Host 状态和 ToolContext 注入。
 - 修改 `packages/core/src/engine/compact-service.ts`：删除附件 Catalog 类型和格式化，增加通用 `CompactContextSection` 限额处理。
@@ -74,11 +74,11 @@
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
-- 修改：`packages/agent-runtime/src/child-agent-options.ts`
-- 修改：`packages/agent-runtime/src/child-agent-options.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`
 
 - [x] **步骤 1：为配置校验写失败测试**
 
@@ -218,7 +218,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [x] **步骤 7：提交可信覆盖能力**
 
 ```bash
-git add -- packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime.test.ts packages/agent-runtime/src/child-agent-options.ts packages/agent-runtime/src/child-agent-options.test.ts
+git add -- packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/node/runtime/child-agent-options.ts packages/agent-runtime/src/node/runtime/child-agent-options.test.ts
 git diff --cached --check
 git diff --cached --stat
 git commit -m "feat(agent-runtime): trust first-party tool overrides"
@@ -692,22 +692,22 @@ git commit -m "feat(server): install attachment-aware tool overrides"
 
 **文件：**
 
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/core/src/engine/integration.test.ts`（若 fixture 实现 setter）
 - 修改：`packages/core/src/index.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/capability-resolution.ts`
-- 修改：`packages/agent-runtime/src/capability-resolution.test.ts`
-- 修改：`packages/agent-runtime/src/default-agent-capabilities.ts`
-- 修改：`packages/agent-runtime/src/kernel.ts`
-- 修改：`packages/agent-runtime/src/kernel.test.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/child-agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/capabilities/capability-resolution.ts`
+- 修改：`packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`
+- 修改：`packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts`
+- 修改：`packages/agent-runtime/src/kernel/index.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/host-assembly.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent.test.ts`
 
 - [x] **步骤 1：先把类型/快照测试改成目标形状**
 
@@ -791,7 +791,7 @@ pnpm --filter @vykor/server check-types
 - [x] **步骤 7：提交 Capability 清理**
 
 ```bash
-git add -- packages/core/src/types/tools.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/core/src/engine/integration.test.ts packages/core/src/index.ts packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/capability-resolution.ts packages/agent-runtime/src/capability-resolution.test.ts packages/agent-runtime/src/default-agent-capabilities.ts packages/agent-runtime/src/kernel.ts packages/agent-runtime/src/kernel.test.ts packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime.test.ts packages/agent-runtime/src/agent.ts packages/agent-runtime/src/agent-composition.ts packages/agent-runtime/src/child-agent.test.ts
+git add -- packages/agent-contracts/src/tools.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/core/src/engine/integration.test.ts packages/core/src/index.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/capabilities/capability-resolution.ts packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts packages/agent-runtime/src/kernel/index.ts packages/agent-runtime/src/node/runtime/host-assembly.test.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/child-agent.test.ts
 git diff --cached --check
 git diff --cached --stat
 git commit -m "refactor(agent-runtime): remove attachment capabilities"
@@ -808,8 +808,8 @@ git commit -m "refactor(agent-runtime): remove attachment capabilities"
 - 修改：`packages/core/src/engine/compact-service.ts`
 - 修改：`packages/core/src/engine/compact-service-advanced.test.ts`
 - 修改：`packages/core/src/index.ts`
-- 修改：`packages/agent-runtime/src/compact-context.ts`
-- 修改：`packages/agent-runtime/src/compact-context.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/compact-context.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/compact-context.test.ts`
 - 修改：`packages/server/src/application/attachment-resource/compact-attachment-catalog.ts`
 - 修改：`packages/server/src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts`
 - 修改：`packages/server/src/application/agent/agent-pool.ts`
@@ -924,7 +924,7 @@ rg -n "CompactAttachmentCatalog|attachmentCatalog|Conversation Attachments|attac
 - [x] **步骤 8：提交 compact 边界迁移**
 
 ```bash
-git add -- packages/core/src/engine/compact-service.ts packages/core/src/engine/compact-service-advanced.test.ts packages/core/src/index.ts packages/agent-runtime/src/compact-context.ts packages/agent-runtime/src/compact-context.test.ts packages/server/src/application/attachment-resource/compact-attachment-catalog.ts packages/server/src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts packages/server/src/application/agent/agent-pool.ts packages/server/src/application/agent/__test__/agent-pool.test.ts packages/server/src/application/daemon-application.ts packages/server/src/application/__test__/durable-agent-application.test.ts
+git add -- packages/core/src/engine/compact-service.ts packages/core/src/engine/compact-service-advanced.test.ts packages/core/src/index.ts packages/agent-runtime/src/node/runtime/compact-context.ts packages/agent-runtime/src/node/runtime/compact-context.test.ts packages/server/src/application/attachment-resource/compact-attachment-catalog.ts packages/server/src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts packages/server/src/application/agent/agent-pool.ts packages/server/src/application/agent/__test__/agent-pool.test.ts packages/server/src/application/daemon-application.ts packages/server/src/application/__test__/durable-agent-application.test.ts
 git diff --cached --check
 git diff --cached --stat
 git commit -m "refactor(compact): move attachment context to server"

@@ -13,13 +13,11 @@
  *
  * 对齐 Python vykor v0.1.9 services/compact。
  */
-import type {
-  Message,
-  ToolUseBlock,
-  IHookExecutor,
-} from "../index";
+import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
+import type { HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens";
-import { isAgentExecutionLimitError } from "../types/runtime";
+import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
+import { isModelAttemptControlFailure } from "./model-attempt-control";
 import {
   createCompactBoundaryMarker,
   estimateMessageTokens,
@@ -240,7 +238,7 @@ export class CompactService {
         this.consecutiveFailures = 0;
         return result;
       } catch (err) {
-        if (isAgentExecutionLimitError(err)) throw err;
+        if (isAgentExecutionLimitError(err) || isModelAttemptControlFailure(err)) throw err;
         if (signal?.aborted) throw signal.reason;
         if (err instanceof CompactContextProviderError) throw err;
         this.consecutiveFailures++;
@@ -393,7 +391,7 @@ export class CompactService {
         summaryText = await collectSummary(this.client, summarizable, compactPrompt, signal);
         break;
       } catch (err) {
-        if (isAgentExecutionLimitError(err)) throw err;
+        if (isAgentExecutionLimitError(err) || isModelAttemptControlFailure(err)) throw err;
         if (signal?.aborted) throw signal.reason;
         if (isPromptTooLongError(err) && ptlRetries < MAX_PTL_RETRIES) {
           const truncated = this.truncateHeadForPtlRetry(summarizable);

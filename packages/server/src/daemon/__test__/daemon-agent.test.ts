@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "./../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vykor/coordinator", async (importOriginal) => {
@@ -29,7 +30,7 @@ vi.mock("@vykor/agent-runtime", () => ({
 import { createDaemonAgentLoader, readDaemonAgentLocalWorkspace } from "../daemon-agent.js";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { getCoordinatorUserContext } from "@vykor/coordinator";
-import { createDefaultNodeAgentWithInternals } from "../../../../agent-runtime/src/default-agent.js";
+
 import { AgentPool } from "../../application/agent/agent-pool.js";
 import { SessionCommandService } from "../../application/session/session-command-service.js";
 import { resolve } from "node:path";
@@ -61,7 +62,7 @@ describe("createDaemonAgentLoader", () => {
       const captured = limit;
       return { resolveModelOutputLimit: async () => captured };
     });
-    const loader = createDaemonAgentLoader({ settings: { model: "chat" } as any, createAgent, prepareModelMetadata })!;
+    const loader = createDaemonAgentLoader({ settings: { model: "chat" } as any, createAgent:hostedAgentFactory(createAgent), prepareModelMetadata })!;
     await loader({ session, history: [], parts: [] });
     limit = 16_000;
     await loader({ session: { ...session, id: "next" }, history: [], parts: [] });
@@ -77,7 +78,7 @@ describe("createDaemonAgentLoader", () => {
     const cwd = resolve("/tasks/worktree");
     const getSettingsForCwd = vi.fn(async () => ({ model: "default-model" } as any));
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn(async () => {}) }) as any);
-    const loader = createDaemonAgentLoader({ getSettingsForCwd, createAgent })!;
+    const loader = createDaemonAgentLoader({ getSettingsForCwd, createAgent:hostedAgentFactory(createAgent) })!;
     await loader({ session: { ...session, cwd, metadata: { ...session.metadata, desktop: { settingsRoot: root, worktree: { id: "tree", path: cwd, branch: "task/tree" } } } }, history: [], parts: [] });
     expect(getSettingsForCwd).toHaveBeenCalledWith(root);
     expect(createAgent.mock.calls[0]![0].options).toMatchObject({ cwd, memoryRoot: root });
@@ -89,7 +90,7 @@ describe("createDaemonAgentLoader", () => {
   it("passes the host-only Run capability lifecycle unchanged into the runtime", async () => {
     const onRunCapabilities = vi.fn(() => vi.fn());
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
-    const loader = createDaemonAgentLoader({ createAgent, onRunCapabilities })!;
+    const loader = createDaemonAgentLoader({ createAgent:hostedAgentFactory(createAgent), onRunCapabilities })!;
     await loader({ session, history: [], parts: [] });
     expect(createAgent.mock.calls[0]![0].options.onRunCapabilities).toBe(onRunCapabilities);
   });
@@ -106,7 +107,7 @@ describe("createDaemonAgentLoader", () => {
     await createDaemonAgentLoader({ settings })!({ session, history: [], parts: [] });
     expect(readDaemonAgentLocalWorkspace(wsl)).toBeUndefined();
     const custom = { loadHistory: vi.fn(), close: vi.fn() } as any;
-    await createDaemonAgentLoader({ createAgent: async () => custom })!({ session, history: [], parts: [] });
+    await createDaemonAgentLoader({ createAgent: hostedAgentFactory(async () => custom) })!({ session, history: [], parts: [] });
     expect(readDaemonAgentLocalWorkspace(custom)).toBeUndefined();
   });
 
@@ -121,7 +122,7 @@ describe("createDaemonAgentLoader", () => {
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model", agentEnvironment: { kind: "wsl" }, sandbox: { enabled: false } } as any,
       executionSurface: "desktop_managed",
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({ session: projectless, history: [], parts: [] });
@@ -141,7 +142,7 @@ describe("createDaemonAgentLoader", () => {
     };
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
       mcpRuntimeRegistry,
     })!;
 
@@ -159,7 +160,7 @@ describe("createDaemonAgentLoader", () => {
     };
     const loader = createDaemonAgentLoader({
       settings: { model: "old", provider: "openai", baseUrl: "https://old.example/v1" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({ session: switched, history: [], parts: [] });
     expect(createAgent.mock.calls[0]![0].options.baseUrl).toBeUndefined();
@@ -174,7 +175,7 @@ describe("createDaemonAgentLoader", () => {
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model", effort: "medium" } as any,
       getSession: () => current,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({ session, history: [], parts: [] });
@@ -217,7 +218,7 @@ describe("createDaemonAgentLoader", () => {
       settings: { model: "default-model" } as any,
       executionSurface: "desktop_managed",
       acquireEnvironment,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({ session, history: [], parts: [] });
@@ -226,7 +227,12 @@ describe("createDaemonAgentLoader", () => {
       session,
       expect.objectContaining({ model: "default-model" }),
     );
-    expect(createAgent.mock.calls[0]![0].options.executionEnvironment).toBe(lease);
+    const options = createAgent.mock.calls[0]![0].options;
+    expect(options.executionEnvironment).toMatchObject({ environmentId: lease.environmentId });
+    expect(options.ownsExecutionEnvironment).toBe(true);
+    await options.executionEnvironment.release();
+    await options.executionEnvironment.release();
+    expect(lease.release).toHaveBeenCalledOnce();
   });
 
   it("releases an acquired environment when Agent creation fails", async () => {
@@ -235,7 +241,7 @@ describe("createDaemonAgentLoader", () => {
       settings: { model: "default-model" } as any,
       executionSurface: "desktop_managed",
       acquireEnvironment: vi.fn(async () => lease),
-      createAgent: vi.fn(async () => { throw new Error("create failed"); }),
+      createAgent: hostedAgentFactory(vi.fn(async () => { throw new Error("create failed"); })),
     })!;
 
     await expect(loader({ session, history: [], parts: [] })).rejects.toThrow("create failed");
@@ -261,7 +267,7 @@ describe("createDaemonAgentLoader", () => {
     const readOverride = { name: "Read", description: "attachments", inputSchema: {}, execute: vi.fn() } as any;
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
       requestPermission,
       schedules,
       createEventSink,
@@ -275,7 +281,7 @@ describe("createDaemonAgentLoader", () => {
       trustedToolOverrides: ["Read"],
     })!;
 
-    const loaded = await loader({ session, history: [], parts: [] });
+    const {agent:loaded,host} = await loader({ session, history: [], parts: [] });
 
     expect(loaded).toBe(agent);
     expect(createAgent).toHaveBeenCalledOnce();
@@ -337,15 +343,15 @@ describe("createDaemonAgentLoader", () => {
         sandbox: { enabled: false },
         memory: { enabled: false },
       } as any,
-      createAgent: async ({ options }) =>
-        createDefaultNodeAgentWithInternals(options, { createLocalTerminal }),
+      createAgent: hostedAgentFactory(async ({ options }) =>
+        (await vi.importActual<typeof import("@vykor/agent-runtime")>("@vykor/agent-runtime")).createDefaultNodeAgent(options)),
       createTerminal: () => ({ value: terminal, jobs: terminalJobs }),
     })!;
 
-    const loaded = await loader({ session, history: [], parts: [] });
+    const {agent:loaded,host} = await loader({ session, history: [], parts: [] });
     try {
       expect(createLocalTerminal).not.toHaveBeenCalled();
-      expect(loaded.getCapabilities().terminal).toEqual({
+      expect(host!.plugins.getCapabilities().terminal).toEqual({
         status: "available",
         source: "override",
       });
@@ -366,7 +372,7 @@ describe("createDaemonAgentLoader", () => {
     const loader = createDaemonAgentLoader({
       settings: { model: "global-model", sandbox: { enabled: false } } as any,
       getSettingsForCwd,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({ session, history: [], parts: [] });
@@ -385,7 +391,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => agent);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model", plugins: { enabled: false } } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({
@@ -407,7 +413,7 @@ describe("createDaemonAgentLoader", () => {
 
   it("loads a persisted child with stale coordinator mode as a direct Agent", async () => {
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn(async () => {}) }) as any);
-    const loader = createDaemonAgentLoader({ settings: { model: "default-model" } as any, createAgent })!;
+    const loader = createDaemonAgentLoader({ settings: { model: "default-model" } as any, createAgent:hostedAgentFactory(createAgent) })!;
     await loader({ session: { ...session, parentId: "parent", metadata: { runtime: { ...session.metadata.runtime, sessionMode: "coordinator", permissionMode: "plan", allowedTools: ["Shell"] } } }, history: [], parts: [] });
     const options = createAgent.mock.calls[0]![0].options;
     expect(options.roleAllowedTools).toBeUndefined();
@@ -421,7 +427,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => agent);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({
@@ -469,7 +475,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => agent);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
 
     await loader({ session, history: [], parts: [] });
@@ -485,7 +491,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => agent);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     const childSession = {
       ...session,
@@ -504,7 +510,7 @@ describe("createDaemonAgentLoader", () => {
     const close = vi.fn(async () => {});
     const agent = { loadHistory: vi.fn(() => { throw error; }), close } as any;
     const loader = createDaemonAgentLoader({
-      createAgent: vi.fn(async () => agent),
+      createAgent: hostedAgentFactory(vi.fn(async () => agent)),
     })!;
 
     await expect(loader({ session, history: [], parts: [] })).rejects.toThrow("bad history");
@@ -516,14 +522,14 @@ describe("createDaemonAgentLoader", () => {
     const sink = vi.fn(async () => {});
     const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
     const loader = createDaemonAgentLoader({
-      createAgent: vi.fn(async ({ options }) => {
+      createAgent: hostedAgentFactory(vi.fn(async ({ options }) => {
         await options.onEvent!(event);
         return agent;
-      }),
+      })),
       createEventSink: vi.fn(() => sink),
     })!;
 
-    await expect(loader({ session, history: [], parts: [] })).resolves.toBe(agent);
+    await expect(loader({ session, history: [], parts: [] })).resolves.toMatchObject({agent});
     expect(sink).toHaveBeenCalledWith(event);
   });
 
@@ -535,7 +541,7 @@ describe("createDaemonAgentLoader", () => {
       close: vi.fn(async () => { throw closeError; }),
     } as any;
     const loader = createDaemonAgentLoader({
-      createAgent: vi.fn(async () => agent),
+      createAgent: hostedAgentFactory(vi.fn(async () => agent)),
     })!;
 
     const failure = await loader({ session, history: [], parts: [] }).catch((error) => error);
@@ -548,7 +554,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
       resolveReasoningEfforts: async () => ["low", "high", "max"],
     })!;
 
@@ -570,7 +576,7 @@ describe("createDaemonAgentLoader", () => {
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
       resolveReasoningEfforts: async () => {
         throw new Error("catalog offline");
       },
@@ -605,7 +611,7 @@ describe("createDaemonAgentLoader", () => {
     const resolveReasoningEfforts = vi.fn(async () => ["low", "high", "max"]);
     const loadAgent = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
       resolveReasoningEfforts,
     })!;
     const store = {
@@ -618,7 +624,7 @@ describe("createDaemonAgentLoader", () => {
         return record;
       }),
     };
-    const pool = new AgentPool({ store, loadAgent } as any);
+    const pool = new AgentPool({ store, loadAgent:hostedAgentFactory(loadAgent) } as any);
     const service = new SessionCommandService({
       sessions: store as any,
       transactions: {

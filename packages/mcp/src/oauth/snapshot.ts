@@ -6,7 +6,7 @@ import type {
   McpRuntimeStatus,
   McpServerConfig,
   McpServerIdentity,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { oauthScopesChanged, resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 /**

@@ -1,3 +1,6 @@
+import {createFileEditTool} from "../edit.js";
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,9 +14,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "repeated.txt");
       await writeFile(file, "same\nother\nsame\nsame\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "same", new_string: "new" },
-        {
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "same", new_string: "new" }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -22,8 +23,7 @@ describe("fileEditTool", () => {
             permission: { mode: "default" },
             sandbox: { enabled: false },
           },
-        },
-      );
+        });
 
       expect(result.isError).toBe(true);
       expect(result).toMatchObject({ executionState: "not_started", failureKind: "precondition" });
@@ -40,9 +40,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "secret.txt");
       await writeFile(file, "old", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "old", new_string: "new" },
-        {
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "old", new_string: "new" }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -58,8 +56,7 @@ describe("fileEditTool", () => {
               },
             },
           },
-        },
-      );
+        });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as any).text).toContain("denied by sandbox rule");
@@ -82,14 +79,11 @@ describe("fileEditTool", () => {
       const file = join(dir, "code.ts");
       await writeFile(file, "function f() {\n    return 1;\n}\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        {
+      const result = await executeToolFixture(host => createFileEditTool(host), {
           file_path: file,
           old_string: "function f() {\n  return 1;\n}",
           new_string: "function f() {\n  return 2;\n}",
-        },
-        { cwd: dir, settings },
-      );
+        }, { cwd: dir, settings });
 
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf-8")).toContain("return 2;");
@@ -104,10 +98,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "win.txt");
       await writeFile(file, "alpha\r\nbeta\r\ngamma\r\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "beta\ngamma", new_string: "BETA\nGAMMA" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "beta\ngamma", new_string: "BETA\nGAMMA" }, { cwd: dir, settings });
 
       expect(result.isError).toBeFalsy();
       const after = await readFile(file, "utf-8");
@@ -124,10 +115,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "bom.txt");
       await writeFile(file, "\uFEFFtitle\nbody\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "title", new_string: "TITLE" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "title", new_string: "TITLE" }, { cwd: dir, settings });
 
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf-8")).toBe("\uFEFFTITLE\nbody\n");
@@ -142,10 +130,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "same.txt");
       await writeFile(file, "keep me\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "keep me", new_string: "keep me" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "keep me", new_string: "keep me" }, { cwd: dir, settings });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
@@ -163,10 +148,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "multi.txt");
       await writeFile(file, "alpha\r\nbeta\r\nother\r\nalpha\r\nbeta\r\n", "utf-8");
 
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "alpha\nbeta", new_string: "ALPHA\nBETA" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "alpha\nbeta", new_string: "ALPHA\nBETA" }, { cwd: dir, settings });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
@@ -182,10 +164,7 @@ describe("fileEditTool", () => {
     try {
       const file = join(dir, "spacing.ts");
       await writeFile(file, "const value   =   1;\n", "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "const value = 1;", new_string: "const value = 2;" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "const value = 1;", new_string: "const value = 2;" }, { cwd: dir, settings });
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf-8")).toBe("const value = 2;\n");
     } finally {
@@ -198,10 +177,7 @@ describe("fileEditTool", () => {
     try {
       const file = join(dir, "escaped.txt");
       await writeFile(file, "alpha\nbeta\n", "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "alpha\\nbeta", new_string: "ALPHA\nBETA" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "alpha\\nbeta", new_string: "ALPHA\nBETA" }, { cwd: dir, settings });
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf-8")).toBe("ALPHA\nBETA\n");
     } finally {
@@ -214,10 +190,7 @@ describe("fileEditTool", () => {
     try {
       const file = join(dir, "all.txt");
       await writeFile(file, "old / old / old", "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "old", new_string: "new", replace_all: true },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "old", new_string: "new", replace_all: true }, { cwd: dir, settings });
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf-8")).toBe("new / new / new");
     } finally {
@@ -230,10 +203,7 @@ describe("fileEditTool", () => {
     try {
       const file = join(dir, "missing.txt");
       await writeFile(file, "original\n", "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "absent", new_string: "new" },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "absent", new_string: "new" }, { cwd: dir, settings });
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string not found in file.",
@@ -253,14 +223,11 @@ describe("fileEditTool", () => {
         "if (ready) {", "      run();", "}",
       ].join("\n");
       await writeFile(file, before, "utf-8");
-      const result = await fileEditTool.execute!(
-        {
+      const result = await executeToolFixture(host => createFileEditTool(host), {
           file_path: file,
           old_string: "if (ready) {\n  run();\n}",
           new_string: "if (ready) {\n  stop();\n}",
-        },
-        { cwd: dir, settings },
-      );
+        }, { cwd: dir, settings });
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
         "Found multiple matches for oldString. Provide more surrounding context to make the match unique.",
@@ -277,10 +244,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "blank.txt");
       const before = "alpha\n\nbeta\n";
       await writeFile(file, before, "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "   ", new_string: "X", replace_all: true },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "   ", new_string: "X", replace_all: true }, { cwd: dir, settings });
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string not found in file.",
@@ -297,10 +261,7 @@ describe("fileEditTool", () => {
       const file = join(dir, "bom-only.txt");
       const before = "\uFEFFtitle\n";
       await writeFile(file, before, "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "\uFEFF", new_string: "X", replace_all: true },
-        { cwd: dir, settings },
-      );
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "\uFEFF", new_string: "X", replace_all: true }, { cwd: dir, settings });
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string must not be empty.",
@@ -316,9 +277,7 @@ describe("fileEditTool", () => {
     try {
       const file = join(dir, "secret.txt");
       await writeFile(file, "same", "utf-8");
-      const result = await fileEditTool.execute!(
-        { file_path: file, old_string: "same", new_string: "same" },
-        {
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "same", new_string: "same" }, {
           cwd: dir,
           settings: {
             ...settings,
@@ -327,8 +286,7 @@ describe("fileEditTool", () => {
               filesystem: { allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] },
             },
           },
-        },
-      );
+        });
       expect(result.isError).toBe(true);
       expect((result.content[0] as { type: string; text: string }).text)
         .toContain("denied by sandbox rule");

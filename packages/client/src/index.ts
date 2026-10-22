@@ -39,36 +39,14 @@ export {
   McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
-export { normalizeApprovalMode, isWorkMode } from "@vykor/protocol";
+export { normalizeApprovalMode, isWorkMode, patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "./runtime-configuration.js";
 export type { ApprovalMode, WorkMode, ApprovalReviewRecord } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
 export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
-export type {
-  PluginCatalogEntry,
-  AgentEnvironmentCapabilities,
-  AttachmentAssetRecord,
-  CreateNoteInput,
-  NoteRecord,
-  UpdateNoteInput,
-  ClientProtocolSupport,
-  ProtocolCompatibility,
-  ServerCapabilities,
-  SearchSessionsOptions,
-  SessionSearchResult,
-} from "@vykor/protocol";
-export {
-  checkProtocolCompatibility,
-  CURRENT_PROTOCOL_VERSION,
-  readSessionModelRetryState,
-  readSessionModelUsage,
-  isSupersededModelPart,
-  supportsFeature,
-} from "@vykor/protocol";
-export type {
-  SessionModelRetryState,
-  SessionModelUsageSummary,
-} from "@vykor/protocol";
+export type { PluginCatalogEntry, AgentEnvironmentCapabilities, AttachmentAssetRecord, CreateNoteInput, NoteRecord, UpdateNoteInput, ClientProtocolSupport, ProtocolCompatibility, ServerCapabilities, SearchSessionsOptions, SessionSearchResult } from "@vykor/protocol";
+export { checkProtocolCompatibility, CURRENT_PROTOCOL_VERSION, readSessionModelRetryState, readSessionModelUsage, isSupersededModelPart, supportsFeature } from "@vykor/protocol";
+export type { SessionModelRetryState, SessionModelUsageSummary } from "@vykor/protocol";
 export {
   applyEvent,
   applyEvents,
@@ -103,17 +81,8 @@ export {
   parseSlashLine,
   resolveSessionCwd,
 } from "./commands/index.js";
-export {
-  patchSessionRuntimeMetadata,
-  isPluginIconSource,
-  isPluginWebUrl,
-  readRuntimeMetadata,
-  readSessionRuntimeConfig,
-} from "@vykor/protocol";
-export type {
-  SessionRuntimeConfig,
-  SessionRuntimeConfigPatch,
-} from "@vykor/protocol";
+export { isPluginIconSource, isPluginWebUrl, readRuntimeMetadata } from "@vykor/protocol";
+export type { SessionRuntimeConfig, SessionRuntimeConfigPatch } from "@vykor/protocol";
 export type {
   PresentationReadRequest,
   SessionCommandHost,
@@ -220,45 +189,7 @@ export type {
   DownloadAttachmentOptions,
 } from "./types/index.js";
 export type { SessionMessageWithParts } from "./state/index.js";
-export type {
-  TerminalCreateRequest,
-  TerminalEvent,
-  TerminalReadRequest,
-  TerminalReadResult,
-  TerminalResizeRequest,
-  TerminalRuntime,
-  TerminalSessionInfo,
-  TerminalSessionStatus,
-  TerminalSignal,
-  TerminalSource,
-  TerminalWriteRequest,
-  JobCapabilities,
-  JobKind,
-  JobReadResult,
-  JobSnapshot,
-  JobStatus,
-  JobWaitResult,
-  DurableChannelMessageInput,
-  DurableChannelMessageResult,
-  ExternalConversationRecord,
-  ChannelDeliveryRecord,
-  ChannelDeliveryStatus,
-  ChannelStatusSnapshot,
-  ChannelConnectorRuntimeStatus,
-  ChannelDenialNotice,
-  ChannelDomain,
-  ChannelRuntimeControlInput,
-  ChannelRuntimeState,
-  ChannelRuntimeStatus,
-  FeishuAllowInput,
-  FeishuChannelSnapshot,
-  FeishuConnectInput,
-  FeishuPatchInput,
-  FeishuRegistrationSnapshot,
-  FeishuRegistrationStartInput,
-  FeishuRegistrationState,
-  RecordChannelDeliveryInput,
-} from "@vykor/protocol";
+export type { TerminalCreateRequest, TerminalEvent, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalRuntime, TerminalSessionInfo, TerminalSessionStatus, TerminalSignal, TerminalSource, TerminalWriteRequest, JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult, DurableChannelMessageInput, DurableChannelMessageResult, ExternalConversationRecord, ChannelDeliveryRecord, ChannelDeliveryStatus, ChannelStatusSnapshot, ChannelConnectorRuntimeStatus, ChannelDenialNotice, ChannelDomain, ChannelRuntimeControlInput, ChannelRuntimeState, ChannelRuntimeStatus, FeishuAllowInput, FeishuChannelSnapshot, FeishuConnectInput, FeishuPatchInput, FeishuRegistrationSnapshot, FeishuRegistrationStartInput, FeishuRegistrationState, RecordChannelDeliveryInput } from "@vykor/protocol";
 
 export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
 
@@ -266,10 +197,11 @@ export { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 export type { OfficeFormat, OfficePreview } from "@vykor/protocol";
 
 export { PluginAppResource } from "./resources/plugin-app-resource.js";
-export { getPluginAppToolPolicy } from "@vykor/protocol";
+export { getPluginAppToolPolicy } from "./plugin-app-policy.js";
 export type { PluginAppToolPolicy, PluginAppToolDescriptor } from "@vykor/protocol";
 export type { PluginAppToolRequest, PluginAppConversationRequest, PluginAppActionResponse, PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppRecord, PluginAppSource, PluginAppRuntimeLease, PluginAppResponse } from "@vykor/protocol";
-export { PLUGIN_APP_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest, parseMcpCallResultData } from "@vykor/protocol";
+export { PLUGIN_APP_INPUT_LIMITS, PLUGIN_APP_DATA_LIMITS, PLUGIN_APP_RESOURCE_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest } from "@vykor/protocol";
+export { parseMcpCallResultData } from "@vykor/protocol";
 export { isPluginAppAdmissionRejection, type PluginAppAdmissionRejection } from "@vykor/protocol";
 
 export { readPluginUiInstance, readPluginUiAction, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, ProtocolValidationError } from "@vykor/protocol";

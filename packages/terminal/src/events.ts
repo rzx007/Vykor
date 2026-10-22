@@ -1,6 +1,6 @@
-import type { TerminalEvent } from "@vykor/protocol";
+import type { TerminalEvent } from "./contracts.js";
 
-export type { TerminalEvent } from "@vykor/protocol";
+export type { TerminalEvent } from "./contracts.js";
 
 export type TerminalEventListener = (event: TerminalEvent) => void
 

@@ -1,9 +1,5 @@
-import {
-  parseCreateScheduledTaskRequest,
-  parseUpdateScheduledTaskRequest,
-  ProtocolValidationError,
-  type ScheduledTaskRecord,
-} from "@vykor/protocol";
+import { parseCreateScheduledTaskRequest, parseUpdateScheduledTaskRequest, ProtocolValidationError } from "@vykor/protocol";
+import type { ScheduledTaskRecord } from "@vykor/protocol";
 import { Hono } from "hono";
 
 import type { ScheduledTaskService } from "../../daemon/scheduled-task-service.js";

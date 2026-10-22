@@ -1,4 +1,4 @@
-import type { Message, ContentBlock } from "../index";
+import type { Message, ContentBlock } from "@vykor/agent-contracts";
 import type { CompactTrigger } from "./compact-types";
 import { boundaryFallsInsideToolGroup as historyBoundaryFallsInsideToolGroup } from "../utils/message-history";
 import { estimateTokens as estimateTextTokens } from "../utils/token-counter";

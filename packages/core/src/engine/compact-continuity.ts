@@ -1,4 +1,4 @@
-import type { Message } from "../types/messages";
+import type { Message } from "@vykor/agent-contracts";
 import { toolFeedbackFields } from "./tool-result-feedback";
 
 const MARKER = "[history-excerpts-v1]";

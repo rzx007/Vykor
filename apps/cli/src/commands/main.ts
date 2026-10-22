@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { ContentBlock, Settings } from "@vykor/core";
-import { loadSettings, getSkillsDir, getDataDir } from "@vykor/core";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import type { Settings } from "@vykor/host-config";
+import { loadSettings, getSkillsDir, getDataDir } from "@vykor/host-config";
 import { CommandRegistry } from "@vykor/commands";
 import { SkillRegistry, SkillLoader, findProjectSkillDirs, type SkillDefinition } from "@vykor/skills";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";

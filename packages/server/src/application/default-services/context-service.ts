@@ -4,10 +4,9 @@ import {
   assembleContextUsageSnapshot,
   createTip,
   formatContextUsageReport,
-  getCredentialsFilePath,
-  getConfigDir,
   type ContextUsageSnapshot,
 } from "@vykor/core";
+import { getCredentialsFilePath, getConfigDir } from "@vykor/host-config";
 import {
   buildPromptLayers,
   buildPromptLedgerSegments,

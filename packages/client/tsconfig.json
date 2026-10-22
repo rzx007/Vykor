@@ -3,9 +3,22 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "../..",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": [
+        "../coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../coordinator/src/workflow/index.ts"
+      ],
       "@vykor/core": [
         "../core/src/index.ts"
       ],

@@ -1,11 +1,4 @@
-import type {
-  PermissionRequestRecord,
-  ProjectionSettlementRecord,
-  SessionExecutionRecord,
-  SessionMessagePartRecord,
-  SessionRunAttemptRecord,
-  SessionRunRecord,
-} from "@vykor/protocol";
+import type { PermissionRequestRecord, ProjectionSettlementRecord, SessionExecutionRecord, SessionMessagePartRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 export interface RuntimeMetricHistogram {
   count: number;

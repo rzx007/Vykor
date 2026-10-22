@@ -1,7 +1,8 @@
 import { AttachmentError } from "@vykor/services";
+import { DomainValidationError } from "@vykor/domain-contracts/inputs";
 import { describe, expect, it } from "vitest";
 
-import { applicationErrorResponse, attachmentErrorResponse } from "./support.js";
+import { applicationErrorResponse, attachmentErrorResponse, protocolValidationErrorResponse } from "./support.js";
 
 describe("attachmentErrorResponse", () => {
   it.each([
@@ -27,5 +28,25 @@ describe("attachmentErrorResponse", () => {
         new AttachmentError("attachment_count_exceeded", "too many"),
       ).status,
     ).toBe(413);
+  });
+});
+
+describe("domain validation error adapters", () => {
+  it("retains the existing wire error code and field details", async () => {
+    const response = applicationErrorResponse(new DomainValidationError("invalid_text", "items", "invalid_value"));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: "invalid_request", message: "invalid_text",
+      details: { field: "items", reason: "invalid_value" },
+    });
+  });
+
+  it("retains the argument payload limit status and wire code", async () => {
+    const response = protocolValidationErrorResponse(new DomainValidationError("arguments are too large", "args", "payload_too_large"));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      code: "payload_too_large", message: "arguments are too large",
+      details: { field: "args", reason: "payload_too_large" },
+    });
   });
 });

@@ -1,4 +1,5 @@
-import type { AgentEvent, AgentRunResult, Message, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import type { AgentEvent, AgentRunResult, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { fileURLToPath } from "node:url";
 import { validateToolInput } from "../../packages/core/src/engine/tool-input-schema.js";

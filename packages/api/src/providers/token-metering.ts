@@ -1,4 +1,4 @@
-import type { ModelTokenMetering } from "@vykor/core";
+import type { ModelTokenMetering } from "@vykor/agent-contracts";
 
 export function normalizeTokenMetering(
   raw: { input: unknown; output: unknown; cacheCreation?: unknown; cacheRead?: unknown },

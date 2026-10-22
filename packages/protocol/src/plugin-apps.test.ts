@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { copyPluginAppJson, parsePluginAppToolRequest, isPluginAppAdmissionRejection, readPluginAppAction, PLUGIN_APP_LIMITS } from "./plugin-apps.js";
+import { PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
+import { copyPluginAppJson, parsePluginAppToolRequest, isPluginAppAdmissionRejection, readPluginAppAction } from "./plugin-apps.js";
+import { ProtocolValidationError } from "./requests.js";
 
 describe("plugin app wire data", () => {
+  it("retains structured input failure information for transport adapters", () => {
+    try { parsePluginAppToolRequest({}); throw new Error("expected invalid input"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(ProtocolValidationError);
+      expect(error).toMatchObject({ code: "invalid_request", details: { reason: "plugin_app_invalid_request" } });
+    }
+  });
   it("copies bounded finite JSON and rejects executable or lossy values", () => {
     const input = { draft: [1, true, null, "文"] };
     const copy = copyPluginAppJson(input, 1024);
@@ -36,7 +45,7 @@ describe("plugin app wire data", () => {
       pluginId: "p", pluginVersion: "1", pluginDigest: "p", definitionDigest: "d", backendId: "b", backendKind: "mcp-server",
       resourceUri: "ui://page", toolName: "save", registeredToolName: "mcp__s__save", toolUseId: "call", args: request.args, executionState: "completed" };
     expect(readPluginAppAction({ pluginAppAction: metadata })?.args).toEqual(request.args);
-    expect(() => parsePluginAppToolRequest({ ...request, args: { text: "x".repeat(PLUGIN_APP_LIMITS.maxArgsBytes) } })).toThrow("too_large");
+    expect(() => parsePluginAppToolRequest({ ...request, args: { text: "x".repeat(PLUGIN_APP_DATA_LIMITS.maxArgsBytes) } })).toThrow("too_large");
   });
   it("accepts old or explicit busy rejection proof and rejects an invented reason", () => {
     const request = { source: { sessionId: "s", appId: "a" }, requestId: "r", expectedRevision: 1 };

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CompactService, type Message, type StreamingMessageClient, type StreamMessageParams, type ToolDefinition } from "@vykor/core";
+import {
+  CompactService,
+  type StreamingMessageClient,
+  type StreamMessageParams,
+  type ToolDefinition,
+} from "@vykor/core";
+import { type Message } from "@vykor/agent-contracts";
 import { createCompactContextProvider } from "@vykor/agent-runtime";
 import { runBehaviorCase } from "./run.js";
 import type { BehaviorCase } from "./cases.js";

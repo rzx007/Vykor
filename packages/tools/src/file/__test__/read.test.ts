@@ -1,3 +1,6 @@
+
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileReadTool} from "./../read.js";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +30,7 @@ describe("fileReadTool", () => {
       class DisappearingFiles extends HostFileOperations {
         async readBytes(path: string) { await rm(path); return super.readBytes(path); }
       }
-      const result = await fileReadTool.execute({ file_path: file }, { cwd: dir, environment: {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir, environment: {
         workspace: { hostRoot: dir },
         files: new DisappearingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
       } } as never);
@@ -37,7 +40,7 @@ describe("fileReadTool", () => {
   it("reports a definitely missing target even when its missing parent has no suggestions", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-missing-parent-"));
     try {
-      const result = await fileReadTool.execute({ file_path: join(dir, "absent-parent", "data.txt") }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "absent-parent", "data.txt") }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
@@ -46,7 +49,7 @@ describe("fileReadTool", () => {
     try {
       const target = mode === "directory-offset" ? dir : join(dir, "data.txt");
       if (mode !== "directory-offset") await writeFile(target, mode === "binary" ? Buffer.from([0xff, 0xfe]) : "one\n");
-      const result = await fileReadTool.execute({ file_path: target, ...(mode === "binary" ? {} : { offset: 99 }) }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: target, ...(mode === "binary" ? {} : { offset: 99 }) }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "completed" });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
@@ -59,10 +62,7 @@ describe("fileReadTool", () => {
   });
 
   it("treats attachment URIs as invalid local paths", async () => {
-    const result = await fileReadTool.execute!(
-      { file_path: "attachment://att_123/report.log" },
-      { cwd: "D:/project" },
-    );
+    const result = await executeToolFixture(host => createFileReadTool(host), { file_path: "attachment://att_123/report.log" }, { cwd: "D:/project" });
 
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("Error reading file");
@@ -74,10 +74,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "notes.txt");
       await writeFile(file, "one\ntwo\nthree", "utf-8");
 
-      const result = await fileReadTool.execute!(
-        { file_path: file, offset: 2, limit: 1 },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, offset: 2, limit: 1 }, { cwd: dir });
 
       expect((result.content[0] as any).text).toBe(
         "2: two\n\n(Showing lines 2-2 of 3. Use offset=3 to continue.)",
@@ -97,7 +94,7 @@ describe("fileReadTool", () => {
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
       await writeFile(file, png);
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBeFalsy();
       expect(result.content).toEqual([{
@@ -115,7 +112,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "broken.png");
       await writeFile(file, "not a PNG");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toContain("Invalid image file");
@@ -130,7 +127,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "data.bin");
       await writeFile(file, Buffer.from([0, 255, 1, 2]));
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toBe(
@@ -147,10 +144,7 @@ describe("fileReadTool", () => {
       await mkdir(join(dir, "app"));
       await writeFile(join(dir, "README.md"), "hello", "utf-8");
 
-      const result = await fileReadTool.execute!(
-        { file_path: dir },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir }, { cwd: dir });
 
       const text = (result.content[0] as any).text as string;
       expect(text).toContain("app/");
@@ -168,9 +162,7 @@ describe("fileReadTool", () => {
       const file = join(outside, "secret.txt");
       await writeFile(file, "secret", "utf-8");
 
-      const result = await fileReadTool.execute!(
-        { file_path: file },
-        {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -179,8 +171,7 @@ describe("fileReadTool", () => {
             permission: { mode: "default" },
             sandbox: { enabled: true },
           },
-        },
-      );
+        });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as any).text).toContain("outside the sandbox boundary");
@@ -196,7 +187,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "three.txt");
       await writeFile(file, "one\ntwo\nthree", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("1: one");
@@ -212,7 +203,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "three.txt");
       await writeFile(file, "one\ntwo\nthree", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file, offset: 1, limit: 3 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, offset: 1, limit: 3 }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("(End of file - total 3 lines)");
@@ -228,7 +219,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "two.txt");
       await writeFile(file, "a\nb\n", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect((result.content[0] as { text: string }).text).toContain("(End of file - total 2 lines)");
     } finally {
@@ -243,7 +234,7 @@ describe("fileReadTool", () => {
       const lines = Array.from({ length: 30 }, () => "a".repeat(1990));
       await writeFile(file, lines.join("\n"), "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("Output capped at 50 KB");
@@ -259,7 +250,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "long.txt");
       await writeFile(file, "x".repeat(2500), "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect((result.content[0] as { text: string }).text).toContain("(line truncated to 2000 chars)");
     } finally {
@@ -273,7 +264,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "bin.dat");
       await writeFile(file, Buffer.from([0x68, 0x00, 0x69]), "binary");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toBe(`Cannot read binary file: ${file}`);
@@ -288,7 +279,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "ctrl.dat");
       await writeFile(file, Buffer.from(new Array(200).fill(0x01)), "binary");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toContain("Cannot read binary file");
@@ -303,7 +294,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "normal.txt");
       await writeFile(file, "col1\tcol2\n中文 🙂\n", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBeFalsy();
       expect((result.content[0] as { text: string }).text).toContain("col1\tcol2");
@@ -318,7 +309,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "three.txt");
       await writeFile(file, "one\ntwo\nthree", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file, offset: 5 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, offset: 5 }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toBe(
@@ -335,7 +326,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "empty.txt");
       await writeFile(file, "", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir });
 
       expect(result.isError).toBeFalsy();
       expect((result.content[0] as { text: string }).text).toBe("(End of file - total 0 lines)");
@@ -350,7 +341,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "three.txt");
       await writeFile(file, "one\ntwo\nthree", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: file, offset: -5, limit: 0 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, offset: -5, limit: 0 }, { cwd: dir });
 
       expect(result.isError).toBeFalsy();
       const text = (result.content[0] as { text: string }).text;
@@ -367,10 +358,7 @@ describe("fileReadTool", () => {
       const file = join(dir, "two.txt");
       await writeFile(file, "one\ntwo", "utf-8");
 
-      const result = await fileReadTool.execute!(
-        { file_path: file, offset: Number.NaN, limit: Number.POSITIVE_INFINITY },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, offset: Number.NaN, limit: Number.POSITIVE_INFINITY }, { cwd: dir });
 
       expect(result.isError).toBeFalsy();
       const text = (result.content[0] as { text: string }).text;
@@ -394,7 +382,7 @@ describe("fileReadTool", () => {
       await mkdir(join(dir, "app"));
       await writeFile(join(dir, "README.md"), "hello", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: dir }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("app/");
@@ -411,7 +399,7 @@ describe("fileReadTool", () => {
         await writeFile(join(dir, name), "x", "utf-8");
       }
 
-      const result = await fileReadTool.execute!({ file_path: dir, limit: 2 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir, limit: 2 }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("Showing entries 1-2 of 3. Use offset=3 to continue.");
@@ -427,7 +415,7 @@ describe("fileReadTool", () => {
         await writeFile(join(dir, name), "x", "utf-8");
       }
 
-      const result = await fileReadTool.execute!({ file_path: dir, offset: 2 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir, offset: 2 }, { cwd: dir });
 
       expect((result.content[0] as { text: string }).text).toContain(
         "Showing entries 2-3 of 3. End of directory.",
@@ -448,7 +436,7 @@ describe("fileReadTool", () => {
         await writeFile(join(dir, name), "x", "utf-8");
       }
 
-      const result = await fileReadTool.execute!({ file_path: dir }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir }, { cwd: dir });
 
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("Output capped at 50 KB");
@@ -465,7 +453,7 @@ describe("fileReadTool", () => {
       await writeFile(join(dir, "a.txt"), "x", "utf-8");
       await writeFile(join(dir, "b.txt"), "x", "utf-8");
 
-      const result = await fileReadTool.execute!({ file_path: dir, offset: 5 }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir, offset: 5 }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect((result.content[0] as { text: string }).text).toBe(
@@ -479,7 +467,7 @@ describe("fileReadTool", () => {
   it("keeps the empty-directory message", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-dirempty-"));
     try {
-      const result = await fileReadTool.execute!({ file_path: dir }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: dir }, { cwd: dir });
       expect((result.content[0] as { text: string }).text).toBe("(empty directory)");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -492,7 +480,7 @@ describe("fileReadTool", () => {
       await writeFile(join(dir, "config.ts"), "x", "utf-8");
 
       // 目标名 "config" 是已存在条目 "config.ts" 的前缀，满足"互相包含"。
-      const result = await fileReadTool.execute!({ file_path: join(dir, "config") }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "config") }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       const text = (result.content[0] as { text: string }).text;
@@ -508,9 +496,7 @@ describe("fileReadTool", () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-suggest-sandbox-"));
     try {
       await writeFile(join(dir, "secret.txt"), "x", "utf-8");
-      const result = await fileReadTool.execute!(
-        { file_path: join(dir, "secret") },
-        {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "secret") }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -522,8 +508,7 @@ describe("fileReadTool", () => {
               filesystem: { allowRead: ["secret"], allowWrite: [] },
             },
           },
-        },
-      );
+        });
 
       expect(result.isError).toBe(true);
       expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
@@ -540,7 +525,7 @@ describe("fileReadTool", () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-diagnostic-failure-"));
     try {
       const file = join(dir, "missing.txt");
-      const result = await fileReadTool.execute({ file_path: file }, { cwd: dir,
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir,
         settings: { model: "fixture", apiFormat: "openai", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: false } },
         environment: { workspace: { hostRoot: dir }, files: new HostFileOperations(), paths: { resolve: async (path: string) => {
           if (path === dir) throw new Error("optional parent inspection failed");
@@ -555,7 +540,7 @@ describe("fileReadTool", () => {
   it("reports a plain not-found error when nothing is similar", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-nosuggest-"));
     try {
-      const result = await fileReadTool.execute!({ file_path: join(dir, "zzz.ts") }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "zzz.ts") }, { cwd: dir });
 
       expect(result.isError).toBe(true);
       expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });

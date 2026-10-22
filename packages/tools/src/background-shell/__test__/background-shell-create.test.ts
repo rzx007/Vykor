@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { describe, expect, it, vi } from "vitest";
 import { resolveHostShellLauncher } from "@vykor/sandbox";
 
@@ -14,7 +16,7 @@ const shellDescriptor = {
 describe("BackgroundShellCreate", () => {
   it.skipIf(resolveHostShellLauncher().kind !== "powershell")("does not reject valid quoting when no descriptor is supplied", async () => {
     let launches = 0;
-    const result = await backgroundShellCreateTool.execute({ description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
+    const result = await executeToolFixture(host => createBackgroundShellTool(undefined,undefined,host), { description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
@@ -25,7 +27,7 @@ describe("BackgroundShellCreate", () => {
   it.skipIf(process.platform !== "win32")("registers invalid PowerShell syntax for the background interpreter to report", async () => {
     let launches = 0;
     const tool = createBackgroundShellTool(shellDescriptor);
-    const result = await tool.execute({ description: "install", command: "Write-Output (" }, {
+    const result = await executeToolFixture(host => createBackgroundShellTool(shellDescriptor, undefined, host), { description: "install", command: "Write-Output (" }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
@@ -38,7 +40,7 @@ describe("BackgroundShellCreate", () => {
     let launches = 0;
     const tool = createBackgroundShellTool(shellDescriptor);
     const command = "@'\nconsole.log(true && false || true);\n'@ | node -";
-    const result = await tool.execute({ description: "fixture", command }, {
+    const result = await executeToolFixture(host => createBackgroundShellTool(shellDescriptor, undefined, host), { description: "fixture", command }, {
       cwd: process.cwd(), sessionId: "fixture", toolCallId: "fixture",
       backgroundShell: { create: async () => { launches++; return { jobId: "fixture", label: "fixture" }; } },
     });
@@ -64,10 +66,7 @@ describe("BackgroundShellCreate", () => {
   });
 
   it("rejects the removed Agent creation shape", async () => {
-    const result = await backgroundShellCreateTool.execute(
-      { type: "local_agent", description: "review", prompt: "review this" },
-      { cwd: process.cwd() },
-    );
+    const result = await executeToolFixture(host => createBackgroundShellTool(undefined,undefined,host), { type: "local_agent", description: "review", prompt: "review this" }, { cwd: process.cwd() });
     expect(result.isError).toBe(true);
     expect(result.content[0]).toMatchObject({ text: expect.stringContaining("Use Agent") });
   });
@@ -75,16 +74,13 @@ describe("BackgroundShellCreate", () => {
   it("delegates creation to the host and returns its durable job id", async () => {
     const create = vi.fn(async () => ({ jobId: "task-durable", label: "print output" }));
     const tool = createBackgroundShellTool(shellDescriptor);
-    const result = await tool.execute(
-      { description: "print output", command: 'node -e "process.stdout.write(\'ok\')"' },
-      {
+    const result = await executeToolFixture(host => createBackgroundShellTool(shellDescriptor, undefined, host), { description: "print output", command: 'node -e "process.stdout.write(\'ok\')"' }, {
         cwd: "/repo",
         sessionId: "session-1",
         toolCallId: "call-1",
         settings: { model: "test" } as any,
         backgroundShell: { create },
-      },
-    );
+      });
     const payload = JSON.parse((result.content[0] as { text: string }).text) as Record<string, unknown>;
     expect(payload).toMatchObject({
       kind: "job",
@@ -109,14 +105,11 @@ describe("BackgroundShellCreate", () => {
 
   it("fails before launching when the tool call has no stable identity", async () => {
     const create = vi.fn();
-    const result = await backgroundShellCreateTool.execute(
-      { description: "server", command: "npm run dev" },
-      {
+    const result = await executeToolFixture(host => createBackgroundShellTool(undefined,undefined,host), { description: "server", command: "npm run dev" }, {
         cwd: "/repo",
         sessionId: "session-1",
         backgroundShell: { create },
-      },
-    );
+      });
 
     expect(result).toMatchObject({
       isError: true,
@@ -128,10 +121,7 @@ describe("BackgroundShellCreate", () => {
   });
 
   it("fails before launching when no host is configured", async () => {
-    const result = await backgroundShellCreateTool.execute(
-      { description: "server", command: "npm run dev" },
-      { cwd: "/repo", sessionId: "session-1" },
-    );
+    const result = await executeToolFixture(host => createBackgroundShellTool(undefined,undefined,host), { description: "server", command: "npm run dev" }, { cwd: "/repo", sessionId: "session-1" });
 
     expect(result).toMatchObject({
       isError: true,

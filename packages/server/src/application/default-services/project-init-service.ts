@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { PROJECT_CONFIG_DIR_NAME } from "@vykor/core";
+import { PROJECT_CONFIG_DIR_NAME } from "@vykor/host-config";
 
 import type { ProjectInitService } from "../settings-api.js";
 

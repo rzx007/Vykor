@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { getDataDir } from "@vykor/core";
+import { getDataDir } from "@vykor/host-config";
 
 export type DaemonExecutionSurface = "desktop_managed" | "cli_advanced";
 

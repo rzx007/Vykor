@@ -1,4 +1,4 @@
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { normalizeSandboxConfig } from "./config.js";
 import type { ResolvedSandboxConfig } from "./types.js";
 

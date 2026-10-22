@@ -1,78 +1,142 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolHostPolicyPort } from "../ports/policy.js";
+import { LspClient, type LspServerConfig } from "@vykor/execution-node";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 
-export const lspTool: ToolDefinition = {
-  name: "Lsp",
-  description: "Code intelligence: symbols, definitions, references, hover.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      operation: { type: "string", enum: ["document_symbol", "workspace_symbol", "go_to_definition", "find_references", "hover"], description: "Operation" },
-      filePath: { type: "string", description: "Source file path" },
-      symbol: { type: "string", description: "Symbol name" },
-      line: { type: "number", description: "1-based line number" },
-      character: { type: "number", description: "1-based character offset" },
-      query: { type: "string", description: "Query for workspace_symbol" },
+export type WithLspClient = <T>(
+  config: LspServerConfig,
+  work: (client: LspClient) => Promise<T>,
+) => Promise<T>;
+
+async function withLocalClient<T>(
+  config: LspServerConfig,
+  work: (client: LspClient) => Promise<T>,
+): Promise<T> {
+  const client = new LspClient(config);
+  try {
+    return await work(client);
+  } finally {
+    await client.disconnect();
+  }
+}
+
+export function createLspTool(withClient: WithLspClient = withLocalClient, host: ToolHostPolicyPort = {}): ToolDefinition {
+  return {
+    name: "Lsp",
+    description: "Code intelligence: symbols, definitions, references, hover.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: [
+            "document_symbol",
+            "workspace_symbol",
+            "go_to_definition",
+            "find_references",
+            "hover",
+          ],
+          description: "Operation",
+        },
+        filePath: { type: "string", description: "Source file path" },
+        symbol: { type: "string", description: "Symbol name" },
+        line: { type: "number", description: "1-based line number" },
+        character: { type: "number", description: "1-based character offset" },
+        query: { type: "string", description: "Query for workspace_symbol" },
+      },
+      required: ["operation"],
     },
-    required: ["operation"],
-  },
-  async execute(input, context) {
-    if (context.environment) return executeEnvironmentLsp(input, context);
-    const { LspClient } = await import("@vykor/services");
-    const operation = input.operation as string;
-    const client = new LspClient({
-      command: "",
-      args: [],
-      cwd: context.cwd,
-      sessionId: context.sessionId,
-      settings: context.settings,
-      signal: context.abortSignal,
-    });
+    async execute(input, context) {
+      if (context.environment) return executeEnvironmentLsp(input, context);
+      const operation = input.operation as string;
+      return withClient(
+        {
+          command: "",
+          args: [],
+          cwd: context.cwd,
+          sessionId: context.sessionId,
+          settings: host.settings,
+          signal: context.abortSignal,
+        },
+        async (client): Promise<ToolResult> => {
+          if (operation === "workspace_symbol") {
+            const results = await client.workspaceSymbolSearch(
+              context.cwd,
+              (input.query as string) ?? "",
+            );
+            if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
+            const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
+            return { content: [{ type: "text", text }] };
+          }
 
-    if (operation === "workspace_symbol") {
-      const results = await client.workspaceSymbolSearch(context.cwd, (input.query as string) ?? "");
-      if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
-      const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
-      return { content: [{ type: "text", text }] };
-    }
+          const filePath = input.filePath as string;
+          if (!filePath)
+            return {
+              content: [{ type: "text", text: `${operation} requires filePath` }],
+              isError: true,
+            };
 
-    const filePath = input.filePath as string;
-    if (!filePath) return { content: [{ type: "text", text: `${operation} requires filePath` }], isError: true };
+          const { resolve } = await import("node:path");
+          const fullPath = resolve(context.cwd, filePath);
 
-    const { resolve } = await import("node:path");
-    const fullPath = resolve(context.cwd, filePath);
+          if (operation === "document_symbol") {
+            const results = await client.documentSymbols(fullPath);
+            if (!results.length) return { content: [{ type: "text", text: "(no symbols)" }] };
+            const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
+            return { content: [{ type: "text", text }] };
+          }
 
-    if (operation === "document_symbol") {
-      const results = await client.documentSymbols(fullPath);
-      if (!results.length) return { content: [{ type: "text", text: "(no symbols)" }] };
-      const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
-      return { content: [{ type: "text", text }] };
-    }
+          if (operation === "go_to_definition") {
+            const results = await client.goToDefinition(
+              context.cwd,
+              fullPath,
+              input.symbol as string,
+              input.line as number | undefined,
+            );
+            if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
+            const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
+            return { content: [{ type: "text", text }] };
+          }
 
-    if (operation === "go_to_definition") {
-      const results = await client.goToDefinition(context.cwd, fullPath, input.symbol as string, input.line as number | undefined);
-      if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
-      const text = results.map((r) => `${r.kind} ${r.name} - ${r.path}:${r.line}`).join("\n");
-      return { content: [{ type: "text", text }] };
-    }
+          if (operation === "find_references") {
+            const results = await client.findReferences(
+              context.cwd,
+              fullPath,
+              input.symbol as string,
+              input.line as number | undefined,
+            );
+            if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
+            const text = results.map((r) => `${r.path}:${r.line}: ${r.text}`).join("\n");
+            return { content: [{ type: "text", text }] };
+          }
 
-    if (operation === "find_references") {
-      const results = await client.findReferences(context.cwd, fullPath, input.symbol as string, input.line as number | undefined);
-      if (!results.length) return { content: [{ type: "text", text: "(no results)" }] };
-      const text = results.map((r) => `${r.path}:${r.line}: ${r.text}`).join("\n");
-      return { content: [{ type: "text", text }] };
-    }
+          if (operation === "hover") {
+            const result = await client.hover(
+              context.cwd,
+              fullPath,
+              input.symbol as string,
+              input.line as number,
+              input.character as number,
+            );
+            if (!result) return { content: [{ type: "text", text: "(no hover result)" }] };
+            const parts = [
+              `${result.kind} ${result.name}`,
+              `${result.path}:${result.line}:${result.character}`,
+            ];
+            if (result.signature) parts.push(`signature: ${result.signature}`);
+            return { content: [{ type: "text", text: parts.join("\n") }] };
+          }
 
-    if (operation === "hover") {
-      const result = await client.hover(context.cwd, fullPath, input.symbol as string, input.line as number, input.character as number);
-      if (!result) return { content: [{ type: "text", text: "(no hover result)" }] };
-      const parts = [`${result.kind} ${result.name}`, `${result.path}:${result.line}:${result.character}`];
-      if (result.signature) parts.push(`signature: ${result.signature}`);
-      return { content: [{ type: "text", text: parts.join("\n") }] };
-    }
+          return {
+            content: [{ type: "text", text: `Unknown operation: ${operation}` }],
+            isError: true,
+          };
+        },
+      );
+    },
+  };
+}
 
-    return { content: [{ type: "text", text: `Unknown operation: ${operation}` }], isError: true };
-  },
-};
+export const lspTool: ToolDefinition = createLspTool();
 
 async function executeEnvironmentLsp(
   input: Record<string, unknown>,
@@ -117,12 +181,16 @@ async function executeEnvironmentLsp(
     if (operation === "find_references") {
       return textResult(matches.length ? matches.join("\n") : "(no results)");
     }
-    return textResult(matches.length
-      ? matches.map((match) => {
-          const parsed = parseMatch(match);
-          return `definition ${symbol} - ${parsed.path}:${parsed.line}`;
-        }).join("\n")
-      : "(no results)");
+    return textResult(
+      matches.length
+        ? matches
+            .map((match) => {
+              const parsed = parseMatch(match);
+              return `definition ${symbol} - ${parsed.path}:${parsed.line}`;
+            })
+            .join("\n")
+        : "(no results)",
+    );
   }
 
   return errorResult(`Unknown operation: ${operation}`);
@@ -141,7 +209,9 @@ function extractSymbols(content: string, filePath: string): string[] {
   for (const { regex, kind } of patterns) {
     let match: RegExpExecArray | null;
     while ((match = regex.exec(content))) {
-      symbols.push(`${kind} ${match[1]} - ${filePath}:${content.slice(0, match.index).split("\n").length}`);
+      symbols.push(
+        `${kind} ${match[1]} - ${filePath}:${content.slice(0, match.index).split("\n").length}`,
+      );
     }
   }
   return symbols;

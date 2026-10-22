@@ -8,6 +8,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./contracts": {
+      "import": "./src/contracts.ts",
+      "types": "./src/contracts.ts"
     }
   },
   "scripts": {
@@ -17,7 +21,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/protocol": "workspace:*"
+    "@vykor/jobs": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

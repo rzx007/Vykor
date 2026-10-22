@@ -1,17 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { getDataDir } from "@vykor/core";
+import { getDataDir } from "@vykor/host-config";
 
-import {
-  isCommittedModelPart,
-  publicToolResult,
-  readPluginUiAction,
-  type SessionInputRecord,
-  type SessionMessagePartRecord,
-  type SessionMessageRecord,
-  type SessionRecord,
-  type SessionRunRecord,
-} from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
+import { readPluginUiAction } from "@vykor/domain-contracts/plugin-apps/history";
+import type { SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import { publicToolResult } from "@vykor/agent-contracts";
 import { isCommittedPublicTextPart, publicTextFromParts } from "./transcript-text.js";
 
 export type SessionExportFormat = "md" | "json";

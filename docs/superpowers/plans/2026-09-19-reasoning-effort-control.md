@@ -23,13 +23,13 @@
 | `packages/client/src/types/index.ts` | `ModelInfo.reasoningEfforts` 镜像 |
 | `packages/core/src/types/settings.ts` | `effort?: string` |
 | `packages/protocol/src/runtime-config.ts` | `effortValue` 真值表 |
-| `packages/core/src/types/client.ts` | `StreamMessageParams.reasoningEffort` |
+| `packages/agent-contracts/src/model.ts` | `StreamMessageParams.reasoningEffort` |
 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions.reasoningEffort` |
 | `packages/core/src/engine/query-engine.ts` | 透传 `reasoningEffort` |
 | `packages/api/src/providers/openai.ts` | 请求体写 `reasoning_effort` |
-| `packages/agent-runtime/src/agent-options.ts` | `VykorAgentConfiguration.reasoningEffort` |
-| `packages/agent-runtime/src/default-runtime.ts` | `engineOptions.reasoningEffort` |
-| `packages/agent-runtime/src/child-agent-options.ts` | 子代理继承规则 |
+| `packages/agent-runtime/src/node/runtime/agent-options.ts` | `VykorAgentConfiguration.reasoningEffort` |
+| `packages/agent-runtime/src/node/runtime/default-runtime.ts` | `engineOptions.reasoningEffort` |
+| `packages/agent-runtime/src/node/runtime/child-agent-options.ts` | 子代理继承规则 |
 | `packages/server/src/daemon/daemon-agent.ts` | 校验 + `resolveReasoningEfforts` 注入点 |
 | `packages/server/src/application/daemon-application.ts` | 注入目录实现 |
 | `packages/server/src/daemon/scheduled-task-service.ts` | 校验放宽 |
@@ -320,7 +320,7 @@ git commit -m "feat(protocol): allow free-form reasoning effort with clear senti
 ## 任务 3：请求链路透传 reasoningEffort
 
 **文件：**
-- 修改：`packages/core/src/types/client.ts:5-13`
+- 修改：`packages/agent-contracts/src/model.ts:5-13`
 - 修改：`packages/core/src/types/runtime.ts:488-509`
 - 修改：`packages/core/src/engine/query-engine.ts:156-201,365-371`
 - 修改：`packages/api/src/providers/openai.ts:183-191`
@@ -388,7 +388,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
 
 - [ ] **步骤 3：加参数类型**
 
-`packages/core/src/types/client.ts` 的 `StreamMessageParams` 内、`temperature?: number;` 之后加：
+`packages/agent-contracts/src/model.ts` 的 `StreamMessageParams` 内、`temperature?: number;` 之后加：
 
 ```ts
   reasoningEffort?: string;
@@ -447,7 +447,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add packages/core/src/types/client.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/agent-contracts/src/model.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
 git commit -m "feat(api): forward reasoning effort to openai-compatible requests"
 ```
 
@@ -456,8 +456,8 @@ git commit -m "feat(api): forward reasoning effort to openai-compatible requests
 ## 任务 4：daemon 校验与目录注入
 
 **文件：**
-- 修改：`packages/agent-runtime/src/agent-options.ts:41-73`
-- 修改：`packages/agent-runtime/src/default-runtime.ts:231-248`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts:41-73`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts:231-248`
 - 修改：`packages/server/src/daemon/daemon-agent.ts:72-102,151-186,248-276`
 - 修改：`packages/server/src/application/daemon-application.ts:395-440`
 - 测试：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
@@ -513,13 +513,13 @@ git commit -m "feat(api): forward reasoning effort to openai-compatible requests
 
 - [ ] **步骤 3：加 Agent 配置字段**
 
-`packages/agent-runtime/src/agent-options.ts` 的 `VykorAgentConfiguration` 内、`effort?: Settings["effort"];` 之后加：
+`packages/agent-runtime/src/node/runtime/agent-options.ts` 的 `VykorAgentConfiguration` 内、`effort?: Settings["effort"];` 之后加：
 
 ```ts
   reasoningEffort?: string;
 ```
 
-`packages/agent-runtime/src/default-runtime.ts:231-248` 的 `engineOptions` 内、`model: runtimeModel,` 之后加：
+`packages/agent-runtime/src/node/runtime/default-runtime.ts:231-248` 的 `engineOptions` 内、`model: runtimeModel,` 之后加：
 
 ```ts
     reasoningEffort: configuration.reasoningEffort,
@@ -619,7 +619,7 @@ import { catalogModelReasoningEfforts } from "./default-services/catalog-provide
 - [ ] **步骤 9：Commit**
 
 ```bash
-git add packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/default-runtime.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/application/daemon-application.ts packages/server/src/daemon/__test__/daemon-agent.test.ts
+git add packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/application/daemon-application.ts packages/server/src/daemon/__test__/daemon-agent.test.ts
 git commit -m "feat(daemon): validate and forward reasoning effort per session"
 ```
 
@@ -628,12 +628,12 @@ git commit -m "feat(daemon): validate and forward reasoning effort per session"
 ## 任务 5：子代理继承规则
 
 **文件：**
-- 修改：`packages/agent-runtime/src/child-agent-options.ts:22-60`
-- 测试：`packages/agent-runtime/src/child-agent-options.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.ts:22-60`
+- 测试：`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/agent-runtime/src/child-agent-options.test.ts` 内追加（沿用该文件既有的构造 helper 风格；若 helper 名称不同，按文件内现有用法调整）：
+在 `packages/agent-runtime/src/node/runtime/child-agent-options.test.ts` 内追加（沿用该文件既有的构造 helper 风格；若 helper 名称不同，按文件内现有用法调整）：
 
 ```ts
   it("inherits reasoning effort only when the model and effort are unchanged", () => {
@@ -664,7 +664,7 @@ git commit -m "feat(daemon): validate and forward reasoning effort per session"
 
 - [ ] **步骤 3：实现继承规则**
 
-`packages/agent-runtime/src/child-agent-options.ts` 的 `deriveChildAgentOptions` 内，把 `effort: isSupportedEffort(child.effort) ? child.effort : configuration.effort,` 替换为：
+`packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildAgentOptions` 内，把 `effort: isSupportedEffort(child.effort) ? child.effort : configuration.effort,` 替换为：
 
 ```ts
     effort: isSupportedEffort(child.effort) ? child.effort : configuration.effort,
@@ -705,7 +705,7 @@ function isSupportedEffort(
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/agent-runtime/src/child-agent-options.ts packages/agent-runtime/src/child-agent-options.test.ts
+git add packages/agent-runtime/src/node/runtime/child-agent-options.ts packages/agent-runtime/src/node/runtime/child-agent-options.test.ts
 git commit -m "feat(agent-runtime): scope child reasoning effort to inherited models"
 ```
 

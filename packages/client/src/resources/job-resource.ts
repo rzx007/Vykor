@@ -1,15 +1,5 @@
-import type {
-  JobKind,
-  JobReadResult,
-  JobSnapshot,
-  JobStatus,
-  JobWaitResult,
-} from "@vykor/protocol";
-import {
-  decodeJobReadResult,
-  decodeJobSnapshot,
-  decodeJobWaitResult,
-} from "@vykor/protocol";
+import type { JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "@vykor/protocol";
+import { decodeJobReadResult, decodeJobSnapshot, decodeJobWaitResult } from "@vykor/protocol";
 import type {
   CreateBackgroundShellInput,
   CreateBackgroundShellResult,

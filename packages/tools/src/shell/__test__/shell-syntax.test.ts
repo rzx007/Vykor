@@ -1,4 +1,7 @@
-import type { ToolContext } from "@vykor/core";
+
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
+import type { ToolContext } from "@vykor/agent-contracts";
 import type { ShellDescriptor } from "@vykor/environment";
 import { createProcess, resolveSandboxPolicy } from "@vykor/sandbox";
 import { describe, expect, it, vi } from "vitest";
@@ -26,7 +29,7 @@ describe("Shell interpreter and startup boundaries", () => {
       executedCommands.push(command);
       return processResult(command === source ? "42" : '{"errors":[]}');
     };
-    const result = await createShellTool().execute({ command: source }, environmentContext(execShell));
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: source }, environmentContext(execShell));
     expect(executedCommands).toEqual([source]);
     expect(result).toMatchObject({ isError: false, executionState: "completed", content: [{ text: "42" }] });
   });
@@ -36,10 +39,10 @@ describe("Shell interpreter and startup boundaries", () => {
     controller.abort();
     const execShell = vi.fn();
     const create = vi.fn();
-    const tool = mode === "explicit background" ? createBackgroundShellTool(powershell) : createShellTool();
+    const tool = mode === "explicit background" ? createBackgroundShellTool(powershell, undefined, { backgroundShell: { create } } as any) : createShellTool();
     const result = await tool.execute({ command: mode === "foreground" ? "Write-Output 1" : "npm install", description: "fixture" }, {
       ...environmentContext(execShell), abortSignal: controller.signal,
-      sessionId: "fixture", toolCallId: "fixture", backgroundShell: { create },
+      sessionId: "fixture", toolCallId: "fixture",
     });
     expect(result).toMatchObject({ failureKind: "interrupted", executionState: "not_started" });
     expect(execShell).not.toHaveBeenCalled();
@@ -55,7 +58,7 @@ describe("Shell interpreter and startup boundaries", () => {
       controller.abort();
       return { executionPath: "/fixture", mountPurpose: "workspace", mountMode: "rw" };
     };
-    const result = await createShellTool().execute({ command: "Write-Output 1" }, context);
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "Write-Output 1" }, context);
     expect(result).toMatchObject({ failureKind: "interrupted", executionState: "not_started" });
     expect(execShell).not.toHaveBeenCalled();
   });
@@ -74,7 +77,17 @@ describe("Shell interpreter and startup boundaries", () => {
         };
       }, run,
     });
-    const result = await tool.execute({ command: "Write-Output 1" }, { cwd: process.cwd(), abortSignal: controller.signal });
+    const result = await executeToolFixture(host => createShellTool({
+      async resolve(request) {
+        controller.abort();
+        return {
+          command: request.command, cwd: process.cwd(), timeoutMs: 3_000, maxOutputChars: 4_096,
+          policy: resolveSandboxPolicy({ cwd: process.cwd(), config: { enabled: false } }),
+          hostShell: { kind: "powershell", bin: "powershell.exe" } as const,
+          runner: { mode: "host", fallbackToHost: false } as const,
+        };
+      }, run,
+    }, undefined, undefined, host), { command: "Write-Output 1" }, { cwd: process.cwd(), abortSignal: controller.signal });
     expect(result).toMatchObject({ failureKind: "interrupted", executionState: "not_started" });
     expect(run).not.toHaveBeenCalled();
   });
@@ -82,7 +95,7 @@ describe("Shell interpreter and startup boundaries", () => {
   it("does not attach dialect guesses to success, unknown outcome, policy rejection or interruption", async () => {
     for (const [exitCode, abort] of [[0, false], [null, false], [0, true]] as const) {
       const controller = new AbortController();
-      const result = await createShellTool().execute({ command: "dir /B 2>nul" }, {
+      const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "dir /B 2>nul" }, {
         ...environmentContext(async () => ({ ...processResult("actual output"), wait: async () => {
           if (abort) controller.abort();
           return { exitCode };
@@ -90,7 +103,7 @@ describe("Shell interpreter and startup boundaries", () => {
       });
       expect(JSON.stringify(result)).not.toContain("Possible shell compatibility hints");
     }
-    const result = await createShellTool({
+    const result = await executeToolFixture(host => createShellTool({
       async resolve(request) { return {
         command: request.command, cwd: process.cwd(), timeoutMs: 3_000, maxOutputChars: 4_096,
         policy: resolveSandboxPolicy({ cwd: process.cwd(), config: { enabled: false } }),
@@ -98,20 +111,20 @@ describe("Shell interpreter and startup boundaries", () => {
         runner: { mode: "host", fallbackToHost: false } as const,
       }; },
       async run() { return { status: "failed", failureKind: "policy", output: "denied", outputTruncated: false, exitCode: null } as const; },
-    }).execute({ command: "dir /B 2>nul" }, { cwd: process.cwd() });
+    }, undefined, undefined, host), { command: "dir /B 2>nul" }, { cwd: process.cwd() });
     expect(result).toMatchObject({ failureKind: "policy", executionState: "not_started", content: [{ text: "denied" }] });
     expect(JSON.stringify(result)).not.toContain("Possible shell compatibility hints");
   });
 
   it.skipIf(process.platform !== "win32")("reports an actual Windows PowerShell syntax failure as a completed command failure", async () => {
-    const result = await createShellTool(windowsPowerShellExecutor).execute({ command: "Write-Output (", timeout: 10_000 }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createShellTool(windowsPowerShellExecutor, undefined, undefined, host), { command: "Write-Output (", timeout: 10_000 }, { cwd: process.cwd() });
     expect(result).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
     expect(result.content[0]).toMatchObject({ text: expect.stringMatching(/MissingEndParenthesis|ParserError/) });
     expect(result.recoveryHint).toContain("1");
   });
 
   it.skipIf(process.platform !== "win32")("executes a valid JavaScript here-string through the real Shell tool", async () => {
-    const result = await createShellTool(windowsPowerShellExecutor).execute({ command: "@'\nconsole.log((true && false) || 42);\n'@ | node -", timeout: 10_000 }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createShellTool(windowsPowerShellExecutor, undefined, undefined, host), { command: "@'\nconsole.log((true && false) || 42);\n'@ | node -", timeout: 10_000 }, { cwd: process.cwd() });
     expect(result).toMatchObject({ isError: false, executionState: "completed" });
     expect(result.content[0]).toMatchObject({ text: "42" });
   });

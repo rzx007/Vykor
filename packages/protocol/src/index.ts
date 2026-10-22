@@ -1,11 +1,11 @@
 export * from "./session.js";
 export * from "./maintenance.js";
 export * from "./runtime-config.js";
-export * from "./approval-mode.js";
-export * from "./approval-review.js";
+export type { ApprovalMode, WorkMode } from "./approval-mode.js";
+export type { ApprovalReviewEvidence, ApprovalReviewInput, ApprovalReviewOutcome, ApprovalReviewRecord, ApprovalReviewResult } from "./approval-review.js";
 export * from "./requests.js";
-export * from "./job.js";
-export * from "./terminal.js";
+export type { JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "./job.js";
+export type { TerminalCreateRequest, TerminalEvent, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalRuntime, TerminalSessionInfo, TerminalSessionStatus, TerminalSignal, TerminalSignalRequest, TerminalScope, TerminalSource, TerminalWaitResult, TerminalWriteRequest } from "./terminal.js";
 export * from "./serialization.js";
 export * from "./channel.js";
 export * from "./channel-runtime.js";
@@ -21,8 +21,15 @@ export * from "./plugin-presentation.js";
 export * from "./notes.js";
 export * from "./memory.js";
 export * from "./office.js";
-export * from "./mcp-apps.js";
 export * from "./plugin-apps.js";
 
-export * from "./json.js";
+export type { JsonValue } from "./json.js";
+export { isJsonObject, isJsonRecord, isNonnegativeInteger, isUuid, stringifyCanonicalJson, validateJsonRecord } from "./json.js";
 export * from "./plugin-ui-history.js";
+
+// Canonical tool-result data shared with the HTTP client.
+export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts/tool-data";
+
+export { PLUGIN_APP_MANIFEST_LIMITS, PLUGIN_APP_RESOURCE_LIMITS, PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
+export { PLUGIN_APP_INPUT_LIMITS } from "@vykor/domain-contracts/plugin-apps";
+export { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";

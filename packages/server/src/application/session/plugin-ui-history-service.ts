@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { isCommittedModelPart, isJsonObject as isPluginUiRecord, readPluginUiAction, readPluginUiInstance, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, type PluginUiActionReceipt, type PluginUiActionResponse, type PluginUiInstanceRecord, type PluginUiSubmissionRecord, type PluginUiConversationReceipt, type SessionMessagePartRecord, type SessionRunRecord, type SessionRecord } from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
+import { isJsonObject as isPluginUiRecord } from "@vykor/json-data/json";
+import { readPluginUiAction, readPluginUiInstance, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt } from "@vykor/domain-contracts/plugin-apps/history";
+import type { PluginUiActionReceipt, PluginUiActionResponse, PluginUiInstanceRecord, PluginUiSubmissionRecord, PluginUiConversationReceipt } from "@vykor/domain-contracts/plugin-apps/history";
+import type { SessionMessagePartRecord, SessionRunRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import { ApplicationError } from "../../shared/application-error.js";
 

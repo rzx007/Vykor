@@ -1,9 +1,10 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { createSessionPluginUiHistoryRoutes } from "./routes/session-plugin-ui-history.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 
 import { SessionStore } from "@vykor/services";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import type { AttachmentLimits } from "@vykor/protocol";
 
@@ -97,6 +98,7 @@ export interface VykorServerServices {
 }
 
 export interface VykorServerOptions {
+  executionOwner?: ExecutionRuntimeOwner;
   host?: string;
   port?: number;
   token?: string;
@@ -171,6 +173,7 @@ export class VykorHttpServer {
     this.application =
       options.application ??
       createDefaultNodeApplication({
+        executionOwner: options.executionOwner,
         store: options.store,
         storePath: options.storePath,
         attachmentRoot: options.attachmentRoot,
@@ -355,16 +358,15 @@ export class VykorHttpServer {
         pluginLifecycle: this.application.pluginLifecycle,
       }),
     );
-    this.app.route("/", createMaintenanceRoutes({ store: this.store, control: this.application.control, commands: this.application.commands, terminals: this.application.terminals, settings: this.services.settings, readiness: () => this.application.diagnosticState, logs: () => this.maintenanceLogs,
-      closeApplication: () => {
+    this.app.route("/", createMaintenanceRoutes({ maintenance: this.application.createMaintenanceService?.({ settings: this.services.settings, logs: () => this.maintenanceLogs,
+      beforeClose: () => {
         const snapshot = this.application.control.runtimeSnapshot();
         this.restartPreparedHealth = { ok: true, ...(this.version ? { version: this.version } : {}),
           startedAt: snapshot.startedAt, uptimeMs: snapshot.uptimeMs, sessionCount: snapshot.sessions.total,
           activeRunCount: snapshot.coordinator.activeRunCount, queuedRunCount: snapshot.coordinator.queuedRunCount,
           ready: false, accepting: false, restartPrepared: true };
-        return this.application.close();
       },
-    }));
+    }) }));
     this.app.route(
       "/attachments",
       createAttachmentRoutes(this.application.attachments),
@@ -378,7 +380,7 @@ export class VykorHttpServer {
     );
     this.app.route(
       "/facts",
-      createFactsRoutes({ control: this.application.control, sessions: this.store.sessions }),
+      createFactsRoutes({ facts: this.application.facts }),
     );
     this.app.route(
       "/auth",

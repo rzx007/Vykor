@@ -1,5 +1,6 @@
-import type { QueryEngineOptions, RunCapabilityView } from "../types/runtime.js";
-import type { ToolDiscovery, ToolDiscoveryEntry, ToolRegistry } from "../types/tools.js";
+import type { QueryEngineOptions } from "../types/runtime.js";
+import type { RunToolBinding } from "@vykor/agent-contracts";
+import type { ToolDiscovery, ToolDiscoveryEntry, MutableToolRegistry as ToolRegistry } from "@vykor/agent-contracts";
 import { toolDefinitionIdentity } from "./tool-definition-identity.js";
 import { modelToolRegistry, toolRegistryForNames } from "./tool-registry.js";
 
@@ -24,14 +25,14 @@ export class RunToolDiscovery implements ToolDiscovery {
     this.exposed = new Set(this.catalog.filter(row => !deferred.has(row.name)).map(row => row.name));
   }
 
-  static create(registry: ToolRegistry, policy?: QueryEngineOptions["toolDiscovery"], view?: RunCapabilityView): RunToolDiscovery | undefined {
+  static create(registry: ToolRegistry, policy?: QueryEngineOptions["toolDiscovery"], bindings?: ReadonlyMap<string, RunToolBinding>): RunToolDiscovery | undefined {
     if (!policy) return undefined;
     registry = modelToolRegistry(registry);
     const search = registry.get(policy.searchTool.name);
-    const binding = view?.tools.get(policy.searchTool.name);
+    const binding = bindings?.get(policy.searchTool.name);
     // Same-name replacements must not strand deferred tools behind an unrelated search tool.
     if (!search || registry.inspect(search.name)?.source.kind !== "builtin"
-      || (view ? binding?.definitionIdentity !== toolDefinitionIdentity(policy.searchTool)
+      || (bindings ? binding?.definitionIdentity !== toolDefinitionIdentity(policy.searchTool)
         || binding.definition.execute !== policy.searchTool.execute
         : toolDefinitionIdentity(search) !== toolDefinitionIdentity(policy.searchTool) || search.execute !== policy.searchTool.execute)) return undefined;
     const deferred = registry.getAll().filter(tool => tool.name !== search.name && policy.shouldDefer(tool, registry.inspect(tool.name)?.source));

@@ -1,4 +1,5 @@
-import { PROJECT_CONFIG_DIR_NAME, type ToolDefinition } from "@vykor/core";
+import { PROJECT_CONFIG_DIR_NAME } from "@vykor/host-config";
+import { type ToolDefinition } from "@vykor/agent-contracts";
 
 export const enterWorktreeTool: ToolDefinition = {
   name: "EnterWorktree",

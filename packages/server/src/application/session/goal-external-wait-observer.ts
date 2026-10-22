@@ -1,4 +1,4 @@
-import type { GoalExternalWait, SessionGoal } from "@vykor/protocol";
+import type { GoalExternalWait, SessionGoal } from "@vykor/domain-contracts/goals";
 import type { GoalOperations } from "@vykor/services";
 import type { GoalWaitCheck, GoalWaitVerifier } from "./goal-wait-verifier.js";
 

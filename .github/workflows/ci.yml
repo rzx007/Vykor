@@ -33,6 +33,12 @@ jobs:
       - name: Type check
         run: pnpm check-types
 
+      - name: Check architecture
+        run: pnpm check:architecture
+
+      - name: Check documentation
+        run: pnpm check-docs
+
       - name: Test
         run: pnpm test
 

@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { resolveHostShellLauncher, resolveSandboxPolicy, type HostShellLauncher } from "@vykor/sandbox";
 import { describe, expect, it, vi } from "vitest";
 import { createShellTool as createBashTool } from "../shell.js";
@@ -15,7 +17,7 @@ describe("createBashTool", () => {
   it.skipIf(resolveHostShellLauncher().kind !== "powershell")("does not block valid nested PowerShell before automatically creating a background job", async () => {
     let launches = 0;
     const tool = createBashTool(fakeExecutor(result()));
-    const feedback = await tool.execute({ command: 'powershell -Command "$s=1; npm install"' }, {
+    const feedback = await executeToolFixture(host => createBashTool(fakeExecutor(result()), undefined, undefined, host), { command: 'powershell -Command "$s=1; npm install"' }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
@@ -32,7 +34,7 @@ describe("createBashTool", () => {
       async resolve(request) { return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } }); },
       async run() { executions++; return result({ status: "failed", failureKind: "command", exitCode: 1, output: "actual syntax diagnostic" }); },
     };
-    const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
+    const feedback = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command }, { cwd: process.cwd() });
     expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
     expect(feedback.content[0]).toMatchObject({ text: "actual syntax diagnostic" });
     expect(executions).toBe(1);
@@ -48,7 +50,7 @@ describe("createBashTool", () => {
       async resolve(request) { return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } }); },
       async run() { executions++; return result({ output: "user command reached executor" }); },
     };
-    const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
+    const feedback = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command }, { cwd: process.cwd() });
     expect(feedback).toMatchObject({ executionState: "completed" });
     expect(feedback.isError).not.toBe(true);
     expect(executions).toBe(1);
@@ -57,7 +59,7 @@ describe("createBashTool", () => {
 
   it("keeps a legacy failed command with null exit code unknown", async () => {
     const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: null, output: "partial diagnostic" })));
-    const feedback = await tool.execute({ command: "inspect" }, { cwd: process.cwd() });
+    const feedback = await executeToolFixture(host => createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: null, output: "partial diagnostic" })), undefined, undefined, host), { command: "inspect" }, { cwd: process.cwd() });
     expect(feedback).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown", content: [{ text: "partial diagnostic" }] });
     expect(feedback.recoveryHint ?? "").not.toContain("null");
     expect(feedback.compactSummary ?? "").not.toContain("null");
@@ -65,7 +67,7 @@ describe("createBashTool", () => {
 
   it("keeps an environment process with null exit code unknown", async () => {
     const tool = createBashTool();
-    const feedback = await tool.execute({ command: "inspect" }, {
+    const feedback = await executeToolFixture(host => createBashTool(undefined, undefined, undefined, host), { command: "inspect" }, {
       cwd: "/work",
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
@@ -116,7 +118,7 @@ describe("createBashTool", () => {
 
   it("uses the actual exit code for a failed command without copying its command into the summary", async () => {
     const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: 7, output: "diagnostic" })));
-    const feedback = await tool.execute({ command: "echo SECRET_VALUE" }, { cwd: process.cwd() });
+    const feedback = await executeToolFixture(host => createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: 7, output: "diagnostic" })), undefined, undefined, host), { command: "echo SECRET_VALUE" }, { cwd: process.cwd() });
     expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
     expect(feedback.recoveryHint).toContain("7");
     expect(feedback.content[0]).toMatchObject({ text: "diagnostic" });
@@ -138,7 +140,7 @@ describe("createBashTool", () => {
     }));
     const tool = createBashTool(legacy);
 
-    const toolResult = await tool.execute({ command: "pwd" }, {
+    const toolResult = await executeToolFixture(host => createBashTool(legacy, undefined, undefined, host), { command: "pwd" }, {
       cwd: "/workspace",
       environment: {
         info: {
@@ -191,7 +193,7 @@ describe("createBashTool", () => {
     }));
     const tool = createBashTool(legacy);
 
-    const toolResult = await tool.execute({ command: "dir /B 2>nul" }, {
+    const toolResult = await executeToolFixture(host => createBashTool(legacy, undefined, undefined, host), { command: "dir /B 2>nul" }, {
       cwd: "D:\\repo",
       environment: {
         info: {
@@ -253,7 +255,7 @@ describe("createBashTool", () => {
     }));
     const tool = createBashTool(fakeExecutor(result()));
 
-    const toolResult = await tool.execute({ command: "printf ok" }, {
+    const toolResult = await executeToolFixture(host => createBashTool(fakeExecutor(result()), undefined, undefined, host), { command: "printf ok" }, {
       cwd: "/repo",
       environment: {
         info: {
@@ -311,7 +313,7 @@ describe("createBashTool", () => {
     const run = vi.fn(async () => result({ output: "hello" }));
     const tool = createBashTool({ resolve, run });
 
-    const toolResult = await tool.execute({
+    const toolResult = await executeToolFixture(host => createBashTool({ resolve, run }, undefined, undefined, host), {
       command: "echo hello",
       timeout: 2_000,
       workdir: "D:\\project",
@@ -335,7 +337,7 @@ describe("createBashTool", () => {
     const create = vi.fn(async () => ({ jobId: "job-dev", label: "pnpm dev" }));
     const tool = createBashTool({ resolve, run });
 
-    const toolResult = await tool.execute({
+    const toolResult = await executeToolFixture(host => createBashTool({ resolve, run }, undefined, undefined, host), {
       command: "pnpm dev",
     }, {
       cwd: "/repo",
@@ -368,7 +370,7 @@ describe("createBashTool", () => {
     const create = vi.fn(async () => ({ jobId: "job-dev", label: "pnpm dev" }));
     const tool = createBashTool(executor);
 
-    const toolResult = await tool.execute({
+    const toolResult = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), {
       command: "pnpm dev",
       timeout: 1_000,
     }, {
@@ -400,7 +402,7 @@ describe("createBashTool", () => {
     }));
     const tool = createBashTool(executor);
 
-    const toolResult = await tool.execute({ command: "pwd" }, { cwd: process.cwd() });
+    const toolResult = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command: "pwd" }, { cwd: process.cwd() });
 
     expect(toolResult).toEqual({
       content: [{ type: "text", text: "SRT sandbox is unavailable" }],
@@ -419,7 +421,7 @@ describe("createBashTool", () => {
     }), spec({ timeoutMs: 750 }));
     const tool = createBashTool(executor);
 
-    const toolResult = await tool.execute({ command: "slow", timeout: 750 }, { cwd: process.cwd() });
+    const toolResult = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command: "slow", timeout: 750 }, { cwd: process.cwd() });
 
     expect(toolResult.isError).toBe(true);
     expect(toolResult.content[0]).toMatchObject({
@@ -441,7 +443,7 @@ describe("createBashTool", () => {
     };
     const tool = createBashTool(executor);
 
-    const toolResult = await tool.execute({ command: "ls -la /tmp" }, { cwd: process.cwd() });
+    const toolResult = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command: "ls -la /tmp" }, { cwd: process.cwd() });
 
     expect(run).toHaveBeenCalledTimes(1);
     expect(toolResult.isError).not.toBe(true);
@@ -457,7 +459,7 @@ describe("createBashTool", () => {
     };
     const tool = createBashTool(executor);
 
-    const toolResult = await tool.execute({ command: "python - <<'PY'\nprint('ok')\nPY" }, { cwd: process.cwd() });
+    const toolResult = await executeToolFixture(host => createBashTool(executor, undefined, undefined, host), { command: "python - <<'PY'\nprint('ok')\nPY" }, { cwd: process.cwd() });
 
     expect(run).toHaveBeenCalledOnce();
     expect(toolResult.isError).toBe(true);
@@ -469,7 +471,7 @@ describe("createBashTool", () => {
 async function runEnvironmentChunks(stdout: Uint8Array[], stderr: Uint8Array[], exitCode: number) {
   let onStdout: (chunk: Uint8Array) => void = () => {};
   let onStderr: (chunk: Uint8Array) => void = () => {};
-  return createBashTool().execute({ command: "inspect" }, {
+  return executeToolFixture(host => createBashTool(undefined, undefined, undefined, host), { command: "inspect" }, {
     cwd: "/work",
     environment: {
       info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },

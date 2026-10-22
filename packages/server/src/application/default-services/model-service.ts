@@ -6,7 +6,7 @@ import {
   type ModelsDevModel,
 } from "@vykor/api";
 import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
-import type { CustomProviderModelSettings } from "@vykor/core";
+import type { CustomProviderModelSettings } from "@vykor/host-config";
 
 import type {
   ModelInfo,

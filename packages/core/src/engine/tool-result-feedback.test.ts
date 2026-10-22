@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { externalToolMetadata, formatToolResultForModel } from "./tool-result-feedback";
-import type { ToolExecutionResult } from "../types/tools";
+import type { ToolExecutionResult } from "@vykor/agent-contracts";
 
 describe("formatToolResultForModel", () => {
   it("never promotes MCP private data or app data into model feedback or host execution facts", () => {

@@ -1,19 +1,19 @@
+import type { HostedAgent, NodeAgentHost } from "@vykor/agent-runtime";
 import {
   createCompactContextProvider,
   type VykorAgent,
 } from "@vykor/agent-runtime";
 import type { CompactContextSection } from "@vykor/core";
-import type {
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-} from "@vykor/protocol";
+import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import type { LoadDaemonAgent } from "../../daemon/daemon-agent.js";
 
 export interface AgentPoolSessionQueries {
   getSession(sessionId: string): SessionRecord | undefined;
-  listSessions(options?: { cwd?: string; includeArchived?: boolean }): SessionRecord[];
+  listSessions(options?: {
+    cwd?: string;
+    includeArchived?: boolean;
+  }): SessionRecord[];
   listMessages(sessionId: string): SessionMessageRecord[];
   listMessageParts(sessionId: string): SessionMessagePartRecord[];
 }
@@ -32,6 +32,7 @@ export interface AgentPoolContext {
 interface AgentPoolEntry {
   promise: Promise<VykorAgent>;
   agent?: VykorAgent;
+  host?: NodeAgentHost;
   state: "active" | "closing";
   closePromise?: Promise<void>;
   /** Soft settings changed while this agent was busy; close once idle. */
@@ -60,7 +61,9 @@ export class AgentPool {
   }
 
   hasActiveWork(): boolean {
-    return [...this.agents.values()].some((entry) => this.entryHasActiveWork(entry));
+    return [...this.agents.values()].some((entry) =>
+      this.entryHasActiveWork(entry),
+    );
   }
 
   hasActiveWorkForSession(sessionId: string): boolean {
@@ -69,20 +72,47 @@ export class AgentPool {
   }
 
   hasActiveWorkForCwd(cwd: string): boolean {
-    return this.sessionQueries.listSessions({ cwd, includeArchived: true })
+    return this.sessionQueries
+      .listSessions({ cwd, includeArchived: true })
       .some((session) => this.hasActiveWorkForSession(session.id));
   }
 
   async warm(sessionId: string): Promise<void> {
-    if (!this.configured || this.agents.has(sessionId) || this.context.isSessionExternallyOwned?.(sessionId)) return;
+    if (
+      !this.configured ||
+      this.agents.has(sessionId) ||
+      this.context.isSessionExternallyOwned?.(sessionId)
+    )
+      return;
     const session = this.sessionQueries.getSession(sessionId);
-    if (!session || session.status === "closing" || session.status === "archived") return;
+    if (
+      !session ||
+      session.status === "closing" ||
+      session.status === "archived"
+    )
+      return;
     await this.acquireSession(sessionId).catch(() => {});
   }
 
   async get(sessionId: string): Promise<VykorAgent | undefined> {
     const entry = this.agents.get(sessionId);
     return entry?.state === "active" ? await entry.promise : undefined;
+  }
+
+  async acquireHostedSession(sessionId: string): Promise<HostedAgent> {
+    const agent = await this.acquire(sessionId);
+    const entry = this.agents.get(sessionId);
+    if (entry?.agent !== agent)
+      throw new Error(`Agent runtime generation changed: ${sessionId}`);
+    return { agent, host: entry.host };
+  }
+
+  async getHosted(sessionId: string): Promise<HostedAgent | undefined> {
+    const agent = await this.get(sessionId);
+    const entry = this.agents.get(sessionId);
+    return agent && entry?.agent === agent
+      ? { agent, host: entry.host }
+      : undefined;
   }
 
   async acquireSession(sessionId: string): Promise<VykorAgent> {
@@ -92,7 +122,9 @@ export class AgentPool {
   private async acquire(sessionId: string): Promise<VykorAgent> {
     if (!this.configured) throw new Error("Agent runtime is not configured");
     if (this.context.isSessionExternallyOwned?.(sessionId)) {
-      throw new Error(`Session runtime is owned by a live child agent: ${sessionId}`);
+      throw new Error(
+        `Session runtime is owned by a live child agent: ${sessionId}`,
+      );
     }
     const current = this.sessionQueries.getSession(sessionId);
     if (!current) throw new Error(`Session not found: ${sessionId}`);
@@ -119,7 +151,8 @@ export class AgentPool {
       this.sessionQueries.listMessageParts(sessionId),
       entry,
     ).catch((error) => {
-      if (entry.state === "active" && this.agents.get(sessionId) === entry) this.agents.delete(sessionId);
+      if (entry.state === "active" && this.agents.get(sessionId) === entry)
+        this.agents.delete(sessionId);
       throw error;
     });
     entry.promise = promise;
@@ -152,12 +185,21 @@ export class AgentPool {
   }
 
   async closeForCwd(cwd: string): Promise<void> {
-    const sessions = this.sessionQueries.listSessions({ cwd, includeArchived: true });
-    await this.closeSessions(sessions.map((session) => session.id), `Agent pool cleanup failed for cwd: ${cwd}`);
+    const sessions = this.sessionQueries.listSessions({
+      cwd,
+      includeArchived: true,
+    });
+    await this.closeSessions(
+      sessions.map((session) => session.id),
+      `Agent pool cleanup failed for cwd: ${cwd}`,
+    );
   }
 
   async closeAll(): Promise<void> {
-    await this.closeSessions([...this.agents.keys()], "Agent pool cleanup failed");
+    await this.closeSessions(
+      [...this.agents.keys()],
+      "Agent pool cleanup failed",
+    );
   }
 
   /**
@@ -174,7 +216,10 @@ export class AgentPool {
       }
     }
     if (idleSessionIds.length === 0) return;
-    await this.closeSessions(idleSessionIds, "Agent pool soft invalidation failed");
+    await this.closeSessions(
+      idleSessionIds,
+      "Agent pool soft invalidation failed",
+    );
   }
 
   async closeIfStale(sessionId: string): Promise<void> {
@@ -192,16 +237,23 @@ export class AgentPool {
   ): Promise<VykorAgent> {
     const loadAgent = this.context.loadAgent;
     if (!loadAgent) throw new Error("Agent runtime is not configured");
-    const agent = await loadAgent({ session, history, parts });
+    const hosted = await loadAgent({ session, history, parts });
+    const agent = hosted.agent;
+    entry.host = hosted.host;
     if (this.context.supplementalSections || this.context.sessionMemory) {
-      agent.setCompactContextProvider(createCompactContextProvider({
-        ...(this.context.supplementalSections
-          ? { supplementalSections: () => this.context.supplementalSections!(session.id) }
-          : {}),
-        ...(this.context.sessionMemory
-          ? { sessionMemory: () => this.context.sessionMemory!(session.id) }
-          : {}),
-      }));
+      agent.setCompactContextProvider(
+        createCompactContextProvider({
+          ...(this.context.supplementalSections
+            ? {
+                supplementalSections: () =>
+                  this.context.supplementalSections!(session.id),
+              }
+            : {}),
+          ...(this.context.sessionMemory
+            ? { sessionMemory: () => this.context.sessionMemory!(session.id) }
+            : {}),
+        }),
+      );
     }
     entry.agent = agent;
     return agent;
@@ -210,14 +262,28 @@ export class AgentPool {
   private entryHasActiveWork(entry: AgentPoolEntry): boolean {
     if (entry.state === "closing" || !entry.agent) return true;
     if (entry.agent.state !== "idle") return true;
-    return entry.agent.children.list().some((child) =>
-      child.state === "starting" || child.state === "running" || child.state === "closing");
+    return entry.agent.children
+      .list()
+      .some(
+        (child) =>
+          child.state === "starting" ||
+          child.state === "running" ||
+          child.state === "closing",
+      );
   }
 
-  private async closeSessions(sessionIds: string[], message: string): Promise<void> {
-    const settled = await Promise.allSettled(sessionIds.map((sessionId) => this.close(sessionId)));
+  private async closeSessions(
+    sessionIds: string[],
+    message: string,
+  ): Promise<void> {
+    const settled = await Promise.allSettled(
+      sessionIds.map((sessionId) => this.close(sessionId)),
+    );
     const failures = settled
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      )
       .map((result) => result.reason);
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) throw new AggregateError(failures, message);

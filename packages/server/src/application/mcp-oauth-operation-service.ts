@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { McpRuntimeSyncResult } from "@vykor/core";
+import type { McpRuntimeSyncResult } from "@vykor/host-config";
 import {
   McpOAuthApplicationError,
   type McpOAuthApplicationService,

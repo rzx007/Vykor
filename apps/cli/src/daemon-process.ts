@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 
-import { getLogsDir } from "@vykor/core";
+import { getLogsDir } from "@vykor/host-config";
 
 export interface DaemonInvocationOptions {
   bunRuntime?: boolean;

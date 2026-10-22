@@ -1,5 +1,5 @@
-import type { ContextLedgerSegment } from "@vykor/core";
-import type { WorkStyle } from "@vykor/core";
+import type { ContextLedgerSegment } from "@vykor/agent-contracts";
+import type { WorkStyle } from "@vykor/host-config";
 import type { PromptPermissionMode } from "./index.js";
 import {
   buildTaggedPromptSegments,

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PluginCapabilityInventory, PluginCapabilityOwner } from "@vykor/agent-runtime";
-import type { SessionUserInputItem } from "@vykor/protocol";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { SessionStore } from "@vykor/services";
 import { afterEach, describe, expect, it } from "vitest";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
@@ -10,7 +10,7 @@ import { RunAdmissionService } from "../run-admission-service.js";
 import { SessionInteractionService } from "../session-interaction-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { createSessionRuntimeDiscovery } from "../session-runtime-discovery.js";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 const cleanup: Array<() => void> = [];
 afterEach(() => { for (const dispose of cleanup.splice(0)) dispose(); });

@@ -1,14 +1,10 @@
-import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core";
+import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/agent-contracts";
 import { toolFeedbackFields } from "@vykor/core";
-import {
-  isCommittedModelPart,
-  publicToolResult,
-  type AttachmentIntent,
-  type ReplaceTranscriptMessageInput,
-  type ReplaceTranscriptPartInput,
-  type SessionMessagePartRecord,
-  type SessionMessageRecord,
-} from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
+import type { AttachmentIntent } from "@vykor/domain-contracts/attachments";
+import type { ReplaceTranscriptMessageInput, ReplaceTranscriptPartInput } from "@vykor/services";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
+import { publicToolResult } from "@vykor/agent-contracts";
 import { publicTextFromParts } from "../../session/transcript-text.js";
 
 type UserMessageContent = Extract<Message, { type: "user" }>["content"];

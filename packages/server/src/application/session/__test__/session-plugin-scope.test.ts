@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/protocol";
+import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { resolveRunPluginSelection } from "../session-plugin-selection.js";
 
 const candidates = ["P", "Q"].map(pluginId => ({ pluginId, displayName: pluginId,
@@ -16,7 +16,7 @@ function resolve(options: { inputMetadata?: Record<string, unknown>; runMetadata
     session: { metadata: options.sessionMetadata ?? {} } as SessionRecord,
     run: { id: "run", metadata: options.runMetadata ?? {} } as SessionRunRecord,
     input: { id: "input", items: [], attachments: [], metadata: options.inputMetadata ?? { pluginScope: scope } } as unknown as SessionInputRecord,
-    agent: { getPluginCandidates: () => candidates, validatePluginScope, selectPluginForRun } as never,
+    plugins: { getPluginCandidates: () => candidates, validatePluginScope, selectPluginForRun } as never,
     signal: new AbortController().signal, traceId: "trace",
   });
   return { result, selectPluginForRun, validatePluginScope };

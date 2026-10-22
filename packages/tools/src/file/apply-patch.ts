@@ -1,6 +1,7 @@
+import type { FileToolHost } from "../ports/policy.js";
 import { createHash } from "node:crypto";
 import { applyPatch as applyParsedPatch, parsePatch, type ParsedDiff } from "diff";
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { EnvironmentPathOperation } from "@vykor/environment";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
@@ -159,12 +160,13 @@ function validateNewContent(content: string, label: string): string {
 
 interface PlanDependencies {
   context: ToolContext;
+  host: FileToolHost;
   operations: FileOperations;
   cwd: string;
 }
 
 async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise<PatchChange> {
-  const { context, operations, cwd } = deps;
+  const { context, operations, cwd, host } = deps;
   const resolveOperation: EnvironmentPathOperation = item.operation === "create" ? "write" : "read";
   const executionPath = await resolveToolPathInContext(item.relativePath, context, resolveOperation);
 
@@ -177,7 +179,7 @@ async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise
   const operationsToCheck: Array<"read" | "write"> =
     item.operation === "create" ? ["write"] : ["read", "write"];
   for (const operation of operationsToCheck) {
-    const sandboxError = await sandboxPathError(executionPath, cwd, operation, context.settings, context.environment);
+    const sandboxError = await sandboxPathError(executionPath, cwd, operation, host.settings, context.environment);
     if (sandboxError) throw new PatchToolError("policy", sandboxError);
   }
 
@@ -212,7 +214,7 @@ async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise
   };
 }
 
-export async function planPatch(patch: string, context: ToolContext): Promise<PatchPlan> {
+export async function planPatch(patch: string, context: ToolContext, host: FileToolHost = {}): Promise<PatchPlan> {
   if (typeof patch !== "string") {
     throw new PatchToolError("invalid_input", "patch must be a string.");
   }
@@ -257,7 +259,7 @@ export async function planPatch(patch: string, context: ToolContext): Promise<Pa
 
   const changes: PatchChange[] = [];
   for (const item of classified) {
-    changes.push(await planChange(item, { context, operations, cwd }));
+    changes.push(await planChange(item, { context, operations, cwd, host }));
   }
   return { changes };
 }
@@ -431,24 +433,28 @@ export async function executePatchPlan(plan: PatchPlan, operations: FileOperatio
   return patchSuccess(ordered, context);
 }
 
-export const applyPatchTool: ToolDefinition = {
-  name: "ApplyPatch",
-  serialGroup: "file_mutation",
-  description:
-    "Apply a standard unified diff for multi-file or multi-hunk text changes. Supports create, update, and delete; rejects rename, binary, fuzzy, and mode patches.",
-  inputSchema: {
-    type: "object",
-    properties: { patch: { type: "string", description: "Standard unified diff." } },
-    required: ["patch"],
-  },
-  async execute(input, context) {
-    let planning = true;
-    try {
-      const plan = await planPatch(input.patch as string, context);
-      planning = false;
-      return await executePatchPlan(plan, fileOperationsFor(context), context);
-    } catch (error) {
-      return patchErrorResult(error, planning ? "not_started" : "unknown");
-    }
-  },
-};
+export function createApplyPatchTool(host: FileToolHost = {}): ToolDefinition {
+  return {
+    name: "ApplyPatch",
+    serialGroup: "file_mutation",
+    description:
+      "Apply a standard unified diff for multi-file or multi-hunk text changes. Supports create, update, and delete; rejects rename, binary, fuzzy, and mode patches.",
+    inputSchema: {
+      type: "object",
+      properties: { patch: { type: "string", description: "Standard unified diff." } },
+      required: ["patch"],
+    },
+    async execute(input, context) {
+      let planning = true;
+      try {
+        const plan = await planPatch(input.patch as string, context, host);
+        planning = false;
+        return await executePatchPlan(plan, fileOperationsFor(context), context);
+      } catch (error) {
+        return patchErrorResult(error, planning ? "not_started" : "unknown");
+      }
+    },
+  };
+}
+
+export const applyPatchTool: ToolDefinition = createApplyPatchTool();

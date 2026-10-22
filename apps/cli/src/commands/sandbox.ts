@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 export function enableSandbox(settings: Settings, options: { failOpen?: boolean } = {}): Settings {
   return {
@@ -21,7 +21,7 @@ export function formatSandboxStatus(settings: Settings): string {
 export function createSandboxCommand(): Command {
   const command = new Command("sandbox").description("Manage the local SRT sandbox");
   command.command("enable").option("--global").option("--fail-open").action(async (options) => {
-    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@vykor/core");
+    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@vykor/host-config");
     if (options.global) {
       const next = await updateSettings((settings) => enableSandbox(settings, options));
       console.log(formatSandboxStatus(next));
@@ -33,7 +33,7 @@ export function createSandboxCommand(): Command {
     console.log(formatSandboxStatus(next));
   });
   command.command("disable").option("--global").action(async (options) => {
-    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@vykor/core");
+    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@vykor/host-config");
     if (options.global) {
       const next = await updateSettings((settings) => disableSandbox(settings));
       console.log(formatSandboxStatus(next));
@@ -45,11 +45,11 @@ export function createSandboxCommand(): Command {
     console.log(formatSandboxStatus(next));
   });
   command.command("status").action(async () => {
-    const { loadSettings } = await import("@vykor/core");
+    const { loadSettings } = await import("@vykor/host-config");
     console.log(formatSandboxStatus(await loadSettings(undefined, { includeProject: true, projectRoot: process.cwd() })));
   });
   command.command("check").action(async () => {
-    const { loadSettings } = await import("@vykor/core");
+    const { loadSettings } = await import("@vykor/host-config");
     const { getSandboxAvailability } = await import("@vykor/sandbox");
     console.log(JSON.stringify(getSandboxAvailability((await loadSettings(undefined, { includeProject: true, projectRoot: process.cwd() })).sandbox), null, 2));
   });

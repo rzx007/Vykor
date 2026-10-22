@@ -1,4 +1,4 @@
-import type { ContentBlock } from "@vykor/core";
+import type { ContentBlock } from "@vykor/agent-contracts";
 import { access } from "node:fs/promises";
 import { basename } from "node:path";
 

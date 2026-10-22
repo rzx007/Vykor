@@ -42,8 +42,8 @@
 - `packages/auth/src/index.ts`：导出 `McpOAuthCredentialStore`。
 - `packages/mcp/src/index.ts`：注入 credential store/runtime auth，构造 authenticated HTTP transport，暴露连接验证入口。
 - `packages/mcp/package.json`：保持 SDK 依赖，补充测试所需依赖时只放 devDependencies。
-- `packages/agent-runtime/src/runtime-integrations.ts`：创建 store/runtime auth 并注入每个 session 的 manager。
-- `packages/agent-runtime/src/runtime-integrations.test.ts`：验证 OAuth 依赖注入和失败隔离。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：创建 store/runtime auth 并注入每个 session 的 manager。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts`：验证 OAuth 依赖注入和失败隔离。
 - `apps/cli/src/commands/mcp.ts`：实现 `add/get/list/login/logout/remove`。
 - `apps/cli/package.json`：加入 `open` runtime dependency，用函数式 API 跨平台打开授权 URL。
 - `README.md`、`docs/mcp-http-transport-design.md`：更新状态、命令和安全限制。
@@ -467,8 +467,8 @@ git commit -m "feat(mcp): implement interactive OAuth login"
 - 创建：`packages/mcp/src/oauth/status.test.ts`
 - 创建：`packages/mcp/src/oauth/verify-connection.ts`
 - 修改：`packages/mcp/src/index.ts`
-- 修改：`packages/agent-runtime/src/runtime-integrations.ts`
-- 修改：`packages/agent-runtime/src/runtime-integrations.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts`
 
 - [ ] **步骤 1：编写状态计算和刷新 scope 测试**
 
@@ -562,7 +562,7 @@ HTTP 且没有显式 `Authorization` Header 时，为 `StreamableHTTPClientTrans
 - [ ] **步骤 9：提交**
 
 ```bash
-git add packages/mcp/src/oauth/runtime-auth.ts packages/mcp/src/oauth/runtime-auth.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/status.test.ts packages/mcp/src/oauth/verify-connection.ts packages/mcp/src/index.ts packages/agent-runtime/src/runtime-integrations.ts packages/agent-runtime/src/runtime-integrations.test.ts
+git add packages/mcp/src/oauth/runtime-auth.ts packages/mcp/src/oauth/runtime-auth.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/status.test.ts packages/mcp/src/oauth/verify-connection.ts packages/mcp/src/index.ts packages/agent-runtime/src/node/runtime/runtime-integrations.ts packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts
 git commit -m "feat(mcp): refresh OAuth credentials at runtime"
 ```
 

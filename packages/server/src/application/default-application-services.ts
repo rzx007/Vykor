@@ -1,5 +1,6 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import type { AgentPersonaService } from "./settings-api.js";
-import type { AgentEnvironmentSettings } from "@vykor/core";
+import type { AgentEnvironmentSettings } from "@vykor/host-config";
 import { createHash } from "node:crypto";
 import { preflightWsl } from "@vykor/sandbox";
 import {
@@ -39,9 +40,9 @@ export {
 export function createDefaultAgentPersonaService(): AgentPersonaService {
   return {
     async list() {
-      const { getAllAgentDefinitions } =
-        await import("@vykor/coordinator");
-      const agents = getAllAgentDefinitions([]);
+      const { loadNodeAgentDefinitions } =
+        await import("@vykor/agent-runtime");
+      const agents = loadNodeAgentDefinitions();
       return {
         agents: agents.map((agent) => ({
           name: agent.name,
@@ -55,17 +56,17 @@ export function createDefaultAgentPersonaService(): AgentPersonaService {
 }
 
 /** Complete resource-service set installed by the opinionated daemon application. */
-export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeDefault?: AgentEnvironmentSettings) {
+export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeDefault: AgentEnvironmentSettings | undefined, executionOwner: ExecutionRuntimeOwner) {
   return {
     settings: createDefaultSettingsService(ref, {
       agentEnvironment: createDefaultAgentEnvironmentService(activeDefault ?? ref.current.agentEnvironment),
     }),
     provider: createDefaultProviderService(ref),
     model: createDefaultModelService(ref),
-    memory: createDefaultMemoryService(),
+    memory: createDefaultMemoryService(executionOwner),
     auth: createDefaultAuthService(),
     context: createDefaultContextService(ref),
-    dream: createDefaultDreamService(ref),
+    dream: createDefaultDreamService(ref, executionOwner),
     profile: createDefaultProfileService(),
     outputStyle: createDefaultOutputStyleService(),
     projectInit: createDefaultProjectInitService(),

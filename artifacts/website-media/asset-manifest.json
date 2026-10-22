@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "file": "brand/brand-manifest.json",
+      "bytes": 1531,
+      "sha256": "50023fc26d53e1fb581ee7fe4066cf782663638ffaf5c232d15e4a2aaa9da623"
+    },
+    {
+      "file": "brand/hero-assembled.png",
+      "bytes": 2164901,
+      "sha256": "8c0da91fcffc258369b0eba9e138c5b049869ff58ae339028c2095fb558486ec"
+    },
+    {
+      "file": "brand/hero-assembled.webp",
+      "bytes": 34216,
+      "sha256": "e9d8787d1338fbc11610c713495918f46a03aa72d8bc1300cfe05849c0a61c70"
+    },
+    {
+      "file": "brand/hero-closeup.png",
+      "bytes": 2126025,
+      "sha256": "8f5176a61d261520289329bd3d144a39858e3ee9b304567e56541c166e22221e"
+    },
+    {
+      "file": "brand/hero-closeup.webp",
+      "bytes": 32244,
+      "sha256": "4fdf1d51874264e7edac6bfc54db987abb1bf6f8671e6373e5c684ee24162d31"
+    },
+    {
+      "file": "brand/model-verification.json",
+      "bytes": 412,
+      "sha256": "6a4cd5b4a02850799bf6785f0c49e5da9bd8b5e3319bdbf6026b1cc15d47f928"
+    },
+    {
+      "file": "brand/vykor-mark-transparent.png",
+      "bytes": 973958,
+      "sha256": "6a1d26a58c247de204c7b7c4f24c72ca87d59493121dd2c3e2c5ec7ee5a38915"
+    },
+    {
+      "file": "brand/vykor-mark-transparent.webp",
+      "bytes": 36186,
+      "sha256": "03d43f8f99921eafc757be71fb97393ca82f5525863709ac9d95846dbad8b1a3"
+    },
+    {
+      "file": "brand/vykor-optical-mark.blend",
+      "bytes": 142411,
+      "sha256": "7e07b2ff4fc67f99f1282a15de0d2b9759b605cf14a3c42cb6da9d4e4fce4b49"
+    },
+    {
+      "file": "brand/vykor-optical-mark.glb",
+      "bytes": 134528,
+      "sha256": "383c38276b1b77bcff95d471d204beb0f9165ab699c08c379a09c8f4a52cac5d"
+    },
+    {
+      "file": "product/product-manifest.json",
+      "bytes": 7786,
+      "sha256": "332714f17c161c0644b2149ea03fda8b5b12c9e39c937ab95e3c4c8ae89646f4"
+    },
+    {
+      "file": "product/vykor-coding.png",
+      "bytes": 263759,
+      "sha256": "24583bb325befea5c9c5fbce1ca46f295ffe55d359ee68e39dcd65b327fff71e"
+    },
+    {
+      "file": "product/vykor-coding.webp",
+      "bytes": 100050,
+      "sha256": "c1225746465fffdd384630595c722d03c74bc939f62327a7be17953810c9290f"
+    },
+    {
+      "file": "product/vykor-document.png",
+      "bytes": 209019,
+      "sha256": "4cd93caf6962ceb5307570174076404dbef153f8a94999d8f8fe4db4c0e0c506"
+    },
+    {
+      "file": "product/vykor-document.webp",
+      "bytes": 75268,
+      "sha256": "4f6abc6e211b426bb878b426813c42030b27b944eb3e4b14f5d1346e04dacde1"
+    },
+    {
+      "file": "product/vykor-research.png",
+      "bytes": 234773,
+      "sha256": "a58f89d0d614a935cad8bed2ebc8b8b2d103c58dbfc4bebcb2df59bcb2a73a99"
+    },
+    {
+      "file": "product/vykor-research.webp",
+      "bytes": 75198,
+      "sha256": "d69bc1fdf14a9d28de55135d697c3d493f622933f0bf0eaa59d71c47371dbd5f"
+    },
+    {
+      "file": "product/vykor-workspace.png",
+      "bytes": 151660,
+      "sha256": "4108c256d0a9e87055d66a2a691e6c65d90b7661f9ae891b9f42afbc0877bd16"
+    },
+    {
+      "file": "product/vykor-workspace.webp",
+      "bytes": 48814,
+      "sha256": "b3ec90b563ea52fb46c7101e4b24730a639db95f3880bc8c4f195319fd13c529"
+    }
+  ],
+  "notIncluded": "End-to-end recording with real model execution"
+}

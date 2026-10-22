@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type {
-  ChannelDeliveryRecord,
-  ChannelDeliveryStatus,
-  ExternalConversationRecord,
-} from "@vykor/protocol";
+import type { ChannelDeliveryRecord, ChannelDeliveryStatus, ExternalConversationRecord } from "@vykor/domain-contracts/channels";
 import { and, desc, eq, inArray, placeholder, sql } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";

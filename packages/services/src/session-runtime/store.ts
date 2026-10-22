@@ -6,57 +6,20 @@ import Database from "better-sqlite3";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { applicationOwners } from "./schema.js";
-import {
-  DEFAULT_ATTACHMENT_LIMITS,
-  normalizeSessionUserInputItems,
-  parseAttachmentLimits,
-  sessionUserInputText,
-} from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS } from "../attachments/attachment-policy.js";
+import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
+import { parseAttachmentLimits } from "@vykor/domain-contracts/attachments";
 
-import type {
-  AdmitPromptInput,
-  AdmitPromptWithRunInput,
-  AppendEventInput,
-  AppendMessagePartDeltaInput,
-  CreateMessageInput,
-  CreatePermissionRequestInput,
-  CreateProjectionSettlementInput,
-  CreateRunInput,
-  CreateRunAttemptInput,
-  CreateSessionTaskInput,
-  CreateSessionInput,
-  ListEventsOptions,
-  ListMessagePartsOptions,
-  ListMessagesOptions,
-  ListPermissionRequestsOptions,
-  ListProjectionSettlementsOptions,
-  ListSessionsOptions,
-  PermissionRequestRecord,
-  ProjectionSettlementRecord,
-  ReplyPermissionInput,
-  SessionMessagePartRecord,
-  SessionEventRecord,
-  SessionInputRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionRunAttemptRecord,
-  SessionExecutionRecord,
-  SessionStateSnapshot,
-  UpsertMessagePartInput,
-  UpdateRunInput,
-  UpdateRunAttemptInput,
-  UpdateSessionTaskInput,
-  UpdateSessionInput,
-  ReplaceTranscriptInput,
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  AttachmentRepresentationKind,
-  AttachmentLimits,
-  SessionInputAttachmentRecord,
-  SessionUserInputItem,
-  SessionGoal,
-} from "@vykor/protocol";
+import type { AdmitPromptInput, AdmitPromptWithRunInput, AppendEventInput, AppendMessagePartDeltaInput, CreateMessageInput, ListEventsOptions, ListMessagePartsOptions, ListMessagesOptions, UpsertMessagePartInput, ReplaceTranscriptInput } from "../conversations/commands.js";
+import type { CreatePermissionRequestInput, ListPermissionRequestsOptions, ReplyPermissionInput } from "../permissions/commands.js";
+import type { CreateProjectionSettlementInput, ListProjectionSettlementsOptions } from "./commands.js";
+import type { CreateRunInput, CreateRunAttemptInput, CreateSessionTaskInput, UpdateRunInput, UpdateRunAttemptInput, UpdateSessionTaskInput } from "../runs/commands.js";
+import type { CreateSessionInput, ListSessionsOptions, UpdateSessionInput } from "../sessions/commands.js";
+import type { PermissionRequestRecord, ProjectionSettlementRecord, SessionMessagePartRecord, SessionEventRecord, SessionInputRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionStateSnapshot } from "../conversations/query-models.js";
+import type { AttachmentAssetRecord, AttachmentRepresentationRecord, AttachmentRepresentationKind, AttachmentLimits, SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import type { SessionGoal } from "@vykor/domain-contracts/goals";
 import {
   AttachmentRepository,
   AttachmentTransactions,

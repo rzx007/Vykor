@@ -1,4 +1,7 @@
-import type { ChildFailureKind, ChildPartialResult } from "@vykor/core";
+import type {
+  ChildFailureKind,
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 

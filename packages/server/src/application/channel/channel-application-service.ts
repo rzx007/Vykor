@@ -1,15 +1,8 @@
-import {
-  durableChannelInputId,
-  type AdmitPromptAttachmentInput,
-  type ChannelDeliveryRecord,
-  type ChannelStatusSnapshot,
-  type DurableChannelMessageInput,
-  type DurableChannelMessageResult,
-  type ExternalConversationRecord,
-  type RecordChannelDeliveryInput,
-  type SessionInputRecord,
-  type SessionRecord,
-} from "@vykor/protocol";
+import { durableChannelInputId } from "./durable-channel-input-id.js";
+import type { PromptAttachment as AdmitPromptAttachmentInput } from "@vykor/domain-contracts/inputs";
+import type { ChannelDeliveryRecord, ExternalConversationRecord } from "@vykor/domain-contracts/channels";
+import type { ChannelStatusSnapshot, DurableChannelMessageInput, DurableChannelMessageResult, RecordChannelDeliveryInput } from "./query-models.js";
+import type { SessionInputRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";

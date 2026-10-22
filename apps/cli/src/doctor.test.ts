@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CredentialStorage } from "@vykor/auth";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { checkApiKey } from "./doctor";
 
 function mkSettings(partial: Partial<Settings>): Settings {

@@ -1,4 +1,4 @@
-import type { UsageSnapshot, ICostTracker } from "../index";
+import type { UsageSnapshot, ICostTracker } from "@vykor/agent-contracts";
 
 export class CostTracker implements ICostTracker {
   private total: UsageSnapshot = {

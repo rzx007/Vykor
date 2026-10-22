@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
-import type { CreateProjectionSettlementInput, ListProjectionSettlementsOptions, ProjectionSettlementRecord } from "@vykor/protocol";
+import type { CreateProjectionSettlementInput, ListProjectionSettlementsOptions } from "./commands.js";
+import type { ProjectionSettlementRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionDatabase } from "../database/session-database.js";
 import type { TemporaryControlRecords } from "../database/temporary-control-records.js";
 import { projectionSettlements } from "./schema.js";

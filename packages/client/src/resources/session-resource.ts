@@ -2,15 +2,7 @@
  * SessionResource: 会话生命周期、快照、消息树、Prompt 准入排队与 Goal 资源。
  */
 
-import type {
-  CreateSessionGoalInput,
-  GoalActionInput,
-  SessionGoal,
-  UpdateSessionGoalInput,
-  SearchSessionsOptions,
-  SessionSearchResult,
-  ClearSessionWorktreeBindingInput,
-} from "@vykor/protocol";
+import type { CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
 import { decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {

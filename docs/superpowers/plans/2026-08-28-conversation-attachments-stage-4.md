@@ -240,8 +240,8 @@ git commit -m "feat(attachments): route safe native image blocks (stage 4 task 2
 - 修改：`packages/api/src/providers/anthropic.ts`
 - 修改：`packages/api/src/providers/anthropic.test.ts`
 - 修改：`packages/api/src/errors/index.ts`（只在统一 mismatch 分类需要时）
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 
 - [ ] **步骤 1：为最终 SDK 请求写失败的 contract test**
 
@@ -298,7 +298,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [ ] **步骤 5：只提交任务 3 文件**
 
 ```powershell
-git add packages/api/src/providers packages/api/src/errors packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime.test.ts
+git add packages/api/src/providers packages/api/src/errors packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts
 git commit -m "feat(attachments): send native images to providers (stage 4 task 3/5)"
 ```
 

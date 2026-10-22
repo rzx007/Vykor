@@ -1,16 +1,7 @@
-import {
-  readAutoReviewRunMetadata,
-  readSessionModelUsage,
-  type ExecutionObservation,
-  type ExecutionObservationWarning,
-  type ExecutionOutcome,
-  type ExecutionUsageCompleteness,
-  type RunStatus,
-  type SessionExecutionRecord,
-  type SessionRecord,
-  type SessionRunAttemptRecord,
-  type SessionRunRecord,
-} from "@vykor/protocol";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
+import { readSessionModelUsage } from "@vykor/domain-contracts/sessions";
+import type { ExecutionObservation, ExecutionObservationWarning, ExecutionOutcome, ExecutionUsageCompleteness } from "./query-models.js";
+import type { RunStatus, SessionExecutionRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 export interface SessionObservationSource {
   listSessions(): SessionRecord[];

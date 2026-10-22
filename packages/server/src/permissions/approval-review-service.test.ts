@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApprovalReviewInput, ApprovalReviewResult, SessionInputRecord, SessionRunRecord } from "@vykor/protocol";
+import type { ApprovalReviewInput, ApprovalReviewResult } from "@vykor/agent-contracts/permissions";
+import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { createPermissionApprovalReviewService, type ApprovalReviewServiceInput } from "./approval-review-service.js";
 
 const result: ApprovalReviewResult = { decision: "approve", risk: "low", authorization: "task_implied", reason: "项目修改" };

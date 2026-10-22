@@ -1,4 +1,4 @@
-import type { SessionRunRecord } from "@vykor/protocol";
+import type { SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 import { SessionRunCoordinator, type EnqueueRunOptions } from "../../runtime/run-coordinator.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";

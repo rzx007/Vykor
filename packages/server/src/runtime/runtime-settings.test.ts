@@ -1,7 +1,14 @@
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadProjectSettings, loadSettings, saveProjectSettings, SettingsConflictError, updateSettings, type AgentEnvironmentSettings } from "@vykor/core";
+import {
+  loadProjectSettings,
+  loadSettings,
+  saveProjectSettings,
+  SettingsConflictError,
+  updateSettings,
+  type AgentEnvironmentSettings,
+} from "@vykor/host-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inspectRuntimeEnvironment, saveRuntimeEnvironment } from "./runtime-settings.js";
 import { loadRuntimeSecrets, saveRuntimeSecrets } from "./runtime-secrets.js";

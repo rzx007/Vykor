@@ -1,5 +1,5 @@
 import { CredentialStorage } from "@vykor/auth";
-import { getConfigDir, SettingsConflictError, withSettingsFileLock } from "@vykor/core";
+import { getConfigDir, SettingsConflictError, withSettingsFileLock } from "@vykor/host-config";
 import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 

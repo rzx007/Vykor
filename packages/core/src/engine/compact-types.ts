@@ -1,4 +1,4 @@
-import type { IHookExecutor, StreamEvent } from "../index";
+import type { HookExecutor as IHookExecutor, StreamEvent } from "@vykor/agent-contracts";
 
 // ---------------------------------------------------------------------------
 // 公开类型：触发源 / 进度事件 / 检查点

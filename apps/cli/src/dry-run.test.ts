@@ -5,7 +5,7 @@ import {
   countEffectiveTools,
   buildDryRunReport,
 } from "./dry-run";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 function makeSettings(partial: Partial<Settings> = {}): Settings {
   return {

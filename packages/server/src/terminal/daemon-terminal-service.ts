@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type {
   ExecutionEnvironmentConsumer,
   ExecutionEnvironmentHandle,
@@ -25,7 +25,7 @@ import {
   terminalCommandArgs,
   type LocalTerminalProviderOptions,
 } from "@vykor/terminal-node";
-import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
+import type { ProjectRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import { ApplicationError } from "../shared/application-error.js";
 import { DaemonOperationUnavailableError, type DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
 

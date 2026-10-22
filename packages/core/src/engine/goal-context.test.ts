@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import type { AgentExecutionContext, StreamMessageParams } from "../index.js";
+import type { AgentExecutionContext, StreamMessageParams } from "@vykor/agent-contracts";
 
 it("keeps a host run contribution isolated from the next run", async () => {
   const systems: Array<string | undefined> = [];

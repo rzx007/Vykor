@@ -1,6 +1,8 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileReadTool} from "./../read.js";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createWslPathResolver } from "@vykor/sandbox";
 
@@ -54,10 +56,7 @@ describe("resolveToolPathInContext", () => {
       } as unknown as ExecutionEnvironmentHandle,
     } satisfies ToolContext;
 
-    const result = await fileReadTool.execute(
-      { file_path: "src/app.ts" },
-      context,
-    );
+    const result = await executeToolFixture(host => createFileReadTool(host), { file_path: "src/app.ts" }, context);
 
     expect(readBytes).toHaveBeenCalledWith("/workspace/src/app.ts");
     expect(result.isError).toBeFalsy();
@@ -82,7 +81,7 @@ describe("resolveToolPathInContext", () => {
       } as unknown as ExecutionEnvironmentHandle,
     } satisfies ToolContext;
 
-    const result = await fileReadTool.execute({ file_path: "screenshot.png" }, context);
+    const result = await executeToolFixture(host => createFileReadTool(host), { file_path: "screenshot.png" }, context);
 
     expect(result.content[0]).toMatchObject({
       type: "image",
@@ -106,7 +105,7 @@ describe("resolveToolPathInContext", () => {
       } as unknown as ExecutionEnvironmentHandle,
     } satisfies ToolContext;
 
-    const result = await fileReadTool.execute({ file_path: "/home/me/screenshot.png" }, context);
+    const result = await executeToolFixture(host => createFileReadTool(host), { file_path: "/home/me/screenshot.png" }, context);
 
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("not accessible to the model provider");

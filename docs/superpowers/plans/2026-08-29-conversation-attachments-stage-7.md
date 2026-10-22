@@ -21,7 +21,7 @@
 - `packages/core/src/engine/compact-service.ts`
 - `packages/core/src/types/runtime.ts`
 - `packages/core/src/engine/compact-service-advanced.test.ts`
-- `packages/agent-runtime/src/agent.ts`
+- `packages/agent-runtime/src/kernel/agent.ts`
 - `packages/server/src/application/session/session-maintenance-service.ts`
 - `packages/server/src/application/session/__test__/session-maintenance-service.test.ts`
 - 新增 `packages/server/src/application/attachment-resource/compact-attachment-catalog.ts`

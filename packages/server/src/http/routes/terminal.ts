@@ -1,10 +1,6 @@
 import { Hono } from "hono";
 
-import type {
-  TerminalEvent,
-  TerminalRuntime,
-  TerminalSignal,
-} from "@vykor/protocol";
+import type { TerminalEvent, TerminalRuntime, TerminalSignal } from "@vykor/protocol";
 
 import {
   DaemonTerminalError,

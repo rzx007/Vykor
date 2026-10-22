@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createExecutionEnvironment, createWslPathResolver } from "@vykor/sandbox";
 import type { EnvironmentProcessExecutor, WorkspaceBinding } from "@vykor/environment";
 import { createEnvironmentFileSystem } from "@vykor/tools";
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 import { createDaemonImageToTextTool } from "../daemon-image-to-text-tool.js";
 
@@ -152,7 +152,7 @@ describe("daemon ImageToText tool", () => {
     }
   });
 
-  it("uses context settings to send a local image to an OpenAI-compatible endpoint", async () => {
+  it("uses captured host settings to send a local image to an OpenAI-compatible endpoint", async () => {
     const resolvePath = vi.fn(async (path: string) => ({
       executionPath: path === "/workspace" ? "/workspace" : "/workspace/invoice.png",
       mountPurpose: "workspace" as const,
@@ -289,10 +289,7 @@ describe("daemon ImageToText tool", () => {
 });
 
 function createTool() {
-  return createDaemonImageToTextTool({
-    authorizationSessions: { resolve: () => undefined },
-    attachmentOcr: { recognize: vi.fn() },
-  });
+ return {execute:(input:any,fixture:any)=>{const {settings,...context}=fixture;return createDaemonImageToTextTool({authorizationSessions:{resolve:()=>undefined},attachmentOcr:{recognize:vi.fn()},getSettings:()=>settings}).execute(input,context);}};
 }
 
 function settings(model: string, apiFormat: "openai" | "anthropic") {

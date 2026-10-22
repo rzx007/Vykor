@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import type { AppendEventInput, ProjectRecord } from "@vykor/protocol";
+import type { AppendEventInput } from "../conversations/commands.js";
+import type { ProjectRecord } from "@vykor/domain-contracts/sessions";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";

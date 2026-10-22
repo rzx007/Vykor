@@ -1,5 +1,7 @@
-import { parsePluginAppConversationRequest, stringifyCanonicalJson, type PluginAppConversationRequest,
-  type PluginAppSource, type PluginAppSubmissionReceipt } from "@vykor/protocol";
+import { parsePluginAppConversationRequest } from "./plugin-app-inputs.js";
+import { stringifyCanonicalJson } from "@vykor/json-data/json";
+import type { PluginAppConversationRequest } from "./plugin-app-inputs.js";
+import type { PluginAppSource, PluginAppSubmissionReceipt } from "@vykor/domain-contracts/plugin-apps";
 import type { SessionStore } from "@vykor/services";
 import type { SessionPluginAppService } from "./session-plugin-app-service.js";
 import type { PluginAppOperationService } from "./plugin-app-operation-service.js";

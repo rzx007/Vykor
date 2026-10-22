@@ -1,5 +1,5 @@
 import MiniSearch from "minisearch";
-import type { ToolDiscoveryEntry } from "@vykor/core";
+import type { ToolDiscoveryEntry } from "@vykor/agent-contracts";
 
 const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
 

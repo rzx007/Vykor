@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { updateInstalledPluginStore } from "@vykor/plugins";
 import { HookExecutor } from "@vykor/hooks";
 import { pluginAppHarness } from "../../../../test-helpers/plugin-app-harness.js";

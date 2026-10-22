@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileWriteTool} from "./../write.js";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,7 +29,7 @@ describe("fileWriteTool feedback", () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-write-feedback-"));
     try {
       const file = join(dir, "notes.txt");
-      const result = await fileWriteTool.execute({ file_path: file, content: "private body" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "private body" }, { cwd: dir });
       expect(await readFile(file, "utf8")).toBe("private body");
       expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining(file) });
       expect(result.compactSummary).not.toContain("private body");
@@ -39,7 +41,7 @@ describe("fileWriteTool feedback", () => {
   });
 
   it("records a system path block as not started", async () => {
-    const result = await fileWriteTool.execute({ file_path: "C:\\Windows\\blocked.txt", content: "private body" }, { cwd: "C:\\repo" });
+    const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "C:\\Windows\\blocked.txt", content: "private body" }, { cwd: "C:\\repo" });
     expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
   });
 });
@@ -54,7 +56,7 @@ describe("fileWriteTool safety", () => {
           await super.createTextExclusive(path, content);
         }
       }
-      const result = await fileWriteTool.execute({ file_path: target, content: "new" }, {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: target, content: "new" }, {
         cwd: dir,
         environment: { workspace: { kind: "local", hostRoot: dir, executionRoot: dir }, files: new RacingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) } },
       } as never);
@@ -75,7 +77,7 @@ describe("fileWriteTool safety", () => {
           return bytes;
         }
       }
-      const result = await fileWriteTool.execute({ file_path: file, content: "replacement" }, {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "replacement" }, {
         cwd: dir,
         environment: { workspace: { kind: "local", hostRoot: dir, executionRoot: dir }, files: new ConcurrentFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) } },
       } as never);
@@ -96,14 +98,14 @@ describe("fileWriteTool safety", () => {
     const context = { cwd: "/work", environment: { paths: {
       resolve: async () => { throw new Error("must not access filesystem"); },
     } } } as never;
-    const result = await fileWriteTool.execute(input, context);
+    const result = await executeToolFixture(host => createFileWriteTool(host), input, context);
     expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
   });
 
   it("creates an empty file when complete content is an empty string", async () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "empty.txt");
-      const result = await fileWriteTool.execute({ file_path: file, content: "" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "" }, { cwd: dir });
       expect(result).toMatchObject({ executionState: "completed" });
       expect(await readFile(file, "utf8")).toBe("");
     });
@@ -115,7 +117,7 @@ describe("fileWriteTool safety", () => {
       const duplicate = await import("../operations.js");
       expect(duplicate.FileNotFoundError).not.toBe(FileNotFoundError);
       const file = join(dir, "new.txt");
-      const result = await fileWriteTool.execute({ file_path: file, content: "created across modules" }, {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "created across modules" }, {
         cwd: dir,
         environment: {
           workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
@@ -134,7 +136,7 @@ describe("fileWriteTool safety", () => {
         async stat(): Promise<never> { throw Object.assign(new Error("denied"), { code: "EACCES" }); }
       }
       const file = join(dir, "denied.txt");
-      const result = await fileWriteTool.execute({ file_path: file, content: "must not write" }, {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "must not write" }, {
         cwd: dir,
         environment: {
           workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
@@ -149,7 +151,7 @@ describe("fileWriteTool safety", () => {
   });
 
   it("reports path resolution errors as not started instead of uncertain writes", async () => {
-    const result = await fileWriteTool.execute({ file_path: "/work/a.txt", content: "new" }, { cwd: "/work", environment: {
+    const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "/work/a.txt", content: "new" }, { cwd: "/work", environment: {
       paths: { resolve: async () => { throw new Error("cannot resolve execution path"); } },
     } } as never);
     expect(result).toMatchObject({ isError: true, failureKind: "command", executionState: "not_started" });
@@ -167,7 +169,7 @@ describe("fileWriteTool safety", () => {
           await super.writeTextAtomic(path, content); throw new Error("after replace");
         }
       }
-      const result = await fileWriteTool.execute({ file_path: file, content: "new" }, { cwd: dir, environment: {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "new" }, { cwd: dir, environment: {
         workspace: { kind: "local", hostRoot: dir, executionRoot: dir },
         files: new PartialFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountPurpose: "workspace", mountMode: "rw" }) },
       } } as never);
@@ -179,7 +181,7 @@ describe("fileWriteTool safety", () => {
   it("creates a new file with parent directories", async () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "nested", "deep", "new.txt");
-      const result = await fileWriteTool.execute({ file_path: file, content: "fresh" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "fresh" }, { cwd: dir });
       expect(result).toMatchObject({ executionState: "completed" });
       expect(await readFile(file, "utf8")).toBe("fresh");
       expect((result.content[0] as { text: string }).text).toContain("Created");
@@ -190,7 +192,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "value.txt");
       await writeFile(file, "old", "utf8");
-      const result = await fileWriteTool.execute({ file_path: file, content: "new" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "new" }, { cwd: dir });
       expect(result).toMatchObject({ executionState: "completed" });
       expect(result.isError).not.toBe(true);
       expect(await readFile(file, "utf8")).toBe("new");
@@ -199,7 +201,7 @@ describe("fileWriteTool safety", () => {
 
   it.each([true, false, "true", 1, null])("rejects removed overwrite options before accessing the path: %j", async overwrite => {
     let resolves = 0;
-    const result = await fileWriteTool.execute({ file_path: "value.txt", content: "new", overwrite }, {
+    const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "value.txt", content: "new", overwrite }, {
       cwd: "/work", environment: { paths: { resolve: async () => { resolves++; throw new Error("must not resolve"); } } },
     } as never);
     expect(result).toMatchObject({ failureKind: "invalid_input", executionState: "not_started" });
@@ -212,7 +214,7 @@ describe("fileWriteTool safety", () => {
       await writeFile(file, "same", "utf8");
       const before = await stat(file);
       await new Promise((resolve) => setTimeout(resolve, 20));
-      const result = await fileWriteTool.execute({ file_path: file, content: "same" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "same" }, { cwd: dir });
       const after = await stat(file);
       expect((result.content[0] as { text: string }).text).toContain("No write needed");
       expect(after.mtimeMs).toBe(before.mtimeMs);
@@ -224,10 +226,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "value.txt");
       await writeFile(file, "old", "utf8");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "new", expected_sha256: sha256("old") },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "new", expected_sha256: sha256("old") }, { cwd: dir });
       expect(result).toMatchObject({ executionState: "completed" });
       expect(await readFile(file, "utf8")).toBe("new");
     });
@@ -237,10 +236,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "value.txt");
       await writeFile(file, "old", "utf8");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "new", expected_sha256: sha256("other") },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "new", expected_sha256: sha256("other") }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
       expect(await readFile(file, "utf8")).toBe("old");
     });
@@ -250,10 +246,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const target = join(dir, "a-directory");
       await mkdir(target);
-      const result = await fileWriteTool.execute(
-        { file_path: target, content: "new", expected_sha256: "not-a-hash" },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: target, content: "new", expected_sha256: "not-a-hash" }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
       expect((result.content[0] as { text: string }).text).toContain("expected_sha256");
     });
@@ -272,10 +265,7 @@ describe("fileWriteTool safety", () => {
         },
       },
     } as never;
-    const result = await fileWriteTool.execute(
-      { file_path: "value.txt", content: "new", expected_sha256 },
-      context,
-    );
+    const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "value.txt", content: "new", expected_sha256 }, context);
     expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
     expect(resolves).toBe(0);
   });
@@ -284,10 +274,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "same.txt");
       await writeFile(file, "same", "utf8");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "same", expected_sha256: sha256("something-else") },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "same", expected_sha256: sha256("something-else") }, { cwd: dir });
       expect(result).toMatchObject({ executionState: "completed" });
       expect((result.content[0] as { text: string }).text).toContain("No write needed");
     });
@@ -296,10 +283,7 @@ describe("fileWriteTool safety", () => {
   it("refuses expected_sha256 when creating a new file", async () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "brand-new.txt");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "new", expected_sha256: sha256("") },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "new", expected_sha256: sha256("") }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
       await expect(readFile(file)).rejects.toThrow();
     });
@@ -309,7 +293,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const target = join(dir, "a-directory");
       await mkdir(target);
-      const result = await fileWriteTool.execute({ file_path: target, content: "new" }, { cwd: dir });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: target, content: "new" }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
       expect((result.content[0] as { text: string }).text).toContain("non-file");
     });
@@ -326,10 +310,7 @@ describe("fileWriteTool safety", () => {
         if ((error as NodeJS.ErrnoException).code === "EPERM") return;
         throw error;
       }
-      const result = await fileWriteTool.execute(
-        { file_path: link, content: "replacement" },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: link, content: "replacement" }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
       expect(await readFile(real, "utf8")).toBe("original");
     });
@@ -340,9 +321,7 @@ describe("fileWriteTool safety", () => {
     const outside = await mkdtemp(join(tmpdir(), "oh-write-outside-"));
     try {
       const file = join(outside, "secret.txt");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "secret" },
-        {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "secret" }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -351,8 +330,7 @@ describe("fileWriteTool safety", () => {
             permission: { mode: "default" },
             sandbox: { enabled: true },
           },
-        },
-      );
+        });
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       await expect(readFile(file)).rejects.toThrow();
     } finally {
@@ -365,9 +343,7 @@ describe("fileWriteTool safety", () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "secret.txt");
       await writeFile(file, "secret", "utf8");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "secret" },
-        {
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "secret" }, {
           cwd: dir,
           settings: {
             model: "m",
@@ -379,8 +355,7 @@ describe("fileWriteTool safety", () => {
               filesystem: { allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] },
             },
           },
-        },
-      );
+        });
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(result.compactSummary).toBeUndefined();
       expect(await readFile(file, "utf8")).toBe("secret");
@@ -390,10 +365,7 @@ describe("fileWriteTool safety", () => {
   it("keeps the summary within 1000 characters and free of the file body", async () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "summary.txt");
-      const result = await fileWriteTool.execute(
-        { file_path: file, content: "SENSITIVE-CONTENT-MARKER" },
-        { cwd: dir },
-      );
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: file, content: "SENSITIVE-CONTENT-MARKER" }, { cwd: dir });
       expect(summaryOf(result).length).toBeLessThanOrEqual(1000);
       expect(summaryOf(result)).not.toContain("SENSITIVE-CONTENT-MARKER");
       expect(summaryOf(result)).toContain("sha256");

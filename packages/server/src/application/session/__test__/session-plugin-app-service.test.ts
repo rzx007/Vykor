@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionStore } from "@vykor/services";
 import { SessionPluginAppService, type PluginAppBackendDescriptor, type PluginAppCurrentFacts, type PluginAppLeaseAuthority } from "../session-plugin-app-service.js";
-import type { PluginAppRecord, PluginAppRuntimeLease } from "@vykor/protocol";
+import type { PluginAppRecord } from "@vykor/domain-contracts/plugin-apps";
+import type { PluginAppRuntimeLease } from "@vykor/plugin-contracts/runtime";
 
 const cleanups: Array<() => void> = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });

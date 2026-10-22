@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { settingsForApprovalMode } from "./approval-policy.js";
 import { resolveSandboxPolicy } from "./policy.js";
 import { validateSandboxPath } from "./path-validator.js";

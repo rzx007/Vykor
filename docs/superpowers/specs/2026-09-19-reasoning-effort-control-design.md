@@ -18,11 +18,11 @@
   - 取值定义在 `packages/core/src/types/settings.ts:151`（`"low" | "medium" | "high"`），默认 `medium`（`packages/core/src/config/settings.ts:49`）。
   - 提示词注入在 `packages/prompts/src/prompt-segments-assembly.ts:113-115`（输出 `- Effort: high`）。
   - `packages/api/src/providers/*` 里搜不到任何 effort / reasoning_effort 相关代码（命中的 `reasoning_content`、`reasoning.encrypted_content` 是另一回事）。
-- 会话运行时的 `effort` 已可用：`packages/protocol/src/runtime-config.ts:13` 定义了 `SessionRuntimeConfig.effort`，`packages/server/src/daemon/daemon-agent.ts:248-276` 的 `agentConfigurationFromSession` 会把它合成进 Agent 配置的 `effort`；`packages/agent-runtime/src/default-runtime.ts:221` 用它生成系统提示词。
+- 会话运行时的 `effort` 已可用：`packages/protocol/src/runtime-config.ts:13` 定义了 `SessionRuntimeConfig.effort`，`packages/server/src/daemon/daemon-agent.ts:248-276` 的 `agentConfigurationFromSession` 会把它合成进 Agent 配置的 `effort`；`packages/agent-runtime/src/node/runtime/default-runtime.ts:221` 用它生成系统提示词。
 - `effort` 被硬编码成 `low|medium|high` 的校验点共 8 处：
   1. `packages/core/src/types/settings.ts:151`（类型）
   2. `packages/protocol/src/runtime-config.ts:13,45-47,72`（类型 + `effortValue` + switch）
-  3. `packages/agent-runtime/src/child-agent-options.ts:56-60`（`isSupportedEffort`）
+  3. `packages/agent-runtime/src/node/runtime/child-agent-options.ts:56-60`（`isSupportedEffort`）
   4. `packages/server/src/daemon/scheduled-task-service.ts:441`（定时任务校验）
   5. `packages/tools/src/schedule/scheduled-task-tools.ts:55,189`（工具 schema `enum`）
   6. `packages/client/src/commands/session-commands.ts:766-780`（`/effort` 命令）
@@ -99,9 +99,9 @@ reasoningEfforts?: string[];
 
 ### 请求链路
 
-- `packages/core/src/types/client.ts:5-13` `StreamMessageParams` 增加 `reasoningEffort?: string`。
+- `packages/agent-contracts/src/model.ts:5-13` `StreamMessageParams` 增加 `reasoningEffort?: string`。
 - `packages/core/src/types/runtime.ts:488` `QueryEngineOptions` 增加 `reasoningEffort?: string`。
-- `packages/agent-runtime/src/agent-options.ts:41-73` `VykorAgentConfiguration` 增加 `reasoningEffort?: string`。
+- `packages/agent-runtime/src/node/runtime/agent-options.ts:41-73` `VykorAgentConfiguration` 增加 `reasoningEffort?: string`。
 
 ### 设置与协议放宽
 
@@ -186,7 +186,7 @@ resolveReasoningEfforts?(input: {
 
 **注意**：目录首次 `load()` 可能发起网络请求（超时上限 10 秒，`catalog.ts:111-135`）。规格不要求它对首次加载做超时缩短；但因为已有内置副本来源与 catch fallback，失败会降级为空档位（不发送），不会阻塞 Agent 创建。resolver 自身抛错也必须被上面的 try/catch 吞掉。
 
-`packages/agent-runtime/src/default-runtime.ts:231-248` 的 `engineOptions` 增加 `reasoningEffort: configuration.reasoningEffort`；`packages/core/src/engine/query-engine.ts` 构造函数保存该值，并在第 365 行的 `streamMessage({...})` 里加 `...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {})`。
+`packages/agent-runtime/src/node/runtime/default-runtime.ts:231-248` 的 `engineOptions` 增加 `reasoningEffort: configuration.reasoningEffort`；`packages/core/src/engine/query-engine.ts` 构造函数保存该值，并在第 365 行的 `streamMessage({...})` 里加 `...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {})`。
 
 `packages/api/src/providers/openai.ts:183-191` 的 `createParams` 增加：
 
@@ -207,7 +207,7 @@ resolveReasoningEfforts?(input: {
 
 ### 7. 子代理
 
-`packages/agent-runtime/src/child-agent-options.ts` 的 `deriveChildAgentOptions` 目前 `...configuration` 会把 `reasoningEffort` 默认带下去，必须显式覆盖。规则：
+`packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildAgentOptions` 目前 `...configuration` 会把 `reasoningEffort` 默认带下去，必须显式覆盖。规则：
 
 ```ts
 const childModel = child.model ?? configuration.model;

@@ -1,4 +1,9 @@
-import type { ShellOutputLogStatus, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ShellToolHost } from "../ports/policy.js";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type {
+  ShellOutputLogStatus,
+} from "@vykor/agent-contracts";
+import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import { resolve } from "node:path";
 import {
   shellResultMetadata,
@@ -12,7 +17,7 @@ import {
 import { defaultShellExecutor } from "./executor.js";
 import { createBoundedOutputCollector, DEFAULT_MAX_OUTPUT_CHARS, formatOutput } from "./output.js";
 import type { ShellExecutor } from "./types.js";
-import { terminalOpenTool } from "../terminal/terminal-tools.js";
+import { createTerminalTools } from "../terminal/terminal-tools.js";
 import { isPersistentServiceCommand } from "../terminal/service-command.js";
 
 export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
@@ -20,7 +25,10 @@ export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
 export function createShellTool(
   shellOrExecutor?: ShellDescriptor | ShellExecutor,
   executor: ShellExecutor = defaultShellExecutor,
+  terminal?: AgentTerminalHost,
+  host: ShellToolHost = {},
 ): ToolDefinition {
+  const terminalOpen = createTerminalTools(terminal)[0]!;
   const shell = isShellExecutor(shellOrExecutor) ? undefined : shellOrExecutor;
   const effectiveExecutor = isShellExecutor(shellOrExecutor) ? shellOrExecutor : executor;
   return {
@@ -46,7 +54,7 @@ export function createShellTool(
       const command = typeof input.command === "string" ? input.command.trim() : "";
       const descriptor = context.environment?.info.shellDescriptor ?? shell;
       const hasExplicitTimeout = input.timeout !== undefined;
-      if (command && !hasExplicitTimeout && context.terminal && context.sessionId && isPersistentServiceCommand(command)) {
+      if (command && !hasExplicitTimeout && terminal && context.sessionId && isPersistentServiceCommand(command)) {
         const workdir = typeof input.workdir === "string" ? input.workdir.trim() : "";
         const resolvedWorkdir = workdir && context.environment ? await context.environment.paths.resolve(workdir, "execute") : undefined;
         if (resolvedWorkdir && resolvedWorkdir.mountPurpose !== "workspace") return workdirDenied(resolvedWorkdir.executionPath);
@@ -56,9 +64,9 @@ export function createShellTool(
           return { content: [{ type: "text", text: "Use TerminalOpen with command for this service. Include a shell-appropriate cd to the requested subdirectory in command; terminals are scoped to the session directory." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
         }
         if (context.abortSignal?.aborted) return interruptedBeforeStart();
-        return terminalOpenTool.execute({ command, name: summarizeCommand(command) }, context);
+        return terminalOpen.execute({ command, name: summarizeCommand(command) }, context);
       }
-      const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context));
+      const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context, host));
       if (background) {
         try {
           const requestedCwd = typeof input.workdir === "string" && input.workdir.trim()
@@ -72,14 +80,14 @@ export function createShellTool(
           }
           const backgroundCwd = context.environment?.workspace.hostRoot ?? requestedCwd;
           if (context.abortSignal?.aborted) return interruptedBeforeStart();
-          const created = await context.backgroundShell!.create({
+          const created = await host.backgroundShell!.create({
             requestId: `tool:${context.toolCallId}`,
             command,
             description: summarizeCommand(command),
             cwd: backgroundCwd,
             ...(resolvedCwd ? { executionCwd: resolvedCwd.executionPath } : {}),
             sessionId: context.sessionId!,
-            settings: context.settings,
+            settings: host.settings,
             ...(descriptor ? { shellDescriptor: descriptor } : {}),
           });
           return {
@@ -107,7 +115,7 @@ export function createShellTool(
         }
       }
       if (context.environment) {
-        return withShellDialectHints(await executeInEnvironment(command, input, context), command, descriptorHostLauncher(descriptor!));
+        return withShellDialectHints(await executeInEnvironment(command, input, context, host), command, descriptorHostLauncher(descriptor!));
       }
 
       const spec = await effectiveExecutor.resolve({
@@ -117,12 +125,12 @@ export function createShellTool(
       }, {
         cwd: context.cwd,
         sessionId: context.sessionId,
-        settings: context.settings,
+        settings: host.settings,
       });
       if (context.abortSignal?.aborted) return interruptedBeforeStart();
 
       const output = createBoundedOutputCollector();
-      const capture = context.shellOutputLogs?.begin(context.sessionId, spec.maxOutputChars);
+      const capture = host.shellOutputLogs?.begin(context.sessionId, spec.maxOutputChars);
       let streamed = false;
       const append = (text: string) => { streamed = true; output.append(text); capture?.append(text); };
       let result: Awaited<ReturnType<ShellExecutor["run"]>>;
@@ -172,6 +180,7 @@ async function executeInEnvironment(
   command: string,
   input: Record<string, unknown>,
   context: Parameters<ToolDefinition["execute"]>[1],
+  host: ShellToolHost,
 ) {
   if (!command) {
     return { content: [{ type: "text" as const, text: "command is required" }], isError: true, failureKind: "invalid_input" as const, executionState: "not_started" as const };
@@ -195,7 +204,7 @@ async function executeInEnvironment(
     controller.abort();
   }, timeoutMs);
   const output = createBoundedOutputCollector();
-  const capture = context.shellOutputLogs?.begin(context.sessionId, DEFAULT_MAX_OUTPUT_CHARS);
+  const capture = host.shellOutputLogs?.begin(context.sessionId, DEFAULT_MAX_OUTPUT_CHARS);
   const append = (text: string) => { output.append(text); capture?.append(text); };
   const stdoutDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
   const stderrDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
@@ -333,8 +342,8 @@ export function createShellDescription(shell?: ShellDescriptor): string {
   return `Execute a short-lived command with ${shell.displayName}. Use ${shell.dialect} syntax and POSIX paths. ${background}`;
 }
 
-function shouldCreateBackgroundShell(command: string, context: Parameters<ToolDefinition["execute"]>[1]): boolean {
-  return Boolean(context.backgroundShell && context.sessionId && context.toolCallId && isLikelyLongRunningCommand(command));
+function shouldCreateBackgroundShell(command: string, context: Parameters<ToolDefinition["execute"]>[1], host: ShellToolHost): boolean {
+  return Boolean(host.backgroundShell && context.sessionId && context.toolCallId && isLikelyLongRunningCommand(command));
 }
 
 function isLikelyLongRunningCommand(command: string): boolean {

@@ -2,14 +2,9 @@ import {
   computeNextScheduledTime,
   validateScheduledRecurrence,
 } from "@vykor/services";
-import type {
-  CreateScheduledRunInput,
-  CreateScheduledTaskInput,
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-  UpdateScheduledRunInput,
-  UpdateScheduledTaskInput,
-} from "@vykor/protocol";
+import type { CreateScheduledRunInput, UpdateScheduledRunInput, CreateScheduledTaskInput as CreateScheduledTaskCommand, UpdateScheduledTaskInput as UpdateScheduledTaskCommand } from "@vykor/services";
+import type { CreateScheduledTaskInput, UpdateScheduledTaskInput } from "../application/schedule/inputs.js";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 
 const MAX_TIMER_DELAY_MS = 2_147_000_000;
 const DAEMON_RESTART_REASON =
@@ -21,10 +16,10 @@ export interface ScheduledTaskExecutionResult {
 }
 
 export interface ScheduleOperations {
-  createTask(input: CreateScheduledTaskInput): ScheduledTaskRecord;
+  createTask(input: CreateScheduledTaskCommand): ScheduledTaskRecord;
   getTask(id: string): ScheduledTaskRecord | undefined;
   listTasks(options?: { status?: ScheduledTaskRecord["status"] }): ScheduledTaskRecord[];
-  updateTask(id: string, patch: UpdateScheduledTaskInput): ScheduledTaskRecord;
+  updateTask(id: string, patch: UpdateScheduledTaskCommand): ScheduledTaskRecord;
   deleteTask(id: string): boolean;
   createRun(input: CreateScheduledRunInput): ScheduledRunRecord;
   listRuns(options?: { taskId?: string; unread?: boolean; limit?: number }): ScheduledRunRecord[];

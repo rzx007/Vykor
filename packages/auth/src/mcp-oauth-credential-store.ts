@@ -14,7 +14,7 @@ import {
   type CredentialMutationContext,
   type McpOAuthCredentialRecord,
   type McpOAuthStoreFileV2,
-} from "@vykor/core";
+} from "@vykor/host-config";
 
 export class McpOAuthStoreError extends Error {
   constructor(readonly code: string, message: string) {

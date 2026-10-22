@@ -1,4 +1,4 @@
-import { loadSettings, type Settings } from "@vykor/core";
+import { loadSettings, type Settings } from "@vykor/host-config";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import {
   resolveSandboxPolicy,

@@ -1,5 +1,5 @@
 import type { SessionEventRecord, SessionMessagePartRecord } from "@vykor/protocol";
-import { publicToolResult } from "@vykor/protocol";
+import { publicToolResult } from "@vykor/agent-contracts";
 
 const fullBodyByteLimit = 4096;
 const previewChars = 512;

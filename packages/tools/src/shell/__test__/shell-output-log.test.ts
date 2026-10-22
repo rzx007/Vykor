@@ -1,7 +1,12 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileReadTool} from "./../../file/read.js";
+import {createGrepTool} from "./../../search/grep.js";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createShellOutputLogHost } from "@vykor/services/executions";
+import {
+  createShellOutputLogHost,
+} from "@vykor/execution-node";
 import { resolveHostShellLauncher, shellJoin } from "@vykor/sandbox";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileReadTool } from "../../file/read.js";
@@ -47,8 +52,8 @@ describe("foreground Shell log consumption", () => {
       settings: { model: "fixture", apiFormat: "openai" as const, maxTurns: 1,
         permission: { mode: "default" as const }, sandbox: { enabled: false } },
     };
-    const result = await createShellTool().execute({ command, timeout: 15000 }, context);
-    expect(result.isError).not.toBe(true);
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command, timeout: 15000 }, context);
+    expect(result.isError, JSON.stringify(result)).not.toBe(true);
     expect(text(result)).toContain("BEGIN");
     expect(text(result)).toContain("END");
     expect(text(result)).not.toContain("ONLY_MIDDLE_SENTINEL");
@@ -58,7 +63,7 @@ describe("foreground Shell log consumption", () => {
     let restored = "";
     let eof = false;
     for (let pageIndex = 0; pageIndex < 12; pageIndex++) {
-      const page = await fileReadTool.execute({ file_path: ref, cursor }, context);
+      const page = await executeToolFixture(host => createFileReadTool(host), { file_path: ref, cursor }, context);
       expect(page.isError).not.toBe(true);
       const output = text(page);
       restored += output.slice(output.indexOf("\n") + 1);
@@ -70,10 +75,10 @@ describe("foreground Shell log consumption", () => {
     expect(eof).toBe(true);
     expect(restored).toBe(report);
     expect(cursor).toBe(Buffer.byteLength(report, "utf8"));
-    const found = await grepTool.execute({ path: ref, pattern: "ONLY_MIDDLE_SENTINEL" }, context);
+    const found = await executeToolFixture(host => createGrepTool(host), { path: ref, pattern: "ONLY_MIDDLE_SENTINEL" }, context);
     expect(found.isError).not.toBe(true);
     expect(text(found)).toContain("ONLY_MIDDLE_SENTINEL");
-    const denied = await fileReadTool.execute({ file_path: ref }, { ...context, sessionId: "s2" });
+    const denied = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, { ...context, sessionId: "s2" });
     expect(denied.isError).toBe(true);
     expect(await readFile(launches, "utf8")).toBe("started\n");
   }, 20000);
@@ -85,7 +90,7 @@ describe("foreground Shell log consumption", () => {
     ["unavailable", "unknown_outcome", "unknown"],
   ] as const)("classifies Shell log Grep %s without blaming correct arguments", async (status, failureKind, executionState) => {
     const ref = "shell-output://00000000-0000-4000-8000-000000000001";
-    const result = await grepTool.execute({ path: ref, pattern: "needle" }, {
+    const result = await executeToolFixture(host => createGrepTool(host), { path: ref, pattern: "needle" }, {
       cwd: process.cwd(), sessionId: "owner",
       shellOutputLogs: { search: async () => ({ status, matches: [], truncated: false }) } as any,
     });
@@ -96,8 +101,8 @@ describe("foreground Shell log consumption", () => {
   it("classifies missing Shell log hosts as unavailable runtime support", async () => {
     const ref = "shell-output://00000000-0000-4000-8000-000000000001";
     const context = { cwd: process.cwd(), sessionId: "owner" };
-    const grep = await grepTool.execute({ path: ref, pattern: "needle" }, context);
-    const read = await fileReadTool.execute({ file_path: ref }, context);
+    const grep = await executeToolFixture(host => createGrepTool(host), { path: ref, pattern: "needle" }, context);
+    const read = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, context);
     expect(grep).toMatchObject({ isError: true, failureKind: "configuration", executionState: "not_started" });
     expect(read).toMatchObject({ isError: true, failureKind: "configuration", executionState: "not_started" });
   });
@@ -108,7 +113,7 @@ describe("foreground Shell log consumption", () => {
       ["unavailable", "unknown_outcome", "unknown"],
       ["invalid_cursor", "invalid_input", "not_started"],
     ] as const) {
-      const result = await fileReadTool.execute({ file_path: ref }, {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, {
         cwd: process.cwd(), sessionId: "owner",
         shellOutputLogs: { read: async () => ({ status }) } as any,
       });
@@ -120,7 +125,7 @@ describe("foreground Shell log consumption", () => {
     const { logs } = await host();
     const stdout = "\uFEFFout\uFEFF" + "x".repeat(13000);
     const stderr = "\uFEFFerr\uFEFF";
-    const result = await createShellTool().execute({ command: "inspect" }, {
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "inspect" }, {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
@@ -147,7 +152,7 @@ describe("foreground Shell log consumption", () => {
     let cursor = 0;
     let reconstructed = "";
     for (;;) {
-      const page = await fileReadTool.execute({ file_path: ref, cursor }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
+      const page = await executeToolFixture(host => createFileReadTool(host), { file_path: ref, cursor }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
       expect(page.isError).not.toBe(true);
       const body = text(page);
       reconstructed += body.slice(body.indexOf("\n") + 1);
@@ -162,7 +167,7 @@ describe("foreground Shell log consumption", () => {
     const { logs } = await host();
     const report = "start\n" + "x".repeat(7000) + "MIDDLE_NEEDLE" + "y".repeat(7000) + "\nend";
     let launches = 0;
-    const feedback = await createShellTool().execute({ command: "inspect" }, {
+    const feedback = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "inspect" }, {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
@@ -178,12 +183,12 @@ describe("foreground Shell log consumption", () => {
     expect(text(feedback)).not.toContain("MIDDLE_NEEDLE");
     const ref = reference(feedback)!;
     expect(ref).toMatch(/^shell-output:\/\/[0-9a-f-]{36}$/);
-    const found = await grepTool.execute({ pattern: "MIDDLE_NEEDLE", path: ref }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
+    const found = await executeToolFixture(host => createGrepTool(host), { pattern: "MIDDLE_NEEDLE", path: ref }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
     expect(text(found)).toContain("MIDDLE_NEEDLE");
     const chunks: string[] = [];
     let cursor = 0;
     for (let i = 0; i < 5; i++) {
-      const page = await fileReadTool.execute({ file_path: ref, cursor }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
+      const page = await executeToolFixture(host => createFileReadTool(host), { file_path: ref, cursor }, { cwd: "/work", sessionId: "s1", shellOutputLogs: logs });
       const body = text(page);
       chunks.push(body.slice(body.indexOf("\n") + 1));
       const next = body.match(/nextCursor=(\d+)/);
@@ -191,33 +196,32 @@ describe("foreground Shell log consumption", () => {
       cursor = Number(next[1]);
     }
     expect(chunks.join("\n")).toContain("MIDDLE_NEEDLE");
-    const denied = await fileReadTool.execute({ file_path: ref }, { cwd: "/work", sessionId: "s2", shellOutputLogs: logs });
+    const denied = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, { cwd: "/work", sessionId: "s2", shellOutputLogs: logs });
     expect(denied.isError).toBe(true);
     expect(text(denied)).toMatch(/unavailable|不可用/i);
   });
 
   it("keeps short output without creating a log file", async () => {
     const { logs, directory } = await host();
-    const result = await createShellTool(legacy("short", false)).execute({ command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const result = await executeToolFixture(host => createShellTool(legacy("short", false), undefined, undefined, host), { command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     expect(text(result)).toBe("short");
     expect(reference(result)).toBeUndefined();
     expect(await readdir(directory)).toEqual([]);
     const localFile = join(directory, "notes.txt");
     await writeFile(localFile, "hello");
-    const ordinary = await fileReadTool.execute({ file_path: localFile }, { cwd: directory });
+    const ordinary = await executeToolFixture(host => createFileReadTool(host), { file_path: localFile }, { cwd: directory });
     expect(text(ordinary)).toContain("1: hello");
-    const invalidCursor = await fileReadTool.execute({ file_path: localFile, cursor: 0 }, { cwd: directory });
+    const invalidCursor = await executeToolFixture(host => createFileReadTool(host), { file_path: localFile, cursor: 0 }, { cwd: directory });
     expect(invalidCursor.isError).toBe(true);
     expect(text(invalidCursor)).toContain("offset/limit");
   });
 
   it("uses the legacy executor stream callback before its bounded result", async () => {
     const { logs } = await host();
-    const result = await createShellTool(legacy("a".repeat(7000) + "MIDDLE_NEEDLE" + "z".repeat(7000), true))
-      .execute({ command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const result = await executeToolFixture(host => createShellTool(legacy("a".repeat(7000) + "MIDDLE_NEEDLE" + "z".repeat(7000), true), undefined, undefined, host), { command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     const ref = reference(result)!;
     expect(ref).toBeDefined();
-    const found = await grepTool.execute({ pattern: "MIDDLE_NEEDLE", path: ref }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const found = await executeToolFixture(host => createGrepTool(host), { pattern: "MIDDLE_NEEDLE", path: ref }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     expect(text(found)).toContain("MIDDLE_NEEDLE");
     expect(text(result)).toContain("z".repeat(100));
   });
@@ -230,7 +234,7 @@ describe("foreground Shell log consumption", () => {
     const before = process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS;
     process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = "256";
     try {
-      const page = await fileReadTool.execute({ file_path: ref }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+      const page = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
       expect(text(page).length).toBeLessThanOrEqual(256);
       expect(text(page)).toContain("中文");
       expect(text(page)).toMatch(/nextCursor=\d+/);
@@ -239,19 +243,18 @@ describe("foreground Shell log consumption", () => {
       else process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = before;
     }
     for (const input of [{ file_path: ref, offset: 1 }, { file_path: ref, limit: 1 }, { file_path: ref, info_only: true }]) {
-      const invalid = await fileReadTool.execute(input, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+      const invalid = await executeToolFixture(host => createFileReadTool(host), input, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
       expect(invalid.isError).toBe(true);
     }
-    const badCursor = await fileReadTool.execute({ file_path: ref, cursor: 1 }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const badCursor = await executeToolFixture(host => createFileReadTool(host), { file_path: ref, cursor: 1 }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     expect(badCursor.isError).toBe(true);
-    const invalidGrep = await grepTool.execute({ pattern: "中", path: ref, include: "*.log" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const invalidGrep = await executeToolFixture(host => createGrepTool(host), { pattern: "中", path: ref, include: "*.log" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     expect(invalidGrep.isError).toBe(true);
   });
 
   it("does not invent a complete log from a truncated legacy result", async () => {
     const { logs } = await host();
-    const result = await createShellTool(legacy("q".repeat(14000), false))
-      .execute({ command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const result = await executeToolFixture(host => createShellTool(legacy("q".repeat(14000), false), undefined, undefined, host), { command: "inspect" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     const ref = reference(result);
     expect(ref).toBeDefined();
     const page = await logs.read({ sessionId: "s1", reference: ref! });
@@ -261,7 +264,7 @@ describe("foreground Shell log consumption", () => {
 
   it("retains received output when an environment wait throws, without calling it complete", async () => {
     const { logs } = await host();
-    const result = await createShellTool().execute({ command: "inspect" }, {
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "inspect" }, {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
@@ -285,7 +288,7 @@ describe("foreground Shell log consumption", () => {
     const controller = new AbortController();
     controller.abort();
     let launches = 0;
-    const result = await createShellTool().execute({ command: "inspect" }, {
+    const result = await executeToolFixture(host => createShellTool(undefined, undefined, undefined, host), { command: "inspect" }, {
       cwd: "/work", sessionId: "s1", shellOutputLogs: logs, abortSignal: controller.signal,
       environment: {
         info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
@@ -303,7 +306,7 @@ describe("foreground Shell log consumption", () => {
     const capture = logs.begin("s1", 2);
     capture.append("x".repeat(13000));
     const ref = capture.finish(true).reference!;
-    const result = await grepTool.execute({ path: ref, pattern: "x+" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const result = await executeToolFixture(host => createGrepTool(host), { path: ref, pattern: "x+" }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     const output = text(result);
     expect(output).toMatch(/^0: x+/);
     expect(output).not.toContain("(no matches)");
@@ -320,7 +323,7 @@ describe("foreground Shell log consumption", () => {
     const capture = logs.begin("s1", 2);
     capture.append("lead\n" + character.repeat(count));
     const ref = capture.finish(true).reference!;
-    const result = await grepTool.execute({ path: ref, pattern }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
+    const result = await executeToolFixture(host => createGrepTool(host), { path: ref, pattern }, { cwd: process.cwd(), sessionId: "s1", shellOutputLogs: logs });
     const output = text(result);
     expect(output).toMatch(new RegExp(`^5: ${character}`));
     expect(output).not.toContain("(no matches)");

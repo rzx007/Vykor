@@ -1,4 +1,4 @@
-import type { McpOAuthCredentialRecord, McpRemoteServerConfig } from "@vykor/core";
+import type { McpOAuthCredentialRecord, McpRemoteServerConfig } from "@vykor/host-config";
 import { McpOAuthError } from "./errors.js";
 import { assertOAuthEndpoint } from "./security.js";
 

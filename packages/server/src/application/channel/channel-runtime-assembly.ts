@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 
 import type { ChannelConfigStore } from "@vykor/auth";
-import { resolveChannelWorkspaceRoot, type Settings } from "@vykor/core";
+import { resolveChannelWorkspaceRoot, type Settings } from "@vykor/host-config";
 
 import { ChannelRuntimeService } from "../../daemon/channel-runtime-service.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";

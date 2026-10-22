@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Settings } from "@vykor/core";
-import type { DetachedProcessExecution } from "../../executions/index.js";
+import type { Settings } from "@vykor/host-config";
+import type {
+  DetachedProcessExecution,
+} from "@vykor/execution-node";
 import {
   readLastConsolidatedAt,
   tryAcquireConsolidationLock,

@@ -1,21 +1,25 @@
-export { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
+export { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+export { AgentRunNotAcceptingInputError } from "@vykor/agent-contracts";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,
   type AgentInspection,
+  type DefaultNodeAgent,
+  type NodeAgentHost,
+  type HostedAgent,
   type ModelVisibleTool,
   type VykorAgent,
   type VykorAgentOptions,
   type VykorAgentState,
   type VykorAgentSubmitOptions,
   type VykorAgentRunToolOptions,
-} from "./agent.js";
-export type { PluginSelectionCandidate, PluginSelectionCatalog, PluginSelectionResult } from "./plugin-selection.js";
-export { renderPluginDiscoveryContext } from "./plugin-discovery-context.js";
-export { createDefaultNodeAgent } from "./default-agent.js";
-export { createConfiguredApprovalReviewer, type ConfiguredApprovalReviewerOptions } from "./configured-approval-reviewer.js";
-export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
-export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";
+} from "./node/runtime/agent.js";
+export type { PluginSelectionCandidate, PluginSelectionCatalog, PluginSelectionResult } from "./node/plugins/plugin-selection.js";
+export { renderPluginDiscoveryContext } from "./node/plugins/plugin-discovery-context.js";
+export { createDefaultNodeAgent, type DefaultNodeAgentOptions } from "./node/runtime/default-agent.js";
+export { createConfiguredApprovalReviewer, type ConfiguredApprovalReviewerOptions } from "./node/review/configured-approval-reviewer.js";
+export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./node/plugins/run-capability-view.js";
+export { createCompactContextProvider, type CompactContextSources } from "./node/runtime/compact-context.js";
 export type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
@@ -23,7 +27,7 @@ export type {
   CapabilityOverride,
   ObservableJobProducer,
   VykorAgentConfiguration,
-} from "./agent-options.js";
+} from "./node/runtime/agent-options.js";
 export {
   assertJobConfiguration,
   disabledCapability,
@@ -35,7 +39,7 @@ export {
   type CapabilitySnapshot,
   type ResolvedAgentCapabilities,
   type ResolvedCapability,
-} from "./capability-resolution.js";
+} from "./node/capabilities/capability-resolution.js";
 export {
   createAgentKernel,
   createBasicAgentKernelRuntime,
@@ -43,12 +47,12 @@ export {
   type AgentKernelOptions,
   type AgentKernelRuntime,
   type AgentKernelRuntimeContext,
-} from "./kernel.js";
-export type { AgentRememberResult, AgentRememberOptions, AgentMemoryExecution } from "./memory-runtime.js";
-export { createRememberTool, type RememberToolOptions } from "./remember-tool.js";
-export type { VykorAgentExtension, VykorExtensionContext } from "./extensions.js";
-export { discoverVykorExtensions } from "./extensions.js";
-export { activateDiscoveredPlugins, type ActivateDiscoveredPluginsOptions } from "./plugin-activation.js";
+} from "./kernel/index.js";
+export type { AgentRememberResult, AgentRememberOptions, AgentMemoryExecution } from "./node/memory/memory-runtime.js";
+export { createRememberTool, type RememberToolOptions } from "./node/memory/remember-tool.js";
+export type { VykorAgentExtension, VykorExtensionContext } from "./node/plugins/extensions.js";
+export { discoverVykorExtensions } from "./node/plugins/extensions.js";
+export { activateDiscoveredPlugins, type ActivateDiscoveredPluginsOptions } from "./node/plugins/plugin-activation.js";
 export {
   createPluginCapabilityInventory,
   pluginMcpServerId,
@@ -57,28 +61,25 @@ export {
   type LoadedPluginInstallation,
   type PluginCapabilityInventory,
   type PluginCapabilityOwner,
-} from "./plugin-capability-inventory.js";
-export { createGoalRunContribution, type GoalRunBinding } from "./goal-extension.js";
-export { createGoalReadTool, formatGoalReadSnapshot, type GoalReadSnapshot } from "./goal-read-tool.js";
-export { createGoalUpdateTool, GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
+} from "./node/plugins/plugin-capability-inventory.js";
 export {
   activateNativePluginTools,
   type NativeToolActivationResult,
-} from "./native-tools/activate.js";
+} from "./node/plugins/native-tools/activate.js";
 export {
   NativeToolHost,
   NativeToolHostError,
   type NativeToolHostOptions,
   type NativeToolHostState,
-} from "./native-tools/tool-host.js";
+} from "./node/plugins/native-tools/tool-host.js";
 export {
   getNativeToolRuntimeSnapshot,
   type NativeToolRuntimeSnapshot,
-} from "./native-tools/status.js";
-export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-agent.js";
-export type { PluginAppBackendPort, PluginAppBackendCatalogue, CapturedPluginAppBackend, PluginAppResultView } from "./plugin-app-backends.js";
-export { nativeToolResultToAppResult } from "./native-plugin-app-backend.js";
-export { mcpToolResultToAppResult } from "./mcp-plugin-app-backend.js";
+} from "./node/plugins/native-tools/status.js";
+export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./kernel/child-agent.js";
+export type { PluginAppBackendPort, PluginAppBackendCatalogue, CapturedPluginAppBackend, PluginAppResultView } from "./node/plugin-apps/plugin-app-backends.js";
+export { nativeToolResultToAppResult } from "./node/plugin-apps/native-plugin-app-backend.js";
+export { mcpToolResultToAppResult } from "./node/plugin-apps/mcp-plugin-app-backend.js";
 export {
   buildChildAgentWorktreeSlug,
   computeChildAgentWorktreeBaseDir,
@@ -87,5 +88,13 @@ export {
   createInProcessChildEnvironmentProvider,
   type ChildAgentWorktreeManager,
   type GitRunner,
-} from "./child-environment.js";
-export type { PluginAppRuntimeHost, PluginAppRuntimeFacts } from "./plugin-app-runtime.js";
+} from "./node/runtime/child-environment.js";
+export type { PluginAppRuntimeHost, PluginAppRuntimeFacts } from "./node/plugin-apps/plugin-app-runtime.js";
+
+export { loadNodeAgentDefinitions } from "./node/definitions.js";
+export * from "./node/workflow/index.js";
+
+export { createDefaultToolRegistry } from "./node/tools/default-tool-registry.js";
+export { LocalAgentJobHost, type LocalAgentJobHostOptions } from "./node/jobs/local-agent-job-host.js";
+
+export type { RunCapabilityView, NodeRunToolBinding, RunSkillBinding, RunAgentBinding, RunMcpServerBinding, RuntimeSandboxStatus } from "./node/runtime/node-runtime-resources.js";

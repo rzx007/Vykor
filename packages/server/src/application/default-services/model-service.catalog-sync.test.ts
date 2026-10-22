@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createModelCatalogService } from "@vykor/api";
 import { CredentialStorage } from "@vykor/auth";
-import { saveSettings, type Settings } from "@vykor/core";
+import { saveSettings, type Settings } from "@vykor/host-config";
 import { createDefaultModelService } from "./model-service.js";
 import { createDefaultSettingsService } from "./settings-service.js";
 import { validateRequestSelection } from "../session/request-selection-validation.js";

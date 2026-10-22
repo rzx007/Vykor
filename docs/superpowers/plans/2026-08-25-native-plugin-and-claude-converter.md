@@ -90,8 +90,8 @@ apps/cli
 
 ### 主要修改文件
 
-- `packages/agent-runtime/src/extensions.ts`
-- `packages/agent-runtime/src/agent-composition.ts`
+- `packages/agent-runtime/src/node/plugins/extensions.ts`
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`
 - `packages/core/src/types/settings.ts`
 - `packages/server/src/application/settings-api.ts`
 - `packages/server/src/application/default-services/plugin-service.ts`
@@ -113,7 +113,7 @@ apps/cli
 - 对应旧测试文件；
 - `apps/cli/src/plugin-contributions.ts`
 - `apps/cli/src/plugin-contributions.test.ts`
-- `packages/agent-runtime/src/extensions.ts` 中的旧 `registerPluginTools()`；
+- `packages/agent-runtime/src/node/plugins/extensions.ts` 中的旧 `registerPluginTools()`；
 - `packages/plugins/src/index.ts` 中旧 `PluginInstaller`；
 - `Settings.plugins` 和 `Settings.allowProjectPlugins`。
 
@@ -414,9 +414,9 @@ pnpm --filter @vykor/plugins check-types
 
 - Create: `packages/plugins/src/activation/activate.ts`
 - Create: `packages/plugins/src/activation/activate.test.ts`
-- Modify: `packages/agent-runtime/src/extensions.ts`
-- Modify: `packages/agent-runtime/src/extensions.test.ts`
-- Modify: `packages/agent-runtime/src/agent-composition.ts`
+- Modify: `packages/agent-runtime/src/node/plugins/extensions.ts`
+- Modify: `packages/agent-runtime/src/node/plugins/extensions.test.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/agent-composition.ts`
 - Test: `packages/agent-runtime/src/agent-composition.test.ts`（如已有对应测试则扩展）
 
 **产出接口：**

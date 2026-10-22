@@ -1,8 +1,12 @@
+
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createApplyPatchTool} from "./../apply-patch.js";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { createTwoFilesPatch } from "diff";
-import { getProjectMemoryDir, type ToolContext } from "@vykor/core";
+import { getProjectMemoryDir } from "@vykor/host-config";
+import { type ToolContext } from "@vykor/agent-contracts";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { describe, expect, it } from "vitest";
 import { PatchToolError, applyPatchTool, executePatchPlan, planPatch } from "../apply-patch.js";
@@ -320,7 +324,7 @@ describe("executePatchPlan", () => {
       }
     }
     const files = new FailedReads(); files.seed("/repo/src/a.ts", "old\n");
-    const result = await applyPatchTool.execute({ patch: updatePatch() }, makeContext(files));
+    const result = await executeToolFixture(host => createApplyPatchTool(host), { patch: updatePatch() }, makeContext(files));
     expect(result).toMatchObject({ isError: true, failureKind: "command", executionState: "not_started" });
     expect(files.writeCalls).toEqual([]);
     expect(new TextDecoder().decode(files.files.get("/repo/src/a.ts"))).toBe("old\n");
@@ -332,7 +336,7 @@ describe("executePatchPlan", () => {
       async readBytes(path: string) { this.files.delete(path); return super.readBytes(path); }
     }
     const files = new DisappearingFiles(); files.seed("/repo/src/a.ts", "old\n");
-    const result = await applyPatchTool.execute({ patch: updatePatch() }, makeContext(files));
+    const result = await executeToolFixture(host => createApplyPatchTool(host), { patch: updatePatch() }, makeContext(files));
     expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
     expect(files.writeCalls).toEqual([]);
   });
@@ -444,7 +448,7 @@ describe("applyPatchTool", () => {
         "--- a/update.txt\n+++ b/update.txt\n@@ -1 +1 @@\n-old\n+new\n" +
         "--- /dev/null\n+++ b/create.txt\n@@ -0,0 +1 @@\n+created\n" +
         "--- a/delete.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n";
-      const result = await applyPatchTool.execute!({ patch }, { cwd: dir });
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd: dir });
 
       expect(result).toMatchObject({ executionState: "completed" });
       expect(await readFile(join(dir, "update.txt"), "utf8")).toBe("new\n");
@@ -457,7 +461,7 @@ describe("applyPatchTool", () => {
   it("rejects an invalid patch without touching the workspace", async () => {
     await withDir(async (dir) => {
       await writeFile(join(dir, "keep.txt"), "old\n", "utf8");
-      const result = await applyPatchTool.execute!({ patch: "not a patch" }, { cwd: dir });
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch: "not a patch" }, { cwd: dir });
       expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
       expect(await readFile(join(dir, "keep.txt"), "utf8")).toBe("old\n");
     });
@@ -466,7 +470,7 @@ describe("applyPatchTool", () => {
   it("reports unsafe patch paths as invalid input before writing", async () => {
     await withDir(async (dir) => {
       const patch = updatePatch("../outside.txt");
-      const result = await applyPatchTool.execute!({ patch }, { cwd: dir });
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd: dir });
       expect(result).toMatchObject({
         isError: true,
         failureKind: "invalid_input",
@@ -479,10 +483,7 @@ describe("applyPatchTool", () => {
     await withDir(async (dir) => {
       await writeFile(join(dir, "secret.txt"), "old\n", "utf8");
       const patch = "--- a/secret.txt\n+++ b/secret.txt\n@@ -1 +1 @@\n-old\n+new\n";
-      const result = await applyPatchTool.execute!(
-        { patch },
-        { cwd: dir, settings: settings({ allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] }) },
-      );
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd: dir, settings: settings({ allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] }) });
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(await readFile(join(dir, "secret.txt"), "utf8")).toBe("old\n");
     });
@@ -491,10 +492,7 @@ describe("applyPatchTool", () => {
   it("rejects a sandbox-denied create before writing", async () => {
     await withDir(async (dir) => {
       const patch = "--- /dev/null\n+++ b/blocked/new.txt\n@@ -0,0 +1 @@\n+new\n";
-      const result = await applyPatchTool.execute!(
-        { patch },
-        { cwd: dir, settings: settings({ allowRead: ["."], denyRead: [], allowWrite: ["."], denyWrite: ["blocked"] }) },
-      );
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd: dir, settings: settings({ allowRead: ["."], denyRead: [], allowWrite: ["."], denyWrite: ["blocked"] }) });
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       await expect(readFile(join(dir, "blocked", "new.txt"))).rejects.toThrow();
     });

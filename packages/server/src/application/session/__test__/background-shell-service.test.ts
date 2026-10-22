@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { SessionStore } from "@vykor/services";
-import { DetachedProcessSupervisor } from "@vykor/services/executions";
+import {
+  DetachedProcessSupervisor,
+} from "@vykor/execution-node";
 import { SessionExecutionProjector } from "../session-execution-projector.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 

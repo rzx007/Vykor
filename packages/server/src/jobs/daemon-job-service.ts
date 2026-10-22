@@ -1,8 +1,8 @@
 import {
-  cancelPersistentWorkflow,
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
 } from "@vykor/coordinator";
+import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import {
   filterJobSnapshots,
   type AgentJobHost,
@@ -15,10 +15,10 @@ import {
   type JobWaitResult,
 } from "@vykor/jobs";
 import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
-import type { SessionExecutionRecord, SessionRecord, SessionTaskStatus } from "@vykor/protocol";
+import type { SessionExecutionRecord, SessionRecord, SessionTaskStatus } from "@vykor/domain-contracts/sessions";
 import type { SessionExecutionProjector, DetachedProcessRuntime } from "../application/session/session-execution-projector.js";
 import type { DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
-import type { ChildActivitySnapshot } from "@vykor/core";
+import type { ChildActivitySnapshot } from "@vykor/agent-contracts";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 
 import type { DaemonTerminalService } from "../terminal/index.js";
@@ -111,12 +111,16 @@ export class DaemonJobService {
     private readonly getChildAgentExecutionRegistry: (
       scope: { cwd: string; sessionId: string },
     ) => JobExecutionRuntime,
-    private readonly workflows: WorkflowRunRepository,
+    private readonly workflowHost: WorkflowHost,
     private readonly executionProjector?: Pick<SessionExecutionProjector, "trackProcessExecution">,
     private readonly operationGate?: Pick<DaemonOperationGate, "enter">,
   ) {
     this.sessions = store;
     this.tasks = store;
+  }
+
+  private get workflows(): WorkflowRunRepository {
+    return this.workflowHost.repository;
   }
 
   createTerminalAgentHost(session: SessionRecord): AgentJobHost {
@@ -362,8 +366,7 @@ export class DaemonJobService {
       return taskSnapshot(stopped);
     }
     const session = this.requireSession(input.sessionId);
-    await cancelPersistentWorkflow(source.value, {
-      store: source.repository,
+    await this.workflowHost.cancelPersistentWorkflow(source.value, {
       reason: input.reason,
       stopTask: async (taskId) => await this.stopWorkflowWorker(session, taskId),
     });

@@ -1,6 +1,7 @@
 # LSP Client 设计
 
 > 状态：提议设计，尚未实现。当前代码仍是 `Lsp` 工具调用正则和 ripgrep 的近似搜索；本文定义把它替换成真实 Language Server Protocol 客户端的目标边界、运行流程和验收标准。
+> 2026-10-22：P2 已将当前实现迁至 execution-node，活动查询由宿主的 ExecutionRuntimeOwner 管理；尚未接入本文提出的真实语言服务器。
 
 ## 一句话结论
 
@@ -22,7 +23,7 @@ Vykor 不自己实现语言语义，也不手写 JSON-RPC framing。
 
 ## 为什么要替换当前实现
 
-当前 `packages/services/src/lsp/index.ts` 并没有连接语言服务器：
+当前 `packages/execution-node/src/lsp/index.ts` 并没有连接语言服务器：
 
 - `connect()` 只修改一个布尔值；
 - `command` 和 `args` 没有用于启动语言服务器；

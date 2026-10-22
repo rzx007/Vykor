@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createShellOutputLogHost } from "@vykor/services/executions";
-import { fileReadTool } from "@vykor/tools";
+import {
+  createShellOutputLogHost,
+} from "@vykor/execution-node";
+import { createFileReadTool } from "@vykor/tools";
 import { createHash } from "node:crypto";
 import { readOfficeBytes } from "@vykor/services";
 
@@ -23,11 +25,11 @@ describe("attachment Read tool", () => {
       capture.append("recover this Shell output");
       const ref = capture.finish(true).reference!;
       const tool = createAttachmentReadTool({
-        defaultTool: fileReadTool,
+        defaultTool: createFileReadTool({ shellOutputLogs: logs }),
         authorizationSessions: { resolve: () => undefined },
         attachmentReader: { readText: async () => { throw new Error("not an attachment"); } },
       });
-      const allowed = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "owner", shellOutputLogs: logs });
+      const allowed = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "owner" });
       expect((allowed.content[0] as { text: string }).text).toContain("recover this Shell output");
       const denied = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "other", shellOutputLogs: logs });
       expect(denied).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown" });

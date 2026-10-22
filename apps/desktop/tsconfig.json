@@ -13,6 +13,15 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": [
+        "../../packages/coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../../packages/coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../../packages/coordinator/src/workflow/index.ts"
+      ],
       "@renderer/*": [
         "src/renderer/src/*"
       ],

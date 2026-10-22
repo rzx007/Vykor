@@ -38,12 +38,12 @@
 | 已有能力 | 入口 | 本计划只补什么 |
 | --- | --- | --- |
 | Job 状态、游标、等待是否到期 | `packages/protocol/src/job.ts` | 统一退出码及真实执行状态的表达 |
-| 工具错误分类 | `packages/core/src/types/tools.ts` | 必要分类、是否实际执行、模型可见的下一步信息 |
+| 工具错误分类 | `packages/agent-contracts/src/tools.ts` | 必要分类、是否实际执行、模型可见的下一步信息 |
 | 工具执行权限和去重 | `packages/core/src/engine/query-engine.ts`、`tool-failure-memory.ts` | 保持授权与去重；补反馈，不新建自动重试循环 |
 | 工具完成事件与持久记录 | `framework-agent-run.ts`、`transcript-projection.ts` | 实时结果和重载历史都保留反馈 |
 | 上下文按桶统计 | `packages/core/src/context-budget/` | 区分真正发送的工具定义与可发现目录 |
 | 历史压缩 | `packages/core/src/engine/compact-service.ts` | 保留完成证据、当前约束、待办及不确定项 |
-| 本轮能力快照 | `packages/agent-runtime/src/run-capability-view.ts` | 在其内部选择工具，不扩大授权范围 |
+| 本轮能力快照 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts` | 在其内部选择工具，不扩大授权范围 |
 | 工具搜索 | `packages/tools/src/meta/tool-search.ts` | 先测量；需要时增加排序与真正加载 |
 
 Codex 依据固定在 `a33fb9751c1e468b0062aae63e8f06e9d75e2376`。借鉴的是职责划分，不宣称与 Codex 功能或效果等价：
@@ -288,9 +288,9 @@ expect(cancelled.snapshot.status).toBe("killed");
 
 ### 任务 2：把执行事实和失败建议送到模型，而非仅留在日志
 
-**修改：** `packages/core/src/types/tools.ts`、`types/messages.ts`、`types/events.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`。
+**修改：** `packages/agent-contracts/src/tools.ts`、`types/messages.ts`、`types/events.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`。
 **新增：** `packages/core/src/engine/tool-result-feedback.ts`、`tool-result-feedback.test.ts`。
-**跨层接线：** `packages/agent-runtime/src/framework-agent-run.ts`；`packages/server/src/application/session/transcript-projection.ts`、`application/agent/agent-transcript.ts`。
+**跨层接线：** `packages/agent-runtime/src/kernel/framework-agent-run.ts`；`packages/server/src/application/session/transcript-projection.ts`、`application/agent/agent-transcript.ts`。
 **测试：** core `engine/integration.test.ts`、`engine/recovery-evidence.test.ts`；agent-runtime `stream-event-mapping.test.ts`；server `application/session/__test__/transcript-projection.test.ts`、`application/agent/__test__/agent-transcript.test.ts`。
 **输入：** 已执行工具结果或运行时拒绝；**输出：** 第 3.2 节可选字段、统一模型反馈、重载后一致历史。
 
@@ -391,8 +391,8 @@ compactSummary?: string;
 
 ### 任务 6：可关闭的工具发现实验（准入后）
 
-**修改：** `packages/core/src/types/tools.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`；`packages/agent-runtime/src/agent-options.ts`、`default-runtime.ts`；`packages/tools/src/meta/tool-search.ts`；`packages/server/src/application/assemble-session-context-usage.ts`。
-**新增：** `packages/core/src/engine/tool-exposure.ts`、`tool-exposure.test.ts`；`packages/tools/src/meta/__test__/tool-search.test.ts`。
+**修改：** `packages/agent-contracts/src/tools.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`；`packages/agent-runtime/src/node/runtime/agent-options.ts`、`default-runtime.ts`；`packages/tools/src/meta/tool-search.ts`；`packages/server/src/application/assemble-session-context-usage.ts`。
+**新增：** `packages/core/src/engine/tool-exposure.ts`、`tool-exposure.test.ts`；`packages/agent-runtime/src/node/integration/tool-search.test.ts`。
 **测试补充：** core `integration.test.ts`；agent-runtime `run-capability-view.test.ts`、`default-runtime.test.ts`；API `providers/openai.test.ts`、`anthropic.test.ts`、`codex.test.ts`。
 **输入：** 本轮 runToolRegistry、exposure 配置、历史工具名和搜索结果；**输出：** 第 3.4 节加载行为。
 

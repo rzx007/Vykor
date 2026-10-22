@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@vykor/api": "workspace:*",
-    "@vykor/core": "workspace:*"
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

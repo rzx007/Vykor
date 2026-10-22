@@ -6,8 +6,6 @@ export { toolSchemasToLedgerSegments } from "./tool-segments.js";
 export type { ToolSchemaInput, ToolSchemaKind } from "./tool-segments.js";
 export type {
   AssembleContextUsageInput,
-  ContextBucketId,
-  ContextLedgerSegment,
   ContextUsageBucket,
   ContextUsageSnapshot,
   ContextUsageSource,

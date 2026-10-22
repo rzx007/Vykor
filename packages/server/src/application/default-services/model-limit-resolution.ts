@@ -1,5 +1,5 @@
 import type { ModelsDevCatalog } from "@vykor/api";
-import type { CustomProviderModelSettings, CustomProviderSettings, Settings } from "@vykor/core";
+import type { CustomProviderModelSettings, CustomProviderSettings, Settings } from "@vykor/host-config";
 
 import {
   catalogModelContextWindow,

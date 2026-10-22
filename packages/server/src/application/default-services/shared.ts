@@ -1,9 +1,4 @@
-import {
-  updateSettings,
-  loadSettings,
-  SettingsConflictError,
-  type Settings,
-} from "@vykor/core";
+import { updateSettings, loadSettings, SettingsConflictError, type Settings } from "@vykor/host-config";
 import { isDeepStrictEqual } from "node:util";
 import { normalizeSandboxConfig } from "@vykor/sandbox";
 

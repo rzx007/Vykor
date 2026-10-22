@@ -4,7 +4,7 @@ import {
   buildAgentDefinition,
   parseAgentFrontmatter,
   type AgentDefinition,
-} from "@vykor/coordinator";
+} from "@vykor/coordinator/definitions";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

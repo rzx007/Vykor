@@ -1,3 +1,4 @@
+import { DurableChannelBridge } from "../application/channel/durable-channel-bridge.js";
 import type {
   ChannelRuntimeServiceOptions,
   ConnectorRuntimeHandle,
@@ -32,7 +33,7 @@ export async function createDefaultChannelRuntime(
     onDenied: (info) => input.onDenied(info),
     onDeliveryResult: (result) => input.onDeliveryResult(result),
   });
-  const bridge = new channels.DurableChannelBridge({
+  const bridge = new DurableChannelBridge({
     application: {
       handleChannelMessage: (message) => input.application.handleMessage(message),
       listPendingChannelDeliveries: (options) =>

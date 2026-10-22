@@ -14,7 +14,7 @@ import {
   type SessionMessagePartRecord,
   type SessionStateSnapshot,
 } from "@vykor/client";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { isCoordinatorMode } from "@vykor/coordinator";
 
 import { ensureLocalDaemon } from "./ensure-daemon.js";

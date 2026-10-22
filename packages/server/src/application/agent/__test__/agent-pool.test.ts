@@ -1,3 +1,4 @@
+import {hostedAgentFactory} from "./../../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { AgentPool } from "../agent-pool.js";
@@ -31,7 +32,7 @@ function createContext(factory = vi.fn(async () => createAgent())) {
       listMessageParts: vi.fn(() => []),
       listSessions: vi.fn(() => [session]),
     },
-    loadAgent: factory,
+    loadAgent: vi.fn(hostedAgentFactory(factory)),
   };
 }
 

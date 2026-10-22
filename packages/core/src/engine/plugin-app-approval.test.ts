@@ -1,16 +1,16 @@
 import { expect, it, vi } from "vitest";
 import { authorizeToolCall } from "./query-tool-permissions.js";
-import type { AgentExecutionContext, RunToolBinding } from "../types/runtime.js";
+import type { AgentExecutionContext, RunToolBinding } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 
-it("uses only the exact original app Run grant and preserves deny and hooks", async () => {
+it("uses only the host-confirmed captured call and preserves deny and hooks", async () => {
   const tool = { name: "Save", description: "Save", inputSchema: {}, execute: async () => ({ content: [] }) };
-  const binding = { ownerPluginId: "p", definition: tool, definitionIdentity: Symbol("identity"), invoke: tool.execute } as RunToolBinding;
+  const binding = { definition: tool, definitionIdentity: Symbol("identity"), invoke: tool.execute } as RunToolBinding;
   const call = { idx: 0, tool, toolUse: { type: "tool_use" as const, id: "call", name: "Save", input: { documentId: "d" } } };
   const requestPermission = vi.fn(async () => ({ status: "denied" }));
-  const execution = { scope: { runId: "run" }, capabilityView: { tools: new Map([["Save", binding]]), appTools: new Map([["Save", binding]]) },
-    pluginAppToolApproval: { runId: "run", toolUseId: "call", binding, argumentsJson: JSON.stringify(call.toolUse.input) },
+  const execution = { scope: { runId: "run" }, tools: new Map([["Save",binding]]),
+    confirmTool: async ({toolUse,binding: actual}:any) => actual === binding && toolUse.id === "call" && JSON.stringify(toolUse.input) === JSON.stringify(call.toolUse.input),
     effects: { requestPermission }, emit: async () => {} } as unknown as AgentExecutionContext;
   const hook = { execute: vi.fn(async () => ({ blocked: false })) };
   const ask = { checkTool: async () => ({ action: "ask" as const }) };
@@ -25,19 +25,19 @@ it("uses only the exact original app Run grant and preserves deny and hooks", as
   expect(requestPermission).toHaveBeenCalledOnce();
 });
 
-it("does not lend an app approval to a model-audience tool call using the same binding", async () => {
+it("uses ordinary permission without a host confirmation callback", async () => {
   const execute = vi.fn(async () => ({ content: [] }));
   const tool = { name: "Save", description: "Save", inputSchema: { type: "object" }, execute };
   const binding: RunToolBinding = { ownerPluginId: "p", definition: tool, invoke: execute };
   const toolUse = { type: "tool_use" as const, id: "call", name: "Save", input: {} };
   const requestPermission = vi.fn(async () => ({ status: "denied" }));
   const execution = { scope: { runId: "run", signal: new AbortController().signal },
-    capabilityView: { tools: new Map([["Save", binding]]), appTools: new Map([["Save", binding]]) },
-    pluginAppToolApproval: { runId: "run", toolUseId: "call", binding, argumentsJson: "{}" },
+    tools: new Map([["Save",binding]]),
+
     effects: { requestPermission }, emit: async () => {} } as unknown as AgentExecutionContext;
   const registry = new ToolRegistry(); registry.register(tool, { kind: "plugin", id: "p" });
   const engine = new QueryEngine({ async *streamMessage() { throw new Error("model must not be called"); } }, registry,
     { checkTool: async () => ({ action: "ask" }) }, { execute: async () => ({ blocked: false }), register() {} } as never);
-  expect((await engine.executeTool(toolUse, { audience: "model", execution })).failureKind).toBe("permission");
+  expect((await engine.executeTool(toolUse, { execution })).failureKind).toBe("permission");
   expect(execute).not.toHaveBeenCalled(); expect(requestPermission).toHaveBeenCalledOnce();
 });

@@ -9,6 +9,7 @@ import {
   type WorkflowSpec,
 } from "@vykor/coordinator";
 import { SessionStore } from "@vykor/services";
+import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SessionWorkflowRunRepository } from "../session-workflow-run-repository.js";
@@ -66,8 +67,10 @@ describe("SessionWorkflowRunRepository diagnostics", () => {
     try {
       expect(reopened.sessions.get("temporary")).toBeUndefined();
       const repository = workflowRepository(reopened);
+      const workflowHost = new WorkflowHost(repository);
       const eventsBeforeRecovery = reopened.conversations.listEvents();
-      await expect(recoverInterruptedWorkflows({ workflows: repository })).resolves.toBeUndefined();
+      await expect(recoverInterruptedWorkflows({ workflowHost })).resolves.toBeUndefined();
+      await workflowHost.close();
       expect(repository.load("temporary-workflow")).toMatchObject({
         ownerSession: "temporary", status: "failed", termination: "cancelled",
       });

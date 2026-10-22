@@ -103,6 +103,13 @@ export const ConversationTranscript = memo(function ConversationTranscript({
     () => [...entries].reverse().find((entry) => entry.type === "turn"),
     [entries]
   )
+  // Supplemental input can split one Run across turns; only its last segment owns live status.
+  const runningTurn = useMemo(
+    () => activeRun
+      ? [...entries].reverse().find((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
+      : undefined,
+    [entries, activeRun]
+  )
   const lastUserMessage = useMemo(
     () =>
       [...entries]
@@ -254,6 +261,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
             streamingPart={entry === lastTurn ? streamingPart : undefined}
             userMessageIsAnchor={userMessageIsAnchor}
             canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
+            showRunning={entry === runningTurn}
             runningLabel={data.finished ? undefined : runningActivity.label}
             runningState={data.finished ? undefined : runningActivity.orb}
             initialPartIds={initialPartIds}
@@ -358,6 +366,7 @@ type TranscriptTurnProps = Pick<
   streamingPart?: DesktopSessionPart
   userMessageIsAnchor: boolean
   canEditUserMessage: boolean
+  showRunning: boolean
   runningLabel?: string
   runningState?: OrbState
   initialPartIds: ReadonlySet<string>
@@ -369,6 +378,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
   streamingPart,
   userMessageIsAnchor,
   canEditUserMessage,
+  showRunning,
   runningLabel,
   runningState,
   initialPartIds,
@@ -467,7 +477,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
                   onOpenReview={onOpenReview}
                   onOpenTerminal={onOpenTerminal}
                 />
-                {item.key === lastAssistantKey && !folded && !finished ? (
+                {item.key === lastAssistantKey && !folded && !finished && showRunning ? (
                   <TaskDuration timing={timing} label={runningLabel} state={runningState} />
                 ) : null}
                 {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
@@ -499,7 +509,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
       </TurnProcess>
       {lastAssistantKey === undefined ? (
         <>
-          {timing ? (
+          {timing && (finished || showRunning) ? (
             <MessageScrollerItem messageId={`${turn.id}-duration`}>
               <TaskDuration
                 timing={timing}

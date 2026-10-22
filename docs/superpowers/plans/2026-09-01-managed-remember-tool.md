@@ -14,9 +14,9 @@
 
 - 修改 `packages/prompts/src/index.ts`：提供经过安全扫描的 USER profile 立即追加函数，并让 pending 审批复用它。
 - 修改 `packages/prompts/src/index.test.ts`：验证追加、保留旧内容和危险内容拒绝。
-- 创建 `packages/agent-runtime/src/remember-tool.ts`：定义 `Remember` 工具和两个作用域的路由。
-- 创建 `packages/agent-runtime/src/remember-tool.test.ts`：验证 user/project/disabled/invalid 输入行为。
-- 修改 `packages/agent-runtime/src/agent-composition.ts`：用当前 memory runtime 注册工具。
+- 创建 `packages/agent-runtime/src/node/memory/remember-tool.ts`：定义 `Remember` 工具和两个作用域的路由。
+- 创建 `packages/agent-runtime/src/node/memory/remember-tool.test.ts`：验证 user/project/disabled/invalid 输入行为。
+- 修改 `packages/agent-runtime/src/node/runtime/agent-composition.ts`：用当前 memory runtime 注册工具。
 - 修改 `packages/agent-runtime/src/index.ts`：按现有公开 API 方式导出工具工厂和类型。
 - 创建 `packages/tools/src/file/managed-persistence-path.ts`：集中判断 USER profile 和当前项目记忆路径。
 - 创建 `packages/tools/src/file/__test__/managed-persistence-path.test.ts`：验证路径边界和大小写/子路径处理。
@@ -88,9 +88,9 @@ git commit -m "feat(memory): 支持安全追加用户偏好"
 ### 任务 2：提供并注册 Remember 工具
 
 **文件：**
-- 创建：`packages/agent-runtime/src/remember-tool.ts`
-- 创建：`packages/agent-runtime/src/remember-tool.test.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts:135-150`
+- 创建：`packages/agent-runtime/src/node/memory/remember-tool.ts`
+- 创建：`packages/agent-runtime/src/node/memory/remember-tool.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts:135-150`
 - 修改：`packages/agent-runtime/src/index.ts`
 
 - [x] **步骤 1：先写失败测试**
@@ -170,7 +170,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [x] **步骤 6：提交**
 
 ```bash
-git add packages/agent-runtime/src/remember-tool.ts packages/agent-runtime/src/remember-tool.test.ts packages/agent-runtime/src/agent-composition.ts packages/agent-runtime/src/index.ts
+git add packages/agent-runtime/src/node/memory/remember-tool.ts packages/agent-runtime/src/node/memory/remember-tool.test.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/index.ts
 git commit -m "feat(memory): 添加受管理的 Remember 工具"
 ```
 

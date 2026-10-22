@@ -1,19 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { parseAgentFrontmatter, loadAgentsDir, mergeAgentDefinitions } from "../agent-loader.js";
-import type { AgentDefinition } from "../index.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { parseAgentFrontmatter, parseAgentFiles, mergeAgentDefinitions, type AgentDefinition, type AgentDefinitionFile } from "../definitions/index.js";
 
-let tmp: string;
-
-beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "vk-agents-"));
-});
-
-afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
-});
+const tmp = "/explicit-agent-files";
+let files: AgentDefinitionFile[] = [];
+const loadExplicitFiles = () => parseAgentFiles(files);
 
 describe("parseAgentFrontmatter", () => {
   it("parses nested YAML structures (hooks dict, mcpServers list)", () => {
@@ -53,9 +43,10 @@ describe("parseAgentFrontmatter", () => {
   });
 });
 
-describe("loadAgentsDir", () => {
+describe("parseAgentFiles", () => {
+  beforeEach(() => { files = []; });
   function writeAgent(name: string, content: string): void {
-    writeFileSync(join(tmp, `${name}.md`), content);
+    files.push({ stem: name, baseDir: tmp, content, source: "user" });
   }
 
   it("loads the current camelCase field set", () => {
@@ -86,7 +77,7 @@ describe("loadAgentsDir", () => {
         "System prompt body.",
       ].join("\n"),
     );
-    const [agent] = loadAgentsDir(tmp);
+    const [agent] = loadExplicitFiles();
     expect(agent!.name).toBe("full-agent");
     expect(agent!.systemPrompt).toBe("System prompt body.");
     expect(agent!.tools).toEqual(["Read", "Grep"]);
@@ -114,7 +105,7 @@ describe("loadAgentsDir", () => {
 
   it("defaults name to filename and description to Agent: <name>", () => {
     writeAgent("bare", "Just a prompt.");
-    const [agent] = loadAgentsDir(tmp);
+    const [agent] = loadExplicitFiles();
     expect(agent!.name).toBe("bare");
     expect(agent!.description).toBe("Agent: bare");
     expect(agent!.systemPrompt).toBe("Just a prompt.");
@@ -125,7 +116,7 @@ describe("loadAgentsDir", () => {
       "weird",
       ["---", "name: weird", "color: rainbow", "memory: galaxy", "permissionMode: yolo", "maxTurns: -3", "timeoutSeconds: 0", "---", "x"].join("\n"),
     );
-    const [agent] = loadAgentsDir(tmp);
+    const [agent] = loadExplicitFiles();
     expect(agent!.color).toBeUndefined();
     expect(agent!.memory).toBeUndefined();
     expect(agent!.permissionMode).toBeUndefined();
@@ -137,17 +128,17 @@ describe("loadAgentsDir", () => {
     writeAgent("effort-str", ["---", "name: e1", "effort: xhigh", "---", "x"].join("\n"));
     writeAgent("effort-num", ["---", "name: e2", "effort: 3", "---", "x"].join("\n"));
     writeAgent("effort-empty", ["---", "name: e3", 'effort: ""', "---", "x"].join("\n"));
-    const byName = Object.fromEntries(loadAgentsDir(tmp).map((a) => [a.name, a]));
+    const byName = Object.fromEntries(loadExplicitFiles().map((a) => [a.name, a]));
     expect(byName.e1!.effort).toBe("xhigh");
     expect(byName.e2!.effort).toBe(3);
     expect(byName.e3!.effort).toBeUndefined();
   });
 
-  it("skips unreadable files and missing dirs without crashing", () => {
-    writeAgent("good", "ok");
-    rmSync(join(tmp, "good.md")); // 留空目录
-    expect(loadAgentsDir(tmp)).toEqual([]);
-    expect(loadAgentsDir(join(tmp, "nope"))).toEqual([]);
+  it("skips invalid supplied files without reading directories", () => {
+    writeAgent("bad", "---\nname: [unclosed\n---\nBad");
+    writeAgent("good", "Good prompt.");
+    expect(loadExplicitFiles().map((agent) => agent.name)).toEqual(["good"]);
+    expect(parseAgentFiles([])).toEqual([]);
   });
 });
 

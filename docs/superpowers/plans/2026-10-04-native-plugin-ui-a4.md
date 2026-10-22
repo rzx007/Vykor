@@ -24,7 +24,7 @@
 
 ## Task1: Real reference tools and single-file UI
 
-**Files:** examples/plugins/text-inspector/tools/index.mjs, .vykor-plugin/plugin.json, ui/manifest.json, ui/panel.mjs, ui/panel.template.html, scripts/build-ui.mjs, generated ui/panel.html; packages/agent-runtime/src/native-tools/text-inspector.test.ts.
+**Files:** examples/plugins/text-inspector/tools/index.mjs, .vykor-plugin/plugin.json, ui/manifest.json, ui/panel.mjs, ui/panel.template.html, scripts/build-ui.mjs, generated ui/panel.html; packages/agent-runtime/src/node/plugins/native-tools/text-inspector.test.ts.
 
 **Interfaces:** existing TextInspectorCheck({text}) retains {findings,truncated} text. New TextInspectorPreview({text,selected}) returns {text,findings,truncated} text and proposal componentId=text-inspector, data={text,findings,truncated}. UI calls client.requestAction("preview",{text,selected}) and receives snapshots.
 

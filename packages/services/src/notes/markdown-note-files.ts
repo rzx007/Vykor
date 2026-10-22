@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { MAX_NOTE_CONTENT_LENGTH } from "@vykor/protocol";
+import { MAX_NOTE_CONTENT_LENGTH } from "@vykor/domain-contracts/notes";
 
 export function ensureNoteDirectory(directory: string): void {
   mkdirSync(directory, { recursive: true });

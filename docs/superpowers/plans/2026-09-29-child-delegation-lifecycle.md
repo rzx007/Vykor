@@ -70,7 +70,7 @@ interface ChildPartialResult {
 
 ### Task 1：Agent 委派输入契约
 
-**改动：** `packages/core/src/types/runtime.ts`、`packages/tools/src/agent/agent-tools.ts`、`packages/agent-runtime/src/child-agent.ts`、`packages/server/src/application/agent/daemon-agent-event-projector.ts`。**测试：** `packages/tools/src/agent/__test__/agent-tools.test.ts`、`packages/agent-runtime/src/child-agent.test.ts`、`packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`。
+**改动：** `packages/core/src/types/runtime.ts`、`packages/tools/src/agent/agent-tools.ts`、`packages/agent-runtime/src/kernel/child-agent.ts`、`packages/server/src/application/agent/daemon-agent-event-projector.ts`。**测试：** `packages/tools/src/agent/__test__/agent-tools.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`、`packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`。
 
 - [ ] 先写三个行为：`scope/expectedResult/maxTurns/timeoutSeconds` 到达 `spawnChildAgent`；`0`、负数、非整数预算被拒且不 spawn；Child 初始输入含任务边界/交付要求，父 Task metadata 保留两字段，旧输入完全不变。
 - [ ] 运行 `pnpm --filter @vykor/tools exec vitest run src/agent/__test__/agent-tools.test.ts`、`pnpm --filter @vykor/agent-runtime exec vitest run src/child-agent.test.ts`、`pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/daemon-agent-event-projector.test.ts`。预期新增用例分别因字段未透传/任务上下文缺失/metadata 缺失而失败。
@@ -81,7 +81,7 @@ interface ChildPartialResult {
 
 ### Task 2：角色预算选择与轮数硬上限
 
-**改动：** `packages/coordinator/src/types.ts`、`packages/coordinator/src/agent-loader.ts`、`packages/agent-runtime/src/child-agent-options.ts`、`packages/agent-runtime/src/child-agent.ts`、`packages/agent-runtime/src/agent.ts`、`packages/agent-runtime/src/framework-agent-run.ts`、`packages/core/src/types/runtime.ts`、`packages/core/src/engine/query-engine.ts`。**测试：** `packages/coordinator/src/__test__/agent-loader.test.ts`、`packages/agent-runtime/src/child-agent-options.test.ts`、`packages/agent-runtime/src/child-agent.test.ts`、`packages/agent-runtime/src/framework-agent-run-input.test.ts`、`packages/core/src/engine/integration.test.ts`、`packages/core/src/engine/request-configuration.test.ts`。
+**改动：** `packages/coordinator/src/types.ts`、`packages/coordinator/src/agent-loader.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.ts`、`packages/agent-runtime/src/kernel/child-agent.ts`、`packages/agent-runtime/src/kernel/agent.ts`、`packages/agent-runtime/src/kernel/framework-agent-run.ts`、`packages/core/src/types/runtime.ts`、`packages/core/src/engine/query-engine.ts`。**测试：** `packages/coordinator/src/__test__/agent-loader.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`、`packages/agent-runtime/src/node/runtime/framework-agent-run-input.test.ts`、`packages/core/src/engine/integration.test.ts`、`packages/core/src/engine/request-configuration.test.ts`。
 
 - [ ] 先写测试：角色 `timeoutSeconds` 被加载；Child 的有效 `maxTurns` 在每次 Run 启动时冻结；后续请求配置、`setMaxTurns`、已接受 follow-up 试图调大时仍在已冻结轮数结束；同一 Child 的下一个 Run 重新取得当时配置；root Agent 的动态配置测试保持原行为。
 - [ ] 分别运行 `pnpm --filter @vykor/coordinator exec vitest run src/__test__/agent-loader.test.ts`、`pnpm --filter @vykor/agent-runtime exec vitest run src/child-agent-options.test.ts src/child-agent.test.ts src/framework-agent-run-input.test.ts`、`pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts src/engine/request-configuration.test.ts`。预期新增 Child 上限用例失败。
@@ -92,7 +92,7 @@ interface ChildPartialResult {
 
 ### Task 3：可选墙钟 deadline 与取消来源
 
-**改动：** `packages/agent-runtime/src/child-agent.ts`、`packages/core/src/types/runtime.ts`。**测试：** `packages/agent-runtime/src/child-agent.test.ts`。
+**改动：** `packages/agent-runtime/src/kernel/child-agent.ts`、`packages/core/src/types/runtime.ts`。**测试：** `packages/agent-runtime/src/node/runtime/child-agent.test.ts`。
 
 - [ ] 先写测试：没配置 `timeoutSeconds` 的 Child 不设定时器；配置后到期会停止当前 Run，结果 `failed/failureKind=timeout`；父 Run abort 仍是 interrupted，用户 JobCancel 仍保留其来源；Run settle/close 后定时器清除，follow-up 新 Run 重新计时。
 - [ ] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/child-agent.test.ts`；预期新增 timeout 用例失败。
@@ -103,7 +103,7 @@ interface ChildPartialResult {
 
 ### Task 4：本地 Child 活动快照
 
-**改动：** `packages/agent-runtime/src/child-agent.ts`、`packages/core/src/types/runtime.ts`。**参考：** `packages/agent-runtime/src/event-source.ts`。**测试：** `packages/agent-runtime/src/child-agent.test.ts`。
+**改动：** `packages/agent-runtime/src/kernel/child-agent.ts`、`packages/core/src/types/runtime.ts`。**参考：** `packages/agent-runtime/src/kernel/event-source.ts`。**测试：** `packages/agent-runtime/src/node/runtime/child-agent.test.ts`。
 
 - [ ] 先写测试：Child 发出文本 delta 时快照不可见；成功 `output.turn.completed` 后才可见最多 2,000 字符；重试/失败丢弃未提交文本；工具输入输出及 reasoning 不出现在快照；follow-up Run 清空前一 Run 数据。
 - [ ] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/child-agent.test.ts`；预期新增快照用例失败。
@@ -158,7 +158,7 @@ interface ChildPartialResult {
 
 ### Task 9：Framework Run 与 ChildResult 的 partial
 
-**改动：** `packages/agent-runtime/src/framework-agent-run.ts`、`packages/agent-runtime/src/child-agent.ts`、`packages/core/src/types/runtime.ts`。**测试：** `packages/agent-runtime/src/framework-agent-run-retry.test.ts`、`packages/agent-runtime/src/child-agent.test.ts`。
+**改动：** `packages/agent-runtime/src/kernel/framework-agent-run.ts`、`packages/agent-runtime/src/kernel/child-agent.ts`、`packages/core/src/types/runtime.ts`。**测试：** `packages/agent-runtime/src/node/runtime/framework-agent-run-retry.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`。
 
 - [ ] 先写测试：触顶收尾成功时是 `failed` 加 `failureKind=max_turns` 和受限 `partialResult`；中途模型失败时只保留此前已提交、未被替代的文本；没有文本时不生成空 partial；用户取消/父中断/墙钟超时保留各自受信来源。
 - [ ] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/framework-agent-run-retry.test.ts src/child-agent.test.ts`；预期新增部分结果用例失败。

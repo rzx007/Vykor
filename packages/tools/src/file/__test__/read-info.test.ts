@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileReadTool} from "./../read.js";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,7 +20,7 @@ describe("Read info_only before generating file changes", () => {
     await inDirectory(async dir => {
       const file = join(dir, "a.txt");
       await writeFile(file, "private body", "utf8");
-      const result = await fileReadTool.execute({ file_path: file, info_only: true }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, info_only: true }, { cwd: dir, settings });
       expect(result.metadata?.fileInfo).toMatchObject({ path: file, exists: true, kind: "file", sizeBytes: 12,
         sha256: createHash("sha256").update("private body").digest("hex"), parentExists: true });
       expect(result.isError).toBeFalsy();
@@ -32,7 +34,7 @@ describe("Read info_only before generating file changes", () => {
   it("reports a missing target and missing parent without creating either", async () => {
     await inDirectory(async dir => {
       const file = join(dir, "missing", "new.txt");
-      const result = await fileReadTool.execute({ file_path: file, info_only: true }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, info_only: true }, { cwd: dir, settings });
       expect(result.metadata?.fileInfo).toMatchObject({ exists: false, kind: "missing", parentExists: false });
       expect(result).toMatchObject({ executionState: "completed" });
       await expect(readFile(file)).rejects.toMatchObject({ code: "ENOENT" });
@@ -43,7 +45,7 @@ describe("Read info_only before generating file changes", () => {
     await inDirectory(async dir => {
       const target = join(dir, "folder");
       await mkdir(target);
-      const result = await fileReadTool.execute({ file_path: target, info_only: true }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: target, info_only: true }, { cwd: dir, settings });
       expect(result.metadata?.fileInfo).toMatchObject({ exists: true, kind: "directory" });
       expect(result.metadata?.fileInfo).not.toHaveProperty("sha256");
     });
@@ -53,7 +55,7 @@ describe("Read info_only before generating file changes", () => {
     await inDirectory(async dir => {
       const file = join(dir, "secret.txt");
       await writeFile(file, "secret", "utf8");
-      const result = await fileReadTool.execute({ file_path: file, info_only: true }, { cwd: dir, settings: {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, info_only: true }, { cwd: dir, settings: {
         ...settings, sandbox: { enabled: true, filesystem: { allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] } },
       } });
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
@@ -65,7 +67,7 @@ describe("Read info_only before generating file changes", () => {
     await inDirectory(async dir => {
       const file = join(dir, "a.txt");
       await writeFile(file, "old", "utf8");
-      const result = await fileReadTool.execute({ file_path: file, info_only: true }, { cwd: dir, settings: {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file, info_only: true }, { cwd: dir, settings: {
         ...settings, sandbox: { enabled: true, filesystem: { allowRead: ["."], allowWrite: ["."], denyWrite: ["a.txt"] } },
       } });
       expect(result.metadata?.fileInfo).toMatchObject({ exists: true, kind: "file", writePolicyError: expect.any(String) });
@@ -78,7 +80,7 @@ describe("Read info_only before generating file changes", () => {
       const link = join(dir, "link.txt");
       try { await symlink(join(dir, "absent.txt"), link, "file"); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === "EPERM") return; throw error; }
-      const result = await fileReadTool.execute({ file_path: link, info_only: true }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: link, info_only: true }, { cwd: dir, settings });
       expect(result.metadata?.fileInfo).toMatchObject({ exists: true, kind: "symlink" });
       expect(result.metadata?.fileInfo).not.toHaveProperty("sha256");
     });
@@ -91,7 +93,7 @@ describe("Read info_only before generating file changes", () => {
       await writeFile(target, "office bytes");
       try { await symlink(target, link, "file"); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === "EPERM") return; throw error; }
-      const result = await fileReadTool.execute({ file_path: link, info_only: true }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: link, info_only: true }, { cwd: dir, settings });
       expect(result.metadata?.fileInfo).toMatchObject({ kind: "symlink", sizeBytes: 12,
         sha256: createHash("sha256").update("office bytes").digest("hex") });
     });

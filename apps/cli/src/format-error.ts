@@ -1,5 +1,5 @@
 import { AuthenticationFailure, RateLimitFailure, RequestFailure } from "@vykor/api";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 export function formatApiError(err: Error, settings: Settings): string {
   if (err instanceof AuthenticationFailure) {

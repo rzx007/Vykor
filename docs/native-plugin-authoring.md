@@ -330,7 +330,7 @@ Tool 启动失败  → 检查 entry 路径、Node 语法、运行期普通 impor
 ```sh
 pnpm --filter @vykor/plugins check-types
 pnpm --filter @vykor/agent-runtime exec vitest run src/native-tools/text-inspector.test.ts src/native-tools/tool-host.test.ts src/native-tools/native-plugin-authoring.test.ts
-pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-lifecycle.routes.test.ts
 ```
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。

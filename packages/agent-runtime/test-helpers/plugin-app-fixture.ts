@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { installLocalNativePlugin } from "@vykor/plugins";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 export const appFixtureSettings: Settings = {
   apiFormat: "openai",

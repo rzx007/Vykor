@@ -1,9 +1,16 @@
-import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/protocol";
+import { hostedContextUsageAgent } from "../assemble-session-context-usage.js";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import type { AgentRememberResult } from "@vykor/agent-runtime";
-import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";
+import {
+  updateRulesFromSession,
+  type SessionMessageLike,
+} from "@vykor/personalization";
 
-import { writeSessionExport, type SessionExportFormat } from "../../session/export-session.js";
+import {
+  writeSessionExport,
+  type SessionExportFormat,
+} from "../../session/export-session.js";
 import { rewindTranscript } from "../../session/rewind.js";
 import type { RunControlService } from "./run-control-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
@@ -29,15 +36,26 @@ export class SessionMaintenanceError extends ApplicationError {
 }
 
 export interface SessionMaintenanceServiceContext {
-  data: Pick<SessionStore, "conversations" | "conversationTransactions" | "sessions"> & Partial<Pick<SessionStore, "runs">>;
+  data: Pick<
+    SessionStore,
+    "conversations" | "conversationTransactions" | "sessions"
+  > &
+    Partial<Pick<SessionStore, "runs">>;
   runControl: Pick<RunControlService, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
   operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
-  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string, sessionId: string) => number;
+  personalizationUpdater?: (
+    messages: SessionMessageLike[],
+    cwd: string,
+    sessionId: string,
+  ) => number;
   contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
-  refreshContextUsage?: (sessionId: string, agent: SessionContextUsageAgent) => Promise<void>;
+  refreshContextUsage?: (
+    sessionId: string,
+    agent: SessionContextUsageAgent,
+  ) => Promise<void>;
 }
 
 /**
@@ -53,7 +71,11 @@ export class SessionMaintenanceService {
     this.requireRuntime();
     const lease = this.enterSessionOperation(session);
     try {
-      return (await this.context.agentPool.acquireSession(sessionId)).inspect().mcpServers;
+      const { host } =
+        await this.context.agentPool.acquireHostedSession(sessionId);
+      if (!host)
+        throw new SessionMaintenanceError(501, "Node host is not configured");
+      return host.inspect().mcpServers;
     } finally {
       lease.release();
     }
@@ -82,7 +104,11 @@ export class SessionMaintenanceService {
         cacheCreationTokens: usage.cacheCreationTokens ?? 0,
         cacheReadTokens: usage.cacheReadTokens ?? 0,
         messageCount: agent.getHistory().length,
-        estimatedCost: estimateCostUsd(session.model, usage.inputTokens, usage.outputTokens),
+        estimatedCost: estimateCostUsd(
+          session.model,
+          usage.inputTokens,
+          usage.outputTokens,
+        ),
       };
     } finally {
       lease.release();
@@ -107,8 +133,12 @@ export class SessionMaintenanceService {
 
   async compact(sessionId: string): Promise<{
     messageCount: number;
-    messages: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["messages"];
-    parts: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["parts"];
+    messages: ReturnType<
+      SessionStore["conversationTransactions"]["replaceTranscript"]
+    >["messages"];
+    parts: ReturnType<
+      SessionStore["conversationTransactions"]["replaceTranscript"]
+    >["parts"];
   }> {
     const session = this.requireSession(sessionId);
     this.rejectLiveChild(sessionId);
@@ -131,15 +161,21 @@ export class SessionMaintenanceService {
         this.context.events.publishSince(before);
         throw error;
       }
-      const replaced = this.context.data.conversationTransactions.replaceTranscript({
-        sessionId,
-        messages: agentMessagesToTranscript(compacted.history),
-      });
+      const replaced =
+        this.context.data.conversationTransactions.replaceTranscript({
+          sessionId,
+          messages: agentMessagesToTranscript(compacted.history),
+        });
       this.appendCompactionPresentation(sessionId, "completed");
       this.context.events.publishSince(before);
       this.context.contextUsageCache?.invalidate(sessionId);
       try {
-        await this.context.refreshContextUsage?.(sessionId, agent);
+        await this.context.refreshContextUsage?.(
+          sessionId,
+          hostedContextUsageAgent(
+            await this.context.agentPool.acquireHostedSession(sessionId),
+          ),
+        );
       } catch {
         // Best-effort refresh; invalidate already dropped the stale snapshot.
       }
@@ -182,8 +218,12 @@ export class SessionMaintenanceService {
   ): Promise<{
     turns: number;
     removed: number;
-    messages: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["messages"];
-    parts: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["parts"];
+    messages: ReturnType<
+      SessionStore["conversationTransactions"]["replaceTranscript"]
+    >["messages"];
+    parts: ReturnType<
+      SessionStore["conversationTransactions"]["replaceTranscript"]
+    >["parts"];
   }> {
     const session = this.requireSession(sessionId);
     this.rejectLiveChild(sessionId);
@@ -203,10 +243,11 @@ export class SessionMaintenanceService {
         throw new SessionMaintenanceError(400, "No messages to rewind");
       }
       const before = this.context.events.checkpoint();
-      const replaced = this.context.data.conversationTransactions.replaceTranscript({
-        sessionId,
-        messages: rewound.kept,
-      });
+      const replaced =
+        this.context.data.conversationTransactions.replaceTranscript({
+          sessionId,
+          messages: rewound.kept,
+        });
       await this.context.agentPool.close(sessionId);
       this.context.events.publishSince(before);
       return {
@@ -239,7 +280,11 @@ export class SessionMaintenanceService {
     }
     try {
       const agent = await this.context.agentPool.acquireSession(sessionId);
-      const result = await agent.remember();
+      const { host } =
+        await this.context.agentPool.acquireHostedSession(sessionId);
+      if (!host)
+        throw new SessionMaintenanceError(501, "Node host is not configured");
+      const result = await host.memory.remember();
       this.updateLocalEnvironmentRules(sessionId, session.cwd);
       await this.context.agentPool.closeForCwd(session.cwd);
       return result;
@@ -248,7 +293,9 @@ export class SessionMaintenanceService {
     }
   }
 
-  private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["sessions"]["get"]>> {
+  private requireSession(
+    sessionId: string,
+  ): NonNullable<ReturnType<SessionStore["sessions"]["get"]>> {
     const session = this.context.data.sessions.get(sessionId);
     if (!session) throw new SessionMaintenanceError(404, "Session not found");
     return session;
@@ -287,7 +334,10 @@ export class SessionMaintenanceService {
   }
 
   private enterSessionOperation(
-    session: Pick<NonNullable<ReturnType<SessionStore["sessions"]["get"]>>, "id" | "cwd">,
+    session: Pick<
+      NonNullable<ReturnType<SessionStore["sessions"]["get"]>>,
+      "id" | "cwd"
+    >,
   ): DaemonOperationLease {
     try {
       return this.context.operationGate.enter({
@@ -308,7 +358,8 @@ export class SessionMaintenanceService {
         this.context.data.conversations.listMessages(sessionId),
         this.context.data.conversations.listMessageParts(sessionId),
       );
-      const updater = this.context.personalizationUpdater ?? updateRulesFromSession;
+      const updater =
+        this.context.personalizationUpdater ?? updateRulesFromSession;
       updater(messages, cwd, sessionId);
     } catch {
       // Local personalization is best-effort and must not block the remember flow.
@@ -338,9 +389,17 @@ function transcriptToPersonalizationMessages(
         .sort((a, b) => a.seq - b.seq)
         .filter(isCommittedPublicTextPart)
         .map((part) => part.text)
-        .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
+        .filter(
+          (text): text is string =>
+            typeof text === "string" && text.trim().length > 0,
+        )
         .join("\n");
-      return { id: message.id, createdAt: message.createdAt, role: message.role, content };
+      return {
+        id: message.id,
+        createdAt: message.createdAt,
+        role: message.role,
+        content,
+      };
     })
     .filter((message) => message.content.length > 0);
 }

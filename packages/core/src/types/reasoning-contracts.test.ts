@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReasoningDeltaEvent, StreamEvent } from "./events.js";
-import type { AssistantMessage } from "./messages.js";
+import type { AssistantMessage } from "@vykor/agent-contracts";
 
 describe("reasoning contracts", () => {
   it("carries reasoning deltas with their source", () => {

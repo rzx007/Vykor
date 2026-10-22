@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { loadSettings } from "@vykor/core";
+import { loadSettings } from "@vykor/host-config";
 import { CredentialStorage, resolveApiKey } from "@vykor/auth";
 import { findByName } from "@vykor/api";
 import { validateProviderCredential } from "./application/default-services/credential-validation.js";

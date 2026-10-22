@@ -19,13 +19,13 @@
 | 位置 | 当前行为 | 需要改变的地方 |
 | --- | --- | --- |
 | `packages/server/src/application/session/session-command-service.ts` | 所有 runtime metadata 变化共用独占屏障；有活跃任务或子 Agent 时拒绝；成功后关闭 Agent | 按实际变化字段判断，模型请求配置不再要求会话空闲 |
-| `packages/agent-runtime/src/agent.ts` | `setModel` 只允许 idle | 新增统一的运行配置修改入口；旧同步入口保留原契约 |
+| `packages/agent-runtime/src/kernel/agent.ts` | `setModel` 只允许 idle | 新增统一的运行配置修改入口；旧同步入口保留原契约 |
 | `packages/core/src/engine/query-engine.ts` | model、client、reasoningEffort 分开保存；prompt 在循环外构建 | 每次请求使用一份完整配置，并在请求之间重新取得配置 |
-| `packages/agent-runtime/src/default-runtime.ts` | prompt 闭包读取创建时的 configuration/settings | prompt 根据本次请求配置生成 |
+| `packages/agent-runtime/src/node/runtime/default-runtime.ts` | prompt 闭包读取创建时的 configuration/settings | prompt 根据本次请求配置生成 |
 | `packages/server/src/daemon/daemon-agent.ts` | 创建 Agent 时把 effort 转为 reasoningEffort | 模型变化后重新校验强度并生成请求参数 |
 | `packages/server/src/application/agent/agent-pool.ts` | 长期复用 Agent；软更新等整个 run 结束再重建 | 请求参数更新保留同一个 Agent |
 | `packages/server/src/application/default-services/settings-service.ts` | provider/MCP/plugins 等走 restart，effort 等走 invalidate | 后续文件同步阶段按字段和作用范围处理 |
-| `packages/agent-runtime/src/child-agent.ts` | 新子 Agent 从创建父 Agent 时的 configuration 派生 | 新子 Agent 从父 Agent 当前已应用配置派生 |
+| `packages/agent-runtime/src/kernel/child-agent.ts` | 新子 Agent 从创建父 Agent 时的 configuration 派生 | 新子 Agent 从父 Agent 当前已应用配置派生 |
 
 可复用的基础：QueryEngine 已有切换 model/client/maxTurns 的方法；会话 metadata、事件推送和错误展示已存在；MCP 已有连接代次、同步和运行期间保留旧连接的机制。
 

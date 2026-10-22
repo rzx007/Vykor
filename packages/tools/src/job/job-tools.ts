@@ -1,212 +1,217 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
-import type { JobKind, JobStatus } from "@vykor/jobs";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
+import type { AgentJobAuthorization, AgentJobHost, JobKind, JobStatus } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;
 const MAX_JOB_WAIT_MS = 60_000;
 const jobIdProperty = { type: "string", description: "Job id returned by a long-running tool or JobList" };
 
-export const jobListTool: ToolDefinition = {
-  name: "JobList",
-  description: "List the latest terminal, background task, child-agent, and workflow jobs owned by this session. Returns at most 100 by default.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      kinds: {
-        type: "array",
-        items: { type: "string", enum: ["terminal", "shell", "agent", "dream", "workflow"] },
-        description: "Only return these job kinds",
-      },
-      statuses: {
-        type: "array",
-        items: { type: "string", enum: ["running", "stopping", "completed", "killed", "failed"] },
-        description: "Only return these lifecycle states",
-      },
-      startedAfter: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
-      startedBefore: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
-      updatedAfter: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
-      updatedBefore: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
-      includeFinished: { type: "boolean", default: true },
-      limit: { type: "number", minimum: 1, default: DEFAULT_JOB_LIST_LIMIT },
-    },
-  },
-  async execute(input, context) {
-    const host = resolveHost(context);
-    if ("content" in host) return host;
-    try {
-      const limit = optionalNumber(input.limit) ?? DEFAULT_JOB_LIST_LIMIT;
-      const jobs = await host.jobs.list({
-        sessionId: host.sessionId,
-        ...optionalListFilters(input),
-        limit,
-      });
-      return result("list", {
-        jobs,
-        window: {
-          limit,
-          returned: jobs.length,
-          possiblyTruncated: jobs.length === limit,
+export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuthorization): ToolDefinition[] {
+  const jobListTool: ToolDefinition = {
+    name: "JobList",
+    description: "List the latest terminal, background task, child-agent, and workflow jobs owned by this session. Returns at most 100 by default.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kinds: {
+          type: "array",
+          items: { type: "string", enum: ["terminal", "shell", "agent", "dream", "workflow"] },
+          description: "Only return these job kinds",
         },
-      });
-    } catch (error) {
-      return failed(error);
-    }
-  },
-};
-
-export const jobReadTool: ToolDefinition = {
-  name: "JobRead",
-  description: "Read output produced after an optional cursor and return the current job snapshot.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      jobId: jobIdProperty,
-      after: { type: "number", description: "Cursor returned by an earlier JobRead or JobWait" },
-      maxChars: { type: "number", default: 12000 },
-    },
-    required: ["jobId"],
-  },
-  async execute(input, context) {
-    const host = resolveHost(context);
-    if ("content" in host) return host;
-    try {
-      const read = await host.jobs.read({
-        sessionId: host.sessionId,
-        jobId: requiredString(input.jobId, "jobId"),
-        after: optionalNumber(input.after),
-        maxChars: optionalNumber(input.maxChars),
-      });
-      return result("read", read);
-    } catch (error) {
-      return failed(error);
-    }
-  },
-};
-
-export const jobWaitTool: ToolDefinition = {
-  name: "JobWait",
-  description: "Wait briefly for existing jobs without cancelling or restarting them. Defaults to 30 seconds, capped at 60 seconds and the remaining tool deadline. On expiry, returns current snapshots with timedOut=true; this is not a job failure. Use JobRead to inspect output or wait again if still running.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      jobIds: {
-        type: "array",
-        items: jobIdProperty,
-        minItems: 1,
-        maxItems: MAX_JOB_WAIT_IDS,
-        description: "Job ids to wait for concurrently",
+        statuses: {
+          type: "array",
+          items: { type: "string", enum: ["running", "stopping", "completed", "killed", "failed"] },
+          description: "Only return these lifecycle states",
+        },
+        startedAfter: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
+        startedBefore: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
+        updatedAfter: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
+        updatedBefore: { type: "number", description: "Inclusive Unix timestamp in milliseconds" },
+        includeFinished: { type: "boolean", default: true },
+        limit: { type: "number", minimum: 1, default: DEFAULT_JOB_LIST_LIMIT },
       },
-      after: {
-        type: "object",
-        additionalProperties: { type: "number" },
-        description: "Per-job cursors returned by earlier JobRead or JobWait calls",
-      },
-      timeoutSeconds: { type: "number", default: 30, description: "Requested wait in seconds. Values above 60 are shortened; a shorter execution deadline may reduce it further." },
-      maxChars: { type: "number", default: 12000 },
     },
-    required: ["jobIds"],
-  },
-  async execute(input, context) {
-    const host = resolveHost(context);
-    if ("content" in host) return host;
-    try {
-      const timeoutSeconds = optionalNumber(input.timeoutSeconds) ?? 30;
-      if (timeoutSeconds <= 0) throw new Error("timeoutSeconds must be positive.");
-      if (Array.isArray(input.jobIds) && input.jobIds.length > MAX_JOB_WAIT_IDS) {
-        throw new Error(`jobIds cannot contain more than ${MAX_JOB_WAIT_IDS} entries.`);
+    async execute(input, context) {
+      const host = resolveHost(context, port);
+      if ("content" in host) return host;
+      try {
+        const limit = optionalNumber(input.limit) ?? DEFAULT_JOB_LIST_LIMIT;
+        const jobs = await host.jobs.list({
+          sessionId: host.sessionId,
+          ...optionalListFilters(input),
+          limit,
+        });
+        return result("list", {
+          jobs,
+          window: {
+            limit,
+            returned: jobs.length,
+            possiblyTruncated: jobs.length === limit,
+          },
+        });
+      } catch (error) {
+        return failed(error);
       }
-      const jobIds = requiredStringArray(input.jobIds, "jobIds");
-      const cursors = optionalCursorMap(input.after);
-      let timeoutMs = Math.min(timeoutSeconds * 1_000, MAX_JOB_WAIT_MS);
-      if (context.deadlineAt !== undefined) {
-        const remainingMs = Math.max(0, context.deadlineAt - Date.now());
-        // Reserve time for the host's final snapshot and returning the tool result.
-        timeoutMs = Math.min(timeoutMs, Math.max(1, remainingMs - Math.min(1_000, remainingMs * 0.2)));
+    },
+  };
+
+  const jobReadTool: ToolDefinition = {
+    name: "JobRead",
+    description: "Read output produced after an optional cursor and return the current job snapshot.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        jobId: jobIdProperty,
+        after: { type: "number", description: "Cursor returned by an earlier JobRead or JobWait" },
+        maxChars: { type: "number", default: 12000 },
+      },
+      required: ["jobId"],
+    },
+    async execute(input, context) {
+      const host = resolveHost(context, port);
+      if ("content" in host) return host;
+      try {
+        const read = await host.jobs.read({
+          sessionId: host.sessionId,
+          jobId: requiredString(input.jobId, "jobId"),
+          after: optionalNumber(input.after),
+          maxChars: optionalNumber(input.maxChars),
+        });
+        return result("read", read);
+      } catch (error) {
+        return failed(error);
       }
-      const results = await Promise.all(jobIds.map(async (jobId) => {
-        try {
-          return {
-            jobId,
-            ...await host.jobs.wait({
-              sessionId: host.sessionId,
-              jobId,
-              timeoutMs,
-              ...(cursors?.[jobId] !== undefined ? { after: cursors[jobId] } : {}),
-              maxChars: optionalNumber(input.maxChars),
-              signal: context.abortSignal,
-            }),
-          };
-        } catch (error) {
-          return { jobId, error: error instanceof Error ? error.message : String(error) };
+    },
+  };
+
+  const jobWaitTool: ToolDefinition = {
+    name: "JobWait",
+    description: "Wait briefly for existing jobs without cancelling or restarting them. Defaults to 30 seconds, capped at 60 seconds and the remaining tool deadline. On expiry, returns current snapshots with timedOut=true; this is not a job failure. Use JobRead to inspect output or wait again if still running.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        jobIds: {
+          type: "array",
+          items: jobIdProperty,
+          minItems: 1,
+          maxItems: MAX_JOB_WAIT_IDS,
+          description: "Job ids to wait for concurrently",
+        },
+        after: {
+          type: "object",
+          additionalProperties: { type: "number" },
+          description: "Per-job cursors returned by earlier JobRead or JobWait calls",
+        },
+        timeoutSeconds: { type: "number", default: 30, description: "Requested wait in seconds. Values above 60 are shortened; a shorter execution deadline may reduce it further." },
+        maxChars: { type: "number", default: 12000 },
+      },
+      required: ["jobIds"],
+    },
+    async execute(input, context) {
+      const host = resolveHost(context, port);
+      if ("content" in host) return host;
+      try {
+        const timeoutSeconds = optionalNumber(input.timeoutSeconds) ?? 30;
+        if (timeoutSeconds <= 0) throw new Error("timeoutSeconds must be positive.");
+        if (Array.isArray(input.jobIds) && input.jobIds.length > MAX_JOB_WAIT_IDS) {
+          throw new Error(`jobIds cannot contain more than ${MAX_JOB_WAIT_IDS} entries.`);
         }
-      }));
-      return result("wait", { timeoutSeconds: timeoutMs / 1_000, results });
-    } catch (error) {
-      return failed(error);
-    }
-  },
-};
-
-export const jobSendTool: ToolDefinition = {
-  name: "JobSend",
-  description: "Send input to an interactive terminal or agent job that accepts input.",
-  inputSchema: {
-    type: "object",
-    properties: { jobId: jobIdProperty, data: { type: "string" } },
-    required: ["jobId", "data"],
-  },
-  async execute(input, context) {
-    const host = resolveHost(context);
-    if ("content" in host) return host;
-    try {
-      const jobId = requiredString(input.jobId, "jobId");
-      // Model-originated child input carries this Run's trusted controller.
-      // Desktop/direct handle.send remains an explicitly unparented follow-up.
-      if (context.agent?.children.hasChildAgent(jobId)) {
-        const receipt = await context.agent.children.sendChildInput(jobId, { content: String(input.data ?? "") });
-        return result("send", { jobId, ...receipt });
+        const jobIds = requiredStringArray(input.jobIds, "jobIds");
+        const cursors = optionalCursorMap(input.after);
+        let timeoutMs = Math.min(timeoutSeconds * 1_000, MAX_JOB_WAIT_MS);
+        if (context.deadlineAt !== undefined) {
+          const remainingMs = Math.max(0, context.deadlineAt - Date.now());
+          // Reserve time for the host's final snapshot and returning the tool result.
+          timeoutMs = Math.min(timeoutMs, Math.max(1, remainingMs - Math.min(1_000, remainingMs * 0.2)));
+        }
+        const results = await Promise.all(jobIds.map(async (jobId) => {
+          try {
+            return {
+              jobId,
+              ...await host.jobs.wait({
+                sessionId: host.sessionId,
+                jobId,
+                timeoutMs,
+                ...(cursors?.[jobId] !== undefined ? { after: cursors[jobId] } : {}),
+                maxChars: optionalNumber(input.maxChars),
+                signal: context.abortSignal,
+              }),
+            };
+          } catch (error) {
+            return { jobId, error: error instanceof Error ? error.message : String(error) };
+          }
+        }));
+        return result("wait", { timeoutSeconds: timeoutMs / 1_000, results });
+      } catch (error) {
+        return failed(error);
       }
-      const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
-      const authorization = context.capabilityView ?? context.agent?.capabilityView;
-      if (authorization) await host.jobs.send(request, authorization);
-      else await host.jobs.send(request);
-      return result("send", { jobId });
-    } catch (error) {
-      return failed(error);
-    }
-  },
-};
+    },
+  };
 
-export const jobCancelTool: ToolDefinition = {
-  name: "JobCancel",
-  description: "Request cancellation of a job owned by this session.",
-  inputSchema: {
-    type: "object",
-    properties: { jobId: jobIdProperty, reason: { type: "string" } },
-    required: ["jobId"],
-  },
-  async execute(input, context) {
-    const host = resolveHost(context);
-    if ("content" in host) return host;
-    try {
-      const snapshot = await host.jobs.cancel({
-        sessionId: host.sessionId,
-        jobId: requiredString(input.jobId, "jobId"),
-        ...(typeof input.reason === "string" ? { reason: input.reason } : {}),
-      });
-      return result("cancel", { snapshot });
-    } catch (error) {
-      return failed(error);
-    }
-  },
-};
+  const jobSendTool: ToolDefinition = {
+    name: "JobSend",
+    description: "Send input to an interactive terminal or agent job that accepts input.",
+    inputSchema: {
+      type: "object",
+      properties: { jobId: jobIdProperty, data: { type: "string" } },
+      required: ["jobId", "data"],
+    },
+    async execute(input, context) {
+      const host = resolveHost(context, port);
+      if ("content" in host) return host;
+      try {
+        const jobId = requiredString(input.jobId, "jobId");
+        // Model-originated child input carries this Run's trusted controller.
+        // Desktop/direct handle.send remains an explicitly unparented follow-up.
+        if (context.agent?.children.hasChildAgent(jobId)) {
+          const receipt = await context.agent.children.sendChildInput(jobId, { content: String(input.data ?? "") });
+          return result("send", { jobId, ...receipt });
+        }
+        const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
+        if (authorization) await host.jobs.send(request, authorization);
+        else await host.jobs.send(request);
+        return result("send", { jobId });
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  };
 
-export const jobTools = [jobListTool, jobReadTool, jobWaitTool, jobSendTool, jobCancelTool];
+  const jobCancelTool: ToolDefinition = {
+    name: "JobCancel",
+    description: "Request cancellation of a job owned by this session.",
+    inputSchema: {
+      type: "object",
+      properties: { jobId: jobIdProperty, reason: { type: "string" } },
+      required: ["jobId"],
+    },
+    async execute(input, context) {
+      const host = resolveHost(context, port);
+      if ("content" in host) return host;
+      try {
+        const snapshot = await host.jobs.cancel({
+          sessionId: host.sessionId,
+          jobId: requiredString(input.jobId, "jobId"),
+          ...(typeof input.reason === "string" ? { reason: input.reason } : {}),
+        });
+        return result("cancel", { snapshot });
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  };
 
-function resolveHost(context: ToolContext): { jobs: NonNullable<ToolContext["jobs"]>; sessionId: string } | ToolResult {
-  if (!context.jobs) return failed("This host does not provide background jobs.");
+  const jobTools = [jobListTool, jobReadTool, jobWaitTool, jobSendTool, jobCancelTool];
+
+  return jobTools;
+}
+
+
+function resolveHost(context: ToolContext, host?: AgentJobHost): { jobs: AgentJobHost; sessionId: string } | ToolResult {
+  const jobs = host;
+  if (!jobs) return failed("This host does not provide background jobs.");
   if (!context.sessionId) return failed("Background jobs require a durable session.");
-  return { jobs: context.jobs, sessionId: context.sessionId };
+  return { jobs, sessionId: context.sessionId };
 }
 
 function result(action: string, value: object): ToolResult {

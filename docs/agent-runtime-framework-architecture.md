@@ -14,7 +14,8 @@
 把整套东西想成：
 
 ```text
-VykorAgent = 对话引擎 + 历史记录 + 资源 + 当前这一轮运行 + 子 agent 目录
+VykorAgent = 对话引擎执行接口 + 当前这一轮运行 + 子 agent 目录
+DefaultNodeAgent.host = 插件 + 配置 + 记忆 + Node 资源
 AgentEvent       = 「已经发生了什么」的事实记录
 onEvent          = 框架要求上层「必须可靠地处理」这些事实
 subscribe        = 旁观记录/渲染，不参与执行结果
@@ -39,15 +40,18 @@ await agent.close();
 
 | 对象 | 文件 | 职责（白话） |
 |---|---|---|
-| `VykorAgent` | `packages/agent-runtime/src/agent.ts` | 对外主入口；管资源，以及当前这一轮运行归谁 |
-| `FrameworkAgentRun` | `packages/agent-runtime/src/agent.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
-| `AgentEventBus` | `packages/agent-runtime/src/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
-| `AgentChildManager` | `packages/agent-runtime/src/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
-| `AgentChildRegistry` | `packages/agent-runtime/src/child-agent.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
-| child environment | `packages/agent-runtime/src/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
+| `VykorAgent` | `packages/agent-runtime/src/kernel/agent.ts` | 通用执行入口；管当前运行、互斥与显式租约释放 |
+| `FrameworkAgentRun` | `packages/agent-runtime/src/kernel/framework-agent-run.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
+| `AgentEventBus` | `packages/agent-runtime/src/kernel/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
+| `AgentChildManager` | `packages/agent-runtime/src/kernel/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
+| `AgentChildRegistry` | `packages/agent-runtime/src/kernel/child-registry.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
+| child environment | `packages/agent-runtime/src/kernel/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
 | `AgentSession` | `packages/core/src/agent-session.ts` | 对 QueryEngine 的薄包装 |
 | `QueryEngine` | `packages/core/src/engine/query-engine.ts` | 真正跑「模型 ↔ 工具」循环，并维护历史 |
-| execution contracts | `packages/core/src/types/runtime.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
+| AgentDefinition / TeamRegistry | `packages/coordinator/src/definitions/`、`src/teams/` | 唯一角色类型与纯解析；团队由 Node 根树创建实例 |
+| WorkflowHost | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 持有活动 Workflow，负责取消、worker 收尾与保存终态 |
+| 默认工具接线 / 本地 Jobs | `packages/agent-runtime/src/node/tools/`、`src/node/jobs/` | 创建宿主能力并注入工具；Jobs 复用 Host 的 Workflow 视图 |
+| execution contracts | `packages/agent-contracts/src/execution.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
 
 ## 创建流程
 
@@ -68,8 +72,16 @@ flowchart TD
   Bus --> Agent
 ```
 
-需要 Vykor 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供 runtime 和宿主能力。
+需要 Vykor 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供引擎、通用 prepare/release、工具绑定和 effects。
 `createVykorRuntime()` 已不再从包的公开入口导出。
+
+## 定义、团队和 Workflow 的接线
+
+Node 从用户目录和插件读取角色文件，交给 coordinator 的纯解析函数，得到唯一 AgentDefinition。每轮捕获自己可用的角色目录；Workflow 不会为了查角色回退到进程全局插件注册表。
+
+每棵根树创建一个 TeamRegistry，递归 child 借用该实例。两棵根树可以使用同名团队，成员和删除互不影响。默认工具 registry 和 LocalAgentJobHost 位于 Node；tools 只接受具名接口，不再创建这些宿主。
+
+Workflow 工具校验参数后调用 WorkflowToolPort.invoke。Node WorkflowHost 先保存初始快照，再启动 coordinator 调度和 child worker；后续 JobRead/JobWait/JobCancel 使用同一 Host 的 owner 视图。独立 SDK 默认使用文件仓库，daemon 应用提供一个共享 SQLite Host。Agent 关闭自己的视图，根树关闭私有 Host，借用的应用 Host 由应用关闭。正式入口是 `@vykor/agent-runtime/node/workflow`。
 
 ## 一轮 submitMessage
 
@@ -203,7 +215,7 @@ idle / running / maintaining --close--> closing --> closed
 - `submitMessage` 同步抢占 `running`，所以同一个 tick 里连发两次也不会同时开跑。
 - `loadHistory`、`clear`、`setModel`、`compact`、`remember` 只能从 `idle` 进入；冲突抛 `AgentOperationConflictError`。
 - `compact` / `remember` 在整个异步过程中保持 `maintaining`，不能和 run、历史/模型修改穿插。
-- `close()` 可重复调用：进入 `closing` 后拒绝新操作；先打断进行中的 run，等维护操作结束，再关子 agent、排空必须处理的事件、释放运行时。各清理阶段都会跑完，最后再统一上报失败。
+- `close()` 可重复调用：进入 `closing` 后拒绝新操作；先打断进行中的 run，等维护操作结束，取消并等待本 session 的后台 Workflow，再关子 agent、释放其余能力、排空必须处理的事件、释放运行时。各清理阶段都会跑完，最后再统一上报失败。
 
 这层状态机是框架独立运行时的完整约束，不依赖 daemon。
 daemon 在多客户端场景下还会额外加 session / cwd / 全局层面的准入策略。
@@ -218,7 +230,7 @@ daemon 在多客户端场景下还会额外加 session / cwd / 全局层面的�
 | `remember` | 从历史里提炼 memory |
 | `getUsage` | 累计 token 用量 |
 | `inspect` | 模型 / 工具 / hooks / MCP / 沙箱快照 |
-| `close` | 打断 run、关闭子 agent、排空事件、释放运行时 |
+| `close` | 打断 run、等待后台 Workflow 收尾、关闭子 agent、排空事件、释放运行时 |
 
 ## 不变量（必须一直成立）
 
@@ -230,3 +242,9 @@ daemon 在多客户端场景下还会额外加 session / cwd / 全局层面的�
 - 子 agent 递归共享同一棵「按 ID 查 handle」的目录，但**不共享** manager 的所有权（谁创建谁关闭）。
 - `AgentSession` 不再生成 ID、保存回调，或组装宿主环境。
 - 不存在对外的 daemon adapter、run host、或 child projection 公开 API。
+
+## 模型尝试与资源所有权
+
+QueryEngine 唯一持有消息历史；turn-context 冻结本轮请求，model-attempt-runner 执行单次模型请求，tool-execution-context 构造工具上下文。主生成、重试、收尾、压缩和有真实 Run 来源的记忆请求都先等待 ModelAttemptGate，结算完成后才发布 finished。准入或结算错误不当作网络错误重试。
+
+NodeRuntimeResources 创建或借用 ExecutionRuntimeOwner、插件/MCP、Jobs、Workflow 与子环境。创建者负责关闭共享实例，child 只释放自己的视图；每轮 prepare 返回 release，准备失败、Run 终态和 close 都要释放，release 幂等。Kernel 不创建本机能力。

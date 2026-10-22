@@ -1,7 +1,4 @@
-import type {
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-} from "@vykor/protocol";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 import type { scheduledRuns, scheduledTasks } from "../session-runtime/schema.js";
 
 export const encodeScheduleValue = (value: unknown): string =>

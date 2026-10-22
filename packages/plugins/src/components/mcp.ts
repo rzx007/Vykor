@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { getPluginDataDir, type McpServerConfig } from "@vykor/core";
+import { getPluginDataDir, type McpServerConfig } from "@vykor/host-config";
 import { join } from "node:path";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";

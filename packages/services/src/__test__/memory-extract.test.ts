@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import { MemoryManager } from "@vykor/memory";
-import type { StreamEvent, StreamingMessageClient } from "@vykor/core";
-import { ModelRequestFailure } from "@vykor/core";
+import type { StreamEvent, StreamingMessageClient } from "@vykor/agent-contracts";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   hasMemoryWritesSince,
   buildExtractionPrompt,

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { PluginAppManifest } from "@vykor/protocol";
+import type { PluginAppManifest } from "@vykor/plugin-contracts/manifest";
 import type { ValidatedNativePlugin } from "../types.js";
 
 export function nativeAppDefinition(): PluginAppManifest {

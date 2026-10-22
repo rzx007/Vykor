@@ -1,8 +1,4 @@
-import {
-  AgentRunNotAcceptingInputError,
-  type AgentRunHandle,
-  type AgentSteerInput,
-} from "@vykor/core";
+import { AgentRunNotAcceptingInputError, type AgentRunHandle, type AgentSteerInput } from "@vykor/agent-contracts";
 
 export class RunInterruptedError extends Error {
   constructor(message = "Run interrupted") {

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { pluginAppHarness } from "../../../test-helpers/plugin-app-harness.js";
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { updateInstalledPluginStore } from "@vykor/plugins";
 const cleanups: Array<() => Promise<void>> = [];
 it("projects an actual successful Native model result and retrieves appData only through its own app", async () => {
@@ -49,6 +49,10 @@ it.each(["native-tools", "mcp-server"] as const)("mounts %s catalog/resources, c
   expect((await h.client().pluginApps.readResource(h.opened.source, h.opened.lease!, "ui://fixture/panel.html")).contents).toHaveLength(1);
   const list = await h.client().pluginApps.listResources(h.opened.source, h.opened.lease!); expect(list.resources).toHaveLength(1);
   expect((await h.client().pluginApps.listResourceTemplates(h.opened.source, h.opened.lease!)).resourceTemplates).toEqual([]);
+  if (kind === "native-tools") {
+    await expect(h.client().pluginApps.listResources(h.opened.source, h.opened.lease!, "unsupported")).rejects.toMatchObject({ status: 400, body: { error: "应用请求无效或已失效" } });
+    await expect(h.client().pluginApps.listResourceTemplates(h.opened.source, h.opened.lease!, "unsupported")).rejects.toMatchObject({ status: 400, body: { error: "应用请求无效或已失效" } });
+  }
   expect(h.store().conversationTransactions.getSessionState(h.session.id).pluginApps).toEqual([h.opened.app]);
   const event = h.store().conversations.listEvents({ sessionId: h.session.id }).find(e => e.type === "session.plugin_app.updated");
   expect(event?.payload.app).toEqual(h.opened.app);
@@ -83,6 +87,8 @@ it("allows only verified static Native resources after invoke approval is withdr
   expect(view.availability).toMatchObject({ canReadResource: true, canInvokeTools: false, canMessage: false });
   expect(view.lease).toBeUndefined();
   expect((await h.client().pluginApps.readResource(view.source, undefined, "ui://fixture/panel.html")).contents).toHaveLength(1);
+  await expect(h.client().pluginApps.listResources(view.source, undefined, "unsupported")).rejects.toMatchObject({ status: 400, body: { error: "应用请求无效或已失效" } });
+  await expect(h.client().pluginApps.listResourceTemplates(view.source, undefined, "unsupported")).rejects.toMatchObject({ status: 400, body: { error: "应用请求无效或已失效" } });
   await expect(h.client().pluginApps.invoke(h.request)).rejects.toMatchObject({ status: 409 });
   await updateInstalledPluginStore(getInstalledPluginStorePath(), store => {
     Object.values(store.plugins).forEach(plugin => { plugin.enabled = false; });

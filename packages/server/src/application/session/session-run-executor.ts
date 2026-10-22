@@ -1,13 +1,28 @@
-import type { AutoReviewMode, SessionRecord } from "@vykor/protocol";
-import { readSessionModelRetryState } from "@vykor/protocol";
+import { hostedContextUsageAgent } from "../assemble-session-context-usage.js";
+import type { AutoReviewMode } from "@vykor/domain-contracts/approvals";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import { readSessionModelRetryState } from "@vykor/domain-contracts/sessions";
 import { resolveRunPluginSelection } from "./session-plugin-selection.js";
 import type { ProviderInputCapabilities } from "@vykor/api";
-import { PluginPreparationError, type GoalRunBinding, type GoalReadSnapshot } from "@vykor/agent-runtime";
-import { isAgentExecutionLimitError, type AgentExecutionLimits, type ContentBlock, type ModelInputCapabilities } from "@vykor/core";
+import { PluginPreparationError } from "@vykor/agent-runtime";
+import {
+  createGoalRunContribution,
+  type GoalRunBinding,
+} from "../goals/goal-run-contribution.js";
+import type { GoalReadSnapshot } from "../goals/goal-read-tool.js";
+import {
+  isAgentExecutionLimitError,
+  type AgentExecutionLimits,
+} from "@vykor/agent-contracts";
+import { type ContentBlock } from "@vykor/agent-contracts";
+import { type ModelInputCapabilities } from "@vykor/host-config";
 import type { GoalOperations, SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
-import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";
+import {
+  RunInterruptedError,
+  type SessionRunWorkContext,
+} from "../../runtime/run-coordinator.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionAutoReviewService } from "../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
@@ -29,7 +44,11 @@ import {
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { ContextUsageCache } from "../context-usage-cache.js";
 import type { SessionContextUsageAgent } from "../assemble-session-context-usage.js";
-import { captureAutoReviewBaseline, reviewAutoReview, settleUnreviewedAutoReview } from "./run-auto-review.js";
+import {
+  captureAutoReviewBaseline,
+  reviewAutoReview,
+  settleUnreviewedAutoReview,
+} from "./run-auto-review.js";
 import type { SessionWorkspaceChanges } from "./session-workspace-changes.js";
 
 const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
@@ -38,20 +57,44 @@ const DEFAULT_RUN_STALL_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_RUN_STALL_CHECK_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
-  data: Pick<SessionStore,
-    "conversations" | "conversationTransactions" | "permissions" | "runs" | "sessions" | "transaction"
+  data: Pick<
+    SessionStore,
+    | "conversations"
+    | "conversationTransactions"
+    | "permissions"
+    | "runs"
+    | "sessions"
+    | "transaction"
   >;
-  attachments: Pick<SessionStore["attachments"],
-    "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
+  attachments: Pick<
+    SessionStore["attachments"],
+    | "acquireAttachmentLeases"
+    | "renewAttachmentLeases"
+    | "releaseAttachmentLeases"
   >;
   goals: Pick<GoalOperations, "getGoal">;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
-  checkGoalRunExecution?(goalId: string, objectiveVersion: number, runId: string, boundary: string, tool?: {toolName: string; toolAttemptId: string}): void;
-  readGoalSnapshot?(goalId: string, objectiveVersion: number, runId: string): Promise<GoalReadSnapshot>;
-  submitGoalUpdate?(goalId: string, objectiveVersion: number, runId: string, input: Record<string, unknown>): Promise<{ recorded: true }>;
+  checkGoalRunExecution?(
+    goalId: string,
+    objectiveVersion: number,
+    runId: string,
+    boundary: string,
+    tool?: { toolName: string; toolAttemptId: string },
+  ): void;
+  readGoalSnapshot?(
+    goalId: string,
+    objectiveVersion: number,
+    runId: string,
+  ): Promise<GoalReadSnapshot>;
+  submitGoalUpdate?(
+    goalId: string,
+    objectiveVersion: number,
+    runId: string,
+    input: Record<string, unknown>,
+  ): Promise<{ recorded: true }>;
   agentPool: Pick<
     AgentPool,
-    "configured" | "acquireSession" | "close" | "closeIfStale"
+    "configured" | "acquireHostedSession" | "close" | "closeIfStale"
   >;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
   transcriptProjection: Pick<
@@ -78,7 +121,9 @@ export interface SessionRunExecutorContext {
   >;
   resolveAutoReviewMode?(cwd: string): Promise<AutoReviewMode>;
   workspaceChanges?: Pick<SessionWorkspaceChanges, "capture" | "settle">;
-  resolveLocalExecutionCwd?(agent: Awaited<ReturnType<AgentPool["acquireSession"]>>): string | undefined;
+  resolveLocalExecutionCwd?(
+    agent: Awaited<ReturnType<AgentPool["acquireSession"]>>,
+  ): string | undefined;
   postRunMaintenance?: Pick<SessionPostRunMaintenance, "run">;
   attachmentResources?: Pick<SessionAttachmentResources, "materializeRun">;
   attachmentOcrAvailable?: boolean;
@@ -89,7 +134,9 @@ export interface SessionRunExecutorContext {
     agent: SessionContextUsageAgent,
   ) => Promise<void>;
   /** Re-read the cwd catalog before executing renderer-supplied Skill paths. */
-  resolveSkillCatalog?(session: SessionRecord): Promise<SessionInputSkillCatalog>;
+  resolveSkillCatalog?(
+    session: SessionRecord,
+  ): Promise<SessionInputSkillCatalog>;
   /** 无进展看门狗：超过该时长没有记录更新且没有运行中的任务或工具时中断 run（默认 10 分钟）。 */
   stallTimeoutMs?: number;
   /** 无进展看门狗检查周期（默认 30 秒）。 */
@@ -115,7 +162,10 @@ export interface ExecuteSessionRunInput {
 export class SessionRunExecutor {
   constructor(private readonly context: SessionRunExecutorContext) {}
 
-  async execute(input: ExecuteSessionRunInput, workContext: SessionRunWorkContext): Promise<void> {
+  async execute(
+    input: ExecuteSessionRunInput,
+    workContext: SessionRunWorkContext,
+  ): Promise<void> {
     // 测试或未接线的 daemon：store 里可以有 run，但没有可执行的 agent。
     if (!this.context.agentPool.configured) return;
     const { sessionId, inputId, runId } = input;
@@ -131,8 +181,15 @@ export class SessionRunExecutor {
       const storedRun = this.context.data.runs.getRun(runId);
       if (!storedRun) throw new Error(`Run not found: ${runId}`);
       workContext.signal.throwIfAborted();
-      const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context" || (item.type === "capability" && item.kind === "plugin_agent"));
-      const hasExplicitSkills = admitted.items.some((item) => item.type === "skill");
+      const hasStructuredContext = admitted.items.some(
+        (item) =>
+          item.type === "skill" ||
+          item.type === "context" ||
+          (item.type === "capability" && item.kind === "plugin_agent"),
+      );
+      const hasExplicitSkills = admitted.items.some(
+        (item) => item.type === "skill",
+      );
 
       if (admitted.attachments.length > 0) {
         const acquiredAt = Date.now();
@@ -166,23 +223,61 @@ export class SessionRunExecutor {
         renewTimer.unref?.();
         cleanupAttachmentLease = () => {
           clearInterval(renewTimer);
-          this.context.attachments.releaseAttachmentLeases("session_run", runId);
+          this.context.attachments.releaseAttachmentLeases(
+            "session_run",
+            runId,
+          );
         };
       }
 
-      const goalId = typeof storedRun?.metadata?.goalId === "string" ? storedRun.metadata.goalId : undefined;
-      const goalObjectiveVersion = typeof storedRun?.metadata?.goalObjectiveVersion === "number" ? storedRun.metadata.goalObjectiveVersion : undefined;
+      const goalId =
+        typeof storedRun?.metadata?.goalId === "string"
+          ? storedRun.metadata.goalId
+          : undefined;
+      const goalObjectiveVersion =
+        typeof storedRun?.metadata?.goalObjectiveVersion === "number"
+          ? storedRun.metadata.goalObjectiveVersion
+          : undefined;
       let goalBinding: GoalRunBinding | undefined;
       if (goalId) {
         const goal = this.context.goals.getGoal(goalId);
-        if (!goal || goal.sessionId !== sessionId || goal.objectiveVersion !== goalObjectiveVersion || goal.status !== "active" || goal.currentRunId !== runId) {
+        if (
+          !goal ||
+          goal.sessionId !== sessionId ||
+          goal.objectiveVersion !== goalObjectiveVersion ||
+          goal.status !== "active" ||
+          goal.currentRunId !== runId
+        ) {
           throw new Error("session_goal_run_is_stale");
         }
-        goalBinding = { goalId: goal.id, objectiveVersion: goal.objectiveVersion,
-          submitUpdate: (input) => this.context.submitGoalUpdate ? this.context.submitGoalUpdate(goal.id, goal.objectiveVersion, runId, input) : Promise.reject(new Error("Goal update handler is unavailable")),
-          readSnapshot: () => this.context.readGoalSnapshot ? this.context.readGoalSnapshot(goal.id, goal.objectiveVersion, runId) : Promise.reject(new Error("Goal snapshot reader is unavailable")) };
+        goalBinding = {
+          goalId: goal.id,
+          objectiveVersion: goal.objectiveVersion,
+          submitUpdate: (input) =>
+            this.context.submitGoalUpdate
+              ? this.context.submitGoalUpdate(
+                  goal.id,
+                  goal.objectiveVersion,
+                  runId,
+                  input,
+                )
+              : Promise.reject(new Error("Goal update handler is unavailable")),
+          readSnapshot: () =>
+            this.context.readGoalSnapshot
+              ? this.context.readGoalSnapshot(
+                  goal.id,
+                  goal.objectiveVersion,
+                  runId,
+                )
+              : Promise.reject(
+                  new Error("Goal snapshot reader is unavailable"),
+                ),
+        };
       }
-      const bindLimits = (boundRunId: string, parent?: AgentExecutionLimits): AgentExecutionLimits => {
+      const bindLimits = (
+        boundRunId: string,
+        parent?: AgentExecutionLimits,
+      ): AgentExecutionLimits => {
         let starting = Boolean(parent);
         const bound: AgentExecutionLimits = {
           // The child's first check precedes run.started and its durable projection.
@@ -194,74 +289,131 @@ export class SessionRunExecutor {
             }
             starting = false;
             return this.context.checkGoalRunExecution
-              ? this.context.checkGoalRunExecution(goalBinding!.goalId, goalBinding!.objectiveVersion, boundRunId, boundary, tool)
-              : this.context.checkGoalExecution!(goalBinding!.goalId, goalBinding!.objectiveVersion);
+              ? this.context.checkGoalRunExecution(
+                  goalBinding!.goalId,
+                  goalBinding!.objectiveVersion,
+                  boundRunId,
+                  boundary,
+                  tool,
+                )
+              : this.context.checkGoalExecution!(
+                  goalBinding!.goalId,
+                  goalBinding!.objectiveVersion,
+                );
           },
-          forChildRun: childRunId => bindLimits(childRunId, bound),
+          forChildRun: (childRunId) => bindLimits(childRunId, bound),
         };
         return bound;
       };
-      const limits = goalBinding && this.context.checkGoalExecution ? bindLimits(runId) : undefined;
+      const limits =
+        goalBinding && this.context.checkGoalExecution
+          ? bindLimits(runId)
+          : undefined;
       await limits?.check("run");
 
       // 先拿到实际 Agent，路由才能看见 allow/deny 过滤后的工具和真实宿主能力。
       agentTouched = true;
-      const agent = await this.context.agentPool.acquireSession(sessionId);
-      const hadResolvedSelection = (storedRun.metadata?.pluginSelection as { status?: string } | undefined)?.status === "resolved";
-      let selection = await resolveRunPluginSelection({ session, run: storedRun, input: admitted, agent,
-        signal: workContext.signal, traceId: this.context.traceIdForRun(runId), limits });
-      this.context.data.runs.updateRun(runId, { metadata: {
-        pluginId: selection.pluginId, pluginSelection: selection } });
+      const hosted =
+        await this.context.agentPool.acquireHostedSession(sessionId);
+      const { agent, host } = hosted;
+      const hadResolvedSelection =
+        (storedRun.metadata?.pluginSelection as { status?: string } | undefined)
+          ?.status === "resolved";
+      let selection = await resolveRunPluginSelection({
+        session,
+        run: storedRun,
+        input: admitted,
+        plugins: host?.plugins,
+        signal: workContext.signal,
+        traceId: this.context.traceIdForRun(runId),
+        limits,
+      });
+      this.context.data.runs.updateRun(runId, {
+        metadata: {
+          pluginId: selection.pluginId,
+          pluginSelection: selection,
+        },
+      });
       const pluginId = selection.pluginId ?? undefined;
-      const automaticScope = selection.scopeVersion === 2 && selection.source === "auto";
-      const capabilityView = agent.createRunCapabilityView?.(automaticScope ? selection.pluginIds ?? [] : pluginId);
-      if ((pluginId || selection.pluginIds?.length) && !capabilityView) throw new Error("Plugin capability view is unavailable");
+      const automaticScope =
+        selection.scopeVersion === 2 && selection.source === "auto";
+      const capabilityView = host?.plugins.createRunCapabilityView(
+        automaticScope ? (selection.pluginIds ?? []) : pluginId,
+      );
+      if ((pluginId || selection.pluginIds?.length) && !capabilityView)
+        throw new Error("Plugin capability view is unavailable");
       if (automaticScope && capabilityView) {
-        const readyIds = (selection.pluginIds ?? []).filter(id => capabilityView.pluginIds?.has(id) ?? capabilityView.pluginId === id);
+        const readyIds = (selection.pluginIds ?? []).filter(
+          (id) =>
+            capabilityView.pluginIds?.has(id) ?? capabilityView.pluginId === id,
+        );
         if (readyIds.length !== selection.pluginIds?.length) {
-          if (hadResolvedSelection) throw new Error("Saved plugin scope could not be prepared; recovery cannot change its plugin scope");
-          selection = { ...selection, pluginIds: readyIds,
-            candidates: selection.candidates?.filter(candidate => readyIds.includes(candidate.pluginId)),
-            reason: readyIds.length ? "matched" : "no_candidates" };
-          this.context.data.runs.updateRun(runId, { metadata: { pluginSelection: selection } });
+          if (hadResolvedSelection)
+            throw new Error(
+              "Saved plugin scope could not be prepared; recovery cannot change its plugin scope",
+            );
+          selection = {
+            ...selection,
+            pluginIds: readyIds,
+            candidates: selection.candidates?.filter((candidate) =>
+              readyIds.includes(candidate.pluginId),
+            ),
+            reason: readyIds.length ? "matched" : "no_candidates",
+          };
+          this.context.data.runs.updateRun(runId, {
+            metadata: { pluginSelection: selection },
+          });
         }
       }
       const materialized = hasStructuredContext
         ? materializeSessionInput(
             admitted.items,
             hasExplicitSkills
-              ? await resolveSkillCatalog(session, this.context.resolveSkillCatalog)
+              ? await resolveSkillCatalog(
+                  session,
+                  this.context.resolveSkillCatalog,
+                )
               : { resolvePath: () => undefined },
-            conversationContextCatalog({
-              getSession: (id) => this.context.data.sessions.get(id),
-              listMessages: (id) => this.context.data.conversations.listMessages(id),
-              listMessageParts: (id) => this.context.data.conversations.listMessageParts(id),
-            }, sessionId),
+            conversationContextCatalog(
+              {
+                getSession: (id) => this.context.data.sessions.get(id),
+                listMessages: (id) =>
+                  this.context.data.conversations.listMessages(id),
+                listMessageParts: (id) =>
+                  this.context.data.conversations.listMessageParts(id),
+              },
+              sessionId,
+            ),
             capabilityView,
           )
         : undefined;
 
-      let submittedContent: string | ContentBlock[] = materialized?.text ?? admitted.content;
+      let submittedContent: string | ContentBlock[] =
+        materialized?.text ?? admitted.content;
       if (admitted.attachments.length > 0) {
-        if (!this.context.resolveCapabilities || !this.context.routeAttachments) {
+        if (
+          !this.context.resolveCapabilities ||
+          !this.context.routeAttachments
+        ) {
           throw new Error("attachment routing is not configured");
         }
         const capabilities = await this.context.resolveCapabilities(session);
-        const inspection = agent.inspect();
+        const inspection = host?.inspect();
         const routed = await this.context.routeAttachments({
           text: materialized?.text ?? admitted.content,
           attachments: admitted.attachments,
           ...capabilities,
-          availableTools: inspection.tools.map((tool) => tool.name),
+          availableTools: (inspection?.tools ?? []).map((tool) => tool.name),
           attachmentOcrAvailable: this.context.attachmentOcrAvailable === true,
           signal: workContext.signal,
         });
         submittedContent = routed.content;
-        cleanupAttachmentResources = await this.context.attachmentResources?.materializeRun({
-          sessionId,
-          runId,
-          decisions: routed.decisions,
-        });
+        cleanupAttachmentResources =
+          await this.context.attachmentResources?.materializeRun({
+            sessionId,
+            runId,
+            decisions: routed.decisions,
+          });
         const beforeAttachmentProjection = this.context.events.checkpoint();
         this.context.data.transaction(() => {
           this.context.transcriptProjection.projectAttachmentTransformations({
@@ -291,13 +443,24 @@ export class SessionRunExecutor {
         );
       }
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
-      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd, agent, workContext.signal);
+      await captureAutoReviewBaseline(
+        this.context,
+        sessionId,
+        runId,
+        session.cwd,
+        agent,
+        workContext.signal,
+      );
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
       const run = agent.submitMessage(submittedContent, {
-        ...(capabilityView ? { capabilityView } : {}),
-        ...(goalBinding ? { goal: goalBinding } : {}),
+        ...(capabilityView
+          ? { preparation: host!.plugins.prepareRun(capabilityView) }
+          : {}),
+        ...(goalBinding
+          ? { contribution: await createGoalRunContribution(goalBinding) }
+          : {}),
         ...(limits ? { limits } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,
@@ -314,12 +477,15 @@ export class SessionRunExecutor {
       // 若在 register 前已经被 abort，coordinator 会立刻 interrupt 这个 handle。
       await workContext.registerHandle(run);
 
-      const stallTimeoutMs = this.context.stallTimeoutMs ?? DEFAULT_RUN_STALL_TIMEOUT_MS;
+      const stallTimeoutMs =
+        this.context.stallTimeoutMs ?? DEFAULT_RUN_STALL_TIMEOUT_MS;
       watchdog = new RunStallWatchdog({
         runId,
         sessionId,
         staleMs: stallTimeoutMs,
-        intervalMs: this.context.stallCheckIntervalMs ?? DEFAULT_RUN_STALL_CHECK_INTERVAL_MS,
+        intervalMs:
+          this.context.stallCheckIntervalMs ??
+          DEFAULT_RUN_STALL_CHECK_INTERVAL_MS,
         readActivity: () => ({
           runUpdatedAt: this.context.data.runs.getRun(runId)?.updatedAt ?? 0,
           taskUpdatedAt: Math.max(
@@ -328,13 +494,19 @@ export class SessionRunExecutor {
               .reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
             this.context.data.conversations
               .listMessages(sessionId)
-              .reduce((latest, message) => Math.max(latest, message.updatedAt), 0),
+              .reduce(
+                (latest, message) => Math.max(latest, message.updatedAt),
+                0,
+              ),
           ),
         }),
         hasPendingPermission: () =>
           this.context.data.permissions
             .list({ sessionId })
-            .some((request) => request.runId === runId && request.status === "pending"),
+            .some(
+              (request) =>
+                request.runId === runId && request.status === "pending",
+            ),
         readModelRetryDeadline: () => {
           const metadata = this.context.data.runs.getRun(runId)?.metadata ?? {};
           const retry = readSessionModelRetryState(metadata);
@@ -344,18 +516,30 @@ export class SessionRunExecutor {
         hasRunningChildTask: () =>
           this.context.data.runs
             .listSessionTasks(sessionId)
-            .some((task) => Boolean(task.childSessionId) && task.status === "running"),
+            .some(
+              (task) =>
+                Boolean(task.childSessionId) && task.status === "running",
+            ),
         hasRunningTool: () => {
-          const messageIds = new Set(this.context.data.conversations
-            .listMessages(sessionId)
-            .filter((message) => message.runId === runId)
-            .map((message) => message.id));
+          const messageIds = new Set(
+            this.context.data.conversations
+              .listMessages(sessionId)
+              .filter((message) => message.runId === runId)
+              .map((message) => message.id),
+          );
           return this.context.data.conversations
             .listMessageParts(sessionId)
-            .some((part) => messageIds.has(part.messageId) && part.type === "tool" && part.status === "running");
+            .some(
+              (part) =>
+                messageIds.has(part.messageId) &&
+                part.type === "tool" &&
+                part.status === "running",
+            );
         },
         onStall: () => {
-          this.context.data.runs.updateRun(runId, { metadata: { stalled: true } });
+          this.context.data.runs.updateRun(runId, {
+            metadata: { stalled: true },
+          });
           void run
             .interrupt(
               `运行超过 ${Math.round(stallTimeoutMs / 60_000)} 分钟无进展，已自动终止`,
@@ -397,13 +581,21 @@ export class SessionRunExecutor {
       });
 
       // 只在成功走完之后做记忆/个性化/auto-dream。失败路径不跑，避免半截对话被写进长期记忆。
-      await this.context.postRunMaintenance?.run(sessionId, runId, agent, limits);
+      await this.context.postRunMaintenance?.run(
+        sessionId,
+        runId,
+        host,
+        limits,
+      );
 
       // Run terminal (success): invalidate then rewrite live usage from the same agent
       // before closeIfStale may drop the warm runtime.
       this.context.contextUsageCache?.invalidate(sessionId);
       try {
-        await this.context.refreshContextUsage?.(sessionId, agent);
+        await this.context.refreshContextUsage?.(
+          sessionId,
+          hostedContextUsageAgent(hosted),
+        );
       } catch (error) {
         this.context.log({
           level: "warn",
@@ -436,20 +628,30 @@ export class SessionRunExecutor {
           traceId: this.context.traceIdForRun(runId),
           sessionId,
           runId,
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          error:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError),
         });
       }
 
       // projector / interrupt 已经写下终态就不要再改：否则会把 completed 覆盖成 failed。
-      if (current && ["completed", "failed", "interrupted"].includes(current.status)) {
-        if (current.status !== "completed") settleUnreviewedAutoReview(this.context, sessionId, runId);
+      if (
+        current &&
+        ["completed", "failed", "interrupted"].includes(current.status)
+      ) {
+        if (current.status !== "completed")
+          settleUnreviewedAutoReview(this.context, sessionId, runId);
         this.context.contextUsageCache?.invalidate(sessionId);
         return;
       }
 
       const message = error instanceof Error ? error.message : String(error);
       const traceId = this.context.traceIdForRun(runId);
-      const interrupted = error instanceof RunInterruptedError || isAgentExecutionLimitError(error) || workContext.signal.aborted;
+      const interrupted =
+        error instanceof RunInterruptedError ||
+        isAgentExecutionLimitError(error) ||
+        workContext.signal.aborted;
       const routingError = attachmentRoutingError(error);
       const before = this.context.events.checkpoint();
       this.context.data.transaction(() => {
@@ -490,11 +692,18 @@ export class SessionRunExecutor {
         this.context.data.runs.updateRun(runId, {
           status: interrupted ? "interrupted" : "failed",
           error: message,
-          ...(error instanceof PluginPreparationError ? {
-            metadata: { ...current?.metadata, pluginPreparation: {
-              status: "failed", pluginId: error.pluginId, error: message,
-            } },
-          } : {}),
+          ...(error instanceof PluginPreparationError
+            ? {
+                metadata: {
+                  ...current?.metadata,
+                  pluginPreparation: {
+                    status: "failed",
+                    pluginId: error.pluginId,
+                    error: message,
+                  },
+                },
+              }
+            : {}),
           ...(routingError
             ? {
                 metadata: {
@@ -524,8 +733,16 @@ export class SessionRunExecutor {
     } finally {
       // Also observe partial effects after a failed/interrupting submit or result.
       // Terminal timestamps were already recorded by the Run owner.
-      try { await this.context.workspaceChanges?.settle(runId, workContext.signal); }
-      catch (error) { this.context.log({ level: "warn", event: "workspace_changes.settle_failed", runId, error: String(error) }); }
+      try {
+        await this.context.workspaceChanges?.settle(runId, workContext.signal);
+      } catch (error) {
+        this.context.log({
+          level: "warn",
+          event: "workspace_changes.settle_failed",
+          runId,
+          error: String(error),
+        });
+      }
       watchdog?.dispose();
       if (cleanupAttachmentResources) {
         try {
@@ -557,7 +774,6 @@ export class SessionRunExecutor {
       }
     }
   }
-
 }
 
 async function resolveSkillCatalog(
@@ -572,10 +788,9 @@ async function resolveSkillCatalog(
   return await resolver(session);
 }
 
-function attachmentRoutingError(error: unknown): Pick<
-  AttachmentRoutingError,
-  "code" | "assetIds" | "decisions"
-> | undefined {
+function attachmentRoutingError(
+  error: unknown,
+): Pick<AttachmentRoutingError, "code" | "assetIds" | "decisions"> | undefined {
   if (!error || typeof error !== "object") return undefined;
   const candidate = error as Partial<AttachmentRoutingError>;
   if (

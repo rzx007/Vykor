@@ -87,7 +87,7 @@ GoalAssessment 增加 `evidenceRefs: GoalEvidenceRef[]` 和可选 wait；evidenc
 
 新增 `packages/server/src/application/session/session-goal-context.ts`，在 session-run-executor 构建请求内容时加入目标正文、当前版本与成功条件检查指引。保持用户原始 items/附件不变。steer 和 live child 路径必须携带所属目标关联，不能让同会话输入绕过目标评估。
 
-新增 Agent 可调用的目标评估工具（具体注册方式沿用 `packages/agent-runtime/src/default-runtime-tools.ts`），调用参数使用 GoalAssessment 的业务字段；goalId/revision/runId 从当前运行绑定，不信任模型提供的任意 ID。通过现有 domain.event 持久化评估建议。
+新增 Agent 可调用的目标评估工具（具体注册方式沿用 `packages/agent-runtime/src/node/runtime/default-runtime-tools.ts`），调用参数使用 GoalAssessment 的业务字段；goalId/revision/runId 从当前运行绑定，不信任模型提供的任意 ID。通过现有 domain.event 持久化评估建议。
 
 工具构造新增于 `packages/agent-runtime/src/goal-assessment-tool.ts`。运行身份从 `framework-agent-run.ts` 创建的每轮 AgentExecutionContext 传入，扩展 core 的运行上下文类型以携带服务端验证的目标绑定；query-engine 调用工具时传递此绑定。不得把首轮 goalId/revision 捕获在 AgentPool 缓存实例的闭包中。无目标绑定时隐藏该工具，调用时仍须二次校验。
 

@@ -36,14 +36,14 @@
 
 | 部分 | 文件 | 当前职责及计划变化 |
 |---|---|---|
-| 模型调用接口 | `packages/core/src/types/client.ts` | `StreamingMessageClient` 和请求参数；补充单次请求时间限制 |
-| 流事件 | `packages/core/src/types/events.ts` | `StreamEvent`；新增生成尝试开始、等待重试事件 |
+| 模型调用接口 | `packages/agent-contracts/src/model.ts` | `StreamingMessageClient` 和请求参数；补充单次请求时间限制 |
+| 流事件 | `packages/agent-contracts/src/events.ts` | `StreamEvent`；新增生成尝试开始、等待重试事件 |
 | 引擎配置与 Agent 事件 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions`、`AgentEventInput`；增加重试策略和事件映射 |
 | 重试策略 | 新增 `packages/core/src/engine/model-retry.ts` | 纯策略计算、共享错误类型和可取消等待，不依赖 API 包 |
 | 引擎 | `packages/core/src/engine/query-engine.ts` | 在当前模型调用边界重试，成功后才提交消息及执行工具 |
 | 提供商适配器 | `packages/api/src/providers/openai.ts`、`anthropic.ts`、`codex.ts` | 收敛为单次调用，保留错误原因，验证完整响应 |
 | API 错误及超时 | `packages/api/src/errors/index.ts`、`packages/api/src/providers/retry.ts` | 归一化错误和读取超时；移除被替代的等待逻辑前检查所有调用者 |
-| 框架运行结果 | `packages/agent-runtime/src/framework-agent-run.ts` | 修正直接累加 `output`，映射新事件 |
+| 框架运行结果 | `packages/agent-runtime/src/kernel/framework-agent-run.ts` | 修正直接累加 `output`，映射新事件 |
 | 服务端投影 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` | 将生成尝试、重试状态写入会话记录 |
 | 消息投影 | `packages/server/src/application/session/transcript-projection.ts` | 记录当前尝试所有 part，失败后标记被替代 |
 | 数据写入 | `packages/services/src/runs/run-repository.ts`、`packages/services/src/conversations/incremental-output.ts`、`conversation-repository.ts` | 复用 Run metadata 和消息 metadata，保证缓冲数据与替换顺序 |
@@ -54,7 +54,7 @@
 | 卡住检测 | `packages/server/src/application/session/run-stall-watchdog.ts`、`session-run-executor.ts` | 在有界等待重试期间避免提前判定运行无进展 |
 | CLI | `apps/cli/src/print-session.ts`、`renderer.ts` | 正确处理不可撤回的终端输出及机器可读结果 |
 | 服务端历史和公开文本 | `packages/server/src/application/agent/agent-transcript.ts`、`packages/server/src/session/transcript-text.ts` | 重建模型历史和提取公开文本时排除失效输出 |
-| 辅助模型调用 | `packages/core/src/engine/query-engine.ts`、`packages/agent-runtime/src/memory-runtime.ts`、`packages/services/src/memory-extract.ts` | 压缩和记忆提取独立重试，成功后交付缓冲结果 |
+| 辅助模型调用 | `packages/core/src/engine/query-engine.ts`、`packages/agent-runtime/src/node/memory/memory-runtime.ts`、`packages/services/src/memory-extract.ts` | 压缩和记忆提取独立重试，成功后交付缓冲结果 |
 | 用量完整性 | `packages/core/src/types/usage.ts`、`packages/core/src/engine/cost-tracker.ts` | 区分已知消耗与未知尝试，汇总不可冒充完整账单 |
 
 实施时若调用链因并行工作发生变化，先用 `rg` 重新定位同名接口，再更新计划的路径，不移动或重构无关模块。
@@ -226,7 +226,7 @@ pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts
 ## 任务 1：建立共享错误、重试策略与事件类型
 
 **新增：** `packages/core/src/engine/model-retry.ts`、`model-retry.test.ts`。
-**修改：** `packages/core/src/types/events.ts`、`types/client.ts`、`types/runtime.ts`、`index.ts`。
+**修改：** `packages/agent-contracts/src/events.ts`、`types/client.ts`、`types/runtime.ts`、`index.ts`。
 
 **输入：** 原始时间和重试计数、`ModelRequestFailure.info`。
 **输出：** 上文错误/事件类型，以及以下明确接口：
@@ -370,7 +370,7 @@ pnpm --filter @vykor/core check-types
 ## 任务 3A：保留压缩和记忆提取的重试能力
 
 **新增：** `packages/core/src/engine/buffered-model-retry.ts`、`buffered-model-retry.test.ts`。
-**修改：** `packages/core/src/index.ts`、`packages/core/src/engine/query-engine.ts` 的 toCompactClient、`packages/agent-runtime/src/memory-runtime.ts`、`packages/services/src/memory-extract.ts`；扩展各自既有测试。
+**修改：** `packages/core/src/index.ts`、`packages/core/src/engine/query-engine.ts` 的 toCompactClient、`packages/agent-runtime/src/node/memory/memory-runtime.ts`、`packages/services/src/memory-extract.ts`；扩展各自既有测试。
 
 **输入：** 原始单次 StreamingMessageClient、StreamMessageParams、独立重试策略。
 **输出：** 仅包含最终成功尝试的事件流；失败内容不会拼进压缩摘要或记忆 JSON。
@@ -406,8 +406,8 @@ pnpm --filter @vykor/services exec vitest run src/__test__/memory-extract.test.t
 
 ## 任务 4：运行事件和最终结果同步替换
 
-**修改：** `packages/agent-runtime/src/framework-agent-run.ts`、`stream-event-mapping.test.ts`。
-**新增：** `packages/agent-runtime/src/framework-agent-run-retry.test.ts`。
+**修改：** `packages/agent-runtime/src/kernel/framework-agent-run.ts`、`stream-event-mapping.test.ts`。
+**新增：** `packages/agent-runtime/src/node/runtime/framework-agent-run-retry.test.ts`。
 
 **输入：** generation_started、model_retry 和现有流事件。
 **输出：** Agent 事件及不含被替代文本的 `AgentRunResult.output`。

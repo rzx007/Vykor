@@ -1,6 +1,7 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { describe, expect, it, vi } from "vitest";
-import { PLUGIN_APP_LIMITS, PLUGIN_APP_HTML_MIME_TYPE } from "@vykor/protocol";
+import { PLUGIN_APP_RESOURCE_LIMITS } from "@vykor/plugin-contracts/limits";
+import { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
 import { captureMcpAppResources } from "./app-resources.js";
 
 describe("generation-bound MCP app resources", () => {
@@ -17,9 +18,9 @@ describe("generation-bound MCP app resources", () => {
 
   it.each(["decoded-total", "html", "malformed-base64", "foreign-uri"])("rejects %s without silent truncation", async failure => {
     const contents = failure === "decoded-total" ? [
-      { uri, blob: Buffer.alloc(PLUGIN_APP_LIMITS.resourceBytes / 2 + 1).toString("base64") },
-      { uri, blob: Buffer.alloc(PLUGIN_APP_LIMITS.resourceBytes / 2 + 1).toString("base64") },
-    ] : failure === "html" ? [{ uri, mimeType: PLUGIN_APP_HTML_MIME_TYPE, text: "x".repeat(PLUGIN_APP_LIMITS.htmlBytes + 1) }]
+      { uri, blob: Buffer.alloc(PLUGIN_APP_RESOURCE_LIMITS.resourceBytes / 2 + 1).toString("base64") },
+      { uri, blob: Buffer.alloc(PLUGIN_APP_RESOURCE_LIMITS.resourceBytes / 2 + 1).toString("base64") },
+    ] : failure === "html" ? [{ uri, mimeType: MCP_APP_HTML_MIME_TYPE, text: "x".repeat(PLUGIN_APP_RESOURCE_LIMITS.htmlBytes + 1) }]
       : failure === "malformed-base64" ? [{ uri, blob: "%%%" }] : [{ uri: "ui://other/panel.html", text: "wrong" }];
     const { port, readResource } = fixture(contents);
     await expect(port.readResource(uri)).rejects.toThrow(failure === "foreign-uri" ? "uri_mismatch" : failure === "malformed-base64" ? "invalid_blob" : "too_large");

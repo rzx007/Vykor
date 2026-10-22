@@ -7,21 +7,14 @@ import {
   VykorHttpServer,
   type CreateDaemonAgent,
 } from "@vykor/server";
-import type {
-  AgentEvent,
-  AgentEventContext,
-  AgentEventInput,
-  AgentEventListener,
-  AgentPermissionDecision,
-  AgentPermissionRequest,
-  AgentRunHandle,
-} from "@vykor/core";
+import type { AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionDecision, AgentPermissionRequest, AgentRunHandle } from "@vykor/agent-contracts";
 import type {
   AgentCapabilitySnapshot,
   VykorAgent,
 } from "@vykor/agent-runtime";
 
 import { runPrintSession } from "./print-session.js";
+import { hostedAgentFixture } from "../../../packages/server/test-helpers/hosted-agent.js";
 
 function captureWrite(stream: NodeJS.WriteStream): {
   chunks: string[];
@@ -161,7 +154,7 @@ function testAgent(
       }),
       async close() {},
     };
-    return agent;
+    return hostedAgentFixture(agent);
   };
 }
 

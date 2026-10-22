@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SandboxConfig } from "@vykor/core";
+import type { SandboxConfig } from "@vykor/host-config";
 import { normalizeSandboxConfig } from "./config.js";
 
 export interface SrtRuntimeConfig {

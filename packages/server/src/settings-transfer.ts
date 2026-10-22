@@ -1,4 +1,11 @@
-import { loadSettings, parsePermissionSettings, parseAgentEnvironmentSettings, SettingsConflictError, updateSettings, type Settings } from "@vykor/core";
+import {
+  loadSettings,
+  parsePermissionSettings,
+  parseAgentEnvironmentSettings,
+  SettingsConflictError,
+  updateSettings,
+  type Settings,
+} from "@vykor/host-config";
 import { isDeepStrictEqual } from "node:util";
 
 export const SETTINGS_TRANSFER_GROUPS = {

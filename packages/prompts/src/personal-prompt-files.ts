@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { getConfigDir } from "@vykor/core";
+import { getConfigDir } from "@vykor/host-config";
 import { detectCredentialValue } from "@vykor/memory";
 
 const MAX_SOUL_CHARS = 12_000;

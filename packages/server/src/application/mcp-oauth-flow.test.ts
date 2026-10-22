@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { McpOAuthCredentialStore } from "@vykor/auth";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { loginMcpOAuth, McpOAuthRuntime, revokeMcpOAuthCredential, verifyMcpOAuthConnection } from "@vykor/mcp";
 import { McpOAuthApplicationService } from "./mcp-oauth-application-service.js";
 import { McpOAuthOperationService } from "./mcp-oauth-operation-service.js";

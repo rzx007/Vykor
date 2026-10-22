@@ -1,4 +1,4 @@
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 /** One explicit choice, shared by host-owned installation tools and the desktop approval card. */
 export async function askInstallConfirmation(

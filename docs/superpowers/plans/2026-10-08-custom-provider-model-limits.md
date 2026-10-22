@@ -32,9 +32,9 @@
 读取链路
 
 - `packages/server/src/application/default-services/model-service.ts` — 展示路径合并声明值。
-- `packages/agent-runtime/src/agent-options.ts` — 两个运行时回调类型加 `settings`。
+- `packages/agent-runtime/src/node/runtime/agent-options.ts` — 两个运行时回调类型加 `settings`。
 - `packages/server/src/daemon/daemon-agent.ts` — 同上（宿主侧类型）。
-- `packages/agent-runtime/src/default-runtime.ts` — 调用回调时传当前 `settings`。
+- `packages/agent-runtime/src/node/runtime/default-runtime.ts` — 调用回调时传当前 `settings`。
 - `packages/server/src/application/daemon-application.ts` — 回调实现先查声明值。
 
 桌面界面
@@ -47,7 +47,7 @@
 
 - `packages/core/src/config/settings.test.ts`
 - `packages/server/src/application/__test__/default-application-services.test.ts`
-- `packages/agent-runtime/src/default-runtime.test.ts`
+- `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 - `apps/desktop/src/main/features/provider/provider-service.test.ts`
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/custom-provider-form.test.ts`
 
@@ -472,15 +472,15 @@ git commit -m "feat(server): 模型列表以声明的上限覆盖目录值"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent-options.ts:90-92`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts:90-92`
 - 修改：`packages/server/src/daemon/daemon-agent.ts:97-104`
-- 修改：`packages/agent-runtime/src/default-runtime.ts:324-331`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts:324-331`
 - 修改：`packages/server/src/application/daemon-application.ts:507-514`
-- 测试：`packages/agent-runtime/src/default-runtime.test.ts:793`
+- 测试：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts:793`
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/agent-runtime/src/default-runtime.test.ts` 的 `derives the request output cap from the catalog output size`（L793）之后追加，照抄该用例的 `createVykorRuntime` 夹具：
+在 `packages/agent-runtime/src/node/runtime/default-runtime.test.ts` 的 `derives the request output cap from the catalog output size`（L793）之后追加，照抄该用例的 `createVykorRuntime` 夹具：
 
 ```ts
 it("passes the current settings to the model capacity callbacks", async () => {
@@ -521,7 +521,7 @@ it("passes the current settings to the model capacity callbacks", async () => {
 
 - [ ] **步骤 3：扩展两处回调类型**
 
-`packages/agent-runtime/src/agent-options.ts` L90-92：
+`packages/agent-runtime/src/node/runtime/agent-options.ts` L90-92：
 
 ```ts
   /** Host-owned model capacity lookup; absent for SDK callers without a catalog. */
@@ -549,7 +549,7 @@ it("passes the current settings to the model capacity callbacks", async () => {
 
 - [ ] **步骤 4：调用时传入当前 settings**
 
-`packages/agent-runtime/src/default-runtime.ts` L324-331：
+`packages/agent-runtime/src/node/runtime/default-runtime.ts` L324-331：
 
 ```ts
       const contextWindow = await configuration.resolveModelContextWindow?.({
@@ -606,7 +606,7 @@ import { resolveCustomProviderModelLimits } from "@vykor/core";
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime.test.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/application/daemon-application.ts
+git add packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/application/daemon-application.ts
 git commit -m "feat(agent-runtime): 运行时模型上限优先采用声明的值"
 ```
 

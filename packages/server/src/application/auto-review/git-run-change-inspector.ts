@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { terminateProcessTree } from "@vykor/sandbox";
 
-import type { AutoReviewReason } from "@vykor/protocol";
+import type { AutoReviewReason } from "@vykor/domain-contracts/approvals";
 
 import type { AutoReviewChangeFile, AutoReviewChangeSet } from "./auto-review-policy.js";
 import {

@@ -1,5 +1,5 @@
 import type { AttachmentAssetRecord } from "@vykor/protocol";
-import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
 import { AttachmentError } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
 

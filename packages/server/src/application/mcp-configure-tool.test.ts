@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolRegistry, type McpRuntimeSyncResult, type Settings, type ToolContext } from "@vykor/core";
+import { ToolRegistry } from "@vykor/core";
+import { type ToolContext } from "@vykor/agent-contracts";
+import { type McpRuntimeSyncResult, type Settings } from "@vykor/host-config";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { PermissionChecker } from "@vykor/permissions";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
@@ -17,8 +19,9 @@ function world(sync: McpRuntimeSyncResult = unavailable) {
     snapshot: async () => ({ servers: Object.entries(settings.mcpServers ?? {}).map(([name, config]) =>
       buildMcpAuthServerSnapshot({ name, config, credential: undefined, runtimeStatus: sync.status })) }),
   });
+  const host={settings,canConfigure:()=>true};
   const ask = vi.fn(async (_question: string) => "确认添加");
-  return { tool: createMcpConfigureTool(service, "root"), coordinator, ask,
+  return { tool: createMcpConfigureTool(service, "root",host), host, coordinator, ask,
     context: { cwd: "/work", sessionId: "root", askUserPrompt: ask } as ToolContext,
     settings: () => settings };
 }
@@ -99,6 +102,7 @@ describe("McpConfigure", () => {
   it("blocks child sessions and plugin-scoped runs", async () => {
     const w = world();
     expect((await w.tool.execute(local, { ...w.context, sessionId: "child" })).isError).toBe(true);
+    w.host.canConfigure=()=>false;
     expect((await w.tool.execute(local, { ...w.context, capabilityView: { pluginId: "plugin" } as any })).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
     expect(w.ask).not.toHaveBeenCalled();
@@ -122,6 +126,7 @@ describe("McpConfigure", () => {
     const blocked = world();
     expect((await blocked.tool.execute(local, { ...blocked.context, ...scope, sessionId: "child" } as ToolContext)).isError).toBe(true);
     expect(blocked.ask).not.toHaveBeenCalled();
+    blocked.host.canConfigure=()=>false;
     const explicit = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(ids) }, ids[0]!);
     expect((await blocked.tool.execute(local, { ...blocked.context, capabilityView: explicit })).isError).toBe(true);
     expect(blocked.settings().mcpServers).toEqual({});
@@ -137,7 +142,8 @@ describe("McpConfigure", () => {
   it("does not bypass a Shell denial when configuring a local third-party process", async () => {
     const w = world();
     const settings = { ...w.settings(), permission: { mode: "full_auto" as const, deniedTools: ["Shell"] } };
-    expect((await w.tool.execute(local, { ...w.context, settings })).isError).toBe(true);
+    w.host.settings=settings;
+    expect((await w.tool.execute(local, w.context)).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
     expect(w.ask).not.toHaveBeenCalled();
   });
@@ -145,7 +151,8 @@ describe("McpConfigure", () => {
   it("honors denied command patterns before asking to start a local server", async () => {
     const w = world();
     const settings = { ...w.settings(), permission: { mode: "full_auto" as const, deniedCommands: ["uvx*"] } };
-    expect((await w.tool.execute(local, { ...w.context, settings })).isError).toBe(true);
+    w.host.settings=settings;
+    expect((await w.tool.execute(local, w.context)).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
   });
 

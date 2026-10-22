@@ -1,5 +1,5 @@
 import type { workflowRuns } from "../session-runtime/schema.js";
-import { parseChatResourceSource, type ChatResourceSource } from "@vykor/protocol";
+import { parseChatResourceSource, type ChatResourceSource } from "@vykor/domain-contracts/attachments";
 
 export interface StoredWorkflowRunInput {
   runId: string;

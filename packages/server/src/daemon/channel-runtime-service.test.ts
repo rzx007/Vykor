@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { FeishuChannelConfig } from "@vykor/auth";
 import type { InboundMessage } from "@vykor/channels";
 

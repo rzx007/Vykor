@@ -11,7 +11,7 @@ vi.mock("@vykor/sandbox", async importOriginal => ({
   preflightWsl: vi.fn(async () => ({ homeDir: "/home/test" })),
   hostPathToWslPath: () => "/mnt/d/project",
 }));
-vi.mock("@vykor/core", async importOriginal => ({ ...await importOriginal<typeof import("@vykor/core")>(), loadSettings: vi.fn(async () => ({ sandbox: { enabled: false } })) }));
+vi.mock("@vykor/host-config", async importOriginal => ({ ...await importOriginal<typeof import("@vykor/host-config")>(), loadSettings: vi.fn(async () => ({ sandbox: { enabled: false } })) }));
 import { checkRuntimeEnvironment, validateRuntimeEnvironmentConfig } from "./runtime-settings.js";
 beforeEach(() => { run.mockReset(); run.mockImplementation(async (_file, args: string[]) => ({ stdout: args.some(arg => arg.includes("vykor-shell-ready")) ? "vykor-shell-ready" : "version" })); });
 describe("real WSL shell command validation", () => {
