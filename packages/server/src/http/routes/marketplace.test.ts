@@ -1,5 +1,21 @@
 import { expect, it } from "vitest";
 import { createMarketplaceRoutes } from "./marketplace.js";
+it("delivers author presentation in the market catalog without leaking private fields", async () => {
+  const plugin = { id: "example.notes", name: "notes", version: "1.0.0", category: "productivity", componentTypes: ["apps"],
+    icon: "data:image/svg+xml;base64,PHN2Zy8+", introduction: "## 笔记", homepage: "https://example.com/notes",
+    prompts: [{ title: "整理笔记", prompt: "整理现有笔记。", privatePath: "/private/example" }],
+    artifact: { url: "https://example.com/notes.zip", sha256: "a".repeat(64), size: 42 }, requires: { host: ">=1.2.20" },
+    source: { repository: "https://example.com/repository", commit: "b".repeat(40), path: "notes" }, privatePath: "/private/icon" };
+  const app = createMarketplaceRoutes({ catalog: async () => ({ sources: [], entries: [
+    { sourceId: "source", compatible: true, updateAvailable: false, plugin },
+  ] }) } as never);
+  const response = await app.request("/catalog?cwd=project");
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.entries[0].plugin).toMatchObject({ icon: plugin.icon, introduction: plugin.introduction, homepage: plugin.homepage });
+  expect(body.entries[0].plugin.prompts).toEqual([{ title: "整理笔记", prompt: "整理现有笔记。" }]);
+  expect(body.entries[0].plugin).not.toHaveProperty("privatePath");
+});
 it.each(["preview", "install"])("rejects unknown %s request fields with a Protocol error", async route => {
   const app = createMarketplaceRoutes({
     preview: async () => ({}), install: async () => ({}),

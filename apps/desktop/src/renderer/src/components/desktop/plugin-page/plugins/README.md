@@ -19,3 +19,5 @@
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../AGENTS.md)。
 
 市场浏览与来源管理由 marketplace.tsx 承载；权限确认仅传递主进程生成的选择编号，安装状态来自服务端操作回执，新版本供下次对话使用。
+
+市场与已安装共用 plugin-detail.tsx 的详情主体；marketplace-detail.tsx 只负责把目录展示信息与安装入口接入详情，不构造已安装状态或绕过权限判断。两处列表复用 shared/plugin-catalog.tsx，描述统一单行省略。

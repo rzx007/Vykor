@@ -168,6 +168,46 @@ describe("PluginManager archive import", () => {
     await render({ addRequest: props.addRequest + 1 })
   }
 
+  it("reports only the active market detail so hidden installed content cannot restore the page heading", async () => {
+    Object.assign(window.desktop!.plugins, {
+      marketplaceCatalog: vi.fn(async () => ({
+        sources: [],
+        entries: [
+          {
+            sourceId: "market",
+            compatible: true,
+            updateAvailable: false,
+            plugin: {
+              id: "market.plugin",
+              name: "Market",
+              version: "1.0.0",
+              description: "市场插件",
+              category: "productivity",
+              componentTypes: [],
+              requires: { host: ">=1.2.20" },
+              source: { repository: "https://example.com", path: "plugin", commit: "a".repeat(40) },
+            },
+          },
+        ],
+      })),
+    })
+    const onDetailChange = vi.fn()
+    await render({ onDetailChange })
+    const marketTab = host.querySelector<HTMLButtonElement>(
+      '[role="tab"][data-tabs-value="marketplace"]'
+    )
+    expect(marketTab).toBeTruthy()
+    await act(async () => marketTab!.click())
+    await click("查看 Market 详情")
+    expect(onDetailChange).toHaveBeenLastCalledWith(true)
+    expect(host.querySelector('[aria-label="插件浏览方式"]')).toBeNull()
+    await render({ refreshRequest: 1 })
+    expect(onDetailChange).toHaveBeenLastCalledWith(true)
+    await click("返回插件市场")
+    expect(onDetailChange).toHaveBeenLastCalledWith(false)
+    expect(host.querySelector('[aria-label="插件浏览方式"]')).toBeTruthy()
+  })
+
   async function requestGitImport(): Promise<void> {
     await render({ gitAddRequest: props.gitAddRequest + 1 })
   }
@@ -755,6 +795,34 @@ describe("PluginManager archive import", () => {
     expect(button?.disabled).toBe(true)
     await click("立即使用")
     expect(onUse).not.toHaveBeenCalled()
+  })
+
+  it("keeps missing-permission use blocked in the shared detail without repeating its summary", async () => {
+    const alpha = plugin({
+      presentation: {
+        description: "整理资料",
+        prompts: [{ title: "写报告", prompt: "根据资料生成完整报告。" }],
+      },
+      permissions: { requested: ["ui:render"], approved: [], missing: ["ui:render"] },
+    })
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [alpha] })
+    const onUse = vi.fn(async () => undefined)
+    await render({ onUse })
+    await click("查看 Alpha 详情")
+    const detail = host.querySelector('[aria-label="Alpha 插件详情"]')!
+    expect(detail.textContent?.split("整理资料")).toHaveLength(2)
+    expect(detail.textContent).not.toContain("作者暂未提供")
+    const use = [...detail.querySelectorAll("button")].find(
+      (item) => item.textContent === "立即使用"
+    )!
+    const example = detail.querySelector<HTMLButtonElement>('[aria-label="使用示例：写报告"]')!
+    expect(use.disabled).toBe(true)
+    expect(example.disabled).toBe(true)
+    await click("立即使用")
+    await click("使用示例：写报告")
+    expect(onUse).not.toHaveBeenCalled()
+    await click("管理")
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("alpha@1.0.0")
   })
 
   it("falls back when an author icon fails to load", async () => {

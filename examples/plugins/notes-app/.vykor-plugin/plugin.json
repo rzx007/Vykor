@@ -2,8 +2,12 @@
   "schemaVersion": 1,
   "id": "example.notes-app",
   "name": "notes-app",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "license": "MIT",
+  "displayName": "Notes",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3QgeD0iMTIiIHk9IjciIHdpZHRoPSI0MCIgaGVpZ2h0PSI1MCIgcng9IjkiIGZpbGw9IiNlZWYyZmYiIHN0cm9rZT0iIzRmNDZlNSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTggMThoOE04IDI4aDhNOCAzOGg4TTggNDhoOE0yNCAyMmgxN00yNCAzMWgxN00yNCA0MGgxMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjM2NmYxIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==",
+  "introduction": "## 与助手协作编辑笔记\n\n在右侧面板查看笔记、编辑草稿，点击“保存草稿”提交；收到服务端回执后才显示已保存。切换应用、聊天或收起面板保留当前页面草稿。\n\n把选中文字引用到聊天，让助手继续整理。助手更新笔记后，面板会提示远端变化；有本地草稿时先对照合并，避免覆盖未保存内容。",
+  "prompts": [{"title": "打开协作笔记", "prompt": "请读取 Notes 当前笔记，并在右侧打开编辑面板，让我继续编辑；不要修改笔记内容。"}, {"title": "整理引用的笔记", "prompt": "请先读取 Notes 的最新版本，根据我引用的选区整理一份清晰提纲，仅修改对应内容并保留其他段落；完成后说明保存结果。"}],
   "description": "在右侧面板编辑并手工保存笔记；保留本地草稿，对照远端新版合并，并引用选区到聊天。",
   "components": { "mcpServers": ["./mcp.json"], "apps": ["./ui/apps.json"] }
 }

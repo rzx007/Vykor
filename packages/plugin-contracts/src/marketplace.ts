@@ -1,3 +1,5 @@
+import { isPluginIconSource } from "./presentation.js";
+
 /** Distribution metadata describes install candidates; it never grants runtime permission. */
 export interface MarketplacePlugin {
   id: string;
@@ -5,6 +7,10 @@ export interface MarketplacePlugin {
   version: string;
   displayName?: string;
   description?: string;
+  icon?: string;
+  introduction?: string;
+  prompts?: Array<{ title: string; prompt: string }>;
+  homepage?: string;
   author?: { name: string; url?: string; email?: string };
   license?: string;
   keywords?: string[];
@@ -218,9 +224,24 @@ export function parseMarketplaceDocument(input: unknown): MarketplaceDocument {
         path,
       },
     };
-    for (const key of ["displayName", "description", "license"] as const)
+    for (const key of ["displayName", "description", "introduction", "license"] as const)
       if (item[key] !== undefined)
-        plugin[key] = string(item[key], key === "description" ? 16384 : 256);
+        plugin[key] = string(item[key], key === "introduction" ? 65536 : key === "description" ? 16384 : 256);
+    if (item.icon !== undefined) {
+      const icon = string(item.icon, 1_048_576);
+      if (!isPluginIconSource(icon)) throw new Error("Invalid marketplace icon");
+      if (!icon.startsWith("data:")) normalizeMarketplaceUrl(icon);
+      plugin.icon = icon;
+    }
+    if (item.homepage !== undefined) plugin.homepage = normalizeMarketplaceUrl(string(item.homepage));
+    if (item.prompts !== undefined) {
+      if (!Array.isArray(item.prompts) || item.prompts.length > 16)
+        throw new Error("Invalid marketplace examples");
+      plugin.prompts = item.prompts.map(raw => {
+        const example = record(raw);
+        return { title: string(example.title, 100).trim(), prompt: string(example.prompt, 16384).trim() };
+      });
+    }
     if (item.keywords !== undefined) plugin.keywords = strings(item.keywords);
     if (item.author !== undefined) {
       const author = record(item.author);

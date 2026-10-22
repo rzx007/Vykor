@@ -39,6 +39,38 @@ describe("marketplace distribution contract", () => {
     input.plugins[0]!.version = "9.0.0";
     expect(result.plugins[0]!.version).toBe("1.0.2");
   });
+  it("preserves author icons and detail content without requiring them in older catalogs", () => {
+    const input = valid();
+    Object.assign(input.plugins[0]!, {
+      icon: "data:image/svg+xml;base64,PHN2Zy8+",
+      introduction: "## 笔记\n\n保留草稿，并引用选区。",
+      homepage: "https://example.com/notes",
+      prompts: [{ title: "整理笔记", prompt: "保留原文，为这篇笔记整理提纲。" }],
+    });
+    expect(parseMarketplaceDocument(input).plugins[0]).toMatchObject({
+      icon: "data:image/svg+xml;base64,PHN2Zy8+",
+      introduction: "## 笔记\n\n保留草稿，并引用选区。",
+      homepage: "https://example.com/notes",
+      prompts: [{ title: "整理笔记", prompt: "保留原文，为这篇笔记整理提纲。" }],
+    });
+    expect(parseMarketplaceDocument(valid()).plugins[0]).not.toHaveProperty("icon");
+  });
+  it.each([
+    { prompts: [{ title: "", prompt: "整理资料" }] },
+    { prompts: [{ title: "整理资料", prompt: " " }] },
+    { prompts: Array.from({ length: 17 }, () => ({ title: "示例", prompt: "整理资料" })) },
+    { prompts: [{ title: "a".repeat(101), prompt: "整理资料" }] },
+    { prompts: [{ title: "示例", prompt: "a".repeat(16385) }] },
+  ])("rejects invalid author examples %#", ({ prompts }) => {
+    const input = valid();
+    Object.assign(input.plugins[0]!, { prompts });
+    expect(() => parseMarketplaceDocument(input)).toThrow();
+  });
+  it.each(["javascript:alert(1)", "file:///private/icon.svg", "data:text/html;base64,PHN2Zy8+", "data:image/png;base64,broken"])("rejects invalid market icon %s", icon => {
+    const input = valid();
+    Object.assign(input.plugins[0]!, { icon });
+    expect(() => parseMarketplaceDocument(input)).toThrow();
+  });
   it.each([
     (x: ReturnType<typeof valid>) => {
       x.plugins.push(x.plugins[0]!);

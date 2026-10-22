@@ -1,6 +1,6 @@
 # Excalidraw 画板
 
-正式插件 `dev.vykor.excalidraw`，版本 `1.0.0`。在会话右侧绘图，连续编辑自动保存。可创建、导入、打开、重命名和切换画板，引用选中元素到聊天，并导出 `.excalidraw`、PNG、SVG。
+正式插件 `dev.vykor.excalidraw`，版本 `1.0.1`。在会话右侧绘图，连续编辑自动保存。可创建、导入、打开、重命名和切换画板，引用选中元素到聊天，并导出 `.excalidraw`、PNG、SVG。
 
 ## 构建与安装
 
@@ -45,5 +45,7 @@ npm run typecheck
 ## 来源与许可证
 
 移植自 [zai-org/zcode-plugins](https://github.com/zai-org/zcode-plugins/tree/413f8b688ee9b5bfc763a9cf5dd1fc5913be99cc/ui-plugins/excalidraw)，锁定提交 `413f8b688ee9b5bfc763a9cf5dd1fc5913be99cc`，上游插件 `0.3.4`，Excalidraw `0.18.1`、React `19.2.7`。复用上游场景处理、SQLite worker、局部操作、导出和界面，适配 Vykor 的清单、SDK 1.1.2、数据目录、保存回执与资源通知。
+
+插件图标沿用同一上游仓库的 `assets/excalidraw/icon.png`。
 
 `LICENSE` 保留上游 Excalidraw 插件的完整 MIT 许可；`licenses/` 保留 Excalidraw、各字体、其他上游许可及仓库 Apache 2.0 声明。构建额外生成 `dist/THIRD_PARTY_NOTICES.txt`，列出实际打包依赖的完整许可。

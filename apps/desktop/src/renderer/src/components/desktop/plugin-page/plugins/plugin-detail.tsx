@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ArrowLeft, ArrowRight, ExternalLink, MessageCircle, Settings2 } from "lucide-react"
 import { cjk } from "@streamdown/cjk"
 import { Streamdown } from "streamdown"
@@ -46,7 +46,72 @@ export function PluginDetail({
     }
   }
   return (
+    <PluginDetailContent
+      name={name}
+      version={plugin.identity.version}
+      presentation={presentation}
+      onBack={onBack}
+      actions={
+        <>
+          <Button variant="secondary" shape="pill" onClick={onManage}>
+            <Settings2 data-icon="inline-start" />
+            管理
+          </Button>
+          <Button shape="pill" disabled={!usable || starting} onClick={() => void start()}>
+            <MessageCircle data-icon="inline-start" />
+            {starting ? "正在打开…" : "立即使用"}
+          </Button>
+        </>
+      }
+      starting={starting}
+      onPrompt={usable ? (prompt) => void start(prompt) : undefined}
+      status={
+        !usable ? (
+          <p className="text-xs text-muted-foreground">
+            {plugin.runtimeStatus.message} 请在管理中检查插件状态。
+          </p>
+        ) : undefined
+      }
+    />
+  )
+}
+
+/** 市场与已安装共用展示；安装、权限确认和使用操作仍由各自入口负责。 */
+export function PluginDetailContent({
+  name,
+  version,
+  presentation,
+  onBack,
+  backLabel = "返回插件",
+  actions,
+  status,
+  children,
+  information,
+  starting = false,
+  onPrompt,
+}: {
+  name: string
+  version: string
+  presentation?: DesktopPluginInfo["presentation"]
+  onBack: () => void
+  backLabel?: string
+  actions: ReactNode
+  status?: ReactNode
+  children?: ReactNode
+  information?: ReactNode
+  starting?: boolean
+  onPrompt?: (prompt: string) => void
+}): React.JSX.Element {
+  const section = useRef<HTMLElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    section.current?.scrollIntoView?.({ block: "start" })
+    heading.current?.focus({ preventScroll: true })
+  }, [name])
+  const introduction = presentation?.introduction?.trim()
+  return (
     <section
+      ref={section}
       aria-label={`${name} 插件详情`}
       className="mx-auto flex w-full max-w-[56rem] flex-col gap-8"
     >
@@ -58,36 +123,26 @@ export function PluginDetail({
         onClick={onBack}
       >
         <ArrowLeft data-icon="inline-start" />
-        返回插件
+        {backLabel}
       </Button>
       <header className="flex flex-col gap-5">
         <ExtensionIcon name={name} src={presentation?.icon} size="lg" />
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold break-words">{name}</h1>
+            <h1 ref={heading} tabIndex={-1} className="text-xl font-semibold break-words">
+              {name}
+            </h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" shape="pill" onClick={onManage}>
-              <Settings2 data-icon="inline-start" />
-              管理
-            </Button>
-            <Button shape="pill" disabled={!usable || starting} onClick={() => void start()}>
-              <MessageCircle data-icon="inline-start" />
-              {starting ? "正在打开…" : "立即使用"}
-            </Button>
-          </div>
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
         </div>
         {presentation?.description ? (
           <p className="-mt-2 text-sm leading-6 text-muted-foreground">
             {presentation.description}
           </p>
         ) : null}
-        {!usable ? (
-          <p className="text-xs text-muted-foreground">
-            {plugin.runtimeStatus.message} 请在管理中检查插件状态。
-          </p>
-        ) : null}
+        {status}
       </header>
+      {children}
       {presentation?.prompts?.length ? (
         <section
           aria-labelledby="plugin-prompts-title"
@@ -102,9 +157,9 @@ export function PluginDetail({
               <Button
                 key={index}
                 variant="ghost"
-                disabled={!usable || starting}
+                disabled={!onPrompt || starting}
                 aria-label={`使用示例：${item.title}`}
-                onClick={() => void start(item.prompt)}
+                onClick={() => onPrompt?.(item.prompt)}
                 title={item.title}
                 className="plugin-prompt-example h-auto min-h-16 w-full justify-between gap-4 rounded-2xl border-0 px-3 py-3 text-left whitespace-normal active:translate-y-0"
               >
@@ -126,25 +181,18 @@ export function PluginDetail({
           </div>
         </section>
       ) : null}
-      <section aria-labelledby="plugin-introduction-title" className="flex flex-col gap-3">
-        <h2 id="plugin-introduction-title" className="sr-only">
-          插件介绍
-        </h2>
-        {presentation?.introduction || presentation?.description ? (
-          <article className="desktop-markdown-preview text-sm leading-7">
-            <Streamdown
-              mode="static"
-              controls={false}
-              plugins={{ cjk }}
-              className="desktop-streamdown"
-            >
-              {presentation.introduction || presentation.description || ""}
-            </Streamdown>
-          </article>
-        ) : (
-          <p className="text-sm text-muted-foreground">作者暂未提供插件介绍。</p>
-        )}
-      </section>
+      {introduction && introduction !== presentation?.description?.trim() ? (
+        <section aria-label="插件介绍" className="desktop-markdown-preview text-sm leading-7">
+          <Streamdown
+            mode="static"
+            controls={false}
+            plugins={{ cjk }}
+            className="desktop-streamdown"
+          >
+            {introduction}
+          </Streamdown>
+        </section>
+      ) : null}
       <section aria-labelledby="plugin-information-title" className="flex flex-col gap-4">
         <h2
           id="plugin-information-title"
@@ -154,7 +202,8 @@ export function PluginDetail({
         </h2>
         <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-8 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] [&>dd]:min-w-0 [&>dd]:break-words">
           <dt className="text-muted-foreground">版本</dt>
-          <dd>{plugin.identity.version}</dd>
+          <dd>{version}</dd>
+          {information}
           {presentation?.author ? (
             <>
               <dt className="text-muted-foreground">开发者</dt>

@@ -48,7 +48,7 @@ import type {
   DesktopPluginSnapshot,
 } from "@shared/plugin-types"
 import { PluginDetailsDialog } from "../../settings-page/plugins/plugin-settings"
-import { ExtensionIcon } from "../shared/plugin-catalog"
+import { ExtensionIcon, ExtensionRow } from "../shared/plugin-catalog"
 import { PluginDetail } from "./plugin-detail"
 export interface PluginManagerProps {
   query: string
@@ -63,12 +63,37 @@ export interface PluginManagerProps {
 }
 export function PluginManager(props: PluginManagerProps): React.JSX.Element {
   const [mode, setMode] = useState("installed")
-  useEffect(() => { if (props.sourceAddRequest) setMode("marketplace") }, [props.sourceAddRequest])
-  return <div className="flex flex-col gap-5">
-    <Tabs value={mode} onValueChange={setMode}><TabsList className="extension-tabs bg-transparent" wrapperClassName="w-auto" aria-label="插件浏览方式"><TabsTrigger value="marketplace">浏览市场</TabsTrigger><TabsTrigger value="installed">已安装</TabsTrigger></TabsList></Tabs>
-    <div hidden={mode !== "marketplace"}><Marketplace {...props} /></div>
-    <div hidden={mode !== "installed"}><InstalledPluginManager {...props} /></div>
-  </div>
+  const [marketDetail, setMarketDetail] = useState(false)
+  const [installedDetail, setInstalledDetail] = useState(false)
+  const detailOpen = mode === "marketplace" ? marketDetail : installedDetail
+  useEffect(() => {
+    props.onDetailChange?.(detailOpen)
+  }, [detailOpen, props.onDetailChange])
+  useEffect(() => {
+    if (props.sourceAddRequest) setMode("marketplace")
+  }, [props.sourceAddRequest])
+  return (
+    <div className="flex flex-col gap-5">
+      {!detailOpen ? (
+        <Tabs value={mode} onValueChange={setMode}>
+          <TabsList
+            className="extension-tabs bg-transparent"
+            wrapperClassName="w-auto"
+            aria-label="插件浏览方式"
+          >
+            <TabsTrigger value="marketplace">浏览市场</TabsTrigger>
+            <TabsTrigger value="installed">已安装</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      ) : null}
+      <div hidden={mode !== "marketplace"}>
+        <Marketplace {...props} notify={toast.success} onDetailChange={setMarketDetail} />
+      </div>
+      <div hidden={mode !== "installed"}>
+        <InstalledPluginManager {...props} onDetailChange={setInstalledDetail} />
+      </div>
+    </div>
+  )
 }
 
 type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }> & {
@@ -688,45 +713,6 @@ export function InstalledPluginManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  )
-}
-function ExtensionRow({
-  name,
-  icon,
-  description,
-  status,
-  onClick,
-  action,
-}: {
-  name: string
-  icon?: string
-  description: string
-  status?: string
-  onClick: () => void
-  action: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div
-      data-extension-row
-      className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl px-1 py-3"
-    >
-      <button
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={onClick}
-      >
-        <ExtensionIcon name={name} src={icon} />
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-sm font-semibold group-hover:underline group-hover:underline-offset-4">
-            {name}
-          </span>
-          <span className="truncate text-sm text-muted-foreground" title={description}>
-            {description}
-          </span>
-          {status ? <span className="truncate text-xs text-muted-foreground">{status}</span> : null}
-        </span>
-      </button>
-      {action}
     </div>
   )
 }

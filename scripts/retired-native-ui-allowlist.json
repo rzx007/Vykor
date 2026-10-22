@@ -540,13 +540,13 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/__test__/plugin-manager.test.tsx",
-      "line": 377,
+      "line": 417,
       "text": "          uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/__test__/plugin-manager.test.tsx",
-      "line": 393,
+      "line": 433,
       "text": "          uiInventory: { manifestCount: 1, componentCount: null, validatedComponentCount: 0 },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },

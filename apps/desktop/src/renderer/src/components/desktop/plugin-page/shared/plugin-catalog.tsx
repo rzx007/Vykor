@@ -1,4 +1,14 @@
-import { Braces, Globe, Mail, FolderOpen, Plug, Database } from "lucide-react"
+import {
+  Braces,
+  Globe,
+  Mail,
+  FolderOpen,
+  Plug,
+  Database,
+  NotebookPen,
+  PencilRuler,
+  TextSearch,
+} from "lucide-react"
 import Github from "@lobehub/icons/es/Github/components/Mono"
 import Figma from "@lobehub/icons/es/Figma/components/Color"
 import Notion from "@lobehub/icons/es/Notion/components/Mono"
@@ -50,6 +60,12 @@ export function ExtensionIcon({
     <Notion size={25} />
   ) : normalized.includes("google") ? (
     <Google size={25} />
+  ) : /excalidraw|canvas|画板/.test(normalized) ? (
+    <PencilRuler className="size-6" />
+  ) : /notes|笔记/.test(normalized) ? (
+    <NotebookPen className="size-6" />
+  ) : /inspector|文本检查/.test(normalized) ? (
+    <TextSearch className="size-6" />
   ) : /mail|邮件/.test(normalized) ? (
     <Mail className="size-6" />
   ) : /browser|浏览/.test(normalized) ? (
@@ -91,5 +107,48 @@ export function ExtensionIcon({
         icon
       )}
     </span>
+  )
+}
+
+export function ExtensionRow({
+  name,
+  icon,
+  description,
+  status,
+  onClick,
+  action,
+}: {
+  name: string
+  icon?: string
+  description?: string
+  status?: string
+  onClick: () => void
+  action: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div
+      data-extension-row
+      className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl px-1 py-3"
+    >
+      <button
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`查看 ${name} 详情`}
+        onClick={onClick}
+      >
+        <ExtensionIcon name={name} src={icon} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-sm font-semibold group-hover:underline group-hover:underline-offset-4">
+            {name}
+          </span>
+          {description ? (
+            <span className="truncate text-sm text-muted-foreground" title={description}>
+              {description}
+            </span>
+          ) : null}
+          {status ? <span className="truncate text-xs text-muted-foreground">{status}</span> : null}
+        </span>
+      </button>
+      {action}
+    </div>
   )
 }

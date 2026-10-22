@@ -14,24 +14,10 @@ import {
   DialogFooter,
 } from "@renderer/components/ui/dialog"
 import { pluginErrorMessage } from "@renderer/lib/plugin-error"
-
-const capabilityLabels: Record<string, string> = {
-  tool: "工具",
-  tools: "工具",
-  mcp: "工具服务",
-  app: "常驻应用",
-  apps: "常驻应用",
-  skill: "技能",
-  skills: "技能",
-  agent: "智能体",
-  agents: "智能体",
-  hook: "运行钩子",
-  hooks: "运行钩子",
-  command: "快捷命令",
-  commands: "快捷命令",
-}
-const capabilities = (types: string[]): string =>
-  types.map((type) => capabilityLabels[type] ?? type).join("、")
+import { CircleCheck, Plus, RefreshCw, Settings2 } from "lucide-react"
+import { Skeleton } from "@renderer/components/ui/skeleton"
+import { ExtensionRow } from "../shared/plugin-catalog"
+import { MarketplaceDetail } from "./marketplace-detail"
 
 export function Marketplace({
   query,
@@ -40,6 +26,7 @@ export function Marketplace({
   sourceAddRequest = 0,
   notify,
   onUse,
+  onDetailChange,
 }: {
   query: string
   projectPath: string
@@ -47,6 +34,7 @@ export function Marketplace({
   sourceAddRequest?: number
   notify: (message: string) => void
   onUse?: (plugin: DesktopPluginInfo, prompt: string) => Promise<void>
+  onDetailChange?: (open: boolean) => void
 }): React.JSX.Element {
   const api = window.desktop?.plugins
   const [catalog, setCatalog] = useState<MarketplaceCatalog>({ entries: [], sources: [] })
@@ -64,6 +52,21 @@ export function Marketplace({
   const lock = useRef(false)
   const previousRefresh = useRef(refreshRequest)
   const previousAdd = useRef(sourceAddRequest)
+  const approvalEntry = useRef<MarketplaceEntry | null>(null)
+  const operationEntry = useRef<MarketplaceEntry | null>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const wasDetailOpen = useRef(false)
+  const detail =
+    selected &&
+    catalog.entries.find(
+      (entry) => entry.sourceId === selected.sourceId && entry.plugin.id === selected.plugin.id
+    )
+  const detailOpen = Boolean(detail)
+  useEffect(() => {
+    if (wasDetailOpen.current && !detailOpen) heading.current?.focus({ preventScroll: true })
+    wasDetailOpen.current = detailOpen
+    onDetailChange?.(detailOpen)
+  }, [detailOpen, onDetailChange])
   async function load(refresh = false): Promise<void> {
     if (!api?.marketplaceCatalog) {
       setLoading(false)
@@ -101,8 +104,12 @@ export function Marketplace({
     previousAdd.current = sourceAddRequest
     setSourcesOpen(true)
   }, [sourceAddRequest])
-  async function receive(result: MarketplaceOperation): Promise<void> {
+  async function receive(
+    result: MarketplaceOperation,
+    owner = operationEntry.current
+  ): Promise<void> {
     const current = generation.current
+    operationEntry.current = owner
     setOperation(result)
     if (result.status === "installed") {
       notify(`${result.message} 新版本将在下次对话中生效。`)
@@ -142,8 +149,9 @@ export function Marketplace({
         await api.marketplaceCancel({ selectionId: result.selectionId })
         return
       }
-      if (result.operation) await receive(result.operation)
+      if (result.operation) await receive(result.operation, entry)
       else {
+        approvalEntry.current = entry
         handle.current = result.selectionId
         setApproval(result)
       }
@@ -153,16 +161,39 @@ export function Marketplace({
     const selectionId = handle.current
     handle.current = null
     setApproval(null)
+    approvalEntry.current = null
     if (selectionId) await api?.marketplaceCancel({ selectionId })
   }
   const entries = catalog.entries.filter((entry) =>
     [entry.plugin.displayName, entry.plugin.name, entry.plugin.description, entry.plugin.category]
       .join(" ")
       .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
+      .includes(query.trim().toLocaleLowerCase())
   )
   const sourceName = (id: string): string => catalog.sources.find((s) => s.id === id)?.name ?? id
-  function action(entry: MarketplaceEntry): React.JSX.Element {
+  const ownsReceipt = Boolean(
+    detail &&
+    operationEntry.current?.sourceId === detail.sourceId &&
+    operationEntry.current.plugin.id === detail.plugin.id
+  )
+  const canUseInstalled =
+    ownsReceipt &&
+    operation?.status === "installed" &&
+    installed?.identity.id === detail?.plugin.id &&
+    installed?.identity.version === detail?.plugin.version &&
+    installed?.enabled &&
+    installed?.installation === "installed" &&
+    installed?.permissions.missing.length === 0 &&
+    installed?.runtimeStatus.state !== "failed" &&
+    detail?.installedSourceId === detail?.sourceId &&
+    !detail?.updateAvailable
+  function useInstalled(prompt = ""): void {
+    if (!canUseInstalled || !installed || !onUse) return
+    void run(async () => {
+      await onUse(installed, prompt)
+    })
+  }
+  function action(entry: MarketplaceEntry, inDetail = false): React.JSX.Element {
     const installed = Boolean(entry.installedVersion)
     const sameSource = entry.installedSourceId === entry.sourceId
     const sourceChange = installed && !sameSource
@@ -178,27 +209,57 @@ export function Marketplace({
           : installed
             ? "已安装"
             : "安装"
+    const addIcon = !inDetail && label === "安装"
     return (
       <Button
-        shape="pill"
-        variant={alreadyInstalled ? "outline" : "default"}
+        shape={addIcon ? "circle" : "pill"}
+        size={addIcon ? "icon-sm" : "sm"}
+        variant={inDetail && !alreadyInstalled ? "default" : "ghost"}
+        aria-label={addIcon ? `安装 ${entry.plugin.displayName ?? entry.plugin.name}` : label}
+        title={entry.compatible ? label : (entry.incompatibility ?? label)}
         disabled={busy || !entry.compatible || alreadyInstalled}
         onClick={() => void preview(entry)}
       >
-        {label}
+        {addIcon ? (
+          <Plus />
+        ) : (
+          <>
+            {alreadyInstalled ? <CircleCheck data-icon="inline-start" /> : null}
+            {label}
+          </>
+        )}
       </Button>
     )
   }
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" shape="pill" disabled={busy} onClick={() => void load(true)}>
-          刷新市场
-        </Button>
-        <Button variant="outline" shape="pill" onClick={() => setSourcesOpen(true)}>
-          管理插件源
-        </Button>
-      </div>
+      {!detail ? (
+        <div className="flex items-center justify-between gap-3">
+          <h2 ref={heading} tabIndex={-1} className="text-[15px] font-semibold">
+            全部插件
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              {loading ? "" : entries.length}
+            </span>
+          </h2>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              shape="circle"
+              aria-label="刷新市场"
+              title="刷新市场"
+              disabled={busy}
+              onClick={() => void load(true)}
+            >
+              <RefreshCw />
+            </Button>
+            <Button variant="ghost" size="sm" shape="pill" onClick={() => setSourcesOpen(true)}>
+              <Settings2 data-icon="inline-start" />
+              管理插件源
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -212,7 +273,7 @@ export function Marketplace({
             {s.updatedAt ? ` · 缓存时间 ${new Date(s.updatedAt).toLocaleString()}` : ""}
           </p>
         ))}
-      {operation ? (
+      {operation && operation.status !== "installed" ? (
         <div role="status" className="flex items-center gap-3 text-sm">
           <span>{operation.message}</span>
           {operation.status === "unknown" || operation.status === "pending" ? (
@@ -234,79 +295,68 @@ export function Marketplace({
               检查安装结果
             </Button>
           ) : null}
-          {installed && onUse ? (
-            <Button shape="pill" onClick={() => void onUse(installed, "")}>
-              新建对话使用
-            </Button>
-          ) : null}
         </div>
       ) : null}
-      {loading ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          正在加载市场…
-        </p>
-      ) : entries.length ? (
-        <div className="divide-y divide-border/50">
-          {entries.map((entry) => (
-            <div
-              key={`${entry.sourceId}:${entry.plugin.id}`}
-              className="flex min-h-20 items-center gap-4 py-4"
-            >
-              <button
-                className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-                onClick={() => setSelected(entry)}
-              >
-                <span className="text-sm font-semibold">
-                  {entry.plugin.displayName ?? entry.plugin.name}
-                </span>
-                <span className="text-sm text-muted-foreground">{entry.plugin.description}</span>
-                <span className="text-xs text-muted-foreground">
-                  {entry.plugin.author?.name ? `${entry.plugin.author.name} · ` : ""}
-                  {entry.plugin.version} · {entry.plugin.category} ·{" "}
-                  {capabilities(entry.plugin.componentTypes)} · {sourceName(entry.sourceId)}
-                  {entry.installedVersion
-                    ? ` · 已安装 ${entry.installedVersion} · ${entry.installedSourceId ? `安装来源：${catalog.sources.find((source) => source.id === entry.installedSourceId)?.name ?? "其他插件源"}` : "未关联插件源"}`
-                    : ""}
-                </span>
-                {!entry.compatible ? (
-                  <span className="text-xs text-destructive">{entry.incompatibility}</span>
-                ) : null}
-              </button>
-              {action(entry)}
+      {detail ? (
+        <MarketplaceDetail
+          entry={detail}
+          sourceName={sourceName(detail.sourceId)}
+          installedSourceName={
+            detail.installedSourceId ? sourceName(detail.installedSourceId) : undefined
+          }
+          onBack={() => setSelected(null)}
+          starting={busy}
+          onPrompt={canUseInstalled && onUse ? useInstalled : undefined}
+          action={
+            canUseInstalled && installed && onUse ? (
+              <Button shape="pill" disabled={busy} onClick={() => useInstalled()}>
+                新建对话使用
+              </Button>
+            ) : (
+              action(detail, true)
+            )
+          }
+          receipt={
+            ownsReceipt && operation ? (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer">安装回执 · {operation.message}</summary>
+                <p className="mt-2 break-all">{operation.operationId}</p>
+              </details>
+            ) : undefined
+          }
+        />
+      ) : loading ? (
+        <div
+          role="status"
+          aria-label="正在加载市场"
+          className="grid grid-cols-1 gap-x-10 md:grid-cols-2"
+        >
+          {[1, 2, 3, 4].map((key) => (
+            <div key={key} className="flex items-center gap-3 py-3">
+              <Skeleton className="size-11 rounded-xl" />
+              <div className="flex flex-1 flex-col gap-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
             </div>
+          ))}
+        </div>
+      ) : entries.length ? (
+        <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2" aria-label="市场插件">
+          {entries.map((entry) => (
+            <ExtensionRow
+              key={`${entry.sourceId}:${entry.plugin.id}`}
+              name={entry.plugin.displayName ?? entry.plugin.name}
+              icon={entry.plugin.icon}
+              description={entry.plugin.description}
+              onClick={() => setSelected(entry)}
+              action={action(entry)}
+            />
           ))}
         </div>
       ) : (
         <p className="py-6 text-sm text-muted-foreground">没有找到匹配的市场插件。</p>
       )}
-      <Dialog
-        open={Boolean(selected)}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selected?.plugin.displayName ?? selected?.plugin.name}</DialogTitle>
-            <DialogDescription>{selected?.plugin.description}</DialogDescription>
-          </DialogHeader>
-          {selected ? (
-            <div className="flex flex-col gap-3 text-sm">
-              <p>
-                {selected.plugin.author?.name ? `作者：${selected.plugin.author.name} · ` : ""}版本{" "}
-                {selected.plugin.version}
-              </p>
-              <p>来源：{sourceName(selected.sourceId)}</p>
-              <p>
-                分类：{selected.plugin.category} · 能力：
-                {capabilities(selected.plugin.componentTypes)}
-              </p>
-              <p>{selected.compatible ? "与当前版本兼容" : selected.incompatibility}</p>
-              {action(selected)}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
       <Dialog
         open={Boolean(approval)}
         onOpenChange={(open) => {
@@ -354,7 +404,7 @@ export function Marketplace({
                   handle.current = null
                   if (current !== generation.current) return
                   setApproval(null)
-                  await receive(result)
+                  await receive(result, approvalEntry.current)
                 })
               }
             >
@@ -400,7 +450,7 @@ export function Marketplace({
                     {source.name}
                     {source.builtin ? "（内置）" : ""}
                   </p>
-                  <p className="break-all text-xs text-muted-foreground">{source.url}</p>
+                  <p className="text-xs break-all text-muted-foreground">{source.url}</p>
                 </div>
                 <Switch
                   aria-label={`${source.enabled ? "禁用" : "启用"} ${source.name}`}
