@@ -183,8 +183,11 @@ async function validProjects(
         root,
         info: { name: project.name.trim() || basename(root), path: root },
       });
-    } catch {
-      warnings.push(`项目不存在或不是目录：${project.path}`);
+    } catch (error) {
+      // Removed projects are stale catalog entries, not skill-loading failures.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") continue;
+      warnings.push(`无法访问项目技能目录：${project.path}`);
     }
   }
   return projects;
