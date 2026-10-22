@@ -3540,7 +3540,7 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1042,
+      "line": 1041,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3624,25 +3624,25 @@
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 316,
+      "line": 303,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 410,
+      "line": 397,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 427,
+      "line": 414,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 439,
+      "line": 426,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },

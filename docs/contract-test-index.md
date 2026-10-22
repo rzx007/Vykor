@@ -125,7 +125,7 @@
 | B03 子运行创建、TTL 和关闭 | [ChildAgent](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[子环境](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) | `pnpm test` |
 | B04 撤销、冻结与父子缩权 | [插件生命周期](../packages/agent-runtime/src/node/plugins/run-capability-lifecycle.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/index.test.ts) | `pnpm test` |
 | B05 应用确认与可信来源 | [应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts)、[来源投影](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) | `pnpm test` |
-| B06 文件和 SQLite Workflow | [文件运行](../packages/agent-runtime/src/node/integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts) | `pnpm test` |
+| B06 文件和 SQLite Workflow | [文件运行](../packages/agent-runtime/src/node/integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts)、[自定义宿主取消](../packages/agent-runtime/src/node/workflow/workflow-host.child-cancellation.test.ts) | `pnpm test` |
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |

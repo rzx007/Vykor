@@ -1,6 +1,6 @@
 # Agent 核心包架构收敛实施计划
 
-> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 P0–P6 已完成并通过整体验收，P6 代码、配套文档和验收记录随本次提交交付，未推送；最新结果见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。
+> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 P0–P6 已完成并通过整体验收，P6 提交为 `c398e3d8`，未推送。最终复查后的两项 P2 修复与定向验收见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)，本次补充随本次提交交付。
 > **For agentic workers:** 仅在用户要求开始实施后使用 executing-plans 按阶段执行。只有用户或适用指令明确授权时才使用 subagent-driven-development；本计划不要求自动启动子 Agent。
 
 **Goal:** 收敛 packages 的执行、宿主和持久化职责，使新增能力不再要求修改多个核心控制层，同时保持现有执行和数据语义。
@@ -478,6 +478,8 @@ pnpm check-docs
 **验收：** B11 和所有 A/B 条目；独立 SDK、Server、Client 和文档描述一致；不把“构建成功”替代模型/子 Agent/取消/权限等行为验收。
 
 **实际进度：** 2026-10-22 完成 T11、T12 / M28–M30，P0–P6 全部完成。阶段例外为 0，存储和 Protocol 子入口规则、旧 Kernel 路径检查已收紧；联合测试迁入 tests/server-client，旧 Coordinator 包装与无引用依赖已删除。SDK 严格独立消费、跨 bundle 错误、Native Tool/PTY 均通过；全量 pnpm test exit 0（68 个 workspace 任务及后续脚本/插件/执行/联合测试），类型 67/67 加联合/受影响包补验通过。完整 A/B 对应和失败处置见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。P5 已提交为 67c3aadb，P6 代码、文档和验收记录随本次提交交付，其他并行修改保留在工作区。
+
+**最终复查后补充：** P6 已提交为 `c398e3d8`。2026-10-22 修复两项 P2：自定义 WorkflowHost 默认取消不再查询已移除的 child；普通 CI 接入架构和文档检查。新增真实 ChildManager 的 Job、父 Run、owner 和 Host 取消回归，先确认旧实现四项失败，再完成定向验证；证据见 P6 收口记录末节。本次补充随本次提交交付，不包含其他并行修改。
 
 ## 9. 验收证据矩阵
 

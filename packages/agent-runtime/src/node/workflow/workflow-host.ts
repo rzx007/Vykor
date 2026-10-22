@@ -587,8 +587,8 @@ export class WorkflowHost {
           (call.children
             ? async (id: string, reason?: string) => {
                 if (call.children!.hasChildAgent(id)) {
+                  // Interrupt waits for resource cleanup and removes the child from the directory.
                   await call.children!.interruptChildAgent(id, reason);
-                  await call.children!.awaitChildAgent(id);
                   return;
                 }
                 if (!options.executionOwner)
