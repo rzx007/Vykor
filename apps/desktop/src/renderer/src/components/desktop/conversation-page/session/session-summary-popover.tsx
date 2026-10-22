@@ -85,6 +85,51 @@ function SessionSummary({
   const runs = workflow?.snapshot?.runs ?? []
   const shellTasks =
     view?.tasks.filter((task) => task.sessionId === view.session.id && task.type === "shell") ?? []
+  const sessionRuns = view?.runs.filter((run) => run.sessionId === view.session.id) ?? []
+  const latestRun =
+    sessionRuns.find((run) => run.status === "running") ??
+    sessionRuns.reduce<(typeof sessionRuns)[number] | undefined>(
+      (latest, run) => (!latest || run.createdAt >= latest.createdAt ? run : latest),
+      undefined
+    )
+  const currentRunIds = new Set(
+    sessionRuns
+      .filter(
+        (run) =>
+          latestRun &&
+          (run.id === latestRun.id || (latestRun.inputId && run.inputId === latestRun.inputId))
+      )
+      .map((run) => run.id)
+  )
+  const currentMessageIds = new Set(
+    view?.messages
+      .filter(
+        (message) =>
+          message.sessionId === view.session.id && message.runId && currentRunIds.has(message.runId)
+      )
+      .map((message) => message.id)
+  )
+  const currentToolRequests = new Set(
+    view?.parts
+      .filter(
+        (part) =>
+          part.sessionId === view.session.id &&
+          currentMessageIds.has(part.messageId) &&
+          part.toolUseId
+      )
+      .map((part) => `tool:${part.toolUseId}`)
+  )
+  const currentTaskIds = new Set(
+    shellTasks
+      .filter((task) =>
+        task.runId
+          ? currentRunIds.has(task.runId)
+          : task.requestNamespace === "tool" &&
+            task.requestId &&
+            currentToolRequests.has(task.requestId)
+      )
+      .map((task) => task.id)
+  )
   const terminals = useSessionSummaryTerminals(view)
   const [attention] = useState(
     () =>
@@ -272,6 +317,7 @@ function SessionSummary({
             runs={runs}
             terminals={terminals.records}
             shellTasks={shellTasks}
+            currentTaskIds={currentTaskIds}
             terminalError={terminals.error}
             workflowError={workflow?.error}
             workflowReconnecting={workflow?.syncStatus === "reconnecting"}
