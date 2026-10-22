@@ -18,7 +18,7 @@ await Promise.all([
     recursive: true,
   }),
   copyFile(
-    join(root, "packages/agent-runtime/src/native-tools/host-entry.mjs"),
+    join(root, "packages/agent-runtime/src/node/plugins/native-tools/host-entry.mjs"),
     join(output, "host-entry.mjs")
   ),
 ])

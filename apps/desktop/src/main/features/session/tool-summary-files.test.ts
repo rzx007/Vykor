@@ -11,7 +11,6 @@ import { collectChangedFiles } from "../../../renderer/src/components/desktop/co
 import { SessionStore } from "../../../../../../packages/services/src/index.js";
 import { SessionTranscriptProjection } from "../../../../../../packages/server/src/application/session/transcript-projection.js";
 import { QueryEngine, ToolRegistry } from "../../../../../../packages/core/src/index.js";
-import type { StreamEvent } from "@vykor/agent-contracts";
 
 it("keeps actual long ApplyPatch and ordered Edit file identities without deriving preview line counts", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "oh-summary-files-"));
@@ -44,12 +43,12 @@ it("keeps actual long ApplyPatch and ordered Edit file identities without derivi
     const registry = new ToolRegistry();
     registry.register(fileEditTool);
     let requested = false;
-    const engine = new QueryEngine({ async *streamMessage(): AsyncIterable<StreamEvent> {
+    const engine = new QueryEngine({ async *streamMessage() {
       if (!requested) {
         requested = true;
-        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "WrappedEdit", name: "Edit", input: wrappedInput } };
-        yield { type: "complete", stopReason: "tool_use" };
-      } else yield { type: "complete", stopReason: "end_turn" };
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "WrappedEdit", name: "Edit", input: wrappedInput } } as const;
+        yield { type: "complete", stopReason: "tool_use" } as const;
+      } else yield { type: "complete", stopReason: "end_turn" } as const;
     } }, registry, { checkTool: async () => ({ action: "allow" }) },
     { execute: async () => ({ blocked: false }) }, { cwd, trajectoryTrackerFactory: false });
     for await (const event of engine.submitMessage("fixture")) {

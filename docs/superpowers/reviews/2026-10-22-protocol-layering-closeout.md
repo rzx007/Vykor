@@ -35,6 +35,16 @@
 
 等待期间新增的 Transcript 运行指示修复按“提交所有代码”要求一并纳入，其单文件 16 项通过。桌面 Node / Web / MCP Apps SDK 三项类型检查分别通过；Web 与 SDK 只在修正各自失败后补跑对应命令，没有重复已通过的测试组。
 
+### main 推送后的 CI 修复
+
+`e9f64590` 的 [CI 39778381610](https://github.com/rzx007/Vykor/actions/runs/39778381610) 在 Build 阶段失败：桌面测试的 `@vykor/agent-contracts` 类型导入违反桌面仅直接消费 Client/Server 的入口规则。该导入是合并前修正旧类型导入时引入的；此前边界检查在这一修改之前运行，不能证明最终提交通过。后续 Type check、架构、文档和 Test 步骤被跳过，不记为通过。
+
+本次移除该导入及显式返回类型，用事件字面量推断保留测试的类型检查；不扩大白名单、不恢复旧公开导出，也不改用源码相对路径绕过检查。原边界命令先复现退出 1，修复后退出 0；`tool-summary-files.test.ts` 单文件 1 项通过，CLI 构建输出 4 个文件、退出 0。只运行相关验证，没有执行完整 `pnpm test`。
+
+随后运行 Desktop 构建，三项类型检查通过，但资源复制暴露出另一处迁移遗漏：仍读取 `agent-runtime/src/native-tools/host-entry.mjs`。已将正式构建和 Plugin Apps 测试后端脚本统一指向 `src/node/plugins/native-tools/host-entry.mjs`；后端构建脚本退出 0。只重跑受影响的 Electron 打包阶段，不重复已通过的类型检查或测试。
+
+最终 `pnpm --filter @vykor/desktop exec electron-vite build` 退出 0，文档预览、Main、Preload、Renderer 均完成。`verify-update-packaging.mjs --build` 退出 0，正式产物与测试后端的两份 Host 文件均逐字节匹配规范源码。以上为本机 Windows 定向验证；远端原 CI 的后续步骤未执行，修复推送后的 Linux CI 结果需另行确认。
+
 ## 实际收敛结果
 
 | 阶段 | 完成内容 |
