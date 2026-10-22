@@ -1624,7 +1624,7 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 
 ### Task 21：覆盖原因与引用纠正示例
 
-**Files:** packages/core/src/types/tools.ts；engine/tool-input-reuse.ts；packages/tools/src/file/write.ts；packages/prompts/src/index.ts；对应复用及 Write 集成测试。
+**Files:** packages/agent-contracts/src/tools.ts；engine/tool-input-reuse.ts；packages/tools/src/file/write.ts；packages/prompts/src/index.ts；对应复用及 Write 集成测试。
 
 **Interfaces:** 既有 inputReuse 增加可选 formatRecoveryHint，接收只读输入选项、sourceId 和只读失败事实，不传结果正文；Write 使用 metadata.writeFailure 的稳定原因。
 
@@ -1639,7 +1639,7 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 
 ### Task 22：纠错耗尽直接停止
 
-**Files:** packages/core/src/engine/query-engine.ts；新增同目录 tool-input-corrections.test.ts；packages/agent-runtime/src/framework-agent-run-retry.test.ts。
+**Files:** packages/core/src/engine/query-engine.ts；新增同目录 tool-input-corrections.test.ts；packages/agent-runtime/src/node/runtime/framework-agent-run-retry.test.ts。
 
 **Interfaces:** 使用现有 ToolExecutionResult 与 runtime 异常序列化；内部异常 ToolInputCorrectionsExceeded 的 name/message 不依赖自定义字段。
 
@@ -1949,7 +1949,7 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 
 ### Task 42: 有界生成摘要与安静的工具行
 
-**Files:** packages/core/src/types/events.ts 及 query-engine.ts 的进度转发分支／对应测试；packages/api/src/providers 中现有三种适配器／DSML scanner／进度测试和至多一个共享摘要模块；packages/server/src/application/agent/daemon-agent-event-projector.ts 及进度投影测试；desktop 的 tool-generation-presentation.ts／assistant-message.tsx 及直接测试；tools Write／Edit 仅调整 file_path 描述。不改协议存储 schema、核心工具执行／权限／恢复分支或其他 UI 功能。
+**Files:** packages/agent-contracts/src/events.ts 及 query-engine.ts 的进度转发分支／对应测试；packages/api/src/providers 中现有三种适配器／DSML scanner／进度测试和至多一个共享摘要模块；packages/server/src/application/agent/daemon-agent-event-projector.ts 及进度投影测试；desktop 的 tool-generation-presentation.ts／assistant-message.tsx 及直接测试；tools Write／Edit 仅调整 file_path 描述。不改协议存储 schema、核心工具执行／权限／恢复分支或其他 UI 功能。
 
 **Interfaces:** ToolGenerationProgressEvent 增加可选 filePath:string|null、可选 discarded:boolean。null 只撤回该调用的路径，不删除其接收量；丢弃事件仍带原 generation／attempt／toolKey，只撤销对应 Run 摘要；正常进度继续单调 receivedChars。renderer 路径放在展示 metadata，不放进正式 input。
 

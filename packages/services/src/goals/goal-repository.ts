@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { GoalUsage, SessionGoal } from "@vykor/protocol";
+import type { GoalUsage, SessionGoal } from "@vykor/domain-contracts/goals";
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";

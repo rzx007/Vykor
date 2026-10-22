@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 import { createDaemonAutoStartController } from "../auto-start-controller.js";
 

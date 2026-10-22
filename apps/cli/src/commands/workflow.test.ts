@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { FileWorkflowRunRepository } from "@vykor/agent-runtime/node/workflow";
 import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
@@ -16,6 +17,29 @@ import {
 } from "./workflow";
 
 describe("workflow command", () => {
+  it("cancels a persisted file workflow through its explicit host", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "oh-workflow-cli-cancel-"));
+    const output = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const repository = new FileWorkflowRunRepository({ cwd: directory });
+      const spec = { mode: "sequential" as const, tasks: [{ id: "one" }] };
+      repository.save(createWorkflowRunSnapshot({
+        runId: "cancelled", status: "running", summary: "running", spec,
+        plan: createWorkflowPlan(spec), results: new Map(), running: new Set(["one"]), createdAt: 1,
+      }));
+      await createWorkflowCommand().parseAsync([
+        "node", "workflow", "cancel", "cancelled", "--cwd", directory, "--reason", "user stopped",
+      ]);
+      expect(repository.load("cancelled")).toMatchObject({
+        status: "failed", termination: "cancelled", summary: "user stopped",
+      });
+      expect(repository.loadEvents("cancelled")).toContainEqual(expect.objectContaining({ type: "workflow_cancelled" }));
+    } finally {
+      output.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("registers workflow subcommands", () => {
     const cmd = createWorkflowCommand();
     expect(cmd.name()).toBe("workflow");

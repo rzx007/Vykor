@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "../../../../test-helpers/hosted-agent.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -48,7 +49,8 @@ function createMaintenance(agent: Record<string, any>, options: { personalizatio
   };
   const agentPool = {
     configured: true,
-    acquireSession: vi.fn(async () => agent),
+    acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => agent),
     hasActiveWorkForSession: vi.fn(() => false),
     hasActiveWorkForCwd: vi.fn(() => false),
     close: vi.fn(async () => {}),
@@ -109,7 +111,8 @@ describe("SessionMaintenanceService", () => {
         runControl: { hasWork: () => false, hasActiveRunsForCwd: () => false } as any,
         agentPool: {
           configured: true,
-          acquireSession: async () => ({ compact }),
+          acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ compact }),
           hasActiveWorkForSession: () => false,
           hasActiveWorkForCwd: () => false,
         } as any,

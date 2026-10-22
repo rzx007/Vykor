@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { describe, it, expect } from "vitest";
 import {
   shellTool as bashTool,
@@ -47,10 +49,25 @@ describe("bashTool", () => {
         };
       },
     });
-    const result = await tool.execute!(
-      { command: "ignored", timeout: 500 },
-      { cwd: process.cwd() }
-    );
+    const result = await executeToolFixture(host => createBashTool({
+      async resolve() {
+        return {
+          timeoutMs: 500,
+          maxOutputChars: 12_000,
+          hostShell: { kind: "posix-sh" },
+          runner: { mode: "host", fallbackToHost: false },
+        } as ShellExecSpec;
+      },
+      async run() {
+        return {
+          status: "timed_out",
+          failureKind: "timeout",
+          output: "partial-marker",
+          outputTruncated: false,
+          exitCode: null,
+        };
+      },
+    }, undefined, undefined, host), { command: "ignored", timeout: 500 }, { cwd: process.cwd() });
     const text = (result.content[0] as any).text as string;
     expect(result.isError).toBe(true);
     expect(text).toContain("timed out");

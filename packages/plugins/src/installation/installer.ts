@@ -1,4 +1,4 @@
-import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/core";
+import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/host-config";
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { validateNativePlugin } from "../manifest/validate.js";

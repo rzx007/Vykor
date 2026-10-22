@@ -1,0 +1,67 @@
+{
+  "brand": "Vykor",
+  "source": "apps/desktop/resources/icon.png (project-owned reference)",
+  "asset": "vykor-optical-mark.glb",
+  "clip": "scrollani",
+  "duration_seconds": 4.0,
+  "scroll_mapping": "clamp(progress, 0, 1) * 4",
+  "front": "+Z in exported glTF, +Y up",
+  "parts": [
+    "Vykor_Rig",
+    "Bracket_Left",
+    "Bracket_Right",
+    "Lime_Inlay_Left",
+    "Lime_Inlay_Right",
+    "Robot_Face",
+    "Connector_Left",
+    "Connector_Right"
+  ],
+  "materials": [
+    "Vykor_Smoked_Optical_Glass",
+    "Vykor_Lime_Core",
+    "Vykor_Graphite_Connector"
+  ],
+  "runtime_material_hint": {
+    "ior": [
+      1.35,
+      1.48
+    ],
+    "transmission": [
+      0.94,
+      0.94
+    ],
+    "roughness": [
+      0.075,
+      0.1
+    ],
+    "thickness": [
+      0.16,
+      0.28
+    ],
+    "note": "Use a lit environment in Three.js; the glTF model does not contain its studio environment."
+  },
+  "posters": [
+    "vykor-mark-transparent.png",
+    "hero-closeup.png",
+    "hero-assembled.png"
+  ],
+  "layers": {
+    "Lime_Inlay_Left": "optional coloured insert; hide for clear glass",
+    "Lime_Inlay_Right": "optional coloured insert; hide for clear glass"
+  },
+  "validated": {
+    "glb_version": 2,
+    "external_images": 0,
+    "channels": 6,
+    "animation_time_range": [
+      0.0,
+      4.0
+    ],
+    "no_external_geometry_buffers": true
+  },
+  "web_posters": [
+    "hero-closeup.webp",
+    "hero-assembled.webp",
+    "vykor-mark-transparent.webp"
+  ]
+}

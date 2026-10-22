@@ -8,6 +8,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./effective-permission-mode": {
+      "import": "./src/effective-permission-mode.ts",
+      "types": "./src/effective-permission-mode.ts"
     }
   },
   "scripts": {
@@ -17,8 +21,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/environment": "workspace:*",
-    "@vykor/core": "workspace:*"
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

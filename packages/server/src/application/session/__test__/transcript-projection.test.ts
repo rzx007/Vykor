@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "@vykor/services";
-import type { SessionInputRecord } from "@vykor/protocol";
+import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 
 import { SessionTranscriptProjection } from "../transcript-projection.js";
 

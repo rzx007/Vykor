@@ -22,7 +22,7 @@
 ### Task 1: 批次 A — 凭据、配置、Web 和 MCP
 
 **源提交：** `60435f90`、`75cc6b14`、`7694bf52`（不含已删除 Docker）、`b199fad1`、`5e37a945`（不含已删除 Cron）。
-**负责文件：** packages/auth/src/{credential-storage,credential-resolution}.ts 及测试；packages/core/src/config/settings.ts 及对应测试；packages/server/src/default-services/provider-service.ts 及测试；packages/tools/src/{web,mcp}；packages/agent-runtime/src/mcp-auth.ts、必要接线及相关测试。
+**负责文件：** packages/auth/src/{credential-storage,credential-resolution}.ts 及测试；packages/core/src/config/settings.ts 及对应测试；packages/server/src/default-services/provider-service.ts 及测试；packages/tools/src/{web,mcp}；packages/agent-runtime/src/node/mcp/mcp-auth.ts、必要接线及相关测试。
 **输入/输出：** 沿用 CredentialStorage、配置原子写入、已有 prepared MCP connection 和当前工具授权入口；不创建第二套权限策略。
 
 - [x] 移植原提交的行为测试：两个凭据实例交错写入不能丢掉对方内容；命名自定义 endpoint 不借用其他密钥；保存配置不写入 transient apiKey；缺失/非法 provider id 明确拒绝。

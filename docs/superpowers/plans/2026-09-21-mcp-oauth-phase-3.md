@@ -65,7 +65,7 @@ interface CredentialMutationContext {
 
 **创建：** `packages/mcp/src/oauth/resource-binding.ts`、`resource-binding.test.ts`、`protocol.test.ts`。
 
-**修改：** `packages/mcp/src/oauth/protocol.ts`、`login.ts`、`runtime-auth.ts`、`status.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`、`packages/agent-runtime/src/runtime-integrations.ts`。
+**修改：** `packages/mcp/src/oauth/protocol.ts`、`login.ts`、`runtime-auth.ts`、`status.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`、`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`。
 
 **测试：** 上述 MCP 测试与 `packages/core/src/config/settings.test.ts`。
 

@@ -1,12 +1,5 @@
-import {
-  EXECUTION_KINDS,
-  type ExecutionKind,
-  type ExecutionKindSummary,
-  type ExecutionObservation,
-  type ExecutionObservationExport,
-  type ExecutionObservationFilter,
-  type ExecutionObservationWarning,
-} from "@vykor/protocol";
+import { EXECUTION_KINDS } from "./query-models.js";
+import type { ExecutionKind, ExecutionKindSummary, ExecutionObservation, ExecutionObservationExport, ExecutionObservationFilter, ExecutionObservationWarning } from "./query-models.js";
 
 import type { SessionObservationReadResult } from "./session-execution-observation-reader.js";
 import type { WorkflowObservationReadResult } from "./workflow-execution-observation-reader.js";

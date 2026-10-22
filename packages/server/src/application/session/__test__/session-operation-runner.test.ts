@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionEventRecord } from "@vykor/protocol";
+import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 import { ApplicationEventService } from "../../events/application-event-service.js";

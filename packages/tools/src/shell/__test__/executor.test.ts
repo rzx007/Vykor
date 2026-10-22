@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import {
   SandboxPolicyDeniedError,
   type HostShellLauncher,

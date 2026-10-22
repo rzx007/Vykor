@@ -8,7 +8,7 @@ import type {
   CredentialMutationContext,
   McpOAuthCredentialRecord,
   McpRemoteServerConfig,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { createOAuthCallback, parseCallbackUrl, type OAuthCallbackController } from "./callback.js";
 import { McpOAuthError } from "./errors.js";
 import {

@@ -5,6 +5,15 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": [
+        "../coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../coordinator/src/workflow/index.ts"
+      ],
       "@vykor/coordinator": [
         "../coordinator/src/index.ts"
       ],
@@ -16,6 +25,81 @@
       ],
       "@vykor/services": [
         "../services/src/index.ts"
+      ],
+      "@vykor/json-data/json": [
+        "../json-data/src/json.ts"
+      ],
+      "@vykor/plugin-contracts/manifest": [
+        "../plugin-contracts/src/manifest.ts"
+      ],
+      "@vykor/plugin-contracts/presentation": [
+        "../plugin-contracts/src/presentation.ts"
+      ],
+      "@vykor/plugin-contracts/validation": [
+        "../plugin-contracts/src/validation.ts"
+      ],
+      "@vykor/plugin-contracts/limits": [
+        "../plugin-contracts/src/limits.ts"
+      ],
+      "@vykor/plugin-contracts/runtime": [
+        "../plugin-contracts/src/runtime.ts"
+      ],
+      "@vykor/plugin-contracts/runtime-data": [
+        "../plugin-contracts/src/runtime-data.ts"
+      ],
+      "@vykor/domain-contracts/sessions": [
+        "../domain-contracts/src/sessions/index.ts"
+      ],
+      "@vykor/domain-contracts/inputs": [
+        "../domain-contracts/src/inputs/index.ts"
+      ],
+      "@vykor/domain-contracts/goals": [
+        "../domain-contracts/src/goals/index.ts"
+      ],
+      "@vykor/domain-contracts/attachments": [
+        "../domain-contracts/src/attachments/index.ts"
+      ],
+      "@vykor/domain-contracts/schedules": [
+        "../domain-contracts/src/schedules/index.ts"
+      ],
+      "@vykor/domain-contracts/channels": [
+        "../domain-contracts/src/channels/index.ts"
+      ],
+      "@vykor/domain-contracts/notes": [
+        "../domain-contracts/src/notes/index.ts"
+      ],
+      "@vykor/domain-contracts/memory": [
+        "../domain-contracts/src/memory/index.ts"
+      ],
+      "@vykor/domain-contracts/approvals": [
+        "../domain-contracts/src/approvals/index.ts"
+      ],
+      "@vykor/domain-contracts/plugin-apps": [
+        "../domain-contracts/src/plugin-apps/index.ts"
+      ],
+      "@vykor/domain-contracts/workspace-changes": [
+        "../domain-contracts/src/workspace-changes/index.ts"
+      ],
+      "@vykor/domain-contracts/usage": [
+        "../domain-contracts/src/usage/index.ts"
+      ],
+      "@vykor/domain-contracts/maintenance": [
+        "../domain-contracts/src/maintenance/index.ts"
+      ],
+      "@vykor/domain-contracts/sessions/model-metadata": [
+        "../domain-contracts/src/sessions/model-metadata.ts"
+      ],
+      "@vykor/domain-contracts/sessions/runtime-config": [
+        "../domain-contracts/src/sessions/runtime-config.ts"
+      ],
+      "@vykor/domain-contracts/plugin-apps/history": [
+        "../domain-contracts/src/plugin-apps/history.ts"
+      ],
+      "@vykor/domain-contracts/sessions/records": [
+        "../domain-contracts/src/sessions/records.ts"
+      ],
+      "@vykor/domain-contracts/approvals/auto-review": [
+        "../domain-contracts/src/approvals/auto-review.ts"
       ]
     }
   },

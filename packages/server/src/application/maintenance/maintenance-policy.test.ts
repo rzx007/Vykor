@@ -1,3 +1,4 @@
+import { createMaintenanceApplicationService } from "./maintenance-application-service.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ describe("storage retention policy", () => {
     const directory = mkdtempSync(join(tmpdir(), "maintenance-policy-")); const previous = process.env.VYKOR_DATA_DIR; process.env.VYKOR_DATA_DIR = directory;
     const remove = vi.fn(async () => ["old"]);
     const context = { store: { path: join(directory, "sessions.db"), sessions: { list: () => [{ id: "old", updatedAt: 1, title: "old" }], listChildren: () => [], get: () => ({ id: "old", updatedAt: 1 }) }, runs: { listRuns: () => [] }, permissions: { list: () => [] }, listSessionTasks: () => [], listProjectionSettlements: () => [], conversations: { listSessionInputAttachments: () => [] } }, control: { hasAnyActiveRuns: () => true, runtimeSnapshot: () => ({ coordinator: { queuedRunCount: 0 } }) }, commands: { deleteSessionTree: remove } };
-    const routes = createMaintenanceRoutes(context as never);
+    const routes = createMaintenanceRoutes({ maintenance: createMaintenanceApplicationService(context as never) });
     const post = (path: string, body: unknown) => routes.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     try {
       expect(await (await routes.request("/maintenance/cleanup/policy")).json()).toMatchObject({ enabled: false, days: 90 });

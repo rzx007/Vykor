@@ -1,9 +1,5 @@
 import { Hono } from "hono";
-import {
-  parseAdmitPromptRequest,
-  parsePromptAttachments,
-  parsePromptItems,
-} from "@vykor/protocol";
+import { parseAdmitPromptRequest, parsePromptAttachments, parsePromptItems } from "@vykor/protocol";
 
 import {
   applicationErrorResponse,

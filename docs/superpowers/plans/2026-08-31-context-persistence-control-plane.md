@@ -39,8 +39,8 @@
 
 ### Agent 工具和 Runtime
 
-- 修改 `packages/core/src/types/tools.ts`：增加 `AgentContextMemoryHost` 和 ToolContext capability。
-- 修改 `packages/agent-runtime/src/agent-options.ts`、`agent-composition.ts`、`default-runtime.ts` 和 QueryEngine setter：贯通 host。
+- 修改 `packages/agent-contracts/src/tools.ts`：增加 `AgentContextMemoryHost` 和 ToolContext capability。
+- 修改 `packages/agent-runtime/src/node/runtime/agent-options.ts`、`agent-composition.ts`、`default-runtime.ts` 和 QueryEngine setter：贯通 host。
 - 创建 `packages/tools/src/context/context-tools.ts`：Remember、ResolveContextDecision、RecallContext、UpdateContext、ForgetContext。
 - 修改 `packages/tools/src/registry.ts`：仅 host 可用时注册工具。
 - 修改 `packages/server/src/daemon/daemon-agent.ts` 和 `application/daemon-application.ts`：给每个 session 注入 daemon host。
@@ -60,7 +60,7 @@
 
 - 创建 `packages/tools/src/file/managed-resource-policy.ts`：托管资源写入检查。
 - 修改 `packages/tools/src/file/write.ts`、`edit.ts` 和 runtime ToolContext 注入：写前拒绝托管路径。
-- 删除 `packages/memory/`、`packages/personalization/`、`packages/agent-runtime/src/memory-runtime.ts`、`packages/services/src/memory-extract.ts`。
+- 删除 `packages/memory/`、`packages/personalization/`、`packages/agent-runtime/src/node/memory/memory-runtime.ts`、`packages/services/src/memory-extract.ts`。
 - 删除 server 旧 memory service/routes 和 prompts 的 USER pending API。
 - 删除 `service.ts` 中旧 dream/profile/context-preview 契约；新的 `/agent-identity` 只管理 SOUL，Context preview 由任务 7 的资源 API 提供。
 - 修改配置、文档、依赖和测试，删除所有旧运行时引用。
@@ -265,11 +265,11 @@ git commit -m "feat(context): resolve and govern context mutations"
 ### 任务 4：Agent 语义工具和 daemon host 接线
 
 **文件：**
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 创建：`packages/tools/src/context/context-tools.ts`
 - 创建：`packages/tools/src/context/index.ts`
 - 创建：`packages/tools/src/context/context-tools.test.ts`
@@ -456,11 +456,11 @@ git commit -m "feat(context): add resource API and client commands"
 **文件：**
 - 创建：`packages/tools/src/file/managed-resource-policy.ts`
 - 创建：`packages/tools/src/file/__test__/managed-resource-policy.test.ts`
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/tools/src/file/write.ts`
 - 修改：`packages/tools/src/file/edit.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`
 - 修改：`packages/server/src/application/default-services/profile-service.ts`
 - 修改：`packages/server/src/http/routes/service.ts`
@@ -546,13 +546,13 @@ git commit -m "feat(desktop): manage persistent context"
 **文件：**
 - 删除：`packages/memory/`
 - 删除：`packages/personalization/`
-- 删除：`packages/agent-runtime/src/memory-runtime.ts` 及测试
+- 删除：`packages/agent-runtime/src/node/memory/memory-runtime.ts` 及测试
 - 删除：`packages/services/src/memory-extract.ts` 及测试
 - 删除：旧 Markdown autodream 文件和 dream service/routes/client command
 - 删除：`packages/server/src/application/default-services/memory-service.ts`
 - 删除：`packages/server/src/http/routes/memory.ts`
 - 修改：`packages/prompts/src/index.ts` 及测试，删除 USER/local rules/pending update
-- 修改：`packages/agent-runtime/src/agent.ts`，删除 `remember()` maintenance API
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`，删除 `remember()` maintenance API
 - 修改：`packages/server/src/application/session/session-maintenance-service.ts`，删除旧全会话 remember
 - 修改：`packages/core/src/types/settings.ts`、`config/settings.ts`、CLI config coercion
 - 修改：所有受影响 package.json、exports、barrels、docs 和 pnpm lock

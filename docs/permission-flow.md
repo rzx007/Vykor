@@ -59,7 +59,7 @@ sequenceDiagram
 |---|---|
 | permission checker 与 tool gate | `packages/core/src/engine/query-engine.ts` |
 | request/decision/event contracts | `packages/core/src/types/runtime.ts` |
-| framework event/callback 调用 | `packages/agent-runtime/src/agent.ts` |
+| framework event/callback 调用 | `packages/agent-runtime/src/kernel/agent.ts` |
 | daemon callback 注入 | `packages/server/src/daemon/daemon-agent.ts` |
 | durable broker | `packages/server/src/permissions/permission-broker.ts` |
 | live resolver/expiration | `packages/server/src/permissions/permission-controller.ts` |

@@ -4,10 +4,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import {
   getAgentDefinition,
-  registerPluginAgents,
 } from "@vykor/coordinator";
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
@@ -101,7 +100,6 @@ describe("createDefaultCommandCatalog", () => {
       writePlugin(cwdA, "plugin-a", "model-a", "command-a");
       writePlugin(cwdB, "plugin-b", "model-b", "command-b");
       const discoveryA = await discoverVykorExtensions(cwdA, settings);
-      registerPluginAgents(discoveryA.agentDefinitions);
 
       const commands = await createDefaultCommandCatalog(settings).list({
         cwd: cwdB,
@@ -110,9 +108,8 @@ describe("createDefaultCommandCatalog", () => {
       expect(commands.map((command) => command.name)).toContain(
         "/scoped:command-b",
       );
-      expect(getAgentDefinition("dev.vykor.plugin-a:reviewer")?.model).toBe("model-a");
+      expect(getAgentDefinition("dev.vykor.plugin-a:reviewer", discoveryA.agentDefinitions)?.model).toBe("model-a");
     } finally {
-      registerPluginAgents([]);
       if (previousConfigDir === undefined) {
         delete process.env.VYKOR_CONFIG_DIR;
       } else {

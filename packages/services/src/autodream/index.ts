@@ -1,11 +1,10 @@
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import {
-  getDetachedProcessSupervisor,
   type DetachedProcessExecution,
-} from "../executions/index.js";
+} from "@vykor/execution-node";
 import {
   readLastConsolidatedAt,
   rollbackConsolidationLock,
@@ -57,7 +56,7 @@ export interface DreamTaskRunner {
     description: string;
     cwd: string;
     env?: Record<string, string>;
-    type?: string;
+    type?: "dream";
     settings?: Settings;
   }): Promise<DetachedProcessExecution>;
   registerExecutionListener(listener: (task: DetachedProcessExecution, event: string) => void): () => void;
@@ -78,7 +77,7 @@ export interface StartDreamOptions {
   appLabel?: string;
   /** 用量型 stale 候选清单（一行一条），进整合 prompt 的附加上下文。 */
   staleSection?: string;
-  taskRunner?: DreamTaskRunner;
+  taskRunner: DreamTaskRunner;
   /** CLI 入口（缺省 process.argv[1]，与 teammate 同写法）。 */
   cliEntry?: string;
 }
@@ -138,7 +137,7 @@ export async function startDreamNow(options: StartDreamOptions): Promise<Detache
   const priorMtime = tryAcquireConsolidationLock(memoryDir);
   if (priorMtime === null) return null;
 
-  const runner = options.taskRunner ?? getDetachedProcessSupervisor(cwd);
+  const runner = options.taskRunner;
   mkdirSync(memoryDir, { recursive: true });
   const before = memoryFilesMtimeSnapshot(memoryDir);
   const backupDir = options.preview

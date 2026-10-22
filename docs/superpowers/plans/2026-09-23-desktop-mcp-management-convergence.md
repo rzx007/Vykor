@@ -19,7 +19,7 @@
 - `packages/mcp/src/oauth/snapshot.ts`：启用状态的安全快照；HTTP OAuth 身份逻辑保持独立。
 - `packages/server/src/application/mcp-config-application-service.ts`：全局 MCP 增删改、启停、编辑冲突与部分成功结果。
 - `packages/server/src/application/mcp-runtime-connection-coordinator.ts`、`packages/server/src/http/routes/mcp.ts`：按全局服务名触发活动 Session 核对，保留已有 OAuth 指纹同步入口。
-- `packages/agent-runtime/src/runtime-integrations.ts`：按当前有效配置及来源核对连接、工具注册与能力视图。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：按当前有效配置及来源核对连接、工具注册与能力视图。
 - `apps/cli/src/commands/mcp.ts` 和其他全局设置写入者：使用共同的设置修改入口，并输出实际 `enabled`。
 - `apps/desktop/src/main/features/mcp/`、`apps/desktop/src/shared/`、`apps/desktop/src/preload/desktop-api.ts`：Desktop 操作、IPC 契约、无敏感列表快照。
 - `apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-*`：保留现有列表及弹窗结构，改接真实 API；表单与 JSON 只提交真实配置字段。
@@ -50,7 +50,7 @@
 
 ## 任务 2：真实 `enabled` 与新 Session 行为
 
-**文件：** `packages/core/src/types/settings.ts`、`packages/core/src/config/settings.ts`、`packages/mcp/src/oauth/snapshot.ts`、`packages/agent-runtime/src/plugin-discovery.ts`、`packages/agent-runtime/src/runtime-integrations.ts`、`apps/cli/src/commands/mcp.ts` 及各自测试。
+**文件：** `packages/core/src/types/settings.ts`、`packages/core/src/config/settings.ts`、`packages/mcp/src/oauth/snapshot.ts`、`packages/agent-runtime/src/node/plugins/plugin-discovery.ts`、`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`、`apps/cli/src/commands/mcp.ts` 及各自测试。
 
 - [ ] 写失败测试：旧配置缺 `enabled` 时仍连接；`enabled:false` 通过配置校验、快照和 CLI JSON 显示为停用；新 Session 不连接、不注册该服务工具；同一服务重新启用后新 Session 可连接。分别运行对应 core、mcp、agent-runtime 与 CLI 测试文件，确认旧实现失败。
 - [ ] 在两个 `McpServerConfig` 分支中增加 `enabled?: boolean`，设置文件允许该字段并校验布尔值；快照用 `config.enabled !== false`。在 Runtime 建立连接和构建能力绑定前过滤停用项，保留已配置服务供管理快照读取：
@@ -65,7 +65,7 @@
 
 ## 任务 3：活动 Session 的配置核对
 
-**文件：** `packages/core/src/types/mcp-oauth.ts`、`packages/server/src/application/mcp-runtime-connection-coordinator.ts`、`packages/server/src/http/routes/mcp.ts`、`packages/client/src/` 中 MCP 控制请求、`packages/agent-runtime/src/runtime-integrations.ts`、`packages/server/src/daemon/default-daemon.ts` 及目标测试。
+**文件：** `packages/core/src/types/mcp-oauth.ts`、`packages/server/src/application/mcp-runtime-connection-coordinator.ts`、`packages/server/src/http/routes/mcp.ts`、`packages/client/src/` 中 MCP 控制请求、`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`、`packages/server/src/daemon/default-daemon.ts` 及目标测试。
 
 - [ ] 先写失败测试：活动 Session 中新增全局服务能连接；停用、删除、改址可撤下旧工具并断开旧连接；重新启用 stdio、HTTP、SSE 能连接；慢连接完成前发生停用时不能重新发布工具；当前项目若覆盖 `mcpServers`，同名同 URL 也不参与全局核对。运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/runtime-integrations.test.ts` 与 server 协调器测试，确认失败。
 - [ ] 为配置变更增加与现有 OAuth 指纹入口并列的控制请求，例如 `POST /mcp/:name/reconcile-global`；daemon Bearer 中间件继续保护该请求。协调器按服务名串行并推进代次，将请求送达所有活动 Session 的通用句柄，句柄自行判断该名称是否由全局配置提供。现有 OAuth `synchronize(identity)` 继续按 HTTP 指纹工作，不改登录协议。

@@ -15,22 +15,26 @@
     "./kernel": {
       "types": "./dist/kernel-entry.d.ts",
       "import": "./dist/kernel.js"
+    },
+    "./node/workflow": {
+      "types": "./dist/workflow-entry.d.ts",
+      "import": "./dist/workflow.js"
     }
   },
   "scripts": {
     "build": "rimraf dist && tsc -p tsconfig.build.json && node scripts/build.mjs",
     "test:pack": "pnpm run build && node scripts/verify-pack.mjs",
     "check-types": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "node --test scripts/kernel-boundary.test.mjs && vitest run",
     "clean": "rimraf dist"
   },
   "dependencies": {
     "@vykor/terminal-node": "workspace:*",
-    "better-sqlite3": "^13.0.2",
     "node-pty": "^1.0.0",
-    "sharp": "0.34.4"
-  },
-  "peerDependencies": {
+    "sharp": "0.34.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*",
     "@vykor/api": "workspace:*",
     "@vykor/auth": "workspace:*",
     "@vykor/coordinator": "workspace:*",
@@ -43,52 +47,18 @@
     "@vykor/permissions": "workspace:*",
     "@vykor/plugins": "workspace:*",
     "@vykor/prompts": "workspace:*",
-    "@vykor/protocol": "workspace:*",
-    "@vykor/sandbox": "workspace:*",
-    "@vykor/skills": "workspace:*",
-    "@vykor/terminal": "workspace:*",
-    "@vykor/tools": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@vykor/api": { "optional": true },
-    "@vykor/auth": { "optional": true },
-    "@vykor/coordinator": { "optional": true },
-    "@vykor/core": { "optional": true },
-    "@vykor/environment": { "optional": true },
-    "@vykor/hooks": { "optional": true },
-    "@vykor/jobs": { "optional": true },
-    "@vykor/mcp": { "optional": true },
-    "@vykor/memory": { "optional": true },
-    "@vykor/permissions": { "optional": true },
-    "@vykor/plugins": { "optional": true },
-    "@vykor/prompts": { "optional": true },
-    "@vykor/protocol": { "optional": true },
-    "@vykor/sandbox": { "optional": true },
-    "@vykor/skills": { "optional": true },
-    "@vykor/terminal": { "optional": true },
-    "@vykor/tools": { "optional": true }
-  },
-  "devDependencies": {
-    "@vykor/api": "workspace:*",
-    "@vykor/auth": "workspace:*",
-    "@vykor/coordinator": "workspace:*",
-    "@vykor/core": "workspace:*",
-    "@vykor/environment": "workspace:*",
-    "@vykor/hooks": "workspace:*",
-    "@vykor/jobs": "workspace:*",
-    "@vykor/mcp": "workspace:*",
-    "@vykor/memory": "workspace:*",
-    "@vykor/permissions": "workspace:*",
-    "@vykor/plugins": "workspace:*",
-    "@vykor/prompts": "workspace:*",
-    "@vykor/protocol": "workspace:*",
     "@vykor/sandbox": "workspace:*",
     "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
     "@vykor/tools": "workspace:*",
     "@types/node": "catalog:",
+    "@vykor/plugin-contracts": "workspace:*"
+  },
+  "devDependencies": {
     "esbuild": "^0.27.7",
     "typescript": "^5.7.3",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@anthropic-ai/sdk": "catalog:",
+    "openai": "catalog:"
   }
 }

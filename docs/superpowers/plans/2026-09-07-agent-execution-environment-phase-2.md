@@ -67,8 +67,8 @@
 
 - `packages/server/src/application/daemon-application.ts`：创建并持有唯一 Manager，注入 Agent、终端和后台任务。
 - `packages/server/src/daemon/daemon-agent.ts`：在创建 Agent 前取得环境 lease。
-- `packages/agent-runtime/src/agent-composition.ts`：优先使用宿主传入的 lease，不自行创建第二个容器。
-- `packages/agent-runtime/src/default-runtime.ts`：Docker 中重新开放 `TerminalOpen`。
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`：优先使用宿主传入的 lease，不自行创建第二个容器。
+- `packages/agent-runtime/src/node/runtime/default-runtime.ts`：Docker 中重新开放 `TerminalOpen`。
 - `packages/server/src/application/session/background-shell-service.ts`：后台任务独立持有环境 lease，结束后释放。
 - `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-runtime-model.ts`：纯函数决定默认环境终端、显式本机终端和 scope。
 - `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-runtime-model.test.ts`：覆盖项目与项目外会话。
@@ -413,8 +413,8 @@ git commit -m "feat(server): resolve shared environment owners"
 - 修改：`packages/server/src/application/default-node-application.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent.test.ts`
 
 - [ ] **步骤 1：编写 daemon 单例环境测试**
 
@@ -610,8 +610,8 @@ git commit -m "feat(server): share environments with scoped terminals"
 - 修改：`packages/server/src/terminal/daemon-terminal-service.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 - 修改：`packages/tools/src/registry.ts`
 - 修改：`packages/tools/src/terminal/__test__/terminal-tools.test.ts`
 

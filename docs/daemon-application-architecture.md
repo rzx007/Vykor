@@ -1,6 +1,6 @@
 # Daemon Application Architecture
 
-> 状态：当前实现的权威运行索引。最后核对：2026-09-17。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；存储边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)，跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
+> 状态：当前实现的权威运行索引。最后核对：2026-10-22。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；存储边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)，跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
 
 ## 总体模型
 
@@ -65,6 +65,16 @@ VykorAgent onEvent sink
 
 `packages/server/src/daemon/daemon-agent.ts` 是唯一的 durable session -> live Agent 翻译点：读取动态 settings、合并 session metadata、注入 permission/event callback、创建 agent、恢复 history。`AgentPool` 不再理解配置和投影。
 
+## 通信输入、应用用例与存储命令
+
+Protocol 只拥有 HTTP/SSE 格式与解码。HTTP routes 使用 Protocol parser，再经 `http/mappers/session.ts`、`plugin-apps.ts` 等转换形成用例输入；Application 使用自己的 `inputs.ts` 和 `query-models.ts`，不导入 Protocol。维护报表与运行观察由 `http/mappers/maintenance.ts`、`execution-observability.ts` 转成公开 DTO。
+
+应用用例先验证会话 owner、revision、状态与授权，再调用 Services 的存储命令或 Node 的宿主接口。记录与纯数据校验按 `domain-contracts` 业务子入口引用；Services 的命令由自身领域模块定义，不能把 HTTP Request 直接当作内部写库输入。事件服务返回领域事件，SSE 包装与通信序列化在 HTTP 层完成。
+
+插件应用调用由 `application/session/plugin-app-host-binding.ts` 将已保存记录转换成 `PluginAppHostBinding`。其中 `instanceId = app.id` 只用于隔离与撤销，其他字段来自已核实的 owner、插件及后端身份；不把可变应用记录交给 Node。Node 保存 lease 权威并重新核对来源、generation 与绑定，Server 的 lease 适配不会增加第二份 token 表。
+
+附件限额形状归 domain-contracts，默认值单独定义在 `services/src/attachments/attachment-policy.ts`，供独立 Services 和 Server 共用。Services 的 Office 转换返回自身 `OfficeDocumentPreview`；当前 Server 没有生成 Protocol `OfficePreview` 的用例，因此不设置空的查询模型或 mapper。
+
 ## Session 运行配置
 
 一条 session 有两类模型信息，不能混着看：
@@ -73,6 +83,8 @@ VykorAgent onEvent sink
 | -------------------------------- | --------------------------------- | ------------------------------------ |
 | `session.model`                  | 列表、导出和统计使用的展示列       | UI 展示、导出、统计展示              |
 | `session.metadata.runtime.model` | 这条 session 下一轮真正要用的模型 | daemon 创建或重建 `VykorAgent` |
+
+配置记录与纯读取来自 `domain-contracts/sessions/runtime-config`。组合读取、patch 和变化判断在 `application/session/runtime-configuration.ts`；旧模式归一化调用 host-config，有效模式计算调用 permissions。Client 保留本地请求构造与显示投影，Server 仍负责实际运行决策。
 
 当前规则：
 
@@ -182,7 +194,7 @@ packages/server/src/runtime/run-coordinator.ts
 packages/server/src/application/session/session-run-executor.ts
 packages/server/src/application/agent/agent-pool.ts
 packages/server/src/daemon/daemon-agent.ts
-packages/agent-runtime/src/agent.ts
+packages/agent-runtime/src/kernel/agent.ts
 packages/core/src/engine/query-engine.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 ```
@@ -399,12 +411,15 @@ daemon 中的 Workflow 和 Session、Run 使用同一份 SQLite：
 
 ```text
 Workflow tool / daemon command
+  -> DaemonApplication 持有的 WorkflowHost
   -> Workflow scheduler
   -> SessionWorkflowRunRepository
   -> workflow_run / workflow_task_attempt / durable event
   -> DaemonJobService
   -> HTTP client / TUI / Web / Desktop
 ```
+
+DaemonApplication 为该仓库创建唯一 WorkflowHost，Agent loader、DaemonJobService、启动恢复和应用关闭共享它。Agent 只获得绑定自身 session 的视图；回收 Agent 等待本 session 的 Workflow，应用关闭等待整个 Host，然后关闭执行 owner 和存储。Jobs 取消直接进入同一个 Host，不再通过 coordinator 的全局活动目录查找。
 
 `SessionWorkflowRunRepository` 是 daemon 唯一注入的 Workflow 仓库。它保存完整快照、每个 task 的 attempt 和 Workflow 事件；不会读取 `.vykor/workflows`，也不会在启动时迁移旧 JSON。独立 CLI 如果要查看项目文件，必须明确创建 `FileWorkflowRunRepository`，详见 [Workflow CLI](./workflow-cli.md)。
 
@@ -485,3 +500,15 @@ shutdown 先把 `DaemonOperationGate` 置为 closing 并等待现有 shared/barr
 - framework 只通过 event/effect/handle 与 daemon 接触。
 - daemon 不持有 QueryEngine，也不生成 framework child controls。
 - SSE 来自 durable store/event publisher，不直接把 framework event 透传给 UI。
+
+## 模型尝试与管理操作（P5）
+
+GoalModelAttemptService 通过 Node 配置进入每次执行。Engine 先检查执行限制，等待该服务准入，再可靠发布 started 并请求 Provider；finally 中先完成服务结算，再发布 finished。DaemonAgentEventProjector 仅投影 Run 展示与 transcript，不再调用 Goal 准入和用量写入。沿用原有 runId/generationId/attempt 唯一身份、未知用量规则和启动恢复，没有新增持久格式。
+
+维护路由只调用 createMaintenanceApplicationService 提供的业务方法；策略与用量文件由 maintenance-policy-repository 管理，备份、清理、扫描和用量统计继续使用既有实现。DaemonApplication 的具名工厂注入 Store、Control、ready 状态及关闭回调。重启先停止准入，再释放自己的维护 lease（本次独占凭证），最后等待应用关闭，避免等待自身。
+
+ProjectFactsService 负责事实脱敏、session/cwd 校验、工作区独占凭证和运行时回收。NoteApplicationService 负责便签写入前的就绪检查与冲突错误转换。路由只解析请求、调用用例和转换状态码，不接收具体 Repository 或读取 Store.path。
+
+## 收口后的依赖检查
+
+Server 不依赖 Client。包含真实 Client 的请求级联合测试放在 `tests/server-client`，由 `pnpm test:server-client` 运行，同时纳入根 test 和 check-types。HTTP 的 maintenance/facts/notes 上下文只声明应用用例，持久规则和资源关闭归应用层；Owner、ready 和工作区互斥沿用原入口。

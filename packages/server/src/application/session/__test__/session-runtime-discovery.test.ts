@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@vykor/protocol";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import { describe, expect, it } from "vitest";
 
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";

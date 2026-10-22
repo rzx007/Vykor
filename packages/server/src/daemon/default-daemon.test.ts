@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vykor/auth", () => ({ ChannelConfigStore: class {} }));
-vi.mock("@vykor/core", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@vykor/core")>(),
+vi.mock("@vykor/host-config", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@vykor/host-config")>(),
   loadSettings: async () => ({ model: "fixture", agentEnvironment: { kind: "wsl" } }),
   loadProjectSettings: async () => null,
 }));

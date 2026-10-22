@@ -90,7 +90,7 @@
 - `packages/mcp/src/oauth/protocol.ts`：`discoverOAuth` 先确定 expectedResource 与来源（challenge / endpoint-well-known / origin-well-known / explicit），再逐个候选获取 metadata 并校验；显式 `oauth.resourceUrl` 优先且 challenge 不能替换。
 - `login.ts` / `runtime-auth.ts` / `status.ts`：授权、授权码交换、刷新使用同一个已验证 `resourceUrl`；凭据 `binding.resourceUrl` 落盘；旧记录按 `serverUrl` 解释；endpoint/resource 变化触发重新授权。
 - `packages/core/src/types/mcp-oauth.ts`、`config/settings.ts`：新增 `oauth.resourceUrl`、`binding.resourceUrl` 及 settings 白名单/类型校验。
-- `packages/agent-runtime/src/runtime-integrations.ts`：`getConfiguredScopes` 收敛为 `getConfiguredOAuth(name, config)`，返回最新非秘密 OAuth 设置。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：`getConfiguredScopes` 收敛为 `getConfiguredOAuth(name, config)`，返回最新非秘密 OAuth 设置。
 - 测试：`resource-binding.test.ts`、`protocol.test.ts`（challenge/路径 well-known/根 fallback/显式 override/兄弟路径/跨 origin/query/编码）、`login.test.ts`（三种 resource 参数一致性）、`status.test.ts`、`settings.test.ts`。
 
 ### 任务 3：最小文件格式与跨进程退出保护

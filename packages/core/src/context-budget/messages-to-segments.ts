@@ -1,6 +1,6 @@
 import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens.js";
-import type { ContentBlock, Message } from "../types/messages.js";
-import type { ContextBucketId, ContextLedgerSegment } from "./types.js";
+import type { ContentBlock, Message } from "@vykor/agent-contracts";
+import type { ContextBucketId, ContextLedgerSegment } from "@vykor/agent-contracts";
 
 function contentBlocksToText(blocks: ContentBlock[]): string {
   return blocks

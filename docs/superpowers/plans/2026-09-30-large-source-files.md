@@ -63,7 +63,7 @@
 |---|---:|---|
 | `packages/core/src/engine/query-engine.ts` | 1530 | 工具执行及结果预算，留在 `engine/`；`submitMessage` 的轮次状态留原类 |
 | `packages/core/src/engine/compact-service.ts` | 1247 | 消息截断、配对保护及 token 估算，留在 `engine/`；压缩决策留原类 |
-| `packages/agent-runtime/src/child-agent.ts` | 1091 | 预算和活动事件转换，留在 `agent-runtime/src/`；子代理记录的生命周期留原管理器 |
+| `packages/agent-runtime/src/kernel/child-agent.ts` | 1091 | 预算和活动事件转换，留在 `agent-runtime/src/`；子代理记录的生命周期留原管理器 |
 | `packages/tools/src/agent/workflow/tool.ts` | 983 | 输入解析、时间线格式化放入现有 `agent/workflow/` |
 | `packages/services/src/executions/detached-process-supervisor.ts` | 824 | 进程信号、stdin 编码等纯步骤留在 `executions/` |
 | `apps/desktop/src/main/features/browser/browser-agent-service.ts` | 871 | 页面操作与开发诊断留在 `browser/` |
@@ -114,7 +114,7 @@
 
 | 下一轮处理 | 文件与当前行数 | 判断依据 |
 |---|---|---|
-| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1025；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
+| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1025；`packages/agent-runtime/src/kernel/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
 | 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
 | 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1126；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
@@ -213,7 +213,7 @@
 
 ### 2026-10-01：子代理预算注册表
 
-- `packages/agent-runtime/src/child-agent.ts` 从 1091 行降至 955 行；共享子代理索引、深度／并发／累计预算的预留和释放归入同包 `child-registry.ts`。原 `AgentChildRegistry` 与默认预算的导出路径保留，管理器继续持有子代理运行和关闭状态。
+- `packages/agent-runtime/src/kernel/child-agent.ts` 从 1091 行降至 955 行；共享子代理索引、深度／并发／累计预算的预留和释放归入同包 `child-registry.ts`。原 `AgentChildRegistry` 与默认预算的导出路径保留，管理器继续持有子代理运行和关闭状态。
 - 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
 
 ### 2026-10-01：脱离会话进程辅助
@@ -348,7 +348,7 @@
 
 ### 2026-10-01：子代理活动投影
 
-- `packages/agent-runtime/src/child-agent.ts` 从 955 行降至 836 行；可信事件的最近活动投影、文本限额及未完成结果提取归入同目录 `child-activity.ts`。管理器仍负责事件订阅、子代理预算、运行与关闭。
+- `packages/agent-runtime/src/kernel/child-agent.ts` 从 955 行降至 836 行；可信事件的最近活动投影、文本限额及未完成结果提取归入同目录 `child-activity.ts`。管理器仍负责事件订阅、子代理预算、运行与关闭。
 - 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
 
 ### 2026-10-01：渠道运行连接类型

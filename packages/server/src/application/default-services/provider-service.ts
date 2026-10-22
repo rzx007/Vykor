@@ -9,7 +9,7 @@ import {
   type ModelsDevCatalog,
 } from "@vykor/api";
 import { CredentialStorage } from "@vykor/auth";
-import type { CustomProviderSettings, Settings } from "@vykor/core";
+import type { CustomProviderSettings, Settings } from "@vykor/host-config";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type {

@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@vykor/protocol";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import {
   DaemonOperationUnavailableError,

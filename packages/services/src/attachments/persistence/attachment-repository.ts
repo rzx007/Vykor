@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type {
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  AttachmentRepresentationKind,
-  ChatResourceSource,
-} from "@vykor/protocol";
+import type { AttachmentAssetRecord, AttachmentRepresentationRecord, AttachmentRepresentationKind, ChatResourceSource } from "@vykor/domain-contracts/attachments";
 import { and, eq, gt, lte, ne } from "drizzle-orm";
 import type { StorageContext } from "../../database/storage-context.js";
 import {

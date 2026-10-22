@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 
-import type { AttachmentLimits } from "@vykor/protocol";
+import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
 import {
   AttachmentBlobStore,
   LightOcrEngine,

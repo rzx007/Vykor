@@ -1,13 +1,8 @@
-import type {
-  AppendEventInput,
-  SessionEventRecord,
-  SessionGoal,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRunRecord,
-} from "@vykor/protocol";
-import { readRuntimeMetadata, sessionUserInputText } from "@vykor/protocol";
+import type { AppendEventInput } from "@vykor/services";
+import type { SessionEventRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionGoal } from "@vykor/domain-contracts/goals";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
+import { sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import { AttachmentError } from "@vykor/services";
 import { normalizeTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";

@@ -1,4 +1,4 @@
-import type { AttachmentAssetRecord } from "@vykor/protocol";
+import type { AttachmentAssetRecord } from "@vykor/domain-contracts/attachments";
 
 import type {
   AttachmentLeaseRecord,

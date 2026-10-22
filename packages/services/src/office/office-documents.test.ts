@@ -13,8 +13,8 @@ import {
   readOfficeBytes,
   MAX_OFFICE_BYTES,
 } from "./office-documents.js";
-import { sniffOfficePackage } from "./office-package.js";
-import { OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+import { sniffOfficePackage } from "../attachments/storage/attachment-media-type.js";
+import { OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
 import { AttachmentBlobStore } from "../attachments/storage/attachment-blob-store.js";
 
 it("rejects renamed binary and legacy files before invoking the engine", async () => {

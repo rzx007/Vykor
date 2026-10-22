@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { BrowserDeveloperAction, BrowserHost } from "./browser-host.js";
 
 /** Final server-side ceiling on one developer tool response. */

@@ -1,9 +1,5 @@
 import type { CompactContextSection } from "@vykor/core";
-import type {
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  SessionInputAttachmentRecord,
-} from "@vykor/protocol";
+import type { AttachmentAssetRecord, AttachmentRepresentationRecord, SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 
 export interface CompactAttachmentAssetQueries {
   getAttachment(

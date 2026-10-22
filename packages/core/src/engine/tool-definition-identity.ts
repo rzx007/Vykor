@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../types/tools";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 
 const identities = new WeakMap<ToolDefinition, symbol>();
 

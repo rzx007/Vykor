@@ -1,4 +1,4 @@
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 import type { EnvironmentPathOperation } from "@vykor/environment";
 
 import { resolveToolPath } from "./path.js";

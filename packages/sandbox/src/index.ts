@@ -19,7 +19,7 @@ export { getSandboxAvailability, getSrtAvailability } from "./availability.js";
 export type { AvailabilityDeps } from "./availability.js";
 export { buildSrtRuntimeConfig, shellJoin, shellQuote, wrapCommandForSrt } from "./srt-adapter.js";
 export type { SrtRuntimeConfig, WrappedSrtCommand } from "./srt-adapter.js";
-export { signalProcessTree, terminateProcessTree } from "./process-control.js";
+export { registerManagedProcess, signalProcessTree, terminateProcessTree } from "./process-control.js";
 export type { ProcessSignal } from "./process-control.js";
 export { createProcess, createShellProcess, describeHostShellLauncher, resolveHostShellLauncher, resolveShellArgv, resolveShellDescriptor, resetHostShellCacheForTests } from "./shell.js";
 export type { CreateProcessOptions, CreateShellProcessOptions, HostShellLauncher } from "./shell.js";

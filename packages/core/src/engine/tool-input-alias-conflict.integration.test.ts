@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import type { AgentExecutionContext, StreamEvent } from "../index.js";
+import type { AgentExecutionContext, StreamEvent } from "@vykor/agent-contracts";
 
 describe("path alias conflicts at the core input boundary", () => {
   it("returns individual invalid_input results before permission and still runs a valid peer", async () => {

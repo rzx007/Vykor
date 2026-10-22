@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@vykor/core";
+import type { StreamEvent } from "@vykor/agent-contracts";
 
 export interface RenderOptions {
   verbose?: boolean;

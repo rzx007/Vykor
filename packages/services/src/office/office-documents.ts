@@ -1,13 +1,10 @@
 import { mkdtemp, writeFile, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  officeFormat,
-  OFFICE_MEDIA_TYPES,
-  type OfficePreview,
-} from "@vykor/protocol";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
+import { type OfficeDocumentPreview } from "./contracts.js";
 import { createOfficeRunner, hash } from "./office-engine.mjs";
-import { sniffOfficePackage } from "./office-package.js";
+import { sniffOfficePackage } from "../attachments/storage/attachment-media-type.js";
 import { wordParagraphText, assertCompleteOfficeText } from "./office-text.js";
 
 export const MAX_OFFICE_BYTES = 64 * 1024 * 1024;
@@ -31,7 +28,7 @@ export async function readOfficeBytes(
   bytes: Uint8Array,
   name: string,
   options: { page?: number; preview?: boolean; signal?: AbortSignal } = {},
-): Promise<{ text: string; preview?: OfficePreview }> {
+): Promise<{ text: string; preview?: OfficeDocumentPreview }> {
   options.signal?.throwIfAborted();
   const format = officeFormat(name);
   if (!format) throw new Error("仅支持 DOCX、XLSX、PPTX 文件。");
@@ -57,12 +54,12 @@ export async function readOfficeBytes(
   const digest = hash(bytes),
     key = `${digest}:${format}:${options.preview ? "html:" + page : "text"}`;
   const hit = cache.get(key);
-  if (hit) return JSON.parse(hit) as { text: string; preview?: OfficePreview };
+  if (hit) return JSON.parse(hit) as { text: string; preview?: OfficeDocumentPreview };
   const directory = await mkdtemp(join(tmpdir(), "vykor-office-"));
   const file = join(directory, `document.${format}`),
     htmlFile = join(directory, "preview.html");
   let failure: unknown;
-  let result: { text: string; preview?: OfficePreview };
+  let result: { text: string; preview?: OfficeDocumentPreview };
   let runner: Awaited<ReturnType<typeof createOfficeRunner>> | undefined;
   try {
     await writeFile(file, bytes);

@@ -2,7 +2,7 @@ import type { IOType } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import process from "node:process";
 import { PassThrough, type Stream } from "node:stream";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { EnvironmentProcess, EnvironmentProcessExecutor } from "@vykor/environment";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";

@@ -1,9 +1,6 @@
 import { Hono } from "hono";
 
-import {
-  parseDurableChannelMessageInput,
-  parseRecordChannelDeliveryInput,
-} from "@vykor/protocol";
+import { parseDurableChannelMessageInput, parseRecordChannelDeliveryInput } from "@vykor/protocol";
 
 import type { ChannelApplicationService } from "../../application/channel/channel-application-service.js";
 import {

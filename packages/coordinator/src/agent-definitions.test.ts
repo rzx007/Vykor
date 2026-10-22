@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getBuiltinAgentDefinitions } from "./agent-definitions.js";
+import { getBuiltinAgentDefinitions } from "./definitions/index.js";
 
 describe("builtin review role", () => {
   it("exposes a strictly read-only review role", () => {

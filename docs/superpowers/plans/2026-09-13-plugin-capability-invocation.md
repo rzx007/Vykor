@@ -16,14 +16,14 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `packages/agent-runtime/src/plugin-capability-inventory.ts` | 当前 Runtime 的插件及 Skill/MCP/Tool/Agent 所有权目录 |
+| `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts` | 当前 Runtime 的插件及 Skill/MCP/Tool/Agent 所有权目录 |
 | `packages/protocol/src/session-input-items.ts` | PluginCapabilityRef、PluginAgentRef 和输入校验 |
 | `packages/server/src/application/session/session-plugin-capability-service.ts` | admission 校验单 pluginId、强制 queue、推导插件 Skill/Agent owner |
-| `packages/agent-runtime/src/run-capability-view.ts` | Run 开始时从当前 Runtime 生成冻结 View |
+| `packages/agent-runtime/src/node/plugins/run-capability-view.ts` | Run 开始时从当前 Runtime 生成冻结 View |
 | `packages/core/src/types/runtime.ts`、`engine/query-engine.ts` | 通用按 Run 工具可见性和调用前 guard |
 | `packages/server/src/application/session/session-run-executor.ts` | 取得暖 Runtime、解析 pluginId、注入 View 后提交 Agent |
 | `packages/server/src/application/session/session-input-materializer.ts` | 插件 Skill 和 Plugin Agent 加载要求 |
-| `packages/agent-runtime/src/child-agent-options.ts` | Child View 与父 View 取交集 |
+| `packages/agent-runtime/src/node/runtime/child-agent-options.ts` | Child View 与父 View 取交集 |
 | `packages/server/src/application/session/session-goal-service.ts` | Goal revision 和续跑 Run 传播 pluginId |
 | `apps/desktop/.../composer/` | 插件 Picker、富文本引用和历史恢复 |
 
@@ -31,9 +31,9 @@
 
 **文件：**
 
-- 创建 `packages/agent-runtime/src/plugin-capability-inventory.ts`
-- 创建 `packages/agent-runtime/src/plugin-capability-inventory.test.ts`
-- 修改 `packages/agent-runtime/src/extensions.ts`、`extensions.test.ts`、`index.ts`
+- 创建 `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts`
+- 创建 `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.test.ts`
+- 修改 `packages/agent-runtime/src/node/plugins/extensions.ts`、`extensions.test.ts`、`index.ts`
 
 - [ ] 写失败测试：discovery 为当前有效安装生成 pluginId、版本、scope、origin、Skill/MCP/Native Tool/Agent 有效名称、唯一 MCP server identity 和 tool → plugin/server owner 映射。
 - [ ] 写失败测试：managed/user 同 ID 按现有安装优先级只能产生一个 winner；无法判定或组件裸名称冲突时插件不进入可选择目录并产生诊断。
@@ -85,10 +85,10 @@ type PluginAgentRef = {
 
 **文件：**
 
-- 创建 `packages/agent-runtime/src/run-capability-view.ts`、`run-capability-view.test.ts`
+- 创建 `packages/agent-runtime/src/node/plugins/run-capability-view.ts`、`run-capability-view.test.ts`
 - 修改 `packages/core/src/types/runtime.ts`、`types/tools.ts`
 - 修改 `packages/core/src/engine/query-engine.ts`
-- 修改 `packages/agent-runtime/src/agent.ts`、`framework-agent-run.ts`
+- 修改 `packages/agent-runtime/src/kernel/agent.ts`、`framework-agent-run.ts`
 - 修改 `packages/server/src/application/session/session-run-executor.ts`
 
 - [ ] 写失败测试验证公式：
@@ -126,8 +126,8 @@ type RunCapabilityView = {
 
 - 修改 `packages/server/src/application/session/session-input-materializer.ts` 及测试
 - 修改 `packages/tools/src/meta/skill.ts` 及测试
-- 修改 `packages/agent-runtime/src/default-runtime.ts`、`runtime-integrations.ts`
-- 修改 `packages/agent-runtime/src/native-tools/activate.ts`
+- 修改 `packages/agent-runtime/src/node/runtime/default-runtime.ts`、`runtime-integrations.ts`
+- 修改 `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`
 - 修改 `docs/skill-prompt-flow.md`
 
 - [ ] 写失败测试：普通 Run 的系统提示只列非插件 Skill；`@插件` Run 列该插件 Skill；完整正文只通过 Skill tool result 返回。
@@ -146,7 +146,7 @@ type RunCapabilityView = {
 - 修改 `packages/server/src/application/session/session-input-materializer.ts`
 - 修改 `packages/tools/src/agent/agent-tools.ts` 及测试
 - 修改 `packages/core/src/types/runtime.ts` 的 Child 输入
-- 修改 `packages/agent-runtime/src/child-agent-options.ts` 及测试
+- 修改 `packages/agent-runtime/src/node/runtime/child-agent-options.ts` 及测试
 - 修改 `packages/server/src/application/agent/daemon-agent-event-projector.ts` 及测试
 
 - [ ] 写端到端失败测试：PluginAgentRef → root Input/Run → materializer → root Agent Tool → Child Run → child result → root final。

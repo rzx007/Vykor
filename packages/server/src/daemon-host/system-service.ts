@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { getLogsDir } from "@vykor/core";
+import { getLogsDir } from "@vykor/host-config";
 
 const WINDOWS_TASK_NAME = "Vykor Daemon";
 const WINDOWS_LAUNCHER_NAME = "daemon-watchdog.vbs";

@@ -65,6 +65,26 @@ try {
     throw new Error("packed default entry does not declare its direct node-pty runtime dependency");
   }
 
+  const typeConsumer = join(temp, "consumer.ts");
+  writeFileSync(typeConsumer, `import type { DefaultNodeAgent } from "@vykor/agent-runtime";
+import type { VykorAgent, AgentKernelOptions } from "@vykor/agent-runtime/kernel";
+import type { StreamingMessageClient, ModelAttemptGate } from "@vykor/agent-contracts";
+import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
+function consume(node: DefaultNodeAgent, kernel: VykorAgent, options: AgentKernelOptions, client: StreamingMessageClient, gate: ModelAttemptGate, workflow: WorkflowHost) {
+  node.host.inspect();
+  kernel.submitMessage("hello");
+  options.engine.getHistory();
+  // @ts-expect-error Kernel has no Node host.
+  kernel.host.inspect();
+}
+`);
+  execFileSync(process.execPath, [
+    resolve(cwd, "node_modules/typescript/bin/tsc"),
+    "--noEmit", "--moduleResolution", "bundler",
+    "--module", "ESNext", "--target", "ES2022", "--strict",
+    "--types", "node", typeConsumer,
+  ], { cwd: temp, stdio: "inherit" });
+  console.log("packed public declarations: ok");
   writeFileSync(
     app,
     `import { writeFileSync } from "node:fs";
@@ -76,6 +96,18 @@ import {
 } from "@vykor/agent-runtime/kernel";
 
 const defaultEntry = await import("@vykor/agent-runtime");
+const kernelEntry = await import("@vykor/agent-runtime/kernel");
+for (const [name, args] of [
+  ["AgentOperationConflictError", ["agent", "running", "compact"]],
+  ["AgentChildBudgetExceededError", ["depth", 1, 2]],
+  ["AgentRunNotAcceptingInputError", ["run"]],
+]) {
+  for (const [left, right] of [[defaultEntry, kernelEntry], [kernelEntry, defaultEntry]]) {
+    if (!(new left[name](...args) instanceof right[name])) throw new Error("cross-bundle error identity: " + name);
+    if (Object.assign(new Error("fake"), {name}) instanceof right[name]) throw new Error("unbranded error accepted: " + name);
+  }
+}
+console.log("packed cross-bundle error identity: ok");
 if (typeof defaultEntry.createDefaultNodeAgent !== "function") {
   throw new Error("packed default Node entry is unavailable");
 }
@@ -141,9 +173,12 @@ const toolResultText = (messages, toolUseId) => {
 };
 const hasToolResult = (messages, toolUseId) => Boolean(toolResultText(messages, toolUseId));
 const toolResultPayload = (messages, toolUseId) => {
-  const text = toolResultText(messages, toolUseId);
-  if (!text) throw new Error("Missing packed tool result: " + toolUseId);
-  return JSON.parse(text);
+  const result = messages.find((message) => message.type === "tool_result" && message.toolUseId === toolUseId);
+  for (const block of result?.content ?? []) {
+    if (block.type !== "text") continue;
+    try { return JSON.parse(block.text); } catch {}
+  }
+  throw new Error("Missing packed JSON tool result: " + toolUseId);
 };
 const toolUse = (id, name, input) => ({
   type: "tool_use_start",
@@ -190,14 +225,14 @@ const defaultAgent = await defaultEntry.createDefaultNodeAgent({
   client: defaultClient,
 });
 try {
-  const defaultCapabilities = defaultAgent.getCapabilities();
+  const defaultCapabilities = defaultAgent.host.plugins.getCapabilities();
   if (defaultCapabilities.terminal.status !== "available") {
     throw new Error("packed default Terminal is unavailable");
   }
   if (defaultCapabilities.jobs.status !== "available") {
     throw new Error("packed default Jobs is unavailable");
   }
-  const defaultToolNames = defaultAgent.inspect().tools.map((tool) => tool.name);
+  const defaultToolNames = defaultAgent.host.inspect().tools.map((tool) => tool.name);
   if (!defaultToolNames.includes("TerminalOpen") || !defaultToolNames.includes("JobCancel")) {
     throw new Error("packed default Terminal/Jobs tools are missing");
   }
@@ -219,91 +254,30 @@ try {
   await defaultAgent.close();
 }
 
-const unavailable = (reason) => ({ status: "unavailable", reason });
-const capabilities = {
-  terminal: unavailable("packed host has no terminal"),
-  backgroundShell: unavailable("packed host has no background shell"),
-  jobs: unavailable("packed host has no jobs"),
-  attachments: unavailable("packed host has no attachments"),
-  memory: unavailable("packed host has no memory"),
-  childEnvironment: {
-    status: "available",
-    value: createInProcessChildEnvironmentProvider(),
-    source: "override",
-  },
-  workflowRepository: unavailable("packed host has no workflow repository"),
-  imageToText: unavailable("packed host has no image to text"),
-  schedules: unavailable("packed host has no schedules"),
-};
-let rootCalls = 0;
-const createRuntime = async (context) => {
-  const child = Boolean(context.identity?.childId);
-  const client = {
-    async *streamMessage() {
-      if (child) {
-        yield { type: "text_delta", delta: "child complete" };
-        yield { type: "complete", stopReason: "end_turn" };
-        return;
-      }
-      rootCalls += 1;
-      if (rootCalls === 1) {
-        yield {
-          type: "tool_use_start",
-          toolUse: { type: "tool_use", id: "spawn-1", name: "SpawnChild", input: {} },
-        };
-        yield { type: "complete", stopReason: "tool_use" };
-        return;
-      }
-      yield { type: "text_delta", delta: "root complete" };
-      yield { type: "complete", stopReason: "end_turn" };
-    },
-  };
-  return createBasicAgentKernelRuntime({
-    settings,
-    cwd: context.cwd,
-    sessionId: context.sessionId,
-    client,
-    tools: child ? [] : [{
-      name: "SpawnChild",
-      description: "pack verification child",
-      inputSchema: {},
-      async execute(_input, toolContext) {
-        const invocation = await toolContext.agent.children.spawnChildAgent({
-          description: "packed child",
-          prompt: "run child",
-          cwd: context.cwd,
-        });
-        const result = await invocation.result;
-        return { content: [{ type: "text", text: result.output }] };
-      },
-    }],
-  });
-};
-
-const agent = await createAgentKernel({
-  settings,
-  cwd: process.cwd(),
-  capabilities,
-  effects: {
-    requestPermission: async () => ({ status: "approved" }),
-  },
-  createRuntime,
-});
-try {
-  const result = await agent.runMessage("verify packed root and child");
-  if (result.output !== "root complete") throw new Error("packed root did not finish");
-  if (!result.history.some((message) => JSON.stringify(message).includes("child complete"))) {
-    throw new Error("packed child result did not return to root");
-  }
-} finally {
-  await agent.close();
+const spawnDefinition={name:"SpawnChild",description:"pack verification child",inputSchema:{},async execute(_input,context){const invocation=await context.agent.children.spawnChildAgent({description:"packed child",prompt:"run child",agent:"worker",cwd:process.cwd()});const result=await invocation.result;return {content:[{type:"text",text:result.output}]};}};
+async function makeKernel(child=false,sessionId="packed-root"){
+ let calls=0;
+ const tools=child?new Map():new Map([[spawnDefinition.name,{definition:spawnDefinition,source:{kind:"runtime"},invoke:spawnDefinition.execute.bind(spawnDefinition)}]]);
+ const engine=createBasicAgentKernelRuntime({cwd:process.cwd(),model:"packed-fake-model",tools:child?[]:[spawnDefinition],client:{async *streamMessage(){if(!child&&++calls===1){yield {type:"tool_use_start",toolUse:{type:"tool_use",id:"spawn-1",name:"SpawnChild",input:{}}};yield {type:"complete",stopReason:"tool_use"};return;}yield {type:"text_delta",delta:child?"child complete":"root complete"};yield {type:"complete",stopReason:"end_turn"};}}});
+ return createAgentKernel({sessionId,cwd:process.cwd(),engine,effects:{requestPermission:async()=>({status:"approved"})},preparation:{async prepare(){return {run:{tools},release(){}};}},resolveChild:input=>({spawn:input.spawn,createAgent:()=>makeKernel(true,input.sessionId)})});
 }
-console.log("packed root + child + close: ok");
+const agent=await makeKernel();
+const packedEvents=[];
+const unsubscribe=agent.subscribe(event=>packedEvents.push(event.type));
+try{const result=await agent.runMessage("verify packed root and child");if(result.output!=="root complete")throw new Error("packed root did not finish");if(!result.history.some(message=>JSON.stringify(message).includes("child complete")))throw new Error("packed child result did not return to root");}finally{await agent.close();}
+unsubscribe();
+if (!packedEvents.includes("run.started") || !packedEvents.includes("run.completed")) throw new Error("packed lifecycle events missing");
+await agent.close();
+let closedRejected=false;
+try { await agent.runMessage("after close"); } catch { closedRejected=true; }
+if(!closedRejected) throw new Error("closed packed Agent accepted a Run");
+console.log("packed root + child + events + idempotent close: ok");
 `,
   );
   execFileSync(process.execPath, [app], {
     cwd: temp,
     stdio: "inherit",
+    env: { ...process.env, VYKOR_CONFIG_DIR: join(temp, "config"), VYKOR_DATA_DIR: join(temp, "data") },
   });
 } finally {
   rmSync(temp, { recursive: true, force: true });

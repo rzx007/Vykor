@@ -27,7 +27,7 @@
 | --- | --- |
 | `packages/personalization/src/index.ts` | 按用户消息提取、附来源、保存项目事实；只输出可追溯的规则 |
 | `packages/memory/src/sensitive-content.ts`（新建） | 返回凭据风险代码，不返回或记录原文 |
-| `packages/memory/src/index.ts`、`packages/agent-runtime/src/memory-runtime.ts` | 在受管记忆写入边界拒绝凭据候选；自动提取跳过被拒记录 |
+| `packages/memory/src/index.ts`、`packages/agent-runtime/src/node/memory/memory-runtime.ts` | 在受管记忆写入边界拒绝凭据候选；自动提取跳过被拒记录 |
 | `packages/server/src/application/session/session-post-run-maintenance.ts`、`session-maintenance-service.ts` | 把 durable 消息 ID、创建时间和会话 ID 传给环境事实写入 |
 | `packages/server/src/application/default-services/context-service.ts` | 报告可信与旧无来源事实各有多少 |
 | `packages/prompts/src/prompt-segments-assembly.ts` | 继续按 cwd 读取项目规则；Task 3 验证其不会注入旧缓存 |
@@ -81,7 +81,7 @@
 
 **交付物：** 明显的 API key、Bearer token、私钥正文及凭据赋值不能写入项目事实或长期记忆；普通环境变量名和“凭据放在环境变量中”仍可保存。
 
-**Files:** 新建 `packages/memory/src/sensitive-content.ts` 和测试；修改 `packages/memory/src/index.ts`、`index.test.ts`、`packages/agent-runtime/src/memory-runtime.ts`、`memory-runtime.test.ts`、`packages/services/src/memory-extract.ts`、`packages/services/src/__test__/memory-extract.test.ts`、`packages/personalization/src/index.ts`、`index.test.ts`、`packages/personalization/package.json`、`pnpm-lock.yaml`、`docs/memory-policy.md`。
+**Files:** 新建 `packages/memory/src/sensitive-content.ts` 和测试；修改 `packages/memory/src/index.ts`、`index.test.ts`、`packages/agent-runtime/src/node/memory/memory-runtime.ts`、`memory-runtime.test.ts`、`packages/services/src/memory-extract.ts`、`packages/services/src/__test__/memory-extract.test.ts`、`packages/personalization/src/index.ts`、`index.test.ts`、`packages/personalization/package.json`、`pnpm-lock.yaml`、`docs/memory-policy.md`。
 
 **Interfaces:** 从 `@vykor/memory` 导出 `detectCredentialValue(text: string): "private_key" | "bearer_token" | "key_assignment" | "api_key_prefix" | null`。它只返回风险代码。`@vykor/personalization` 增加对 workspace 包 `@vykor/memory` 的依赖。长期记忆的 `MemoryManager.add/update` 是最后一道防线，自动提取调用方则在逐条写入前跳过被拒候选，以便继续处理同批的安全候选。
 

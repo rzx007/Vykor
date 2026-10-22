@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CredentialStorage } from "@vykor/auth";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultProviderService } from "./provider-service.js";
 import { sanitizeSettings } from "./shared.js";

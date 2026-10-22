@@ -53,11 +53,11 @@ Base UI/shadcn 组件、pnpm workspace。
   `customProviders`。
 - `packages/core/src/config/settings.test.ts`：证明 daemon、CLI 和 SDK 共用的
   `loadSettings` 结果始终使用用户级供应商清单。
-- `packages/agent-runtime/src/default-runtime-provider.ts`：对当前
+- `packages/agent-runtime/src/node/runtime/default-runtime-provider.ts`：对当前
   `customProviders` 请求头统一展开后再构造 OpenAI client。
-- `packages/agent-runtime/src/default-runtime-provider.test.ts`：把 OpenCode Go 特判
+- `packages/agent-runtime/src/node/runtime/default-runtime-provider.test.ts`：把 OpenCode Go 特判
   测试改成自定义/目录供应商的通用行为测试。
-- `packages/agent-runtime/src/default-runtime.ts`：继续把已建立的 session ID 传入
+- `packages/agent-runtime/src/node/runtime/default-runtime.ts`：继续把已建立的 session ID 传入
   `resolveApiClient`。
 - `packages/server/src/daemon/__test__/daemon-agent.test.ts`：证明 durable session ID
   原样进入 runtime options。
@@ -317,9 +317,9 @@ git commit -m "fix(core): keep provider inventory user scoped"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/default-runtime-provider.ts`
-- 修改：`packages/agent-runtime/src/default-runtime-provider.test.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime-provider.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime-provider.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
 
 - [ ] **步骤 1：将 runtime 测试改成供应商无关的失败测试**
@@ -416,9 +416,9 @@ pnpm --filter @vykor/api --filter @vykor/agent-runtime check-types
 - [ ] **步骤 6：提交 runtime 集成**
 
 ```bash
-git add packages/agent-runtime/src/default-runtime-provider.ts `
-  packages/agent-runtime/src/default-runtime-provider.test.ts `
-  packages/agent-runtime/src/default-runtime.ts `
+git add packages/agent-runtime/src/node/runtime/default-runtime-provider.ts `
+  packages/agent-runtime/src/node/runtime/default-runtime-provider.test.ts `
+  packages/agent-runtime/src/node/runtime/default-runtime.ts `
   packages/server/src/daemon/__test__/daemon-agent.test.ts
 git commit -m "feat(runtime): expand configured provider headers"
 ```

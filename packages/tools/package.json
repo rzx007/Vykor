@@ -17,25 +17,23 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/auth": "workspace:*",
     "@vykor/coordinator": "workspace:*",
-    "@vykor/core": "workspace:*",
     "@vykor/environment": "workspace:*",
     "@vykor/jobs": "workspace:*",
-    "@vykor/mcp": "workspace:*",
     "@vykor/sandbox": "workspace:*",
-    "@vykor/services": "workspace:*",
-    "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
     "diff": "catalog:",
     "ignore": "7.0.6",
     "minisearch": "catalog:",
-    "picomatch": "4.0.4"
+    "picomatch": "4.0.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*",
+    "@types/diff": "catalog:",
+    "@types/picomatch": "4.0.3"
   },
   "devDependencies": {
-    "@types/diff": "catalog:",
     "@types/node": "catalog:",
-    "@types/picomatch": "4.0.3",
     "typescript": "^5.7.3",
     "vitest": "catalog:"
   }

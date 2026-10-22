@@ -1,5 +1,5 @@
-import type { ModelAttemptFinishedEvent, UsageSnapshot } from "../index";
-import { ModelRequestFailure } from "./model-retry";
+import type { ModelAttemptFinishedEvent, UsageSnapshot } from "@vykor/agent-contracts";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 
 /** Combine caller cancellation with the recovery deadline for one request. */
 export function createAttemptSignal(external?: AbortSignal, deadlineAt?: number): {

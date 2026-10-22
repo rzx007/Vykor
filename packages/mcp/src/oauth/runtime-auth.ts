@@ -3,7 +3,7 @@ import type {
   McpOAuthSettings,
   McpRemoteServerConfig,
   McpServerConfig,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { refreshAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import { McpOAuthError } from "./errors.js";
 import type { McpOAuthCredentialStore } from "./login.js";

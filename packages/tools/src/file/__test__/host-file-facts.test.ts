@@ -1,3 +1,8 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileReadTool} from "./../read.js";
+import {createFileWriteTool} from "./../write.js";
+import {createFileEditTool} from "./../edit.js";
+import {createApplyPatchTool} from "./../apply-patch.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -37,7 +42,7 @@ describe("host file receipts", () => {
           return bytes;
         }
       }
-      const result = await fileReadTool.execute({ file_path: path }, { cwd, environment: {
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: path }, { cwd, environment: {
         workspace: { kind: "local", hostRoot: cwd, executionRoot: cwd }, files: new RacingFiles(),
         paths: { resolve: async () => ({ executionPath: path }) },
       } } as never);
@@ -50,7 +55,7 @@ describe("host file receipts", () => {
   it("marks info-only missing state explicitly and does not expose document body", async () => {
     await directory(async cwd => {
       const path = join(cwd, "absent.txt");
-      const result = await fileReadTool.execute({ file_path: path, info_only: true }, { cwd });
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: path, info_only: true }, { cwd });
       expect(facts(result)?.files).toEqual([expect.objectContaining({ path, operation: "read", afterDigest: "missing", bodyVisible: false })]);
     });
   });
@@ -58,9 +63,9 @@ describe("host file receipts", () => {
   it("records exact create, overwrite and Edit before/after states", async () => {
     await directory(async cwd => {
       const path = join(cwd, "target.txt");
-      const created = await fileWriteTool.execute({ file_path: path, content: "first" }, { cwd });
-      const overwritten = await fileWriteTool.execute({ file_path: path, content: "second" }, { cwd });
-      const edited = await fileEditTool.execute({ file_path: path, old_string: "second", new_string: "third" }, { cwd });
+      const created = await executeToolFixture(host => createFileWriteTool(host), { file_path: path, content: "first" }, { cwd });
+      const overwritten = await executeToolFixture(host => createFileWriteTool(host), { file_path: path, content: "second" }, { cwd });
+      const edited = await executeToolFixture(host => createFileEditTool(host), { file_path: path, old_string: "second", new_string: "third" }, { cwd });
       expect(facts(created)?.files[0]).toMatchObject({ beforeDigest: "missing", afterDigest: digest("first"), completed: true });
       expect(facts(overwritten)?.files[0]).toMatchObject({ beforeDigest: digest("first"), afterDigest: digest("second") });
       expect(facts(edited)?.files[0]).toMatchObject({ beforeDigest: digest("second"), afterDigest: digest("third") });
@@ -74,9 +79,9 @@ describe("host file receipts", () => {
       const path = join(cwd, "target.txt");
       await writeFile(path, "old\n");
       const patch = createTwoFilesPatch("target.txt", "/dev/null", "old\n", "");
-      const result = await applyPatchTool.execute({ patch }, { cwd });
+      const result = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd });
       expect(facts(result)?.files).toEqual([expect.objectContaining({ path, beforeDigest: digest("old\n"), afterDigest: "missing", completed: true })]);
-      const failed = await applyPatchTool.execute({ patch }, { cwd });
+      const failed = await executeToolFixture(host => createApplyPatchTool(host), { patch }, { cwd });
       expect(failed.isError).toBe(true);
       expect(facts(failed)).toBeUndefined();
     });

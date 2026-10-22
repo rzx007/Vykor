@@ -3,11 +3,8 @@ import {
   VykorApiError,
   VykorClient,
 } from "@vykor/client";
-import type {
-  McpRuntimeConnectionCoordinator,
-  McpRuntimeSyncResult,
-  McpServerIdentity,
-} from "@vykor/core";
+import type { McpRuntimeConnectionCoordinator } from "@vykor/mcp";
+import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 import { readDaemonRegistry } from "@vykor/server";
 
 export interface CliMcpRuntimeClient {

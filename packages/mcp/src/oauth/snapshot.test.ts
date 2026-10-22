@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord, McpServerConfig } from "@vykor/core";
+import type { McpOAuthCredentialRecord, McpServerConfig } from "@vykor/host-config";
 import {
   buildMcpAuthServerSnapshot,
   createMcpServerIdentity,

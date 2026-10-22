@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PluginAppRecord } from "@vykor/protocol";
+import type { PluginAppRecord } from "@vykor/domain-contracts/plugin-apps";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertMutableSession, assertSession, clone } from "../session-runtime/store-state.js";
 

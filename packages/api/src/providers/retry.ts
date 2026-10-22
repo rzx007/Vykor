@@ -1,4 +1,8 @@
-import { DEFAULT_MODEL_RETRY_POLICY, ModelRequestFailure } from "@vykor/core";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
+
+// Timeouts for one provider request; generation retry policy belongs to core.
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000;
 
 export interface RequestLifecycle {
   /** 传给 SDK/fetch 的信号；外部取消会转发到它。 */
@@ -21,8 +25,8 @@ export function createRequestLifecycle(options: {
   requestTimeoutMs?: number;
   streamIdleTimeoutMs?: number;
 }): RequestLifecycle {
-  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_MODEL_RETRY_POLICY.requestTimeoutMs;
-  const streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_MODEL_RETRY_POLICY.streamIdleTimeoutMs;
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
   const controller = new AbortController();
   const external = options.external;
   let timedOutPhase: "request" | "stream" | undefined;

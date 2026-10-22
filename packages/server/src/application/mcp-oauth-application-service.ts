@@ -1,16 +1,18 @@
 import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@vykor/auth";
 import {
   createUnavailableMcpRuntimeCoordinator,
+  type McpRuntimeConnectionCoordinator,
+} from "@vykor/mcp";
+import {
   loadSettings,
   updateSettings,
   withMcpServerOAuthScopes,
   type McpAuthServerSnapshot,
-  type McpRuntimeConnectionCoordinator,
   type McpRemoteServerConfig,
   type McpRuntimeSyncResult,
   type McpServerConfig,
   type Settings,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import {
   buildMcpAuthServerSnapshot,
   createMcpServerIdentity,

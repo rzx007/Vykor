@@ -1,4 +1,4 @@
-import type { SessionInputAttachmentRecord } from "@vykor/protocol";
+import type { SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 import { describe, expect, it, vi } from "vitest";
 import { AttachmentTextDecodingError } from "@vykor/services";
 

@@ -8,23 +8,14 @@ export type { CapturedMcpAppResources } from "./app-resources.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type {
-  McpRemoteServerConfig,
-  McpServerConfig,
-  Settings,
-  ToolDefinition,
-} from "@vykor/core";
+import type { McpRemoteServerConfig, McpServerConfig, Settings } from "@vykor/host-config";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 import { resolveTransportKind } from "./connection-types.js";
-import {
-  McpResultDataError,
-  mcpResultModelText,
-  normalizeMcpToolMetadata,
-  parseMcpCallResultData,
-} from "@vykor/protocol";
+import { McpResultDataError, mcpResultModelText, normalizeMcpToolMetadata, parseMcpCallResultData } from "@vykor/agent-contracts";
 import type {
   McpConnection,
   McpConnectionActivation,
@@ -655,3 +646,10 @@ export {
 } from "./oauth/login.js";
 export { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 export { verifyMcpOAuthConnection } from "./oauth/verify-connection.js";
+
+export {
+  createUnavailableMcpRuntimeCoordinator,
+  type McpRuntimeConnectionCoordinator,
+  type ActiveMcpRuntimeHandle,
+  type McpRuntimeRegistry,
+} from "./runtime-coordination.js";

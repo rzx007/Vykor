@@ -14,9 +14,9 @@
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/child-agent-options.ts`
-- 创建：`packages/agent-runtime/src/child-agent-options.test.ts`
-- 修改：`packages/agent-runtime/src/child-agent.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/child-agent-options.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`
+- 修改：`packages/agent-runtime/src/kernel/child-agent.ts`
 
 - [x] 先写测试，断言父配置继承、Child 显式覆盖、allowlist 分层、deny 合并，以及 Host overrides/effects 保持对象身份。
 - [x] 运行新测试，确认因为 `deriveChildAgentOptions` 尚不存在而失败。
@@ -27,8 +27,8 @@
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/default-agent-capabilities.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
+- 创建：`packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
 
 - [x] 将 ChildManager、Workflow、Local Jobs、Terminal、Background Shell、Jobs、Memory 及可选 Host 能力的解析移动到新模块。
 - [x] 保留原有 Job 禁用校验、Terminal cleanup 登记和能力 source 状态。
@@ -38,8 +38,8 @@
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/runtime-integrations.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
 
 - [x] 将 discovered extensions、调用方 extensions、MCP、Remember 和 Memory Retriever 安装移动到新模块。
 - [x] 返回 MCP 连接读取函数，供 Agent inspect 使用。

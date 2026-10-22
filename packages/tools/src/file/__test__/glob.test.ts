@@ -1,3 +1,6 @@
+import {createGlobTool} from "../glob.js";
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -33,10 +36,7 @@ describe("globTool", () => {
     try {
       await fs.writeFile(path.join(dir, "a.ts"), "");
       await fs.writeFile(path.join(dir, "b.js"), "");
-      const result = await globTool.execute!(
-        { pattern: "**/*.ts", path: dir },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createGlobTool(host), { pattern: "**/*.ts", path: dir }, { cwd: dir });
       const out = lines(result);
       expect(out.some((l) => l.endsWith("a.ts"))).toBe(true);
       expect(out.some((l) => l.endsWith("b.js"))).toBe(false);
@@ -56,10 +56,7 @@ describe("globTool", () => {
       await fs.mkdir(path.join(dir, ".venv"));
       await fs.writeFile(path.join(dir, ".venv", "lib.ts"), "");
 
-      const result = await globTool.execute!(
-        { pattern: "**/*.ts", path: dir },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createGlobTool(host), { pattern: "**/*.ts", path: dir }, { cwd: dir });
       const out = lines(result);
       expect(out.some((l) => l.endsWith("keep.ts"))).toBe(true);
       // Even if rg is present it honors .gitignore defaults but not arbitrary
@@ -86,10 +83,7 @@ describe("globTool", () => {
       await fs.writeFile(path.join(dir, "kept.ts"), "");
       await fs.writeFile(path.join(dir, "ignored.ts"), "");
 
-      const result = await globTool.execute!(
-        { pattern: "**/*.ts", path: dir },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createGlobTool(host), { pattern: "**/*.ts", path: dir }, { cwd: dir });
       const out = lines(result);
       expect(out.some((l) => l.endsWith("kept.ts"))).toBe(true);
       expect(out.some((l) => l.endsWith("ignored.ts"))).toBe(false);
@@ -104,10 +98,7 @@ describe("globTool", () => {
       for (let i = 0; i < 20; i++) {
         await fs.writeFile(path.join(dir, `f${i}.ts`), "");
       }
-      const result = await globTool.execute!(
-        { pattern: "**/*.ts", path: dir, limit: 5 },
-        { cwd: dir }
-      );
+      const result = await executeToolFixture(host => createGlobTool(host), { pattern: "**/*.ts", path: dir, limit: 5 }, { cwd: dir });
       const out = lines(result);
       expect(out.length).toBe(5);
     } finally {

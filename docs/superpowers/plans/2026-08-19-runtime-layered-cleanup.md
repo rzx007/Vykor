@@ -24,10 +24,10 @@
 **Files:**
 - Create: `packages/memory/src/extraction.ts`
 - Modify: `packages/memory/src/index.ts`
-- Modify: `packages/agent-runtime/src/memory-runtime.ts`
+- Modify: `packages/agent-runtime/src/node/memory/memory-runtime.ts`
 - Modify: `packages/services/src/memory-extract.ts`
 - Test: `packages/memory/src/extraction.test.ts`
-- Test: `packages/agent-runtime/src/memory-runtime.test.ts`
+- Test: `packages/agent-runtime/src/node/memory/memory-runtime.test.ts`
 - Test: `packages/services/src/memory-extract.test.ts`
 
 **Interfaces:**
@@ -42,11 +42,11 @@
 ### Task 2: Pure extension discovery and scoped activation
 
 **Files:**
-- Modify: `packages/agent-runtime/src/extensions.ts`
-- Modify: `packages/agent-runtime/src/agent.ts` or the new composition module from Task 4
+- Modify: `packages/agent-runtime/src/node/plugins/extensions.ts`
+- Modify: `packages/agent-runtime/src/kernel/agent.ts` or the new composition module from Task 4
 - Modify: `packages/coordinator/src/agent-definitions.ts`
 - Modify: command/context callers under `packages/server/src`
-- Test: `packages/agent-runtime/src/extensions.test.ts`
+- Test: `packages/agent-runtime/src/node/plugins/extensions.test.ts`
 - Test: coordinator/server focused tests
 
 **Interfaces:**
@@ -63,7 +63,7 @@
 **Files:**
 - Modify: `packages/swarm/src/worktree.ts` and its barrel/tests, or add deprecation documentation if a safe thin adapter is impossible
 - Modify: `packages/swarm/README.md`
-- Test: `packages/agent-runtime/src/child-environment.test.ts`
+- Test: `packages/agent-runtime/src/node/runtime/child-environment.test.ts`
 - Test: `packages/swarm/src/worktree.test.ts` when retained
 
 **Interfaces:**
@@ -77,12 +77,12 @@
 ### Task 4: Split agent facade, run state and composition
 
 **Files:**
-- Modify: `packages/agent-runtime/src/agent.ts`
-- Create: `packages/agent-runtime/src/framework-agent-run.ts`
-- Create: `packages/agent-runtime/src/agent-composition.ts`
-- Create: `packages/agent-runtime/src/agent-errors.ts`
+- Modify: `packages/agent-runtime/src/kernel/agent.ts`
+- Create: `packages/agent-runtime/src/kernel/framework-agent-run.ts`
+- Create: `packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- Create: `packages/agent-runtime/src/kernel/agent-errors.ts`
 - Test: existing `packages/agent-runtime/src/*.test.ts`
-- Test: add focused factory failure tests under `packages/agent-runtime/src/agent.test.ts`
+- Test: add focused factory failure tests under `packages/agent-runtime/src/node/runtime/agent.test.ts`
 
 **Interfaces:**
 - Public exports remain sourced from `agent.ts`/`index.ts` with identical signatures.

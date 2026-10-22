@@ -1,3 +1,11 @@
+import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
+import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
+import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
+import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
+import {hostedContextUsageAgent} from "./assemble-session-context-usage.js";
+import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
+import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { PluginUiHistoryService } from "./session/plugin-ui-history-service.js";
 import { retirePluginUiActions } from "./recovery/retire-plugin-ui-actions.js";
 import type { PluginLifecycle } from "./session/plugin-lifecycle.js";
@@ -5,7 +13,8 @@ import { randomUUID } from "node:crypto";
 import { assemblePluginApps } from "./session/plugin-app-assembly.js";
 import { PluginAppConversationService } from "./session/plugin-app-conversation-service.js";
 
-import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
+import type { AgentBackgroundShellHost } from "@vykor/tools";
+import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
 import { fileReadTool } from "@vykor/tools";
@@ -14,27 +23,23 @@ import {
   type ObservableJobProducer,
 } from "@vykor/agent-runtime";
 import type { AgentTerminalHost } from "@vykor/terminal";
-import {
-  readSessionRuntimeConfig,
-  type AttachmentLimits,
-  type SessionRecord,
-} from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "./session/runtime-configuration.js";
+import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import {
   AttachmentIntegrityService,
   type LocalOcrService,
-  closeExecutionRuntimes,
   executeAutoDream,
-  getChildAgentExecutionRegistry,
-  getDetachedProcessSupervisor,
   getSessionMemoryContent,
   getSessionMemoryPath,
   readLastConsolidatedAt,
   sessionMemoryToCompactText,
   updateSessionMemoryFile,
   type SessionStore,
-  type NoteRepository,
   type ApplicationOwnerLease,
 } from "@vykor/services";
+import {
+} from "@vykor/execution-node";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
 import { createDaemonAttachmentServices } from "./attachments/daemon-attachment-services.js";
@@ -135,6 +140,8 @@ import { createMcpConfigureTool } from "./mcp-configure-tool.js";
 import { McpConfigApplicationService } from "./mcp-config-application-service.js";
 
 export interface DaemonApplicationOptions {
+  /** Transferred to the application and closed with it; omitted means a private owner. */
+  executionOwner?: ExecutionRuntimeOwner;
   store: SessionStore;
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
@@ -165,13 +172,15 @@ export interface DaemonApplicationOptions {
  * daemon 对外暴露的能力面。HTTP 路由只调这些，不自己造 Agent、不自己写会话记录。
  */
 export interface DurableAgentApplication {
+  createMaintenanceService?(host?: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void }): ReturnType<typeof createMaintenanceApplicationService>;
   readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
   readonly pluginUiHistory?: PluginUiHistoryService;
   readonly pluginLifecycle?: PluginLifecycle;
   readonly pluginApps?: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation?: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteRepository;
+  readonly notes: NoteApplicationService;
+  readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
@@ -215,12 +224,14 @@ function failMissingSettings(): never {
  * → onEvent 进投影 → 写成会话记录 → events 推给窗口。
  */
 export class DaemonApplication implements DurableAgentApplication {
+  private readonly executionOwner: ExecutionRuntimeOwner;
   readonly pluginUiHistory: PluginUiHistoryService;
   readonly pluginLifecycle: PluginLifecycle;
   readonly pluginApps: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteRepository;
+  readonly notes: NoteApplicationService;
+  readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
@@ -239,6 +250,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly channelRuntime?: ChannelRuntimeService;
   readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
+  readonly workflowHost: WorkflowHost;
   readonly retention: ApplicationRetentionService;
   readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
   readonly mcpOAuth: McpOAuthApplicationService;
@@ -259,6 +271,9 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
   private readonly startupRecovery: Promise<void>;
+  createMaintenanceService(host: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void } = {}) {
+    return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
+  }
   private closePromise?: Promise<void>;
   private readyState: "starting" | "ready" | "failed" | "closing" | "closed" = "starting";
   get diagnosticState() { return { phase: this.readyState, accepting: this.readyState === "ready" && this.operationGate.accepting }; }
@@ -268,7 +283,9 @@ export class DaemonApplication implements DurableAgentApplication {
   constructor(private readonly options: DaemonApplicationOptions) {
     const { store } = options;
     this.store = store;
-    this.notes = store.notes;
+    const executionOwner = options.executionOwner ?? new ExecutionRuntimeOwner();
+    this.executionOwner = executionOwner;
+    this.notes = createNoteApplicationService({ notes: store.notes, readiness: () => this.diagnosticState });
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
     this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });
@@ -294,6 +311,7 @@ export class DaemonApplication implements DurableAgentApplication {
       }
     }, options.ownerHeartbeatMs ?? 5_000);
     this.ownerHeartbeat.unref?.();
+    let createdWorkflowHost: WorkflowHost | undefined;
     try {
       const attachmentServices = createDaemonAttachmentServices({
         store,
@@ -320,6 +338,7 @@ export class DaemonApplication implements DurableAgentApplication {
         onDurableEvent: (previousEventSeq) =>
           this.eventPublisher.publishSince(previousEventSeq),
       });
+      this.workflowHost = createdWorkflowHost = new WorkflowHost(this.workflows);
       this.retention = new ApplicationRetentionService(
         store,
         new AttachmentIntegrityService({
@@ -386,7 +405,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.executionProjector = new SessionExecutionProjector({
         store,
-        getChildAgentExecutionRegistry: (scope) => getChildAgentExecutionRegistry(scope),
+        getChildAgentExecutionRegistry: (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
         events: this.eventPublisher,
         traceIdForRun: (runId) => this.traceIdForRun(runId),
         log: options.log,
@@ -423,7 +442,7 @@ export class DaemonApplication implements DurableAgentApplication {
         operationGate: jobOperationGate,
         store: taskStore,
         executionProjector: this.executionProjector,
-        getDetachedProcessSupervisor: (scope) => getDetachedProcessSupervisor(scope),
+        getDetachedProcessSupervisor: (scope) => this.executionOwner.getDetachedProcessSupervisor(scope),
         events: this.eventPublisher,
         getSettingsForCwd: async (cwd) =>
           options.getSettingsForCwd
@@ -432,12 +451,13 @@ export class DaemonApplication implements DurableAgentApplication {
         acquireEnvironment: acquireSessionEnvironment,
       });
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
+      const toolAppOrigins = new ToolAppOriginProjector();
       this.jobs = new DaemonJobService(
         taskStore,
         this.terminals,
-        (scope) => getDetachedProcessSupervisor(scope),
-        (scope) => getChildAgentExecutionRegistry(scope),
-        this.workflows,
+        (scope) => this.executionOwner.getDetachedProcessSupervisor(scope),
+        (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
+        this.workflowHost,
         this.executionProjector,
         jobOperationGate,
       );
@@ -457,13 +477,18 @@ export class DaemonApplication implements DurableAgentApplication {
       const imageToTextTool = createDaemonImageToTextTool({
         authorizationSessions: attachmentAuthorizationSessions,
         attachmentOcr,
+        getSettings: async context => {const session=context.sessionId ? store.sessions.get(context.sessionId) : undefined;return session && options.getSettingsForCwd ? await options.getSettingsForCwd(sessionSettingsRoot(session)) : options.getSettings?.() ?? options.settings;},
       });
       const imageGenerationTool = createDaemonImageGenerationTool({
         attachments: this.attachments,
       });
 
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
+      const modelAttempts = new GoalModelAttemptService({ store, events: this.eventPublisher,
+        requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
       const loadAgent = createDaemonAgentLoader({
+        modelAttempts,
+        executionOwner: this.executionOwner,
         executionSurface: options.executionSurface,
         settings: options.settings,
         getSettings: options.getSettings,
@@ -516,10 +541,11 @@ export class DaemonApplication implements DurableAgentApplication {
             jobs: this.jobs.createDetachedProcessAgentHost(session),
           })),
         workflowRepository: this.workflows,
-        tools: async ({ session }) => {
+        workflowHost: this.workflowHost,
+        tools: async ({ session,settings }) => {
           const pluginSettings = options.getSettings?.() ?? options.settings;
           return [
-            createMcpConfigureTool(new McpConfigApplicationService({ coordinator: this.mcpRuntimes }), session.id),
+            createMcpConfigureTool(new McpConfigApplicationService({ coordinator: this.mcpRuntimes }), session.id, {settings,canConfigure:context=>{const id=context.agent?.scope.runId;const run=id?store.runs.getRun(id):undefined;return !!run && run.sessionId===session.id && typeof run.metadata.pluginId!=="string";}}),
             ...(pluginSettings
               ? [
                   createPluginInstallTool(
@@ -546,17 +572,14 @@ export class DaemonApplication implements DurableAgentApplication {
             createBrowserDeveloperTool(options.browserHost),
           ]
         },
-        toolOverrides: [
-          createAttachmentReadTool({
-            defaultTool: fileReadTool,
+        toolDecorators: [{name:"Read",decorate:base=>createAttachmentReadTool({
+            defaultTool: base,
             authorizationSessions: attachmentAuthorizationSessions,
             attachmentReader,
             supportsImageInput: async (context) =>
               supportsNativeImageInput(context, await this.modelCatalog.load()),
             localOcr: this.localOcr,
-          }),
-        ],
-        trustedToolOverrides: ["Read"],
+          })}],
         requestPermission: async (request, context) => {
           const owner = store.sessions.get(context.sessionId);
           const settings = owner && options.getSettingsForCwd
@@ -601,6 +624,7 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         onRunCapabilities: snapshot => {
           pluginCapabilities.authorizeRun(snapshot);
+          return toolAppOrigins.capture(snapshot);
         },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
@@ -608,13 +632,13 @@ export class DaemonApplication implements DurableAgentApplication {
             projectorId: `${DAEMON_AGENT_PROJECTOR}:${agent.id}`,
             rootSessionId: session.id,
             rootAgent: agent,
+            toolAppOrigins,
             store,
             transcriptProjection: this.transcriptProjection,
             executionProjector: this.executionProjector,
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
             log: options.log,
-            requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId),
           });
           return (event) => projector.apply(event);
         },
@@ -660,7 +684,9 @@ export class DaemonApplication implements DurableAgentApplication {
             ...(goal ? { toolMetadata: { task_focus_state: { goal } } } : {}),
           }),
         lastConsolidatedAt: readLastConsolidatedAt,
-        autoDream: executeAutoDream,
+        autoDream: (input) => executeAutoDream({
+          ...input, taskRunner: this.executionOwner.getDetachedProcessSupervisor(input.cwd),
+        }),
       });
 
       const contextUsageCache = sharedContextUsageCache;
@@ -712,10 +738,10 @@ export class DaemonApplication implements DurableAgentApplication {
           outputLimit: limits.outputLimit,
           skillsList,
           getAgent: async () => {
-            const warm = await this.agentPool.get(sessionId);
-            if (warm) return warm;
+            const warm = await this.agentPool.getHosted(sessionId);
+            if (warm) return hostedContextUsageAgent(warm);
             try {
-              return await this.agentPool.acquireSession(sessionId);
+              return hostedContextUsageAgent(await this.agentPool.acquireHostedSession(sessionId));
             } catch {
               return undefined;
             }
@@ -773,7 +799,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
       this.pluginApps = assemblePluginApps({ store, operations: this.operationRunner, engine: this.runEngine,
-        acquireSession: id => this.agentPool.acquireSession(id), operationGate: this.operationGate, events: this.eventPublisher,
+        acquireSession: id => this.agentPool.acquireHostedSession(id), operationGate: this.operationGate, events: this.eventPublisher,
         settings: async cwd => await resolveSessionSettings(cwd),
         interrupt: (sessionId, runId) => { this.runControl.interruptRun(sessionId, runId, "plugin_app_cancelled"); },
         waitForRuns: ids => this.runControl.waitForRuns(ids),
@@ -930,6 +956,7 @@ export class DaemonApplication implements DurableAgentApplication {
         resolveSkillCatalog: runtimeDiscovery.resolveSkillCatalog,
         pluginCapabilities,
       });
+      this.facts = createProjectFactsService({ control: this.control, sessions: store.sessions, readiness: () => this.diagnosticState });
       this.goals = new SessionGoalService({
         transaction: store,
         sessions: store.sessions,
@@ -1022,7 +1049,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverAttachments: () => this.attachments.recover(),
         reconcileBackgroundTasks: () => this.backgroundShells.reconcileActiveTasks(DAEMON_RESTART_TASK_REASON),
         recoverGoalWaits: () => { this.goals.recoverExternalWaits(); },
-        recoverWorkflows: () => recoverInterruptedWorkflows({ workflows: this.workflows }),
+        recoverWorkflows: () => recoverInterruptedWorkflows({ workflowHost: this.workflowHost }),
       });
       this.startupRecovery = recovery.run()
         .then(
@@ -1038,6 +1065,10 @@ export class DaemonApplication implements DurableAgentApplication {
         );
       void this.startupRecovery.catch(() => {});
     } catch (error) {
+      void (async () => {
+        try { await createdWorkflowHost?.close(); }
+        finally { await executionOwner.close(); }
+      })().catch(() => {});
       clearInterval(this.ownerHeartbeat);
       store.releaseApplicationOwner(this.ownerLease);
       throw error;
@@ -1103,7 +1134,12 @@ export class DaemonApplication implements DurableAgentApplication {
       failures.push(error);
     }
     try {
-      await closeExecutionRuntimes();
+      await this.workflowHost.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await this.executionOwner.close();
     } catch (error) {
       failures.push(error);
     }

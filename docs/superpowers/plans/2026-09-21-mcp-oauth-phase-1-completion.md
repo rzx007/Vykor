@@ -28,11 +28,11 @@
 ### 修改文件
 
 - `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/index.ts`：增加 `McpAuthMode`、`McpRuntimeStatus`、identity、snapshot 与同步结果 DTO。
-- `packages/core/src/types/tools.ts`、`packages/core/src/engine/tool-registry.ts`、对应测试：增加 `replaceBySource()` 原子提交。
+- `packages/agent-contracts/src/tools.ts`、`packages/core/src/engine/tool-registry.ts`、对应测试：增加 `replaceBySource()` 原子提交。
 - `packages/mcp/src/index.ts`、对应测试：增加 prepared connection、同步激活和可观察的断开错误。
 - `packages/mcp/src/oauth/login.ts`、对应测试：候选凭据先在内存验证，验证成功后才允许持久化。
 - `packages/auth/src/mcp-oauth-credential-store.ts`、对应测试：复用 `runExclusive()` 串行化最终提交，不改变凭据文件格式。
-- `packages/agent-runtime/src/runtime-integrations.ts`、`packages/agent-runtime/src/agent-options.ts`、`packages/agent-runtime/src/agent-composition.ts`、对应测试：在连接前登记 Runtime handle，在清理时注销，并使用原子 Registry 替换。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`、`packages/agent-runtime/src/node/runtime/agent-options.ts`、`packages/agent-runtime/src/node/runtime/agent-composition.ts`、对应测试：在连接前登记 Runtime handle，在清理时注销，并使用原子 Registry 替换。
 - `packages/server/src/application/mcp-oauth-application-service.ts`、对应测试：编排 settings 与 credential 的提交、Runtime 同步及稳定错误阶段。
 - `packages/server/src/application/daemon-application.ts`、`packages/server/src/daemon/daemon-agent.ts`、对应测试：把 Runtime registry 注入每个 Session agent。
 - `packages/server/src/http/server.ts`、`packages/server/src/index.ts`、HTTP 测试：挂载 MCP 控制面路由并导出契约。
@@ -142,10 +142,10 @@ git commit -m "feat(mcp): add unified OAuth status snapshot"
 ## 任务 2：Tool Registry 按来源原子替换
 
 **文件：**
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 测试：`packages/core/src/engine/index.test.ts`
-- 测试：`packages/agent-runtime/src/run-capability-mcp.test.ts`
+- 测试：`packages/agent-runtime/src/node/plugins/run-capability-mcp.test.ts`
 
 - [ ] **步骤 1：编写失败测试**
 
@@ -188,7 +188,7 @@ replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void;
 - [ ] **步骤 5：提交 Registry 原子替换**
 
 ```bash
-git add packages/core/src/types/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/agent-runtime/src/run-capability-mcp.test.ts
+git add packages/agent-contracts/src/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/agent-runtime/src/node/plugins/run-capability-mcp.test.ts
 git commit -m "feat(core): replace tools atomically by source"
 ```
 
@@ -197,8 +197,8 @@ git commit -m "feat(core): replace tools atomically by source"
 **文件：**
 - 修改：`packages/mcp/src/index.ts`
 - 测试：`packages/mcp/src/index.test.ts`
-- 修改：`packages/agent-runtime/src/mcp-auth.ts`
-- 测试：`packages/agent-runtime/src/mcp-auth.test.ts`
+- 修改：`packages/agent-runtime/src/node/mcp/mcp-auth.ts`
+- 测试：`packages/agent-runtime/src/node/mcp/mcp-auth.test.ts`
 
 - [ ] **步骤 1：为 staged 生命周期编写失败测试**
 
@@ -244,7 +244,7 @@ await activation.closePrevious();
 - [ ] **步骤 7：提交 staged connection**
 
 ```bash
-git add packages/mcp/src/index.ts packages/mcp/src/index.test.ts packages/agent-runtime/src/mcp-auth.ts packages/agent-runtime/src/mcp-auth.test.ts
+git add packages/mcp/src/index.ts packages/mcp/src/index.test.ts packages/agent-runtime/src/node/mcp/mcp-auth.ts packages/agent-runtime/src/node/mcp/mcp-auth.test.ts
 git commit -m "feat(mcp): activate prepared connections atomically"
 ```
 
@@ -253,10 +253,10 @@ git commit -m "feat(mcp): activate prepared connections atomically"
 **文件：**
 - 创建：`packages/server/src/application/mcp-runtime-connection-coordinator.ts`
 - 创建：`packages/server/src/application/mcp-runtime-connection-coordinator.test.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/runtime-integrations.ts`
-- 测试：`packages/agent-runtime/src/runtime-integrations.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
+- 测试：`packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`
 - 测试：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
 - 修改：`packages/server/src/application/daemon-application.ts`
@@ -319,7 +319,7 @@ export interface McpRuntimeConnectionCoordinator {
 - [ ] **步骤 7：提交 Runtime 协调**
 
 ```bash
-git add packages/server/src/application/mcp-runtime-connection-coordinator.ts packages/server/src/application/mcp-runtime-connection-coordinator.test.ts packages/server/src/application/daemon-application.ts packages/server/src/application/index.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/daemon/__test__/daemon-agent.test.ts packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/agent-composition.ts packages/agent-runtime/src/runtime-integrations.ts packages/agent-runtime/src/runtime-integrations.test.ts
+git add packages/server/src/application/mcp-runtime-connection-coordinator.ts packages/server/src/application/mcp-runtime-connection-coordinator.test.ts packages/server/src/application/daemon-application.ts packages/server/src/application/index.ts packages/server/src/daemon/daemon-agent.ts packages/server/src/daemon/__test__/daemon-agent.test.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/runtime-integrations.ts packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts
 git commit -m "feat(server): coordinate active MCP runtimes"
 ```
 

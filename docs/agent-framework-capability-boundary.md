@@ -27,15 +27,21 @@ flowchart LR
 @vykor/core <- @vykor/agent-runtime <- @vykor/server <- clients/apps
 ```
 
-`agent-runtime` 禁止依赖 server、HTTP、SSE、daemon store 或 durable session schema。
+Kernel 禁止依赖 server、HTTP、SSE、daemon store、产品领域记录以及 domain-contracts、plugin-contracts、json-data；纯数据包也不能因此进入 Kernel。Node 从 plugin-contracts 和 Job/Terminal contracts 消费自身需要的数据，不依赖 Protocol、domain-contracts 或 Services，不读取数据库，不拥有 Goal 状态。
 
 ## Kernel 与默认 Node 组装
+
+`agent-contracts` 定义跨包执行数据；`core/engine` 负责模型与工具循环；Kernel 负责 Run/Child 状态和可靠事件交付。Node 在进入循环前捕获本轮工具和能力，通过 `AgentRunPreparation` 返回通用绑定与释放函数。完整 Settings、插件/Skill/MCP/Jobs/Terminal/Schedule 由具体工具工厂闭包持有，不能塞回 `ToolContext`。
+
+Server 保存 `HostedAgent { agent, host }`：执行通过 agent，插件/配置/记忆/检查通过 host。GoalRead/GoalUpdate 与目标提示词由 Server 组成通用 contribution。应用工具仍走 Kernel `runTool` 和同一条受检查执行管道；精确确认由 Node 校验保存的授权、参数、版本与工具身份，硬 deny 优先。可信应用来源由 Server 和 Node 从本轮真实捕获的绑定生成，不信任工具结果或事件自由字段。Server 验证持久应用状态与 revision 后，用 `pluginAppHostBinding()` 构造插件、版本、digest、后端和 owner 数据，连同 lease、工具名、参数交给 Node。绑定保留不透明 `instanceId = app.id` 用于隔离和撤销，不携带可变应用记录或 Run 账本。Node 保留原 lease 权威和二次绑定检查，Server 适配它，不另建第二份 token 表。
+
+Node 的能力捕获目录属于根树实例，子 Agent 借用；不设置进程级运行目录或通过全局工具 ID 反查宿主。通用 `profile.toolResultReferences` 仅选择结果引用策略，Node 根据已授权范围配置，Kernel 不据此发现插件。
 
 `@vykor/agent-runtime` 现在有两个入口，名字代表它们会做多少事：
 
 | 入口 | 实际做什么 |
 |---|---|
-| `createAgentKernel()` | 只运行 Agent/Run/Child；settings、runtime 和宿主能力都必须由调用方交进来 |
+| `createAgentKernel()` | 只运行 Agent/Run/Child；只接收执行引擎、通用工具绑定、effects 和 prepare/release |
 | `createDefaultNodeAgent()` | 读取本机配置并组装 provider、工具、插件、Skill、MCP、Memory、Sandbox 和 Git child environment |
 
 `createVykorAgent()` 已删除，不提供兼容别名。调用方必须明确选择最小 Kernel 或 Node 默认组装。
@@ -45,8 +51,8 @@ flowchart LR
 | 能力 | 放在哪里 | 原因 |
 |---|---|---|
 | Agent/Run/Child 状态、event/effect/handle、关闭 | Kernel | 这是一次 Agent 执行本身 |
-| QueryEngine turn loop | Kernel 接收的 runtime | Kernel 使用它，但不替宿主选择 provider |
-| `StreamingMessageClient` 接口 | Kernel runtime contract | 可以用 fake client、远程 client 或 Node client |
+| QueryEngine turn loop | core；Kernel 接收引擎接口 | Kernel 使用它，但不替宿主选择 provider |
+| `StreamingMessageClient` 接口 | agent-contracts | 可以用 fake client、远程 client 或 Node client |
 | Anthropic/OpenAI/Codex client | 默认 Node 组装 | 会处理真实网络端点和凭据 |
 | settings 和 CredentialStorage | 默认 Node 组装 | 会读取本机和用户目录 |
 | 插件、Skill、MCP、Memory | 默认 Node 组装 | 会发现或连接外部资源 |
@@ -66,7 +72,7 @@ Kernel 的硬规则：
 - 不启动 Sandbox；
 - 不写 `process.stderr`；
 - 不创建 `LocalAgentJobHost`；
-- child 继承 root session tree 的同一份 capability overrides；Host 覆盖必须支持整棵树；
+- child 的通用限制由 Kernel 收紧；Node 为整棵树解析宿主能力，借用资源不能由 child 关闭；
 - 没有显式 child environment 时只沿用 cwd，不查 Git、不建 worktree。
 
 可传入 Host 对象的 override 是 `terminal`、`backgroundShell`、`childEnvironment`、`workflowRepository` 和 `schedules`；Terminal 与后台 Shell 都使用 `{ value, jobs }`，确保其 Job 可观察。`jobs` 与 `memory` 只能设为 `false`，分别禁用本地 Jobs 或受管 Memory，不能用 Host 对象替换。若设 `jobs: false`，还必须同时设 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`，因为这些能力会产生或依赖 Job。权限通过 `effects.requestPermission` 提供。Artifact 与更细的 Workspace 操作还没有稳定接口，因此本阶段没有添加两个只占名字、不能工作的空对象；以后出现真实调用方时再加入。
@@ -75,16 +81,17 @@ Kernel 的硬规则：
 
 ## 发布形式
 
-当前明确公开发布 `@vykor/agent-runtime`，其他 workspace 包仍按内部包处理。发布包提供两个路径：
+公开 SDK 入口是 `@vykor/agent-runtime`；内部包随声明依赖安装，不承诺独立可替换实现。发布包提供三个路径：
 
 ```text
 @vykor/agent-runtime          默认 Node 入口
-@vykor/agent-runtime/kernel   只包含 Kernel、最小 runtime builder 和显式能力类型
+@vykor/agent-runtime/kernel   Kernel、通用执行工厂和显式类型
+@vykor/agent-runtime/node/workflow  Node Workflow 宿主与仓库
 ```
 
-构建结果在 `dist`，`main`、`types` 和 `exports` 不再指向 TypeScript 源码。Kernel ESM bundle 不需要仓库源码就能运行；完整入口也会生成可直接加载的 ESM bundle。workspace 包只作为开发期和类型 peer，`pnpm pack` 会把发布清单中的 `workspace:*` 转成正常版本号。
+构建结果在 `dist`，`main`、`types` 和 `exports` 不再指向 TypeScript 源码。Kernel ESM bundle 不需要仓库源码就能运行；完整入口也会生成可直接加载的 ESM bundle。workspace 包作为公开声明所需的正式依赖，`pnpm pack` 会把发布清单中的 `workspace:*` 转成正常版本号。
 
-`package.json` 里这些 peer 标了 `optional: true`，且源码对它们是**值导入**（不是 `import type`）。这不表示第三方可以自行提供替代实现：发布构建会用 esbuild 把 api/auth/core/tools/mcp/plugins 等一并打进 `dist/`，运行时不依赖消费者再装一套可互换的 peer。`optional: true` 只是避免 monorepo / 局部安装时 peer 警告噪声；消费方仍应把 `@vykor/agent-runtime` 当作自带组装内核的意见化 SDK，而不是可热插拔的 facade。
+esbuild 把 api/auth/core/tools/mcp/plugins 等实现打进 `dist/`。消费者安装的内部依赖用于公开声明，不用于替换 bundle 内的实现。默认入口保留 sharp、node-pty 与 Native Tool host-entry，数据库驱动不在执行闭包中。
 
 `pnpm run test:pack` 每次都会：
 
@@ -92,7 +99,9 @@ Kernel 的硬规则：
 2. 创建 npm tarball；
 3. 检查 tarball 的 manifest 不含 `workspace:`；
 4. 安装到仓库外的临时目录；
-5. 用 fake provider 跑完 root Agent、child Agent 和 close。
+5. 用 TypeScript 消费 Node/Kernel/Workflow 的公开声明；
+6. 用 fake Provider 跑 root/child、事件、幂等关闭、关闭后拒绝及跨 bundle 错误识别；
+7. 实际启动 Native Tool 和默认 PTY/Job。
 
 ## Framework 边界
 
@@ -186,3 +195,11 @@ AgentChildProjection / DaemonChildAgentProjection
 ChildAgentProjectionFactory / LiveChildAgentRegistry controls copy
 pullFollowUps / wakeCount / mergeWake
 ```
+
+P5 中，Server 通过 GoalModelAttemptService 在实际模型请求前准入、完成事实发布前结算；Node 仅传递通用 gate，事件投影不写 Goal 账本。维护、事实和便签路由调用应用用例，文件位置、写入就绪检查与独占凭证留在应用层。
+
+## P6 与 Protocol 收敛后的长期边界
+
+架构门禁覆盖静态/类型/动态导入、再导出、别名、跨包相对路径与声明来源。当前阶段为 P13，`stageExceptions` 为空；[P7 基线](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md) 的 4,173 条关系是迁移前历史快照，不是当前例外数。底层能力、Services、Node 和 Server application 不再依赖 Protocol。Client 只直接依赖 Protocol，Server/Client 联合测试放在 `tests/server-client`。存储模块仍不能导入 Office/Memory 辅助宿主、模型、进程和 PTY；宿主辅助域保留原能力。
+
+AgentDefinition 的规范来源为 coordinator/definitions，执行权限与审查数据归 agent-contracts/permissions，工具数据与执行错误归 agent-contracts，Settings 与旧模式归一化归 host-config，有效权限计算归 permissions。领域记录归 domain-contracts，插件清单与后端绑定归 plugin-contracts，通用 JSON 归 json-data/json；Job/Terminal 的纯数据从各自 /contracts 引用。旧 Core 配置、工具默认宿主与 Node 转发入口不保留。Swarm 保留独立文件协作用途，不接入当前 Run/Child 链路。

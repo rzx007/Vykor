@@ -1,26 +1,24 @@
 # @vykor/core
 
-Core engine for Vykor query execution, settings management, and tool registry.
+Core engine for Vykor query execution, tool registration, history and compaction.
 
 ## 功能
 
 - **QueryEngine**: 流式 LLM 调用 + 工具执行循环
-- **Settings**: 配置管理 (load/save)
 - **ToolRegistry**: 工具注册表
 - **CompactService**: 双层压缩服务
 
 ## 使用
 
 ```ts
-import { QueryEngine, loadSettings, ToolRegistry } from "@vykor/core";
+import { QueryEngine, ToolRegistry } from "@vykor/core";
+import { loadSettings } from "@vykor/host-config";
+import type { Message, UsageSnapshot } from "@vykor/agent-contracts";
 ```
 
 ## API
 
-### Settings
-
-- `loadSettings(cwd?)` - 加载配置
-- `saveSettings(settings)` - 保存配置
+公共消息、用量和错误类型由 `agent-contracts` 定义；本机配置的类型、路径、读取与保存由 `host-config` 提供。
 
 ### QueryEngine
 

@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 
 export const enterPlanModeTool: ToolDefinition = {
   name: "EnterPlanMode",

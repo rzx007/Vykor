@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { createDefaultContextService } from "./context-service.js";
 import { createServiceRoutes } from "../../http/routes/service.js";
 

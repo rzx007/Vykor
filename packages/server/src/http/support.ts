@@ -1,8 +1,6 @@
-import {
-  ProtocolValidationError,
-  PROTOCOL_VERSION_HEADER,
-  type ProtocolError,
-} from "@vykor/protocol";
+import { DomainValidationError } from "@vykor/domain-contracts/inputs";
+import { ProtocolValidationError, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
+import type { ProtocolError } from "@vykor/protocol";
 import type { Context } from "hono";
 import {
   isAttachmentError,
@@ -147,6 +145,7 @@ export function applicationErrorResponse(
   fallbackStatus = 500,
 ): Response {
   if (isAttachmentError(error)) return attachmentErrorResponse(error);
+  if (error instanceof DomainValidationError) return protocolValidationErrorResponse(new ProtocolValidationError(error.message, error.field, error.reason));
   if (error instanceof ApplicationError && error.code.startsWith("plugin_ui_")) {
     return jsonResponse({ code: error.code, message: error.message } satisfies ProtocolError,
       APPLICATION_ERROR_HTTP_STATUS[error.code]);
@@ -162,7 +161,7 @@ export function applicationErrorResponse(
 }
 
 export function protocolValidationErrorResponse(error: unknown): Response {
-  const validationError = error instanceof ProtocolValidationError
+  const validationError = error instanceof DomainValidationError ? new ProtocolValidationError(error.message, error.field, error.reason) : error instanceof ProtocolValidationError
     ? error
     : new ProtocolValidationError(
       error instanceof SyntaxError

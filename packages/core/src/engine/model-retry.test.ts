@@ -2,12 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_MODEL_RETRY_POLICY,
-  type ModelFailureInfo,
-  ModelRequestFailure,
   nextModelRetryDelay,
   normalizeModelRetryPolicy,
   waitForModelRetry,
 } from "./model-retry";
+import { type ModelFailureInfo } from "@vykor/agent-contracts";
 
 function failure(overrides: Partial<ModelFailureInfo> = {}): ModelFailureInfo {
   return {
@@ -236,24 +235,5 @@ describe("waitForModelRetry", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("ModelRequestFailure", () => {
-  it("preserves the original cause and structured info", () => {
-    const cause = new Error("socket closed");
-    const error = new ModelRequestFailure(
-      "connection reset",
-      { kind: "network", phase: "stream", retryable: true, statusCode: 503 },
-      cause,
-    );
-    expect(error.name).toBe("ModelRequestFailure");
-    expect(error.info).toEqual({
-      kind: "network",
-      phase: "stream",
-      retryable: true,
-      statusCode: 503,
-    });
-    expect(error.cause).toBe(cause);
   });
 });

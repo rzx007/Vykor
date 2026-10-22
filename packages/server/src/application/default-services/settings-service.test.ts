@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultSettingsService, settingsPatchRuntimeImpact } from "./settings-service.js";
-import { getConfigFilePath, loadSettings, updateSettings } from "@vykor/core";
+import { getConfigFilePath, loadSettings, updateSettings } from "@vykor/host-config";
 
 let root: string;
 let previousConfigDir: string | undefined;

@@ -2,23 +2,18 @@ import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { sessionSettingsRoot } from "../../runtime/session-settings-root.js";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type {
   ExecutionEnvironmentConsumer,
   ExecutionEnvironmentHandle,
   ShellDescriptor,
 } from "@vykor/environment";
-import type {
-  SessionExecutionRecord,
-  SessionRecord,
-  SessionStatus,
-  SessionTaskStatus,
-} from "@vykor/protocol";
+import type { SessionExecutionRecord, SessionRecord, SessionStatus, SessionTaskStatus } from "@vykor/domain-contracts/sessions";
 
 import type {
   DetachedProcessExecution,
   DetachedProcessSupervisor,
-} from "@vykor/services/executions";
+} from "@vykor/execution-node";
 
 import type { SessionExecutionProjector } from "./session-execution-projector.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";

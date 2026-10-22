@@ -2,6 +2,7 @@ export type ApplicationErrorCode =
   | "invalid_request"
   | "not_found"
   | "conflict"
+  | "not_ready"
   | "not_supported"
   | "plugin_ui_retired"
   | "plugin_ui_not_found"
@@ -17,6 +18,7 @@ export const APPLICATION_ERROR_HTTP_STATUS: Record<ApplicationErrorCode, number>
   plugin_ui_conversation_unavailable: 409,
   plugin_ui_action_not_resumable: 409,
   conflict: 409,
+  not_ready: 503,
   not_supported: 501,
   application_error: 500,
 };
@@ -38,6 +40,7 @@ function codeFromStatus(status: number): ApplicationErrorCode {
   if (status === 400) return "invalid_request";
   if (status === 404) return "not_found";
   if (status === 409) return "conflict";
+  if (status === 503) return "not_ready";
   if (status === 501) return "not_supported";
   return "application_error";
 }

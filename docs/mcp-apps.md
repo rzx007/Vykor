@@ -244,8 +244,8 @@ sendMessage 需要宿主确认，并发送到原会话。它不附带主输入�
 | 想修改什么 | 仓库内入口 |
 | --- | --- |
 | 应用清单校验 | packages/plugins/src/components/apps.ts |
-| Native Tool 适配 | packages/agent-runtime/src/native-plugin-app-backend.ts |
-| MCP 后台适配 | packages/agent-runtime/src/mcp-plugin-app-backend.ts |
+| Native Tool 适配 | packages/agent-runtime/src/node/plugin-apps/native-plugin-app-backend.ts |
+| MCP 后台适配 | packages/agent-runtime/src/node/plugin-apps/mcp-plugin-app-backend.ts |
 | 页面身份与授权 | packages/server/src/application/session/session-plugin-app-service.ts |
 | 操作去重与执行 | packages/server/src/application/session/plugin-app-operation-service.ts、plugin-app-operation-executor.ts |
 | 窗口绑定与确认请求 | apps/desktop/src/main/features/plugin-apps/plugin-app-service.ts |

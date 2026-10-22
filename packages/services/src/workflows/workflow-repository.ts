@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, or, placeholder, sql } from "drizzle-orm";
-import { parseChatResourceSource } from "@vykor/protocol";
+import { parseChatResourceSource } from "@vykor/domain-contracts/attachments";
 
 import type { StorageContext } from "../database/storage-context.js";
 import {

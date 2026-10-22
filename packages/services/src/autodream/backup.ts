@@ -1,7 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
 
-import { getDataDir } from "@vykor/core";
+import { getDataDir } from "@vykor/host-config";
 import { LOCK_FILE } from "./lock.js";
 
 /**

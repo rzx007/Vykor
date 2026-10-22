@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, SettingsConflictError, updateSettings } from "@vykor/core";
+import { loadSettings, SettingsConflictError, updateSettings } from "@vykor/host-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exportPortableSettings, importPortableSettings, parsePortableSettings } from "./settings-transfer.js";
 
@@ -18,7 +18,6 @@ describe("portable settings boundaries", () => {
     await importPortableSettings({ version: 1, groups: { general: { maxTurns: 0 } } }, ["general"], expected);
     expect((await exportPortableSettings()).groups.general?.maxTurns).toBe(0);
   });
-
   it.each([
     { version: 1, groups: {}, apiKey: "fixture-secret" },
     { version: 1, groups: { credentials: { apiKey: "fixture-secret" } } },

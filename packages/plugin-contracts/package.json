@@ -1,0 +1,45 @@
+{
+  "name": "@vykor/plugin-contracts",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./manifest": {
+      "types": "./src/manifest.ts",
+      "import": "./src/manifest.ts"
+    },
+    "./presentation": {
+      "types": "./src/presentation.ts",
+      "import": "./src/presentation.ts"
+    },
+    "./validation": {
+      "types": "./src/validation.ts",
+      "import": "./src/validation.ts"
+    },
+    "./limits": {
+      "types": "./src/limits.ts",
+      "import": "./src/limits.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime.ts",
+      "import": "./src/runtime.ts"
+    },
+    "./runtime-data": {
+      "types": "./src/runtime-data.ts",
+      "import": "./src/runtime-data.ts"
+    }
+  },
+  "scripts": {
+    "build": "exit 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@vykor/json-data": "workspace:*",
+    "@vykor/agent-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "catalog:"
+  }
+}

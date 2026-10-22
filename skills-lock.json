@@ -7,6 +7,12 @@
       "skillPath": "skills/beui/SKILL.md",
       "computedHash": "bff7df8f18d41d96fb1ba26adfed7354c3de9f0bc11669e6e03c9f2b0384b997"
     },
+    "design-taste-frontend": {
+      "source": "Leonxlnx/taste-skill",
+      "sourceType": "github",
+      "skillPath": "skills/taste-skill/SKILL.md",
+      "computedHash": "65049e1890f5fedf8f8e1144848f07bcda788e51c22bac78afbd073aeb486725"
+    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",

@@ -6,6 +6,7 @@
     "noEmit": false
   },
   "exclude": [
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "src/**/*.test-support.ts"
   ]
 }

@@ -41,7 +41,7 @@
 
 - `packages/core/src/types/settings.ts`：增加 Terminal 设置。
 - `packages/core/src/config/settings.ts`：Terminal 默认值与深合并。
-- `packages/core/src/types/tools.ts`：ToolContext 环境能力和工具执行域。
+- `packages/agent-contracts/src/tools.ts`：ToolContext 环境能力和工具执行域。
 - `packages/core/src/engine/tool-registry.ts`：保留执行域元数据。
 - `packages/core/package.json`：增加环境契约依赖。
 - `packages/sandbox/src/types.ts`：受管挂载、surface 和环境启动参数。
@@ -62,12 +62,12 @@
 - `packages/permissions/package.json`：增加环境契约依赖。
 - `packages/prompts/src/index.ts`：接收已经探测的环境信息。
 - `packages/prompts/src/index.test.ts`：本机/Docker 环境段测试。
-- `packages/agent-runtime/src/agent-options.ts`：接收环境覆盖。
-- `packages/agent-runtime/src/agent-composition.ts`：先创建环境，再创建 Prompt 和 Runtime。
-- `packages/agent-runtime/src/default-runtime.ts`：删除内部 Sandbox attach，使用环境句柄。
-- `packages/agent-runtime/src/default-runtime.test.ts`：初始化顺序、ToolContext 与清理测试。
-- `packages/agent-runtime/src/runtime-integrations.ts`：按执行域过滤 Native Plugin Tools。
-- `packages/agent-runtime/src/native-tools/activate.ts`：Docker 第一期禁止激活 Native Tool Host。
+- `packages/agent-runtime/src/node/runtime/agent-options.ts`：接收环境覆盖。
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`：先创建环境，再创建 Prompt 和 Runtime。
+- `packages/agent-runtime/src/node/runtime/default-runtime.ts`：删除内部 Sandbox attach，使用环境句柄。
+- `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`：初始化顺序、ToolContext 与清理测试。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：按执行域过滤 Native Plugin Tools。
+- `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`：Docker 第一期禁止激活 Native Tool Host。
 - `packages/server/src/application/visual-tools/daemon-image-to-text-tool.ts`：路径输入通过环境读取字节。
 - `packages/server/src/application/visual-tools/__test__/daemon-image-to-text-tool.test.ts`：禁止宿主任意路径读取。
 - `packages/server/package.json`：增加环境契约依赖。
@@ -465,7 +465,7 @@ git commit -m "feat(sandbox): expose local and Docker environment handles"
 
 **文件：**
 
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/package.json`
 - 创建：`packages/tools/src/file/environment-path.ts`
 - 创建：`packages/tools/src/file/__test__/environment-path.test.ts`
@@ -553,10 +553,10 @@ git commit -m "refactor(tools): resolve files through execution environment"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 - 修改：`packages/prompts/src/index.ts`
 - 修改：`packages/prompts/src/index.test.ts`
 - 修改：`packages/agent-runtime/package.json`
@@ -640,12 +640,12 @@ git commit -m "refactor(agent-runtime): bind agents to resolved environments"
 
 **文件：**
 
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 修改：`packages/tools/src/registry.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/runtime-integrations.ts`
-- 修改：`packages/agent-runtime/src/native-tools/activate.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
+- 修改：`packages/agent-runtime/src/node/plugins/native-tools/activate.ts`
 - 修改：`packages/server/src/application/visual-tools/daemon-image-to-text-tool.ts`
 - 修改：相关 Core、Agent Runtime 和 ImageToText 测试
 - 修改：`packages/server/package.json`
@@ -855,7 +855,7 @@ git commit -m "feat(desktop): configure the default agent environment"
 
 - 修改：`apps/desktop/src/main/features/session/outside-project-workspace.test.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 
 - [ ] **步骤 1：编写项目外 Docker Runtime 测试**
 

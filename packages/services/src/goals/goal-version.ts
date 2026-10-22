@@ -1,4 +1,4 @@
-import type { GoalVersion } from "@vykor/protocol";
+import type { GoalVersion } from "@vykor/domain-contracts/goals";
 import { and, asc, eq } from "drizzle-orm";
 import type { StorageContext } from "../database/storage-context.js";
 import { sessionGoalVersions } from "../session-runtime/schema.js";

@@ -12,14 +12,7 @@
  * 约束：不感知任何业务 Resource 领域逻辑。
  */
 
-import {
-  ProtocolDataError,
-  CURRENT_PROTOCOL_VERSION,
-  PROTOCOL_VERSION_HEADER,
-  checkProtocolCompatibility,
-  parseServerCapabilities,
-  type ServerCapabilities,
-} from "@vykor/protocol";
+import { ProtocolDataError, CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER, checkProtocolCompatibility, parseServerCapabilities, type ServerCapabilities } from "@vykor/protocol";
 import { IncompatibleProtocolError } from "../protocol/protocol-client.js";
 
 export interface HttpTransportOptions {

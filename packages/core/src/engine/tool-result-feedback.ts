@@ -1,10 +1,6 @@
-import type { ContentBlock } from "../types/messages";
-import type {
-  ToolExecutionResult,
-  ToolFailureKind,
-  ToolResult,
-  HostFileFacts,
-} from "../types/tools";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import type { ToolExecutionResult, ToolResult, HostFileFacts } from "@vykor/agent-contracts";
+import type { ToolFailureKind } from "@vykor/agent-contracts";
 
 const FAILURE_KINDS: readonly ToolFailureKind[] = [
   "permission",

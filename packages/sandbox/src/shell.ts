@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess, type StdioOptions } from "node:child_process";
 import { resolve } from "node:path";
-import { loadSettings, type Settings } from "@vykor/core";
+import { loadSettings, type Settings } from "@vykor/host-config";
 import type { EnvironmentExecutionOwner } from "@vykor/environment";
 import { shellArgv, type ShellDescriptor } from "@vykor/environment";
 import { getSrtAvailability } from "./availability.js";
@@ -128,7 +128,6 @@ async function createResolvedProcess(
   child.once("error", cleanup);
   return child;
 }
-
 
 export function resolveHostShellLauncher(): HostShellLauncher {
   return detectHostShell();

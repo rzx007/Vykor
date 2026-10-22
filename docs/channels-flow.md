@@ -224,13 +224,13 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | 飞书接入核心 | `packages/channels/src/impl/feishu-registration.ts` | 包 `registerApp` 的扫码创建应用状态机 |
 | 凭据校验 | `packages/channels/src/impl/feishu-verify.ts` | 换 tenant token 校验凭据，尽力取机器人信息 |
 | 渠道配置存储 | `packages/auth/src/channel-config-store.ts` | 读写 `channel-credentials.json`（含渠道配置与密钥） |
-| DurableChannelBridge | `packages/channels/src/core/durable-bridge.ts` | 把入站消息交给 daemon 应用，发布已保存回复 |
+| DurableChannelBridge | `packages/server/src/application/channel/durable-channel-bridge.ts` | 把入站消息交给 daemon 应用，发布已保存回复 |
 | ChannelManager | `packages/channels/src/core/manager.ts` | 白名单检查、平台收发、回写发送结果 |
 | FeishuAdapter | `packages/channels/src/impl/feishu.ts` | 飞书 WebSocket、image/file 入站、thread/topic、真实 message ID 与出站发送 |
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
-| 工作目录根 | `packages/core/src/config/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
+| 工作目录根 | `packages/host-config/src/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
 | Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar/sidebar.tsx` | 「IM 会话」分区：按平台分组 |
 | 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 

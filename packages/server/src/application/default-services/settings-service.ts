@@ -8,8 +8,13 @@ import {
 } from "@vykor/api";
 
 import type { SettingsService } from "../settings-api.js";
-import type { AgentEnvironmentCapabilities } from "@vykor/protocol";
-import { loadSettings, parsePermissionSettings, type AgentEnvironmentSettings, type Settings } from "@vykor/core";
+import type { AgentEnvironmentCapabilities } from "./query-models.js";
+import {
+  loadSettings,
+  parsePermissionSettings,
+  type AgentEnvironmentSettings,
+  type Settings,
+} from "@vykor/host-config";
 import { validateIsolationConfiguration } from "../../permissions/settings-management.js";
 import { normalizeSandboxConfig } from "@vykor/sandbox";
 import { importPortableSettings, parsePortableSettings, type PortableSettings } from "../../settings-transfer.js";
@@ -59,7 +64,7 @@ export type SettingsRuntimeImpact = "restart" | "invalidate" | "none";
 export interface AgentEnvironmentService {
   capabilities(): Promise<AgentEnvironmentCapabilities>;
   validate(kind: "native" | "wsl"): Promise<void>;
-  active?(): import("@vykor/core").AgentEnvironmentSettings | undefined;
+  active?(): import("@vykor/host-config").AgentEnvironmentSettings | undefined;
   kindOverride?(): "native" | "wsl" | undefined;
 }
 

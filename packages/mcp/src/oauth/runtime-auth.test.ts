@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { InvalidGrantError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { McpOAuthCredentialRecord } from "@vykor/core";
+import type { McpOAuthCredentialRecord } from "@vykor/host-config";
 import type { McpOAuthCredentialStore } from "./login.js";
 import { McpOAuthRuntime } from "./runtime-auth.js";
 

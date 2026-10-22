@@ -1,6 +1,29 @@
 # Protocol Contract
 
-> 状态：当前客户端与 daemon 协议的权威契约。最后核对：2026-09-26。
+> 状态：当前客户端与 daemon 协议的权威契约。最后核对：2026-10-22。
+
+## 数据所有权与通信边界
+
+Protocol 只负责 HTTP/SSE 通信格式、公开 DTO、请求解码、序列化、错误和协议版本。相同的规范数据可以被明确再导出；能力宿主、存储命令、配置默认值和执行策略不从 Protocol 暴露。本次内部迁移保持版本 5、字段、错误 code/field 和持久格式不变。
+
+| 规范来源 | 正式入口与职责 |
+| --- | --- |
+| `@vykor/json-data/json` | `JsonValue`、JSON 对象检查、确定性序列化和显式有界复制；没有包根入口 |
+| `@vykor/plugin-contracts` | `/manifest`、`/presentation`、`/validation`、`/limits`、`/runtime`、`/runtime-data`；不触达安装器或进程 |
+| `@vykor/domain-contracts` | `/sessions`、`/inputs`、`/goals`、`/attachments`、`/schedules`、`/channels`、`/notes`、`/memory`、`/approvals`、`/plugin-apps`、`/workspace-changes`、`/usage`、`/maintenance`；按业务引用，无根汇总入口 |
+| 细分领域数据 | `/sessions/records`、`/sessions/model-metadata`、`/sessions/runtime-config`、`/approvals/auto-review`、`/plugin-apps/history` |
+| `@vykor/agent-contracts/permissions` | 执行权限模式和审查 Input/Evidence/Result/Outcome；持久审查记录归领域包 |
+| `@vykor/jobs/contracts`、`@vykor/terminal/contracts` | 能力参数、状态、结果和事件；活体控制接口留在实现入口 |
+
+Server HTTP 先解码，再显式选取字段形成应用输入；应用服务验证 owner、版本、状态和授权后构造 Services 命令或 Node 绑定，最后由 HTTP 将应用查询结果转换为公开响应。领域校验不导入 `ProtocolValidationError`，错误 code/field 的通信转换留在 Protocol 或 HTTP。
+
+插件 HTTP 入口按 `ProtocolValidationError` 或 plugin-contracts `/runtime-data` 中明确列出的校验错误码返回 400，不按错误文案前缀分类。插件 parser 将校验结果转换为通信错误；Node 的参数、策略和 Native 游标错误携带结构化 code，跨 Runtime bundle 也能识别。未知运行失败仍返回 409；应用错误与请求未接纳的专用响应保持原处理。畸形 JSON、非对象动作请求此前误报 409，现修正为 400，通用响应体仍为 `{ error: "应用请求无效或已失效" }`。
+
+Client 只直接依赖 Protocol。`readSessionRuntimeConfig`、`patchSessionRuntimeMetadata`、模式归一化和 `getPluginAppToolPolicy` 的既有 Client 公开名字由本地辅助实现保留，用于显示已有数据与构造请求；它们不能生成宿主授权。真实模式归一化在 host-config，有效权限计算在 permissions，插件有效策略在 Node。
+
+Client 的源码导出名有一项迁移：旧 `PLUGIN_APP_LIMITS` 聚合对象已移除，调用方按用途选择 `PLUGIN_APP_DATA_LIMITS`、`PLUGIN_APP_INPUT_LIMITS`、`PLUGIN_APP_RESOURCE_LIMITS` 三个公开硬上限常量。公共方法、请求形状与线格式保持原行为，不能把这次调整描述为所有源码导出名均未变化。
+
+通用 JSON 算法只有一个规范来源。canonical 保留对象/数组 `depth >= 20` 拒绝边界；插件复制显式使用 `depth >= 32`；MCP 结果保留自身 `depth > 32` 和复杂度规则，不共用一个默认阈值。
 
 ## 当前版本
 
@@ -143,9 +166,11 @@ id, seq, type, schemaVersion, optional sessionId, payload, createdAt
 |---|---|
 | capabilities 解析与精确匹配 | `packages/protocol/src/capabilities.ts` |
 | 请求 decoder 与 ProtocolError | `packages/protocol/src/requests.ts` |
-| Session snapshot/event 类型 | `packages/protocol/src/session.ts` |
+| 领域记录 / snapshot 和通信组合 | `packages/domain-contracts/src/` / `packages/protocol/src/session.ts` |
+| 通用 JSON / 插件数据 | `packages/json-data/src/json.ts` / `packages/plugin-contracts/src/` |
+| HTTP 输入与响应转换 | `packages/server/src/http/mappers/` |
 | 严格序列化检查 | `packages/protocol/src/serialization.ts` |
 | HTTP client 与重连 | `packages/client/src/transport/http-client.ts`、`packages/client/src/state/sync.ts` |
 | 共享 reducer | `packages/client/src/state/reducer.ts` |
 | 服务端 capabilities | `packages/server/src/http/routes/system.ts` |
-| HTTP 契约测试 | `packages/server/src/http/__test__/http.test.ts` |
+| HTTP 契约测试 | `tests/server-client/http.test.ts` |

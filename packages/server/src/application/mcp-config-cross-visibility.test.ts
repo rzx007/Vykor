@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadSettings, updateSettings, type Settings } from "@vykor/core";
+import { loadSettings, updateSettings, type Settings } from "@vykor/host-config";
 
 import { McpConfigApplicationService } from "./mcp-config-application-service.js";
 

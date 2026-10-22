@@ -3,10 +3,7 @@ import type {
   FeishuRegistrationCredentials,
   FeishuRegistrationStatus,
 } from "@vykor/channels";
-import type {
-  FeishuChannelSnapshot,
-  FeishuRegistrationSnapshot,
-} from "@vykor/protocol";
+import type { FeishuChannelSnapshot, FeishuRegistrationSnapshot } from "./query-models.js";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 

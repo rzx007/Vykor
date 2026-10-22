@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/core";
+import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/host-config";
 import { readInstalledPluginStore, updateInstalledPluginStore } from "@vykor/plugins";
 import { createDefaultPluginService, PluginArchiveFailure } from "./plugin-service.js";
 

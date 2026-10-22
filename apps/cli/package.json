@@ -54,7 +54,10 @@
     "node-pty": "^1.0.0",
     "qrcode-terminal": "^0.12.0",
     "react": "catalog:",
-    "sharp": "0.34.4"
+    "sharp": "0.34.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*"
   },
   "devDependencies": {
     "@vykor/agent-runtime": "workspace:*",

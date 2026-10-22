@@ -1,8 +1,10 @@
 import { expect, it } from "vitest";
-import type { RunCapabilityView, ToolContext } from "@vykor/core";
-import { listSkillsTool } from "../skill.js";
 
-function context(count = 3): ToolContext {
+import type { ToolContext } from "@vykor/agent-contracts";
+import { createSkillTools, createCapturedSkillCatalog } from "../skill.js";
+const listSkillsTool = {execute:(input:any,fixture:any)=>createSkillTools(createCapturedSkillCatalog(fixture.definitions)).find(tool=>tool.name==="ListSkills")!.execute(input,{cwd:fixture.cwd})};
+
+function context(count = 3) {
   const skills = Array.from({ length: count }, (_, index) => {
     const name = `skill-${index}`;
     const path = `/plugins/${name}/SKILL.md`;
@@ -11,9 +13,7 @@ function context(count = 3): ToolContext {
       metadata: { pluginId: "forged-metadata" },
     } }] as const;
   });
-  return { cwd: "/repo", capabilityView: {
-    pluginIds: new Set(["alpha.pkg", "beta.pkg"]), skills: new Map(skills), tools: new Map(), agents: new Map(), mcpServers: new Map(),
-  } as RunCapabilityView };
+  return {cwd:"/repo",definitions:skills.map(([,binding])=>({...binding.definition,ownerPluginId:binding.ownerPluginId}))};
 }
 const text = (result: Awaited<ReturnType<typeof listSkillsTool.execute>>) => (result.content[0] as { text: string }).text;
 

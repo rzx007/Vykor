@@ -7,7 +7,7 @@ import { nativeAppDefinition, writeNativeAppFixture } from "../test-helpers/nati
 import { validateNativePlugin } from "../manifest/validate.js";
 import { loadNativePlugin } from "../load-native-plugin.js";
 import { requestedPluginPermissions } from "../installation/installer.js";
-import { PLUGIN_APP_LIMITS } from "@vykor/protocol";
+import { PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 
 let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vykor-app-def-")); });
@@ -32,7 +32,7 @@ describe("plugin apps metadata", () => {
     const policy = { tool: "SaveDocument", maxArgumentsBytes: 1024 * 1024, authorization: "plugin-data-write" };
     if (failure === "unknown-tool") policy.tool = "ForeignTool";
     if (failure === "wildcard") policy.tool = "*";
-    if (failure === "too-large") policy.maxArgumentsBytes = PLUGIN_APP_LIMITS.maxArgsBytes + 1;
+    if (failure === "too-large") policy.maxArgumentsBytes = PLUGIN_APP_DATA_LIMITS.maxArgsBytes + 1;
     if (failure === "unknown-authorization") policy.authorization = "filesystem-write";
     Object.assign(definition.backends[0]!, { toolPolicies: failure === "duplicate" ? [policy, policy] : [policy] });
     const plugin = await writeNativeAppFixture(root, definition);

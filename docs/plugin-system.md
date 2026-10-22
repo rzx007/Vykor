@@ -203,9 +203,9 @@ Notes 的远端更新保留本地草稿。采用远端正文需要确认，保�
 | 文件与旧 UI 校验 | packages/plugins/src/manifest/validate.ts |
 | 当前可激活组件 | packages/plugins/src/load-native-plugin.ts |
 | 安装权限汇总 | packages/plugins/src/installation/installer.ts |
-| 任务可用能力的绑定 | packages/agent-runtime/src/run-capability-view.ts |
+| 任务可用能力的绑定 | packages/agent-runtime/src/node/plugins/run-capability-view.ts |
 | 自动与显式插件范围 | packages/server/src/application/session/session-plugin-capability-service.ts |
-| Native Tool 校验 | packages/agent-runtime/src/native-tools/guard.ts |
+| Native Tool 校验 | packages/agent-runtime/src/node/plugins/native-tools/guard.ts |
 
 源码基准为 D:/code/personal-project/OpenHarness-ts 当前工作区。本文记录实现状态，不把历史设计方案当作已上线能力。
 

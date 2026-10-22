@@ -1,13 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
 import { readOfficeFile } from "@vykor/services";
 
-import {
-  DEFAULT_ATTACHMENT_LIMITS,
-  parseAttachmentLimits,
-  type AttachmentAssetRecord,
-  type AttachmentLimits,
-} from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
+import { parseAttachmentLimits } from "@vykor/domain-contracts/attachments";
+import type { AttachmentAssetRecord, AttachmentLimits } from "@vykor/domain-contracts/attachments";
 import {
   AttachmentBlobStore,
   AttachmentError,

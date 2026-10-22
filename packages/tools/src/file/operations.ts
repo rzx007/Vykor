@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, posix, relative } from "node:path";
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 import type {
   EnvironmentFileSystem,
   EnvironmentGrepOptions,

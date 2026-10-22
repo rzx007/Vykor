@@ -1,8 +1,8 @@
 import { readFile, access, readdir } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
-import { resolveGitRepository } from "@vykor/core";
-import type { WorkStyle } from "@vykor/core";
+import { resolveGitRepository } from "@vykor/host-config";
+import type { WorkStyle } from "@vykor/host-config";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import {
   describeHostShellLauncher,

@@ -1,4 +1,4 @@
-import { readAutoReviewRunMetadata } from "@vykor/protocol";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
 
 export type DurableEventScope = "session" | "global";
 export interface DurableEventDefinition {

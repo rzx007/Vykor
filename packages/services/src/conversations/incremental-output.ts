@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import type { AppendEventInput, AppendMessagePartDeltaInput, SessionEventRecord } from "@vykor/protocol";
+import type { AppendEventInput, AppendMessagePartDeltaInput } from "./commands.js";
+import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertSynchronousCommit } from "../database/chat-persistence.js";
 import { assertMessage, assertSession, clone, now } from "../session-runtime/store-state.js";

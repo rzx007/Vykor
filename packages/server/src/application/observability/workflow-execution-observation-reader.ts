@@ -1,8 +1,4 @@
-import type {
-  ExecutionObservation,
-  ExecutionObservationWarning,
-  ExecutionUsageCompleteness,
-} from "@vykor/protocol";
+import type { ExecutionObservation, ExecutionObservationWarning, ExecutionUsageCompleteness } from "./query-models.js";
 import type {
   WorkflowEventReadResult,
   WorkflowReadDiagnostic,

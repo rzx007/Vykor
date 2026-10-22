@@ -33,8 +33,8 @@
 | --- | --- | --- |
 | A1 | `packages/protocol/src/session-goals.ts`；`packages/services/src/session-runtime/schema.ts`；`packages/services/src/goals/goal-records.ts`、`goal-repository.ts`、`goal-transactions.ts` | Goal 字段、版本递增、原因 JSON、快照；单一当前协议 |
 | A1 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql`、`meta/0006_snapshot.json`；`packages/services/src/database/__fixtures__/current-schema-inventory.json` | 同步现行初始化 SQL、当前 ORM snapshot 与结构 inventory；不新增旧数据转换迁移 |
-| A2 | `packages/server/src/application/session/session-goal-service.ts`、`run-admission-service.ts`、`session-run-executor.ts`；`packages/agent-runtime/src/agent.ts`、`framework-agent-run.ts`、`goal-extension.ts`、`goal-assessment-tool.ts`；`packages/server/src/application/session/goal-assessment-policy.ts`；projector | 根运行版本从接纳传到评估/证据校验 |
-| A3 | `packages/core/src/types/runtime-child.ts`；`packages/agent-runtime/src/child-agent.ts`、`agent.ts`、`framework-agent-run.ts`；`packages/server/src/application/agent/daemon-agent-event-projector.ts`、`live-child-agent-directory.ts`；`packages/services/src/runs/run-repository.ts`；run-control/assembly | 每次新子 Run 的父身份、取消信号、按 Run 中断与后代清理；不改变 AgentChildInput 的模型输入权限 |
+| A2 | `packages/server/src/application/session/session-goal-service.ts`、`run-admission-service.ts`、`session-run-executor.ts`；`packages/agent-runtime/src/kernel/agent.ts`、`framework-agent-run.ts`、`goal-extension.ts`、`goal-assessment-tool.ts`；`packages/server/src/application/session/goal-assessment-policy.ts`；projector | 根运行版本从接纳传到评估/证据校验 |
+| A3 | `packages/agent-contracts/src/children.ts`；`packages/agent-runtime/src/kernel/child-agent.ts`、`agent.ts`、`framework-agent-run.ts`；`packages/server/src/application/agent/daemon-agent-event-projector.ts`、`live-child-agent-directory.ts`；`packages/services/src/runs/run-repository.ts`；run-control/assembly | 每次新子 Run 的父身份、取消信号、按 Run 中断与后代清理；不改变 AgentChildInput 的模型输入权限 |
 | A4 | `packages/protocol/src/session-goals.ts`、assessment tool；`packages/server/src/application/session/goal-wait-verifier.ts`；`packages/server/src/application/daemon-application.ts` | 等待数据、可信绑定、持久核验，移除 liveChildren 判断 |
 | A5 | `packages/server/src/application/session/goal-external-wait-observer.ts`、`session-goal-service.ts`、`run-admission-service.ts`；`packages/services/src/goals/goal-transactions.ts` | 观察结果回到 Goal 服务；唯一事务、开跑复查、失败恢复 |
 | A6 | goal service/transactions、`packages/server/src/application/session/run-control-service.ts`；`apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/goal-banner.tsx`；新增同目录 `goal-stop-reason-label.ts` | 写结构化原因；原 Banner 显示与操作 |
@@ -141,7 +141,7 @@ projector 接收模型评估事件时检查 run.status=running；settleRun 结�
 
 ## 5. A3：逐 Child Run 捕获可信父身份
 
-**测试文件：**`packages/agent-runtime/src/child-agent.test.ts`、`plugin-child-followup.test.ts`、`agent-post-run-child.test.ts`；`packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`。
+**测试文件：**`packages/agent-runtime/src/node/runtime/child-agent.test.ts`、`plugin-child-followup.test.ts`、`agent-post-run-child.test.ts`；`packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`。
 
 - [x] **补复用回归。** 使用现有 ChildManager fixture，第一次由父 Run P1 spawn，等其结果终态；由 createController(P2, 同一合法 capabilityView) 的 sendChildInput 开第二 Run。断言两个 run.started.context.parentRunId 分别为 P1/P2；初始 childId/sessionId 不变。再加 queued followup：在 P2 调用时捕获身份，即使真正开跑时根会话已进入 P3，也不得绑定 P3。同父 steer 不换绑定；不同父的默认 steer 必须转排队新 Run，不能把 P2 工作合进 P1。测试使用现有事件收集器和完整生命周期，不只测试赋值函数。
 > 原计划的单独红灯命令已并入集中验证；未单独执行该步。

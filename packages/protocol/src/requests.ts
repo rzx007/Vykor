@@ -1,6 +1,6 @@
+import { DomainValidationError, assertPromptMetadataAllowed as domainAssertPromptMetadataAllowed, parseSessionInputItems as domainParseSessionInputItems, parsePromptAttachments as domainParsePromptAttachments } from "@vykor/domain-contracts/inputs";
 import { parsePluginAppComposerContexts } from "./plugin-apps.js";
 import {
-  patchSessionRuntimeMetadata,
   readRuntimeMetadata,
 } from "./runtime-config.js";
 import type {
@@ -16,12 +16,7 @@ import type {
   UpdateSessionInput,
   ClearSessionWorktreeBindingInput,
 } from "./session.js";
-import type { AttachmentIntent } from "./attachment.js";
-import {
-  normalizeSessionUserInputItems,
-  type SessionUserInputItem,
-  type SkillSource,
-} from "./session-input-items.js";
+import type { SessionUserInputItem } from "./session-input-items.js";
 
 export interface ProtocolError {
   code: string;
@@ -57,30 +52,9 @@ export class ProtocolValidationError extends Error {
 }
 
 /** Ordinary Prompt inputs cannot claim host-created UI instances or action Runs. */
-export function withoutHostPluginMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
-  const { pluginUi: _ui, uiAction: _action, pluginUiSubmission: _submission,
-    pluginAppAction: _appAction, pluginAppSubmission: _appSubmission, pluginAppSource: _appSource, ...ordinary } = metadata;
-  return ordinary;
-}
+export { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";
 
-export function assertPromptMetadataAllowed(input: {
-  metadata?: unknown;
-  runMetadata?: unknown;
-}): void {
-  for (const namespace of ["metadata", "runMetadata"] as const) {
-    const metadata = input[namespace];
-    if (!metadata || typeof metadata !== "object") continue;
-    for (const name of ["pluginUi", "uiAction", "pluginUiSubmission", "pluginAppAction", "pluginAppSubmission", "pluginAppSource"]) {
-      if (Object.hasOwn(metadata, name)) {
-        const field = `${namespace}.${name}`;
-        throw new ProtocolValidationError(
-          `${field} is reserved for the host`,
-          field,
-        );
-      }
-    }
-  }
-}
+export function assertPromptMetadataAllowed(input: { metadata?: unknown; runMetadata?: unknown }): void { adaptDomainInput(() => domainAssertPromptMetadataAllowed(input)); }
 
 type JsonRecord = Record<string, unknown>;
 
@@ -217,7 +191,7 @@ export function parseCreateSessionRequest(value: unknown): CreateSessionInput {
   return {
     cwd,
     model,
-    metadata: patchSessionRuntimeMetadata(rawMetadata, { model }),
+    metadata: { ...rawMetadata, runtime: { ...runtime, model } },
     ...(id !== undefined ? { id } : {}),
     ...(parentId !== undefined ? { parentId } : {}),
     ...(projectId !== undefined ? { projectId } : {}),
@@ -336,191 +310,9 @@ export function parsePromptItems(value: unknown): SessionUserInputItem[] {
   return parseSessionInputItems([{ type: "text", text: content }]);
 }
 
-export function parseSessionInputItems(value: unknown): SessionUserInputItem[] {
-  if (!Array.isArray(value)) {
-    throw new ProtocolValidationError("items must be an array", "items");
-  }
-  const items = value.map((entry, index): SessionUserInputItem => {
-    const field = `items[${index}]`;
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      throw new ProtocolValidationError(`${field} must be an object`, field);
-    }
-    const item = entry as JsonRecord;
-    if (item.type === "text") {
-      if (typeof item.text !== "string") {
-        throw new ProtocolValidationError(
-          `${field}.text must be a string`,
-          `${field}.text`,
-        );
-      }
-      return { type: "text", text: item.text };
-    }
-    if (item.type === "context") {
-      if (
-        item.kind !== "conversation" ||
-        typeof item.id !== "string" ||
-        typeof item.displayName !== "string"
-      ) {
-        throw new ProtocolValidationError(
-          `${field} requires kind, id and displayName`,
-          field,
-        );
-      }
-      return {
-        type: "context",
-        kind: "conversation",
-        id: item.id,
-        displayName: item.displayName,
-      };
-    }
-    if (item.type === "capability") {
-      if (
-        (item.kind !== "plugin" && item.kind !== "plugin_agent") ||
-        typeof item.pluginId !== "string" ||
-        typeof item.displayName !== "string" ||
-        (item.kind === "plugin_agent" && typeof item.agentId !== "string")
-      ) {
-        throw new ProtocolValidationError(
-          `${field} requires a valid kind, pluginId, displayName and agentId`,
-          field,
-        );
-      }
-      return item.kind === "plugin"
-        ? {
-            type: "capability",
-            kind: "plugin",
-            pluginId: item.pluginId,
-            displayName: item.displayName,
-          }
-        : {
-            type: "capability",
-            kind: "plugin_agent",
-            pluginId: item.pluginId,
-            agentId: item.agentId as string,
-            displayName: item.displayName,
-          };
-    }
-    if (item.type !== "skill" && item.type !== "mention") {
-      throw new ProtocolValidationError(
-        `${field}.type is invalid`,
-        `${field}.type`,
-      );
-    }
-    if (typeof item.name !== "string" || typeof item.path !== "string") {
-      throw new ProtocolValidationError(
-        `${field} requires name and path`,
-        field,
-      );
-    }
-    if (
-      item.displayName !== undefined &&
-      typeof item.displayName !== "string"
-    ) {
-      throw new ProtocolValidationError(
-        `${field}.displayName must be a string`,
-        `${field}.displayName`,
-      );
-    }
-    if (item.type === "mention") {
-      return {
-        type: "mention",
-        name: item.name,
-        path: item.path,
-        ...(typeof item.displayName === "string"
-          ? { displayName: item.displayName }
-          : {}),
-      };
-    }
-    if (
-      item.source !== undefined &&
-      item.source !== "bundled" &&
-      item.source !== "user" &&
-      item.source !== "project" &&
-      item.source !== "plugin"
-    ) {
-      throw new ProtocolValidationError(
-        `${field}.source is invalid`,
-        `${field}.source`,
-      );
-    }
-    return {
-      type: "skill",
-      name: item.name,
-      path: item.path,
-      ...(typeof item.displayName === "string"
-        ? { displayName: item.displayName }
-        : {}),
-      ...(item.source !== undefined
-        ? { source: item.source as SkillSource }
-        : {}),
-    };
-  });
-  try {
-    return normalizeSessionUserInputItems(items);
-  } catch (error) {
-    throw new ProtocolValidationError(
-      error instanceof Error ? error.message : "items are invalid",
-      "items",
-    );
-  }
-}
+export function parseSessionInputItems(value: unknown): SessionUserInputItem[] { return adaptDomainInput(() => domainParseSessionInputItems(value)); }
 
-export function parsePromptAttachments(
-  value: unknown,
-): AdmitPromptAttachmentInput[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    throw new ProtocolValidationError(
-      "attachments must be an array",
-      "attachments",
-    );
-  }
-  return value.map((entry, index) => {
-    const field = `attachments[${index}]`;
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      throw new ProtocolValidationError(`${field} must be an object`, field);
-    }
-    const item = entry as JsonRecord;
-    const assetId = item.assetId;
-    if (typeof assetId !== "string" || assetId.length === 0) {
-      throw new ProtocolValidationError(
-        `${field}.assetId must be a non-empty string`,
-        `${field}.assetId`,
-      );
-    }
-    const intent = item.intent;
-    const allowedIntents = [
-      "auto",
-      "vision",
-      "ocr",
-      "document",
-      "tool_resource",
-      "workspace_reference",
-    ] as const satisfies readonly AttachmentIntent[];
-    if (
-      intent !== undefined &&
-      (typeof intent !== "string" ||
-        !allowedIntents.includes(intent as AttachmentIntent))
-    ) {
-      throw new ProtocolValidationError(
-        `${field}.intent must be one of: ${allowedIntents.join(", ")}`,
-        `${field}.intent`,
-      );
-    }
-    const displayName = item.displayName;
-    if (displayName !== undefined && typeof displayName !== "string") {
-      throw new ProtocolValidationError(
-        `${field}.displayName must be a string`,
-        `${field}.displayName`,
-      );
-    }
-    return {
-      assetId,
-      ...(intent !== undefined ? { intent: intent as AttachmentIntent } : {}),
-      ...(displayName !== undefined ? { displayName } : {}),
-    };
-  });
-}
+export function parsePromptAttachments(value: unknown): AdmitPromptAttachmentInput[] { return adaptDomainInput(() => domainParsePromptAttachments(value)); }
 
 export function parseReplyPermissionRequest(
   value: unknown,
@@ -703,3 +495,5 @@ export function parseUpdateScheduledTaskRequest(
     ...(runCount !== undefined ? { runCount: runCount as number } : {}),
   };
 }
+
+function adaptDomainInput<T>(read: () => T): T { try { return read(); } catch(error) { if (error instanceof DomainValidationError) throw new ProtocolValidationError(error.message, error.field, error.reason); throw error; } }

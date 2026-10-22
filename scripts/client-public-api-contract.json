@@ -1110,7 +1110,15 @@
       "kind": "runtime-export"
     },
     {
-      "name": "PLUGIN_APP_LIMITS",
+      "name": "PLUGIN_APP_DATA_LIMITS",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PLUGIN_APP_INPUT_LIMITS",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PLUGIN_APP_RESOURCE_LIMITS",
       "kind": "runtime-export"
     },
     {

@@ -14,7 +14,7 @@ import {
   type McpServerConfig,
   type McpStdioServerConfig,
   type Settings,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import {
   McpOAuthApplicationError,
   McpOAuthApplicationService,

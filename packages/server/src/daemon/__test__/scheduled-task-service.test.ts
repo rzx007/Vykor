@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SessionStore } from "@vykor/services";
-import type {
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-} from "@vykor/protocol";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {

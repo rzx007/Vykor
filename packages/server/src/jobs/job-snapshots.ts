@@ -1,6 +1,6 @@
 import { createWorkflowNotification, createWorkflowResultFromSnapshot, type WorkflowRunSnapshot, type WorkflowRunEvent } from "@vykor/coordinator";
 import type { JobKind, JobReadResult, JobSnapshot, JobStatus } from "@vykor/jobs";
-import type { SessionExecutionRecord } from "@vykor/protocol";
+import type { SessionExecutionRecord } from "@vykor/domain-contracts/sessions";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 
 const DEFAULT_OUTPUT_LIMIT = 12_000;

@@ -4,7 +4,7 @@ import type {
   McpOAuthCredentialRecord,
   McpRemoteServerConfig,
   McpServerConfig,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { uniqueScopes } from "./security.js";
 import { credentialBindingMatches } from "./resource-binding.js";
 

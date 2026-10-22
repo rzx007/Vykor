@@ -1,4 +1,4 @@
-import type { PluginAppAdmissionRejection } from "@vykor/protocol";
+import type { PluginAppAdmissionRejection } from "./plugin-app-query-models.js";
 import { ApplicationError } from "../../shared/application-error.js";
 
 /** Emitted only inside the original serialized admission after verifying no durable record exists. */

@@ -2,15 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getFeishu = vi.hoisted(() => vi.fn());
 
-vi.mock("@vykor/auth", () => ({
-  ChannelConfigStore: class {
-    getFeishu = getFeishu;
-  },
-}));
+import { feishuApiBase, createFeishuPushTool, getTenantToken } from "../feishu-push.js";
 
-import { feishuApiBase, feishuPushTool, getTenantToken } from "../feishu-push.js";
+const feishuPushTool = createFeishuPushTool({ getFeishu });
 
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 const context: ToolContext = {
   cwd: process.cwd(),

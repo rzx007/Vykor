@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { StreamMessageParams, StreamingMessageClient } from "../types/client.js";
-import type { AgentExecutionContext, IHookExecutor } from "../index.js";
+import type { StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
+import type { AgentExecutionContext, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 

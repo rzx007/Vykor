@@ -2,10 +2,11 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ToolRegistry, type Settings } from "@vykor/core";
+import { ToolRegistry } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 import { expect } from "vitest";
-import { discoverVykorExtensions } from "../src/extensions.js";
-import { activateNativePluginTools, type NativeToolActivationResult } from "../src/native-tools/activate.js";
+import { discoverVykorExtensions } from "../src/node/plugins/extensions.js";
+import { activateNativePluginTools, type NativeToolActivationResult } from "../src/node/plugins/native-tools/activate.js";
 
 export const pluginId = "example.text-inspector";
 export const toolName = "TextInspectorCheck";
@@ -43,7 +44,10 @@ export class NativePluginFixture {
   }
 
   async prepare(): Promise<void> {
-    await cp(sampleRoot, this.source, { recursive: true });
+    await cp(sampleRoot, this.source, {
+      recursive: true,
+      filter: (source) => !source.split(/[\\/]/).includes("node_modules"),
+    });
     await Promise.all([this.config, ...this.cwds].map(path => mkdir(path, { recursive: true })));
     // Only the temporary copy gains an observation marker; the reference plugin stays untouched.
     const source = await readFile(this.entry, "utf8");

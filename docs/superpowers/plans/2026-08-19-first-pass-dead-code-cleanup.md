@@ -22,7 +22,7 @@
 ### Task 1: Runtime API-surface cleanup
 
 **Files:**
-- Modify: `packages/agent-runtime/src/agent.ts:779`
+- Modify: `packages/agent-runtime/src/kernel/agent.ts:779`
 - Test: `packages/agent-runtime/src/*.test.ts`
 
 **Interfaces:**
@@ -39,7 +39,7 @@ Expected: all runtime tests pass before editing.
 
 Run: `rg -n "serializeError" packages apps`
 
-Expected: one definition and one same-file production call in `packages/agent-runtime/src/agent.ts`.
+Expected: one definition and one same-file production call in `packages/agent-runtime/src/kernel/agent.ts`.
 
 - [ ] **Step 3: Remove only the `export` modifier**
 

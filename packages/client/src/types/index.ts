@@ -13,41 +13,7 @@ export type * from "./attachment-types.js";
 export type * from "./extension-types.js";
 export type * from "./sync-types.js";
 
-import type {
-  AdmitPromptAttachmentInput,
-  AttachmentAssetRecord,
-  CreateScheduledTaskInput,
-  CreateNoteInput,
-  CreateSessionInput,
-  ForkSessionInput,
-  InputDelivery,
-  PermissionRequestRecord,
-  NoteRecord,
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-  UpdateScheduledTaskInput,
-  UpdateNoteInput,
-  PermissionStatus,
-  SessionEventRecord,
-  SessionAttachmentMessagePartRecord,
-  SessionInputAttachmentRecord,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionRunAttemptRecord,
-  SessionExecutionRecord,
-  SessionStateSnapshot,
-  SessionTransformationMessagePartRecord,
-  SessionUserInputItem,
-  ListMessagePartsOptions,
-  JobSnapshot,
-  SessionGoal,
-  CreateSessionGoalInput,
-  UpdateSessionGoalInput,
-  GoalActionInput,
-} from "@vykor/protocol";
+import type { AdmitPromptAttachmentInput, AttachmentAssetRecord, CreateScheduledTaskInput, CreateNoteInput, CreateSessionInput, ForkSessionInput, InputDelivery, PermissionRequestRecord, NoteRecord, ScheduledRunRecord, ScheduledTaskRecord, UpdateScheduledTaskInput, UpdateNoteInput, PermissionStatus, SessionEventRecord, SessionAttachmentMessagePartRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, SessionStateSnapshot, SessionTransformationMessagePartRecord, SessionUserInputItem, ListMessagePartsOptions, JobSnapshot, SessionGoal, CreateSessionGoalInput, UpdateSessionGoalInput, GoalActionInput } from "@vykor/protocol";
 
 export type {
   SessionGoal,

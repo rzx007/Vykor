@@ -1,12 +1,15 @@
-import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalUpdateInput, type CreateSessionGoalInput, type GoalActionInput, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
+import { DEFAULT_GOAL_AUTO_TURNS } from "../goals/goal-policy.js";
+import { MAX_GOAL_AUTO_TURNS, parseGoalUpdateInput } from "@vykor/domain-contracts/goals";
+import type { CreateSessionGoalInput, GoalActionInput, GoalExternalWait, SessionGoal, UpdateSessionGoalInput } from "@vykor/domain-contracts/goals";
+import type { PermissionRequestRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
-import { parseGoalActionInput } from "@vykor/protocol";
-import { AgentExecutionLimitError } from "@vykor/core";
+import { parseGoalActionInput } from "@vykor/domain-contracts/goals";
+import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { AdmitPromptInput } from "./run-admission-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { GoalReadSnapshot } from "@vykor/agent-runtime";
+import type { GoalReadSnapshot } from "../goals/goal-read-tool.js";
 import type { GoalWaitCheck, GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 import type { RunAdmissionService } from "./run-admission-service.js";
@@ -537,7 +540,6 @@ export class SessionGoalService {
       }
     } finally { this.context.events.publishSince(before); }
   }
-
 
   private settleExternalWait(goalId: string, expectedWait: GoalExternalWait, check: GoalWaitCheck): GoalWaitObservationResult {
     const before = this.context.events.checkpoint();

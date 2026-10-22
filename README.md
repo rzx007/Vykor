@@ -6,7 +6,7 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 
 ## 特性
 
-> **易漂移数字以代码和测试为准**：基础工具数看 `packages/tools` 的 `createDefaultToolRegistry()`；Provider 看 `packages/api` 的 `PROVIDERS`；默认 model/maxTurns 看 `packages/core` 的 `DEFAULT_SETTINGS`。当前架构和硬规则统一从 [docs/README.md](docs/README.md) 索引。
+> **易漂移数字以代码和测试为准**：基础工具数看 `packages/agent-runtime/src/node/tools` 的 `createDefaultToolRegistry()`；Provider 看 `packages/api` 的 `PROVIDERS`；默认 model/maxTurns 看 `packages/host-config` 的 `DEFAULT_SETTINGS`。当前架构和硬规则统一从 [docs/README.md](docs/README.md) 索引。
 
 - ✅ **多模型支持** — Provider catalog 自动检测（`packages/api` `PROVIDERS`；Anthropic 原生 + OpenAI 兼容 + Codex 订阅），含 `<think>` 块过滤、图片/vision 传递、gpt-5/o 系列 token 字段适配。🟡 暂缺 Copilot 订阅；CLI/`settings.effort` 已有，模型原生 reasoning tokens 仍简化
 - ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule`* 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
@@ -307,10 +307,16 @@ Vykor/
 │   ├── commands/             # Command catalog 与共享命令派发
 │   ├── context/              # 上下文组装能力
 │   ├── coordinator/          # Workflow 与多 Agent 编排
-│   ├── core/                 # QueryEngine、类型与配置
+│   ├── core/                 # QueryEngine、历史与工具检查
+│   ├── agent-contracts/      # 通用执行数据、工具、权限审查与错误
+│   ├── json-data/            # /json：通用 JSON 检查、序列化与有界复制
+│   ├── plugin-contracts/     # 清单、展示、硬上限与后端绑定纯数据
+│   ├── domain-contracts/     # 按业务子入口组织的产品记录与数据规则
+│   ├── host-config/          # 本机配置、路径和保存
+│   ├── execution-node/       # 本地进程与 LSP
 │   ├── environment/          # Native/WSL 执行环境抽象
 │   ├── hooks/                # Hook 生命周期系统
-│   ├── jobs/                 # 统一 Job 协议与控制
+│   ├── jobs/                 # /contracts 纯数据；Host 观察与控制
 │   ├── mcp/                  # MCP 协议客户端
 │   ├── memory/               # 持久化记忆
 │   ├── output-styles/        # 输出格式
@@ -320,13 +326,13 @@ Vykor/
 │   ├── plugin-sources/       # 插件来源
 │   ├── plugins/              # Native Plugin 安装与运行时
 │   ├── prompts/              # System Prompt 构建
-│   ├── protocol/             # 浏览器安全的 Session/Run/Event 请求、响应与公共类型
+│   ├── protocol/             # HTTP/SSE 请求、响应、事件与编解码
 │   ├── sandbox/              # SRT 权限边界
 │   ├── server/               # daemon Application、HTTP、恢复与投影
 │   ├── services/             # SQLite Repository/Transaction 与本地服务
 │   ├── skills/               # Skill 加载与管理
 │   ├── swarm/                # 多 Agent 团队状态
-│   ├── terminal/             # Terminal 公共契约
+│   ├── terminal/             # /contracts 纯数据；Provider 活体接口
 │   ├── terminal-node/        # Node PTY 实现
 │   ├── themes/               # 终端主题
 │   └── tools/                # 基础工具 registry 与工具实现
@@ -341,120 +347,31 @@ Vykor/
 
 ### 架构图
 
-当前主线采用 daemon/session runtime。TUI 不再经过 BackendHost/LegacyJSON，也不为每个会话派生后端进程。本机入口通过私有 registry 发现 daemon；远程入口只接受显式 URL 与 bearer token，二者最终连接同一套领域 Resource、HTTP routes 和 SSE。完整分层见 [架构总览](docs/architecture-overview.md) 与 [可交互架构图](docs/vykor-current-architecture.html)，启动链路见 [TUI Flow](docs/tui-flow.md)。
+当前边界见[交互架构图](docs/vykor-current-architecture.html)和[架构总览](docs/architecture-overview.md)。箭头表示依赖；请求、事件和结果的流转见下方运行流程。
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                              客户端入口                             │
-│  ┌───────────────────────┐    ┌──────────────────────────────────┐ │
-│  │ 本机 CLI / TUI / print │    │ 远程 TUI / Web / Desktop         │ │
-│  │ `vk` / `vk --tui`   │    │ 显式 daemon URL + bearer token   │ │
-│  │ 私有本机 registry     │    │ 不读取、不复制本机 registry      │ │
-│  └───────────┬───────────┘    └───────────────┬──────────────────┘ │
-│              │ 启动或复用本机 daemon           │ HTTP action + SSE  │
-│              └───────────────┬────────────────┘                    │
-│                              ▼                                     │
-│                 ┌─────────────────────────────┐                    │
-│                 │ `vk serve` / daemon        │                    │
-│                 │ Hono routes                    │                    │
-│                 │ Query / Command / Interaction │                    │
-│                 │ SessionOperationRunner         │                    │
-│                 │ Repository/Transaction/SQLite │                    │
-│                 └──────────────┬──────────────┘                    │
-│                                │ AgentPool.acquireSession(id)      │
-│                 ┌──────────────▼──────────────┐                    │
-│                 │ `AgentPool`                   │                    │
-│                 │ `VykorAgent`             │                    │
-│                 │ `AgentSession` → QueryEngine  │                    │
-│                 └──────────────┬──────────────┘                    │
-└────────────────────────────────┼────────────────────────────────────┘
-                         │
-┌────────────────────────┼───────────────────────────────────────────┐
-│                    Core Engine                                      │
-│                        │                                            │
-│  ┌─────────────────────▼──────────────────────────────────────┐    │
-│  │                    QueryEngine                              │    │
-│  │                                                             │    │
-│  │  ┌───────────┐  ┌────────────┐  ┌───────────────────────┐  │    │
-│  │  │ API Client│  │ Tool       │  │ Permission            │  │    │
-│  │  │ (stream)  │  │ Registry   │  │ Checker               │  │    │
-│  │  └─────┬─────┘  └─────┬──────┘  └───────────┬───────────┘  │    │
-│  │        │              │                     │               │    │
-│  │  ┌─────▼──────────────▼─────────────────────▼──────────┐   │    │
-│  │  │              Agentic Loop (max 50 turns)             │   │    │
-│  │  │                                                      │   │    │
-│  │  │  1. Stream from API ──► 2. Parse tool_use blocks     │   │    │
-│  │  │  3. Check permissions  ► 4. Execute tools            │   │    │
-│  │  │  5. Append results  ───► 6. Auto-compact if needed   │   │    │
-│  │  │  7. Loop back to 1    ◄── (repeat until no tool_use) │   │    │
-│  │  └──────────────────────────────────────────────────────┘   │    │
-│  │                                                             │    │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │    │
-│  │  │ Compact      │  │ CostTracker  │  │ Hook Executor    │  │    │
-│  │  │ Service      │  │              │  │                  │  │    │
-│  │  └──────────────┘  └──────────────┘  └──────────────────┘  │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                    API Provider Layer                               │
-│                                                                     │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │  Provider Registry (`PROVIDERS` 是当前事实源)                 │ │
-│  │                                                                │ │
-│  │  ┌──────────────┐  ┌──────────────────┐  ┌────────────────┐  │ │
-│  │  │ Anthropic    │  │ OpenAI Compat    │  │ Auto Detect    │  │ │
-│  │  │ SDK Client   │  │ SDK Client       │  │ apiKey/URL/    │  │ │
-│  │  │              │  │                  │  │ model keywords │  │ │
-│  │  └──────────────┘  └──────────────────┘  └────────────────┘  │ │
-│  │                                                                │ │
-│  │  Providers: OpenAI • DeepSeek • Gemini • Qwen • GLM • Groq  │ │
-│  │  Mistral • Bedrock • VertexAI • Moonshot • SiliconFlow • …   │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Tool Layer (createDefaultToolRegistry)           │
-│                                                                     │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────┐ │
-│  │ Bash    │ │ Read     │ │ Write    │ │ Edit      │ │ Glob    │ │
-│  ├─────────┤ ├──────────┤ ├──────────┤ ├───────────┤ ├─────────┤ │
-│  │ Grep    │ │ WebFetch │ │WebSearch │ │ Notebook  │ │ LSP     │ │
-│  ├─────────┤ ├──────────┤ ├──────────┤ ├───────────┤ ├─────────┤ │
-│  │ Agent   │ │ Job×5    │ │ BgShell  │ │ Workflow  │ │Schedule×5│ │
-│  ├─────────┤ ├──────────┤ ├──────────┤ ├───────────┤ ├─────────┤ │
-│  │ MCP×4   │ │ Image×2  │ │ Skill    │ │ TodoWrite │ │ …      │ │
-│  └─────────┘ └──────────┘ └──────────┘ └───────────┘ └─────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Service Layer                                    │
-│                                                                     │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────┐ │
-│  │ Compact      │ │ Repository   │ │ Scheduled    │ │ Execution │ │
-│  │ Service      │ │ + Transaction│ │ Scheduler    │ │ Supervisor│ │
-│  │ (LLM摘要)   │ │ (SQLite)     │ │ (RRULE计算)  │ │ (进程句柄)│ │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └───────────┘ │
-│  ┌──────────────┐ ┌──────────────┐                                │
-│  │ Memory       │ │ LSP Client   │                                │
-│  │ (加权搜索)   │ │              │                                │
-│  └──────────────┘ └──────────────┘                                │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Extension Layer                                  │
-│                                                                     │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────┐ │
-│  │ MCP Client   │ │ Channels     │ │ Coordinator  │ │ Plugins   │ │
-│  │ stdio/HTTP/  │ │ Stdio/HTTP/  │ │ (多Agent     │ │ (动态加载)│ │
-│  │ SSE          │ │ Feishu       │ │  编排)       │ │           │ │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └───────────┘ │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐               │
-│  │ Skills       │ │ Swarm/Team   │ │ Client Sync  │               │
-│  │ (Markdown)   │ │ (多Agent团队)│ │ snapshot/SSE │               │
-│  └──────────────┘ └──────────────┘ └──────────────┘               │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Apps["CLI / TUI / Desktop"] --> Client["@vykor/client"]
+  Client --> Protocol["@vykor/protocol"]
+  HTTP["Server HTTP / SSE"] --> Protocol
+  HTTP --> Server["Server 应用用例"]
+  Server --> Node["Agent Runtime Node 宿主"]
+  Server --> Services["Services Repository / Transaction"]
+  Protocol --> Domain["domain-contracts 领域数据"]
+  Protocol --> Data["plugin-contracts / json-data / 能力 contracts"]
+  Server --> Domain
+  Services --> Domain
+  Node --> NodeData["plugin-contracts / Job 与 Terminal contracts"]
+  Node --> Kernel["Kernel Run / Child"]
+  Node --> Config["host-config 本机配置"]
+  Node --> Execution["execution-node 进程 / LSP"]
+  Node --> Tools["tools / WorkflowHost / MCP"]
+  Kernel --> Core["Core 历史与模型 / 工具循环"]
+  Core --> Contracts["agent-contracts 执行契约"]
+  Protocol --> Contracts
 ```
+
+Server 保存会话与 Goal 状态，每次模型请求先准入并结算。HTTP 将通信输入转换成应用用例输入，应用用例再构造 Services 自己的存储命令或已核实的 Node 绑定。Protocol 只拥有通信格式，Services、能力包、Node 和 Server application 不反向引用它。Client 只直接依赖 Protocol，本地辅助函数只用于请求和显示。Node 创建或借用本机资源，由创建者关闭；Kernel 使用已捕获的通用工具绑定，不进入产品数据包。Swarm 保留独立文件协作用途，不参加当前 Run/Child 执行。
 
 ---
 
@@ -469,8 +386,8 @@ Vykor/
 | `CompactService` | 上下文管理：token 估算 + 自动摘要（LLM 生成 `<analysis>/<summary>`），连续失败 3 次自动退回。详见 [docs/compact-service-design.md](docs/compact-service-design.md) |
 | `CostTracker`    | 费用追踪：记录 input/output/cache token 用量和估算成本                                                                                              |
 | `ToolRegistry`   | 工具注册中心：按名称查找、批量注册、可过滤                                                                                                                 |
-| `RuntimeBuilder` | 运行时组装：Builder 模式将 API Client、工具、权限、Hook 组装为 `RuntimeBundle`                                                                           |
-| `Settings`       | 配置管理：默认值 < 配置文件 < 环境变量 < CLI 参数，四层优先级                                                                                                 |
+| `NodeRuntimeResources` | Node 宿主组装与关闭默认能力，Kernel 通过通用执行接口调用 |
+| `host-config/Settings` | 本机配置类型、默认值、读取、校验与原子保存 |
 
 
 ### API 层
@@ -485,6 +402,8 @@ Vykor/
 
 
 ### 工具层（基础 registry；host 按能力注入 Jobs / Terminal / Scheduled Tasks）
+
+默认 Registry 位于 Node 宿主；视觉和通道工具由 Server 按已授权能力注入。工具只处理输入、调用明确的能力接口并格式化结果。
 
 
 | 分类           | 工具                                                                                                                            |
@@ -501,6 +420,8 @@ Vykor/
 
 
 ### 服务层
+
+以下能力分布在不同包：压缩归 Core，进程和 LSP 归 execution-node，持久记录归 services；Memory 保留独立文件处理。
 
 
 | 模块                          | 说明                                                                                                                                                                 |
@@ -519,7 +440,7 @@ Vykor/
 
 | 模块                  | 说明                                                                                                                                                                                                                                                                                                                                             |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Coordinator`       | 多 Agent 编排：内置/用户/插件 Agent 定义 + coordinator prompt；硬调度器（`Workflow` / DAG / 持久化恢复 / timeline / budget / reconcile / cancel）。详见 [docs/coordinator-hard-scheduler-flow.md](docs/coordinator-hard-scheduler-flow.md)                                                                                                                                |
+| `coordinator/definitions`、`teams`、`workflow` | Agent 定义纯解析、实例团队目录与 Workflow 纯调度；角色发现和文件/SQLite 仓库由 Node/Server 注入 |
 | `McpClientManager`  | MCP 协议客户端：stdio + HTTP/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权及 Streamable HTTP OAuth Token 注入、刷新和单次 401 恢复，动态获取工具和资源                                                                                                                                                                                                                        |
 | `ChannelAdapter`    | 通信通道：`StdioAdapter`（标准输入输出）、`HttpAdapter`（HTTP Webhook）、`FeishuAdapter`（飞书机器人）                                                                                                                                                                                                                                                                 |
 | `HookExecutor`      | Hook 系统：10 类事件（`session_start/end`、`pre/post_tool_use`、`pre/post_compact`、`user_prompt_submit`、`notification`、`stop`、`subagent_stop`），支持 command/http/prompt/agent 四种类型、priority、matcher、`$ARGUMENTS`                                                                                                                                          |

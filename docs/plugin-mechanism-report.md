@@ -80,11 +80,11 @@
 | `packages/plugin-sources/src/local-zip.ts` | 把 `.zip`/`.tar`/`.tar.gz`/`.tgz` 安全解压成候选目录 |
 | `packages/plugin-sources/src/git-source.ts` | 用系统 `git` 固定到具体 commit，删掉 `.git` 后交付候选目录 |
 | `packages/plugin-converters/src/` | Claude Code / Codex 外部格式 → Native Plugin 的转换 |
-| `packages/agent-runtime/src/plugin-discovery.ts` | 发现、校验并静态加载已安装插件 |
-| `packages/agent-runtime/src/plugin-capability-inventory.ts` | 安装优先级、组件归属与同名冲突判定 |
-| `packages/agent-runtime/src/plugin-activation.ts` | 注册 Hooks、激活 Native Tool |
-| `packages/agent-runtime/src/native-tools/` | Tool Host 子进程、IPC 协议、调用闸门、运行状态 |
-| `packages/agent-runtime/src/run-capability-view.ts` | 生成单轮 Run 的冻结能力视图 |
+| `packages/agent-runtime/src/node/plugins/plugin-discovery.ts` | 发现、校验并静态加载已安装插件 |
+| `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts` | 安装优先级、组件归属与同名冲突判定 |
+| `packages/agent-runtime/src/node/plugins/plugin-activation.ts` | 注册 Hooks、激活 Native Tool |
+| `packages/agent-runtime/src/node/plugins/native-tools/` | Tool Host 子进程、IPC 协议、调用闸门、运行状态 |
+| `packages/agent-runtime/src/node/plugins/run-capability-view.ts` | 生成单轮 Run 的冻结能力视图 |
 | `packages/server/src/application/default-services/plugin-service.ts` | 安装 / 启停 / 卸载 / 预览 / 列出的统一应用层 |
 | `packages/server/src/application/session/session-plugin-capability-service.ts` | 决定一次输入能不能带 `pluginId`，以及带哪一个 |
 | `packages/server/src/http/routes/service.ts` | `/plugins/**` HTTP 路由 |
@@ -215,7 +215,7 @@ link 安装（`vk plugin link`）跳过复制和摘要，直接引用开发目�
 
 ### 6.3 发现
 
-入口 `discoverVykorExtensions(cwd, settings, { pluginsEnabled })`，由 `packages/agent-runtime/src/plugin-discovery.ts` 实现。
+入口 `discoverVykorExtensions(cwd, settings, { pluginsEnabled })`，由 `packages/agent-runtime/src/node/plugins/plugin-discovery.ts` 实现。
 
 - 总开关：`settings.plugins.enabled` 与 `--no-plugins` 都为真才去读安装记录；两者是“与”关系。
 - 只取 `enabled === true` 的记录；同一 ID 有多条记录时按 `managed > user` 选唯一 winner，无法唯一确定就丢弃并记 error 诊断。
@@ -223,7 +223,7 @@ link 安装（`vk plugin link`）跳过复制和摘要，直接引用开发目�
 - 通过后再 `loadNativePlugin` 静态加载组件。
 - 最后用 `createPluginCapabilityInventory` 算出“谁能用哪些组件”，并处理同名冲突。
 
-发现结果只是数据。把它接成“活的 Runtime”的入口是 `packages/agent-runtime/src/runtime-integrations.ts`：它调用上面的发现与激活，并挂上 `runtime.createRunCapabilityView`，也就是第 10 节那个按 Run 过滤的能力视图。选中插件的 Native Tool 没起来、MCP 没连上时，“插件不可用”的 readiness 错误就是在这一层产生的，对应回归测试是 `packages/agent-runtime/src/runtime-plugin-readiness.test.ts`。改插件装载链路时，这个文件是必须一起看的入口。
+发现结果只是数据。把它接成“活的 Runtime”的入口是 `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：它调用上面的发现与激活，并挂上 `runtime.createRunCapabilityView`，也就是第 10 节那个按 Run 过滤的能力视图。选中插件的 Native Tool 没起来、MCP 没连上时，“插件不可用”的 readiness 错误就是在这一层产生的，对应回归测试是 `packages/agent-runtime/src/node/plugins/runtime-plugin-readiness.test.ts`。改插件装载链路时，这个文件是必须一起看的入口。
 
 ### 6.4 运行前校验
 
@@ -256,7 +256,7 @@ Tool 声明的权限必须在 manifest 里声明过，否则整条 Tool 声明�
 
 ### 6.6 激活
 
-入口 `activateDiscoveredPlugins(...)`（`packages/agent-runtime/src/plugin-activation.ts`）：
+入口 `activateDiscoveredPlugins(...)`（`packages/agent-runtime/src/node/plugins/plugin-activation.ts`）：
 
 1. 把插件 Hooks 注册进 HookExecutor，失败时回滚已注册的 Hook；
 2. 调 `activateNativePluginTools` 为插件启动 Tool Host，注册 Tool；
@@ -282,9 +282,9 @@ Hook 的 id 形如 `plugin:<pluginId>:<event>:<index>`，在插件范围内稳�
 这一块容易踩坑，单独说明：
 
 - 运行时最后使用的 MCP 配置是 `{ ...插件提供的 servers, ...settings.mcpServers }`，**同名的宿主 Settings 配置覆盖插件配置**。
-- 但在合并之前，`packages/agent-runtime/src/plugin-capability-inventory.ts` 会先检查插件 MCP 名字是否撞上宿主已保留的 server 名。撞上就记一条 error 级 `plugin_mcp_server_name_conflict`，并把**整个插件**排除出可用集合，而不是只丢掉那一个 server。
+- 但在合并之前，`packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts` 会先检查插件 MCP 名字是否撞上宿主已保留的 server 名。撞上就记一条 error 级 `plugin_mcp_server_name_conflict`，并把**整个插件**排除出可用集合，而不是只丢掉那一个 server。
 - 插件之间的同名 MCP server 也会触发 `plugin_component_name_conflict`，同样把涉及的插件全部排除。
-- `packages/agent-runtime/src/runtime-integrations.ts` 在装配阶段还会对重复 owner 直接抛错。注意这条守卫遍历的是**已经排除过冲突**的 inventory，所以宿主同名和跨插件同名这两种情况根本到不了这里；它实际主要拦的是显式传入的 `options.mcpServers` 与插件 server 撞名。
+- `packages/agent-runtime/src/node/runtime/runtime-integrations.ts` 在装配阶段还会对重复 owner 直接抛错。注意这条守卫遍历的是**已经排除过冲突**的 inventory，所以宿主同名和跨插件同名这两种情况根本到不了这里；它实际主要拦的是显式传入的 `options.mcpServers` 与插件 server 撞名。
 
 结论：插件 MCP 的命名冲突是“整插件出局”的严重程度，不是“重命名后继续”。作者应给 server 加上插件专属前缀。
 
@@ -294,9 +294,9 @@ Hook 的 id 形如 `plugin:<pluginId>:<event>:<index>`，在插件范围内稳�
 
 ### 8.1 进程与协议
 
-`NativeToolHost`（`packages/agent-runtime/src/native-tools/tool-host.ts`）用 `child_process.fork` 启动 `host-entry.mjs`，IPC 用 advanced serialization，走四种请求方法：`healthcheck`、`registerTools`、`callTool`、`shutdown`，另有宿主主动发的 `cancel`。
+`NativeToolHost`（`packages/agent-runtime/src/node/plugins/native-tools/tool-host.ts`）用 `child_process.fork` 启动 `host-entry.mjs`，IPC 用 advanced serialization，走四种请求方法：`healthcheck`、`registerTools`、`callTool`、`shutdown`，另有宿主主动发的 `cancel`。
 
-子进程侧（`packages/agent-runtime/src/native-tools/host-entry.mjs`）：
+子进程侧（`packages/agent-runtime/src/node/plugins/native-tools/host-entry.mjs`）：
 
 - 逐个 `import()` manifest 声明的入口模块，要求导出 `registerTools`；
 - 校验每个工具定义（`name`、`description`、`inputSchema`、`invoke` 都要合法），工具名在一个插件内不能重复；
@@ -308,7 +308,7 @@ Hook 的 id 形如 `plugin:<pluginId>:<event>:<index>`，在插件范围内稳�
 
 ### 8.2 调用闸门
 
-每次调用都经过 `NativeToolCallGuard`（`packages/agent-runtime/src/native-tools/guard.ts`）：
+每次调用都经过 `NativeToolCallGuard`（`packages/agent-runtime/src/node/plugins/native-tools/guard.ts`）：
 
 1. **并发上限**，默认 4，超了返回 `tool_concurrency_limit`；
 2. **输入校验**，按 `inputSchema` 支持的部分 JSON Schema 关键字（`const`、`enum`、`type`、`required`、`properties`、`additionalProperties: false`、`items`、`minItems`/`maxItems`、`minLength`/`maxLength`）校验，失败返回 `tool_input_invalid`，**插件代码根本不执行**。有两个作者常踩的坑：一是这里不是完整的 JSON Schema 实现，数值范围（`minimum`/`maximum`）和 `pattern` 都不生效，需要强约束的插件要自己在 `invoke` 里再查一遍；二是只要出现 `properties`、`required` 或 `additionalProperties: false` 中的任意一个，校验器就会按对象处理，即使没写 `type: "object"`；
@@ -344,11 +344,11 @@ Host 崩溃或退出时，宿主会注销该插件的全部 Tool，激活结果�
 
 ### 8.5 运行状态
 
-`packages/agent-runtime/src/native-tools/status.ts` 维护进程内的 Host 状态汇总（状态、Host 数量、已注册工具名、最近启动时间、最近错误）。同一插件在多个 live Runtime 里会各有一个 Host，所以 `hostCount` 可能大于 1。这份状态是进程内内存，不持久化。
+`packages/agent-runtime/src/node/plugins/native-tools/status.ts` 维护进程内的 Host 状态汇总（状态、Host 数量、已注册工具名、最近启动时间、最近错误）。同一插件在多个 live Runtime 里会各有一个 Host，所以 `hostCount` 可能大于 1。这份状态是进程内内存，不持久化。
 
 ### 8.6 Hook 的执行边界（与 Tool 不同，容易误判）
 
-Hooks 不走 Tool Host。`packages/agent-runtime/src/plugin-activation.ts` 只是把 Hook 定义注册进 HookExecutor，真正执行发生在宿主进程里（`packages/hooks/src/index.ts`）：
+Hooks 不走 Tool Host。`packages/agent-runtime/src/node/plugins/plugin-activation.ts` 只是把 Hook 定义注册进 HookExecutor，真正执行发生在宿主进程里（`packages/hooks/src/index.ts`）：
 
 | Hook 类型 | 实际执行位置 | 是否受 Tool Host 的环境变量白名单约束 |
 | --- | --- | --- |
@@ -378,7 +378,7 @@ Hooks 不走 Tool Host。`packages/agent-runtime/src/plugin-activation.ts` 只�
 
 ## 10. Run 级能力视图
 
-安装并启用只代表“可被发现”。真正决定一轮对话能用什么的是 `RunCapabilityView`（`packages/agent-runtime/src/run-capability-view.ts`）。
+安装并启用只代表“可被发现”。真正决定一轮对话能用什么的是 `RunCapabilityView`（`packages/agent-runtime/src/node/plugins/run-capability-view.ts`）。
 
 流程是：用户在输入里选 `@插件` → 输入只持久化 `pluginId` 和展示名 → 服务端 `SessionPluginCapabilityService` 校验这个 `pluginId` 在当前目录下是否有效、Plugin Agent 归属是否匹配、是否一次混用了多个插件 → Run 从会话暖 Runtime 的已加载状态生成内存视图 → 视图创建后冻结。
 
@@ -396,7 +396,7 @@ Hooks 不走 Tool Host。`packages/agent-runtime/src/plugin-activation.ts` 只�
 
 ### 10.1 子视图到底收了什么
 
-这里容易把“交集”说得太满。`packages/agent-runtime/src/child-agent-options.ts` 的 `deriveChildCapabilityView` 实际只收窄两类能力：
+这里容易把“交集”说得太满。`packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildCapabilityView` 实际只收窄两类能力：
 
 | 能力 | 子视图实际行为 |
 | --- | --- |
@@ -512,7 +512,7 @@ vk plugin install <source> --from codex|claude-code
 **实现细节**
 
 - **`managed` scope 是只读预留**。代码里决策优先级偏好 `managed`，但没有任何生产代码会写 `scope: "managed"` 的记录（只有测试构造它），安装器也明确拒绝非 user scope。也就是说这个通道当前只能被手工预置的文件使用。
-- **`packages/plugins/src/activation/activate.ts` 已无调用点**。它导出的 `activateNativePlugin` 在仓库内没有任何调用者；Runtime 走的是 `packages/agent-runtime/src/plugin-activation.ts` 里的 `activateDiscoveredPlugins`。两套激活语义并存，容易误导后来者。
+- **`packages/plugins/src/activation/activate.ts` 已无调用点**。它导出的 `activateNativePlugin` 在仓库内没有任何调用者；Runtime 走的是 `packages/agent-runtime/src/node/plugins/plugin-activation.ts` 里的 `activateDiscoveredPlugins`。两套激活语义并存，容易误导后来者。
 - **`discoverInstalledNativePlugins({ cwd })` 忽略 `cwd`**。函数签名保留了它，但函数体只读 `storePath`。这是 user-only 安装策略的残留。
 - **`@vykor/plugins` 是 optional peer + dev 依赖，不是运行期依赖**。`packages/agent-runtime/package.json` 的 `dependencies` 只有 `@vykor/terminal-node`、`better-sqlite3`、`node-pty`、`sharp`；`@vykor/plugins` 出现在 `peerDependencies` 且被 `peerDependenciesMeta` 标为 optional，同时也在 `devDependencies` 里。构建时 esbuild 按 `bundle: true` 把它打进 `dist/index.js`，这也是运行期不需要单独安装它的原因。若将来把插件相关代码改成 external，这个声明会立刻变成运行期缺包问题。
 - **旧 scope 记录会让整个 store 读取失败**。`readInstalledPluginStore` 只接受 `user` 与 `managed`，遇到其他 scope 直接抛 `Invalid installed plugin store`，因此旧 `project`/`local` 记录不是“被忽略并提示”，而是让插件列表整体报错。这与 `docs/superpowers/specs/2026-09-02-user-scoped-native-plugin-installation-design.md` 里“读取旧值并忽略它们、给出 warning”的描述已经不一致——是代码收紧、文档没跟上，按代码理解。
@@ -583,7 +583,7 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 | 根联接是被哪一道检查拦下的 | 另跑一个探针，对同一联接同时打印 `lstat()` 的 `isDirectory()`/`isSymbolicLink()`、realpath 比对结果，以及 `readdir` 的 `Dirent` 标志 | `lstat` 对联接报 `isDirectory()=false`、`isSymbolicLink()=true`，所以是 `assertRegularPluginCacheSnapshot` 的第一道检查触发；realpath 比对是独立兜底。归因已改正（第 5 节） |
 | `@vykor/plugins` 的依赖声明 | 读 `packages/agent-runtime/package.json` 与构建脚本 | 是 optional peer + dev 依赖，靠 esbuild 打包进产物；已补入第 13 节 |
 | Tool Host 入口缺失时到底报哪个错误码 | 把 `tool-host.ts` 复制到一个没有 `host-entry.mjs` 的目录，构造带一个 Tool 声明的插件并直接调 `start()` | 实际是 `tool_host_crashed`（子进程 code=1 退出），不是 `tool_host_spawn_failed` 或 `tool_host_unavailable`；同时发现失败后 `host.state` 会被 `stop()` 归零成 `inactive`。两处都已按实测改写（第 8.3、11.1 节） |
-| 子视图是否真的是“交集” | 读 `packages/agent-runtime/src/child-agent-options.ts` 的 `deriveChildCapabilityView` | 只收窄 `tools` 与 `mcpServers`；`skills` 与 `agents` 原样继承。已把第 10 节的“取交集”改成按能力分类的实际规则（第 10.1 节） |
+| 子视图是否真的是“交集” | 读 `packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildCapabilityView` | 只收窄 `tools` 与 `mcpServers`；`skills` 与 `agents` 原样继承。已把第 10 节的“取交集”改成按能力分类的实际规则（第 10.1 节） |
 
 ### 15.3 仍未验证的部分
 
@@ -606,12 +606,12 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 | 新增一种组件的加载 | `packages/plugins/src/components/`、`packages/plugins/src/load-native-plugin.ts` |
 | 改安装与快照语义 | `packages/plugins/src/installation/installer.ts`、`cache.ts`、`store.ts`、`verify.ts` |
 | 改运行前校验 | `packages/plugins/src/installation/verify.ts` |
-| 改 Tool 子进程协议 | `packages/agent-runtime/src/native-tools/protocol.ts`、`tool-host.ts`、`host-entry.mjs` |
-| 改 Tool 调用限制 | `packages/agent-runtime/src/native-tools/guard.ts` |
-| 改插件发现/冲突规则 | `packages/agent-runtime/src/plugin-discovery.ts`、`plugin-capability-inventory.ts` |
-| 把发现接成活 Runtime | `packages/agent-runtime/src/runtime-integrations.ts` |
-| 改 Hook 的执行方式或边界 | `packages/agent-runtime/src/plugin-activation.ts`、`packages/hooks/src/index.ts` |
-| 改 Run 可见性 | `packages/agent-runtime/src/run-capability-view.ts`、`packages/server/src/application/session/session-plugin-capability-service.ts` |
+| 改 Tool 子进程协议 | `packages/agent-runtime/src/node/plugins/native-tools/protocol.ts`、`tool-host.ts`、`host-entry.mjs` |
+| 改 Tool 调用限制 | `packages/agent-runtime/src/node/plugins/native-tools/guard.ts` |
+| 改插件发现/冲突规则 | `packages/agent-runtime/src/node/plugins/plugin-discovery.ts`、`plugin-capability-inventory.ts` |
+| 把发现接成活 Runtime | `packages/agent-runtime/src/node/runtime/runtime-integrations.ts` |
+| 改 Hook 的执行方式或边界 | `packages/agent-runtime/src/node/plugins/plugin-activation.ts`、`packages/hooks/src/index.ts` |
+| 改 Run 可见性 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts`、`packages/server/src/application/session/session-plugin-capability-service.ts` |
 | 改管理接口 | `packages/server/src/application/default-services/plugin-service.ts`、`packages/server/src/http/routes/service.ts` |
 | 加命令 | `apps/cli/src/commands/plugin.ts` |
 | 改插件页 | `apps/desktop/src/main/features/plugin/plugin-service.ts`、`apps/desktop/src/renderer/src/components/desktop/plugin-page` |

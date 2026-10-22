@@ -1,6 +1,6 @@
 # Jobs 统一后台任务协议
 
-> 状态：当前实现的权威契约，最后核对：2026-08-27。模型工具、HTTP client、slash command 与 TUI 已统一使用 Jobs 观察和控制长期工作。Terminal 自身设计见 [Desktop Terminal PTY Design](./desktop-terminal-pty-design.md)，daemon 总入口见 [Daemon Application Architecture](./daemon-application-architecture.md)。
+> 状态：当前实现的权威契约，最后核对：2026-10-22。模型工具、HTTP client、slash command 与 TUI 已统一使用 Jobs 观察和控制长期工作。Terminal 自身设计见 [Desktop Terminal PTY Design](./desktop-terminal-pty-design.md)，daemon 总入口见 [Daemon Application Architecture](./daemon-application-architecture.md)。
 
 ## 一句话解释
 
@@ -92,6 +92,14 @@ flowchart LR
 核心约束：Jobs 可以聚合和路由，但不能成为第二个执行器或第二份持久状态。
 
 daemon Workflow 和 Session/Run 使用同一份 SQLite。独立 CLI 的 `FileWorkflowRunRepository` 是明确选择的项目文件实现，不是 daemon 的 fallback；两边不会自动迁移或合并。Workflow Job ID 只有 `workflow:<runId>` 一种格式，Jobs API 不接受裸 run ID。
+
+## 纯数据入口与活体接口
+
+`@vykor/jobs/contracts` 定义 `JobKind`、`JobStatus`、`JobCapabilities`、`JobSnapshot`、`JobReadResult` 和 `JobWaitResult`。`@vykor/terminal/contracts` 定义终端创建、读写、尺寸、状态和事件数据，并且只通过 `jobs/contracts` 引用 `JobStatus`。两者不依赖 Protocol 或产品领域记录，Protocol 显式再导出通信需要的这些数据。
+
+`AgentJobHost`、路由函数和带 `AbortSignal` 的 `JobWaitRequest` 留在 Jobs 实现入口；`TerminalProvider`、事件订阅和带 `AbortSignal` 的 `TerminalWaitRequest` 留在 Terminal provider。数据里的 `TerminalSignal` 是 interrupt/eof/terminate 字符串，不是活动取消对象。纯数据入口不能导入包根以取得实现，也不能保存进程、PTY、handle 或等待中的 Promise。
+
+调用方只需要可序列化状态时引用 `/contracts`；需要控制已运行资源时使用对应 Host/Provider。资源仍由原 producer 创建和关闭，本次拆分不增加执行负责人或全局目录。
 
 ## 创建与控制分离
 
@@ -252,7 +260,7 @@ stateDiagram-v2
 
 ### 当前模型工具清单
 
-模型侧的统一控制面就是下面五个工具。daemon 使用持久化 `DaemonJobService`；standalone SDK 在调用方没有注入外部 host 时自动创建 `LocalAgentJobHost`，因此两种运行方式都会注册这五个工具。
+模型侧的统一控制面就是下面五个工具。daemon 使用持久化 `DaemonJobService`；standalone SDK 由 Node 默认组装创建 `LocalAgentJobHost`，因此两种运行方式都会注册这五个工具。模型工具由 `createJobTools(host)` 显式注入；两种 host 都复用其所属 WorkflowHost，不另建活动目录。
 
 | 工具        | 输入重点                                         | 返回重点                                        | 支持范围                                     |
 | ----------- | ------------------------------------------------ | ----------------------------------------------- | -------------------------------------------- |
@@ -425,15 +433,17 @@ HTTP `/jobs` 由 daemon Bearer token 保护。HTTP 里的 `sessionId` 用于选�
 
 | 位置                                                      | 责任                                                    |
 | --------------------------------------------------------- | ------------------------------------------------------- |
-| `packages/jobs/src/index.ts`                              | 可移植类型和 `AgentJobHost` 契约                        |
+| `packages/jobs/src/contracts.ts`                          | Job 纯数据，正式入口为 `@vykor/jobs/contracts` |
+| `packages/terminal/src/contracts.ts`                      | Terminal 纯数据，正式入口为 `@vykor/terminal/contracts` |
+| `packages/jobs/src/index.ts`                              | `AgentJobHost`、带取消信号的等待输入与控制函数 |
 | `packages/server/src/jobs/daemon-job-service.ts`          | owner 校验、聚合、状态转换、控制路由                    |
 | `packages/tools/src/job/job-tools.ts`                     | 模型可调用的五个 `Job*` 工具                            |
-| `packages/tools/src/job/local-job-host.ts`                | standalone SDK 的 child、DetachedProcessSupervisor、Workflow 本地聚合 |
+| `packages/agent-runtime/src/node/jobs/local-agent-job-host.ts`                | standalone SDK 的 child、DetachedProcessSupervisor、Workflow 本地聚合 |
 | `packages/server/src/http/routes/job.ts`                  | `/jobs` HTTP API                                        |
 | `packages/client/src/transport/http-client.ts`            | TypeScript HTTP client                                  |
 | `packages/terminal-node/src/local-terminal-provider.ts`   | Terminal 输出、等待和真实退出生命周期                   |
 | `packages/server/src/application/session/session-execution-projector.ts` | DetachedProcessSupervisor 到 durable execution 的持续投影          |
-| `packages/coordinator/src/workflow/store.ts`              | Workflow 快照、active run 取消和迟到写回保护            |
+| `packages/agent-runtime/src/node/workflow/workflow-host.ts`              | 活动 Workflow、owner 隔离、取消收尾与终态保存            |
 
 ## 已知边界
 

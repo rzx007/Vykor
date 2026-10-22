@@ -1,5 +1,6 @@
-import type { PluginUiInventory, MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
-export type { MemoryEntryRecord } from "@vykor/protocol";
+import type { PluginUiInventory } from "@vykor/domain-contracts/plugin-apps/history";
+import type { MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/domain-contracts/memory";
+export type { MemoryEntryRecord } from "@vykor/domain-contracts/memory";
 
 /**
  * Injectable daemon settings / provider surfaces.
@@ -8,7 +9,7 @@ export type { MemoryEntryRecord } from "@vykor/protocol";
 
 export interface SettingsService {
   agentEnvironmentCapabilities?(): Promise<
-    import("@vykor/protocol").AgentEnvironmentCapabilities
+    import("./default-services/query-models.js").AgentEnvironmentCapabilities
   >;
   get(): Promise<Record<string, unknown>> | Record<string, unknown>;
   patch(patch: Record<string, unknown>):
@@ -170,7 +171,7 @@ export interface AuthService {
 }
 
 export interface ContextService {
-  plugins?(input: { cwd: string }): Promise<{ plugins: import("@vykor/protocol").PluginCatalogEntry[] }>;
+  plugins?(input: { cwd: string }): Promise<{ plugins: import("@vykor/domain-contracts/inputs").PluginCatalogEntry[] }>;
   preview(input: {
     cwd: string;
   }): Promise<{ report: string }> | { report: string };
@@ -242,7 +243,7 @@ export type PluginRuntimeStatus =
 
 export interface PluginInfo {
   identity: { id: string; name: string; version: string; displayName?: string };
-  presentation?: import("@vykor/protocol").PluginPresentation;
+  presentation?: import("@vykor/plugin-contracts/presentation").PluginPresentation;
   origin: "native" | "converted";
   sourceFormat?: string;
   scope: "user" | "managed";
@@ -418,4 +419,4 @@ export interface GitService {
     message: string;
   }): Promise<{ output: string }> | { output: string };
 }
-import type { InputSupport, ModelInputCapabilities } from "@vykor/core";
+import type { InputSupport, ModelInputCapabilities } from "@vykor/host-config";

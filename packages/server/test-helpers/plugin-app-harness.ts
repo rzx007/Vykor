@@ -1,3 +1,4 @@
+import {hostedAgentFactory} from "./hosted-agent.js";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,13 +32,13 @@ export async function pluginAppHarness(kind: "native-tools" | "mcp-server", mode
   const boot = () => new VykorHttpServer({ store, settings: settingsRef.current, token: "app-token",
     logger: () => {}, getSettings: () => settingsRef.current,
     services: { plugin: createDefaultPluginService(settingsRef), settings: createDefaultSettingsService(settingsRef) },
-    createAgent: async ({ options }) => runtime.createDefaultNodeAgent({ ...options, ...(modelTool ? { approvalMode: "full_access" as const } : {}),
+    createAgent: hostedAgentFactory(async ({ options }) => runtime.createDefaultNodeAgent({ ...options, ...(modelTool ? { approvalMode: "full_access" as const } : {}),
       capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
       client: { async *streamMessage() { modelCalls++;
         if (modelTool && modelCalls === 1) { yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "native-model-result", name: "SaveDocument", input: { value: "model" } } }; yield { type: "complete", stopReason: "tool_use" }; }
         else { yield { type: "text_delta", delta: "Done" }; yield { type: "complete", stopReason: "end_turn" }; }
       } },
-    }),
+    })),
   });
   let server = boot(); await server.application.ready();
   const session = store.sessions.create({ id: "app-session", cwd: root, model: "never", metadata: { runtime: { provider: "fixture", model: "never", approvalMode: modelTool ? "full_access" : "auto_review" } } });

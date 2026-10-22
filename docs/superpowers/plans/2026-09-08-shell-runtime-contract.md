@@ -276,7 +276,7 @@ git commit -m "refactor(tools): replace Bash with environment-bound Shell"
 **文件：**
 - 修改：`packages/tools/src/background-shell/background-shell-tools.ts`
 - 修改：`packages/tools/src/background-shell/index.ts`
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/server/src/jobs/daemon-job-service.ts`
 - 测试：`packages/tools/src/background-shell/__test__/background-shell-create.test.ts`
 - 测试：`packages/server/src/jobs/daemon-job-service.test.ts`
@@ -330,8 +330,8 @@ git commit -m "refactor(jobs): bind background commands to session shell"
 - 修改：`packages/permissions/src/index.ts`
 - 修改：`packages/hooks/src/index.ts`
 - 修改：`packages/plugins/src/activation/activate.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/child-agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.ts`
 - 修改：`packages/coordinator/src/coordinator-mode.ts`
 - 修改：`packages/server/src/permissions/permission-broker.ts`
 - 修改：上述文件的相应 `*.test.ts`
@@ -388,8 +388,8 @@ git commit -m "refactor(runtime): migrate Bash tool references to Shell"
 - 修改：`packages/prompts/src/index.ts`
 - 修改：`packages/prompts/src/prompt-segments-assembly.ts`
 - 修改：`packages/prompts/src/index.test.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 
 - [ ] **步骤 1：编写 Prompt 唯一来源失败测试**
 

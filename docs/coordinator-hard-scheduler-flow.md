@@ -16,17 +16,18 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 
 ## 核心模型：一次提交 + 调度循环 + 持久快照
 
-分三层：
+分四层：
 
-1. **入口**：模型调 `Workflow` 工具创建、恢复或做领域查询，普通生命周期控制交给 Jobs；代码也可直接调用 `runWorkflow` / `runPersistentWorkflow`。
-2. **调度**：`runWorkflow` 维护 ready 队列、并发上限、失败策略、写冲突串行、预算与超时。
-3. **执行**：每个 task 经 `WorkflowRunner`（默认 `createAgentWorkflowRunner`）调用 `context.agent.children.spawnChildAgent()`，再等待同一个 framework child 完成并把结构化结果回填；只有调用方显式提供 external worker adapter 时才走外部 task。
+1. **入口**：模型调 `Workflow` 工具创建、恢复或做领域查询，普通生命周期控制交给 Jobs；代码可直接调用纯 `runWorkflow`；持久执行调用 Node `WorkflowHost.runPersistentWorkflow`。
+2. **宿主**：Node WorkflowHost 接收工具的一次 invoke，绑定 owner、保存初始快照、持有后台执行和取消；Jobs 与关闭共用它。
+3. **调度**：`runWorkflow` 维护 ready 队列、并发上限、失败策略、写冲突串行、预算与超时。
+4. **执行**：每个 task 经 `WorkflowRunner`（默认 `createAgentWorkflowRunner`）调用 `context.agent.children.spawnChildAgent()`，再等待同一个 framework child 完成并把结构化结果回填；只有调用方显式提供 external worker adapter 时才走外部 task。
 
 ```text
 ┌─ 模型 / 代码入口 ─────────────────────────────────────┐
 │ Workflow action=run|resume|timeline|history|...         │
-│   run      → parseWorkflowSpec → runPersistentWorkflow │
-│   resume   → load snapshot → resumePersistentWorkflow  │
+│   run      → port.invoke → WorkflowHost.runPersistentWorkflow │
+│   resume   → port.invoke → WorkflowHost.resumePersistentWorkflow │
 │   timeline → load snapshot + filtered events           │
 │   history  → advanced persisted-run query              │
 │ JobRead/Wait/List/Cancel → 普通生命周期控制             │
@@ -39,7 +40,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 │   预算超限 → skip 未启动                                │
 │   writeScope 冲突 → blocked，等运行中写任务结束         │
 │   可跑 → runner(task) → onFinished → 传播失败 / 入队    │
-│ onSnapshot / onEvent → 显式 WorkflowRunRepository      │
+│ onSnapshot / onEvent → Host → WorkflowRunRepository   │
 └────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -54,7 +55,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| 公共调度入口 | `packages/coordinator/src/workflow/index.ts` | 从这里或 `@vykor/coordinator` 导入调度 API |
+| 公共调度入口 | `packages/coordinator/src/workflow/index.ts` | 从正式 `@vykor/coordinator/workflow` 导入纯调度 API |
 | 调度循环 | `packages/coordinator/src/workflow/runner.ts` | `runWorkflow`、ready queue、并发、失败策略、budget、blocked task |
 | task attempt | `packages/coordinator/src/workflow/task-runner.ts` | 单 task 执行、retry、timeout、progress budget |
 | plan / 校验 | `packages/coordinator/src/workflow/validation.ts` | `WorkflowSpec` 展开、DAG、mode、writeScope 校验 |
@@ -62,15 +63,17 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | snapshot | `packages/coordinator/src/workflow/snapshot.ts` | run id、snapshot、summary、snapshot/result 转换 |
 | notification | `packages/coordinator/src/workflow/notification.ts` | `<workflow-notification>` formatter/parser |
 | reconciliation | `packages/coordinator/src/workflow/reconciliation.ts` | changed-file / write-scope overlap 检测、summary、follow-up spec |
-| 公共持久化入口 | `packages/coordinator/src/workflow/index.ts` | 导出 repository contract 与持久运行 API |
-| 文件持久化实现 | `packages/coordinator/src/workflow/store.ts` | `FileWorkflowRunRepository`；`.vykor/workflows/<runId>.json` + `.events.ndjson` |
+| 仓库接口与解码 | `packages/coordinator/src/workflow/repository.ts` | 纯 Repository 契约；不保存活动执行 |
+| Node 持久运行入口 | `packages/agent-runtime/src/workflow-entry.ts` | 正式 `@vykor/agent-runtime/node/workflow`；导出 Host、文件仓库和 runner |
+| 活动执行与关闭 | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 同应用共享 Host，session 绑定视图；取消等待 worker 和终态保存 |
+| 文件持久化实现 | `packages/agent-runtime/src/node/workflow/file-workflow-run-repository.ts` | `FileWorkflowRunRepository`；`.vykor/workflows/<runId>.json` + `.events.ndjson` |
 | daemon 持久化实现 | `packages/server/src/application/workflow/session-workflow-run-repository.ts` | `SessionWorkflowRunRepository`；写入统一 SQLite |
 | Coordinator 模式 | `packages/coordinator/src/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
 | System prompt | `packages/coordinator/src/index.ts` | `COORDINATOR_SYSTEM_PROMPT` 说明何时用 Workflow vs Agent |
-| Workflow 工具 | `packages/tools/src/agent/workflow/tool.ts` | 创建/恢复 workflow，提供 timeline/history 等领域查询；detached run 返回 `jobId` |
-| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/tools/src/job/local-job-host.ts` | Workflow 普通 list/read/wait/cancel |
-| Agent runner | `packages/tools/src/agent/workflow/runner.ts` | 默认 spawn/await framework child；也接受显式 external worker adapter |
-| 工具注册 | `packages/tools/src/registry.ts` | 只有宿主显式提供 Workflow repository 时才注册 Workflow 工具 |
+| Workflow 工具 | `packages/tools/src/agent/workflow/tool.ts` | 校验参数并传递真实 scope/signal、children 和捕获的角色集合；一次合法调用只 invoke 一次 |
+| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/local-agent-job-host.ts` | Workflow 普通 list/read/wait/cancel |
+| Agent runner | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` | 默认 spawn/await framework child；也接受显式 external worker adapter |
+| 工具注册 | `packages/agent-runtime/src/node/tools/default-tool-registry.ts` | Node 有绑定后的 WorkflowToolPort 时才注册工具；工具不从 context 查找仓库 |
 | CLI 白名单 | `apps/cli/src/commands/main.ts` | coordinator 模式 `setAllowedTools(getCoordinatorTools())` |
 | Workflow CLI | `apps/cli/src/commands/workflow.ts` | `vk workflow list/status/validate/template/reconcile/cancel`；JSON-first 管理面 |
 
@@ -108,23 +111,21 @@ vk workflow cancel     # stop backing task，并写 terminal snapshot
 
 ```text
 模型调 Workflow
-  └─ createWorkflowTool().execute()          # packages/tools/src/agent/workflow/tool.ts
-       ├─ action=timeline → 人类可读事件线（可按 taskIds/eventTypes/statuses 过滤）
-       ├─ action=history  → 高级历史筛选
-       ├─ action=validate/template/reconcile → Workflow 领域操作
-       │
-       ├─ action=resume → load snapshot → resumePersistentWorkflow(runner)
-       │
-       └─ action=run（默认）
-            parseWorkflowSpec(input)
-            createAgentWorkflowRunner({ cwd, team, timeoutMs, permissionMode })
-            persist!==false + repository → runPersistentWorkflow(spec, runner, { store, runId })
-            否则 → runWorkflow(spec, runner[, { runId }])
-            → detached: { kind: "job", jobId, jobKind: "workflow" }
-            → synchronous: formatWorkflowNotification(result)
+  → createWorkflowTool(port).execute()
+      校验 action 和当前 Run scope
+      传递 input / scope / signal / children / 本轮角色集合
+  → port.invoke()（一次）
+  → Node WorkflowHost 的当前 session 视图
+      run     → 校验 spec → 创建 runner → 同步保存初始快照和 claim → 调度
+      resume  → owner 与角色校验 → 恢复旧快照
+      timeline / history / validate / template / reconcile → Node 动作处理
+      detached → 返回 jobId；Host 保留后台 Promise 和取消监听
+      waitForCompletion → 等待并返回原有结果信封
 ```
 
-`persist` 默认 `true`，但调用方必须显式注入 repository。daemon 注入 `SessionWorkflowRunRepository`，快照进入统一 SQLite；standalone Node Agent 只有显式注入 `FileWorkflowRunRepository` 时才写项目 `.vykor/workflows/`。没有 repository 时，持久化 action 会明确失败，不会创建文件 fallback。
+`persist` 默认 `true`。daemon 应用注入共享 SQLite Host；standalone Node Agent 默认创建文件仓库，也可以明确关闭或替换。缺少能力时不会注册 Workflow 工具，工具自身不创建文件 fallback。`persist: false` 使用 Host 内存仓库，不写文件。
+
+请求 signal 只控制本次调用或等待；scope.signal 绑定拥有后台工作的 Run。显式取消、父 Run 取消和关闭等待 worker 及终态保存，写入失败返回错误。关闭一个 session 只处理自己的运行，应用关闭等待整个 Host。
 
 常用 input 字段：
 
@@ -226,16 +227,16 @@ createAgentWorkflowRunner()(context)
             metadata: agentId, workerTaskId, backendType, worktree, diff, changedFiles
 ```
 
-调度器本身不依赖 swarm；adapter 放在 `@vykor/tools`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。
+调度器本身不依赖 swarm；adapter 放在 `@vykor/agent-runtime/node/workflow`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。
 
 ## D. 持久化与恢复
 
-调度器只依赖 `WorkflowRunRepository`，不自己选择数据位置。当前有两种明确实现：
+纯调度器只接收快照和事件回调；WorkflowHost 调用 `WorkflowRunRepository` 保存，不由调度器选择数据位置。当前有两种明确实现：
 
 | 使用场景 | Repository | 状态放在哪里 |
 |---|---|---|
 | daemon、多客户端、Bot、TUI/Web/Desktop | `SessionWorkflowRunRepository` | 与 Session/Run 相同的 SQLite |
-| 独立项目文件 CLI 或显式 standalone 配置 | `FileWorkflowRunRepository` | `.vykor/workflows/` |
+| 独立项目文件 CLI 或 standalone Node Agent 默认配置 | `FileWorkflowRunRepository` | `.vykor/workflows/` |
 
 文件实现的目录结构：
 
@@ -250,7 +251,7 @@ createAgentWorkflowRunner()(context)
 恢复：
 
 ```text
-resumePersistentWorkflow(snapshot, runner)
+host.resumePersistentWorkflow(snapshot, runner)
   status !== "running" → 直接从 snapshot 合成 WorkflowRunResult（不重跑）
   status === "running" → runWorkflow(spec, {
        runId, createdAt,
@@ -302,7 +303,7 @@ JSON 含：`runId`、`status`、`summary`、`mode`、任务计数、`tasks[]`（
 detached run 先返回 Job receipt：
 
 ```json
-{"kind":"job","action":"created","jobId":"workflow_...","jobKind":"workflow","status":"running"}
+{"kind":"job","action":"created","jobId":"workflow:<runId>","jobKind":"workflow","status":"running"}
 ```
 
 随后 `JobRead` 返回通用 snapshot，并在 `details` 中带上 plan、pending/running/blocked、results、budget 和 reconciliation；事件时间线使用 `Workflow action: "timeline"`。
@@ -337,10 +338,12 @@ detached run 先返回 Job receipt：
 | 范围 | 文件 |
 |------|------|
 | 纯调度（fake runner） | `packages/coordinator/src/workflow/__test__/scheduler.test.ts` |
-| repository contract / resume | `packages/coordinator/src/workflow/__test__/store.test.ts` |
-| Workflow 工具解析与 timeline/history | `packages/tools/src/agent/workflow/__test__/tool.test.ts` |
-| runner 单元 | `packages/tools/src/agent/workflow/__test__/runner.test.ts` |
-| 工具 → scheduler → framework child smoke | `packages/tools/src/agent/workflow/__test__/workflow-smoke.test.ts` |
+| 文件仓库兼容 | `packages/agent-runtime/src/node/workflow/file-workflow-run-repository.test.ts` |
+| Node 动作 / timeline / history | `packages/agent-runtime/src/node/workflow/workflow-actions.test.ts` |
+| runner 单元 | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.test.ts` |
+| 工具 → scheduler → framework child smoke | `packages/agent-runtime/src/node/workflow/workflow-smoke.test.ts` |
+
+工具参数与单次 port 调用见 `packages/tools/src/agent/workflow/tool.test.ts`；内存/文件/SQLite 共用生命周期场景见 `tests/workflow/lifecycle-scenarios.ts`，Node Host 和 Server Host 测试分别执行。真实 Agent.close 顺序见 `packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts`。
 
 ## J. 当前能力边界
 

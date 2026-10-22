@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SettingsConflictError } from "@vykor/core";
+import { SettingsConflictError } from "@vykor/host-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadRuntimeSecrets, runtimeSecretsRevision, saveRuntimeSecrets } from "./runtime-secrets.js";
 

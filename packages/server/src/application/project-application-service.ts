@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 
 import { isAbsolute, relative, sep } from "node:path";
-import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
+import type { ProjectRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import { ApplicationError } from "../shared/application-error.js";
 
 interface ProjectRebindRuntime {

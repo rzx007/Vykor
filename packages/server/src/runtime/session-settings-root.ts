@@ -1,5 +1,5 @@
 import { isAbsolute } from "node:path";
-import type { SessionRecord } from "@vykor/protocol";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 /** A task worktree executes in its own cwd but keeps its owning project's settings. */
 export function sessionSettingsRoot(session: SessionRecord): string {

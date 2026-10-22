@@ -1,39 +1,5 @@
-export type ChannelDeliveryStatus = "pending" | "sent" | "failed" | "unknown";
-
-export interface ExternalConversationRecord {
-  id: string;
-  connector: string;
-  accountId: string;
-  workspaceId?: string;
-  chatId: string;
-  threadId?: string;
-  sessionId: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ChannelDeliveryRecord {
-  id: string;
-  conversationId: string;
-  connector: string;
-  accountId: string;
-  chatId: string;
-  threadId?: string;
-  sessionId: string;
-  inputId: string;
-  runId: string;
-  externalMessageId: string;
-  content: string;
-  status: ChannelDeliveryStatus;
-  attemptCount: number;
-  externalDeliveryId?: string;
-  error?: string;
-  createdAt: number;
-  updatedAt: number;
-  sentAt?: number;
-  platformMeta?: Record<string, unknown>;
-}
-
+export * from "@vykor/domain-contracts/channels";
+import type { ExternalConversationRecord, ChannelDeliveryRecord, ChannelDeliveryStatus } from "@vykor/domain-contracts/channels";
 export interface DurableChannelMessageInput {
   connector: string;
   accountId: string;
@@ -64,17 +30,6 @@ export interface RecordChannelDeliveryInput {
 export interface ChannelStatusSnapshot {
   conversations: ExternalConversationRecord[];
   deliveries: ChannelDeliveryRecord[];
-}
-
-/** 同一个平台消息在所有重试中得到同一个 durable Input id。 */
-export function durableChannelInputId(input: {
-  connector: string;
-  accountId: string;
-  externalMessageId: string;
-}): string {
-  return ["channel", input.connector, input.accountId, input.externalMessageId]
-    .map((part) => encodeURIComponent(part.trim()))
-    .join(":");
 }
 
 export function parseDurableChannelMessageInput(

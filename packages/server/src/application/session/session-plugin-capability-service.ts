@@ -4,11 +4,9 @@ import type {
 } from "@vykor/agent-runtime";
 import { resolve } from "node:path";
 import type { SessionStore } from "@vykor/services";
-import type {
-  SessionRecord,
-  SessionUserInputItem,
-} from "@vykor/protocol";
-import { readRuntimeMetadata } from "@vykor/protocol";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import { SessionApplicationError } from "./session-application-error.js";
 import {
   capturePluginSelectionPolicy, emptyPluginScope, readInputPluginScope, readRunPluginScope,

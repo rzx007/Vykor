@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type { AttachmentRepresentationRecord } from "@vykor/protocol";
+import type { AttachmentRepresentationRecord } from "@vykor/domain-contracts/attachments";
 
 import type { NormalizedOcrImage } from "./image-normalizer.js";
 import { normalizeOcrImage } from "./image-normalizer.js";

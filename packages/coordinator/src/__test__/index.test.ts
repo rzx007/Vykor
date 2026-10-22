@@ -1,41 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { beforeAll, afterAll } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join as joinPath } from "node:path";
-import { tmpdir } from "node:os";
 import {
-  Coordinator,
   TeamRegistry,
-  getTeamRegistry,
+  createTeamRegistry,
+  narrowTeamPort,
   getBuiltinAgentDefinitions,
   getAgentDefinition,
   hasRequiredMcpServers,
   isCoordinatorMode,
   COORDINATOR_SYSTEM_PROMPT,
 } from "../index.js";
-
-// getAllAgentDefinitions 现在会读 ~/.vykor/agents：把配置目录指到临时
-// 目录，避免开发机上的真实用户 agent 影响断言（环境隔离）。
-let cfgDir: string;
-beforeAll(() => {
-  cfgDir = mkdtempSync(joinPath(tmpdir(), "vk-coord-cfg-"));
-  process.env.VYKOR_CONFIG_DIR = cfgDir;
-});
-afterAll(() => {
-  delete process.env.VYKOR_CONFIG_DIR;
-  rmSync(cfgDir, { recursive: true, force: true });
-});
-
-describe("Coordinator", () => {
-  it("stores config", () => {
-    const c = new Coordinator({
-      mode: "parallel",
-      agents: [{ name: "a", description: "test" }],
-    });
-    expect(c.getMode()).toBe("parallel");
-    expect(c.getAgents()).toHaveLength(1);
-  });
-});
 
 describe("TeamRegistry", () => {
   it("creates and lists teams", () => {
@@ -143,11 +116,21 @@ describe("isCoordinatorMode", () => {
   });
 });
 
-describe("getTeamRegistry", () => {
-  it("returns a singleton", () => {
-    const a = getTeamRegistry();
-    const b = getTeamRegistry();
-    expect(a).toBe(b);
+describe("root TeamRegistry isolation", () => {
+  it("keeps same-named teams and deletion within their root tree", () => {
+    const rootA = createTeamRegistry();
+    const rootB = createTeamRegistry();
+    const childA = narrowTeamPort(rootA);
+    const childB = narrowTeamPort(rootB);
+    childA.createTeam("dev");
+    childB.createTeam("dev");
+    childA.addAgent("dev", "a-child");
+    childB.addAgent("dev", "b-child");
+    expect(rootA.listTeams()[0]!.agents).toEqual(["a-child"]);
+    expect(rootB.listTeams()[0]!.agents).toEqual(["b-child"]);
+    childA.deleteTeam("dev");
+    expect(rootA.listTeams()).toEqual([]);
+    expect(rootB.listTeams()[0]!.agents).toEqual(["b-child"]);
   });
 });
 

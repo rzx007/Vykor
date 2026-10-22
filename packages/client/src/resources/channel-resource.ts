@@ -1,18 +1,4 @@
-import type {
-  ChannelDeliveryRecord,
-  ChannelRuntimeControlInput,
-  ChannelRuntimeStatus,
-  ChannelStatusSnapshot,
-  DurableChannelMessageInput,
-  DurableChannelMessageResult,
-  FeishuAllowInput,
-  FeishuChannelSnapshot,
-  FeishuConnectInput,
-  FeishuPatchInput,
-  FeishuRegistrationSnapshot,
-  FeishuRegistrationStartInput,
-  RecordChannelDeliveryInput,
-} from "@vykor/protocol";
+import type { ChannelDeliveryRecord, ChannelRuntimeControlInput, ChannelRuntimeStatus, ChannelStatusSnapshot, DurableChannelMessageInput, DurableChannelMessageResult, FeishuAllowInput, FeishuChannelSnapshot, FeishuConnectInput, FeishuPatchInput, FeishuRegistrationSnapshot, FeishuRegistrationStartInput, RecordChannelDeliveryInput } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 
 export interface FeishuComposedSnapshot {

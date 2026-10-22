@@ -33,21 +33,21 @@ pnpm --filter @vykor/server test
 
 - `packages/terminal-node/src/agent-terminal-host.ts`：把 `LocalTerminalProvider` 适配成 Agent Terminal producer 与 Job source。
 - `packages/terminal-node/src/agent-terminal-host.test.ts`：open、list、read、wait、send、cancel 和 session 边界测试。
-- `packages/agent-runtime/src/cleanup-stack.ts`：runtime-owned cleanup 的逆序、去重、幂等执行。
-- `packages/agent-runtime/src/cleanup-stack.test.ts`：顺序、共享 identity、失败汇总和幂等测试。
-- `packages/agent-runtime/src/default-node-terminal.ts`：创建默认 Node Terminal bundle 并返回 cleanup。
-- `packages/agent-runtime/src/default-node-terminal.test.ts`：默认 factory 与 Host override 的所有权测试。
+- `packages/agent-runtime/src/node/runtime/cleanup-stack.ts`：runtime-owned cleanup 的逆序、去重、幂等执行。
+- `packages/agent-runtime/src/node/runtime/cleanup-stack.test.ts`：顺序、共享 identity、失败汇总和幂等测试。
+- `packages/agent-runtime/src/node/runtime/default-node-terminal.ts`：创建默认 Node Terminal bundle 并返回 cleanup。
+- `packages/agent-runtime/src/node/runtime/default-node-terminal.test.ts`：默认 factory 与 Host override 的所有权测试。
 
 ### 修改
 
 - `packages/terminal-node/package.json`：增加 `@vykor/jobs` workspace 依赖。
 - `packages/terminal-node/src/index.ts`：导出 Agent Terminal bundle factory。
 - `packages/agent-runtime/package.json`：在 `dependencies` 增加 `"@vykor/terminal-node": "workspace:*"`，保证默认 Node Agent 安装后实际带有 Terminal 实现。
-- `packages/agent-runtime/src/agent-composition.ts`：未覆盖 Terminal 时创建默认 bundle，登记 cleanup 并接入 Jobs。
-- `packages/agent-runtime/src/agent.ts`：Agent close 调用装配 cleanup，保持现有关闭顺序和幂等语义。
-- `packages/agent-runtime/src/default-agent.ts`：Node-only 默认工厂入口。
-- `packages/agent-runtime/src/sdk.test.ts`：无 Host 的完整默认能力集成测试。
-- `packages/agent-runtime/src/agent.test.ts`：关闭与初始化失败回滚测试。
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`：未覆盖 Terminal 时创建默认 bundle，登记 cleanup 并接入 Jobs。
+- `packages/agent-runtime/src/kernel/agent.ts`：Agent close 调用装配 cleanup，保持现有关闭顺序和幂等语义。
+- `packages/agent-runtime/src/node/runtime/default-agent.ts`：Node-only 默认工厂入口。
+- `packages/agent-runtime/src/node/runtime/sdk.test.ts`：无 Host 的完整默认能力集成测试。
+- `packages/agent-runtime/src/node/runtime/agent.test.ts`：关闭与初始化失败回滚测试。
 - `packages/tools/src/terminal/__test__/terminal-tools.test.ts`：Terminal 工具与 Job ID 契约回归。
 - `packages/server/src/daemon/__test__/daemon-agent.test.ts`：daemon Host Terminal 不创建本地 provider。
 
@@ -160,8 +160,8 @@ git commit -m "feat(terminal-node): expose terminal sessions as jobs"
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/cleanup-stack.ts`
-- 创建：`packages/agent-runtime/src/cleanup-stack.test.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/cleanup-stack.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/cleanup-stack.test.ts`
 
 - [ ] **步骤 1：先写逆序、identity 去重和幂等测试**
 
@@ -218,7 +218,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [ ] **步骤 6：提交 cleanup stack**
 
 ```bash
-git add packages/agent-runtime/src/cleanup-stack.ts packages/agent-runtime/src/cleanup-stack.test.ts
+git add packages/agent-runtime/src/node/runtime/cleanup-stack.ts packages/agent-runtime/src/node/runtime/cleanup-stack.test.ts
 git commit -m "feat(agent-runtime): manage owned capability cleanup"
 ```
 
@@ -226,14 +226,14 @@ git commit -m "feat(agent-runtime): manage owned capability cleanup"
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/default-node-terminal.ts`
-- 创建：`packages/agent-runtime/src/default-node-terminal.test.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/default-node-terminal.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/default-node-terminal.test.ts`
 - 修改：`packages/agent-runtime/package.json`
 - 修改：`pnpm-lock.yaml`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-agent.ts`
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-agent.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
 
 - [ ] **步骤 1：先写默认 factory 与 override 惰性测试**
 
@@ -325,8 +325,8 @@ git commit -m "feat(agent-runtime): install default local terminal"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
-- 修改：`packages/agent-runtime/src/agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent.test.ts`
 - 修改：`packages/tools/src/terminal/__test__/terminal-tools.test.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
 - 修改：`packages/terminal-node/src/agent-terminal-host.test.ts`

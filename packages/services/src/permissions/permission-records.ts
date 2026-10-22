@@ -1,12 +1,6 @@
-import type {
-  AppendEventInput,
-  CreatePermissionRequestInput,
-  ListPermissionRequestsOptions,
-  PermissionRequestRecord,
-  SessionEventRecord,
-  SessionRecord,
-  SessionRunRecord,
-} from "@vykor/protocol";
+import type { AppendEventInput } from "../conversations/commands.js";
+import type { CreatePermissionRequestInput, ListPermissionRequestsOptions } from "./commands.js";
+import type { PermissionRequestRecord, SessionEventRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 import type { StorageContext } from "../database/storage-context.js";
 

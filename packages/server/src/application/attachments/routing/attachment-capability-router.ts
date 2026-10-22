@@ -1,5 +1,5 @@
-import type { ContentBlock } from "@vykor/core";
-import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
 import {
   classifyAttachmentCandidate,
   AttachmentTextDecodingError,

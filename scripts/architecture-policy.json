@@ -1,0 +1,926 @@
+{
+  "$schema": "./architecture-policy.schema.json",
+  "version": 1,
+  "currentPhase": "P13",
+  "packages": {
+    "@vykor/agent-contracts": {
+      "directory": "packages/agent-contracts",
+      "allowed": [
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/host-config": {
+      "directory": "packages/host-config",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P8",
+      "migrationId": "M32"
+    },
+    "@vykor/execution-node": {
+      "directory": "packages/execution-node",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment",
+        "@vykor/sandbox"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/core": {
+      "directory": "packages/core",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M15"
+    },
+    "@vykor/agent-runtime": {
+      "directory": "packages/agent-runtime",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/core",
+        "@vykor/host-config",
+        "@vykor/execution-node",
+        "@vykor/api",
+        "@vykor/auth",
+        "@vykor/coordinator",
+        "@vykor/environment",
+        "@vykor/hooks",
+        "@vykor/jobs",
+        "@vykor/mcp",
+        "@vykor/memory",
+        "@vykor/permissions",
+        "@vykor/plugins",
+        "@vykor/prompts",
+        "@vykor/sandbox",
+        "@vykor/skills",
+        "@vykor/terminal",
+        "@vykor/terminal-node",
+        "@vykor/tools",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data"
+      ],
+      "removeByPhase": "P11",
+      "migrationId": "M38"
+    },
+    "@vykor/api": {
+      "directory": "packages/api",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M15"
+    },
+    "@vykor/auth": {
+      "directory": "packages/auth",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/api"
+      ],
+      "removeByPhase": "P1",
+      "migrationId": "M02"
+    },
+    "@vykor/permissions": {
+      "directory": "packages/permissions",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P1",
+      "migrationId": "M03"
+    },
+    "@vykor/hooks": {
+      "directory": "packages/hooks",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment",
+        "@vykor/sandbox"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M15"
+    },
+    "@vykor/sandbox": {
+      "directory": "packages/sandbox",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P8",
+      "migrationId": "M32"
+    },
+    "@vykor/tools": {
+      "directory": "packages/tools",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment",
+        "@vykor/execution-node",
+        "@vykor/sandbox",
+        "@vykor/coordinator",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M14"
+    },
+    "@vykor/coordinator": {
+      "directory": "packages/coordinator",
+      "allowed": [
+        "@vykor/agent-contracts"
+      ],
+      "removeByPhase": "P3",
+      "migrationId": "M07"
+    },
+    "@vykor/jobs": {
+      "directory": "packages/jobs",
+      "allowed": [],
+      "removeByPhase": "P8",
+      "migrationId": "M33"
+    },
+    "@vykor/terminal": {
+      "directory": "packages/terminal",
+      "allowed": [
+        "@vykor/jobs"
+      ],
+      "removeByPhase": "P8",
+      "migrationId": "M33"
+    },
+    "@vykor/terminal-node": {
+      "directory": "packages/terminal-node",
+      "allowed": [
+        "@vykor/environment",
+        "@vykor/host-config",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "removeByPhase": "P1",
+      "migrationId": "M02"
+    },
+    "@vykor/services": {
+      "directory": "packages/services",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/memory",
+        "@vykor/environment",
+        "@vykor/sandbox",
+        "@vykor/execution-node",
+        "@vykor/core",
+        "@vykor/domain-contracts",
+        "@vykor/json-data"
+      ],
+      "removeByPhase": "P10",
+      "migrationId": "M35",
+      "allowedDeclarationOrigins": [
+        "@vykor/plugin-contracts"
+      ]
+    },
+    "@vykor/server": {
+      "directory": "packages/server",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/execution-node",
+        "@vykor/core",
+        "@vykor/agent-runtime",
+        "@vykor/api",
+        "@vykor/auth",
+        "@vykor/permissions",
+        "@vykor/hooks",
+        "@vykor/sandbox",
+        "@vykor/tools",
+        "@vykor/coordinator",
+        "@vykor/jobs",
+        "@vykor/terminal",
+        "@vykor/terminal-node",
+        "@vykor/services",
+        "@vykor/protocol",
+        "@vykor/plugins",
+        "@vykor/plugin-converters",
+        "@vykor/plugin-sources",
+        "@vykor/prompts",
+        "@vykor/skills",
+        "@vykor/memory",
+        "@vykor/personalization",
+        "@vykor/channels",
+        "@vykor/commands",
+        "@vykor/output-styles",
+        "@vykor/themes",
+        "@vykor/swarm",
+        "@vykor/environment",
+        "@vykor/mcp",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/protocol": {
+      "directory": "packages/protocol",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/client": {
+      "directory": "packages/client",
+      "allowed": [
+        "@vykor/protocol"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30",
+      "allowedDeclarationOrigins": [
+        "@vykor/agent-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ]
+    },
+    "@vykor/plugins": {
+      "directory": "packages/plugins",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/skills",
+        "@vykor/coordinator",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data"
+      ],
+      "removeByPhase": "P9",
+      "migrationId": "M34"
+    },
+    "@vykor/plugin-converters": {
+      "directory": "packages/plugin-converters",
+      "allowed": [
+        "@vykor/plugins"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/plugin-sources": {
+      "directory": "packages/plugin-sources",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/prompts": {
+      "directory": "packages/prompts",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment",
+        "@vykor/sandbox",
+        "@vykor/memory",
+        "@vykor/personalization",
+        "@vykor/core"
+      ],
+      "removeByPhase": "P1",
+      "migrationId": "M02"
+    },
+    "@vykor/skills": {
+      "directory": "packages/skills",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/memory": {
+      "directory": "packages/memory",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/personalization": {
+      "directory": "packages/personalization",
+      "allowed": [
+        "@vykor/memory"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/channels": {
+      "directory": "packages/channels",
+      "allowed": [],
+      "removeByPhase": "P10",
+      "migrationId": "M37"
+    },
+    "@vykor/commands": {
+      "directory": "packages/commands",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/output-styles": {
+      "directory": "packages/output-styles",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/themes": {
+      "directory": "packages/themes",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M29"
+    },
+    "@vykor/swarm": {
+      "directory": "packages/swarm",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M29"
+    },
+    "@vykor/environment": {
+      "directory": "packages/environment",
+      "allowed": [],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    "@vykor/mcp": {
+      "directory": "packages/mcp",
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/environment",
+        "@vykor/sandbox",
+        "@vykor/plugin-contracts"
+      ],
+      "removeByPhase": "P9",
+      "migrationId": "M34"
+    },
+    "@vykor/json-data": {
+      "directory": "packages/json-data",
+      "allowed": [],
+      "removeByPhase": "P8",
+      "migrationId": "M31"
+    },
+    "@vykor/plugin-contracts": {
+      "directory": "packages/plugin-contracts",
+      "allowed": [
+        "@vykor/json-data",
+        "@vykor/agent-contracts"
+      ],
+      "removeByPhase": "P9",
+      "migrationId": "M34"
+    },
+    "@vykor/domain-contracts": {
+      "directory": "packages/domain-contracts",
+      "allowed": [
+        "@vykor/json-data",
+        "@vykor/plugin-contracts",
+        "@vykor/agent-contracts"
+      ],
+      "removeByPhase": "P10",
+      "migrationId": "M35"
+    }
+  },
+  "modules": [
+    {
+      "id": "portable-contracts",
+      "fromPaths": [
+        "packages/agent-contracts/src/"
+      ],
+      "allowed": [
+        "@vykor/environment"
+      ],
+      "forbidBuiltins": true,
+      "typeOnlyPackages": [
+        "@vykor/environment"
+      ],
+      "removeByPhase": "P1",
+      "migrationId": "M01",
+      "allowExternal": []
+    },
+    {
+      "id": "kernel",
+      "fromPaths": [
+        "packages/agent-runtime/src/kernel/"
+      ],
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/core",
+        "@vykor/environment"
+      ],
+      "allowSelfPaths": [
+        "packages/agent-runtime/src/kernel/",
+        "packages/agent-runtime/src/kernel-entry.ts"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M18",
+      "fromFiles": [
+        "packages/agent-runtime/src/kernel-entry.ts"
+      ],
+      "forbidSpecifiers": [
+        "^(?:node:)?(?:fs|child_process|net|http|https)(?:/|$)",
+        "^(?:node-pty|better-sqlite3|sharp)$"
+      ],
+      "allowExternal": []
+    },
+    {
+      "id": "kernel-declarations",
+      "fromPaths": [
+        "packages/agent-runtime/src/kernel/"
+      ],
+      "symbols": [
+        "^(Settings|PluginAppRecord|GoalRunBinding|VykorAgentOptions|VykorAgentConfiguration|McpClientManager|AgentJobHost|AgentScheduleEffects)$"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M18",
+      "fromFiles": [
+        "packages/agent-runtime/src/kernel-entry.ts"
+      ]
+    },
+    {
+      "id": "engine-host-types",
+      "fromPaths": [
+        "packages/core/src/engine/"
+      ],
+      "symbols": [
+        "^(Settings|PluginAppRecord|GoalRunBinding|McpClientManager|AgentJobHost|AgentTerminalHost|AgentScheduleEffects)$"
+      ],
+      "forbidPaths": [
+        "packages/core/src/config/"
+      ],
+      "removeByPhase": "P4",
+      "migrationId": "M15",
+      "forbidSpecifiers": [
+        "^(?:node:)?(?:fs|child_process)(?:/|$)"
+      ]
+    },
+    {
+      "id": "route-storage",
+      "fromPaths": [
+        "packages/server/src/http/routes/"
+      ],
+      "symbols": [
+        "^(SessionStore|StorageContext|.*Repository)$"
+      ],
+      "forbidPaths": [
+        "packages/services/src/database/",
+        "packages/services/src/session-runtime/store.ts"
+      ],
+      "removeByPhase": "P5",
+      "migrationId": "M25",
+      "forbidSpecifiers": [
+        "^(?:node:)?fs(?:/|$)"
+      ]
+    },
+    {
+      "id": "storage-hosts",
+      "fromPaths": [
+        "packages/services/src/database/",
+        "packages/services/src/sessions/",
+        "packages/services/src/conversations/",
+        "packages/services/src/runs/",
+        "packages/services/src/goals/",
+        "packages/services/src/permissions/",
+        "packages/services/src/workflows/",
+        "packages/services/src/attachments/",
+        "packages/services/src/plugin-apps/",
+        "packages/services/src/notes/",
+        "packages/services/src/session-runtime/",
+        "packages/services/src/projects/",
+        "packages/services/src/schedules/",
+        "packages/services/src/channels/",
+        "packages/services/src/token-estimation/"
+      ],
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/host-config",
+        "@vykor/domain-contracts",
+        "@vykor/json-data",
+        "@vykor/plugin-contracts"
+      ],
+      "forbidPaths": [
+        "packages/services/src/executions/",
+        "packages/services/src/lsp/",
+        "packages/services/src/office/",
+        "packages/services/src/autodream/",
+        "packages/services/src/memory-extract.ts"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30",
+      "allowSelfPaths": [
+        "packages/services/src/database/",
+        "packages/services/src/sessions/",
+        "packages/services/src/conversations/",
+        "packages/services/src/runs/",
+        "packages/services/src/goals/",
+        "packages/services/src/permissions/",
+        "packages/services/src/workflows/",
+        "packages/services/src/attachments/",
+        "packages/services/src/plugin-apps/",
+        "packages/services/src/notes/",
+        "packages/services/src/session-runtime/",
+        "packages/services/src/projects/",
+        "packages/services/src/schedules/",
+        "packages/services/src/channels/",
+        "packages/services/src/token-estimation/"
+      ],
+      "forbidSpecifiers": [
+        "^(?:node:)?(?:child_process|net|http|https)(?:/|$)",
+        "^(?:node-pty|@anthropic-ai/sdk|openai)$"
+      ]
+    },
+    {
+      "id": "workflow-pure",
+      "fromPaths": [
+        "packages/coordinator/src/workflow/"
+      ],
+      "allowed": [
+        "@vykor/agent-contracts"
+      ],
+      "forbidSpecifiers": [
+        "^(?:node:)?fs(?:/|$)",
+        "^@vykor/(?:host-config|core)(?:/|$)"
+      ],
+      "forbidPaths": [
+        "packages/coordinator/src/agent-definitions",
+        "packages/coordinator/src/definitions/",
+        "packages/coordinator/src/team-registry",
+        "packages/coordinator/src/teams/"
+      ],
+      "removeByPhase": "P3",
+      "migrationId": "M11",
+      "forbidBuiltins": true
+    },
+    {
+      "id": "core-config-consumers",
+      "fromPaths": [
+        "packages/agent-contracts/src/",
+        "packages/execution-node/src/",
+        "packages/agent-runtime/src/",
+        "packages/api/src/",
+        "packages/auth/src/",
+        "packages/permissions/src/",
+        "packages/hooks/src/",
+        "packages/sandbox/src/",
+        "packages/tools/src/",
+        "packages/coordinator/src/",
+        "packages/jobs/src/",
+        "packages/terminal/src/",
+        "packages/terminal-node/src/",
+        "packages/services/src/",
+        "packages/server/src/",
+        "packages/protocol/src/",
+        "packages/client/src/",
+        "packages/plugins/src/",
+        "packages/plugin-converters/src/",
+        "packages/plugin-sources/src/",
+        "packages/prompts/src/",
+        "packages/skills/src/",
+        "packages/memory/src/",
+        "packages/personalization/src/",
+        "packages/channels/src/",
+        "packages/commands/src/",
+        "packages/output-styles/src/",
+        "packages/themes/src/",
+        "packages/swarm/src/",
+        "packages/environment/src/",
+        "packages/mcp/src/"
+      ],
+      "symbols": [
+        "^(Settings|loadSettings|saveSettings|loadProjectSettings|saveProjectSettings|updateSettings|withSettingsFileLock|getConfigDir|getConfigFilePath|resolvePaths|getDataDir|getLogsDir|getSessionsDir|getTasksDir|getPluginsDir|getPluginCacheDir|getPluginDataDir|getPluginSourcesDir|getInstalledPluginStorePath|getSkillsDir|getMemoryDir|getProjectMemoryDir|getFeedbackDir|getCredentialsFilePath|getMcpOAuthFilePath|getChannelCredentialsFilePath|getProjectConfigDir|getProjectSettingsFilePath)$"
+      ],
+      "forbidPaths": [],
+      "removeByPhase": "P1",
+      "migrationId": "M02",
+      "targetPackages": [
+        "@vykor/core"
+      ]
+    },
+    {
+      "id": "retired-execution-paths",
+      "fromPaths": [
+        "packages/",
+        "apps/"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/services/executions(?:/|$)",
+        "(?:^|/)services/src/(?:executions|lsp)(?:/|$)"
+      ],
+      "forbidPaths": [
+        "packages/services/src/executions/",
+        "packages/services/src/lsp/"
+      ],
+      "removeByPhase": "P2",
+      "migrationId": "M05"
+    },
+    {
+      "id": "tool-host-boundary",
+      "fromPaths": [
+        "packages/tools/src/"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/(?:auth|mcp|skills|services|agent-runtime)(?:/|$)"
+      ],
+      "forbidPaths": [
+        "packages/agent-runtime/src/node/",
+        "packages/services/src/",
+        "packages/auth/src/",
+        "packages/mcp/src/",
+        "packages/skills/src/"
+      ],
+      "removeByPhase": "P3",
+      "migrationId": "M14"
+    },
+    {
+      "id": "definition-pure",
+      "fromPaths": [
+        "packages/coordinator/src/definitions/"
+      ],
+      "allowed": [
+        "@vykor/agent-contracts"
+      ],
+      "forbidBuiltins": true,
+      "allowExternal": [
+        "yaml"
+      ],
+      "removeByPhase": "P3",
+      "migrationId": "M07"
+    },
+    {
+      "id": "retired-workflow-host-paths",
+      "fromPaths": [
+        "packages/",
+        "apps/"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/tools/(?:registry|job/local-job-host|agent/(?:child-task|workflow/(?:runner|presentation|input)))(?:\\.|/|$)",
+        "^@vykor/coordinator/(?:agent-loader|agent-definitions|team-registry|workflow/store)(?:\\.|/|$)"
+      ],
+      "forbidPaths": [
+        "packages/coordinator/src/workflow/store.ts",
+        "packages/coordinator/src/agent-loader.ts",
+        "packages/coordinator/src/agent-definitions.ts",
+        "packages/coordinator/src/team-registry.ts",
+        "packages/tools/src/registry.ts",
+        "packages/tools/src/job/local-job-host.ts",
+        "packages/tools/src/agent/workflow/runner.ts",
+        "packages/tools/src/agent/workflow/presentation.ts",
+        "packages/tools/src/agent/workflow/input.ts",
+        "packages/tools/src/agent/child-task.ts",
+        "packages/agent-runtime/src/workflow-child-task.ts"
+      ],
+      "removeByPhase": "P3",
+      "migrationId": "M14"
+    },
+    {
+      "id": "protocol-data-only",
+      "fromPaths": [
+        "packages/protocol/src/"
+      ],
+      "targetPackages": [
+        "@vykor/agent-contracts"
+      ],
+      "allowTargetPaths": [
+        "packages/agent-contracts/src/tool-data.ts",
+        "packages/agent-contracts/src/permissions.ts"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/agent-contracts(?:/(?!tool-data$|permissions$).*)?$"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30",
+      "symbols": [
+        "^(?:PermissionChecker|AgentPermissionRequest|AgentPermissionDecision|PermissionDecision|PermissionMode)$"
+      ]
+    },
+    {
+      "id": "retired-kernel-paths",
+      "fromPaths": [
+        "packages/",
+        "apps/",
+        "tests/"
+      ],
+      "forbidSpecifiers": [
+        "(?:^|/)agent-runtime/src/(?:framework-agent-run|event-source|agent|kernel|runtime-builder)(?:\\.[cm]?[jt]sx?)?$"
+      ],
+      "forbidPaths": [
+        "packages/agent-runtime/src/framework-agent-run.ts",
+        "packages/agent-runtime/src/event-source.ts",
+        "packages/agent-runtime/src/agent.ts",
+        "packages/agent-runtime/src/kernel.ts",
+        "packages/agent-runtime/src/runtime-builder.ts"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30"
+    },
+    {
+      "id": "protocol-layering-declarations",
+      "fromPaths": [
+        "packages/host-config/src/",
+        "packages/sandbox/src/",
+        "packages/jobs/src/",
+        "packages/terminal/src/",
+        "packages/plugins/src/",
+        "packages/mcp/src/",
+        "packages/services/src/",
+        "packages/channels/src/",
+        "packages/agent-runtime/src/"
+      ],
+      "targetPackages": [
+        "@vykor/protocol"
+      ],
+      "traceTypes": true,
+      "removeByPhase": "P13",
+      "migrationId": "M40"
+    },
+    {
+      "id": "server-non-http-protocol",
+      "fromPaths": [
+        "packages/server/src/application/",
+        "packages/server/src/commands/",
+        "packages/server/src/daemon/",
+        "packages/server/src/daemon-host/",
+        "packages/server/src/jobs/",
+        "packages/server/src/permissions/",
+        "packages/server/src/runtime/",
+        "packages/server/src/session/",
+        "packages/server/src/shared/",
+        "packages/server/src/terminal/"
+      ],
+      "targetPackages": [
+        "@vykor/protocol"
+      ],
+      "allowTargetPaths": [],
+      "forbidSpecifiers": [
+        "^@vykor/protocol(?:/|$)"
+      ],
+      "traceTypes": true,
+      "removeByPhase": "P11",
+      "migrationId": "M38"
+    },
+    {
+      "id": "pure-data-entries",
+      "fromPaths": [
+        "packages/json-data/",
+        "packages/plugin-contracts/",
+        "packages/domain-contracts/"
+      ],
+      "fromFiles": [
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts"
+      ],
+      "allowed": [
+        "@vykor/json-data",
+        "@vykor/plugin-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/agent-contracts",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "allowSelfPaths": [
+        "packages/json-data/src/",
+        "packages/plugin-contracts/src/",
+        "packages/domain-contracts/src/",
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts",
+        "packages/agent-contracts/src/permissions.ts",
+        "packages/agent-contracts/src/tool-data.ts"
+      ],
+      "allowTargetPaths": [
+        "packages/json-data/src/",
+        "packages/plugin-contracts/src/",
+        "packages/domain-contracts/src/",
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts",
+        "packages/agent-contracts/src/permissions.ts",
+        "packages/agent-contracts/src/tool-data.ts"
+      ],
+      "allowExternal": [],
+      "forbidBuiltins": true,
+      "forbidTypeReferences": [
+        "^(?:AbortSignal|AbortController|Promise|Disposable|AsyncDisposable|FileHandle|ChildProcess|Socket|.*Repository)$",
+        "^NodeJS(?:\\.|$)"
+      ],
+      "traceTypes": true,
+      "removeByPhase": "P13",
+      "migrationId": "M40",
+      "testExternal": [
+        "node:crypto",
+        "node:fs"
+      ]
+    },
+    {
+      "id": "protocol-portable-data",
+      "fromPaths": [
+        "packages/protocol/src/"
+      ],
+      "allowed": [
+        "@vykor/agent-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "forbidBuiltins": true,
+      "allowExternal": [],
+      "traceTypes": true,
+      "removeByPhase": "P12",
+      "migrationId": "M39",
+      "testExternal": [
+        "node:crypto",
+        "node:fs"
+      ],
+      "forbidTypeReferences": [
+        "^(?:AbortSignal|AbortController|Promise|Disposable|AsyncDisposable|FileHandle|ChildProcess|Socket|.*Repository)$",
+        "^NodeJS(?:\\.|$)"
+      ]
+    },
+    {
+      "id": "client-canonical-data-origins",
+      "fromPaths": [
+        "packages/client/src/"
+      ],
+      "targetPackages": [
+        "@vykor/agent-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "allowTargetPaths": [
+        "packages/agent-contracts/src/tool-data.ts",
+        "packages/agent-contracts/src/permissions.ts",
+        "packages/domain-contracts/src/",
+        "packages/plugin-contracts/src/",
+        "packages/json-data/src/json.ts",
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts"
+      ],
+      "removeByPhase": "P12",
+      "migrationId": "M39"
+    },
+    {
+      "id": "storage-plugin-data",
+      "fromPaths": [
+        "packages/services/src/database/",
+        "packages/services/src/sessions/",
+        "packages/services/src/conversations/",
+        "packages/services/src/runs/",
+        "packages/services/src/goals/",
+        "packages/services/src/permissions/",
+        "packages/services/src/workflows/",
+        "packages/services/src/attachments/",
+        "packages/services/src/plugin-apps/",
+        "packages/services/src/notes/",
+        "packages/services/src/session-runtime/",
+        "packages/services/src/projects/",
+        "packages/services/src/schedules/",
+        "packages/services/src/channels/",
+        "packages/services/src/token-estimation/"
+      ],
+      "targetPackages": [
+        "@vykor/plugin-contracts"
+      ],
+      "allowTargetPaths": [
+        "packages/plugin-contracts/src/manifest.ts",
+        "packages/plugin-contracts/src/runtime-data.ts",
+        "packages/plugin-contracts/src/limits.ts"
+      ],
+      "removeByPhase": "P13",
+      "migrationId": "M40"
+    },
+    {
+      "id": "protocol-capability-data-entries",
+      "fromPaths": [
+        "packages/protocol/src/"
+      ],
+      "targetPackages": [
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "allowTargetPaths": [
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/(?:jobs|terminal)(?:/(?!contracts$).*)?$"
+      ],
+      "traceTypes": true,
+      "removeByPhase": "P13",
+      "migrationId": "M40"
+    }
+  ],
+  "stageExceptions": []
+}

@@ -1,11 +1,12 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolHostPolicyPort } from "../ports/policy.js";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
 import { sandboxNetworkGuard } from "./sandbox-network.js";
 import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebFetchFormat, WebRuntimeLike } from "./types.js";
 
-export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime): ToolDefinition {
+export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime, host: ToolHostPolicyPort = {}): ToolDefinition {
   return {
     name: "WebFetch",
     description: "Fetch one web page and return compact readable text.",
@@ -27,7 +28,7 @@ export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime):
       required: ["url"],
     },
     async execute(input, context) {
-      const blocked = sandboxNetworkGuard(context);
+      const blocked = sandboxNetworkGuard(context, host);
       if (blocked) return blocked;
       const url = input.url as string;
       const maxChars = (input.maxChars as number) ?? 12000;

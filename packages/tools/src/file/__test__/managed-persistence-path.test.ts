@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getConfigDir, getProjectMemoryDir } from "@vykor/core";
+import { getConfigDir, getProjectMemoryDir } from "@vykor/host-config";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { managedPersistencePathKind } from "../managed-persistence-path.js";

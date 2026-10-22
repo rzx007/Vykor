@@ -3,15 +3,10 @@ import {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
 } from "@vykor/services";
-import {
-  sessionUserInputText,
-  assertPromptMetadataAllowed,
-  readRuntimeMetadata,
-  type SessionInputRecord,
-  type SessionRecord,
-  type SessionRunRecord,
-  type SessionUserInputItem,
-} from "@vykor/protocol";
+import { sessionUserInputText, assertPromptMetadataAllowed } from "@vykor/domain-contracts/inputs";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
+import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { ApplicationError } from "../../shared/application-error.js";
 
 import type {

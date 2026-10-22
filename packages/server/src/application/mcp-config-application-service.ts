@@ -2,7 +2,6 @@ import type { McpOAuthCredentialStore as McpOAuthCredentialStoreContract } from 
 import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@vykor/auth";
 import {
   assertValidMcpServerConfig,
-  createUnavailableMcpRuntimeCoordinator,
   loadSettings,
   McpServerConfigError,
   SettingsConflictError,
@@ -11,12 +10,15 @@ import {
   type McpAuthServerSnapshot,
   type McpOAuthAuthStatus,
   type McpRemoteServerConfig,
-  type McpRuntimeConnectionCoordinator,
   type McpRuntimeStatus,
   type McpRuntimeSyncResult,
   type McpServerConfig,
   type Settings,
-} from "@vykor/core";
+} from "@vykor/host-config";
+import {
+  createUnavailableMcpRuntimeCoordinator,
+  type McpRuntimeConnectionCoordinator,
+} from "@vykor/mcp";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 
 import { McpOAuthApplicationService, type McpOAuthSnapshot } from "./mcp-oauth-application-service.js";

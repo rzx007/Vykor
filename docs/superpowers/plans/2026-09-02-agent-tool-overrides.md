@@ -12,26 +12,26 @@
 
 ## 文件结构
 
-- 修改 `packages/core/src/types/tools.ts`：定义 Tool 来源、诊断结果和严格 Registry 接口。
+- 修改 `packages/agent-contracts/src/tools.ts`：定义 Tool 来源、诊断结果和严格 Registry 接口。
 - 修改 `packages/core/src/engine/tool-registry.ts`：实现新增/覆盖互斥、稳定错误和来源记录。
 - 修改 `packages/core/src/engine/index.test.ts`：锁定 Registry 的新增、覆盖、拼写错误和注销行为。
 - 修改 `packages/core/src/index.ts`：导出新增类型和错误。
 - 修改 `packages/permissions/src/index.ts`：允许 Runtime 标记失去内置本地只读信任的 Tool 名称。
 - 修改 `packages/permissions/src/index.test.ts`：验证覆盖后的 `Read` 不再按名称自动放行。
 - 修改 `packages/tools/src/registry.ts`：将默认 Tool 明确登记为 `builtin`。
-- 修改 `packages/agent-runtime/src/agent-options.ts`：增加 `tools` 与 `toolOverrides` 公共配置。
-- 修改 `packages/agent-runtime/src/default-runtime.ts`：原子应用调用方 Tool、修正可见性计算和权限信任。
-- 修改 `packages/agent-runtime/src/default-runtime.test.ts`：覆盖配置验证、过滤和权限测试。
-- 修改 `packages/agent-runtime/src/agent-composition.ts`：将 Tool 配置传入 Runtime 装配。
-- 修改 `packages/agent-runtime/src/child-agent-options.ts`：显式传播父级 Tool 配置。
-- 修改 `packages/agent-runtime/src/child-agent-options.test.ts`：锁定父子继承和对象身份。
-- 修改 `packages/agent-runtime/src/agent.ts`：扩展 `agent.inspect().tools` 来源诊断。
-- 修改 `packages/agent-runtime/src/agent.test.ts`：验证公开 API、执行结果和 inspect。
-- 修改 `packages/agent-runtime/src/extensions.ts`：给第三方 Extension 只暴露新增语义并标记来源。
-- 修改 `packages/agent-runtime/src/runtime-integrations.ts`：标记 Extension、MCP、Remember 来源并拒绝冲突。
-- 修改 `packages/agent-runtime/src/native-tools/activate.ts`：标记 Native Plugin 来源，保留冲突失败。
-- 修改 `packages/agent-runtime/src/mcp-auth.ts`：MCP 重连注册时标记来源。
-- 修改 `packages/agent-runtime/src/extensions.test.ts`：验证 Extension/Plugin 不覆盖现有 Tool。
+- 修改 `packages/agent-runtime/src/node/runtime/agent-options.ts`：增加 `tools` 与 `toolOverrides` 公共配置。
+- 修改 `packages/agent-runtime/src/node/runtime/default-runtime.ts`：原子应用调用方 Tool、修正可见性计算和权限信任。
+- 修改 `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`：覆盖配置验证、过滤和权限测试。
+- 修改 `packages/agent-runtime/src/node/runtime/agent-composition.ts`：将 Tool 配置传入 Runtime 装配。
+- 修改 `packages/agent-runtime/src/node/runtime/child-agent-options.ts`：显式传播父级 Tool 配置。
+- 修改 `packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`：锁定父子继承和对象身份。
+- 修改 `packages/agent-runtime/src/kernel/agent.ts`：扩展 `agent.inspect().tools` 来源诊断。
+- 修改 `packages/agent-runtime/src/node/runtime/agent.test.ts`：验证公开 API、执行结果和 inspect。
+- 修改 `packages/agent-runtime/src/node/plugins/extensions.ts`：给第三方 Extension 只暴露新增语义并标记来源。
+- 修改 `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：标记 Extension、MCP、Remember 来源并拒绝冲突。
+- 修改 `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`：标记 Native Plugin 来源，保留冲突失败。
+- 修改 `packages/agent-runtime/src/node/mcp/mcp-auth.ts`：MCP 重连注册时标记来源。
+- 修改 `packages/agent-runtime/src/node/plugins/extensions.test.ts`：验证 Extension/Plugin 不覆盖现有 Tool。
 - 修改 `packages/tools/src/file/read.ts`：明确 `Read` 支持 `attachment://` 且不是 MCP Resource。
 - 修改 `packages/tools/src/file/__test__/read.test.ts`：锁定新的模型可见描述和既有读取行为。
 - 修改 `packages/server/src/application/attachment-routing/attachment-capability-router.ts`：大文本提示提供精确 `Read` 调用并禁止 `ReadMcpResource`。
@@ -40,7 +40,7 @@
 ### 任务 1：严格 ToolRegistry 与来源诊断
 
 **文件：**
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 修改：`packages/core/src/engine/index.test.ts`
 - 修改：`packages/core/src/index.ts`
@@ -89,7 +89,7 @@ pnpm --filter @vykor/core test -- src/engine/index.test.ts
 
 - [x] **步骤 3：实现 Registry 类型与严格语义**
 
-在 `packages/core/src/types/tools.ts` 增加：
+在 `packages/agent-contracts/src/tools.ts` 增加：
 
 ```ts
 export interface ToolRegistrationSource {
@@ -160,7 +160,7 @@ pnpm --filter @vykor/core check-types
 - [x] **步骤 6：提交 Registry 语义**
 
 ```powershell
-git add packages/core/src/types/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/core/src/engine/query-engine.ts packages/core/src/index.ts
+git add packages/agent-contracts/src/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/core/src/engine/query-engine.ts packages/core/src/index.ts
 git commit -m "feat(core): make tool overrides explicit"
 ```
 
@@ -170,14 +170,14 @@ git commit -m "feat(core): make tool overrides explicit"
 - 修改：`packages/permissions/src/index.ts`
 - 修改：`packages/permissions/src/index.test.ts`
 - 修改：`packages/tools/src/registry.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/agent.test.ts`
-- 修改：`packages/agent-runtime/src/child-agent-options.ts`
-- 修改：`packages/agent-runtime/src/child-agent-options.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`
 
 - [x] **步骤 1：先写 Agent API 与配置校验失败测试**
 
@@ -306,19 +306,19 @@ pnpm --filter @vykor/agent-runtime check-types
 - [x] **步骤 8：提交 Agent API**
 
 ```powershell
-git add packages/permissions/src/index.ts packages/permissions/src/index.test.ts packages/tools/src/registry.ts packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/agent-composition.ts packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime.test.ts packages/agent-runtime/src/agent.ts packages/agent-runtime/src/agent.test.ts packages/agent-runtime/src/child-agent-options.ts packages/agent-runtime/src/child-agent-options.test.ts
+git add packages/permissions/src/index.ts packages/permissions/src/index.test.ts packages/tools/src/registry.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent.test.ts packages/agent-runtime/src/node/runtime/child-agent-options.ts packages/agent-runtime/src/node/runtime/child-agent-options.test.ts
 git commit -m "feat(agent-runtime): support explicit tool overrides"
 ```
 
 ### 任务 3：阻止 Extension、Plugin 与 MCP 隐式覆盖
 
 **文件：**
-- 修改：`packages/agent-runtime/src/extensions.ts`
-- 修改：`packages/agent-runtime/src/runtime-integrations.ts`
-- 修改：`packages/agent-runtime/src/native-tools/activate.ts`
-- 修改：`packages/agent-runtime/src/mcp-auth.ts`
-- 修改：`packages/agent-runtime/src/extensions.test.ts`
-- 修改：`packages/agent-runtime/src/mcp-auth.test.ts`
+- 修改：`packages/agent-runtime/src/node/plugins/extensions.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
+- 修改：`packages/agent-runtime/src/node/plugins/native-tools/activate.ts`
+- 修改：`packages/agent-runtime/src/node/mcp/mcp-auth.ts`
+- 修改：`packages/agent-runtime/src/node/plugins/extensions.test.ts`
+- 修改：`packages/agent-runtime/src/node/mcp/mcp-auth.test.ts`
 
 - [x] **步骤 1：编写集成来源和冲突测试**
 
@@ -393,7 +393,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [x] **步骤 6：提交集成冲突保护**
 
 ```powershell
-git add packages/agent-runtime/src/extensions.ts packages/agent-runtime/src/runtime-integrations.ts packages/agent-runtime/src/native-tools/activate.ts packages/agent-runtime/src/mcp-auth.ts packages/agent-runtime/src/extensions.test.ts packages/agent-runtime/src/mcp-auth.test.ts
+git add packages/agent-runtime/src/node/plugins/extensions.ts packages/agent-runtime/src/node/runtime/runtime-integrations.ts packages/agent-runtime/src/node/plugins/native-tools/activate.ts packages/agent-runtime/src/node/mcp/mcp-auth.ts packages/agent-runtime/src/node/plugins/extensions.test.ts packages/agent-runtime/src/node/mcp/mcp-auth.test.ts
 git commit -m "fix(agent-runtime): prevent integration tool shadowing"
 ```
 

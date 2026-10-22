@@ -1,13 +1,7 @@
-import type {
-  McpRuntimeConnectionCoordinator,
-  McpServerIdentity,
-} from "@vykor/core";
-import {
-  MCP_OAUTH_LOGIN_COMPLETED_EVENT,
-  parseMcpOAuthCallbackInput,
-  parseMcpOAuthLoginInput,
-  type OAuthOperationEvent,
-} from "@vykor/protocol";
+import type { McpRuntimeConnectionCoordinator } from "@vykor/mcp";
+import type { McpServerIdentity } from "@vykor/host-config";
+import { MCP_OAUTH_LOGIN_COMPLETED_EVENT, parseMcpOAuthCallbackInput, parseMcpOAuthLoginInput } from "@vykor/protocol";
+import type { OAuthOperationEvent } from "@vykor/protocol";
 import { Hono, type Context } from "hono";
 
 import {

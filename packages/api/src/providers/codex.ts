@@ -1,15 +1,8 @@
 import { platform, machine } from "node:os";
 import { normalizeTokenMetering } from "./token-metering.js";
-import type { UsageSnapshot } from "@vykor/core";
-import type {
-  ContentBlock,
-  Message,
-  StreamEvent,
-  StreamingMessageClient,
-  StreamMessageParams,
-  ToolDefinition,
-  ToolUseBlock,
-} from "@vykor/core";
+import type { UsageSnapshot } from "@vykor/agent-contracts";
+import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
+import type { StreamEvent, StreamingMessageClient, StreamMessageParams, ToolDefinition } from "@vykor/agent-contracts";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
   AuthenticationFailure,
@@ -20,7 +13,7 @@ import {
 import { createRequestLifecycle } from "./retry";
 import { parseToolInput } from "./tool-input.js";
 import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
-import { ModelRequestFailure } from "@vykor/core";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
@@ -302,7 +295,7 @@ function extractAccountId(token: string): string {
 }
 
 async function convertMessagesToCodex(
-  messages: Message[],
+  messages: readonly Message[],
   signal?: AbortSignal,
 ): Promise<Array<Record<string, unknown>>> {
   const result: Array<Record<string, unknown>> = [];

@@ -1,9 +1,4 @@
-import type {
-  ExecutionKind,
-  ExecutionObservation,
-  ExecutionObservationWarning,
-  ExecutionOutcome,
-} from "@vykor/protocol";
+import type { ExecutionKind, ExecutionObservation, ExecutionObservationWarning, ExecutionOutcome } from "./query-models.js";
 import { describe, expect, it } from "vitest";
 
 import { ExecutionObservationService } from "./execution-observation-service.js";

@@ -1,8 +1,7 @@
-import {
-  assertValidMcpServerConfig,
-  type ToolDefinition,
-  type ToolResult,
-} from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import type { ToolContext } from "@vykor/agent-contracts";
+import { assertValidMcpServerConfig } from "@vykor/host-config";
+import { type ToolDefinition, type ToolResult } from "@vykor/agent-contracts";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { PermissionChecker } from "@vykor/permissions";
 import { askInstallConfirmation } from "./ask-install-confirmation.js";
@@ -20,6 +19,10 @@ const reply = (text: string, isError = false): ToolResult => ({
 export function createMcpConfigureTool(
   service: Pick<McpConfigApplicationService, "list" | "add">,
   ownerSessionId: string,
+  host: {
+    settings?: Settings;
+    canConfigure?(context: ToolContext): boolean;
+  } = {},
 ): ToolDefinition {
   return {
     name: "McpConfigure",
@@ -74,8 +77,7 @@ export function createMcpConfigureTool(
       // Children inherit tool definitions, but not authority to mutate host-global configuration.
       if (
         context.sessionId !== ownerSessionId ||
-        context.capabilityView?.pluginId ||
-        context.agent?.capabilityView?.pluginId
+        host.canConfigure?.(context) === false
       ) {
         return reply(
           "全局 MCP 配置仅能由主会话管理，请交由用户所在主会话处理。",
@@ -103,7 +105,7 @@ export function createMcpConfigureTool(
         if (config.type === "stdio") {
           // A dedicated setup tool must not turn a forbidden Shell command into an allowed process.
           const policy = new PermissionChecker({
-            ...context.settings?.permission,
+            ...host.settings?.permission,
             mode: "default",
             cwd: context.cwd,
           });

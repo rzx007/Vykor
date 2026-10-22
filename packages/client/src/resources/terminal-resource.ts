@@ -1,18 +1,5 @@
-import type {
-  TerminalCreateRequest,
-  TerminalEvent,
-  TerminalReadResult,
-  TerminalResizeRequest,
-  TerminalSessionInfo,
-  TerminalSignal,
-  TerminalSource,
-  TerminalWriteRequest,
-} from "@vykor/protocol";
-import {
-  decodeTerminalEvent,
-  decodeTerminalReadResult,
-  decodeTerminalSessionInfo,
-} from "@vykor/protocol";
+import type { TerminalCreateRequest, TerminalEvent, TerminalReadResult, TerminalResizeRequest, TerminalSessionInfo, TerminalSignal, TerminalSource, TerminalWriteRequest } from "@vykor/protocol";
+import { decodeTerminalEvent, decodeTerminalReadResult, decodeTerminalSessionInfo } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import { responseArray, responseField } from "../transport/http-transport.js";
 import type { SseTransport } from "../transport/sse-transport.js";

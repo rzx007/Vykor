@@ -33,7 +33,7 @@
 ### Task 1: core 事件与消息契约
 
 **Files:**
-- Modify: `packages/core/src/types/events.ts`
+- Modify: `packages/agent-contracts/src/events.ts`
 - Modify: `packages/core/src/types/messages.ts:15-25`
 - Modify: `packages/core/src/types/runtime.ts:241-248`
 - Modify: `packages/core/src/index.ts:17-25`
@@ -81,7 +81,7 @@ Expected: FAIL —— `reasoning_delta` 不在 `StreamEvent` 联合里（类型�
 
 - [ ] **Step 3: 实现类型**
 
-`packages/core/src/types/events.ts` 新增并加入联合：
+`packages/agent-contracts/src/events.ts` 新增并加入联合：
 
 ```ts
 export type ReasoningSource = "reasoning_content" | "think";
@@ -147,7 +147,7 @@ Expected: PASS，类型无错误。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/core/src/types/events.ts packages/core/src/types/messages.ts packages/core/src/types/runtime.ts packages/core/src/index.ts packages/core/src/types/reasoning-contracts.test.ts
+git add packages/agent-contracts/src/events.ts packages/core/src/types/messages.ts packages/core/src/types/runtime.ts packages/core/src/index.ts packages/core/src/types/reasoning-contracts.test.ts
 git commit -m "feat(core): 新增 reasoning 事件与助手消息思考字段"
 ```
 
@@ -678,8 +678,8 @@ git commit -m "fix(api): 思考内容回传改读消息字段，删除按下标�
 ### Task 6: agent-runtime 事件映射
 
 **Files:**
-- Modify: `packages/agent-runtime/src/framework-agent-run.ts:240-277`
-- Test: `packages/agent-runtime/src/stream-event-mapping.test.ts`（新建）
+- Modify: `packages/agent-runtime/src/kernel/framework-agent-run.ts:240-277`
+- Test: `packages/agent-runtime/src/node/runtime/stream-event-mapping.test.ts`（新建）
 
 **Interfaces:**
 - Consumes: Task 1 的 `ReasoningDeltaEvent`、`output.reasoning.delta`
@@ -688,7 +688,7 @@ git commit -m "fix(api): 思考内容回传改读消息字段，删除按下标�
 - [ ] **Step 1: 写失败测试**
 
 ```ts
-// packages/agent-runtime/src/stream-event-mapping.test.ts
+// packages/agent-runtime/src/node/runtime/stream-event-mapping.test.ts
 import { describe, expect, it } from "vitest";
 import { streamEventToAgentEvent } from "./framework-agent-run.js";
 
@@ -728,7 +728,7 @@ Expected: FAIL —— `streamEventToAgentEvent` 未导出。
 
 - [ ] **Step 3: 实现**
 
-在 `packages/agent-runtime/src/framework-agent-run.ts` 的 import 旁加上类型导入（若尚未导入）：
+在 `packages/agent-runtime/src/kernel/framework-agent-run.ts` 的 import 旁加上类型导入（若尚未导入）：
 
 ```ts
 import type { AgentEventInput } from "@vykor/core";
@@ -785,7 +785,7 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/agent-runtime/src/framework-agent-run.ts packages/agent-runtime/src/stream-event-mapping.test.ts
+git add packages/agent-runtime/src/kernel/framework-agent-run.ts packages/agent-runtime/src/node/runtime/stream-event-mapping.test.ts
 git commit -m "feat(agent-runtime): reasoning_delta 映射为 output.reasoning.delta"
 ```
 

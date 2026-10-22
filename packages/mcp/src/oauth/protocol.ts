@@ -1,4 +1,4 @@
-import type { McpOAuthCredentialRecord } from "@vykor/core";
+import type { McpOAuthCredentialRecord } from "@vykor/host-config";
 import {
   discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,

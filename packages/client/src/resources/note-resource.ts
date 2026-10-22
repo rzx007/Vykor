@@ -1,8 +1,4 @@
-import type {
-  CreateNoteInput,
-  NoteRecord,
-  UpdateNoteInput,
-} from "@vykor/protocol";
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/protocol";
 
 import type { HttpTransport } from "../transport/http-transport.js";
 

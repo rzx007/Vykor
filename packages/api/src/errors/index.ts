@@ -2,7 +2,7 @@ import {
   ModelRequestFailure,
   type ModelFailureInfo,
   type ModelFailureKind,
-} from "@vykor/core";
+} from "@vykor/agent-contracts";
 
 export class AuthenticationFailure extends Error {
   constructor(message: string) {

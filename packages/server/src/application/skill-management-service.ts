@@ -9,7 +9,7 @@ import {
   resolve,
   sep,
 } from "node:path";
-import { getSkillsDir } from "@vykor/core";
+import { getSkillsDir } from "@vykor/host-config";
 import {
   BUNDLED_SKILLS,
   SkillLoader,

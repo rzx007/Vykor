@@ -6,8 +6,22 @@
     "allowJs": true,
     "checkJs": true,
     "paths": {
-      "@vykor/plugins/sdk": ["./src/sdk.ts"]
+      "@vykor/coordinator/definitions": [
+        "../coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../coordinator/src/workflow/index.ts"
+      ],
+      "@vykor/plugins/sdk": [
+        "./src/sdk.ts"
+      ]
     }
   },
-  "include": ["../../examples/plugins/text-inspector/tools/**/*.mjs", "../../plugins/knowledge-work/tools/**/*.mjs"]
+  "include": [
+    "../../examples/plugins/text-inspector/tools/**/*.mjs",
+    "../../plugins/knowledge-work/tools/**/*.mjs"
+  ]
 }

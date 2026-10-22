@@ -88,7 +88,7 @@ Write 声明 `{ property: "content", referenceProperty: "content_from" }`。这�
 
 | 文件 | 职责 |
 |---|---|
-| `packages/core/src/types/tools.ts` | 可选的参数复用声明 |
+| `packages/agent-contracts/src/tools.ts` | 可选的参数复用声明 |
 | `packages/core/src/engine/tool-input-reuse.ts` | 仅对现有消息数据展开单个内容参数、生成短提示 |
 | `packages/core/src/engine/query-tool-preparation.ts` | 在校验与权限之前调用展开逻辑 |
 | `packages/core/src/engine/query-engine.ts` | 传入消息历史，在失败反馈中提供引用提示 |

@@ -1,4 +1,4 @@
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext, ToolResult } from "@vykor/agent-contracts";
 import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
 import type {
   AgentTerminalHost,
@@ -7,9 +7,9 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  terminalOpenTool,
+  createTerminalTools,
 } from "../terminal-tools.js";
-import { jobCancelTool, jobSendTool } from "../../job/job-tools.js";
+import { createJobTools } from "../../job/job-tools.js";
 
 const terminal: TerminalSessionInfo = {
   id: "terminal-1",
@@ -27,9 +27,21 @@ const terminal: TerminalSessionInfo = {
 };
 
 describe("persistent terminal tools", () => {
+  it("does not use a context host when no port was injected", async () => {
+    const open = vi.fn(async () => terminal);
+    const result = await createTerminalTools()[0]!.execute({}, createContext({ open }));
+    expect(result.isError).toBe(true);
+    expect(open).not.toHaveBeenCalled();
+  });
+  it("uses the injected host with its method receiver", async () => {
+    const host = { terminal, async open() { return this.terminal; } };
+    const tool = createTerminalTools(host)[0]!;
+    const result = await tool.execute({}, { cwd: terminal.cwd, sessionId: "session-1" });
+    expect(parseResult(result)).toMatchObject({ jobId: terminal.id });
+  });
   it("starts a named command terminal and returns its job handle", async () => {
     const open = vi.fn(async (input) => ({ ...terminal, command: input.command }));
-    const result = await terminalOpenTool.execute({ name: "preview", command: "npm run dev" }, createContext({ open }));
+    const result = await executeTerminal({ name: "preview", command: "npm run dev" }, createContext({ open }));
     expect(parseResult(result)).toMatchObject({ kind: "terminal", action: "open", terminal: { command: "npm run dev" }, jobId: "terminal-1" });
     expect(open).toHaveBeenCalledWith(expect.objectContaining({ command: "npm run dev" }));
   });
@@ -38,7 +50,7 @@ describe("persistent terminal tools", () => {
     const open = vi.fn(async () => terminal);
     const context = createContext({ open });
 
-    const result = await terminalOpenTool.execute(
+    const result = await executeTerminal(
       { name: "dev server" },
       context,
     );
@@ -60,7 +72,7 @@ describe("persistent terminal tools", () => {
 
   it("fails before touching the host when no durable session exists", async () => {
     const open = vi.fn(async () => terminal);
-    const result = await terminalOpenTool.execute(
+    const result = await executeTerminal(
       {},
       {
         cwd: terminal.cwd,
@@ -81,10 +93,10 @@ describe("persistent terminal tools", () => {
       jobs: createJobs({ send, cancel }),
     };
 
-    const opened = parseResult(await terminalOpenTool.execute({}, context));
+    const opened = parseResult(await executeTerminal({}, context));
     const openedTerminal = opened.terminal as { id: string };
-    await jobSendTool.execute({ jobId: openedTerminal.id, data: "hello\n" }, context);
-    await jobCancelTool.execute({ jobId: openedTerminal.id, reason: "done" }, context);
+    await createJobTools(context.jobs).find(tool => tool.name === "JobSend")!.execute({ jobId: openedTerminal.id, data: "hello\n" }, context);
+    await createJobTools(context.jobs).find(tool => tool.name === "JobCancel")!.execute({ jobId: openedTerminal.id, reason: "done" }, context);
 
     expect(openedTerminal.id).toBe("terminal-1");
     expect(send).toHaveBeenCalledWith({
@@ -144,10 +156,14 @@ function createJobs(overrides: Partial<AgentJobHost>): AgentJobHost {
 }
 
 function parseResult(
-  result: Awaited<ReturnType<typeof terminalOpenTool.execute>>,
+  result: ToolResult,
 ): Record<string, unknown> {
   const block = result.content[0];
   if (!block || block.type !== "text")
     throw new Error("Expected a text tool result");
   return JSON.parse(block.text) as Record<string, unknown>;
+}
+
+function executeTerminal(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+  return createTerminalTools(context.terminal)[0]!.execute(input, context);
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { assembleContextUsageSnapshot, type Settings } from "@vykor/core";
+import { assembleContextUsageSnapshot } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 
 import { ContextUsageCache } from "../context-usage-cache.js";
 import { createDefaultContextService } from "./context-service.js";

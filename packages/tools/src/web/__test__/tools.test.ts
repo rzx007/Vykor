@@ -1,3 +1,6 @@
+
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+
 import { describe, expect, it } from "vitest";
 import { createWebFetchTool } from "../fetch.js";
 import { createWebSearchTool } from "../search.js";
@@ -12,8 +15,8 @@ describe("web tools", () => {
   it.each([{ enabled: false, mode: "none" }, { enabled: true, mode: "bridge" }, { enabled: true, mode: "host" }, { enabled: true, mode: "proxy" }] as const)("allows normal web traffic for sandbox %j", async policy => {
     const web = runtime({ async search() { return { provider: "fixture", sources: [] }; }, async fetch() { return { provider: "fixture", url: "https://example.com", status: 200, statusText: "OK", ok: true, contentType: "text/plain", body: "ok", truncated: false }; } });
     const context = { cwd: process.cwd(), settings: { model: "m", apiFormat: "openai" as const, maxTurns: 1, permission: { mode: "default" as const }, sandbox: { enabled: policy.enabled, network: { mode: policy.mode } } } };
-    expect(await createWebFetchTool(web).execute({ url: "https://example.com" }, context)).toMatchObject({ executionState: "completed" });
-    expect(await createWebSearchTool(web).execute({ query: "fixture" }, context)).toMatchObject({ executionState: "completed" });
+    expect(await executeToolFixture(host => createWebFetchTool(web, host), { url: "https://example.com" }, context)).toMatchObject({ executionState: "completed" });
+    expect(await executeToolFixture(host => createWebSearchTool(web, host), { query: "fixture" }, context)).toMatchObject({ executionState: "completed" });
   });
   it.each(["fetch", "search"] as const)("blocks host %s before network access when sandbox network is none", async (kind) => {
     let requests = 0;
@@ -21,23 +24,22 @@ describe("web tools", () => {
       async fetch() { requests++; throw new Error("unexpected network access"); },
       async search() { requests++; throw new Error("unexpected network access"); },
     });
-    const tool = kind === "fetch" ? createWebFetchTool(web) : createWebSearchTool(web);
+    const tool = kind === "fetch" ? createWebFetchTool(web,{settings:{sandbox:{enabled:true,network:{mode:"none"}}} as any}) : createWebSearchTool(web,{settings:{sandbox:{enabled:true,network:{mode:"none"}}} as any});
     const result = await tool.execute({ url: "https://private.example", query: "secret" }, { cwd: process.cwd(), settings: { model: "m", apiFormat: "openai", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: true, network: { mode: "none" } } } });
     expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
     expect(requests).toBe(0);
   });
   it("records an empty search as completed without copying the query into its summary", async () => {
-    const result = await createWebSearchTool(runtime({ async search() { return { provider: "test", sources: [] }; } }))
-      .execute({ query: "secret-query" }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebSearchTool(runtime({ async search() { return { provider: "test", sources: [] }; } }), host), { query: "secret-query" }, { cwd: process.cwd() });
     expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("0 results") });
     expect(result.compactSummary).not.toContain("secret-query");
   });
 
   it("keeps ambiguous HTTP 403 as provider failure and gives a condition check", async () => {
-    const result = await createWebFetchTool(runtime({ async fetch() { return {
+    const result = await executeToolFixture(host => createWebFetchTool(runtime({ async fetch() { return {
       provider: "test", url: "https://example.com", status: 403, statusText: "Forbidden", ok: false,
       contentType: "text/plain", body: "", truncated: false,
-    }; } })).execute({ url: "https://example.com" }, { cwd: process.cwd() });
+    }; } }), host), { url: "https://example.com" }, { cwd: process.cwd() });
     expect(result).toMatchObject({ isError: true, failureKind: "provider", executionState: "completed" });
     expect(result.recoveryHint).toMatch(/access|访问/i);
   });
@@ -46,7 +48,9 @@ describe("web tools", () => {
     const tool = createWebSearchTool(runtime({
       async search() { return { provider: "test-search", sources: [] }; },
     }));
-    const result = await tool.execute({ query: "rare term" }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebSearchTool(runtime({
+      async search() { return { provider: "test-search", sources: [] }; },
+    }), host), { query: "rare term" }, { cwd: process.cwd() });
     expect(result.isError).not.toBe(true);
     expect(result.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("rare term") });
   });
@@ -65,7 +69,19 @@ describe("web tools", () => {
       },
     }));
 
-    const result = await tool.execute({ query: "vykor", maxResults: 3 }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebSearchTool(runtime({
+      async search(request) {
+        expect(request).toEqual({ query: "vykor", maxResults: 3 });
+        return {
+          provider: "test-search",
+          sources: [{
+            title: "Vykor",
+            url: "https://example.com",
+            snippet: "A result",
+          }],
+        };
+      },
+    }), host), { query: "vykor", maxResults: 3 }, { cwd: process.cwd() });
 
     expect(result.isError).not.toBe(true);
     expect(result.content[0]).toMatchObject({
@@ -86,7 +102,11 @@ describe("web tools", () => {
       },
     }));
 
-    const result = await tool.execute({ query: "x" }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebSearchTool(runtime({
+      async search() {
+        throw new WebProviderError("parse_failed", "unexpected markup");
+      },
+    }), host), { query: "x" }, { cwd: process.cwd() });
 
     expect(result.isError).toBe(true);
     expect(result.content[0]).toMatchObject({
@@ -116,7 +136,25 @@ describe("web tools", () => {
       },
     }));
 
-    const result = await tool.execute({ url: "https://example.com" }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebFetchTool(runtime({
+      async fetch(request) {
+        expect(request).toEqual({
+          url: "https://example.com",
+          maxChars: 12000,
+          format: "text",
+        });
+        return {
+          provider: "test-fetch",
+          url: "https://example.com/final",
+          status: 200,
+          statusText: "OK",
+          ok: true,
+          contentType: "text/plain",
+          body: "Hello",
+          truncated: false,
+        };
+      },
+    }), host), { url: "https://example.com" }, { cwd: process.cwd() });
 
     expect(result.isError).not.toBe(true);
     expect(result.content[0]).toMatchObject({
@@ -141,7 +179,20 @@ describe("web tools", () => {
       },
     }));
 
-    const result = await tool.execute({ url: "https://example.com/missing" }, { cwd: process.cwd() });
+    const result = await executeToolFixture(host => createWebFetchTool(runtime({
+      async fetch() {
+        return {
+          provider: "test-fetch",
+          url: "https://example.com/missing",
+          status: 404,
+          statusText: "Not Found",
+          ok: false,
+          contentType: "text/plain",
+          body: "missing",
+          truncated: false,
+        };
+      },
+    }), host), { url: "https://example.com/missing" }, { cwd: process.cwd() });
 
     expect(result.isError).toBe(true);
     expect(result.content[0]).toMatchObject({

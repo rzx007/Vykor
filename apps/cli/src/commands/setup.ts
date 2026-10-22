@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import * as readline from "node:readline";
 import { CODEX_DEFAULT_MODEL, type ProviderSpec } from "@vykor/api";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { applyProviderConfig } from "./provider";
 
 export interface SetupChoice {
@@ -71,7 +71,7 @@ export function createSetupCommand(): Command {
       const chalk = (await import("chalk")).default;
       const { PROVIDERS } = await import("@vykor/api");
       const { CredentialStorage, describeCodexAuthState } = await import("@vykor/auth");
-      const { loadSettings, updateSettings } = await import("@vykor/core");
+      const { loadSettings, updateSettings } = await import("@vykor/host-config");
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const ask = (q: string): Promise<string> =>

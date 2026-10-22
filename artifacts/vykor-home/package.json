@@ -1,0 +1,18 @@
+{
+  "name": "vykor-home-preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "gsap": "3.15.0",
+    "lenis": "1.3.27",
+    "three": "0.184.0",
+    "vite": "7.3.7"
+  }
+}

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { GoalExternalWait } from "@vykor/protocol";
+import type { GoalExternalWait } from "@vykor/domain-contracts/goals";
 import { SessionStore } from "@vykor/services";
 import { GoalWaitVerifier } from "../goal-wait-verifier.js";
 

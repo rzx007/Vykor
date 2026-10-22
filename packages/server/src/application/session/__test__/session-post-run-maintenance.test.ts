@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "../../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionPostRunMaintenance } from "../session-post-run-maintenance.js";
@@ -47,12 +48,12 @@ describe("SessionPostRunMaintenance", () => {
       getSettings: async () => ({ memory: { enabled: true, autoExtractEnabled: true, autoDreamEnabled: true, sessionMemoryEnabled: false } } as any),
       personalizationUpdater: () => 0, autoDream, log: vi.fn(),
     });
-    await maintenance.run("s1", "run-1", { remember } as any, limits);
+    await maintenance.run("s1", "run-1", {memory:{remember}} as any, limits);
     expect(remember).toHaveBeenCalledWith({ automatic: true, execution: { scope: { sessionId: "s1", runId: "run-1" }, limits } });
     expect(autoDream).not.toHaveBeenCalled();
     limits.check.mockImplementation(() => { throw new Error("budget closed"); });
     remember.mockClear();
-    await maintenance.run("s1", "run-1", { remember } as any, limits);
+    await maintenance.run("s1", "run-1", {memory:{remember}} as any, limits);
     expect(remember).not.toHaveBeenCalled();
   });
   it("never writes automatic memory or personalization for temporary sessions", async () => {
@@ -71,7 +72,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember}} as any);
 
     expect(personalizationUpdater).not.toHaveBeenCalled();
     expect(sessionMemoryWriter).not.toHaveBeenCalled();
@@ -95,7 +96,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember:vi.fn()}} as any);
 
     expect(autoDream).toHaveBeenCalledWith(expect.objectContaining({ recentSessionIds: ["durable"] }));
   });
@@ -114,7 +115,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember:vi.fn()}} as any);
 
     expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
       { id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" },
@@ -141,7 +142,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember}} as any);
 
     expect(personalizationUpdater).toHaveBeenCalledWith([
       { id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" },
@@ -160,7 +161,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember:vi.fn()}} as any);
 
     expect(getSettings).not.toHaveBeenCalled();
   });
@@ -177,7 +178,7 @@ describe("SessionPostRunMaintenance", () => {
       log: vi.fn(),
     });
 
-    await maintenance.run("s1", "run-1", { remember } as any);
+    await maintenance.run("s1", "run-1", {memory:{remember}} as any);
 
     expect(personalizationUpdater).toHaveBeenCalledOnce();
     expect(remember).not.toHaveBeenCalled();
@@ -195,7 +196,7 @@ describe("SessionPostRunMaintenance", () => {
       log,
     });
 
-    await expect(maintenance.run("s1", "run-1", { remember: vi.fn() } as any)).resolves.toBeUndefined();
+    await expect(maintenance.run("s1", "run-1", {memory:{remember:vi.fn()}} as any)).resolves.toBeUndefined();
     expect(log).toHaveBeenCalledWith(expect.objectContaining({
       event: "session.personalization.extract_failed",
       error: "disk full",
@@ -211,7 +212,7 @@ describe("SessionPostRunMaintenance", () => {
     });
 
     await expect(
-      maintenance.run("s1", "run-1", { remember: vi.fn() } as any),
+      maintenance.run("s1", "run-1", {memory:{remember:vi.fn()}} as any),
     ).resolves.toBeUndefined();
     expect(log).toHaveBeenCalledWith(expect.objectContaining({
       event: "session.post_run_maintenance_failed",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord } from "@vykor/core";
+import type { McpOAuthCredentialRecord } from "@vykor/host-config";
 import type { OAuthCallbackController } from "./callback.js";
 import { loginMcpOAuth, revokeMcpOAuthCredential, type McpOAuthCredentialStore } from "./login.js";
 import { McpOAuthRuntime } from "./runtime-auth.js";

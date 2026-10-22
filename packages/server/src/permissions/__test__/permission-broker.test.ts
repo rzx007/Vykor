@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "@vykor/services";
 
-import type { ApprovalReviewOutcome } from "@vykor/protocol";
+import type { ApprovalReviewOutcome } from "@vykor/agent-contracts/permissions";
 import { StorePermissionBroker, type PermissionApprovalReviewHook, type StorePermissionBrokerOptions } from "../permission-broker.js";
 
 function withBroker(

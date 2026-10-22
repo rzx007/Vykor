@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "./../../../../test-helpers/hosted-agent.js";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,7 @@ vi.mock("@vykor/agent-runtime", async (importOriginal) => {
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { createDaemonAgentLoader, readDaemonAgentLocalWorkspace } from "../../../daemon/daemon-agent.js";
 import { SessionStore } from "@vykor/services";
-import { readWorkspaceChangesMetadata } from "@vykor/protocol";
+import { readWorkspaceChangesMetadata } from "@vykor/domain-contracts/workspace-changes";
 import { fileWriteTool } from "../../../../../tools/src/file/write.js";
 import { createExecFileGitExecutor, createGitRunChangeInspector } from "../../auto-review/git-run-change-inspector.js";
 import { SessionEventPublisher } from "../session-event-publisher.js";
@@ -22,7 +23,7 @@ describe("read-only Run workspace observation", () => {
   let repo: string, storeDir: string, store: SessionStore, sessionId: string;
   const git = (args: string[]) => execFileSync("git", args, { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
   const events = () => new SessionEventPublisher(store.conversations, { broadcastSince: () => {}, broadcastEvent: () => {} });
-  const observer = (inspector = createGitRunChangeInspector()) => new SessionWorkspaceChanges({ session: store, events: events(), inspector });
+  const observer = (inspector = createGitRunChangeInspector()) => new SessionWorkspaceChanges({ session: store, events: events(), inspector, captureBudgetMs: 15_000, settleBudgetMs: 30_000 });
   const metadata = (id: string) => readWorkspaceChangesMetadata(store.runs.getRun(id)?.metadata.workspaceChanges);
   const createRun = () => store.runs.createRun({ sessionId }).id;
   beforeEach(() => {
@@ -54,7 +55,8 @@ describe("read-only Run workspace observation", () => {
       runChildForCompletedRun: async () => { childCalls++; throw new Error("off mode must not call a reviewer"); },
     } as any;
     const executor = new SessionRunExecutor({ data: store, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => agent, close: async () => {}, closeIfStale: async () => {} },
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => agent, close: async () => {}, closeIfStale: async () => {} },
       transcriptProjection: { finalizeRunParts: () => {}, projectAttachmentTransformations: () => {} },
       events: events(), traceIdForRun: () => "offline", log: () => {}, workspaceChanges: changes,
       resolveLocalExecutionCwd: () => repo, resolveAutoReviewMode: async () => "off",

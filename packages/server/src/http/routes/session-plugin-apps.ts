@@ -1,5 +1,8 @@
 import { Hono, type Context } from "hono";
-import { PLUGIN_APP_LIMITS, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest, type PluginAppRuntimeLease } from "@vykor/protocol";
+import { pluginAppToolInput, pluginAppConversationInput } from "../mappers/plugin-apps.js";
+import { PLUGIN_APP_DATA_LIMITS, ProtocolValidationError, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest } from "@vykor/protocol";
+import { isPluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
+import type { PluginAppRuntimeLease } from "@vykor/protocol";
 import type { assemblePluginApps } from "../../application/session/plugin-app-assembly.js";
 import type { PluginAppConversationService } from "../../application/session/plugin-app-conversation-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
@@ -11,10 +14,10 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
     if (new URL(c.req.url).search) throw new ApplicationError(400, "应用入口不接受查询参数");
     return parsePluginAppSource({ sessionId: c.req.param("sessionId"), appId: c.req.param("appId") });
   };
-  const fixed = <T extends { source: { sessionId: string; appId: string } }>(c: Context, input: T): T => {
+  const fixedSource = (c: Context, input: { source: { sessionId: string; appId: string } }) => {
     const route = source(c);
     if (route.sessionId !== input.source.sessionId || route.appId !== input.source.appId) throw new ApplicationError(400, "应用来源与地址不符");
-    return input;
+    return route;
   };
   const resources = async (c: Context) => {
     const body = copyPluginAppJson(await readJson(c), 16 * 1024) as unknown as { lease: PluginAppRuntimeLease; uri?: string; cursor?: string };
@@ -25,7 +28,7 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
   };
   const routes = new Hono();
   routes.onError(error => error instanceof PluginAppAdmissionError ? jsonResponse(error.rejection, 409) : applicationErrorResponse(error instanceof ApplicationError ? error
-    : new ApplicationError(error.message.startsWith("plugin_app_invalid") || error.message.startsWith("plugin_app_json") ? 400 : 409, "应用请求无效或已失效")));
+    : new ApplicationError(error instanceof ProtocolValidationError || isPluginAppValidationError(error) ? 400 : 409, "应用请求无效或已失效")));
   return routes
     .post("/plugin-app-notifications/stream", async c => {
       const input = await readJson(c);
@@ -81,7 +84,8 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
     })
     .post("/:sessionId/plugin-apps/:appId/actions", async c => {
       // Only app actions accept declared large payloads. Runtime still checks the captured tool's own quota.
-      const response = await runtime.actions.invoke(fixed(c, parsePluginAppToolRequest(await readJson(c, undefined, PLUGIN_APP_LIMITS.maxArgsBytes + 16 * 1024))));
+      const request = parsePluginAppToolRequest(await readJson(c, undefined, PLUGIN_APP_DATA_LIMITS.maxArgsBytes + 16 * 1024));
+      const response = await runtime.actions.invoke(pluginAppToolInput(fixedSource(c, request), request));
       return jsonResponse(response, ["pending", "running"].includes(response.receipt.status) ? 202 : 200);
     })
     .get("/:sessionId/plugin-apps/:appId/actions/:requestId", c => jsonResponse(runtime.actions.read(source(c), c.req.param("requestId"))))
@@ -100,6 +104,9 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
     .post("/:sessionId/plugin-apps/:appId/resource-templates/list", async c => {
       const { body, port } = await resources(c); return jsonResponse(await port.listResourceTemplates(body.cursor, c.req.raw.signal));
     })
-    .post("/:sessionId/plugin-apps/:appId/conversation/submissions", async c => jsonResponse({ receipt: await conversation.submit(fixed(c, parsePluginAppConversationRequest(await readJson(c)))) }))
+    .post("/:sessionId/plugin-apps/:appId/conversation/submissions", async c => {
+      const request = parsePluginAppConversationRequest(await readJson(c));
+      return jsonResponse({ receipt: await conversation.submit(pluginAppConversationInput(fixedSource(c, request), request)) });
+    })
     .get("/:sessionId/plugin-apps/:appId/conversation/submissions/:requestId", c => jsonResponse({ receipt: conversation.read(source(c), c.req.param("requestId")) }));
 }

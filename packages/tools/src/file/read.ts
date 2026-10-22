@@ -1,6 +1,7 @@
+import type { FileToolHost } from "../ports/policy.js";
 import { createHash } from "node:crypto";
 import { extname, posix, win32 } from "node:path";
-import { readToolOutputInlineChars, type ToolContext, type ToolDefinition, type ToolResult } from "@vykor/core";
+import { type ToolContext, type ToolDefinition, type ToolResult } from "@vykor/agent-contracts";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
@@ -150,132 +151,137 @@ function readErrorResult(error: unknown): ToolResult {
   };
 }
 
-export const fileReadTool: ToolDefinition = {
-  name: "Read",
-  description:
-    "Read a local text file, supported image, or directory. For Shell output use file_path=shell-output://UUID and cursor=0 (UTF-8 byte position); omit info_only/offset/limit. Use info_only=true to inspect local target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise local text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large local files or directories. Lines longer than 2000 characters and local text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      file_path: {
-        type: "string",
-        description: "An absolute or working-directory-relative local path, or shell-output://UUID from Shell.",
+export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
+  return {
+    name: "Read",
+    description:
+      "Read a local text file, supported image, or directory. For Shell output use file_path=shell-output://UUID and cursor=0 (UTF-8 byte position); omit info_only/offset/limit. Use info_only=true to inspect local target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise local text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large local files or directories. Lines longer than 2000 characters and local text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "An absolute or working-directory-relative local path, or shell-output://UUID from Shell.",
+        },
+        cursor: { type: "number", description: "For shell-output:// only: UTF-8 byte cursor (default 0)." },
+        offset: { type: "number", description: "Start line (1-indexed)." },
+        limit: { type: "number", description: "Max lines to read." },
+        info_only: { type: "boolean", description: "Only inspect a local file target's state and overwrite conditions. No body or mutation; not a permission grant." },
       },
-      cursor: { type: "number", description: "For shell-output:// only: UTF-8 byte cursor (default 0)." },
-      offset: { type: "number", description: "Start line (1-indexed)." },
-      limit: { type: "number", description: "Max lines to read." },
-      info_only: { type: "boolean", description: "Only inspect a local file target's state and overwrite conditions. No body or mutation; not a permission grant." },
+      required: ["file_path"],
     },
-    required: ["file_path"],
-  },
-  async execute(input, context) {
-    if (input.info_only !== undefined && typeof input.info_only !== "boolean") {
-      return { content: [{ type: "text", text: "info_only must be boolean." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
-    }
-    const rawPath = input.file_path as string;
-    if (typeof rawPath === "string" && /^shell-output:/i.test(rawPath)) {
-      return readShellOutput(input, context, rawPath);
-    }
-    if (input.cursor !== undefined) {
-      return { content: [{ type: "text", text: "cursor is only for shell-output:// references; use offset/limit for ordinary files." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
-    }
-    const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
-    const offset = normalizeReadInteger(input.offset, 1);
-    const limit = normalizeReadInteger(input.limit, DEFAULT_READ_LIMIT);
-
-    try {
-      const filePath = await resolveToolPathInContext(rawPath, context, "read");
-      const sandboxError = await sandboxPathError(filePath, cwd, "read", context.settings, context.environment);
-      if (sandboxError) {
-        return {
-          content: [{ type: "text", text: sandboxError }],
-          isError: true,
-          failureKind: "policy",
-          executionState: "not_started",
-          recoveryHint: "此路径被读取策略限制；遵守限制，不能换工具绕过。",
-        };
+    async execute(input, context) {
+      if (input.info_only !== undefined && typeof input.info_only !== "boolean") {
+        return { content: [{ type: "text", text: "info_only must be boolean." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
       }
+      const rawPath = input.file_path as string;
+      if (typeof rawPath === "string" && /^shell-output:/i.test(rawPath)) {
+        return readShellOutput(input, context, rawPath, host);
+      }
+      if (input.cursor !== undefined) {
+        return { content: [{ type: "text", text: "cursor is only for shell-output:// references; use offset/limit for ordinary files." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
+      }
+      const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
+      const offset = normalizeReadInteger(input.offset, 1);
+      const limit = normalizeReadInteger(input.limit, DEFAULT_READ_LIMIT);
 
-      const operations = fileOperationsFor(context);
-      if (input.info_only === true) return await inspectFileInfo(operations, filePath, rawPath, context);
-      let fileStat: Awaited<ReturnType<FileOperations["stat"]>>;
       try {
-        fileStat = await operations.stat(filePath);
-      } catch (statError) {
-        return await describeMissingPath(operations, filePath, statError, context);
-      }
-      if (fileStat.isDirectory) {
-        return await readDirectoryListing(operations, filePath, offset, limit);
-      }
+        const filePath = await resolveToolPathInContext(rawPath, context, "read");
+        const sandboxError = await sandboxPathError(filePath, cwd, "read", host.settings, context.environment);
+        if (sandboxError) {
+          return {
+            content: [{ type: "text", text: sandboxError }],
+            isError: true,
+            failureKind: "policy",
+            executionState: "not_started",
+            recoveryHint: "此路径被读取策略限制；遵守限制，不能换工具绕过。",
+          };
+        }
 
-      const bytes = await operations.readBytes(filePath);
-      const mediaType = imageMediaType(bytes);
-      const expectedMediaType = IMAGE_EXTENSIONS[extname(filePath).toLowerCase()];
-      if (expectedMediaType && mediaType !== expectedMediaType) {
-        throw new Error(`Invalid image file: expected ${expectedMediaType} content`);
-      }
-      if (mediaType) {
-        const hostPath = context.environment
-          ? context.environment.paths.toHostPath(filePath)
-          : filePath;
-        if (!hostPath) throw new Error("Image file is not accessible to the model provider");
+        const operations = fileOperationsFor(context);
+        if (input.info_only === true) return await inspectFileInfo(operations, filePath, rawPath, context, host);
+        let fileStat: Awaited<ReturnType<FileOperations["stat"]>>;
+        try {
+          fileStat = await operations.stat(filePath);
+        } catch (statError) {
+          return await describeMissingPath(operations, filePath, statError, context, host);
+        }
+        if (fileStat.isDirectory) {
+          return await readDirectoryListing(operations, filePath, offset, limit);
+        }
+
+        const bytes = await operations.readBytes(filePath);
+        const mediaType = imageMediaType(bytes);
+        const expectedMediaType = IMAGE_EXTENSIONS[extname(filePath).toLowerCase()];
+        if (expectedMediaType && mediaType !== expectedMediaType) {
+          throw new Error(`Invalid image file: expected ${expectedMediaType} content`);
+        }
+        if (mediaType) {
+          const hostPath = context.environment
+            ? context.environment.paths.toHostPath(filePath)
+            : filePath;
+          if (!hostPath) throw new Error("Image file is not accessible to the model provider");
+          return {
+            content: [{
+              type: "image",
+              source: { type: "file", mediaType, path: hostPath, sizeBytes: bytes.byteLength },
+            }],
+            executionState: "completed",
+            compactSummary: `Read completed: ${filePath}; image`,
+          };
+        }
+
+        let content: string;
+        try {
+          content = decodeUtf8Text(bytes);
+        } catch {
+          return {
+            content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
+            isError: true,
+            failureKind: "precondition",
+            executionState: "completed",
+          };
+        }
+
+        const lines = splitReadLines(content);
+        const total = lines.length;
+        if (offset > total && !(total === 0 && offset === 1)) {
+          return {
+            content: [{ type: "text", text: `Offset ${offset} is out of range for this file (${total} lines)` }],
+            isError: true,
+            failureKind: "precondition",
+            executionState: "completed",
+          };
+        }
+
+        const slice = sliceReadLines(lines, offset, limit);
+        const body = slice.lines.join("\n");
+        const trailer = readTrailer({
+          offset,
+          emitted: slice.emitted,
+          total,
+          byteCapped: slice.byteCapped,
+        });
         return {
-          content: [{
-            type: "image",
-            source: { type: "file", mediaType, path: hostPath, sizeBytes: bytes.byteLength },
-          }],
+          content: [{ type: "text", text: body ? `${body}\n\n${trailer}` : trailer }],
+          metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: fileDigest(bytes), bodyVisible: true }]) },
           executionState: "completed",
-          compactSummary: `Read completed: ${filePath}; image`,
+          compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
         };
+      } catch (error) {
+        return readErrorResult(error);
       }
+    },
+  };
+}
 
-      let content: string;
-      try {
-        content = decodeUtf8Text(bytes);
-      } catch {
-        return {
-          content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
-          isError: true,
-          failureKind: "precondition",
-          executionState: "completed",
-        };
-      }
-
-      const lines = splitReadLines(content);
-      const total = lines.length;
-      if (offset > total && !(total === 0 && offset === 1)) {
-        return {
-          content: [{ type: "text", text: `Offset ${offset} is out of range for this file (${total} lines)` }],
-          isError: true,
-          failureKind: "precondition",
-          executionState: "completed",
-        };
-      }
-
-      const slice = sliceReadLines(lines, offset, limit);
-      const body = slice.lines.join("\n");
-      const trailer = readTrailer({
-        offset,
-        emitted: slice.emitted,
-        total,
-        byteCapped: slice.byteCapped,
-      });
-      return {
-        content: [{ type: "text", text: body ? `${body}\n\n${trailer}` : trailer }],
-        metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: fileDigest(bytes), bodyVisible: true }]) },
-        executionState: "completed",
-        compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
-      };
-    } catch (error) {
-      return readErrorResult(error);
-    }
-  },
-};
+export const fileReadTool: ToolDefinition = createFileReadTool();
 
 async function readShellOutput(
   input: Record<string, unknown>,
-  context: import("@vykor/core").ToolContext,
+  context: import("@vykor/agent-contracts").ToolContext,
   reference: string,
+  host: FileToolHost,
 ): Promise<ToolResult> {
   const invalid = (message: string): ToolResult => ({ content: [{ type: "text", text: message }], isError: true, failureKind: "invalid_input", executionState: "not_started" });
   if (input.info_only !== undefined || input.offset !== undefined || input.limit !== undefined) {
@@ -283,14 +289,14 @@ async function readShellOutput(
   }
   const cursor = input.cursor ?? 0;
   if (typeof cursor !== "number" || !Number.isSafeInteger(cursor) || cursor < 0) return invalid("cursor must be a non-negative safe UTF-8 byte position.");
-  if (!context.shellOutputLogs || !context.sessionId) return {
+  if (!host.shellOutputLogs || !context.sessionId) return {
     content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
     isError: true, failureKind: "configuration", executionState: "not_started",
   };
-  const budget = readToolOutputInlineChars();
+  const budget = (host.outputPolicy?.inlineChars ?? 16_000);
   let maxBytes = Math.min(8192, Math.max(4, budget - 160));
   for (;;) {
-    const page = await context.shellOutputLogs.read({ sessionId: context.sessionId, reference, cursor, maxBytes });
+    const page = await host.shellOutputLogs.read({ sessionId: context.sessionId, reference, cursor, maxBytes });
     if (page.status !== "ok") return page.status === "invalid_cursor"
       ? invalid("Invalid Shell output cursor: use a UTF-8 character boundary within retained bytes.")
       : { content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
@@ -307,8 +313,9 @@ async function inspectFileInfo(
   operations: FileOperations,
   filePath: string,
   rawPath: string,
-  context: import("@vykor/core").ToolContext,
-): Promise<import("@vykor/core").ToolResult> {
+  context: import("@vykor/agent-contracts").ToolContext,
+  host: FileToolHost,
+): Promise<import("@vykor/agent-contracts").ToolResult> {
   let item: Awaited<ReturnType<FileOperations["stat"]>> | undefined;
   try { item = await operations.stat(filePath); }
   catch (error) { if (!isFileNotFoundError(error)) throw error; }
@@ -320,7 +327,7 @@ async function inspectFileInfo(
   };
   if (!item) {
     const parent = readPathInfo(filePath).parent;
-    const denied = await sandboxPathError(parent, context.cwd, "read", context.settings, context.environment);
+    const denied = await sandboxPathError(parent, context.cwd, "read", host.settings, context.environment);
     if (!denied) {
       try { info.parentExists = (await operations.stat(parent)).isDirectory; }
       catch (error) { if (isFileNotFoundError(error)) info.parentExists = false; }
@@ -335,7 +342,7 @@ async function inspectFileInfo(
     ? "System paths cannot be modified."
     : managedPersistencePathKind(filePath, context.cwd)
       ? "Managed persistence paths must use their dedicated tool."
-      : await sandboxPathError(filePath, context.cwd, "write", context.settings, context.environment);
+      : await sandboxPathError(filePath, context.cwd, "write", host.settings, context.environment);
   if (policy) info.writePolicyError = policy;
   return {
     content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
@@ -351,7 +358,7 @@ async function readDirectoryListing(
   dir: string,
   offset: number,
   limit: number,
-): Promise<import("@vykor/core").ToolResult> {
+): Promise<import("@vykor/agent-contracts").ToolResult> {
   const entries = (await operations.listDir(dir)).sort((a, b) => {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -431,14 +438,15 @@ async function describeMissingPath(
   operations: FileOperations,
   filePath: string,
   statError: unknown,
-  context: import("@vykor/core").ToolContext,
-): Promise<import("@vykor/core").ToolResult> {
+  context: import("@vykor/agent-contracts").ToolContext,
+  host: FileToolHost,
+): Promise<import("@vykor/agent-contracts").ToolResult> {
   let entries: Awaited<ReturnType<FileOperations["listDir"]>>;
   const pathInfo = readPathInfo(filePath);
   const failure = readErrorResult(statError);
   const missing = failure.failureKind === "precondition";
   try {
-    const denied = await sandboxPathError(pathInfo.parent, context.cwd, "read", context.settings, context.environment);
+    const denied = await sandboxPathError(pathInfo.parent, context.cwd, "read", host.settings, context.environment);
     if (denied) return failure;
     entries = await operations.listDir(pathInfo.parent);
   } catch {

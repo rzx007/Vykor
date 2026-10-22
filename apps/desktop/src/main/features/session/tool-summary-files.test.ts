@@ -10,7 +10,8 @@ import type { DesktopSessionPart } from "@shared/session-types";
 import { collectChangedFiles } from "../../../renderer/src/components/desktop/conversation-page/message/message-render-model";
 import { SessionStore } from "../../../../../../packages/services/src/index.js";
 import { SessionTranscriptProjection } from "../../../../../../packages/server/src/application/session/transcript-projection.js";
-import { QueryEngine, ToolRegistry, type StreamEvent } from "../../../../../../packages/core/src/index.js";
+import { QueryEngine, ToolRegistry } from "../../../../../../packages/core/src/index.js";
+import type { StreamEvent } from "@vykor/agent-contracts";
 
 it("keeps actual long ApplyPatch and ordered Edit file identities without deriving preview line counts", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "oh-summary-files-"));
@@ -50,7 +51,7 @@ it("keeps actual long ApplyPatch and ordered Edit file identities without derivi
         yield { type: "complete", stopReason: "tool_use" };
       } else yield { type: "complete", stopReason: "end_turn" };
     } }, registry, { checkTool: async () => ({ action: "allow" }) },
-    { register() {}, execute: async () => ({ blocked: false }) }, { cwd, trajectoryTrackerFactory: false });
+    { execute: async () => ({ blocked: false }) }, { cwd, trajectoryTrackerFactory: false });
     for await (const event of engine.submitMessage("fixture")) {
       if (event.type === "tool_use_end") expect(event.result).toMatchObject({ executionState: "completed" });
       // Match the tool.started/tool.completed events handled by the production projector.

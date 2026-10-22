@@ -11,15 +11,8 @@
  * - 业务请求的强制握手由 HttpTransport 缓存并执行
  */
 
-import type {
-  ClientProtocolSupport,
-  ServerCapabilities,
-} from "@vykor/protocol";
-import {
-  checkProtocolCompatibility,
-  CURRENT_PROTOCOL_VERSION,
-  parseServerCapabilities,
-} from "@vykor/protocol";
+import type { ClientProtocolSupport, ServerCapabilities } from "@vykor/protocol";
+import { checkProtocolCompatibility, CURRENT_PROTOCOL_VERSION, parseServerCapabilities } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type { VykorServerHealth } from "../types/index.js";
 

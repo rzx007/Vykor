@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
-import type { AgentEvent, AgentRunResult, Settings, StreamingMessageClient, StreamMessageParams } from "@vykor/core";
+import type {
+  AgentEvent,
+  AgentRunResult,
+  StreamingMessageClient,
+  StreamMessageParams,
+} from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { createDefaultNodeAgent, type VykorAgent } from "@vykor/agent-runtime";
 import { buildWorkStyleSection, getDefaultIdentity, getInvariantGuidance } from "@vykor/prompts";
 import type { BehaviorCase } from "./cases.js";

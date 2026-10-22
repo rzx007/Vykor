@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OpenAICompatibleClient } from "./openai.js";
 import { AnthropicClient } from "./anthropic.js";
 import { CodexSubscriptionClient } from "./codex.js";
-import type { StreamEvent } from "@vykor/core";
+import type { StreamEvent } from "@vykor/agent-contracts";
 import { createToolPathSummary } from "./tool-path-summary.js";
 
 afterEach(() => vi.unstubAllGlobals());

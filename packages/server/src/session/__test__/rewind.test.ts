@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { rewindTranscript } from "../rewind.js";
-import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/protocol";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 
 function message(
   id: string,

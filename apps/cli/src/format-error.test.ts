@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AuthenticationFailure, RateLimitFailure, RequestFailure } from "@vykor/api";
 import { formatApiError } from "./format-error";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 const SETTINGS: Settings = {
   model: "minimax/minimax-m2.5:free",

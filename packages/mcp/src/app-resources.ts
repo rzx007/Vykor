@@ -5,7 +5,9 @@ import type {
   ListResourcesResult,
   ListResourceTemplatesResult,
 } from "@modelcontextprotocol/sdk/types.js";
-import { PLUGIN_APP_LIMITS, PLUGIN_APP_HTML_MIME_TYPE } from "@vykor/protocol";
+import { PLUGIN_APP_RESOURCE_LIMITS } from "@vykor/plugin-contracts/limits";
+import { validatePluginAppResourceContents } from "@vykor/plugin-contracts/validation";
+import type { PluginAppResourceLimits } from "@vykor/plugin-contracts/limits";
 
 /** Captured concrete client, never name-based dispatch to a replacement connection. No tool invocation. */
 export interface CapturedMcpAppResources {
@@ -32,6 +34,7 @@ export function captureMcpAppResources(
   client: Client,
   generation: string,
   isCurrent: () => boolean,
+  limits: PluginAppResourceLimits = PLUGIN_APP_RESOURCE_LIMITS,
 ): CapturedMcpAppResources {
   const assertCurrent = () => {
     if (!isCurrent()) throw new Error("plugin_app_backend_changed");
@@ -71,31 +74,11 @@ export function captureMcpAppResources(
           { uri },
           signal ? { signal } : undefined,
         );
-        const html =
-          result.contents.length === 1 &&
-          result.contents[0]?.mimeType === PLUGIN_APP_HTML_MIME_TYPE;
-        const limit = html
-          ? PLUGIN_APP_LIMITS.htmlBytes
-          : PLUGIN_APP_LIMITS.resourceBytes;
-        let decodedBytes = 0;
-        for (const content of result.contents) {
-          if (content.uri !== uri)
-            throw new Error("plugin_app_resource_uri_mismatch");
-          if ("text" in content && typeof content.text === "string")
-            decodedBytes += Buffer.byteLength(content.text, "utf8");
-          else if ("blob" in content && typeof content.blob === "string") {
-            if (content.blob.length > Math.ceil((limit - decodedBytes) / 3) * 4)
-              throw new Error("plugin_app_resource_too_large");
-            if (content.blob.length % 4 || /[^A-Za-z0-9+/=]/.test(content.blob))
-              throw new Error("plugin_app_resource_invalid_blob");
-            const bytes = Buffer.from(content.blob, "base64");
-            if (bytes.toString("base64") !== content.blob)
-              throw new Error("plugin_app_resource_invalid_blob");
-            decodedBytes += bytes.byteLength;
-          } else throw new Error("plugin_app_resource_invalid_content");
-          if (decodedBytes > limit)
-            throw new Error("plugin_app_resource_too_large");
-        }
+        const validation = validatePluginAppResourceContents(result, uri, {
+          htmlBytes: Math.min(limits.htmlBytes, PLUGIN_APP_RESOURCE_LIMITS.htmlBytes),
+          resourceBytes: Math.min(limits.resourceBytes, PLUGIN_APP_RESOURCE_LIMITS.resourceBytes),
+        });
+        if (!validation.ok) throw new Error(validation.code);
         return result;
       }),
     listResources: (cursor?: string, signal?: AbortSignal) =>

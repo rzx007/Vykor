@@ -1,4 +1,4 @@
-import type { AgentPermissionDecision } from "@vykor/core";
+import type { AgentPermissionDecision } from "@vykor/agent-contracts";
 
 export interface PermissionControllerWaitInput {
   requestId: string;

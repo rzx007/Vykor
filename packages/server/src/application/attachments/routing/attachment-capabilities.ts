@@ -7,12 +7,8 @@ import {
   findByName,
   providerInputCapabilities,
 } from "@vykor/api";
-import type {
-  Settings,
-  InputSupport,
-  ModelInputCapabilities,
-} from "@vykor/core";
-import type { SessionRuntimeConfig } from "@vykor/protocol";
+import type { Settings, InputSupport, ModelInputCapabilities } from "@vykor/host-config";
+import type { SessionRuntimeConfig } from "@vykor/domain-contracts/sessions";
 import type { ModelProviderInfo } from "../../settings-api.js";
 import { readCatalogProvider } from "../../default-services/catalog-provider-mapping.js";
 

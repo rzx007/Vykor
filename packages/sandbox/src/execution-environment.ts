@@ -2,7 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { realpath } from "node:fs/promises";
 import { homedir, platform, tmpdir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type {
   EnvironmentFileSystem,
   EnvironmentPathResolver,

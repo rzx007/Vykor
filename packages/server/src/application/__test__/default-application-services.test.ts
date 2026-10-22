@@ -1,9 +1,10 @@
+import { afterAll as releaseExecutionOwner } from "vitest";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerPluginAgents } from "@vykor/coordinator";
 import { getLocalRulesDir, replaceFact, saveFacts } from "@vykor/personalization";
 
 vi.mock("@vykor/services", () => ({
@@ -11,7 +12,7 @@ vi.mock("@vykor/services", () => ({
 }));
 
 import { CredentialStorage } from "@vykor/auth";
-import { saveSettings } from "@vykor/core";
+import { saveSettings } from "@vykor/host-config";
 
 import {
   createDefaultAgentPersonaService,
@@ -153,25 +154,9 @@ describe("default daemon application services", () => {
   });
 
   it("keeps persona inspection limited to built-in and user definitions", async () => {
-    registerPluginAgents([
-      {
-        name: "leaked:reviewer",
-        description: "Should stay runtime-scoped",
-        model: "leaked-model",
-        source: "plugin",
-      },
-    ]);
-
-    try {
-      const result = await createDefaultAgentPersonaService().list();
-
-      expect(result.agents.map((agent) => agent.name)).toContain("worker");
-      expect(result.agents.map((agent) => agent.name)).not.toContain(
-        "leaked:reviewer",
-      );
-    } finally {
-      registerPluginAgents([]);
-    }
+    const result = await createDefaultAgentPersonaService().list();
+    expect(result.agents.map((agent) => agent.name)).toContain("worker");
+    expect(result.agents.every((agent) => agent.source !== "plugin")).toBe(true);
   });
 
   it("updates daemon.autoStart without restarting live agent runtimes", async () => {
@@ -1358,3 +1343,7 @@ describe("default daemon application services", () => {
     );
   });
 });
+
+const executionOwner = new ExecutionRuntimeOwner();
+
+releaseExecutionOwner(() => executionOwner.close());

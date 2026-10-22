@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import type { AgentExecutionContext, StreamEvent } from "../index.js";
+import type { AgentExecutionContext, StreamEvent } from "@vykor/agent-contracts";
 
 /**
  * Mock streaming client that records every `streamMessage` request so tests can
@@ -39,14 +39,14 @@ describe("QueryEngine per-turn memory retriever", () => {
     const { client, requests } = createRecordingClient(SIMPLE_RESPONSE);
     const engine = new QueryEngine(client, new ToolRegistry(), createMockPermissionChecker(), createMockHookExecutor(), {
       systemPrompt: "SESSION",
-      systemPromptForRun: async (view) => view.pluginId ? "PLUGIN SUMMARY" : "BASELINE SUMMARY",
+      systemPromptForRun: async (tools) => tools.has("plugin") ? "PLUGIN SUMMARY" : "BASELINE SUMMARY",
       memoryRetriever: async () => "MEMORY",
     });
     engine.setSystemPrompt("UPDATED SESSION");
     expect(engine.getContextUsagePromptSource().systemPrompt).toBe("UPDATED SESSION");
     for (const pluginId of [undefined, "one", undefined]) {
       const execution = {
-        capabilityView: { pluginId, tools: new Map(), skills: new Map(), agents: new Map(), mcpServers: new Map() },
+        tools: new Map(pluginId ? [["plugin", {}]] : []),
         emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
       } as unknown as AgentExecutionContext;
       for await (const _ of engine.submitMessage("go", { execution })) {}

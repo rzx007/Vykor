@@ -13,10 +13,6 @@
       "import": "./src/memory-extract.ts",
       "types": "./src/memory-extract.ts"
     },
-    "./executions": {
-      "import": "./src/executions/index.ts",
-      "types": "./src/executions/index.ts"
-    },
     "./workflows": {
       "import": "./src/workflows/index.ts",
       "types": "./src/workflows/index.ts"
@@ -32,15 +28,16 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/environment": "workspace:*",
     "@arcships/light-ocr": "catalog:",
     "@vykor/core": "workspace:*",
     "@vykor/memory": "workspace:*",
-    "@vykor/protocol": "workspace:*",
-    "@vykor/sandbox": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "drizzle-orm": "^0.45.2",
-    "sharp": "0.34.4"
+    "sharp": "0.34.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*",
+    "@vykor/domain-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

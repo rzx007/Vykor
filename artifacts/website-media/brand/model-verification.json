@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "loader": "Three.js GLTFLoader r184",
+  "clip": "scrollani",
+  "duration": 4,
+  "meshes": [
+    "Bracket_Left",
+    "Lime_Inlay_Left",
+    "Bracket_Right",
+    "Lime_Inlay_Right",
+    "Connector_Left",
+    "Connector_Right",
+    "Robot_Face_Profile",
+    "Robot_Face_Profile_1"
+  ],
+  "initialWidth": 10.49119818589901,
+  "finalWidth": 3.350000694209566,
+  "scaleRatio": 3.131700302042598
+}

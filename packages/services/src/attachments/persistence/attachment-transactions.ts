@@ -1,10 +1,6 @@
-import { parseAttachmentAssetRecord, parseChatResourceSource } from "@vykor/protocol";
-import type {
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  AttachmentRepresentationKind,
-  SessionRecord,
-} from "@vykor/protocol";
+import { parseAttachmentAssetRecord, parseChatResourceSource } from "@vykor/domain-contracts/attachments";
+import type { AttachmentAssetRecord, AttachmentRepresentationRecord, AttachmentRepresentationKind } from "@vykor/domain-contracts/attachments";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import { AttachmentError } from "../attachment-errors.js";
 import type { StorageContext } from "../../database/storage-context.js";
 import type {

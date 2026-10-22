@@ -2,13 +2,7 @@ import {
   defaultDurableEventRegistry,
   type SessionStore,
 } from "@vykor/services";
-import type {
-  PermissionRequestRecord,
-  ProjectionSettlementRecord,
-  SessionEventRecord,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-} from "@vykor/protocol";
+import type { PermissionRequestRecord, ProjectionSettlementRecord, SessionEventRecord, SessionInputRecord, SessionMessagePartRecord } from "@vykor/domain-contracts/sessions";
 
 export interface RunInspectionWarning {
   code: "orphan_input" | "active_attempt_on_closed_run" | "unknown_event" | "pending_settlement" | "unknown_tool_outcome";
