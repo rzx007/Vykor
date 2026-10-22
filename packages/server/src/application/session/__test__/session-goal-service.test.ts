@@ -156,6 +156,25 @@ describe("SessionGoalService simple lifecycle", () => {
     expect(h.current().status).toBe(action === "cancel" ? "cancelled" : action === "pause" ? "paused" : "blocked");
     expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(1);
   });
+  it("restores a queued question answer after failed dispatch and resends it without adding quota twice", async () => {
+    const h = harness(); await h.create({ maxAutoTurns: 1 }); await h.finish({ question: "检查哪个模块？" });
+    const wait = h.current().wait;
+    if (wait?.kind !== "user") throw new Error("expected question");
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued-answer",
+      expectedRevision: h.current().revision, questionId: wait.questionId, objectiveVersion: 1,
+      response: "协议模块", additionalAutoTurns: 2 });
+    h.failDispatch(true); h.userWork(false);
+    await h.service.settleQueuedResume("s1");
+    expect(h.current()).toMatchObject({ status: "waiting_user", maxAutoTurns: 3,
+      wait: { ...wait, response: "协议模块" } });
+    h.failDispatch(false);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "answer-again",
+      expectedRevision: h.current().revision, questionId: wait.questionId, objectiveVersion: 1, response: "协议模块" });
+    expect(h.current()).toMatchObject({ status: "active", maxAutoTurns: 3 });
+    expect(h.store.conversations.getInput(h.run().inputId!)?.content).toBe("协议模块");
+    expect(h.store.runs.listGoalRuns(h.current().id).filter(run => run.status === "running")).toHaveLength(1);
+  });
   it("waits for a supplemental user Run that is already associated with this Goal", async () => {
     const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "等补充" });
     const user = h.store.runs.createRun({ sessionId: "s1", metadata: {

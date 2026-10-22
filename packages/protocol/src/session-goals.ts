@@ -60,6 +60,8 @@ export type GoalWait =
       question: string;
       objectiveVersion: number;
       replyInputId?: string;
+      /** Accepted answer restored after a queued Run could not be dispatched. */
+      response?: string;
     }
   | { kind: "approval"; permissionRequestId: string }
   | GoalExternalWait;

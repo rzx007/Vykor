@@ -40,6 +40,27 @@ function setup() {
 }
 
 describe("session plugin app lifecycle", () => {
+  it("renews host control revision for a captured context after admission without relaxing lease or final revision checks", async () => {
+    const { store, service, facts, setExecution } = setup();
+    const opened = await service.open("s", { pluginId: "notes", surfaceId: "notes" });
+    const context = { source: opened.source, lease: opened.lease!, requestId: "context",
+      expectedRevision: 0, text: "selected text", data: { documentRevision: 3 } };
+    store.runs.createRun({ id: "autosave", sessionId: "s" });
+    store.pluginApps.admitAction(opened.app.id, { expectedRevision: 0, runId: "autosave" });
+    store.pluginApps.settleAction(opened.app.id, "autosave"); setExecution("completed");
+    const materialized = await service.materializeComposerContexts("s", [context]);
+    expect(JSON.stringify(materialized.items)).toContain("selected text");
+    expect(JSON.stringify(materialized.items)).toContain("documentRevision");
+    materialized.assertCurrent();
+    await expect(service.materializeComposerContexts("s", [{ ...context, expectedRevision: 99 }])).rejects.toThrow();
+    facts.backendGeneration = "g2";
+    await expect(service.materializeComposerContexts("s", [context])).rejects.toThrow();
+    facts.backendGeneration = "g1";
+    expect(store.pluginApps.get(opened.app.id)!.status).not.toBe("closed");
+    store.pluginApps.close(opened.app.id, store.pluginApps.get(opened.app.id)!.controlRevision);
+    expect(() => materialized.assertCurrent()).toThrow();
+    await expect(service.materializeComposerContexts("s", [context])).rejects.toThrow();
+  });
   it("opens a surface without any tool Run or fake Part and reuses the durable identity", async () => {
     const { store, service } = setup();
     const first = await service.open("s", { pluginId: "notes", surfaceId: "notes" });

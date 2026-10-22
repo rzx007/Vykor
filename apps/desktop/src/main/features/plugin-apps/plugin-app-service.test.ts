@@ -165,17 +165,27 @@ it("creates context without sending, isolates its session, and rejects expired s
   expect(await f.service.composerContext(42, "session", [entry.id])).toMatchObject([{ source, text: "selection", data: { selected: 1 }, expectedRevision: 0 }])
   await expect(f.service.composerContext(42, "other", [entry.id])).rejects.toThrow("context_expired")
   f.setState({ ...f.state(), availability: { canReadResource: true, canInvokeTools: false, canMessage: false, reason: "action-unconfirmed" } })
+  await f.service.refresh(42, { mountId })
   await expect(f.service.composerContext(42, "session", [entry.id])).rejects.toThrow("message_unavailable")
 })
-it("refreshes only host context credentials after autosave and preserves the selected document snapshot", async () => {
+it("captures local context before admission and preserves its document snapshot across host refresh", async () => {
   const f = fixture(), { mountId } = await f.mount()
   const data = { documentId: "diagram-a", revision: 3, elementIds: ["shape-a"] }
   const entry = await f.service.updateModelContext(42, { mountId, content: [{ type: "text", text: "selection A" }], structuredContent: data })
   f.setState({ ...f.state(), app: { ...f.state().app, controlRevision: 6 } })
   const [context] = await f.service.composerContext(42, "session", [entry.id])
-  expect(context).toMatchObject({ source, expectedRevision: 6, text: "selection A", data, lease: initial.lease })
+  expect(context).toMatchObject({ source, expectedRevision: 0, text: "selection A", data, lease: initial.lease })
+  await f.service.refresh(42, { mountId })
+  expect((await f.service.composerContext(42, "session", [entry.id]))[0]).toMatchObject({ expectedRevision: 6, text: "selection A", data })
   f.setState({ ...f.state(), lease: { token: "replacement", backendGeneration: "new-generation" } })
+  await f.service.refresh(42, { mountId })
   await expect(f.service.composerContext(42, "session", [entry.id])).rejects.toThrow("context_expired")
+})
+it("does not wait for network preparation when collecting an already captured composer context", async () => {
+  const f = fixture(), { mountId } = await f.mount()
+  const entry = await f.service.updateModelContext(42, { mountId, content: [{ type: "text", text: "selection" }] })
+  vi.spyOn(f.service, "refresh").mockRejectedValue(new Error("network preparation must happen after admission"))
+  expect(await f.service.composerContext(42, "session", [entry.id])).toMatchObject([{ text: "selection", source }])
 })
 it("never delivers a late message receipt to a released frame", async () => {
   const f = fixture(), { mountId } = await f.mount()

@@ -222,9 +222,11 @@ export class SessionInteractionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
-    return this.context.operationRunner.run(sessionId, () =>
+    const work = () => this.context.operationRunner.run(sessionId, () =>
       this.admitPromptWork(this.requireSession(sessionId), input),
     );
+    return this.context.admission.withUserInputPreparation
+      ? this.context.admission.withUserInputPreparation(sessionId, work) : work();
   }
 
   private async admitPromptWork(

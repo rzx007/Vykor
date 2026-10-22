@@ -44,6 +44,18 @@ const button = (label: string): HTMLButtonElement =>
     (node) => node.textContent === label || node.getAttribute("aria-label") === label
   )!
 
+it("restores the accepted answer for confirmation after a queued dispatch failure", async () => {
+  const onAction = vi.fn()
+  await act(async () => root.render(createElement(GoalBanner, {
+    goal: { ...goal, status: "waiting_user", maxAutoTurns: 0,
+      wait: { kind: "user", questionId: "q", question: "检查哪个模块？", objectiveVersion: 1, response: "协议模块" } },
+    busy: false, stopping: false, onAction, onEdit: vi.fn(), onDismiss: vi.fn(),
+  })))
+  expect(container.querySelector("textarea")?.value).toBe("协议模块")
+  await act(async () => button("补充并继续").click())
+  expect(onAction).toHaveBeenCalledWith({ action: "resume", questionId: "q", objectiveVersion: 1, response: "协议模块" })
+})
+
 it("keeps a completed goal compact and reveals its full completion note on demand", async () => {
   const reason = "第一回合创建文件，第二回合检查结果，第三回合完成。测试目录已保留。"
   await act(async () => root.render(createElement(GoalBanner, {

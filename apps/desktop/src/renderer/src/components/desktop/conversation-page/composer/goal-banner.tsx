@@ -48,7 +48,9 @@ export function GoalBanner({
   const [cancelOpen, setCancelOpen] = useState(false)
   const [additionalAutoTurns, setAdditionalAutoTurns] = useState(20)
   const [response, setResponse] = useState("")
-  useEffect(() => setResponse(""), [goal.id, goal.objectiveVersion, goal.wait?.kind === "user" ? goal.wait.questionId : undefined])
+  const questionId = goal.wait?.kind === "user" ? goal.wait.questionId : undefined
+  const restoredResponse = goal.wait?.kind === "user" ? goal.wait.response : undefined
+  useEffect(() => setResponse(restoredResponse ?? ""), [goal.id, goal.objectiveVersion, questionId, restoredResponse])
   const budgetClosed = goal.tokenBudget !== undefined && (goal.usage.incomplete || goal.usage.knownTokens >= goal.tokenBudget)
   const stopLabel = goalStopReasonLabel(goal)
   const terminal = goal.status === "completed" || goal.status === "cancelled"
