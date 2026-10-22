@@ -49,7 +49,7 @@ export interface GoalOperations {
     budgetClosed?: boolean;
   };
   refreshGoalRunTime(goalId: string): GoalUsage;
-  reconcileGoalModelAttempts(): number;
+  reconcileGoalModelAttempts(runId?: string): number;
   checkGoalBudget(goalId: string): {
     code?: GoalBudgetStopCode;
     budgetClosed?: boolean;
@@ -348,14 +348,19 @@ export class GoalTransactions implements GoalOperations {
     return this.write(() => this.refreshUsage(goalId));
   }
 
-  reconcileGoalModelAttempts(): number {
+  reconcileGoalModelAttempts(runId?: string): number {
     return this.write(() => {
+      const runGoalId = runId === undefined ? undefined : this.options.getRun(runId)?.metadata.goalId;
+      if (runId !== undefined && typeof runGoalId !== "string") return 0;
       let count = 0;
+      const goalIds = new Set<string>();
       for (const row of listGoalModelAttempts(
         this.options.storage,
-        undefined,
-        false,
+        typeof runGoalId === "string" ? runGoalId : undefined,
+        runId !== undefined,
       )) {
+        if (runId !== undefined && row.runId !== runId) continue;
+        goalIds.add(row.goalId);
         const run = this.options.getRun(row.runId);
         if (
           row.state !== "pending" ||
@@ -369,7 +374,7 @@ export class GoalTransactions implements GoalOperations {
         });
         count++;
       }
-      for (const id of this.options.repository.listGoalIds(false)) {
+      for (const id of runId === undefined ? this.options.repository.listGoalIds(false) : goalIds) {
         this.refreshUsage(id);
         this.closeBudget(this.options.repository.getGoal(id)!);
       }

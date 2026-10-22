@@ -764,6 +764,25 @@ test("P13 allows storage canonical plugin data origins without opening a direct 
   assert.ok(checkModuleDependency({ fromFile: "packages/protocol/src/new.ts", specifier: "<local-types>", resolvedFile: "packages/protocol/src/new.ts", importedNames: ["AbortSignal"], typeOnly: true, typeReferences: ["AbortSignal"] }, targetPolicy).length);
 });
 
+test("pure data tracing checks arrow signatures and inferred async returns without scanning function bodies", () => {
+  policyFixture({
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/permissions.ts" } }),
+    "packages/agent-contracts/src/permissions.ts": [
+      'export const arrow = (): Promise<void> => Promise.resolve();',
+      'export async function inferred() {}',
+      'export const asyncArrow = async () => {};',
+      'export function data(): string { const internal: Promise<void> = Promise.resolve(); return "ok"; }',
+    ].join('\n'),
+    ...Object.fromEntries(["arrow", "inferred", "asyncArrow", "data"].map(name => [`packages/protocol/src/${name}.ts`,
+      `import { ${name} } from "@vykor/agent-contracts/permissions"; export type WireData = ReturnType<typeof ${name}>;`])),
+  }, directory => {
+    const violations = collectPolicyViolations(directory, targetPolicy);
+    for (const name of ["arrow", "inferred", "asyncArrow"])
+      assert.ok(violations.some(item => item.fromFile === `packages/protocol/src/${name}.ts` && item.reason.includes("runtime type is not data")), name);
+    assert.ok(!violations.some(item => item.fromFile.endsWith("/data.ts")), "implementation-local Promise must not contaminate a string return");
+  });
+});
+
 test("pure data tracing checks runtime references in the selected declaration and its private aliases", () => {
   policyFixture({
     "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/permissions.ts" } }),

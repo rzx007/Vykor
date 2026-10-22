@@ -6,11 +6,11 @@ import { describe, expect, it } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";
 
-function withStore(test: (store: SessionStore) => void): void {
+function withStore(test: (store: SessionStore) => void, storage: "sqlite" | "memory" = "sqlite"): void {
   const directory = mkdtempSync(join(tmpdir(), "vk-goal-transactions-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
-    store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+    store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m", storage });
     test(store);
   } finally {
     store.close();
@@ -30,6 +30,22 @@ function failGoalEvent(store: SessionStore, type: string): void {
 }
 
 describe("GoalTransactions", () => {
+  it.each(["sqlite", "memory"] as const)("reconciles only the requested terminal Run and leaves active attempts untouched (%s)", storage => {
+    withStore(store => {
+      const goal = store.goals.createGoal({ sessionId: "s1", objective: "finish", maxAutoTurns: 2, tokenBudget: 100 });
+      for (const id of ["ended", "active"]) {
+        store.runs.createRun({ id, sessionId: "s1", metadata: { goalId: goal.id, goalObjectiveVersion: goal.objectiveVersion } });
+        store.runs.updateRun(id, { status: "running" });
+        store.goals.beginGoalModelAttempt({ runId: id, sessionId: "s1", generationId: id, attempt: 1, model: "m", purpose: "generation" });
+      }
+      store.runs.updateRun("ended", { status: "failed" });
+      expect(store.goals.reconcileGoalModelAttempts("ended")).toBe(1);
+      expect(store.goals.getGoal(goal.id)?.usage).toMatchObject({ unknownAttempts: 1, inFlightAttempts: 1, incomplete: true });
+      expect(store.goals.reconcileGoalModelAttempts("ended")).toBe(0);
+      expect(store.goals.getGoal(goal.id)?.usage.inFlightAttempts).toBe(1);
+    }, storage);
+  });
+
   it("rolls back goal creation when its durable event fails", () => {
     withStore((store) => {
       failGoalEvent(store, "session.goal.created");

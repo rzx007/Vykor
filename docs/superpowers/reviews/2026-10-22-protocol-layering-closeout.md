@@ -127,6 +127,8 @@
 
 ## 验证范围与剩余风险
 
+最终复查补充发现了 Terminal 创建/关闭并发、Goal 结算失败恢复、声明签名追踪和后续插件市场接口分层四项 P2。修复范围与定向验收见[四项 P2 修复记录](./2026-10-22-architecture-final-p2-fixes.md)；此前“未发现遗留问题”的表述仅对应当时审查，不覆盖这些补充发现。
+
 - 本轮在 Windows 验证，未声称 Linux/macOS 平台执行结果，也未执行完整单仓测试套件。
 - SDK pack 中 Windows ConPTY 辅助子进程仍会输出 `AttachConsole failed`；主探针、TerminalOpen/JobCancel 及最终退出码均成功。这是已有环境现象，本轮未扩大为终端实现修复。
 - 外部源码消费者需要同步旧策略、存储命令和混合 limits 的导入位置；HTTP/SSE 格式与已验证行为保持基线。

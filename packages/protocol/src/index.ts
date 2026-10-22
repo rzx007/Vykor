@@ -23,6 +23,7 @@ export * from "./notes.js";
 export * from "./memory.js";
 export * from "./office.js";
 export * from "./plugin-apps.js";
+export * from "./plugin-marketplace.js";
 
 export type { JsonValue } from "./json.js";
 export { isJsonObject, isJsonRecord, isNonnegativeInteger, isUuid, stringifyCanonicalJson, validateJsonRecord } from "./json.js";
