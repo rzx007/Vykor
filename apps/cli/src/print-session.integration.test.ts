@@ -7,15 +7,7 @@ import {
   VykorHttpServer,
   type CreateDaemonAgent,
 } from "@vykor/server";
-import type {
-  AgentEvent,
-  AgentEventContext,
-  AgentEventInput,
-  AgentEventListener,
-  AgentPermissionDecision,
-  AgentPermissionRequest,
-  AgentRunHandle,
-} from "@vykor/core";
+import type { AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionDecision, AgentPermissionRequest, AgentRunHandle } from "@vykor/agent-contracts";
 import type {
   AgentCapabilitySnapshot,
   VykorAgent,

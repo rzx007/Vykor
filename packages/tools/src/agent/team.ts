@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { TeamPort } from "@vykor/coordinator/teams";
 
 export function createTeamTools(port: TeamPort): ToolDefinition[] {

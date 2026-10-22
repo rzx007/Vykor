@@ -1,5 +1,8 @@
+import { createToolExecutionContext } from "./tool-execution-context";
+import { createTurnRequest, composeTurnPrompt, appendSystemGuidance } from "./turn-context";
+import { runModelAttempt } from "./model-attempt-runner";
 import { randomUUID } from "node:crypto";
-import { isAgentExecutionLimitError } from "../types/runtime";
+import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
 
 import type {
   Message,
@@ -8,29 +11,11 @@ import type {
   ContentBlock,
   ModelAttemptFinishedEvent,
 } from "@vykor/agent-contracts";
-import type { StreamEvent, ToolGenerationProgressEvent } from "../index";
-import type {
-  AgentExecutionContext,
-  StreamingMessageClient,
-  IPermissionChecker,
-  IHookExecutor,
-  QueryEngine as IQueryEngine,
-  QueryEngineOptions,
-  MemoryRetriever,
-  AgentBackgroundShellHost,
-  AgentScheduleEffects,
-  McpAuthHost,
-  QueryRequestConfiguration,
-} from "../index";
-import type {
-  ToolContext,
-  ToolDiscovery,
-  ToolDefinition,
-  ToolExecutionResult,
-  ToolRegistry as IToolRegistry,
-} from "../types/tools";
-import type { AgentTerminalHost } from "@vykor/terminal";
-import type { AgentJobHost } from "@vykor/jobs";
+import type { StreamEvent } from "@vykor/agent-contracts";
+import type { QueryEngine as IQueryEngine, QueryEngineOptions, MemoryRetriever, QueryRequestConfiguration } from "../types/runtime";
+import type { AgentExecutionContext, StreamingMessageClient, PermissionChecker as IPermissionChecker, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
+import type { MutableToolRegistry as IToolRegistry } from "@vykor/agent-contracts";
+import type { ToolContext, ToolDiscovery, ToolDefinition, ToolExecutionResult } from "@vykor/agent-contracts";
 import {
   CompactService,
   type CompactClient,
@@ -51,8 +36,6 @@ import { executeCheckedTools } from "./checked-tool-execution";
 import { withToolInputReuseHint } from "./tool-input-reuse";
 import {
   attemptFinishedEvent,
-  createAttemptSignal,
-  describeModelFailure,
 } from "./query-model-attempt";
 import { applyToolOutputBudget } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
@@ -63,6 +46,7 @@ import {
 import { toolDefinitionIdentity } from "./tool-definition-identity";
 import { RunToolDiscovery } from "./tool-discovery";
 import {
+  capturedToolRegistry,
   runToolRegistry as runToolRegistryForRun,
   toolRegistryForNames,
   toolRegistryView,
@@ -113,7 +97,7 @@ function toCompactClient(
       event: ModelAttemptFinishedEvent,
     ) => void | Promise<void>;
     onAttemptStarted?: import("./buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
-    limits?: import("../types/runtime").AgentExecutionLimits;
+    limits?: import("@vykor/agent-contracts").AgentExecutionLimits;
     maxOutputTokens?: number;
     provider?: string;
   } = {},
@@ -218,7 +202,7 @@ export class QueryEngine implements IQueryEngine {
       runId: string;
       result: ToolExecutionResult;
       bytes: number;
-      binding: import("../types/runtime.js").RunToolBinding;
+      binding: import("@vykor/agent-contracts").RunToolBinding;
     }
   >();
   private compactService: CompactService;
@@ -228,15 +212,8 @@ export class QueryEngine implements IQueryEngine {
   private lastMemoryReminderText: string | undefined;
   private model: string;
   private maxTurns: number;
-  private skillRegistry?: unknown;
   private memoryRetriever?: MemoryRetriever;
   private allowedTools: string[] | null = null;
-  private mcpManager: unknown = undefined;
-  private mcpAuth: McpAuthHost | undefined;
-  private terminal: AgentTerminalHost | undefined;
-  private jobs: AgentJobHost | undefined;
-  private backgroundShell: AgentBackgroundShellHost | undefined;
-  private schedules: AgentScheduleEffects | undefined;
   private cwd: string;
   private sessionId: string | undefined;
   private reasoningEffort: string | undefined;
@@ -274,8 +251,7 @@ export class QueryEngine implements IQueryEngine {
     );
     this.compactService.setProgressCallback(options.compactProgressCallback);
     this.systemPrompt = options.systemPrompt;
-    this.maxTurns = options.maxTurns ?? 50;
-    this.skillRegistry = options.skillRegistry;
+    this.maxTurns = options.maxTurns ?? 0;
     this.memoryRetriever = options.memoryRetriever;
     this.cwd = options.cwd ?? process.cwd();
     this.sessionId = options.sessionId;
@@ -303,32 +279,6 @@ export class QueryEngine implements IQueryEngine {
     this.sessionId = sessionId;
   }
 
-  setMcpManager(mgr: unknown): void {
-    this.mcpManager = mgr;
-  }
-
-  setMcpAuth(auth: McpAuthHost | undefined): void {
-    this.mcpAuth = auth;
-  }
-
-  setTerminal(terminal: AgentTerminalHost | undefined): void {
-    this.terminal = terminal;
-  }
-
-  setJobs(jobs: AgentJobHost | undefined): void {
-    this.jobs = jobs;
-  }
-
-  setBackgroundShell(
-    backgroundShell: AgentBackgroundShellHost | undefined,
-  ): void {
-    this.backgroundShell = backgroundShell;
-  }
-
-  setSchedules(schedules: AgentScheduleEffects | undefined): void {
-    this.schedules = schedules;
-  }
-
   /**
    * 组合本轮发往 API 的 system 提示。
    *
@@ -340,16 +290,9 @@ export class QueryEngine implements IQueryEngine {
     memoryContext: string | null,
     systemPrompt = this.systemPrompt,
   ): string | undefined {
-    if (!memoryContext || !memoryContext.trim()) {
-      this.lastMemoryReminderText = undefined;
-      return systemPrompt;
-    }
-    const reminder = `<system-reminder>\n${memoryContext.trim()}\n</system-reminder>`;
-    this.lastMemoryReminderText = reminder;
-    if (systemPrompt && systemPrompt.trim()) {
-      return `${systemPrompt}\n\n${reminder}`;
-    }
-    return reminder;
+    const prompt = composeTurnPrompt(systemPrompt, memoryContext);
+    this.lastMemoryReminderText = prompt.memoryReminderText;
+    return prompt.systemPrompt;
   }
 
   /**
@@ -373,7 +316,7 @@ export class QueryEngine implements IQueryEngine {
     );
     this.messages = sanitizeMessageHistory(this.messages).map((message) =>
       message.type === "tool_result"
-        ? { ...message, content: applyToolOutputBudget(message.content) }
+        ? { ...message, content: applyToolOutputBudget(message.content, this.options.toolOutputPolicy) }
         : message,
     );
     this.messages.push({ type: "user", content: preparedContent });
@@ -397,12 +340,12 @@ export class QueryEngine implements IQueryEngine {
       this.toolRegistry,
       this.allowedTools,
       contribution,
-      options.execution?.capabilityView,
+      options.execution?.tools,
     );
     const toolDiscovery = RunToolDiscovery.create(
       runToolRegistry,
       this.options.toolDiscovery,
-      options.execution?.capabilityView,
+      options.execution?.tools,
     );
     const internalTools = new Set(
       contribution?.tools
@@ -437,10 +380,12 @@ export class QueryEngine implements IQueryEngine {
     // comparison so request configuration, setMaxTurns and accepted follow-ups
     // can only move the reusable engine's baseline, never this Run's ceiling.
     const hardMaxTurns = options.execution?.hardMaxTurns;
-    const maxTurnsLimit = (): number =>
-      hardMaxTurns === undefined
-        ? this.maxTurns
-        : Math.min(this.maxTurns, hardMaxTurns);
+    const maxTurnsLimit = (): number => {
+      const configuredLimit = this.maxTurns === 0 ? Infinity : this.maxTurns;
+      return hardMaxTurns === undefined
+        ? configuredLimit
+        : Math.min(configuredLimit, hardMaxTurns);
+    };
 
     // 执行会话开始时的钩子函数
     if (options.execution?.profile?.executableHooks !== false) {
@@ -545,12 +490,12 @@ export class QueryEngine implements IQueryEngine {
           (this.options.systemPromptForTools
             ? await this.options.systemPromptForTools(
                 tools,
-                options.execution?.capabilityView,
+                options.execution?.tools,
               )
-            : options.execution?.capabilityView &&
+            : options.execution?.tools &&
                 this.options.systemPromptForRun
               ? await this.options.systemPromptForRun(
-                  options.execution.capabilityView,
+                  options.execution.tools,
                 )
               : this.systemPrompt));
       this.lastRunPrompt = { systemPrompt: runSystemPrompt };
@@ -604,177 +549,36 @@ export class QueryEngine implements IQueryEngine {
       let attempt = 1;
 
       let assistantText = "";
-      let assistantReasoning = "";
-      let assistantReasoningReplay = "";
-      let assistantReasoningSegments: Array<{
-        source: "reasoning_content" | "think";
-        text: string;
-      }> = [];
-      let assistantPhase:
-        | import("@vykor/agent-contracts").AssistantMessagePhase
-        | undefined;
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
+
+      const request = createTurnRequest({ model: requestConfiguration.model, messages: this.messages, system, tools,
+        maxOutputTokens: requestConfiguration.maxOutputTokens, reasoningEffort: requestConfiguration.reasoningEffort });
 
       // 只把「当前模型调用」包进重试。工具执行、权限请求、压缩和整个 Run
       // 都在循环之外；每次重试冻结同一份请求参数与已确认输入。
       while (true) {
         yield { type: "generation_started", generationId, attempt };
 
-        assistantText = "";
-        assistantReasoning = "";
-        assistantReasoningReplay = "";
-        assistantReasoningSegments = [];
-        assistantPhase = undefined;
-        toolUses = [];
-        stopReason = "end_turn";
-
-        const attemptSignal = createAttemptSignal(
-          options.signal,
-          recoveryDeadlineAt,
-        );
-        const attemptToolUses: ToolUseBlock[] = [];
-        let attemptUsage: UsageSnapshot | undefined;
-        let completionSeen = false;
-        let attemptFailed: ModelRequestFailure | undefined;
-        const pendingProgress = new Map<string, ToolGenerationProgressEvent>();
-        const progressSentAt = new Map<string, number>();
-        let registered = false;
-        let clientInvoked = false;
-        let requestExitedNormally = false;
-
-        try {
-          await options.execution?.limits?.check("model");
-          await options.execution?.emit({
-            type: "model.attempt.started",
-            data: {
-              generationId,
-              attempt,
-              model: requestConfiguration.model,
-              ...(requestConfiguration.provider
-                ? { provider: requestConfiguration.provider }
-                : {}),
-              purpose: forcedFinalTurn ? "finalization" : "generation",
-            },
-          });
-          registered = true;
-          attemptSignal.signal.throwIfAborted();
-          clientInvoked = true;
-          const stream = requestConfiguration.client.streamMessage({
-            model: requestConfiguration.model,
-            messages: this.messages,
-            system,
-            tools: tools.length > 0 ? tools : undefined,
-            ...(requestConfiguration.maxOutputTokens !== undefined
-              ? { maxTokens: requestConfiguration.maxOutputTokens }
-              : {}),
-            ...(requestConfiguration.reasoningEffort
-              ? { reasoningEffort: requestConfiguration.reasoningEffort }
-              : {}),
-            abortSignal: attemptSignal.signal,
-            requestTimeoutMs: policy.requestTimeoutMs,
-            streamIdleTimeoutMs: policy.streamIdleTimeoutMs,
-          });
-
-          for await (const event of stream) {
-            if (event.type === "text_delta") {
-              assistantText += event.delta;
-              assistantPhase = event.phase ?? assistantPhase;
-              yield event;
-            } else if (event.type === "reasoning_delta") {
-              assistantReasoning += event.delta;
-              const lastSegment = assistantReasoningSegments.at(-1);
-              if (lastSegment?.source === event.source)
-                lastSegment.text += event.delta;
-              else
-                assistantReasoningSegments.push({
-                  source: event.source,
-                  text: event.delta,
-                });
-              if (event.source === "reasoning_content") {
-                assistantReasoningReplay += event.delta;
-              }
-              yield event;
-            } else if (event.type === "tool_generation_progress") {
-              const progress = { ...event, generationId, attempt };
-              const now = Date.now();
-              const lastSent = progressSentAt.get(event.toolKey);
-              if (event.discarded === true || event.filePath === null) {
-                pendingProgress.delete(event.toolKey);
-                progressSentAt.delete(event.toolKey);
-                yield progress;
-              } else if (lastSent === undefined || now - lastSent >= 250) {
-                progressSentAt.set(event.toolKey, now);
-                pendingProgress.delete(event.toolKey);
-                yield progress;
-              } else {
-                pendingProgress.set(event.toolKey, progress);
-              }
-            } else if (event.type === "tool_use_start") {
-              attemptToolUses.push(event.toolUse);
-            } else if (event.type === "usage") {
-              attemptUsage = event.usage;
-            } else if (event.type === "complete") {
-              stopReason = event.stopReason;
-              completionSeen = true;
-            } else if (event.type === "error") {
-              throw event.error;
-            } else {
-              yield event;
-            }
-          }
-
-          if (!completionSeen) {
-            throw new ModelRequestFailure(
-              "模型流在完成前结束（缺少完成标记）",
-              { kind: "stream_incomplete", phase: "stream", retryable: true },
-            );
-          }
-          requestExitedNormally = true;
-        } catch (error) {
-          requestExitedNormally = true;
-          if (!registered) throw error;
-          if (isAgentExecutionLimitError(error)) {
-            this.settleModelAttempt(attemptUsage, clientInvoked);
-            yield attemptFinishedEvent(
-              generationId,
-              attempt,
-              "failed",
-              attemptUsage,
-              clientInvoked ? undefined : true,
-            );
-            throw error;
-          }
-          attemptFailed = describeModelFailure(
-            error,
-            options.signal,
-            attemptSignal,
-          );
-        } finally {
-          attemptSignal.dispose();
-          // A consumer can return() while we are suspended at a streamed delta.
-          // It will ignore a finally yield, so settle directly through the host.
-          if (registered && !requestExitedNormally) {
-            this.settleModelAttempt(attemptUsage, clientInvoked);
-            const { type: _, ...data } = attemptFinishedEvent(
-              generationId,
-              attempt,
-              options.signal?.aborted ? "interrupted" : "failed",
-              attemptUsage,
-              clientInvoked ? undefined : true,
-            );
-            await options.execution?.emit({
-              type: "model.attempt.finished",
-              data,
-            });
-            if (attemptUsage)
-              await options.execution?.emit({
-                type: "usage.updated",
-                data: { usage: attemptUsage },
-              });
-          }
-        }
-
+        const modelAttempt = yield* runModelAttempt({
+          client: requestConfiguration.client,
+          request,
+          generationId, attempt, policy, recoveryDeadlineAt,
+          purpose: forcedFinalTurn ? "finalization" : "generation",
+          provider: requestConfiguration.provider,
+          signal: options.signal, execution: options.execution,
+          settleUsage: (usage, incomplete) => this.settleModelAttempt(usage, incomplete),
+        });
+        assistantText = modelAttempt.text;
+        const assistantReasoning = modelAttempt.reasoning;
+        const assistantReasoningReplay = modelAttempt.reasoningReplay;
+        const assistantReasoningSegments = modelAttempt.reasoningSegments;
+        const assistantPhase = modelAttempt.phase;
+        const attemptToolUses = modelAttempt.toolUses;
+        const attemptUsage = modelAttempt.usage;
+        const attemptFailed = modelAttempt.failure;
+        const clientInvoked = modelAttempt.clientInvoked;
+        stopReason = modelAttempt.stopReason;
         if (attemptFailed) {
           this.settleModelAttempt(attemptUsage, clientInvoked);
           yield attemptFinishedEvent(
@@ -847,7 +651,7 @@ export class QueryEngine implements IQueryEngine {
           attemptUsage,
         );
 
-        for (const progress of pendingProgress.values()) yield progress;
+        for (const progress of modelAttempt.progress) yield progress;
         if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
           const notice =
             "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
@@ -949,7 +753,7 @@ export class QueryEngine implements IQueryEngine {
           this.messages.push({
             type: "tool_result",
             toolUseId: result.toolUseId,
-            content: applyToolOutputBudget(result.content),
+            content: applyToolOutputBudget(result.content, this.options.toolOutputPolicy),
             isError: result.isError,
             ...toolFeedbackFields(result),
           });
@@ -1130,7 +934,7 @@ export class QueryEngine implements IQueryEngine {
       .resolveRequestConfiguration
       ? await this.options.resolveRequestConfiguration({
           signal: options.signal,
-          capabilityView: options.execution?.capabilityView,
+          tools: options.execution?.tools,
         })
       : {
           revision: 0,
@@ -1152,8 +956,8 @@ export class QueryEngine implements IQueryEngine {
 
   private applyRequestMaxTurns(maxTurns: number | undefined): void {
     if (maxTurns === undefined) return;
-    if (!Number.isSafeInteger(maxTurns) || maxTurns <= 0) {
-      throw new RangeError("maxTurns must be a positive safe integer");
+    if (!Number.isSafeInteger(maxTurns) || maxTurns < 0) {
+      throw new RangeError("maxTurns must be a non-negative safe integer (0 means unlimited)");
     }
     this.maxTurns = maxTurns;
   }
@@ -1165,7 +969,7 @@ export class QueryEngine implements IQueryEngine {
     if (!configuration) return undefined;
     const maxTurns = configuration.maxTurns ?? this.maxTurns;
     // Steering has already accepted this input; let its request finish if the limit just fell.
-    return maxTurns <= nextTurnCount
+    return maxTurns > 0 && maxTurns <= nextTurnCount
       ? { ...configuration, maxTurns: nextTurnCount + 1 }
       : configuration;
   }
@@ -1396,36 +1200,11 @@ export class QueryEngine implements IQueryEngine {
     options: {
       signal?: AbortSignal;
       execution: AgentExecutionContext;
-      audience?: "model" | "app";
       onResult?: (result: ToolExecutionResult) => Promise<void>;
     },
   ): Promise<ToolExecutionResult> {
-    const original = options.execution;
-    const appBinding =
-      options.audience === "app"
-        ? original.capabilityView?.appTools?.get(toolUse.name)
-        : undefined;
-    // Trusted app operations get exactly one captured app binding, with no model/delegation catalogue.
-    const execution: AgentExecutionContext =
-      options.audience === "app"
-        ? {
-            ...original,
-            capabilityView: original.capabilityView && {
-              ...original.capabilityView,
-              tools: new Map(appBinding ? [[toolUse.name, appBinding]] : []),
-              appTools: new Map(appBinding ? [[toolUse.name, appBinding]] : []),
-              delegatableTools: undefined,
-            },
-          }
-        : { ...original, pluginAppToolApproval: undefined };
-    // Empty allowlist fails closed when no captured view was supplied. Contributions do not widen this entry.
-    const toolRegistry = runToolRegistryForRun(
-      this.toolRegistry,
-      [],
-      undefined,
-      execution.capabilityView,
-      options.audience,
-    );
+    const execution = options.execution;
+    const toolRegistry = capturedToolRegistry(execution.tools ?? new Map());
     const signal = AbortSignal.any([
       execution.scope.signal,
       ...(options.signal ? [options.signal] : []),
@@ -1465,16 +1244,16 @@ export class QueryEngine implements IQueryEngine {
     results: ToolExecutionResult[],
     execution?: AgentExecutionContext,
   ): ToolExecutionResult[] {
-    if (!execution) return results;
+    if (!execution?.profile?.toolResultReferences) return results;
     for (const [id, entry] of this.recentToolResults)
       if (entry.runId !== execution.scope.runId)
         this.recentToolResults.delete(id);
-    const view = execution.capabilityView;
-    if (!view || !(view.pluginIds?.size || view.pluginId)) return results;
+    const view = execution.tools;
+    if (!view) return results;
     return results.map((result) => {
       this.recentToolResults.delete(result.toolUseId);
       if (result.executionState === "not_started") return result;
-      const binding = view.tools.get(result.toolName);
+      const binding = view.get(result.toolName);
       if (!binding) return result;
       const actual = {
         toolUseId: result.toolUseId,
@@ -1513,35 +1292,24 @@ export class QueryEngine implements IQueryEngine {
   }
 
   private createToolContext(
-    toolUse: ToolUseBlock,
-    toolAttemptId: string,
-    toolRegistry: IToolRegistry,
-    signal?: AbortSignal,
-    execution?: AgentExecutionContext,
-    requestConfiguration?: ToolContext["requestConfiguration"],
-    toolDiscovery?: ToolDiscovery,
-    onUnexposedMcpTool?: (name: string) => void,
+    toolUse: ToolUseBlock, toolAttemptId: string, toolRegistry: IToolRegistry,
+    signal?: AbortSignal, execution?: AgentExecutionContext,
+    requestConfiguration?: ToolContext["requestConfiguration"], toolDiscovery?: ToolDiscovery,
+    onUnexposedTool?: (name: string) => void,
   ): ToolContext {
-    return {
-      cwd: this.cwd,
-      ...(this.options.executionEnvironment
-        ? { environment: this.options.executionEnvironment }
-        : {}),
-      sessionId: this.sessionId,
-      shellOutputLogs: this.options.shellOutputLogs,
-      toolCallId: toolUse.id,
-      toolAttemptId,
-      readToolResult: (id) => {
+    return createToolExecutionContext({
+      cwd: this.cwd, sessionId: this.sessionId, environment: this.options.executionEnvironment,
+      toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration, toolDiscovery,
+      setPlanMode: this.options.setPlanMode,
+      readToolResult: id => {
         const entry = this.recentToolResults.get(id);
         const binding =
-          entry && execution?.capabilityView?.tools.get(entry.result.toolName);
+          entry && execution?.tools?.get(entry.result.toolName);
         if (
           !execution ||
           !entry ||
           entry.runId !== execution.scope.runId ||
           !binding ||
-          binding.ownerPluginId !== entry.binding.ownerPluginId ||
-          binding.serverId !== entry.binding.serverId ||
           binding.source?.kind !== entry.binding.source?.kind ||
           binding.source?.id !== entry.binding.source?.id ||
           binding.definitionIdentity !== entry.binding.definitionIdentity ||
@@ -1552,110 +1320,60 @@ export class QueryEngine implements IQueryEngine {
           return undefined;
         return structuredClone(entry.result);
       },
-      runAbortSignal: signal,
-      settings: this.options.settings,
-      setPlanMode: this.options.setPlanMode,
-      ...(requestConfiguration ? { requestConfiguration } : {}),
-      toolRegistry: toolRegistryView(toolRegistry),
-      ...(toolDiscovery ? { toolDiscovery } : {}),
-      ...(toolUse.name === "McpToolCall"
-        ? {
-            callMcpTool: async (
-              name: string,
-              input: Record<string, unknown>,
-              options?: { signal?: AbortSignal; deadlineAt?: number },
-            ) => {
-              if (
-                !name.startsWith("mcp__") ||
-                toolRegistry.inspect(name)?.source.kind !== "mcp"
-              ) {
-                if (name.startsWith("mcp__") && !toolRegistry.has(name))
-                  onUnexposedMcpTool?.(name);
-                return {
-                  content: [
-                    {
-                      type: "text" as const,
-                      text: `Unknown or disallowed MCP tool: ${name}`,
-                    },
-                  ],
-                  isError: true,
-                  failureKind: "policy" as const,
-                  executionState: "not_started" as const,
-                };
-              }
-              const innerSignal = AbortSignal.any([
-                ...(signal ? [signal] : []),
-                ...(options?.signal ? [options.signal] : []),
-              ]);
-              const innerExecution = execution
-                ? {
-                    ...execution,
-                    emit: async (
-                      event: Parameters<AgentExecutionContext["emit"]>[0],
-                    ) => {
-                      // The delegated target is not an additional model-issued tool part.
-                      if (
-                        event.type === "domain.event" &&
-                        event.data.name === "tool.lifecycle"
-                      )
-                        return;
-                      await execution.emit(event);
-                    },
-                  }
-                : undefined;
-              const { results, failure } = await executeCheckedTools({
-                toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
-                toolRegistry,
-                messages: [],
-                permissionChecker: this.permissionChecker,
-                hookExecutor: this.hookExecutor,
-                signal: innerSignal,
-                execution: innerExecution,
-                timeoutMs:
-                  options?.deadlineAt === undefined
-                    ? this.options.toolTimeoutMs
-                    : Math.max(1, options.deadlineAt - Date.now()),
-                createToolContext: (call, attemptId) =>
-                  this.createToolContext(
-                    call,
-                    attemptId,
-                    toolRegistry,
-                    innerSignal,
-                    innerExecution,
-                    requestConfiguration,
-                  ),
-                isTrustedSummary: () => false,
-              });
-              if (failure) throw failure.error;
-              return results[0]!;
-            },
-          }
-        : {}),
-      capabilityView: execution?.capabilityView,
-      skillRegistry: this.skillRegistry,
-      // Global MCP meta APIs bypass captured tools; Runs with a View fail closed.
-      mcpManager: execution?.capabilityView ? undefined : this.mcpManager,
-      mcpAuth: execution?.capabilityView ? undefined : this.mcpAuth,
-      terminal: this.terminal,
-      jobs: this.jobs,
-      backgroundShell: this.backgroundShell,
-      schedules: this.schedules,
-      ...(execution?.effects?.askUserPrompt
-        ? {
-            askUserPrompt: (question: string) =>
-              execution.effects.askUserPrompt!(question, execution.scope),
-          }
-        : {}),
-      ...(execution?.effects?.requestPermission
-        ? {
-            requestPermission: (request) =>
-              execution.effects.requestPermission!(request, execution.scope),
-          }
-        : {}),
-      agent: execution,
-    };
+      invokeTool: async (name, input, options) => {
+        if (!toolRegistry.has(name)) {
+          onUnexposedTool?.(name);
+          return {content: [{type: "text", text: "Unknown or disallowed tool: " + name}],
+            isError: true, failureKind: "policy", executionState: "not_started"};
+        }
+        const innerSignal = AbortSignal.any([
+          ...(signal ? [signal] : []),
+          ...(options?.signal ? [options.signal] : []),
+        ]);
+        const innerExecution = execution
+          ? {
+              ...execution,
+              emit: async (
+                event: Parameters<AgentExecutionContext["emit"]>[0],
+              ) => {
+                // The delegated target is not an additional model-issued tool part.
+                if (
+                  event.type === "domain.event" &&
+                  event.data.name === "tool.lifecycle"
+                )
+                  return;
+                await execution.emit(event);
+              },
+            }
+          : undefined;
+        const { results, failure } = await executeCheckedTools({
+          toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
+          toolRegistry,
+          messages: [],
+          permissionChecker: this.permissionChecker,
+          hookExecutor: this.hookExecutor,
+          signal: innerSignal,
+          execution: innerExecution,
+          timeoutMs:
+            options?.deadlineAt === undefined
+              ? this.options.toolTimeoutMs
+              : Math.max(1, options.deadlineAt - Date.now()),
+          createToolContext: (call, attemptId) =>
+            this.createToolContext(
+              call,
+              attemptId,
+              toolRegistry,
+              innerSignal,
+              innerExecution,
+              requestConfiguration,
+            ),
+          isTrustedSummary: () => false,
+        });
+        if (failure) throw failure.error;
+        return results[0]!;
+      },
+    });
   }
-
   private isTrustedSummary(
     toolUse: ToolUseBlock,
     definition: ToolDefinition,
@@ -1669,7 +1387,7 @@ export class QueryEngine implements IQueryEngine {
         this.isTrustedOverride(
           toolUse.name,
           definition,
-          execution?.capabilityView,
+          execution?.tools,
         ))
     );
   }
@@ -1677,12 +1395,12 @@ export class QueryEngine implements IQueryEngine {
   private isTrustedOverride(
     name: string,
     tool: ToolDefinition,
-    view?: AgentExecutionContext["capabilityView"],
+    view?: AgentExecutionContext["tools"],
   ): boolean {
     const approved = this.trustedOverrides.get(name);
     if (!approved) return false;
     if (view) {
-      const binding = view.tools.get(name);
+      const binding = view.get(name);
       return (
         binding?.definitionIdentity === approved.identity &&
         binding.definition.execute === approved.execute &&
@@ -1694,11 +1412,4 @@ export class QueryEngine implements IQueryEngine {
       tool.execute === approved.execute
     );
   }
-}
-
-function appendSystemGuidance(
-  systemPrompt: string | undefined,
-  guidance: string,
-): string {
-  return systemPrompt?.trim() ? `${systemPrompt}\n\n${guidance}` : guidance;
 }

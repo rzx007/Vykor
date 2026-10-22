@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type {
-  CreatePermissionRequestInput,
-  ListPermissionRequestsOptions,
-  PermissionRequestRecord,
-  ReplyPermissionInput,
-} from "@vykor/protocol";
+import type { CreatePermissionRequestInput, ListPermissionRequestsOptions, PermissionRequestRecord, ReplyPermissionInput } from "@vykor/protocol";
 
 import { atomicWrite } from "../database/atomic-write.js";
 import type { PermissionRepositoryOptions } from "./permission-records.js";

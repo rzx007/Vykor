@@ -242,7 +242,7 @@ export async function mainAction(
   if (options.permissionMode || options.dangerouslySkipPermissions) {
     overrides.permission = { mode: resolveRuntimeModes(options, undefined).approvalMode };
   }
-  if (options.maxTurns) overrides.maxTurns = options.maxTurns;
+  if (options.maxTurns !== undefined) overrides.maxTurns = options.maxTurns;
   if (options.plugins === false) overrides.plugins = { enabled: false };
 
   const settings = await loadSettings(overrides, { includeProject: true, projectRoot: process.cwd() });

@@ -3,7 +3,7 @@ import {
   type PermissionRequestRecord, type PermissionStatus,
 } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";
-import type { AgentPermissionDecision } from "@vykor/core";
+import type { AgentPermissionDecision } from "@vykor/agent-contracts";
 import type { StructuredLogger } from "../shared/observability.js";
 import { PermissionController } from "./permission-controller.js";
 

@@ -3,13 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
-import {
-  QueryEngine,
-  ToolRegistry,
-  type AgentEvent,
-  type StreamingMessageClient,
-  type ToolDefinition,
-} from "@vykor/core";
+import { QueryEngine, ToolRegistry } from "@vykor/core";
+import { type AgentEvent, type StreamingMessageClient, type ToolDefinition } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
 import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../../../client/src/index.js";
 import { FrameworkAgentRun } from "../../../../agent-runtime/src/framework-agent-run.js";

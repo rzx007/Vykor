@@ -35,7 +35,7 @@ T3 也保留底层代理的基础提示词，例如 Claude 接入在 `claude_cod
 
 **对我们的要求：** 区分上游输入、解析结果、执行前文件状态和最终结果。典型失败应能转成脱敏样本，重复验证同一条链路，避免只增加一个局部测试就宣布整条流程已经修复。
 
-**已有基础：** [真实 SDK 到引擎的重试测试](../../../packages/api/src/providers/upstream-retry.integration.test.ts)、[工具执行链路测试](../../../packages/core/src/engine/tool-workflow.integration.test.ts)、现有 Run Inspector 和关联 ID。优先扩展这些入口，不另建通用回放平台。
+**已有基础：** [真实 SDK 到引擎的重试测试](../../../packages/agent-runtime/src/node/integration/upstream-retry.integration.test.ts)、[工具执行链路测试](../../../packages/agent-runtime/src/kernel/engine-tool-workflow.integration.test.ts)、现有 Run Inspector 和关联 ID。优先扩展这些入口，不另建通用回放平台。
 
 T3 证据：`apps/server/src/provider/Layers/EventNdjsonLogger.ts:195`；`docs/orchestration-v2/testing-strategy.md:7`。
 
@@ -107,7 +107,7 @@ T3 按当轮实际挂载的浏览器和设备工具决定是否注入对应说�
 
 检查重点是工具禁用、能力变化后提示是否过期，以及基础提示、Skill、工具描述和错误反馈是否重复或冲突。需要审批的工具不等于不存在；权限拒绝也不能变成换工具绕过的理由。
 
-已有入口：[默认 Runtime](../../../packages/agent-runtime/src/default-runtime.ts)、[提示词片段组装](../../../packages/prompts/src/prompt-segments-assembly.ts)。T3 证据：`apps/server/src/provider/CodexDeveloperInstructions.ts:25`。
+已有入口：[默认 Runtime](../../../packages/agent-runtime/src/node/runtime/default-runtime.ts)、[提示词片段组装](../../../packages/prompts/src/prompt-segments-assembly.ts)。T3 证据：`apps/server/src/provider/CodexDeveloperInstructions.ts:25`。
 
 ### 行为方向二 长任务保留关键事实并能补读来源
 
@@ -117,7 +117,7 @@ T3 当前交接代码优先选择最新请求、最近回答和原始要求；�
 
 优先验证压缩后能否继续遵守最新要求、不做事项、已完成证据、未完成工作和等待句柄。只有样本证明缺口后，才通过现有压缩与上下文入口补充有限事实；必要时在原有访问权限内补读消息，不默认读取其他会话，不建立大型记忆系统。
 
-已有入口：[压缩服务](../../../packages/core/src/engine/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
+已有入口：[压缩服务](../../../packages/core/src/engine/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/node/runtime/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
 
 ### 行为方向三 计划模式与权限及待办进度分开
 
@@ -199,8 +199,8 @@ T3 证据：`apps/server/src/provider/CodexDeveloperInstructions.ts:81`。行为
 | 覆盖链路 | 证据与结果 |
 | --- | --- |
 | 原始 SSE、DSML、参数生成 | API 的恢复、生成进度与真实 SDK 重试测试，59 项通过 |
-| 真实 SDK 到临时文件 | 新增 [file-protocol-replay.integration.test.ts](../../../packages/tools/src/file/__test__/file-protocol-replay.integration.test.ts)，5 项通过：包装 DSML Write 后继续；上游错误和缺少完成标记不落盘废弃调用；native 与 DSML 在部分 JSON 参数生成期间取消不写入、不重试 |
-| Edit 拒绝与短参数修正 | 既有 [file-workflow.integration.test.ts](../../../packages/tools/src/file/__test__/file-workflow.integration.test.ts)，7 项通过；补强断言确认匹配失败时当前原文实际进入下一轮模型请求，而不只保存在某个中间结果中 |
+| 真实 SDK 到临时文件 | 新增 [file-protocol-replay.integration.test.ts](../../../packages/agent-runtime/src/node/integration/file-protocol-replay.integration.test.ts)，5 项通过：包装 DSML Write 后继续；上游错误和缺少完成标记不落盘废弃调用；native 与 DSML 在部分 JSON 参数生成期间取消不写入、不重试 |
+| Edit 拒绝与短参数修正 | 既有 [file-workflow.integration.test.ts](../../../packages/agent-runtime/src/node/integration/file-workflow.integration.test.ts)，7 项通过；补强断言确认匹配失败时当前原文实际进入下一轮模型请求，而不只保存在某个中间结果中 |
 | 引擎执行边界 | core 的工具执行链路测试，33 项通过；核对生成、调用与取消的顺序 |
 | SDK 事件映射 | agent-runtime 的流事件映射测试，5 项通过 |
 | 服务端状态与诊断 | server 的工具进度投影 20 项、Run Inspector 10 项通过；核对占位交接、废弃状态清除、默认脱敏和未知执行结果诊断 |

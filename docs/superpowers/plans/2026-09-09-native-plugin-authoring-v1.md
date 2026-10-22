@@ -12,7 +12,7 @@
 
 ## 任务 1：公开插件作者使用的类型
 
-**文件：** 新建 `packages/plugins/src/sdk.ts`、`packages/plugins/type-tests/sdk.ts`、`packages/plugins/tsconfig.sdk-tests.json`；修改 `packages/plugins/package.json` 与 `packages/agent-runtime/src/native-tools/protocol.ts`。
+**文件：** 新建 `packages/plugins/src/sdk.ts`、`packages/plugins/type-tests/sdk.ts`、`packages/plugins/tsconfig.sdk-tests.json`；修改 `packages/plugins/package.json` 与 `packages/agent-runtime/src/node/plugins/native-tools/protocol.ts`。
 
 - [x] 先编写类型样例，定义正确的 `NativeToolRegister`，并以 `@ts-expect-error` 覆盖缺少 invoke、结果类型错误、调用 context.terminal/context.settings 的情况。
 - [x] 配置独立类型测试的 tsconfig：继承包配置、rootDir 为包根、include 为类型测试目录、noEmit 为 true；从公开子路径导入类型，验证 package exports 可被解析。
@@ -38,7 +38,7 @@ export type NativeToolRegister = (
 
 ## 任务 2：可运行的参考插件与调用验收
 
-**文件：** 新建 `examples/plugins/text-inspector/` 下设计列出的五个文件；新建 `packages/agent-runtime/src/native-tools/text-inspector.test.ts`；修改 `turbo.json`、SDK 类型检查配置和现有 `tool-host.test.ts`。
+**文件：** 新建 `examples/plugins/text-inspector/` 下设计列出的五个文件；新建 `packages/agent-runtime/src/node/plugins/native-tools/text-inspector.test.ts`；修改 `turbo.json`、SDK 类型检查配置和现有 `tool-host.test.ts`。
 
 - [x] 沿用 `tool-host.test.ts` 的真实注册表和 cleanup 模式创建测试。通过 `validateNativePlugin`、`loadNativePlugin`、`activateNativePluginTools` 加载仓库中的参考目录。
 - [x] 先写工具不存在时失败的调用断言，再创建参考插件：
@@ -66,7 +66,7 @@ expect(result).toEqual({ content: [{ type: "text", text: JSON.stringify({
 
 ## 任务 3：正式安装与开发链接验收
 
-**文件：** 新建 `packages/agent-runtime/src/native-tools/native-plugin-authoring.test.ts`、Server 插件生命周期集成测试；修改 `packages/client/src/commands/session-commands.ts` 的重载结果展示并补测试。只在回归证明必要时调整安装/发现/激活代码。
+**文件：** 新建 `packages/agent-runtime/src/node/plugins/native-tools/native-plugin-authoring.test.ts`、Server 插件生命周期集成测试；修改 `packages/client/src/commands/session-commands.ts` 的重载结果展示并补测试。只在回归证明必要时调整安装/发现/激活代码。
 
 - [x] 每个用例复制参考插件到独立临时源目录，将 `VYKOR_CONFIG_DIR` 指向另一临时目录，并在 finally 恢复环境变量和停止 Tool Host。
 - [x] 正式安装：调用 `installLocalNativePlugin`，删除临时源目录，使用 `discoverInstalledNativePlugins` 和 `verifyInstalledNativePlugin` 从快照继续加载并调用。断言 origin native、user scope、已持久化摘要和空权限请求。

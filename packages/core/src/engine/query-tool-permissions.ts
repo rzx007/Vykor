@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { AgentExecutionContext, IPermissionChecker, IHookExecutor } from "../index";
-import type { ToolExecutionResult } from "../types/tools";
+import type {
+  AgentExecutionContext,
+  PermissionChecker as IPermissionChecker,
+  HookExecutor as IHookExecutor,
+} from "@vykor/agent-contracts";
+import type { ToolExecutionResult } from "@vykor/agent-contracts";
 import type { PreparedToolCall } from "./query-tool-preparation";
 
 export async function authorizeToolCall(
@@ -16,7 +20,11 @@ export async function authorizeToolCall(
   try {
     decision = internalTools.has(toolUse.name)
       ? { action: "allow" as const, reason: "Trusted host-internal run tool" }
-      : await permissionChecker.checkTool(toolUse.name, toolUse.input, tool.inputSchema);
+      : await permissionChecker.checkTool(
+          toolUse.name,
+          toolUse.input,
+          tool.inputSchema,
+        );
   } catch {
     decision = { action: "deny" as const, reason: "permission check failed" };
   }
@@ -27,7 +35,12 @@ export async function authorizeToolCall(
     return {
       toolUseId: toolUse.id,
       toolName: toolUse.name,
-      content: [{ type: "text", text: `Permission denied: ${decision.reason ?? "not allowed"}` }],
+      content: [
+        {
+          type: "text",
+          text: `Permission denied: ${decision.reason ?? "not allowed"}`,
+        },
+      ],
       isError: true,
       failureKind: "permission",
       executionState: "not_started",
@@ -35,29 +48,41 @@ export async function authorizeToolCall(
   }
 
   // 处理需要用户确认权限的情况
-  const approval = execution?.pluginAppToolApproval;
-  const approvedAppCall = !!approval && approval.runId === execution?.scope.runId && approval.toolUseId === toolUse.id
-    && approval.binding.definition.name === toolUse.name
-    && execution?.capabilityView?.appTools?.get(toolUse.name) === approval.binding
-    && execution?.capabilityView?.tools.get(toolUse.name) === approval.binding
-    && approval.argumentsJson === JSON.stringify(toolUse.input);
-  if (decision.action === "ask" && !approvedAppCall) {
+  const binding = execution?.tools?.get(toolUse.name);
+  const confirmed =
+    decision.action === "ask" && execution && binding
+      ? (await execution.confirmTool?.({
+          toolUse,
+          binding,
+          scope: execution.scope,
+        })) === true
+      : false;
+  if (decision.action === "ask" && !confirmed) {
     let allowed = false;
     if (execution) {
       const requestId = `permission_${randomUUID()}`;
       const request = {
         toolName: toolUse.name,
-        toolSource: execution.capabilityView?.tools.get(toolUse.name)?.source?.kind ?? "unknown",
+        toolSource:
+          execution.tools?.get(toolUse.name)?.source?.kind ?? "unknown",
         toolDescription: tool.description,
         reason: decision.reason,
         input: toolUse.input,
       };
-      await emitToolLifecycle(execution, toolUse.id, "waiting_permission", "not_started");
+      await emitToolLifecycle(
+        execution,
+        toolUse.id,
+        "waiting_permission",
+        "not_started",
+      );
       await execution.emit({
         type: "permission.requested",
         data: { requestId, request },
       });
-      const approval = await execution.effects.requestPermission(request, execution.scope);
+      const approval = await execution.effects.requestPermission(
+        request,
+        execution.scope,
+      );
       await execution.emit({
         type: "permission.resolved",
         data: { requestId, decision: approval },
@@ -69,7 +94,12 @@ export async function authorizeToolCall(
       return {
         toolUseId: toolUse.id,
         toolName: toolUse.name,
-        content: [{ type: "text", text: `Permission denied by user: ${decision.reason ?? "not confirmed"}` }],
+        content: [
+          {
+            type: "text",
+            text: `Permission denied by user: ${decision.reason ?? "not confirmed"}`,
+          },
+        ],
         isError: true,
         failureKind: "permission",
         executionState: "not_started",
@@ -94,7 +124,12 @@ export async function authorizeToolCall(
     return {
       toolUseId: toolUse.id,
       toolName: toolUse.name,
-      content: [{ type: "text", text: `Blocked by hook: ${hookResult.reason ?? "pre-tool hook blocked execution"}` }],
+      content: [
+        {
+          type: "text",
+          text: `Blocked by hook: ${hookResult.reason ?? "pre-tool hook blocked execution"}`,
+        },
+      ],
       isError: true,
       failureKind: "policy",
       executionState: "not_started",
@@ -107,11 +142,26 @@ export async function authorizeToolCall(
 export async function emitToolLifecycle(
   execution: AgentExecutionContext | undefined,
   toolUseId: string,
-  phase: "preparing" | "waiting_permission" | "queued" | "running" | "completed" | "failed" | "unknown",
+  phase:
+    | "preparing"
+    | "waiting_permission"
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "unknown",
   executionState?: import("@vykor/agent-contracts").ToolExecutionState,
 ): Promise<void> {
-  await execution?.emit({ type: "domain.event", data: { name: "tool.lifecycle", payload: {
-    toolUseId, toolAttemptId: `tool_attempt_${toolUseId}_1`, phase,
-    ...(executionState ? { executionState } : {}),
-  } } });
+  await execution?.emit({
+    type: "domain.event",
+    data: {
+      name: "tool.lifecycle",
+      payload: {
+        toolUseId,
+        toolAttemptId: `tool_attempt_${toolUseId}_1`,
+        phase,
+        ...(executionState ? { executionState } : {}),
+      },
+    },
+  });
 }

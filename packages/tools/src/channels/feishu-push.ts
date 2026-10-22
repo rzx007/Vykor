@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { FeishuChannelPort } from "../ports/channel.js";
 import { createToolAbortScope } from "../abort.js";
 

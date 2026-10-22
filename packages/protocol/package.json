@@ -19,5 +19,8 @@
   "devDependencies": {
     "typescript": "^5.7.3",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@vykor/agent-contracts": "workspace:*"
   }
 }

@@ -6,10 +6,10 @@ import { createDefaultToolRegistry } from "./default-tool-registry.js";
 import { SkillRegistry } from "@vykor/skills";
 
 describe("createDefaultToolRegistry", () => {
-  it("registers the original builtin definition and its source", () => {
+  it("creates a host-bound builtin definition and retains its source", () => {
     const registry = createDefaultToolRegistry();
-    expect(registry.get("Read")).toBe(fileReadTool);
-    expect(registry.get("Read")!.execute).toBe(fileReadTool.execute);
+    expect(registry.get("Read")?.name).toBe(fileReadTool.name);
+    expect(registry.get("Read")?.inputSchema).toEqual(fileReadTool.inputSchema);
     expect(registry.inspect("Read")?.source).toEqual({ kind: "builtin" });
   });
   it("registers all built-in tools", () => {

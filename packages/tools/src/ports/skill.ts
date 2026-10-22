@@ -1,4 +1,4 @@
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 export interface ToolSkillDefinition {
   name: string;
@@ -10,6 +10,8 @@ export interface ToolSkillDefinition {
   userInvocable: boolean;
   disableModelInvocation: boolean;
   commandName?: string;
+  /** Set only by the host after selecting the winning plugin definition. */
+  ownerPluginId?: string;
 }
 
 /** Supplies the current catalogue; discovery and filesystem refresh belong to the host. */

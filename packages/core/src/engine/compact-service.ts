@@ -14,9 +14,9 @@
  * 对齐 Python vykor v0.1.9 services/compact。
  */
 import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type { IHookExecutor } from "../index";
+import type { HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens";
-import { isAgentExecutionLimitError } from "../types/runtime";
+import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
 import {
   createCompactBoundaryMarker,
   estimateMessageTokens,

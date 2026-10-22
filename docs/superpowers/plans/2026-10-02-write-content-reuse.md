@@ -24,7 +24,7 @@
 
 **Files:**
 
-- Modify: `packages/core/src/types/tools.ts`
+- Modify: `packages/agent-contracts/src/tools.ts`
 - Create: `packages/core/src/engine/tool-input-reuse.ts`
 - Modify: `packages/core/src/engine/query-tool-preparation.ts`
 - Modify: `packages/core/src/engine/query-engine.ts`
@@ -99,7 +99,7 @@ node node_modules/vitest/vitest.mjs run src/engine/query-tool-preparation.reuse.
 
 - Modify: `packages/tools/src/file/write.ts`
 - Modify: `packages/tools/src/file/__test__/write.test.ts`
-- Create: `packages/tools/src/file/__test__/write-content-reuse.integration.test.ts`
+- Create: `packages/agent-runtime/src/node/integration/write-content-reuse.integration.test.ts`
 - Update: 本 spec/plan 的完成记录。
 
 **Interfaces:**

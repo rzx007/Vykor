@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
-    "@vykor/core": "workspace:*",
     "openai": "catalog:",
     "sharp": "0.34.4",
     "@vykor/agent-contracts": "workspace:*",

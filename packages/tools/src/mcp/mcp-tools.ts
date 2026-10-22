@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { McpToolPort } from "../ports/mcp.js";
 
 export function createMcpTools(port?: McpToolPort): ToolDefinition[] {
@@ -16,11 +16,12 @@ export function createMcpTools(port?: McpToolPort): ToolDefinition[] {
     },
     async execute(input, context) {
       const qualifiedName = `mcp__${String(input.serverName ?? "")}__${String(input.toolName ?? "")}`;
-      if (!context.callMcpTool) {
+      const source = context.toolRegistry?.inspect(qualifiedName)?.source;
+      if (!qualifiedName.startsWith("mcp__") || source?.kind !== "mcp" || !context.invokeTool) {
         return { content: [{ type: "text", text: `Checked MCP invocation is unavailable: ${qualifiedName}` }], isError: true, failureKind: "policy", executionState: "not_started" };
       }
       try {
-        return await context.callMcpTool(
+        return await context.invokeTool(
           qualifiedName,
           (input.args as Record<string, unknown>) ?? {},
           { signal: context.abortSignal, deadlineAt: context.deadlineAt },

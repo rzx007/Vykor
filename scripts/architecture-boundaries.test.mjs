@@ -558,3 +558,10 @@ test("P3 tools cannot import host implementations and coordinator entries stay p
   assert.ok(checkModuleDependency({ fromFile: "packages/server/src/jobs/example.ts", specifier: "@vykor/tools/agent/child-task", importedNames: ["awaitFrameworkChildTask"] }, policy).length > 0);
   assert.ok(targetPolicy.stageExceptions.every(item => !["P1", "P2", "P3"].includes(item.removeByPhase)));
 });
+
+test("portable code permits Vitest only in test files",()=>{
+ for(const prefix of ["packages/agent-contracts/src/","packages/agent-runtime/src/kernel/"]){
+  assert.deepEqual(checkModuleDependency({fromFile:prefix+"scope.test.ts",specifier:"vitest",importedNames:["it"]},strictPolicy()),[]);
+  assert.ok(checkModuleDependency({fromFile:prefix+"scope.ts",specifier:"vitest",importedNames:["it"]},strictPolicy()).length>0);
+ }
+});

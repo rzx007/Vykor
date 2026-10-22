@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ToolDefinition } from "../types/tools.js";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { resolveToolExecution, ToolRegistry, toolRegistryForNames, visibleToolRegistry } from "./tool-registry.js";
 
 function testTool(execution?: ToolDefinition["execution"]): ToolDefinition {

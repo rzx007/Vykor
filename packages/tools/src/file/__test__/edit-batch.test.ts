@@ -1,3 +1,5 @@
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileEditTool} from "./../edit.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,7 +23,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     const old_string = "/* WORK layers */\\n  const track=document.querySelector('.layer-track');\\n  const panSpeed=[\\n    [0,'-30%',30%]\\n  ];\\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{";
     const new_string = "/* WORK layers */\\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{";
     await fixture(body, async (file, dir) => {
-      const failed = await fileEditTool.execute({ file_path: file, old_string, new_string }, { cwd: dir, settings });
+      const failed = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string, new_string }, { cwd: dir, settings });
       expect(failed).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started",
         metadata: { editFailure: { kind: "disproportionate", matchCount: 1 } } });
       expect(failed.recoveryHint).toContain("实际换行");
@@ -33,7 +35,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       const corrected = { file_path: file,
         old_string: "/* WORK layers */\n  const track=document.querySelector('.layer-track');\n  const panSpeed=[\n    [0,'-30%',30%]\n  ];\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{",
         new_string: "/* WORK layers */\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{" };
-      expect((await fileEditTool.execute(corrected, { cwd: dir, settings })).isError).toBeFalsy();
+      expect((await executeToolFixture(host => createFileEditTool(host), corrected, { cwd: dir, settings })).isError).toBeFalsy();
       expect(await readFile(file, "utf8")).toBe("before\n  /* WORK layers */\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{\nafter\n");
     });
   });
@@ -41,7 +43,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   it("keeps intentional source-code escapes literal in an exact edit", async () => {
     await fixture('const pattern = "\\n";\n', async (file, dir) => {
       const input = { file_path: file, old_string: 'const pattern = "\\n";', new_string: 'const pattern = "\\t";' };
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf8")).toBe('const pattern = "\\t";\n');
     });
@@ -56,7 +58,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       const input = { file_path: file, old_string, new_string, replace_all: true };
       expect((await computeFileChange("Edit", input))?.after).toBe(expected);
       expect(await readFile(file, "utf8")).toBe(body);
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       expect(result.isError).toBeFalsy();
       expect(await readFile(file, "utf8")).toBe(expected);
     });
@@ -74,7 +76,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       ] };
       const preview = await computeFileChange("Edit", input);
       expect(preview?.after).toBe("FIRST\nSECOND\n");
-      const result = await fileEditTool.execute(input, { cwd: dir, settings, environment: {
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings, environment: {
         workspace: { hostRoot: dir },
         files: new CountingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
       } } as never);
@@ -90,7 +92,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
         { old_string: "alpha", new_string: "UNWRITTEN-FIRST-EDIT" },
         { old_string: "function target() {\n  return 999;\n}\nmissing anchor", new_string: "replacement" },
       ] };
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       expect(result).toMatchObject({ isError: true, executionState: "not_started", metadata: {
         editFailure: { editIndex: 2, source: "original_file" },
       } });
@@ -107,14 +109,14 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       const input = { file_path: file, old_string: "function target() {\n  return 1;\n}", new_string: "function target() {\n  return 2;\n}" };
       const preview = await computeFileChange("Edit", input);
       expect(preview?.after).toBe("\uFEFFfunction target() {\r\n  return 2;\r\n}\r\n");
-      await fileEditTool.execute(input, { cwd: dir, settings });
+      await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       expect(await readFile(file, "utf8")).toBe(preview?.after);
     });
   });
 
   it("applies replacement dollar sequences literally", async () => {
     await fixture("alpha\n", async (file, dir) => {
-      await fileEditTool.execute({ file_path: file, old_string: "alpha", new_string: "$& $` $' $$" }, { cwd: dir, settings });
+      await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "alpha", new_string: "$& $` $' $$" }, { cwd: dir, settings });
       expect(await readFile(file, "utf8")).toBe("$& $` $' $$\n");
     });
   });
@@ -122,7 +124,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   it("returns bounded original context for ambiguous matches and does not modify the file", async () => {
     const body = Array.from({ length: 200 }, (_, i) => `same\ncontext ${i} ${"x".repeat(1000)}`).join("\n");
     await fixture(body, async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string: "same", new_string: "new" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "same", new_string: "new" }, { cwd: dir, settings });
       expect(result.metadata?.editFailure).toMatchObject({ kind: "ambiguous", source: "original_file" });
       const windows = (result.metadata?.editFailure as { windows: unknown[] }).windows;
       expect(windows.length).toBeLessThanOrEqual(3);
@@ -136,7 +138,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       const input = { file_path: file, old_string: "alpha", new_string: "new",
         expected_sha256: createHash("sha256").update("other").digest("hex") };
       expect(await computeFileChange("Edit", input)).toBeNull();
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       expect(result).toMatchObject({ isError: true, executionState: "not_started" });
       expect(await readFile(file, "utf8")).toBe("alpha\n");
     });
@@ -149,7 +151,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   ])("locates the original declaration without applying an incorrect edit: %s", async old_string => {
     const body = Array.from({ length: 20 }, (_, i) => `/* padding ${i} */`).join("\n") + "\n    --line-strong: rgba(14, 26, 34, 0.42apsed);\n";
     await fixture(body, async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string, new_string: "--line-strong: rgba(14, 26, 34, 0.42);" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string, new_string: "--line-strong: rgba(14, 26, 34, 0.42);" }, { cwd: dir, settings });
       expect(result).toMatchObject({ isError: true, executionState: "not_started", metadata: {
         editFailure: { kind: "not_found", matchCount: 0, windows: [{ startLine: 19, endLine: 21 }] },
       } });
@@ -165,7 +167,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     ['  "timeoutMs": 100,', '"timeoutMs": 900,'],
   ])("locates other stable declaration names: %s", async (original, old_string) => {
     await fixture(original + "\n", async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string, new_string: "new content" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string, new_string: "new content" }, { cwd: dir, settings });
       expect(result.metadata?.editFailure).toMatchObject({ kind: "not_found", matchCount: 0, windows: [{ startLine: 1, endLine: 1 }] });
       expect(JSON.stringify(result.content)).toContain(original.replaceAll('"', '\\"'));
       expect(await readFile(file, "utf8")).toBe(original + "\n");
@@ -175,7 +177,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   it("does not mistake a similar name, comment or reference for the requested declaration", async () => {
     const body = "// const timeoutMs = 100;\nconst timeoutMsOther = 100;\nconsole.log(timeoutMs);\nconst other = timeoutMs;\n";
     await fixture(body, async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string: "const timeoutMs = 900;", new_string: "new content" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "const timeoutMs = 900;", new_string: "new content" }, { cwd: dir, settings });
       expect(result.metadata?.editFailure).toMatchObject({ kind: "not_found", windows: [] });
       expect(JSON.stringify(result.content)).not.toContain("console.log");
       expect(await readFile(file, "utf8")).toBe(body);
@@ -186,7 +188,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     const body = `{"rows":[${JSON.stringify({ padding: "x".repeat(500) })},{ "id": "th-model", "width": 100 }]}`;
     await fixture(body, async (file, dir) => {
       const input = { file_path: file, old_string: '{"id":"th-model","width":104}', new_string: "replacement" };
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
       expect(result.metadata?.editFailure).toMatchObject({ kind: "not_found", source: "original_file" });
       expect(text).toContain('"id": "th-model"');
@@ -203,7 +205,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
         { old_string: '"width": 100, "padding"', new_string: '"width": 101, "padding"' },
         { old_string: '{"id":"th-product","width":104}', new_string: "replacement" },
       ] };
-      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings });
       const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
       expect(result.metadata?.editFailure).toMatchObject({ editIndex: 2, source: "original_file" });
       expect(text).toContain('"id": "th-product"');
@@ -217,7 +219,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   it.each(['中文列', 'th-\\"quoted'])("locates a raw JSON string id without changing escaped content: %s", async id => {
     const body = `{ "id": ${JSON.stringify(id)}, "width": 100 }`;
     await fixture(body, async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file,
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file,
         old_string: `{"id":${JSON.stringify(id)},"width":104}`, new_string: "replacement" }, { cwd: dir, settings });
       const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
       expect(text).toContain(`"id": ${JSON.stringify(id)}`);
@@ -227,7 +229,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
 
   it("suggests Read or Grep without a made-up offset when no anchor exists", async () => {
     await fixture("actual content\n", async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string: "missing content", new_string: "replacement" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "missing content", new_string: "replacement" }, { cwd: dir, settings });
       expect(result.metadata?.editFailure).toMatchObject({ windows: [] });
       expect(result.recoveryHint).toMatch(/Read.*Grep|Grep.*Read/);
       expect(result.recoveryHint).not.toMatch(/offset=/);
@@ -237,7 +239,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
   it("keeps declaration-location hints within the existing diagnostic bounds", async () => {
     const body = Array.from({ length: 100 }, (_, i) => `--line-strong: value-${i};\n${"x".repeat(1000)}`).join("\n");
     await fixture(body, async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string: "--line-strong: missing-value;", new_string: "new content" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "--line-strong: missing-value;", new_string: "new content" }, { cwd: dir, settings });
       const failure = result.metadata?.editFailure as { windows: { startLine: number; endLine: number }[] };
       expect(failure.windows.length).toBeGreaterThan(0);
       expect(failure.windows.length).toBeLessThanOrEqual(3);
@@ -249,7 +251,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
 
   it("does not ask for another read when old_string and new_string are identical", async () => {
     await fixture("function messel(el) {\n}\n", async (file, dir) => {
-      const result = await fileEditTool.execute({ file_path: file, old_string: "function messel(el) {", new_string: "function messel(el) {" }, { cwd: dir, settings });
+      const result = await executeToolFixture(host => createFileEditTool(host), { file_path: file, old_string: "function messel(el) {", new_string: "function messel(el) {" }, { cwd: dir, settings });
       expect(result).toMatchObject({ isError: true, executionState: "not_started", metadata: { editFailure: { kind: "identical", windows: [] } } });
       expect(result.recoveryHint).not.toMatch(/Read|Grep|offset/);
       expect(result.recoveryHint).toMatch(/相同/);
@@ -262,7 +264,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
       await writeFile(file, Buffer.concat([Buffer.from("alpha\n"), Buffer.from([255])]));
       const input = { file_path: file, old_string: "alpha", new_string: "new" };
       expect(await computeFileChange("Edit", input)).toBeNull();
-      expect(await fileEditTool.execute(input, { cwd: dir, settings })).toMatchObject({ isError: true, executionState: "not_started" });
+      expect(await executeToolFixture(host => createFileEditTool(host), input, { cwd: dir, settings })).toMatchObject({ isError: true, executionState: "not_started" });
     });
   });
 
@@ -271,7 +273,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     { edits: [{ old_string: "alpha", new_string: "new" }], old_string: "alpha", new_string: "new" },
     { edits: [{ old_string: "alpha", new_string: "new", replace_all: "true" }] },
   ])("rejects invalid edit forms before accessing the filesystem: %j", async input => {
-    const result = await fileEditTool.execute({ file_path: "a.txt", ...input }, { cwd: "/work", environment: {
+    const result = await executeToolFixture(host => createFileEditTool(host), { file_path: "a.txt", ...input }, { cwd: "/work", environment: {
       paths: { resolve: async () => { throw new Error("must not read files"); } },
     } } as never);
     expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });

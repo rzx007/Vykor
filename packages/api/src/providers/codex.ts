@@ -2,12 +2,7 @@ import { platform, machine } from "node:os";
 import { normalizeTokenMetering } from "./token-metering.js";
 import type { UsageSnapshot } from "@vykor/agent-contracts";
 import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type {
-  StreamEvent,
-  StreamingMessageClient,
-  StreamMessageParams,
-  ToolDefinition,
-} from "@vykor/core";
+import type { StreamEvent, StreamingMessageClient, StreamMessageParams, ToolDefinition } from "@vykor/agent-contracts";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
   AuthenticationFailure,
@@ -300,7 +295,7 @@ function extractAccountId(token: string): string {
 }
 
 async function convertMessagesToCodex(
-  messages: Message[],
+  messages: readonly Message[],
   signal?: AbortSignal,
 ): Promise<Array<Record<string, unknown>>> {
   const result: Array<Record<string, unknown>> = [];

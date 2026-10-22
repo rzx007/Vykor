@@ -1,8 +1,4 @@
-import type {
-  AgentRunScope,
-  AgentChildController,
-  ToolResult,
-} from "@vykor/core";
+import type { AgentRunScope, AgentChildController, ToolResult } from "@vykor/agent-contracts";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 export interface WorkflowInvocation {
   readonly input: Readonly<Record<string, unknown>>;

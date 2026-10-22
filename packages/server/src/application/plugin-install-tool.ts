@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { PluginService } from "./settings-api.js";
 import { askInstallConfirmation } from "./ask-install-confirmation.js";
 

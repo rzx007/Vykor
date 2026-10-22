@@ -9,18 +9,13 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpRemoteServerConfig, McpServerConfig, Settings } from "@vykor/host-config";
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 import { resolveTransportKind } from "./connection-types.js";
-import {
-  McpResultDataError,
-  mcpResultModelText,
-  normalizeMcpToolMetadata,
-  parseMcpCallResultData,
-} from "@vykor/protocol";
+import { McpResultDataError, mcpResultModelText, normalizeMcpToolMetadata, parseMcpCallResultData } from "@vykor/agent-contracts";
 import type {
   McpConnection,
   McpConnectionActivation,

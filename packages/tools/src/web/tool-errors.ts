@@ -1,5 +1,5 @@
 import { WebProviderError } from "./types.js";
-import type { ToolResult } from "@vykor/core";
+import type { ToolResult } from "@vykor/agent-contracts";
 
 export function webErrorFacts(error: unknown): Pick<ToolResult, "failureKind" | "executionState" | "recoveryHint"> {
   if (error instanceof WebProviderError) {

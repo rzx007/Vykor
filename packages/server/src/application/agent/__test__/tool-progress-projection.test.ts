@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentEvent, AgentEventInput } from "@vykor/core";
+import type { AgentEvent, AgentEventInput } from "@vykor/agent-contracts";
 import type { SessionEventRecord } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { applyEvents, createInitialClientState, syncEvents } from "@vykor/client";

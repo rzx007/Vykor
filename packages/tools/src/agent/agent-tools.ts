@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import {
   getAgentDefinition,
   type AgentDefinition,
@@ -105,11 +105,8 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
       }
 
       const subagentType = (input.subagentType as string | undefined) ?? "worker";
-      const view = context.capabilityView ?? context.agent?.capabilityView;
-      const agentDef = view
-        ? view.agents.get(subagentType)?.definition
-        : getAgentDefinition(subagentType, definitions);
-      if (view && !agentDef) {
+      const agentDef = getAgentDefinition(subagentType, definitions);
+      if (!agentDef) {
         return { content: [{ type: "text", text: `Agent is not available in this run: ${subagentType}` }], isError: true };
       }
       const team = (input.team as string) ?? "default";

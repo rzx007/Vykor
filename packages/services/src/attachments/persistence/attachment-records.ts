@@ -1,9 +1,5 @@
 import { parseAttachmentAssetRecord } from "@vykor/protocol";
-import type {
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  AttachmentRepresentationKind,
-} from "@vykor/protocol";
+import type { AttachmentAssetRecord, AttachmentRepresentationRecord, AttachmentRepresentationKind } from "@vykor/protocol";
 import type {
   attachmentAssets,
   attachmentLeases,

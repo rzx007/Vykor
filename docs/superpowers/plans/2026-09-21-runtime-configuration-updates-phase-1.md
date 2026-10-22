@@ -41,8 +41,8 @@
 **Files:**
 
 - Modify: `packages/core/src/types/runtime.ts`、`packages/core/src/index.ts`
-- Create: `packages/agent-runtime/src/request-configuration.ts`
-- Create: `packages/agent-runtime/src/request-configuration.test.ts`
+- Create: `packages/agent-runtime/src/node/configuration/request-configuration.ts`
+- Create: `packages/agent-runtime/src/node/configuration/request-configuration.test.ts`
 - Modify: `packages/protocol/src/runtime-config.ts`、`packages/protocol/src/runtime-config.test.ts`
 
 **Interfaces:**
@@ -193,11 +193,11 @@ it("changes the next request without replaying a tool", async () => {
 
 - Create: `packages/agent-runtime/src/request-configuration-resolver.ts`
 - Create: `packages/agent-runtime/src/request-configuration-resolver.test.ts`
-- Modify: `packages/agent-runtime/src/agent-options.ts`、`agent.ts`、`agent-composition.ts`
-- Modify: `packages/agent-runtime/src/default-runtime.ts`、`default-runtime-provider.ts`
-- Modify: `packages/agent-runtime/src/default-agent-capabilities.ts`、`child-agent.ts`、`child-agent-options.ts`
-- Modify: `packages/agent-runtime/src/kernel.ts`、`kernel-entry.ts`、`index.ts`
-- Modify: `packages/agent-runtime/src/agent.test.ts`、`child-agent-options.test.ts`、`child-agent.test.ts`、`kernel.test.ts`、`public-surface.test.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/agent-options.ts`、`agent.ts`、`agent-composition.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/default-runtime.ts`、`default-runtime-provider.ts`
+- Modify: `packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts`、`child-agent.ts`、`child-agent-options.ts`
+- Modify: `packages/agent-runtime/src/kernel/index.ts`、`kernel-entry.ts`、`index.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/agent.test.ts`、`child-agent-options.test.ts`、`child-agent.test.ts`、`kernel.test.ts`、`public-surface.test.ts`
 
 **Interfaces:**
 
@@ -285,7 +285,7 @@ it("accepts request configuration while a run is active", async () => {
 **Files:**
 
 - Modify: `packages/agent-runtime/src/request-configuration-resolver.ts`、对应测试
-- Modify: `packages/agent-runtime/src/default-runtime-provider.ts`、对应测试
+- Modify: `packages/agent-runtime/src/node/runtime/default-runtime-provider.ts`、对应测试
 - Modify: `packages/api/src/providers/openai.ts`、`anthropic.ts` 及对应测试
 - Inspect/Modify: `packages/api/src` 中 Codex 适配器的实际请求与历史转换入口（先用下方命令定位）
 - Modify: `packages/server/src/application/assemble-session-context-usage.ts`

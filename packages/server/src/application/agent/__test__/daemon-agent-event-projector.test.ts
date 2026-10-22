@@ -1,5 +1,6 @@
-import { isAgentExecutionLimitError, streamBufferedModelWithRetry, type AgentEvent } from "@vykor/core";
-import { AgentEventBus } from "../../../../../agent-runtime/src/event-source.js";
+import { streamBufferedModelWithRetry } from "@vykor/core";
+import { isAgentExecutionLimitError, type AgentEvent } from "@vykor/agent-contracts";
+import { AgentEventBus } from "@vykor/agent-runtime/kernel";
 import type { SessionEventRecord } from "@vykor/protocol";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

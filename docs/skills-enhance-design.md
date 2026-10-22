@@ -31,7 +31,7 @@ daemon 先用当前 cwd catalog 校验 `name + path`，再要求模型调用 `Sk
 | --- | --- | --- |
 | `SkillDefinition` / `SkillRegistry` | `packages/skills/src/index.ts` | frontmatter、多来源加载、名称与路径解析、覆盖赢家 |
 | bundled Skills | `packages/skills/src/bundled.ts` | 随包提供的内嵌 Skill |
-| 扩展发现 | `packages/agent-runtime/src/extensions.ts` | 合并 bundled、标准全局、用户、项目和 plugin Skill |
+| 扩展发现 | `packages/agent-runtime/src/node/plugins/extensions.ts` | 合并 bundled、标准全局、用户、项目和 plugin Skill |
 | 用户目录 | `packages/server/src/commands/default-command-catalog.ts` | 将 `userInvocable` Skill 映射为 template command |
 | Desktop 输入 | `apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/` | `/`、`$` 选择后插入 `SkillMentionNode` |
 | TUI 输入 | `apps/frontend/src/hooks/useServerSync.ts` | template slash 转成 Skill + text items |

@@ -14,7 +14,8 @@
 把整套东西想成：
 
 ```text
-VykorAgent = 对话引擎 + 历史记录 + 资源 + 当前这一轮运行 + 子 agent 目录
+VykorAgent = 对话引擎执行接口 + 当前这一轮运行 + 子 agent 目录
+DefaultNodeAgent.host = 插件 + 配置 + 记忆 + Node 资源
 AgentEvent       = 「已经发生了什么」的事实记录
 onEvent          = 框架要求上层「必须可靠地处理」这些事实
 subscribe        = 旁观记录/渲染，不参与执行结果
@@ -39,18 +40,18 @@ await agent.close();
 
 | 对象 | 文件 | 职责（白话） |
 |---|---|---|
-| `VykorAgent` | `packages/agent-runtime/src/agent.ts` | 对外主入口；管资源，以及当前这一轮运行归谁 |
-| `FrameworkAgentRun` | `packages/agent-runtime/src/agent.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
-| `AgentEventBus` | `packages/agent-runtime/src/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
-| `AgentChildManager` | `packages/agent-runtime/src/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
-| `AgentChildRegistry` | `packages/agent-runtime/src/child-agent.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
-| child environment | `packages/agent-runtime/src/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
+| `VykorAgent` | `packages/agent-runtime/src/kernel/agent.ts` | 通用执行入口；管当前运行、互斥与显式租约释放 |
+| `FrameworkAgentRun` | `packages/agent-runtime/src/kernel/framework-agent-run.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
+| `AgentEventBus` | `packages/agent-runtime/src/kernel/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
+| `AgentChildManager` | `packages/agent-runtime/src/kernel/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
+| `AgentChildRegistry` | `packages/agent-runtime/src/kernel/child-registry.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
+| child environment | `packages/agent-runtime/src/kernel/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
 | `AgentSession` | `packages/core/src/agent-session.ts` | 对 QueryEngine 的薄包装 |
 | `QueryEngine` | `packages/core/src/engine/query-engine.ts` | 真正跑「模型 ↔ 工具」循环，并维护历史 |
 | AgentDefinition / TeamRegistry | `packages/coordinator/src/definitions/`、`src/teams/` | 唯一角色类型与纯解析；团队由 Node 根树创建实例 |
 | WorkflowHost | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 持有活动 Workflow，负责取消、worker 收尾与保存终态 |
 | 默认工具接线 / 本地 Jobs | `packages/agent-runtime/src/node/tools/`、`src/node/jobs/` | 创建宿主能力并注入工具；Jobs 复用 Host 的 Workflow 视图 |
-| execution contracts | `packages/core/src/types/runtime.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
+| execution contracts | `packages/agent-contracts/src/execution.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
 
 ## 创建流程
 
@@ -71,7 +72,7 @@ flowchart TD
   Bus --> Agent
 ```
 
-需要 Vykor 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供 runtime 和宿主能力。
+需要 Vykor 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供引擎、通用 prepare/release、工具绑定和 effects。
 `createVykorRuntime()` 已不再从包的公开入口导出。
 
 ## 定义、团队和 Workflow 的接线

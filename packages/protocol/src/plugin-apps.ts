@@ -154,7 +154,7 @@ export interface PluginAppActionReceipt {
 }
 export interface PluginAppActionResponse {
   receipt: PluginAppActionReceipt;
-  result?: import("./mcp-apps").McpCallResultData;
+  result?: import("@vykor/agent-contracts").McpCallResultData;
   dataError?: "plugin_app_invalid_data" | "plugin_app_data_too_large" | "plugin_app_unsupported_content" | "plugin_app_result_unavailable";
 }
 export interface PluginAppConversationRequest {

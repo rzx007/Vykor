@@ -5,13 +5,7 @@
  * message/part view and map it to their own presentation models.
  */
 
-import {
-  isSupersededModelPart,
-  readSessionModelRetryState,
-  readSessionModelUsage,
-  type SessionModelRetryState,
-  type SessionModelUsageSummary,
-} from "@vykor/protocol";
+import { isSupersededModelPart, readSessionModelRetryState, readSessionModelUsage, type SessionModelRetryState, type SessionModelUsageSummary } from "@vykor/protocol";
 import type { SessionBucket, SessionMessagePartRecord, SessionMessageRecord } from "../types/index.js";
 
 export interface SessionMessageWithParts {

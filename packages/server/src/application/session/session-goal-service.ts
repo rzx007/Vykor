@@ -1,11 +1,11 @@
 import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalUpdateInput, type CreateSessionGoalInput, type GoalActionInput, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
 import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
-import { AgentExecutionLimitError } from "@vykor/core";
+import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { AdmitPromptInput } from "./run-admission-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { GoalReadSnapshot } from "@vykor/agent-runtime";
+import type { GoalReadSnapshot } from "../goals/goal-read-tool.js";
 import type { GoalWaitCheck, GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 import type { RunAdmissionService } from "./run-admission-service.js";

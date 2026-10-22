@@ -735,8 +735,8 @@ LSP 不进入以上近期顺序。
 6. `packages/plugins/src/load-native-plugin.ts`：当前支持与 deferred Component；
 7. `packages/plugins/src/installation/`：安装、store、cache 和激活前验证；
 8. `packages/plugin-converters/src/`：Converter SPI 与 Claude Code 实现；
-9. `packages/agent-runtime/src/extensions.ts`：Runtime 组合入口；
-10. `packages/agent-runtime/src/native-tools/`：隔离 Tool Runtime；
+9. `packages/agent-runtime/src/node/plugins/extensions.ts`：Runtime 组合入口；
+10. `packages/agent-runtime/src/node/plugins/native-tools/`：隔离 Tool Runtime；
 11. `apps/desktop/src/renderer/src/components/desktop/plugin-page/`：Desktop 管理页面；
 12. `apps/cli/src/commands/plugin.ts` 与 Server Plugin Service：管理入口。
 

@@ -1,3 +1,5 @@
+import {hostedContextUsageAgent} from "./assemble-session-context-usage.js";
+import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
 import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { PluginUiHistoryService } from "./session/plugin-ui-history-service.js";
@@ -7,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { assemblePluginApps } from "./session/plugin-app-assembly.js";
 import { PluginAppConversationService } from "./session/plugin-app-conversation-service.js";
 
-import type { AgentBackgroundShellHost } from "@vykor/core";
+import type { AgentBackgroundShellHost } from "@vykor/tools";
 import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
@@ -442,6 +444,7 @@ export class DaemonApplication implements DurableAgentApplication {
         acquireEnvironment: acquireSessionEnvironment,
       });
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
+      const toolAppOrigins = new ToolAppOriginProjector();
       this.jobs = new DaemonJobService(
         taskStore,
         this.terminals,
@@ -467,6 +470,7 @@ export class DaemonApplication implements DurableAgentApplication {
       const imageToTextTool = createDaemonImageToTextTool({
         authorizationSessions: attachmentAuthorizationSessions,
         attachmentOcr,
+        getSettings: async context => {const session=context.sessionId ? store.sessions.get(context.sessionId) : undefined;return session && options.getSettingsForCwd ? await options.getSettingsForCwd(sessionSettingsRoot(session)) : options.getSettings?.() ?? options.settings;},
       });
       const imageGenerationTool = createDaemonImageGenerationTool({
         attachments: this.attachments,
@@ -528,10 +532,10 @@ export class DaemonApplication implements DurableAgentApplication {
           })),
         workflowRepository: this.workflows,
         workflowHost: this.workflowHost,
-        tools: async ({ session }) => {
+        tools: async ({ session,settings }) => {
           const pluginSettings = options.getSettings?.() ?? options.settings;
           return [
-            createMcpConfigureTool(new McpConfigApplicationService({ coordinator: this.mcpRuntimes }), session.id),
+            createMcpConfigureTool(new McpConfigApplicationService({ coordinator: this.mcpRuntimes }), session.id, {settings,canConfigure:context=>{const id=context.agent?.scope.runId;const run=id?store.runs.getRun(id):undefined;return !!run && run.sessionId===session.id && typeof run.metadata.pluginId!=="string";}}),
             ...(pluginSettings
               ? [
                   createPluginInstallTool(
@@ -558,17 +562,14 @@ export class DaemonApplication implements DurableAgentApplication {
             createBrowserDeveloperTool(options.browserHost),
           ]
         },
-        toolOverrides: [
-          createAttachmentReadTool({
-            defaultTool: fileReadTool,
+        toolDecorators: [{name:"Read",decorate:base=>createAttachmentReadTool({
+            defaultTool: base,
             authorizationSessions: attachmentAuthorizationSessions,
             attachmentReader,
             supportsImageInput: async (context) =>
               supportsNativeImageInput(context, await this.modelCatalog.load()),
             localOcr: this.localOcr,
-          }),
-        ],
-        trustedToolOverrides: ["Read"],
+          })}],
         requestPermission: async (request, context) => {
           const owner = store.sessions.get(context.sessionId);
           const settings = owner && options.getSettingsForCwd
@@ -613,6 +614,7 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         onRunCapabilities: snapshot => {
           pluginCapabilities.authorizeRun(snapshot);
+          return toolAppOrigins.capture(snapshot);
         },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
@@ -620,6 +622,7 @@ export class DaemonApplication implements DurableAgentApplication {
             projectorId: `${DAEMON_AGENT_PROJECTOR}:${agent.id}`,
             rootSessionId: session.id,
             rootAgent: agent,
+            toolAppOrigins,
             store,
             transcriptProjection: this.transcriptProjection,
             executionProjector: this.executionProjector,
@@ -726,10 +729,10 @@ export class DaemonApplication implements DurableAgentApplication {
           outputLimit: limits.outputLimit,
           skillsList,
           getAgent: async () => {
-            const warm = await this.agentPool.get(sessionId);
-            if (warm) return warm;
+            const warm = await this.agentPool.getHosted(sessionId);
+            if (warm) return hostedContextUsageAgent(warm);
             try {
-              return await this.agentPool.acquireSession(sessionId);
+              return hostedContextUsageAgent(await this.agentPool.acquireHostedSession(sessionId));
             } catch {
               return undefined;
             }
@@ -786,7 +789,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runControl = runServices.control;
       this.runEngine = runServices.engine;
       this.pluginApps = assemblePluginApps({ store, operations: this.operationRunner, engine: this.runEngine,
-        acquireSession: id => this.agentPool.acquireSession(id), operationGate: this.operationGate, events: this.eventPublisher,
+        acquireSession: id => this.agentPool.acquireHostedSession(id), operationGate: this.operationGate, events: this.eventPublisher,
         settings: async cwd => await resolveSessionSettings(cwd),
         interrupt: (sessionId, runId) => { this.runControl.interruptRun(sessionId, runId, "plugin_app_cancelled"); },
         waitForRuns: ids => this.runControl.waitForRuns(ids),

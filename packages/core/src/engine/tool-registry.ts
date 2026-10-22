@@ -1,13 +1,16 @@
-import type { AgentExecutionContext } from "../index";
+import type {
+  AgentExecutionContext,
+  RunToolBinding,
+} from "@vykor/agent-contracts";
 import type {
   RegisteredToolInspection,
   ToolDefinition,
   ToolDescriptor,
   ToolExecutionSpec,
   ToolRegistrationSource,
-  ToolRegistry as IToolRegistry,
+  MutableToolRegistry as IToolRegistry,
   ToolRegistryView,
-} from "../types/tools";
+} from "@vykor/agent-contracts";
 
 const DEFAULT_TOOL_EXECUTION: Readonly<ToolExecutionSpec> = Object.freeze({
   domain: "environment",
@@ -19,15 +22,24 @@ export function resolveToolExecution(tool: ToolDefinition): ToolExecutionSpec {
 }
 
 /** Presentation scope only. Malformed explicit metadata never widens either audience. */
-export function isToolVisibleTo(tool: ToolDefinition, audience: "model" | "app"): boolean {
+export function isToolVisibleTo(
+  tool: ToolDefinition,
+  audience: "model" | "app",
+): boolean {
   if (tool.ui === undefined) return true;
   const visibility = tool.ui?.visibility;
-  return Array.isArray(visibility) && visibility.length > 0
-    && visibility.every(value => value === "model" || value === "app")
-    && visibility.includes(audience);
+  return (
+    Array.isArray(visibility) &&
+    visibility.length > 0 &&
+    visibility.every((value) => value === "model" || value === "app") &&
+    visibility.includes(audience)
+  );
 }
 
-function audienceToolRegistry(inner: IToolRegistry, audience: "model" | "app"): IToolRegistry {
+function audienceToolRegistry(
+  inner: IToolRegistry,
+  audience: "model" | "app",
+): IToolRegistry {
   const get = (name: string) => {
     const tool = inner.get(name);
     return tool && isToolVisibleTo(tool, audience) ? tool : undefined;
@@ -36,10 +48,12 @@ function audienceToolRegistry(inner: IToolRegistry, audience: "model" | "app"): 
     register: (tool, source) => inner.register(tool, source),
     override: (tool, source) => inner.override(tool, source),
     replaceBySource: (source, tools) => inner.replaceBySource(source, tools),
-    unregister: name => inner.unregister?.(name) ?? false,
-    get, getAll: () => inner.getAll().filter(tool => isToolVisibleTo(tool, audience)),
-    has: name => get(name) !== undefined,
-    inspect: name => get(name) ? inner.inspect(name) : undefined,
+    unregister: (name) => inner.unregister?.(name) ?? false,
+    get,
+    getAll: () =>
+      inner.getAll().filter((tool) => isToolVisibleTo(tool, audience)),
+    has: (name) => get(name) !== undefined,
+    inspect: (name) => (get(name) ? inner.inspect(name) : undefined),
   };
 }
 
@@ -48,8 +62,7 @@ export function modelToolRegistry(inner: IToolRegistry): IToolRegistry {
 }
 
 type ToolRegistrationErrorCode =
-  | "tool_already_registered"
-  | "tool_override_target_not_found";
+  "tool_already_registered" | "tool_override_target_not_found";
 
 interface ToolEntry {
   definition: ToolDefinition;
@@ -99,7 +112,10 @@ export class ToolRegistry implements IToolRegistry {
     });
   }
 
-  replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
+  replaceBySource(
+    source: ToolRegistrationSource,
+    tools: ToolDefinition[],
+  ): void {
     const next = new Map(this.tools);
     for (const [name, entry] of next) {
       if (sameSource(entry.source, source)) next.delete(name);
@@ -165,7 +181,10 @@ function formatSource(source: ToolRegistrationSource): string {
   return source.id ? `${source.kind}:${source.id}` : source.kind;
 }
 
-function sameSource(a: ToolRegistrationSource, b: ToolRegistrationSource): boolean {
+function sameSource(
+  a: ToolRegistrationSource,
+  b: ToolRegistrationSource,
+): boolean {
   return a.kind === b.kind && a.id === b.id;
 }
 
@@ -192,7 +211,10 @@ export function toolRegistryForNames(
     override(tool: ToolDefinition, source): void {
       inner.override(tool, source);
     },
-    replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
+    replaceBySource(
+      source: ToolRegistrationSource,
+      tools: ToolDefinition[],
+    ): void {
       inner.replaceBySource(source, tools);
     },
     unregister(name: string): boolean {
@@ -217,31 +239,19 @@ export function runToolRegistry(
   inner: IToolRegistry,
   allowedTools: readonly string[] | null,
   contribution: AgentExecutionContext["contribution"],
-  view?: AgentExecutionContext["capabilityView"],
-  audience: "model" | "app" = "model",
+  bindings?: ReadonlyMap<string, RunToolBinding>,
 ): IToolRegistry {
-  const bindings = audience === "app" ? view?.appTools : view?.tools;
-  const captured = (view || audience === "app") && new Map([...(bindings ?? [])].map(([name, binding]) => [
-    name, { ...binding.definition, execute: binding.invoke },
-  ]));
-  const base: IToolRegistry = captured ? {
-    register: () => { throw new Error("Run capability view is immutable"); },
-    override: () => { throw new Error("Run capability view is immutable"); },
-    replaceBySource: () => { throw new Error("Run capability view is immutable"); },
-    get: (name) => captured.get(name),
-    getAll: () => [...captured.values()],
-    has: (name) => captured.has(name),
-    inspect: (name) => {
-      const binding = bindings?.get(name);
-      return binding ? { name, source: binding.source ?? { kind: "runtime" } } : undefined;
-    },
-  } : visibleToolRegistry(inner, allowedTools);
-  const contributed = audience === "app" ? [] : contribution?.tools ?? [];
-  if (contributed.length === 0) return audienceToolRegistry(base, audience);
+  const base = bindings
+    ? capturedToolRegistry(bindings)
+    : visibleToolRegistry(inner, allowedTools);
+  const contributed = contribution?.tools ?? [];
+  if (contributed.length === 0) return modelToolRegistry(base);
   const additions = new Map<string, ToolDefinition>();
   for (const { definition } of contributed) {
     if (base.has(definition.name) || additions.has(definition.name))
-      throw new Error(`Run tool conflicts with an existing tool: ${definition.name}`);
+      throw new Error(
+        `Run tool conflicts with an existing tool: ${definition.name}`,
+      );
     additions.set(definition.name, definition);
   }
   return modelToolRegistry({
@@ -265,6 +275,38 @@ export function runToolRegistry(
   });
 }
 
+/** Executes exactly the bindings captured by a trusted caller; never consults a second directory. */
+export function capturedToolRegistry(
+  bindings: ReadonlyMap<string, RunToolBinding>,
+): IToolRegistry {
+  const captured = new Map(
+    [...bindings].map(([name, binding]) => [
+      name,
+      { ...binding.definition, execute: binding.invoke },
+    ]),
+  );
+  return {
+    register: () => {
+      throw new Error("Captured tools are immutable");
+    },
+    override: () => {
+      throw new Error("Captured tools are immutable");
+    },
+    replaceBySource: () => {
+      throw new Error("Captured tools are immutable");
+    },
+    get: (name) => captured.get(name),
+    getAll: () => [...captured.values()],
+    has: (name) => captured.has(name),
+    inspect: (name) => {
+      const binding = bindings.get(name);
+      return binding
+        ? { name, source: binding.source ?? { kind: "runtime" } }
+        : undefined;
+    },
+  };
+}
+
 export function toolRegistryView(registry: IToolRegistry): ToolRegistryView {
   return {
     get: (name) => {
@@ -283,8 +325,12 @@ function toolDescriptor(tool: ToolDefinition): ToolDescriptor {
     description: tool.description,
     inputSchema: deepFrozenCopy(tool.inputSchema),
     ...(tool.ui ? { ui: deepFrozenCopy(tool.ui) } : {}),
-    ...(tool.annotations ? { annotations: deepFrozenCopy(tool.annotations) } : {}),
-    ...(tool.safeToRetry === undefined ? {} : { safeToRetry: tool.safeToRetry }),
+    ...(tool.annotations
+      ? { annotations: deepFrozenCopy(tool.annotations) }
+      : {}),
+    ...(tool.safeToRetry === undefined
+      ? {}
+      : { safeToRetry: tool.safeToRetry }),
   });
 }
 

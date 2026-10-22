@@ -1,3 +1,4 @@
+import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
 import {
   existsSync,
   mkdtempSync,
@@ -17,19 +18,7 @@ import {
   createWorkflowRunSnapshot,
 } from "@vykor/coordinator";
 import type { JobSnapshot } from "@vykor/jobs";
-import type {
-  AgentChildInput,
-  AgentChildDirectory,
-  AgentChildHandle,
-  AgentEvent,
-  AgentEventContext,
-  AgentEventInput,
-  AgentEventListener,
-  AgentPermissionRequest,
-  AgentPermissionDecision,
-  AgentRunHandle,
-  AgentRunResult,
-} from "@vykor/core";
+import type { AgentChildInput, AgentChildDirectory, AgentChildHandle, AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionRequest, AgentPermissionDecision, AgentRunHandle, AgentRunResult } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
 import type {
   AgentCapabilitySnapshot,
@@ -466,10 +455,10 @@ async function withServer(
     allowedOrigins: options.allowedOrigins,
     storePath: join(dir, "sessions.db"),
     createAgent:
-      options.createAgent ??
+      hostedAgentFactory(options.createAgent ??
       (options.runtimeFactory
         ? adaptTestAgentFactory(options.runtimeFactory)
-        : undefined),
+        : undefined)),
     services: {
       commandCatalog: options.commandCatalog,
       settings: options.settingsService,
@@ -951,7 +940,7 @@ describe("VykorHttpServer", () => {
       first = new VykorHttpServer({
         storePath,
         token,
-        createAgent: adaptTestAgentFactory(runtimeFactory),
+        createAgent: hostedAgentFactory(adaptTestAgentFactory(runtimeFactory)),
         logger: () => {},
       });
       const firstListen = await first.listen();
@@ -1055,7 +1044,7 @@ describe("VykorHttpServer", () => {
       second = new VykorHttpServer({
         storePath,
         token,
-        createAgent: adaptTestAgentFactory(runtimeFactory),
+        createAgent: hostedAgentFactory(adaptTestAgentFactory(runtimeFactory)),
         logger: () => {},
       });
       const secondListen = await second.listen();
@@ -2058,7 +2047,7 @@ describe("VykorHttpServer", () => {
       const first = new VykorHttpServer({
         token,
         storePath,
-        createAgent: adaptTestAgentFactory(runtimeFactory),
+        createAgent: hostedAgentFactory(adaptTestAgentFactory(runtimeFactory)),
       });
       const listen1 = await first.listen();
       try {
@@ -2461,7 +2450,7 @@ describe("VykorHttpServer", () => {
       second = new VykorHttpServer({
         token,
         storePath,
-        createAgent: adaptTestAgentFactory(runtimeFactory),
+        createAgent: hostedAgentFactory(adaptTestAgentFactory(runtimeFactory)),
         logger: (event) => logs.push(event),
       });
       const listen = await second.listen();

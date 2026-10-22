@@ -1,4 +1,4 @@
-import type { ToolResult } from "@vykor/core";
+import type { ToolResult } from "@vykor/agent-contracts";
 import { EditPlanError } from "./edit-plan.js";
 
 /** Line-shaped location hints, not a parser of block comments/templates or replacement values. */

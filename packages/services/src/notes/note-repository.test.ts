@@ -2,11 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type {
-  CreateNoteInput,
-  NoteRecord,
-  UpdateNoteInput,
-} from "@vykor/protocol";
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/protocol";
 import { describe, expect, it } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";

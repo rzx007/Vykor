@@ -14,8 +14,8 @@
 
 - 修改 `packages/skills/src/index.ts`：提供标准目录函数、多个 user 目录加载和规范化去重。
 - 修改 `packages/skills/src/index.test.ts`：验证目录生成、优先级、重复目录和 project 排除。
-- 修改 `packages/agent-runtime/src/extensions.ts`：Session 技能发现接入标准目录。
-- 修改 `packages/agent-runtime/src/capability-resolution.test.ts`：验证 runtime snapshot 调用标准目录。
+- 修改 `packages/agent-runtime/src/node/plugins/extensions.ts`：Session 技能发现接入标准目录。
+- 修改 `packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`：验证 runtime snapshot 调用标准目录。
 - 修改 `packages/tools/src/meta/skill.ts`：Skill/ListSkills 文件系统刷新接入标准目录。
 - 修改 `packages/tools/src/meta/__test__/meta.test.ts`：验证刷新后发现标准全局技能。
 - 修改 `packages/server/src/application/settings-api.ts`：管理来源增加 `standard`。
@@ -135,8 +135,8 @@ git commit -m "feat(skills): discover standard global skill directories"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/extensions.ts`
-- 测试：`packages/agent-runtime/src/capability-resolution.test.ts`
+- 修改：`packages/agent-runtime/src/node/plugins/extensions.ts`
+- 测试：`packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`
 - 修改：`packages/tools/src/meta/skill.ts`
 - 测试：`packages/tools/src/meta/__test__/meta.test.ts`
 
@@ -191,7 +191,7 @@ pnpm --filter @vykor/tools test
 - [ ] **步骤 6：提交运行时接入**
 
 ```powershell
-git add -- packages/agent-runtime/src/extensions.ts packages/agent-runtime/src/capability-resolution.test.ts packages/tools/src/meta/skill.ts packages/tools/src/meta/__test__/meta.test.ts
+git add -- packages/agent-runtime/src/node/plugins/extensions.ts packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts packages/tools/src/meta/skill.ts packages/tools/src/meta/__test__/meta.test.ts
 git commit -m "feat(runtime): load standard global skills"
 ```
 

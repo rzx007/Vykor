@@ -27,15 +27,21 @@ flowchart LR
 @vykor/core <- @vykor/agent-runtime <- @vykor/server <- clients/apps
 ```
 
-`agent-runtime` 禁止依赖 server、HTTP、SSE、daemon store 或 durable session schema。
+Kernel 禁止依赖 server、HTTP、SSE、daemon store 和产品持久记录。Node 可以通过 protocol 使用插件应用数据，但不读取数据库，不拥有 Goal 状态。
 
 ## Kernel 与默认 Node 组装
+
+`agent-contracts` 定义跨包执行数据；`core/engine` 负责模型与工具循环；Kernel 负责 Run/Child 状态和可靠事件交付。Node 在进入循环前捕获本轮工具和能力，通过 `AgentRunPreparation` 返回通用绑定与释放函数。完整 Settings、插件/Skill/MCP/Jobs/Terminal/Schedule 由具体工具工厂闭包持有，不能塞回 `ToolContext`。
+
+Server 保存 `HostedAgent { agent, host }`：执行通过 agent，插件/配置/记忆/检查通过 host。GoalRead/GoalUpdate 与目标提示词由 Server 组成通用 contribution。应用工具仍走 Kernel `runTool` 和同一条受检查执行管道；精确确认由 Node 校验保存的授权、参数、版本与工具身份，硬 deny 优先。可信应用来源由 Server 从本轮真实捕获的绑定生成，不信任工具结果或事件自由字段。
+
+Node 的能力捕获目录属于根树实例，子 Agent 借用；不设置进程级运行目录或通过全局工具 ID 反查宿主。通用 `profile.toolResultReferences` 仅选择结果引用策略，Node 根据已授权范围配置，Kernel 不据此发现插件。
 
 `@vykor/agent-runtime` 现在有两个入口，名字代表它们会做多少事：
 
 | 入口 | 实际做什么 |
 |---|---|
-| `createAgentKernel()` | 只运行 Agent/Run/Child；settings、runtime 和宿主能力都必须由调用方交进来 |
+| `createAgentKernel()` | 只运行 Agent/Run/Child；只接收执行引擎、通用工具绑定、effects 和 prepare/release |
 | `createDefaultNodeAgent()` | 读取本机配置并组装 provider、工具、插件、Skill、MCP、Memory、Sandbox 和 Git child environment |
 
 `createVykorAgent()` 已删除，不提供兼容别名。调用方必须明确选择最小 Kernel 或 Node 默认组装。
@@ -45,8 +51,8 @@ flowchart LR
 | 能力 | 放在哪里 | 原因 |
 |---|---|---|
 | Agent/Run/Child 状态、event/effect/handle、关闭 | Kernel | 这是一次 Agent 执行本身 |
-| QueryEngine turn loop | Kernel 接收的 runtime | Kernel 使用它，但不替宿主选择 provider |
-| `StreamingMessageClient` 接口 | Kernel runtime contract | 可以用 fake client、远程 client 或 Node client |
+| QueryEngine turn loop | core；Kernel 接收引擎接口 | Kernel 使用它，但不替宿主选择 provider |
+| `StreamingMessageClient` 接口 | agent-contracts | 可以用 fake client、远程 client 或 Node client |
 | Anthropic/OpenAI/Codex client | 默认 Node 组装 | 会处理真实网络端点和凭据 |
 | settings 和 CredentialStorage | 默认 Node 组装 | 会读取本机和用户目录 |
 | 插件、Skill、MCP、Memory | 默认 Node 组装 | 会发现或连接外部资源 |

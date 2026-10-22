@@ -6,57 +6,9 @@ import Database from "better-sqlite3";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { applicationOwners } from "./schema.js";
-import {
-  DEFAULT_ATTACHMENT_LIMITS,
-  normalizeSessionUserInputItems,
-  parseAttachmentLimits,
-  sessionUserInputText,
-} from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS, normalizeSessionUserInputItems, parseAttachmentLimits, sessionUserInputText } from "@vykor/protocol";
 
-import type {
-  AdmitPromptInput,
-  AdmitPromptWithRunInput,
-  AppendEventInput,
-  AppendMessagePartDeltaInput,
-  CreateMessageInput,
-  CreatePermissionRequestInput,
-  CreateProjectionSettlementInput,
-  CreateRunInput,
-  CreateRunAttemptInput,
-  CreateSessionTaskInput,
-  CreateSessionInput,
-  ListEventsOptions,
-  ListMessagePartsOptions,
-  ListMessagesOptions,
-  ListPermissionRequestsOptions,
-  ListProjectionSettlementsOptions,
-  ListSessionsOptions,
-  PermissionRequestRecord,
-  ProjectionSettlementRecord,
-  ReplyPermissionInput,
-  SessionMessagePartRecord,
-  SessionEventRecord,
-  SessionInputRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionRunAttemptRecord,
-  SessionExecutionRecord,
-  SessionStateSnapshot,
-  UpsertMessagePartInput,
-  UpdateRunInput,
-  UpdateRunAttemptInput,
-  UpdateSessionTaskInput,
-  UpdateSessionInput,
-  ReplaceTranscriptInput,
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
-  AttachmentRepresentationKind,
-  AttachmentLimits,
-  SessionInputAttachmentRecord,
-  SessionUserInputItem,
-  SessionGoal,
-} from "@vykor/protocol";
+import type { AdmitPromptInput, AdmitPromptWithRunInput, AppendEventInput, AppendMessagePartDeltaInput, CreateMessageInput, CreatePermissionRequestInput, CreateProjectionSettlementInput, CreateRunInput, CreateRunAttemptInput, CreateSessionTaskInput, CreateSessionInput, ListEventsOptions, ListMessagePartsOptions, ListMessagesOptions, ListPermissionRequestsOptions, ListProjectionSettlementsOptions, ListSessionsOptions, PermissionRequestRecord, ProjectionSettlementRecord, ReplyPermissionInput, SessionMessagePartRecord, SessionEventRecord, SessionInputRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, SessionStateSnapshot, UpsertMessagePartInput, UpdateRunInput, UpdateRunAttemptInput, UpdateSessionTaskInput, UpdateSessionInput, ReplaceTranscriptInput, AttachmentAssetRecord, AttachmentRepresentationRecord, AttachmentRepresentationKind, AttachmentLimits, SessionInputAttachmentRecord, SessionUserInputItem, SessionGoal } from "@vykor/protocol";
 import {
   AttachmentRepository,
   AttachmentTransactions,

@@ -10,3 +10,8 @@ export * from "./context-usage.js";
 export * from "./tool-names.js";
 export type { CostTracker as ICostTracker } from "./usage.js";
 export * from "./shell-output.js";
+
+export * from "./tools.js";
+export * from "./execution.js";
+export * from "./events.js";
+export * from "./collections.js";

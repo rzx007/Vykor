@@ -101,7 +101,7 @@ export function moduleViolations(input, policy) {
     if (rule.forbidSpecifiers?.some((pattern) => new RegExp(pattern).test(input.specifier))) add(rule.id, rule, "forbidden module specifier");
     if (rule.symbols?.some((pattern) => names.some((name) => new RegExp(pattern).test(name)))) add(rule.id, rule, `forbidden declaration ${names.join(",")}`);
     if (rule.typeOnlyPackages?.includes(targetName) && !input.typeOnly) add(rule.id, rule, "only a type import is allowed");
-    if (rule.allowExternal && !targetName && !resolvedFile && !input.specifier.startsWith(".") && !rule.allowExternal.includes(packageName(input.specifier))) add(rule.id, rule, "external implementation is not allowed");
+    if (!(packageName(input.specifier) === "vitest" && /\.test\.[cm]?[jt]sx?$/.test(fromFile)) && rule.allowExternal && !targetName && !resolvedFile && !input.specifier.startsWith(".") && !rule.allowExternal.includes(packageName(input.specifier))) add(rule.id, rule, "external implementation is not allowed");
   }
   return [...new Map(violations.map((item) => [item.target, item])).values()];
 }

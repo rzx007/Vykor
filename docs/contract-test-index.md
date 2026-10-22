@@ -1,6 +1,6 @@
 # 契约与测试索引
 
-> 状态：当前硬规则到自动测试的权威索引。最后核对：2026-08-23。
+> 状态：当前硬规则到自动测试的权威索引。最后核对：2026-10-22。
 
 这份文档回答一个简单问题：改了某条关键规则，至少要跑哪些测试。测试文件是证据，不是文档附件；表里的链接由 `pnpm check-docs` 检查是否仍存在。
 
@@ -8,31 +8,41 @@
 
 | 编号 | 主要测试 |
 |---|---|
-| A1、A2、A3、A4、A5 | [agent.test.ts](../packages/agent-runtime/src/agent.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/sdk.test.ts) |
-| E1、E2、E3、E4、E5 | [event-source.test.ts](../packages/agent-runtime/src/event-source.test.ts)、[agent.test.ts](../packages/agent-runtime/src/agent.test.ts) |
-| C1、C2、C3、C4、C5、C6 | [child-agent.test.ts](../packages/agent-runtime/src/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/child-environment.test.ts) |
+| A1、A2、A3、A4、A5 | [agent.test.ts](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/node/runtime/sdk.test.ts) |
+| E1、E2、E3、E4、E5 | [event-source.test.ts](../packages/agent-runtime/src/kernel/event-source.test.ts)、[agent.test.ts](../packages/agent-runtime/src/node/runtime/agent.test.ts) |
+| C1、C2、C3、C4、C5、C6 | [child-agent.test.ts](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) |
 | D1、D2、D3、D4、D5、D6、D7 | [http.test.ts](../packages/server/src/http/__test__/http.test.ts)、[daemon-control-service.test.ts](../packages/server/src/application/control/__test__/daemon-control-service.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts)、[agent-pool.test.ts](../packages/server/src/application/agent/__test__/agent-pool.test.ts)、[daemon-lifecycle.soak.test.ts](../packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts) |
 | T1、T2、T3 | [http.test.ts](../packages/server/src/http/__test__/http.test.ts) |
 | P1、P2、P3、P4、P5、P6、P7、P8 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)、[transcript-projection.test.ts](../packages/server/src/application/session/__test__/transcript-projection.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts)、[projection-settlement-recovery.test.ts](../packages/server/src/application/agent/__test__/projection-settlement-recovery.test.ts) |
 
 ## Runtime Kernel
 
+### Kernel / Node 分离（2026-10-22）
+
+| 硬规则 | 主要测试 |
+| --- | --- |
+| 通用 Kernel、可靠回执、父子工具权限上限 | [kernel/index.test.ts](../packages/agent-runtime/src/kernel/index.test.ts) |
+| 注入环境默认借用，转交所有权后关闭一次 | [execution-ownership.test.ts](../packages/agent-runtime/src/node/runtime/execution-ownership.test.ts) |
+| 根树目录隔离和离线 MCP 认证范围 | [node-run-catalogue.test.ts](../packages/agent-runtime/src/node/capabilities/node-run-catalogue.test.ts)、[prepare-run-tools.test.ts](../packages/agent-runtime/src/node/runtime/prepare-run-tools.test.ts) |
+| 应用来源必须来自可信本轮绑定 | [tool-app-origin-projector.test.ts](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) |
+
+
 ### 模型网络重试（2026-09-26）
 
 | 硬规则 | 主要测试 |
 |---|---|
 | 仅重试当前模型调用，次数有界、等待可取消，工具不重复执行 | [model-retry.integration.test.ts](../packages/core/src/engine/model-retry.integration.test.ts)、[model-retry.test.ts](../packages/core/src/engine/model-retry.test.ts) |
-| 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
+| 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/node/memory/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
 | 实时结果、SQLite 历史、客户端重放一致，投影失败不重发模型 | [model-retry-flow.test.ts](../packages/server/src/application/__test__/model-retry-flow.test.ts) |
 | Desktop 即使跳过中间快照也正确替换输出，倒计时独立更新 | [session-subscription-service.coalescing.test.ts](../apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts)、[model-retry-countdown.test.tsx](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/notices/__test__/model-retry-countdown.test.tsx) |
 | CLI 最终 JSON 不拼接失效输出，流式 JSON 可识别替换 | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts)、[renderer.test.ts](../apps/cli/src/renderer.test.ts) |
 
 | 硬规则 | 主要测试 |
 |---|---|
-| Kernel 可以独立创建 Agent，不依赖 daemon、HTTP 或 UI | [kernel.test.ts](../packages/agent-runtime/src/kernel.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/sdk.test.ts) |
-| Run 完成、失败、中断后都只能得到一个终态结果 | [agent.test.ts](../packages/agent-runtime/src/agent.test.ts)、[event-source.test.ts](../packages/agent-runtime/src/event-source.test.ts) |
-| Agent close 会继续尝试所有清理阶段 | [agent.test.ts](../packages/agent-runtime/src/agent.test.ts)、[default-runtime.test.ts](../packages/agent-runtime/src/default-runtime.test.ts) |
-| Child 深度、并发和总数受全树预算限制；关闭后不能重置总数 | [child-agent.test.ts](../packages/agent-runtime/src/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/child-environment.test.ts) |
+| Kernel 可以独立创建 Agent，不依赖 daemon、HTTP 或 UI | [kernel.test.ts](../packages/agent-runtime/src/node/runtime/host-assembly.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/node/runtime/sdk.test.ts) |
+| Run 完成、失败、中断后都只能得到一个终态结果 | [agent.test.ts](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[event-source.test.ts](../packages/agent-runtime/src/kernel/event-source.test.ts) |
+| Agent close 会继续尝试所有清理阶段 | [agent.test.ts](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[default-runtime.test.ts](../packages/agent-runtime/src/node/runtime/default-runtime.test.ts) |
+| Child 深度、并发和总数受全树预算限制；关闭后不能重置总数 | [child-agent.test.ts](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) |
 
 对应契约：[Agent Lifecycle Contract](./agent-lifecycle-contract.md)、[Agent Child Session Flow](./agent-child-session-flow.md)。
 
@@ -84,7 +94,7 @@
 |---|---|
 | Permission 请求持久化、回复幂等、过期后不能重新批准 | [permission-broker.test.ts](../packages/server/src/permissions/__test__/permission-broker.test.ts)、[permission-controller.test.ts](../packages/server/src/permissions/__test__/permission-controller.test.ts) |
 | Sandbox 统一限制命令和文件访问 | [sandbox policy.test.ts](../packages/sandbox/src/policy.test.ts)、[sandbox index.test.ts](../packages/sandbox/src/index.test.ts)、[file Edit test.ts](../packages/tools/src/file/__test__/edit.test.ts) |
-| MCP manager 缺失和认证失败会明确返回错误 | [mcp-tools.test.ts](../packages/tools/src/mcp/__test__/mcp-tools.test.ts)、[mcp-auth.test.ts](../packages/agent-runtime/src/mcp-auth.test.ts) |
+| MCP manager 缺失和认证失败会明确返回错误 | [mcp-tools.test.ts](../packages/tools/src/mcp/__test__/mcp-tools.test.ts)、[mcp-auth.test.ts](../packages/agent-runtime/src/node/mcp/mcp-auth.test.ts) |
 
 对应契约：[Security and Trust Boundaries](./security-and-trust-boundaries.md)、[Permission Flow](./permission-flow.md)、[Sandbox Runtime Flow](./sandbox-runtime-flow.md)。
 

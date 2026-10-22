@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@vykor/coordinator": "workspace:*",
-    "@vykor/core": "workspace:*",
     "@vykor/environment": "workspace:*",
     "@vykor/jobs": "workspace:*",
     "@vykor/sandbox": "workspace:*",

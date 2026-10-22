@@ -1,11 +1,7 @@
 import { mkdtemp, writeFile, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  officeFormat,
-  OFFICE_MEDIA_TYPES,
-  type OfficePreview,
-} from "@vykor/protocol";
+import { officeFormat, OFFICE_MEDIA_TYPES, type OfficePreview } from "@vykor/protocol";
 import { createOfficeRunner, hash } from "./office-engine.mjs";
 import { sniffOfficePackage } from "../attachments/storage/attachment-media-type.js";
 import { wordParagraphText, assertCompleteOfficeText } from "./office-text.js";

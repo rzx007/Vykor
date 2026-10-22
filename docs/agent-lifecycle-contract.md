@@ -19,6 +19,8 @@ surface   = interaction state and rendering
 |---|---|---|
 | root run、maintenance、child live handle | `VykorAgent` | `agent.close()` |
 | 本轮后台 Workflow、worker 收尾和终态写入 | Node WorkflowHost；Agent/session 使用绑定视图 | Agent 先关闭自己的视图，应用关闭整个 Host |
+| root tree 的能力捕获目录 | NodeRunCatalogue；根树创建、child 借用 | 不跨根树共享，随树关闭 |
+| 本轮已捕获工具和 MCP 连接租约 | Node 的 AgentRunPreparation | 准备失败、Run 终态、close 均释放一次 |
 | root tree 的团队目录 | Node 根树创建的 TeamRegistry | 子 Agent 借用，不跨根树共享 |
 | child worktree/environment lease | 创建该 child 的 `AgentChildManager` | child suspend/close，失败也必须尝试 |
 | per-session agent generation | `AgentPool` | archive、配置失效或 daemon shutdown |
@@ -37,7 +39,7 @@ stateDiagram-v2
   [*] --> idle
   idle --> running: submitMessage
   running --> idle: run settles
-  idle --> maintaining: compact / remember
+  idle --> maintaining: compact / runTool / Node memory
   maintaining --> idle: operation settles
   idle --> closing: close
   running --> closing: close + interrupt
@@ -148,8 +150,8 @@ stateDiagram-v2
 
 | 契约 | 回归测试 |
 |---|---|
-| A1-A5、E1-E5 | `packages/agent-runtime/src/agent.test.ts`, `sdk.test.ts`, `event-source.test.ts` |
-| C1-C6 | `packages/agent-runtime/src/child-agent.test.ts` |
+| A1-A5、E1-E5 | `packages/agent-runtime/src/node/runtime/agent.test.ts`, `sdk.test.ts`, `event-source.test.ts` |
+| C1-C6 | `packages/agent-runtime/src/node/runtime/child-agent.test.ts` |
 | D2、T1-T3 | `packages/server/src/application/control/__test__/daemon-control-service.test.ts`, `packages/server/src/http/__test__/http.test.ts` |
 | D3-D5、P1-P5 | `packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`, `packages/server/src/application/session/__test__/session-run-executor.test.ts` |
 | D6 | `packages/server/src/application/agent/__test__/agent-pool.test.ts` |

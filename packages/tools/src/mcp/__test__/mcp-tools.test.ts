@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpAuthHost, ToolResult } from "@vykor/core";
+import type { McpAuthHost } from "@vykor/tools";
+import type { ToolResult } from "@vykor/agent-contracts";
 import { createMcpTools } from "../index.js";
 
 function textOf(result: ToolResult): string {

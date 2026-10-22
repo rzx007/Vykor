@@ -63,7 +63,7 @@ daemon hosting 时，同一份字段同时写入 child session metadata，供 du
 packages/coordinator/src/agent-loader.ts
 packages/tools/src/agent/index.ts
 packages/tools/src/agent/workflow/runner.ts
-packages/agent-runtime/src/child-agent.ts
+packages/agent-runtime/src/kernel/child-agent.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 ```
 

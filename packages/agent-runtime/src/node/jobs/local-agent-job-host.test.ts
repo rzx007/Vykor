@@ -1,3 +1,4 @@
+import type { AgentChildDirectory, AgentChildHandle, ChildActivitySnapshot } from "@vykor/agent-contracts";
 import { beforeEach as setupOwner } from "vitest";
 import {
   mkdtempSync,
@@ -9,11 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type {
-  AgentChildDirectory,
-  AgentChildHandle,
-  ChildActivitySnapshot,
-} from "@vykor/core";
+
 import type { AgentChildResult } from "@vykor/agent-contracts";
 import {
   createWorkflowPlan,

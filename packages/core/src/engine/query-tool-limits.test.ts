@@ -6,11 +6,8 @@ const text = (content: ReturnType<typeof applyToolOutputBudget>) => content.filt
 
 describe("tool output history budget", () => {
   it("keeps one bounded independent reference and an accurate notice at a block boundary", () => {
-    const before = process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS;
-    const previewBefore = process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS;
-    process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = "256";
-    process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS = "128";
-    try {
+    const policy = { inlineChars: 256, previewChars: 128 };
+
       const image = { type: "image" as const, source: { type: "base64" as const, mediaType: "image/png", data: "AA==" } };
       const content = [
         { type: "text" as const, text: "a".repeat(128) }, image,
@@ -18,19 +15,14 @@ describe("tool output history budget", () => {
         { type: "text" as const, text: ref },
         { type: "text" as const, text: ref },
       ];
-      const once = applyToolOutputBudget(content);
+      const once = applyToolOutputBudget(content, policy);
       expect(once).toContain(image);
       expect(once.filter((block) => block.type === "text" && block.text === ref)).toHaveLength(1);
       expect(text(once)).toContain("输出已截断");
       expect(text(once)).not.toContain("b".repeat(100));
-      const again = applyToolOutputBudget(once);
+      const again = applyToolOutputBudget(once, policy);
       expect(again.filter((block) => block.type === "text" && block.text === ref)).toHaveLength(1);
-    } finally {
-      if (before === undefined) delete process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS;
-      else process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = before;
-      if (previewBefore === undefined) delete process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS;
-      else process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS = previewBefore;
-    }
+
   });
 
   it("does not protect malformed, whitespace, or oversized reference blocks", () => {

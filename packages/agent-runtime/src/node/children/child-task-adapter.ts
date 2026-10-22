@@ -1,4 +1,5 @@
-import type { AgentChildController } from "@vykor/core";
+import type { AgentChildController } from "@vykor/agent-contracts";
+
 import type { AwaitExecutionResult } from "@vykor/execution-node";
 
 export async function awaitFrameworkChildTask(

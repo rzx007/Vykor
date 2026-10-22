@@ -1,3 +1,4 @@
+import type { ToolResult } from "@vykor/agent-contracts";
 import {
   createWorkflowPlan,
   createWorkflowRunId,
@@ -21,7 +22,7 @@ import {
 } from "@vykor/coordinator/workflow";
 import type { AgentJobHost, JobSnapshot, JobReadResult } from "@vykor/jobs";
 import { filterJobSnapshots, isTerminalJobStatus } from "@vykor/jobs";
-import type { ToolResult } from "@vykor/core";
+
 import type { WorkflowInvocation, WorkflowToolPort } from "@vykor/tools";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import {

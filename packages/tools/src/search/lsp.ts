@@ -1,5 +1,6 @@
+import type { ToolHostPolicyPort } from "../ports/policy.js";
 import { LspClient, type LspServerConfig } from "@vykor/execution-node";
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 
 export type WithLspClient = <T>(
   config: LspServerConfig,
@@ -18,7 +19,7 @@ async function withLocalClient<T>(
   }
 }
 
-export function createLspTool(withClient: WithLspClient = withLocalClient): ToolDefinition {
+export function createLspTool(withClient: WithLspClient = withLocalClient, host: ToolHostPolicyPort = {}): ToolDefinition {
   return {
     name: "Lsp",
     description: "Code intelligence: symbols, definitions, references, hover.",
@@ -53,7 +54,7 @@ export function createLspTool(withClient: WithLspClient = withLocalClient): Tool
           args: [],
           cwd: context.cwd,
           sessionId: context.sessionId,
-          settings: context.settings,
+          settings: host.settings,
           signal: context.abortSignal,
         },
         async (client): Promise<ToolResult> => {

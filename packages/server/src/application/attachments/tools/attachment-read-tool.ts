@@ -1,4 +1,4 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { LocalOcrImageBytesResult } from "@vykor/services";
 import { readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/services";
 import { officeFormat } from "@vykor/protocol";

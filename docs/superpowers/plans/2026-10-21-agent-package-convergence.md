@@ -1,6 +1,6 @@
 # Agent 核心包架构收敛实施计划
 
-> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 完成 P3。P0–P3 已完成并验证，P4–P6 尚未开始；最新证据见 [P3 验证记录](../reviews/2026-10-22-agent-package-convergence-p3.md)。
+> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 完成 P4。P0–P4 已完成并验证，P5、P6 尚未开始；最新证据见 [P4 验证记录](../reviews/2026-10-22-agent-package-convergence-p4.md)。
 > **For agentic workers:** 仅在用户要求开始实施后使用 executing-plans 按阶段执行。只有用户或适用指令明确授权时才使用 subagent-driven-development；本计划不要求自动启动子 Agent。
 
 **Goal:** 收敛 packages 的执行、宿主和持久化职责，使新增能力不再要求修改多个核心控制层，同时保持现有执行和数据语义。
@@ -13,7 +13,7 @@
 
 ## Global Constraints
 
-- 当前授权范围截至 P3：基线、公共基础类型、本机配置、本地执行，以及 Agent 定义、Team、Workflow 和工具宿主收敛；P4–P6 尚未启动。不发布、不部署、不重置用户数据。
+- 当前授权范围截至 P4：完成基线、公共类型、本机配置、本地执行、Agent 定义、Team、Workflow、Kernel/Node 分离和 Engine 职责整理；P5、P6 尚未启动。不发布、不部署、不重置用户数据。
 - 最终新增三个内部包：`@vykor/agent-contracts`、`@vykor/host-config`、`@vykor/execution-node`；其他职责先在现有包内分目录、子入口管理。
 - 保留会话排队、事务、可靠事件处理和子 Agent 生命周期；先移动职责和缩小接口，再整理大文件。
 - 每阶段形成可编译、可运行的完整切面，不提交只有新接口、实际调用仍走旧实现的空架构。
@@ -286,7 +286,7 @@ node scripts/architecture-boundaries.mjs
 
 **验收：** A04、B04/B06；工具层没有后台运行所有权，没有全局进程目录查找，注册来源与能力过滤保持有效。
 
-**实际进度：** 2026-10-22 完成 T04–T06 / M07–M14。AgentDefinition 归一、Team 按根树隔离；WorkflowHost 拥有活动执行，文件仓库、worker 和默认工具组装迁到 Node；工具使用显式能力接口。修复关闭顺序，真实 child 收尾后才移除。架构阶段推进到 P3，例外 597 条（P4 558、P5 13、P6 26），P0–P3 到期例外为零。1,112 项测试通过、1 项 Windows 不适用测试跳过，类型、构建、正式入口及检查结果见 [P3 记录](../reviews/2026-10-22-agent-package-convergence-p3.md)。P4 尚未启动。
+**实际进度：** 2026-10-22 完成 T04–T06 / M07–M14。AgentDefinition 归一、Team 按根树隔离；WorkflowHost 拥有活动执行，文件仓库、worker 和默认工具组装迁到 Node；工具使用显式能力接口。修复关闭顺序，真实 child 收尾后才移除。架构阶段推进到 P3，例外 597 条（P4 558、P5 13、P6 26），P0–P3 到期例外为零。1,112 项测试通过、1 项 Windows 不适用测试跳过，类型、构建、正式入口及检查结果见 [P3 记录](../reviews/2026-10-22-agent-package-convergence-p3.md)。后续 P4 结果见下一节。
 
 ## 6. P4：Kernel 与 Node 分离
 
@@ -305,13 +305,13 @@ node scripts/architecture-boundaries.mjs
 
 本任务分四个编辑步骤，但必须作为一个可构建、可运行的整体交付：
 
-- [ ] **T07.1 固定测试。** Kernel 只接收 fake client、工具、环境、effects；依赖反例阻止 Node 专属类型进入 Kernel 声明。迁移 B01–B05 测试，不删除现有失败/取消用例。
-- [ ] **T07.2 缩小通用上下文。** 移走 Settings/MCP/Skill/Terminal/Jobs/Schedule 字段，切到 T06 工厂；把通用消息/工具/事件/控制类型移入 contracts。NodeCapabilityView 保留具体能力目录，PreparedAgentRun 只携带捕获的通用执行绑定。
-- [ ] **T07.3 分开宿主和生命周期。** Kernel 使用引擎执行接口及显式 release；RuntimeBundle/RuntimeBuilder 迁成 NodeRuntimeResources。Child 工厂只接收已解析配置，保留创建/幂等/TTL/关闭状态机。Node 负责资源安装/本轮准备，清理发生在准备失败、终态和 close 三条路径。
-- [ ] **T07.4 搬走 Goal 和应用接入并切换使用者。** Server 创建 Goal contribution；Node host 管应用 catalogue/lease；Server 经通用独立工具执行入口调用已捕获工具。应用精确确认走宿主通用确认接口，硬 deny 仍优先。持久 pluginAppOrigin 在可靠 Server 入口生成。
-- [ ] 更新 Server HostedAgent 适配、loader/pool/self-review、SDK 调用者和声明；Node 默认工厂仍直接提供 submitMessage/runMessage/close，host 特性只从 `.host` 访问。
-- [ ] 删除内核中的 Goal/PluginAppRecord/插件候选策略、完整 Settings 和默认能力创建代码；更新构建入口与 metafile 检查。
-- [ ] 完整运行该原子组的相关回归后，再交付此阶段；禁止只合入新 interface、留双运行路径。
+- [x] **T07.1 固定测试。** Kernel 只接收 fake client、工具、环境、effects；依赖反例阻止 Node 专属类型进入 Kernel 声明。迁移 B01–B05 测试，不删除现有失败/取消用例。
+- [x] **T07.2 缩小通用上下文。** 移走 Settings/MCP/Skill/Terminal/Jobs/Schedule 字段，切到 T06 工厂；把通用消息/工具/事件/控制类型移入 contracts。NodeCapabilityView 保留具体能力目录，PreparedAgentRun 只携带捕获的通用执行绑定。
+- [x] **T07.3 分开宿主和生命周期。** Kernel 使用引擎执行接口及显式 release；RuntimeBundle/RuntimeBuilder 迁成 NodeRuntimeResources。Child 工厂只接收已解析配置，保留创建/幂等/TTL/关闭状态机。Node 负责资源安装/本轮准备，清理发生在准备失败、终态和 close 三条路径。
+- [x] **T07.4 搬走 Goal 和应用接入并切换使用者。** Server 创建 Goal contribution；Node host 管应用 catalogue/lease；Server 经通用独立工具执行入口调用已捕获工具。应用精确确认走宿主通用确认接口，硬 deny 仍优先。持久 pluginAppOrigin 在可靠 Server 入口生成。
+- [x] 更新 Server HostedAgent 适配、loader/pool/self-review、SDK 调用者和声明；Node 默认工厂仍直接提供 submitMessage/runMessage/close，host 特性只从 `.host` 访问。
+- [x] 删除内核中的 Goal/PluginAppRecord/插件候选策略、完整 Settings 和默认能力创建代码；更新构建入口与 metafile 检查。
+- [x] 完整运行该原子组的相关回归后，再交付此阶段；禁止只合入新 interface、留双运行路径。
 
 必须验证的具体场景：
 
@@ -347,11 +347,11 @@ node scripts/architecture-boundaries.mjs
 
 **接口：** QueryEngine 保留 public submitMessage/executeTool/getHistory/compact；内部 model-attempt-runner 只执行一次模型尝试并汇总事件，turn-context 生成本回合冻结输入，tool-execution-context 从显式执行参数生成通用 ToolContext。可复用既有 checked-tool-execution，不再造第二条工具管道。
 
-- [ ] 用既有回归固定模型失败后重试、部分输出替换、工具提交一次、steer 边界和末轮收尾行为。
-- [ ] 将对应代码搬入具名模块，通过参数/返回值交换结果；QueryEngine 唯一持有可变消息历史和当前请求配置。
-- [ ] 不把 Engine 所有字段打包成内部万能 EngineContext，也不让子模块持有另一份 history/cost 状态。
-- [ ] 保留批次取消与已启动工具的独立结果交付；新模块不重试工具执行。
-- [ ] 移动测试而非重复同一实现断言；对新发现的交叉状态才增加用例。
+- [x] 用既有回归固定模型失败后重试、部分输出替换、工具提交一次、steer 边界和末轮收尾行为。
+- [x] 将对应代码搬入具名模块，通过参数/返回值交换结果；QueryEngine 唯一持有可变消息历史和当前请求配置。
+- [x] 不把 Engine 所有字段打包成内部万能 EngineContext，也不让子模块持有另一份 history/cost 状态。
+- [x] 保留批次取消与已启动工具的独立结果交付；新模块不重试工具执行。
+- [x] 移动测试而非重复同一实现断言；对新发现的交叉状态才增加用例。
 
 ```powershell
 pnpm --filter @vykor/core exec vitest run src/engine/model-retry.integration.test.ts src/engine/buffered-model-retry.test.ts src/engine/checked-tool-execution.test.ts src/engine/recovery-evidence.test.ts src/engine/tool-discovery.integration.test.ts src/engine/request-configuration.test.ts
@@ -360,6 +360,8 @@ pnpm --filter @vykor/core --filter @vykor/agent-runtime check-types
 ```
 
 **验收：** B01/B02/B04；一个历史所有者、一条受检查的工具执行管道；不以每个文件小于某行数作为验收。
+
+**实际进度：** 2026-10-22 完成 T07、T08。执行契约归 contracts，Kernel 只接收通用 Engine、捕获工具、effects 和 release；具体能力归 Node.host，Server 持有 HostedAgent 并生成可信来源，Goal contribution 迁入 Server。QueryEngine 拆出单次模型尝试、冻结请求和工具上下文，保留唯一历史和工具检查管道。架构例外降至 39 条（P5 13、P6 26）；类型检查 67/67，通过正式构建和打包消费者验证。测试首轮及补验、资源所有权和后续边界见 [P4 验证记录](../reviews/2026-10-22-agent-package-convergence-p4.md)。
 
 ## 7. P5：显式模型准入和 Server 用例
 

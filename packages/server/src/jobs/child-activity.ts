@@ -1,5 +1,5 @@
 import { isCommittedModelPart, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunAttemptRecord, type SessionRunRecord } from "@vykor/protocol";
-import type { ChildActivitySnapshot } from "@vykor/core";
+import type { ChildActivitySnapshot } from "@vykor/agent-contracts";
 
 const MAX_ACTIVITY_TEXT = 2_000;
 

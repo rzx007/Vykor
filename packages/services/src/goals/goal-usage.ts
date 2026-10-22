@@ -1,10 +1,5 @@
 import type { ModelTokenMetering } from "@vykor/agent-contracts";
-import type {
-  GoalModelAttemptKey,
-  GoalUsage,
-  SessionGoal,
-  SessionRunRecord,
-} from "@vykor/protocol";
+import type { GoalModelAttemptKey, GoalUsage, SessionGoal, SessionRunRecord } from "@vykor/protocol";
 import { and, eq } from "drizzle-orm";
 import type { StorageContext } from "../database/storage-context.js";
 import { sessionGoalModelAttempts } from "../session-runtime/schema.js";

@@ -1,14 +1,10 @@
-import type { AgentExecutionContext } from "../types/runtime";
-import { isAgentExecutionLimitError } from "../types/runtime";
-import type { HookExecutor as IHookExecutor } from "../types/hooks";
-import type { PermissionChecker as IPermissionChecker } from "../types/permissions";
+import type { AgentExecutionContext } from "@vykor/agent-contracts";
+import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
+import type { HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
+import type { PermissionChecker as IPermissionChecker } from "@vykor/agent-contracts";
 import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type {
-  ToolContext,
-  ToolDefinition,
-  ToolExecutionResult,
-  ToolRegistry,
-} from "../types/tools";
+import type { MutableToolRegistry as ToolRegistry } from "@vykor/agent-contracts";
+import type { ToolContext, ToolDefinition, ToolExecutionResult } from "@vykor/agent-contracts";
 import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCall, emitToolLifecycle } from "./query-tool-permissions";
 import {
@@ -23,7 +19,7 @@ import {
   toolFeedbackFields,
   validHostFileFacts,
 } from "./tool-result-feedback";
-import { parseMcpCallResultData, publicToolResult } from "@vykor/protocol";
+import { parseMcpCallResultData, publicToolResult } from "@vykor/agent-contracts";
 
 export interface CheckedToolExecutionOptions {
   toolUses: ToolUseBlock[];

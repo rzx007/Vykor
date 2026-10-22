@@ -2905,7 +2905,7 @@
     {
       "path": "package.json",
       "line": 31,
-      "text": "    \"check:retired-ui\": \"node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs\"",
+      "text": "    \"check:retired-ui\": \"node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs\",",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
@@ -2922,19 +2922,19 @@
     },
     {
       "path": "packages/client/src/index.ts",
-      "line": 177,
+      "line": 146,
       "text": "  PluginUiInventory,",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "packages/client/src/index.ts",
-      "line": 275,
+      "line": 207,
       "text": "export { readPluginUiInstance, readPluginUiAction, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, ProtocolValidationError } from \"@vykor/protocol\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "packages/client/src/index.ts",
-      "line": 276,
+      "line": 208,
       "text": "export type { JsonValue, PluginUiInstanceRecord, PluginUiActionRunMetadata, PluginUiActionReceipt, PluginUiActionResponse, PluginUiSubmissionRecord, PluginUiConversationReceipt } from \"@vykor/protocol\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
@@ -2964,55 +2964,43 @@
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 2,
-      "text": "  parsePluginUiConversationReceipt,",
+      "line": 1,
+      "text": "import { parsePluginUiConversationReceipt, ProtocolValidationError, type PluginUiActionResponse, type PluginUiConversationReceipt } from \"@vykor/protocol\";",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
       "line": 4,
-      "text": "  type PluginUiActionResponse,",
-      "reason": "Only the two original authenticated history GET addresses."
-    },
-    {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 5,
-      "text": "  type PluginUiConversationReceipt,",
-      "reason": "Only the two original authenticated history GET addresses."
-    },
-    {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 9,
       "text": "  return `/sessions/${encodeURIComponent(sessionId)}/plugin-ui/${encodeURIComponent(instanceId)}`;",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 12,
+      "line": 7,
       "text": "export class PluginUiHistoryResource {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 19,
+      "line": 14,
       "text": "  ): Promise<Extract<PluginUiConversationReceipt, { mode: \"submit\" }>> {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 32,
+      "line": 27,
       "text": "  ): Extract<PluginUiConversationReceipt, { mode: \"submit\" }> {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 33,
+      "line": 28,
       "text": "    const receipt = parsePluginUiConversationReceipt(value);",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
       "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
-      "line": 50,
+      "line": 45,
       "text": "  ): Promise<PluginUiActionResponse> {",
       "reason": "Only the two original authenticated history GET addresses."
     },
@@ -3060,19 +3048,19 @@
     },
     {
       "path": "packages/core/src/engine/tool-result-feedback.ts",
-      "line": 57,
+      "line": 53,
       "text": "    \"pluginUi\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
       "path": "packages/core/src/engine/tool-result-feedback.ts",
-      "line": 58,
+      "line": 54,
       "text": "    \"uiAction\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
       "path": "packages/core/src/engine/tool-result-feedback.ts",
-      "line": 59,
+      "line": 55,
       "text": "    \"pluginUiSubmission\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -3192,7 +3180,7 @@
     },
     {
       "path": "packages/protocol/src/index.ts",
-      "line": 28,
+      "line": 27,
       "text": "export * from \"./plugin-ui-history.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
@@ -3516,43 +3504,43 @@
     },
     {
       "path": "packages/server/src/application/agent/agent-transcript.ts",
-      "line": 119,
+      "line": 112,
       "text": "    value.kind === \"plugin_ui_action\" || value.kind === \"plugin_app_action\" ||",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1,
+      "line": 5,
       "text": "import { PluginUiHistoryService } from \"./session/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 2,
+      "line": 6,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 169,
+      "line": 175,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 218,
+      "line": 225,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 377,
+      "line": 389,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1012,
+      "line": 1029,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3858,13 +3846,13 @@
     },
     {
       "path": "packages/server/src/application/session/transcript-projection.ts",
-      "line": 10,
+      "line": 11,
       "text": "import { isCommittedModelPart, readPluginUiInstance, settleSessionToolMetadata } from \"@vykor/protocol\";",
       "reason": "Preserves already persisted historical source Part during transcript projection."
     },
     {
       "path": "packages/server/src/application/session/transcript-projection.ts",
-      "line": 265,
+      "line": 267,
       "text": "        const existing = previous && readPluginUiInstance(previous.metadata);",
       "reason": "Preserves already persisted historical source Part during transcript projection."
     },
@@ -4134,13 +4122,13 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 1,
+      "line": 2,
       "text": "import { createSessionPluginUiHistoryRoutes } from \"./routes/session-plugin-ui-history.js\";",
       "reason": "Registers read-only history/410 routes only."
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 471,
+      "line": 474,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },
@@ -4152,31 +4140,31 @@
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 8,
-      "text": "  readPluginUiAction,",
+      "line": 5,
+      "text": "import { isCommittedModelPart, readPluginUiAction, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord } from \"@vykor/protocol\";",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 130,
+      "line": 122,
       "text": "    const action = readPluginUiAction(run.metadata);",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 133,
+      "line": 125,
       "text": "      uiAction: sensitiveSession ? { instanceId: action.instanceId, executionState: action.executionState, content: REDACTED_CONTENT } : action }];",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 153,
+      "line": 145,
       "text": "          && (message.metadata.presentation as { kind?: unknown }).kind === \"plugin_ui_action\"",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 154,
+      "line": 146,
       "text": "          ? { metadata: { presentation: { kind: \"plugin_ui_action\" } } } : {}),",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
@@ -4230,7 +4218,7 @@
     },
     {
       "path": "packages/services/src/conversations/conversation-transactions.ts",
-      "line": 480,
+      "line": 458,
       "text": "          const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...importedMetadata } = partInput.metadata ?? {};",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -4326,79 +4314,79 @@
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 90,
+      "line": 93,
       "text": "      \"name\": \"PluginUiConversationReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 94,
+      "line": 97,
       "text": "      \"name\": \"PluginUiSubmissionRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 102,
+      "line": 105,
       "text": "      \"name\": \"parsePluginUiConversationReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 106,
+      "line": 109,
       "text": "      \"name\": \"parsePluginUiSubmissionRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 110,
+      "line": 113,
       "text": "      \"name\": \"readPluginUiInstance\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 114,
+      "line": 117,
       "text": "      \"name\": \"readPluginUiAction\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 122,
+      "line": 125,
       "text": "      \"name\": \"PluginUiActionRunMetadata\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 126,
+      "line": 129,
       "text": "      \"name\": \"PluginUiActionReceipt\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 130,
+      "line": 133,
       "text": "      \"name\": \"PluginUiActionResponse\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 134,
+      "line": 137,
       "text": "      \"name\": \"PluginUiInstanceRecord\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 702,
+      "line": 705,
       "text": "      \"name\": \"PluginUiInventory\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 1094,
+      "line": 1097,
       "text": "      \"name\": \"PluginUiHistoryResource\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "scripts/client-public-api-contract.json",
-      "line": 1098,
+      "line": 1101,
       "text": "      \"name\": \"pluginUiHistory\",",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },

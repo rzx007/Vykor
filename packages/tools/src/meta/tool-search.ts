@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolDiscovery, ToolDiscoveryEntry } from "@vykor/core";
+import type { ToolDefinition, ToolDiscovery, ToolDiscoveryEntry } from "@vykor/agent-contracts";
 import { ToolSearchIndex } from "./tool-search-index.js";
 
 const indexes = new WeakMap<ToolDiscovery, ToolSearchIndex>();

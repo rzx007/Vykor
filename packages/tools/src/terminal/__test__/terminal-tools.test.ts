@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult } from "@vykor/core";
+import type { ToolContext, ToolResult } from "@vykor/agent-contracts";
 import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
 import type {
   AgentTerminalHost,

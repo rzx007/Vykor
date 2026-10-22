@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@vykor/environment": "workspace:*",
-    "@vykor/core": "workspace:*",
     "@vykor/sandbox": "workspace:*",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/host-config": "workspace:*"

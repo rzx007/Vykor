@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
-import type { AgentExecutionContext, StreamMessageParams, ToolDefinition } from "../index.js";
+import type { AgentExecutionContext, StreamMessageParams, ToolDefinition } from "@vykor/agent-contracts";
 
 function execution(extra: Partial<AgentExecutionContext> = {}): AgentExecutionContext {
   return { scope: { signal: new AbortController().signal }, emit: async () => {},

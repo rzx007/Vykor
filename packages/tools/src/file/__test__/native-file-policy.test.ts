@@ -1,10 +1,15 @@
+import {createFileReadTool} from "../read.js";
+import {createFileEditTool} from "../edit.js";
+import {createApplyPatchTool} from "../apply-patch.js";
+import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {createFileWriteTool} from "./../write.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Settings } from "@vykor/host-config";
-import type { ToolContext, ToolDefinition } from "@vykor/core";
+import type { ToolContext, ToolDefinition } from "@vykor/agent-contracts";
 import { createWorkspaceBinding } from "@vykor/environment";
 import { createExecutionEnvironment, resolveExecutionEnvironmentConfig } from "@vykor/sandbox";
 import { applyPatchTool } from "../apply-patch.js";
@@ -53,17 +58,17 @@ describe("Native environment file policy", () => {
     });
   });
 
-  const readDenied: Array<[string, ToolDefinition, Record<string, unknown>]> = [
-    ["Read", fileReadTool, { file_path: "secret.txt" }],
-    ["Read info_only", fileReadTool, { file_path: "secret.txt", info_only: true }],
-    ["Edit", fileEditTool, { file_path: "secret.txt", old_string: "wrong text", new_string: "changed" }],
-    ["ApplyPatch", applyPatchTool, { patch: "--- a/secret.txt\n+++ b/secret.txt\n@@ -1 +1 @@\n-private original body\n+changed\n" }],
+  const readDenied: Array<[string, (host:import("../../ports/policy.js").FileToolHost)=>ToolDefinition, Record<string, unknown>]> = [
+    ["Read", createFileReadTool, { file_path: "secret.txt" }],
+    ["Read info_only", createFileReadTool, { file_path: "secret.txt", info_only: true }],
+    ["Edit", createFileEditTool, { file_path: "secret.txt", old_string: "wrong text", new_string: "changed" }],
+    ["ApplyPatch", createApplyPatchTool, { patch: "--- a/secret.txt\n+++ b/secret.txt\n@@ -1 +1 @@\n-private original body\n+changed\n" }],
   ];
   it.each(readDenied)("%s refuses denied reads before file inspection or diagnostics", async (_, tool, input) => {
     await inNativeEnvironment(async (context, files) => {
       const stat = vi.spyOn(files, "stat");
       const read = vi.spyOn(files, "readBytes");
-      const result = await tool.execute(input, context);
+      const result = await executeToolFixture(tool,input,context);
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(result.metadata?.fileInfo).toBeUndefined();
       expect(JSON.stringify(result)).not.toContain(secret.trim());
@@ -77,7 +82,7 @@ describe("Native environment file policy", () => {
   it("Write refuses a denied existing-file read without disclosing its body or hash", async () => {
     await inNativeEnvironment(async (context, files) => {
       const read = vi.spyOn(files, "readBytes");
-      const result = await fileWriteTool.execute({ file_path: "secret.txt", content: "changed" }, context);
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "secret.txt", content: "changed" }, context);
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(read).not.toHaveBeenCalled();
       expect(JSON.stringify(result)).not.toContain(secret.trim());
@@ -91,7 +96,7 @@ describe("Native environment file policy", () => {
       const read = vi.spyOn(files, "readBytes");
       const settings: Settings = { ...context.settings!, sandbox: { enabled: true,
         filesystem: { allowRead: ["."], allowWrite: ["."], denyRead: ["new.txt"] } } };
-      const result = await fileWriteTool.execute({ file_path: "new.txt", content: "new body" }, { ...context, settings });
+      const result = await executeToolFixture(host => createFileWriteTool(host), { file_path: "new.txt", content: "new body" }, { ...context, settings });
       expect(result).toMatchObject({ executionState: "completed" });
       expect(result.isError).toBeFalsy();
       expect(read).not.toHaveBeenCalled();
@@ -105,7 +110,7 @@ describe("Native environment file policy", () => {
       const settings: Settings = { ...context.settings!, sandbox: { enabled: true,
         filesystem: { allowRead: ["."], allowWrite: ["."], denyRead: ["visible.txt"] } } };
       const expected_sha256 = createHash("sha256").update("old\n").digest("hex");
-      const committed = await fileWriteTool.execute({ file_path: "visible.txt",
+      const committed = await executeToolFixture(host => createFileWriteTool(host), { file_path: "visible.txt",
         expected_sha256, content: "changed" }, { ...context, settings });
       expect(committed).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(read).not.toHaveBeenCalled();
@@ -114,15 +119,15 @@ describe("Native environment file policy", () => {
     });
   });
 
-  const writeDenied: Array<[string, ToolDefinition, Record<string, unknown>]> = [
-    ["Write", fileWriteTool, { file_path: "blocked/new.txt", content: "new" }],
-    ["Edit", fileEditTool, { file_path: "blocked/existing.txt", old_string: "old", new_string: "changed" }],
-    ["ApplyPatch", applyPatchTool, { patch: "--- /dev/null\n+++ b/blocked/new.txt\n@@ -0,0 +1 @@\n+new\n" }],
+  const writeDenied: Array<[string, (host:import("../../ports/policy.js").FileToolHost)=>ToolDefinition, Record<string, unknown>]> = [
+    ["Write", createFileWriteTool, { file_path: "blocked/new.txt", content: "new" }],
+    ["Edit", createFileEditTool, { file_path: "blocked/existing.txt", old_string: "old", new_string: "changed" }],
+    ["ApplyPatch", createApplyPatchTool, { patch: "--- /dev/null\n+++ b/blocked/new.txt\n@@ -0,0 +1 @@\n+new\n" }],
   ];
   it.each(writeDenied)("%s refuses denied writes before creating files or directories", async (_, tool, input) => {
     await inNativeEnvironment(async (context, files) => {
       const stat = vi.spyOn(files, "stat");
-      const result = await tool.execute(input, context);
+      const result = await executeToolFixture(tool,input,context);
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(stat).not.toHaveBeenCalled();
       expect(await readdir(context.cwd)).toEqual(expect.arrayContaining(["secret.txt", "visible.txt"]));

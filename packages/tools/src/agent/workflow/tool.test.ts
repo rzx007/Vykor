@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { AgentRunScope, ToolContext } from "@vykor/core";
+import type { AgentRunScope, ToolContext } from "@vykor/agent-contracts";
 import { createWorkflowTool } from "./tool.js";
 
 describe("Workflow tool port", () => {
@@ -47,7 +47,7 @@ describe("Workflow tool port", () => {
     const definition = { name: "selected", description: "Selected role" };
     const invoke = vi.fn(async () => ({ content: [] }));
     const view = { agents: new Map([["selected", { definition }]]) };
-    await createWorkflowTool({ invoke }).execute({ action: "history", definitions: [{ name: "forged" }] }, { ...context, capabilityView: view } as ToolContext);
+    await createWorkflowTool({ invoke }, [definition]).execute({ action: "history", definitions: [{ name: "forged" }] }, { ...context, capabilityView: view } as ToolContext);
     expect(invoke.mock.calls[0]?.[0]?.definitions).toEqual([definition]);
   });
   it("reports missing execution scope without creating a host", async () => {

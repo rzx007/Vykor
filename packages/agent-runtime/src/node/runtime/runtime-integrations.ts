@@ -1,0 +1,882 @@
+import type { NodeRuntimeResources as RuntimeBundle } from "./node-runtime-resources.js";
+import type { RunToolBinding, ToolDefinition } from "@vykor/agent-contracts";
+import { createHash, randomUUID } from "node:crypto";
+import { join } from "node:path";
+import type { ActiveMcpRuntimeHandle, McpRuntimeRegistry } from "@vykor/mcp";
+import type {
+  McpServerConfig,
+  McpServerIdentity,
+  Settings,
+} from "@vykor/host-config";
+
+import { loadProjectSettings, loadSettings } from "@vykor/host-config";
+import {
+  computePluginBehaviorDigest,
+  discoverInstalledNativePlugins,
+  loadNativeAppMetadata,
+  verifyInstalledNativePlugin,
+} from "@vykor/plugins";
+import {
+  createMcpServerIdentity,
+  McpClientManager,
+  McpOAuthRuntime,
+  type CapturedMcpAppResources,
+} from "@vykor/mcp";
+import { McpOAuthCredentialStore } from "@vykor/auth";
+import { appendUserProfileUpdate } from "@vykor/prompts";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
+
+import type {
+  VykorAgentExtension,
+  VykorExtensionDiscovery,
+} from "../plugins/extensions.js";
+import { createExtensionToolRegistry } from "../plugins/extensions.js";
+import { activateDiscoveredPlugins } from "../plugins/plugin-activation.js";
+import type { AgentMemoryRuntime } from "../memory/memory-runtime.js";
+import { createMcpAuthHost } from "../mcp/mcp-auth.js";
+import { createRememberTool } from "../memory/remember-tool.js";
+import { getInternalToolRegistry } from "./default-runtime.js";
+import {
+  getAppToolRegistry,
+  getDelegationToolRegistry,
+  getTrustedToolCatalogue,
+} from "./default-runtime-tools.js";
+import {
+  captureNativePluginAppBackend,
+  createNativePluginAppResourceSnapshot,
+  type NativePluginAppResourceSnapshot,
+} from "../plugin-apps/native-plugin-app-backend.js";
+import { captureMcpPluginAppBackend } from "../plugin-apps/mcp-plugin-app-backend.js";
+import type { PluginAppBackendCatalogue } from "../plugin-apps/plugin-app-backends.js";
+import { createRunCapabilityView } from "../plugins/run-capability-view.js";
+import type { PluginSelectionCatalog } from "../plugins/plugin-selection.js";
+import { selectPluginInstallationWinners } from "../plugins/plugin-capability-inventory.js";
+
+export interface InstallRuntimeIntegrationsOptions {
+  cwd: string;
+  sessionId: string;
+  settings: Settings;
+  runtime: RuntimeBundle;
+  discovery: VykorExtensionDiscovery;
+  extensions?: VykorAgentExtension[];
+  mcpServers?: Record<string, McpServerConfig>;
+  memory?: AgentMemoryRuntime;
+  executionEnvironment?: ExecutionEnvironmentHandle;
+  /** Host-owned registry used to coordinate OAuth-driven Runtime reconnects. */
+  mcpRuntimeRegistry?: McpRuntimeRegistry;
+}
+
+/** Only exact host placeholders in an installed plugin's stdio environment are substituted. */
+export function resolvePluginMcpEnvironment(
+  env: Record<string, string>,
+  input: { cwd: string; sessionId?: string },
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [
+      key,
+      value === "${VYKOR_SESSION_ID}"
+        ? createHash("sha256")
+            .update(input.sessionId ?? randomUUID())
+            .digest("hex")
+        : value === "${VYKOR_WORKSPACE_ROOT}"
+          ? input.cwd
+          : value,
+    ]),
+  );
+}
+
+/** Install integrations that need a fully constructed RuntimeBundle. */
+export async function installRuntimeIntegrations(
+  options: InstallRuntimeIntegrationsOptions,
+): Promise<{
+  pluginSelection: PluginSelectionCatalog;
+  getConnections: () => ReturnType<McpClientManager["getConnections"]>;
+  retainConnectionsForRun: () => () => void;
+  /** Agent-internal catalogue; executable captures must never enter HTTP/Client resources. */
+  pluginApps: PluginAppBackendCatalogue;
+}> {
+  const { runtime } = options;
+  const memory = options.memory;
+  const inventory = options.discovery.pluginCapabilityInventory;
+  const pluginSelection: PluginSelectionCatalog = {
+    candidates: [...inventory.plugins.values()].map(
+      ({ pluginId, displayName, description, version, behaviorDigest }) =>
+        Object.freeze({
+          pluginId,
+          displayName,
+          description,
+          version,
+          behaviorDigest,
+        }),
+    ),
+    validate: async (candidate) => {
+      const current = inventory.plugins.get(candidate.pluginId);
+      const plugin = options.discovery.plugins.find(
+        (item) => item.manifest.id === candidate.pluginId,
+      );
+      if (
+        !plugin ||
+        current?.version !== candidate.version ||
+        !candidate.behaviorDigest ||
+        current.behaviorDigest !== candidate.behaviorDigest ||
+        (await computePluginBehaviorDigest(plugin.root)) !==
+          candidate.behaviorDigest
+      ) {
+        throw new Error(
+          `Plugin changed during selection: ${candidate.pluginId}`,
+        );
+      }
+      const latest = selectPluginInstallationWinners(
+        await discoverInstalledNativePlugins({ cwd: options.cwd }),
+      ).winners.find((item) => item.id === candidate.pluginId);
+      if (
+        !latest ||
+        latest.scope !== current.scope ||
+        latest.cachePath !== plugin.root ||
+        latest.currentVersion !== current.version
+      ) {
+        throw new Error(`Plugin is no longer available: ${candidate.pluginId}`);
+      }
+      const verified = await verifyInstalledNativePlugin(latest);
+      if (verified.status !== "valid")
+        throw new Error(
+          `Plugin permissions or installation changed: ${candidate.pluginId}`,
+        );
+    },
+  };
+  assertPluginMcpServerNamesAvailable(options);
+  const toolActivations = await activateDiscoveredPlugins({
+    plugins: options.discovery.plugins,
+    cwd: options.cwd,
+    settings: options.settings,
+    environmentKind: options.executionEnvironment?.info.kind,
+    toolRegistry: runtime.toolRegistry,
+    hookExecutor: runtime.hookExecutor,
+    addCleanup: (cleanup, cleanupSync) =>
+      runtime.addCleanup(cleanup, cleanupSync),
+    onLog: (message) => process.stderr.write(`${message}\n`),
+    onDiagnostic: (diagnostic, plugin) => {
+      process.stderr.write(
+        `[plugins] ${plugin.manifest.id}: ${diagnostic.message}\n`,
+      );
+    },
+  });
+  await installProgrammaticExtensions(options);
+
+  const credentialStore = new McpOAuthCredentialStore();
+  const mcpOAuthRuntime = new McpOAuthRuntime({
+    store: credentialStore,
+    getConfiguredOAuth: async (name, config) => {
+      const latest = await loadSettings(undefined, {
+        includeProject: true,
+        projectRoot: options.cwd,
+      });
+      const current = latest.mcpServers?.[name];
+      return current?.type === "http" && current.url === config.url
+        ? current.oauth
+        : config.oauth;
+    },
+  });
+  const mcpManager = new McpClientManager({
+    cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,
+    settings: options.settings,
+    sessionId: options.sessionId,
+    processExecutor: options.executionEnvironment?.process,
+    oauthRuntime: mcpOAuthRuntime,
+  });
+  runtime.addCleanup(() => mcpManager.disconnectAll());
+  const mcpServers = selectMcpServersForEnvironment(
+    options.mcpServers ?? options.discovery.mcpServers,
+    options.executionEnvironment?.info,
+  );
+  const serverOwners = new Map(
+    [...inventory.mcpServers].map(([id, owner]) => [
+      owner.serverName,
+      { id, ...owner },
+    ]),
+  );
+  for (const [name, config] of Object.entries(mcpServers)) {
+    if (serverOwners.has(name) && config.type === "stdio" && config.env) {
+      mcpServers[name] = {
+        ...config,
+        env: resolvePluginMcpEnvironment(config.env, options),
+      };
+    }
+  }
+  const enabledMcpServers = filterEnabledMcpServers(mcpServers);
+  const projectDeclaresMcpServers = async (): Promise<boolean> => {
+    const project = await loadProjectSettings(options.cwd);
+    return project?.mcpServers !== undefined;
+  };
+  // Where each configured server came from, recorded at session start and
+  // updated as global configuration is reconciled. Only "global" servers
+  // participate in global status aggregation and global reconcile.
+  const connectionSources = new Map<string, McpConnectionSource>();
+  const sessionProjectOverrides = await projectDeclaresMcpServers();
+  for (const serverName of Object.keys(mcpServers)) {
+    if (options.mcpServers?.[serverName] !== undefined)
+      connectionSources.set(serverName, "host");
+    else if (options.settings.mcpServers?.[serverName] !== undefined)
+      connectionSources.set(
+        serverName,
+        sessionProjectOverrides ? "project" : "global",
+      );
+    else if (serverOwners.has(serverName))
+      connectionSources.set(serverName, "plugin");
+    else connectionSources.set(serverName, "unknown");
+  }
+  const connectionSource = (name: string): McpConnectionSource =>
+    connectionSources.get(name) ?? "unknown";
+  const setConnectionSource = (
+    name: string,
+    source: McpConnectionSource,
+  ): void => {
+    connectionSources.set(name, source);
+  };
+  const rememberServerConfig = (
+    name: string,
+    config: McpServerConfig,
+  ): void => {
+    mcpServers[name] = config;
+    setConnectionSource(name, "global");
+  };
+  const forgetServerConfig = (name: string): void => {
+    delete mcpServers[name];
+    connectionSources.delete(name);
+  };
+  const resolveGlobalServer = async (
+    name: string,
+  ): Promise<McpServerConfig | undefined> => {
+    return (await loadSettings()).mcpServers?.[name];
+  };
+
+  const runtimeRegistry = options.mcpRuntimeRegistry;
+  const identityFor = (name: string): McpServerIdentity | undefined => {
+    const config = mcpServers[name];
+    return config ? createMcpServerIdentity(name, config) : undefined;
+  };
+  const executionFor = (name: string): ToolDefinition["execution"] => {
+    const server = mcpServers[name];
+    return server?.type === "http" || server?.type === "sse"
+      ? {
+          domain: "control_plane",
+          supportedEnvironments: ["local", "wsl"],
+          network: true,
+        }
+      : { domain: "environment", supportedEnvironments: ["local", "wsl"] };
+  };
+  const installedMcpApps = new Map<
+    string,
+    { resources: CapturedMcpAppResources; tools: ToolDefinition[] }
+  >();
+  const commitMcpTools = (name: string, tools: ToolDefinition[]): void => {
+    const installed = tools.map((tool) => ({
+      ...tool,
+      execution: executionFor(name),
+    }));
+    const resources = mcpManager.captureAppResources(name);
+    runtime.toolRegistry.replaceBySource({ kind: "mcp", id: name }, installed);
+    if (resources) installedMcpApps.set(name, { resources, tools: installed });
+    else installedMcpApps.delete(name);
+  };
+  const connectionErrors = new Map<string, string>();
+
+  // Publish a prepared connection only while the caller's generation guard
+  // still holds. The guard is re-checked after staging, right before the atomic
+  // activation, so a concurrent disable/delete/address change can never publish
+  // a stale connection or its tools.
+  const stageAndActivate = async (
+    name: string,
+    config: McpServerConfig,
+    guard: () => boolean,
+  ): Promise<void> => {
+    if (!guard()) return;
+    let prepared;
+    try {
+      prepared = await mcpManager.prepareConnection(name, config);
+    } catch (error) {
+      // Connection setup failures are isolated per server and never fatal.
+      throw new McpConnectionStageError(error);
+    }
+    if (!guard()) {
+      await prepared.client.close().catch(() => undefined);
+      return;
+    }
+    const activation = mcpManager.activatePreparedConnection(
+      prepared,
+      (tools) => commitMcpTools(name, tools),
+    );
+    if (!activation.committed) {
+      await activation.discardPrepared().catch(() => undefined);
+      // A tool-commit conflict is a configuration error and stays fatal.
+      throw activation.error;
+    }
+    await activation.closePrevious();
+  };
+
+  const disconnectServer = async (name: string): Promise<void> => {
+    installedMcpApps.delete(name);
+    runtime.toolRegistry.replaceBySource({ kind: "mcp", id: name }, []);
+    await mcpManager.disconnect(name);
+  };
+
+  if (runtimeRegistry) {
+    const unregister = runtimeRegistry.register(
+      createMcpRuntimeHandle({
+        sessionId: options.sessionId,
+        cwd: options.cwd,
+        identityFor,
+        mcpServers,
+        mcpManager,
+        oauthRuntime: mcpOAuthRuntime,
+        stageAndActivate,
+        disconnectServer,
+        registry: runtimeRegistry,
+        connectionSource,
+        rememberServerConfig,
+        forgetServerConfig,
+        projectOverridesMcpServers: projectDeclaresMcpServers,
+        resolveGlobalServer,
+      }),
+    );
+    runtime.addCleanup(() => unregister());
+  }
+
+  // Capture each server's name generation before the initial connects start. A
+  // reconcile that runs while an initial connect is in flight advances it, which
+  // aborts the stale connect instead of letting it publish tools for old config.
+  const installNamedGenerations = new Map<string, number>();
+  if (runtimeRegistry) {
+    for (const name of Object.keys(enabledMcpServers)) {
+      installNamedGenerations.set(
+        name,
+        runtimeRegistry.currentNamedGeneration(name),
+      );
+    }
+  }
+
+  await Promise.all(
+    Object.entries(enabledMcpServers).map(async ([name, config]) => {
+      const identity = identityFor(name);
+      const generation =
+        runtimeRegistry && identity
+          ? runtimeRegistry.currentGeneration(identity)
+          : 0;
+      const namedGeneration = installNamedGenerations.get(name) ?? 0;
+      const guard = runtimeRegistry
+        ? () =>
+            runtimeRegistry.currentNamedGeneration(name) === namedGeneration &&
+            (!identity ||
+              runtimeRegistry.currentGeneration(identity) === generation)
+        : () => true;
+      try {
+        await stageAndActivate(name, config, guard);
+      } catch (error) {
+        if (error instanceof McpConnectionStageError) {
+          connectionErrors.set(name, error.message);
+          // Keep the failed attempt observable for plugin readiness diagnostics.
+          mcpManager.recordFailedConnection(name, config, error.cause);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  runtime.mcpManager = mcpManager;
+  runtime.mcpAuth = createMcpAuthHost({
+    cwd: options.cwd,
+    settings: options.settings,
+    mcpManager,
+    toolRegistry: getInternalToolRegistry(runtime.toolRegistry),
+  });
+
+  if (memory) {
+    runtime.toolRegistry.register(
+      createRememberTool({
+        appendUserProfile: appendUserProfileUpdate,
+        projectMemory: memory.manager,
+      }),
+      { kind: "runtime", id: "memory" },
+    );
+  }
+  runtime.queryEngine.setMemoryRetriever(
+    memory ? (userInput) => memory.retrieve(userInput) : undefined,
+  );
+
+  const skills = options.discovery.skillRegistry
+    .getRunCandidates()
+    .map((definition) => {
+      const owner = inventory.skills.get(definition.name);
+      return {
+        definition,
+        path: definition.path,
+        ownerPluginId:
+          definition.source === "plugin" && owner?.path === definition.path
+            ? owner.pluginId
+            : undefined,
+      };
+    });
+  const agents = options.discovery.agentDefinitions.map((definition) => ({
+    definition,
+    ownerPluginId:
+      definition.source === "plugin"
+        ? inventory.agents.get(definition.name)?.pluginId
+        : undefined,
+  }));
+
+  runtime.createRunCapabilityView = (scope) => {
+    const preparationErrors = new Map<string, string[]>();
+    for (const pluginId of typeof scope === "string"
+      ? [scope]
+      : (scope ?? [])) {
+      const errors: string[] = [];
+      preparationErrors.set(pluginId, errors);
+      const plugin = options.discovery.plugins.find(
+        (item) => item.manifest.id === pluginId,
+      );
+      errors.push(
+        ...(plugin?.diagnostics
+          .filter(
+            (item) => item.severity === "error" && item.component !== "ui",
+          )
+          .map((item) => item.message) ?? []),
+      );
+      const activation = toolActivations.find(
+        (item) => item.pluginId === pluginId,
+      );
+      if (
+        inventory.plugins.get(pluginId)?.nativeToolEntries.length &&
+        (!activation ||
+          (activation.host?.state ?? activation.state) !== "active")
+      ) {
+        errors.push(
+          `Native Tools: ${activation?.diagnostics.map((item) => item.message).join("; ") || "host is not active"}`,
+        );
+      }
+      for (const {
+        pluginId: owner,
+        serverName,
+      } of inventory.mcpServers.values()) {
+        if (owner !== pluginId) continue;
+        const connection = mcpManager.getConnection(serverName);
+        if (connection?.status !== "connected") {
+          errors.push(
+            `MCP ${serverName}: ${connection?.error?.message ?? connectionErrors.get(serverName) ?? "server is not connected in this environment"}`,
+          );
+        } else {
+          for (const error of [
+            connection.toolError,
+            connection.resourceError,
+          ]) {
+            if (error) errors.push(`MCP ${serverName}: ${error.message}`);
+          }
+        }
+      }
+    }
+    // Bindings are derived from the live connections and their recorded source,
+    // not from the install-time snapshot, so a reconciled add/remove/change is
+    // reflected in the very next run without rebuilding the session.
+    const configuredServers = Object.entries(mcpServers)
+      .filter(([, definition]) => definition.enabled !== false)
+      .map(([serverName, definition]) => {
+        const pluginServer = serverOwners.get(serverName);
+        // Name conflicts were rejected before any plugin activation or connection.
+        const hostOwned = connectionSource(serverName) === "global";
+        return {
+          definition,
+          serverName,
+          serverId:
+            !hostOwned && pluginServer ? pluginServer.id : `mcp:${serverName}`,
+          ownerPluginId: !hostOwned ? pluginServer?.pluginId : undefined,
+        };
+      });
+    return createRunCapabilityView(
+      {
+        toolRegistry: runtime.toolRegistry,
+        appToolRegistry: getAppToolRegistry(runtime.toolRegistry),
+        delegatableToolRegistry: getDelegationToolRegistry(
+          runtime.toolRegistry,
+        ),
+        pluginIds: new Set(inventory.plugins.keys()),
+        pluginPreparationErrors: preparationErrors,
+        skills,
+        agents,
+        mcpServers: configuredServers.filter(
+          (server) =>
+            mcpManager.getConnection(server.serverName)?.status === "connected",
+        ),
+        mcpAuthServers: configuredServers,
+      },
+      scope,
+    );
+  };
+
+  const staticAppSnapshots = new Map<string, NativePluginAppResourceSnapshot>();
+  let pluginAppsActive = true;
+  runtime.addCleanup(() => {
+    pluginAppsActive = false;
+    for (const snapshot of staticAppSnapshots.values()) snapshot.revoke();
+    staticAppSnapshots.clear();
+  });
+  const pluginApps: PluginAppBackendCatalogue = Object.freeze({
+    list: () =>
+      Object.freeze(
+        options.settings.plugins?.uiEnabled === false
+          ? []
+          : options.discovery.plugins.flatMap((plugin) => {
+              const pluginDigest = inventory.plugins.get(
+                plugin.manifest.id,
+              )?.behaviorDigest;
+              if (!pluginDigest || plugin.components.apps?.status !== "loaded")
+                return [];
+              return (plugin.components.apps.value ?? []).flatMap((metadata) =>
+                metadata.definition.backends.map((backend) =>
+                  Object.freeze({
+                    pluginId: plugin.manifest.id,
+                    pluginVersion: plugin.manifest.version,
+                    pluginDigest,
+                    definitionDigest: metadata.definitionDigest,
+                    backend,
+                    surfaces: Object.freeze(
+                      metadata.definition.surfaces.filter(
+                        (surface) => surface.backend === backend.id,
+                      ),
+                    ),
+                  }),
+                ),
+              );
+            }),
+      ),
+    capture: async (pluginId: string, backendId: string) => {
+      if (!pluginAppsActive || options.settings.plugins?.uiEnabled === false)
+        return undefined;
+      const plugin = options.discovery.plugins.find(
+        (item) => item.manifest.id === pluginId,
+      );
+      if (!plugin || plugin.components.apps?.status !== "loaded")
+        return undefined;
+      const metadata = plugin.components.apps.value?.find((app) =>
+        app.definition.backends.some((backend) => backend.id === backendId),
+      );
+      const definition = metadata?.definition.backends.find(
+        (backend) => backend.id === backendId,
+      );
+      const pluginDigest = inventory.plugins.get(pluginId)?.behaviorDigest;
+      if (!metadata || !definition || !pluginDigest) return undefined;
+      // Re-verify installed approval, winner and bytes without selecting/injecting this plugin into a model Run.
+      const snapshotKey = `${pluginId}:${backendId}`;
+      try {
+        await pluginSelection.validate({
+          pluginId,
+          displayName: plugin.manifest.displayName ?? plugin.manifest.name,
+          description: plugin.manifest.description ?? "",
+          version: plugin.manifest.version,
+          behaviorDigest: pluginDigest,
+        });
+        const checked = await loadNativeAppMetadata({
+          root: plugin.root,
+          manifest: plugin.manifest,
+          manifestPath: join(plugin.root, ".vykor-plugin", "plugin.json"),
+        });
+        if (
+          checked.status !== "loaded" ||
+          !checked.value?.some(
+            (app) =>
+              app.declaredManifest === metadata.declaredManifest &&
+              app.definitionDigest === metadata.definitionDigest,
+          )
+        )
+          throw new Error("plugin_app_definition_changed");
+      } catch (error) {
+        staticAppSnapshots.get(snapshotKey)?.revoke();
+        staticAppSnapshots.delete(snapshotKey);
+        throw error;
+      }
+      // Closing a runtime during asynchronous verification must not mint a new live snapshot.
+      if (!pluginAppsActive) return undefined;
+      const common = {
+        pluginId,
+        pluginVersion: plugin.manifest.version,
+        pluginDigest,
+        metadata,
+        definition,
+        pluginDataWriteApproved:
+          plugin.manifest.permissions?.pluginData?.includes("write") === true,
+        toolRegistry: getTrustedToolCatalogue(runtime.toolRegistry),
+      };
+      if (definition.kind === "native-tools") {
+        if (definition.tools.length === 0) {
+          let resourceSnapshot = staticAppSnapshots.get(snapshotKey);
+          if (!resourceSnapshot) {
+            resourceSnapshot = createNativePluginAppResourceSnapshot();
+            staticAppSnapshots.set(snapshotKey, resourceSnapshot);
+          }
+          return captureNativePluginAppBackend({
+            ...common,
+            root: plugin.root,
+            resourceSnapshot,
+          });
+        }
+        const activation = toolActivations.find(
+          (item) => item.pluginId === pluginId,
+        );
+        if (!activation?.host || activation.host.state !== "active")
+          return undefined;
+        return captureNativePluginAppBackend({
+          ...common,
+          root: plugin.root,
+          host: activation.host,
+        });
+      }
+      const owner = serverOwners.get(definition.server);
+      const installed = installedMcpApps.get(definition.server);
+      if (
+        owner?.pluginId !== pluginId ||
+        connectionSource(definition.server) !== "plugin" ||
+        !installed?.resources.isCurrent()
+      )
+        return undefined;
+      return captureMcpPluginAppBackend({
+        ...common,
+        serverId: owner.id,
+        resources: installed.resources,
+        installedTools: installed.tools,
+      });
+    },
+  });
+
+  return {
+    pluginSelection,
+    pluginApps,
+    getConnections: () => mcpManager.getConnections(),
+    retainConnectionsForRun: () => mcpManager.retainCurrentConnections(),
+  };
+}
+
+function assertPluginMcpServerNamesAvailable(
+  options: InstallRuntimeIntegrationsOptions,
+): void {
+  const pluginServerNames = new Set<string>();
+  for (const {
+    serverName,
+  } of options.discovery.pluginCapabilityInventory.mcpServers.values()) {
+    if (
+      pluginServerNames.has(serverName) ||
+      options.mcpServers?.[serverName] ||
+      options.settings.mcpServers?.[serverName]
+    ) {
+      throw new Error(
+        `MCP server name '${serverName}' conflicts with another owner; independent bindings are required`,
+      );
+    }
+    pluginServerNames.add(serverName);
+  }
+}
+
+async function installProgrammaticExtensions(
+  options: InstallRuntimeIntegrationsOptions,
+): Promise<void> {
+  const { runtime } = options;
+  for (const extension of options.extensions ?? []) {
+    const registeredNames: string[] = [];
+    try {
+      await extension.setup({
+        cwd: options.cwd,
+        settings: options.settings,
+        skillRegistry: options.discovery.skillRegistry,
+        toolRegistry: createExtensionToolRegistry(
+          runtime.toolRegistry,
+          registeredNames,
+        ),
+        hookExecutor: runtime.hookExecutor,
+      });
+    } catch (error) {
+      for (const name of registeredNames)
+        runtime.toolRegistry.unregister?.(name);
+      throw error;
+    }
+  }
+}
+
+/** Marks a per-server connection setup failure so it can be isolated. */
+class McpConnectionStageError extends Error {
+  constructor(readonly cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "McpConnectionStageError";
+  }
+}
+
+/** Where a session's configured MCP server came from. */
+export type McpConnectionSource =
+  "global" | "project" | "plugin" | "host" | "unknown";
+
+/** @internal Exposed for focused tests of the Runtime handle contract. */
+export interface CreateMcpRuntimeHandleInput {
+  sessionId: string;
+  cwd: string;
+  identityFor(name: string): McpServerIdentity | undefined;
+  mcpServers: Record<string, McpServerConfig>;
+  mcpManager: McpClientManager;
+  oauthRuntime: McpOAuthRuntime;
+  registry: McpRuntimeRegistry;
+  stageAndActivate(
+    name: string,
+    config: McpServerConfig,
+    guard: () => boolean,
+  ): Promise<void>;
+  disconnectServer(name: string): Promise<void>;
+  /** Recorded source for a configured server ("unknown" when unrecorded). */
+  connectionSource(name: string): McpConnectionSource;
+  /** Remember the latest global config and mark the server globally owned. */
+  rememberServerConfig(name: string, config: McpServerConfig): void;
+  /** Drop a server that no longer exists in global settings. */
+  forgetServerConfig(name: string): void;
+  /** Whether the session's project settings declare `mcpServers` (whole-list override). */
+  projectOverridesMcpServers(): Promise<boolean>;
+  /** Latest global settings entry for `name` (ignores project settings). */
+  resolveGlobalServer(name: string): Promise<McpServerConfig | undefined>;
+}
+
+/**
+ * Build the narrow Runtime handle the coordinator drives.
+ *
+ * `synchronize` never trusts a login/logout intent: it re-reads the shared
+ * credential store's final state after acquiring the identity lock and then
+ * reconnects or disconnects accordingly.
+ *
+ * `reconcileGlobal` re-checks the latest global configuration for one server
+ * name. It skips sessions whose project settings override `mcpServers` and
+ * sessions whose server is plugin-owned, so a global operation never touches a
+ * project or plugin connection that merely shares the name.
+ */
+export function createMcpRuntimeHandle(
+  input: CreateMcpRuntimeHandleInput,
+): ActiveMcpRuntimeHandle {
+  // An identity-guarded connect must also abort if a name-keyed reconcile has
+  // superseded it, otherwise a slow install-time or OAuth connect could publish
+  // tools for a config that a later disable/delete/address change withdrew.
+  const identityGuard =
+    (
+      identity: McpServerIdentity,
+      generation: number,
+      namedGeneration: number,
+    ) =>
+    () =>
+      input.registry.currentGeneration(identity) === generation &&
+      input.registry.currentNamedGeneration(identity.name) === namedGeneration;
+  const namedGuard = (name: string, generation: number) => () =>
+    input.registry.currentNamedGeneration(name) === generation;
+
+  return {
+    runtimeId: `${input.sessionId}:${randomUUID()}`,
+    // Only globally-owned servers contribute to global status aggregation and
+    // global OAuth synchronization. Project or plugin connections that happen to
+    // share a name and URL must never be reported as the global server.
+    identity: (name) =>
+      input.connectionSource(name) === "global"
+        ? input.identityFor(name)
+        : undefined,
+    getStatus: (identity) => {
+      const connection = input.mcpManager.getConnection(identity.name);
+      if (!connection) return "disconnected";
+      if (connection.status === "connected") return "connected";
+      if (connection.status === "error") return "error";
+      return "disconnected";
+    },
+    async synchronize(identity, generation) {
+      const config = input.mcpServers[identity.name];
+      const current = input.identityFor(identity.name);
+      if (
+        !config ||
+        !current ||
+        current.endpointFingerprint !== identity.endpointFingerprint
+      )
+        return;
+      const namedGeneration = input.registry.currentNamedGeneration(
+        identity.name,
+      );
+      const guard = identityGuard(identity, generation, namedGeneration);
+      if (!guard()) return;
+      if (config.enabled === false) {
+        await input.disconnectServer(identity.name);
+        return;
+      }
+
+      const action = await input.oauthRuntime.getConnectionAction(
+        identity.name,
+        config,
+      );
+      if (!guard()) return;
+      if (action === "ignore") return;
+      if (action === "connect") {
+        await input.stageAndActivate(identity.name, config, guard);
+      } else {
+        await input.disconnectServer(identity.name);
+      }
+    },
+    async reconcileGlobal(name, generation) {
+      const guard = namedGuard(name, generation);
+      if (!guard()) return;
+      // Project settings replace the whole global list; global operations must
+      // not touch any connection owned by such a session.
+      if (await input.projectOverridesMcpServers()) return;
+      // A plugin owns this name in this session. A later global entry with the
+      // same name must not replace the plugin's connection or tools.
+      if (
+        input.connectionSource(name) === "plugin" ||
+        input.connectionSource(name) === "host"
+      )
+        return;
+
+      const desired = await input.resolveGlobalServer(name);
+      if (!guard()) return;
+      const ownsGlobal =
+        input.connectionSource(name) === "global" || desired !== undefined;
+      if (!ownsGlobal) return;
+
+      // Always withdraw the old connection and tools first, then reconnect from
+      // the latest config. This covers delete, address change and disable.
+      await input.disconnectServer(name);
+      if (!guard()) return;
+
+      if (desired && desired.enabled !== false) {
+        input.rememberServerConfig(name, desired);
+        await input.stageAndActivate(name, desired, guard);
+      } else if (desired) {
+        input.rememberServerConfig(name, desired);
+      } else {
+        input.forgetServerConfig(name);
+      }
+    },
+  };
+}
+
+export function selectMcpServersForEnvironment(
+  servers: Record<string, McpServerConfig>,
+  environment?: Pick<
+    ExecutionEnvironmentHandle["info"],
+    "kind" | "networkMode"
+  >,
+): Record<string, McpServerConfig> {
+  if (!environment || environment.kind === "local") return servers;
+  return Object.fromEntries(
+    Object.entries(servers).filter(
+      ([, server]) =>
+        server.type === "stdio" || environment.networkMode !== "none",
+    ),
+  );
+}
+
+/**
+ * Keep the servers a new session should actually connect. `enabled: false`
+ * servers stay configured (management snapshots still list them) but are
+ * neither connected nor bound into the run capability view.
+ */
+export function filterEnabledMcpServers(
+  servers: Record<string, McpServerConfig>,
+): Record<string, McpServerConfig> {
+  return Object.fromEntries(
+    Object.entries(servers).filter(([, config]) => config.enabled !== false),
+  );
+}

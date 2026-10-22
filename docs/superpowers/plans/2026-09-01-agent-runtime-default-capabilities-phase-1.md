@@ -27,20 +27,20 @@
 
 ### 新建
 
-- `packages/agent-runtime/src/capability-resolution.ts`：能力三态、诊断快照、简单 override 解析和配置一致性校验。
-- `packages/agent-runtime/src/capability-resolution.test.ts`：三态解析、Settings 归一化与 Jobs 关闭约束。
+- `packages/agent-runtime/src/node/capabilities/capability-resolution.ts`：能力三态、诊断快照、简单 override 解析和配置一致性校验。
+- `packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`：三态解析、Settings 归一化与 Jobs 关闭约束。
 - `packages/jobs/src/composite-agent-job-host.ts`：多个 `AgentJobHost` 的合并、归属缓存和路由。
 - `packages/jobs/src/composite-agent-job-host.test.ts`：合并、去重、冲突和五个 Job 操作的路由测试。
 
 ### 修改
 
-- `packages/agent-runtime/src/agent-options.ts`：删除 Host 总清单，定义 overrides、effects 和 observable producer bundle。
-- `packages/agent-runtime/src/agent.ts`：更新公开 options、inspection 和 `getCapabilities()`。
-- `packages/agent-runtime/src/default-agent.ts`：创建默认 permission effect，不再从 Host capability 推导 effects。
-- `packages/agent-runtime/src/agent-composition.ts`：逐项解析默认值与 override，创建最终 Jobs 组合器。
-- `packages/agent-runtime/src/default-runtime.ts`：工具注册和 QueryEngine 接线改读最终能力结果。
-- `packages/agent-runtime/src/kernel.ts`、`packages/agent-runtime/src/kernel-entry.ts`：Kernel 输入改成已解析实现，不再接受 Host 装配对象。
-- `packages/agent-runtime/src/child-agent.ts`：向子 Agent 传播原始 overrides 和 effects。
+- `packages/agent-runtime/src/node/runtime/agent-options.ts`：删除 Host 总清单，定义 overrides、effects 和 observable producer bundle。
+- `packages/agent-runtime/src/kernel/agent.ts`：更新公开 options、inspection 和 `getCapabilities()`。
+- `packages/agent-runtime/src/node/runtime/default-agent.ts`：创建默认 permission effect，不再从 Host capability 推导 effects。
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`：逐项解析默认值与 override，创建最终 Jobs 组合器。
+- `packages/agent-runtime/src/node/runtime/default-runtime.ts`：工具注册和 QueryEngine 接线改读最终能力结果。
+- `packages/agent-runtime/src/kernel/index.ts`、`packages/agent-runtime/src/kernel-entry.ts`：Kernel 输入改成已解析实现，不再接受 Host 装配对象。
+- `packages/agent-runtime/src/kernel/child-agent.ts`：向子 Agent 传播原始 overrides 和 effects。
 - `packages/agent-runtime/src/index.ts`：导出新的公共类型。
 - `packages/jobs/src/index.ts`：导出 `CompositeAgentJobHost`。
 - `packages/server/src/jobs/daemon-job-service.ts`：提供按 Job 类别收窄的 Agent Job Host 视图。
@@ -54,9 +54,9 @@
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/capability-resolution.ts`
-- 创建：`packages/agent-runtime/src/capability-resolution.test.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`
+- 创建：`packages/agent-runtime/src/node/capabilities/capability-resolution.ts`
+- 创建：`packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
 - 修改：`packages/agent-runtime/src/index.ts`
 
 - [ ] **步骤 1：先写三态解析和 bundle 类型测试**
@@ -183,7 +183,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [ ] **步骤 7：提交能力类型**
 
 ```bash
-git add packages/agent-runtime/src/capability-resolution.ts packages/agent-runtime/src/capability-resolution.test.ts packages/agent-runtime/src/agent-options.ts packages/agent-runtime/src/index.ts
+git add packages/agent-runtime/src/node/capabilities/capability-resolution.ts packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/index.ts
 git commit -m "refactor(agent-runtime): define capability override model"
 ```
 
@@ -275,17 +275,17 @@ git commit -m "feat(jobs): compose multiple job control sources"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/default-agent.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/kernel.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/kernel/index.ts`
 - 修改：`packages/agent-runtime/src/kernel-entry.ts`
-- 修改：`packages/agent-runtime/src/child-agent.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
-- 修改：`packages/agent-runtime/src/kernel.test.ts`
-- 修改：`packages/agent-runtime/src/agent.test.ts`
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/kernel/child-agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/host-assembly.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
 
 - [ ] **步骤 1：先写 DefaultNodeAgent 无权限 effect 的测试**
 

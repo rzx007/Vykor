@@ -1,5 +1,7 @@
+import { type ToolExecutionSpec } from "@vykor/agent-contracts";
+import type { AgentScheduleEffects } from "@vykor/host-config";
 import {
-  applyPatchTool,
+  createApplyPatchTool,
   askUserTool,
   briefTool,
   createAgentTool,
@@ -19,20 +21,20 @@ import {
   enterWorktreeTool,
   exitPlanModeTool,
   exitWorktreeTool,
-  fileEditTool,
-  fileReadTool,
-  fileWriteTool,
-  globTool,
-  grepTool,
+  createFileEditTool,
+  createFileReadTool,
+  createFileWriteTool,
+  createGlobTool,
+  createGrepTool,
   notebookEditTool,
   sleepTool,
   todoWriteTool,
   toolSearchTool,
-  webFetchTool,
-  webSearchTool,
+  createWebFetchTool,
+  createWebSearchTool,
 } from "@vykor/tools";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
-import { ToolRegistry, type ToolExecutionSpec } from "@vykor/core";
+import { ToolRegistry } from "@vykor/core";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import {
   createTeamRegistry,
@@ -41,7 +43,7 @@ import {
 } from "@vykor/coordinator/teams";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { AgentTerminalHost } from "@vykor/terminal";
-import type { AgentScheduleEffects } from "@vykor/core";
+
 import type {
   ConfigToolPort,
   FeishuChannelPort,
@@ -60,6 +62,16 @@ import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export function createDefaultToolRegistry(
   options: {
+    toolDecorators?: readonly {
+      name: string;
+      decorate(
+        base: import("@vykor/agent-contracts").ToolDefinition,
+      ): import("@vykor/agent-contracts").ToolDefinition;
+    }[];
+    host?: import("@vykor/tools").FileToolHost &
+      import("@vykor/tools").ShellToolHost;
+    authorization?: import("@vykor/jobs").AgentJobAuthorization;
+    backgroundShellHost?: import("@vykor/tools").AgentBackgroundShellHost;
     executionOwner?: ExecutionRuntimeOwner;
     schedules?: AgentScheduleEffects;
     terminal?: AgentTerminalHost;
@@ -98,17 +110,28 @@ export function createDefaultToolRegistry(
     ...(network ? { network: true } : {}),
   });
   registerBuiltin(
-    createShellTool(options.environment?.info.shellDescriptor, undefined, options.terminal),
+    createShellTool(
+      options.environment?.info.shellDescriptor,
+      undefined,
+      options.terminal,
+      { ...options.host, backgroundShell: options.backgroundShellHost },
+    ),
     environment(),
   );
-  registerBuiltin(fileReadTool, environment());
-  registerBuiltin(fileWriteTool, environment());
-  registerBuiltin(fileEditTool, environment());
-  registerBuiltin(applyPatchTool, environment());
-  registerBuiltin(globTool, environment());
-  registerBuiltin(grepTool, environment());
-  registerBuiltin(webFetchTool, controlPlane(true));
-  registerBuiltin(webSearchTool, controlPlane(true));
+  registerBuiltin(createFileReadTool(options.host), environment());
+  registerBuiltin(createFileWriteTool(options.host), environment());
+  registerBuiltin(createFileEditTool(options.host), environment());
+  registerBuiltin(createApplyPatchTool(options.host), environment());
+  registerBuiltin(createGlobTool(options.host), environment());
+  registerBuiltin(createGrepTool(options.host), environment());
+  registerBuiltin(
+    createWebFetchTool(undefined, options.host),
+    controlPlane(true),
+  );
+  registerBuiltin(
+    createWebSearchTool(undefined, options.host),
+    controlPlane(true),
+  );
   registerBuiltin(todoWriteTool, controlPlane());
   registerBuiltin(
     createConfigTool(options.config ?? createNodeConfigPort()),
@@ -124,7 +147,11 @@ export function createDefaultToolRegistry(
   registerBuiltin(briefTool, controlPlane());
   if (options.backgroundShell !== false) {
     registerBuiltin(
-      createBackgroundShellTool(options.environment?.info.shellDescriptor, options.terminal),
+      createBackgroundShellTool(
+        options.environment?.info.shellDescriptor,
+        options.terminal,
+        { ...options.host, backgroundShell: options.backgroundShellHost },
+      ),
       environment(),
     );
   }
@@ -144,7 +171,10 @@ export function createDefaultToolRegistry(
     );
   }
   if (options.workflow)
-    registerBuiltin(createWorkflowTool(options.workflow), controlPlane());
+    registerBuiltin(
+      createWorkflowTool(options.workflow, options.agentDefinitions),
+      controlPlane(),
+    );
   for (const tool of createTeamTools(teams))
     registerBuiltin(tool, controlPlane());
   if (options.schedules) {
@@ -156,7 +186,7 @@ export function createDefaultToolRegistry(
       registerBuiltin(tool, environment());
   }
   if (options.jobs) {
-    for (const tool of createJobTools(options.jobs))
+    for (const tool of createJobTools(options.jobs, options.authorization))
       registerBuiltin(tool, controlPlane());
   }
   for (const tool of createMcpTools(options.mcp ?? createNodeMcpPort()))
@@ -164,6 +194,7 @@ export function createDefaultToolRegistry(
   registerBuiltin(
     createLspTool(
       options.executionOwner?.withLspClient.bind(options.executionOwner),
+      options.host,
     ),
     environment(),
   );
@@ -171,5 +202,19 @@ export function createDefaultToolRegistry(
     createFeishuPushTool(options.channels ?? createNodeFeishuChannelPort()),
     controlPlane(true),
   );
+  for (const decorator of options.toolDecorators ?? []) {
+    const base = registry.get(decorator.name);
+    if (!base)
+      throw new Error(
+        `Tool decorator target is unavailable: ${decorator.name}`,
+      );
+    const decorated = decorator.decorate(base);
+    if (decorated.name !== base.name)
+      throw new Error(
+        `Tool decorator must preserve the tool name: ${base.name}`,
+      );
+    decorated.execution ??= base.execution;
+    registry.override(decorated, { kind: "builtin" });
+  }
   return registry;
 }

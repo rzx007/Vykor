@@ -3,9 +3,7 @@ import type {
   ChildFailureKind,
   ChildPartialResult,
 } from "@vykor/agent-contracts";
-import type {
-  AgentEvent,
-} from "@vykor/core";
+import type { AgentEvent } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
 import type {
   CreateProjectionSettlementInput,

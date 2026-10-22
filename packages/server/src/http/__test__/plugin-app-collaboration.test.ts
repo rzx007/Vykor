@@ -1,3 +1,4 @@
+import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
 import { expect, it, vi } from "vitest";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,13 +22,13 @@ it("real model origin, app-only policy, raw result privacy, shared invalidations
   let calls = 0;
   const server = new VykorHttpServer({ store, settings, token: "secret", logger: () => {},
     services: { plugin: createDefaultPluginService({ current: settings }), settings: createDefaultSettingsService({ current: settings }), model: createDefaultModelService({ current: settings }) },
-    createAgent: async ({ options }) => createDefaultNodeAgent({ ...options, approvalMode: "full_access",
+    createAgent: hostedAgentFactory(async ({ options }) => createDefaultNodeAgent({ ...options, approvalMode: "full_access",
       capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
       client: { async *streamMessage() {
         if (calls++ === 0) { yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "model-read", name: "mcp__notes__read_note", input: {} } }; yield { type: "complete", stopReason: "tool_use" }; }
         else { yield { type: "text_delta", delta: "done" }; yield { type: "complete", stopReason: "end_turn" }; }
       } },
-    }),
+    })),
   });
   const abort = new AbortController();
   try {

@@ -91,8 +91,8 @@ export function TaskLimitControl() {
   }, [])
   async function save() {
     if (!snapshot || busy || !snapshot.editable) return
-    if (!Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) > 1000) {
-      setError("请输入 1–1000 的整数。")
+    if (!Number.isSafeInteger(Number(value)) || Number(value) < 0 || Number(value) > 1000) {
+      setError("请输入 0–1000 的整数，留空或 0 表示不限制。")
       return
     }
     setBusy(true)
@@ -132,9 +132,9 @@ export function TaskLimitControl() {
           id="general-max-turns"
           aria-label="任务轮数上限"
           type="number"
-          min={1}
+          min={0}
           max={1000}
-          placeholder="默认 50"
+          placeholder="不限制"
           className="w-24"
           value={value}
           disabled={!snapshot?.editable || busy}

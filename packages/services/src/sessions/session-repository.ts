@@ -2,16 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lstatSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import type {
-  AppendEventInput,
-  CreateSessionInput,
-  ListSessionsOptions,
-  ProjectRecord,
-  SessionEventRecord,
-  SessionRecord,
-  UpdateSessionInput,
-  ClearSessionWorktreeBindingInput,
-} from "@vykor/protocol";
+import type { AppendEventInput, CreateSessionInput, ListSessionsOptions, ProjectRecord, SessionEventRecord, SessionRecord, UpdateSessionInput, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
 
 import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";

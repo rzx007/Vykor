@@ -649,11 +649,11 @@ git commit -m "feat(core): forward maxOutputTokens and raise provider output fal
 ### Task 6: daemon 解析目录上限，default-runtime 计算 32k 取小
 
 **Files:**
-- Modify: `packages/agent-runtime/src/agent-options.ts:82`
+- Modify: `packages/agent-runtime/src/node/runtime/agent-options.ts:82`
 - Modify: `packages/server/src/daemon/daemon-agent.ts:88-91, 223-226`
 - Modify: `packages/server/src/application/daemon-application.ts:39-41, 430-438`
-- Modify: `packages/agent-runtime/src/default-runtime.ts:1-20, 309-320`
-- Test: `packages/agent-runtime/src/default-runtime.test.ts`
+- Modify: `packages/agent-runtime/src/node/runtime/default-runtime.ts:1-20, 309-320`
+- Test: `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 
 **Interfaces:**
 - Consumes: `catalogModelContextWindow` / `catalogModelOutputLimit`（Task 4）、`DEFAULT_OUTPUT_TOKEN_MAX`（Task 3）、`QueryRequestConfiguration.maxOutputTokens`（Task 5）
@@ -664,7 +664,7 @@ git commit -m "feat(core): forward maxOutputTokens and raise provider output fal
 
 - [ ] **Step 1: 写失败测试**
 
-在 `packages/agent-runtime/src/default-runtime.test.ts` 内追加：
+在 `packages/agent-runtime/src/node/runtime/default-runtime.test.ts` 内追加：
 
 ```ts
 it("caps the request output tokens at the configured ceiling", async () => {
@@ -721,7 +721,7 @@ Expected: FAIL，`input.maxTokens` 为 `undefined`（配置里还没有 `resolve
 
 - [ ] **Step 3: 类型与解析器打通**
 
-`packages/agent-runtime/src/agent-options.ts` 第 82 行之后加：
+`packages/agent-runtime/src/node/runtime/agent-options.ts` 第 82 行之后加：
 
 ```ts
   resolveModelOutputLimit?: (input: { provider?: string; model: string }) => Promise<number | undefined>;
@@ -770,7 +770,7 @@ import {
 
 - [ ] **Step 4: default-runtime 计算上限并注入**
 
-`packages/agent-runtime/src/default-runtime.ts` 顶部加入值导入（若已有 `@vykor/core` 的 import，合并到其中）：
+`packages/agent-runtime/src/node/runtime/default-runtime.ts` 顶部加入值导入（若已有 `@vykor/core` 的 import，合并到其中）：
 
 ```ts
 import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";

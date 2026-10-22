@@ -1,17 +1,4 @@
-import type {
-  PluginAppRecord,
-  PermissionRequestRecord,
-  AttachmentLimits,
-  SessionEventRecord,
-  SessionInputAttachmentRecord,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionRunAttemptRecord,
-  SessionExecutionRecord,
-} from "@vykor/protocol";
+import type { PluginAppRecord, PermissionRequestRecord, AttachmentLimits, SessionEventRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord } from "@vykor/protocol";
 import type { TransactionCoordinatorHooks } from "../database/index.js";
 import type { DurableEventRegistry } from "./event-registry.js";
 

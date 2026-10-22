@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { AgentEvent } from "@vykor/core";
+import type { AgentEvent } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
 import { describe, expect, it } from "vitest";
 

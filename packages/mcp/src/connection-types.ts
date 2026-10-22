@@ -1,12 +1,8 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig } from "@vykor/host-config";
-import type { ToolDefinition } from "@vykor/core";
-import type {
-  McpCallResultData,
-  McpToolAnnotations,
-  McpToolUiMetadata,
-} from "@vykor/protocol";
+import type { ToolDefinition } from "@vykor/agent-contracts";
+import type { McpCallResultData, McpToolAnnotations, McpToolUiMetadata } from "@vykor/agent-contracts";
 
 export type McpTransportKind = "stdio" | "http" | "sse";
 

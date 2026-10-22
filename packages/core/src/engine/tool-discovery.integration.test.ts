@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { QueryEngine } from "./query-engine.js";
+import { toolDefinitionIdentity } from "./tool-definition-identity.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
-import { createRunCapabilityView } from "../../../agent-runtime/src/run-capability-view.js";
-import type { AgentExecutionContext, QueryEngineOptions, StreamEvent, StreamMessageParams, ToolDefinition, ToolUseEndEvent } from "../index.js";
+import type { QueryEngineOptions } from "../index.js";
+import type { AgentExecutionContext, StreamEvent, StreamMessageParams, ToolDefinition, ToolUseEndEvent } from "@vykor/agent-contracts";
 
 let callId = 0;
 const call = (name: string, input: Record<string, unknown> = {}): StreamEvent => ({
@@ -42,7 +43,7 @@ function fixture(options: {
   if (options.starSource) registry.register(define("*"), options.starSource === "plugin"
     ? { kind: "plugin", id: "office" } : { kind: "builtin" });
   registry.register({ ...define("McpToolCall"), async execute(input, context) {
-    return context.callMcpTool!("mcp__server__edit", input);
+    return context.invokeTool!("mcp__server__edit", input);
   } }, { kind: "builtin" });
   if (options.search !== "missing") registry.register(options.search === "replaced" ? { ...search, execute: define("Other").execute } : search, { kind: "builtin" });
   let logicalRequest = 0;
@@ -227,8 +228,8 @@ describe("Run-local tool discovery", () => {
 
   it("lets a trusted host action use its captured binding without model discovery", async () => {
     const f = fixture();
-    const view = createRunCapabilityView({ toolRegistry: f.registry, pluginIds: new Set(["office"]) }, "office");
-    const execution = { capabilityView: view, scope: { runId: "host-action", signal: new AbortController().signal },
+    const tools = new Map(f.registry.getAll().map(definition => [definition.name, {definition,source:f.registry.inspect(definition.name)!.source,definitionIdentity:toolDefinitionIdentity(definition),invoke:definition.execute}]));
+    const execution = { tools, scope: { runId: "host-action", signal: new AbortController().signal },
       emit: async () => {}, effects: {}, closeSteering() {}, takeSteeredInputs: async () => [],
     } as unknown as AgentExecutionContext;
     await f.run(execution);

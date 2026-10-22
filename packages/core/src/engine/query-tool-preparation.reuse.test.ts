@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type { ToolDefinition } from "../index.js";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { prepareToolCalls } from "./query-tool-preparation.js";
 import { ToolFailureMemory } from "./tool-failure-memory.js";
 import { ToolRegistry } from "./tool-registry.js";

@@ -16,7 +16,7 @@
 
 - `packages/services/src/attachment/attachment-text.ts`：文本候选分类、严格编码识别、换行归一化和有界按行读取。
 - `packages/services/src/attachment/attachment-application-service.ts`：对 ready asset 暴露受控文本读取和只读资源物化。
-- `packages/core/src/types/tools.ts`、`packages/core/src/types/runtime.ts`：定义并注入 `AgentAttachmentResourceHost`。
+- `packages/agent-contracts/src/tools.ts`、`packages/core/src/types/runtime.ts`：定义并注入 `AgentAttachmentResourceHost`。
 - `packages/tools/src/file/attachment-uri.ts`、`packages/tools/src/file/read.ts`：解析 `attachment://` 并复用现有 Read。
 - `packages/server/src/application/attachment-routing/*`：文本/代码路由、预览和二进制阻止。
 - `packages/server/src/application/attachment-resource/*`：校验 session 引用、调用 Attachment Service、管理会话只读资源目录。
@@ -82,7 +82,7 @@ git commit -m "feat(attachments): route safe text resources"
 ### 任务 2：让现有 Read 安全读取 attachment URI（已完成）
 
 **文件：**
-- 修改：`packages/core/src/types/tools.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/core/src/index.ts`

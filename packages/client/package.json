@@ -17,7 +17,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/protocol": "workspace:*"
+    "@vykor/protocol": "workspace:*",
+    "@vykor/agent-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

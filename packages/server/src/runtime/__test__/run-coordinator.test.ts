@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AgentRunNotAcceptingInputError,
-  type AgentRunHandle,
-} from "@vykor/core";
+import { AgentRunNotAcceptingInputError, type AgentRunHandle } from "@vykor/agent-contracts";
 
 import {
   RunInterruptedError,

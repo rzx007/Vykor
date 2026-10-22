@@ -1,8 +1,4 @@
-import type {
-  ChannelDeliveryRecord,
-  ChannelDeliveryStatus,
-  ExternalConversationRecord,
-} from "@vykor/protocol";
+import type { ChannelDeliveryRecord, ChannelDeliveryStatus, ExternalConversationRecord } from "@vykor/protocol";
 import type { channelDeliveries, externalConversations } from "../session-runtime/schema.js";
 
 export function externalConversationFromRow(

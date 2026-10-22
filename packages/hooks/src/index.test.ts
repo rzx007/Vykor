@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HookExecutor } from "../src/index.js";
 import type { HookDefinition } from "@vykor/host-config";
-import type { StreamEvent, StreamMessageParams, StreamingMessageClient } from "@vykor/core";
+import type { StreamEvent, StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
 
 /**
  * POSIX-only: shellQuote produces POSIX single-quote escaping, which is only

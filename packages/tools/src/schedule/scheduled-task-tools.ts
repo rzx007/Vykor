@@ -1,8 +1,5 @@
-import type {
-  AgentScheduleEffects,
-  ToolDefinition,
-  ToolResult,
-} from "@vykor/core";
+import type { AgentScheduleEffects } from "@vykor/host-config";
+import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 
 export function createScheduleTools(port?: AgentScheduleEffects): ToolDefinition[] {
 

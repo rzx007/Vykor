@@ -1,3 +1,4 @@
+import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,13 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { VykorAgent } from "@vykor/agent-runtime";
-import type {
-  AgentEvent,
-  AgentEventContext,
-  AgentEventInput,
-  AgentRunHandle,
-  AgentRunResult,
-} from "@vykor/core";
+import type { AgentEvent, AgentEventContext, AgentEventInput, AgentRunHandle, AgentRunResult } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
 
 import type { CreateDaemonAgent } from "../daemon-agent.js";
@@ -217,7 +212,7 @@ describe("daemon lifecycle soak", () => {
       for (let generation = 0; generation < roundsByGeneration.length; generation += 1) {
         server = new VykorHttpServer({
           storePath,
-          createAgent: createSoakAgent(metrics),
+          createAgent: hostedAgentFactory(createSoakAgent(metrics)),
           logger: () => {},
         });
         const listen = await server.listen();

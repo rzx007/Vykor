@@ -2,16 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  QueryEngine,
-  ToolRegistry,
-  type AgentExecutionContext,
-  type RunCapabilityView,
-  type StreamMessageParams,
-} from "@vykor/core";
+import { QueryEngine, ToolRegistry, } from "@vykor/core";
+import { type AgentExecutionContext, type StreamMessageParams } from "@vykor/agent-contracts";
 import { type Message } from "@vykor/agent-contracts";
 import { toolSearchTool } from "@vykor/tools";
-import { createRunCapabilityView, type PluginCapabilityInventory } from "@vykor/agent-runtime";
+import { createRunCapabilityView, type PluginCapabilityInventory, type RunCapabilityView } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
 import type { SessionInputRecord, SessionRunRecord } from "@vykor/protocol";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
@@ -94,7 +89,7 @@ function fixture(delivery: "unmerged" | "recovered" | "same" = "unmerged", disco
     },
     async resolve(result: { input: SessionInputRecord; run?: SessionRunRecord }) {
       const selection = await resolveRunPluginSelection({ session: store.sessions.get("s1")!, input: result.input, run: result.run!,
-        agent: { getPluginCandidates: candidates, validatePluginScope }, signal: new AbortController().signal, traceId: "test" });
+        plugins: { getPluginCandidates: candidates, validatePluginScope }, signal: new AbortController().signal, traceId: "test" });
       const view = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["P", "Q"]) },
         selection.scopeVersion === 2 ? selection.pluginIds : selection.pluginId ?? undefined);
       return { selection, tools: [...view.tools.keys()], view };
@@ -117,7 +112,7 @@ async function runWithSearch(view: RunCapabilityView, script: Array<{ name: stri
     searchTool: toolSearchTool, minToolCount: 1, shouldDefer: (_tool, source) => source?.kind === "plugin",
   } });
   engine.loadMessages(history);
-  const execution = { capabilityView: view, scope: { runId: "discovery-test", signal: new AbortController().signal },
+  const execution = { tools: view.tools, scope: { runId: "discovery-test", signal: new AbortController().signal },
     effects: { requestPermission: async () => ({ status: "denied" }) },
     emit: async () => {}, takeSteeredInputs: async () => [], closeSteering() {},
   } as unknown as AgentExecutionContext;

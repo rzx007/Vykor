@@ -1,4 +1,5 @@
-import type { AgentScheduleEffects, ToolContext } from "@vykor/core";
+import type { AgentScheduleEffects } from "@vykor/host-config";
+import type { ToolContext } from "@vykor/agent-contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import { createScheduleTools } from "../scheduled-task-tools.js";

@@ -40,6 +40,40 @@ await agent.close();
 
 `createDefaultNodeAgent()` 自动加载 settings、provider、credentials、默认 tools、prompt、skills、plugins、MCP、memory 与 sandbox。默认工具包含纯本地文件 `Read`，不包含 `ImageToText` 或 `ImageGeneration`。调用方只覆盖需要改变的部分。旧的 `createVykorAgent()` 已删除，不提供别名。
 
+## 嵌入 Kernel 与访问 Node 宿主
+
+执行接口从 `@vykor/agent-runtime/kernel` 导入。它接收引擎、通用工具、交互回调和本轮准备函数，不接收 Settings、插件目录、MCP 或本机资源。
+
+```ts
+import { createAgentKernel, createBasicAgentKernelRuntime } from "@vykor/agent-runtime/kernel";
+import type { StreamingMessageClient, ToolDefinition } from "@vykor/agent-contracts";
+
+async function createEmbeddedAgent(client: StreamingMessageClient, tools: readonly ToolDefinition[]) {
+  const engine = createBasicAgentKernelRuntime({ client, model: "chosen-model", tools });
+  return createAgentKernel({
+    cwd: "/workspace", engine,
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    preparation: { prepare: async () => ({
+      run: { tools: new Map(tools.map(definition => [definition.name, { definition, invoke: definition.execute }])) },
+      release() {},
+    }) },
+  });
+}
+```
+
+默认 Node 工厂仍直接返回可执行 Agent；宿主功能通过独立的 `agent.host` 使用：
+
+| 入口 | 职责 |
+| --- | --- |
+| `agent.submitMessage/runMessage/runTool/compact/close` | 执行、互斥、历史、取消与生命周期 |
+| `agent.host.plugins` | 捕获插件能力、应用目录和已授权应用工具调用 |
+| `agent.host.configuration` | 读取配置快照、修改配置与模型选择 |
+| `agent.host.memory` | 显式记忆维护 |
+| `agent.host.inspect()` | Node 工具、hooks、MCP 和沙箱检查 |
+| `agent.host.workflows` | Node 的 Workflow 宿主 |
+
+Server 的自定义 `createAgent` 工厂必须返回 `{ agent, host }`（HostedAgent）。纯 Kernel 宿主可以明确返回 `host: undefined`；插件应用、记忆维护等功能在缺少对应宿主时不可用。已有的直接 Node 工厂可写成 `const node = await createDefaultNodeAgent(options); return { agent: node, host: node.host };`。
+
 ## 创建参数
 
 常用参数全部位于顶层，不存在 runtime factory 或 `overrides` 包装层：
@@ -112,17 +146,19 @@ await createDefaultNodeAgent({
 
 `capabilityOverrides` 按能力独立解析：不传表示使用该能力的默认值，传入 `false` 表示关闭。只有 `terminal`、`backgroundShell`、`childEnvironment`、`workflowRepository` 和 `schedules` 接受 Host 对象作为 override；其中 `terminal` 与 `backgroundShell` 必须使用 `{ value, jobs }` bundle，让 `Job*` 工具能观察与控制它们创建的 Job。`jobs` 与 `memory` 不接受 Host 对象，分别只能设为 `false` 来关闭本地 Jobs 或受管 Memory。
 
-附件不是 Agent Capability。默认 `Read` 只读本地路径，默认 Agent 也不承诺图生文或文生图。`@vykor/tools` 不定义或导出 `ImageToText`、`ImageGeneration`。daemon 作为第一方 Agent 创建者，通过 `toolOverrides` 把 `Read` 扩展为“本地路径 + 当前会话授权附件”，并在 server 内完整定义两个视觉 Tool。`createDaemonAgentLoader` 只调用统一的 `tools({ session, settings })` 获取当前会话的普通工具，不认识任何具体工具名称。daemon 的 `ImageToText` 支持普通路径、图片 URL 和授权后的 `attachment_id`；附件分支会把 Child session 解析到 Root session 后再校验引用。
+附件不是 Agent Capability。默认 `Read` 只读本地路径，默认 Agent 也不承诺图生文或文生图。`@vykor/tools` 不定义或导出 `ImageToText`、`ImageGeneration`。daemon 作为第一方 Agent 创建者，通过 `toolDecorators` 包装已绑定宿主配置和日志的 `Read`，把它 扩展为“本地路径 + 当前会话授权附件”，并在 server 内完整定义两个视觉 Tool。`createDaemonAgentLoader` 只调用统一的 `tools({ session, settings })` 获取当前会话的普通工具，不认识任何具体工具名称。daemon 的 `ImageToText` 支持普通路径、图片 URL 和授权后的 `attachment_id`；附件分支会把 Child session 解析到 Root session 后再校验引用。
 
-内部的 `trustedToolOverrides` 只用于第一方 composition root 明确信任自己构造的覆盖，让 daemon 的 `Read` 保留原内置 `Read` 的权限分类。名称必须同时存在于 `toolOverrides`，且目标必须是默认 builtin；普通 `toolOverrides` 默认不继承信任。Extension、Plugin 和 MCP 没有设置或追加可信名称的入口。
+内部的 `trustedToolOverrides` 只用于第一方 composition root 明确信任自己构造的覆盖，让 其他第一方覆盖保留原内置工具的权限分类。名称必须同时存在于 `toolOverrides`，且目标必须是默认 builtin；普通 `toolOverrides` 默认不继承信任。Extension、Plugin 和 MCP 没有设置或追加可信名称的入口。
 
 `jobs: false` 不是独立开关：Terminal、后台 Shell、child environment 与 Workflow repository 都会产生或依赖 Job，因此必须同时写成 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`。只替换 Terminal 不会关掉本地后台 Shell 或 Memory。
+
+显式传入的执行环境默认也由调用方释放。只有创建方明确指定 `ownsExecutionEnvironment: true` 时，Node 才接管该租约；child 借用时重置此标记。Server loader 将自己申请的会话环境租约明确交给 Node，失败时也只释放一次。
 
 Host 覆盖是**借用对象**，不是由 Agent 接管的资源：它们必须能覆盖 root session 的整棵 child session tree，且由 Host 自己在合适的生命周期释放。`agent.close()` 只清理 runtime 自己创建的默认资源；不会调用 Host Terminal、后台 Shell 或其 Jobs 的释放逻辑。
 
 Node 默认创建每棵根树的 TeamRegistry 和 WorkflowHostDirectory，child 借用本树目录。Workflow、Job 工具和 Agent.close 使用同一个 owner 视图；close 等待后台 worker 和终态保存，再移除子 Agent。应用注入的共享 Host 不由单个 Agent 关闭；其创建入口为 `@vykor/agent-runtime/node/workflow`。
 
-Kernel 入口保持可嵌入：它不会创建本地 Terminal、Jobs、child environment 或其他 Node 默认能力，调用方必须明确提供运行时与所需能力。
+Kernel 使用显式 `release` 关闭自己收到的租约。本轮 `prepare` 返回的 `release` 在准备失败或 Run 终态后释放；默认 Node 根树拥有本地执行、团队与能力捕获目录，child 借用同一棵树的目录。外部传入的 Host 由创建方关闭。
 
 ## Event 与 Effect
 
@@ -243,19 +279,19 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 
 | 要找的逻辑 | 文件 |
 |---|---|
-| SDK facade 与 run handle | `packages/agent-runtime/src/agent.ts` |
-| 默认 composition root | `packages/agent-runtime/src/default-runtime.ts` |
-| ordered sink 与 observers | `packages/agent-runtime/src/event-source.ts` |
-| child lifecycle | `packages/agent-runtime/src/child-agent.ts` |
+| SDK facade 与 run handle | `packages/agent-runtime/src/kernel/agent.ts` |
+| 默认 composition root | `packages/agent-runtime/src/node/runtime/default-runtime.ts` |
+| ordered sink 与 observers | `packages/agent-runtime/src/kernel/event-source.ts` |
+| child lifecycle | `packages/agent-runtime/src/kernel/child-agent.ts` |
 | Agent producer | `packages/tools/src/agent/agent-tools.ts` |
 | Job lifecycle routing | `packages/tools/src/job`、`packages/server/src/jobs` |
 | Workflow child spawn/wait | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` |
-| child worktree | `packages/agent-runtime/src/child-environment.ts` |
+| child worktree | `packages/agent-runtime/src/kernel/child-environment.ts` |
 | daemon application composition | `packages/server/src/application/daemon-application.ts` |
 | durable session -> live Agent | `packages/server/src/daemon/daemon-agent.ts` |
 | daemon agent cache | `packages/server/src/application/agent/agent-pool.ts` |
 | durable event projection | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
-| standalone SDK contract test | `packages/agent-runtime/src/sdk.test.ts` |
+| standalone SDK contract test | `packages/agent-runtime/src/node/runtime/sdk.test.ts` |
 
 ## 非目标
 

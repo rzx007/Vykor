@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@vykor/protocol": "workspace:*",
-    "@vykor/core": "workspace:*",
     "zod": "catalog:",
     "@vykor/skills": "workspace:*",
     "@vykor/coordinator": "workspace:*",

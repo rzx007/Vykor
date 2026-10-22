@@ -1,5 +1,5 @@
 import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type { ToolDefinition, ToolExecutionResult } from "../types/tools";
+import type { ToolDefinition, ToolExecutionResult } from "@vykor/agent-contracts";
 
 function reusableBody(tool: ToolDefinition, input: Record<string, unknown>, property: string): string | undefined {
   const properties = tool.inputSchema?.properties;

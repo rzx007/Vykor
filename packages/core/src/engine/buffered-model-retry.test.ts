@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { streamBufferedModelWithRetry } from "./buffered-model-retry.js";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
-import { AgentExecutionLimitError } from "../types/runtime.js";
+import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 import { attemptFinishedEvent } from "./query-model-attempt.js";
 import type { ModelAttemptFinishedEvent } from "@vykor/agent-contracts";
-import type { StreamEvent, StreamMessageParams } from "../index.js";
+import type { StreamEvent, StreamMessageParams } from "@vykor/agent-contracts";
 
 async function collect(
   client: { streamMessage(params: StreamMessageParams): AsyncIterable<StreamEvent> },

@@ -1,3 +1,4 @@
+import type { HostedAgent } from "@vykor/agent-runtime";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { normalizeApprovalMode } from "@vykor/protocol";
@@ -18,14 +19,16 @@ import {
 import type { WorkflowRunRepository } from "@vykor/coordinator";
 import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { PROJECT_CONFIG_DIR_NAME } from "@vykor/host-config";
+import type { AgentBackgroundShellHost } from "@vykor/tools";
 import type {
   AgentScheduleEffects,
-  AgentBackgroundShellHost,
+  AgentRequestConfigurationReader,
+} from "@vykor/host-config";
+import type {
   AgentEffects,
   AgentEventListener,
-  AgentRequestConfigurationReader,
   ToolDefinition,
-} from "@vykor/core";
+} from "@vykor/agent-contracts";
 import type { McpRuntimeRegistry } from "@vykor/mcp";
 import type { Settings } from "@vykor/host-config";
 import type { AgentTerminalHost } from "@vykor/terminal";
@@ -57,7 +60,7 @@ export interface CreateDaemonAgentContext {
  */
 export type CreateDaemonAgent = (
   context: CreateDaemonAgentContext,
-) => Promise<VykorAgent>;
+) => Promise<HostedAgent>;
 
 export interface LoadDaemonAgentContext {
   session: SessionRecord;
@@ -71,13 +74,15 @@ export interface LoadDaemonAgentContext {
  */
 export type LoadDaemonAgent = (
   context: LoadDaemonAgentContext,
-) => Promise<VykorAgent>;
+) => Promise<HostedAgent>;
 
 // Evidence from the warm Agent's actual construction, not settings re-read later.
 // Host Git cannot enforce the Agent's path-read policy; only explicitly disabled
 // sandboxing permits repository-wide observation. Unknown/restricted policy fails closed.
 const localAgentWorkspaces = new WeakMap<VykorAgent, string>();
-export function readDaemonAgentLocalWorkspace(agent: VykorAgent): string | undefined {
+export function readDaemonAgentLocalWorkspace(
+  agent: VykorAgent,
+): string | undefined {
   return localAgentWorkspaces.get(agent);
 }
 
@@ -92,10 +97,16 @@ export type DaemonToolsProvider = (
 
 export interface DaemonAgentLoaderOptions {
   executionOwner?: ExecutionRuntimeOwner;
-  prepareModelMetadata?(settings: Settings): Promise<Pick<
-    VykorAgentOptions,
-    "resolveReasoningEfforts" | "resolveModelContextWindow" | "resolveModelOutputLimit"
-  >>;
+  prepareModelMetadata?(
+    settings: Settings,
+  ): Promise<
+    Pick<
+      VykorAgentOptions,
+      | "resolveReasoningEfforts"
+      | "resolveModelContextWindow"
+      | "resolveModelOutputLimit"
+    >
+  >;
   /** Host-only actual Run bindings, including delegated workers; never serialized into events. */
   onRunCapabilities?: VykorAgentOptions["onRunCapabilities"];
   executionSurface?: "desktop_managed" | "cli_advanced";
@@ -135,6 +146,7 @@ export interface DaemonAgentLoaderOptions {
   workflowHost?: WorkflowHost;
   tools?: DaemonToolsProvider;
   toolOverrides?: ToolDefinition[];
+  toolDecorators?: VykorAgentOptions["toolDecorators"];
   trustedToolOverrides?: string[];
   /** Process-wide registry so OAuth login/logout can reconnect this Agent's MCP Runtimes. */
   mcpRuntimeRegistry?: McpRuntimeRegistry;
@@ -171,9 +183,17 @@ export function createDaemonAgentLoader(
 
   return async ({ session, history, parts }) => {
     const settingsRoot = sessionSettingsRoot(session);
-    const storedSettings = await resolveSettingsForSession(options, settingsRoot);
-    const configuration = agentConfigurationFromSession(session, storedSettings);
-    const settings = storedSettings ? settingsForApprovalMode(storedSettings, configuration.approvalMode) : undefined;
+    const storedSettings = await resolveSettingsForSession(
+      options,
+      settingsRoot,
+    );
+    const configuration = agentConfigurationFromSession(
+      session,
+      storedSettings,
+    );
+    const settings = storedSettings
+      ? settingsForApprovalMode(storedSettings, configuration.approvalMode)
+      : undefined;
     if (!options.createAgent && !settings)
       throw new Error("Agent settings are not configured");
 
@@ -200,20 +220,39 @@ export function createDaemonAgentLoader(
     const terminal = options.createTerminal?.(session);
     const backgroundShell = options.createBackgroundShell?.(session);
     const tools = (await options.tools?.({ session, settings })) ?? [];
-    const executionEnvironment = settings && options.acquireEnvironment
-      ? await options.acquireEnvironment(session, settings)
+    const modelMetadata = settings
+      ? await options.prepareModelMetadata?.(settings)
       : undefined;
-    const modelMetadata = settings ? await options.prepareModelMetadata?.(settings) : undefined;
+    const acquiredEnvironment =
+      settings && options.acquireEnvironment
+        ? await options.acquireEnvironment(session, settings)
+        : undefined;
+    let environmentReleased = false;
+    const executionEnvironment = acquiredEnvironment
+      ? {
+          ...acquiredEnvironment,
+          release: async () => {
+            if (environmentReleased) return;
+            environmentReleased = true;
+            await acquiredEnvironment.release();
+          },
+        }
+      : undefined;
     const requestConfigurationStore = createDaemonRequestConfigurationStore({
       session,
       settings,
       getSession: options.getSession,
-      getSettingsForCwd: options.getSettingsForCwd ? () => options.getSettingsForCwd!(settingsRoot) : undefined,
+      getSettingsForCwd: options.getSettingsForCwd
+        ? () => options.getSettingsForCwd!(settingsRoot)
+        : undefined,
       onSettingsReloadError: options.onSettingsReloadError,
     });
     let declaredEfforts: string[] | undefined;
     try {
-      declaredEfforts = await (modelMetadata?.resolveReasoningEfforts ?? options.resolveReasoningEfforts)?.({
+      declaredEfforts = await (
+        modelMetadata?.resolveReasoningEfforts ??
+        options.resolveReasoningEfforts
+      )?.({
         provider: configuration.provider,
         model: configuration.model ?? session.model,
       });
@@ -226,39 +265,62 @@ export function createDaemonAgentLoader(
         ? chosenEffort
         : undefined;
     const agentOptions: VykorAgentOptions = {
-      ...(options.onRunCapabilities ? { onRunCapabilities: options.onRunCapabilities } : {}),
+      ...(options.onRunCapabilities
+        ? { onRunCapabilities: options.onRunCapabilities }
+        : {}),
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
       memoryRoot: settingsRoot,
       sessionId: session.id,
-      ...(options.mcpRuntimeRegistry ? { mcpRuntimeRegistry: options.mcpRuntimeRegistry } : {}),
-      ...(options.executionSurface ? { executionSurface: options.executionSurface } : {}),
-      ...(executionEnvironment ? { executionEnvironment } : {}),
+      ...(options.mcpRuntimeRegistry
+        ? { mcpRuntimeRegistry: options.mcpRuntimeRegistry }
+        : {}),
+      ...(options.executionSurface
+        ? { executionSurface: options.executionSurface }
+        : {}),
+      ...(executionEnvironment
+        ? { executionEnvironment, ownsExecutionEnvironment: true }
+        : {}),
       ...configuration,
       requestConfigurationStore,
-      ...(options.getSession ? {
-        requestConfigurationStoreForSession: (sessionId: string) => {
-          const childSession = options.getSession!(sessionId);
-          return childSession ? createDaemonRequestConfigurationStore({
-            session: childSession,
-            settings,
-            getSession: options.getSession,
-            getSettingsForCwd: options.getSettingsForCwd ? () => options.getSettingsForCwd!(sessionSettingsRoot(childSession)) : undefined,
-            onSettingsReloadError: options.onSettingsReloadError,
-          }) : undefined;
-        },
-      } : {}),
+      ...(options.getSession
+        ? {
+            requestConfigurationStoreForSession: (sessionId: string) => {
+              const childSession = options.getSession!(sessionId);
+              return childSession
+                ? createDaemonRequestConfigurationStore({
+                    session: childSession,
+                    settings,
+                    getSession: options.getSession,
+                    getSettingsForCwd: options.getSettingsForCwd
+                      ? () =>
+                          options.getSettingsForCwd!(
+                            sessionSettingsRoot(childSession),
+                          )
+                      : undefined,
+                    onSettingsReloadError: options.onSettingsReloadError,
+                  })
+                : undefined;
+            },
+          }
+        : {}),
       ...(options.resolveReasoningEfforts
-        ? { resolveReasoningEfforts: async (input) =>
-            await options.resolveReasoningEfforts!(input) }
+        ? {
+            resolveReasoningEfforts: async (input) =>
+              await options.resolveReasoningEfforts!(input),
+          }
         : {}),
       ...(options.resolveModelContextWindow
-        ? { resolveModelContextWindow: async (input) =>
-            await options.resolveModelContextWindow!(input) }
+        ? {
+            resolveModelContextWindow: async (input) =>
+              await options.resolveModelContextWindow!(input),
+          }
         : {}),
       ...(options.resolveModelOutputLimit
-        ? { resolveModelOutputLimit: async (input) =>
-            await options.resolveModelOutputLimit!(input) }
+        ? {
+            resolveModelOutputLimit: async (input) =>
+              await options.resolveModelOutputLimit!(input),
+          }
         : {}),
       ...modelMetadata,
       reasoningEffort,
@@ -272,7 +334,12 @@ export function createDaemonAgentLoader(
       },
       effects: { requestPermission, askUserPrompt } as AgentEffectOverrides,
       ...(tools.length > 0 ? { tools } : {}),
-      ...(options.toolOverrides ? { toolOverrides: options.toolOverrides } : {}),
+      ...(options.toolOverrides
+        ? { toolOverrides: options.toolOverrides }
+        : {}),
+      ...(options.toolDecorators
+        ? { toolDecorators: options.toolDecorators }
+        : {}),
       ...(options.trustedToolOverrides
         ? { trustedToolOverrides: options.trustedToolOverrides }
         : {}),
@@ -291,24 +358,28 @@ export function createDaemonAgentLoader(
           }
         : {}),
     };
-    let agent: VykorAgent;
+    let hosted: HostedAgent;
     try {
-      agent = options.createAgent
+      hosted = options.createAgent
         ? await options.createAgent({
             session,
             history,
             parts,
             options: agentOptions,
           })
-        : await createDefaultNodeAgent({
-            ...agentOptions,
-            executionOwner: options.executionOwner,
-            workflowHost: options.workflowHost,
-          });
+        : await (async () => {
+            const node = await createDefaultNodeAgent({
+              ...agentOptions,
+              executionOwner: options.executionOwner,
+              workflowHost: options.workflowHost,
+            });
+            return { agent: node, host: node.host };
+          })();
     } catch (error) {
       await executionEnvironment?.release();
       throw error;
     }
+    const agent = hosted.agent;
     try {
       // 重启 daemon / 热加载 session 时，内存 Agent 是空的；必须先灌历史再对外暴露，
       // 否则下一句 prompt 会丢上下文。
@@ -326,14 +397,23 @@ export function createDaemonAgentLoader(
         sinkBinding = undefined;
       }
       if (!options.createAgent && settings?.sandbox?.enabled === false) {
-        if (executionEnvironment?.workspace.kind === "local" &&
-          executionEnvironment.workspace.hostRoot === executionEnvironment.workspace.executionRoot) {
-          localAgentWorkspaces.set(agent, executionEnvironment.workspace.executionRoot);
-        } else if (!executionEnvironment && settings?.agentEnvironment?.kind !== "wsl") {
+        if (
+          executionEnvironment?.workspace.kind === "local" &&
+          executionEnvironment.workspace.hostRoot ===
+            executionEnvironment.workspace.executionRoot
+        ) {
+          localAgentWorkspaces.set(
+            agent,
+            executionEnvironment.workspace.executionRoot,
+          );
+        } else if (
+          !executionEnvironment &&
+          settings?.agentEnvironment?.kind !== "wsl"
+        ) {
           localAgentWorkspaces.set(agent, session.cwd);
         }
       }
-      return agent;
+      return hosted;
     } catch (error) {
       try {
         await agent.close();
@@ -360,24 +440,39 @@ function createDaemonRequestConfigurationStore(input: {
   const read = async () => {
     const session = input.getSession?.(input.session.id) ?? input.session;
     const defaults = Array.isArray(session.metadata.runtimeDefaultFields)
-      ? session.metadata.runtimeDefaultFields : [];
+      ? session.metadata.runtimeDefaultFields
+      : [];
     const followsDefaultEffort = defaults.includes("effort");
     const followsDefaultMaxTurns = defaults.includes("maxTurns");
     const followsDefaultSystemPrompt = defaults.includes("systemPrompt");
     if (input.getSettingsForCwd) {
       try {
         const loaded = await input.getSettingsForCwd(session.cwd);
-        if (followsDefaultMaxTurns && (!Number.isSafeInteger(loaded.maxTurns) || loaded.maxTurns <= 0)) {
-          throw new RangeError("settings.maxTurns must be a positive safe integer");
+        if (
+          followsDefaultMaxTurns &&
+          (!Number.isSafeInteger(loaded.maxTurns) || loaded.maxTurns < 0)
+        ) {
+          throw new RangeError(
+            "settings.maxTurns must be a non-negative safe integer (0 means unlimited)",
+          );
         }
-        if (loaded.workStyle !== undefined
-          && loaded.workStyle !== "practical" && loaded.workStyle !== "efficient") {
+        if (
+          loaded.workStyle !== undefined &&
+          loaded.workStyle !== "practical" &&
+          loaded.workStyle !== "efficient"
+        ) {
           throw new Error("settings.workStyle must be practical or efficient");
         }
-        if (loaded.fastMode !== undefined && typeof loaded.fastMode !== "boolean") {
+        if (
+          loaded.fastMode !== undefined &&
+          typeof loaded.fastMode !== "boolean"
+        ) {
           throw new Error("settings.fastMode must be a boolean");
         }
-        if (loaded.systemPrompt !== undefined && typeof loaded.systemPrompt !== "string") {
+        if (
+          loaded.systemPrompt !== undefined &&
+          typeof loaded.systemPrompt !== "string"
+        ) {
           throw new Error("settings.systemPrompt must be a string");
         }
         lastValidSettings = loaded;
@@ -394,42 +489,66 @@ function createDaemonRequestConfigurationStore(input: {
       provider: input.settings?.provider,
       baseUrl: defaultBaseUrlForSession(session, input.settings),
       apiFormat: input.settings?.apiFormat,
-      effort: followsDefaultEffort ? lastValidSettings?.effort : input.settings?.effort,
-      maxTurns: followsDefaultMaxTurns ? lastValidSettings?.maxTurns : input.settings?.maxTurns,
+      effort: followsDefaultEffort
+        ? lastValidSettings?.effort
+        : input.settings?.effort,
+      maxTurns: followsDefaultMaxTurns
+        ? lastValidSettings?.maxTurns
+        : input.settings?.maxTurns,
     });
     const rawRuntime = session.metadata.runtime;
-    const effortCleared = rawRuntime !== null && typeof rawRuntime === "object"
-      && !Array.isArray(rawRuntime)
-      && (rawRuntime as Record<string, unknown>).effort === "";
-    const baseUrlCleared = rawRuntime !== null && typeof rawRuntime === "object"
-      && !Array.isArray(rawRuntime)
-      && (rawRuntime as Record<string, unknown>).baseUrl === "";
-    const systemPromptCleared = rawRuntime !== null && typeof rawRuntime === "object"
-      && !Array.isArray(rawRuntime)
-      && (rawRuntime as Record<string, unknown>).systemPrompt === "";
+    const effortCleared =
+      rawRuntime !== null &&
+      typeof rawRuntime === "object" &&
+      !Array.isArray(rawRuntime) &&
+      (rawRuntime as Record<string, unknown>).effort === "";
+    const baseUrlCleared =
+      rawRuntime !== null &&
+      typeof rawRuntime === "object" &&
+      !Array.isArray(rawRuntime) &&
+      (rawRuntime as Record<string, unknown>).baseUrl === "";
+    const systemPromptCleared =
+      rawRuntime !== null &&
+      typeof rawRuntime === "object" &&
+      !Array.isArray(rawRuntime) &&
+      (rawRuntime as Record<string, unknown>).systemPrompt === "";
     return {
       revision: readSessionRuntimeRevision(session.metadata),
       configuration: {
         model: runtime.model,
         ...(runtime.provider ? { provider: runtime.provider } : {}),
-        ...(baseUrlCleared ? { baseUrl: "" }
-          : runtime.baseUrl ? { baseUrl: runtime.baseUrl } : {}),
+        ...(baseUrlCleared
+          ? { baseUrl: "" }
+          : runtime.baseUrl
+            ? { baseUrl: runtime.baseUrl }
+            : {}),
         ...(runtime.apiFormat ? { apiFormat: runtime.apiFormat } : {}),
         ...(followsDefaultEffort && lastValidSettings?.effort !== undefined
           ? { effort: lastValidSettings.effort }
-          : effortCleared ? { effort: "" }
-          : runtime.effort !== undefined ? { effort: runtime.effort } : {}),
+          : effortCleared
+            ? { effort: "" }
+            : runtime.effort !== undefined
+              ? { effort: runtime.effort }
+              : {}),
         ...(followsDefaultMaxTurns && lastValidSettings?.maxTurns !== undefined
           ? { maxTurns: lastValidSettings.maxTurns }
-          : runtime.maxTurns !== undefined ? { maxTurns: runtime.maxTurns } : {}),
+          : runtime.maxTurns !== undefined
+            ? { maxTurns: runtime.maxTurns }
+            : {}),
         ...(followsDefaultSystemPrompt
           ? { systemPrompt: undefined }
-          : systemPromptCleared ? { systemPrompt: "" }
-          : runtime.systemPrompt !== undefined ? { systemPrompt: runtime.systemPrompt } : {}),
+          : systemPromptCleared
+            ? { systemPrompt: "" }
+            : runtime.systemPrompt !== undefined
+              ? { systemPrompt: runtime.systemPrompt }
+              : {}),
         settingsPrompt: lastValidSettings?.systemPrompt,
-        ...(lastValidSettings?.workStyle ? { workStyle: lastValidSettings.workStyle } : {}),
+        ...(lastValidSettings?.workStyle
+          ? { workStyle: lastValidSettings.workStyle }
+          : {}),
         ...(lastValidSettings?.fastMode !== undefined
-          ? { fastMode: lastValidSettings.fastMode } : {}),
+          ? { fastMode: lastValidSettings.fastMode }
+          : {}),
       },
     };
   };
@@ -442,7 +561,8 @@ function defaultBaseUrlForSession(
 ): string | undefined {
   const selectedProvider = readSessionRuntimeConfig(session).provider;
   return selectedProvider && selectedProvider !== settings?.provider
-    ? undefined : settings?.baseUrl;
+    ? undefined
+    : settings?.baseUrl;
 }
 
 /** 项目级设置优先于进程级，再退回构造时传入的静态 settings。 */
@@ -489,7 +609,8 @@ function agentConfigurationFromSession(
     effort: runtime.effort,
     // The persistent master switch is a ceiling: session metadata may disable
     // plugins, but an old session cannot re-enable them globally.
-    pluginsEnabled: (settings?.plugins?.enabled ?? true) && (runtime.pluginsEnabled ?? true),
+    pluginsEnabled:
+      (settings?.plugins?.enabled ?? true) && (runtime.pluginsEnabled ?? true),
   };
   if (!session.parentId && runtime.sessionMode === "coordinator") {
     // coordinator 模式换一套编排 prompt + 工具白名单（Agent/Job*/Workflow），

@@ -1,12 +1,4 @@
-import type {
-  AppendEventInput,
-  CreatePermissionRequestInput,
-  ListPermissionRequestsOptions,
-  PermissionRequestRecord,
-  SessionEventRecord,
-  SessionRecord,
-  SessionRunRecord,
-} from "@vykor/protocol";
+import type { AppendEventInput, CreatePermissionRequestInput, ListPermissionRequestsOptions, PermissionRequestRecord, SessionEventRecord, SessionRecord, SessionRunRecord } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 

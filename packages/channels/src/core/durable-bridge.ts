@@ -1,9 +1,4 @@
-import type {
-  ChannelDeliveryRecord,
-  DurableChannelMessageInput,
-  DurableChannelMessageResult,
-  RecordChannelDeliveryInput,
-} from "@vykor/protocol";
+import type { ChannelDeliveryRecord, DurableChannelMessageInput, DurableChannelMessageResult, RecordChannelDeliveryInput } from "@vykor/protocol";
 
 import { MessageBus, type InboundMessage } from "../bus/queue.js";
 

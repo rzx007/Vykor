@@ -1,9 +1,4 @@
-import {
-  parsePluginUiConversationReceipt,
-  ProtocolValidationError,
-  type PluginUiActionResponse,
-  type PluginUiConversationReceipt,
-} from "@vykor/protocol";
+import { parsePluginUiConversationReceipt, ProtocolValidationError, type PluginUiActionResponse, type PluginUiConversationReceipt } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 function path(sessionId: string, instanceId: string): string {
   return `/sessions/${encodeURIComponent(sessionId)}/plugin-ui/${encodeURIComponent(instanceId)}`;

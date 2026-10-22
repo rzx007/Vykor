@@ -1,3 +1,4 @@
+import type { AgentChildController } from "@vykor/agent-contracts";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import type {
   AgentDefinition,
@@ -11,7 +12,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AwaitExecutionResult } from "@vykor/execution-node";
-import type { AgentChildController } from "@vykor/core";
+
 import { promisify } from "node:util";
 import { awaitFrameworkChildTask } from "../children/child-task-adapter.js";
 

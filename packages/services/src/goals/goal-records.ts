@@ -1,10 +1,4 @@
-import type {
-  GoalStatus,
-  GoalStopReason,
-  GoalWait,
-  GoalUsage,
-  SessionGoal,
-} from "@vykor/protocol";
+import type { GoalStatus, GoalStopReason, GoalWait, GoalUsage, SessionGoal } from "@vykor/protocol";
 import type {
   sessionGoalRequests,
   sessionGoals,

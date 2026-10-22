@@ -1,11 +1,12 @@
+import type { ShellToolHost } from "../ports/policy.js";
 import type { AgentTerminalHost } from "@vykor/terminal";
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { ShellDescriptor } from "@vykor/environment";
 import { createShellDescription } from "../shell/index.js";
 import { createTerminalTools } from "../terminal/terminal-tools.js";
 import { isPersistentServiceCommand } from "../terminal/service-command.js";
 
-export function createBackgroundShellTool(shell?: ShellDescriptor, terminal?: AgentTerminalHost): ToolDefinition {
+export function createBackgroundShellTool(shell?: ShellDescriptor, terminal?: AgentTerminalHost, host: ShellToolHost = {}): ToolDefinition {
 const terminalOpen = createTerminalTools(terminal)[0]!;
 return {
   name: "BackgroundShellCreate",
@@ -38,20 +39,20 @@ return {
       return terminalOpen.execute({ command: command.value, name: description.value }, context);
     }
     if (!context.sessionId) return { ...failed("Background shell jobs require a durable session."), failureKind: "configuration" as const };
-    if (!context.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
+    if (!host.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
     if (!context.toolCallId) return { ...failed("Background shell request identity is not configured."), failureKind: "configuration" as const };
     if (context.abortSignal?.aborted) {
       return { ...failed("Shell interrupted before the command started."), failureKind: "interrupted" as const };
     }
 
     try {
-      const created = await context.backgroundShell.create({
+      const created = await host.backgroundShell.create({
         requestId: `tool:${context.toolCallId}`,
         command: command.value,
         description: description.value,
         cwd: context.environment?.workspace.hostRoot ?? context.cwd,
         sessionId: context.sessionId,
-        settings: context.settings,
+        settings: host.settings,
         ...(shell ? { shellDescriptor: shell } : {}),
       });
       return {

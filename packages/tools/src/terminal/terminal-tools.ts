@@ -1,9 +1,5 @@
 import type { AgentTerminalHost } from "@vykor/terminal";
-import type {
-  ToolContext,
-  ToolDefinition,
-  ToolResult,
-} from "@vykor/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 
 export function createTerminalTools(host?: AgentTerminalHost): ToolDefinition[] {
   const terminalOpenTool: ToolDefinition = {

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 import type { ContentBlock, Message } from "@vykor/agent-contracts";
-import type { StreamEvent } from "./types/events.js";
-import type { AgentExecutionContext, QueryEngine as IQueryEngine } from "./types/runtime.js";
+import type { StreamEvent } from "@vykor/agent-contracts";
+import type { QueryEngine as IQueryEngine } from "./types/runtime.js";
+import type { AgentExecutionContext } from "@vykor/agent-contracts";
 
 export interface AgentSessionSubmitOptions {
   signal?: AbortSignal;

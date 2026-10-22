@@ -6,7 +6,7 @@ import { feishuApiBase, createFeishuPushTool, getTenantToken } from "../feishu-p
 
 const feishuPushTool = createFeishuPushTool({ getFeishu });
 
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 const context: ToolContext = {
   cwd: process.cwd(),

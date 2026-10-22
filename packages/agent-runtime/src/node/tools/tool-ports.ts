@@ -8,7 +8,7 @@ import {
   standardUserSkillDirs,
 } from "@vykor/skills";
 import {
-  capturedSkillCatalog,
+  createCapturedSkillCatalog,
   type ConfigToolPort,
   type FeishuChannelPort,
   type McpToolPort,
@@ -21,12 +21,7 @@ export function createNodeSkillCatalog(
 ): SkillCatalogPort {
   return {
     async resolve(context) {
-      if (context.capabilityView) return capturedSkillCatalog.resolve(context);
-      const registry =
-        shared ??
-        (context.skillRegistry instanceof SkillRegistry
-          ? context.skillRegistry
-          : undefined);
+      const registry = shared;
       const snapshot = await createSkillRegistrySnapshot({
         baseline:
           registry
@@ -53,32 +48,59 @@ export function createNodeConfigPort(): ConfigToolPort {
   };
 }
 
-export function createNodeMcpPort(): McpToolPort {
+export function createNodeMcpPort(
+  manager?: McpClientManager,
+  auth?: import("@vykor/tools").McpAuthHost,
+  servers?: ReadonlySet<string>,
+  authServers: ReadonlySet<string> | undefined = servers,
+): McpToolPort {
+  const permits = (name: string) => !servers || servers.has(name);
   return {
-    listResources(context) {
-      return context.mcpManager instanceof McpClientManager
-        ? context.mcpManager.getConnectedResources()
-        : undefined;
+    listResources() {
+      return servers?.size === 0
+        ? undefined
+        : manager
+            ?.getConnectedResources()
+            .filter((resource) => permits(resource.serverName));
     },
     async readResource(serverName, uri, context) {
-      if (context.capabilityView || !(context.mcpManager instanceof McpClientManager))
-        throw new Error("MCP manager not available");
-      return context.mcpManager.readResource(
-        serverName,
-        uri,
-        context.abortSignal,
-      );
+      if (!manager || !permits(serverName))
+        throw new Error("MCP server not available in this Run");
+      return manager.readResource(serverName, uri, context.abortSignal);
     },
-    async configureAuth(input, context) {
-      if (!context.mcpAuth)
+    async configureAuth(input) {
+      if (!auth || (authServers && !authServers.has(input.serverName)))
         throw new Error(
-          "MCP auth is not available in this host. No auth was saved and no MCP server was reconnected.",
+          "MCP auth is not available in this Run. No auth was saved and no MCP server was reconnected.",
         );
-      return context.mcpAuth.configure(input);
+      return auth.configure(input);
     },
   };
 }
 
 export function createNodeFeishuChannelPort(): FeishuChannelPort {
   return new ChannelConfigStore();
+}
+
+/** Validate captured ownership and the exact Skill path before exposing its content. */
+export function createRunSkillCatalog(
+  view: import("../runtime/node-runtime-resources.js").RunCapabilityView,
+): SkillCatalogPort {
+  const owners =
+    view.pluginIds ?? new Set(view.pluginId ? [view.pluginId] : []);
+  const definitions = [...view.skills.values()]
+    .filter((binding) => {
+      if (binding.definition.path !== binding.path) return false;
+      if (binding.ownerPluginId !== undefined)
+        return (
+          owners.has(binding.ownerPluginId) &&
+          binding.definition.source === "plugin"
+        );
+      return binding.definition.source !== "plugin";
+    })
+    .map((binding) => ({
+      ...binding.definition,
+      ownerPluginId: binding.ownerPluginId,
+    }));
+  return createCapturedSkillCatalog(definitions);
 }

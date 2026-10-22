@@ -1,5 +1,5 @@
 import type { VykorAgent } from "@vykor/agent-runtime";
-import type { AgentChildInput, AgentInputReceipt } from "@vykor/core";
+import type { AgentChildInput, AgentInputReceipt } from "@vykor/agent-contracts";
 
 interface LiveChildEntry {
   childId: string;

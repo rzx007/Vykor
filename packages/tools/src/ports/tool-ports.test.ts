@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/agent-contracts";
 import { createConfigTool } from "../meta/config.js";
 import { createSkillTools, skillCatalogSnapshot } from "../meta/skill.js";
 import { createMcpTools } from "../mcp/mcp-tools.js";

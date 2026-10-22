@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAgentTool } from "../index.js";
-import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
+import type { AgentChildController, AgentExecutionContext } from "@vykor/agent-contracts";
 import { getBuiltinAgentDefinitions, mergeAgentDefinitions, type AgentDefinition } from "@vykor/coordinator/definitions";
 import { createTeamRegistry } from "@vykor/coordinator/teams";
 
@@ -59,10 +59,10 @@ describe("agentTool framework child controller", () => {
         tools: ["Read"], requiredMcpServers: ["plugin:docs"],
       } }]]), tools: new Map(), skills: new Map(), mcpServers: new Map(),
     };
-    const result = await agentTool.execute({ description: "review", prompt: "inspect", subagentType: "plugin:review", capabilityView: {} }, { cwd: "/work", agent, capabilityView });
+    const result = await createAgentTool({definitions:[...capabilityView.agents.values()].map(item=>item.definition)}).execute({ description: "review", prompt: "inspect", subagentType: "plugin:review", capabilityView: {} }, { cwd: "/work", agent, capabilityView });
     expect(result.isError).not.toBe(true);
     expect(calls[0]).toMatchObject({ systemPrompt: "Child-only instructions", allowedTools: ["Read"], requiredMcpServers: ["plugin:docs"] });
-    const denied = await agentTool.execute({ description: "d", prompt: "p", subagentType: "worker" }, { cwd: "/work", agent, capabilityView });
+    const denied = await createAgentTool({definitions:[...capabilityView.agents.values()].map(item=>item.definition)}).execute({ description: "d", prompt: "p", subagentType: "worker" }, { cwd: "/work", agent, capabilityView });
     expect(denied.isError).toBe(true);
     expect(calls).toHaveLength(1);
   });
@@ -124,7 +124,7 @@ describe("agentTool framework child controller", () => {
       } }]]), tools: new Map(), skills: new Map(), mcpServers: new Map(),
     };
 
-    await agentTool.execute(
+    await createAgentTool({definitions:[...capabilityView.agents.values()].map(item=>item.definition)}).execute(
       { description: "review", prompt: "inspect", subagentType: "plugin:scoped", maxTurns: 40, timeoutSeconds: 900 },
       { cwd: "/work", agent, capabilityView },
     );

@@ -1,18 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type {
-  AppendEventInput,
-  CreateMessageInput,
-  ListEventsOptions,
-  ListMessagePartsOptions,
-  ListMessagesOptions,
-  SessionEventRecord,
-  SessionInputAttachmentRecord,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  UpsertMessagePartInput,
-} from "@vykor/protocol";
+import type { AppendEventInput, CreateMessageInput, ListEventsOptions, ListMessagePartsOptions, ListMessagesOptions, SessionEventRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, UpsertMessagePartInput } from "@vykor/protocol";
 
 import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";

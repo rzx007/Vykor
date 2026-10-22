@@ -1,9 +1,10 @@
+import type { StreamingMessageClient } from "@vykor/agent-contracts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import type { StreamingMessageClient } from "@vykor/core";
-import { createDefaultNodeAgent } from "../../default-agent.js";
+
+import { createDefaultNodeAgent } from "../runtime/default-agent.js";
 import { FileWorkflowRunRepository } from "./file-workflow-run-repository.js";
 
 it("closes the workflow owner before removing its real child workers", async () => {

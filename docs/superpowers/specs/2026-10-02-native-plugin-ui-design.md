@@ -65,8 +65,8 @@ CLI、TUI、普通 Web、IDE 和 Bot 在首版继续使用工具文字结果；�
 | UI 仍在延后支持的组件列表 | `packages/plugins/src/load-native-plugin.ts` | 必须实现 UI 元数据加载，不能把识别字段等同于已能显示 |
 | 安装授权根据 manifest 重新计算 | `packages/plugins/src/installation/installer.ts`、`verify.ts` | UI 新增授权必须同时进入预览、安装和安装后校验 |
 | 安装快照包含内容摘要，开发 link 单独处理 | `packages/plugins/src/installation/cache.ts` | UI 必须绑定准确快照；不能只按插件 ID 找“当前最新版” |
-| Native Tool 已有来源登记和 Run 能力视图 | `packages/agent-runtime/src/native-tools/activate.ts`、`run-capability-view.ts` | 后台可证明工具属于哪个插件，并固定本次运行的定义和调用函数 |
-| 工具结果支持自由 metadata，宿主身份字段会过滤 | `packages/core/src/types/tools.ts`、`engine/tool-result-feedback.ts` | 插件只能提议 UI；最终身份、状态和权限仍由宿主生成 |
+| Native Tool 已有来源登记和 Run 能力视图 | `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`、`run-capability-view.ts` | 后台可证明工具属于哪个插件，并固定本次运行的定义和调用函数 |
+| 工具结果支持自由 metadata，宿主身份字段会过滤 | `packages/agent-contracts/src/tools.ts`、`engine/tool-result-feedback.ts` | 插件只能提议 UI；最终身份、状态和权限仍由宿主生成 |
 | 工具结果会进入会话 Part 的 output 与 metadata | `packages/server/src/application/session/transcript-projection.ts` | 原始工具结果保持不变，UI 当前状态放在该 Part 的宿主 metadata 中 |
 | Run 可以没有 inputId；调度器接受 work 回调 | `packages/services/src/runs/run-repository.ts`、`packages/server/src/runtime/run-coordinator.ts` | UI 操作复用 Run 和会话执行车道，无需伪造模型 Prompt |
 | 工具校验、授权、Hook、超时和取消目前在 QueryEngine 内组合 | `packages/core/src/engine/query-engine.ts` | 必须提取可复用的受检工具执行入口，不能直接调用 `tool.execute()` |
@@ -744,7 +744,7 @@ UI 授权、定义加载、后台 Runtime 可用性和某窗口挂载状态分�
 | 插件授权 | 修改 `packages/plugins/src/installation/installer.ts`、`verify.ts` 及安装预览调用方 | 推导两项 UI 授权，预览/安装/验证一致 |
 | SDK | 新增 `packages/plugins/src/ui-sdk.ts`；修改 package exports | 浏览器消息接口；无 Node 依赖 |
 | 工具公共执行 | 新增 `packages/core/src/engine/checked-tool-execution.ts`；修改 `query-engine.ts`、`tool-result-feedback.ts` | 复用受检工具执行和宿主 metadata 保护 |
-| Runtime 绑定 | 修改 `packages/agent-runtime/src/native-tools/activate.ts`、`run-capability-view.ts`、扩展装配入口 | 提供来源与精确版本绑定，限制 UI 动作工具集合 |
+| Runtime 绑定 | 修改 `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`、`run-capability-view.ts`、扩展装配入口 | 提供来源与精确版本绑定，限制 UI 动作工具集合 |
 | Application | 新增 `packages/server/src/application/session/session-plugin-ui-service.ts`、`session-plugin-ui-action-executor.ts` | 实例创建、原子动作准入、Run 执行、恢复和生命周期 |
 | Transcript / Context | 修改 `transcript-projection.ts`、`session-input-materializer.ts`、相关 Run 恢复入口 | 持久实例、真实 UI 操作记录、后续模型上下文摘要 |
 | HTTP | 新增 `packages/server/src/http/routes/session-plugin-ui.ts`；接入现有 route assembly | 认证路由与协议 decoder，无业务逻辑复制 |

@@ -1,3 +1,4 @@
+import {hostedAgentFactory,hostedAgentFixture} from "./../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +21,7 @@ describe("daemon request settings refresh", () => {
       settings: { model: "model-a", systemPrompt: "old settings instructions" } as any,
       getSettingsForCwd: async () => ({ model: "model-a", systemPrompt: "new settings instructions" } as any),
       getSession: () => session,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({ session, history: [], parts: [] });
     const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
@@ -42,7 +43,7 @@ describe("daemon request settings refresh", () => {
     const loader = createDaemonAgentLoader({
       settings: settings as any,
       getSettingsForCwd: async () => settings as any,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({
       session: {
@@ -74,7 +75,7 @@ describe("daemon request settings refresh", () => {
     const loader = createDaemonAgentLoader({
       settings: { model: "model-a", maxTurns: 1 } as any,
       getSettingsForCwd: async () => ({ model: "model-a", maxTurns } as any),
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({
       session: {
@@ -90,6 +91,8 @@ describe("daemon request settings refresh", () => {
     expect((await reader.read()).configuration.maxTurns).toBe(1);
     maxTurns = 2;
     expect((await reader.read()).configuration.maxTurns).toBe(2);
+    maxTurns = 0;
+    expect((await reader.read()).configuration.maxTurns).toBe(0);
   });
 
   it("uses a project settings edit for the next model request in the same run", async () => {
@@ -124,16 +127,16 @@ describe("daemon request settings refresh", () => {
       }, project);
       const loader = createDaemonAgentLoader({
         getSettingsForCwd: (cwd) => loadSettings(undefined, { includeProject: true, projectRoot: cwd }),
-        createAgent: async ({ options }) => {
+        createAgent: hostedAgentFactory(async ({ options }) => {
           agent = await createDefaultNodeAgent({ ...options, client });
           return agent;
-        },
+        }),
         tools: async () => [{
           name: "Echo", description: "Echoes", inputSchema: {},
           execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
         }],
       })!;
-      agent = await loader({
+      agent = (await loader({
         session: {
           id: "session-live-effort", cwd: project, model: "model-a",
           metadata: {
@@ -142,8 +145,8 @@ describe("daemon request settings refresh", () => {
           },
         } as any,
         history: [], parts: [],
-      });
-      const running = agent.runMessage("use Echo");
+      })).agent as typeof agent;
+      const running = agent!.runMessage("use Echo");
       await firstStarted;
       await saveProjectSettings({
         effort: "high", workStyle: "efficient", fastMode: true,
@@ -174,10 +177,10 @@ describe("daemon request settings refresh", () => {
       const readers = new Map<string, any>();
       const loader = createDaemonAgentLoader({
         getSettingsForCwd: (cwd) => loadSettings(undefined, { includeProject: true, projectRoot: cwd }),
-        createAgent: async ({ session, options }) => {
+        createAgent: hostedAgentFactory(async ({ session, options }) => {
           readers.set(session.id, options.requestConfigurationStore);
           return { loadHistory: () => undefined, close: async () => undefined } as any;
-        },
+        }),
       })!;
       for (const [id, cwd] of [["a", projectA], ["b", projectB]] as const) {
         await loader({
@@ -215,7 +218,7 @@ describe("daemon request settings refresh", () => {
     const loader = createDaemonAgentLoader({
       settings: { model: "model-a", effort: "low" } as any,
       getSettingsForCwd: async () => ({ model: "model-a", effort } as any),
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({ session, history: [], parts: [] });
     const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
@@ -240,7 +243,7 @@ describe("daemon request settings refresh", () => {
         return { model: "model-a", effort } as any;
       },
       onSettingsReloadError,
-      createAgent,
+      createAgent:hostedAgentFactory(createAgent),
     })!;
     await loader({
       session: {

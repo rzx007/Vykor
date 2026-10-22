@@ -371,12 +371,12 @@ git commit -m "feat(review): parse bounded reviewer verdicts"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/child-agent.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/default-runtime-tools.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.test.ts`
-- 创建：`packages/agent-runtime/src/agent-post-run-child.test.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/kernel/child-agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime-tools.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/agent-post-run-child.test.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/index.ts`
 
@@ -425,7 +425,7 @@ ChildManager 增加仅供该宿主方法调用的 trusted system spawn：仍计�
 ```powershell
 pnpm --filter @vykor/agent-runtime exec vitest run src/agent-post-run-child.test.ts src/child-agent.test.ts src/default-runtime.test.ts
 pnpm --filter @vykor/agent-runtime run check-types
-git add packages/core/src/types/runtime.ts packages/core/src/index.ts packages/agent-runtime/src/agent.ts packages/agent-runtime/src/child-agent.ts packages/agent-runtime/src/default-runtime.ts packages/agent-runtime/src/default-runtime-tools.ts packages/agent-runtime/src/default-runtime.test.ts packages/agent-runtime/src/agent-post-run-child.test.ts packages/agent-runtime/src/child-agent.test.ts
+git add packages/core/src/types/runtime.ts packages/core/src/index.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/kernel/child-agent.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime-tools.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/node/runtime/agent-post-run-child.test.ts packages/agent-runtime/src/node/runtime/child-agent.test.ts
 git commit -m "feat(agent): spawn bounded post-run child review"
 ```
 

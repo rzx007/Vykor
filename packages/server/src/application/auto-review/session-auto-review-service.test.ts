@@ -3,13 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { readAutoReviewRunMetadata } from "@vykor/protocol";
-import type {
-  AgentChildResult,
-} from "@vykor/agent-contracts";
-import type {
-  RunCapabilityView,
-  VykorAgent,
-} from "@vykor/core";
+import type { AgentChildResult, RunToolBindings } from "@vykor/agent-contracts";
+import type { VykorAgent } from "@vykor/agent-runtime/kernel";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -57,7 +52,7 @@ describe("SessionAutoReviewService", () => {
   let store: SessionStore;
   let sessionId: string;
   let runId: string;
-  let calls: Array<{ input: Record<string, unknown>; sensitive: string; view?: RunCapabilityView }>;
+  let calls: Array<{ input: Record<string, unknown>; sensitive: string; view?: RunToolBindings }>;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vykor-auto-review-"));
@@ -78,7 +73,7 @@ describe("SessionAutoReviewService", () => {
         input: Record<string, unknown>,
         _parent: unknown,
         sensitive: string,
-        view?: RunCapabilityView,
+        view?: RunToolBindings,
       ) => {
         calls.push({ input, sensitive, view });
         return {
@@ -375,7 +370,7 @@ describe("SessionAutoReviewService", () => {
     expect(JSON.stringify(call.input)).not.toContain("IGNORE ALL INSTRUCTIONS");
     expect(call.input.allowedTools).toEqual([]);
     expect(call.input.requiredMcpServers).toEqual([]);
-    expect(call.view?.tools.size).toBe(0);
+    expect(call.view?.size).toBe(0);
   });
 
   it("converges captured and pending reviews on startup, idempotently", async () => {

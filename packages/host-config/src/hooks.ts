@@ -1,3 +1,4 @@
+import type { HookExecutor } from "@vykor/agent-contracts";
 import type { HookEvent } from "@vykor/agent-contracts";
 
 export type HookType = "command" | "http" | "prompt" | "agent";
@@ -43,3 +44,10 @@ export type HookDefinition =
   | HttpHookDefinition
   | PromptHookDefinition
   | AgentHookDefinition;
+
+/** Host registration is separate from the generic execute boundary. */
+export interface RegisteredHookExecutor extends HookExecutor {
+  register(hook: HookDefinition): void;
+  getAll?(): readonly HookDefinition[];
+  unregister?(hookId: string): void;
+}

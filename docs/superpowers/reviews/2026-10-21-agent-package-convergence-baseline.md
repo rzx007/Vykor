@@ -57,8 +57,8 @@
 | 模型错误身份 | [model-retry.ts](../../../packages/core/src/engine/model-retry.ts)：`Symbol.for("@vykor/core/ModelRequestFailure")` | 源码核对；跨发布 bundle 的完整验证仍归 P6 |
 | 执行限制错误身份 | [runtime.ts](../../../packages/core/src/types/runtime.ts)：`Symbol.for("@vykor/core/AgentExecutionLimitError")` | 源码核对 |
 | 尝试用量状态 | ModelAttemptUsageStatus 固定为 complete / partial / unknown；未发出用 notDispatched 标记 | 源码核对，不新增持久枚举 |
-| Run 回执 | [FrameworkAgentRun](../../../packages/agent-runtime/src/framework-agent-run.ts) 等待可靠 run.started 后完成 started；终态可靠处理结束后完成 result | Kernel/事件/Child 回归通过；本次未改状态机 |
-| 事件观察 | [AgentEventBus](../../../packages/agent-runtime/src/event-source.ts) 等待唯一可靠 sink；旁观者失败不改变执行结果 | event-source 5 项通过 |
+| Run 回执 | [FrameworkAgentRun](../../../packages/agent-runtime/src/kernel/framework-agent-run.ts) 等待可靠 run.started 后完成 started；终态可靠处理结束后完成 result | Kernel/事件/Child 回归通过；本次未改状态机 |
+| 事件观察 | [AgentEventBus](../../../packages/agent-runtime/src/kernel/event-source.ts) 等待唯一可靠 sink；旁观者失败不改变执行结果 | event-source 5 项通过 |
 | 子 Agent | 创建归属、ID、输入幂等、树目录、空闲释放、取消/关闭保持当前行为 | child-agent 55 项通过 |
 | Goal 尝试唯一键 | [schema.ts](../../../packages/services/src/session-runtime/schema.ts) 的 session_goal_model_attempt 主键为 runId/generationId/attempt；[goal-usage.ts](../../../packages/services/src/goals/goal-usage.ts) 按同一身份查写 | 源码核对；未做 schema 或预算实现改动 |
 | 文件 Workflow claim | [文件仓库（P3 后位置）](../../../packages/agent-runtime/src/node/workflow/file-workflow-run-repository.ts) 在本基线中返回 file:pid、generation=1；finish 为空操作 | 源码核对；不具备跨进程互斥保证 |

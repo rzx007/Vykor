@@ -49,9 +49,9 @@
 **交付物：** 不支持图片的主 Agent 收到 OCR 资源提示并能真实调用本地工具；工具被过滤时 Provider 零调用。
 
 **文件：**
-- 修改：`packages/core/src/types/tools.ts`、`events.ts`、`runtime.ts`
+- 修改：`packages/agent-contracts/src/tools.ts`、`events.ts`、`runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
-- 修改：`packages/agent-runtime/src/agent-options.ts`、`default-runtime.ts`、`kernel.ts`、`child-agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`、`default-runtime.ts`、`kernel.ts`、`child-agent.ts`
 - 修改：`packages/tools/src/registry.ts`
 - 重写：`packages/tools/src/media/image-to-text.ts`
 - 创建：`packages/tools/src/media/__test__/image-to-text.test.ts`

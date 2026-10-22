@@ -24,17 +24,17 @@ rg -n "hostCapabilities|AgentHostCapabilities" packages apps -g "*.ts"
 
 ### 新建
 
-- `packages/agent-runtime/src/compact-context.ts`：直接组合 attachment catalog 与 Session Memory provider。
-- `packages/agent-runtime/src/compact-context.test.ts`：两个来源独立缺省、同时存在和单方失败的测试。
+- `packages/agent-runtime/src/node/runtime/compact-context.ts`：直接组合 attachment catalog 与 Session Memory provider。
+- `packages/agent-runtime/src/node/runtime/compact-context.test.ts`：两个来源独立缺省、同时存在和单方失败的测试。
 
 ### 修改
 
 - `packages/tools/src/job/local-job-host.ts`：显式接收 `WorkflowRunRepository | undefined`，不自行创建 Repository。
 - `packages/tools/src/job/local-job-host.test.ts`：同一 Repository、关闭 Workflow 和 Job 路由测试。
-- `packages/agent-runtime/src/agent-composition.ts`：Memory/Workflow/Attachments 解析和 compact 接线。
-- `packages/agent-runtime/src/agent.ts`：重命名 compact provider API，公开能力诊断。
-- `packages/agent-runtime/src/memory-runtime.ts`、`packages/agent-runtime/src/remember-tool.ts`：只做新装配所需的最小签名调整，不改变 Markdown schema。
-- `packages/agent-runtime/src/memory-runtime.test.ts`、`packages/agent-runtime/src/remember-tool.test.ts`、`packages/agent-runtime/src/sdk.test.ts`：Memory 默认、关闭和受管路径回归。
+- `packages/agent-runtime/src/node/runtime/agent-composition.ts`：Memory/Workflow/Attachments 解析和 compact 接线。
+- `packages/agent-runtime/src/kernel/agent.ts`：重命名 compact provider API，公开能力诊断。
+- `packages/agent-runtime/src/node/memory/memory-runtime.ts`、`packages/agent-runtime/src/node/memory/remember-tool.ts`：只做新装配所需的最小签名调整，不改变 Markdown schema。
+- `packages/agent-runtime/src/node/memory/memory-runtime.test.ts`、`packages/agent-runtime/src/node/memory/remember-tool.test.ts`、`packages/agent-runtime/src/node/runtime/sdk.test.ts`：Memory 默认、关闭和受管路径回归。
 - `packages/core/src/engine/compact-service.ts`：`CompactAttachments`/provider 改名为 `CompactContext`/provider。
 - `packages/core/src/engine/query-engine.ts`：setter 改名并保持单一 provider。
 - `packages/core/src/types/runtime.ts`、`packages/core/src/index.ts`：导出新名称，删除旧名称。
@@ -44,7 +44,7 @@ rg -n "hostCapabilities|AgentHostCapabilities" packages apps -g "*.ts"
 - `packages/server/src/application/daemon-application.ts`：把现有两个读取函数分别注入 AgentPool。
 - `packages/server/src/application/__test__/durable-agent-application.test.ts`：验证实际 compact 内容。
 - `packages/server/src/daemon/daemon-agent.ts`：附件 override、root mount 和新 compact 参数。
-- `packages/agent-runtime/src/child-agent.ts`、`packages/agent-runtime/src/child-agent.test.ts`：session tree override 借用契约。
+- `packages/agent-runtime/src/kernel/child-agent.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`：session tree override 借用契约。
 
 ## 任务 1：让 Workflow 工具和 Jobs 共用 Repository
 
@@ -52,8 +52,8 @@ rg -n "hostCapabilities|AgentHostCapabilities" packages apps -g "*.ts"
 
 - 修改：`packages/tools/src/job/local-job-host.ts`
 - 修改：`packages/tools/src/job/local-job-host.test.ts`
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
 
 - [ ] **步骤 1：先写注入 Repository 的失败测试**
 
@@ -130,7 +130,7 @@ pnpm --filter @vykor/agent-runtime exec vitest run src/sdk.test.ts
 - [ ] **步骤 7：提交 Workflow Repository 收口**
 
 ```bash
-git add packages/tools/src/job packages/agent-runtime/src/agent-composition.ts packages/agent-runtime/src/sdk.test.ts
+git add packages/tools/src/job packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/sdk.test.ts
 git commit -m "fix(workflow): share one repository with jobs"
 ```
 
@@ -138,11 +138,11 @@ git commit -m "fix(workflow): share one repository with jobs"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/agent.ts`
-- 修改：`packages/agent-runtime/src/memory-runtime.test.ts`
-- 修改：`packages/agent-runtime/src/remember-tool.test.ts`
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
+- 修改：`packages/agent-runtime/src/node/memory/memory-runtime.test.ts`
+- 修改：`packages/agent-runtime/src/node/memory/remember-tool.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
 
 - [ ] **步骤 1：先写 Memory 默认与显式关闭测试**
 
@@ -202,15 +202,15 @@ git commit -m "refactor(memory): keep managed runtime agent-owned"
 
 **文件：**
 
-- 创建：`packages/agent-runtime/src/compact-context.ts`
-- 创建：`packages/agent-runtime/src/compact-context.test.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/compact-context.ts`
+- 创建：`packages/agent-runtime/src/node/runtime/compact-context.test.ts`
 - 修改：`packages/core/src/engine/compact-service.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/index.ts`
 - 修改：`packages/core/src/engine/compact-service-advanced.test.ts`
 - 修改：`packages/core/src/agent-session.test.ts`
-- 修改：`packages/agent-runtime/src/agent.ts`
+- 修改：`packages/agent-runtime/src/kernel/agent.ts`
 
 - [ ] **步骤 1：先写两个 provider 的组合测试**
 
@@ -282,7 +282,7 @@ rg -n "CompactAttachments|setAttachmentsProvider|setCompactAttachmentsProvider" 
 - [ ] **步骤 7：提交 compact 核心 API**
 
 ```bash
-git add packages/core/src packages/agent-runtime/src/compact-context.ts packages/agent-runtime/src/compact-context.test.ts packages/agent-runtime/src/agent.ts
+git add packages/core/src packages/agent-runtime/src/node/runtime/compact-context.ts packages/agent-runtime/src/node/runtime/compact-context.test.ts packages/agent-runtime/src/kernel/agent.ts
 git commit -m "refactor(compact): expose context provider"
 ```
 
@@ -361,11 +361,11 @@ git commit -m "fix(compact): combine attachments and session memory"
 
 **文件：**
 
-- 修改：`packages/agent-runtime/src/agent-composition.ts`
-- 修改：`packages/agent-runtime/src/default-runtime.ts`
-- 修改：`packages/agent-runtime/src/child-agent.ts`
-- 修改：`packages/agent-runtime/src/child-agent.test.ts`
-- 修改：`packages/agent-runtime/src/sdk.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
+- 修改：`packages/agent-runtime/src/kernel/child-agent.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/child-agent.test.ts`
+- 修改：`packages/agent-runtime/src/node/runtime/sdk.test.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
 

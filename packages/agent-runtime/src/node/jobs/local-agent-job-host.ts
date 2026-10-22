@@ -1,10 +1,7 @@
+import type { AgentChildDirectory, AgentChildHandle } from "@vykor/agent-contracts";
 import { createHash, randomUUID } from "node:crypto";
 
-import type {
-  AgentBackgroundShellHost,
-  AgentChildDirectory,
-  AgentChildHandle,
-} from "@vykor/core";
+import type { AgentBackgroundShellHost } from "@vykor/tools";
 import type { AgentChildResult } from "@vykor/agent-contracts";
 import {
   filterJobSnapshots,
@@ -47,6 +44,7 @@ export interface LocalAgentJobHostOptions {
   cwd: string;
   sessionId: string;
   childManager: AgentChildDirectory;
+  sendChildInput?(childId:string,input:import("@vykor/agent-contracts").AgentChildInput,authorization?:import("@vykor/jobs").AgentJobAuthorization):Promise<import("@vykor/agent-contracts").AgentInputReceipt>;
   workflows?: AgentJobHost;
 }
 
@@ -70,7 +68,7 @@ export class LocalAgentJobHost
     }
   >();
 
-  constructor(options: LocalAgentJobHostOptions) {
+  constructor(private readonly options: LocalAgentJobHostOptions) {
     this.cwd = options.cwd;
     this.ownerSession = options.sessionId;
     this.children = options.childManager;
@@ -280,7 +278,8 @@ export class LocalAgentJobHost
         throw new Error(`Job ${input.jobId} does not accept input.`);
       }
       if (authorization)
-        await source.value.handle.send({ content: input.data }, authorization);
+        if(this.options.sendChildInput)await this.options.sendChildInput(source.value.handle.id,{content:input.data},authorization);
+        else throw new Error("Authorized child input is not available in this host");
       else await source.value.handle.send({ content: input.data });
       this.observeChild(source.value.handle);
       return;

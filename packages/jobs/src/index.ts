@@ -1,22 +1,9 @@
-import type {
-  JobKind,
-  JobReadResult,
-  JobSnapshot,
-  JobStatus,
-  JobWaitResult,
-} from "@vykor/protocol";
+import type { JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "@vykor/protocol";
 
 export { CompositeAgentJobHost } from "./composite-agent-job-host.js";
 
 /** Jobs 包对外汇总它实际使用的跨端协议类型。 */
-export type {
-  JobCapabilities,
-  JobKind,
-  JobReadResult,
-  JobSnapshot,
-  JobStatus,
-  JobWaitResult,
-} from "@vykor/protocol";
+export type { JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "@vykor/protocol";
 
 export interface JobReadRequest {
   sessionId: string;

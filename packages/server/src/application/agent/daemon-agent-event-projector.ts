@@ -1,10 +1,8 @@
+import type { ToolAppOriginProjector } from "./tool-app-origin-projector.js";
+import type { PluginAppToolOrigin } from "@vykor/protocol";
 import type { VykorAgent } from "@vykor/agent-runtime";
-import { AgentExecutionLimitError, isAgentExecutionLimitError } from "@vykor/core";
-import type {
-  AgentChildSpawnInput,
-  AgentEvent,
-  StreamEvent,
-} from "@vykor/core";
+import { AgentExecutionLimitError, isAgentExecutionLimitError } from "@vykor/agent-contracts";
+import type { AgentChildSpawnInput, AgentEvent, StreamEvent } from "@vykor/agent-contracts";
 import type {
   ChildFailureKind,
   ChildPartialResult,
@@ -70,6 +68,7 @@ export interface DaemonAgentEventProjectorContext {
   events: Pick<SessionEventPublisher, "checkpoint" | "publish" | "publishSince">;
   log(event: ObservabilityEvent): void;
   requestBudgetStop?(goalId: string): void;
+  toolAppOrigins?: ToolAppOriginProjector;
 }
 
 /**
@@ -200,6 +199,7 @@ export class DaemonAgentEventProjector {
         this.projectModelAttemptFinished(event);
         return;
       case "tool.started":
+        this.context.toolAppOrigins?.started(event);
         this.projectStream(event, { type: "tool_use_start", toolUse: event.data.toolUse });
         return;
       case "tool.completed":
@@ -207,8 +207,7 @@ export class DaemonAgentEventProjector {
           type: "tool_use_end",
           toolUseId: event.data.toolUseId,
           result: event.data.result,
-          pluginAppOrigin: event.data.pluginAppOrigin,
-        });
+        }, await this.context.toolAppOrigins?.completed(event));
         return;
       case "usage.updated":
         this.projectUsage(event);
@@ -565,7 +564,7 @@ export class DaemonAgentEventProjector {
     }
   }
 
-  private projectStream(event: AgentEvent, stream: StreamEvent): void {
+  private projectStream(event: AgentEvent, stream: StreamEvent, toolAppOrigin?: PluginAppToolOrigin): void {
     const runId = required(event.context.runId, "runId", event.type);
     const state = this.transcripts.get(runId);
     if (!state) throw new Error(`Transcript projection not started for run: ${runId}`);
@@ -580,7 +579,7 @@ export class DaemonAgentEventProjector {
     const before = direct ? undefined : this.context.events.checkpoint();
     let applied: ReturnType<SessionTranscriptProjection["projectStreamEvent"]>;
     const project = () => {
-      const result = this.context.transcriptProjection.projectStreamEvent(state, stream);
+      const result = toolAppOrigin ? this.context.transcriptProjection.projectStreamEvent(state, stream, {toolAppOrigin}) : this.context.transcriptProjection.projectStreamEvent(state, stream);
       if (stream.type === "tool_use_start") {
         this.clearToolGeneration(runId, (entry) => entry.toolUseId !== stream.toolUse.id);
       }

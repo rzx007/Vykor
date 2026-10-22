@@ -50,3 +50,14 @@ it("saves the chosen limit with its original value", async () => {
   )
   expect(updateLimits).toHaveBeenCalledWith({ maxTurns: 75, expectedMaxTurns: 50 })
 })
+it.each(["", "0"])("saves %j as unlimited", async (value) => {
+  await act(async () => root.render(<TaskLimitControl />))
+  const input = container.querySelector<HTMLInputElement>("input")!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => [...container.querySelectorAll("button")]
+    .find((button) => button.textContent === "保存")!.click())
+  expect(updateLimits).toHaveBeenCalledWith({ maxTurns: 0, expectedMaxTurns: 50 })
+})

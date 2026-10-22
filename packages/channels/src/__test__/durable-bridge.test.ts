@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type {
-  ChannelDeliveryRecord,
-  DurableChannelMessageResult,
-} from "@vykor/protocol";
+import type { ChannelDeliveryRecord, DurableChannelMessageResult } from "@vykor/protocol";
 
 import { MessageBus } from "../bus/queue.js";
 import { DurableChannelBridge, type DurableChannelPort } from "../core/durable-bridge.js";

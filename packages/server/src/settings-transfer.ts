@@ -31,7 +31,7 @@ export function parsePortableSettings(value: unknown): PortableSettings {
     if (raw.workStyle !== undefined && raw.workStyle !== "practical" && raw.workStyle !== "efficient") throw new Error("工作风格无效。");
     if (raw.showReasoning !== undefined && typeof raw.showReasoning !== "boolean") throw new Error("思考展示开关无效。");
     if (raw.modelDisabled !== undefined && typeof raw.modelDisabled !== "boolean") throw new Error("默认模型开关无效。");
-    if (raw.maxTurns !== undefined && (!Number.isInteger(raw.maxTurns) || (raw.maxTurns as number) < 1 || (raw.maxTurns as number) > 1000)) throw new Error("任务轮数上限必须是 1–1000 的整数。");
+    if (raw.maxTurns !== undefined && (!Number.isInteger(raw.maxTurns) || (raw.maxTurns as number) < 0 || (raw.maxTurns as number) > 1000)) throw new Error("任务轮数上限必须是 0–1000 的整数，0 表示不限制。");
     if (raw.autoReview !== undefined) {
       const review = raw.autoReview as Record<string, unknown>;
       if (!review || typeof review !== "object" || Object.keys(review).some(key => key !== "mode") || (review.mode !== "off" && review.mode !== "risk_based")) throw new Error("完成后检查设置无效。");

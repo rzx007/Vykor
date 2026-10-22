@@ -21,7 +21,6 @@ export * from "./plugin-presentation.js";
 export * from "./notes.js";
 export * from "./memory.js";
 export * from "./office.js";
-export * from "./mcp-apps.js";
 export * from "./plugin-apps.js";
 
 export * from "./json.js";

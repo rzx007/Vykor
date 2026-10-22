@@ -1,12 +1,12 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
-import type { AgentJobHost, JobKind, JobStatus } from "@vykor/jobs";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
+import type { AgentJobAuthorization, AgentJobHost, JobKind, JobStatus } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;
 const MAX_JOB_WAIT_MS = 60_000;
 const jobIdProperty = { type: "string", description: "Job id returned by a long-running tool or JobList" };
 
-export function createJobTools(port?: AgentJobHost): ToolDefinition[] {
+export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuthorization): ToolDefinition[] {
   const jobListTool: ToolDefinition = {
     name: "JobList",
     description: "List the latest terminal, background task, child-agent, and workflow jobs owned by this session. Returns at most 100 by default.",
@@ -168,7 +168,6 @@ export function createJobTools(port?: AgentJobHost): ToolDefinition[] {
           return result("send", { jobId, ...receipt });
         }
         const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
-        const authorization = context.capabilityView ?? context.agent?.capabilityView;
         if (authorization) await host.jobs.send(request, authorization);
         else await host.jobs.send(request);
         return result("send", { jobId });

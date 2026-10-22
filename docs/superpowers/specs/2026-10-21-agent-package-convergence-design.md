@@ -1,6 +1,6 @@
 # Agent 核心包架构收敛方案
 
-> 状态：当前架构调整方案；2026-10-21 基于 `bd63a584` 核对，2026-10-22 完成 P3。P0–P3 已实施，Agent 定义归一、Team 实例化，Workflow 与工具宿主已迁到 Node；P4–P6 待实施。职责、所有权与验证结果见 [P3 记录](../reviews/2026-10-22-agent-package-convergence-p3.md)。
+> 状态：当前架构调整方案；2026-10-21 基于 `bd63a584` 核对，2026-10-22 完成 P4。P0–P4 已实施，Kernel/Node、通用执行契约和 Engine 职责已分离，具体能力通过 Node.host 接入；P5、P6 待实施。职责、所有权与验证结果见 [P4 记录](../reviews/2026-10-22-agent-package-convergence-p4.md)。
 > 范围：packages 的职责、依赖、运行状态所有权和公开入口。实施顺序见[分阶段实施计划](../plans/2026-10-21-agent-package-convergence.md)。
 
 ## 1. 目标和决策
@@ -49,8 +49,8 @@
 
 以下记录编写方案时 `bd63a584` 的问题；P3 已迁移的链接指向当前对应实现，当前职责以 [P3 验证记录](../reviews/2026-10-22-agent-package-convergence-p3.md)为准：
 
-- [core 公共入口](../../../packages/core/src/index.ts)、[ToolContext](../../../packages/core/src/types/tools.ts)、[QueryEngine](../../../packages/core/src/engine/query-engine.ts)。13 个其他 package 的业务源码导入 core，很多只需要类型或路径函数。
-- [Kernel 组装](../../../packages/agent-runtime/src/kernel.ts)、[Agent 接口](../../../packages/agent-runtime/src/agent.ts)、[默认组装](../../../packages/agent-runtime/src/agent-composition.ts)。Kernel 不主动发现插件，但返回接口仍带插件目录、应用记录和 Goal 参数。
+- [core 公共入口](../../../packages/core/src/index.ts)、[ToolContext](../../../packages/agent-contracts/src/tools.ts)、[QueryEngine](../../../packages/core/src/engine/query-engine.ts)。13 个其他 package 的业务源码导入 core，很多只需要类型或路径函数。
+- [Kernel 组装](../../../packages/agent-runtime/src/kernel/index.ts)、[Agent 接口](../../../packages/agent-runtime/src/kernel/agent.ts)、[默认组装](../../../packages/agent-runtime/src/node/runtime/agent-composition.ts)。Kernel 不主动发现插件，但返回接口仍带插件目录、应用记录和 Goal 参数。
 - [Workflow 工具](../../../packages/tools/src/agent/workflow/tool.ts)、[worker runner（现归 Node）](../../../packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts)、[本地 Jobs（现归 Node）](../../../packages/agent-runtime/src/node/jobs/local-agent-job-host.ts)。迁移前工具内含后台 Promise、取消监听和持久记录查询；P3 已移入 Host。
 - 原 Workflow store 同时定义 Repository、文件实现、持久运行控制和模块级活动目录，P3 已拆为 [Repository 接口](../../../packages/coordinator/src/workflow/repository.ts)和 [Node Host](../../../packages/agent-runtime/src/node/workflow/workflow-host.ts)；[TeamRegistry](../../../packages/coordinator/src/teams/index.ts) 原为进程单例，P3 已改为根树实例。
 - [Agent 事件投影器](../../../packages/server/src/application/agent/daemon-agent-event-projector.ts) 在 `projectGoalUsage` 中检查预算并拒绝模型调用；可靠记录和执行准入通过同一事件通道相连。
@@ -507,4 +507,4 @@ P6 只在阶段验收全部通过、API 使用者完成迁移、旧入口删除�
 | SDK bundling 后错误类型身份改变 | 保留现有 Symbol 身份，测试跨 bundle instanceof 与独立 pack |
 | 改动过大无法回滚 | 每个任务连同实际调用方和测试形成可独立回退的提交；不同阶段不夹带产品功能 |
 
-代码回退以阶段/任务的完整提交为单位，不通过重新增加旧 API 维持半迁移状态。本轮不发布、不部署、不删除用户数据；P0–P3 已按授权实施，P4–P6 等待后续授权。
+代码回退以阶段/任务的完整提交为单位，不通过重新增加旧 API 维持半迁移状态。本轮不发布、不部署、不删除用户数据；P0–P4 已按授权实施，P5、P6 等待后续授权。

@@ -1,11 +1,4 @@
-import {
-  parseOAuthOperationEvent,
-  type McpOAuthLoginInput,
-  type McpOAuthLoginResponse,
-  type McpOAuthStatusSnapshot,
-  type OAuthOperationEvent,
-  type OAuthOperationView,
-} from "@vykor/protocol";
+import { parseOAuthOperationEvent, type McpOAuthLoginInput, type McpOAuthLoginResponse, type McpOAuthStatusSnapshot, type OAuthOperationEvent, type OAuthOperationView } from "@vykor/protocol";
 import type { McpRuntimeSyncResult } from "../types/index.js";
 import type { HttpTransport } from "../transport/http-transport.js";
 import { streamServerSentEvents } from "../transport/sse-transport.js";

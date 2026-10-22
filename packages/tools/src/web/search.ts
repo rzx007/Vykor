@@ -1,11 +1,12 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolHostPolicyPort } from "../ports/policy.js";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
 import { sandboxNetworkGuard } from "./sandbox-network.js";
 import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebRuntimeLike } from "./types.js";
 
-export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime): ToolDefinition {
+export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime, host: ToolHostPolicyPort = {}): ToolDefinition {
   return {
     name: "WebSearch",
     description: "Search the web and return compact top results with titles, URLs, and snippets.",
@@ -26,7 +27,7 @@ export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime)
       required: ["query"],
     },
     async execute(input, context) {
-      const blocked = sandboxNetworkGuard(context);
+      const blocked = sandboxNetworkGuard(context, host);
       if (blocked) return blocked;
       const query = input.query as string;
       const maxResults = (input.maxResults as number) ?? 5;

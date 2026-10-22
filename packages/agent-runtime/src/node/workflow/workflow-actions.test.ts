@@ -1,3 +1,5 @@
+import type { AgentExecutionContext } from "@vykor/agent-contracts";
+import type { ToolContext } from "@vykor/agent-contracts";
 import {parseAction} from "@vykor/coordinator/workflow";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -11,14 +13,14 @@ import {
   type WorkflowSpec,
   type WorkflowTaskRunResult,
 } from "@vykor/coordinator";
-import type { AgentExecutionContext } from "@vykor/core";
+
 import { createWorkflowTool as createWorkflowToolDefinition } from "@vykor/tools";
 import type { AgentWorkflowRunnerOptions } from "./agent-workflow-runner.js";
 
 import { FileWorkflowRunRepository } from "./file-workflow-run-repository.js";
 import { WorkflowHost } from "./workflow-host.js";
 import type { WorkflowRunRepository } from "@vykor/coordinator/workflow";
-import type { ToolContext } from "@vykor/core";
+
 const hostInstances: WorkflowHost[] = [];
 interface WorkflowToolOptions {
   repository?: WorkflowRunRepository;

@@ -205,7 +205,7 @@
 
 ## 第 6 层：决策、计划和历史
 
-- [Agent 核心包架构收敛方案](./superpowers/specs/2026-10-21-agent-package-convergence-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-21-agent-package-convergence.md)：P0–P3 已实施，公共类型、配置和执行能力已拆出，Agent 定义归一、Team 按根树隔离，Workflow 与工具宿主归 Node，见 [P3 验证记录](./superpowers/reviews/2026-10-22-agent-package-convergence-p3.md)；P4–P6 待实施。
+- [Agent 核心包架构收敛方案](./superpowers/specs/2026-10-21-agent-package-convergence-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-21-agent-package-convergence.md)：P0–P4 已实施，公共类型、配置和执行能力已拆出，Kernel 与 Node 分离，宿主能力经 Node.host 接入，见 [P4 验证记录](./superpowers/reviews/2026-10-22-agent-package-convergence-p4.md)；P5、P6 待实施。
 - `docs/adr/`：已经作出的长期决定。当前有 [Projection Settlement 失败分类与恢复边界](./adr/0001-projection-settlement-failure-policy.md)。
 - `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。

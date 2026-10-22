@@ -6,21 +6,7 @@ import {
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
   permissionRequests, sessionEvents, sessionEventSequence, sessionPluginApps,
 } from "../session-runtime/schema.js";
-import {
-  normalizeSessionUserInputItems,
-  sessionUserInputText,
-  type PermissionRequestRecord,
-  type SessionEventRecord,
-  type SessionExecutionRecord,
-  type SessionInputAttachmentRecord,
-  type SessionInputRecord,
-  type SessionMessagePartRecord,
-  type SessionMessageRecord,
-  type SessionRecord,
-  type SessionRunAttemptRecord,
-  type SessionRunRecord,
-  type SessionUserInputItem,
-} from "@vykor/protocol";
+import { normalizeSessionUserInputItems, sessionUserInputText, type PermissionRequestRecord, type SessionEventRecord, type SessionExecutionRecord, type SessionInputAttachmentRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunAttemptRecord, type SessionRunRecord, type SessionUserInputItem } from "@vykor/protocol";
 
 import type { DurableEventRegistry } from "../session-runtime/event-registry.js";
 import {

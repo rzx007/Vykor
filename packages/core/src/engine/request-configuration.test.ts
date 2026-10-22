@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { StreamMessageParams, StreamingMessageClient } from "../types/client.js";
-import type { AgentExecutionContext, IHookExecutor } from "../index.js";
+import type { StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
+import type { AgentExecutionContext, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 
@@ -29,6 +29,36 @@ function createExecutionContext(
 }
 
 describe("QueryEngine request configuration", () => {
+  it.each([undefined, 0])("continues beyond 100 requests with unlimited maxTurns %s", async (maxTurns) => {
+    let requests = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage() {
+        requests++;
+        if (requests <= 101) {
+          yield { type: "tool_use_start" as const, toolUse: {
+            type: "tool_use", id: `step-${requests}`, name: "Step", input: {},
+          } };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({ name: "Step", description: "Next step", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: `step ${requests}` }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) },
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns, trajectoryTrackerFactory: false, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "test", client, maxTurns,
+      }) },
+    );
+    for await (const _ of engine.submitMessage("complete all steps")) { /* consume */ }
+    expect(requests).toBe(102);
+  });
+
   it("passes the current model identity to dynamically injected tools", async () => {
     const requests: StreamMessageParams[] = [];
     const toolRequests: Array<{ model: string; provider?: string; apiFormat?: "openai" | "anthropic" } | undefined> = [];
@@ -212,7 +242,7 @@ describe("QueryEngine request configuration", () => {
     expect(requests).toEqual(["model-a", "model-a"]);
   });
 
-  it("ignores setMaxTurns that would raise the run's frozen hard cap", async () => {
+  it.each([50, 0])("keeps the run's frozen hard cap when setMaxTurns changes to %s", async (maxTurns) => {
     let release!: () => void;
     let started!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
@@ -250,7 +280,7 @@ describe("QueryEngine request configuration", () => {
       })) { /* consume */ }
     })();
     await firstStarted;
-    engine.setMaxTurns(50);
+    engine.setMaxTurns(maxTurns);
     release();
     await expect(running).rejects.toThrow("Exceeded maximum agentic turns (1)");
     expect(requests).toBe(1);

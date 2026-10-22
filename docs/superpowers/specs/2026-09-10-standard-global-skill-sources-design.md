@@ -50,7 +50,7 @@ userDir: getSkillsDir(),
 
 涉及的两个统一装配入口是：
 
-- `packages/agent-runtime/src/extensions.ts`：创建 Session 使用的技能注册表。
+- `packages/agent-runtime/src/node/plugins/extensions.ts`：创建 Session 使用的技能注册表。
 - `packages/tools/src/meta/skill.ts`：`Skill` / `ListSkills` 刷新文件系统时重建注册表。
 
 CLI、Desktop 和后台任务最终复用这些入口，不分别实现目录扫描。

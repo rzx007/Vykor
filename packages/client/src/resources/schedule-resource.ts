@@ -1,9 +1,4 @@
-import type {
-  CreateScheduledTaskInput,
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-  UpdateScheduledTaskInput,
-} from "@vykor/protocol";
+import type { CreateScheduledTaskInput, ScheduledRunRecord, ScheduledTaskRecord, UpdateScheduledTaskInput } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type { ScheduledTaskStatusSummary } from "../types/index.js";
 

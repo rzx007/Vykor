@@ -1,7 +1,7 @@
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
 import type { WorkspaceBaselineResult, WorkspaceChangeResult } from "./session-workspace-changes.js";
-import type { AgentExecutionLimits } from "@vykor/core";
+import type { AgentExecutionLimits } from "@vykor/agent-contracts";
 
 type AutoReviewContext = Pick<
   SessionRunExecutorContext,

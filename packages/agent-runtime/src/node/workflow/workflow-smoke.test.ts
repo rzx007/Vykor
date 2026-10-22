@@ -1,9 +1,10 @@
+import type { AgentChildController, AgentExecutionContext } from "@vykor/agent-contracts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseWorkflowNotification } from "@vykor/coordinator";
-import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
+
 import { createAgentWorkflowRunner } from "./agent-workflow-runner.js";
 import { FileWorkflowRunRepository } from "./file-workflow-run-repository.js";
 import { WorkflowHost } from "./workflow-host.js";

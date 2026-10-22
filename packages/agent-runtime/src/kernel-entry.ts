@@ -1,32 +1,9 @@
-export { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
-export { AgentRunNotAcceptingInputError } from "@vykor/core";
-export {
-  AgentOperationConflictError,
-  type AgentCompactResult,
-  type AgentInspection,
-  type VykorAgent,
-  type VykorAgentState,
-  type VykorAgentSubmitOptions,
-  type VykorAgentRunToolOptions,
-} from "./agent.js";
-export type {
-  VykorAgentConfiguration,
-} from "./agent-options.js";
-export type {
-  AgentCapabilitySnapshot,
-  ResolvedAgentCapabilities,
-  ResolvedCapability,
-} from "./capability-resolution.js";
-export {
-  createAgentKernel,
-  createBasicAgentKernelRuntime,
-  type BasicAgentKernelRuntimeOptions,
-  type AgentKernelOptions,
-  type AgentKernelRuntime,
-  type AgentKernelRuntimeContext,
-} from "./kernel.js";
-export type {
-  AgentChildEnvironmentLease,
-  AgentChildEnvironmentProvider,
-} from "./child-environment.js";
-export { createInProcessChildEnvironmentProvider } from "./child-environment.js";
+export { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError, readonlyMap, readonlySet } from "@vykor/agent-contracts";
+export * from "./kernel/agent.js";
+export * from "./kernel/index.js";
+export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./kernel/child-environment.js";
+export { createInProcessChildEnvironmentProvider } from "./kernel/child-environment.js";
+export type { ResolvedChildExecution, AgentChildManagerOptions } from "./kernel/child-agent.js";
+
+export { AgentEventBus, AgentEventDeliveryError } from "./kernel/event-source.js";
+export { AgentChildManager, AgentChildRegistry } from "./kernel/child-agent.js";

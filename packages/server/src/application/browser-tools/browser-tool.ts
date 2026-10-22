@@ -1,6 +1,6 @@
 import type { ModelsDevCatalog } from "@vykor/api";
 import type { ContentBlock } from "@vykor/agent-contracts";
-import type { ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { BrowserAction, BrowserHost } from "./browser-host.js";
 import {
   supportsNativeImageInput,

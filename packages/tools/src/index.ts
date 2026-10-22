@@ -68,3 +68,13 @@ export type { FeishuChannelPort } from "./ports/channel.js";
 export type { McpToolPort, McpResourceDescription } from "./ports/mcp.js";
 export type { SkillCatalogPort, SkillCatalogSnapshot, ToolSkillDefinition } from "./ports/skill.js";
 export type { WorkflowInvocation, WorkflowToolPort } from "./ports/workflow.js";
+
+export type { AgentBackgroundShellHost, McpAuthConfigureInput, McpAuthConfigureResult, McpAuthHost } from "./ports/host.js";
+
+export { createFileReadTool } from "./file/read.js";
+export { createFileWriteTool } from "./file/write.js";
+export { createFileEditTool } from "./file/edit.js";
+export { createApplyPatchTool } from "./file/apply-patch.js";
+export { createGlobTool } from "./file/glob.js";
+export { createGrepTool } from "./search/grep.js";
+export type { ToolHostPolicyPort, FileToolHost, ShellToolHost } from "./ports/policy.js";

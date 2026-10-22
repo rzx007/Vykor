@@ -1,7 +1,8 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { AgentDefinition } from "@vykor/coordinator/definitions";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { parseAction } from "@vykor/coordinator/workflow";
 import type { WorkflowToolPort } from "../../ports/workflow.js";
-export function createWorkflowTool(port: WorkflowToolPort): ToolDefinition {
+export function createWorkflowTool(port: WorkflowToolPort, definitions?: readonly AgentDefinition[]): ToolDefinition {
   return {
     name: "Workflow",
     description:
@@ -328,15 +329,12 @@ export function createWorkflowTool(port: WorkflowToolPort): ToolDefinition {
           ],
           isError: true,
         };
-      const view = context.capabilityView ?? context.agent?.capabilityView;
       return await port.invoke({
         input,
         scope,
         signal: context.abortSignal ?? scope.signal,
         children: context.agent?.children,
-        definitions: view
-          ? [...view.agents.values()].map((binding) => binding.definition)
-          : undefined,
+        definitions,
       });
     },
   };

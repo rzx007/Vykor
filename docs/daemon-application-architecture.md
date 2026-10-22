@@ -182,7 +182,7 @@ packages/server/src/runtime/run-coordinator.ts
 packages/server/src/application/session/session-run-executor.ts
 packages/server/src/application/agent/agent-pool.ts
 packages/server/src/daemon/daemon-agent.ts
-packages/agent-runtime/src/agent.ts
+packages/agent-runtime/src/kernel/agent.ts
 packages/core/src/engine/query-engine.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 ```

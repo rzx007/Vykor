@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
 
 vi.mock("@vykor/agent-runtime", () => ({ createConfiguredApprovalReviewer: vi.fn() }));
-import type { AgentEffectContext } from "@vykor/core";
+import type { AgentEffectContext } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
 import type { PermissionRequestRecord } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";

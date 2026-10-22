@@ -1,5 +1,9 @@
-import type { AgentExecutionLimits, AgentRunHandle } from "@vykor/core";
-import type { AgentCapabilitySnapshot, GoalReadSnapshot, GoalRunBinding } from "@vykor/agent-runtime";
+import {hostedAgentFactory,hostedAgentFixture} from "../../../../test-helpers/hosted-agent.js";
+import type { AgentExecutionLimits, AgentRunHandle } from "@vykor/agent-contracts";
+import type { AgentCapabilitySnapshot } from "@vykor/agent-runtime";
+import type {AgentRunContribution} from "@vykor/agent-contracts";
+import type {GoalReadSnapshot} from "../../goals/goal-read-tool.js";
+import type {GoalRunBinding} from "../../goals/goal-run-contribution.js";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { ToolRegistry } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
@@ -100,22 +104,23 @@ describe("SessionRunExecutor", () => {
     const readGoalSnapshot = vi.fn(async () => snapshot);
     const submitGoalUpdate = vi.fn(async () => ({ recorded: true as const }));
     const update = { status: "completed", reason: "checked current files" };
-    let observedGoal: GoalRunBinding | undefined;
+    let observedGoal: AgentRunContribution | undefined;
     let observedLimits: AgentExecutionLimits | undefined;
     const checkGoalRunExecution = vi.fn();
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
       readGoalSnapshot, submitGoalUpdate,
       checkGoalExecution: vi.fn(), checkGoalRunExecution,
-      agentPool: { configured: true, acquireSession: async () => ({
-        submitMessage: (_content: unknown, options: { goal?: GoalRunBinding; limits?: AgentExecutionLimits }) => {
-          observedGoal = options.goal;
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
+        submitMessage: (_content: unknown, options: { contribution?: AgentRunContribution; limits?: AgentExecutionLimits }) => {
+          observedGoal = options.contribution;
           observedLimits = options.limits;
           const handle = completedHandle();
           return { ...handle, result: (async () => {
-            if (options.goal) {
-              expect(await options.goal.readSnapshot()).toEqual(snapshot);
-              expect(await options.goal.submitUpdate(update)).toEqual({ recorded: true });
+            if (options.contribution) {
+              expect(options.contribution.systemGuidance).toContain(snapshot.objective);
+              expect((await options.contribution.tools!.find(item=>item.definition.name==="GoalUpdate")!.definition.execute(update,{cwd:"/repo"})).isError).not.toBe(true);
             }
             return handle.result;
           })() };
@@ -127,7 +132,7 @@ describe("SessionRunExecutor", () => {
     await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
       { signal: new AbortController().signal, registerHandle: async () => {} });
     if (goalRun) {
-      expect(observedGoal).toMatchObject({ goalId: "g1", objectiveVersion: 2 });
+      expect(observedGoal?.tools?.map(item=>item.definition.name)).toEqual(["GoalUpdate","GoalRead"]);
       expect(readGoalSnapshot).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1");
       expect(submitGoalUpdate).toHaveBeenCalledExactlyOnceWith("g1", 2, "run-1", update);
       checkGoalRunExecution.mockClear();
@@ -159,10 +164,11 @@ describe("SessionRunExecutor", () => {
     let submittedView: unknown;
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
         createRunCapabilityView: () => view,
         submitMessage: (_content: unknown, options: { capabilityView: unknown }) => {
-          submittedView = options.capabilityView;
+          submittedView = options.preparation.fixtureView;
           if (fail) throw new Error("submission failed");
           return completedHandle();
         },
@@ -183,7 +189,8 @@ describe("SessionRunExecutor", () => {
       data: store.data,
       attachments: store.attachments,
       goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
         setModel: () => {},
         createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({
           toolRegistry: new ToolRegistry(), pluginIds: new Set(["selected"]),
@@ -217,7 +224,8 @@ describe("SessionRunExecutor", () => {
       data: store.data,
       attachments: store.attachments,
       goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
         setModel: () => {}, createRunCapabilityView: () => view,
         submitMessage: (content: string) => { submitted = content; return completedHandle(); },
       }), close: async () => {}, closeIfStale: async () => {} } as any,
@@ -242,11 +250,12 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: async () => ({
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
           setModel: () => {},
           createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["selected"]) }, pluginId),
           submitMessage: (_content: unknown, options: any) => {
-            observed.push([options.capabilityView?.pluginId, ...options.capabilityView?.tools.keys() ?? []]);
+            observed.push([options.preparation.fixtureView?.pluginId, ...options.preparation.fixtureView?.tools.keys() ?? []]);
             return completedHandle();
           },
         }),
@@ -275,7 +284,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: vi.fn(async () => agent),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => agent),
         close: vi.fn(async () => {}),
         closeIfStale,
       } as any,
@@ -300,7 +310,7 @@ describe("SessionRunExecutor", () => {
     });
     expect(agent.setModel).not.toHaveBeenCalled();
     expect(registerHandle).toHaveBeenCalledWith(handle);
-    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", agent, undefined);
+    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", expect.objectContaining({memory:expect.anything(),plugins:expect.anything()}), undefined);
     expect(closeIfStale).toHaveBeenCalledWith("s1");
   });
 
@@ -320,7 +330,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: vi.fn(async () => ({ setModel: vi.fn(), submitMessage })),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => ({ setModel: vi.fn(), submitMessage })),
         close: vi.fn(),
       } as any,
       events: { checkpoint: () => 1, publishSince: vi.fn() },
@@ -362,7 +373,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
         close,
       } as any,
       events: { checkpoint: () => 7, publishSince },
@@ -392,7 +404,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
         close: vi.fn(async () => { throw closeError; }),
       } as any,
       events: { checkpoint: () => 3, publishSince: vi.fn() },
@@ -434,7 +447,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: vi.fn(async () => ({
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: vi.fn(async () => ({
           setModel: vi.fn(),
           submitMessage,
           inspect: () => ({
@@ -516,7 +530,8 @@ describe("SessionRunExecutor", () => {
       data: store.data,
       attachments: store.attachments,
       goals: store.goals,
-      agentPool: { configured: true, acquireSession, close } as any,
+      agentPool: { configured: true, acquireHostedSession:async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession, close } as any,
       events: { checkpoint: () => 4, publishSince: vi.fn() },
       transcriptProjection: {
         finalizeRunParts: vi.fn(),
@@ -571,7 +586,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
         close: async () => {},
         closeIfStale: async () => {},
       } as any,
@@ -606,7 +622,8 @@ describe("SessionRunExecutor", () => {
       goals: store.goals,
       agentPool: {
         configured: true,
-        acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
+        acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
         close: async () => {},
         closeIfStale: async () => {},
       } as any,
@@ -638,7 +655,8 @@ describe("SessionRunExecutor", () => {
     const handle = deferredHandle();
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }), close: async () => {}, closeIfStale: async () => {} } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }), close: async () => {}, closeIfStale: async () => {} } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: () => {},
@@ -671,7 +689,8 @@ describe("SessionRunExecutor", () => {
     });
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: () => {},
@@ -702,7 +721,8 @@ describe("SessionRunExecutor", () => {
     };
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => completedHandle() }), close: async () => {}, closeIfStale: async () => {} } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => completedHandle() }), close: async () => {}, closeIfStale: async () => {} } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: () => {},
@@ -730,7 +750,8 @@ describe("SessionRunExecutor", () => {
     };
     const executor2 = new SessionRunExecutor({
       data: store2.data, attachments: store2.attachments, goals: store2.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run2.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale: async () => {} } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run2.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale: async () => {} } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: () => {},
@@ -759,7 +780,8 @@ describe("SessionRunExecutor", () => {
     const closeIfStale = vi.fn(async () => {});
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: vi.fn(),
@@ -800,7 +822,8 @@ describe("SessionRunExecutor", () => {
     const handle = deferredHandle();
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments, goals: store.goals,
-      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return handle; } }), close: async () => {}, closeIfStale: async () => {} } as any,
+      agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return handle; } }), close: async () => {}, closeIfStale: async () => {} } as any,
       events: { checkpoint: () => 1, publishSince: () => {} },
       transcriptProjection: { finalizeRunParts: () => {} } as any,
       traceIdForRun: () => "trace-1", log: () => {},
@@ -856,7 +879,8 @@ function autoSelectionFixture(pluginId: string | null = "office") {
   const observed: unknown[][] = [];
   const executor = new SessionRunExecutor({
     data: store.data, attachments: store.attachments, goals: store.goals,
-    agentPool: { configured: true, acquireSession: async () => ({
+    agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+acquireSession: async () => ({
       getHistory: () => [],
       getPluginCandidates: () => candidates,
       validatePluginScope: async () => {},
@@ -865,7 +889,7 @@ function autoSelectionFixture(pluginId: string | null = "office") {
         pluginIds: new Set(["office", "knowledge"]),
         pluginPreparationErrors: new Map([...preparationFailures].map(pluginId => [pluginId, [`prepare failed: ${pluginId}`]])),
       }, id),
-      submitMessage: (_content: unknown, options: any) => { observed.push([[...options.capabilityView.pluginIds], ...options.capabilityView.tools.keys()]); return completedHandle(); },
+      submitMessage: (_content: unknown, options: any) => { observed.push([[...options.preparation.fixtureView.pluginIds], ...options.preparation.fixtureView.tools.keys()]); return completedHandle(); },
     }), close: async () => {}, closeIfStale: async () => {} } as any,
     events: { checkpoint: () => 1, publishSince: () => {} },
     transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},

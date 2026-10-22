@@ -1,8 +1,5 @@
-import type {
-  McpAuthConfigureInput,
-  McpAuthConfigureResult,
-  ToolContext,
-} from "@vykor/core";
+import type { McpAuthConfigureInput, McpAuthConfigureResult } from "./host.js";
+import type { ToolContext } from "@vykor/agent-contracts";
 
 export interface McpResourceDescription {
   serverName: string;

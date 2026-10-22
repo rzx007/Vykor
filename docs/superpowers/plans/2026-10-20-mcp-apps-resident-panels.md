@@ -115,9 +115,9 @@ interface PluginAppBackendPort {
 
 **Files:**
 
-- Create: `packages/protocol/src/mcp-apps.ts`、`mcp-apps.test.ts`。
+- Create: `packages/agent-contracts/src/tool-data.ts`、`mcp-apps.test.ts`。
 - Modify: protocol 公开导出、`packages/mcp/src/connection-types.ts`、`index.ts`。
-- Modify: `packages/core/src/types/tools.ts`、`engine/checked-tool-execution.ts`、`engine/tool-result-feedback.ts`。
+- Modify: `packages/agent-contracts/src/tools.ts`、`engine/checked-tool-execution.ts`、`engine/tool-result-feedback.ts`。
 - Modify: Server `application/agent/agent-transcript.ts`、`http/part-wire-view.ts` 与实际结果序列化入口。
 - Test: mcp `index.test.ts`、core `tool-result-feedback.test.ts`、Server `part-wire-view.test.ts`。
 
@@ -182,7 +182,7 @@ pnpm --filter @vykor/desktop test:plugin-apps-electron
 
 - Create: `packages/plugins/src/components/apps.ts`、`app-resources.ts` 及测试。
 - Modify: plugins `types.ts`、`manifest/schema-v1.ts`、`load-native-plugin.ts`、安装校验和权限统计。
-- Create: `packages/agent-runtime/src/plugin-app-backends.ts`、`native-plugin-app-backend.ts`、`mcp-plugin-app-backend.ts` 及测试。
+- Create: `packages/agent-runtime/src/node/plugin-apps/plugin-app-backends.ts`、`native-plugin-app-backend.ts`、`mcp-plugin-app-backend.ts` 及测试。
 - Modify: agent-runtime `runtime-integrations.ts`、`native-tools/activate.ts`，按实际映射控制 outward 可见性，不改业务 invoke。
 - Modify: agent-runtime `default-runtime-tools.ts`、`run-capability-view.ts`，抽取并共用原 registry 策略判断，保持宿主/角色/deny/环境限制。
 

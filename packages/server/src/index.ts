@@ -109,7 +109,7 @@ export type {
   AgentPermissionRequest,
   AgentRunHandle,
   AgentRunScope,
-} from "@vykor/core";
+} from "@vykor/agent-contracts";
 export type {
   AgentChildResult,
 } from "@vykor/agent-contracts";

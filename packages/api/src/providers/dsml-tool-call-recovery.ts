@@ -1,4 +1,4 @@
-import type { ToolGenerationProgressEvent } from "@vykor/core";
+import type { ToolGenerationProgressEvent } from "@vykor/agent-contracts";
 import { isFileTool, safeFilePath } from "./tool-path-summary.js";
 import { streamIncompleteFailure } from "../errors/index.js";
 

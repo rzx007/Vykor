@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { SkillCatalogSnapshot, SkillCatalogPort, ToolSkillDefinition as SkillDefinition } from "../ports/skill.js";
 import { posix, win32, resolve } from "node:path";
 
@@ -113,21 +113,11 @@ export function createSkillTools(catalog?: SkillCatalogPort): ToolDefinition[] {
   return [skillTool, listSkillsTool];
 }
 
-/** Frozen Run definitions need no local filesystem or global registry. */
-export const capturedSkillCatalog: SkillCatalogPort = {
-  async resolve(context) {
-    const view = context.capabilityView;
-    if (!view) return skillCatalogSnapshot([]);
-    return skillCatalogSnapshot([...view.skills].flatMap(([name, binding]) => {
-      if (binding.definition.name !== name || binding.path !== binding.definition.path) return [];
-      if (binding.ownerPluginId !== undefined && !(view.pluginIds
-        ? view.pluginIds.has(binding.ownerPluginId)
-        : binding.ownerPluginId === view.pluginId)) return [];
-      if (binding.definition.source === "plugin" && !binding.ownerPluginId) return [];
-      return [binding.definition];
-    }));
-  },
-};
+/** The Node host supplies only this Run's frozen, already authorized definitions. */
+export function createCapturedSkillCatalog(definitions: readonly SkillDefinition[]): SkillCatalogPort {
+  const snapshot = skillCatalogSnapshot(definitions);
+  return { async resolve() { return snapshot; } };
+}
 export function skillCatalogSnapshot(definitions: readonly SkillDefinition[]): SkillCatalogSnapshot {
   const skills = [...definitions].sort((a, b) => a.name.localeCompare(b.name));
   const pathKey = (value: string) => process.platform === "win32" ? resolve(value).toLowerCase() : resolve(value);
@@ -160,11 +150,7 @@ function filterSkills(
 }
 
 function skillOwner(skill: SkillDefinition, context: Parameters<ToolDefinition["execute"]>[1]): string | undefined {
-  if (context.capabilityView) {
-    const binding = context.capabilityView.skills.get(skill.name);
-    return binding?.path === skill.path ? binding.ownerPluginId : undefined;
-  }
-  return skill.source === "plugin" && typeof skill.metadata?.pluginId === "string" ? skill.metadata.pluginId : undefined;
+  return skill.ownerPluginId ?? (skill.source === "plugin" && typeof skill.metadata?.pluginId === "string" ? skill.metadata.pluginId : undefined);
 }
 
 function catalogText(value: string): string {

@@ -28,3 +28,8 @@ export interface HookResult {
   blocked: boolean;
   reason?: string;
 }
+
+/** Executes an installed hook; registration belongs to the host. */
+export interface HookExecutor {
+  execute(event: HookEvent, context: Record<string, unknown>): Promise<HookResult>;
+}

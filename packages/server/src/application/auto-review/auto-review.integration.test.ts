@@ -8,7 +8,7 @@ import type {
 } from "@vykor/agent-contracts";
 import type {
   VykorAgent,
-} from "@vykor/core";
+} from "@vykor/agent-runtime/kernel";
 import { readAutoReviewRunMetadata } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -141,7 +141,7 @@ describe("risk-based auto review integration", () => {
     const svc = service();
     const observation = new SessionWorkspaceChanges({ session: store,
       events: new SessionEventPublisher(store.conversations, { broadcastSince: () => undefined, broadcastEvent: () => undefined }),
-      inspector: createGitRunChangeInspector() });
+      inspector: createGitRunChangeInspector(), captureBudgetMs: 15_000, settleBudgetMs: 30_000 });
     const baseline = await observation.capture(runId, repo, repo);
     await svc.captureBaseline({ sessionId, runId, cwd: repo, mode: "off", observation: baseline });
     const changes = await observation.settle(runId);

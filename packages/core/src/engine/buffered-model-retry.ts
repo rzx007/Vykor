@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import type { StreamMessageParams, StreamingMessageClient } from "../types/client";
+import type { StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
 import type { ModelAttemptFinishedEvent } from "@vykor/agent-contracts";
-import type { StreamEvent } from "../types/events";
+import type { StreamEvent } from "@vykor/agent-contracts";
 import type { UsageSnapshot } from "@vykor/agent-contracts";
-import { isAgentExecutionLimitError, type AgentExecutionLimits } from "../types/runtime";
+import { isAgentExecutionLimitError, type AgentExecutionLimits } from "@vykor/agent-contracts";
 import type { ModelAttemptStarted } from "@vykor/agent-contracts";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {

@@ -2,11 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { copyFileSync, readdirSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { eq, sql } from "drizzle-orm";
-import type {
-  CreateNoteInput,
-  NoteRecord,
-  UpdateNoteInput,
-} from "@vykor/protocol";
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/protocol";
 import { parseCreateNoteInput, parseUpdateNoteInput } from "@vykor/protocol";
 import type { StorageContext } from "../database/storage-context.js";
 import { notes, noteFileIndex } from "../session-runtime/schema.js";

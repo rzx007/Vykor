@@ -46,7 +46,7 @@ volatile
 | print 模式 | `apps/cli/src/commands/main.ts` | 每次运行前调用 `buildRuntimeSystemPrompt()`，传入 settings、memory、skills | ✅ canonical |
 | backend / TUI host 初始化 | `apps/cli/src/commands/main.ts` | `refreshSystemPrompt()` 调用 `buildRuntimeSystemPrompt()`，传入 settings、memory、skills | ✅ canonical |
 | backend permission mode 切换 | `apps/cli/src/commands/main.ts` | 更新 settings 后调用 `refreshSystemPrompt()` | ✅ canonical |
-| 默认 runtime composition | `packages/agent-runtime/src/default-runtime.ts` | 未提供 explicit override 时调用 `buildRuntimeSystemPrompt()`，传入 settings、skills | ✅ canonical |
+| 默认 runtime composition | `packages/agent-runtime/src/node/runtime/default-runtime.ts` | 未提供 explicit override 时调用 `buildRuntimeSystemPrompt()`，传入 settings、skills | ✅ canonical |
 | `/context` 调试 | `packages/client/src/commands/session-commands.ts` + server context service | 通过 daemon 返回当前上下文诊断 | ✅ diagnostic |
 | `/profile` 管理 | `packages/client/src/commands/session-commands.ts` + server profile service | 使用统一的个人 prompt 诊断和初始化服务 | ✅ diagnostic + init |
 

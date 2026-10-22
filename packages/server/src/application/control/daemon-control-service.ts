@@ -26,7 +26,7 @@ export interface DaemonControlServiceContext {
     | "size"
     | "hasActiveWork"
     | "hasActiveWorkForCwd"
-    | "acquireSession"
+    | "acquireHostedSession"
     | "closeAll"
     | "closeForCwd"
     | "invalidateWarmAgents"
@@ -203,8 +203,8 @@ export class DaemonControlService {
       cwd: session.cwd,
     });
     try {
-      const agent = await this.context.agentPool.acquireSession(sessionId);
-      return agent.inspect().hooks.map((hook) => ({ ...hook, origin: "runtime" as const }));
+      const {host} = await this.context.agentPool.acquireHostedSession(sessionId);
+      return (host?.inspect().hooks ?? []).map((hook) => ({ ...hook, origin: "runtime" as const }));
     } finally {
       lease.release();
     }

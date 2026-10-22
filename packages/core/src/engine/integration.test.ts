@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import { RuntimeBuilder } from "./runtime-builder.js";
-import type { AgentEffects, AgentExecutionContext, StreamEvent, ToolDefinition } from "../index.js";
+import type { AgentEffects, AgentExecutionContext, StreamEvent, ToolDefinition } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
 import { sanitizeMessageHistory } from "../utils/message-history.js";
 
@@ -110,14 +109,11 @@ describe("tool execution feedback", () => {
     } };
     const execution = {
       ...createExecutionContext(),
-      capabilityView: {
-        pluginId: "native",
-        tools: new Map([
-          ["LargeResult", { ownerPluginId: "native", definition: largeTool, source: { kind: "plugin" as const, id: "native" }, invoke: largeTool.execute }],
-          ["ReadResult", { ownerPluginId: "native", definition: readTool, source: { kind: "plugin" as const, id: "native" }, invoke: readTool.execute }],
+      profile:{toolResultReferences:true},
+      tools: new Map([
+          ["LargeResult", { definition: largeTool, source: { kind: "plugin" as const, id: "native" }, invoke: largeTool.execute }],
+          ["ReadResult", { definition: readTool, source: { kind: "plugin" as const, id: "native" }, invoke: readTool.execute }],
         ]),
-        skills: new Map(), mcpServers: new Map(), agents: new Map(),
-      },
     } satisfies AgentExecutionContext;
     const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
     const events: StreamEvent[] = [];
@@ -127,12 +123,12 @@ describe("tool execution feedback", () => {
     expect(JSON.stringify(requests[1]?.find(message => message.type === "tool_result")?.content)).toContain("Tool-Result-Id: large");
   });
 
-  it("passes the optional Shell log host to the actual ToolContext", async () => {
+  it("keeps session identity in ToolContext while the tool captures its host", async () => {
     const registry = new ToolRegistry();
     const logs = { begin: () => undefined } as never;
     registry.register({
       name: "ProbeLogs", description: "probe", inputSchema: { type: "object" },
-      execute: async (_input, context) => ({ content: [{ type: "text", text: String(context.shellOutputLogs === logs && context.sessionId === "log-owner") }] }),
+      execute: async (_input, context) => ({ content: [{ type: "text", text: String(logs !== undefined && context.sessionId === "log-owner") }] }),
     });
     const seen: Message[][] = [];
     const client = { streamMessage: async function* (params: { messages: Message[] }) {
@@ -140,7 +136,7 @@ describe("tool execution feedback", () => {
       if (seen.length === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "probe", name: "ProbeLogs", input: {} } };
       yield { type: "complete" as const, stopReason: seen.length === 1 ? "tool_use" as const : "end_turn" as const };
     } };
-    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { sessionId: "log-owner", shellOutputLogs: logs, trajectoryTrackerFactory: false });
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { sessionId: "log-owner", trajectoryTrackerFactory: false });
     for await (const _ of engine.submitMessage("probe")) { /* consume */ }
     expect(seen[1]?.find((message) => message.type === "tool_result")).toMatchObject({ content: [{ type: "text", text: "true" }] });
   });
@@ -297,7 +293,7 @@ describe("tool execution feedback", () => {
         if (requests.length <= 2) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `call-${requests.length}`, name: "Work", input: {} } };
         yield { type: "complete" as const, stopReason: requests.length <= 2 ? "tool_use" : "end_turn" };
       } };
-      const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+      const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false, toolOutputPolicy: {inlineChars:256,previewChars:128} });
       const events: any[] = [];
       for await (const event of engine.submitMessage("work")) events.push(event);
       const results = events.filter((event) => event.type === "tool_use_end").map((event) => event.result);
@@ -1652,68 +1648,6 @@ describe("Integration: Full Agent Loop", () => {
   });
 });
 
-describe("Integration: RuntimeBuilder", () => {
-  it("builds a valid RuntimeBundle", () => {
-    const mockClient = { streamMessage: async function* () {} };
-    const registry = new ToolRegistry();
-    const checker = allowAll();
-    const hooks = noopHooks();
-    const engine = new QueryEngine(mockClient, registry, checker, hooks);
-
-    const bundle = new RuntimeBuilder()
-      .setApiClient(mockClient)
-      .setToolRegistry(registry)
-      .setPermissionChecker(checker)
-      .setHookExecutor(hooks)
-      .setQueryEngine(engine)
-      .build({ model: "test", apiFormat: "anthropic", permission: { mode: "default" }, maxTurns: 10 });
-
-    expect(bundle.settings.model).toBe("test");
-    expect(bundle.apiClient).toBe(mockClient);
-    expect(bundle.queryEngine).toBe(engine);
-  });
-
-  it("switchApiClient updates the query engine client for subsequent calls", async () => {
-    const usedClients: string[] = [];
-    const clientA = {
-      streamMessage: async function* () {
-        usedClients.push("A");
-        yield { type: "complete" as const, stopReason: "end_turn" };
-      },
-    };
-    const clientB = {
-      streamMessage: async function* () {
-        usedClients.push("B");
-        yield { type: "complete" as const, stopReason: "end_turn" };
-      },
-    };
-    const registry = new ToolRegistry();
-    const checker = allowAll();
-    const hooks = noopHooks();
-    const engine = new QueryEngine(clientA, registry, checker, hooks);
-
-    const bundle = new RuntimeBuilder()
-      .setApiClient(clientA)
-      .setToolRegistry(registry)
-      .setPermissionChecker(checker)
-      .setHookExecutor(hooks)
-      .setQueryEngine(engine)
-      .build({ model: "test", apiFormat: "anthropic", permission: { mode: "default" }, maxTurns: 10 });
-
-    for await (const _ of bundle.queryEngine.submitMessage("before")) {}
-    bundle.switchApiClient(clientB);
-    for await (const _ of bundle.queryEngine.submitMessage("after")) {}
-
-    expect(bundle.apiClient).toBe(clientB);
-    expect(usedClients).toEqual(["A", "B"]);
-  });
-
-  it("throws if missing required components", () => {
-    expect(() => new RuntimeBuilder().build({ model: "x", apiFormat: "anthropic", permission: { mode: "default" }, maxTurns: 1 }))
-      .toThrow("ApiClient is required");
-  });
-});
-
 describe("Integration: AutoCompact in Agent Loop", () => {
   it("auto-compacts messages when over token limit during loop", async () => {
     const registry = new ToolRegistry();
@@ -2024,11 +1958,7 @@ describe("Integration: Permission Prompt (ask mode)", () => {
         requestPermission: async () => ({ status: "denied" }),
         emit: async (event) => { permissionEvents.push(event); },
       }),
-      ...(withPlugin ? { capabilityView: {
-        pluginId: "quality",
-        tools: new Map([["Bash", { definition: tool, invoke: tool.execute, ownerPluginId: "quality" }]]),
-        skills: new Map(), mcpServers: new Map(), agents: new Map(),
-      } } : {}),
+      ...(withPlugin ? { tools: new Map([["Bash", { definition: tool, invoke: tool.execute }]]) } : {}),
     };
     for await (const e of engine.submitMessage("run", {
       execution,

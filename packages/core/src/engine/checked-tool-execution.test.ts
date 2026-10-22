@@ -1,18 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type {
-  AgentEventInput,
-  AgentExecutionContext,
-  IHookExecutor,
-  IPermissionChecker,
-  StreamEvent,
-  ToolContext,
-  ToolDefinition,
-  ToolRegistrationSource,
-} from "../index.js";
+import type { AgentEventInput, AgentExecutionContext, HookExecutor as IHookExecutor, PermissionChecker as IPermissionChecker, StreamEvent, ToolContext, ToolDefinition, ToolRegistrationSource } from "@vykor/agent-contracts";
 import type { ToolUseBlock } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import { AgentExecutionLimitError } from "../types/runtime.js";
+import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 
 afterEach(() => vi.useRealTimers());
 
@@ -41,19 +32,18 @@ function fixture(options: {
   const registry = new ToolRegistry();
   registry.register(definition, options.source ?? { kind: "plugin", id: "native" });
   const execution: AgentExecutionContext = {
+    profile:{toolResultReferences:true},
     scope: { agentId: "a", sessionId: "s", runId: "r", inputId: "i",
       cwd: "/untrusted", traceId: "t", signal: controller.signal },
-    capabilityView: {
-      pluginId: "native", tools: new Map([["Inspect", {
-        ownerPluginId: "native", definition, source: options.source ?? { kind: "plugin", id: "native" },
+    tools: new Map([["Inspect", {
+        definition, source: options.source ?? { kind: "plugin", id: "native" },
         invoke: async (input, context) => {
           inputs.push({ ...input }); contexts.push(context);
           return options.invoke?.(input, context) ?? {
             content: [{ type: "text", text: String(input.text) }], compactSummary: "untrusted summary",
           };
         },
-      }]]), skills: new Map(), mcpServers: new Map(), agents: new Map(),
-    },
+      }]]),
     effects: { requestPermission: async () => ({ status: "approved" }) },
     children: {
       hasChildAgent: () => false,
@@ -164,10 +154,8 @@ describe("history-free checked tool execution", () => {
 
   it.each(["missing_view", "missing_tool", "contribution"])("fails closed for %s without using the global registry", async mode => {
     const f = fixture();
-    const execution = { ...f.execution, capabilityView: mode === "missing_view" ? undefined : {
-      ...f.execution.capabilityView!, tools: new Map(),
-    }, contribution: mode === "contribution" ? {
-      tools: [{ definition: { ...f.execution.capabilityView!.tools.get("Inspect")!.definition,
+    const execution = { ...f.execution, tools: mode === "missing_view" ? undefined : new Map(), contribution: mode === "contribution" ? {
+      tools: [{ definition: { ...f.execution.tools!.get("Inspect")!.definition,
         execute: async () => { throw new Error("contribution invoked"); } }, permission: "host-internal" as const }],
     } : undefined };
     expect(await f.engine.executeTool(f.toolUse, { execution })).toMatchObject({ isError: true, executionState: "not_started" });

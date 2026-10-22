@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { todoWriteTool } from "../../../../tools/src/meta/todo-write.js";
-import { sleepTool } from "../../../../tools/src/meta/sleep.js";
-import { briefTool } from "../../../../tools/src/meta/brief.js";
+import { todoWriteTool } from "@vykor/tools";
+import { sleepTool } from "@vykor/tools";
+import { briefTool } from "@vykor/tools";
 import { createConfigTool } from "@vykor/tools";
 import { createNodeConfigPort, createNodeSkillCatalog } from "./tool-ports.js";
 const configTool = createConfigTool(createNodeConfigPort());
-import { toolSearchTool } from "../../../../tools/src/meta/tool-search.js";
-import { askUserTool } from "../../../../tools/src/meta/ask-user.js";
+import { toolSearchTool } from "@vykor/tools";
+import { askUserTool } from "@vykor/tools";
 import { hostPathDirectory, createSkillTools } from "@vykor/tools";
 const listSkillsTool = createSkillTools(
   createNodeSkillCatalog(undefined, { userDirs: [] }),
@@ -400,7 +400,7 @@ describe("skillTool", () => {
 async function listAllSkillPages(
   input: Parameters<typeof listSkillsTool.execute>[0],
   context: Parameters<typeof listSkillsTool.execute>[1],
-  tool = listSkillsTool,
+  tool = createSkillTools(createNodeSkillCatalog(context.skillRegistry,{userDirs:[]})).find(item=>item.name==="ListSkills")!,
 ) {
   const pages: string[] = [];
   for (let offset = 0; ; offset += 100) {

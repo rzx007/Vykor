@@ -175,7 +175,7 @@ HTTP 413 仍可能来自整次请求的总大小、网关自定义限制或大�
 
 - 历史写入前预检：`packages/core/src/engine/query-engine.ts`
 - 图片元数据类型：`packages/agent-contracts/src/messages.ts`
-- 可选客户端准备接口：`packages/core/src/types/client.ts`
+- 可选客户端准备接口：`packages/agent-contracts/src/model.ts`
 - 图片 token 估算：`packages/core/src/engine/compact-service.ts`
 - Sharp 准备器和缓存：`packages/api/src/providers/vision-image-preparer.ts`
 - 共享准备器与历史元数据：`packages/api/src/providers/native-image-payload.ts`

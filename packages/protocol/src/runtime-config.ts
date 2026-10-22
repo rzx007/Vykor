@@ -157,7 +157,7 @@ export function readSessionRuntimeConfig(
     ...(approvalMode
       ? { permissionMode: effectivePermissionMode(approvalMode, workMode) }
       : {}),
-    ...(numberValue(runtime.maxTurns) ?? defaults?.maxTurns
+    ...((numberValue(runtime.maxTurns) ?? defaults?.maxTurns) !== undefined
       ? { maxTurns: numberValue(runtime.maxTurns) ?? defaults?.maxTurns }
       : {}),
     ...(effortValue(runtime.effort) ?? defaults?.effort

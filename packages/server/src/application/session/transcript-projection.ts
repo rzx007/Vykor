@@ -1,4 +1,5 @@
-import type { ReasoningSource, StreamEvent } from "@vykor/core";
+import type { PluginAppToolOrigin } from "@vykor/protocol";
+import type { ReasoningSource, StreamEvent } from "@vykor/agent-contracts";
 import { externalToolMetadata, toolFeedbackFields } from "@vykor/core";
 import type { AssistantMessagePhase } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
@@ -166,6 +167,7 @@ export class SessionTranscriptProjection {
   projectStreamEvent(
     state: ActiveTranscriptProjectionState,
     event: StreamEvent,
+    trusted?: { toolAppOrigin?: PluginAppToolOrigin },
   ): AppliedTranscriptStreamEvent {
     switch (event.type) {
       case "reasoning_delta": {
@@ -298,9 +300,9 @@ export class SessionTranscriptProjection {
             : {}),
           metadata: {
             ...externalToolMetadata(event.result.metadata),
-            ...(active && event.pluginAppOrigin && event.pluginAppOrigin.toolName === active.toolName
+            ...(active && trusted?.toolAppOrigin && trusted?.toolAppOrigin.toolName === active.toolName
               && !event.result.isError && event.result.executionState === "completed" ? {
-                pluginAppSource: { ...event.pluginAppOrigin, sessionId: state.sessionId, runId: state.runId, sourcePartId: active.partId, toolUseId: event.toolUseId },
+                pluginAppSource: { ...trusted?.toolAppOrigin, sessionId: state.sessionId, runId: state.runId, sourcePartId: active.partId, toolUseId: event.toolUseId },
               } : {}),
             toolCallId: event.toolUseId,
             toolAttemptId: event.result.toolAttemptId ?? `tool_attempt_${event.toolUseId}_1`,

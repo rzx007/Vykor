@@ -13,6 +13,11 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); });
 
 describe("portable settings boundaries", () => {
+  it("round trips unlimited task limits", async () => {
+    const expected = await exportPortableSettings();
+    await importPortableSettings({ version: 1, groups: { general: { maxTurns: 0 } } }, ["general"], expected);
+    expect((await exportPortableSettings()).groups.general?.maxTurns).toBe(0);
+  });
   it.each([
     { version: 1, groups: {}, apiKey: "fixture-secret" },
     { version: 1, groups: { credentials: { apiKey: "fixture-secret" } } },

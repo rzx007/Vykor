@@ -1,91 +1,6 @@
-import type { StreamingMessageClient } from "./client";
-import type {
-  AgentBackgroundShellHost,
-  McpAuthHost,
-  ToolRegistry,
-} from "./tools";
-import type {
-  ShellOutputLogHost,
-} from "@vykor/agent-contracts";
-import type { PermissionChecker } from "./permissions";
-import type { HookExecutor } from "./hooks";
-import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type { StreamEvent } from "./events";
-import type { Settings } from "@vykor/host-config";
+import type { StreamingMessageClient, AgentExecutionContext, ToolUseBlock, ContentBlock, Message, StreamEvent, RunToolBinding } from "@vykor/agent-contracts";
 import type { CompactContextProvider } from "../engine/compact-service";
-import type { AgentTerminalHost } from "@vykor/terminal";
-import type { AgentJobHost } from "@vykor/jobs";
 import type { ModelRetryPolicy } from "../engine/model-retry";
-import type { AgentChildController, AgentChildInput, AgentInputReceipt, AgentRunScope, AgentSteerInput } from "./runtime-child.js";
-import type { AgentEventInput } from "./runtime-events.js";
-
-export * from "./runtime-child.js";
-export * from "./runtime-events.js";
-
-export interface AgentExecutionLimits {
-  check(boundary: "run" | "model" | "tool" | "child" | "maintenance",
-    tool?: { toolName: string; toolAttemptId: string }): void | Promise<void>;
-  /** Host restrictions rebound to a framework-generated child Run, never model input. */
-  forChildRun?(runId: string): AgentExecutionLimits;
-}
-
-/** Host-owned restrictions scoped to one Run, including every model retry. */
-export interface AgentExecutionProfile {
-  maxOutputTokens?: number;
-  executableHooks?: boolean;
-}
-
-const AGENT_EXECUTION_LIMIT_ERROR = Symbol.for("@vykor/core/AgentExecutionLimitError");
-
-export function isAgentExecutionLimitError(value: unknown): value is AgentExecutionLimitError {
-  return typeof value === "object" && value !== null
-    && AGENT_EXECUTION_LIMIT_ERROR in value && value[AGENT_EXECUTION_LIMIT_ERROR] === true;
-}
-
-export class AgentExecutionLimitError extends Error {
-  private readonly [AGENT_EXECUTION_LIMIT_ERROR] = true;
-  static [Symbol.hasInstance](value: unknown): boolean { return isAgentExecutionLimitError(value); }
-  constructor(message: string) {
-    super(message);
-    this.name = "AgentExecutionLimitError";
-  }
-}
-
-/** The user-selected values that are safe to change between model requests. */
-export type AgentRequestConfiguration = {
-  model: string;
-  provider?: string;
-  baseUrl?: string;
-  apiFormat?: "anthropic" | "openai";
-  effort?: string;
-  maxTurns?: number;
-  /** A session override takes precedence over settingsPrompt. */
-  systemPrompt?: string;
-  settingsPrompt?: string;
-  workStyle?: Settings["workStyle"];
-  fastMode?: boolean;
-};
-
-export type AgentRequestConfigurationPatch = Partial<AgentRequestConfiguration>;
-
-export type AgentRequestConfigurationSnapshot = {
-  revision: number;
-  configuration: Readonly<AgentRequestConfiguration>;
-};
-
-export interface AgentRequestConfigurationReader {
-  read(): Promise<AgentRequestConfigurationSnapshot>;
-}
-
-export interface AgentRequestConfigurationStore extends AgentRequestConfigurationReader {
-  update(
-    patch: AgentRequestConfigurationPatch,
-  ): Promise<AgentRequestConfigurationSnapshot>;
-  restoreIfCurrent(
-    failedRevision: number,
-    previous: Readonly<AgentRequestConfiguration>,
-  ): Promise<AgentRequestConfigurationSnapshot | undefined>;
-}
 
 /** A fully prepared model request captured at one request boundary. */
 export type QueryRequestConfiguration = {
@@ -100,226 +15,19 @@ export type QueryRequestConfiguration = {
   client: StreamingMessageClient;
   systemPrompt?: string;
   /** Internal request snapshot builder; receives the exact tools sent to the model. */
-  systemPromptForTools?: (tools: readonly import("./tools").ToolDefinition[]) => Promise<string>;
+  systemPromptForTools?: (tools: readonly import("@vykor/agent-contracts").ToolDefinition[]) => Promise<string>;
   contextWindow?: number;
   maxOutputTokens?: number;
 };
 
-export interface AgentPermissionRequest {
-  toolName: string;
-  /** Captured host registration; never supplied by the model. */
-  toolSource?: string;
-  toolDescription?: string;
-  reason?: string;
-  input?: Record<string, unknown>;
-}
-
-export interface AgentPermissionDecision {
-  status: "approved" | "denied" | "expired";
-  decision?: "once" | "session";
-  reason?: string;
-  answer?: string;
-}
-
-export interface AgentScheduledTaskInput {
-  name: string;
-  prompt: string;
-  recurrence: string;
-  recurrenceFormat: "rrule" | "once";
-  timezone: string;
-  destination: "standalone" | "chat";
-  sessionId?: string;
-  projectPaths: string[];
-  executionMode?: "local" | "worktree";
-  model?: string;
-  effort?: string;
-  skillNames?: string[];
-  pluginNames?: string[];
-  permissionProfile?: {
-    mode: "read_only" | "workspace_write" | "full_access";
-    network?: boolean;
-    allowedTools?: string[];
-    deniedTools?: string[];
-  };
-  overlapPolicy?: "skip" | "queue";
-  missedRunPolicy?: "skip" | "run_once";
-  stopPolicy?: {
-    runOnce?: boolean;
-    maxRuns?: number;
-    stopWhenCompleted?: boolean;
-    expiresAt?: number;
-  };
-}
-
-export interface AgentScheduledTask extends AgentScheduledTaskInput {
-  id: string;
-  status: "active" | "paused" | "completed";
-  nextRunAt?: number;
-  lastRunAt?: number;
-  runCount: number;
-}
-
-export interface AgentScheduledRun {
-  id: string;
-  taskId: string;
-  status: "queued" | "running" | "succeeded" | "failed" | "interrupted" | "needs_attention" | "skipped";
-  summary?: string;
-  error?: string;
-  sessionId?: string;
-  runId?: string;
-}
-
-export interface AgentScheduleEffects {
-  create(input: AgentScheduledTaskInput): Promise<AgentScheduledTask>;
-  update(
-    id: string,
-    patch: Partial<AgentScheduledTaskInput> & {
-      status?: AgentScheduledTask["status"];
-    },
-  ): Promise<AgentScheduledTask>;
-  remove(id: string): Promise<void>;
-  list(): Promise<AgentScheduledTask[]>;
-  trigger(id: string): Promise<AgentScheduledRun>;
-  listRuns(taskId?: string): Promise<AgentScheduledRun[]>;
-}
-
-export interface AgentEffectContext {
-  agentId: string;
-  sessionId: string;
-  runId: string;
-  inputId: string;
-  cwd: string;
-  traceId: string;
-  childId?: string;
-  signal: AbortSignal;
-}
-
-export interface AgentEffects {
-  requestPermission(input: AgentPermissionRequest, context: AgentEffectContext): Promise<AgentPermissionDecision>;
-  askUserPrompt?(question: string, context: AgentEffectContext): Promise<string>;
-}
-
-export interface AgentRunToolContribution {
-  readonly definition: import("./tools").ToolDefinition;
-  readonly permission: "host-internal";
-  /** End only after this exact definition succeeds and the whole batch is delivered. */
-  readonly endRunOnSuccess?: true;
-}
-
-export interface AgentRunContribution {
-  readonly systemGuidance?: string;
-  readonly tools?: readonly AgentRunToolContribution[];
-  /** Include actual tool result IDs as model-visible reference data. */
-  readonly exposeToolResultIds?: true;
-}
-
-/** Objects captured from the host's already-filtered runtime for one Run. */
-export interface RunToolBinding {
-  /** Opaque identity of the original registered definition; omitted by JSON serialization. */
-  readonly definitionIdentity?: symbol;
-  readonly ownerPluginId?: string;
-  readonly definition: import("./tools").ToolDefinition;
-  readonly source?: import("./tools").ToolRegistrationSource;
-  readonly serverId?: string;
-  readonly invoke: import("./tools").ToolDefinition["execute"];
-}
-
-export interface RunSkillBinding {
-  readonly ownerPluginId?: string;
-  readonly path: string;
-  readonly definition: {
-    readonly name: string;
-    readonly description: string;
-    readonly content: string;
-    readonly path: string;
-    readonly source?: "bundled" | "user" | "project" | "plugin";
-    readonly metadata?: Record<string, unknown>;
-    readonly userInvocable: boolean;
-    readonly disableModelInvocation: boolean;
-    readonly model?: string;
-    readonly argumentHint?: string;
-    readonly commandName?: string;
-    readonly displayName?: string;
-  };
-}
-
-export interface RunAgentBinding {
-  readonly ownerPluginId?: string;
-  readonly definition: import("@vykor/coordinator/definitions").AgentDefinition;
-}
-
-export interface RunMcpServerBinding {
-  readonly ownerPluginId?: string;
-  readonly serverId: string;
-  readonly serverName: string;
-  readonly definition: import("@vykor/host-config").McpServerConfig;
-}
-
-export interface RunCapabilityView {
-  /** Explicit single-plugin restriction; automatic scopes use pluginIds even for one owner. */
-  readonly pluginId?: string;
-  /** Exact allowed plugin owners. Individual bindings remain the execution authority. */
-  readonly pluginIds?: ReadonlySet<string>;
-  readonly tools: ReadonlyMap<string, RunToolBinding>;
-  /** Host-only app directory under this Run's role/host/environment policy; never model execution. */
-  readonly appTools?: ReadonlyMap<string, RunToolBinding>;
-  /** Host-captured bindings for child delegation; never executable by this Run. */
-  readonly delegatableTools?: ReadonlyMap<string, RunToolBinding>;
-  readonly skills: ReadonlyMap<string, RunSkillBinding>;
-  readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
-  readonly agents: ReadonlyMap<string, RunAgentBinding>;
-}
-
-/** Framework-internal execution capabilities shared with tool packages. */
-export interface AgentExecutionContext {
-  /** Host-only approval for one original app tool invocation; never inherited by model or child Runs. */
-  readonly pluginAppToolApproval?: {
-    readonly runId: string;
-    readonly toolUseId: string;
-    readonly binding: RunToolBinding;
-    readonly argumentsJson: string;
-  };
-  readonly limits?: AgentExecutionLimits;
-  readonly profile?: AgentExecutionProfile;
-  readonly scope: AgentRunScope;
-  readonly capabilityView?: RunCapabilityView;
-  /** Trusted, run-scoped ceiling for this Run only. Later configuration cannot raise it. */
-  readonly hardMaxTurns?: number;
-  /** Trusted, run-scoped capabilities supplied by the host. */
-  readonly contribution?: AgentRunContribution;
-  readonly effects: AgentEffects;
-  readonly children: AgentChildController;
-  emit(event: AgentEventInput): Promise<void>;
-  takeSteeredInputs(options?: { closeIfEmpty?: boolean }): Promise<AgentChildInput[]>;
-  closeSteering(): void;
-}
-
-export interface AgentRunResult {
-  status: "completed";
-  output: string;
-  history: Message[];
-  usage: import("@vykor/agent-contracts").UsageSnapshot;
-}
-
-export interface AgentRunHandle {
-  readonly id: string;
-  readonly inputId: string;
-  readonly sessionId: string;
-  readonly traceId: string;
-  readonly started: Promise<AgentInputReceipt>;
-  readonly result: Promise<AgentRunResult>;
-  steer(input: AgentSteerInput): Promise<AgentInputReceipt>;
-  interrupt(reason?: string): Promise<void>;
-}
-
 export interface QueryEngine {
   executeTool(
     toolUse: ToolUseBlock,
-    options: { signal?: AbortSignal; execution: AgentExecutionContext; audience?: "model" | "app";
+    options: { signal?: AbortSignal; execution: AgentExecutionContext;
       /** Reliable delivery of a collected result before a later execution-chain failure propagates. */
-      onResult?: (result: import("./tools").ToolExecutionResult) => Promise<void>;
+      onResult?: (result: import("@vykor/agent-contracts").ToolExecutionResult) => Promise<void>;
     },
-  ): Promise<import("./tools").ToolExecutionResult>;
+  ): Promise<import("@vykor/agent-contracts").ToolExecutionResult>;
   submitMessage(
     content: string | ContentBlock[],
     options?: {
@@ -345,12 +53,6 @@ export interface QueryEngine {
   setCompactContextProvider(fn: CompactContextProvider | undefined): void;
   setAllowedTools(tools: string[] | null): void;
   setSessionId(sessionId: string | undefined): void;
-  setMcpManager(mgr: unknown): void;
-  setMcpAuth(auth: McpAuthHost | undefined): void;
-  setTerminal(terminal: AgentTerminalHost | undefined): void;
-  setJobs(jobs: AgentJobHost | undefined): void;
-  setBackgroundShell(backgroundShell: AgentBackgroundShellHost | undefined): void;
-  setSchedules(schedules: AgentScheduleEffects | undefined): void;
 }
 
 export interface MemoryRetriever {
@@ -360,21 +62,21 @@ export interface MemoryRetriever {
 export interface QueryEngineOptions {
   /** Optional host policy. Omission preserves full authorized tool exposure. */
   toolDiscovery?: {
-    searchTool: import("./tools").ToolDefinition;
-    shouldDefer: (tool: import("./tools").ToolDefinition, source?: import("./tools").ToolRegistrationSource) => boolean;
+    searchTool: import("@vykor/agent-contracts").ToolDefinition;
+    shouldDefer: (tool: import("@vykor/agent-contracts").ToolDefinition, source?: import("@vykor/agent-contracts").ToolRegistrationSource) => boolean;
     /** Deferral starts when either threshold is reached. Default: 20 tools. */
     minToolCount?: number;
     /** Serialized deferred definitions (name, description, schema). Default: 32 KiB. */
     minSchemaBytes?: number;
   };
   /** Current runtime permission owner; omitted when mode tools are unsupported. */
-  setPlanMode?: import("./tools").ToolContext["setPlanMode"];
+  setPlanMode?: import("@vykor/agent-contracts").ToolContext["setPlanMode"];
   /** Exact tool definitions validated by the host as trusted builtin replacements. */
-  trustedToolOverrides?: ReadonlyMap<string, import("./tools").ToolDefinition>;
+  trustedToolOverrides?: ReadonlyMap<string, import("@vykor/agent-contracts").ToolDefinition>;
   /** Host-provided Run prompt. With a View, takes precedence over systemPrompt/setSystemPrompt(). */
-  systemPromptForRun?: (view: RunCapabilityView) => Promise<string>;
+  systemPromptForRun?: (tools: ReadonlyMap<string, RunToolBinding>) => Promise<string>;
   /** Builds capability guidance after finalization and trajectory tool filtering. */
-  systemPromptForTools?: (tools: readonly import("./tools").ToolDefinition[], view?: RunCapabilityView) => Promise<string>;
+  systemPromptForTools?: (tools: readonly import("@vykor/agent-contracts").ToolDefinition[], bindings?: ReadonlyMap<string, RunToolBinding>) => Promise<string>;
   maxTurns?: number;
   /** Runtime working directory used for all tool execution in this engine. */
   cwd?: string;
@@ -387,82 +89,17 @@ export interface QueryEngineOptions {
   /** Resolves a stable model/client pair before each model request. */
   resolveRequestConfiguration?: (input: {
     signal?: AbortSignal;
-    capabilityView?: RunCapabilityView;
+    tools?: ReadonlyMap<string, RunToolBinding>;
   }) => Promise<QueryRequestConfiguration>;
-  /** Default 300000 ms; can also be set with VYKOR_TOOL_TIMEOUT_MS. */
+  /** Resolved host timeout in milliseconds; the execution default is 300000. */
   toolTimeoutMs?: number;
-  settings?: Settings;
+  toolOutputPolicy?: { inlineChars: number; previewChars: number };
   compactKeepRecent?: number;
-  skillRegistry?: unknown;
   memoryRetriever?: MemoryRetriever;
   executionEnvironment?: import("@vykor/environment").ExecutionEnvironmentHandle;
-  shellOutputLogs?: ShellOutputLogHost;
   /** Optional per-run trajectory policy factory. False disables the default tracker. */
   trajectoryTrackerFactory?: false | (() => import("../engine/trajectory/tracker").TrajectoryTracker);
   compactProgressCallback?: import("../engine/compact-service").CompactProgressCallback;
   /** 有界模型网络重试策略；`maxTotalRetries: 0` 可显式关闭自动重试。 */
   modelRetry?: Partial<ModelRetryPolicy>;
-}
-
-export type RuntimeSandboxState = "off" | "active" | "degraded" | "unavailable";
-
-export interface RuntimeSandboxStatus {
-  state: RuntimeSandboxState;
-  enabled: boolean;
-  active: boolean;
-  backend?: string;
-  platform?: string;
-  reason?: string;
-  degraded?: boolean;
-  networkMode?: string;
-  dns?: string[];
-  proxy?: "configured" | "not configured";
-}
-
-export class RuntimeBundle {
-  private cleanupCallbacks: Array<() => Promise<void> | void> = [];
-  private syncCleanupCallbacks: Array<() => void> = [];
-  sandboxStatus?: RuntimeSandboxStatus;
-  /** Factory installed by the runtime host; never reloads components from disk. */
-  createRunCapabilityView?: (pluginId?: string | readonly string[]) => RunCapabilityView;
-  resolveRequestConfiguration?: QueryEngineOptions["resolveRequestConfiguration"];
-  /** Exact host-validated builtin replacements; source remains agent for identity checks. */
-  trustedToolOverrides?: ReadonlyMap<string, Readonly<{
-    identity: symbol; execute: import("./tools").ToolDefinition["execute"];
-  }>>;
-
-  constructor(
-    public settings: Settings,
-    public apiClient: StreamingMessageClient,
-    public toolRegistry: ToolRegistry,
-    public permissionChecker: PermissionChecker,
-    public hookExecutor: HookExecutor,
-    public queryEngine: QueryEngine,
-  ) {}
-
-  switchApiClient(newClient: StreamingMessageClient): void {
-    this.apiClient = newClient;
-    this.queryEngine.setApiClient(newClient);
-  }
-
-  addCleanup(cleanup: () => Promise<void> | void, cleanupSync?: () => void): void {
-    this.cleanupCallbacks.push(cleanup);
-    if (cleanupSync) this.syncCleanupCallbacks.push(cleanupSync);
-  }
-
-  async close(): Promise<void> {
-    const callbacks = this.cleanupCallbacks.splice(0).reverse();
-    this.syncCleanupCallbacks = [];
-    for (const cleanup of callbacks) {
-      await cleanup();
-    }
-  }
-
-  closeSync(): void {
-    const callbacks = this.syncCleanupCallbacks.splice(0).reverse();
-    this.cleanupCallbacks = [];
-    for (const cleanup of callbacks) {
-      cleanup();
-    }
-  }
 }

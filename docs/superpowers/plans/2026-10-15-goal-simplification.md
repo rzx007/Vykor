@@ -30,8 +30,8 @@
 | packages/protocol/src/session-goals.ts | 最小 Goal、正文编辑、用户动作及 GoalUpdate 请求；只做结构校验 |
 | packages/services/src/goals/goal-records.ts、goal-repository.ts、goal-transactions.ts、goal-version.ts | 最小状态与简单正文记录；删除准备、评估和证据存取 |
 | packages/services/src/session-runtime/schema.ts；packages/services/src/database/temporary-control-records.ts | 同步 SQLite 与临时会话结构；保留现有事务语义 |
-| packages/agent-runtime/src/goal-extension.ts、goal-read-tool.ts、agent.ts | 简短目标注入、普通工具能力及绑定工具 |
-| packages/agent-runtime/src/goal-update-tool.ts | 替代旧评估工具，按需提交状态、问题或具体任务等待 |
+| packages/server/src/application/goals/goal-run-contribution.ts、goal-read-tool.ts、agent.ts | 简短目标注入、普通工具能力及绑定工具 |
+| packages/server/src/application/goals/goal-update-tool.ts | 替代旧评估工具，按需提交状态、问题或具体任务等待 |
 | packages/server/src/application/session/session-goal-service.ts、run-admission-service.ts | 前者接纳操作、结算和决定续跑；后者保留排队与开跑复查，移除阶段校验 |
 | packages/server/src/application/session/run-control-service.ts | 暂停持久化与真实中断分别尝试，保存失败也不能跳过中断 |
 | packages/server/src/application/session/session-run-executor.ts；packages/server/src/application/daemon-application.ts | 装配 Goal 绑定及宿主回调，不判断完成语义 |

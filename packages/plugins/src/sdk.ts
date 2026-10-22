@@ -1,7 +1,7 @@
-import type { ToolResult } from "@vykor/core";
+import type { ToolResult } from "@vykor/agent-contracts";
 import type { VykorPluginPermissions } from "./types.js";
 
-export type { ToolResult } from "@vykor/core";
+export type { ToolResult } from "@vykor/agent-contracts";
 export type { VykorPluginPermissions } from "./types.js";
 
 export interface NativeToolPluginIdentity {

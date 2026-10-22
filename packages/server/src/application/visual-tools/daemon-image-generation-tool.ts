@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition } from "@vykor/agent-contracts";
 import { sniffAttachmentMediaType } from "@vykor/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";

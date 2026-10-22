@@ -1,27 +1,21 @@
 import type { ContentBlock } from "@vykor/agent-contracts";
-import type { ToolContext, ToolDefinition } from "../types/tools";
+import type { ToolContext, ToolDefinition } from "@vykor/agent-contracts";
 
-const DEFAULT_TOOL_TIMEOUT_MS = 300_000;
-
-function readPositiveIntEnv(name: string, defaultValue: number, minimum: number): number {
-  const raw = (process.env[name] ?? "").trim();
-  if (!raw) return defaultValue;
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
+export interface ToolOutputPolicy {
+  inlineChars: number;
+  previewChars: number;
 }
-
-export function readToolOutputInlineChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
-}
-
-function toolOutputPreviewChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_PREVIEW_CHARS", 3_000, 128);
-}
+const DEFAULT_TOOL_OUTPUT_POLICY: Readonly<ToolOutputPolicy> = Object.freeze({
+  inlineChars: 16_000,
+  previewChars: 3_000,
+});
 
 export function toolExecutionTimeoutMs(override: number | undefined): number {
-  if (typeof override === "number" && Number.isInteger(override) && override > 0) return override;
-  return readPositiveIntEnv("VYKOR_TOOL_TIMEOUT_MS", DEFAULT_TOOL_TIMEOUT_MS, 1);
+  return typeof override === "number" &&
+    Number.isInteger(override) &&
+    override > 0
+    ? override
+    : 300_000;
 }
 
 export class ToolTimeoutError extends Error {
@@ -32,23 +26,41 @@ export class ToolTimeoutError extends Error {
 }
 
 /** Keep image blocks; truncate oversized text before it reaches model history. */
-export function applyToolOutputBudget(content: ContentBlock[]): ContentBlock[] {
-  const inlineChars = readToolOutputInlineChars();
-  const previewChars = toolOutputPreviewChars();
-  const totalText = content.reduce((sum, b) => sum + (b.type === "text" ? b.text.length : 0), 0);
-  const reference = content.find((block) => block.type === "text" &&
-    block.text.length <= 96 && /^\[tool-output-ref: \S+\]$/.test(block.text));
+export function applyToolOutputBudget(
+  content: ContentBlock[],
+  policy: Readonly<ToolOutputPolicy> = DEFAULT_TOOL_OUTPUT_POLICY,
+): ContentBlock[] {
+  const { inlineChars, previewChars } = policy;
+  const totalText = content.reduce(
+    (sum, b) => sum + (b.type === "text" ? b.text.length : 0),
+    0,
+  );
+  const reference = content.find(
+    (block) =>
+      block.type === "text" &&
+      block.text.length <= 96 &&
+      /^\[tool-output-ref: \S+\]$/.test(block.text),
+  );
   let seenReference = false;
   const unique = content.filter((block) => {
-    if (block.type !== "text" || block.text.length > 96 || !/^\[tool-output-ref: \S+\]$/.test(block.text)) return true;
+    if (
+      block.type !== "text" ||
+      block.text.length > 96 ||
+      !/^\[tool-output-ref: \S+\]$/.test(block.text)
+    )
+      return true;
     if (seenReference) return false;
     seenReference = true;
     return true;
   });
   if (totalText <= inlineChars) return unique;
 
-  const noticeFor = (count: number) => `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${count} 字符]`;
-  let remaining = Math.min(previewChars, Math.max(0, inlineChars - noticeFor(previewChars).length));
+  const noticeFor = (count: number) =>
+    `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${count} 字符]`;
+  let remaining = Math.min(
+    previewChars,
+    Math.max(0, inlineChars - noticeFor(previewChars).length),
+  );
   let retained = 0;
   const out: ContentBlock[] = [];
   for (const block of unique) {
@@ -110,7 +122,11 @@ export async function executeToolWithTimeout(
 
   try {
     return await Promise.race([
-      tool.execute(input, { ...context, abortSignal: controller.signal, deadlineAt }),
+      tool.execute(input, {
+        ...context,
+        abortSignal: controller.signal,
+        deadlineAt,
+      }),
       timeoutPromise,
     ]);
   } finally {

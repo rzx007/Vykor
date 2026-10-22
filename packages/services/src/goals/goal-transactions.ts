@@ -1,12 +1,4 @@
-import type {
-  AppendEventInput,
-  SessionEventRecord,
-  SessionGoal,
-  SessionRecord,
-  SessionRunRecord,
-  GoalUsage,
-  GoalVersion,
-} from "@vykor/protocol";
+import type { AppendEventInput, SessionEventRecord, SessionGoal, SessionRecord, SessionRunRecord, GoalUsage, GoalVersion } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 import type {
