@@ -848,11 +848,20 @@ export class SessionGoalService {
     catch (error) {
       const current = this.context.goals.getGoal(goal.id)!;
       if (current.status === "active" && current.objectiveVersion === goal.objectiveVersion) {
-        const paused = this.context.goals.updateGoal(goal.id, { expectedRevision: current.revision, status: "paused", currentRunId: null,
-          reason: `目标派发失败：${error instanceof Error ? error.message : String(error)}`,
-          stopReason: { code: "run_error", at: Date.now(), runId } });
-        this.context.goals.settleGoalRequest(requestId, { status: "pending", goalId: goal.id,
-          result: { ...request.result, goal: paused, phase: "dispatch-retry", retryRevision: paused.revision } });
+        // The desktop already accepted a queued request and no longer owns its retry id.
+        const abandonQueuedRun = request.result?.phase === "queued-resume"
+          && run.status === "pending" && !this.admission.isRunQueuedOrRunning(runId);
+        this.context.transaction.transaction(() => {
+          const paused = this.context.goals.updateGoal(goal.id, { expectedRevision: current.revision, status: "paused", currentRunId: null,
+            reason: `目标派发失败：${error instanceof Error ? error.message : String(error)}`,
+            stopReason: { code: "run_error", at: Date.now(), runId } });
+          if (abandonQueuedRun) this.context.runs.updateRun(runId, {
+            status: "failed", error: paused.reason,
+          });
+          this.context.goals.settleGoalRequest(requestId, { status: abandonQueuedRun ? "completed" : "pending", goalId: goal.id,
+            result: abandonQueuedRun ? { goal: paused }
+              : { ...request.result, goal: paused, phase: "dispatch-retry", retryRevision: paused.revision } });
+        });
       }
       throw error;
     }

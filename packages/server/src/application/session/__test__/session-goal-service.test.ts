@@ -118,6 +118,30 @@ describe("SessionGoalService simple lifecycle", () => {
     expect(lateCancel.status).toBe("active");
     expect(h.run().status).toBe("running");
   });
+  it("allows a fresh resume after a queued resume fails to dispatch", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "补充后继续" });
+    h.userWork(true);
+    const request = { action: "resume" as const, requestId: "queued-dispatch", expectedRevision: h.current().revision };
+    await h.service.action("s1", h.current().id, request);
+    h.failDispatch(true);
+    h.userWork(false);
+    const user = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(user.id, { status: "completed" });
+    await h.service.settleRun("s1", user.id);
+    expect(h.current().status).toBe("paused");
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    h.failDispatch(false);
+    const resumed = await h.service.action("s1", h.current().id, {
+      action: "resume", requestId: "fresh-resume", expectedRevision: h.current().revision,
+    });
+    expect(resumed.status).toBe("active");
+    const resumes = h.store.runs.listGoalRuns(resumed.id).filter(run => run.metadata.goalRunKind === "resume");
+    expect(resumes.filter(run => run.status === "pending")).toHaveLength(0);
+    expect(resumes.filter(run => run.status === "running")).toHaveLength(1);
+    expect(h.store.goals.getGoalRequest(request.requestId)?.status).toBe("completed");
+    await h.service.action("s1", resumed.id, request);
+    expect(h.store.runs.listGoalRuns(resumed.id).filter(run => run.metadata.goalRunKind === "resume")).toHaveLength(2);
+  });
   it.each(["cancel_resume", "pause", "cancel"] as const)("revokes a queued resume on %s", async action => {
     const h = harness(); await h.create(); await h.finish({ status: "blocked", reason: "等补充" });
     h.userWork(true);
