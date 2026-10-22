@@ -2,7 +2,7 @@ import { GoalModelAttemptService } from "../../goals/goal-model-attempt-service.
 import { streamBufferedModelWithRetry } from "@vykor/core";
 import { isAgentExecutionLimitError, type AgentEvent } from "@vykor/agent-contracts";
 import { AgentEventBus } from "@vykor/agent-runtime/kernel";
-import type { SessionEventRecord } from "@vykor/protocol";
+import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

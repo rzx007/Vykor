@@ -8,7 +8,7 @@ import type { RegisteredHookExecutor as IHookExecutor } from "@vykor/host-config
 import { QueryEngine, ToolRegistry } from "@vykor/core";
 import { McpClientManager } from "@vykor/mcp";
 import { loadNativePlugin, validateNativePlugin } from "@vykor/plugins";
-import { PLUGIN_APP_LIMITS } from "@vykor/protocol";
+import { PLUGIN_APP_DEFAULT_LIMITS } from "./policy.js";
 import { writeNativeAppFixture } from "../../../../plugins/src/test-helpers/native-app.js";
 import { activateNativePluginTools } from "../plugins/native-tools/activate.js";
 import { captureNativePluginAppBackend, nativeToolResultToAppResult } from "./native-plugin-app-backend.js";
@@ -35,7 +35,7 @@ describe("Native app result adaptation", () => {
   });
 
   it("bounds structured bytes and refuses metadata getters without running them", () => {
-    expect(nativeToolResultToAppResult({ content: [], metadata: { appData: { text: "字".repeat(PLUGIN_APP_LIMITS.appDataBytes / 2) } } }).dataError).toBe("plugin_app_data_too_large");
+    expect(nativeToolResultToAppResult({ content: [], metadata: { appData: { text: "字".repeat(PLUGIN_APP_DEFAULT_LIMITS.appDataBytes / 2) } } }).dataError).toBe("plugin_app_data_too_large");
     const getter = vi.fn(() => ({}));
     expect(nativeToolResultToAppResult({ content: [], metadata: Object.defineProperty({}, "appData", { enumerable: true, get: getter }) }).dataError).toBe("plugin_app_invalid_data");
     expect(getter).not.toHaveBeenCalled();

@@ -1,5 +1,5 @@
 import type { SessionStore } from "@vykor/services";
-import { readPluginUiAction, readPluginUiInstance } from "@vykor/protocol";
+import { readPluginUiAction, readPluginUiInstance } from "@vykor/domain-contracts/plugin-apps/history";
 export function retirePluginUiActions(store: SessionStore): void {
   store.transaction(() => {
     for (const session of store.sessions.list({ includeArchived: true })) {

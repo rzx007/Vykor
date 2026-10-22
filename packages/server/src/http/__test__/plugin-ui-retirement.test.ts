@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { pluginAppHarness } from "../../../test-helpers/plugin-app-harness.js";
-import { CURRENT_PROTOCOL_VERSION, readPluginUiAction, type PluginUiInstanceRecord, type PluginUiActionRunMetadata } from "@vykor/protocol";
+import { CURRENT_PROTOCOL_VERSION, readPluginUiAction } from "@vykor/protocol";
+import type { PluginUiInstanceRecord, PluginUiActionRunMetadata } from "@vykor/protocol";
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0)) await close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 

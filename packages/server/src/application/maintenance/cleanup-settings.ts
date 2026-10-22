@@ -7,8 +7,8 @@ import type { SessionCommandService } from "../session/session-command-service.j
 import type { DaemonControlService } from "../control/daemon-control-service.js";
 import type { DaemonTerminalService } from "../../terminal/daemon-terminal-service.js";
 
-import type { CleanupPreview, CleanupResult } from "@vykor/protocol";
-export type { CleanupCandidate, CleanupPreview, CleanupResult } from "@vykor/protocol";
+import type { CleanupPreview, CleanupResult } from "./query-models.js";
+export type { CleanupCandidate, CleanupPreview, CleanupResult } from "./query-models.js";
 export class MaintenanceCleanupService {
   private previews = new Map<string, CleanupPreview>();
   constructor(private store: SessionStore, private control: DaemonControlService, private commands: SessionCommandService, private terminals?: Pick<DaemonTerminalService, "list">) {}

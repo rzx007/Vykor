@@ -1,3 +1,4 @@
+import { pluginAppHostInvocation } from "./plugin-app-host-binding.js";
 import { createHash } from "node:crypto";
 import type { HostedAgent } from "@vykor/agent-runtime";
 import {
@@ -5,17 +6,13 @@ import {
   mcpToolResultToAppResult,
 } from "@vykor/agent-runtime";
 import type { ToolResult } from "@vykor/agent-contracts";
-import {
-  parsePluginAppToolRequest,
-  readPluginAppAction,
-  stringifyCanonicalJson,
-  type PluginAppActionMetadata,
-  type PluginAppActionResponse,
-  type PluginAppRecord,
-  type PluginAppSource,
-  type PluginAppToolRequest,
-  type SessionRunRecord,
-} from "@vykor/protocol";
+import { parsePluginAppToolRequest } from "./plugin-app-inputs.js";
+import { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
+import { stringifyCanonicalJson } from "@vykor/json-data/json";
+import type { PluginAppActionMetadata, PluginAppRecord, PluginAppSource } from "@vykor/domain-contracts/plugin-apps";
+import type { PluginAppActionResponse } from "./plugin-app-query-models.js";
+import type { PluginAppToolRequest } from "./plugin-app-inputs.js";
+import type { SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import type { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
@@ -168,10 +165,7 @@ export class PluginAppOperationService {
         );
         if (!host)
           throw new ApplicationError(501, "plugin_app_runtime_unavailable");
-        const registeredToolName = await host.plugins.pluginApps.assertTool(
-          app,
-          request,
-        );
+        const registeredToolName = await host.plugins.pluginApps.assertTool(pluginAppHostInvocation(app, request, agent.id));
         this.assertState(request.source, request.expectedRevision);
         this.options.store.transaction(() => {
           this.assertState(request.source, request.expectedRevision);
@@ -257,7 +251,7 @@ export class PluginAppOperationService {
     if (!host)
       throw new ApplicationError(501, "plugin_app_runtime_unavailable");
     if (
-      (await host.plugins.pluginApps.assertTool(app, request)) !==
+      (await host.plugins.pluginApps.assertTool(pluginAppHostInvocation(app, request, agent.id))) !==
       action.registeredToolName
     )
       throw new ApplicationError(409, "工具绑定已变化");

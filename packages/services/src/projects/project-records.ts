@@ -1,6 +1,6 @@
 import { basename, resolve } from "node:path";
 
-import type { ProjectRecord } from "@vykor/protocol";
+import type { ProjectRecord } from "@vykor/domain-contracts/sessions";
 import type { projects } from "../session-runtime/schema.js";
 
 export function projectFromRow(

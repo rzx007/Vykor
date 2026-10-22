@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { verifyReferences } from "./check-retired-native-ui.mjs";
+import { referenceScanSource } from "./reference-inventory.mjs";
 
 test("each historical approval is exact and does not hide a new live entry in the same file", () => {
   const source = 'const history = readPluginUiInstance(record);';
@@ -9,4 +10,9 @@ test("each historical approval is exact and does not hide a new live entry in th
   assert.match(verifyReferences([{ path: "history.ts", source: source + '\ncreatePluginUiClient();' }], approved).join(), /Unreviewed/);
   assert.match(verifyReferences([{ path: "history.ts", source: 'createPluginUiClient();' }], approved).join(), /Unreviewed/);
   assert.match(verifyReferences([], approved).join(), /Stale approval/);
+  const inventory = JSON.stringify({ stageExceptions: [{ fromFile: "history.ts", target: source }], modules: [] });
+  assert.deepEqual(verifyReferences([{ path: "scripts/architecture-policy.json", source: referenceScanSource("scripts/architecture-policy.json", inventory) }], []), []);
+  assert.match(verifyReferences([{ path: "new.ts", source: referenceScanSource("new.ts", source) }], []).join(), /Unreviewed/);
+  const otherPolicyField = JSON.stringify({ stageExceptions: [], modules: [{ forbidden: source }] });
+  assert.match(verifyReferences([{ path: "policy.json", source: referenceScanSource("scripts/architecture-policy.json", otherPolicyField) }], []).join(), /Unreviewed/);
 });

@@ -1,10 +1,9 @@
+import { pluginAppHostBinding } from "./plugin-app-host-binding.js";
 import type { PluginAppRuntimeHost, HostedAgent } from "@vykor/agent-runtime";
 import type { Settings } from "@vykor/host-config";
-import {
-  isCommittedModelPart,
-  readSessionRuntimeConfig,
-  type PluginAppSource,
-} from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
+import { readSessionRuntimeConfig } from "./runtime-configuration.js";
+import type { PluginAppSource } from "@vykor/domain-contracts/plugin-apps";
 import type { SessionStore } from "@vykor/services";
 import { SessionPluginAppService } from "./session-plugin-app-service.js";
 import {
@@ -18,11 +17,8 @@ import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { verifiedStaticAppResources } from "./plugin-app-static-resources.js";
 import { PluginAppNotifications } from "./plugin-app-notifications.js";
-import type {
-  PluginAppToolOrigin,
-  SessionMessagePartRecord,
-  SessionRecord,
-} from "@vykor/protocol";
+import type { PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
+import type { SessionMessagePartRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import {
   mcpToolResultToAppResult,
   nativeToolResultToAppResult,
@@ -131,12 +127,12 @@ export function assemblePluginApps(
         const host = hosts.get(app.sessionId);
         if (!host || blocked(app.sessionId, app.pluginId))
           throw new Error("plugin_app_runtime_unavailable");
-        return host.issue(app, generation);
+        return host.issue(pluginAppHostBinding(app), generation);
       },
       validate: (app, lease, generation) =>
         !blocked(app.sessionId, app.pluginId) &&
-        hosts.get(app.sessionId)?.validate(app, lease, generation) === true,
-      revoke: (source) => hosts.get(source.sessionId)?.revoke(source),
+        hosts.get(app.sessionId)?.validate(pluginAppHostBinding(app), lease, generation) === true,
+      revoke: (source) => hosts.get(source.sessionId)?.revoke({ sessionId: source.sessionId, instanceId: source.appId }),
       clear: () => {
         for (const host of hosts.values()) host.clear();
         hosts.clear();
@@ -153,7 +149,7 @@ export function assemblePluginApps(
         try {
           const facts = await (
             await acquire(session.id)
-          ).host!.plugins.pluginApps.refresh(app);
+          ).host!.plugins.pluginApps.refresh(pluginAppHostBinding(app));
           if (facts.resourceAvailable) return facts;
         } catch {
           /* exact static resources may still be readable */
@@ -170,7 +166,7 @@ export function assemblePluginApps(
             isCurrent: () => false,
           };
       }
-      hosts.get(session.id)?.revoke({ sessionId: session.id, appId: app.id });
+      hosts.get(session.id)?.revoke({ sessionId: session.id, instanceId: app.id });
       return {
         enabled: false,
         renderApproved: false,
@@ -202,7 +198,7 @@ export function assemblePluginApps(
         : undefined;
     },
     listTools: (app, lease) =>
-      hosts.get(app.sessionId)?.listTools(app, lease) ?? [],
+      hosts.get(app.sessionId)?.listTools(pluginAppHostBinding(app), lease) ?? [],
   });
   let executor: PluginAppOperationExecutor;
   const actions = new PluginAppOperationService({
@@ -234,7 +230,7 @@ export function assemblePluginApps(
     const port =
       facts.backendGeneration && lease
         ? (await acquire(source.sessionId)).host!.plugins.pluginApps.resource(
-            app,
+            pluginAppHostBinding(app),
             lease,
           )
         : await verifiedStaticAppResources(
@@ -250,7 +246,7 @@ export function assemblePluginApps(
         (!lease ||
           !hosts
             .get(source.sessionId)
-            ?.validate(latest.app, lease, facts.backendGeneration))
+            ?.validate(pluginAppHostBinding(latest.app), lease, facts.backendGeneration))
       )
         throw new ApplicationError(409, "应用运行凭证已失效");
       return result;
@@ -275,7 +271,7 @@ export function assemblePluginApps(
           return (
             !!latest &&
             !blocked(source.sessionId, app.pluginId) &&
-            hosts.get(source.sessionId)?.validate(latest, lease, generation) ===
+            hosts.get(source.sessionId)?.validate(pluginAppHostBinding(latest), lease, generation) ===
               true
           );
         };
@@ -349,7 +345,7 @@ export function assemblePluginApps(
       !facts.backendGeneration ||
       !hosts
         .get(source.sessionId)
-        ?.validate(app, lease, facts.backendGeneration)
+        ?.validate(pluginAppHostBinding(app), lease, facts.backendGeneration)
     )
       throw new ApplicationError(409, "应用凭证失效");
     const part = options.store.conversations
@@ -377,7 +373,7 @@ export function assemblePluginApps(
     if (
       !hosts
         .get(source.sessionId)
-        ?.validate(app, lease, facts.backendGeneration)
+        ?.validate(pluginAppHostBinding(app), lease, facts.backendGeneration)
     )
       throw new ApplicationError(409, "应用凭证失效");
     return { arguments: part.input ?? {}, ...result };

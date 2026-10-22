@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { buildChildAgentWorktreeSlug, createChildAgentWorktreeManager } from "@vykor/agent-runtime";
 import type { Settings } from "@vykor/host-config";
-import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/protocol";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SessionInteractionService } from "../session/session-interaction-service.js";
 import type { SessionQueryService } from "../session/session-query-service.js";

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { StorageRetentionPolicy } from "@vykor/protocol";
+import type { StorageRetentionPolicy } from "@vykor/domain-contracts/maintenance";
 import { defaultUsageSettings, type UsageSettings } from "./usage-settings.js";
 
 export function createMaintenancePolicyRepository(storePath: string) {

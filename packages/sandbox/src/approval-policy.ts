@@ -1,4 +1,4 @@
-import type { ApprovalMode } from "@vykor/protocol";
+import type { ApprovalMode } from "@vykor/agent-contracts/permissions";
 import type { Settings } from "@vykor/host-config";
 
 // Symbol.for survives the runtime bundle boundary without serializing the baseline.

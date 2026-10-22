@@ -1,6 +1,7 @@
 import { hostedContextUsageAgent } from "../assemble-session-context-usage.js";
-import type { AutoReviewMode, SessionRecord } from "@vykor/protocol";
-import { readSessionModelRetryState } from "@vykor/protocol";
+import type { AutoReviewMode } from "@vykor/domain-contracts/approvals";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import { readSessionModelRetryState } from "@vykor/domain-contracts/sessions";
 import { resolveRunPluginSelection } from "./session-plugin-selection.js";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError } from "@vykor/agent-runtime";

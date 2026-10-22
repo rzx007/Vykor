@@ -10,7 +10,7 @@ import { SessionStore } from "@vykor/services";
 import {
   ChildAgentExecutionRegistry,
 } from "@vykor/execution-node";
-import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "@vykor/protocol";
+import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../../session/runtime-configuration.js";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 import { LiveChildAgentDirectory } from "../live-child-agent-directory.js";
 import { AgentPool } from "../agent-pool.js";

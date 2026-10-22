@@ -2,7 +2,7 @@ import type { PluginDiagnostic } from "./diagnostics.js";
 import type { HookDefinition, McpServerConfig } from "@vykor/host-config";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import type { SkillDefinition } from "@vykor/skills";
-import type { PluginPresentation } from "@vykor/protocol";
+import type { PluginPresentation } from "@vykor/plugin-contracts/presentation";
 
 export const NATIVE_PLUGIN_COMPONENT_KINDS = [
   "skills", "agents", "hooks", "mcpServers", "lspServers", "tools", "workflows",

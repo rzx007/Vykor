@@ -1,4 +1,4 @@
-import { OFFICE_MEDIA_TYPES, type OfficeFormat } from "@vykor/protocol";
+import { OFFICE_MEDIA_TYPES, type OfficeFormat } from "@vykor/domain-contracts/attachments";
 const OCTET_STREAM = "application/octet-stream";
 
 const SIGNATURES: ReadonlyArray<{

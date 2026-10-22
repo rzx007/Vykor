@@ -3,7 +3,7 @@ import {
   type PermissionSettings,
   type SandboxConfig,
 } from "@vykor/host-config";
-import { normalizeApprovalMode } from "@vykor/protocol";
+import { normalizeApprovalMode } from "@vykor/host-config";
 import { PermissionChecker } from "@vykor/permissions";
 import {
   getSandboxAvailability,

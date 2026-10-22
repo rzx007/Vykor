@@ -25,12 +25,9 @@ import type {
   HookDefinition,
 } from "@vykor/host-config";
 import type { McpConnection, McpRuntimeRegistry } from "@vykor/mcp";
-import {
-  parsePluginAppToolRequest,
-  type PluginAppRecord,
-  type PluginAppToolRequest,
-  type PluginAppToolOrigin,
-} from "@vykor/protocol";
+import type { PluginAppHostInvocation, PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
+import { copyPluginAppJson } from "@vykor/plugin-contracts/runtime-data";
+import { PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 import {
   KernelAgent,
   type VykorAgent,
@@ -130,8 +127,7 @@ export interface NodeAgentHost {
       signal: AbortSignal,
     ): Promise<void>;
     runPluginAppTool(
-      app: PluginAppRecord,
-      request: PluginAppToolRequest,
+      invocation: PluginAppHostInvocation,
       options: Omit<VykorAgentRunToolOptions, "tools">,
     ): Promise<ToolExecutionResult>;
     toolOrigin(
@@ -613,31 +609,32 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
     });
   }
   private async runPluginAppTool(
-    app: PluginAppRecord,
-    value: PluginAppToolRequest,
+    value: PluginAppHostInvocation,
     options: Omit<VykorAgentRunToolOptions, "tools">,
   ): Promise<ToolExecutionResult> {
-    const request = parsePluginAppToolRequest(value);
+    const invocation: PluginAppHostInvocation = { binding: structuredClone(value.binding), lease: structuredClone(value.lease),
+      toolName: value.toolName, args: copyPluginAppJson(value.args, PLUGIN_APP_DATA_LIMITS.maxArgsBytes) as PluginAppHostInvocation["args"] };
+    if (!invocation.args || Array.isArray(invocation.args) || typeof invocation.args !== "object") throw new Error("plugin_app_invalid_request");
+    const app = invocation.binding;
     if (
+      app.agentId !== this.id ||
       app.sessionId !== this.id ||
       options.scope.sessionId !== this.id ||
       options.scope.agentId !== this.id
     )
       throw new Error("plugin_app_scope_invalid");
     const prepared = await this.appRuntime.prepare(
-      app,
-      request,
+      invocation,
       this.createRunCapabilityView(app.pluginId),
     );
     const toolUse: ToolUseBlock = {
       type: "tool_use",
       id: `app_tool_${options.scope.runId}`,
       name: prepared.name,
-      input: request.args,
+      input: invocation.args,
     };
-    const savedArgs = structuredClone(request.args),
-      savedRequest = structuredClone(request);
-    const savedApp = structuredClone(app);
+    const savedArgs = structuredClone(invocation.args),
+      savedInvocation = structuredClone(invocation);
     const candidate = this.getPluginCandidates().find(
       (c) => c.pluginId === app.pluginId,
     );
@@ -653,9 +650,9 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
         tools: readonlyMap([[prepared.name, prepared.binding]]),
         confirmTool: async (input) => {
           if (
-            app.controlRevision !== savedApp.controlRevision ||
-            app.status !== savedApp.status ||
-            request.expectedRevision !== savedRequest.expectedRevision ||
+            !isDeepStrictEqual(value.binding, savedInvocation.binding) ||
+            !isDeepStrictEqual(value.lease, savedInvocation.lease) ||
+            value.toolName !== savedInvocation.toolName ||
             prepared.policy.confirmation !== "granted" ||
             input.scope.runId !== options.scope.runId ||
             input.scope.sessionId !== this.id ||
@@ -670,9 +667,8 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
           )
             return false;
           const fresh = await this.appRuntime.prepare(
-            savedApp,
-            savedRequest,
-            this.createRunCapabilityView(savedApp.pluginId),
+            savedInvocation,
+            this.createRunCapabilityView(savedInvocation.binding.pluginId),
           );
           return (
             fresh.policy.confirmation === "granted" &&
@@ -689,7 +685,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
             event.data.name === "tool.lifecycle" &&
             event.data.payload?.phase === "running"
           )
-            await this.appRuntime.host.assertTool(savedApp, savedRequest);
+            await this.appRuntime.host.assertTool(savedInvocation);
           await options.onToolEvent?.(event);
         },
       });

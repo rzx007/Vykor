@@ -1,4 +1,4 @@
-import type { SessionEventRecord } from "@vykor/protocol";
+import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 
 export interface SessionEventCursor {
   latestEventSeq(): number;

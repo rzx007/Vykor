@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ProjectRecord } from "@vykor/protocol";
+import type { ProjectRecord } from "@vykor/domain-contracts/sessions";
 import { SessionStore } from "@vykor/services";
 import {
   ExecutionRuntimeOwner,

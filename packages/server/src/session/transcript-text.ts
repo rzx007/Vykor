@@ -1,8 +1,5 @@
-import {
-  isCommittedModelPart,
-  isSupersededModelPart,
-  type SessionMessagePartRecord,
-} from "@vykor/protocol";
+import { isCommittedModelPart, isSupersededModelPart } from "@vykor/domain-contracts/sessions";
+import type { SessionMessagePartRecord } from "@vykor/domain-contracts/sessions";
 
 /** Only ordinary, non-superseded text may become a public reply. */
 export function isPublicTextPart(part: SessionMessagePartRecord): boolean {

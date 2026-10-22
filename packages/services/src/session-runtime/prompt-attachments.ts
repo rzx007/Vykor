@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import type { AdmitPromptAttachmentInput, AttachmentIntent } from "@vykor/protocol";
+import type { AdmitPromptAttachmentInput } from "../conversations/commands.js";
+import type { AttachmentIntent } from "@vykor/domain-contracts/attachments";
 
 import { AttachmentError } from "../attachments/attachment-errors.js";
 

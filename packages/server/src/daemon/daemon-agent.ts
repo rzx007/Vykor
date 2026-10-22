@@ -1,7 +1,7 @@
 import type { HostedAgent } from "@vykor/agent-runtime";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { settingsForApprovalMode } from "@vykor/sandbox";
-import { normalizeApprovalMode } from "@vykor/protocol";
+import { normalizeApprovalMode } from "@vykor/host-config";
 import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 import {
   createDefaultNodeAgent,
@@ -33,15 +33,9 @@ import type { McpRuntimeRegistry } from "@vykor/mcp";
 import type { Settings } from "@vykor/host-config";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
-import {
-  readSessionRuntimeConfig,
-  readSessionRuntimeRevision,
-} from "@vykor/protocol";
-import type {
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-} from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "../application/session/runtime-configuration.js";
+import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
+import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import { buildAgentTranscript } from "../application/agent/agent-transcript.js";
 

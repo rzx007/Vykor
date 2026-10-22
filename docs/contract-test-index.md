@@ -34,7 +34,7 @@
 | 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model-attempt-gate.test.ts) |
 | Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/goal-model-attempt-service.test.ts) |
 | 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
-| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/application/maintenance/maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/notes.test.ts) |
+| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/notes.test.ts) |
 
 ### 模型网络重试（2026-09-26）
 
@@ -91,7 +91,7 @@
 |---|---|
 | Workflow 按依赖、并发、重试和预算调度，状态可持久恢复 | [scheduler.test.ts](../packages/coordinator/src/workflow/__test__/scheduler.test.ts)、[Node workflow-host.test.ts](../packages/agent-runtime/src/node/workflow/workflow-host.test.ts)、[SQLite workflow-host.test.ts](../packages/server/src/application/workflow/__test__/workflow-host.test.ts) |
 | Jobs 对不同 producer 提供同一 read/wait/send/cancel 语义 | [jobs index.test.ts](../packages/jobs/src/index.test.ts)、[daemon-job-service.test.ts](../packages/server/src/jobs/daemon-job-service.test.ts)、[job route.test.ts](../packages/server/src/http/routes/job.test.ts) |
-| Channel 消息幂等进入 durable Session/Run，投递状态可重试 | [durable-bridge.test.ts](../packages/channels/src/__test__/durable-bridge.test.ts)、[channel routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
+| Channel 消息幂等进入 durable Session/Run，投递状态可重试 | [durable-bridge.test.ts](../packages/server/src/application/channel/__test__/durable-bridge.test.ts)、[channel routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
 | CLI print 使用 daemon 持久状态，不创建第二套 runtime | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts) |
 | TUI 只通过共享 client 同步 Session，Jobs 缓存失败不破坏 Run | [useServerSync.test.tsx](../apps/frontend/src/hooks/useServerSync.test.tsx)、[job-remote-state.test.ts](../apps/frontend/src/jobs/job-remote-state.test.ts) |
 
@@ -118,8 +118,8 @@
 | A03 Kernel 无宿主可达引用 | [递归声明与构建反例](../packages/agent-runtime/scripts/kernel-boundary.test.mjs)、[构建检查](../packages/agent-runtime/scripts/build.mjs) | `pnpm --filter @vykor/agent-runtime test:pack` |
 | A04 工具与执行宿主 | [资源所有权](../packages/agent-runtime/src/node/runtime/execution-ownership.test.ts)、tool-host-boundary 反例 | `pnpm test`、`pnpm check:architecture` |
 | A05 定义、团队、Workflow | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[WorkflowHost](../packages/agent-runtime/src/node/workflow/workflow-host.test.ts) | `pnpm test` |
-| A06 HTTP 与存储边界 | [架构反例](../scripts/architecture-boundaries.test.mjs)、[应用重启](../packages/server/src/application/maintenance/maintenance-restart.test.ts) | `pnpm check:architecture`、`pnpm test` |
-| A07 零阶段例外与依赖 | [最终策略](../scripts/architecture-policy.json)、[导入图扫描](../scripts/architecture-policy.mjs) | `pnpm check:architecture` |
+| A06 HTTP 与存储边界 | [架构反例](../scripts/architecture-boundaries.test.mjs)、[应用重启](../packages/server/src/http/__test__/application-maintenance-restart.test.ts) | `pnpm check:architecture`、`pnpm test` |
+| A07 P0–P6 旧例外清零与依赖 | [架构策略](../scripts/architecture-policy.json)、[导入图扫描](../scripts/architecture-policy.mjs)；Protocol 迁移前的关系保留在 [P7 历史基线](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md)，当前 P13 `stageExceptions` 为空 | `pnpm check:architecture` |
 | B01 Run 输入、互斥与重试 | [Agent](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[模型重试](../packages/core/src/engine/model-retry.integration.test.ts) | `pnpm test` |
 | B02 可靠事件和结果顺序 | [事件总线](../packages/agent-runtime/src/kernel/event-source.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/index.test.ts) | `pnpm test` |
 | B03 子运行创建、TTL 和关闭 | [ChildAgent](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[子环境](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) | `pnpm test` |
@@ -129,7 +129,7 @@
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |
-| B10 管理用例与 lease | [维护](../packages/server/src/application/maintenance/maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/note-application-service.test.ts) | `pnpm test` |
+| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/note-application-service.test.ts) | `pnpm test` |
 | B11 SDK 与浏览器 | [独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs)、[浏览器入口](../tests/browser-client/vite.config.ts) | `pnpm --filter @vykor/agent-runtime test:pack`、`pnpm test:client-browser` |
 
 ## 常用命令
@@ -141,7 +141,22 @@ pnpm test
 pnpm test:client-browser
 ```
 
-只改一个包时可以先跑该包，例如 `pnpm --filter @vykor/agent-runtime test`；提交前仍应按改动风险运行上面的全局检查。
+只改一个包时先运行相关测试，例如 `pnpm --filter @vykor/agent-runtime exec vitest run <相关文件>`。根据改动范围补类型、架构或独立消费检查；没有新增跨域风险时不重复运行全量套件。
+
+## Protocol 数据分层与通信契约（P7-P13）
+
+P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零。P7 的 4,173 条关系、manifest 和样本数量继续保留为历史快照；本表列当前规则与测试入口，[最终验收记录](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)列本轮结果和平台范围。
+
+| 检查目标 | 具体证据 | 定向入口 |
+| --- | --- | --- |
+| 禁止底层与应用层依赖 Protocol，拒绝隐藏包装、动态导入、别名和根入口绕行 | [架构反例](../scripts/architecture-boundaries.test.mjs)、[策略及声明扫描](../scripts/architecture-policy.mjs) | `pnpm check:architecture` |
+| 通用 JSON 字节、指纹、原型、canonical 20 层与有界复制 32 层 | [JSON 样本](../packages/json-data/src/json.test.ts)、[通信基线](../packages/protocol/src/layering-baseline.test.ts) | json-data `src/json.test.ts`；Protocol `src/layering-baseline.test.ts` |
+| 旧模式归一化与 plan 权限上限，Client 只做显示投影 | [配置模式](../packages/host-config/src/permission-modes.test.ts)、[有效模式](../packages/permissions/src/effective-permission-mode.test.ts)、[Client 投影](../packages/client/src/runtime-configuration.test.ts) | 各文件所在包的定向 Vitest |
+| 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
+| 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/validation.test.ts)、[附件策略](../packages/services/src/attachments/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/boundary.test.ts) | 对应包定向 Vitest |
+| Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/index.test.ts)、[组合 Host](../packages/jobs/src/composite-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
+| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
 ## 维护规则
 

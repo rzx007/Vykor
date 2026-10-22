@@ -2,13 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type {
-  AdmitPromptAttachmentInput,
-  SessionInputRecord,
-  SessionRunRecord,
-  SessionUserInputItem,
-} from "@vykor/protocol";
-import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
+import type { PromptAttachment as AdmitPromptAttachmentInput, SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
 import { AttachmentError, SessionStore } from "@vykor/services";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 import {

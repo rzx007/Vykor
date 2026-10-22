@@ -2,10 +2,9 @@ import type { RunCapabilityView } from "../runtime/node-runtime-resources.js";
 import type { NodeRunToolBinding as RunToolBinding } from "../runtime/node-runtime-resources.js";
 import { randomUUID } from "node:crypto";
 
-import type { PluginAppToolOrigin } from "@vykor/protocol";
-import { copyPluginAppJson, type PluginAppToolPolicy } from "@vykor/protocol";
-import { capturedAppToolPolicy } from "./plugin-app-backends.js";
-import type { PluginAppRecord, PluginAppRuntimeLease, PluginAppSource, PluginAppToolRequest, PluginAppToolDescriptor } from "@vykor/protocol";
+import type { PluginAppToolOrigin, PluginAppToolPolicy, PluginAppHostBinding, PluginAppRuntimeLease, PluginAppRuntimeSource, PluginAppHostInvocation, PluginAppToolDescriptor } from "@vykor/plugin-contracts/runtime";
+import { copyPluginAppJson } from "@vykor/plugin-contracts/runtime-data";
+import { capturedAppToolPolicy } from "./policy.js";
 import type { CapturedPluginAppBackend, PluginAppBackendCatalogue, PluginAppBackendPort } from "./plugin-app-backends.js";
 import { readonlyMap, readonlySet } from "../plugins/run-capability-view.js";
 
@@ -18,24 +17,24 @@ export interface PluginAppRuntimeFacts {
 /** The host can inspect resources and opaque credentials, never executable captures. */
 export interface PluginAppRuntimeHost {
   list(): Array<{ pluginId: string; pluginVersion: string; pluginDigest: string; definitionDigest: string;
-    backendId: string; backendKind: PluginAppRecord["backendKind"]; surfaces: CapturedPluginAppBackend["surfaces"] }>;
-  refresh(app: PluginAppRecord): Promise<PluginAppRuntimeFacts>;
-  issue(app: PluginAppRecord, generation: string): PluginAppRuntimeLease;
-  validate(app: PluginAppRecord, lease: PluginAppRuntimeLease, generation: string): boolean;
-  revoke(source: PluginAppSource): void;
+    backendId: string; backendKind: PluginAppHostBinding["backendKind"]; surfaces: CapturedPluginAppBackend["surfaces"] }>;
+  refresh(app: PluginAppHostBinding): Promise<PluginAppRuntimeFacts>;
+  issue(app: PluginAppHostBinding, generation: string): PluginAppRuntimeLease;
+  validate(app: PluginAppHostBinding, lease: PluginAppRuntimeLease, generation: string): boolean;
+  revoke(source: PluginAppRuntimeSource): void;
   clear(): void;
-  resource(app: PluginAppRecord, lease: PluginAppRuntimeLease): PluginAppBackendPort;
-  assertTool(app: PluginAppRecord, request: PluginAppToolRequest): Promise<string>;
-  prepareTool(app: PluginAppRecord, request: PluginAppToolRequest): Promise<{ name: string; policy: PluginAppToolPolicy }>;
-  listTools(app: PluginAppRecord, lease: PluginAppRuntimeLease): PluginAppToolDescriptor[];
+  resource(app: PluginAppHostBinding, lease: PluginAppRuntimeLease): PluginAppBackendPort;
+  assertTool(invocation: PluginAppHostInvocation): Promise<string>;
+  prepareTool(invocation: PluginAppHostInvocation): Promise<{ name: string; policy: PluginAppToolPolicy }>;
+  listTools(app: PluginAppHostBinding, lease: PluginAppRuntimeLease): PluginAppToolDescriptor[];
   resolveOrigin(origin: PluginAppToolOrigin): Promise<ReturnType<PluginAppRuntimeHost["list"]>[number] | undefined>;
 }
 
-function identity(app: PluginAppRecord): string {
-  return JSON.stringify([app.sessionId, app.id, app.pluginId, app.pluginVersion, app.pluginDigest,
-    app.definitionDigest, app.backendId, app.backendKind, app.resourceUri, app.origin, app.logicalKey]);
+function identity(app: PluginAppHostBinding): string {
+  return JSON.stringify([app.sessionId, app.instanceId, app.pluginId, app.pluginVersion, app.pluginDigest,
+    app.definitionDigest, app.backendId, app.backendKind, app.resourceUri, app.agentId]);
 }
-function matches(app: PluginAppRecord, capture: CapturedPluginAppBackend): boolean {
+function matches(app: PluginAppHostBinding, capture: CapturedPluginAppBackend): boolean {
   return app.pluginId === capture.pluginId && app.pluginVersion === capture.pluginVersion
     && app.pluginDigest === capture.pluginDigest && app.definitionDigest === capture.definitionDigest
     && app.backendId === capture.definition.id && app.backendKind === capture.definition.kind
@@ -70,26 +69,27 @@ export class PluginAppRuntime {
           || ![...(capture.originTools ?? capture.tools).values()].some(binding => binding.definition.name === origin.toolName && binding.definition.ui?.resourceUri === origin.resourceUri)) return undefined;
         return this.host.list().find(item => item.pluginId === origin.pluginId && item.backendId === origin.backendId);
       },
-      refresh: (app: PluginAppRecord) => this.refresh(app),
-      issue: (app: PluginAppRecord, generation: string) => this.issue(app, generation),
-      validate: (app: PluginAppRecord, lease: PluginAppRuntimeLease, generation: string) => this.validate(app, lease, generation),
-      revoke: (source: PluginAppSource) => this.revoke(source),
+      refresh: (app: PluginAppHostBinding) => this.refresh(app),
+      issue: (app: PluginAppHostBinding, generation: string) => this.issue(app, generation),
+      validate: (app: PluginAppHostBinding, lease: PluginAppRuntimeLease, generation: string) => this.validate(app, lease, generation),
+      revoke: (source: PluginAppRuntimeSource) => this.revoke(source),
       clear: () => { this.#captures.clear(); this.#leases.clear(); },
-      resource: (app: PluginAppRecord, lease: PluginAppRuntimeLease) => this.require(app, lease).port,
-      listTools: (app: PluginAppRecord, lease: PluginAppRuntimeLease) => {
+      resource: (app: PluginAppHostBinding, lease: PluginAppRuntimeLease) => this.require(app, lease).port,
+      listTools: (app: PluginAppHostBinding, lease: PluginAppRuntimeLease) => {
         const capture = this.require(app, lease);
         return [...capture.tools].filter(([name]) => capture.isCurrentTool(name)).map(([name, tool]) => ({
           name, description: tool.definition.description, inputSchema: structuredClone(tool.definition.inputSchema), policy: capturedAppToolPolicy(capture, name),
         }));
       },
-      assertTool: async (app: PluginAppRecord, request: PluginAppToolRequest) => {
-        return (await this.host.prepareTool(app, request)).name;
+      assertTool: async (invocation: PluginAppHostInvocation) => {
+        return (await this.host.prepareTool(invocation)).name;
       },
-      prepareTool: async (app: PluginAppRecord, request: PluginAppToolRequest) => {
+      prepareTool: async (invocation: PluginAppHostInvocation) => {
+        const { binding: app } = invocation;
         await this.refresh(app);
-        const tool = this.tool(app, request), capture = this.require(app, request.lease);
-        const policy = capturedAppToolPolicy(capture, request.toolName);
-        copyPluginAppJson(request.args, policy.maxArgumentsBytes);
+        const tool = this.tool(invocation), capture = this.require(app, invocation.lease);
+        const policy = capturedAppToolPolicy(capture, invocation.toolName);
+        copyPluginAppJson(invocation.args, policy.maxArgumentsBytes);
         return { name: tool.definition.name, policy };
       },
     });
@@ -109,57 +109,57 @@ export class PluginAppRuntime {
     }
     return matches.length === 1 ? matches[0] : undefined;
   }
-  private async refresh(app: PluginAppRecord): Promise<PluginAppRuntimeFacts> {
+  private async refresh(app: PluginAppHostBinding): Promise<PluginAppRuntimeFacts> {
     const unavailable: PluginAppRuntimeFacts = { enabled: false, renderApproved: false, invokeApproved: false,
       snapshot: "missing", resourceAvailable: false, toolsAvailable: false, isCurrent: () => false };
-    if (app.sessionId !== this.sessionId) return unavailable;
+    if (app.agentId !== this.sessionId || app.sessionId !== this.sessionId) return unavailable;
     let fresh: CapturedPluginAppBackend | undefined;
     try { fresh = await this.catalogue?.capture(app.pluginId, app.backendId); } catch { /* failed approval revokes */ }
     if (!fresh || !matches(app, fresh) || !fresh.port.isCurrent()) {
-      this.revoke({ sessionId: app.sessionId, appId: app.id }); return unavailable;
+      this.revoke({ sessionId: app.sessionId, instanceId: app.instanceId }); return unavailable;
     }
-    const prior = this.#captures.get(app.id);
+    const prior = this.#captures.get(app.instanceId);
     const capture = prior?.identity === identity(app) && sameCapture(prior.capture, fresh) ? prior.capture : fresh;
-    if (capture !== prior?.capture) this.#leases.delete(app.id);
-    this.#captures.set(app.id, { identity: identity(app), capture });
+    if (capture !== prior?.capture) this.#leases.delete(app.instanceId);
+    this.#captures.set(app.instanceId, { identity: identity(app), capture });
     return { enabled: true, renderApproved: true, invokeApproved: true, snapshot: "valid",
       resourceAvailable: true, toolsAvailable: [...capture.tools.keys()].some(name => capture.isCurrentTool(name)),
-      backendGeneration: capture.port.generation, isCurrent: () => capture.port.isCurrent() && this.#captures.get(app.id)?.capture === capture };
+      backendGeneration: capture.port.generation, isCurrent: () => capture.port.isCurrent() && this.#captures.get(app.instanceId)?.capture === capture };
   }
-  private issue(app: PluginAppRecord, generation: string): PluginAppRuntimeLease {
-    const current = this.#captures.get(app.id);
-    if (app.sessionId !== this.sessionId || app.status !== "open" || current?.identity !== identity(app)
+  private issue(app: PluginAppHostBinding, generation: string): PluginAppRuntimeLease {
+    const current = this.#captures.get(app.instanceId);
+    if (app.agentId !== this.sessionId || app.sessionId !== this.sessionId || current?.identity !== identity(app)
       || current.capture.port.generation !== generation || !current.capture.port.isCurrent()) throw new Error("plugin_app_stale_capture");
-    let entry = this.#leases.get(app.id);
+    let entry = this.#leases.get(app.instanceId);
     if (!entry || entry.identity !== current.identity || entry.capture !== current.capture) {
       entry = { ...current, lease: Object.freeze({ token: randomUUID(), backendGeneration: generation }) };
-      this.#leases.set(app.id, entry);
+      this.#leases.set(app.instanceId, entry);
     }
     return { ...entry.lease };
   }
-  private validate(app: PluginAppRecord, lease: PluginAppRuntimeLease, generation: string): boolean {
-    const entry = this.#leases.get(app.id), current = this.#captures.get(app.id);
-    return app.sessionId === this.sessionId && app.status === "open" && !!entry && entry.identity === identity(app)
+  private validate(app: PluginAppHostBinding, lease: PluginAppRuntimeLease, generation: string): boolean {
+    const entry = this.#leases.get(app.instanceId), current = this.#captures.get(app.instanceId);
+    return app.agentId === this.sessionId && app.sessionId === this.sessionId && !!entry && entry.identity === identity(app)
       && entry.capture === current?.capture && entry.lease.token === lease.token && entry.lease.backendGeneration === generation
       && lease.backendGeneration === generation && entry.capture.port.isCurrent();
   }
-  private revoke(source: PluginAppSource): void {
+  private revoke(source: PluginAppRuntimeSource): void {
     if (source.sessionId !== this.sessionId) return;
-    this.#captures.delete(source.appId); this.#leases.delete(source.appId);
+    this.#captures.delete(source.instanceId); this.#leases.delete(source.instanceId);
   }
-  private require(app: PluginAppRecord, lease: PluginAppRuntimeLease): CapturedPluginAppBackend {
+  private require(app: PluginAppHostBinding, lease: PluginAppRuntimeLease): CapturedPluginAppBackend {
     if (!this.validate(app, lease, lease.backendGeneration)) throw new Error("plugin_app_lease_invalid");
-    return this.#leases.get(app.id)!.capture;
+    return this.#leases.get(app.instanceId)!.capture;
   }
-  private tool(app: PluginAppRecord, request: PluginAppToolRequest) {
-    if (request.source.sessionId !== app.sessionId || request.source.appId !== app.id) throw new Error("plugin_app_source_invalid");
-    const capture = this.require(app, request.lease), tool = capture.tools.get(request.toolName);
-    if (!tool || !capture.isCurrentTool(request.toolName)) throw new Error("plugin_app_tool_unavailable");
+  private tool(invocation: PluginAppHostInvocation) {
+    const capture = this.require(invocation.binding, invocation.lease), tool = capture.tools.get(invocation.toolName);
+    if (!tool || !capture.isCurrentTool(invocation.toolName)) throw new Error("plugin_app_tool_unavailable");
     return tool;
   }
-  async prepare(app: PluginAppRecord, request: PluginAppToolRequest, view: RunCapabilityView) {
-    const prepared = await this.host.prepareTool(app, request);
-    const tool = this.tool(app, request);
+  async prepare(invocation: PluginAppHostInvocation, view: RunCapabilityView) {
+    const app = invocation.binding;
+    const prepared = await this.host.prepareTool(invocation);
+    const tool = this.tool(invocation);
     const server = tool.serverId ? view.mcpServers.get(tool.serverId) : undefined;
     if (app.backendKind === "mcp-server" && (!server || server.ownerPluginId !== app.pluginId)) throw new Error("plugin_app_server_unavailable");
     const tools = readonlyMap([[tool.definition.name, tool]]);

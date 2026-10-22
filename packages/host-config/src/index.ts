@@ -6,6 +6,7 @@ export * from "./mcp-config-validation.js";
 export * from "./mcp-credentials.js";
 export * from "./paths.js";
 export * from "./permission-settings.js";
+export * from "./permission-modes.js";
 export * from "./permissions.js";
 export * from "./settings-mutation.js";
 export * from "./settings-types.js";

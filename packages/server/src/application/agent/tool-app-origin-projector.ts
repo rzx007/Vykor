@@ -1,6 +1,6 @@
 import type { AgentEvent } from "@vykor/agent-contracts";
 import type { AgentRunCapabilitySnapshot } from "@vykor/agent-runtime";
-import type { PluginAppToolOrigin } from "@vykor/protocol";
+import type { PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
 
 interface CapturedRun {
   snapshot: AgentRunCapabilitySnapshot;

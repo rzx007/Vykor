@@ -4,12 +4,7 @@ import { join } from "node:path";
 
 import { getChannelWorkspaceRoot } from "@vykor/host-config";
 import type { FeishuChannelConfig } from "@vykor/auth";
-import type {
-  ChannelConnectorRuntimeStatus,
-  ChannelDenialNotice,
-  ChannelRuntimeState,
-  ChannelRuntimeStatus,
-} from "@vykor/protocol";
+import type { ChannelConnectorRuntimeStatus, ChannelDenialNotice, ChannelRuntimeState, ChannelRuntimeStatus } from "../application/channel/query-models.js";
 import type { InboundMessage } from "@vykor/channels";
 import type {
   ChannelAttachmentDownload,

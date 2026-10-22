@@ -3,7 +3,8 @@ import type { ToolResult } from "@vykor/agent-contracts";
 import { randomUUID } from "node:crypto";
 import { readPluginAppResource } from "@vykor/plugins";
 import { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts";
-import { PLUGIN_APP_LIMITS, PLUGIN_APP_HTML_MIME_TYPE } from "@vykor/protocol";
+import { PLUGIN_APP_DEFAULT_LIMITS, PLUGIN_APP_EFFECTIVE_RESOURCE_LIMITS } from "./policy.js";
+import { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
 import { captureAppToolBindings, capturedBackend, type CapturedPluginAppBackend, type PluginAppBackendCaptureInput, type PluginAppBackendPort, type PluginAppResultView } from "./plugin-app-backends.js";
 import type { NativeToolHost } from "../plugins/native-tools/tool-host.js";
 
@@ -43,13 +44,13 @@ export function captureNativePluginAppBackend(input: PluginAppBackendCaptureInpu
       assertCurrent();
       const resource = declaredResources.find(item => item.definition.uri === uri);
       if (!resource) throw new Error("plugin_app_resource_not_declared");
-      const result = await readPluginAppResource(input.root, resource);
+      const result = await readPluginAppResource(input.root, resource, PLUGIN_APP_EFFECTIVE_RESOURCE_LIMITS);
       assertCurrent(); return result;
     },
     listResources: async (cursor?: string) => {
       assertCurrent(); if (cursor) throw new Error("plugin_app_invalid_cursor");
       return { resources: declaredResources.map(resource => ({ uri: resource.definition.uri,
-        name: resource.definition.uri, mimeType: PLUGIN_APP_HTML_MIME_TYPE })) };
+        name: resource.definition.uri, mimeType: MCP_APP_HTML_MIME_TYPE })) };
     },
     listResourceTemplates: async (cursor?: string) => {
       assertCurrent(); if (cursor) throw new Error("plugin_app_invalid_cursor"); return { resourceTemplates: [] };
@@ -74,7 +75,7 @@ export function nativeToolResultToAppResult(original: ToolResult): PluginAppResu
   try {
     // Reuse the bounded finite/plain JSON parser; never call getters/toJSON or parse text as JSON.
     const structuredContent = parseMcpCallResultData({ content: [], structuredContent: appData }).structuredContent!;
-    if (Buffer.byteLength(JSON.stringify(structuredContent), "utf8") > PLUGIN_APP_LIMITS.appDataBytes) {
+    if (Buffer.byteLength(JSON.stringify(structuredContent), "utf8") > PLUGIN_APP_DEFAULT_LIMITS.appDataBytes) {
       return { result, dataError: "plugin_app_data_too_large" };
     }
     return { result: parseMcpCallResultData({ ...result, structuredContent }) };

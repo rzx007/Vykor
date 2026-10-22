@@ -46,10 +46,8 @@ import {
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
 import { settingsForApprovalMode } from "@vykor/sandbox";
-import {
-  effectivePermissionMode,
-  normalizeApprovalMode,
-} from "@vykor/protocol";
+import { effectivePermissionMode } from "@vykor/permissions";
+import { normalizeApprovalMode } from "@vykor/host-config";
 import type { SkillRegistry } from "@vykor/skills";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";

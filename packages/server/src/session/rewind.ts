@@ -3,12 +3,9 @@
  * Counts user turns from the end.
  */
 
-import {
-  isCommittedModelPart,
-  type ReplaceTranscriptMessageInput,
-  type SessionMessagePartRecord,
-  type SessionMessageRecord,
-} from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
+import type { ReplaceTranscriptMessageInput } from "@vykor/services";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 import { publicTextFromParts } from "./transcript-text.js";
 
 export interface RewindTranscriptResult {

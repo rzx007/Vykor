@@ -4,12 +4,8 @@ import type {
   PluginSelectionResult,
   NodeAgentHost,
 } from "@vykor/agent-runtime";
-import {
-  readRuntimeMetadata,
-  type SessionInputRecord,
-  type SessionRecord,
-  type SessionRunRecord,
-} from "@vykor/protocol";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
+import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 export interface InputPluginScope {
   scopeVersion: 2;

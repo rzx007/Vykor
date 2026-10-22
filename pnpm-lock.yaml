@@ -632,15 +632,15 @@ importers:
       '@vykor/permissions':
         specifier: workspace:*
         version: link:../permissions
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
       '@vykor/plugins':
         specifier: workspace:*
         version: link:../plugins
       '@vykor/prompts':
         specifier: workspace:*
         version: link:../prompts
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
@@ -731,9 +731,6 @@ importers:
       '@larksuiteoapi/node-sdk':
         specifier: ^1.73.0
         version: 1.74.0
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -811,6 +808,25 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
+  packages/domain-contracts:
+    dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/json-data':
+        specifier: workspace:*
+        version: link:../json-data
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
   packages/environment:
     devDependencies:
       '@types/node':
@@ -878,9 +894,6 @@ importers:
       '@vykor/agent-contracts':
         specifier: workspace:*
         version: link:../agent-contracts
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -893,14 +906,19 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/jobs:
-    dependencies:
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/json-data:
+    devDependencies:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -922,9 +940,9 @@ importers:
       '@vykor/host-config':
         specifier: workspace:*
         version: link:../host-config
-      '@vykor/protocol':
+      '@vykor/plugin-contracts':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../plugin-contracts
       '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
@@ -998,6 +1016,22 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
+  packages/plugin-contracts:
+    dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/json-data':
+        specifier: workspace:*
+        version: link:../json-data
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
   packages/plugin-converters:
     dependencies:
       '@vykor/plugins':
@@ -1050,9 +1084,12 @@ importers:
       '@vykor/host-config':
         specifier: workspace:*
         version: link:../host-config
-      '@vykor/protocol':
+      '@vykor/json-data':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../json-data
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
       '@vykor/skills':
         specifier: workspace:*
         version: link:../skills
@@ -1106,6 +1143,21 @@ importers:
       '@vykor/agent-contracts':
         specifier: workspace:*
         version: link:../agent-contracts
+      '@vykor/domain-contracts':
+        specifier: workspace:*
+        version: link:../domain-contracts
+      '@vykor/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@vykor/json-data':
+        specifier: workspace:*
+        version: link:../json-data
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
+      '@vykor/terminal':
+        specifier: workspace:*
+        version: link:../terminal
     devDependencies:
       typescript:
         specifier: ^5.7.3
@@ -1122,9 +1174,6 @@ importers:
       '@vykor/host-config':
         specifier: workspace:*
         version: link:../host-config
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1162,6 +1211,9 @@ importers:
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/domain-contracts':
+        specifier: workspace:*
+        version: link:../domain-contracts
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
@@ -1174,6 +1226,9 @@ importers:
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@vykor/json-data':
+        specifier: workspace:*
+        version: link:../json-data
       '@vykor/mcp':
         specifier: workspace:*
         version: link:../mcp
@@ -1189,6 +1244,9 @@ importers:
       '@vykor/personalization':
         specifier: workspace:*
         version: link:../personalization
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
       '@vykor/plugin-sources':
         specifier: workspace:*
         version: link:../plugin-sources
@@ -1244,6 +1302,9 @@ importers:
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/domain-contracts':
+        specifier: workspace:*
+        version: link:../domain-contracts
       '@vykor/execution-node':
         specifier: workspace:*
         version: link:../execution-node
@@ -1253,9 +1314,6 @@ importers:
       '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
-      '@vykor/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.2
@@ -1312,9 +1370,9 @@ importers:
 
   packages/terminal:
     dependencies:
-      '@vykor/protocol':
+      '@vykor/jobs':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../jobs
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

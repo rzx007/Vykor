@@ -77,3 +77,18 @@ export type { GoalOperations } from "./goals/index.js";
 export { goalBudgetStopCode } from "./goals/index.js";
 export type { GoalAttemptStart, GoalAttemptReport, GoalBudgetStopCode } from "./goals/index.js";
 export * from "./office/index.js";
+
+export type * from "./sessions/commands.js";
+
+export type * from "./conversations/commands.js";
+
+export type * from "./runs/commands.js";
+
+export type * from "./permissions/commands.js";
+
+export type * from "./session-runtime/commands.js";
+
+export type * from "./conversations/query-models.js";
+export type * from "./schedules/commands.js";
+
+export type * from "./notes/commands.js";

@@ -9,7 +9,7 @@ import type {
 import type {
   VykorAgent,
 } from "@vykor/agent-runtime/kernel";
-import { readAutoReviewRunMetadata } from "@vykor/protocol";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

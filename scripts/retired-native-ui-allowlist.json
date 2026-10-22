@@ -95,6 +95,312 @@
   ],
   "entries": [
     {
+      "path": "packages/domain-contracts/src/inputs/metadata.ts",
+      "line": 4,
+      "text": "  const { pluginUi: _ui, uiAction: _action, pluginUiSubmission: _submission,",
+      "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
+    },
+    {
+      "path": "packages/domain-contracts/src/inputs/metadata.ts",
+      "line": 16,
+      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
+      "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 1,
+      "text": "import { isJsonObject as isPluginUiRecord, isJsonRecord as isPluginUiJsonRecord, type JsonValue } from \"@vykor/json-data/json\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 3,
+      "text": "const isPluginUiRevision = (value: unknown): value is number => typeof value === \"number\" && Number.isSafeInteger(value) && value >= 0;",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 4,
+      "text": "const isPluginUiUuid = (value: unknown): value is string => typeof value === \"string\" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 5,
+      "text": "export interface PluginUiInventory {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 11,
+      "text": "export interface PluginUiInstanceRecord {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 42,
+      "text": "export interface PluginUiActionReceipt {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 50,
+      "text": "export interface PluginUiActionResponse {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 51,
+      "text": "  receipt: PluginUiActionReceipt;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 56,
+      "text": "export interface PluginUiActionRunMetadata {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 74,
+      "text": "const PLUGIN_UI_LIMITS = { dataBytes: 256 * 1024, actionArgsBytes: 64 * 1024 };",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 101,
+      "text": "export function readPluginUiInstance(",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 103,
+      "text": "): PluginUiInstanceRecord | undefined {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 104,
+      "text": "  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, \"pluginUi\"))",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 106,
+      "text": "  const record = metadata.pluginUi;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 119,
+      "text": "    !isPluginUiRecord(record) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 141,
+      "text": "    !isPluginUiUuid(record.instanceId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 148,
+      "text": "    !isPluginUiRevision(record.revision) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 151,
+      "text": "    !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 160,
+      "text": "      !isPluginUiRecord(dismissal) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 168,
+      "text": "      !isPluginUiUuid(dismissal.requestId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 170,
+      "text": "      !isPluginUiRevision(dismissal.expectedRevision) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 171,
+      "text": "      !isPluginUiRevision(dismissal.revision) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 176,
+      "text": "  return record as unknown as PluginUiInstanceRecord;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 180,
+      "text": "export function readPluginUiAction(",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 182,
+      "text": "): PluginUiActionRunMetadata | undefined {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 183,
+      "text": "  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, \"uiAction\"))",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 185,
+      "text": "  const record = metadata.uiAction;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 195,
+      "text": "    !isPluginUiRecord(record) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 212,
+      "text": "    !isPluginUiUuid(record.instanceId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 213,
+      "text": "    !isPluginUiUuid(record.requestId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 217,
+      "text": "    !isPluginUiRevision(record.expectedRevision) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 222,
+      "text": "    !isPluginUiJsonRecord(record.args, PLUGIN_UI_LIMITS.actionArgsBytes)",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 225,
+      "text": "  return record as unknown as PluginUiActionRunMetadata;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 228,
+      "text": "export type PluginUiConversationReceipt =",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 248,
+      "text": "export interface PluginUiSubmissionRecord {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 270,
+      "text": "    !isPluginUiRecord(value) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 281,
+      "text": "export function parsePluginUiConversationReceipt(",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 283,
+      "text": "): PluginUiConversationReceipt {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 284,
+      "text": "  if (!isPluginUiRecord(value)) invalid();",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 305,
+      "text": "    !isPluginUiUuid(r.instanceId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 306,
+      "text": "    !isPluginUiRevision(r.revision)",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 312,
+      "text": "    !isPluginUiUuid(r.requestId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 321,
+      "text": "  return structuredClone(r) as unknown as PluginUiConversationReceipt;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 323,
+      "text": "export function parsePluginUiSubmissionRecord(",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 325,
+      "text": "): PluginUiSubmissionRecord {",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 340,
+      "text": "    !isPluginUiUuid(r.requestId) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 341,
+      "text": "    !isPluginUiRevision(r.expectedRevision) ||",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 347,
+      "text": "    !isPluginUiRevision(r.acceptedAt)",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
+      "path": "packages/domain-contracts/src/plugin-apps/history.ts",
+      "line": 350,
+      "text": "  return structuredClone(r) as unknown as PluginUiSubmissionRecord;",
+      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+    },
+    {
       "path": "README.md",
       "line": 256,
       "text": "页面统一使用官方 MCP Apps，由 `components.apps` 声明；Native Tool 与 MCP Server 后台复用原工具权限、审计和持久 Run。旧 Native UI 已退役，历史工具文字和回执保留，新导入不再接受 `components.ui`。见 [原生插件编写指南](docs/native-plugin-authoring.md)与 [MCP Apps 设计](docs/superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)。",
@@ -3180,307 +3486,55 @@
     },
     {
       "path": "packages/protocol/src/index.ts",
-      "line": 27,
+      "line": 28,
       "text": "export * from \"./plugin-ui-history.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
       "line": 1,
-      "text": "import { isJsonObject as isPluginUiRecord, isNonnegativeInteger as isPluginUiRevision, isUuid as isPluginUiUuid, isJsonRecord as isPluginUiJsonRecord, type JsonValue } from \"./json.js\";",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+      "text": "export { type PluginUiInventory, type PluginUiInstanceRecord, type PluginUiActionReceipt, type PluginUiActionResponse, type PluginUiActionRunMetadata, readPluginUiInstance, readPluginUiAction, type PluginUiConversationReceipt, type PluginUiSubmissionRecord } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "line": 2,
+      "text": "import { parsePluginUiConversationReceipt as domainConversationReceipt, parsePluginUiSubmissionRecord as domainSubmissionRecord, type PluginUiConversationReceipt, type PluginUiSubmissionRecord } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
       "line": 3,
-      "text": "export interface PluginUiInventory {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+      "text": "import { isUuid as isPluginUiUuid } from \"./json.js\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 9,
-      "text": "export interface PluginUiInstanceRecord {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+      "line": 6,
+      "text": "export function parsePluginUiConversationReceipt(value: unknown): PluginUiConversationReceipt { return adaptDomainValidation(() => domainConversationReceipt(value)); }",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 40,
-      "text": "export interface PluginUiActionReceipt {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
+      "line": 7,
+      "text": "export function parsePluginUiSubmissionRecord(value: unknown): PluginUiSubmissionRecord { return adaptDomainValidation(() => domainSubmissionRecord(value)); }",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 48,
-      "text": "export interface PluginUiActionResponse {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 49,
-      "text": "  receipt: PluginUiActionReceipt;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 54,
-      "text": "export interface PluginUiActionRunMetadata {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 72,
-      "text": "const PLUGIN_UI_LIMITS = { dataBytes: 256 * 1024, actionArgsBytes: 64 * 1024 };",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 99,
-      "text": "export function readPluginUiInstance(",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 101,
-      "text": "): PluginUiInstanceRecord | undefined {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 102,
-      "text": "  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, \"pluginUi\"))",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 104,
-      "text": "  const record = metadata.pluginUi;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 117,
-      "text": "    !isPluginUiRecord(record) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 139,
-      "text": "    !isPluginUiUuid(record.instanceId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 146,
-      "text": "    !isPluginUiRevision(record.revision) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 149,
-      "text": "    !isPluginUiJsonRecord(record.data, PLUGIN_UI_LIMITS.dataBytes)",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 158,
-      "text": "      !isPluginUiRecord(dismissal) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 166,
-      "text": "      !isPluginUiUuid(dismissal.requestId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 168,
-      "text": "      !isPluginUiRevision(dismissal.expectedRevision) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 169,
-      "text": "      !isPluginUiRevision(dismissal.revision) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 174,
-      "text": "  return record as unknown as PluginUiInstanceRecord;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 178,
-      "text": "export function readPluginUiAction(",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 180,
-      "text": "): PluginUiActionRunMetadata | undefined {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 181,
-      "text": "  if (!isPluginUiRecord(metadata) || !Object.hasOwn(metadata, \"uiAction\"))",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 183,
-      "text": "  const record = metadata.uiAction;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 193,
-      "text": "    !isPluginUiRecord(record) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 210,
-      "text": "    !isPluginUiUuid(record.instanceId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 211,
-      "text": "    !isPluginUiUuid(record.requestId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 215,
-      "text": "    !isPluginUiRevision(record.expectedRevision) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 220,
-      "text": "    !isPluginUiJsonRecord(record.args, PLUGIN_UI_LIMITS.actionArgsBytes)",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 223,
-      "text": "  return record as unknown as PluginUiActionRunMetadata;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 226,
-      "text": "export type PluginUiConversationReceipt =",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 246,
-      "text": "export interface PluginUiSubmissionRecord {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 268,
-      "text": "    !isPluginUiRecord(value) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 279,
-      "text": "export function parsePluginUiConversationReceipt(",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 281,
-      "text": "): PluginUiConversationReceipt {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 282,
-      "text": "  if (!isPluginUiRecord(value)) invalid();",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 303,
-      "text": "    !isPluginUiUuid(r.instanceId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 304,
-      "text": "    !isPluginUiRevision(r.revision)",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 310,
-      "text": "    !isPluginUiUuid(r.requestId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 319,
-      "text": "  return structuredClone(r) as unknown as PluginUiConversationReceipt;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 321,
-      "text": "export function parsePluginUiSubmissionRecord(",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 323,
-      "text": "): PluginUiSubmissionRecord {",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 338,
-      "text": "    !isPluginUiUuid(r.requestId) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 339,
-      "text": "    !isPluginUiRevision(r.expectedRevision) ||",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 345,
-      "text": "    !isPluginUiRevision(r.acceptedAt)",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 348,
-      "text": "  return structuredClone(r) as unknown as PluginUiSubmissionRecord;",
-      "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
-    },
-    {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 350,
+      "line": 8,
       "text": "export function parsePluginUiRouteIds(value: { sessionId: string; instanceId: string; requestId?: string }) {",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 352,
+      "line": 10,
       "text": "  if (!isPluginUiUuid(value.instanceId)) throw new ProtocolValidationError(\"instanceId must be a UUID\", \"instanceId\");",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
       "path": "packages/protocol/src/plugin-ui-history.ts",
-      "line": 353,
+      "line": 11,
       "text": "  if (value.requestId !== undefined && !isPluginUiUuid(value.requestId)) throw new ProtocolValidationError(\"requestId must be a UUID\", \"requestId\");",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
@@ -3491,20 +3545,8 @@
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/protocol/src/requests.ts",
-      "line": 61,
-      "text": "  const { pluginUi: _ui, uiAction: _action, pluginUiSubmission: _submission,",
-      "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
-    },
-    {
-      "path": "packages/protocol/src/requests.ts",
-      "line": 73,
-      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
-      "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
-    },
-    {
       "path": "packages/server/src/application/agent/agent-transcript.ts",
-      "line": 112,
+      "line": 115,
       "text": "    value.kind === \"plugin_ui_action\" || value.kind === \"plugin_app_action\" ||",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -3522,25 +3564,25 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 179,
+      "line": 177,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 230,
+      "line": 228,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 398,
+      "line": 396,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1042,
+      "line": 1040,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3571,8 +3613,8 @@
     {
       "path": "packages/server/src/application/recovery/retire-plugin-ui-actions.ts",
       "line": 2,
-      "text": "import { readPluginUiAction, readPluginUiInstance } from \"@vykor/protocol\";",
-      "reason": "Startup settles original in-flight records without replay and preserves unknown facts."
+      "text": "import { readPluginUiAction, readPluginUiInstance } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/server/src/application/recovery/retire-plugin-ui-actions.ts",
@@ -3624,25 +3666,25 @@
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 316,
+      "line": 312,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 410,
+      "line": 406,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 427,
+      "line": 423,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 439,
+      "line": 435,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3672,379 +3714,397 @@
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 2,
-      "text": "import { isCommittedModelPart, isJsonObject as isPluginUiRecord, readPluginUiAction, readPluginUiInstance, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, type PluginUiActionReceipt, type PluginUiActionResponse, type PluginUiInstanceRecord, type PluginUiSubmissionRecord, type PluginUiConversationReceipt, type SessionMessagePartRecord, type SessionRunRecord, type SessionRecord } from \"@vykor/protocol\";",
-      "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
+      "line": 3,
+      "text": "import { isJsonObject as isPluginUiRecord } from \"@vykor/json-data/json\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 7,
+      "line": 4,
+      "text": "import { readPluginUiAction, readPluginUiInstance, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "line": 5,
+      "text": "import type { PluginUiActionReceipt, PluginUiActionResponse, PluginUiInstanceRecord, PluginUiSubmissionRecord, PluginUiConversationReceipt } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
+    },
+    {
+      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "line": 11,
       "text": "export class PluginUiHistoryService {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 13,
+      "line": 17,
       "text": "  ): PluginUiActionResponse {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 16,
+      "line": 20,
       "text": "    const action = readPluginUiAction(run.metadata)!;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 32,
+      "line": 36,
       "text": "  ): PluginUiActionReceipt {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 40,
+      "line": 44,
       "text": "      readPluginUiAction(run.metadata)?.instanceId !== instanceId",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 42,
+      "line": 46,
       "text": "      throw new ApplicationError(404, \"找不到此操作\", \"plugin_ui_not_found\");",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 47,
+      "line": 51,
       "text": "  private receipt(run: SessionRunRecord): PluginUiActionReceipt {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 48,
+      "line": 52,
       "text": "    const action = readPluginUiAction(run.metadata)!;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 69,
+      "line": 73,
       "text": "          (p) => readPluginUiInstance(p.metadata)?.instanceId === instanceId,",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 71,
+      "line": 75,
       "text": "    const instance = part && readPluginUiInstance(part.metadata);",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 76,
+      "line": 80,
       "text": "        \"plugin_ui_not_found\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 85,
+      "line": 89,
       "text": "      PluginUiInstanceRecord,",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 108,
+      "line": 112,
       "text": "      isPluginUiRecord(part.output) &&",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 115,
+      "line": 119,
       "text": "      !Object.hasOwn(run.metadata, \"uiAction\") &&",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 126,
+      "line": 130,
       "text": "  ): Extract<PluginUiConversationReceipt, { mode: \"submit\" }> {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 132,
+      "line": 136,
       "text": "        \"plugin_ui_not_found\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 142,
+      "line": 146,
       "text": "    if (!Object.hasOwn(part.metadata, \"pluginUiSubmission\")) return undefined;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 147,
+      "line": 151,
       "text": "        \"plugin_ui_conversation_unavailable\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 149,
+      "line": 153,
       "text": "    let record: PluginUiSubmissionRecord;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 151,
+      "line": 155,
       "text": "      record = parsePluginUiSubmissionRecord(part.metadata.pluginUiSubmission);",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 174,
+      "line": 178,
       "text": "      Object.hasOwn(run.metadata, \"uiAction\") ||",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 175,
+      "line": 179,
       "text": "      Object.hasOwn(input.metadata, \"pluginUiSubmission\") ||",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 176,
+      "line": 180,
       "text": "      Object.hasOwn(run.metadata, \"pluginUiSubmission\")",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 179,
+      "line": 183,
       "text": "    const receipt = parsePluginUiConversationReceipt({",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 211,
+      "line": 215,
       "text": "    throw new ApplicationError(409, \"交接目标会话不可用\", \"plugin_ui_conversation_unavailable\");",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
-      "line": 226,
+      "line": 230,
       "text": "function runPluginSourceMatches(run: SessionRunRecord, source: Pick<PluginUiInstanceRecord, \"pluginId\" | \"pluginVersion\" | \"pluginDigest\">): boolean {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
       "path": "packages/server/src/application/session/session-interaction-service.ts",
-      "line": 468,
+      "line": 463,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/session-interaction-service.ts",
-      "line": 472,
+      "line": 467,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/transcript-projection.ts",
-      "line": 11,
-      "text": "import { isCommittedModelPart, readPluginUiInstance, settleSessionToolMetadata } from \"@vykor/protocol\";",
-      "reason": "Preserves already persisted historical source Part during transcript projection."
+      "line": 8,
+      "text": "import { readPluginUiInstance } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/server/src/application/session/transcript-projection.ts",
-      "line": 267,
+      "line": 264,
       "text": "        const existing = previous && readPluginUiInstance(previous.metadata);",
       "reason": "Preserves already persisted historical source Part during transcript projection."
     },
     {
       "path": "packages/server/src/application/settings-api.ts",
       "line": 1,
-      "text": "import type { PluginUiInventory, MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from \"@vykor/protocol\";",
-      "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
+      "text": "import type { PluginUiInventory } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/server/src/application/settings-api.ts",
-      "line": 269,
+      "line": 270,
       "text": "  uiInventory?: PluginUiInventory;",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
       "line": 4,
-      "text": "import { CURRENT_PROTOCOL_VERSION, readPluginUiAction, type PluginUiInstanceRecord, type PluginUiActionRunMetadata } from \"@vykor/protocol\";",
-      "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
+      "text": "import { CURRENT_PROTOCOL_VERSION, readPluginUiAction } from \"@vykor/protocol\";",
+      "reason": "P13 retirement HTTP regression: reads original stored receipts and verifies removed execution stays unavailable."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 17,
+      "line": 5,
+      "text": "import type { PluginUiInstanceRecord, PluginUiActionRunMetadata } from \"@vykor/protocol\";",
+      "reason": "P13 retirement HTTP regression: reads original stored receipts and verifies removed execution stays unavailable."
+    },
+    {
+      "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
+      "line": 18,
       "text": "  const instance: PluginUiInstanceRecord = { schemaVersion: 2, instanceId, sessionId, sourceRunId: \"old-source\", sourcePartId: \"source-part\", sourceToolUseId: \"source-tool\", sourceToolName: \"Inspect\",",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 21,
+      "line": 22,
       "text": "    metadata: { executionState: \"completed\", pluginUi: instance } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 22,
+      "line": 23,
       "text": "  const action: PluginUiActionRunMetadata = { schemaVersion: 2, instanceId, requestId, requestFingerprint: \"c\".repeat(64), expectedRevision: 0, actionId: \"save\", label: \"Save\", args: { text: \"original\" },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 24,
+      "line": 25,
       "text": "  store.runs.createRun({ id: runId, sessionId, inputId: input.id, metadata: { uiAction: action } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 28,
+      "line": 29,
       "text": "  store.runs.createRun({ id: pendingId, sessionId, metadata: { uiAction: pending } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 31,
+      "line": 32,
       "text": "  store.runs.createRun({ id: completeId, sessionId, metadata: { uiAction: complete } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 34,
+      "line": 35,
       "text": "  store.runs.createRun({ id: missingId, sessionId, metadata: { uiAction: missing } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 40,
+      "line": 41,
       "text": "    reopened.runs.updateRun(runId, { status: \"running\", metadata: { uiAction: action } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 41,
+      "line": 42,
       "text": "    reopened.runs.updateRun(pendingId, { status: \"pending\", metadata: { uiAction: pending } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 42,
+      "line": 43,
       "text": "    reopened.runs.updateRun(completeId, { status: \"running\", metadata: { uiAction: complete } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 43,
+      "line": 44,
       "text": "    reopened.runs.updateRun(missingId, { status: \"running\", metadata: { uiAction: missing } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 47,
+      "line": 48,
       "text": "  expect(readPluginUiAction(store.runs.getRun(pendingId)?.metadata)).toEqual(pending);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 49,
+      "line": 50,
       "text": "  expect((await h.client().pluginUiHistory.getAction(sessionId, instanceId, complete.requestId)).result).toEqual(originalResult);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 51,
+      "line": 52,
       "text": "  expect(readPluginUiAction(store.runs.getRun(runId)?.metadata)).toEqual(action);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 53,
+      "line": 54,
       "text": "  expect(readPluginUiAction(store.runs.getRun(missingId)?.metadata)).toEqual({ ...missing, executionState: \"unknown\" });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 54,
+      "line": 55,
       "text": "  const receipt = await h.client().pluginUiHistory.getAction(sessionId, instanceId, requestId);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 57,
+      "line": 58,
       "text": "    const response = await h.raw(`/sessions/${sessionId}/plugin-ui/${instanceId}${suffix}`, suffix === \"/document\" || suffix === \"\" ? undefined : {});",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 58,
+      "line": 59,
       "text": "    expect(response.status).toBe(410); expect(await response.json()).toMatchObject({ code: \"plugin_ui_retired\" });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 64,
+      "line": 65,
       "text": "  store.runs.createRun({ id: \"corrupt-old-action\", sessionId, inputId: input.id, metadata: { uiAction: {} } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 72,
+      "line": 73,
       "text": "    pluginUi: { ...(current.metadata.pluginUi as PluginUiInstanceRecord), status: \"resolved\" }, pluginUiSubmission: submission } });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 73,
+      "line": 74,
       "text": "  const submitted = await h.client().pluginUiHistory.getConversationSubmission(sessionId, instanceId, submissionId);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 75,
+      "line": 76,
       "text": "  const unauthorized = await h.server().app.request(`/sessions/${sessionId}/plugin-ui/${instanceId}/actions/${requestId}`,",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 80,
+      "line": 81,
       "text": "  expect(await h.client().pluginUiHistory.getAction(sessionId, instanceId, requestId)).toEqual(receipt);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 81,
+      "line": 82,
       "text": "  expect(await h.client().pluginUiHistory.getConversationSubmission(sessionId, instanceId, submissionId)).toEqual(submitted);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 83,
+      "line": 84,
       "text": "  await expect(h.client().pluginUiHistory.getAction(\"foreign\", instanceId, requestId)).rejects.toMatchObject({ status: 404 });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 88,
+      "line": 89,
       "text": "      executionState: readPluginUiAction(h.store().runs.getRun(id)?.metadata)?.executionState })),",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 89,
+      "line": 90,
       "text": "    originalFingerprintPreserved: readPluginUiAction(h.store().runs.getRun(runId)?.metadata)?.requestFingerprint === action.requestFingerprint,",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 90,
+      "line": 91,
       "text": "    originalResultPreserved: JSON.stringify((await h.client().pluginUiHistory.getAction(sessionId, instanceId, complete.requestId)).result) === JSON.stringify(originalResult),",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/http/__test__/plugin-ui-retirement.test.ts",
-      "line": 101,
+      "line": 102,
       "text": "  expect((await h.client().protocol.capabilities()).features).not.toHaveProperty(\"pluginUi\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -4134,37 +4194,37 @@
     },
     {
       "path": "packages/server/src/http/support.ts",
-      "line": 150,
+      "line": 149,
       "text": "  if (error instanceof ApplicationError && error.code.startsWith(\"plugin_ui_\")) {",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 5,
-      "text": "import { isCommittedModelPart, readPluginUiAction, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord } from \"@vykor/protocol\";",
-      "reason": "Exports/redacts original historical action facts, does not execute them."
+      "line": 6,
+      "text": "import { readPluginUiAction } from \"@vykor/domain-contracts/plugin-apps/history\";",
+      "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 122,
+      "line": 124,
       "text": "    const action = readPluginUiAction(run.metadata);",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 125,
+      "line": 127,
       "text": "      uiAction: sensitiveSession ? { instanceId: action.instanceId, executionState: action.executionState, content: REDACTED_CONTENT } : action }];",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 145,
+      "line": 147,
       "text": "          && (message.metadata.presentation as { kind?: unknown }).kind === \"plugin_ui_action\"",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
     {
       "path": "packages/server/src/session/export-session.ts",
-      "line": 146,
+      "line": 148,
       "text": "          ? { metadata: { presentation: { kind: \"plugin_ui_action\" } } } : {}),",
       "reason": "Exports/redacts original historical action facts, does not execute them."
     },
@@ -4218,13 +4278,13 @@
     },
     {
       "path": "packages/services/src/conversations/conversation-transactions.ts",
-      "line": 458,
+      "line": 465,
       "text": "          const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...importedMetadata } = partInput.metadata ?? {};",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
       "path": "packages/services/src/conversations/conversation-tree-operations.ts",
-      "line": 90,
+      "line": 91,
       "text": "      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...copiedMetadata } = part.metadata;",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -4242,49 +4302,49 @@
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 7,
+      "line": 8,
       "text": "export const legacyPattern = /VykorPluginUi|createPluginUiClient|plugin-ui|pluginUi|PluginUi|components\\.ui|metadata\\.ui\\b|ui-sdk|ui-styles|RunPluginUiBinding|loadNativeUiMetadata|\\buiAction\\b|uiInventory|plugin_ui_|NativeUi|native-ui|PLUGIN_UI/;",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 28,
+      "line": 29,
       "text": "  const manifestPath = \"scripts/retired-native-ui-allowlist.json\";",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 36,
-      "text": "    \"packages/protocol/src/plugin-ui-history.ts\": [\"./json.js\", \"./requests.js\"],",
-      "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
-    },
-    {
-      "path": "scripts/check-retired-native-ui.mjs",
       "line": 37,
-      "text": "    \"packages/server/src/application/session/plugin-ui-history-service.ts\": [\"node:crypto\", \"@vykor/protocol\", \"@vykor/services\", \"../../shared/application-error.js\"],",
-      "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
+      "text": "    \"packages/protocol/src/plugin-ui-history.ts\": [\"@vykor/domain-contracts/plugin-apps/history\", \"./json.js\", \"./requests.js\", \"./domain-validation.js\"],",
+      "reason": "P13 exact dependency guard: canonical historical data and wire error adapters only; no loader or execution dependencies."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 38,
+      "line": 39,
+      "text": "    \"packages/server/src/application/session/plugin-ui-history-service.ts\": [\"node:crypto\", \"@vykor/domain-contracts/sessions\", \"@vykor/domain-contracts/plugin-apps/history\", \"@vykor/json-data/json\", \"@vykor/services\", \"../../shared/application-error.js\"],",
+      "reason": "P13 exact dependency guard: canonical historical data and wire error adapters only; no loader or execution dependencies."
+    },
+    {
+      "path": "scripts/check-retired-native-ui.mjs",
+      "line": 40,
       "text": "    \"packages/client/src/resources/plugin-ui-history-resource.ts\": [\"@vykor/protocol\", \"../transport/http-transport.js\"],",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 48,
+      "line": 50,
       "text": "  if (Object.keys(exports).some(key => /ui-sdk|ui-styles/.test(key))) errors.push(\"Retired SDK remains exported\");",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 49,
+      "line": 51,
       "text": "  for (const path of [\"packages/plugins/dist\", \"tests/browser-plugin-ui-sdk/dist\"]) {",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.mjs",
-      "line": 53,
+      "line": 55,
       "text": "      if (/ui-sdk|ui-styles/.test(name) || path.startsWith(\"tests/\") && /\\.(?:js|html)$/.test(name)) errors.push(`Retired generated artifact: ${path}/${name}`);",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
@@ -4296,19 +4356,19 @@
     },
     {
       "path": "scripts/check-retired-native-ui.test.mjs",
-      "line": 6,
+      "line": 7,
       "text": "  const source = 'const history = readPluginUiInstance(record);';",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.test.mjs",
-      "line": 9,
+      "line": 10,
       "text": "  assert.match(verifyReferences([{ path: \"history.ts\", source: source + '\\ncreatePluginUiClient();' }], approved).join(), /Unreviewed/);",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
       "path": "scripts/check-retired-native-ui.test.mjs",
-      "line": 10,
+      "line": 11,
       "text": "  assert.match(verifyReferences([{ path: \"history.ts\", source: 'createPluginUiClient();' }], approved).join(), /Unreviewed/);",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },

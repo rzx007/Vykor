@@ -132,3 +132,6 @@ export function publicToolResult(value: unknown): unknown {
   }
   return rest;
 }
+
+/** Canonical MCP App HTML media type used by resource producers and consumers. */
+export const MCP_APP_HTML_MIME_TYPE = "text/html;profile=mcp-app";

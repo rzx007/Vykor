@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { cleanupPreviewDto, cleanupResultDto, storageReportDto, usageReportDto } from "../mappers/maintenance.js";
 import type { MaintenanceApplicationService } from "../../application/maintenance/maintenance-application-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { errorResponse, jsonResponse, readJson } from "../support.js";
@@ -71,13 +72,13 @@ export function createMaintenanceRoutes(context: {
     .post(
       "/maintenance/cleanup/preview",
       reply(async (c) =>
-        service.previewCleanup(await readJson(c), c.req.raw.signal),
+        cleanupPreviewDto(await service.previewCleanup(await readJson(c), c.req.raw.signal)),
       ),
     )
     .post(
       "/maintenance/cleanup/execute",
       reply(async (c) =>
-        service.runCleanup(await readJson(c), c.req.raw.signal),
+        cleanupResultDto(await service.runCleanup(await readJson(c), c.req.raw.signal)),
       ),
     )
     .get(
@@ -101,7 +102,7 @@ export function createMaintenanceRoutes(context: {
     .post(
       "/maintenance/usage",
       reply(async (c) =>
-        service.readUsage(await readJson(c), c.req.raw.signal),
+        usageReportDto(await service.readUsage(await readJson(c), c.req.raw.signal)),
       ),
     )
     .get(
@@ -122,7 +123,7 @@ export function createMaintenanceRoutes(context: {
     )
     .get(
       "/maintenance/storage",
-      reply((c) => service.readStorage(undefined, c.req.raw.signal)),
+      reply(async (c) => storageReportDto(await service.readStorage(undefined, c.req.raw.signal))),
     )
     .post(
       "/maintenance/backup",

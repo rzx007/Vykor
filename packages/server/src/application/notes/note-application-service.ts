@@ -2,11 +2,8 @@ import {
   NoteRevisionConflictError,
   type NoteRepository,
 } from "@vykor/services";
-import {
-  ProtocolValidationError,
-  type CreateNoteInput,
-  type UpdateNoteInput,
-} from "@vykor/protocol";
+import { DomainValidationError as ProtocolValidationError } from "@vykor/domain-contracts/inputs";
+import type { CreateNoteInput, UpdateNoteInput } from "@vykor/domain-contracts/notes";
 import { ApplicationError } from "../../shared/application-error.js";
 export interface NoteApplicationContext {
   notes: Pick<NoteRepository, "list" | "create" | "update" | "remove"> &

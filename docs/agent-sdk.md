@@ -21,6 +21,14 @@ createDefaultNodeAgent(options)
 
 发布包运行实现已 bundle；公开声明引用的内部包作为正式 dependencies 安装，不能用替换依赖的方式替换已经打包的实现。细节见 [Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)。
 
+## 数据契约与宿主绑定
+
+SDK 的执行数据与权限审查数据来自 `agent-contracts`；权限专用入口为 `agent-contracts/permissions`。Node 的插件数据使用 `plugin-contracts/manifest`、`/runtime` 等明确子入口，Job/Terminal 数据使用各自 `/contracts`。Node 不引用 Protocol、domain-contracts 或 Services。
+
+`agent.host.plugins.runPluginAppTool()` 接收 `PluginAppHostInvocation`，其中只有已核实的 binding、lease、工具名和参数。Server 从已保存记录生成 binding，保留不透明 `instanceId = app.id` 用于实例隔离与 lease 撤销；Node 再检查 owner、插件/后端版本与 digest、generation、lease 和原工具绑定。绑定不包含应用 open/closed 状态、revision 或其他可变产品记录，Server 也不复制 Node 的 token 表。普通工具与应用工具继续共用 Kernel 的参数、权限、Hook 和超时管道。
+
+纯 Kernel 只消费通用执行契约。其 bundle 和声明检查仍只允许 agent-contracts、Core、environment；三个新数据包和 Jobs/Terminal 实现不能借纯数据名义进入 Kernel。daemon 客户端辅助函数用于请求和显示，不能作为上述宿主检查的授权证据。
+
 ## 最小运行
 
 ```ts
@@ -293,6 +301,8 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 | daemon agent cache | `packages/server/src/application/agent/agent-pool.ts` |
 | durable event projection | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
 | standalone SDK contract test | `packages/agent-runtime/src/node/runtime/sdk.test.ts` |
+| 插件宿主调用数据 / Server 绑定转换 | `packages/plugin-contracts/src/runtime.ts` / `packages/server/src/application/session/plugin-app-host-binding.ts` |
+| Job / Terminal 纯数据 | `packages/jobs/src/contracts.ts` / `packages/terminal/src/contracts.ts` |
 
 ## 非目标
 
@@ -312,4 +322,4 @@ Server 的 GoalModelAttemptService 从持久 Run 核对 session、Goal 版本和
 
 `pnpm --filter @vykor/agent-runtime test:pack` 在仓库外安装 tarball，用 TypeScript 消费 Node、Kernel、Workflow 和公共类型，再运行 fake Provider 的 root/child、事件、关闭以及跨 bundle 错误识别。它还实际启动 Native Tool 和默认 PTY/Job，不能用空导入替代。仅编译器来自测试工具链；Node 类型、产品声明及运行依赖都从临时安装目录解析，不跳过声明检查。
 
-构建保留 `default.metafile.json`、`kernel.metafile.json`。Kernel 检查源码输入和递归声明引用；默认入口仍需要 `sharp` 与 `node-pty`，不需要数据库驱动。`host-entry.mjs` 随包保留供 Native Tool 进程启动。
+构建保留 `default.metafile.json`、`kernel.metafile.json`。Kernel 检查源码输入和递归声明引用，明确拒绝 domain-contracts、plugin-contracts 和 json-data；默认入口仍需要 `sharp` 与 `node-pty`，不需要数据库驱动。`host-entry.mjs` 随包保留供 Native Tool 进程启动。

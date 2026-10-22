@@ -1,6 +1,9 @@
 import type { SessionStore } from "@vykor/services";
-import { readSessionModelAttemptUsage, type UsageFilter, type UsageRequest, type UsagePrice, type UsageSettings, type UsageReport } from "@vykor/protocol";
-export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport } from "@vykor/protocol";
+import { readSessionModelAttemptUsage } from "@vykor/domain-contracts/sessions";
+import type { UsageFilter, UsageRequest, UsageReport } from "./query-models.js";
+import type { UsagePrice, UsageSettings } from "@vykor/domain-contracts/usage";
+export type { UsageFilter, UsageRequest, UsageReport } from "./query-models.js";
+export type { UsagePrice, UsageSettings } from "@vykor/domain-contracts/usage";
 export const defaultUsageSettings: UsageSettings = { version: 1, prices: [], budget: { enabled: false, tokens: null, amount: null, currency: "USD" } };
 
 /** Finished model events identify individual network retries. Run totals are never added again. */

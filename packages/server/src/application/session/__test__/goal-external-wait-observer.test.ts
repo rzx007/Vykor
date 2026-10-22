@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionGoal } from "@vykor/protocol";
+import type { SessionGoal } from "@vykor/domain-contracts/goals";
 import { GoalExternalWaitObserver } from "../goal-external-wait-observer.js";
 
 afterEach(() => vi.useRealTimers());

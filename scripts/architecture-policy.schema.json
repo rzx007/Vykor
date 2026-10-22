@@ -12,10 +12,10 @@
     "stageExceptions": { "type": "array", "items": { "$ref": "#/$defs/exception" } }
   },
   "$defs": {
-    "phase": { "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6"] },
+    "phase": { "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"] },
     "text": { "type": "string", "minLength": 1 },
     "list": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
-    "migration": { "type": "string", "pattern": "^M(?:0[1-9]|[12][0-9]|3[0-3])$" },
+    "migration": { "type": "string", "pattern": "^M(?:0[1-9]|[123][0-9]|40)$" },
     "package": {
       "type": "object", "additionalProperties": false,
       "required": ["directory", "allowed", "removeByPhase", "migrationId"],
@@ -40,10 +40,13 @@
         "forbidPaths": { "$ref": "#/$defs/list" },
         "forbidSpecifiers": { "$ref": "#/$defs/list" },
         "forbidBuiltins": { "type": "boolean" },
+        "forbidTypeReferences": { "$ref": "#/$defs/list" },
+        "traceTypes": { "type": "boolean" },
         "symbols": { "$ref": "#/$defs/list" },
         "typeOnlyPackages": { "$ref": "#/$defs/list" },
         "targetPackages": { "$ref": "#/$defs/list" },
         "allowExternal": { "$ref": "#/$defs/list" },
+        "testExternal": { "$ref": "#/$defs/list" },
         "removeByPhase": { "$ref": "#/$defs/phase" },
         "migrationId": { "$ref": "#/$defs/migration" }
       }

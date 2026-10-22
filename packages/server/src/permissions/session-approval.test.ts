@@ -4,7 +4,7 @@ import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
 vi.mock("@vykor/agent-runtime", () => ({ createConfiguredApprovalReviewer: vi.fn() }));
 import type { AgentEffectContext } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
-import type { PermissionRequestRecord } from "@vykor/protocol";
+import type { PermissionRequestRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import { sessionPermissionRequest } from "./session-approval.js";
 function fixture(toolName = "Shell", source = "builtin") {

@@ -15,3 +15,5 @@ export {
   AttachmentTransactions,
   type AttachmentTransactionsOptions,
 } from "./persistence/attachment-transactions.js";
+
+export { DEFAULT_ATTACHMENT_LIMITS } from "./attachment-policy.js";

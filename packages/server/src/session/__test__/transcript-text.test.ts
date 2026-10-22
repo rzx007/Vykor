@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SessionMessagePartRecord } from "@vykor/protocol";
+import type { SessionMessagePartRecord } from "@vykor/domain-contracts/sessions";
 import {
   isCommittedPublicTextPart,
   isPublicTextPart,

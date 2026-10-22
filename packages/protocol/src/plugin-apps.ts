@@ -1,277 +1,46 @@
-/** Plugin packaging declarations. Runtime identities and execution authority are host-owned. */
-export interface PluginAppResourceDefinition {
-  uri: string;
-  entry: string;
-}
+import type { PluginAppRuntimeLease, PluginAppToolDescriptor } from "@vykor/plugin-contracts/runtime";
+import { validatePluginAppConversationInput, validatePluginAppSource, validateOpenPluginAppInput, validateClosePluginAppInput,
+  validatePluginAppToolInput, validatePluginAppComposerContexts, type PluginAppToolInput, type PluginAppConversationInput,
+  type OpenPluginAppInput, type ClosePluginAppInput, type ValidationResult,
+  type PluginAppRecord, type PluginAppSource, type PluginAppActionReceipt } from "@vykor/domain-contracts/plugin-apps";
 
-export interface PluginAppNativeToolDefinition {
-  tool: string;
-  visibility: Array<"model" | "app">;
-  ui?: { resourceUri: string };
-}
+export type { PluginAppResourceDefinition, PluginAppNativeToolDefinition, PluginAppToolPolicyDefinition,
+  PluginAppNativeBackendDefinition, PluginAppMcpBackendDefinition, PluginAppBackendDefinition,
+  PluginAppSurfaceDefinition, PluginAppManifest, PluginAppBackendKind } from "@vykor/plugin-contracts/manifest";
+export type { PluginAppRuntimeLease, PluginAppToolPolicy, PluginAppToolDescriptor, PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
+export type { PluginAppJson } from "@vykor/plugin-contracts/runtime-data";
+export { copyPluginAppJson } from "@vykor/plugin-contracts/runtime-data";
+export type { PluginAppRecord, PluginAppSource, PluginAppOrigin, PluginAppActionMetadata,
+  PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppExecutionState } from "@vykor/domain-contracts/plugin-apps";
+export { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
 
-/** Exact installed declaration. It never grants authority on its own. */
-export interface PluginAppToolPolicyDefinition {
-  tool: string;
-  authorization?: "plugin-data-write";
-  maxArgumentsBytes?: number;
-}
-
-export interface PluginAppNativeBackendDefinition {
-  id: string;
-  kind: "native-tools";
-  resources: PluginAppResourceDefinition[];
-  tools: PluginAppNativeToolDefinition[];
-  toolPolicies?: PluginAppToolPolicyDefinition[];
-}
-
-export interface PluginAppMcpBackendDefinition {
-  id: string;
-  kind: "mcp-server";
-  server: string;
-  toolPolicies?: PluginAppToolPolicyDefinition[];
-}
-
-export type PluginAppBackendDefinition = PluginAppNativeBackendDefinition | PluginAppMcpBackendDefinition;
-
-export interface PluginAppSurfaceDefinition {
-  id: string;
-  title: string;
-  backend: string;
-  resourceUri: string;
-  availability: "session";
-}
-
-export interface PluginAppManifest {
-  schemaVersion: 1;
-  backends: PluginAppBackendDefinition[];
-  surfaces: PluginAppSurfaceDefinition[];
-}
-
-export const PLUGIN_APP_LIMITS = Object.freeze({
-  manifestCount: 8,
-  manifestBytes: 256 * 1024,
-  backendCount: 32,
-  surfaceCount: 32,
-  htmlBytes: 16 * 1024 * 1024,
-  resourceBytes: 8 * 1024 * 1024,
-  appDataBytes: 256 * 1024,
-  argsBytes: 64 * 1024,
-  maxArgsBytes: 64 * 1024 * 1024,
-  resultBytes: 1024 * 1024,
-  widgetStateBytes: 32 * 1024,
-  handoffBytes: 32 * 1024,
-  messageCharacters: 4096,
-  sessionPages: 4,
-  windowPages: 8,
-  jsonDepth: 32,
-});
-
-export const PLUGIN_APP_HTML_MIME_TYPE = "text/html;profile=mcp-app";
-
-export type PluginAppBackendKind = PluginAppBackendDefinition["kind"];
-export interface PluginAppSource { sessionId: string; appId: string }
-export type PluginAppOrigin = { kind: "surface"; surfaceId: string } | { kind: "tool-result"; sourcePartId: string };
-export interface PluginAppRecord {
-  id: string;
-  sessionId: string;
-  pluginId: string;
-  pluginVersion: string;
-  pluginDigest: string;
-  definitionDigest: string;
-  backendId: string;
-  backendKind: PluginAppBackendKind;
-  resourceUri: string;
-  origin: PluginAppOrigin;
-  logicalKey: string;
-  status: "open" | "closed" | "revoked";
-  controlRevision: number;
-  activeActionRunId?: string;
-  lastActionRunId?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-/** An opaque host credential. Its source, digests and backend are bound server-side. */
-export interface PluginAppRuntimeLease { token: string; backendGeneration: string }
-export type PluginAppJson = null | boolean | number | string | PluginAppJson[] | { [key: string]: PluginAppJson };
-export interface PluginAppInvokeInput {
-  requestId: string;
-  expectedRevision: number;
-  toolName: string;
-  args: Record<string, PluginAppJson>;
-}
-export interface PluginAppToolRequest extends PluginAppInvokeInput { source: PluginAppSource; lease: PluginAppRuntimeLease }
-export interface OpenPluginAppInput { pluginId: string; surfaceId: string }
-export interface ClosePluginAppInput { expectedRevision: number }
-export type PluginAppExecutionState = "not_started" | "completed" | "unknown";
+export type { PluginAppInvokeInput, OpenPluginAppInput, ClosePluginAppInput } from "@vykor/domain-contracts/plugin-apps";
+export interface PluginAppToolRequest extends PluginAppToolInput {}
 export interface PluginAppAvailability {
   canReadResource: boolean;
   canInvokeTools: boolean;
   canMessage: boolean;
   reason?: "closed" | "revoked" | "session-unavailable" | "snapshot-changed" | "permission-missing" | "runtime-unavailable" | "action-unconfirmed";
 }
-export interface PluginAppToolPolicy {
-  confirmation: "required" | "granted";
-  maxArgumentsBytes: number;
-  authorization?: "plugin-data-write";
-}
-export interface PluginAppToolDescriptor { name: string; description: string; inputSchema: Record<string, unknown>; policy?: PluginAppToolPolicy }
-/** Reads a host descriptor only; page-supplied policy is never accepted by the invoke parser. */
-export function getPluginAppToolPolicy(descriptor?: PluginAppToolDescriptor): PluginAppToolPolicy {
-  const policy = descriptor?.policy;
-  if (!policy) return { confirmation: "required", maxArgumentsBytes: PLUGIN_APP_LIMITS.argsBytes };
-  if (!Number.isSafeInteger(policy.maxArgumentsBytes) || policy.maxArgumentsBytes < 1 || policy.maxArgumentsBytes > PLUGIN_APP_LIMITS.maxArgsBytes
-    || !["required", "granted"].includes(policy.confirmation)
-    || (policy.authorization !== undefined && policy.authorization !== "plugin-data-write")
-    || (policy.confirmation === "granted" && policy.authorization !== "plugin-data-write")) throw new Error("plugin_app_invalid_policy");
-  return { ...policy };
-}
 export interface PluginAppResponse { source: PluginAppSource; app: PluginAppRecord; availability: PluginAppAvailability; lease?: PluginAppRuntimeLease; tools?: PluginAppToolDescriptor[] }
 export interface PluginAppListResponse { apps: PluginAppResponse[] }
-export interface PluginAppActionMetadata {
-  schemaVersion: 1;
-  source: PluginAppSource;
-  requestId: string;
-  requestFingerprint: string;
-  expectedRevision: number;
-  acceptedRevision: number;
-  pluginId: string;
-  pluginVersion: string;
-  pluginDigest: string;
-  definitionDigest: string;
-  backendId: string;
-  backendKind: PluginAppBackendKind;
-  resourceUri: string;
-  toolName: string;
-  registeredToolName: string;
-  toolUseId: string;
-  args: Record<string, PluginAppJson>;
-  executionState: PluginAppExecutionState;
-}
-export interface PluginAppActionReceipt {
-  source: PluginAppSource; requestId: string; runId: string; expectedRevision: number; acceptedRevision: number;
-  status: import("./session").SessionRunRecord["status"]; executionState: PluginAppExecutionState;
-}
 export interface PluginAppActionResponse {
   receipt: PluginAppActionReceipt;
   result?: import("@vykor/agent-contracts/tool-data").McpCallResultData;
   dataError?: "plugin_app_invalid_data" | "plugin_app_data_too_large" | "plugin_app_unsupported_content" | "plugin_app_result_unavailable";
 }
-export interface PluginAppConversationRequest {
-  source: PluginAppSource; lease: PluginAppRuntimeLease; requestId: string; expectedRevision: number;
-  text: string; data: PluginAppJson;
-}
-export interface PluginAppSubmissionReceipt {
-  source: PluginAppSource; requestId: string; inputId: string; runId: string; expectedRevision: number;
-  status: import("./session").SessionRunRecord["status"];
-}
-/** Only host-owned Run metadata can provide execution facts. External ingress reserves this key. */
-export function readPluginAppAction(metadata: Record<string, unknown>): PluginAppActionMetadata | undefined {
-  try {
-    const value = record(copyPluginAppJson(metadata.pluginAppAction, PLUGIN_APP_LIMITS.maxArgsBytes + 32 * 1024));
-    if (value.schemaVersion !== 1 || !["not_started", "completed", "unknown"].includes(String(value.executionState))
-      || !["native-tools", "mcp-server"].includes(String(value.backendKind))) return undefined;
-    parsePluginAppSource(value.source);
-    revision(value.expectedRevision); revision(value.acceptedRevision);
-    if (value.acceptedRevision !== (value.expectedRevision as number) + 1) return undefined;
-    for (const key of ["requestId", "requestFingerprint", "pluginId", "pluginVersion", "pluginDigest", "definitionDigest",
-      "backendId", "resourceUri", "toolName", "registeredToolName", "toolUseId"]) identifier(value[key]);
-    record(copyPluginAppJson(value.args, PLUGIN_APP_LIMITS.maxArgsBytes));
-    return value as unknown as PluginAppActionMetadata;
-  } catch { return undefined; }
-}
-export function parsePluginAppConversationRequest(value: unknown): PluginAppConversationRequest {
-  const input = record(copyPluginAppJson(value, PLUGIN_APP_LIMITS.handoffBytes + 32 * 1024));
-  fields(input, ["source", "lease", "requestId", "expectedRevision", "text", "data"]);
-  const lease = record(input.lease); fields(lease, ["token", "backendGeneration"]);
-  if (typeof input.text !== "string" || [...input.text].length > PLUGIN_APP_LIMITS.messageCharacters || !input.text.trim())
-    throw new Error("plugin_app_invalid_message");
-  return { source: parsePluginAppSource(input.source), lease: { token: identifier(lease.token), backendGeneration: identifier(lease.backendGeneration) },
-    requestId: identifier(input.requestId), expectedRevision: revision(input.expectedRevision), text: input.text,
-    data: copyPluginAppJson(input.data, PLUGIN_APP_LIMITS.handoffBytes) };
-}
+export interface PluginAppConversationRequest extends PluginAppConversationInput {}
 
-/** Copy only finite, plain JSON without invoking getters/toJSON or retaining input aliases. */
-export function copyPluginAppJson(value: unknown, maxBytes: number): PluginAppJson {
-  const ancestors = new Set<object>();
-  let budget = maxBytes;
-  const spend = (text: string): void => {
-    budget -= new TextEncoder().encode(text).byteLength;
-    if (budget < 0) throw new Error("plugin_app_json_too_large");
-  };
-  const copy = (item: unknown, depth: number): PluginAppJson => {
-    if (item === null || typeof item === "boolean" || typeof item === "string" || (typeof item === "number" && Number.isFinite(item))) {
-      spend(JSON.stringify(item)); return item;
-    }
-    if (typeof item !== "object" || item === null || depth >= PLUGIN_APP_LIMITS.jsonDepth || ancestors.has(item)) throw new Error("plugin_app_invalid_json");
-    const array = Array.isArray(item);
-    if (!array && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) throw new Error("plugin_app_invalid_json");
-    const descriptors = Object.getOwnPropertyDescriptors(item);
-    if (Object.getOwnPropertySymbols(item).length || Object.values(descriptors).some(descriptor => descriptor.get || descriptor.set)) throw new Error("plugin_app_invalid_json");
-    ancestors.add(item); spend(array ? "[]" : "{}");
-    try {
-      if (array) {
-        const result: PluginAppJson[] = [];
-        if (Object.keys(item).length !== item.length) throw new Error("plugin_app_invalid_json");
-        for (let index = 0; index < item.length; index++) {
-          if (index) spend(","); result.push(copy(descriptors[index]!.value, depth + 1));
-        }
-        return result;
-      }
-      const result: Record<string, PluginAppJson> = {};
-      let count = 0;
-      for (const key of Object.keys(item).sort()) {
-        if (count++) spend(","); spend(`${JSON.stringify(key)}:`);
-        Object.defineProperty(result, key, { value: copy(descriptors[key]!.value, depth + 1), enumerable: true, writable: true, configurable: true });
-      }
-      return result;
-    } finally { ancestors.delete(item); }
-  };
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error("plugin_app_invalid_json_limit");
-  return copy(value, 0);
+function parsed<T>(result: ValidationResult<T>): T {
+  if (!result.ok) throw new Error(result.code);
+  return result.value;
 }
-
-function record(value: unknown): Record<string, PluginAppJson> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("plugin_app_invalid_request");
-  return value as Record<string, PluginAppJson>;
-}
-function fields(value: Record<string, PluginAppJson>, names: string[]): void {
-  if (Object.keys(value).length !== names.length || names.some(name => !Object.hasOwn(value, name))) throw new Error("plugin_app_invalid_request");
-}
-function identifier(value: unknown): string {
-  if (typeof value !== "string" || !value.trim() || value.length > 1024) throw new Error("plugin_app_invalid_request");
-  return value;
-}
-function revision(value: unknown): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error("plugin_app_invalid_request");
-  return value as number;
-}
-export function parsePluginAppSource(value: unknown): PluginAppSource {
-  const input = record(copyPluginAppJson(value, 4096)); fields(input, ["sessionId", "appId"]);
-  return { sessionId: identifier(input.sessionId), appId: identifier(input.appId) };
-}
-export function parseOpenPluginAppInput(value: unknown): OpenPluginAppInput {
-  const input = record(copyPluginAppJson(value, 4096)); fields(input, ["pluginId", "surfaceId"]);
-  return { pluginId: identifier(input.pluginId), surfaceId: identifier(input.surfaceId) };
-}
-export function parseClosePluginAppInput(value: unknown): ClosePluginAppInput {
-  const input = record(copyPluginAppJson(value, 1024)); fields(input, ["expectedRevision"]);
-  return { expectedRevision: revision(input.expectedRevision) };
-}
-export function parsePluginAppToolRequest(value: unknown): PluginAppToolRequest {
-  const input = record(copyPluginAppJson(value, PLUGIN_APP_LIMITS.maxArgsBytes + 16 * 1024));
-  fields(input, ["requestId", "expectedRevision", "toolName", "args", "source", "lease"]);
-  const lease = record(input.lease); fields(lease, ["token", "backendGeneration"]);
-  const args = record(copyPluginAppJson(input.args, PLUGIN_APP_LIMITS.maxArgsBytes));
-  return { requestId: identifier(input.requestId), expectedRevision: revision(input.expectedRevision), toolName: identifier(input.toolName), args,
-    source: parsePluginAppSource(input.source), lease: { token: identifier(lease.token), backendGeneration: identifier(lease.backendGeneration) } };
-}
-
-/** Explicit ordinary-input references. Host credentials never travel through metadata. */
-export function parsePluginAppComposerContexts(value: unknown): PluginAppConversationRequest[] {
-  if (!Array.isArray(value) || value.length > PLUGIN_APP_LIMITS.windowPages) throw new Error("plugin_app_invalid_context");
-  return value.map(parsePluginAppConversationRequest);
-}
+export function parsePluginAppConversationRequest(value: unknown): PluginAppConversationRequest { return parsed(validatePluginAppConversationInput(value)); }
+export function parsePluginAppSource(value: unknown): PluginAppSource { return parsed(validatePluginAppSource(value)); }
+export function parseOpenPluginAppInput(value: unknown): OpenPluginAppInput { return parsed(validateOpenPluginAppInput(value)); }
+export function parseClosePluginAppInput(value: unknown): ClosePluginAppInput { return parsed(validateClosePluginAppInput(value)); }
+export function parsePluginAppToolRequest(value: unknown): PluginAppToolRequest { return parsed(validatePluginAppToolInput(value)); }
+export function parsePluginAppComposerContexts(value: unknown): PluginAppConversationRequest[] { return parsed(validatePluginAppComposerContexts(value)); }
 /** A synchronous admission failure, not a missing receipt or an execution-state estimate. */
 export interface PluginAppAdmissionRejection {
   code: "plugin_app_not_accepted";
@@ -299,9 +68,4 @@ export interface PluginAppResourceWatch {
   lease: PluginAppRuntimeLease;
   leaseGeneration: number;
   uris: string[];
-}
-/** Created by trusted checked result projection, never from plugin result metadata. */
-export interface PluginAppToolOrigin {
-  pluginId: string; pluginVersion: string; pluginDigest: string; definitionDigest: string;
-  backendId: string; backendKind: PluginAppBackendKind; resourceUri: string; toolName: string;
 }

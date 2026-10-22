@@ -1,12 +1,11 @@
 import { expect, it } from "vitest";
 import { PluginAppRuntime } from "./plugin-app-runtime.js";
 import type { CapturedPluginAppBackend } from "./plugin-app-backends.js";
-import type { PluginAppRecord } from "@vykor/protocol";
+import type { PluginAppHostBinding } from "@vykor/plugin-contracts/runtime";
 
 it("binds credentials to full immutable identity and original capture, and invalidates generation replacement", async () => {
-  const app: PluginAppRecord = { id: "a", sessionId: "s", pluginId: "p", pluginVersion: "1", pluginDigest: "p",
-    definitionDigest: "d", backendId: "b", backendKind: "native-tools", resourceUri: "ui://page", origin: { kind: "surface", surfaceId: "page" },
-    logicalKey: "key", status: "open", controlRevision: 0, createdAt: 1, updatedAt: 1 };
+  const app: PluginAppHostBinding = { instanceId: "a", agentId: "s", sessionId: "s", pluginId: "p", pluginVersion: "1", pluginDigest: "p",
+    definitionDigest: "d", backendId: "b", backendKind: "native-tools", resourceUri: "ui://page" };
   let generation = "g";
   const capture = (): CapturedPluginAppBackend => {
     const captured = generation;
@@ -21,9 +20,19 @@ it("binds credentials to full immutable identity and original capture, and inval
   const lease = runtime.host.issue(app, "g");
   await runtime.host.refresh(app);
   expect(runtime.host.issue(app, "g")).toEqual(lease);
-  for (const patch of [{ sessionId: "other" }, { id: "other" }, { resourceUri: "ui://other" }, { definitionDigest: "other" },
-    { pluginDigest: "other" }, { pluginVersion: "2" }, { backendId: "other" }, { logicalKey: "other" }])
+  for (const patch of [{ sessionId: "other" }, { instanceId: "other" }, { resourceUri: "ui://other" }, { definitionDigest: "other" },
+    { pluginDigest: "other" }, { pluginVersion: "2" }, { backendId: "other" }, { agentId: "other" }])
     expect(runtime.host.validate({ ...app, ...patch }, lease, "g")).toBe(false);
+  const sibling = { ...app, instanceId: "b" };
+  await runtime.host.refresh(sibling);
+  const siblingLease = runtime.host.issue(sibling, "g");
+  expect(siblingLease.token).not.toBe(lease.token);
+  expect(runtime.host.validate(sibling, lease, "g")).toBe(false);
+  runtime.host.revoke({ sessionId: "s", instanceId: "a" });
+  expect(runtime.host.validate(sibling, siblingLease, "g")).toBe(true);
+  expect(runtime.host.validate(app, lease, "g")).toBe(false);
+  await runtime.host.refresh(app);
+  expect(runtime.host.issue(app, "g").token).not.toBe(lease.token);
   generation = "next";
   expect(runtime.host.validate(app, lease, "g")).toBe(false);
   await runtime.host.refresh(app);

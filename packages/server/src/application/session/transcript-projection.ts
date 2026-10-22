@@ -1,14 +1,11 @@
-import type { PluginAppToolOrigin } from "@vykor/protocol";
+import type { PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
 import type { ReasoningSource, StreamEvent } from "@vykor/agent-contracts";
 import { externalToolMetadata, toolFeedbackFields } from "@vykor/core";
 import type { AssistantMessagePhase } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
-import type {
-  SessionEventRecord,
-  SessionInputRecord,
-  SessionMessagePartStatus,
-} from "@vykor/protocol";
-import { isCommittedModelPart, readPluginUiInstance, settleSessionToolMetadata } from "@vykor/protocol";
+import type { SessionEventRecord, SessionInputRecord, SessionMessagePartStatus } from "@vykor/domain-contracts/sessions";
+import { isCommittedModelPart, settleSessionToolMetadata } from "@vykor/domain-contracts/sessions";
+import { readPluginUiInstance } from "@vykor/domain-contracts/plugin-apps/history";
 import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 import { generatedImageAssets, recordValue } from "./transcript-image-metadata.js";
 

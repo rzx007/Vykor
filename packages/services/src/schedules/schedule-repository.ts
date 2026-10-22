@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import type { AppendEventInput, CreateScheduledRunInput, CreateScheduledTaskInput, ScheduledRunRecord, ScheduledTaskRecord, UpdateScheduledRunInput, UpdateScheduledTaskInput } from "@vykor/protocol";
+import type { AppendEventInput } from "../conversations/commands.js";
+import type { CreateScheduledRunInput, CreateScheduledTaskInput, UpdateScheduledRunInput, UpdateScheduledTaskInput } from "./commands.js";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 import { and, desc, eq, exists, inArray, placeholder } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";

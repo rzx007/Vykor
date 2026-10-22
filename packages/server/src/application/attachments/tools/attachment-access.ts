@@ -1,8 +1,6 @@
-import type {
-  SessionInputAttachmentRecord,
-  SessionRecord,
-} from "@vykor/protocol";
-import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
+import type { SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
 import {
   classifyAttachmentCandidate,
   type LocalOcrResult,

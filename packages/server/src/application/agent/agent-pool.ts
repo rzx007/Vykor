@@ -4,11 +4,7 @@ import {
   type VykorAgent,
 } from "@vykor/agent-runtime";
 import type { CompactContextSection } from "@vykor/core";
-import type {
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-} from "@vykor/protocol";
+import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import type { LoadDaemonAgent } from "../../daemon/daemon-agent.js";
 

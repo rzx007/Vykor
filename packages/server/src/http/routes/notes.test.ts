@@ -1,9 +1,5 @@
 import { createNoteApplicationService } from "../../application/notes/note-application-service.js";
-import type {
-  CreateNoteInput,
-  NoteRecord,
-  UpdateNoteInput,
-} from "@vykor/protocol";
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/protocol";
 import { NoteRevisionConflictError } from "@vykor/services";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";

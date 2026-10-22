@@ -5,7 +5,7 @@ import { isToolVisibleTo, toolDefinitionIdentity } from "@vykor/core";
 import type { CapturedMcpAppResources } from "@vykor/mcp";
 import type { NativeAppMetadata } from "@vykor/plugins";
 import { type McpCallResultData } from "@vykor/agent-contracts";
-import { PLUGIN_APP_LIMITS, type PluginAppBackendDefinition, type PluginAppSurfaceDefinition, type PluginAppToolPolicy } from "@vykor/protocol";
+import type { PluginAppBackendDefinition, PluginAppSurfaceDefinition } from "@vykor/plugin-contracts/manifest";
 import { readonlyMap } from "../plugins/run-capability-view.js";
 
 /** Resource-only port. No arbitrary invoke, Tool Host, registry, or execute function crosses this boundary. */
@@ -55,18 +55,6 @@ export interface PluginAppBackendCaptureInput {
   /** Trusted host catalogue with the current host/role/deny/environment policy applied. */
   toolRegistry: IToolRegistry;
   pluginDataWriteApproved?: boolean;
-}
-
-/** Host-only derivation from reviewed manifest, current approval and the original binding. MCP metadata cannot grant this. */
-export function capturedAppToolPolicy(capture: CapturedPluginAppBackend, name: string): PluginAppToolPolicy {
-  const tool = capture.tools.get(name);
-  if (!tool) throw new Error("plugin_app_tool_unavailable");
-  const declared = capture.definition.toolPolicies?.find(policy => policy.tool === name);
-  const granted = declared?.authorization === "plugin-data-write" && capture.pluginDataWriteApproved === true
-    && tool.ownerPluginId === capture.pluginId && isToolVisibleTo(tool.definition, "app") && !isToolVisibleTo(tool.definition, "model");
-  return Object.freeze({ confirmation: granted ? "granted" : "required",
-    maxArgumentsBytes: declared?.maxArgumentsBytes ?? PLUGIN_APP_LIMITS.argsBytes,
-    ...(granted ? { authorization: "plugin-data-write" as const } : {}) });
 }
 
 /** Receiver and identity belong to the installed definition, never a newly generated equivalent wrapper. */

@@ -8,8 +8,8 @@ import {
   getTasksDir,
 } from "@vykor/host-config";
 
-import type { StorageCategory, StorageReport } from "@vykor/protocol";
-export type { StorageCategory, StorageReport } from "@vykor/protocol";
+import type { StorageCategory, StorageReport } from "./query-models.js";
+export type { StorageCategory, StorageReport } from "./query-models.js";
 export function maintenanceDirectories(storePath: string) {
   const root = dirname(resolve(storePath));
   return { attachments: join(root, "attachments"), memory: join(getDataDir(), "memory"), executionOutput: getTasksDir() };

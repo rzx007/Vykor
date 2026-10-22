@@ -1,7 +1,6 @@
-import {
-  readPluginAppAction,
-  type PluginAppToolRequest,
-} from "@vykor/protocol";
+import { pluginAppHostInvocation } from "./plugin-app-host-binding.js";
+import { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
+import type { PluginAppToolRequest } from "./plugin-app-inputs.js";
 import type { SessionStore } from "@vykor/services";
 import type { SessionRunWorkContext } from "../../runtime/run-coordinator.js";
 import type { DaemonOperationGate } from "../control/daemon-operation-gate.js";
@@ -44,7 +43,7 @@ export class PluginAppOperationExecutor {
       const prepared = await service.prepare(runId, request);
       publish(() => store.runs.updateRun(runId, { status: "running" }));
       const messageId = `app_message_${runId}`;
-      await prepared.host.plugins.runPluginAppTool(prepared.app, request, {
+      await prepared.host.plugins.runPluginAppTool(pluginAppHostInvocation(prepared.app, request, prepared.agent.id), {
         scope: {
           agentId: prepared.agent.id,
           sessionId: session.id,

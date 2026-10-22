@@ -21,6 +21,11 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@vykor/agent-contracts": "workspace:*"
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/json-data": "workspace:*",
+    "@vykor/jobs": "workspace:*",
+    "@vykor/terminal": "workspace:*",
+    "@vykor/plugin-contracts": "workspace:*",
+    "@vykor/domain-contracts": "workspace:*"
   }
 }

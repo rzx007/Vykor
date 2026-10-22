@@ -4,10 +4,8 @@ import { type ToolRegistrationSource } from "@vykor/agent-contracts";
 import { type ContextLedgerSegment, type Message } from "@vykor/agent-contracts";
 import { type Settings } from "@vykor/host-config";
 import { buildPromptLedgerSegments } from "@vykor/prompts";
-import {
-  readSessionRuntimeConfig,
-  type SessionRecord,
-} from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "./session/runtime-configuration.js";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import type { ContextUsageCache } from "./context-usage-cache.js";
 import type { ModelInfo, ModelProviderInfo } from "./settings-api.js";

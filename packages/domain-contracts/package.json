@@ -1,0 +1,94 @@
+{
+  "name": "@vykor/domain-contracts",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./sessions": {
+      "import": "./src/sessions/index.ts",
+      "types": "./src/sessions/index.ts"
+    },
+    "./inputs": {
+      "import": "./src/inputs/index.ts",
+      "types": "./src/inputs/index.ts"
+    },
+    "./goals": {
+      "import": "./src/goals/index.ts",
+      "types": "./src/goals/index.ts"
+    },
+    "./attachments": {
+      "import": "./src/attachments/index.ts",
+      "types": "./src/attachments/index.ts"
+    },
+    "./schedules": {
+      "import": "./src/schedules/index.ts",
+      "types": "./src/schedules/index.ts"
+    },
+    "./channels": {
+      "import": "./src/channels/index.ts",
+      "types": "./src/channels/index.ts"
+    },
+    "./notes": {
+      "import": "./src/notes/index.ts",
+      "types": "./src/notes/index.ts"
+    },
+    "./memory": {
+      "import": "./src/memory/index.ts",
+      "types": "./src/memory/index.ts"
+    },
+    "./approvals": {
+      "import": "./src/approvals/index.ts",
+      "types": "./src/approvals/index.ts"
+    },
+    "./plugin-apps": {
+      "import": "./src/plugin-apps/index.ts",
+      "types": "./src/plugin-apps/index.ts"
+    },
+    "./workspace-changes": {
+      "import": "./src/workspace-changes/index.ts",
+      "types": "./src/workspace-changes/index.ts"
+    },
+    "./usage": {
+      "import": "./src/usage/index.ts",
+      "types": "./src/usage/index.ts"
+    },
+    "./maintenance": {
+      "import": "./src/maintenance/index.ts",
+      "types": "./src/maintenance/index.ts"
+    },
+    "./sessions/model-metadata": {
+      "import": "./src/sessions/model-metadata.ts",
+      "types": "./src/sessions/model-metadata.ts"
+    },
+    "./sessions/runtime-config": {
+      "import": "./src/sessions/runtime-config.ts",
+      "types": "./src/sessions/runtime-config.ts"
+    },
+    "./plugin-apps/history": {
+      "import": "./src/plugin-apps/history.ts",
+      "types": "./src/plugin-apps/history.ts"
+    },
+    "./sessions/records": {
+      "import": "./src/sessions/records.ts",
+      "types": "./src/sessions/records.ts"
+    },
+    "./approvals/auto-review": {
+      "import": "./src/approvals/auto-review.ts",
+      "types": "./src/approvals/auto-review.ts"
+    }
+  },
+  "scripts": {
+    "build": "exit 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/json-data": "workspace:*",
+    "@vykor/plugin-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "catalog:"
+  }
+}

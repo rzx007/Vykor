@@ -1,5 +1,6 @@
-import type { CreateSessionInput, SessionInputRecord, SessionRecord } from "@vykor/protocol";
-import { withoutHostPluginMetadata } from "@vykor/protocol";
+import type { CreateSessionInput } from "../sessions/commands.js";
+import type { SessionInputRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
+import { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertSynchronousCommit } from "../database/chat-persistence.js";
 import type { SessionRepository } from "../sessions/session-repository.js";

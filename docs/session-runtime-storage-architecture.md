@@ -41,6 +41,12 @@ SQLite 连接配置、备份与外层同步事务继续由现有连接负责，�
 
 当前两个实现使用同步提交；同步入口会拒绝 Promise 返回值，回滚并阻止提交后通知。未来异步数据库需增加等待提交的事务入口，同时调整 admission、projection 和通知调用者；缓存查询可以保持同步，不把后台异步写入当作已经成功。
 
+## 记录与写入命令
+
+Session、Input、Run、Goal、Attachment 等记录及其纯数据规则来自 `domain-contracts` 对应业务子入口。该包没有汇总所有记录的根入口，不持有 Repository、事务、配置加载或文件 I/O。Services 不依赖 Protocol。
+
+Services 在 sessions、conversations、runs、permissions、schedules、notes 和 session-runtime 等模块用自己的 `commands.ts` 定义写入输入，查询条件也在所属存储模块定义。Application 将业务意图转换成这些命令，Repository/Transaction 再按自身不变量验证和写入；HTTP 字段、状态码和分页响应不成为存储契约。
+
 ## 状态放在哪里
 
 | 状态 | 当前负责人 | 说明 |
@@ -154,7 +160,7 @@ Daemon 对外 ready 前由 Server 的 recovery service 收束上次进程留下�
 
 Attachment 当前按层各保留一个领域入口：
 
-- Services：`packages/services/src/attachments/` 是唯一根。`persistence/` 放 SQLite 记录、Repository 和原子事务；`storage/` 放内容寻址 Blob、文件名/媒体类型、完整性检查和存储操作互斥；`processing/` 放 OCR 和图片标准化；`content/` 放不依赖存储的内容分类与文本解码。稳定错误放在该根目录。
+- Services：`packages/services/src/attachments/` 是唯一根。`attachment-policy.ts` 是 `DEFAULT_ATTACHMENT_LIMITS` 的单一来源，独立 Services 可以直接使用，Server 引用同一默认值；domain-contracts 只定义限额形状和校验。`persistence/` 放 SQLite 记录、Repository 和原子事务；`storage/` 放内容寻址 Blob、文件名/媒体类型、完整性检查和存储操作互斥；`processing/` 放 OCR 和图片标准化；`content/` 放不依赖存储的内容分类与文本解码。稳定错误放在该根目录。
 - Server：`packages/server/src/application/attachments/attachment-service.ts` 是 daemon 应用用例入口，负责组合事务、Blob Store、限制和存储操作 gate。routing、resources、tools 收在同一根下的子目录。远程图片导入属于 visual tools，不在 Attachment processing。
 - Client：`packages/client/src/resources/attachment-resource.ts` 保持远程 Resource。
 - Desktop：`apps/desktop/src/main/features/attachment/` 继续负责本机交互；上传生命周期与本地文件操作分别在 `attachment-upload-service.ts` 和 `attachment-file-service.ts`，门面只做委派。
@@ -189,6 +195,6 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 
 ## 存储与执行的依赖边界
 
-`database`、各记录域和 `session-runtime` 只持有存储、配置及协议数据。它们不能反向调用 Core、execution-node、Sandbox、Agent、PTY 或 Office/Memory 辅助服务；`scripts/architecture-policy.json` 通过导入图验证。附件图片/OCR 处理保留既有专用实现，不参与 Agent/PTY 组装。
+`database`、各记录域和 `session-runtime` 只持有存储、自有命令和明确的领域数据，不引用 Protocol 的 HTTP DTO。它们不能反向调用 Core、execution-node、Sandbox、Agent、PTY 或 Office/Memory 辅助服务；`scripts/architecture-policy.json` 通过导入图验证。附件图片/OCR 处理保留既有专用实现，不参与 Agent/PTY 组装。
 
-本地执行与 LSP 已归 `@vykor/execution-node`。Server 持有应用级 ExecutionRuntimeOwner 并在关闭时回收；Node/工具通过明确接口借用，不再从 services 入口发现执行宿主。Goal 的持久事务仍归 services，准入和结算编排在 Server GoalModelAttemptService；事件投影不能再写 Goal 用量。
+本地执行与 LSP 已归 `@vykor/execution-node`。Server 持有应用级 ExecutionRuntimeOwner 并在关闭时回收；Node/工具通过明确接口借用，不再从 services 入口发现执行宿主。Office 转换保留自己的 `OfficeDocumentPreview` 数据，不依赖 Protocol 的预览响应。Goal 的持久事务仍归 services，准入和结算编排在 Server GoalModelAttemptService；事件投影不能再写 Goal 用量。

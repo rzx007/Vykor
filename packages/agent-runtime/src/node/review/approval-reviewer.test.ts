@@ -1,7 +1,7 @@
 import type { StreamEvent, StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ApprovalReviewInput, ApprovalReviewResult } from "@vykor/protocol";
+import type { ApprovalReviewInput, ApprovalReviewResult } from "@vykor/agent-contracts/permissions";
 import { createApprovalReviewer, parseApprovalReviewResult } from "./approval-reviewer.js";
 
 const approved: ApprovalReviewResult = { decision: "approve", risk: "low", authorization: "task_implied", reason: "修改属于用户要求的项目范围。" };

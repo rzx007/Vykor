@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@vykor/services";
 import { createGoalRunContribution } from "../../goals/goal-run-contribution.js";
-import type { GoalUpdateInput, SessionGoal } from "@vykor/protocol";
+import type { GoalUpdateInput, SessionGoal } from "@vykor/domain-contracts/goals";
 import { SessionGoalService } from "../session-goal-service.js";
 import type { AdmitPromptInput } from "../run-admission-service.js";
 import type { GoalWaitCheck } from "../goal-wait-verifier.js";

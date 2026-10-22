@@ -1,8 +1,4 @@
-import {
-  parseCreateNoteInput,
-  parseUpdateNoteInput,
-  ProtocolValidationError,
-} from "@vykor/protocol";
+import { parseCreateNoteInput, parseUpdateNoteInput, ProtocolValidationError } from "@vykor/protocol";
 import type { NoteApplicationService } from "../../application/notes/note-application-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { Hono } from "hono";

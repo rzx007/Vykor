@@ -1,7 +1,4 @@
-import type {
-  AutoReviewSeverity,
-  AutoReviewVerdict,
-} from "@vykor/protocol";
+import type { AutoReviewSeverity, AutoReviewVerdict } from "@vykor/domain-contracts/approvals";
 
 import type { AutoReviewChangeFile, AutoReviewRiskDecision } from "./auto-review-policy.js";
 

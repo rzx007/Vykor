@@ -52,6 +52,8 @@ test("sessions, conversations, and runs cannot import server", () => {
 });
 
 test("database cannot depend on sessions, conversations, or runs", () => {
+  assert.deepEqual(checkImportBoundary("packages/services/src/database/read-model.ts", "@vykor/domain-contracts/sessions"), []);
+  assert.deepEqual(checkImportBoundary("packages/services/src/database/read-model.ts", "@vykor/services/sessions"), ["packages/services/src/database/read-model.ts must not depend on sessions"]);
   assert.deepEqual(
     checkImportBoundary("packages/services/src/database/storage-context.ts", "../sessions/index.js"),
     ["packages/services/src/database/storage-context.ts must not depend on sessions"],
@@ -570,9 +572,12 @@ test("portable code permits Vitest only in test files",()=>{
 });
 
 
-test("P6 has no stage exceptions and Client directly depends only on Protocol", () => {
-  assert.equal(targetPolicy.currentPhase, "P6");
+test("P0-P6 exceptions stay retired and Client directly depends only on Protocol", () => {
+  assert.equal(targetPolicy.currentPhase, "P13");
   assert.deepEqual(targetPolicy.stageExceptions, []);
+  assert.ok(targetPolicy.stageExceptions.every(item => Number(item.migrationId.slice(1)) >= 31 && Number(item.removeByPhase.slice(1)) > 7));
+  assert.ok(targetPolicy.stageExceptions.every(item => /^package:(?:@vykor\/protocol(?:#|\/)|packages\/protocol\/)/.test(item.target)
+    || item.target.startsWith("server-application-protocol:")), "P7 exceptions cannot reopen an unrelated old boundary");
   assert.deepEqual(targetPolicy.packages["@vykor/client"].allowed, ["@vykor/protocol"]);
   const fromFile = "packages/client/src/resource.ts";
   for (const input of [
@@ -637,4 +642,113 @@ test("storage declaration tracing rejects host types wrapped behind a local stor
   }, directory => {
     assert.ok(collectPolicyViolations(directory, strictPolicy()).some(item => item.fromFile.endsWith("session-runtime/new-store.ts") && item.target.includes("office/host.ts")));
   });
+});
+
+test("Protocol layering rejects new imports and manifests in all nine lower packages", () => {
+  for (const name of ["agent-runtime", "channels", "host-config", "jobs", "mcp", "plugins", "sandbox", "services", "terminal"]) {
+    for (const fromFile of [`packages/${name}/src/new-capability.ts`, `packages/${name}/src/new.test.ts`, `packages/${name}/package.json`]) {
+      assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy).length, fromFile);
+      assert.ok(checkModuleDependency({ fromFile, specifier: "../../protocol/src/job.js", resolvedFile: "packages/protocol/src/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy).length, fromFile);
+    }
+  }
+  assert.ok(checkModuleDependency({ fromFile: "packages/server/src/application/session/new.ts", specifier: "@vykor/protocol", importedNames: ["parseCreateSessionRequest"] }, targetPolicy).length);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/routes/new.ts", specifier: "@vykor/protocol", resolvedFile: "packages/protocol/src/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy), []);
+});
+
+test("Protocol layering follows wrapped types, function signatures, dynamic imports and aliases", () => {
+  for (const bridge of [
+    'export type Hidden = import("@vykor/protocol").JobSnapshot;',
+    'import type { JobSnapshot } from "@vykor/protocol"; export interface Hidden { job: JobSnapshot }',
+    'import type * as P from "@vykor/protocol"; export type Hidden = Pick<P.JobSnapshot, "id">;',
+    'import type { JobSnapshot } from "@vykor/protocol"; export function Hidden(): JobSnapshot { throw 0 }',
+    'import type { JobSnapshot } from "@vykor/protocol"; export const Hidden: () => JobSnapshot = () => { throw 0 };',
+  ]) policyFixture({
+    "packages/jobs/package.json": JSON.stringify({ name: "@vykor/jobs" }),
+    "packages/protocol/src/index.ts": "export interface JobSnapshot { id: string }",
+    "packages/jobs/tsconfig.json": JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@bridge": ["src/bridge.ts"] } } }),
+    "packages/jobs/src/bridge.ts": bridge,
+    "packages/jobs/src/new.ts": 'import { Hidden as Alias } from "@bridge"; const lazy = import("./bridge.js");',
+    "packages/jobs/src/new.test.ts": 'type Alias = import("./bridge.js").Hidden;',
+    "packages/jobs/src/namespace.ts": 'import type * as Hidden from "./bridge.js";',
+    "packages/jobs/src/dynamic.ts": 'const hidden = import("./bridge.js");',
+    "packages/server/src/application/bridge.ts": bridge,
+    "packages/server/src/application/new.ts": 'import type { Hidden } from "./bridge.js";',
+  }, directory => {
+    const violations = collectPolicyViolations(directory, targetPolicy);
+    for (const file of ["packages/jobs/src/new.ts", "packages/jobs/src/new.test.ts", "packages/jobs/src/namespace.ts", "packages/jobs/src/dynamic.ts", "packages/server/src/application/new.ts"]) {
+      assert.ok(violations.some(item => item.fromFile === file && item.target.includes("protocol/src/index.ts")), `${file}: ${bridge}`);
+    }
+  });
+});
+
+test("pure data entries reject implementation detours and locally declared runtime handles", () => {
+  for (const source of [
+    'export interface Data { signal: AbortSignal }',
+    'export interface Data extends AbortSignal {}',
+    'export type Data = typeof AbortController;',
+    'export type Data = Promise<string>;',
+    'export interface Data { process: NodeJS.Process }',
+    'export { execute } from "./implementation.js";',
+    'import { readFile } from "node:fs/promises";',
+  ]) policyFixture({
+    "packages/terminal/package.json": JSON.stringify({ name: "@vykor/terminal", exports: { "./contracts": "./src/contracts.ts" } }),
+    "packages/terminal/src/contracts.ts": source,
+    "packages/terminal/src/implementation.ts": "export function execute() {}",
+  }, directory => {
+    assert.ok(collectPolicyViolations(directory, targetPolicy).some(item => item.fromFile === "packages/terminal/src/contracts.ts"), source);
+  });
+  policyFixture({
+    "packages/terminal/package.json": JSON.stringify({ name: "@vykor/terminal" }),
+    "packages/terminal/src/contracts.ts": 'export interface TerminalSnapshot { id: string; scope: { kind: "session"; sessionId: string } }',
+  }, directory => assert.deepEqual(collectPolicyViolations(directory, targetPolicy), []));
+  for (const name of ["json-data", "plugin-contracts", "domain-contracts"]) policyFixture({
+    [`packages/${name}/package.json`]: JSON.stringify({ name: `@vykor/${name}`, dependencies: { "node-pty": "1" } }),
+    [`packages/${name}/src/index.ts`]: "export {};",
+  }, directory => assert.ok(collectPolicyViolations(directory, targetPolicy).some(item => item.fromFile === `packages/${name}/package.json`)));
+});
+
+test("Protocol type tracing retains every origin across cyclic wrappers and repeated consumers", () => {
+  policyFixture({
+    "packages/jobs/package.json": JSON.stringify({ name: "@vykor/jobs" }),
+    "packages/protocol/src/index.ts": "export interface JobSnapshot { id: string }",
+    "packages/jobs/src/a.ts": 'import type { B } from "./b.js"; import type { JobSnapshot } from "@vykor/protocol"; export interface A { b: B; job: JobSnapshot }',
+    "packages/jobs/src/b.ts": 'import type { A } from "./a.js"; export interface B { a: A }',
+    "packages/jobs/src/consumer-a.ts": 'import type { A } from "./a.js";',
+    "packages/jobs/src/consumer-b.ts": 'import type { B } from "./b.js";',
+  }, directory => {
+    const violations = collectPolicyViolations(directory, targetPolicy);
+    for (const file of ["consumer-a.ts", "consumer-b.ts"]) assert.ok(violations.some(item => item.fromFile.endsWith(file) && item.target.includes("protocol/src/index.ts")));
+  });
+});
+
+test("P7 exceptions cannot authorize another source, symbol, value import or deadline", () => {
+  const input = { fromFile: "packages/jobs/src/old.ts", specifier: "@vykor/protocol", importedNames: ["JobSnapshot"], typeOnly: true };
+  const policy = strictPolicy();
+  policy.currentPhase = "P7";
+  const [item] = moduleViolations(input, policy);
+  policy.stageExceptions = [{ fromFile: item.fromFile, target: item.target, reason: item.reason, removeByPhase: item.removeByPhase, migrationId: item.migrationId }];
+  assert.deepEqual(checkModuleDependency(input, policy), []);
+  for (const change of [{ fromFile: "packages/jobs/src/new.ts" }, { importedNames: ["parseCreateSessionRequest"] }, { typeOnly: false }]) {
+    assert.ok(checkModuleDependency({ ...input, ...change }, policy).length);
+  }
+  policy.stageExceptions[0].migrationId = "M34";
+  assert.ok(checkModuleDependency(input, policy).length);
+  policy.stageExceptions[0].migrationId = item.migrationId;
+  policy.currentPhase = "P8";
+  assert.ok(checkModuleDependency(input, policy).length);
+});
+
+test("P13 keeps Server transport types out of daemon and application code", () => {
+  for (const directory of ["application", "daemon", "session", "terminal", "runtime"]) {
+    assert.ok(checkModuleDependency({ fromFile: `packages/server/src/${directory}/new.ts`, specifier: "@vykor/protocol", importedNames: ["SessionRecord"], typeOnly: true }, targetPolicy).length);
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/mappers/new.ts", specifier: "@vykor/protocol", importedNames: ["SessionRecord"], typeOnly: true }, targetPolicy), []);
+});
+
+test("P13 allows storage canonical plugin data origins without opening a direct capability dependency", () => {
+  const fromFile = "packages/services/src/database/read-model.ts";
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/manifest.ts", importedNames: ["PluginAppBackendKind"], declarationOrigin: true, typeOnly: true }, targetPolicy), []);
+  assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/plugin-contracts/manifest", importedNames: ["PluginAppBackendKind"], typeOnly: true }, targetPolicy).length);
+  assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/runtime.ts", importedNames: ["PluginAppRuntimeLease"], declarationOrigin: true, typeOnly: true }, targetPolicy).length);
+  assert.ok(checkModuleDependency({ fromFile: "packages/protocol/src/new.ts", specifier: "<local-types>", resolvedFile: "packages/protocol/src/new.ts", importedNames: ["AbortSignal"], typeOnly: true, typeReferences: ["AbortSignal"] }, targetPolicy).length);
 });

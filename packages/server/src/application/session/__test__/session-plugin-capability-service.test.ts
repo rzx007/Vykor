@@ -1,5 +1,6 @@
 import type { PluginCapabilityInventory, PluginCapabilityOwner } from "@vykor/agent-runtime";
-import type { SessionRecord, SessionUserInputItem } from "@vykor/protocol";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";

@@ -1,7 +1,5 @@
-import type {
-  ApprovalReviewEvidence, ApprovalReviewInput, ApprovalReviewOutcome,
-  SessionInputRecord, SessionRunRecord,
-} from "@vykor/protocol";
+import type { ApprovalReviewEvidence, ApprovalReviewInput, ApprovalReviewOutcome } from "@vykor/agent-contracts/permissions";
+import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 export type ApprovalReviewServiceInput = Omit<ApprovalReviewInput, "evidence"> & {
   evidence: Omit<ApprovalReviewEvidence, "userInstruction">;

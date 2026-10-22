@@ -6,7 +6,9 @@ import {
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
   permissionRequests, sessionEvents, sessionEventSequence, sessionPluginApps,
 } from "../session-runtime/schema.js";
-import { normalizeSessionUserInputItems, sessionUserInputText, type PermissionRequestRecord, type SessionEventRecord, type SessionExecutionRecord, type SessionInputAttachmentRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunAttemptRecord, type SessionRunRecord, type SessionUserInputItem } from "@vykor/protocol";
+import { normalizeSessionUserInputItems, sessionUserInputText, type SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import { type PermissionRequestRecord, type SessionEventRecord, type SessionExecutionRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunAttemptRecord, type SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import { type SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 
 import type { DurableEventRegistry } from "../session-runtime/event-registry.js";
 import {
@@ -29,9 +31,9 @@ export function loadSessionReadModel(
     const { originJson, activeActionRunId, lastActionRunId, ...fields } = row;
     state.pluginApps[row.id] = {
       ...fields,
-      backendKind: row.backendKind as import("@vykor/protocol").PluginAppBackendKind,
-      status: row.status as import("@vykor/protocol").PluginAppRecord["status"],
-      origin: JSON.parse(originJson) as import("@vykor/protocol").PluginAppOrigin,
+      backendKind: row.backendKind as import("@vykor/domain-contracts/plugin-apps").PluginAppRecord["backendKind"],
+      status: row.status as import("@vykor/domain-contracts/plugin-apps").PluginAppRecord["status"],
+      origin: JSON.parse(originJson) as import("@vykor/domain-contracts/plugin-apps").PluginAppOrigin,
       ...(activeActionRunId === null ? {} : { activeActionRunId }),
       ...(lastActionRunId === null ? {} : { lastActionRunId }),
     };

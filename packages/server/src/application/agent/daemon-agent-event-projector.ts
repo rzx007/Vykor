@@ -1,5 +1,5 @@
 import type { ToolAppOriginProjector } from "./tool-app-origin-projector.js";
-import type { PluginAppToolOrigin } from "@vykor/protocol";
+import type { PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
 import type { AgentChildSpawnInput, AgentEvent, StreamEvent } from "@vykor/agent-contracts";
@@ -11,13 +11,10 @@ import type { ContentBlock } from "@vykor/agent-contracts";
 import {
   type SessionStore,
 } from "@vykor/services";
-import {
-  patchSessionRuntimeMetadata,
-  readSessionModelUsage,
-  readSessionRuntimeConfig,
-  parseSessionInputItems,
-  type SessionInputRecord,
-} from "@vykor/protocol";
+import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../session/runtime-configuration.js";
+import { readSessionModelUsage } from "@vykor/domain-contracts/sessions";
+import { parseSessionInputItems } from "@vykor/domain-contracts/inputs";
+import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { LiveChildAgentDirectory } from "./live-child-agent-directory.js";

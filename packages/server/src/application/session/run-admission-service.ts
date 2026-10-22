@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
-import {
-  assertPromptMetadataAllowed,
-  type AdmitPromptAttachmentInput,
-  type AttachmentLimits,
-  type ReplaceTranscriptMessageInput,
-  type SessionInputRecord,
-  type SessionRunRecord,
-  type SessionUserInputItem,
-} from "@vykor/protocol";
+import { assertPromptMetadataAllowed } from "@vykor/domain-contracts/inputs";
+import type { PromptAttachment as AdmitPromptAttachmentInput, SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
+import type { ReplaceTranscriptMessageInput } from "@vykor/services";
+import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import {
   AttachmentError,
   normalizePromptAttachments,
@@ -24,7 +20,7 @@ function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
 }
 
 export interface AdmitPromptInput {
-  pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
+  pluginAppContexts?: import("./plugin-app-inputs.js").PluginAppConversationRequest[];
   id?: string;
   delivery?: "queue" | "steer";
   items: SessionUserInputItem[];
@@ -204,7 +200,7 @@ export class RunAdmissionService {
       delivery: "queue" | "steer";
       items: SessionUserInputItem[];
       attachmentFingerprint: string;
-      pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
+      pluginAppContexts?: import("./plugin-app-inputs.js").PluginAppConversationRequest[];
       metadata: Record<string, unknown>;
       promise: Promise<AdmitPromptResult>;
     }

@@ -32,9 +32,9 @@ import {
   ExecutionRuntimeOwner,
 } from "@vykor/execution-node";
 import {
+  DEFAULT_ATTACHMENT_LIMITS,
   SessionStore,
 } from "@vykor/services";
-import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
 import { saveFacts } from "@vykor/personalization";
 import type {
   CreateDaemonAgent,

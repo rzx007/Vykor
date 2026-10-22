@@ -1,8 +1,5 @@
 import { hostedContextUsageAgent } from "../assemble-session-context-usage.js";
-import type {
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-} from "@vykor/protocol";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import type { AgentRememberResult } from "@vykor/agent-runtime";
 import {

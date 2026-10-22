@@ -8,7 +8,7 @@ import { type Message } from "@vykor/agent-contracts";
 import { toolSearchTool } from "@vykor/tools";
 import { createRunCapabilityView, type PluginCapabilityInventory, type RunCapabilityView } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
-import type { SessionInputRecord, SessionRunRecord } from "@vykor/protocol";
+import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 import { RunAdmissionService } from "../run-admission-service.js";
 import { SessionInteractionService } from "../session-interaction-service.js";

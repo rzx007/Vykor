@@ -1,8 +1,6 @@
 import { resolve } from "node:path";
-import {
-  readWorkspaceChangesMetadata, WORKSPACE_CHANGE_MAX_FILES, WORKSPACE_CHANGE_MAX_PATH_LENGTH, WORKSPACE_CHANGE_REASONS,
-  type WorkspaceChangesMetadata,
-} from "@vykor/protocol";
+import { readWorkspaceChangesMetadata, WORKSPACE_CHANGE_MAX_FILES, WORKSPACE_CHANGE_MAX_PATH_LENGTH, WORKSPACE_CHANGE_REASONS } from "@vykor/domain-contracts/workspace-changes";
+import type { WorkspaceChangesMetadata } from "@vykor/domain-contracts/workspace-changes";
 import type { GitRunBaseline, GitRunChangeInspector, GitRunChangeSet, GitRunChangeUnavailable } from "../auto-review/git-run-change-inspector.js";
 import type { AutoReviewSessionPort, AutoReviewEventPublisherPort } from "../auto-review/session-auto-review-service.js";
 

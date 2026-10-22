@@ -1,6 +1,8 @@
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 import type { Settings } from "@vykor/host-config";
-import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem } from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "./runtime-configuration.js";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import type { SessionStore } from "@vykor/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";

@@ -20,12 +20,13 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/protocol": "workspace:*",
     "zod": "catalog:",
     "@vykor/skills": "workspace:*",
     "@vykor/coordinator": "workspace:*",
     "@vykor/agent-contracts": "workspace:*",
-    "@vykor/host-config": "workspace:*"
+    "@vykor/host-config": "workspace:*",
+    "@vykor/plugin-contracts": "workspace:*",
+    "@vykor/json-data": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

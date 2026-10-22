@@ -1,4 +1,4 @@
-import type { StorageRetentionPolicy } from "@vykor/protocol";
+import type { StorageRetentionPolicy } from "@vykor/domain-contracts/maintenance";
 import {
   constants,
   cpSync,

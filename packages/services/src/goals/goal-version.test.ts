@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { GoalVersion } from "@vykor/protocol";
+import type { GoalVersion } from "@vykor/domain-contracts/goals";
 import type { StorageContext } from "../database/storage-context.js";
 import { SessionStore } from "../session-runtime/store.js";
 

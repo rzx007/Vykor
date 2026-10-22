@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/protocol";
+import type { SessionInputRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { resolveRunPluginSelection } from "../session-plugin-selection.js";
 
 const candidates = ["P", "Q"].map(pluginId => ({ pluginId, displayName: pluginId,

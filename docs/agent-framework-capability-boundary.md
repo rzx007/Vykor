@@ -27,13 +27,13 @@ flowchart LR
 @vykor/core <- @vykor/agent-runtime <- @vykor/server <- clients/apps
 ```
 
-Kernel 禁止依赖 server、HTTP、SSE、daemon store 和产品持久记录。Node 可以通过 protocol 使用插件应用数据，但不读取数据库，不拥有 Goal 状态。
+Kernel 禁止依赖 server、HTTP、SSE、daemon store、产品领域记录以及 domain-contracts、plugin-contracts、json-data；纯数据包也不能因此进入 Kernel。Node 从 plugin-contracts 和 Job/Terminal contracts 消费自身需要的数据，不依赖 Protocol、domain-contracts 或 Services，不读取数据库，不拥有 Goal 状态。
 
 ## Kernel 与默认 Node 组装
 
 `agent-contracts` 定义跨包执行数据；`core/engine` 负责模型与工具循环；Kernel 负责 Run/Child 状态和可靠事件交付。Node 在进入循环前捕获本轮工具和能力，通过 `AgentRunPreparation` 返回通用绑定与释放函数。完整 Settings、插件/Skill/MCP/Jobs/Terminal/Schedule 由具体工具工厂闭包持有，不能塞回 `ToolContext`。
 
-Server 保存 `HostedAgent { agent, host }`：执行通过 agent，插件/配置/记忆/检查通过 host。GoalRead/GoalUpdate 与目标提示词由 Server 组成通用 contribution。应用工具仍走 Kernel `runTool` 和同一条受检查执行管道；精确确认由 Node 校验保存的授权、参数、版本与工具身份，硬 deny 优先。可信应用来源由 Server 从本轮真实捕获的绑定生成，不信任工具结果或事件自由字段。
+Server 保存 `HostedAgent { agent, host }`：执行通过 agent，插件/配置/记忆/检查通过 host。GoalRead/GoalUpdate 与目标提示词由 Server 组成通用 contribution。应用工具仍走 Kernel `runTool` 和同一条受检查执行管道；精确确认由 Node 校验保存的授权、参数、版本与工具身份，硬 deny 优先。可信应用来源由 Server 和 Node 从本轮真实捕获的绑定生成，不信任工具结果或事件自由字段。Server 验证持久应用状态与 revision 后，用 `pluginAppHostBinding()` 构造插件、版本、digest、后端和 owner 数据，连同 lease、工具名、参数交给 Node。绑定保留不透明 `instanceId = app.id` 用于隔离和撤销，不携带可变应用记录或 Run 账本。Node 保留原 lease 权威和二次绑定检查，Server 适配它，不另建第二份 token 表。
 
 Node 的能力捕获目录属于根树实例，子 Agent 借用；不设置进程级运行目录或通过全局工具 ID 反查宿主。通用 `profile.toolResultReferences` 仅选择结果引用策略，Node 根据已授权范围配置，Kernel 不据此发现插件。
 
@@ -198,8 +198,8 @@ pullFollowUps / wakeCount / mergeWake
 
 P5 中，Server 通过 GoalModelAttemptService 在实际模型请求前准入、完成事实发布前结算；Node 仅传递通用 gate，事件投影不写 Goal 账本。维护、事实和便签路由调用应用用例，文件位置、写入就绪检查与独占凭证留在应用层。
 
-## P6 长期边界
+## P6 与 Protocol 收敛后的长期边界
 
-架构门禁覆盖静态/类型/动态导入、再导出、别名和跨包相对路径，`stageExceptions` 必须为空。Client 直接依赖 Protocol；Server/Client 联合测试放在 `tests/server-client`，由根测试命令统一执行。存储模块（含 session-runtime）不能导入 Office/Memory 辅助宿主、模型、进程和 PTY。宿主辅助域仍保留原能力。
+架构门禁覆盖静态/类型/动态导入、再导出、别名、跨包相对路径与声明来源。当前阶段为 P13，`stageExceptions` 为空；[P7 基线](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md) 的 4,173 条关系是迁移前历史快照，不是当前例外数。底层能力、Services、Node 和 Server application 不再依赖 Protocol。Client 只直接依赖 Protocol，Server/Client 联合测试放在 `tests/server-client`。存储模块仍不能导入 Office/Memory 辅助宿主、模型、进程和 PTY；宿主辅助域保留原能力。
 
-AgentDefinition 的规范来源为 coordinator/definitions，工具数据与执行错误归 agent-contracts，Settings 归 host-config。旧 Core 配置、工具默认宿主与 Node 转发入口不保留。Swarm 保留独立文件协作用途，不接入当前 Run/Child 链路。
+AgentDefinition 的规范来源为 coordinator/definitions，执行权限与审查数据归 agent-contracts/permissions，工具数据与执行错误归 agent-contracts，Settings 与旧模式归一化归 host-config，有效权限计算归 permissions。领域记录归 domain-contracts，插件清单与后端绑定归 plugin-contracts，通用 JSON 归 json-data/json；Job/Terminal 的纯数据从各自 /contracts 引用。旧 Core 配置、工具默认宿主与 Node 转发入口不保留。Swarm 保留独立文件协作用途，不接入当前 Run/Child 链路。

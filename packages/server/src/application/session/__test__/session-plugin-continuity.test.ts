@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PluginCapabilityInventory, PluginCapabilityOwner } from "@vykor/agent-runtime";
-import type { SessionUserInputItem } from "@vykor/protocol";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { SessionStore } from "@vykor/services";
 import { afterEach, describe, expect, it } from "vitest";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";

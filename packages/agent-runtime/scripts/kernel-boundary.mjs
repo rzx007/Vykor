@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import ts from "typescript";
 
-const hostModules = /(?:^src\/node\/|agent-runtime\/src\/node\/|(?:^|\/)(?:host-config|tools|plugins|coordinator|protocol|services|server|execution-node|api|auth|hooks|mcp|memory|sandbox|skills|terminal-node|terminal|jobs)\/src\/)/;
+const hostModules = /(?:^src\/node\/|agent-runtime\/src\/node\/|(?:^|\/)(?:host-config|tools|plugins|coordinator|protocol|domain-contracts|plugin-contracts|json-data|services|server|execution-node|api|auth|hooks|mcp|memory|sandbox|skills|terminal-node|terminal|jobs)\/src\/)/;
 export function verifyKernelInputs(metafile) {
   const forbidden = Object.keys(metafile.inputs).filter(path => hostModules.test(path.replaceAll("\\", "/")));
   if (forbidden.length) throw new Error(`Kernel bundle reaches Node host modules:\n${forbidden.join("\n")}`);

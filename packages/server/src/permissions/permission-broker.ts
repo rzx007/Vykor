@@ -1,7 +1,7 @@
-import {
-  getSessionStorage, type ApprovalMode, type ApprovalReviewOutcome, type ApprovalReviewRecord,
-  type PermissionRequestRecord, type PermissionStatus,
-} from "@vykor/protocol";
+import { getSessionStorage } from "@vykor/domain-contracts/sessions";
+import type { ApprovalMode, ApprovalReviewOutcome } from "@vykor/agent-contracts/permissions";
+import type { ApprovalReviewRecord } from "@vykor/domain-contracts/approvals";
+import type { PermissionRequestRecord, PermissionStatus } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import type { AgentPermissionDecision } from "@vykor/agent-contracts";
 import type { StructuredLogger } from "../shared/observability.js";

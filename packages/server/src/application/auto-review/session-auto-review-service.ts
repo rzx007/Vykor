@@ -1,17 +1,7 @@
-import type {
-  AppendEventInput,
-  SessionEventRecord,
-  SessionRunRecord,
-  UpdateRunInput,
-} from "@vykor/protocol";
-import {
-  readAutoReviewRunMetadata,
-  type AutoReviewMode,
-  type AutoReviewReason,
-  type AutoReviewRunMetadata,
-  type AutoReviewSeverity,
-  type AutoReviewStatus,
-} from "@vykor/protocol";
+import type { AppendEventInput, UpdateRunInput } from "@vykor/services";
+import type { SessionEventRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
+import type { AutoReviewMode, AutoReviewReason, AutoReviewRunMetadata, AutoReviewSeverity, AutoReviewStatus } from "@vykor/domain-contracts/approvals";
 import { getBuiltinAgentDefinitions } from "@vykor/coordinator";
 import { readonlyMap } from "@vykor/agent-contracts";
 import type { AgentExecutionLimits } from "@vykor/agent-contracts";

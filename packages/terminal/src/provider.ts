@@ -1,8 +1,7 @@
 import type { TerminalEventListener } from "./events";
-import type { TerminalCreateRequest, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalSessionInfo, TerminalSignalRequest, TerminalWaitResult, TerminalWriteRequest } from "@vykor/protocol";
+import type { TerminalCreateRequest, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalSessionInfo, TerminalSignalRequest, TerminalWaitResult, TerminalWriteRequest } from "./contracts.js";
 
-/** Terminal 包对外汇总它实际使用的跨端协议类型。 */
-export type { TerminalCreateRequest, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalRuntime, TerminalSessionInfo, TerminalSessionStatus, TerminalSignal, TerminalSignalRequest, TerminalScope, TerminalSource, TerminalWaitResult, TerminalWriteRequest } from "@vykor/protocol";
+export type { TerminalCreateRequest, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalRuntime, TerminalSessionInfo, TerminalSessionStatus, TerminalSignal, TerminalSignalRequest, TerminalScope, TerminalSource, TerminalWaitResult, TerminalWriteRequest } from "./contracts.js";
 
 export interface TerminalWaitRequest extends TerminalReadRequest {
   timeoutMs: number;

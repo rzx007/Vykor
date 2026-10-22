@@ -12,7 +12,7 @@ import type { RunCapabilityView } from "./node-runtime-resources.js";
 import type { AgentChildBudget } from "@vykor/agent-contracts";
 import type { AgentBackgroundShellHost } from "@vykor/tools";
 import type { PermissionMode, Settings } from "@vykor/host-config";
-import type { ApprovalMode, WorkMode } from "@vykor/protocol";
+import type { ApprovalMode, WorkMode } from "@vykor/agent-contracts/permissions";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { WorkflowRunRepository } from "@vykor/coordinator";
@@ -25,7 +25,7 @@ export interface AgentRunCapabilitySnapshot {
   readonly resolveToolAppOrigin: (
     binding:
       import("./node-runtime-resources.js").NodeRunToolBinding | undefined,
-  ) => Promise<import("@vykor/protocol").PluginAppToolOrigin | undefined>;
+  ) => Promise<import("@vykor/plugin-contracts/runtime").PluginAppToolOrigin | undefined>;
   readonly scope: AgentRunScope;
   readonly identity?: {
     readonly childId?: string;

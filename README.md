@@ -308,12 +308,15 @@ Vykor/
 │   ├── context/              # 上下文组装能力
 │   ├── coordinator/          # Workflow 与多 Agent 编排
 │   ├── core/                 # QueryEngine、历史与工具检查
-│   ├── agent-contracts/      # 通用执行数据、工具与错误
+│   ├── agent-contracts/      # 通用执行数据、工具、权限审查与错误
+│   ├── json-data/            # /json：通用 JSON 检查、序列化与有界复制
+│   ├── plugin-contracts/     # 清单、展示、硬上限与后端绑定纯数据
+│   ├── domain-contracts/     # 按业务子入口组织的产品记录与数据规则
 │   ├── host-config/          # 本机配置、路径和保存
 │   ├── execution-node/       # 本地进程与 LSP
 │   ├── environment/          # Native/WSL 执行环境抽象
 │   ├── hooks/                # Hook 生命周期系统
-│   ├── jobs/                 # 统一 Job 协议与控制
+│   ├── jobs/                 # /contracts 纯数据；Host 观察与控制
 │   ├── mcp/                  # MCP 协议客户端
 │   ├── memory/               # 持久化记忆
 │   ├── output-styles/        # 输出格式
@@ -323,13 +326,13 @@ Vykor/
 │   ├── plugin-sources/       # 插件来源
 │   ├── plugins/              # Native Plugin 安装与运行时
 │   ├── prompts/              # System Prompt 构建
-│   ├── protocol/             # 浏览器安全的 Session/Run/Event 请求、响应与公共类型
+│   ├── protocol/             # HTTP/SSE 请求、响应、事件与编解码
 │   ├── sandbox/              # SRT 权限边界
 │   ├── server/               # daemon Application、HTTP、恢复与投影
 │   ├── services/             # SQLite Repository/Transaction 与本地服务
 │   ├── skills/               # Skill 加载与管理
 │   ├── swarm/                # 多 Agent 团队状态
-│   ├── terminal/             # Terminal 公共契约
+│   ├── terminal/             # /contracts 纯数据；Provider 活体接口
 │   ├── terminal-node/        # Node PTY 实现
 │   ├── themes/               # 终端主题
 │   └── tools/                # 基础工具 registry 与工具实现
@@ -350,8 +353,15 @@ Vykor/
 flowchart TD
   Apps["CLI / TUI / Desktop"] --> Client["@vykor/client"]
   Client --> Protocol["@vykor/protocol"]
-  Server["Server 应用用例 / HTTP"] --> Node["Agent Runtime Node 宿主"]
+  HTTP["Server HTTP / SSE"] --> Protocol
+  HTTP --> Server["Server 应用用例"]
+  Server --> Node["Agent Runtime Node 宿主"]
   Server --> Services["Services Repository / Transaction"]
+  Protocol --> Domain["domain-contracts 领域数据"]
+  Protocol --> Data["plugin-contracts / json-data / 能力 contracts"]
+  Server --> Domain
+  Services --> Domain
+  Node --> NodeData["plugin-contracts / Job 与 Terminal contracts"]
   Node --> Kernel["Kernel Run / Child"]
   Node --> Config["host-config 本机配置"]
   Node --> Execution["execution-node 进程 / LSP"]
@@ -361,7 +371,7 @@ flowchart TD
   Protocol --> Contracts
 ```
 
-Server 保存会话与 Goal 状态，每次模型请求先准入并结算；Node 创建或借用本机资源，由创建者关闭；Kernel 使用已经捕获的通用工具绑定。Swarm 保留独立文件协作用途，不参加当前 Run/Child 执行。
+Server 保存会话与 Goal 状态，每次模型请求先准入并结算。HTTP 将通信输入转换成应用用例输入，应用用例再构造 Services 自己的存储命令或已核实的 Node 绑定。Protocol 只拥有通信格式，Services、能力包、Node 和 Server application 不反向引用它。Client 只直接依赖 Protocol，本地辅助函数只用于请求和显示。Node 创建或借用本机资源，由创建者关闭；Kernel 使用已捕获的通用工具绑定，不进入产品数据包。Swarm 保留独立文件协作用途，不参加当前 Run/Child 执行。
 
 ---
 

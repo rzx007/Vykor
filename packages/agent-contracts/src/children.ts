@@ -1,4 +1,5 @@
 import type { AgentExecutionLimits } from "./execution.js";
+import type { ApprovalMode, WorkMode } from "./permissions.js";
 /** Limits shared by every descendant of one root agent. The root itself is depth 0. */
 export interface AgentChildBudget {
   maxDepth: number;
@@ -65,8 +66,8 @@ export interface AgentChildSpawnInput {
   systemPrompt?: string;
   permissionMode?: "default" | "plan" | "full_auto";
   /** Host-derived constrained modes for durable child projection; never caller authorization. */
-  approvalMode?: "ask" | "auto_review" | "full_access";
-  workMode?: "execute" | "plan";
+  approvalMode?: ApprovalMode;
+  workMode?: WorkMode;
   allowedTools?: string[];
   requiredMcpServers?: string[];
   disallowedTools?: string[];

@@ -1,11 +1,14 @@
 import type { AgentEffectContext, AgentPermissionRequest } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
 import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
-import { normalizeApprovalMode, readRuntimeMetadata, readSessionRuntimeConfig, readSessionRuntimeRevision } from "@vykor/protocol";
+import { normalizeApprovalMode } from "@vykor/host-config";
+import { readRuntimeMetadata, readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
+import { readSessionRuntimeConfig } from "../application/session/runtime-configuration.js";
 import type { SessionStore } from "@vykor/services";
 import { getSandboxAvailability } from "@vykor/sandbox";
 import { createPermissionApprovalReviewService } from "./approval-review-service.js";
-import { readPluginAppAction, stringifyCanonicalJson } from "@vykor/protocol";
+import { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
+import { stringifyCanonicalJson } from "@vykor/json-data/json";
 import { verifiedAppAction } from "../application/session/plugin-app-operation-service.js";
 import type { PermissionAskInput } from "./permission-broker.js";
 

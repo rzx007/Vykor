@@ -16,6 +16,7 @@ export type {
   PathRuleConfig,
 };
 export { parsePermissionSettings } from "@vykor/host-config";
+export { effectivePermissionMode } from "./effective-permission-mode.js";
 
 /**
  * 只读工具集：swarm worker（teammate）对这些工具自动放行，无需父进程开 full_auto。

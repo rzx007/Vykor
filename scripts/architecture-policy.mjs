@@ -94,17 +94,19 @@ export function moduleViolations(input, policy) {
   }
   for (const rule of policy.modules) {
     if (!matchesFrom(rule, fromFile)) continue;
+    const testExternal = /\.test\.[cm]?[jt]sx?$/.test(fromFile) && rule.testExternal?.includes(input.specifier);
     if (rule.targetPackages && !rule.targetPackages.includes(targetName)) continue;
     if (targetName && targetName !== ownerName && rule.allowed && !rule.allowed.includes(targetName)) add(rule.id, rule, `module must not depend on ${targetName}`);
     if (resolvedFile && rule.allowed && !targetName && actualOwner !== owner) add(rule.id, rule, `source is outside the allowed packages: ${resolvedFile}`);
     if (resolvedFile && rule.forbidPaths?.some((path) => resolvedFile.startsWith(path))) add(rule.id, rule, `forbidden source ${resolvedFile}`);
     if (resolvedFile && rule.allowTargetPaths && !rule.allowTargetPaths.some((path) => path.endsWith("/") ? resolvedFile.startsWith(path) : resolvedFile === path)) add(rule.id, rule, `source is outside the allowed contract entries: ${resolvedFile}`);
     if (resolvedFile && actualOwner === owner && rule.allowSelfPaths && !rule.allowSelfPaths.some((path) => path.endsWith("/") ? resolvedFile.startsWith(path) : resolvedFile === path)) add(rule.id, rule, `source is outside the module: ${resolvedFile}`);
-    if (rule.forbidBuiltins && (input.specifier.startsWith("node:") || builtins.has(input.specifier))) add(rule.id, rule, "Node builtin is not allowed");
+    if (!testExternal && rule.forbidBuiltins && (input.specifier.startsWith("node:") || builtins.has(input.specifier))) add(rule.id, rule, "Node builtin is not allowed");
     if (rule.forbidSpecifiers?.some((pattern) => new RegExp(pattern).test(input.specifier))) add(rule.id, rule, "forbidden module specifier");
     if (rule.symbols?.some((pattern) => names.some((name) => new RegExp(pattern).test(name)))) add(rule.id, rule, `forbidden declaration ${names.join(",")}`);
+    if (rule.forbidTypeReferences?.some((pattern) => input.typeReferences?.some((name) => new RegExp(pattern).test(name)))) add(rule.id, rule, `runtime type is not data: ${input.typeReferences.join(",")}`);
     if (rule.typeOnlyPackages?.includes(targetName) && !input.typeOnly) add(rule.id, rule, "only a type import is allowed");
-    if (!(packageName(input.specifier) === "vitest" && /\.test\.[cm]?[jt]sx?$/.test(fromFile)) && rule.allowExternal && !targetName && !resolvedFile && !input.specifier.startsWith(".") && !rule.allowExternal.includes(packageName(input.specifier))) add(rule.id, rule, "external implementation is not allowed");
+    if (!testExternal && !(packageName(input.specifier) === "vitest" && /\.test\.[cm]?[jt]sx?$/.test(fromFile)) && rule.allowExternal && !targetName && !resolvedFile && !input.specifier.startsWith(".") && !rule.allowExternal.includes(packageName(input.specifier))) add(rule.id, rule, "external implementation is not allowed");
   }
   return [...new Map(violations.map((item) => [item.target, item])).values()];
 }
@@ -130,6 +132,7 @@ function parseModule(source, file) {
   const stars = [];
   const locals = new Set();
   const declarations = new Map();
+  const typeReferences = new Set();
   const add = (specifier, names, typeOnly = false) => {
     const entry = { specifier, importedNames: names, typeOnly };
     dependencies.push(entry);
@@ -182,12 +185,16 @@ function parseModule(source, file) {
       if (ts.isVariableStatement(node)) for (const declaration of node.declarationList.declarations) if (ts.isIdentifier(declaration.name)) locals.add(declaration.name.text);
       if (node.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) locals.add("default");
     }
-    if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) && node.name) declarations.set(node.name.text, node);
+    if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
+      || ts.isVariableDeclaration(node)) && node.name && ts.isIdentifier(node.name)) declarations.set(node.name.text, node);
+    if (ts.isTypeReferenceNode(node)) typeReferences.add(node.typeName.getText(ast));
+    if (ts.isTypeQueryNode(node)) typeReferences.add(node.exprName.getText(ast));
+    if (ts.isExpressionWithTypeArguments(node)) typeReferences.add(node.expression.getText(ast));
     if (ts.isExportAssignment(node)) exports.set("default", ts.isIdentifier(node.expression) ? { local: node.expression.text } : { local: "default" });
     ts.forEachChild(node, visit);
   }
   visit(ast);
-  return { dependencies, exports, imported, stars, locals, declarations };
+  return { dependencies, exports, imported, stars, locals, declarations, typeReferences };
 }
 
 function walkSources(directory) {
@@ -276,24 +283,28 @@ export function collectPolicyViolations(root, policy) {
     resolutions.set(key, result);
     return result;
   }
-  function origins(file, name, includeTypes, active = new Set()) {
-    const key = `${file}\0${name}\0${includeTypes}`;
+  function origins(file, name, includeTypes, includeSignatures, stopAtProtocol, context = { visited: new Set(), cycles: 0 }) {
+    const key = `${file}\0${name}\0${includeTypes}\0${includeSignatures}\0${stopAtProtocol}`;
     if (originCache.has(key)) return originCache.get(key);
-    if (active.has(key)) return [];
-    const isRoot = active.size === 0;
+    if (context.visited.has(key)) { context.cycles++; return []; }
+    const isRoot = context.visited.size === 0;
+    const cycleCount = context.cycles;
     // A root query needs the reachable declarations once, regardless of how
     // many alias/type paths lead to each declaration. Share the visited set
     // across branches as well as cycles so diamonds do not grow exponentially.
-    const next = active.add(key);
+    context.visited.add(key);
     const data = module(file);
     const results = [];
     const follow = (entry) => {
       const target = resolveImport(file, entry.dependency.specifier);
-      if (target && sourceExtension.test(target)) results.push(...origins(target, entry.name, includeTypes, next));
+      if (target && sourceExtension.test(target)) results.push(...origins(target, entry.name, includeTypes, includeSignatures, stopAtProtocol, context));
     };
     if (name === "*") {
-      for (const local of data.locals) results.push({ file, name: local });
-      for (const exported of data.exports.keys()) results.push(...origins(file, exported, includeTypes, next));
+      for (const local of data.locals) {
+        if (includeSignatures) results.push(...origins(file, local, includeTypes, includeSignatures, stopAtProtocol, context));
+        else results.push({ file, name: local });
+      }
+      for (const exported of data.exports.keys()) results.push(...origins(file, exported, includeTypes, includeSignatures, stopAtProtocol, context));
       for (const star of data.stars) follow({ dependency: star, name: "*" });
     } else {
       const entry = data.exports.get(name);
@@ -302,7 +313,8 @@ export function collectPolicyViolations(root, policy) {
       else if (entry || data.locals.has(name)) results.push({ file, name });
       else for (const star of data.stars) follow({ dependency: star, name });
       const declaration = data.declarations.get(entry?.local ?? name);
-      if (declaration && includeTypes) {
+      if (declaration && includeTypes && !(stopAtProtocol && workspaceOwner(normalize(relative(root, file))) === "packages/protocol")
+        && (includeSignatures || ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration))) {
         const references = new Set();
         function visitType(node) {
           if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) {
@@ -310,23 +322,35 @@ export function collectPolicyViolations(root, policy) {
             while (qualifier && ts.isQualifiedName(qualifier)) qualifier = qualifier.left;
             follow({ dependency: { specifier: node.argument.literal.text }, name: qualifier?.text ?? "*" });
           }
-          if (ts.isTypeReferenceNode(node)) {
-            let reference = node.typeName;
+          if (ts.isTypeReferenceNode(node) || ts.isTypeQueryNode(node) || ts.isExpressionWithTypeArguments(node)) {
+            let reference = ts.isTypeReferenceNode(node) ? node.typeName : ts.isTypeQueryNode(node) ? node.exprName : node.expression;
             while (ts.isQualifiedName(reference)) reference = reference.left;
+            while (ts.isPropertyAccessExpression(reference)) reference = reference.expression;
             references.add(reference.text);
           }
           ts.forEachChild(node, visitType);
         }
-        visitType(declaration);
+        // Declarations expose signatures, not function bodies or variable initializers.
+        // Following implementation-local annotations would pull unrelated host graphs into a DTO.
+        const visitSignature = node => {
+          for (const parameter of node.parameters ?? []) if (parameter.type) visitType(parameter.type);
+          if (node.type) visitType(node.type);
+        };
+        if (ts.isFunctionDeclaration(declaration) || ts.isVariableDeclaration(declaration)) visitSignature(declaration);
+        else if (ts.isClassDeclaration(declaration)) {
+          for (const clause of declaration.heritageClauses ?? []) visitType(clause);
+          for (const member of declaration.members) visitSignature(member);
+        } else visitType(declaration);
         for (const reference of references) {
           if (data.imported.has(reference)) follow(data.imported.get(reference));
-          else if (reference !== name && data.declarations.has(reference)) results.push(...origins(file, reference, includeTypes, next));
+          else if (reference !== name && data.declarations.has(reference)) results.push(...origins(file, reference, includeTypes, includeSignatures, stopAtProtocol, context));
         }
       }
     }
     // Do not cache an incomplete result reached while breaking an export cycle.
-    if (isRoot) originCache.set(key, results);
-    return results;
+    const unique = [...new Map(results.map(item => [`${item.file}\0${item.name}`, item])).values()];
+    if (isRoot || cycleCount === context.cycles) originCache.set(key, unique);
+    return unique;
   }
   const violations = new Map();
   const add = (input) => {
@@ -334,19 +358,31 @@ export function collectPolicyViolations(root, policy) {
   };
   for (const owner of packages) {
     for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
-      for (const name of Object.keys(owner.json[section] ?? {})) if (policy.packages[name]) {
+      for (const name of Object.keys(owner.json[section] ?? {})) if (policy.packages[name] || section !== "devDependencies") {
         add({ fromFile: normalize(relative(root, join(owner.directory, "package.json"))), specifier: name, importedNames: ["manifest"] });
       }
     }
     for (const file of walkSources(join(owner.directory, "src"))) {
+      const fromFile = normalize(relative(root, file));
+      const traceRules = policy.modules.filter(rule => rule.traceTypes && matchesFrom(rule, fromFile));
+      const legacyTrace = policy.modules.some(rule => ["kernel", "route-storage", "storage-hosts"].includes(rule.id) && matchesFrom(rule, fromFile));
+      if (policy.modules.some(rule => rule.forbidTypeReferences && matchesFrom(rule, fromFile))) {
+        for (const name of module(file).typeReferences) add({ fromFile, specifier: "<local-types>", resolvedFile: fromFile, importedNames: [name], typeOnly: true, typeReferences: [name] });
+      }
       for (const dependency of module(file).dependencies) {
         const target = resolveImport(file, dependency.specifier);
-        const input = { ...dependency, fromFile: normalize(relative(root, file)), resolvedFile: target && normalize(relative(root, target)) };
+        const input = { ...dependency, fromFile, resolvedFile: target && normalize(relative(root, target)) };
         add(input);
         if (target && sourceExtension.test(target)) {
-          const includeTypes = policy.modules.some((rule) => ["kernel", "route-storage", "storage-hosts"].includes(rule.id) && matchesFrom(rule, input.fromFile));
+          const includeTypes = legacyTrace || traceRules.length > 0;
           const declarations = new Map();
-          for (const name of dependency.importedNames) for (const origin of origins(target, name, includeTypes)) {
+          const stopAtProtocol = !legacyTrace && traceRules.length > 0 && traceRules.every(rule => rule.targetPackages?.length === 1 && rule.targetPackages[0] === "@vykor/protocol");
+          for (const name of dependency.importedNames) for (const origin of origins(target, name, includeTypes, traceRules.length > 0, stopAtProtocol)) {
+            // A targeted trace follows wrappers to that layer without changing unrelated old ceilings.
+            const originPath = normalize(relative(root, origin.file));
+            const originPackage = packages.find(item => normalize(relative(root, item.directory)) === workspaceOwner(originPath))?.json.name;
+            if (!legacyTrace && includeTypes && !traceRules.some(rule => !rule.targetPackages || rule.targetPackages.includes(originPackage))
+              && origin.file !== target) continue;
             if (!declarations.has(origin.file)) declarations.set(origin.file, new Set());
             declarations.get(origin.file).add(origin.name);
           }

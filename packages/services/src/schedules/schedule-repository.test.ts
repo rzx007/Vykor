@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
-import type { ScheduledRunRecord } from "@vykor/protocol";
+import type { ScheduledRunRecord } from "@vykor/domain-contracts/schedules";
 
 import { ApplicationOwnerConflictError, SessionStore } from "../session-runtime/store.js";
 import type { StorageContext } from "../database/storage-context.js";

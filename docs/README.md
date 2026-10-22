@@ -93,7 +93,7 @@
 - [Daemon Application Architecture](./daemon-application-architecture.md)：Session、Input、Run、Permission、Workflow、Owner、恢复和关闭的总入口。
 - [Session Runtime 存储架构](./session-runtime-storage-architecture.md)：SQLite、Repository、Transaction、`SessionStore`、owner lease 和提交/回滚边界。
 - [Durable Execution Data Model](./durable-execution-data-model.md)：所有运行记录的固定格式、关系、终态和版本。
-- [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE 和升级规则。
+- [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE，以及 json-data、plugin-contracts、domain-contracts 和能力纯数据入口的所有权。
 - [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。
 - [Observability](./observability.md)：trace、结构化日志、runtime snapshot 和排障。
 - [按风险自动评审](./auto-review.md)：Run 结束后按固定风险规则对可归因改动做只读评审，并把通过/发现问题/失败/超时记录为真实状态。
@@ -206,6 +206,7 @@
 ## 第 6 层：决策、计划和历史
 
 - [Agent 核心包架构收敛方案](./superpowers/specs/2026-10-21-agent-package-convergence-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-21-agent-package-convergence.md)：P0–P6 已实施并验收，阶段例外清零，SDK 和权威文档完成收口，见 [P6 验收记录](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)。
+- [Protocol 分层收敛方案](./superpowers/specs/2026-10-22-protocol-layering-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-22-protocol-layering.md)：P7–P13 实现与集中验收完成，当前 `stageExceptions` 为零，详见[最终验收记录](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)。[P7 记录](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md)保留迁移前快照，不代表当前依赖或例外数量。
 - `docs/adr/`：已经作出的长期决定。当前有 [Projection Settlement 失败分类与恢复边界](./adr/0001-projection-settlement-failure-policy.md)。
 - `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。

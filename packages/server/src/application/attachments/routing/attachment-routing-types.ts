@@ -1,7 +1,7 @@
 import type { ProviderInputCapabilities } from "@vykor/api";
 import type { ContentBlock } from "@vykor/agent-contracts";
 import type { ModelInputCapabilities } from "@vykor/host-config";
-import type { SessionInputAttachmentRecord } from "@vykor/protocol";
+import type { SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 
 export type AttachmentRoutingErrorCode =
   | "attachment_model_capability_unknown"

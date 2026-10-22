@@ -1,7 +1,4 @@
-import type {
-  AutoReviewReason,
-  AutoReviewRiskLevel,
-} from "@vykor/protocol";
+import type { AutoReviewReason, AutoReviewRiskLevel } from "@vykor/domain-contracts/approvals";
 
 export interface AutoReviewChangeFile {
   path: string;

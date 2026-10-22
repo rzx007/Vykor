@@ -1,4 +1,4 @@
-import type { SessionExecutionRecord } from "@vykor/protocol";
+import type { SessionExecutionRecord } from "@vykor/domain-contracts/sessions";
 import { mkdtempSync, rmSync, renameSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

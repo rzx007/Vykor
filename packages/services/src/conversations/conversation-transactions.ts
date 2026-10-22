@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
-import { type AdmitPromptInput, type AdmitPromptWithRunInput, type AttachmentAssetRecord, type AttachmentLimits, type CreateSessionInput, type ListPermissionRequestsOptions, type PermissionRequestRecord, type ReplaceTranscriptInput, type SessionInputAttachmentRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type SessionStateSnapshot, type SessionUserInputItem, normalizeSessionUserInputItems, sessionUserInputText, parseAttachmentLimits, DEFAULT_ATTACHMENT_LIMITS, settleSessionToolMetadata } from "@vykor/protocol";
+import { type AdmitPromptInput, type AdmitPromptWithRunInput, type ReplaceTranscriptInput } from "./commands.js";
+import { type AttachmentAssetRecord, type AttachmentLimits, type SessionInputAttachmentRecord, parseAttachmentLimits } from "@vykor/domain-contracts/attachments";
+import { type CreateSessionInput } from "../sessions/commands.js";
+import { type ListPermissionRequestsOptions } from "../permissions/commands.js";
+import { type PermissionRequestRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, settleSessionToolMetadata } from "@vykor/domain-contracts/sessions";
+import { type SessionStateSnapshot } from "./query-models.js";
+import { type SessionUserInputItem, normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
+import { DEFAULT_ATTACHMENT_LIMITS } from "../attachments/attachment-policy.js";
 
 import type { StorageContext } from "../database/storage-context.js";
 import type { ConversationRepository } from "./conversation-repository.js";
@@ -47,7 +54,7 @@ export interface ConversationTransactionTestHooks {
 }
 
 export interface ConversationTransactionsOptions {
-  listPluginApps?(sessionId: string): import("@vykor/protocol").PluginAppRecord[];
+  listPluginApps?(sessionId: string): import("@vykor/domain-contracts/plugin-apps").PluginAppRecord[];
   storage: StorageContext;
   conversations: ConversationRepository;
   sessions?: SessionRepository;
@@ -789,4 +796,4 @@ export class ConversationTransactions {
     });
   }
 }
-import { withoutHostPluginMetadata } from "@vykor/protocol";
+import { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";

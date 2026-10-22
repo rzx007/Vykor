@@ -23,11 +23,9 @@ import {
   type ObservableJobProducer,
 } from "@vykor/agent-runtime";
 import type { AgentTerminalHost } from "@vykor/terminal";
-import {
-  readSessionRuntimeConfig,
-  type AttachmentLimits,
-  type SessionRecord,
-} from "@vykor/protocol";
+import { readSessionRuntimeConfig } from "./session/runtime-configuration.js";
+import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import {
   AttachmentIntegrityService,
   type LocalOcrService,

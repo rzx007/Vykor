@@ -5,10 +5,8 @@ import type {
 } from "@vykor/agent-contracts";
 import type { AgentEvent } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
-import type {
-  CreateProjectionSettlementInput,
-  ProjectionSettlementRecord,
-} from "@vykor/protocol";
+import type { CreateProjectionSettlementInput } from "@vykor/services";
+import type { ProjectionSettlementRecord } from "@vykor/domain-contracts/sessions";
 
 export const DAEMON_AGENT_PROJECTOR = "daemon-agent";
 

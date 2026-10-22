@@ -11,7 +11,7 @@ vi.mock("@vykor/agent-runtime", async (importOriginal) => {
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { createDaemonAgentLoader, readDaemonAgentLocalWorkspace } from "../../../daemon/daemon-agent.js";
 import { SessionStore } from "@vykor/services";
-import { readWorkspaceChangesMetadata } from "@vykor/protocol";
+import { readWorkspaceChangesMetadata } from "@vykor/domain-contracts/workspace-changes";
 import { fileWriteTool } from "../../../../../tools/src/file/write.js";
 import { createExecFileGitExecutor, createGitRunChangeInspector } from "../../auto-review/git-run-change-inspector.js";
 import { SessionEventPublisher } from "../session-event-publisher.js";

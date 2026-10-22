@@ -1,11 +1,7 @@
 import { Hono } from "hono";
+import { sessionCreateInput, sessionForkInput, sessionUpdateInput, sessionClearWorktreeInput } from "../mappers/session.js";
 import { publicPart, summarizePart } from "../part-wire-view.js";
-import {
-  parseCreateSessionRequest,
-  parseForkSessionRequest,
-  parseUpdateSessionRequest,
-  parseClearSessionWorktreeBindingRequest,
-} from "@vykor/protocol";
+import { parseCreateSessionRequest, parseForkSessionRequest, parseUpdateSessionRequest, parseClearSessionWorktreeBindingRequest } from "@vykor/protocol";
 
 import {
   applicationErrorResponse,
@@ -75,7 +71,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       } catch (error) {
         return protocolValidationErrorResponse(error);
       }
-      const session = context.commands.createSession(input);
+      const session = context.commands.createSession(sessionCreateInput(input));
       return jsonResponse({ session }, 201);
     })
     .get("/:sessionId", async (c) => {
@@ -95,7 +91,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
         return protocolValidationErrorResponse(error);
       }
       try {
-        const session = context.commands.forkSession(sessionId, input);
+        const session = context.commands.forkSession(sessionId, sessionForkInput(input));
         return jsonResponse({ session }, 201);
       } catch (error) {
         return applicationErrorResponse(error, 404);
@@ -111,7 +107,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
         return protocolValidationErrorResponse(error);
       }
       try {
-        const session = await context.commands.updateSession(sessionId, input);
+        const session = await context.commands.updateSession(sessionId, sessionUpdateInput(input));
         return jsonResponse({ session });
       } catch (error) {
         return applicationErrorResponse(
@@ -124,7 +120,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       let input;
       try { input = parseClearSessionWorktreeBindingRequest(await readJson(c)); }
       catch (error) { return protocolValidationErrorResponse(error); }
-      try { return jsonResponse({ session: await context.commands.clearWorktreeBinding(c.req.param("sessionId"), input) }); }
+      try { return jsonResponse({ session: await context.commands.clearWorktreeBinding(c.req.param("sessionId"), sessionClearWorktreeInput(input)) }); }
       catch (error) { return applicationErrorResponse(error, sessionMutationErrorStatus(error)); }
     })
     .get("/:sessionId/state", (c) => {

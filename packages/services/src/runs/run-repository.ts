@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
-import type { AppendEventInput, CreateRunAttemptInput, CreateRunInput, CreateSessionTaskInput, SessionEventRecord, SessionExecutionRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord, UpdateRunAttemptInput, UpdateRunInput, UpdateSessionTaskInput } from "@vykor/protocol";
+import type { AppendEventInput } from "../conversations/commands.js";
+import type { CreateRunAttemptInput, CreateRunInput, CreateSessionTaskInput, UpdateRunAttemptInput, UpdateRunInput, UpdateSessionTaskInput } from "./commands.js";
+import type { SessionEventRecord, SessionExecutionRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
 import { atomicWrite } from "../database/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";

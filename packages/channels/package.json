@@ -17,8 +17,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.73.0",
-    "@vykor/protocol": "workspace:*"
+    "@larksuiteoapi/node-sdk": "^1.73.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

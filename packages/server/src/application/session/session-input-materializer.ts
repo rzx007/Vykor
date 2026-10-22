@@ -1,10 +1,7 @@
 import type { ContentBlock } from "@vykor/agent-contracts";
 import type { RunCapabilityView } from "@vykor/agent-runtime";
-import {
-  normalizeSessionUserInputItems,
-  sessionUserInputText,
-  type SessionUserInputItem,
-} from "@vykor/protocol";
+import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 
 export interface SessionInputCatalogSkill {
   name: string;

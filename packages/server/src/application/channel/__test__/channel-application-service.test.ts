@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DurableChannelMessageInput, ExternalConversationRecord, ChannelDeliveryRecord } from "@vykor/protocol";
+import type { DurableChannelMessageInput } from "../query-models.js";
+import type { ExternalConversationRecord, ChannelDeliveryRecord } from "@vykor/domain-contracts/channels";
 import { ChannelApplicationService } from "../channel-application-service.js";
 import { ApplicationError } from "../../../shared/application-error.js";
 

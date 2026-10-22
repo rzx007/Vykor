@@ -8,7 +8,7 @@ import {
 } from "@vykor/api";
 
 import type { SettingsService } from "../settings-api.js";
-import type { AgentEnvironmentCapabilities } from "@vykor/protocol";
+import type { AgentEnvironmentCapabilities } from "./query-models.js";
 import {
   loadSettings,
   parsePermissionSettings,

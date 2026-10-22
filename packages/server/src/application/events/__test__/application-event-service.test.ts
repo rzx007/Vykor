@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SessionEventRecord } from "@vykor/protocol";
+import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 
 import { ApplicationEventService } from "../application-event-service.js";
 

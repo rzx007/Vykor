@@ -46,6 +46,20 @@
           "provider"
         ],
         "note": "Node 组装宿主能力；Kernel 经通用契约调用 Core，引擎每次请求先经过 Server 准入与结算。"
+      },
+      {
+        "id": "data-ownership",
+        "label": "通信与数据归属",
+        "focus": [
+          "client",
+          "protocol",
+          "http",
+          "daemon",
+          "store",
+          "runtime",
+          "data-contracts"
+        ],
+        "note": "Client 只直接依赖 Protocol；Protocol 只处理通信并显式引用规范数据。Services 只直接依赖领域记录，Node 只用插件和能力数据；Kernel 不进入三个新数据包。"
       }
     ],
     "repository": {
@@ -85,7 +99,7 @@
       "id": "client",
       "type": "backend",
       "label": "@vykor/client",
-      "sublabel": "snapshot + SSE reducer",
+      "sublabel": "仅 Protocol / 本地显示投影",
       "tag": "packages/client",
       "pos": [
         250,
@@ -112,7 +126,7 @@
       "id": "protocol",
       "type": "security",
       "label": "@vykor/protocol",
-      "sublabel": "请求/响应/事件公共类型",
+      "sublabel": "HTTP/SSE 格式与编解码",
       "tag": "packages/protocol",
       "pos": [
         250,
@@ -134,7 +148,7 @@
       "id": "http",
       "type": "backend",
       "label": "Daemon HTTP 层",
-      "sublabel": "Routes / auth / SSE",
+      "sublabel": "Decode / mapper / SSE",
       "tag": "packages/server",
       "pos": [
         460,
@@ -161,7 +175,7 @@
       "id": "daemon",
       "type": "backend",
       "label": "DaemonApplication",
-      "sublabel": "Goal 准入 / 应用用例",
+      "sublabel": "用例输入 / Goal 准入",
       "tag": "Durable Application",
       "pos": [
         670,
@@ -188,7 +202,7 @@
       "id": "store",
       "type": "database",
       "label": "SessionStore / SQLite",
-      "sublabel": "Session / Run / Events",
+      "sublabel": "领域记录 / 自有存储命令",
       "tag": "packages/services",
       "pos": [
         690,
@@ -243,7 +257,7 @@
       "type": "backend",
       "label": "@vykor/agent-runtime",
       "sublabel": "Kernel / Node host",
-      "tag": "agent-contracts 执行契约",
+      "tag": "Node 绑定 / Kernel 执行契约",
       "pos": [
         900,
         270
@@ -372,6 +386,48 @@
           "label": "plugins 依赖"
         }
       ]
+    },
+    {
+      "id": "data-contracts",
+      "type": "security",
+      "label": "规范数据子入口",
+      "sublabel": "domain / plugin / JSON / Job / Terminal",
+      "tag": "按包和子入口引用，无根汇总",
+      "pos": [
+        40,
+        480
+      ],
+      "size": [
+        310,
+        76
+      ],
+      "sources": [
+        {
+          "path": "docs/protocol-contract.md",
+          "line": 5,
+          "label": "所有权与正式子入口"
+        },
+        {
+          "path": "packages/domain-contracts/package.json",
+          "line": 1,
+          "label": "领域子入口"
+        },
+        {
+          "path": "packages/plugin-contracts/package.json",
+          "line": 1,
+          "label": "插件纯数据子入口"
+        },
+        {
+          "path": "packages/json-data/package.json",
+          "line": 1,
+          "label": "仅 /json"
+        },
+        {
+          "path": "packages/terminal/src/contracts.ts",
+          "line": 1,
+          "label": "仅类型引用 jobs/contracts"
+        }
+      ]
     }
   ],
   "boundaries": [
@@ -423,10 +479,10 @@
       ]
     },
     {
-      "id": "protocol_to_client",
-      "from": "protocol",
-      "to": "client",
-      "label": "typed contract",
+      "id": "client_to_protocol",
+      "from": "client",
+      "to": "protocol",
+      "label": "仅直接依赖 Protocol",
       "variant": "security",
       "labelAt": [
         332,
@@ -434,10 +490,10 @@
       ]
     },
     {
-      "id": "protocol_to_http",
-      "from": "protocol",
-      "to": "http",
-      "label": "decode / validate",
+      "id": "http_to_protocol",
+      "from": "http",
+      "to": "protocol",
+      "label": "通信解码依赖",
       "variant": "security",
       "labelAt": [
         445,
@@ -460,7 +516,7 @@
       "id": "http_to_daemon",
       "from": "http",
       "to": "daemon",
-      "label": "调用应用服务",
+      "label": "mapper → 应用输入",
       "variant": "emphasis",
       "route": "straight",
       "labelAt": [
@@ -625,6 +681,79 @@
       "labelAt": [
         540,
         612
+      ]
+    },
+    {
+      "id": "protocol_to_data_contracts",
+      "from": "protocol",
+      "to": "data-contracts",
+      "label": "显式引用纯数据",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [
+        [
+          225,
+          156
+        ],
+        [
+          225,
+          452
+        ],
+        [
+          195,
+          452
+        ]
+      ],
+      "labelAt": [
+        155,
+        440
+      ]
+    },
+    {
+      "id": "store_to_data_contracts",
+      "from": "store",
+      "to": "data-contracts",
+      "label": "仅领域记录 / 自有命令",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          784,
+          575
+        ],
+        [
+          195,
+          575
+        ]
+      ],
+      "labelAt": [
+        465,
+        568
+      ]
+    },
+    {
+      "id": "runtime_to_data_contracts",
+      "from": "runtime",
+      "to": "data-contracts",
+      "label": "Node 仅插件与能力数据",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          996,
+          640
+        ],
+        [
+          195,
+          640
+        ]
+      ],
+      "labelAt": [
+        900,
+        654
       ]
     }
   ]

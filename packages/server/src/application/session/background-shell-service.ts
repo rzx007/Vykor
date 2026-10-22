@@ -8,12 +8,7 @@ import type {
   ExecutionEnvironmentHandle,
   ShellDescriptor,
 } from "@vykor/environment";
-import type {
-  SessionExecutionRecord,
-  SessionRecord,
-  SessionStatus,
-  SessionTaskStatus,
-} from "@vykor/protocol";
+import type { SessionExecutionRecord, SessionRecord, SessionStatus, SessionTaskStatus } from "@vykor/domain-contracts/sessions";
 
 import type {
   DetachedProcessExecution,

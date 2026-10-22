@@ -1,13 +1,8 @@
 import type { FeishuChannelConfig } from "@vykor/auth";
 import type { InboundMessage } from "@vykor/channels";
 import type { Settings } from "@vykor/host-config";
-import type {
-  ChannelConnectorRuntimeStatus,
-  ChannelDeliveryRecord,
-  DurableChannelMessageInput,
-  DurableChannelMessageResult,
-  RecordChannelDeliveryInput,
-} from "@vykor/protocol";
+import type { ChannelConnectorRuntimeStatus, DurableChannelMessageInput, DurableChannelMessageResult, RecordChannelDeliveryInput } from "../application/channel/query-models.js";
+import type { ChannelDeliveryRecord } from "@vykor/domain-contracts/channels";
 import type { ObservabilityEvent } from "../shared/observability.js";
 
 /** Application operations used by the daemon's channel connector. */

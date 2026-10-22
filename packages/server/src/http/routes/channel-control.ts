@@ -1,11 +1,4 @@
-import {
-  parseChannelRuntimeControlInput,
-  parseFeishuAllowInput,
-  parseFeishuConnectInput,
-  parseFeishuPatchInput,
-  parseFeishuRegistrationStartInput,
-  ProtocolValidationError,
-} from "@vykor/protocol";
+import { parseChannelRuntimeControlInput, parseFeishuAllowInput, parseFeishuConnectInput, parseFeishuPatchInput, parseFeishuRegistrationStartInput, ProtocolValidationError } from "@vykor/protocol";
 import { Hono } from "hono";
 
 import type { ChannelRuntimeService } from "../../daemon/channel-runtime-service.js";

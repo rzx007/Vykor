@@ -1,6 +1,8 @@
 import { getSkillsDir, type Settings } from "@vykor/host-config";
 import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@vykor/environment";
-import { normalizeApprovalMode, readSessionRuntimeConfig, type SessionRecord } from "@vykor/protocol";
+import { normalizeApprovalMode } from "@vykor/host-config";
+import { readSessionRuntimeConfig } from "../application/session/runtime-configuration.js";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig, settingsForApprovalMode } from "@vykor/sandbox";
 import { createEnvironmentFileSystem } from "@vykor/tools";
 import { loadRuntimeSecrets } from "./runtime-secrets.js";

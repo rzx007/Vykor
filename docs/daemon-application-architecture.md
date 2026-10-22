@@ -1,6 +1,6 @@
 # Daemon Application Architecture
 
-> 状态：当前实现的权威运行索引。最后核对：2026-09-17。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；存储边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)，跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
+> 状态：当前实现的权威运行索引。最后核对：2026-10-22。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；存储边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)，跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
 
 ## 总体模型
 
@@ -65,6 +65,16 @@ VykorAgent onEvent sink
 
 `packages/server/src/daemon/daemon-agent.ts` 是唯一的 durable session -> live Agent 翻译点：读取动态 settings、合并 session metadata、注入 permission/event callback、创建 agent、恢复 history。`AgentPool` 不再理解配置和投影。
 
+## 通信输入、应用用例与存储命令
+
+Protocol 只拥有 HTTP/SSE 格式与解码。HTTP routes 使用 Protocol parser，再经 `http/mappers/session.ts`、`plugin-apps.ts` 等转换形成用例输入；Application 使用自己的 `inputs.ts` 和 `query-models.ts`，不导入 Protocol。维护报表与运行观察由 `http/mappers/maintenance.ts`、`execution-observability.ts` 转成公开 DTO。
+
+应用用例先验证会话 owner、revision、状态与授权，再调用 Services 的存储命令或 Node 的宿主接口。记录与纯数据校验按 `domain-contracts` 业务子入口引用；Services 的命令由自身领域模块定义，不能把 HTTP Request 直接当作内部写库输入。事件服务返回领域事件，SSE 包装与通信序列化在 HTTP 层完成。
+
+插件应用调用由 `application/session/plugin-app-host-binding.ts` 将已保存记录转换成 `PluginAppHostBinding`。其中 `instanceId = app.id` 只用于隔离与撤销，其他字段来自已核实的 owner、插件及后端身份；不把可变应用记录交给 Node。Node 保存 lease 权威并重新核对来源、generation 与绑定，Server 的 lease 适配不会增加第二份 token 表。
+
+附件限额形状归 domain-contracts，默认值单独定义在 `services/src/attachments/attachment-policy.ts`，供独立 Services 和 Server 共用。Services 的 Office 转换返回自身 `OfficeDocumentPreview`；当前 Server 没有生成 Protocol `OfficePreview` 的用例，因此不设置空的查询模型或 mapper。
+
 ## Session 运行配置
 
 一条 session 有两类模型信息，不能混着看：
@@ -73,6 +83,8 @@ VykorAgent onEvent sink
 | -------------------------------- | --------------------------------- | ------------------------------------ |
 | `session.model`                  | 列表、导出和统计使用的展示列       | UI 展示、导出、统计展示              |
 | `session.metadata.runtime.model` | 这条 session 下一轮真正要用的模型 | daemon 创建或重建 `VykorAgent` |
+
+配置记录与纯读取来自 `domain-contracts/sessions/runtime-config`。组合读取、patch 和变化判断在 `application/session/runtime-configuration.ts`；旧模式归一化调用 host-config，有效模式计算调用 permissions。Client 保留本地请求构造与显示投影，Server 仍负责实际运行决策。
 
 当前规则：
 

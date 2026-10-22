@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PluginAppResourceNotice } from "@vykor/protocol";
+import type { PluginAppResourceNotice } from "./plugin-app-query-models.js";
 
 /** Ephemeral invalidations only: never goes through the conversation event store. */
 export class PluginAppNotifications {

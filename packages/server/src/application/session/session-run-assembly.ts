@@ -1,4 +1,5 @@
-import type { AttachmentLimits, SessionUserInputItem } from "@vykor/protocol";
+import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import type { GoalOperations, SessionStore } from "@vykor/services";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";

@@ -31,13 +31,13 @@
     "@arcships/light-ocr": "catalog:",
     "@vykor/core": "workspace:*",
     "@vykor/memory": "workspace:*",
-    "@vykor/protocol": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "drizzle-orm": "^0.45.2",
     "sharp": "0.34.4",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/host-config": "workspace:*",
-    "@vykor/execution-node": "workspace:*"
+    "@vykor/execution-node": "workspace:*",
+    "@vykor/domain-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

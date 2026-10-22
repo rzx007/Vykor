@@ -1,7 +1,9 @@
 import { selectPluginInstallationWinners } from "@vykor/agent-runtime";
 import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeAppMetadata,
   readPluginAppResource, verifyInstalledNativePlugin } from "@vykor/plugins";
-import { PLUGIN_APP_HTML_MIME_TYPE, type PluginAppRecord, type SessionRecord } from "@vykor/protocol";
+import { MCP_APP_HTML_MIME_TYPE as PLUGIN_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
+import type { PluginAppRecord } from "@vykor/domain-contracts/plugin-apps";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 /** Offline Native HTML is independently readable with render approval; this never constructs tool authority. */
 export async function verifiedStaticAppResources(session: SessionRecord, app: PluginAppRecord) {

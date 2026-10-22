@@ -49,7 +49,9 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
   const isDatabase = /(?:^|\/)(?:packages\/services\/src\/)?database\//.test(normalized);
-  if (isDatabase) {
+  // Product data entries are separate from Services repository modules.
+  // Their implementation and declaration origins are checked by the policy below.
+  if (isDatabase && !specifier.startsWith("@vykor/domain-contracts/")) {
     const domainMatch = specifier.match(/(?:^|\/|\.\.\/)(sessions|conversations|runs)(?:\/|\.|$)/);
     if (domainMatch) {
       return [`${fromFile} must not depend on ${domainMatch[1]}`];

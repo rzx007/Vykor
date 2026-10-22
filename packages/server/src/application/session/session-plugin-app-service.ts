@@ -1,13 +1,14 @@
+import { MAX_SESSION_PLUGIN_APPS } from "./plugin-app-policy.js";
 import { createHash, randomUUID } from "node:crypto";
-import {
-  parsePluginAppComposerContexts, PLUGIN_APP_LIMITS, parseClosePluginAppInput, parseOpenPluginAppInput, parsePluginAppSource,
-  type PluginAppAvailability, type PluginAppBackendKind, type PluginAppExecutionState, type PluginAppOrigin,
-  type PluginAppRecord, type PluginAppResponse, type PluginAppRuntimeLease, type PluginAppSource,
-  type PluginAppSurfaceDefinition, type SessionMessagePartRecord, type SessionRecord, type SessionRunRecord,
-} from "@vykor/protocol";
+import { parsePluginAppComposerContexts, parseClosePluginAppInput, parseOpenPluginAppInput, parsePluginAppSource } from "./plugin-app-inputs.js";
+import type { PluginAppAvailability, PluginAppResponse } from "./plugin-app-query-models.js";
+import type { PluginAppBackendKind, PluginAppSurfaceDefinition } from "@vykor/plugin-contracts/manifest";
+import type { PluginAppExecutionState, PluginAppOrigin, PluginAppRecord, PluginAppSource } from "@vykor/domain-contracts/plugin-apps";
+import type { PluginAppRuntimeLease } from "@vykor/plugin-contracts/runtime";
+import type { SessionMessagePartRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import type { CreatePluginAppInput, SessionStore } from "@vykor/services";
 import { ApplicationError } from "../../shared/application-error.js";
-import { isCommittedModelPart } from "@vykor/protocol";
+import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
 
 /** Data-only view of the Agent catalogue. Never pass capture(), tools or execute functions here. */
 export interface PluginAppBackendDescriptor {
@@ -50,7 +51,7 @@ export interface SessionPluginAppServiceOptions {
   resolveCurrent(session: SessionRecord, app: PluginAppRecord): Promise<PluginAppCurrentFacts>;
   /** Must validate trusted Run provenance as well as executionState. Missing/unverifiable => undefined. */
   readExecutionState(run: SessionRunRecord, app: PluginAppRecord): PluginAppExecutionState | undefined;
-  listTools?(app: PluginAppRecord, lease: PluginAppRuntimeLease): import("@vykor/protocol").PluginAppToolDescriptor[];
+  listTools?(app: PluginAppRecord, lease: PluginAppRuntimeLease): import("@vykor/plugin-contracts/runtime").PluginAppToolDescriptor[];
   /** Optional trusted result-origin resolver. Verify the original installed binding and successful checked tool result; legacy UI metadata is never authority. */
   resolveToolResult?(session: SessionRecord, part: SessionMessagePartRecord): Promise<{ descriptor: PluginAppBackendDescriptor; resourceUri: string } | undefined>;
 }
@@ -113,7 +114,7 @@ export class SessionPluginAppService {
       const current = this.options.store.pluginApps.findByLogicalKey(sessionId, logicalKey);
       if (current?.status === "revoked") throw new ApplicationError(409, "已撤销的应用不能重新打开");
       const openCount = this.options.store.pluginApps.list(sessionId).filter(item => item.status === "open").length;
-      if ((!current || current.status !== "open") && openCount >= PLUGIN_APP_LIMITS.sessionPages) throw new ApplicationError(409, "当前会话打开的应用过多");
+      if ((!current || current.status !== "open") && openCount >= MAX_SESSION_PLUGIN_APPS) throw new ApplicationError(409, "当前会话打开的应用过多");
       // This fact belongs to this exact transaction, not a later renderer lookup.
       const openedByRequest = !current || current.status === "closed";
       return { app: current ? this.options.store.pluginApps.reopen(current.id) : this.options.store.pluginApps.create({ ...input, id: candidate.id }), openedByRequest };
@@ -157,7 +158,7 @@ export class SessionPluginAppService {
   async assertCanInvoke(source: PluginAppSource, lease: PluginAppRuntimeLease): Promise<{ app: PluginAppRecord; facts: PluginAppCurrentFacts }> {
     return this.assertAuthorized(source, lease, "canInvokeTools");
   }
-  async materializeComposerContexts(sessionId: string, value: unknown): Promise<{ items: import("@vykor/protocol").SessionUserInputItem[]; assertCurrent(): void }> {
+  async materializeComposerContexts(sessionId: string, value: unknown): Promise<{ items: import("@vykor/domain-contracts/inputs").SessionUserInputItem[]; assertCurrent(): void }> {
     const contexts = parsePluginAppComposerContexts(value);
     const checked: Array<{ context: typeof contexts[number]; current: { app: PluginAppRecord; facts: PluginAppCurrentFacts } }> = [];
     for (const context of contexts) {

@@ -2,7 +2,7 @@ import type { StreamingMessageClient } from "@vykor/agent-contracts";
 import { describe, expect, it, vi } from "vitest";
 import type { Settings } from "@vykor/host-config";
 
-import type { ApprovalReviewInput } from "@vykor/protocol";
+import type { ApprovalReviewInput } from "@vykor/agent-contracts/permissions";
 import { resolveApiClient } from "../runtime/default-runtime-provider.js";
 import { createConfiguredApprovalReviewer } from "./configured-approval-reviewer.js";
 

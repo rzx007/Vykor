@@ -10,6 +10,38 @@ test("Kernel metafile rejects host modules, including transitive imports", () =>
   assert.doesNotThrow(() => verifyKernelInputs({ inputs: { "../core/src/engine/index.ts": {} } }));
 });
 
+for (const name of ["domain-contracts", "plugin-contracts", "json-data"]) {
+  test(`Kernel metafile rejects ${name} source modules`, () => {
+    for (const path of [`../${name}/src/index.ts`, `node_modules/@vykor/${name}/src/index.ts`, `..\\${name}\\src\\index.ts`]) {
+      assert.throws(() => verifyKernelInputs({ inputs: { [path]: {} } }), /Kernel bundle reaches Node host modules/);
+    }
+  });
+
+  test(`Kernel declarations reject ${name} package and relative paths`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "vykor-kernel-data-boundary-"));
+    const write = (file, source) => { mkdirSync(join(root, file, ".."), { recursive: true }); writeFileSync(join(root, file), source); };
+    try {
+      write("dist/kernel-entry.d.ts", 'export * from "./kernel/nested.js";');
+      write(`node_modules/@vykor/${name}/package.json`, JSON.stringify({ name: `@vykor/${name}`, exports: { "./data": { types: "./src/data.d.ts" } } }));
+      write(`node_modules/@vykor/${name}/src/data.d.ts`, "export interface Data { value: string }");
+      write(`packages/${name}/src/data.d.ts`, "export interface Data { value: string }");
+      for (const source of [
+        `export type Data = import("@vykor/${name}/data").Data;`,
+        `export type { Data } from "../../node_modules/@vykor/${name}/src/data.js";`,
+        `export type { Data } from "../../packages/${name}/src/data.js";`,
+        `/// <reference path="../../packages/${name}/src/data.d.ts" />\nexport interface Data {}`,
+      ]) {
+        write("dist/kernel/nested.d.ts", source);
+        await assert.rejects(verifyKernelDeclarations(root), error => {
+          assert.match(error.message, /Kernel declaration reaches a host (?:dependency|path)/);
+          assert.ok(error.message.includes(name));
+          return true;
+        });
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
 test("Kernel declarations follow relative barrels and package exports", async () => {
   const root = mkdtempSync(join(tmpdir(), "vykor-kernel-boundary-"));
   const write = (file, source) => { mkdirSync(join(root, file, ".."), { recursive: true }); writeFileSync(join(root,file),source); };

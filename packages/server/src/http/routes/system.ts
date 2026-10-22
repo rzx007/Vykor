@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { executionObservationDto } from "../mappers/execution-observability.js";
 import { withProviderConfigurationUpdate } from "../provider-configuration-update.js";
 
 import {
@@ -19,13 +20,9 @@ import type {
 } from "../../application/index.js";
 import type { DaemonControlService } from "../../application/control/index.js";
 import type { ApplicationRetentionService } from "../../application/retention/application-retention-service.js";
-import {
-  DEFAULT_ATTACHMENT_LIMITS,
-  CURRENT_PROTOCOL_VERSION,
-  parseExecutionObservationFilter,
-  type AttachmentLimits,
-  type ServerCapabilities,
-} from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
+import { CURRENT_PROTOCOL_VERSION, parseExecutionObservationFilter } from "@vykor/protocol";
+import type { AttachmentLimits, ServerCapabilities } from "@vykor/protocol";
 import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
 import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugin-lifecycle.js";
 
@@ -151,7 +148,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
       try {
         const query = Object.fromEntries(new URL(c.req.url).searchParams.entries());
         return jsonResponse(
-          context.control.queryExecutionObservations(parseExecutionObservationFilter(query)),
+          executionObservationDto(context.control.queryExecutionObservations(parseExecutionObservationFilter(query))),
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

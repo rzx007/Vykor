@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { normalizeSessionUserInputItems, sessionUserInputText, type SessionUserInputItem } from "@vykor/protocol";
+import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { AttachmentError, normalizePromptAttachments, promptAttachmentFingerprint } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../support.js";
 import { RunInterruptedError } from "../../runtime/run-coordinator.js";

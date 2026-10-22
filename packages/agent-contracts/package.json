@@ -12,6 +12,10 @@
     "./tool-data": {
       "import": "./src/tool-data.ts",
       "types": "./src/tool-data.ts"
+    },
+    "./permissions": {
+      "import": "./src/permissions.ts",
+      "types": "./src/permissions.ts"
     }
   },
   "scripts": {

@@ -48,7 +48,10 @@
     "hono": "catalog:",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/host-config": "workspace:*",
-    "@vykor/execution-node": "workspace:*"
+    "@vykor/execution-node": "workspace:*",
+    "@vykor/json-data": "workspace:*",
+    "@vykor/plugin-contracts": "workspace:*",
+    "@vykor/domain-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

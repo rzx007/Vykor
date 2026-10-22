@@ -1,13 +1,7 @@
-import type {
-  AppendEventInput,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionUserInputItem,
-} from "@vykor/protocol";
-import type { AdmitPromptAttachmentInput } from "@vykor/protocol";
+import type { AppendEventInput } from "@vykor/services";
+import type { SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
+import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
+import type { PromptAttachment as AdmitPromptAttachmentInput } from "@vykor/domain-contracts/inputs";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { LiveChildAgentDirectory } from "../agent/live-child-agent-directory.js";
 import type { DaemonOperationGate } from "../control/daemon-operation-gate.js";

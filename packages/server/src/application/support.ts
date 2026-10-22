@@ -1,4 +1,4 @@
-import { runtimeMetadataChanged } from "@vykor/protocol";
+import { runtimeMetadataChanged } from "./session/runtime-configuration.js";
 
 import type { RuntimeMetricsSnapshot } from "../shared/runtime-metrics.js";
 

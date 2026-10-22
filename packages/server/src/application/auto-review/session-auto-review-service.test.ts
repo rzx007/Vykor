@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { readAutoReviewRunMetadata } from "@vykor/protocol";
+import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
 import type { AgentChildResult, RunToolBindings } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime/kernel";
 import { SessionStore } from "@vykor/services";

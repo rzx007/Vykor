@@ -1,8 +1,4 @@
-import type {
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-} from "@vykor/protocol";
+import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionInputConversationCatalog } from "./session-input-materializer.js";
 import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
 

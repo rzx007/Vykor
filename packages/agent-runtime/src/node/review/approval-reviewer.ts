@@ -1,6 +1,6 @@
 import type { StreamingMessageClient } from "@vykor/agent-contracts";
 
-import type { ApprovalReviewInput, ApprovalReviewOutcome, ApprovalReviewResult } from "@vykor/protocol";
+import type { ApprovalReviewInput, ApprovalReviewOutcome, ApprovalReviewResult } from "@vykor/agent-contracts/permissions";
 
 export interface ApprovalReviewer {
   review(input: ApprovalReviewInput, signal?: AbortSignal): Promise<ApprovalReviewOutcome>;

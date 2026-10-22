@@ -47,12 +47,12 @@
     "@vykor/permissions": "workspace:*",
     "@vykor/plugins": "workspace:*",
     "@vykor/prompts": "workspace:*",
-    "@vykor/protocol": "workspace:*",
     "@vykor/sandbox": "workspace:*",
     "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
     "@vykor/tools": "workspace:*",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@vykor/plugin-contracts": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.27.7",

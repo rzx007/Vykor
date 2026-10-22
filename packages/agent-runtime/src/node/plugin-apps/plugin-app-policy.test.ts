@@ -1,8 +1,8 @@
 import type { RunToolBinding } from "@vykor/agent-contracts";
 import { expect, it } from "vitest";
 
-import { PLUGIN_APP_LIMITS } from "@vykor/protocol";
-import { capturedAppToolPolicy, type CapturedPluginAppBackend } from "./plugin-app-backends.js";
+import { PLUGIN_APP_DEFAULT_LIMITS, capturedAppToolPolicy } from "./policy.js";
+import { type CapturedPluginAppBackend } from "./plugin-app-backends.js";
 
 it("never derives automatic approval from MCP hints, dual visibility, a quota alone or missing installed permission", () => {
   const binding: RunToolBinding = { ownerPluginId: "p", definition: { name: "mcp__notes__save", description: "Save", inputSchema: {},
@@ -17,6 +17,6 @@ it("never derives automatic approval from MCP hints, dual visibility, a quota al
   expect(capturedAppToolPolicy({ ...capture, definition: { ...capture.definition, toolPolicies: [{ tool: "save", maxArgumentsBytes: 1024 * 1024 }] } }, "save"))
     .toEqual({ confirmation: "required", maxArgumentsBytes: 1024 * 1024 });
   expect(capturedAppToolPolicy({ ...capture, definition: { ...capture.definition, toolPolicies: undefined } }, "save"))
-    .toEqual({ confirmation: "required", maxArgumentsBytes: PLUGIN_APP_LIMITS.argsBytes });
+    .toEqual({ confirmation: "required", maxArgumentsBytes: PLUGIN_APP_DEFAULT_LIMITS.argsBytes });
   expect(() => capturedAppToolPolicy(capture, "foreign")).toThrow("unavailable");
 });

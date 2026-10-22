@@ -25,7 +25,7 @@ import {
   resolveExecutionEnvironmentConfig,
   settingsForApprovalMode,
 } from "@vykor/sandbox";
-import { normalizeApprovalMode } from "@vykor/protocol";
+import { normalizeApprovalMode } from "@vykor/host-config";
 import { createEnvironmentFileSystem } from "@vykor/tools";
 
 import type {
