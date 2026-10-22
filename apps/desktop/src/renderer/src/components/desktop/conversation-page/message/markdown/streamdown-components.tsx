@@ -22,6 +22,14 @@ export function createStreamdownComponents({
   return {
     a: ({ href, children, ...props }) => {
       const file = href ? parseFileReference(href) : null
+      if (file) {
+        // Markdown href 是 URL 编码；只在链接转为文件路径时还原一次。
+        try {
+          file.path = decodeURIComponent(file.path)
+        } catch {
+          // 保留带有不完整百分号转义的原始文件名。
+        }
+      }
       if (file && fileLinkMode === "text") {
         return <span title={file.path}>{children}</span>
       }

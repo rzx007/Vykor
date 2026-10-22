@@ -21,6 +21,7 @@ export interface SessionRunAssemblyOptions {
   materializeSteerInput(sessionId: string, items: readonly SessionUserInputItem[]): Promise<string>;
   assertReady(): void;
   settleGoalRun(sessionId: string, runId: string): Promise<void>;
+  settleQueuedGoalResume?(sessionId: string, failed: boolean): Promise<void>;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
 }
 
@@ -100,6 +101,7 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     events: options.events,
     attachmentLimits: options.attachmentLimits,
     goals: {
+      userWorkSettled: options.settleQueuedGoalResume,
       getCurrentGoal: (sessionId) => options.goals.getCurrentGoal(sessionId),
       getGoal: (goalId) => options.goals.getGoal(goalId),
       startGoalRun: (goalId, revision, runId, continuation) => options.goals.startGoalRun(goalId, revision, runId, continuation),

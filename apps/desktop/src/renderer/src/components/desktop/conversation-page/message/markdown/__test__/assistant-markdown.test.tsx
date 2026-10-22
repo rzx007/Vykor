@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { AssistantMessage } from "../../assistant-message"
 import { AppearanceProvider } from "@renderer/components/appearance/appearance-provider"
 import type { DesktopSessionPart } from "@shared/session-types"
+import { prepareFileOpenRequest } from "@renderer/components/desktop/layout/main-layout/utility-panel/file-open-request"
 
 let root: Root
 let container: HTMLDivElement
@@ -106,6 +107,47 @@ it("keeps code fences, tables, file links and final footnotes intact in a long r
   expect(file).not.toBeNull()
   act(() => file.click())
   expect(opened).toEqual([["/src/example.ts", undefined]])
+})
+
+it.each([
+  {
+    href: "/C:/Users/ruanz/.answer-me-with-html/pages/Vykor-更新流程-20261021-222914.html",
+    path: "C:/Users/ruanz/.answer-me-with-html/pages/Vykor-更新流程-20261021-222914.html",
+    url: "file:///C:/Users/ruanz/.answer-me-with-html/pages/Vykor-%E6%9B%B4%E6%96%B0%E6%B5%81%E7%A8%8B-20261021-222914.html",
+  },
+  {
+    href: "/C:/reports/%E6%9B%B4%E6%96%B0.html:42",
+    path: "C:/reports/更新.html",
+    url: "file:///C:/reports/%E6%9B%B4%E6%96%B0.html",
+  },
+  {
+    href: "/C:/reports/report%2520%20%231%25.html",
+    path: "C:/reports/report%20 #1%.html",
+    url: "file:///C:/reports/report%2520%20%231%25.html",
+  },
+])("decodes Markdown file links once before opening the browser: $href", async ({ href, path, url }) => {
+  const opened: string[] = []
+  await act(async () => render(`[查看报告](${href})`, false, (filePath) => opened.push(filePath)))
+  const file = container.querySelector<HTMLButtonElement>(".assistant-file-link")!
+  expect(file).not.toBeNull()
+  act(() => file.click())
+  expect(opened).toEqual([path])
+  expect(prepareFileOpenRequest(opened[0]!, "D:/repo").browserUrl).toBe(url)
+})
+
+it("keeps Chinese project file links decoded once in the file viewer", async () => {
+  const opened: Array<[string, number | undefined]> = []
+  await act(async () => render("[项目文档](/D:/repo/文档/更新%20%231%2520.md:42)", false, (path, line) => {
+    opened.push([path, line])
+  }))
+  const file = container.querySelector<HTMLButtonElement>(".assistant-file-link")!
+  expect(file).not.toBeNull()
+  act(() => file.click())
+  expect(opened).toEqual([["D:/repo/文档/更新 #1%20.md", 42]])
+  expect(prepareFileOpenRequest(opened[0]![0], "D:/repo")).toEqual({
+    openPath: "D:/repo/文档/更新 #1%20.md",
+    placeholderPath: null,
+  })
 })
 
 it("cancels a pending refresh when its virtual row unmounts", async () => {

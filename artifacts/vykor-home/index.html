@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#151815" />
+    <meta name="description" content="Vykor，你的 AI 工作台。与 AI 一起写代码、查资料、整理文档，让工作沿着同一个项目继续。" />
+    <title>Vykor — 你的 AI 工作台</title>
+    <link rel="icon" href="/media/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/media/vykor-mark-transparent.webp" as="image" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#coding">跳到产品介绍</a>
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="Vykor 首页">
+        <svg class="brand-icon" viewBox="0 0 40 36" aria-hidden="true"><path d="M12 3H7L2 8v20l5 5h5v-5H9l-2-2V10l2-2h3zm16 0h5l5 5v20l-5 5h-5v-5h3l2-2V10l-2-2h-3z" fill="currentColor"/><rect x="13" y="11" width="14" height="14" rx="4" fill="currentColor"/><path d="M17.5 16v4m5-4v4" stroke="var(--ground)" stroke-width="2.5" stroke-linecap="round"/></svg>
+        Vykor
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="navigation">菜单</button>
+      <nav id="navigation" aria-label="主导航">
+        <a href="#coding">编程</a>
+        <a href="#research">资料与文档</a>
+        <a href="https://github.com/rzx007/Vykor" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <a class="header-download" href="https://github.com/rzx007/Vykor/releases" target="_blank" rel="noopener noreferrer">下载 Vykor <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main>
+      <section id="top" class="hero-story" aria-labelledby="hero-title">
+        <div class="hero-stage">
+          <div class="first-scene">
+            <div class="hero-copy">
+              <h1 id="hero-title"><span>你的 AI</span><span>工作台。</span></h1>
+              <p>与 AI 一起写代码、查资料、整理文档。</p>
+              <a class="button" href="https://github.com/rzx007/Vykor/releases" target="_blank" rel="noopener noreferrer">下载 Vykor <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="optical-stage" aria-hidden="true">
+              <img class="optical-poster" src="/media/vykor-mark-transparent.webp" width="1400" height="1400" alt="" fetchpriority="high" />
+              <canvas id="optical-canvas"></canvas>
+            </div>
+            <div class="hero-foot"><a href="#workspace">向下，进入工作台 <span aria-hidden="true">↓</span></a><span>想法，从这里开始。</span></div>
+          </div>
+          <div id="workspace" class="workspace-scene" aria-labelledby="workspace-title">
+            <div class="workspace-intro">
+              <h2 id="workspace-title">从一句话，<br />开始一件事。</h2>
+              <p>把任务、文件和工具放在同一个工作台，<br class="desktop-break" />沿着当前项目往前做。</p>
+            </div>
+            <figure class="workspace-figure">
+              <div class="screen" data-ui><img src="/media/vykor-workspace.webp" width="2880" height="1620" alt="Vykor 工作台：同一项目下保留首页、资料和文档会话" /></div>
+              <figcaption>Vykor 工作台 · 示例项目</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section id="coding" class="coding-section section-wrap" aria-labelledby="coding-title">
+        <div class="wide-intro">
+          <h2 id="coding-title" class="reveal">把想法，<br />写进项目。</h2>
+          <div class="intro-copy reveal"><p>读文件、改代码、打开终端。<br />在对话与实现之间，少一点来回。</p><a class="text-link" href="https://github.com/rzx007/Vykor#快速开始" target="_blank" rel="noopener noreferrer">看看如何开始 <span aria-hidden="true">↗</span></a></div>
+        </div>
+        <figure class="coding-figure reveal">
+          <div class="screen" data-ui><img src="/media/vykor-coding.webp" width="2880" height="1620" alt="编程示例：左侧讨论首页实现，右侧查看 LaunchPage.tsx 代码" loading="lazy" decoding="async" /></div>
+          <figcaption><span>对话和代码，并排展开。</span><span>产品界面 · 示例数据</span></figcaption>
+        </figure>
+        <div class="coding-note reveal"><p>从当前文件出发，<br />让讨论落到具体的修改。</p><p>文件、终端、浏览器随手打开。<br />需要执行操作时，保留确认与选择。</p></div>
+      </section>
+
+      <section id="research" class="research-section section-wrap" aria-labelledby="research-title">
+        <div class="research-copy">
+          <h2 id="research-title" class="reveal">资料有出处，<br />思路有来路。</h2>
+          <p class="reveal">在浏览器里看参考，把链接和笔记整理进项目。需要时，回到原始资料。</p>
+          <details class="sources reveal">
+            <summary>打开这份示例的来源 <span class="source-indicator" aria-hidden="true">+</span></summary>
+            <div class="source-list">
+              <a href="https://lite.ego.app/zh-cn" target="_blank" rel="noopener noreferrer">ego(lite)<span>镜片与产品窗口的交接 ↗</span></a>
+              <a href="https://threejs.org/docs/" target="_blank" rel="noopener noreferrer">Three.js<span>模型、材质与动画 ↗</span></a>
+              <a href="https://gsap.com/docs/v3/Plugins/ScrollTrigger/" target="_blank" rel="noopener noreferrer">GSAP<span>滚动与动画进度 ↗</span></a>
+            </div>
+          </details>
+        </div>
+        <figure class="research-figure reveal">
+          <div class="detail-screen" data-ui><img src="/media/vykor-research.webp" width="2880" height="1620" alt="Vykor 资料示例：整理官网参考资料并保留原始来源" loading="lazy" decoding="async" /></div>
+          <figcaption>参考资料文件 · 示例数据</figcaption>
+        </figure>
+      </section>
+
+      <section id="continue" class="continue-section section-wrap" aria-labelledby="continue-title">
+        <figure class="document-figure reveal">
+          <div class="detail-screen" data-ui><img src="/media/vykor-document.webp" width="2880" height="1620" alt="Vykor 文档示例：回到原来的项目，继续完善上线说明" loading="lazy" decoding="async" /></div>
+          <figcaption>回到项目，继续整理文档 · 示例数据</figcaption>
+        </figure>
+        <div class="continue-copy">
+          <h2 id="continue-title" class="reveal">下次打开，<br />接着这件事。</h2>
+          <p class="reveal">会话、文件和资料留在项目里。<br />回来看一眼，再决定下一步。</p>
+          <p class="continuity-note reveal">保留做过的工作，也留出重新思考的空间。</p>
+        </div>
+      </section>
+
+      <section id="download" class="download-section section-wrap" aria-labelledby="download-title">
+        <div class="download-intro"><h2 id="download-title" class="reveal">给想法，<br />一个工作台。</h2><div class="reveal"><p>下载 Vykor，开始你的下一个项目。</p><a class="button" href="https://github.com/rzx007/Vykor/releases" target="_blank" rel="noopener noreferrer">前往下载页 <span aria-hidden="true">↗</span></a></div></div>
+        <div class="closing-wordmark reveal" aria-hidden="true">Vykor</div>
+      </section>
+    </main>
+    <footer class="site-footer"><p>Vykor，你的 AI 工作台。</p><div><a href="https://github.com/rzx007/Vykor" target="_blank" rel="noopener noreferrer">源代码 ↗</a><a href="https://github.com/rzx007/Vykor/tree/main/docs" target="_blank" rel="noopener noreferrer">文档 ↗</a><a href="#top">回到顶部 ↑</a></div><p>界面演示使用示例数据。</p></footer>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

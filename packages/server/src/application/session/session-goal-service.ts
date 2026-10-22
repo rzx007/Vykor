@@ -1,5 +1,6 @@
 import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalUpdateInput, type CreateSessionGoalInput, type GoalActionInput, type GoalExternalWait, type PermissionRequestRecord, type SessionGoal, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@vykor/protocol";
 import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
+import { parseGoalActionInput } from "@vykor/protocol";
 import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { AdmitPromptInput } from "./run-admission-service.js";
@@ -15,7 +16,7 @@ import { emptyPluginScope, readInputPluginScope, type InputPluginScope } from ".
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
-  private readonly admission: Pick<RunAdmissionService, "persistGoalRun" | "persistGoalInput" | "dispatchPersistedRun" | "isRunQueuedOrRunning">;
+  private readonly admission: Pick<RunAdmissionService, "persistGoalRun" | "persistGoalInput" | "dispatchPersistedRun" | "isRunQueuedOrRunning"> & Partial<Pick<RunAdmissionService, "captureUserInputPreparation">>;
   private readonly control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork" | "stopGoalChildren">;
   private readonly waitObserver: GoalExternalWaitObserver;
   constructor(
@@ -34,7 +35,7 @@ export class SessionGoalService {
       };
       goals: GoalOperations;
       operationRunner: Pick<SessionOperationRunner, "run">;
-      admission: Pick<RunAdmissionService, "persistGoalRun" | "persistGoalInput" | "dispatchPersistedRun" | "isRunQueuedOrRunning">;
+      admission: Pick<RunAdmissionService, "persistGoalRun" | "persistGoalInput" | "dispatchPersistedRun" | "isRunQueuedOrRunning"> & Partial<Pick<RunAdmissionService, "captureUserInputPreparation">>;
       control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork" | "stopGoalChildren">;
       events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
       waitVerifier?: Pick<GoalWaitVerifier, "check">;
@@ -52,7 +53,66 @@ export class SessionGoalService {
 
   get(sessionId: string): SessionGoal | null {
     this.requireSession(sessionId);
-    return this.context.goals.getCurrentGoal(sessionId, true) ?? null;
+    const goal = this.context.goals.getCurrentGoal(sessionId, true);
+    return goal ? this.withQueuedResume(goal) : null;
+  }
+
+  private queuedResume(goal: SessionGoal) {
+    return this.context.goals.listPendingGoalRequests(goal.sessionId)
+      .find(request => request.goalId === goal.id && request.result?.phase === "queued-resume");
+  }
+
+  private withQueuedResume(goal: SessionGoal): SessionGoal {
+    const queued = this.queuedResume(goal);
+    return queued && queued.result?.queuedRevision === goal.revision
+      && queued.result.objectiveVersion === goal.objectiveVersion
+      ? { ...goal, queuedResume: { requestId: queued.requestId } } : goal;
+  }
+
+  private cancelQueuedResume(goal: SessionGoal, reason?: string, expectedRequestId?: string): void {
+    const queued = this.queuedResume(goal);
+    if (!queued || (expectedRequestId !== undefined && queued.requestId !== expectedRequestId)) return;
+    this.context.transaction.transaction(() => {
+      const changed = reason && queued.result?.queuedRevision === goal.revision
+        ? this.context.goals.updateGoal(goal.id, { expectedRevision: goal.revision, reason }) : goal;
+      this.context.goals.settleGoalRequest(queued.requestId, {
+        status: "completed", goalId: goal.id, result: { goal: changed, cancelled: true },
+      });
+    });
+  }
+
+  /** Run/admission completion is the only wake-up source; no timer or foreground view is needed. */
+  async settleQueuedResume(sessionId: string, failed = false): Promise<void> {
+    const goal = this.context.goals.getCurrentGoal(sessionId, true);
+    const queued = goal && this.queuedResume(goal);
+    if (!goal || !queued) return;
+    try {
+      if (failed || queued.result?.queuedRevision !== goal.revision
+        || queued.result.objectiveVersion !== goal.objectiveVersion) {
+        await this.context.operationRunner.run(sessionId, async () => {
+          const current = this.context.goals.getGoal(goal.id)!;
+          this.cancelQueuedResume(current, failed ? "补充消息未正常完成，已取消排队继续，请检查后重试。" : undefined, queued.requestId);
+        });
+        return;
+      }
+      if (this.control.hasUserWork(sessionId)) return;
+      const inFlight = this.requests.get(queued.requestId);
+      if (inFlight) {
+        // A client's replay only returns the queued snapshot; it is not a consumer.
+        await inFlight.promise.catch(() => {});
+        return this.settleQueuedResume(sessionId);
+      }
+      const action = queued.result?.action;
+      parseGoalActionInput(action);
+      // Keep the accepted payload's field order: the existing request fingerprint uses JSON.stringify.
+      await this.executeAction(sessionId, goal.id, action as GoalActionInput, true);
+    } catch (error) {
+      const checkpoint = this.context.events.checkpoint();
+      try {
+        const current = this.context.goals.getGoal(goal.id);
+        if (current) this.cancelQueuedResume(current, "排队继续未启动：" + (error instanceof Error ? error.message : String(error)), queued.requestId);
+      } finally { this.context.events.publishSince(checkpoint); }
+    }
   }
 
   checkExecution(goalId: string, objectiveVersion: number): void {
@@ -160,6 +220,11 @@ export class SessionGoalService {
   }
 
   recoverExternalWaits(): number {
+    for (const request of this.context.goals.listPendingGoalRequests()) {
+      if (request.result?.phase !== "queued-resume" || !request.goalId) continue;
+      const goal = this.context.goals.getGoal(request.goalId);
+      if (goal) this.cancelQueuedResume(goal, "后台已重启，排队继续已取消，请重新确认。");
+    }
     const goals = this.context.goals.listActiveExternalWaitGoals();
     for (const goal of goals) this.waitObserver.observe(goal);
     return goals.length;
@@ -205,6 +270,7 @@ export class SessionGoalService {
       this.assertOpen(original);
       if (original.revision !== input.expectedRevision && request.result?.phase !== "stopping")
         throw new SessionApplicationError(409, "目标已变化");
+      this.cancelQueuedResume(original);
       if (input.objective.trim() === original.objective && request.result?.phase !== "stopping") {
         this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal: original } });
         return original;
@@ -258,18 +324,42 @@ export class SessionGoalService {
   }
 
   action(sessionId: string, goalId: string, input: GoalActionInput): Promise<SessionGoal> {
+    return this.executeAction(sessionId, goalId, input);
+  }
+
+  private executeAction(sessionId: string, goalId: string, input: GoalActionInput, consumeQueue = false): Promise<SessionGoal> {
+    const preparation = input.action === "resume" ? this.admission.captureUserInputPreparation?.(sessionId) : undefined;
     return this.command(sessionId, input.requestId, { operation: "action", goalId, ...input }, async () => {
-      const replay = await this.replay(input.requestId);
+      const completed = this.context.goals.getGoalRequest(input.requestId)?.status === "completed";
+      if (preparation && !completed && !await preparation)
+        throw new SessionApplicationError(409, "补充消息未正常完成，请检查后重新继续目标。");
+      const queued = consumeQueue ? this.context.goals.getGoalRequest(input.requestId) : undefined;
+      const acceptedQueue = queued?.status === "pending" && queued.result?.phase === "queued-resume";
+      const replay = acceptedQueue ? undefined : await this.replay(input.requestId);
       if (replay) return replay;
       const goal = this.requireGoal(sessionId, goalId);
+      if (input.action === "cancel_resume" && !this.queuedResume(goal)) {
+        this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal } });
+        return goal;
+      }
       this.assertOpen(goal);
-      if (goal.revision !== input.expectedRevision) throw new SessionApplicationError(409, "目标已变化，请刷新后重试");
+      const expectedRevision = acceptedQueue ? queued.result!.queuedRevision : input.expectedRevision;
+      if (goal.revision !== expectedRevision) throw new SessionApplicationError(409, "目标已变化，请刷新后重试");
+      if (input.action === "cancel_resume") {
+        return this.context.transaction.transaction(() => {
+          this.cancelQueuedResume(goal);
+          const changed = this.context.goals.updateGoal(goal.id, { expectedRevision: goal.revision });
+          this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal: changed } });
+          return changed;
+        });
+      }
       if (input.action === "budget") {
         if (input.tokenBudget !== null && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget! <= 0))
           throw new SessionApplicationError(400, "Token 总预算必须为正整数，或明确解除限制");
         if (input.tokenBudget !== null && input.tokenBudget! < goal.usage.knownTokens)
           throw new SessionApplicationError(409, "总预算不能低于已知用量");
         const saved = this.context.transaction.transaction(() => {
+          this.cancelQueuedResume(goal);
           this.context.goals.updateGoal(goalId, { expectedRevision: goal.revision, tokenBudget: input.tokenBudget });
           const checked = this.context.goals.checkGoalBudget(goalId);
           const changed = this.context.goals.getGoal(goalId)!;
@@ -280,10 +370,37 @@ export class SessionGoalService {
         return saved.changed;
       }
       const retryRun = input.action === "resume" ? this.waitDispatchCandidate(goal) : undefined;
-      if (input.action === "resume") this.validateResume(goal, input, retryRun?.id);
+      if (input.action === "resume") {
+        this.validateResume(goal, input, retryRun?.id, true);
+        const pending = this.queuedResume(goal);
+        if (pending && !acceptedQueue) {
+          const saved = this.withQueuedResume(goal);
+          this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal: saved } });
+          return saved;
+        }
+        if (this.control.hasUserWork(sessionId)) {
+          const existing = this.queuedResume(goal);
+          if (existing) {
+            const saved = this.withQueuedResume(goal);
+            if (existing.requestId !== input.requestId)
+              this.context.goals.settleGoalRequest(input.requestId, { status: "completed", goalId, result: { goal: saved } });
+            return saved;
+          }
+          return this.context.transaction.transaction(() => {
+            const changed = this.context.goals.updateGoal(goalId, { expectedRevision: goal.revision });
+            this.context.goals.settleGoalRequest(input.requestId, { status: "pending", goalId, result: {
+              phase: "queued-resume", action: input, queuedRevision: changed.revision,
+              objectiveVersion: changed.objectiveVersion, goal: changed,
+              ...(goal.wait?.kind === "user" ? { queuedQuestion: { ...goal.wait, response: input.response } } : {}),
+            } });
+            return this.withQueuedResume(changed);
+          });
+        }
+      }
       const updated = this.context.transaction.transaction(() => {
+        if (input.action !== "resume") this.cancelQueuedResume(goal);
         const changed = this.context.goals.updateGoal(goalId, {
-          expectedRevision: input.expectedRevision,
+          expectedRevision: goal.revision,
           status: input.action === "cancel" ? "cancelled" : input.action === "pause" ? "paused" : "active",
           maxAutoTurns: goal.maxAutoTurns === 0 ? 0 : goal.maxAutoTurns + (input.action === "resume" ? (input.additionalAutoTurns ?? 0) : 0),
           currentRunId: null,
@@ -328,6 +445,10 @@ export class SessionGoalService {
   }
 
   async settleRun(sessionId: string, runId: string): Promise<void> {
+    const settled = this.context.runs.getRun(runId);
+    if (settled && settled.sessionId === sessionId && !["pending", "running"].includes(settled.status))
+      await this.settleQueuedResume(sessionId,
+        (!settled.metadata.goalRunKind || settled.metadata.goalRunKind === "user") && settled.status !== "completed");
     const before = this.context.events.checkpoint();
     let nextRunId: string | undefined;
     let waitToObserve: SessionGoal | undefined;
@@ -529,14 +650,18 @@ export class SessionGoalService {
     }
   }
 
-  private validateResume(goal: SessionGoal, input: GoalActionInput, retryRunId?: string): void {
+  private validateResume(goal: SessionGoal, input: GoalActionInput, retryRunId?: string, allowUserWork = false): void {
     if (!["paused", "blocked", "waiting_user"].includes(goal.status)) throw new SessionApplicationError(409, `Goal cannot resume from ${goal.status}`);
     if (goal.maxAutoTurns > 0 && goal.maxAutoTurns + (input.additionalAutoTurns ?? 0) > MAX_GOAL_AUTO_TURNS) throw new SessionApplicationError(400, "自动续跑总额度最多为 1000");
     if (goal.maxAutoTurns > 0 && goal.autoTurnsUsed >= goal.maxAutoTurns + (input.additionalAutoTurns ?? 0)) throw new SessionApplicationError(409, "请明确增加自动续跑额度");
-    if (this.control.hasUserWork(goal.sessionId)) throw new SessionApplicationError(409, "请先等待用户任务结束");
+    if (!allowUserWork && this.control.hasUserWork(goal.sessionId)) throw new SessionApplicationError(409, "请先等待用户任务结束");
     if (goalBudgetStopCode(goal, goal.usage)) throw new SessionApplicationError(409, "Token 预算已用完或用量不完整，请先调整预算");
     if (input.questionId && (goal.status !== "waiting_user" || goal.wait?.kind !== "user")) throw new SessionApplicationError(409, "目标当前没有等待这个问题的回答");
-    if (this.context.runs.listGoalRuns(goal.id).some((run) => run.id !== retryRunId && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标仍在停止，请稍后继续");
+    if (this.context.runs.listGoalRuns(goal.id).some((run) => run.id !== retryRunId
+      && (run.status === "pending" || run.status === "running")
+      && !(allowUserWork && run.sessionId === goal.sessionId
+        && (!run.metadata.goalRunKind || run.metadata.goalRunKind === "user"))))
+      throw new SessionApplicationError(409, "目标仍在停止，请稍后继续");
     if (goal.status === "waiting_user") {
       if (goal.wait?.kind === "user" && (!input.response?.trim() || goal.wait.questionId !== input.questionId || goal.wait.objectiveVersion !== input.objectiveVersion)) throw new SessionApplicationError(409, "请先回答当前版本的问题");
       if (goal.wait?.kind === "approval") {
@@ -604,6 +729,8 @@ export class SessionGoalService {
   private async replay(requestId: string): Promise<SessionGoal | undefined> {
     const request = this.context.goals.getGoalRequest(requestId)!;
     if (request.status === "completed" && request.result?.goal) return request.result.goal as unknown as SessionGoal;
+    if (request.result?.phase === "queued-resume" && request.goalId)
+      return this.withQueuedResume(this.context.goals.getGoal(request.goalId)!);
     if (request.result?.phase === "dispatch-retry" && request.goalId && typeof request.result.runId === "string") {
       const goal = this.context.goals.getGoal(request.goalId)!;
       const run = this.context.runs.getRun(request.result.runId);
@@ -731,11 +858,25 @@ export class SessionGoalService {
     catch (error) {
       const current = this.context.goals.getGoal(goal.id)!;
       if (current.status === "active" && current.objectiveVersion === goal.objectiveVersion) {
-        const paused = this.context.goals.updateGoal(goal.id, { expectedRevision: current.revision, status: "paused", currentRunId: null,
-          reason: `目标派发失败：${error instanceof Error ? error.message : String(error)}`,
-          stopReason: { code: "run_error", at: Date.now(), runId } });
-        this.context.goals.settleGoalRequest(requestId, { status: "pending", goalId: goal.id,
-          result: { ...request.result, goal: paused, phase: "dispatch-retry", retryRevision: paused.revision } });
+        // The desktop already accepted a queued request and no longer owns its retry id.
+        const abandonQueuedRun = request.result?.phase === "queued-resume"
+          && run.status === "pending" && !this.admission.isRunQueuedOrRunning(runId);
+        const question = request.result?.queuedQuestion as SessionGoal["wait"];
+        const restoreQuestion = abandonQueuedRun && question?.kind === "user"
+          && question.objectiveVersion === current.objectiveVersion;
+        this.context.transaction.transaction(() => {
+          const paused = this.context.goals.updateGoal(goal.id, { expectedRevision: current.revision,
+            status: restoreQuestion ? "waiting_user" : "paused", currentRunId: null,
+            ...(restoreQuestion ? { wait: question } : {}),
+            reason: `目标派发失败：${error instanceof Error ? error.message : String(error)}`,
+            stopReason: { code: "run_error", at: Date.now(), runId } });
+          if (abandonQueuedRun) this.context.runs.updateRun(runId, {
+            status: "failed", error: paused.reason,
+          });
+          this.context.goals.settleGoalRequest(requestId, { status: abandonQueuedRun ? "completed" : "pending", goalId: goal.id,
+            result: abandonQueuedRun ? { goal: paused }
+              : { ...request.result, goal: paused, phase: "dispatch-retry", retryRevision: paused.revision } });
+        });
       }
       throw error;
     }

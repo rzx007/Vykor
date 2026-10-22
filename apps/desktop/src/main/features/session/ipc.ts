@@ -35,6 +35,8 @@ import { desktopSessionService } from "./session-service"
 export const sessionIpcContribution: IpcContribution = {
   id: "session",
   register() {
+    // Includes local context preparation, before sendPrompt reaches daemon admission.
+    const promptSubmissions = new Map<string, Set<Promise<void>>>()
     return [
       {
         channel: IpcChannels.workflowRead,
@@ -133,10 +135,15 @@ export const sessionIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.sessionGoalAction,
-        handler: (_event, input) =>
-          desktopSessionService.goalAction(
-            input as import("../../../shared/session-types").DesktopSessionGoalActionInput
-          ),
+        handler: async (_event, value) => {
+          const input = value as import("../../../shared/session-types").DesktopSessionGoalActionInput
+          if (input.action === "resume") {
+            while (promptSubmissions.has(input.sessionId)) {
+              await Promise.all(promptSubmissions.get(input.sessionId)!)
+            }
+          }
+          return desktopSessionService.goalAction(input)
+        },
       },
       {
         channel: IpcChannels.projectRename,
@@ -222,13 +229,23 @@ export const sessionIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.sessionSendPrompt,
-        handler: async (event, input) => {
+        handler: (event, input) => {
           const prompt = input as SendDesktopPromptInput
-          if (!prompt.pluginAppContextIds?.length) return desktopSessionService.sendPrompt(prompt)
-          const apps = requireDesktopPluginAppService()
-          if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame || !apps.isOwner(event.sender.id)) throw new Error("plugin_app_owner_unavailable")
-          const contexts = await apps.composerContext(event.sender.id, prompt.sessionId, prompt.pluginAppContextIds)
-          return desktopSessionService.sendPrompt(prompt, contexts)
+          const submitting = (async () => {
+            if (!prompt.pluginAppContextIds?.length) return desktopSessionService.sendPrompt(prompt)
+            const apps = requireDesktopPluginAppService()
+            if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame || !apps.isOwner(event.sender.id)) throw new Error("plugin_app_owner_unavailable")
+            const contexts = await apps.composerContext(event.sender.id, prompt.sessionId, prompt.pluginAppContextIds)
+            return desktopSessionService.sendPrompt(prompt, contexts)
+          })()
+          const pending = promptSubmissions.get(prompt.sessionId) ?? new Set<Promise<void>>()
+          pending.add(submitting)
+          promptSubmissions.set(prompt.sessionId, pending)
+          void submitting.finally(() => {
+            pending.delete(submitting)
+            if (!pending.size) promptSubmissions.delete(prompt.sessionId)
+          }).catch(() => {})
+          return submitting
         },
       },
       {

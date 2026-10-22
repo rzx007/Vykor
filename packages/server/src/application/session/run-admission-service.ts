@@ -159,6 +159,7 @@ export interface RunAdmissionEvents {
 }
 
 export interface RunAdmissionGoalControl {
+  userWorkSettled?(sessionId: string, failed: boolean): Promise<void>;
   checkExecution?(goalId: string, objectiveVersion: number): void;
   getCurrentGoal?(sessionId: string): { id: string; status: string; objectiveVersion: number } | undefined;
   getGoal?(goalId: string): { id: string; status: string; objectiveVersion: number } | undefined;
@@ -211,6 +212,31 @@ export class RunAdmissionService {
 
   constructor(private readonly options: RunAdmissionServiceOptions) {}
 
+  private readonly preparingUserInputs = new Map<string, Set<Promise<boolean>>>();
+
+  /** Snapshot only submissions that preceded this resume, not later user input. */
+  captureUserInputPreparation(sessionId: string): Promise<boolean> | undefined {
+    const pending = this.preparingUserInputs.get(sessionId);
+    return pending && Promise.all([...pending]).then(results => results.every(Boolean));
+  }
+
+  /** Cover the outer plugin/context preparation as well as the final admission. */
+  async withUserInputPreparation<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
+    const pending = this.preparingUserInputs.get(sessionId) ?? new Set<Promise<boolean>>();
+    const result = work();
+    const preparation = result.then(() => true, () => false);
+    pending.add(preparation);
+    this.preparingUserInputs.set(sessionId, pending);
+    let failed = false;
+    try { return await result; }
+    catch (error) { failed = true; throw error; }
+    finally {
+      pending.delete(preparation);
+      if (!pending.size) this.preparingUserInputs.delete(sessionId);
+      void this.options.goals?.userWorkSettled?.(sessionId, failed).catch(() => {});
+    }
+  }
+
   private assertReady(): void {
     this.options.assertReady?.();
   }
@@ -224,7 +250,7 @@ export class RunAdmissionService {
   }
 
   hasPendingAdmission(sessionId: string): boolean {
-    return [...this.pendingAdmissions.values()].some(
+    return this.preparingUserInputs.has(sessionId) || [...this.pendingAdmissions.values()].some(
       (entry) => entry.sessionId === sessionId,
     );
   }
@@ -543,9 +569,15 @@ export class RunAdmissionService {
       }
       return pending.promise;
     }
-    const promise = admitPromptWork(this.options, sessionId, input).finally(() => {
+    let failed = false;
+    const promise = admitPromptWork(this.options, sessionId, input).catch(error => {
+      failed = true;
+      throw error;
+    }).finally(() => {
       if (this.pendingAdmissions.get(input.id!)?.promise === promise) {
         this.pendingAdmissions.delete(input.id!);
+        if (!input.runMetadata?.goalId)
+          void this.options.goals?.userWorkSettled?.(sessionId, failed).catch(() => {});
       }
     });
     this.pendingAdmissions.set(input.id, {

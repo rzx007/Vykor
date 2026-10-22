@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_GOAL_AUTO_TURNS, parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput, parseGoalUpdateInput } from "./session-goals.js";
 
 describe("session goal protocol", () => {
+  it("accepts cancellation of only the queued resume without accepting resume payload fields", () => {
+    const action = { requestId: "cancel-queue", expectedRevision: 2, action: "cancel_resume" };
+    expect(parseGoalActionInput(action)).toEqual(action);
+    expect(() => parseGoalActionInput({ ...action, response: "answer" })).toThrow();
+    expect(() => parseGoalActionInput({ ...action, additionalAutoTurns: 2 })).toThrow();
+  });
   it("defaults to unlimited work and accepts optional limits", () => {
     expect(DEFAULT_GOAL_AUTO_TURNS).toBe(0);
     expect(parseCreateSessionGoalInput({ requestId: "r", objective: "  完成目标  " })).toEqual({ requestId: "r", objective: "完成目标" });

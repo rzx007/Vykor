@@ -8,7 +8,7 @@ export function PluginMentionIcon({ pluginId }: { pluginId: string }): React.JSX
   const plugins = useContext(MessagePluginCatalog)
   const icon = plugins.find((plugin) => plugin.pluginId === pluginId)?.icon
   return (
-    <span className="mr-1 inline-block align-middle">
+    <span className="mr-1 inline-flex align-middle">
       <ExtensionIcon name="plugin" src={icon} size="inline" />
     </span>
   )

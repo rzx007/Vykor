@@ -14,6 +14,7 @@ it("uses the catalog icon and falls back to the same default as the composer", (
   )
   expect(markup).toContain(icon)
   expect(markup).toContain("<img")
+  expect(markup).toContain('class="mr-1 inline-flex align-middle"')
   expect(renderToStaticMarkup(<PluginMentionIcon pluginId="missing" />)).toContain("lucide-plug")
 })
 

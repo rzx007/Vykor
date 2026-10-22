@@ -271,17 +271,14 @@ export class DesktopPluginAppService {
       if (!stored || stored.mount.ownerId !== ownerId || stored.entry.source.sessionId !== sessionId) throw new Error("plugin_app_context_expired")
       return stored
     })
-    for (const stored of selected) {
-      await this.refresh(ownerId, { mountId: stored.mount.mountId }); this.assertMessage(stored.mount, false)
-      if (this.contexts.get(stored.entry.id) !== stored) throw new Error("plugin_app_context_expired")
-    }
+    // Network/source freshness is checked by daemon admission, where user work is tracked.
     return selected.map(stored => {
       this.assertMessage(stored.mount, false)
       const { request, mount, entry } = stored, lease = mount.response.lease
       if (this.contexts.get(entry.id) !== stored || entry.source.sessionId !== sessionId
         || lease?.token !== request.lease.token || lease?.backendGeneration !== request.lease.backendGeneration)
         throw new Error("plugin_app_context_expired")
-      // Renew only the host control version. The user's document/version/element snapshot stays fixed.
+      // This is a local snapshot; the daemon renews and checks host control state before persistence.
       return parsePluginAppConversationRequest({ ...request, expectedRevision: mount.response.app.controlRevision })
     })
   }

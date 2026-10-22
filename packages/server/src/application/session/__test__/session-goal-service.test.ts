@@ -91,6 +91,167 @@ function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-r
 }
 
 describe("SessionGoalService simple lifecycle", () => {
+  it("queues one resume while user work is pending and dispatches once only after all user work ends", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "补充后继续" });
+    h.userWork(true);
+    const request = { action: "resume" as const, requestId: "queued", expectedRevision: h.current().revision };
+    const queued = await h.service.action("s1", h.current().id, request);
+    expect(queued.queuedResume).toEqual({ requestId: "queued" });
+    await h.service.action("s1", queued.id, request);
+    await h.service.action("s1", queued.id, { ...request, requestId: "duplicate", expectedRevision: h.current().revision });
+    expect(h.store.runs.listGoalRuns(queued.id).filter(run => run.metadata.goalRunKind === "resume")).toHaveLength(0);
+    const first = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(first.id, { status: "completed" });
+    await h.service.settleRun("s1", first.id);
+    expect(h.service.get("s1")?.queuedResume).toBeDefined();
+    expect(h.current().status).toBe("paused");
+    h.userWork(false);
+    const last = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(last.id, { status: "completed" });
+    await Promise.all([h.service.settleRun("s1", last.id), h.service.settleRun("s1", last.id)]);
+    expect(h.current().status).toBe("active");
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.store.runs.listGoalRuns(queued.id).filter(run => run.metadata.goalRunKind === "resume")).toHaveLength(1);
+    const lateCancel = await h.service.action("s1", queued.id, {
+      action: "cancel_resume", requestId: "late-cancel", expectedRevision: queued.revision,
+    });
+    expect(lateCancel.status).toBe("active");
+    expect(h.run().status).toBe("running");
+  });
+  it("allows a fresh resume after a queued resume fails to dispatch", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "补充后继续" });
+    h.userWork(true);
+    const request = { action: "resume" as const, requestId: "queued-dispatch", expectedRevision: h.current().revision };
+    await h.service.action("s1", h.current().id, request);
+    h.failDispatch(true);
+    h.userWork(false);
+    const user = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(user.id, { status: "completed" });
+    await h.service.settleRun("s1", user.id);
+    expect(h.current().status).toBe("paused");
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    h.failDispatch(false);
+    const resumed = await h.service.action("s1", h.current().id, {
+      action: "resume", requestId: "fresh-resume", expectedRevision: h.current().revision,
+    });
+    expect(resumed.status).toBe("active");
+    const resumes = h.store.runs.listGoalRuns(resumed.id).filter(run => run.metadata.goalRunKind === "resume");
+    expect(resumes.filter(run => run.status === "pending")).toHaveLength(0);
+    expect(resumes.filter(run => run.status === "running")).toHaveLength(1);
+    expect(h.store.goals.getGoalRequest(request.requestId)?.status).toBe("completed");
+    await h.service.action("s1", resumed.id, request);
+    expect(h.store.runs.listGoalRuns(resumed.id).filter(run => run.metadata.goalRunKind === "resume")).toHaveLength(2);
+  });
+  it.each(["cancel_resume", "pause", "cancel"] as const)("revokes a queued resume on %s", async action => {
+    const h = harness(); await h.create(); await h.finish({ status: "blocked", reason: "等补充" });
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued", expectedRevision: h.current().revision });
+    await h.service.action("s1", h.current().id, { action, requestId: "cancel-queue", expectedRevision: h.current().revision });
+    h.userWork(false);
+    const user = h.store.runs.createRun({ sessionId: "s1" });
+    const nextUser = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(nextUser.id, { status: "completed" });
+    await h.service.settleRun("s1", nextUser.id);
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.current().status).toBe(action === "cancel" ? "cancelled" : action === "pause" ? "paused" : "blocked");
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(1);
+  });
+  it("restores a queued question answer after failed dispatch and resends it without adding quota twice", async () => {
+    const h = harness(); await h.create({ maxAutoTurns: 1 }); await h.finish({ question: "检查哪个模块？" });
+    const wait = h.current().wait;
+    if (wait?.kind !== "user") throw new Error("expected question");
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued-answer",
+      expectedRevision: h.current().revision, questionId: wait.questionId, objectiveVersion: 1,
+      response: "协议模块", additionalAutoTurns: 2 });
+    h.failDispatch(true); h.userWork(false);
+    await h.service.settleQueuedResume("s1");
+    expect(h.current()).toMatchObject({ status: "waiting_user", maxAutoTurns: 3,
+      wait: { ...wait, response: "协议模块" } });
+    h.failDispatch(false);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "answer-again",
+      expectedRevision: h.current().revision, questionId: wait.questionId, objectiveVersion: 1, response: "协议模块" });
+    expect(h.current()).toMatchObject({ status: "active", maxAutoTurns: 3 });
+    expect(h.store.conversations.getInput(h.run().inputId!)?.content).toBe("协议模块");
+    expect(h.store.runs.listGoalRuns(h.current().id).filter(run => run.status === "running")).toHaveLength(1);
+  });
+  it("waits for a supplemental user Run that is already associated with this Goal", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "等补充" });
+    const user = h.store.runs.createRun({ sessionId: "s1", metadata: {
+      goalId: h.current().id, goalObjectiveVersion: 1, goalRunKind: "user",
+    } });
+    h.store.runs.updateRun(user.id, { status: "running" });
+    h.userWork(true);
+    const queued = await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued-user-run", expectedRevision: h.current().revision });
+    expect(queued.queuedResume).toBeDefined();
+    h.store.runs.updateRun(user.id, { status: "completed" });
+    h.userWork(false);
+    await h.service.settleRun("s1", user.id);
+    expect(h.current().status).toBe("active");
+  });
+  it("does not resume an edited goal or silently continue after a failed supplemental message", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "等补充" });
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued", expectedRevision: h.current().revision });
+    const user = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(user.id, { status: "failed", error: "补充处理失败" });
+    h.userWork(false);
+    await h.service.settleRun("s1", user.id);
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.current().reason).toContain("补充消息");
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued-again", expectedRevision: h.current().revision });
+    await h.service.update("s1", h.current().id, { requestId: "edit-queued", objective: "新的目标", expectedRevision: h.current().revision });
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    h.userWork(false);
+    const nextUser = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(nextUser.id, { status: "completed" });
+    await h.service.settleRun("s1", nextUser.id);
+    expect(h.current().status).toBe("paused");
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(1);
+  });
+  it("preserves question answers and charges additional quota only when the queued resume actually starts", async () => {
+    const h = harness(); await h.create({ maxAutoTurns: 1 }); await h.finish({ question: "哪个模块？" });
+    const wait = h.current().wait;
+    if (wait?.kind !== "user") throw new Error("expected question");
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "answer-queued",
+      expectedRevision: h.current().revision, questionId: wait.questionId, objectiveVersion: wait.objectiveVersion,
+      response: "协议模块", additionalAutoTurns: 2 });
+    expect(h.current().maxAutoTurns).toBe(1);
+    h.userWork(false);
+    const user = h.store.runs.createRun({ sessionId: "s1" });
+    h.store.runs.updateRun(user.id, { status: "completed" });
+    await h.service.settleRun("s1", user.id);
+    expect(h.current().maxAutoTurns).toBe(3);
+    expect(h.store.conversations.getInput(h.run().inputId!)?.items).toContainEqual({ type: "text", text: "协议模块" });
+  });
+  it("cancels queued requests on daemon recovery instead of leaving an inert queued badge", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "等补充" });
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued", expectedRevision: h.current().revision });
+    h.service.recoverExternalWaits();
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.current().reason).toContain("重启");
+    expect(h.store.goals.getGoalRequest("queued")?.status).toBe("completed");
+  });
+  it("revokes queued resumes on budget edits and on input preparation failure without a Run", async () => {
+    const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "补充后继续" });
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued", expectedRevision: h.current().revision });
+    h.userWork(false);
+    await h.service.settleQueuedResume("s1", true);
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.current().status).toBe("paused");
+    expect(h.current().reason).toContain("补充消息");
+    h.userWork(true);
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "queued-budget", expectedRevision: h.current().revision });
+    await h.service.action("s1", h.current().id, { action: "budget", tokenBudget: 1, requestId: "budget-edit", expectedRevision: h.current().revision });
+    h.userWork(false);
+    await h.service.settleQueuedResume("s1");
+    expect(h.service.get("s1")?.queuedResume).toBeUndefined();
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(1);
+  });
   it("captures a new goal's plugin scope and keeps the resolved upper bound for continuation and resume", async () => {
     const h = harness();
     const candidates = ["P", "Q"].map(pluginId => ({ pluginId, displayName: pluginId, description: pluginId, version: "1", behaviorDigest: `${pluginId}-digest` }));

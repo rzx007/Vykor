@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Streamdown } from "streamdown"
 import { createStreamdownComponents } from "./streamdown-components"
-import { streamdownPlugins } from "./streamdown-plugins"
+import { streamdownPlugins, streamdownRehypePlugins } from "./streamdown-plugins"
 import { createIncrementalMarkdownParser } from "./incremental-markdown"
 import { longMarkdownCharacters, useStreamingMarkdown } from "./use-streaming-markdown"
 import { CodeFenceActivityContext, createCodeFenceActivity } from "../activity/code-fence-activity"
@@ -87,6 +87,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           parseIncompleteMarkdown={streaming}
           parseMarkdownIntoBlocksFn={parseBlocks}
           plugins={streamdownPlugins}
+          rehypePlugins={streamdownRehypePlugins}
           components={components}
         >
           {rendered.text}

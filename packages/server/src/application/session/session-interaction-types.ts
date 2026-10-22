@@ -40,7 +40,8 @@ export interface SessionInteractionServiceContext {
   sessions: SessionInteractionSessions;
   conversations: SessionInteractionConversations;
   runs: SessionInteractionRuns;
-  admission: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">;
+  admission: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">
+    & Partial<Pick<RunAdmissionService, "withUserInputPreparation">>;
   control: Pick<RunControlService, "activeRunId" | "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "promoteQueuedRun">;
   operationRunner: Pick<SessionOperationRunner, "run">;
   agentPool: Pick<AgentPool, "close" | "configured" | "warm">;

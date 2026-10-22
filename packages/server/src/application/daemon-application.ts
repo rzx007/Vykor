@@ -794,6 +794,7 @@ export class DaemonApplication implements DurableAgentApplication {
         attachmentLimits: this.attachments.limits, materializeSteerInput,
         assertReady: () => this.assertReady(),
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
+        settleQueuedGoalResume: (sessionId, failed) => this.goals.settleQueuedResume(sessionId, failed),
         checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
       });
       this.runAdmission = runServices.admission;

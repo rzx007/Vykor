@@ -229,7 +229,7 @@ export function UtilityPanel({
   useEffect(() => {
     if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
     const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
-    if (prepared.placeholderPath) return
+    if (prepared.placeholderPath || prepared.browserUrl) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
       setTabs((current) => {
@@ -300,6 +300,17 @@ export function UtilityPanel({
     },
     [setActiveTabId, setBrowserTabs, setTabs]
   )
+
+  useEffect(() => {
+    if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
+    const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
+    if (!prepared.browserUrl) return
+    const timer = window.setTimeout(() => {
+      setHandledFileRequestId(fileOpenRequest.id)
+      openBrowserTab(prepared.browserUrl!, fileOpenRequest.path.replace(/\\/g, "/").split("/").pop()?.replace(/:\d+(?::\d+)?$/, ""))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fileOpenRequest, handledFileRequestId, selectedProjectPath, openBrowserTab, setHandledFileRequestId])
 
   const addTab = useCallback(
     (tool: UtilityTool): void => {
@@ -924,7 +935,7 @@ export function UtilityPanel({
               }}
               restoreActivePath={persistedFileState?.activePath ?? null}
               restorePaths={persistedFileState?.paths ?? []}
-              openRequest={fileOpenRequest}
+              openRequest={fileOpenRequest && prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath).browserUrl ? null : fileOpenRequest}
               onOpenHtmlInBrowser={(projectPath, relativePath, name) =>
                 openBrowserTab(toLocalFileUrl(projectPath, relativePath), name)
               }

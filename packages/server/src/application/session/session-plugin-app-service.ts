@@ -163,6 +163,10 @@ export class SessionPluginAppService {
     for (const context of contexts) {
       if (context.source.sessionId !== sessionId) throw new ApplicationError(409, "插件上下文不能发送到其他会话");
       const current = await this.assertCanMessage(context.source, context.lease);
+      if (context.expectedRevision > current.app.controlRevision) throw new ApplicationError(409, "插件上下文版本无效");
+      // Host control may advance after the document snapshot was selected. Renew it here,
+      // inside tracked user admission, without changing the original selected text/data.
+      context.expectedRevision = current.app.controlRevision;
       checked.push({ context, current });
     }
     // No await between this final check of every original capture and ordinary Input/Run persistence.

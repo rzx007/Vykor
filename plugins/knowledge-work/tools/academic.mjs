@@ -9,7 +9,7 @@ import { saveResearchSource, appendResearchAttempts } from "./source-records.mjs
 /** @typedef {{source:string,error:string}} SourceError */
 /** @typedef {{query:string,sources_queried:string[],count:number,results:AcademicRecord[],errors:SourceError[]}} SearchResult */
 /** @typedef {{name:string,attrs:Record<string,string>,parts:(XmlNode|string)[]}} XmlNode */
-/** @typedef {{status:number,ok:boolean,url?:string,headers:{get(name:string):string|null},body?:import('node:stream/web').ReadableStream<Uint8Array>|null}} HttpResponse */
+/** @typedef {{status:number,ok:boolean,url?:string,headers:{get(name:string):string|null},body?:Response['body']}} HttpResponse */
 /** @typedef {(url:URL,options:{redirect:'manual',signal:AbortSignal,headers:Record<string,string>})=>Promise<HttpResponse>} AcademicFetch */
 
 const HOSTS = new Set(["export.arxiv.org", "api.openalex.org", "api.crossref.org", "api.semanticscholar.org", "eutils.ncbi.nlm.nih.gov"]);
@@ -321,7 +321,7 @@ async function fetchSource(source, query, limit, timeout, context, signal, fetch
 }
 
 /** @param {Record<string,unknown>} input @param {InvocationContext} context @param {AcademicFetch} [fetchFn] @returns {Promise<SearchResult>} */
-export async function searchAcademic(input, context, fetchFn = /** @type {AcademicFetch} */ (/** @type {unknown} */ (globalThis.fetch))) {
+export async function searchAcademic(input, context, fetchFn = globalThis.fetch) {
   context.signal.throwIfAborted();
   const query = clean(input.query);
   if (!query || query.length > 2000) throw new TypeError("query must contain 1–2000 characters");

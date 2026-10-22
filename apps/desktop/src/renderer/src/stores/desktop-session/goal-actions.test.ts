@@ -47,6 +47,16 @@ const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => 
 }
 
 describe("goal actions", () => {
+  it("shows a friendly wait message for a resume race without automatically retrying", async () => {
+    useDesktopSessionStore.setState({ goalsBySession: { s1: goal("s1", { status: "paused" }) } })
+    vi.mocked(window.desktop.sessions.goalAction).mockRejectedValueOnce(
+      new Error("Error invoking remote method 'session:goal:action': VykorApiError: 请先等待用户任务结束")
+    )
+    await useDesktopSessionStore.getState().applyGoalAction("s1", { action: "resume" })
+    expect(useDesktopSessionStore.getState().goalComposersByScope[sessionComposerScope("s1")]?.error)
+      .toBe("补充消息仍在排队或处理中，请等待处理结束后再继续目标。")
+    expect(window.desktop.sessions.goalAction).toHaveBeenCalledTimes(1)
+  })
   it("follows a refresh requested during a slow GET with one fresh read", async () => {
     const first = deferred<SessionGoal>();
     vi.mocked(window.desktop.sessions.getGoal).mockReturnValueOnce(first.promise)

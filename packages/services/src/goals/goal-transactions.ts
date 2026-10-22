@@ -60,6 +60,7 @@ export interface GoalOperations {
   ): SessionGoal | undefined;
   updateGoal(id: string, input: UpdateSessionGoalStoreInput): SessionGoal;
   getGoalRequest(requestId: string): SessionGoalRequestRecord | undefined;
+  listPendingGoalRequests(sessionId?: string): SessionGoalRequestRecord[];
   beginGoalRequest(input: {
     requestId: string;
     sessionId: string;
@@ -157,6 +158,10 @@ export class GoalTransactions implements GoalOperations {
 
   getGoalRequest(requestId: string): SessionGoalRequestRecord | undefined {
     return this.options.repository.getRequest(requestId);
+  }
+
+  listPendingGoalRequests(sessionId?: string): SessionGoalRequestRecord[] {
+    return this.options.repository.listPendingRequests(sessionId);
   }
 
   listActiveExternalWaitGoals(): SessionGoal[] {

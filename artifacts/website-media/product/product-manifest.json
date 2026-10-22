@@ -1,0 +1,76 @@
+{
+  "kind": "actual Vykor desktop components rendered with disclosed example data",
+  "notEndToEndRecording": true,
+  "privateUserDataAccessed": false,
+  "providerRequests": false,
+  "viewport": [
+    1920,
+    1080
+  ],
+  "scaleFactor": 1.5,
+  "scenarios": [
+    {
+      "scene": "workspace",
+      "file": "vykor-workspace.png",
+      "size": {
+        "width": 2880,
+        "height": 1620
+      },
+      "diagnostics": [
+        "workspace.listOpeners",
+        "terminal.list",
+        "workflows.read"
+      ],
+      "text": "文件\n编辑\n视图\n帮助\nVykor\n新对话\n便签\n定时任务\n插件\n已归档\n项目\n产品发布项目\n准备产品发布页\n实现产品首页\n整理官网参考资料\n继续完善上线说明\n最近\n\n暂无最近会话\n\n设置\n准备产品发布页\n示例任务：为这个产品准备一个首页，整理参考资料和上线说明。\n08:00\n\n可以把这件事留在同一个项目里推进。\n\n先整理参考资料，确定页面要讲清楚的内容；接着实现首页，最后把资源与发布检查项收进文档。\n\n工作资料\nsrc/LaunchPage.tsx：首页界面\ndocs/参考资料.md：参考页面与来源\ndocs/上线说明.md：发布前的检查项\n\n你可以在右侧打开这些文件，继续修改。\n\n08:00\n输入对话内容\n\n\n\n\n随心输入\n请我批准\n示例模型\n子智能体\n终端\nCtrl+`\n浏览器\nCtrl+T\n文件\nCtrl+P\n侧边聊天\nCtrl+Alt+S"
+    },
+    {
+      "scene": "coding",
+      "file": "vykor-coding.png",
+      "size": {
+        "width": 2880,
+        "height": 1620
+      },
+      "diagnostics": [
+        "workspace.listOpeners",
+        "terminal.list",
+        "workflows.read"
+      ],
+      "text": "文件\n编辑\n视图\n帮助\nVykor\n新对话\n便签\n定时任务\n插件\n已归档\n项目\n产品发布项目\n准备产品发布页\n实现产品首页\n整理官网参考资料\n继续完善上线说明\n最近\n\n暂无最近会话\n\n设置\n实现产品首页\n示例任务：实现产品首页，保留清晰的导航，并适配手机。\n08:00\n\n首页的界面片段放在 src/LaunchPage.tsx。\n\n主标题直接说明产品用途，导航与下载入口各自保持清晰。右侧可以查看实现细节。\n\n继续处理\n连接实际下载地址\n接入三维品牌素材\n在手机宽度下检查文字与导航\n\n这段示例保留了待办项，没有附加未经执行的测试结论。\n\n08:00\n输入对话内容\n\n\n\n\n随心输入\n请我批准\n示例模型\nLaunchPage.tsx\n产品发布项目\nsrc\nLaunchPage.tsx"
+    },
+    {
+      "scene": "research",
+      "file": "vykor-research.png",
+      "size": {
+        "width": 2880,
+        "height": 1620
+      },
+      "diagnostics": [
+        "workspace.listOpeners",
+        "terminal.list",
+        "workflows.read"
+      ],
+      "text": "文件\n编辑\n视图\n帮助\nVykor\n新对话\n便签\n定时任务\n插件\n已归档\n项目\n产品发布项目\n准备产品发布页\n实现产品首页\n整理官网参考资料\n继续完善上线说明\n最近\n\n暂无最近会话\n\n设置\n整理官网参考资料\n示例任务：整理官网动效的参考资料，并保留原始来源。\n08:00\n\n资料按本次设计需要整理成了三个部分：\n\n资料\t用途\nego(lite) 首页\t观察镜片怎样交接到产品窗口\nThree.js\t确认模型、材质和动画的实现方式\nScrollTrigger\t连接滚动位置与动画进度\n\n笔记和来源放在 docs/参考资料.md，可以继续补充观察。\n\n08:00\n输入对话内容\n\n\n\n\n随心输入\n请我批准\n示例模型\n参考资料.md\n产品发布项目\ndocs\n参考资料.md\n官网动效参考\n已保存的原始资料\n来源\t本次关注的内容\nego(lite) 首页\t镜片特写与产品窗口的交接\nThree.js 文档\t三维模型、透射材质与动画时间\nGSAP 文档\t滚动位置与动画进度的连接\n对 Vykor 的启发\n\n保留自己的括号与机器人标识，把它做成有厚度的三维物件。\n\n镜片退出后，让真实的产品界面成为视觉中心。\n\n来源链接\nhttps://lite.ego.app/zh-cn\nhttps://threejs.org/docs/\nhttps://gsap.com/docs/v3/Plugins/ScrollTrigger/\n\n这是一份用于产品素材的示例资料，不是自动调研能力的验证报告。"
+    },
+    {
+      "scene": "document",
+      "file": "vykor-document.png",
+      "size": {
+        "width": 2880,
+        "height": 1620
+      },
+      "diagnostics": [
+        "workspace.listOpeners",
+        "terminal.list",
+        "workflows.read"
+      ],
+      "text": "文件\n编辑\n视图\n帮助\nVykor\n新对话\n便签\n定时任务\n插件\n已归档\n项目\n产品发布项目\n准备产品发布页\n实现产品首页\n整理官网参考资料\n继续完善上线说明\n最近\n\n暂无最近会话\n\n设置\n继续完善上线说明\n示例任务：回到之前的发布项目，继续整理上线说明。\n08:00\n\n上次的资料和文件仍在这个项目里。\n\ndocs/上线说明.md 保留了页面内容、素材列表和发布检查项。下载地址等尚未确定的内容继续标为待接入。\n\n你可以直接修改右侧文档，也可以补充新的要求。\n\n08:00\n输入对话内容\n\n\n\n\n随心输入\n请我批准\n示例模型\n上线说明.md\n产品发布项目\ndocs\n上线说明.md\nVykor 官网 · 上线说明草稿\n页面内容\n\n首屏介绍 AI 工作台，随后展示编程、调研和文档场景。\n\n待接入的资源\nVykor 原创三维标识\n工作台与文件预览素材\n实际发布渠道对应的下载链接\n交互要求\n\n镜片动画随滚动前进或返回。\n\n停止滚动后，画面尽快稳定。\n\n移动端使用更短的交接过程，保留完整文案和下载入口。\n\n发布前检查\n 下载链接可用\n 键盘可以操作主要入口\n 减少动态效果模式可阅读\n 用实际产品素材替换所有占位内容\n\n这是一份用于官网素材制作的示例文档。"
+    }
+  ],
+  "consoleErrors": [
+    "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+    "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+    "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+    "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
+  ],
+  "captureValidated": true
+}

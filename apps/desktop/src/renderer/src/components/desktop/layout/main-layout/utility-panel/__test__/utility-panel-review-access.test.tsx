@@ -16,6 +16,10 @@ vi.mock("@renderer/components/desktop/tools/review/review-tool", async () => {
   return { ReviewTool: () => h("div", { "data-testid": "review-tool" }) }
 })
 
+vi.mock("@renderer/components/appearance/appearance-provider", () => ({
+  useAppearance: () => ({ resolvedTheme: "light" }),
+}))
+
 import { UtilityPanel } from "../utility-panel"
 import { PluginAppController } from "@renderer/components/desktop/shell/plugin-apps/controller"
 import type { ResidentAppPage } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
@@ -169,6 +173,7 @@ afterEach(() => {
   useDesktopSessionStore.setState(initialStoreState, true)
   resetWorkspaceGitProbeCacheForTests()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
 
@@ -241,6 +246,26 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it("opens outside HTML in a browser tab without opening a file viewer", async () => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = "session:outside-html"
+    mountPanel(scopeId, { fileOpenRequest: {
+      id: 1, path: "C:/Users/ruanz/.answer-me-with-html/pages/report.html",
+    } })
+    await settle()
+    const state = readUtilityPanelRuntimeState(scopeId)!
+    expect(state.tabs).toHaveLength(1)
+    expect(state.tabs[0]).toMatchObject({ tool: "browser", title: "report.html" })
+    expect(state.activeTabId).toBe(state.tabs[0].id)
+    expect(state.browserTabs[0].url).toBe("file:///C:/Users/ruanz/.answer-me-with-html/pages/report.html")
+  })
   it.each(["cancel", "discard", "save", "failure"])(
     "protects an inactive dirty file on close: %s",
     async (action) => {

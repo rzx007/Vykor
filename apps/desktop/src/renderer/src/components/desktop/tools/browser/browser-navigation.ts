@@ -18,7 +18,11 @@ export function resolveExternalBrowserUrl(input: string | null | undefined): str
 }
 
 export function toLocalFileUrl(projectPath: string, relativePath: string): string {
-  const absolutePath = `${projectPath.replace(/[\\/]+$/, "")}\\${relativePath.replace(/^[\\/]+/, "")}`
+  const absolutePath = /^(?:[a-z]:[\\/]|\/)/i.test(relativePath)
+    ? relativePath
+    : `${projectPath.replace(/[\\/]+$/, "")}/${relativePath}`
+  if (absolutePath.startsWith("/"))
+    return `file://${absolutePath.split("/").map(encodeURIComponent).join("/")}`
   return windowsPathToFileUrl(absolutePath)
 }
 
