@@ -5,6 +5,54 @@ import { LocalTerminalProvider } from "./local-terminal-provider";
 import { TerminalOutputStore } from "./terminal-output-store";
 
 describe("LocalTerminalProvider", () => {
+  it("waits for an in-progress target and releases it without spawning after dispose starts", async () => {
+    let entered!: () => void;
+    const resolving = new Promise<void>(resolve => { entered = resolve; });
+    let release!: () => void;
+    const ready = new Promise<void>(resolve => { release = resolve; });
+    const close = vi.fn(async () => {});
+    const spawnPty = vi.fn(() => ({
+      onData() { return { dispose() {} }; },
+      onExit() { return { dispose() {} }; },
+      kill() {},
+    } as any));
+    const provider = new LocalTerminalProvider({
+      resolveCwd: async () => process.cwd(),
+      resolveTarget: async () => {
+        entered();
+        await ready;
+        return { command: "shell", args: [], hostCwd: process.cwd(), executionCwd: "/workspace",
+          shell: "shell", signal: async () => {}, close };
+      },
+      spawnPty,
+    });
+    const created = provider.create({ scope: { kind: "session", sessionId: "s1" }, runtime: "environment" });
+    const outcome = created.then(() => "created", () => "rejected");
+    await resolving;
+    let disposed = false;
+    const disposing = provider.dispose().then(() => { disposed = true; });
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(disposed).toBe(false);
+    } finally {
+      release();
+      await disposing;
+    }
+    expect(await outcome).toBe("rejected");
+    expect(spawnPty).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+    expect(await provider.list()).toEqual([]);
+  });
+
+  it("rejects new creates after disposal without resolving cwd", async () => {
+    const resolveCwd = vi.fn(async () => process.cwd());
+    const provider = new LocalTerminalProvider({ resolveCwd, spawnPty: vi.fn() });
+    await provider.dispose();
+    await expect(provider.create({ scope: { kind: "session", sessionId: "s1" }, runtime: "local" }))
+      .rejects.toThrow(/clos/i);
+    expect(resolveCwd).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["/bin/bash", ["-lc", "npm run dev"]],
     ["C:\\Windows\\System32\\cmd.exe", ["/d", "/s", "/c", "npm run dev"]],

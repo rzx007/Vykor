@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@vykor/services";
 import { createGoalRunContribution } from "../../goals/goal-run-contribution.js";
+import { GoalModelAttemptService } from "../../goals/goal-model-attempt-service.js";
 import type { GoalUpdateInput, SessionGoal } from "@vykor/domain-contracts/goals";
 import { SessionGoalService } from "../session-goal-service.js";
 import type { AdmitPromptInput } from "../run-admission-service.js";
@@ -91,6 +92,27 @@ function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-r
 }
 
 describe("SessionGoalService simple lifecycle", () => {
+  it.each([false, true])("blocks resume after a settlement write fails (terminal recovery also failed: %s)", async recoveryFailed => {
+    const h = harness();
+    await h.create({ tokenBudget: 100 });
+    const run = h.run();
+    const gate = new GoalModelAttemptService({ store: h.store, events: { checkpoint: () => 0, publishSince() {} } });
+    const attempt = { scope: { agentId: "s1", sessionId: "s1", runId: run.id, inputId: run.inputId!,
+      traceId: "trace", cwd: process.cwd(), signal: new AbortController().signal },
+      generationId: "generation", attempt: 1, model: "m", purpose: "generation" as const };
+    await gate.beforeDispatch(attempt);
+    vi.spyOn(h.store.goals, "recordGoalModelAttempt").mockImplementationOnce(() => { throw new Error("write failed"); });
+    await expect(gate.settle({ ...attempt, status: "completed", usageStatus: "complete",
+      usage: { inputTokens: 8, outputTokens: 2 } })).rejects.toThrow("write failed");
+    if (recoveryFailed) vi.spyOn(h.store.goals, "reconcileGoalModelAttempts").mockImplementationOnce(() => { throw new Error("recovery write failed"); });
+    await h.finish(undefined, "failed");
+    if (!recoveryFailed) expect(h.current().usage).toMatchObject({ incomplete: true, unknownAttempts: 1, inFlightAttempts: 0 });
+    const runsBefore = h.store.runs.listGoalRuns(h.current().id).length;
+    await expect(h.service.action("s1", h.current().id, { action: "resume", requestId: "retry",
+      expectedRevision: h.current().revision })).rejects.toThrow(/用量不完整/);
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(runsBefore);
+  });
+
   it("queues one resume while user work is pending and dispatches once only after all user work ends", async () => {
     const h = harness(); await h.create(); await h.finish({ status: "paused", reason: "补充后继续" });
     h.userWork(true);

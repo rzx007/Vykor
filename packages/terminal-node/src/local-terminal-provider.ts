@@ -55,15 +55,30 @@ interface PtyTerminalSession {
 export class LocalTerminalProvider implements TerminalProvider {
   private readonly sessions = new Map<string, PtyTerminalSession>();
   private readonly events = new TerminalEventBus();
+  private readonly creating = new Set<Promise<TerminalSessionInfo>>();
+  private closing = false;
+  private closePromise?: Promise<void>;
 
   constructor(private readonly options: LocalTerminalProviderOptions) {}
 
   async create(input: TerminalCreateRequest): Promise<TerminalSessionInfo> {
+    this.assertOpen();
+    const pending = this.createTerminal(input);
+    this.creating.add(pending);
+    try {
+      return await pending;
+    } finally {
+      this.creating.delete(pending);
+    }
+  }
+
+  private async createTerminal(input: TerminalCreateRequest): Promise<TerminalSessionInfo> {
     if (input.command !== undefined && (!input.command.trim() || input.shellArgs !== undefined)) {
       throw new Error("Terminal command must be non-empty and cannot be combined with shellArgs.");
     }
     const id = randomUUID();
     const resolvedCwd = await this.options.resolveCwd(input);
+    this.assertOpen();
     const resolvedInfo = this.options.resolveSessionInfo?.(input) ?? (
       input.scope.kind === "project"
         ? { projectId: input.scope.projectId }
@@ -99,6 +114,7 @@ export class LocalTerminalProvider implements TerminalProvider {
     scopeInfo: Pick<TerminalSessionInfo, "projectId" | "sessionId">,
   ): Promise<TerminalSessionInfo> {
     const spawnPty = this.options.spawnPty ?? (await import("node-pty")).spawn;
+    this.assertOpen();
     const pty = spawnPty(target.command, target.args, {
       cwd: target.hostCwd,
       cols: clampDimension(input.cols),
@@ -270,7 +286,14 @@ export class LocalTerminalProvider implements TerminalProvider {
     return this.events.subscribe(listener);
   }
 
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
+    this.closing = true;
+    return this.closePromise ??= this.disposeTerminals();
+  }
+
+  private async disposeTerminals(): Promise<void> {
+    // A late environment target still owns a lease even before it enters sessions.
+    await Promise.allSettled([...this.creating]);
     const ids = [...this.sessions.keys()];
     await Promise.all(ids.map((id) => this.kill(id)));
     await Promise.all(
@@ -280,6 +303,10 @@ export class LocalTerminalProvider implements TerminalProvider {
     );
     this.sessions.clear();
     this.events.clear();
+  }
+
+  private assertOpen(): void {
+    if (this.closing) throw new Error("Terminal provider is closing or closed.");
   }
 
   private waitResult(input: TerminalWaitRequest, timedOut: boolean): TerminalWaitResult {

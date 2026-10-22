@@ -332,13 +332,21 @@ export function collectPolicyViolations(root, policy) {
           }
           ts.forEachChild(node, visitType);
         }
-        // Declarations expose signatures, not function bodies or variable initializers.
+        // Declarations expose signatures, including callable initializers, not implementation bodies.
         // Following implementation-local annotations would pull unrelated host graphs into a DTO.
         const visitSignature = node => {
           for (const parameter of node.parameters ?? []) if (parameter.type) visitType(parameter.type);
           if (node.type) visitType(node.type);
+          // async always exposes Promise, including inferred returns and async arrows.
+          if (node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) typeReferences.add("Promise");
         };
-        if (ts.isFunctionDeclaration(declaration) || ts.isVariableDeclaration(declaration)) visitSignature(declaration);
+        if (ts.isVariableDeclaration(declaration)) {
+          visitSignature(declaration);
+          let initializer = declaration.initializer;
+          while (initializer && (ts.isParenthesizedExpression(initializer) || ts.isAsExpression(initializer)
+            || ts.isSatisfiesExpression(initializer))) initializer = initializer.expression;
+          if (initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))) visitSignature(initializer);
+        } else if (ts.isFunctionDeclaration(declaration)) visitSignature(declaration);
         else if (ts.isClassDeclaration(declaration)) {
           for (const clause of declaration.heritageClauses ?? []) visitType(clause);
           for (const member of declaration.members) visitSignature(member);
