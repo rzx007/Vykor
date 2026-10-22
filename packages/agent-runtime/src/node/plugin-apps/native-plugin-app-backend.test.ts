@@ -109,6 +109,8 @@ describe("Native app original bindings", () => {
       expect(backend.port).not.toHaveProperty("tools");
       await backend.port.readResource("ui://fixture/panel.html");
       expect(await backend.port.listResourceTemplates()).toEqual({ resourceTemplates: [] });
+      await expect(backend.port.listResources("unsupported")).rejects.toMatchObject({ code: "plugin_app_invalid_cursor" });
+      await expect(backend.port.listResourceTemplates("unsupported")).rejects.toMatchObject({ code: "plugin_app_invalid_cursor" });
       expect(backend.port.supportsSubscriptions).toBe(false);
       await expect(backend.port.readResource("ui://fixture/other.html")).rejects.toThrow("not_declared");
       const view = createRunCapabilityView({ toolRegistry: restricted, appToolRegistry: getAppToolRegistry(restricted), pluginIds: new Set([plugin.manifest.id]) }, plugin.manifest.id);

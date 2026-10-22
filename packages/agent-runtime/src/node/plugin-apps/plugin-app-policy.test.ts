@@ -1,8 +1,13 @@
 import type { RunToolBinding } from "@vykor/agent-contracts";
 import { expect, it } from "vitest";
 
-import { PLUGIN_APP_DEFAULT_LIMITS, capturedAppToolPolicy } from "./policy.js";
+import { PLUGIN_APP_DEFAULT_LIMITS, capturedAppToolPolicy, getPluginAppToolPolicy } from "./policy.js";
 import { type CapturedPluginAppBackend } from "./plugin-app-backends.js";
+
+it("identifies invalid host policies without using the error message", () => {
+  expect(() => getPluginAppToolPolicy({ name: "save", description: "Save", inputSchema: {},
+    policy: { confirmation: "required", maxArgumentsBytes: 0 } })).toThrowError(expect.objectContaining({ code: "plugin_app_invalid_policy" }));
+});
 
 it("never derives automatic approval from MCP hints, dual visibility, a quota alone or missing installed permission", () => {
   const binding: RunToolBinding = { ownerPluginId: "p", definition: { name: "mcp__notes__save", description: "Save", inputSchema: {},

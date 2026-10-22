@@ -23,7 +23,9 @@ vi.mock("@renderer/components/appearance/appearance-provider", () => ({
 import { UtilityPanel } from "../utility-panel"
 import { PluginAppController } from "@renderer/components/desktop/shell/plugin-apps/controller"
 import type { ResidentAppPage } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
-import { mount as appMount } from "@renderer/components/desktop/shell/plugin-apps/__test__/fixtures.test-support"
+import {
+  mount as appMount,
+} from "@renderer/components/desktop/shell/plugin-apps/__test__/fixtures.test-support"
 const appFixture = vi.hoisted(() => ({ pages: [] as ResidentAppPage[] }))
 vi.mock("@renderer/components/desktop/shell/plugin-apps/provider", () => ({ usePluginApps: () => null, usePluginAppPages: () => appFixture.pages }))
 import {

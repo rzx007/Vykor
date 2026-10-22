@@ -39,7 +39,7 @@ export class ModelRequestFailure extends Error {
   // Separate bundles have different constructors but share the global symbol.
   static [Symbol.hasInstance](value: unknown): boolean {
     return typeof value === "object" && value !== null
-      && MODEL_REQUEST_FAILURE in value && value[MODEL_REQUEST_FAILURE] === true;
+      && MODEL_REQUEST_FAILURE in value && (value as unknown as ModelRequestFailure)[MODEL_REQUEST_FAILURE] === true;
   }
 
   constructor(

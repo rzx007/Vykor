@@ -1,5 +1,10 @@
 import type { DesktopUpdateState } from "../../../shared/update-types"
 
+/** The first update check runs this long after the main window is shown. */
+export const UPDATE_CHECK_DELAY_MS = 8_000
+/** A running app re-checks every two hours, so it still learns about a new release. */
+export const UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1_000
+
 interface UpdateInfo {
   version: string
 }
@@ -39,6 +44,7 @@ interface UpdaterServiceDependencies {
   isPackaged: boolean
   platform: string
   checkDelayMs: number
+  checkIntervalMs: number
   logger: UpdaterLogger
   setForceQuit(value: boolean): void
 }
@@ -132,18 +138,28 @@ export function createUpdaterService(dependencies: UpdaterServiceDependencies): 
     for (const [event, listener] of listeners) dependencies.updater.on(event, listener)
   }
 
+  // One timer drives every check: the first one after checkDelayMs, then one every
+  // checkIntervalMs for as long as the app runs.
+  const runScheduledCheck = (): void => {
+    timer = null
+    // A periodic check must not restart a download the user is already waiting for.
+    const busy =
+      state.status === "downloading" || state.status === "downloaded" || state.status === "available"
+    if (!busy) {
+      publish({ status: "checking" })
+      void dependencies.updater.checkForUpdates().catch((error: unknown) => {
+        dependencies.logger.error("Background update check failed", error)
+        if (state.status === "checking") publish({ status: "idle" })
+      })
+    }
+    timer = setTimeout(runScheduledCheck, dependencies.checkIntervalMs)
+  }
+
   return {
     startAfterWindowShown(): void {
       if (!enabled || started) return
       started = true
-      timer = setTimeout(() => {
-        timer = null
-        publish({ status: "checking" })
-        void dependencies.updater.checkForUpdates().catch((error: unknown) => {
-          dependencies.logger.error("Background update check failed", error)
-          if (state.status === "checking") publish({ status: "idle" })
-        })
-      }, dependencies.checkDelayMs)
+      timer = setTimeout(runScheduledCheck, dependencies.checkDelayMs)
     },
     getState: () => state,
     subscribe(listener): () => void {

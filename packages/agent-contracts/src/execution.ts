@@ -21,13 +21,15 @@ export interface AgentExecutionProfile {
 const AGENT_EXECUTION_LIMIT_ERROR = Symbol.for("@vykor/core/AgentExecutionLimitError");
 
 export function isAgentExecutionLimitError(value: unknown): value is AgentExecutionLimitError {
-  return typeof value === "object" && value !== null
-    && AGENT_EXECUTION_LIMIT_ERROR in value && value[AGENT_EXECUTION_LIMIT_ERROR] === true;
+  return value instanceof AgentExecutionLimitError;
 }
 
 export class AgentExecutionLimitError extends Error {
   private readonly [AGENT_EXECUTION_LIMIT_ERROR] = true;
-  static [Symbol.hasInstance](value: unknown): boolean { return isAgentExecutionLimitError(value); }
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null
+      && AGENT_EXECUTION_LIMIT_ERROR in value && (value as unknown as AgentExecutionLimitError)[AGENT_EXECUTION_LIMIT_ERROR] === true;
+  }
   constructor(message: string) {
     super(message);
     this.name = "AgentExecutionLimitError";

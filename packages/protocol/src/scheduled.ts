@@ -1,5 +1,5 @@
 export { type ScheduledTaskStatus, type ScheduledTaskDestination, type ScheduledTaskExecutionMode, type ScheduledRecurrenceFormat, type ScheduledOverlapPolicy, type ScheduledMissedRunPolicy, type ScheduledPermissionProfile, type ScheduledStopPolicy, type ScheduledTaskRecord, type ScheduledRunCause, type ScheduledRunStatus, type ScheduledRunRecord } from "@vykor/domain-contracts/schedules";
-import type { ScheduledTaskStatus, ScheduledTaskDestination, ScheduledTaskExecutionMode, ScheduledRecurrenceFormat, ScheduledOverlapPolicy, ScheduledMissedRunPolicy, ScheduledPermissionProfile, ScheduledStopPolicy, ScheduledTaskRecord, ScheduledRunCause, ScheduledRunStatus } from "@vykor/domain-contracts/schedules";
+import type { ScheduledTaskStatus, ScheduledTaskDestination, ScheduledTaskExecutionMode, ScheduledRecurrenceFormat, ScheduledOverlapPolicy, ScheduledMissedRunPolicy, ScheduledPermissionProfile, ScheduledStopPolicy, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 export interface CreateScheduledTaskInput {
   id?: string;
   name: string;

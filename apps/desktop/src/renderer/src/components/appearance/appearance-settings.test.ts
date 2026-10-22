@@ -300,7 +300,7 @@ describe("AppearanceSettings", () => {
     expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
   })
 
-  it.each(["darwin"])(
+  it.each(["darwin", "win32"])(
     "offers a keyboard-adjustable glass strength slider on %s",
     async (platform) => {
       Object.defineProperty(window, "electron", {
@@ -350,7 +350,7 @@ describe("AppearanceSettings", () => {
     expect(container.textContent).toContain("系统透明效果可用时才能调节")
   })
 
-  it("Windows 用开关切换半透明侧边栏，不再显示透光滑杆", async () => {
+  it("Windows 用开关切换半透明侧边栏，开启后可调透光强度", async () => {
     Object.defineProperty(window, "electron", {
       configurable: true,
       value: { process: { platform: "win32" } },
@@ -381,7 +381,9 @@ describe("AppearanceSettings", () => {
     const slider = container.querySelector<HTMLInputElement>(
       'input[type="range"][aria-label="透光强度"]'
     )
-    expect(slider).toBeNull()
+    expect(slider).not.toBeNull()
+    expect(slider?.disabled).toBe(true)
+    expect(container.textContent).toContain("开启半透明侧边栏后可调节")
   })
 
   it("Windows 开关沿用已保存偏好，关闭时请求实色", async () => {
@@ -402,7 +404,12 @@ describe("AppearanceSettings", () => {
     const toggle = container.querySelector('[role="switch"][aria-label="半透明侧边栏"]')
     expect(toggle?.getAttribute("aria-checked")).toBe("true")
     expect(container.textContent).toContain("已使用实色背景")
-    expect(container.textContent).not.toContain("透光强度")
+    const slider = container.querySelector<HTMLInputElement>(
+      'input[type="range"][aria-label="透光强度"]'
+    )
+    expect(slider).not.toBeNull()
+    expect(slider?.disabled).toBe(true)
+    expect(container.textContent).toContain("系统透明效果可用时才能调节")
   })
 
   it("hides the whole window section on Linux", async () => {

@@ -38,7 +38,7 @@ function copyRuntimeResources(): Plugin {
         { recursive: true }
       )
       cpSync(
-        resolve("../../packages/agent-runtime/src/native-tools/host-entry.mjs"),
+        resolve("../../packages/agent-runtime/src/node/plugins/native-tools/host-entry.mjs"),
         resolve(outputDirectory, "host-entry.mjs")
       )
       await packageKnowledgeWorkPlugin(

@@ -5,16 +5,22 @@ import {
   CirclePlay,
   History,
   MoreHorizontal,
+  Pencil,
   Play,
+  Trash2,
   X,
 } from "lucide-react"
-
+import { useCallback, useRef, useState } from "react"
+import {
+  OverflowActions,
+  type OverflowActionItem,
+} from "@renderer/components/motion/overflow-actions"
 import { Button } from "@renderer/components/ui/button"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { useDismiss } from "@renderer/lib/hooks/use-dismiss"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopScheduledRun, DesktopScheduledTask } from "@shared/schedule-types"
-import { TaskActionsMenu } from "./task-actions-menu"
 import {
   formatRunAge,
   projectLabel,
@@ -47,6 +53,62 @@ export function DetailPanel({
 }): React.JSX.Element {
   const isRunning = busy === "run" || busy === `run:${task.id}`
   const canToggle = task.status !== "completed"
+  const [actionsExpanded, setActionsExpanded] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const collapseActions = useCallback(() => setActionsExpanded(false), [])
+  useDismiss(actionsExpanded, collapseActions, actionsRef)
+
+  const toggleLabel = task.status === "active" ? "暂停任务" : "继续任务"
+  const primaryActions: OverflowActionItem[] = [
+    {
+      id: "run",
+      label: "立即运行任务",
+      icon: isRunning ? (
+        <Spinner className="size-3.5" />
+      ) : (
+        <Play className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+      ),
+      disabled: busy !== null,
+      onClick: onRunNow,
+      ariaLabel: "立即运行任务",
+    },
+  ]
+  if (canToggle) {
+    primaryActions.push({
+      id: "toggle",
+      label: toggleLabel,
+      icon:
+        busy === "toggle" ? (
+          <Spinner className="size-3.5" />
+        ) : task.status === "active" ? (
+          <CirclePause className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        ) : (
+          <CirclePlay className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+        ),
+      disabled: busy !== null,
+      onClick: onToggle,
+      ariaLabel: toggleLabel,
+    })
+  }
+
+  const overflowActions: OverflowActionItem[] = [
+    {
+      id: "edit",
+      label: "编辑任务",
+      icon: <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden="true" />,
+      disabled: busy !== null,
+      onClick: onEdit,
+      ariaLabel: "编辑任务",
+    },
+    {
+      id: "delete",
+      label: "删除任务",
+      icon: <Trash2 className="size-3.5 text-destructive" strokeWidth={1.75} aria-hidden="true" />,
+      disabled: busy !== null,
+      onClick: onDelete,
+      ariaLabel: "删除任务",
+    },
+  ]
 
   return (
     <div className="mx-auto w-full">
@@ -54,54 +116,31 @@ export function DetailPanel({
         <span className="text-ui-small font-medium text-blue-600 dark:text-blue-400">
           {statusLabel(task.status)}
         </span>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            shape="circle"
-            onClick={onRunNow}
-            disabled={busy !== null}
-            title="立即运行任务"
-            aria-label="立即运行任务"
-          >
-            {isRunning ? <Spinner className="size-3.5" /> : <Play />}
-          </Button>
-          {canToggle ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              shape="circle"
-              onClick={onToggle}
-              disabled={busy !== null}
-              title={task.status === "active" ? "暂停任务" : "继续任务"}
-              aria-label={task.status === "active" ? "暂停任务" : "继续任务"}
-              className="text-muted-foreground"
-            >
-              {busy === "toggle" ? (
-                <Spinner className="size-3.5" />
-              ) : task.status === "active" ? (
-                <CirclePause />
-              ) : (
-                <CirclePlay />
-              )}
-            </Button>
-          ) : null}
-          <TaskActionsMenu
-            task={task}
-            busy={busy !== null}
-            onRunNow={onRunNow}
-            onEdit={onEdit}
-            onToggle={canToggle ? onToggle : undefined}
-            onDelete={onDelete}
+        <div ref={actionsRef} className="flex items-center gap-2">
+          <OverflowActions
+            primaryActions={primaryActions}
+            overflowActions={overflowActions}
+            expanded={actionsExpanded}
+            onExpandedChange={setActionsExpanded}
+            collapseOnAction
+            size="sm"
+            openLabel="更多任务操作"
+            closeLabel="收起任务操作"
+            classNames={{
+              track: "border-border/70 bg-background p-0.5",
+              action: "w-8 gap-0 px-0 text-muted-foreground hover:bg-muted hover:text-foreground",
+              primaryAction: "text-foreground",
+              label: "sr-only",
+              toggle: "bg-muted text-muted-foreground hover:text-foreground",
+            }}
           />
           <Button
-            variant="ghost"
-            size="icon"
+            variant="control"
             shape="circle"
+            size="icon-lg"
             onClick={onBack}
             title="关闭详情"
             aria-label="关闭详情"
-            className="text-muted-foreground"
           >
             <X />
           </Button>

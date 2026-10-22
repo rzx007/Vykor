@@ -4,6 +4,47 @@
 
 对应[方案](../specs/2026-10-22-protocol-layering-design.md)和[实施计划](../plans/2026-10-22-protocol-layering.md)。用户已连续授权后续阶段；本轮只运行相关回归和检查，没有运行完整 `pnpm test`。按用户要求将 P7–P13 代码、正式回归、架构检查、文档和验收记录合为本次提交；未推送或发布。
 
+## 最终复查后修复（2026-10-22）
+
+原 P7–P13 提交为 `3d7945e3`；以下是随后复查发现的问题及本轮修复证据，后文数字保留原阶段事实。本轮开始时工作区干净；修复期间并行新增的插件市场计划文档未改动、不计入修复范围。用户随后授权提交全部当前改动、合入 main 后推送，插件市场计划文档一并纳入提交。
+
+- **P2 级门禁缺口：** 原扫描只检查消费文件中的运行类型名，没把来源声明中的 Promise/AbortSignal 带回规则检查，私有别名也会丢失来源。现在按选中声明收集引用并沿别名传播；加入 Protocol 的 Job/Terminal `/contracts` 入口约束，直接导入、相对路径和本地再导出均受检查。回归同时确认 permissions 同文件中的 ApprovalMode 等纯数据仍合法。没有增加阶段例外或扩大白名单。
+- **插件 HTTP 错误适配：** 移除错误 message 前缀判断。Protocol parser 将 ValidationResult 转为 ProtocolValidationError；plugin-contracts `/runtime-data` 定义纯结构化校验错误和精确 code 识别。Node 参数/策略/Native 游标及 Server 静态资源游标提供 code，跨 Runtime bundle 不依赖同一份 class。未知错误保持 409 和通用响应，ApplicationError 及未接纳响应仍走既有分支。畸形 JSON、数组动作请求由误报 409 修正为 400，通用响应体不变。
+- **回归有效性：** 修复前，2 项新架构反例、1 项 parser、8 项 HTTP 分类及 2 项错误产生处断言失败，确认命中原问题；修复后执行定向回归。保留日常测试入口，没有新增临时脚本或一次性测试文件。
+
+| 本轮验证范围 | 结果 |
+| --- | --- |
+| Protocol 插件 parser / 通信基线，两文件 | 10 项通过 |
+| Runtime 策略 / Native 后端 / 原始应用工具执行，三文件 | 30 项通过；随后新增非对象参数拒绝回归，单独筛选 1 项通过、18 项跳过，未重复执行旧组 |
+| Server 错误 / decoder / mapper / 真实插件 HTTP / 应用服务，五文件 | 43 项通过 |
+| 新增 Native 运行与静态资源游标 HTTP 断言 | 2 项通过、4 项跳过；仅补跑这两项，证明真实 Runtime 错误跨包适配和离线分支均返回 400 |
+| plugin-contracts / Protocol / Runtime / Server 类型检查 | 均退出 0 |
+| Runtime 构建 | 退出 0，三个 bundle 构建完成 |
+| `pnpm check:architecture` | 退出 0；55 项架构反例、9 项兼容检查、4 项 Client API；源码/声明与 workspace 无环扫描通过，阶段例外 0、flat-call 基线 104；clean-slate 通过，历史精确批准仍为 729 条、已移除路径 90 个 |
+| `pnpm check-docs` 与差异检查 | 文档检查退出 0；472 个 Markdown 文件（含并行计划文档），链接、章节、源码路径、状态及契约映射有效；差异无空白错误 |
+
+未运行完整 `pnpm test`，也未重复独立 SDK pack 或浏览器构建；本轮只重建受影响 Runtime 并验证真实 HTTP 消费。验证平台仍为 Windows。
+
+### 合入 main 前补验
+
+全部当前改动（含插件市场计划）已保存为 `44816b29`，提交钩子的 73 项工作区任务及 Server/Client 联合类型检查通过。合并远端 `cd59af3e` 时，12 处冲突按当前规范所有者和迁移位置处理；核心内容与该提交一致，保留远端新增的 11 个桌面文件。
+
+桌面更新器、外观和工具面板三文件 49 项通过，文档与桌面依赖边界检查通过。额外桌面类型检查发现两个测试夹具遗漏：StreamEvent 仍从 Core 导入、HookExecutor 替身仍提供旧 register；已改从 agent-contracts 导入并只保留 execute。仅补跑这两个文件，20 项通过，没有重跑核心或单仓全量测试。
+
+桌面 Web 严格检查另外发现五个私有 Symbol 标记读取未被识别、五个迁移后未使用导入；已明确读取所属错误类的私有标记并移除多余导入，未公开标记或更改 Symbol 值。执行限制错误的 helper 复用相同 instanceof 判定；7 项本地及跨 bundle 错误身份回归通过，agent-contracts / Protocol 的 `tsc --noEmit --noUnusedLocals` 退出 0。Electron SDK 夹具改用 Client 已公开的 MCP parser，移除已删除源码路径。
+
+等待期间新增的 Transcript 运行指示修复按“提交所有代码”要求一并纳入，其单文件 16 项通过。桌面 Node / Web / MCP Apps SDK 三项类型检查分别通过；Web 与 SDK 只在修正各自失败后补跑对应命令，没有重复已通过的测试组。
+
+### main 推送后的 CI 修复
+
+`e9f64590` 的 [CI 39778381610](https://github.com/rzx007/Vykor/actions/runs/39778381610) 在 Build 阶段失败：桌面测试的 `@vykor/agent-contracts` 类型导入违反桌面仅直接消费 Client/Server 的入口规则。该导入是合并前修正旧类型导入时引入的；此前边界检查在这一修改之前运行，不能证明最终提交通过。后续 Type check、架构、文档和 Test 步骤被跳过，不记为通过。
+
+本次移除该导入及显式返回类型，用事件字面量推断保留测试的类型检查；不扩大白名单、不恢复旧公开导出，也不改用源码相对路径绕过检查。原边界命令先复现退出 1，修复后退出 0；`tool-summary-files.test.ts` 单文件 1 项通过，CLI 构建输出 4 个文件、退出 0。只运行相关验证，没有执行完整 `pnpm test`。
+
+随后运行 Desktop 构建，三项类型检查通过，但资源复制暴露出另一处迁移遗漏：仍读取 `agent-runtime/src/native-tools/host-entry.mjs`。已将正式构建和 Plugin Apps 测试后端脚本统一指向 `src/node/plugins/native-tools/host-entry.mjs`；后端构建脚本退出 0。只重跑受影响的 Electron 打包阶段，不重复已通过的类型检查或测试。
+
+最终 `pnpm --filter @vykor/desktop exec electron-vite build` 退出 0，文档预览、Main、Preload、Renderer 均完成。`verify-update-packaging.mjs --build` 退出 0，正式产物与测试后端的两份 Host 文件均逐字节匹配规范源码。以上为本机 Windows 定向验证；远端原 CI 的后续步骤未执行，修复推送后的 Linux CI 结果需另行确认。
+
 ## 实际收敛结果
 
 | 阶段 | 完成内容 |

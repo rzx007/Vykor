@@ -373,12 +373,13 @@ export function ScheduledTaskEditor({
             <Button
               type="button"
               variant="outline"
+              shape="pill"
               onClick={() => onOpenChange(false)}
               disabled={busy}
             >
               取消
             </Button>
-            <Button type="submit" disabled={!valid || busy}>
+            <Button type="submit" shape="pill" disabled={!valid || busy}>
               {busy ? "保存中…" : task ? "保存更改" : "创建任务"}
             </Button>
           </DialogFooter>
@@ -430,7 +431,7 @@ function ChoiceButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "flex items-start gap-3 rounded-full border px-3.5 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         active ? "border-foreground/25 bg-muted" : "border-border/70 hover:bg-muted/45"
       )}
     >
@@ -460,7 +461,7 @@ function WorkspaceButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-2 rounded-lg px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3.5",
+        "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3.5",
         active
           ? "bg-background font-medium shadow-sm ring-1 ring-border/70"
           : "text-muted-foreground hover:text-foreground"

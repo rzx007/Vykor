@@ -16,12 +16,7 @@ import type {
   UpdateSessionInput,
   ClearSessionWorktreeBindingInput,
 } from "./session.js";
-import type { AttachmentIntent } from "./attachment.js";
-import {
-  normalizeSessionUserInputItems,
-  type SessionUserInputItem,
-  type SkillSource,
-} from "./session-input-items.js";
+import type { SessionUserInputItem } from "./session-input-items.js";
 
 export interface ProtocolError {
   code: string;

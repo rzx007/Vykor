@@ -1,9 +1,10 @@
-import { selectPluginInstallationWinners } from "@vykor/agent-runtime";
+import { selectPluginInstallationWinners, type PluginAppBackendPort } from "@vykor/agent-runtime";
 import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeAppMetadata,
   readPluginAppResource, verifyInstalledNativePlugin } from "@vykor/plugins";
 import { MCP_APP_HTML_MIME_TYPE as PLUGIN_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
 import type { PluginAppRecord } from "@vykor/domain-contracts/plugin-apps";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import { PluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 
 /** Offline Native HTML is independently readable with render approval; this never constructs tool authority. */
 export async function verifiedStaticAppResources(session: SessionRecord, app: PluginAppRecord) {
@@ -25,7 +26,7 @@ export async function verifiedStaticAppResources(session: SessionRecord, app: Pl
     || !backend.resources.some(resource => resource.uri === app.resourceUri)) return undefined;
   const resources = metadata.resources.filter(resource => backend.resources.some(mapping => mapping.uri === resource.definition.uri));
   return {
-    async readResource(uri: string, signal?: AbortSignal) {
+    async readResource(uri: string, signal?: AbortSignal): ReturnType<PluginAppBackendPort["readResource"]> {
       signal?.throwIfAborted();
       const resource = resources.find(item => item.definition.uri === uri);
       if (!resource) throw new Error("plugin_app_resource_unavailable");
@@ -33,11 +34,11 @@ export async function verifiedStaticAppResources(session: SessionRecord, app: Pl
       signal?.throwIfAborted(); return result;
     },
     async listResources(cursor?: string) {
-      if (cursor) throw new Error("plugin_app_invalid_cursor");
+      if (cursor) throw new PluginAppValidationError("plugin_app_invalid_cursor");
       return { resources: resources.map(resource => ({ uri: resource.definition.uri, name: resource.definition.uri, mimeType: PLUGIN_APP_HTML_MIME_TYPE })) };
     },
     async listResourceTemplates(cursor?: string) {
-      if (cursor) throw new Error("plugin_app_invalid_cursor");
+      if (cursor) throw new PluginAppValidationError("plugin_app_invalid_cursor");
       return { resourceTemplates: [] };
     },
   };

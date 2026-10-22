@@ -667,7 +667,7 @@ describe("SessionSubscriptionService coalescing", () => {
         } }, { kind: "builtin" })
         const engine = new QueryEngine(client, registry,
           { checkTool: async () => ({ action: "allow" as const }) },
-          { register() {}, execute: async () => ({ blocked: false }) },
+          { execute: async () => ({ blocked: false }) },
           { cwd: directory, model: "test", trajectoryTrackerFactory: false })
         const actualEvents: string[] = []
         run = new FrameworkAgentRun({

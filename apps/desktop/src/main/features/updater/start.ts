@@ -6,9 +6,7 @@ import { IpcEvents } from "../../../shared/ipc-channels"
 import { setForceQuit } from "../../core/services/lifecycle"
 import type { IpcContribution } from "../../core/ipc/types"
 import { createUpdaterIpcContribution } from "./ipc"
-import { createUpdaterService, type UpdaterService } from "./updater-service"
-
-const CHECK_DELAY_MS = 8_000
+import { createUpdaterService, UPDATE_CHECK_DELAY_MS, UPDATE_CHECK_INTERVAL_MS, type UpdaterService } from "./updater-service"
 
 export interface DesktopUpdaterRuntime {
   service: UpdaterService
@@ -21,7 +19,8 @@ export function startDesktopUpdater(): DesktopUpdaterRuntime {
     updater: autoUpdater as Parameters<typeof createUpdaterService>[0]["updater"],
     isPackaged: app.isPackaged,
     platform: process.platform,
-    checkDelayMs: CHECK_DELAY_MS,
+    checkDelayMs: UPDATE_CHECK_DELAY_MS,
+    checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
     logger: {
       info: (message) => log.info(`[updater] ${message}`),
       error: (message, error) => log.error(`[updater] ${message}`, error),

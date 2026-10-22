@@ -11,6 +11,16 @@ import {
 } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@renderer/components/ui/alert-dialog"
 import { createPanelWidthStore } from "@renderer/components/desktop/layout/shared/panel-width-store"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -58,6 +68,7 @@ export function ScheduledPage({
   const [error, setError] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorTask, setEditorTask] = useState<DesktopScheduledTask | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DesktopScheduledTask | null>(null)
   const [listWidthPx, setListWidthPx] = useState(() => listWidthStore.resolveDefault())
   const [isResizingList, setIsResizingList] = useState(false)
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -331,6 +342,17 @@ export function ScheduledPage({
     [refresh]
   )
 
+  const requestDeleteTask = useCallback((task: DesktopScheduledTask): void => {
+    setDeleteTarget(task)
+  }, [])
+
+  const confirmDeleteTask = useCallback((): void => {
+    const task = deleteTarget
+    if (!task) return
+    setDeleteTarget(null)
+    void mutate("delete", () => window.desktop.schedules.remove(task.id))
+  }, [deleteTarget, mutate])
+
   const openCreateEditor = (): void => {
     setEditorTask(null)
     setEditorOpen(true)
@@ -473,9 +495,7 @@ export function ScheduledPage({
                         })
                       )
                     }}
-                    onDelete={() =>
-                      void mutate("delete", () => window.desktop.schedules.remove(task.id))
-                    }
+                    onDelete={() => requestDeleteTask(task)}
                   />
                 )
               })}
@@ -533,9 +553,7 @@ export function ScheduledPage({
                         })
                       )
                     }}
-                    onDelete={() =>
-                      void mutate("delete", () => window.desktop.schedules.remove(selected.id))
-                    }
+                    onDelete={() => requestDeleteTask(selected)}
                     onOpenSession={(sessionId) => {
                       setError(null)
                       void onOpenConversation(sessionId).catch((cause) => {
@@ -562,6 +580,29 @@ export function ScheduledPage({
           onSave={saveTask}
         />
       ) : null}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && busy === null && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除 {deleteTarget?.name}？</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后这个定时任务会停止执行，它的运行记录也会一起移除，操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy !== null}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={busy !== null}
+              onClick={confirmDeleteTask}
+            >
+              {busy === "delete" ? "删除中..." : "删除任务"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }

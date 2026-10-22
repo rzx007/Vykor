@@ -1,4 +1,5 @@
 import type { PluginAppRuntimeLease, PluginAppToolDescriptor } from "@vykor/plugin-contracts/runtime";
+import { ProtocolValidationError } from "./requests.js";
 import { validatePluginAppConversationInput, validatePluginAppSource, validateOpenPluginAppInput, validateClosePluginAppInput,
   validatePluginAppToolInput, validatePluginAppComposerContexts, type PluginAppToolInput, type PluginAppConversationInput,
   type OpenPluginAppInput, type ClosePluginAppInput, type ValidationResult,
@@ -32,7 +33,7 @@ export interface PluginAppActionResponse {
 export interface PluginAppConversationRequest extends PluginAppConversationInput {}
 
 function parsed<T>(result: ValidationResult<T>): T {
-  if (!result.ok) throw new Error(result.code);
+  if (!result.ok) throw new ProtocolValidationError(result.code, result.field, result.code);
   return result.value;
 }
 export function parsePluginAppConversationRequest(value: unknown): PluginAppConversationRequest { return parsed(validatePluginAppConversationInput(value)); }

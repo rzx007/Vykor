@@ -26,7 +26,7 @@ import type {
 } from "@vykor/host-config";
 import type { McpConnection, McpRuntimeRegistry } from "@vykor/mcp";
 import type { PluginAppHostInvocation, PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
-import { copyPluginAppJson } from "@vykor/plugin-contracts/runtime-data";
+import { copyPluginAppJson, PluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 import { PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 import {
   KernelAgent,
@@ -614,7 +614,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
   ): Promise<ToolExecutionResult> {
     const invocation: PluginAppHostInvocation = { binding: structuredClone(value.binding), lease: structuredClone(value.lease),
       toolName: value.toolName, args: copyPluginAppJson(value.args, PLUGIN_APP_DATA_LIMITS.maxArgsBytes) as PluginAppHostInvocation["args"] };
-    if (!invocation.args || Array.isArray(invocation.args) || typeof invocation.args !== "object") throw new Error("plugin_app_invalid_request");
+    if (!invocation.args || Array.isArray(invocation.args) || typeof invocation.args !== "object") throw new PluginAppValidationError("plugin_app_invalid_request");
     const app = invocation.binding;
     if (
       app.agentId !== this.id ||

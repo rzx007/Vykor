@@ -32,6 +32,14 @@ async function fixture(kind: "native-tools" | "mcp-server", autosave = false, mo
   const scope = { agentId: agent.id, sessionId: agent.id, runId: "run", inputId: "run", traceId: "run", cwd: root, signal: new AbortController().signal };
   return { agent, app, request, scope, model, requestPermission, ...installed, effects: () => existsSync(installed.effectFile) ? Number(readFileSync(installed.effectFile, "utf8")) : 0 };
 }
+it("rejects non-object app arguments with a structured code before executing", async () => {
+  const h = await fixture("native-tools");
+  for (const args of [null, [], true]) {
+    await expect(h.agent.host.plugins.runPluginAppTool({ ...h.request, args: args as unknown as PluginAppHostInvocation["args"] }, { scope: h.scope }))
+      .rejects.toMatchObject({ code: "plugin_app_invalid_request" });
+  }
+  expect(h.effects()).toBe(0); expect(h.model).not.toHaveBeenCalled(); expect(h.requestPermission).not.toHaveBeenCalled();
+}, 30_000);
 it.each(["native-tools", "mcp-server"] as const)("uses installed %s autosave approval only for the original app and exact argument limit", async kind => {
   const h = await fixture(kind, true, "default");
   expect((await h.agent.host.plugins.pluginApps.prepareTool(h.request)).policy).toEqual({ confirmation: "granted", authorization: "plugin-data-write", maxArgumentsBytes: 2 * 1024 * 1024 });

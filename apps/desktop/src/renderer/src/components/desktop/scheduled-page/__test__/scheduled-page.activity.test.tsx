@@ -26,11 +26,13 @@ vi.mock("../task-row", () => ({
     running,
     onSelect,
     onRunNow,
+    onDelete,
   }: {
     task: { id: string; runCount?: number }
     running: boolean
     onSelect: () => void
     onRunNow: () => void
+    onDelete: () => void
   }) => (
     <>
       <button data-running={running} data-run-count={task.runCount ?? 0} onClick={onSelect}>
@@ -39,12 +41,28 @@ vi.mock("../task-row", () => ({
       <button data-run-now={task.id} onClick={onRunNow}>
         Run {task.id}
       </button>
+      <button data-delete={task.id} onClick={onDelete}>
+        Delete {task.id}
+      </button>
     </>
   ),
 }))
 vi.mock("../scheduled-detail", () => ({
-  DetailPanel: ({ runs }: { runs: Array<{ id: string; status: string }> }) => (
-    <div>{runs.map((run) => `${run.id}:${run.status}`).join(",")}</div>
+  DetailPanel: ({
+    task,
+    runs,
+    onDelete,
+  }: {
+    task: { id: string }
+    runs: Array<{ id: string; status: string }>
+    onDelete: () => void
+  }) => (
+    <div>
+      {runs.map((run) => `${run.id}:${run.status}`).join(",")}
+      <button data-delete-detail={task.id} onClick={onDelete}>
+        Delete detail {task.id}
+      </button>
+    </div>
   ),
 }))
 vi.mock("../scheduled-task-editor", () => ({ ScheduledTaskEditor: () => null }))
@@ -688,5 +706,132 @@ describe("Scheduled detail read semantics", () => {
       await Promise.resolve()
     })
     expect(container.querySelector('button[data-run-count="1"]')?.textContent).toBe("a")
+  })
+})
+
+describe("Scheduled task delete confirmation", () => {
+  let root: Root
+  let container: HTMLDivElement
+  let remove: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    container = document.createElement("div")
+    document.body.append(container)
+    root = createRoot(container)
+    remove = vi.fn(async () => undefined)
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        schedules: {
+          status: vi.fn(async () => ({ unread: 0 })),
+          list: vi.fn(async () => [
+            {
+              id: "a",
+              name: "每晚汇总",
+              prompt: "汇总今天的提交",
+              projectPaths: [],
+              status: "active",
+              runCount: 0,
+            },
+          ]),
+          runNow: vi.fn(async () => undefined),
+          listRuns: vi.fn(async () => []),
+          setRunUnread: vi.fn(async () => undefined),
+          remove,
+        },
+      },
+    })
+    useDesktopSessionStore.setState({
+      activity: createActivityState(),
+      selectedScheduledTaskId: null,
+    })
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    vi.clearAllMocks()
+  })
+
+  async function renderPage(): Promise<void> {
+    await act(async () => {
+      root.render(
+        <ScheduledPage
+          onStartConversation={vi.fn()}
+          onOpenConversation={vi.fn()}
+          onSessionListChanged={vi.fn()}
+        />
+      )
+    })
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+    await vi.waitFor(() =>
+      expect(container.querySelector('button[data-delete="a"]')).not.toBeNull()
+    )
+  }
+
+  function dialogButton(label: string): HTMLButtonElement {
+    const button = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')
+    ).find((item) => item.textContent === label)
+    expect(button).toBeDefined()
+    return button!
+  }
+
+  it("asks for confirmation before removing a task requested from the row", async () => {
+    await renderPage()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-delete="a"]')!.click()
+    })
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain("删除 每晚汇总？")
+    expect(document.body.textContent).toContain("操作无法撤销")
+
+    await act(async () => {
+      dialogButton("删除任务").click()
+    })
+
+    expect(remove).toHaveBeenCalledWith("a")
+  })
+
+  it("asks for confirmation before removing the task shown in the detail panel", async () => {
+    await renderPage()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[data-run-count="0"]')!.click()
+    })
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-delete-detail="a"]')!.click()
+    })
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain("删除 每晚汇总？")
+
+    await act(async () => {
+      dialogButton("删除任务").click()
+    })
+
+    expect(remove).toHaveBeenCalledWith("a")
+  })
+
+  it("keeps the task when the confirmation is dismissed", async () => {
+    await renderPage()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-delete="a"]')!.click()
+    })
+    await act(async () => {
+      dialogButton("取消").click()
+    })
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
   })
 })

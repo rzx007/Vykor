@@ -10,6 +10,27 @@ import { ConversationTranscript } from "../transcript"
 import { MessageScroller, MessageScrollerProvider } from "@renderer/components/ui/message-scroller"
 
 describe("conversation running activity", () => {
+  it.each([false, true])("shows only one running indicator after supplemental input (reply started=%s)", replyStarted => {
+    const messages = [
+      { id: "u1", role: "user", inputId: "i1", runId: "r" },
+      { id: "a1", role: "assistant", inputId: "i1", runId: "r" },
+      { id: "u2", role: "user", inputId: "i2", runId: "r" },
+      { id: "a2", role: "assistant", inputId: "i2", runId: "r" },
+    ].filter(message => replyStarted || message.id !== "a2")
+      .map((message, index) => ({ ...message, sessionId: "s", seq: index + 1, metadata: {}, createdAt: index + 1, updatedAt: index + 1 })) as DesktopSessionMessage[]
+    const parts = messages.map((message, index) => ({ id: `p${index}`, sessionId: "s", messageId: message.id,
+      seq: index + 1, type: "text", status: "completed", text: message.id, metadata: {}, createdAt: 1, updatedAt: 1 })) as DesktopSessionPart[]
+    const html = renderToStaticMarkup(createElement(ConversationTranscript, {
+      messages, parts, runs: [{ id: "r", sessionId: "s", inputId: "i1", status: "running", metadata: {}, startedAt: 1, createdAt: 1, updatedAt: 1 }],
+      running: true, canEditLastUserMessage: false, canOpenReview: false,
+      onEditLastUserMessage: () => {}, onCopyAssistantMessage: () => {}, onOpenFile: () => {}, onOpenReview: () => {}, onOpenTerminal: () => {},
+    }))
+    expect(html).toContain("a1")
+    if (replyStarted) expect(html).toContain("a2")
+    expect(html.match(/data-task-duration/g)).toHaveLength(1)
+    expect(html.indexOf("data-task-duration")).toBeGreaterThan(html.indexOf(replyStarted ? ">a2<" : ">a1<"))
+    expect(html).not.toContain("用时")
+  })
   it("shows a localized preparation row without jargon or duplicated character counts before a real call exists", () => {
     const messages: DesktopSessionMessage[] = []
     const parts: DesktopSessionPart[] = []

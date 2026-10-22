@@ -1,6 +1,7 @@
 import { isToolVisibleTo } from "@vykor/core";
 import { PLUGIN_APP_DATA_LIMITS, PLUGIN_APP_RESOURCE_LIMITS } from "@vykor/plugin-contracts/limits";
 import type { PluginAppToolDescriptor, PluginAppToolPolicy } from "@vykor/plugin-contracts/runtime";
+import { PluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 import type { CapturedPluginAppBackend } from "./plugin-app-backends.js";
 
 export const PLUGIN_APP_DEFAULT_LIMITS = Object.freeze({ argsBytes: 64 * 1024, appDataBytes: 256 * 1024 });
@@ -13,7 +14,7 @@ export function getPluginAppToolPolicy(descriptor?: PluginAppToolDescriptor): Pl
   if (!Number.isSafeInteger(policy.maxArgumentsBytes) || policy.maxArgumentsBytes < 1 || policy.maxArgumentsBytes > PLUGIN_APP_DATA_LIMITS.maxArgsBytes
     || !["required", "granted"].includes(policy.confirmation)
     || (policy.authorization !== undefined && policy.authorization !== "plugin-data-write")
-    || (policy.confirmation === "granted" && policy.authorization !== "plugin-data-write")) throw new Error("plugin_app_invalid_policy");
+    || (policy.confirmation === "granted" && policy.authorization !== "plugin-data-write")) throw new PluginAppValidationError("plugin_app_invalid_policy");
   return { ...policy };
 }
 

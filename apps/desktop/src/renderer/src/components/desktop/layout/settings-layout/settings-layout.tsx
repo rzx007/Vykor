@@ -110,7 +110,7 @@ export function SettingsLayout(): React.JSX.Element {
   return (
     <main
       ref={shellRef}
-      className="flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground"
+      className="glass-shell-surface flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground"
       style={
         {
           "--settings-sidebar-content-width": `${sidebarDefaultSizePx}px`,

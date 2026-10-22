@@ -214,7 +214,7 @@ export function AppearanceSettings(): React.JSX.Element {
                 </ToggleGroup>
               )}
             </Field>
-            {isMac ? (
+            {isMac || isWindows ? (
               <Field orientation="responsive" data-disabled={windowMaterial.active !== "glass"}>
                 <FieldContent>
                   <FieldTitle>透光强度</FieldTitle>
@@ -222,7 +222,7 @@ export function AppearanceSettings(): React.JSX.Element {
                     {windowMaterial.active === "glass"
                       ? "低一些更安静，高一些更透光。正文不受影响。"
                       : windowMaterial.preference === "opaque"
-                        ? "开启透明磨玻璃后可调节。"
+                        ? `开启${isWindows ? "半透明侧边栏" : "透明磨玻璃"}后可调节。`
                         : "系统透明效果可用时才能调节。"}
                   </FieldDescription>
                 </FieldContent>

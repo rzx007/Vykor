@@ -19,7 +19,7 @@ const AGENT_CHILD_BUDGET_EXCEEDED_ERROR = Symbol.for("@vykor/agent-contracts/Age
 export class AgentChildBudgetExceededError extends Error {
   private readonly [AGENT_CHILD_BUDGET_EXCEEDED_ERROR] = true;
   static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && AGENT_CHILD_BUDGET_EXCEEDED_ERROR in value && value[AGENT_CHILD_BUDGET_EXCEEDED_ERROR] === true;
+    return typeof value === "object" && value !== null && AGENT_CHILD_BUDGET_EXCEEDED_ERROR in value && (value as unknown as AgentChildBudgetExceededError)[AGENT_CHILD_BUDGET_EXCEEDED_ERROR] === true;
   }
 
   constructor(
@@ -114,7 +114,7 @@ const CHILD_RUN_TERMINATION_ERROR = Symbol.for("@vykor/agent-contracts/ChildRunT
 export class ChildRunTerminationError extends Error {
   private readonly [CHILD_RUN_TERMINATION_ERROR] = true;
   static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && CHILD_RUN_TERMINATION_ERROR in value && value[CHILD_RUN_TERMINATION_ERROR] === true;
+    return typeof value === "object" && value !== null && CHILD_RUN_TERMINATION_ERROR in value && (value as unknown as ChildRunTerminationError)[CHILD_RUN_TERMINATION_ERROR] === true;
   }
 
   constructor(
@@ -136,7 +136,7 @@ const AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR = Symbol.for("@vykor/agent-contracts/A
 export class AgentRunNotAcceptingInputError extends Error {
   private readonly [AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR] = true;
   static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR in value && value[AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR] === true;
+    return typeof value === "object" && value !== null && AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR in value && (value as unknown as AgentRunNotAcceptingInputError)[AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR] === true;
   }
 
   constructor(readonly runId: string) {

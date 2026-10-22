@@ -4,7 +4,7 @@ import { PluginAppPageManager, canUseAppSidebar } from "../../src/renderer/src/c
 import { PluginAppTransport } from "../../src/renderer/src/components/desktop/shell/plugin-apps/transport"
 import type { PluginAppMount } from "../../src/shared/plugin-app-types"
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
-import { parseMcpCallResultData } from "../../../../packages/protocol/src/mcp-apps"
+import { parseMcpCallResultData } from "@vykor/client"
 
 interface Probe {
   connected?: boolean

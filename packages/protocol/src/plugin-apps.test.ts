@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 import { copyPluginAppJson, parsePluginAppToolRequest, isPluginAppAdmissionRejection, readPluginAppAction } from "./plugin-apps.js";
+import { ProtocolValidationError } from "./requests.js";
 
 describe("plugin app wire data", () => {
+  it("retains structured input failure information for transport adapters", () => {
+    try { parsePluginAppToolRequest({}); throw new Error("expected invalid input"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(ProtocolValidationError);
+      expect(error).toMatchObject({ code: "invalid_request", details: { reason: "plugin_app_invalid_request" } });
+    }
+  });
   it("copies bounded finite JSON and rejects executable or lossy values", () => {
     const input = { draft: [1, true, null, "文"] };
     const copy = copyPluginAppJson(input, 1024);

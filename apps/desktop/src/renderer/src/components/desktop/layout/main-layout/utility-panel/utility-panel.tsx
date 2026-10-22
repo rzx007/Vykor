@@ -1,10 +1,16 @@
-import { usePluginApps, usePluginAppPages } from "@renderer/components/desktop/shell/plugin-apps/provider"
+import {
+  usePluginApps,
+  usePluginAppPages,
+} from "@renderer/components/desktop/shell/plugin-apps/provider"
 import { PluginAppPanel, PluginAppCatalog } from "@renderer/components/desktop/shell/plugin-apps/panel"
 import { toast } from "@renderer/lib/toast"
 import type * as React from "react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { BrowserTool, type BrowserToolTab } from "@renderer/components/desktop/tools/browser/browser-tool"
+import {
+  BrowserTool,
+  type BrowserToolTab,
+} from "@renderer/components/desktop/tools/browser/browser-tool"
 import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import { FilesTool } from "@renderer/components/desktop/tools/files/files-tool"
@@ -15,7 +21,10 @@ import {
   mergeFileViewerTabs,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/files/file-viewer"
-import { SideChatPanel, destroySideChat } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
+import {
+  SideChatPanel,
+  destroySideChat,
+} from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
 import {
   AlertDialog,
   AlertDialogAction,
