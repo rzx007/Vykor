@@ -4,6 +4,27 @@
 
 对应[方案](../specs/2026-10-22-protocol-layering-design.md)和[实施计划](../plans/2026-10-22-protocol-layering.md)。用户已连续授权后续阶段；本轮只运行相关回归和检查，没有运行完整 `pnpm test`。按用户要求将 P7–P13 代码、正式回归、架构检查、文档和验收记录合为本次提交；未推送或发布。
 
+## 最终复查后修复（2026-10-22）
+
+原 P7–P13 提交为 `3d7945e3`；以下是随后复查发现的问题及本轮修复证据，后文数字保留原阶段事实。本轮开始时工作区干净；修复期间并行新增的插件市场计划文档未改动、不计入修复范围。用户随后授权提交全部当前改动、合入 main 后推送，插件市场计划文档一并纳入提交。
+
+- **P2 级门禁缺口：** 原扫描只检查消费文件中的运行类型名，没把来源声明中的 Promise/AbortSignal 带回规则检查，私有别名也会丢失来源。现在按选中声明收集引用并沿别名传播；加入 Protocol 的 Job/Terminal `/contracts` 入口约束，直接导入、相对路径和本地再导出均受检查。回归同时确认 permissions 同文件中的 ApprovalMode 等纯数据仍合法。没有增加阶段例外或扩大白名单。
+- **插件 HTTP 错误适配：** 移除错误 message 前缀判断。Protocol parser 将 ValidationResult 转为 ProtocolValidationError；plugin-contracts `/runtime-data` 定义纯结构化校验错误和精确 code 识别。Node 参数/策略/Native 游标及 Server 静态资源游标提供 code，跨 Runtime bundle 不依赖同一份 class。未知错误保持 409 和通用响应，ApplicationError 及未接纳响应仍走既有分支。畸形 JSON、数组动作请求由误报 409 修正为 400，通用响应体不变。
+- **回归有效性：** 修复前，2 项新架构反例、1 项 parser、8 项 HTTP 分类及 2 项错误产生处断言失败，确认命中原问题；修复后执行定向回归。保留日常测试入口，没有新增临时脚本或一次性测试文件。
+
+| 本轮验证范围 | 结果 |
+| --- | --- |
+| Protocol 插件 parser / 通信基线，两文件 | 10 项通过 |
+| Runtime 策略 / Native 后端 / 原始应用工具执行，三文件 | 30 项通过；随后新增非对象参数拒绝回归，单独筛选 1 项通过、18 项跳过，未重复执行旧组 |
+| Server 错误 / decoder / mapper / 真实插件 HTTP / 应用服务，五文件 | 43 项通过 |
+| 新增 Native 运行与静态资源游标 HTTP 断言 | 2 项通过、4 项跳过；仅补跑这两项，证明真实 Runtime 错误跨包适配和离线分支均返回 400 |
+| plugin-contracts / Protocol / Runtime / Server 类型检查 | 均退出 0 |
+| Runtime 构建 | 退出 0，三个 bundle 构建完成 |
+| `pnpm check:architecture` | 退出 0；55 项架构反例、9 项兼容检查、4 项 Client API；源码/声明与 workspace 无环扫描通过，阶段例外 0、flat-call 基线 104；clean-slate 通过，历史精确批准仍为 729 条、已移除路径 90 个 |
+| `pnpm check-docs` 与差异检查 | 文档检查退出 0；472 个 Markdown 文件（含并行计划文档），链接、章节、源码路径、状态及契约映射有效；差异无空白错误 |
+
+未运行完整 `pnpm test`，也未重复独立 SDK pack 或浏览器构建；本轮只重建受影响 Runtime 并验证真实 HTTP 消费。验证平台仍为 Windows。
+
 ## 实际收敛结果
 
 | 阶段 | 完成内容 |

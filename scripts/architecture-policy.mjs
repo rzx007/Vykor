@@ -316,6 +316,7 @@ export function collectPolicyViolations(root, policy) {
       if (declaration && includeTypes && !(stopAtProtocol && workspaceOwner(normalize(relative(root, file))) === "packages/protocol")
         && (includeSignatures || ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration))) {
         const references = new Set();
+        const typeReferences = new Set();
         function visitType(node) {
           if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) {
             let qualifier = node.qualifier;
@@ -324,6 +325,7 @@ export function collectPolicyViolations(root, policy) {
           }
           if (ts.isTypeReferenceNode(node) || ts.isTypeQueryNode(node) || ts.isExpressionWithTypeArguments(node)) {
             let reference = ts.isTypeReferenceNode(node) ? node.typeName : ts.isTypeQueryNode(node) ? node.exprName : node.expression;
+            typeReferences.add(reference.getText());
             while (ts.isQualifiedName(reference)) reference = reference.left;
             while (ts.isPropertyAccessExpression(reference)) reference = reference.expression;
             references.add(reference.text);
@@ -341,6 +343,11 @@ export function collectPolicyViolations(root, policy) {
           for (const clause of declaration.heritageClauses ?? []) visitType(clause);
           for (const member of declaration.members) visitSignature(member);
         } else visitType(declaration);
+        // Check the selected declaration, including private aliases reached from it.
+        // Checking the entire source module would reject data next to a host interface.
+        let origin = results.find(item => item.file === file && item.name === name);
+        if (!origin) results.push(origin = { file, name });
+        origin.typeReferences = [...typeReferences];
         for (const reference of references) {
           if (data.imported.has(reference)) follow(data.imported.get(reference));
           else if (reference !== name && data.declarations.has(reference)) results.push(...origins(file, reference, includeTypes, includeSignatures, stopAtProtocol, context));
@@ -383,10 +390,13 @@ export function collectPolicyViolations(root, policy) {
             const originPackage = packages.find(item => normalize(relative(root, item.directory)) === workspaceOwner(originPath))?.json.name;
             if (!legacyTrace && includeTypes && !traceRules.some(rule => !rule.targetPackages || rule.targetPackages.includes(originPackage))
               && origin.file !== target) continue;
-            if (!declarations.has(origin.file)) declarations.set(origin.file, new Set());
-            declarations.get(origin.file).add(origin.name);
+            if (!declarations.has(origin.file)) declarations.set(origin.file, { names: new Set(), typeReferences: new Set() });
+            const declaration = declarations.get(origin.file);
+            declaration.names.add(origin.name);
+            for (const reference of origin.typeReferences ?? []) declaration.typeReferences.add(reference);
           }
-          for (const [file, names] of declarations) add({ ...input, declarationOrigin: true, resolvedFile: normalize(relative(root, file)), importedNames: [...names] });
+          for (const [file, declaration] of declarations) add({ ...input, declarationOrigin: true, resolvedFile: normalize(relative(root, file)),
+            importedNames: [...declaration.names], typeReferences: [...declaration.typeReferences] });
         }
       }
     }

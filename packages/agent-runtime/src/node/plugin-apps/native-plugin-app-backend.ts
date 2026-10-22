@@ -2,6 +2,7 @@ import type { ToolResult } from "@vykor/agent-contracts";
 
 import { randomUUID } from "node:crypto";
 import { readPluginAppResource } from "@vykor/plugins";
+import { PluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 import { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts";
 import { PLUGIN_APP_DEFAULT_LIMITS, PLUGIN_APP_EFFECTIVE_RESOURCE_LIMITS } from "./policy.js";
 import { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
@@ -48,12 +49,12 @@ export function captureNativePluginAppBackend(input: PluginAppBackendCaptureInpu
       assertCurrent(); return result;
     },
     listResources: async (cursor?: string) => {
-      assertCurrent(); if (cursor) throw new Error("plugin_app_invalid_cursor");
+      assertCurrent(); if (cursor) throw new PluginAppValidationError("plugin_app_invalid_cursor");
       return { resources: declaredResources.map(resource => ({ uri: resource.definition.uri,
         name: resource.definition.uri, mimeType: MCP_APP_HTML_MIME_TYPE })) };
     },
     listResourceTemplates: async (cursor?: string) => {
-      assertCurrent(); if (cursor) throw new Error("plugin_app_invalid_cursor"); return { resourceTemplates: [] };
+      assertCurrent(); if (cursor) throw new PluginAppValidationError("plugin_app_invalid_cursor"); return { resourceTemplates: [] };
     },
   });
   return capturedBackend(input, port, captureAppToolBindings(input, definition.tools.filter(tool => tool.visibility.includes("app")).map(tool => tool.tool)),

@@ -752,3 +752,43 @@ test("P13 allows storage canonical plugin data origins without opening a direct 
   assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/runtime.ts", importedNames: ["PluginAppRuntimeLease"], declarationOrigin: true, typeOnly: true }, targetPolicy).length);
   assert.ok(checkModuleDependency({ fromFile: "packages/protocol/src/new.ts", specifier: "<local-types>", resolvedFile: "packages/protocol/src/new.ts", importedNames: ["AbortSignal"], typeOnly: true, typeReferences: ["AbortSignal"] }, targetPolicy).length);
 });
+
+test("pure data tracing checks runtime references in the selected declaration and its private aliases", () => {
+  policyFixture({
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/permissions.ts" } }),
+    "packages/agent-contracts/src/permissions.ts": 'type Pending = Promise<string>; type Stop = AbortSignal; export interface PermissionChecker { check(): Pending; signal: Stop } export type ApprovalMode = "ask";',
+    "packages/domain-contracts/package.json": JSON.stringify({ name: "@vykor/domain-contracts" }),
+    "packages/domain-contracts/src/bridge.ts": 'import type { PermissionChecker as Checker } from "@vykor/agent-contracts/permissions"; type Private = Checker; export interface Wrapped { checker: Private }',
+    "packages/domain-contracts/src/bad.ts": 'import type { Wrapped as Alias } from "./bridge.js"; export type Data = Alias;',
+    "packages/domain-contracts/src/inline.ts": 'export interface Data { checker: import("@vykor/agent-contracts/permissions").PermissionChecker }',
+    "packages/domain-contracts/src/good.ts": 'import type { ApprovalMode } from "@vykor/agent-contracts/permissions"; export interface Data { mode: ApprovalMode }',
+    "packages/protocol/src/bad.ts": 'import type { PermissionChecker as Checker } from "@vykor/agent-contracts/permissions"; export interface Data { checker: Checker }',
+    "packages/protocol/src/good.ts": 'import type { ApprovalMode } from "@vykor/agent-contracts/permissions"; export interface Data { mode: ApprovalMode }',
+  }, directory => {
+    const violations = collectPolicyViolations(directory, targetPolicy);
+    for (const path of ["domain-contracts/src/bridge.ts", "domain-contracts/src/bad.ts", "domain-contracts/src/inline.ts", "protocol/src/bad.ts"]) {
+      assert.ok(violations.some(item => item.fromFile === `packages/${path}` && item.reason.includes("runtime type is not data")), path);
+    }
+    assert.ok(!violations.some(item => item.fromFile.endsWith("/good.ts")), "neighboring executable declarations must not contaminate pure data");
+  });
+});
+
+test("Protocol pins Job and Terminal imports and wrapped origins to contracts entries", () => {
+  policyFixture({
+    "packages/jobs/package.json": JSON.stringify({ name: "@vykor/jobs", exports: { ".": "./src/index.ts", "./contracts": "./src/contracts.ts" } }),
+    "packages/jobs/src/index.ts": 'export interface JobWaitRequest { signal: AbortSignal }',
+    "packages/jobs/src/contracts.ts": 'export interface JobSnapshot { id: string }',
+    "packages/terminal/package.json": JSON.stringify({ name: "@vykor/terminal", exports: { ".": "./src/provider.ts", "./contracts": "./src/contracts.ts" } }),
+    "packages/terminal/src/provider.ts": 'export interface TerminalProvider { wait(): Promise<void> }',
+    "packages/terminal/src/contracts.ts": 'export interface TerminalSessionInfo { id: string }',
+    "packages/protocol/src/jobs.ts": 'import type { JobWaitRequest } from "@vykor/jobs";',
+    "packages/protocol/src/terminal.ts": 'import type { TerminalProvider } from "../../terminal/src/provider.js";',
+    "packages/protocol/src/bridge.ts": 'export type { TerminalProvider as Hidden } from "@vykor/terminal";',
+    "packages/protocol/src/wrapped.ts": 'import type { Hidden } from "./bridge.js";',
+    "packages/protocol/src/good.ts": 'import type { JobSnapshot } from "@vykor/jobs/contracts"; import type { TerminalSessionInfo } from "@vykor/terminal/contracts";',
+  }, directory => {
+    const violations = collectPolicyViolations(directory, targetPolicy);
+    for (const name of ["jobs.ts", "terminal.ts", "bridge.ts", "wrapped.ts"]) assert.ok(violations.some(item => item.fromFile.endsWith(`/src/${name}`)), name);
+    assert.ok(!violations.some(item => item.fromFile.endsWith("/good.ts")));
+  });
+});

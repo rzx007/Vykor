@@ -900,6 +900,26 @@
       ],
       "removeByPhase": "P13",
       "migrationId": "M40"
+    },
+    {
+      "id": "protocol-capability-data-entries",
+      "fromPaths": [
+        "packages/protocol/src/"
+      ],
+      "targetPackages": [
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ],
+      "allowTargetPaths": [
+        "packages/jobs/src/contracts.ts",
+        "packages/terminal/src/contracts.ts"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/(?:jobs|terminal)(?:/(?!contracts$).*)?$"
+      ],
+      "traceTypes": true,
+      "removeByPhase": "P13",
+      "migrationId": "M40"
     }
   ],
   "stageExceptions": []

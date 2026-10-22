@@ -17,6 +17,8 @@ Protocol 只负责 HTTP/SSE 通信格式、公开 DTO、请求解码、序列化
 
 Server HTTP 先解码，再显式选取字段形成应用输入；应用服务验证 owner、版本、状态和授权后构造 Services 命令或 Node 绑定，最后由 HTTP 将应用查询结果转换为公开响应。领域校验不导入 `ProtocolValidationError`，错误 code/field 的通信转换留在 Protocol 或 HTTP。
 
+插件 HTTP 入口按 `ProtocolValidationError` 或 plugin-contracts `/runtime-data` 中明确列出的校验错误码返回 400，不按错误文案前缀分类。插件 parser 将校验结果转换为通信错误；Node 的参数、策略和 Native 游标错误携带结构化 code，跨 Runtime bundle 也能识别。未知运行失败仍返回 409；应用错误与请求未接纳的专用响应保持原处理。畸形 JSON、非对象动作请求此前误报 409，现修正为 400，通用响应体仍为 `{ error: "应用请求无效或已失效" }`。
+
 Client 只直接依赖 Protocol。`readSessionRuntimeConfig`、`patchSessionRuntimeMetadata`、模式归一化和 `getPluginAppToolPolicy` 的既有 Client 公开名字由本地辅助实现保留，用于显示已有数据与构造请求；它们不能生成宿主授权。真实模式归一化在 host-config，有效权限计算在 permissions，插件有效策略在 Node。
 
 Client 的源码导出名有一项迁移：旧 `PLUGIN_APP_LIMITS` 聚合对象已移除，调用方按用途选择 `PLUGIN_APP_DATA_LIMITS`、`PLUGIN_APP_INPUT_LIMITS`、`PLUGIN_APP_RESOURCE_LIMITS` 三个公开硬上限常量。公共方法、请求形状与线格式保持原行为，不能把这次调整描述为所有源码导出名均未变化。

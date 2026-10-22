@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { pluginAppToolInput, pluginAppConversationInput } from "../mappers/plugin-apps.js";
-import { PLUGIN_APP_DATA_LIMITS, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest } from "@vykor/protocol";
+import { PLUGIN_APP_DATA_LIMITS, ProtocolValidationError, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest } from "@vykor/protocol";
+import { isPluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 import type { PluginAppRuntimeLease } from "@vykor/protocol";
 import type { assemblePluginApps } from "../../application/session/plugin-app-assembly.js";
 import type { PluginAppConversationService } from "../../application/session/plugin-app-conversation-service.js";
@@ -27,7 +28,7 @@ export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assembl
   };
   const routes = new Hono();
   routes.onError(error => error instanceof PluginAppAdmissionError ? jsonResponse(error.rejection, 409) : applicationErrorResponse(error instanceof ApplicationError ? error
-    : new ApplicationError(error.message.startsWith("plugin_app_invalid") || error.message.startsWith("plugin_app_json") ? 400 : 409, "应用请求无效或已失效")));
+    : new ApplicationError(error instanceof ProtocolValidationError || isPluginAppValidationError(error) ? 400 : 409, "应用请求无效或已失效")));
   return routes
     .post("/plugin-app-notifications/stream", async c => {
       const input = await readJson(c);
