@@ -30,6 +30,27 @@ ID 使用稳定的点分名称，name 使用小写连字符名称。组件路径
 
 Native 根 manifest 保持 schemaVersion 1；apps.json 使用 schemaVersion 1，Native Tool 通过 metadata.appData 提供页面数据。页面使用官方 MCP Apps API，具体接口见 [插件 UI](plugin-apps.md)。
 
+## 市场图标与使用示例
+
+在根 manifest 补充以下可选字段，市场与已安装详情共用这些信息；不是在 apps.json 或市场清单另维护一份：
+
+```json
+{
+  "displayName": "文本助手",
+  "description": "检查你提供的文本，标出格式问题。",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iNCIgZmlsbD0iIzRmNDZlNSIvPjwvc3ZnPg==",
+  "introduction": "## 检查文本\n\n在右侧面板编辑文本并检查格式问题，也可以把选区引用到聊天继续讨论。",
+  "prompts": [
+    { "title": "检查文本", "prompt": "请使用文本助手检查我提供的文本，先说明问题，不修改文件。" }
+  ]
+}
+```
+
+- `icon` 使用图片 base64 data URI 或 HTTP(S) 地址；市场发布只使用 HTTPS。支持 PNG、JPEG、GIF、WebP、AVIF、SVG，整个字符串最多 1 MiB。包内图片在作者构建时编码成 data URI，不在清单写 `./icon.svg` 等相对路径，不使用 HTML、脚本或文件网址。
+- `description` 写清用途；列表只显示一行，超出部分省略。`introduction` 是最多 65536 字符的 Markdown 详细介绍，说明实际功能与限制，不照抄简介。缺少内容时不填占位文字。
+- `prompts` 最多 16 项，每项仅有 `title`、`prompt`；标题最多 100 字符、正文最多 16384 字符，去除首尾空白后都不能为空。示例描述用户可以发起的具体任务，不填工具参数或宿主内部字段，不假定拥有文件权限。
+- `author`（name、email、url）、`license`、`keywords`、`homepage`、`repository` 也属于作者展示信息；市场网站地址使用 HTTPS。展示不会执行示例、调用工具或保存内容，安装权限来自实际包。市场示例只有在对应来源的安装回执确认成功且真实安装状态、权限可用后才能由用户点击使用。
+
 ## Native Tool
 
 最小工具实现，保存为 `tools/index.mjs`：

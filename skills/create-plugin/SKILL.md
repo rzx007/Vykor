@@ -1,6 +1,6 @@
 ---
 name: create-plugin
-description: Use when creating, extending, or packaging a Vykor Native Plugin with Skills, Agents, Hooks, MCP servers, Native Tools, or interactive UI. 不用于改造 Vykor 本身，也不用于转换 Claude Code 或 Codex 插件。
+description: Use when creating, extending, packaging, or preparing marketplace publication of a Vykor Native Plugin with Skills, Agents, Hooks, MCP servers, Native Tools, or interactive UI. 不用于改造 Vykor 本身，也不用于转换 Claude Code 或 Codex 插件。
 ---
 
 # 开发 Vykor 插件
@@ -23,6 +23,7 @@ description: Use when creating, extending, or packaging a Vykor Native Plugin wi
 | 当前任务 | 需要读取的文件 |
 | --- | --- |
 | manifest、Skill、Agent、Hook、MCP、Node 工具 | [Native Plugin 接口](references/native-plugin.md) |
+| 市场图标、介绍、使用示例与发布 | 上一份接口的“市场图标与使用示例”和 [验证与交付](references/verification.md) |
 | 内联卡片、会话侧栏、确认按钮、结果预览 | 上一份接口说明和 [插件 UI](references/plugin-apps.md) |
 | 校验、调试、安装说明、打包交付 | [验证与交付](references/verification.md) |
 
@@ -30,7 +31,7 @@ description: Use when creating, extending, or packaging a Vykor Native Plugin wi
 
 ## 实现流程
 
-1. 写 `.vykor-plugin/plugin.json`，声明实际存在的组件及实际需要的权限。所有组件路径留在插件目录内。
+1. 写 `.vykor-plugin/plugin.json`，声明实际存在的组件及实际需要的权限。所有组件路径留在插件目录内。准备市场分发时，在根清单补齐作者图标、用途、详细介绍和可操作的使用示例；这些展示字段不授予权限，格式见 Native Plugin 接口。
 2. 实现组件。Node 工具导出 `registerTools`，返回 `content` 内容块；参数、结果和错误都要有明确上限。UI 入口是提前构建的单文件 HTML。
 3. 页面使用官方 MCP Apps：先注册通知和 hostContext，再 connect。按钮 await callServerTool 并显示返回值；通知共用显示函数，不再次执行工具。updateModelContext 加入可见条目，sendMessage 经确认交给助手，成功保留应用。参照 UI reference。
 4. 运行与组件对应的检查。`vk` 不存在时，仍可以做 Node 语法检查和纯逻辑测试；明确说明宿主校验、真实激活和桌面交互尚未验证。
