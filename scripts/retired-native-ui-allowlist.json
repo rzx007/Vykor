@@ -3486,7 +3486,7 @@
     },
     {
       "path": "packages/protocol/src/index.ts",
-      "line": 29,
+      "line": 30,
       "text": "export * from \"./plugin-ui-history.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
@@ -4296,7 +4296,7 @@
     },
     {
       "path": "packages/skills/src/create-plugin-distribution.test.ts",
-      "line": 77,
+      "line": 84,
       "text": "  expect(panel).not.toMatch(/VykorPluginUi|requestAction|requestConversation/);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },

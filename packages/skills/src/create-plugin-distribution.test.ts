@@ -72,6 +72,13 @@ it("ships identical official App sources and offline pages in both distributions
   const example = fileURLToPath(new URL("../../../examples/plugins/text-inspector/", import.meta.url));
   for (const file of ["ui/panel.mjs", "ui/panel.html", "ui/styles.css", "ui/apps.json", "scripts/build-ui.mjs", "package.json", "package-lock.json", "tools/index.mjs"])
     expect(await readFile(join(distribution, "assets/text-inspector", file), "utf8")).toBe(await readFile(join(example, file), "utf8"));
+  const asset = join(distribution, "assets/text-inspector");
+  const metadata = JSON.parse(await readFile(join(asset, "package.json"), "utf8"));
+  const lock = JSON.parse(await readFile(join(asset, "package-lock.json"), "utf8"));
+  const definition = JSON.parse(await readFile(join(asset, ".vykor-plugin/plugin.json"), "utf8"));
+  expect(lock.version).toBe(metadata.version);
+  expect(lock.packages[""].version).toBe(metadata.version);
+  expect(definition.version).toBe(metadata.version);
   const panel = await readFile(join(example, "ui/panel.mjs"), "utf8");
   expect(panel).toContain('from "@modelcontextprotocol/ext-apps"');
   expect(panel).not.toMatch(/VykorPluginUi|requestAction|requestConversation/);
