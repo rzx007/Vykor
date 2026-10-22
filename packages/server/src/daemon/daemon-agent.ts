@@ -359,8 +359,8 @@ function createDaemonRequestConfigurationStore(input: {
     if (input.getSettingsForCwd) {
       try {
         const loaded = await input.getSettingsForCwd(session.cwd);
-        if (followsDefaultMaxTurns && (!Number.isSafeInteger(loaded.maxTurns) || loaded.maxTurns <= 0)) {
-          throw new RangeError("settings.maxTurns must be a positive safe integer");
+        if (followsDefaultMaxTurns && (!Number.isSafeInteger(loaded.maxTurns) || loaded.maxTurns < 0)) {
+          throw new RangeError("settings.maxTurns must be a non-negative safe integer (0 means unlimited)");
         }
         if (loaded.workStyle !== undefined
           && loaded.workStyle !== "practical" && loaded.workStyle !== "efficient") {

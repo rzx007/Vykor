@@ -32,12 +32,13 @@ describe("durable defaults and launch environment overrides", () => {
     const { service } = await productionService();
     const before = await service.get();
     expect(before.maxTurnsEditable).toBe(true);
-    await service.patch({ maxTurns: 75, expectedMaxTurns: 50 });
+    expect(before.maxTurns).toBe(0);
+    await service.patch({ maxTurns: 75, expectedMaxTurns: 0 });
     expect((await loadSettings(undefined, { includeEnvironment: false })).maxTurns).toBe(75);
     const saved = readFileSync(getConfigFilePath(), "utf8");
     expect(saved).not.toContain("expectedMaxTurns");
     expect(saved).not.toContain("maxTurnsEditable");
-    await expect(service.patch({ maxTurns: 90, expectedMaxTurns: 50 })).rejects.toMatchObject({ code: "settings_conflict", field: "maxTurns" });
+    await expect(service.patch({ maxTurns: 90, expectedMaxTurns: 0 })).rejects.toMatchObject({ code: "settings_conflict", field: "maxTurns" });
     expect(readFileSync(getConfigFilePath(), "utf8")).toBe(saved);
   });
   it("blocks desktop task-limit edits when a launch override controls the effective value", async () => {
@@ -48,10 +49,18 @@ describe("durable defaults and launch environment overrides", () => {
     await expect(service.patch({ maxTurns: 30, expectedMaxTurns: 77 })).rejects.toThrow(/启动环境变量/);
     expect((await loadSettings(undefined, { includeEnvironment: false })).maxTurns).toBe(20);
   });
-  it.each([0, 1001, 1.5])("rejects invalid desktop task limit %s without writes", async maxTurns => {
+  it("saves unlimited and can replace it with a positive limit", async () => {
     const { service } = await productionService();
-    await expect(service.patch({ maxTurns, expectedMaxTurns: 50 })).rejects.toThrow(/1–1000/);
-    expect((await loadSettings(undefined, { includeEnvironment: false })).maxTurns).toBe(50);
+    await service.patch({ maxTurns: 20, expectedMaxTurns: 0 });
+    await service.patch({ maxTurns: 0, expectedMaxTurns: 20 });
+    expect((await loadSettings(undefined, { includeEnvironment: false })).maxTurns).toBe(0);
+    await service.patch({ maxTurns: 30, expectedMaxTurns: 0 });
+    expect((await service.get()).maxTurns).toBe(30);
+  });
+  it.each([-1, 1001, 1.5])("rejects invalid desktop task limit %s without writes", async maxTurns => {
+    const { service } = await productionService();
+    await expect(service.patch({ maxTurns, expectedMaxTurns: 0 })).rejects.toThrow(/0–1000/);
+    expect((await loadSettings(undefined, { includeEnvironment: false })).maxTurns).toBe(0);
   });
   it("reloads a runtime marker without writing the launch override into the saved target", async () => {
     await updateSettings(current => ({ ...current, agentEnvironment: { kind: "wsl" } }), { includeEnvironment: false });

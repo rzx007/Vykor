@@ -90,6 +90,8 @@ describe("daemon request settings refresh", () => {
     expect((await reader.read()).configuration.maxTurns).toBe(1);
     maxTurns = 2;
     expect((await reader.read()).configuration.maxTurns).toBe(2);
+    maxTurns = 0;
+    expect((await reader.read()).configuration.maxTurns).toBe(0);
   });
 
   it("uses a project settings edit for the next model request in the same run", async () => {

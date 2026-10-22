@@ -30,6 +30,11 @@ it("forwards the limit and read-time value for atomic saving", async () => {
   })
   expect(state.patch).toHaveBeenCalledWith({ maxTurns: 75, expectedMaxTurns: 50 })
 })
+it("saves unlimited and allows switching back to a positive limit", async () => {
+  const service = new ConfigurationSettingsService()
+  expect(await service.updateLimits({ maxTurns: 0, expectedMaxTurns: 50 })).toMatchObject({ maxTurns: 0 })
+  expect(await service.updateLimits({ maxTurns: 75, expectedMaxTurns: 0 })).toMatchObject({ maxTurns: 75 })
+})
 it("refuses read-only, unsupported and stale changes before writing", async () => {
   const service = new ConfigurationSettingsService()
   state.settings = { maxTurns: 77, maxTurnsEditable: false, maxTurnsReason: "启动参数固定" }

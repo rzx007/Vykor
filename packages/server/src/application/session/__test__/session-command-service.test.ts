@@ -145,7 +145,7 @@ describe("SessionCommandService", () => {
       expect(updated.metadata.runtime).toMatchObject({ effort: "high" });
     });
 
-    it("accepts an explicit turn limit during a run and stops following the default", async () => {
+    it.each([0, 5])("accepts an explicit turn limit %s during a run and stops following the default", async (maxTurns) => {
       const { service, runtimeControl } = createService({
         hasWork: true,
         sessionRecord: {
@@ -157,10 +157,10 @@ describe("SessionCommandService", () => {
         } as any,
       });
       const updated = await service.updateSession("s1", {
-        metadata: { runtime: { maxTurns: 5 } },
+        metadata: { runtime: { maxTurns } },
       });
       expect(updated.metadata.runtimeDefaultFields).toEqual([]);
-      expect(updated.metadata.runtime).toMatchObject({ maxTurns: 5 });
+      expect(updated.metadata.runtime).toMatchObject({ maxTurns });
       expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
     });
 

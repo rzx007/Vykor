@@ -276,6 +276,10 @@ function ConversationPane({
     sessionView?.session.status === "running"
   )
   const activeRun = sessionView?.runs.find((run) => run.status === "running")
+  const goalUserWorkPending = activeSessionSending || Boolean(sessionView?.runs.some(
+    (run) => (run.status === "pending" || run.status === "running") &&
+      (!run.metadata.goalRunKind || run.metadata.goalRunKind === "user")
+  ))
   const pendingPrompts = (sessionView?.runs ?? [])
     .filter((run) => run.status === "pending" && run.inputId)
     .sort((left, right) => left.createdAt - right.createdAt)
@@ -762,6 +766,7 @@ function ConversationPane({
                   key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}
                   goal={goal}
                   busy={goalBusy}
+                  userWorkPending={goalUserWorkPending}
                   editing={goalMode && Boolean(goalComposer.editingGoal)}
                   stopping={Boolean(goal.currentRunId && goal.status === "paused" && running)}
                   onEdit={() => changeGoalMode(true)}

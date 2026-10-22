@@ -153,7 +153,7 @@ export function GeneralSettings() {
             <div key={`advanced-${revision}`} className="divide-y divide-border">
               <SettingsRow
                 title="默认任务轮数上限"
-                description="每轮进行一次模型请求，控制任务的默认推进长度；项目可单独设置。"
+                description="每轮进行一次模型请求；默认不限制，留空或填 0 表示不限制。项目可单独设置。"
                 control={<TaskLimitControl />}
               />
               <SettingsRow

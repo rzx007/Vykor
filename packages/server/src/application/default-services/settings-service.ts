@@ -105,7 +105,7 @@ export function createDefaultSettingsService(
     async patch(input) {
       const { expectedPermission, expectedSandbox, expectedAutoReviewMode, expectedMaxTurns, runtimeEnvironmentChanged, ...patch } = input;
       if (expectedMaxTurns !== undefined) {
-        if (!Number.isSafeInteger(expectedMaxTurns) || Number(expectedMaxTurns) < 1 || !Number.isSafeInteger(patch.maxTurns) || Number(patch.maxTurns) < 1 || Number(patch.maxTurns) > 1000) throw new Error("任务轮数必须是 1–1000 的整数，并包含读取时的原值。");
+        if (!Number.isSafeInteger(expectedMaxTurns) || Number(expectedMaxTurns) < 0 || !Number.isSafeInteger(patch.maxTurns) || Number(patch.maxTurns) < 0 || Number(patch.maxTurns) > 1000) throw new Error("任务轮数必须是 0–1000 的整数（0 表示不限制），并包含读取时的原值。");
         if (process.env.VYKOR_MAX_TURNS !== undefined) throw new Error("任务轮数由启动环境变量固定，不能通过设置页修改。");
       }
       if (runtimeEnvironmentChanged !== undefined && typeof runtimeEnvironmentChanged !== "boolean") throw new Error("运行环境刷新标记无效。");

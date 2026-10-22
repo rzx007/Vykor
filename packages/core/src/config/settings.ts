@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: Settings = {
   apiFormat: "openai",
   provider: "openrouter",
   outputTokenMax: DEFAULT_OUTPUT_TOKEN_MAX,
-  maxTurns: 50,
+  maxTurns: 0,
   permission: { mode: "default" },
   plugins: { enabled: true, uiEnabled: true },
   memory: {

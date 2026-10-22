@@ -1,4 +1,4 @@
-import { ChevronDown, Goal, Pause, Pencil, Play, Trash2, X } from "lucide-react"
+import { ChevronDown, Goal, Hourglass, Pause, Pencil, Play, Trash2, X } from "lucide-react"
 import { useEffect, useId, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { ButtonGroup } from "@renderer/components/ui/button-group"
@@ -21,6 +21,7 @@ export function GoalBanner({
   goal,
   busy,
   stopping,
+  userWorkPending = false,
   editing = false,
   onAction,
   onEdit,
@@ -29,6 +30,7 @@ export function GoalBanner({
   goal: SessionGoal
   busy: boolean
   stopping: boolean
+  userWorkPending?: boolean
   editing?: boolean
   onAction: (
     input: Pick<
@@ -52,7 +54,7 @@ export function GoalBanner({
   const terminal = goal.status === "completed" || goal.status === "cancelled"
   const approvalWait = goal.status === "waiting_user" && goal.wait?.kind === "approval"
   const canResume = goal.status === "paused" || goal.status === "blocked" || approvalWait
-  const resumeLabel = approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"
+  const resumeLabel = userWorkPending ? "等待消息处理…" : approvalWait ? "批准后继续" : goal.status === "blocked" ? "检查并继续" : "继续"
   const explanation = goal.wait?.kind === "user" ? goal.wait.question : goal.reason
   const hasExplanation = Boolean(stopLabel || explanation || goal.wait?.kind === "approval")
   const explanationLabel = goal.status === "completed" ? "完成说明" : goal.status === "cancelled" ? "取消说明" : "状态说明"
@@ -61,8 +63,10 @@ export function GoalBanner({
     Number.isSafeInteger(additionalAutoTurns) &&
     additionalAutoTurns > 0 &&
     goal.maxAutoTurns + additionalAutoTurns <= 1000
-  const resume = (): void =>
+  const resume = (): void => {
+    if (busy || stopping || userWorkPending) return
     onAction({ action: "resume", ...(quotaExhausted ? { additionalAutoTurns } : {}) })
+  }
   return (
     <div className="rounded-xl border border-border/70 bg-background px-3 text-sm">
       <div className="flex min-h-12 items-center gap-2 py-2">
@@ -90,18 +94,19 @@ export function GoalBanner({
             <Button
               type="button"
               variant="control"
-              size="icon"
-              shape="circle"
+              size={userWorkPending ? "sm" : "icon"}
+              shape={userWorkPending ? "pill" : "circle"}
               aria-label={resumeLabel}
               title={resumeLabel}
-              disabled={busy || stopping || (approvalWait && budgetClosed)}
+              disabled={busy || stopping || userWorkPending || (approvalWait && budgetClosed)}
               onClick={() => {
                 if (budgetClosed) { setExpanded(true); setMetricsExpanded(true) }
                 else if (quotaExhausted) setExpanded(true)
                 else resume()
               }}
             >
-              <Play />
+              {userWorkPending ? <Hourglass /> : <Play />}
+              {userWorkPending ? <span>{resumeLabel}</span> : null}
             </Button>
           ) : null}
           <ButtonGroup variant="toolbar" aria-label="目标操作">
@@ -193,7 +198,7 @@ export function GoalBanner({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={busy || stopping || !validQuota || budgetClosed}
+                  disabled={busy || stopping || userWorkPending || !validQuota || budgetClosed}
                   onClick={resume}
                 >
                   增加次数并继续
@@ -237,7 +242,7 @@ export function GoalBanner({
             event.preventDefault()
             if (
               goal.wait?.kind !== "user" ||
-              busy || stopping ||
+              busy || stopping || userWorkPending ||
               budgetClosed || !response.trim() ||
               goal.wait.objectiveVersion !== goal.objectiveVersion ||
               (quotaExhausted && (!expanded || !validQuota))
@@ -266,9 +271,9 @@ export function GoalBanner({
             type="submit"
             size="sm"
             shape="pill"
-            disabled={busy || stopping || budgetClosed || !response.trim() || goal.wait.objectiveVersion !== goal.objectiveVersion || (quotaExhausted && (!expanded || !validQuota))}
+            disabled={busy || stopping || userWorkPending || budgetClosed || !response.trim() || goal.wait.objectiveVersion !== goal.objectiveVersion || (quotaExhausted && (!expanded || !validQuota))}
           >
-            {busy ? "正在提交…" : "补充并继续"}
+            {busy ? "正在提交…" : userWorkPending ? "等待消息处理…" : "补充并继续"}
           </Button></div>
           {quotaExhausted && !expanded ? (
             <span className="text-xs">自动续跑次数已用完，请先展开详情增加次数。</span>

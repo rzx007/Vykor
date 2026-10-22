@@ -16,7 +16,7 @@ const labels: Record<string, string> = {
 export class ConfigurationSettingsService {
   async limits() {
     const settings = await (await desktopSessionService.daemonClient()).system.getSettings()
-    if (!Number.isSafeInteger(settings.maxTurns) || Number(settings.maxTurns) < 1)
+    if (!Number.isSafeInteger(settings.maxTurns) || Number(settings.maxTurns) < 0)
       throw new Error("后台未返回有效的任务轮数，请重新读取。")
     const editable = settings.maxTurnsEditable === true
     return {
@@ -30,8 +30,8 @@ export class ConfigurationSettingsService {
     }
   }
   async updateLimits(input: { maxTurns: number; expectedMaxTurns: number }) {
-    if (!Number.isSafeInteger(input.maxTurns) || input.maxTurns < 1 || input.maxTurns > 1000)
-      throw new Error("任务轮数必须是 1–1000 的整数。")
+    if (!Number.isSafeInteger(input.maxTurns) || input.maxTurns < 0 || input.maxTurns > 1000)
+      throw new Error("任务轮数必须是 0–1000 的整数，0 表示不限制。")
     const current = await this.limits()
     if (!current.editable) throw new Error(current.reason ?? "当前任务轮数不可修改。")
     if (current.maxTurns !== input.expectedMaxTurns)

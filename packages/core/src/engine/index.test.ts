@@ -461,7 +461,7 @@ describe("loadSettings", () => {
     expect(settings.model.length).toBeGreaterThan(0);
     expect(["anthropic", "openai", "openai_compat"]).toContain(settings.apiFormat);
     expect(settings.permission.mode).toBe("default");
-    expect(settings.maxTurns).toBe(50);
+    expect(settings.maxTurns).toBe(0);
     expect(settings.sandbox).toMatchObject({
       enabled: false,
       failIfUnavailable: false,

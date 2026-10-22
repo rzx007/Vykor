@@ -25,6 +25,11 @@ function session(metadata: Record<string, unknown>): SessionRecord {
 }
 
 describe("session runtime metadata", () => {
+  it("preserves explicit unlimited limits instead of dropping zero or inheriting a positive default", () => {
+    expect(readSessionRuntimeConfig(session({ runtime: { model: "m", maxTurns: 0 } }), { maxTurns: 50 }).maxTurns).toBe(0);
+    expect(readSessionRuntimeConfig(session({ runtime: { model: "m" } }), { maxTurns: 0 }).maxTurns).toBe(0);
+  });
+
   const forbidden = JSON.parse(readFileSync(new URL("../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
   it.each(forbidden.configFields as string[])("rejects the removed runtime field %s", (field) => {
     expect(() => readSessionRuntimeConfig(session({ runtime: { model: "m", [field]: "old" } })))

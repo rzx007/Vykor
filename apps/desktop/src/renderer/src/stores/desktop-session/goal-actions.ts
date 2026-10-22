@@ -31,6 +31,8 @@ export const selectGoalObjective = (document: ComposerDocument): string =>
 
 function goalErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
+  if (message.includes("请先等待用户任务结束"))
+    return "补充消息仍在排队或处理中，请等待处理结束后再继续目标。"
   const marker = "Daemon operation is blocked by maintenance:"
   const index = message.indexOf(marker)
   if (index < 0) return message

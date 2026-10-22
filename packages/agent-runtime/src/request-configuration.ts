@@ -84,8 +84,8 @@ function assertValidRequestConfiguration(configuration: AgentRequestConfiguratio
     throw new Error("model is required");
   }
   if (configuration.maxTurns !== undefined
-    && (!Number.isSafeInteger(configuration.maxTurns) || configuration.maxTurns <= 0)) {
-    throw new Error("maxTurns must be a positive safe integer");
+    && (!Number.isSafeInteger(configuration.maxTurns) || configuration.maxTurns < 0)) {
+    throw new Error("maxTurns must be a non-negative safe integer (0 means unlimited)");
   }
   if (configuration.fastMode !== undefined && typeof configuration.fastMode !== "boolean") {
     throw new Error("fastMode must be a boolean");

@@ -5,12 +5,18 @@ import {
 } from "./request-configuration.js";
 
 describe("memory request configuration store", () => {
+  it("accepts unlimited as a live request configuration", async () => {
+    const store = createMemoryRequestConfigurationStore({ model: "test", maxTurns: 3 }, async (next) => next);
+    await store.update({ maxTurns: 0 });
+    expect((await store.read()).configuration.maxTurns).toBe(0);
+  });
+
   it("rejects invalid live request options before accepting a revision", async () => {
     const store = createMemoryRequestConfigurationStore(
       { model: "model-a", maxTurns: 3 },
       async (next) => next,
     );
-    await expect(store.update({ maxTurns: 0 })).rejects.toThrow(/maxTurns/);
+    await expect(store.update({ maxTurns: -1 })).rejects.toThrow(/maxTurns/);
     await expect(store.update({ fastMode: "yes" } as never)).rejects.toThrow(/fastMode/);
     await expect(store.update({ workStyle: "turbo" } as never)).rejects.toThrow(/workStyle/);
     await expect(store.update({ systemPrompt: 42 } as never)).rejects.toThrow(/systemPrompt/);

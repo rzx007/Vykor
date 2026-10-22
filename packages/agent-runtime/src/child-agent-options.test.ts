@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
+import { deriveChildAgentOptions, deriveChildCapabilityView, resolveChildMaxTurns } from "./child-agent-options.js";
 import { ToolRegistry, type Settings } from "@vykor/core";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { createRunCapabilityView } from "./run-capability-view.js";
@@ -19,6 +19,13 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("does not turn an unlimited parent into a zero-turn child or erase an explicit child cap", () => {
+    expect(resolveChildMaxTurns({ settingsMaxTurns: 0 })).toBeUndefined();
+    expect(resolveChildMaxTurns({ requestConfigurationMaxTurns: 0, settingsMaxTurns: 50 })).toBeUndefined();
+    expect(resolveChildMaxTurns({ settingsMaxTurns: 0, requestedMaxTurns: 5 })).toBe(5);
+    expect(resolveChildMaxTurns({ settingsMaxTurns: 0, roleMaxTurns: 8, requestedMaxTurns: 20 })).toBe(8);
+  });
+
   it("honors explicit child permission narrowing and restores sandbox settings", () => {
     const baseline = { sandbox: { enabled: true, network: { mode: "none" } } } as Settings;
     const options = deriveChildAgentOptions({

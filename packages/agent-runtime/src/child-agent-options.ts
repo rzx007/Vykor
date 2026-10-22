@@ -35,7 +35,7 @@ export interface ChildTurnBudgetInput {
 export function resolveChildMaxTurns(input: ChildTurnBudgetInput): number | undefined {
   const base =
     input.roleMaxTurns ?? input.requestConfigurationMaxTurns ?? input.settingsMaxTurns;
-  if (base === undefined) return input.requestedMaxTurns;
+  if (base === undefined || base === 0) return input.requestedMaxTurns;
   return input.requestedMaxTurns === undefined
     ? base
     : Math.min(base, input.requestedMaxTurns);

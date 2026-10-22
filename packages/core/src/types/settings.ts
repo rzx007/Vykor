@@ -152,6 +152,7 @@ export interface Settings {
   baseUrl?: string;
   provider?: string;
   customProviders?: CustomProviderSettings[];
+  /** Maximum model requests per task; 0 means unlimited. */
   maxTurns: number;
   systemPrompt?: string;
   permission: PermissionSettings;

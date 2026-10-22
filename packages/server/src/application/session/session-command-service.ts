@@ -395,8 +395,8 @@ export class SessionCommandService {
       if (Object.prototype.hasOwnProperty.call(incomingRuntime, "maxTurns")) {
         if (typeof incomingRuntime.maxTurns !== "number"
           || !Number.isSafeInteger(incomingRuntime.maxTurns)
-          || incomingRuntime.maxTurns <= 0) {
-          throw new SessionApplicationError(400, "maxTurns must be a positive safe integer");
+          || incomingRuntime.maxTurns < 0) {
+          throw new SessionApplicationError(400, "maxTurns must be a non-negative safe integer (0 means unlimited)");
         }
         const defaults = existing.metadata.runtimeDefaultFields;
         if (Array.isArray(defaults)) {

@@ -275,7 +275,7 @@ export class QueryEngine implements IQueryEngine {
     );
     this.compactService.setProgressCallback(options.compactProgressCallback);
     this.systemPrompt = options.systemPrompt;
-    this.maxTurns = options.maxTurns ?? 50;
+    this.maxTurns = options.maxTurns ?? 0;
     this.skillRegistry = options.skillRegistry;
     this.memoryRetriever = options.memoryRetriever;
     this.cwd = options.cwd ?? process.cwd();
@@ -438,10 +438,12 @@ export class QueryEngine implements IQueryEngine {
     // comparison so request configuration, setMaxTurns and accepted follow-ups
     // can only move the reusable engine's baseline, never this Run's ceiling.
     const hardMaxTurns = options.execution?.hardMaxTurns;
-    const maxTurnsLimit = (): number =>
-      hardMaxTurns === undefined
-        ? this.maxTurns
-        : Math.min(this.maxTurns, hardMaxTurns);
+    const maxTurnsLimit = (): number => {
+      const configuredLimit = this.maxTurns === 0 ? Infinity : this.maxTurns;
+      return hardMaxTurns === undefined
+        ? configuredLimit
+        : Math.min(configuredLimit, hardMaxTurns);
+    };
 
     // 执行会话开始时的钩子函数
     if (options.execution?.profile?.executableHooks !== false) {
@@ -1153,8 +1155,8 @@ export class QueryEngine implements IQueryEngine {
 
   private applyRequestMaxTurns(maxTurns: number | undefined): void {
     if (maxTurns === undefined) return;
-    if (!Number.isSafeInteger(maxTurns) || maxTurns <= 0) {
-      throw new RangeError("maxTurns must be a positive safe integer");
+    if (!Number.isSafeInteger(maxTurns) || maxTurns < 0) {
+      throw new RangeError("maxTurns must be a non-negative safe integer (0 means unlimited)");
     }
     this.maxTurns = maxTurns;
   }
@@ -1166,7 +1168,7 @@ export class QueryEngine implements IQueryEngine {
     if (!configuration) return undefined;
     const maxTurns = configuration.maxTurns ?? this.maxTurns;
     // Steering has already accepted this input; let its request finish if the limit just fell.
-    return maxTurns <= nextTurnCount
+    return maxTurns > 0 && maxTurns <= nextTurnCount
       ? { ...configuration, maxTurns: nextTurnCount + 1 }
       : configuration;
   }
