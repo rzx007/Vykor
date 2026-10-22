@@ -14,6 +14,7 @@ import {
   isAgentExecutionLimitError,
 } from "@vykor/agent-contracts";
 import type { ModelRetryPolicy } from "./model-retry";
+import { modelAttemptControl } from "./model-attempt-control";
 import {
   attemptFinishedEvent,
   createAttemptSignal,
@@ -74,11 +75,29 @@ export async function* runModelAttempt(
   const pendingProgress = new Map<string, ToolGenerationProgressEvent>();
   const progressSentAt = new Map<string, number>();
   let registered = false;
+  let admitted = false;
+  let gateSettled = false;
   let clientInvoked = false;
   let requestExitedNormally = false;
+  const settleGate = async (status: "completed" | "failed" | "interrupted") => {
+    if (!admitted || gateSettled) return;
+    gateSettled = true;
+    const { type: _, ...settlement } = attemptFinishedEvent(
+      generationId, attempt, status, attemptUsage, clientInvoked ? undefined : true,
+    );
+    await modelAttemptControl(() => options.execution!.modelAttempts!.settle({ scope: options.execution!.scope, ...settlement }));
+  };
 
   try {
     await options.execution?.limits?.check("model");
+    if (options.execution?.modelAttempts) {
+      const { modelAttempts, scope } = options.execution;
+      await modelAttemptControl(() => modelAttempts.beforeDispatch({
+        scope, generationId, attempt,
+        model: options.request.model, provider: options.provider, purpose: options.purpose,
+      }));
+      admitted = true;
+    }
     await options.execution?.emit({
       type: "model.attempt.started",
       data: {
@@ -159,6 +178,7 @@ export async function* runModelAttempt(
     requestExitedNormally = true;
     if (!registered) throw error;
     if (isAgentExecutionLimitError(error)) {
+      await settleGate(options.signal?.aborted ? "interrupted" : "failed");
       options.settleUsage(attemptUsage, clientInvoked);
       yield attemptFinishedEvent(
         generationId,
@@ -172,6 +192,9 @@ export async function* runModelAttempt(
     attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
   } finally {
     attemptSignal.dispose();
+    await settleGate(options.signal?.aborted ? "interrupted"
+      : registered && requestExitedNormally && !attemptFailed && completionSeen
+        && !(options.purpose === "finalization" && attemptToolUses.length > 0) ? "completed" : "failed");
     // A consumer can return() while we are suspended at a streamed delta.
     // It will ignore a finally yield, so settle directly through the host.
     if (registered && !requestExitedNormally) {

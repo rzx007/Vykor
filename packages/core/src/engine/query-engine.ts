@@ -1,6 +1,7 @@
 import { createToolExecutionContext } from "./tool-execution-context";
 import { createTurnRequest, composeTurnPrompt, appendSystemGuidance } from "./turn-context";
 import { runModelAttempt } from "./model-attempt-runner";
+import { isModelAttemptControlFailure } from "./model-attempt-control";
 import { randomUUID } from "node:crypto";
 import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
 
@@ -98,6 +99,8 @@ function toCompactClient(
     ) => void | Promise<void>;
     onAttemptStarted?: import("./buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
     limits?: import("@vykor/agent-contracts").AgentExecutionLimits;
+    scope?: import("@vykor/agent-contracts").AgentRunScope;
+    modelAttempts?: import("@vykor/agent-contracts").ModelAttemptGate;
     maxOutputTokens?: number;
     provider?: string;
   } = {},
@@ -129,6 +132,8 @@ function toCompactClient(
             ? { onAttemptStarted: options.onAttemptStarted }
             : {}),
           ...(options.limits ? { limits: options.limits } : {}),
+          scope: options.scope,
+          modelAttempts: options.modelAttempts,
           ...(options.provider ? { provider: options.provider } : {}),
           purpose: "compaction",
         },
@@ -445,7 +450,7 @@ export class QueryEngine implements IQueryEngine {
           options.signal,
         );
       } catch (error) {
-        if (isAgentExecutionLimitError(error)) throw error;
+        if (isAgentExecutionLimitError(error) || isModelAttemptControlFailure(error)) throw error;
         if (options.signal?.aborted) throw options.signal.reason;
         // compact failure is non-fatal; continue with current messages
       } finally {
@@ -1069,6 +1074,8 @@ export class QueryEngine implements IQueryEngine {
     return toCompactClient(client, model, {
       policy: this.options.modelRetry,
       limits: execution?.limits,
+      scope: execution?.scope,
+      modelAttempts: execution?.modelAttempts,
       maxOutputTokens:
         execution?.profile?.maxOutputTokens === undefined
           ? undefined

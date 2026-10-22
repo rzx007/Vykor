@@ -1,14 +1,15 @@
+import { GoalModelAttemptService } from "../goals/goal-model-attempt-service.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
-import { QueryEngine, ToolRegistry } from "@vykor/core";
+import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentEvent, type StreamingMessageClient, type ToolDefinition } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
 import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../../../client/src/index.js";
-import { FrameworkAgentRun } from "../../../../agent-runtime/src/framework-agent-run.js";
-import { AgentEventBus } from "../../../../agent-runtime/src/event-source.js";
+import { FrameworkAgentRun } from "../../../../agent-runtime/src/kernel/framework-agent-run.js";
+import { AgentEventBus } from "../../../../agent-runtime/src/kernel/event-source.js";
 import { DaemonAgentEventProjector } from "../agent/daemon-agent-event-projector.js";
 import { SessionTranscriptProjection } from "../session/transcript-projection.js";
 import { buildAgentTranscript } from "../agent/agent-transcript.js";
@@ -46,7 +47,7 @@ function harness(client: StreamingMessageClient, tools: ToolDefinition[] = []) {
     content, delivery: "queue", eventBus: bus,
     session: { id: session.id, getHistory: () => engine.getHistory(),
       submitMessage: (text: string, options: any) => engine.submitMessage(text, options) } as any,
-    runtime: { queryEngine: engine } as any, effects: {} as any,
+    engine, preparation: { prepare: async () => ({ run: { tools: new Map(tools.map(tool => [tool.name, { definition: tool, invoke: tool.execute.bind(tool) }])), modelAttempts: new GoalModelAttemptService({ store, events: { checkpoint: () => store.conversations.latestEventSeq(), publishSince() {} } }) }, release() {} }) }, effects: {} as any,
     children: { cwd: directory, createController: () => ({}) } as any, onSettled() {},
   });
   return { store, path, session, engine, events, projector, start };

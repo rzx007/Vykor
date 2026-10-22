@@ -1,3 +1,4 @@
+import { createMaintenanceApplicationService } from "./maintenance-application-service.js";
 import { describe, expect, it, vi } from "vitest";
 import type { SessionStore } from "@vykor/services";
 import type { DaemonControlService } from "../control/daemon-control-service.js";
@@ -15,7 +16,7 @@ function fixture(tasks: Array<{ status: string }> = [], terminals: Array<{ statu
   const store = { path: "D:/test/sessions.db", sessions: { list: () => [{ id: "session" }] }, runs: { listRuns: () => [] }, listSessionTasks: () => tasks } as unknown as SessionStore;
   const control = { acquireGlobalMutation: () => gate.tryEnterBarrier({ kind: "global" }, () => true) } as unknown as DaemonControlService;
   const closeApplication = vi.fn(() => gate.beginShutdown().then(() => { gate.markClosed() }));
-  const app = createMaintenanceRoutes({ store, control, terminals: { list: async () => terminals } as unknown as DaemonTerminalService, closeApplication });
+  const app = createMaintenanceRoutes({ maintenance: createMaintenanceApplicationService({ store, control, terminals: { list: async () => terminals } as unknown as DaemonTerminalService, closeApplication }) });
   return { app, gate, closeApplication };
 }
 describe("resident daemon safe restart preparation", () => {

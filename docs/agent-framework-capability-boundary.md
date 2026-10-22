@@ -192,3 +192,5 @@ AgentChildProjection / DaemonChildAgentProjection
 ChildAgentProjectionFactory / LiveChildAgentRegistry controls copy
 pullFollowUps / wakeCount / mergeWake
 ```
+
+P5 中，Server 通过 GoalModelAttemptService 在实际模型请求前准入、完成事实发布前结算；Node 仅传递通用 gate，事件投影不写 Goal 账本。维护、事实和便签路由调用应用用例，文件位置、写入就绪检查与独占凭证留在应用层。

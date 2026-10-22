@@ -55,7 +55,7 @@ describe("extractMemories", () => {
     const result = await extractMemories({ apiClient: fakeClient('{"memories":[]}', () => {
       expect(events[0]).toMatchObject({ type: "model.attempt.started", data: { model: "m", purpose: "memory", attempt: 1 } });
     }), model: "m", messages, manager: new MemoryManager(), memoryDir: resolve("memory"), cwd: resolve("project"), sessionId: "s",
-      execution: { scope: { sessionId: "origin", runId: "r" }, emit: async event => { events.push(event); },
+      execution: { scope: { agentId: "s", sessionId: "s", runId: "r", inputId: "i", traceId: "t", cwd: resolve("project"), signal: new AbortController().signal }, emit: async event => { events.push(event); },
         limits: { check: boundary => { boundaries.push(boundary); } },
       },
     });

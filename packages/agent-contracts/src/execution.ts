@@ -76,6 +76,7 @@ export interface RunToolBinding {
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
   readonly limits?: AgentExecutionLimits;
+  readonly modelAttempts?: ModelAttemptGate;
   readonly profile?: AgentExecutionProfile;
   readonly scope: AgentRunScope;
   readonly tools?: ReadonlyMap<string, RunToolBinding>;

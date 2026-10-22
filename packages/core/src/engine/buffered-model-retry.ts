@@ -6,6 +6,7 @@ import type { StreamEvent } from "@vykor/agent-contracts";
 import type { UsageSnapshot } from "@vykor/agent-contracts";
 import { isAgentExecutionLimitError, type AgentExecutionLimits } from "@vykor/agent-contracts";
 import type { ModelAttemptStarted } from "@vykor/agent-contracts";
+import type { AgentRunScope, ModelAttemptGate } from "@vykor/agent-contracts";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   nextModelRetryDelay,
@@ -15,10 +16,13 @@ import {
   type RetryCounters,
 } from "./model-retry";
 import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
+import { modelAttemptControl } from "./model-attempt-control";
 
 export interface BufferedModelRetryOptions {
   onAttemptStarted?: (event: ModelAttemptStarted) => void | Promise<void>;
   limits?: AgentExecutionLimits;
+  scope?: AgentRunScope;
+  modelAttempts?: ModelAttemptGate;
   provider?: string;
   purpose?: ModelAttemptStarted["purpose"];
   policy?: Partial<ModelRetryPolicy>;
@@ -40,6 +44,7 @@ export async function* streamBufferedModelWithRetry(
   params: StreamMessageParams,
   options: BufferedModelRetryOptions = {},
 ): AsyncIterable<StreamEvent> {
+  if (options.modelAttempts && !options.scope) throw new Error("A model attempt gate requires a host-owned Run scope");
   if (params.tools && params.tools.length > 0) {
     throw new Error("streamBufferedModelWithRetry is only valid for tool-free auxiliary calls");
   }
@@ -56,12 +61,26 @@ export async function* streamBufferedModelWithRetry(
     let failure: ModelRequestFailure | undefined;
     const attemptSignal = createAttemptSignal(params.abortSignal, recoveryDeadlineAt);
     let registered = false;
+    let admitted = false;
+    let gateSettled = false;
     let clientInvoked = false;
+    let succeeded = false;
+    const settleGate = async (status: "completed" | "failed" | "interrupted") => {
+      if (!admitted || gateSettled) return;
+      gateSettled = true;
+      const { type: _, ...settlement } = attemptFinishedEvent(generationId, attempt, status, usage, clientInvoked ? undefined : true);
+      await modelAttemptControl(() => options.modelAttempts!.settle({ scope: options.scope!, ...settlement }));
+    };
 
     try {
       await options.limits?.check("model");
-      await options.onAttemptStarted?.({ generationId, attempt, model: params.model,
-        ...(options.provider ? { provider: options.provider } : {}), purpose: options.purpose ?? "compaction" });
+      if (options.modelAttempts) {
+        await modelAttemptControl(() => options.modelAttempts!.beforeDispatch({ scope: options.scope!, generationId, attempt, model: params.model,
+          ...(options.provider ? { provider: options.provider } : {}), purpose: options.purpose ?? "compaction" }));
+        admitted = true;
+      }
+      await modelAttemptControl(() => options.onAttemptStarted?.({ generationId, attempt, model: params.model,
+        ...(options.provider ? { provider: options.provider } : {}), purpose: options.purpose ?? "compaction" }));
       registered = true;
       attemptSignal.signal.throwIfAborted();
       clientInvoked = true;
@@ -103,22 +122,25 @@ export async function* streamBufferedModelWithRetry(
           { kind: "stream_incomplete", phase: "stream", retryable: true },
         );
       }
+      succeeded = true;
     } catch (error) {
       if (!registered) throw error;
       if (isAgentExecutionLimitError(error)) {
-        await options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "failed", usage,
-          clientInvoked ? undefined : true));
+        await settleGate(params.abortSignal?.aborted ? "interrupted" : "failed");
+        await modelAttemptControl(() => options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "failed", usage,
+          clientInvoked ? undefined : true)));
         throw error;
       }
       failure = describeModelFailure(error, params.abortSignal, attemptSignal);
     } finally {
       attemptSignal.dispose();
+      await settleGate(params.abortSignal?.aborted ? "interrupted" : succeeded ? "completed" : "failed");
     }
 
     if (failure) {
-      await options.onAttemptFinished?.(attemptFinishedEvent(
+      await modelAttemptControl(() => options.onAttemptFinished?.(attemptFinishedEvent(
         generationId, attempt, params.abortSignal?.aborted ? "interrupted" : "failed", usage, clientInvoked ? undefined : true,
-      ));
+      )));
       if (params.abortSignal?.aborted) throw params.abortSignal.reason;
       if (!failure.info.retryable) throw failure;
 
@@ -144,7 +166,7 @@ export async function* streamBufferedModelWithRetry(
       continue;
     }
 
-    await options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "completed", usage));
+    await modelAttemptControl(() => options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "completed", usage)));
     for (const event of buffered) yield event;
     return;
   }

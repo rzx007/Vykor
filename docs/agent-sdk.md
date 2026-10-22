@@ -180,7 +180,7 @@ daemon 使用 `onEvent` 保证 run started、transcript 与 terminal state 已�
 
 `output.text.delta` 是当前尝试的实时内容，不一定成为最终回答。收到 `output.generation.started` 时，记录 generationId 和 attempt；同 generationId 的新 attempt 开始时替换前一次尝试的临时文本，保留以前成功生成的内容。`model.retry.scheduled` 表示仍在运行、等待重试，不是运行失败。只需要最终结果的调用方使用 RunHandle 的 result.output，不要把所有 delta 永久拼接。
 
-`model.attempt.finished` 记录每次请求的结算，usageStatus 区分 complete、partial 和 unknown；unknown 没有已知用量数字。`usage.updated` 是给观察者的已知消耗通知，同一结算不能在两个事件中重复相加。daemon 仅通过 model.attempt.finished 原子保存结算、已知小计和完整性，不通过 usage.updated 再计费；自定义持久事件接收器也应处理结算事件。结果用量包含 usageIncomplete 时，数字是已知小计，不能视作完整费用。用户中断仍需保留已发出请求的结算，再结束为 interrupted。
+`model.attempt.finished` 记录每次请求的结算，usageStatus 区分 complete、partial 和 unknown；unknown 没有已知用量数字。`usage.updated` 是给观察者的已知消耗通知，同一结算不能在两个事件中重复相加。daemon 仍通过 model.attempt.finished 原子保存 Run 的展示记录、已知小计和完整性，不通过 usage.updated 再计费；Goal 用量由显式 ModelAttemptGate 在事件发布前结算，事件投影不能重复写 Goal 账本。自定义持久事件接收器也应处理结算事件。结果用量包含 usageIncomplete 时，数字是已知小计，不能视作完整费用。用户中断仍需保留已发出请求的结算，再结束为 interrupted。
 
 daemon/client 的持久接口使用协议版本 5；UI 应由最新快照读取 modelRetry/modelUsage 和 part 的 modelGeneration 标记，不依赖收到每个中间事件。详见[模型网络重试](./model-network-retry-design.md)。
 
@@ -300,3 +300,9 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 - 不暴露 QueryEngine/RuntimeBuilder 作为第二套应用入口。
 - 不提供 session replacement runtime；切换 durable session 是应用行为。
 - 不为旧 runtime factory、host callback 或 projection adapter 保留兼容层。
+
+### 模型请求准入与结算
+
+Node 宿主可通过 createDefaultNodeAgent 的 modelAttempts 选项安装 ModelAttemptGate；纯 Kernel 在 PreparedAgentRun.modelAttempts 中提供同一接口。beforeDispatch 在每次实际请求前完成，settle 在完成事件前保存用量；辅助压缩和有真实 Run 来源的记忆维护也使用该接口。无 Goal 的宿主可省略它。
+
+Server 的 GoalModelAttemptService 从持久 Run 核对 session、Goal 版本和预算。事件回放只更新展示，不做预算准入或 Goal 记账。准入后未发出记录 notDispatched，发出但缺可靠用量保留 unknown；结算失败不会重新调用 Provider。独立记忆和自动审查保留原有归属，不能伪造父 Run。

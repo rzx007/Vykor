@@ -62,6 +62,8 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Host-owned admission and durable settlement for this agent tree's actual model attempts. */
+  modelAttempts?: import("@vykor/agent-contracts").ModelAttemptGate;
   /** Reliable host-only registration after durable Run start, before model dispatch. Return a terminal cleanup. */
   onRunCapabilities?: (
     snapshot: AgentRunCapabilitySnapshot,

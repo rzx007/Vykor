@@ -13,10 +13,10 @@ import {
   callInspector, expectRuntimeStopped, pluginId, settings, toolName, withNativePluginFixture,
   type NativePluginFixture,
 } from "../../../../agent-runtime/test-helpers/native-plugin-authoring.js";
-import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
-import { DaemonOperationGate } from "../../application/control/daemon-operation-gate.js";
-import { createServiceRoutes, type ServiceRoutesContext } from "./service.js";
-import { createSystemRoutes } from "./system.js";
+import { createDefaultPluginService } from "./plugin-service.js";
+import { DaemonOperationGate } from "../control/daemon-operation-gate.js";
+import { createServiceRoutes, type ServiceRoutesContext } from "../../http/routes/service.js";
+import { createSystemRoutes } from "../../http/routes/system.js";
 
 function lifecycleRoutes(fixture: NativePluginFixture) {
   const gate = new DaemonOperationGate();

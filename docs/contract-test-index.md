@@ -27,6 +27,15 @@
 | 应用来源必须来自可信本轮绑定 | [tool-app-origin-projector.test.ts](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) |
 
 
+### 模型准入与应用用例（2026-10-22）
+
+| 硬规则 | 主要测试 |
+| --- | --- |
+| 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model-attempt-gate.test.ts) |
+| Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/goal-model-attempt-service.test.ts) |
+| 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
+| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/application/maintenance/maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/notes.test.ts) |
+
 ### 模型网络重试（2026-09-26）
 
 | 硬规则 | 主要测试 |

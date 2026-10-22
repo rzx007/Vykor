@@ -1,7 +1,7 @@
 {
   "$schema": "./architecture-policy.schema.json",
   "version": 1,
-  "currentPhase": "P4",
+  "currentPhase": "P5",
   "packages": {
     "@vykor/agent-contracts": {
       "directory": "packages/agent-contracts",
@@ -752,109 +752,32 @@
       "migrationId": "M30"
     },
     {
-      "fromFile": "packages/server/src/http/routes/facts.test.ts",
-      "target": "route-storage:node:fs#mkdtempSync,readFileSync,rmSync,writeFileSync",
-      "reason": "Existing at bd63a584; forbidden module specifier",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/facts.ts",
-      "target": "route-storage:packages/services/src/index.ts#SessionStore:type",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/facts.ts",
-      "target": "route-storage:packages/services/src/session-runtime/store.ts#SessionStore:type",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/maintenance.ts",
-      "target": "route-storage:node:fs/promises#access,statfs",
-      "reason": "Existing at bd63a584; forbidden module specifier",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/maintenance.ts",
-      "target": "route-storage:node:fs#constants,cpSync,existsSync,mkdirSync,readFileSync,readdirSync,renameSync,rmSync,statSync,statfsSync,writeFileSync",
-      "reason": "Existing at bd63a584; forbidden module specifier",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/maintenance.ts",
-      "target": "route-storage:packages/services/src/index.ts#SessionStore:type",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/maintenance.ts",
-      "target": "route-storage:packages/services/src/session-runtime/store.ts#SessionStore:type",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/notes.ts",
-      "target": "route-storage:packages/services/src/index.ts#NoteRepository:type",
-      "reason": "Existing at bd63a584; forbidden declaration NoteRepository",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/notes.ts",
-      "target": "route-storage:packages/services/src/notes/note-repository.ts#NoteRepository:type",
-      "reason": "Existing at bd63a584; forbidden declaration NoteRepository",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
+      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
       "target": "package:packages/client/src/commands/session-commands.ts#dispatchSessionCommand",
       "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
     {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
+      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
       "target": "package:packages/client/src/state/reducer.ts#createInitialClientState",
       "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
     {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
+      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
       "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
       "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
     {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
-      "target": "package:packages/client/src/types/extension-types.ts#PluginInfo,PluginRuntimeStatus:type",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
+      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
       "target": "package:packages/client/src/types/index.ts#ReloadPluginsResponse:type",
       "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
       "removeByPhase": "P6",
       "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/plugin-lifecycle.test.ts",
-      "target": "route-storage:node:fs/promises#readFile,writeFile",
-      "reason": "Existing at bd63a584; forbidden module specifier",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
     },
     {
       "fromFile": "packages/server/src/http/routes/provider-live-updates.test.ts",
@@ -869,27 +792,6 @@
       "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
       "removeByPhase": "P6",
       "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/session-worktree-binding.test.ts",
-      "target": "route-storage:node:fs#mkdirSync,mkdtempSync,rmSync,rmdirSync",
-      "reason": "Existing at bd63a584; forbidden module specifier",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/session-worktree-binding.test.ts",
-      "target": "route-storage:packages/services/src/index.ts#SessionStore",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/session-worktree-binding.test.ts",
-      "target": "route-storage:packages/services/src/session-runtime/store.ts#SessionStore",
-      "reason": "Existing at bd63a584; forbidden declaration SessionStore",
-      "removeByPhase": "P5",
-      "migrationId": "M25"
     }
   ]
 }

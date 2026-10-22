@@ -193,6 +193,7 @@ export interface AssembledAgentOptions {
   pluginApps?: PluginAppBackendCatalogue;
   pluginSelection?: PluginSelectionCatalog;
   onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
+  modelAttempts?: VykorAgentConfiguration["modelAttempts"];
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
   retainMcpConnectionsForRun?: () => () => void;
@@ -421,6 +422,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       return {
         run: {
           tools: view.tools,
+          modelAttempts: this.assembled.modelAttempts,
           profile: { toolResultReferences: ids.size > 0 },
           ...(guidance ? { contribution: { systemGuidance: guidance } } : {}),
         },
@@ -518,7 +520,10 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
     return snapshot;
   }
   remember(options?: AgentRememberOptions): Promise<AgentRememberResult> {
+    const controller = new AbortController();
     return this.runMaintenance("remember", async () => {
+      const origin = options?.execution?.scope;
+      if (origin && origin.sessionId !== this.id) throw new Error("Memory execution session does not match this agent");
       if (!this.assembled.memory) {
         return {
           skipped: true,
@@ -536,18 +541,31 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
         options?.execution
           ? {
               ...options.execution,
+              modelAttempts: this.assembled.modelAttempts,
+              scope: {
+                agentId: this.id,
+                sessionId: this.id,
+                cwd: this.assembled.childManager.cwd,
+                runId: origin!.runId,
+                inputId: origin!.inputId ?? origin!.runId,
+                traceId: origin!.traceId ?? origin!.runId,
+                signal: origin!.signal ? AbortSignal.any([controller.signal, origin!.signal]) : controller.signal,
+              },
               emit:
                 options.execution.emit ??
                 (async (event) => {
                   await this.assembled.eventBus.emit(event, {
                     agentId: this.id,
-                    ...options.execution!.scope,
+                    sessionId: this.id,
+                    runId: origin!.runId,
+                    ...(origin!.inputId ? { inputId: origin!.inputId } : {}),
+                    ...(origin!.traceId ? { traceId: origin!.traceId } : {}),
                   });
                 }),
             }
           : undefined,
       );
-    });
+    }, controller);
   }
   getCapabilities(): AgentCapabilitySnapshot {
     return toAgentCapabilitySnapshot(this.assembled.capabilities);

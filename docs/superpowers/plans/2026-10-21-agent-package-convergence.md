@@ -1,6 +1,6 @@
 # Agent 核心包架构收敛实施计划
 
-> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 完成 P4。P0–P4 已完成并验证，P5、P6 尚未开始；最新证据见 [P4 验证记录](../reviews/2026-10-22-agent-package-convergence-p4.md)。
+> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 完成 P5。P0–P5 已完成并验证，P6 尚未开始；最新证据见 [P5 验证记录](../reviews/2026-10-22-agent-package-convergence-p5.md)。
 > **For agentic workers:** 仅在用户要求开始实施后使用 executing-plans 按阶段执行。只有用户或适用指令明确授权时才使用 subagent-driven-development；本计划不要求自动启动子 Agent。
 
 **Goal:** 收敛 packages 的执行、宿主和持久化职责，使新增能力不再要求修改多个核心控制层，同时保持现有执行和数据语义。
@@ -13,7 +13,7 @@
 
 ## Global Constraints
 
-- 当前授权范围截至 P4：完成基线、公共类型、本机配置、本地执行、Agent 定义、Team、Workflow、Kernel/Node 分离和 Engine 职责整理；P5、P6 尚未启动。不发布、不部署、不重置用户数据。
+- 当前授权范围截至 P5：完成前述拆分、显式模型尝试准入与 Goal 记账，以及维护/事实/便签应用用例；P6 尚未启动。不发布、不部署、不重置用户数据。
 - 最终新增三个内部包：`@vykor/agent-contracts`、`@vykor/host-config`、`@vykor/execution-node`；其他职责先在现有包内分目录、子入口管理。
 - 保留会话排队、事务、可靠事件处理和子 Agent 生命周期；先移动职责和缩小接口，再整理大文件。
 - 每阶段形成可编译、可运行的完整切面，不提交只有新接口、实际调用仍走旧实现的空架构。
@@ -375,13 +375,13 @@ pnpm --filter @vykor/core --filter @vykor/agent-runtime check-types
 
 **接口：** 方案 5.6 的 ModelAttemptGate.beforeDispatch/settle；Server 服务只接受来自宿主 scope 的 run/session 身份，对接 beginGoalModelAttempt/recordGoalModelAttempt。usageStatus 固定为 complete/partial/unknown，未发出使用 notDispatched 标记。
 
-- [ ] 先写失败测试：预算拒绝时 Provider 调用为零；同一尝试重复 settle 用量只增加一次；projector 重放不写 Goal 用量。
-- [ ] 写时序测试：beforeDispatch 阻塞时客户端调用为零；准入后事件 sink 失败或取消会登记未发出；实际网络调用后用量缺失保留 unknown。
-- [ ] 实现 GoalModelAttemptService，复用现有事务和归属校验；每次重试使用同 generationId、递增 attempt。
-- [ ] 同一提交切换所有模型入口并删除 projector.projectGoalUsage 的准入/记账职责；不要并行保留两条写入路径。
-- [ ] 主生成、compaction、finalization、memory、plugin_selection 都在第一条网络请求前经过 gate，辅助重试同样如此。
-- [ ] 结算失败阻止成功返回，交给持久恢复；终态重复、父子归属、Goal 版本变更、审批等待/暂停、未知用量恢复使用既有规则。
-- [ ] 明确自动审查等独立辅助调用继续按当前归属执行，不创建虚假的父 Run；不将预算拒绝包装成模型网络重试。
+- [x] 先写失败测试：预算拒绝时 Provider 调用为零；同一尝试重复 settle 用量只增加一次；projector 重放不写 Goal 用量。
+- [x] 写时序测试：beforeDispatch 阻塞时客户端调用为零；准入后事件 sink 失败或取消会登记未发出；实际网络调用后用量缺失保留 unknown。
+- [x] 实现 GoalModelAttemptService，复用现有事务和归属校验；每次重试使用同 generationId、递增 attempt。
+- [x] 同一提交切换所有模型入口并删除 projector.projectGoalUsage 的准入/记账职责；不要并行保留两条写入路径。
+- [x] 主生成、compaction、finalization、memory、plugin_selection 都在第一条网络请求前经过 gate，辅助重试同样如此。
+- [x] 结算失败阻止成功返回，交给持久恢复；终态重复、父子归属、Goal 版本变更、审批等待/暂停、未知用量恢复使用既有规则。
+- [x] 明确自动审查等独立辅助调用继续按当前归属执行，不创建虚假的父 Run；不将预算拒绝包装成模型网络重试。
 
 ```powershell
 pnpm --filter @vykor/core exec vitest run src/engine/model-retry.integration.test.ts src/engine/buffered-model-retry.test.ts src/engine/goal-context.test.ts
@@ -403,21 +403,23 @@ pnpm --filter @vykor/core --filter @vykor/agent-runtime --filter @vykor/services
 
 **接口：** 路由 context 只声明其使用的用例方法；应用接口返回业务数据，抛结构化应用错误，不返回 HTTP Response。维护用例有 getStorageHealth/getRestartPreview/prepareRestart/readPolicy/updatePolicy/runCleanup/readUsage/updateUsageSettings 及现有备份/导入导出动作；精确方法清单从当前路由一对一列入任务 diff。
 
-- [ ] 先保留请求级测试：未 ready 写入拒绝、活跃任务拒绝重启、路径/预期版本冲突、事实脱敏、session/cwd 不匹配、便签 revision 冲突。
-- [ ] 把文件位置、read/write/锁/close 编排移到应用/Repository。路由保留 parse/readJson/状态码转换，不读取 Store.path 或保存策略文件。
-- [ ] 将 ready/owner/cwd lease 获取点写入各用例；维护重启按基线释放当前 lease 后等待 application close，避免自己等待自己。
-- [ ] Note 应用层直接持有必要业务用例和错误映射，若只需结构约束，使用应用层声明的窄接口，避免创建无规则的逐方法转发类。
-- [ ] DaemonApplication 注入服务，并把大型领域闭包转成具名组装函数；不得把路由搬走的实现粘进构造函数。
-- [ ] 对 route 根入口和类型 alias 写 AST 反例，移除 P5 例外。
+- [x] 先保留请求级测试：未 ready 写入拒绝、活跃任务拒绝重启、路径/预期版本冲突、事实脱敏、session/cwd 不匹配、便签 revision 冲突。
+- [x] 把文件位置、read/write/锁/close 编排移到应用/Repository。路由保留 parse/readJson/状态码转换，不读取 Store.path 或保存策略文件。
+- [x] 将 ready/owner/cwd lease 获取点写入各用例；维护重启按基线释放当前 lease 后等待 application close，避免自己等待自己。
+- [x] Note 应用层直接持有必要业务用例和错误映射，若只需结构约束，使用应用层声明的窄接口，避免创建无规则的逐方法转发类。
+- [x] DaemonApplication 注入服务，并把大型领域闭包转成具名组装函数；不得把路由搬走的实现粘进构造函数。
+- [x] 对 route 根入口和类型 alias 写 AST 反例，移除 P5 例外。
 
 ```powershell
-pnpm --filter @vykor/server exec vitest run src/application/maintenance src/http/routes/facts.test.ts src/http/routes/notes.test.ts src/application/personalization src/application/notes
+pnpm --filter @vykor/server exec vitest run src/application/maintenance src/application/personalization/facts.routes.test.ts src/http/routes/notes.test.ts src/application/personalization src/application/notes
 pnpm --filter @vykor/server check-types
 node --test scripts/architecture-boundaries.test.mjs
 node scripts/architecture-boundaries.mjs
 ```
 
 **验收：** A06、B10；返回/错误和写入互斥与基线一致，路由中没有持久业务实现。
+
+**实际进度：** 2026-10-22 完成 T09、T10 / M24–M27。Goal 准入与记账由显式服务执行，投影只保存事实；主/辅助模型调用先准入再发出，结算错误不进入重试或压缩兜底。维护、事实和便签业务归应用服务，HTTP 只做接入。Core 438 项、services 575 项及 Server/Node 定向回归通过，类型 67/67、构建和打包安装通过；架构剩余 25 条均属于 P6。P4 已提交为 63c46b00，P5 尚未提交。验证细节见 [P5 记录](../reviews/2026-10-22-agent-package-convergence-p5.md)。
 
 ## 8. P6：依赖、SDK 和证据收口
 

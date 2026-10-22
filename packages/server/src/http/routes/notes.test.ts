@@ -1,3 +1,4 @@
+import { createNoteApplicationService } from "../../application/notes/note-application-service.js";
 import type {
   CreateNoteInput,
   NoteRecord,
@@ -23,7 +24,7 @@ async function createApp(notes: NotesPort): Promise<Hono> {
     createNoteRoutes(context: { notes: NotesPort }): Hono;
   };
   expect(module).not.toBeNull();
-  return new Hono().route("/notes", module!.createNoteRoutes({ notes }));
+  return new Hono().route("/notes", module!.createNoteRoutes({ notes: createNoteApplicationService({ notes }) }));
 }
 
 const note: NoteRecord = {

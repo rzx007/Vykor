@@ -1,3 +1,7 @@
+import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
+import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
+import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
+import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
 import { ExecutionRuntimeOwner } from "@vykor/execution-node";
@@ -34,7 +38,6 @@ import {
   sessionMemoryToCompactText,
   updateSessionMemoryFile,
   type SessionStore,
-  type NoteRepository,
   type ApplicationOwnerLease,
 } from "@vykor/services";
 import {
@@ -171,13 +174,15 @@ export interface DaemonApplicationOptions {
  * daemon 对外暴露的能力面。HTTP 路由只调这些，不自己造 Agent、不自己写会话记录。
  */
 export interface DurableAgentApplication {
+  createMaintenanceService?(host?: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void }): ReturnType<typeof createMaintenanceApplicationService>;
   readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
   readonly pluginUiHistory?: PluginUiHistoryService;
   readonly pluginLifecycle?: PluginLifecycle;
   readonly pluginApps?: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation?: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteRepository;
+  readonly notes: NoteApplicationService;
+  readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
@@ -227,7 +232,8 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly pluginApps: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteRepository;
+  readonly notes: NoteApplicationService;
+  readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
@@ -267,6 +273,9 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
   private readonly startupRecovery: Promise<void>;
+  createMaintenanceService(host: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void } = {}) {
+    return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
+  }
   private closePromise?: Promise<void>;
   private readyState: "starting" | "ready" | "failed" | "closing" | "closed" = "starting";
   get diagnosticState() { return { phase: this.readyState, accepting: this.readyState === "ready" && this.operationGate.accepting }; }
@@ -278,7 +287,7 @@ export class DaemonApplication implements DurableAgentApplication {
     this.store = store;
     const executionOwner = options.executionOwner ?? new ExecutionRuntimeOwner();
     this.executionOwner = executionOwner;
-    this.notes = store.notes;
+    this.notes = createNoteApplicationService({ notes: store.notes, readiness: () => this.diagnosticState });
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
     this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });
@@ -477,7 +486,10 @@ export class DaemonApplication implements DurableAgentApplication {
       });
 
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
+      const modelAttempts = new GoalModelAttemptService({ store, events: this.eventPublisher,
+        requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
       const loadAgent = createDaemonAgentLoader({
+        modelAttempts,
         executionOwner: this.executionOwner,
         executionSurface: options.executionSurface,
         settings: options.settings,
@@ -629,7 +641,6 @@ export class DaemonApplication implements DurableAgentApplication {
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
             log: options.log,
-            requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId),
           });
           return (event) => projector.apply(event);
         },
@@ -946,6 +957,7 @@ export class DaemonApplication implements DurableAgentApplication {
         resolveSkillCatalog: runtimeDiscovery.resolveSkillCatalog,
         pluginCapabilities,
       });
+      this.facts = createProjectFactsService({ control: this.control, sessions: store.sessions, readiness: () => this.diagnosticState });
       this.goals = new SessionGoalService({
         transaction: store,
         sessions: store.sessions,

@@ -88,7 +88,7 @@
   expect(response.status).toBe(200);
   ```
 
-- [x] **步骤 2：确认红灯。** 在 `packages/server` 执行 `../../node_modules/.bin/vitest.CMD run src/http/routes/facts.test.ts`；预期路由不存在或状态码断言失败。
+- [x] **步骤 2：确认红灯。** 在 `packages/server` 执行 `../../node_modules/.bin/vitest.CMD run src/application/personalization/facts.routes.test.ts`；预期路由不存在或状态码断言失败。
 
 - [x] **步骤 3：接入现有模式。** `createFactsRoutes({ control, sessions })` 使用 `loadFacts()`、`replaceFact()`，先核对可选 sessionId 的会话 cwd 与请求 cwd 相同，再像 `routes/memory.ts` 一样校验请求、调用 `acquireCwdMutation(cwd)`、在 `finally` 释放。列表只读，不获取写锁；写操作在 lease 内调用领域函数，再 `closeRuntimesForCwd(cwd)`，按上一步的错误码返回。`server.ts` 挂载 `this.app.route("/facts", createFactsRoutes({ control: this.application.control, sessions: this.store.sessions }))`。避免新增单实现 service 层。
 
@@ -112,7 +112,7 @@
   }
   ```
 
-- [x] **步骤 4：确认绿灯并提交。** 运行 `../../node_modules/.bin/vitest.CMD run src/http/routes/facts.test.ts`、`../../node_modules/.bin/tsc.CMD --noEmit`（工作目录 `packages/server`），检查 diff 后提交本任务文件。
+- [x] **步骤 4：确认绿灯并提交。** 运行 `../../node_modules/.bin/vitest.CMD run src/application/personalization/facts.routes.test.ts`、`../../node_modules/.bin/tsc.CMD --noEmit`（工作目录 `packages/server`），检查 diff 后提交本任务文件。
 
 ## 任务 3：用户可用的 `/facts` 命令
 

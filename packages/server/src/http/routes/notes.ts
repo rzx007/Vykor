@@ -3,10 +3,8 @@ import {
   parseUpdateNoteInput,
   ProtocolValidationError,
 } from "@vykor/protocol";
-import {
-  NoteRevisionConflictError,
-  type NoteRepository,
-} from "@vykor/services";
+import type { NoteApplicationService } from "../../application/notes/note-application-service.js";
+import { ApplicationError } from "../../shared/application-error.js";
 import { Hono } from "hono";
 
 import {
@@ -17,8 +15,7 @@ import {
 } from "../support.js";
 
 export interface NoteRoutesContext {
-  notes: Pick<NoteRepository, "list" | "create" | "update" | "remove"> &
-    Partial<Pick<NoteRepository, "storageInfo">>;
+  notes: Pick<NoteApplicationService, "list" | "create" | "update" | "remove" | "storageInfo">;
 }
 
 export function createNoteRoutes(context: NoteRoutesContext): Hono {
@@ -77,8 +74,6 @@ function noteError(error: unknown): Response {
     return protocolValidationErrorResponse(error);
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof NoteRevisionConflictError)
-    return errorResponse(409, message);
-  if (message.includes("Note not found")) return errorResponse(404, message);
+  if (error instanceof ApplicationError) return errorResponse(error.status, message);
   return errorResponse(500, message);
 }

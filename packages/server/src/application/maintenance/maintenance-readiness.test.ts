@@ -1,3 +1,4 @@
+import { createMaintenanceApplicationService } from "./maintenance-application-service.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,6 +6,10 @@ import { SessionStore } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
 import { DaemonApplication } from "../daemon-application.js";
 describe("read-only application readiness", () => {
+  it("rejects direct application writes before touching the policy file", async () => {
+    const service = createMaintenanceApplicationService({ store: { path: "D:/unused/policy-test/sessions.db" } as any, control: {} as any, readiness: () => ({ phase: "starting", accepting: false }) });
+    await expect(service.updatePolicy({ enabled: true, days: 30, expected: { enabled: false, days: 90 } })).rejects.toMatchObject({ status: 409 });
+  });
   it("reads startup, ready and closed facts without starting work and returns detached values", async () => {
     const directory = mkdtempSync(join(tmpdir(), "maintenance-ready-"));
     const previousConfig = process.env.VYKOR_CONFIG_DIR; const previousData = process.env.VYKOR_DATA_DIR;

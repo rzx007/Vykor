@@ -440,6 +440,7 @@ test("declaration origins expose renamed/star/local-import barrels and wrapped s
     'import type { SessionStore as Store } from "@vykor/services"; export type { Store as Hidden };',
     'import type { SessionStore } from "@vykor/services"; export interface Hidden { store: SessionStore }',
     'export type Hidden = import("@vykor/services").SessionStore;',
+    'import type { SessionStore as Storage } from "@vykor/services"; export type Hidden = Pick<Storage, "notes">;',
   ]) policyFixture({
     "packages/services/src/index.ts": 'export { SessionStore } from "./session-runtime/store.js";',
     "packages/services/src/session-runtime/store.ts": "export class SessionStore {}",
@@ -471,6 +472,7 @@ test("namespace/dynamic imports, source-export cycles and TS path aliases cannot
 test("exceptions match an exact file/target, expire, and cannot borrow another migration deadline", () => {
   const input = { fromFile: "packages/server/src/http/routes/old.ts", specifier: "@vykor/services", importedNames: ["SessionStore"], typeOnly: true };
   const policy = strictPolicy();
+  policy.currentPhase = "P4";
   const item = moduleViolations(input, policy)[0];
   policy.stageExceptions = [{ fromFile: item.fromFile, target: item.target, reason: "Migrate existing route in P5", removeByPhase: item.removeByPhase, migrationId: item.migrationId }];
   assert.deepEqual(checkModuleDependency(input, policy), []);
@@ -484,6 +486,7 @@ test("exceptions match an exact file/target, expire, and cannot borrow another m
 test("stale exceptions require removal and metadata must match the responsible rule", () => {
   policyFixture({ "packages/server/src/http/routes/old.ts": 'import type { SessionStore } from "@vykor/services";' }, (directory, write) => {
     const policy = strictPolicy();
+    policy.currentPhase = "P4";
     policy.stageExceptions = collectPolicyViolations(directory, policy).map(({ fromFile, target, reason, removeByPhase, migrationId }) => ({ fromFile, target, reason, removeByPhase, migrationId }));
     assert.deepEqual(collectArchitecturePolicyErrors(directory, policy).errors, []);
     policy.stageExceptions[0].migrationId = "M01";

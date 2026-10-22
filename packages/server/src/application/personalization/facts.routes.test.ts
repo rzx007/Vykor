@@ -1,10 +1,11 @@
+import { createProjectFactsService } from "./project-facts-service.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { getLocalRulesDir, loadFacts, loadLocalRules, saveFacts } from "@vykor/personalization";
-import { createFactsRoutes } from "./facts.js";
+import { createFactsRoutes } from "../../http/routes/facts.js";
 
 let configDir: string;
 let projectDir: string;
@@ -24,11 +25,11 @@ function app(locked = false) {
   const release = vi.fn();
   const closeRuntimesForCwd = vi.fn(async () => {});
   const acquireCwdMutation = vi.fn(() => locked ? null : { release });
-  const server = new Hono().route("/facts", createFactsRoutes({
+  const server = new Hono().route("/facts", createFactsRoutes({ facts: createProjectFactsService({
     control: { acquireCwdMutation, closeRuntimesForCwd } as never,
     sessions: { get: (id: string) => id === "s1" ? { cwd: projectDir }
       : id === "other-project" ? { cwd: join(configDir, "other-project") } : null } as never,
-  }));
+  }) }));
   return { server, release, closeRuntimesForCwd, acquireCwdMutation };
 }
 

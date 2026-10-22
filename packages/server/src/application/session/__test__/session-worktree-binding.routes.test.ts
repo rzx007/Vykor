@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { SessionStore } from "@vykor/services";
-import { SessionCommandService } from "../../application/session/session-command-service.js";
-import { createSessionRoutes } from "./session.js";
+import { SessionCommandService } from "../session-command-service.js";
+import { createSessionRoutes } from "../../../http/routes/session.js";
 it("keeps ordinary archive edits forbidden while clearing only a removed worktree binding", async () => {
   const directory = mkdtempSync(join(tmpdir(), "vk-worktree-endpoint-"));
   const path = join(directory, "worktree");

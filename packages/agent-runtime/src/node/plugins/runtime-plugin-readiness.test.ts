@@ -121,7 +121,9 @@ it("keeps failed MCP diagnostics, rejects a partially prepared plugin, and exclu
   expect(() => runtime.createRunCapabilityView!("dev.partial")).toThrow(/dev.partial.*unavailable.*closed/i);
   const ordinary = runtime.createRunCapabilityView!();
   expect(ordinary.mcpServers.size).toBe(0);
-  expect(() => deriveChildCapabilityView(ordinary, { description: "test", prompt: "test", agent: "worker", cwd: roots[0]!, requiredMcpServers: ["hostUnavailable"] })).toThrow(/outside parent/);
+  const child = deriveChildCapabilityView(ordinary, { description: "test", prompt: "test", agent: "worker", cwd: roots[0]!, requiredMcpServers: ["hostUnavailable"] })!;
+  expect([...child.mcpServers.keys()]).toEqual([]);
+  expect([...child.mcpAuthServers!.keys()]).toEqual(["mcp:hostUnavailable"]);
   const selected = runtime.createRunCapabilityView!("dev.working");
   expect([...selected.mcpServers.keys()]).toEqual(["plugin:dev.working:mcp:ready"]);
   expect((await selected.tools.get("mcp__ready__ping")!.invoke({}, { cwd: roots[0]! })).content).toEqual([{ type: "text", text: "pong" }]);

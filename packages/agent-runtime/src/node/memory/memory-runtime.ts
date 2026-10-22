@@ -23,12 +23,13 @@ export interface AgentRememberResult {
   titles: string[];
 }
 
-export type AgentMemoryExecution = Pick<AgentExecutionContext, "emit" | "limits"> & {
-  scope: Pick<AgentRunScope, "sessionId" | "runId">;
-};
+export type AgentMemoryExecution = Pick<AgentExecutionContext, "emit" | "limits" | "modelAttempts" | "scope">;
 export interface AgentRememberOptions {
   automatic?: boolean;
-  execution?: Omit<AgentMemoryExecution, "emit"> & { emit?: AgentMemoryExecution["emit"] };
+  execution?: Pick<AgentMemoryExecution, "limits"> & {
+    scope: Pick<AgentRunScope, "sessionId" | "runId"> & Partial<Pick<AgentRunScope, "inputId" | "traceId" | "signal">>;
+    emit?: AgentMemoryExecution["emit"];
+  };
 }
 
 export interface AgentMemoryRuntime {
@@ -129,6 +130,7 @@ export async function extractMemories(options: {
     options.apiClient,
     {
       model: options.model,
+      abortSignal: options.execution?.scope.signal,
       messages: [{ type: "user", content: prompt }],
       system: [
         "You maintain Vykor durable memory.",
@@ -140,6 +142,8 @@ export async function extractMemories(options: {
     },
     {
       limits: options.execution?.limits,
+      scope: options.execution?.scope,
+      modelAttempts: options.execution?.modelAttempts,
       purpose: "memory",
       onAttemptStarted: async (data) => {
         await options.onAttemptStarted?.(data);

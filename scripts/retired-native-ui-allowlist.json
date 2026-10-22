@@ -1909,7 +1909,7 @@
     {
       "path": "docs/superpowers/reviews/2026-10-03-native-plugin-ui-a2-verification.md",
       "line": 112,
-      "text": "F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`src/application/control/__test__/daemon-control-service.test.ts`、`src/application/agent/__test__/agent-pool.test.ts`、`src/application/session/__test__/session-operation-runner.test.ts`、`src/application/session/__test__/run-control-service.test.ts`、`src/application/session/__test__/session-run-engine.test.ts`、`src/application/session/__test__/session-run-executor.test.ts`、`src/application/session/__test__/session-plugin-ui-service.test.ts`、`src/application/session/__test__/session-plugin-ui-action.test.ts`、`src/application/recovery/startup-recovery-service.test.ts`、`src/http/routes/plugin-lifecycle.test.ts`。",
+      "text": "F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`src/application/control/__test__/daemon-control-service.test.ts`、`src/application/agent/__test__/agent-pool.test.ts`、`src/application/session/__test__/session-operation-runner.test.ts`、`src/application/session/__test__/run-control-service.test.ts`、`src/application/session/__test__/session-run-engine.test.ts`、`src/application/session/__test__/session-run-executor.test.ts`、`src/application/session/__test__/session-plugin-ui-service.test.ts`、`src/application/session/__test__/session-plugin-ui-action.test.ts`、`src/application/recovery/startup-recovery-service.test.ts`、`src/application/default-services/plugin-lifecycle.routes.test.ts`。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
@@ -3510,37 +3510,37 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 5,
+      "line": 9,
       "text": "import { PluginUiHistoryService } from \"./session/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 6,
+      "line": 10,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 175,
+      "line": 179,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 225,
+      "line": 230,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 389,
+      "line": 398,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1029,
+      "line": 1042,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3624,25 +3624,25 @@
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 303,
+      "line": 316,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 397,
+      "line": 410,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 414,
+      "line": 427,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
-      "line": 426,
+      "line": 439,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -4128,7 +4128,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 474,
+      "line": 473,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },
@@ -4170,49 +4170,49 @@
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 6,
+      "line": 7,
       "text": "  | \"plugin_ui_retired\"",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 7,
+      "line": 8,
       "text": "  | \"plugin_ui_not_found\"",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 8,
+      "line": 9,
       "text": "  | \"plugin_ui_conversation_unavailable\"",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 9,
+      "line": 10,
       "text": "  | \"plugin_ui_action_not_resumable\"",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 15,
+      "line": 16,
       "text": "  plugin_ui_retired: 410,",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 16,
+      "line": 17,
       "text": "  plugin_ui_not_found: 404,",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 17,
+      "line": 18,
       "text": "  plugin_ui_conversation_unavailable: 409,",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },
     {
       "path": "packages/server/src/shared/application-error.ts",
-      "line": 18,
+      "line": 19,
       "text": "  plugin_ui_action_not_resumable: 409,",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },

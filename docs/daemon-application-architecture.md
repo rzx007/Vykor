@@ -488,3 +488,11 @@ shutdown 先把 `DaemonOperationGate` 置为 closing 并等待现有 shared/barr
 - framework 只通过 event/effect/handle 与 daemon 接触。
 - daemon 不持有 QueryEngine，也不生成 framework child controls。
 - SSE 来自 durable store/event publisher，不直接把 framework event 透传给 UI。
+
+## 模型尝试与管理操作（P5）
+
+GoalModelAttemptService 通过 Node 配置进入每次执行。Engine 先检查执行限制，等待该服务准入，再可靠发布 started 并请求 Provider；finally 中先完成服务结算，再发布 finished。DaemonAgentEventProjector 仅投影 Run 展示与 transcript，不再调用 Goal 准入和用量写入。沿用原有 runId/generationId/attempt 唯一身份、未知用量规则和启动恢复，没有新增持久格式。
+
+维护路由只调用 createMaintenanceApplicationService 提供的业务方法；策略与用量文件由 maintenance-policy-repository 管理，备份、清理、扫描和用量统计继续使用既有实现。DaemonApplication 的具名工厂注入 Store、Control、ready 状态及关闭回调。重启先停止准入，再释放自己的维护 lease（本次独占凭证），最后等待应用关闭，避免等待自身。
+
+ProjectFactsService 负责事实脱敏、session/cwd 校验、工作区独占凭证和运行时回收。NoteApplicationService 负责便签写入前的就绪检查与冲突错误转换。路由只解析请求、调用用例和转换状态码，不接收具体 Repository 或读取 Store.path。

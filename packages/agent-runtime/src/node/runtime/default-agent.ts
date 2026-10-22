@@ -121,6 +121,7 @@ async function createDefaultNodeAgentInternal(
       identity: internal.identity,
       childDirectory: internal.childDirectory,
       onRunCapabilities: options.onRunCapabilities,
+      modelAttempts: options.modelAttempts,
     });
   } catch (error) {
     return cleanupAfterInitializationFailure(composition.cleanup, error);

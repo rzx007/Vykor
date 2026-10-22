@@ -1,3 +1,4 @@
+import { GoalModelAttemptService } from "../../goals/goal-model-attempt-service.js";
 import { streamBufferedModelWithRetry } from "@vykor/core";
 import { isAgentExecutionLimitError, type AgentEvent } from "@vykor/agent-contracts";
 import { AgentEventBus } from "@vykor/agent-runtime/kernel";
@@ -82,9 +83,10 @@ function projectorStore(flat: Record<string, any>) {
 
 describe("DaemonAgentEventProjector", () => {
   it("records plugin selection purpose and usage while the main Run is pending", async () => {
-    const { store, goal, projector } = goalProjector();
+    const { store, goal, projector, gate } = goalProjector();
     store.runs.createRun({ id: "selecting", sessionId: "parent", metadata: { goalId: goal.id, goalObjectiveVersion: 1 } });
     const context = { sessionId: "parent", runId: "selecting" };
+    await gate.beforeDispatch({ scope: attemptScope(context), generationId: "select", attempt: 1, model: "m", purpose: "plugin_selection" });
     await projector.apply(event("model.attempt.started", { generationId: "select", attempt: 1, model: "m", purpose: "plugin_selection" }, context));
     expect(store.runs.getRun("selecting")?.metadata.pluginSelection).toMatchObject({ status: "selecting", source: "auto" });
     expect(store.conversations.listEvents({ sessionId: "parent" })).toContainEqual(expect.objectContaining({
@@ -93,6 +95,8 @@ describe("DaemonAgentEventProjector", () => {
     await projector.apply(event("model.attempt.finished", { generationId: "select", attempt: 1, status: "completed", usageStatus: "complete",
       usage: { inputTokens: 8, outputTokens: 2, metering: { knownInputTokens: 8, knownOutputTokens: 2, inputIncludesCache: true, completeness: "complete", raw: {} } } }, context));
     expect(store.runs.getRun("selecting")?.metadata.usage).toMatchObject({ inputTokens: 8, outputTokens: 2 });
+    expect(store.goals.getGoal(goal.id)?.usage.knownTokens).toBe(0);
+    await gate.settle({ scope: attemptScope(context), generationId: "select", attempt: 1, status: "completed", usageStatus: "complete", usage: { inputTokens: 8, outputTokens: 2, metering: { knownInputTokens: 8, knownOutputTokens: 2, completeness: "complete", inputIncludesCache: true, raw: {} } } });
     expect(store.goals.getGoal(goal.id)?.usage.knownTokens).toBe(10);
   });
   function goalProjector() {
@@ -115,21 +119,21 @@ describe("DaemonAgentEventProjector", () => {
       store.conversationTransactions.admitPrompt({ id: `input-${runId}`, sessionId, items: [{ type: "text", text: "work" }] });
       return event("run.started", {}, { sessionId, inputId: `input-${runId}`, runId, childId: `${sessionId}-handle`, parentRunId, parentSessionId });
     };
-    return { store, goal, projector, started };
+    const gate = new GoalModelAttemptService({ store, events: { checkpoint: () => 0, publishSince: vi.fn() } });
+    return { store, goal, projector, started, gate };
   }
 
   it("reports the actual goal stop reason instead of implying the token budget was exhausted", async () => {
-    const { store, goal, projector, started } = goalProjector();
+    const { store, goal, projector, started, gate } = goalProjector();
     await projector.apply(started("C-stopped", "child", "P1"));
     const reason = "目标自动续跑次数已用完";
     store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "paused", reason });
-    await expect(projector.apply(event("model.attempt.started", {
-      generationId: "denied", attempt: 1, model: "m", purpose: "generation",
-    }, { runId: "C-stopped", sessionId: "child" }))).rejects.toThrow(reason);
+    await expect(gate.beforeDispatch({ scope: attemptScope({ runId: "C-stopped", sessionId: "child" }),
+      generationId: "denied", attempt: 1, model: "m", purpose: "generation" })).rejects.toThrow(reason);
   });
 
   it("passes Child budget rejection through the real EventBus without calling the model or compensating projection", async () => {
-    const { store, goal, projector, started } = goalProjector();
+    const { store, goal, projector, started, gate } = goalProjector();
     const bus = new AgentEventBus((value) => projector.apply(value));
     const initial = started("C-budget", "child", "P1");
     await bus.emit({ type: "run.started", data: {} }, initial.context);
@@ -144,7 +148,7 @@ describe("DaemonAgentEventProjector", () => {
     let error: unknown;
     try {
       for await (const _ of streamBufferedModelWithRetry(client, { model: "m", systemPrompt: "", messages: [], maxTokens: 10 }, {
-        generationId: "next", onAttemptStarted: async (data) => { await bus.emit({ type: "model.attempt.started", data }, context); },
+        generationId: "next", scope: attemptScope(context), modelAttempts: gate, onAttemptStarted: async (data) => { await bus.emit({ type: "model.attempt.started", data }, context); },
       })) { /* no result is possible after budget denial */ }
     } catch (caught) { error = caught; }
     expect(isAgentExecutionLimitError(error)).toBe(true);
@@ -155,10 +159,11 @@ describe("DaemonAgentEventProjector", () => {
   });
 
   it("accepts late complete usage before terminal and sequence text guards without reactivating a cancelled Goal", async () => {
-    const { store, goal, projector, started } = goalProjector();
+    const { store, goal, projector, started, gate } = goalProjector();
     await projector.apply(started("C-late", "child", "P1"));
     const context = { runId: "C-late", sessionId: "child", childId: "child-handle" };
     const begin = event("model.attempt.started", { generationId: "g", attempt: 1, model: "m", purpose: "generation" }, context);
+    await gate.beforeDispatch({ scope: attemptScope(context), generationId: "g", attempt: 1, model: "m", purpose: "generation" });
     await projector.apply({ ...begin, sequence: 100 });
     store.runs.updateRun("C-late", { status: "completed" });
     const current = store.goals.getGoal(goal.id)!;
@@ -166,7 +171,10 @@ describe("DaemonAgentEventProjector", () => {
     const report = event("model.attempt.finished", { generationId: "g", attempt: 1, status: "completed", usageStatus: "complete", usage: {
       inputTokens: 10, outputTokens: 2, metering: { knownInputTokens: 10, knownOutputTokens: 2, completeness: "complete", inputIncludesCache: true, raw: { input: 10, output: 2 } },
     } }, context);
+    await gate.settle({ scope: attemptScope(context), ...report.data } as any);
+    const record = vi.spyOn(store.goals, "recordGoalModelAttempt");
     await projector.apply({ ...report, sequence: 2 });
+    expect(record).not.toHaveBeenCalled();
     const once = store.goals.getGoal(goal.id)!;
     expect(once).toMatchObject({ status: "cancelled", usage: { knownTokens: 12, incomplete: false, inFlightAttempts: 0 } });
     await projector.apply({ ...report, sequence: 2 });
@@ -174,7 +182,7 @@ describe("DaemonAgentEventProjector", () => {
   });
 
   it("persists each reused Child Run's immediate parent and Goal binding, including pending and replay paths", async () => {
-    const { store, goal, projector, started } = goalProjector();
+    const { store, goal, projector, started, gate } = goalProjector();
     await projector.apply(started("C1", "child", "P1"));
     expect(store.runs.getRun("C1")?.metadata).toMatchObject({ parentRunId: "P1", goalId: goal.id, goalObjectiveVersion: 1 });
     const second = started("C2", "child", "P2");
@@ -190,7 +198,7 @@ describe("DaemonAgentEventProjector", () => {
   });
 
   it.each(["paused", "edited"])("rejects queued children before execution when the Goal was %s", async (change) => {
-    const { store, goal, projector, started } = goalProjector();
+    const { store, goal, projector, started, gate } = goalProjector();
     const pending = started("C1", "child", "P1");
     store.goals.updateGoal(goal.id, { expectedRevision: goal.revision,
       ...(change === "paused" ? { status: "paused" as const } : { objective: "new objective" }) });
@@ -1930,4 +1938,8 @@ function event(
       ...context,
     },
   } as AgentEvent;
+}
+
+function attemptScope(context: { sessionId: string; runId: string }) {
+  return { agentId: context.sessionId, inputId: `input-${context.runId}`, traceId: "test", cwd: "/fixture", signal: new AbortController().signal, ...context };
 }
