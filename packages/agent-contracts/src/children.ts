@@ -14,7 +14,13 @@ export interface AgentChildBudgetSnapshot extends AgentChildBudget {
 export type AgentChildBudgetDimension = "depth" | "activeChildren" | "totalChildren";
 
 /** A child was rejected before its environment or worktree was allocated. */
+const AGENT_CHILD_BUDGET_EXCEEDED_ERROR = Symbol.for("@vykor/agent-contracts/AgentChildBudgetExceededError");
 export class AgentChildBudgetExceededError extends Error {
+  private readonly [AGENT_CHILD_BUDGET_EXCEEDED_ERROR] = true;
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && AGENT_CHILD_BUDGET_EXCEEDED_ERROR in value && value[AGENT_CHILD_BUDGET_EXCEEDED_ERROR] === true;
+  }
+
   constructor(
     readonly dimension: AgentChildBudgetDimension,
     readonly limit: number,
@@ -103,7 +109,13 @@ export interface ChildActivitySnapshot {
 }
 
 /** Trusted marker on an aborted child Run signal; the run copies its kind onto the terminal event. */
+const CHILD_RUN_TERMINATION_ERROR = Symbol.for("@vykor/agent-contracts/ChildRunTerminationError");
 export class ChildRunTerminationError extends Error {
+  private readonly [CHILD_RUN_TERMINATION_ERROR] = true;
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && CHILD_RUN_TERMINATION_ERROR in value && value[CHILD_RUN_TERMINATION_ERROR] === true;
+  }
+
   constructor(
     readonly failureKind: Extract<ChildFailureKind, "timeout" | "user_cancelled" | "parent_interrupted">,
     message: string,
@@ -119,7 +131,13 @@ export interface AgentInputReceipt {
   runId: string;
 }
 
+const AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR = Symbol.for("@vykor/agent-contracts/AgentRunNotAcceptingInputError");
 export class AgentRunNotAcceptingInputError extends Error {
+  private readonly [AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR] = true;
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR in value && value[AGENT_RUN_NOT_ACCEPTING_INPUT_ERROR] === true;
+  }
+
   constructor(readonly runId: string) {
     super(`Run is not accepting input: ${runId}`);
     this.name = "AgentRunNotAcceptingInputError";

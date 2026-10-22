@@ -152,10 +152,10 @@ stateDiagram-v2
 |---|---|
 | A1-A5、E1-E5 | `packages/agent-runtime/src/node/runtime/agent.test.ts`, `sdk.test.ts`, `event-source.test.ts` |
 | C1-C6 | `packages/agent-runtime/src/node/runtime/child-agent.test.ts` |
-| D2、T1-T3 | `packages/server/src/application/control/__test__/daemon-control-service.test.ts`, `packages/server/src/http/__test__/http.test.ts` |
+| D2、T1-T3 | `packages/server/src/application/control/__test__/daemon-control-service.test.ts`, `tests/server-client/http.test.ts` |
 | D3-D5、P1-P5 | `packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`, `packages/server/src/application/session/__test__/session-run-executor.test.ts` |
 | D6 | `packages/server/src/application/agent/__test__/agent-pool.test.ts` |
-| D1、D7、restart | `packages/server/src/http/__test__/http.test.ts`, `packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts` |
+| D1、D7、restart | `tests/server-client/http.test.ts`, `packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts` |
 | P6-P7 | `packages/services/src/session-runtime/__test__/event-registry.test.ts` |
 | P8 | `packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`, `projection-settlement-recovery.test.ts` |
 

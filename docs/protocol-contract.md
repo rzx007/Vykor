@@ -148,4 +148,4 @@ id, seq, type, schemaVersion, optional sessionId, payload, createdAt
 | HTTP client 与重连 | `packages/client/src/transport/http-client.ts`、`packages/client/src/state/sync.ts` |
 | 共享 reducer | `packages/client/src/state/reducer.ts` |
 | 服务端 capabilities | `packages/server/src/http/routes/system.ts` |
-| HTTP 契约测试 | `packages/server/src/http/__test__/http.test.ts` |
+| HTTP 契约测试 | `tests/server-client/http.test.ts` |

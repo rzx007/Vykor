@@ -122,7 +122,7 @@ export class PluginAppResource {
     sourcePartId: string,
   ): Promise<{
     arguments: Record<string, unknown>;
-    result: import("@vykor/agent-contracts").McpCallResultData;
+    result: import("@vykor/protocol").McpCallResultData;
     dataError?: string;
   }> {
     return this.transport.request(path(source) + "/initial-result", {

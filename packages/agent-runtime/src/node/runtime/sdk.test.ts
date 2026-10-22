@@ -163,6 +163,8 @@ describe("programmatic agent SDK", () => {
     let runningWaitPayload: Record<string, any> | undefined;
     let readPayload: Record<string, any> | undefined;
     let finishedWaitPayload: Record<string, any> | undefined;
+    let readAttempt = 0;
+    let readDeadline = 0;
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
         if (!hasToolResult(params.messages, "stdin-terminal-open")) {
@@ -182,7 +184,7 @@ describe("programmatic agent SDK", () => {
         if (!hasToolResult(params.messages, "stdin-terminal-send")) {
           yield toolUse("stdin-terminal-send", "JobSend", {
             jobId,
-            data: "process.stdout.write('stdin-echo:' + 'hello')\n",
+            data: "setTimeout(() => process.stdout.write('stdin-echo:' + 'hello'), 500)\n",
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
           return;
@@ -195,14 +197,28 @@ describe("programmatic agent SDK", () => {
           yield { type: "complete" as const, stopReason: "tool_use" as const };
           return;
         }
-        if (!hasToolResult(params.messages, "stdin-terminal-read")) {
+        const readId = `stdin-terminal-read-${readAttempt}`;
+        if (!hasToolResult(params.messages, readId)) {
           runningWaitPayload = toolResultPayload(params.messages, "stdin-terminal-running-wait");
-          yield toolUse("stdin-terminal-read", "JobRead", { jobId });
+          readDeadline = Date.now() + 5_000;
+          yield toolUse(readId, "JobRead", { jobId });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
           return;
         }
         if (!hasToolResult(params.messages, "stdin-terminal-exit")) {
-          readPayload = toolResultPayload(params.messages, "stdin-terminal-read");
+          readPayload = toolResultPayload(params.messages, readId);
+          // A running JobWait only bounds the wait; it does not acknowledge that
+          // the REPL processed stdin. Read until its actual output arrives.
+          if (!JSON.stringify(readPayload).includes("stdin-echo:hello")) {
+            if (Date.now() >= readDeadline) {
+              expect(JSON.stringify(readPayload)).toContain("stdin-echo:hello");
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            readAttempt += 1;
+            yield toolUse(`stdin-terminal-read-${readAttempt}`, "JobRead", { jobId });
+            yield { type: "complete" as const, stopReason: "tool_use" as const };
+            return;
+          }
           yield toolUse("stdin-terminal-exit", "JobSend", {
             jobId,
             data: "process.exit(0)\n",
@@ -229,7 +245,7 @@ describe("programmatic agent SDK", () => {
         cwd,
         sessionId: "stdin-terminal-session",
         client,
-        settings: { ...testSettings(), maxTurns: 10 },
+        settings: { ...testSettings(), maxTurns: 30 },
       }),
       async (agent) => {
         await expect(agent.runMessage("exercise interactive stdin")).resolves.toMatchObject({

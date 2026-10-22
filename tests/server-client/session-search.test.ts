@@ -7,8 +7,8 @@ import type {
 import {
   SessionQueryService,
   type SessionQueryStore,
-} from "../session-query-service.js";
-import { createSessionRoutes } from "../../../http/routes/session.js";
+} from "../../packages/server/src/application/session/session-query-service.js";
+import { createSessionRoutes } from "../../packages/server/src/http/routes/session.js";
 import { VykorClient } from "@vykor/client";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 

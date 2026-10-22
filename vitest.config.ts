@@ -37,6 +37,8 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["src/**/*.test.ts"],
+    setupFiles: [resolve(__dirname, "tests/setup-isolated-host.ts")],
+    maxWorkers: 2,
     // 不少测试会 spawn 真实子进程（bash/grep/glob、task、swarm teammate 等），
     // 也有 zlib/CRC 压力归档、TypeScript 全量建程序这类重活。turbo 并行跑全量时
     // CPU 争抢会让这些用例慢数倍；5s 默认值、20s 都仍会在高负载下偶发超时

@@ -1,6 +1,6 @@
 # Session Runtime 存储架构
 
-> 状态：当前实现的权威存储说明。最后核对：2026-10-04。
+> 状态：当前实现的权威存储说明。最后核对：2026-10-22。
 
 ## 一句话说明
 
@@ -186,3 +186,9 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 ## 历史说明
 
 旧的 [Session 存储增强设计](./session-storage-design.md) 描述项目级 JSON snapshot，已经退场，只保留为历史记录。它不是当前 SQLite/Repository 架构的实现依据。
+
+## 存储与执行的依赖边界
+
+`database`、各记录域和 `session-runtime` 只持有存储、配置及协议数据。它们不能反向调用 Core、execution-node、Sandbox、Agent、PTY 或 Office/Memory 辅助服务；`scripts/architecture-policy.json` 通过导入图验证。附件图片/OCR 处理保留既有专用实现，不参与 Agent/PTY 组装。
+
+本地执行与 LSP 已归 `@vykor/execution-node`。Server 持有应用级 ExecutionRuntimeOwner 并在关闭时回收；Node/工具通过明确接口借用，不再从 services 入口发现执行宿主。Goal 的持久事务仍归 services，准入和结算编排在 Server GoalModelAttemptService；事件投影不能再写 Goal 用量。

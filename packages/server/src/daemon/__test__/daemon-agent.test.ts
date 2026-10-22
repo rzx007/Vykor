@@ -227,7 +227,12 @@ describe("createDaemonAgentLoader", () => {
       session,
       expect.objectContaining({ model: "default-model" }),
     );
-    expect(createAgent.mock.calls[0]![0].options.executionEnvironment).toBe(lease);
+    const options = createAgent.mock.calls[0]![0].options;
+    expect(options.executionEnvironment).toMatchObject({ environmentId: lease.environmentId });
+    expect(options.ownsExecutionEnvironment).toBe(true);
+    await options.executionEnvironment.release();
+    await options.executionEnvironment.release();
+    expect(lease.release).toHaveBeenCalledOnce();
   });
 
   it("releases an acquired environment when Agent creation fails", async () => {

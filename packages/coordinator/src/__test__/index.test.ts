@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  Coordinator,
   TeamRegistry,
   createTeamRegistry,
   narrowTeamPort,
@@ -10,17 +9,6 @@ import {
   isCoordinatorMode,
   COORDINATOR_SYSTEM_PROMPT,
 } from "../index.js";
-
-describe("Coordinator", () => {
-  it("stores config", () => {
-    const c = new Coordinator({
-      mode: "parallel",
-      agents: [{ name: "a", description: "test" }],
-    });
-    expect(c.getMode()).toBe("parallel");
-    expect(c.getAgents()).toHaveLength(1);
-  });
-});
 
 describe("TeamRegistry", () => {
   it("creates and lists teams", () => {

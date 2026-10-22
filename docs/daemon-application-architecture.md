@@ -496,3 +496,7 @@ GoalModelAttemptService 通过 Node 配置进入每次执行。Engine 先检查�
 维护路由只调用 createMaintenanceApplicationService 提供的业务方法；策略与用量文件由 maintenance-policy-repository 管理，备份、清理、扫描和用量统计继续使用既有实现。DaemonApplication 的具名工厂注入 Store、Control、ready 状态及关闭回调。重启先停止准入，再释放自己的维护 lease（本次独占凭证），最后等待应用关闭，避免等待自身。
 
 ProjectFactsService 负责事实脱敏、session/cwd 校验、工作区独占凭证和运行时回收。NoteApplicationService 负责便签写入前的就绪检查与冲突错误转换。路由只解析请求、调用用例和转换状态码，不接收具体 Repository 或读取 Store.path。
+
+## 收口后的依赖检查
+
+Server 不依赖 Client。包含真实 Client 的请求级联合测试放在 `tests/server-client`，由 `pnpm test:server-client` 运行，同时纳入根 test 和 check-types。HTTP 的 maintenance/facts/notes 上下文只声明应用用例，持久规则和资源关闭归应用层；Owner、ready 和工作区互斥沿用原入口。

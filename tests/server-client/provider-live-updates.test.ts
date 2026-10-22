@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSystemRoutes } from "./system.js";
-import { createAuthRoutes } from "./auth.js";
+import { createSystemRoutes } from "../../packages/server/src/http/routes/system.js";
+import { createAuthRoutes } from "../../packages/server/src/http/routes/auth.js";
 import { VykorClient } from "@vykor/client";
 
 function controls() {
@@ -34,7 +34,7 @@ describe("provider configuration during active runs", () => {
     });
     const auth = createAuthRoutes({ control, authService: {
       status: vi.fn(), logout: vi.fn(),
-      login: async () => { values = [...values, "builtin"]; return { ok: true }; },
+      login: async () => { values = [...values, "builtin"]; return { message: "ok" }; },
     } });
     const custom = routes.request("/providers/custom", { method: "POST", body: "{}" });
     await started;
@@ -95,7 +95,7 @@ describe("provider configuration during active runs", () => {
 
   it("updates a built-in provider key without interrupting current work", async () => {
     const control = controls();
-    const login = vi.fn(async () => ({ ok: true }));
+    const login = vi.fn(async () => ({ message: "ok" }));
     const routes = createAuthRoutes({
       control,
       authService: { status: vi.fn(), login, logout: vi.fn() },

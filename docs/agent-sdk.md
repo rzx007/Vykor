@@ -8,17 +8,18 @@
 
 ```text
 createDefaultNodeAgent(options)
-  -> VykorAgent
+  -> DefaultNodeAgent
      -> submitMessage / runMessage
      -> subscribe
-     -> history / model / compact / remember / usage / inspect
+     -> getHistory / setModel / compact / getUsage
+     -> host.memory / host.inspect / host.configuration / host.plugins
      -> children
      -> close
 ```
 
-`QueryEngine`、`RuntimeBuilder`、provider/tool/hook/MCP/sandbox 的组装是内部实现，不是应用入口。
+`QueryEngine` 的具体实现和 provider/tool/hook/MCP/sandbox 的组装属于内部；Node 通过 createDefaultNodeAgent 接入，Kernel 接收通用执行接口。
 
-发布包的 peerDependencies 标为 optional，是安装人体工程学；实现已 bundle，不要假设可以替换 `@vykor/core` / `@vykor/tools` 等 peer 实现。细节见 [Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)。
+发布包运行实现已 bundle；公开声明引用的内部包作为正式 dependencies 安装，不能用替换依赖的方式替换已经打包的实现。细节见 [Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)。
 
 ## 最小运行
 
@@ -297,7 +298,7 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 
 - 不提供通用 workflow graph runtime。
 - 不把 durable store 或 HTTP transport 抽象进 framework。
-- 不暴露 QueryEngine/RuntimeBuilder 作为第二套应用入口。
+- 不暴露 QueryEngine/Node 组装实现 作为第二套应用入口。
 - 不提供 session replacement runtime；切换 durable session 是应用行为。
 - 不为旧 runtime factory、host callback 或 projection adapter 保留兼容层。
 
@@ -306,3 +307,9 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 Node 宿主可通过 createDefaultNodeAgent 的 modelAttempts 选项安装 ModelAttemptGate；纯 Kernel 在 PreparedAgentRun.modelAttempts 中提供同一接口。beforeDispatch 在每次实际请求前完成，settle 在完成事件前保存用量；辅助压缩和有真实 Run 来源的记忆维护也使用该接口。无 Goal 的宿主可省略它。
 
 Server 的 GoalModelAttemptService 从持久 Run 核对 session、Goal 版本和预算。事件回放只更新展示，不做预算准入或 Goal 记账。准入后未发出记录 notDispatched，发出但缺可靠用量保留 unknown；结算失败不会重新调用 Provider。独立记忆和自动审查保留原有归属，不能伪造父 Run。
+
+## 发布与独立消费检查
+
+`pnpm --filter @vykor/agent-runtime test:pack` 在仓库外安装 tarball，用 TypeScript 消费 Node、Kernel、Workflow 和公共类型，再运行 fake Provider 的 root/child、事件、关闭以及跨 bundle 错误识别。它还实际启动 Native Tool 和默认 PTY/Job，不能用空导入替代。仅编译器来自测试工具链；Node 类型、产品声明及运行依赖都从临时安装目录解析，不跳过声明检查。
+
+构建保留 `default.metafile.json`、`kernel.metafile.json`。Kernel 检查源码输入和递归声明引用；默认入口仍需要 `sharp` 与 `node-pty`，不需要数据库驱动。`host-entry.mjs` 随包保留供 Native Tool 进程启动。

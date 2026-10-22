@@ -25,3 +25,6 @@ export * from "./plugin-apps.js";
 
 export * from "./json.js";
 export * from "./plugin-ui-history.js";
+
+// Canonical tool-result data shared with the HTTP client.
+export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts/tool-data";

@@ -1,6 +1,6 @@
 # Agent 核心包架构收敛实施计划
 
-> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 完成 P5。P0–P5 已完成并验证，P6 尚未开始；最新证据见 [P5 验证记录](../reviews/2026-10-22-agent-package-convergence-p5.md)。
+> 状态：当前实施计划；2026-10-21 基于 `bd63a584` 编写，2026-10-22 P0–P6 已完成并通过整体验收，P6 代码、配套文档和验收记录随本次提交交付，未推送；最新结果见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。
 > **For agentic workers:** 仅在用户要求开始实施后使用 executing-plans 按阶段执行。只有用户或适用指令明确授权时才使用 subagent-driven-development；本计划不要求自动启动子 Agent。
 
 **Goal:** 收敛 packages 的执行、宿主和持久化职责，使新增能力不再要求修改多个核心控制层，同时保持现有执行和数据语义。
@@ -13,7 +13,7 @@
 
 ## Global Constraints
 
-- 当前授权范围截至 P5：完成前述拆分、显式模型尝试准入与 Goal 记账，以及维护/事实/便签应用用例；P6 尚未启动。不发布、不部署、不重置用户数据。
+- 当前授权范围包含 P0–P6：完成职责拆分、显式模型准入与 Goal 记账、Server 用例，以及依赖/SDK/文档与整体验收。不发布、不部署、不重置用户数据。
 - 最终新增三个内部包：`@vykor/agent-contracts`、`@vykor/host-config`、`@vykor/execution-node`；其他职责先在现有包内分目录、子入口管理。
 - 保留会话排队、事务、可靠事件处理和子 Agent 生命周期；先移动职责和缩小接口，再整理大文件。
 - 每阶段形成可编译、可运行的完整切面，不提交只有新接口、实际调用仍走旧实现的空架构。
@@ -419,7 +419,7 @@ node scripts/architecture-boundaries.mjs
 
 **验收：** A06、B10；返回/错误和写入互斥与基线一致，路由中没有持久业务实现。
 
-**实际进度：** 2026-10-22 完成 T09、T10 / M24–M27。Goal 准入与记账由显式服务执行，投影只保存事实；主/辅助模型调用先准入再发出，结算错误不进入重试或压缩兜底。维护、事实和便签业务归应用服务，HTTP 只做接入。Core 438 项、services 575 项及 Server/Node 定向回归通过，类型 67/67、构建和打包安装通过；架构剩余 25 条均属于 P6。P4 已提交为 63c46b00，P5 尚未提交。验证细节见 [P5 记录](../reviews/2026-10-22-agent-package-convergence-p5.md)。
+**实际进度：** 2026-10-22 完成 T09、T10 / M24–M27。Goal 准入与记账由显式服务执行，投影只保存事实；主/辅助模型调用先准入再发出，结算错误不进入重试或压缩兜底。维护、事实和便签业务归应用服务，HTTP 只做接入。Core 438 项、services 575 项及 Server/Node 定向回归通过，类型 67/67、构建和打包安装通过；架构剩余 25 条均属于 P6。P4 已提交为 63c46b00，P5 已提交为 67c3aadb。验证细节见 [P5 记录](../reviews/2026-10-22-agent-package-convergence-p5.md)。
 
 ## 8. P6：依赖、SDK 和证据收口
 
@@ -431,12 +431,12 @@ node scripts/architecture-boundaries.mjs
 - 检查并按证据清理：core AppStateStore、coordinator 纯包装/全局注册、themes/terminal-node 等已经不再需要的依赖、swarm 的内部和发布用途；M28/M29。
 - 存储规则：services database/各 Repository/session-runtime 和宿主辅助子域的模块策略。
 
-- [ ] AST 扫描所有静态、类型、动态、再导出和跨包相对路径；逐项对照方案包矩阵和 Kernel/存储子模块规则。
-- [ ] 删除到期例外，不把它们改成长期允许边。P6 结束 `stageExceptions` 为空。
-- [ ] 对 AgentDefinition、工具数据、Settings、错误身份确认唯一规范来源；删除旧 core 配置出口、tools 宿主默认出口和旧 Node 文件转发。
-- [ ] 清理没有实际引用的 package.json 依赖；测试依赖单独声明，不能借 dev/peer 依赖隐藏反向边或循环。
-- [ ] 对 swarm/公开出口区分仓库内使用与已发布承诺：无发布/消费证据则保留独立用途并记录，不把“仓库内零引用”当作删除外部包的依据。swarm 不参加当前 Agent 执行链。
-- [ ] 保持 services 的 Office/Memory 子域可用，存储模块不可导入它们；本轮不再追加 Office/Memory 全面重写。
+- [x] AST 扫描所有静态、类型、动态、再导出和跨包相对路径；逐项对照方案包矩阵和 Kernel/存储子模块规则。
+- [x] 删除到期例外，不把它们改成长期允许边。P6 结束 `stageExceptions` 为空。
+- [x] 对 AgentDefinition、工具数据、Settings、错误身份确认唯一规范来源；删除旧 core 配置出口、tools 宿主默认出口和旧 Node 文件转发。
+- [x] 清理没有实际引用的 package.json 依赖；测试依赖单独声明，不能借 dev/peer 依赖隐藏反向边或循环。
+- [x] 对 swarm/公开出口区分仓库内使用与已发布承诺：无发布/消费证据则保留独立用途并记录，不把“仓库内零引用”当作删除外部包的依据。swarm 不参加当前 Agent 执行链。
+- [x] 保持 services 的 Office/Memory 子域可用，存储模块不可导入它们；本轮不再追加 Office/Memory 全面重写。
 
 ```powershell
 node --test scripts/architecture-boundaries.test.mjs
@@ -459,12 +459,12 @@ pnpm check:retired-ui
 
 **接口：** SDK root/Kernel 两入口保持正式路径；root 返回 DefaultNodeAgent，Kernel 返回精简 VykorAgent。独立消费者显式使用新接口，不依赖工作区源码或旧 core 导出。
 
-- [ ] esbuild 生成 Kernel/default 两份 metafile；检查 Kernel 源码输入和声明可达图，禁止 Node 组装/数据库/PTY/Goal/应用记录进入 Kernel。
-- [ ] 将新内部包加入现有声明/pack 闭包；保留 native tool host-entry 和默认入口依赖。逐项核实 better-sqlite3/sharp 真实可达性后才决定删除 SDK 依赖。
-- [ ] 用仓库外临时安装的 tarball 验证 fake Provider 的 root、child、事件、关闭和跨 bundle 错误身份；默认入口继续验证 Native Tool 和必要 PTY。
-- [ ] 更新 SDK 示例、CLI Workflow 文件操作、Node host API 和权威架构文档；删除旧 API 文案，不把历史方案改写成已实现记录。
-- [ ] 更新 contract-test-index，逐项映射 A01–A07/B01–B11 到具体测试和命令。
-- [ ] 运行以下最终检查，记录退出码、环境限制和失败处置。这里会重复覆盖部分阶段测试，仅最终整体收口执行一次；无新失败不再反复重跑。
+- [x] esbuild 生成 Kernel/default 两份 metafile；检查 Kernel 源码输入和声明可达图，禁止 Node 组装/数据库/PTY/Goal/应用记录进入 Kernel。
+- [x] 将新内部包加入现有声明/pack 闭包；保留 native tool host-entry 和默认入口依赖。逐项核实 better-sqlite3/sharp 真实可达性后才决定删除 SDK 依赖。
+- [x] 用仓库外临时安装的 tarball 验证 fake Provider 的 root、child、事件、关闭和跨 bundle 错误身份；默认入口继续验证 Native Tool 和必要 PTY。
+- [x] 更新 SDK 示例、CLI Workflow 文件操作、Node host API 和权威架构文档；删除旧 API 文案，不把历史方案改写成已实现记录。
+- [x] 更新 contract-test-index，逐项映射 A01–A07/B01–B11 到具体测试和命令。
+- [x] 运行以下最终检查，记录退出码、环境限制和失败处置。这里会重复覆盖部分阶段测试，仅最终整体收口执行一次；无新失败不再反复重跑。
 
 ```powershell
 pnpm check-types
@@ -476,6 +476,8 @@ pnpm check-docs
 ```
 
 **验收：** B11 和所有 A/B 条目；独立 SDK、Server、Client 和文档描述一致；不把“构建成功”替代模型/子 Agent/取消/权限等行为验收。
+
+**实际进度：** 2026-10-22 完成 T11、T12 / M28–M30，P0–P6 全部完成。阶段例外为 0，存储和 Protocol 子入口规则、旧 Kernel 路径检查已收紧；联合测试迁入 tests/server-client，旧 Coordinator 包装与无引用依赖已删除。SDK 严格独立消费、跨 bundle 错误、Native Tool/PTY 均通过；全量 pnpm test exit 0（68 个 workspace 任务及后续脚本/插件/执行/联合测试），类型 67/67 加联合/受影响包补验通过。完整 A/B 对应和失败处置见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。P5 已提交为 67c3aadb，P6 代码、文档和验收记录随本次提交交付，其他并行修改保留在工作区。
 
 ## 9. 验收证据矩阵
 

@@ -46,7 +46,7 @@ export function validateArchitecturePolicy(policy, schema) {
   if (new Set(ids).size !== ids.length) errors.push("Duplicate architecture module rule id");
   const directories = Object.values(policy.packages).map((item) => item.directory);
   if (new Set(directories).size !== directories.length) errors.push("Duplicate architecture package directory");
-  for (const [name, item] of Object.entries(policy.packages)) for (const dependency of item.allowed) {
+  for (const [name, item] of Object.entries(policy.packages)) for (const dependency of [...item.allowed, ...(item.allowedDeclarationOrigins ?? [])]) {
     if (!policy.packages[dependency]) errors.push(`${name}: unknown allowed package ${dependency}`);
   }
   for (const rule of policy.modules) if (!rule.fromFiles?.length && !rule.fromPaths?.length) errors.push(`${rule.id}: missing source selector`);
@@ -87,7 +87,9 @@ export function moduleViolations(input, policy) {
       message: `${fromFile}: ${id}: ${reason} (${input.specifier} -> ${identity})` });
   }
   const ownerRule = workspace(owner);
-  if (ownerRule && targetName && ownerName !== targetName && !ownerRule.allowed.includes(targetName)) {
+  // Canonical declarations re-exported by an allowed package do not create a direct dependency.
+  // The declaration origin still has its own explicit ceiling; arbitrary barrels cannot bypass allowed.
+  if (ownerRule && targetName && ownerName !== targetName && ![...ownerRule.allowed, ...(input.declarationOrigin ? ownerRule.allowedDeclarationOrigins ?? [] : [])].includes(targetName)) {
     add("package", ownerRule, `${ownerName} must not depend on ${targetName}`);
   }
   for (const rule of policy.modules) {
@@ -96,6 +98,7 @@ export function moduleViolations(input, policy) {
     if (targetName && targetName !== ownerName && rule.allowed && !rule.allowed.includes(targetName)) add(rule.id, rule, `module must not depend on ${targetName}`);
     if (resolvedFile && rule.allowed && !targetName && actualOwner !== owner) add(rule.id, rule, `source is outside the allowed packages: ${resolvedFile}`);
     if (resolvedFile && rule.forbidPaths?.some((path) => resolvedFile.startsWith(path))) add(rule.id, rule, `forbidden source ${resolvedFile}`);
+    if (resolvedFile && rule.allowTargetPaths && !rule.allowTargetPaths.some((path) => path.endsWith("/") ? resolvedFile.startsWith(path) : resolvedFile === path)) add(rule.id, rule, `source is outside the allowed contract entries: ${resolvedFile}`);
     if (resolvedFile && actualOwner === owner && rule.allowSelfPaths && !rule.allowSelfPaths.some((path) => path.endsWith("/") ? resolvedFile.startsWith(path) : resolvedFile === path)) add(rule.id, rule, `source is outside the module: ${resolvedFile}`);
     if (rule.forbidBuiltins && (input.specifier.startsWith("node:") || builtins.has(input.specifier))) add(rule.id, rule, "Node builtin is not allowed");
     if (rule.forbidSpecifiers?.some((pattern) => new RegExp(pattern).test(input.specifier))) add(rule.id, rule, "forbidden module specifier");
@@ -341,13 +344,13 @@ export function collectPolicyViolations(root, policy) {
         const input = { ...dependency, fromFile: normalize(relative(root, file)), resolvedFile: target && normalize(relative(root, target)) };
         add(input);
         if (target && sourceExtension.test(target)) {
-          const includeTypes = policy.modules.some((rule) => ["kernel", "route-storage"].includes(rule.id) && matchesFrom(rule, input.fromFile));
+          const includeTypes = policy.modules.some((rule) => ["kernel", "route-storage", "storage-hosts"].includes(rule.id) && matchesFrom(rule, input.fromFile));
           const declarations = new Map();
           for (const name of dependency.importedNames) for (const origin of origins(target, name, includeTypes)) {
             if (!declarations.has(origin.file)) declarations.set(origin.file, new Set());
             declarations.get(origin.file).add(origin.name);
           }
-          for (const [file, names] of declarations) add({ ...input, resolvedFile: normalize(relative(root, file)), importedNames: [...names] });
+          for (const [file, names] of declarations) add({ ...input, declarationOrigin: true, resolvedFile: normalize(relative(root, file)), importedNames: [...names] });
         }
       }
     }

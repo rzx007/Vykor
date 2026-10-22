@@ -157,6 +157,7 @@ async function startDaemonFixture(options: DaemonFixtureOptions = {}): Promise<D
   const token = "tui-sync-token";
   const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
   const serverModuleUrl = pathToFileURL(join(repoRoot, "packages/server/src/http/server.ts")).href;
+  const hostedFixtureUrl = pathToFileURL(join(repoRoot, "packages/server/test-helpers/hosted-agent.ts")).href;
   const scriptPath = join(dir, "daemon-fixture.mjs");
   let child: DaemonChild | undefined;
   let cleanupPromise: Promise<void> | undefined;
@@ -167,6 +168,7 @@ async function startDaemonFixture(options: DaemonFixtureOptions = {}): Promise<D
       scriptPath,
       options.scriptSource ?? `
 const { VykorHttpServer } = await import(${JSON.stringify(serverModuleUrl)});
+const { hostedAgentFixture } = await import(${JSON.stringify(hostedFixtureUrl)});
 const capabilities = Object.fromEntries([
   "terminal",
   "backgroundShell",
@@ -194,7 +196,7 @@ const server = new VykorHttpServer({
         context,
       });
     };
-    return {
+    return hostedAgentFixture({
       id: session.id,
       state: "idle",
       subscribe() { return () => {}; },
@@ -267,7 +269,7 @@ const server = new VykorHttpServer({
         };
       },
       async close() {},
-    };
+    });
   },
 });
 
@@ -293,6 +295,7 @@ console.log(JSON.stringify({ url: listen.url, token: ${JSON.stringify(token)} })
     const tsxLoaderUrl = pathToFileURL(resolveTsxLoader(repoRoot)).href;
     child = spawn("node", ["--import", tsxLoaderUrl, scriptPath], {
       cwd: repoRoot,
+      env: { ...process.env, VYKOR_CONFIG_DIR: join(dir, "config"), VYKOR_DATA_DIR: join(dir, "data") },
       stdio: ["ignore", "pipe", "pipe"],
     });
     options.onSpawn?.(child, dir);

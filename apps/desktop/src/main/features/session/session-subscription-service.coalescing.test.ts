@@ -21,8 +21,8 @@ import { OpenAICompatibleClient } from "../../../../../../packages/api/src/provi
 import { QueryEngine } from "../../../../../../packages/core/src/engine/query-engine"
 import { ToolRegistry } from "../../../../../../packages/core/src/engine/tool-registry"
 import { AgentSession } from "../../../../../../packages/core/src/agent-session"
-import { FrameworkAgentRun } from "../../../../../../packages/agent-runtime/src/framework-agent-run"
-import { AgentEventBus } from "../../../../../../packages/agent-runtime/src/event-source"
+import { FrameworkAgentRun } from "../../../../../../packages/agent-runtime/src/kernel/framework-agent-run"
+import { AgentEventBus } from "../../../../../../packages/agent-runtime/src/kernel/event-source"
 import { fileWriteTool } from "../../../../../../packages/tools/src/file/write"
 import { SessionStore } from "../../../../../../packages/services/src/session-runtime/store"
 import { DaemonAgentEventProjector } from "../../../../../../packages/server/src/application/agent/daemon-agent-event-projector"
@@ -673,7 +673,7 @@ describe("SessionSubscriptionService coalescing", () => {
         run = new FrameworkAgentRun({
           agentId: "agent", ids: { inputId: "input", runId: "run", traceId: "trace" },
           content: "Create the file", delivery: "queue", session: new AgentSession({ queryEngine: engine, sessionId: session.id }),
-          runtime: { queryEngine: engine } as never,
+          engine, preparation: { prepare: async () => ({ run: { tools: new Map(registry.getAll().map(tool => [tool.name, { definition: tool, invoke: tool.execute.bind(tool) }])) }, release() {} }) },
           eventBus: new AgentEventBus(async event => { actualEvents.push(event.type); await projector.apply(event) }),
           effects: {} as never, children: { cwd: directory, createController: () => ({}) } as never,
           onSettled() {},

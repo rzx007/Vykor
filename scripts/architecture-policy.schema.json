@@ -22,6 +22,7 @@
       "properties": {
         "directory": { "type": "string", "pattern": "^(packages|apps)/[a-z0-9-]+$" },
         "allowed": { "$ref": "#/$defs/list" },
+        "allowedDeclarationOrigins": { "$ref": "#/$defs/list" },
         "removeByPhase": { "$ref": "#/$defs/phase" },
         "migrationId": { "$ref": "#/$defs/migration" }
       }
@@ -35,6 +36,7 @@
         "fromPaths": { "$ref": "#/$defs/list" },
         "allowed": { "$ref": "#/$defs/list" },
         "allowSelfPaths": { "$ref": "#/$defs/list" },
+        "allowTargetPaths": { "$ref": "#/$defs/list" },
         "forbidPaths": { "$ref": "#/$defs/list" },
         "forbidSpecifiers": { "$ref": "#/$defs/list" },
         "forbidBuiltins": { "type": "boolean" },

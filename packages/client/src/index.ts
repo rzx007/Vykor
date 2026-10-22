@@ -201,7 +201,7 @@ export { getPluginAppToolPolicy } from "@vykor/protocol";
 export type { PluginAppToolPolicy, PluginAppToolDescriptor } from "@vykor/protocol";
 export type { PluginAppToolRequest, PluginAppConversationRequest, PluginAppActionResponse, PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppRecord, PluginAppSource, PluginAppRuntimeLease, PluginAppResponse } from "@vykor/protocol";
 export { PLUGIN_APP_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest } from "@vykor/protocol";
-export { parseMcpCallResultData } from "@vykor/agent-contracts";
+export { parseMcpCallResultData } from "@vykor/protocol";
 export { isPluginAppAdmissionRejection, type PluginAppAdmissionRejection } from "@vykor/protocol";
 
 export { readPluginUiInstance, readPluginUiAction, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, ProtocolValidationError } from "@vykor/protocol";

@@ -1,0 +1,160 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "paths": {
+      "@vykor/agent-contracts": [
+        "../../packages/agent-contracts/src/index.ts"
+      ],
+      "@vykor/agent-contracts/tool-data": [
+        "../../packages/agent-contracts/src/tool-data.ts"
+      ],
+      "@vykor/agent-runtime": [
+        "../../packages/agent-runtime/src/index.ts"
+      ],
+      "@vykor/api": [
+        "../../packages/api/src/index.ts"
+      ],
+      "@vykor/auth": [
+        "../../packages/auth/src/index.ts"
+      ],
+      "@vykor/channels": [
+        "../../packages/channels/src/index.ts"
+      ],
+      "@vykor/client": [
+        "../../packages/client/src/index.ts"
+      ],
+      "@vykor/commands": [
+        "../../packages/commands/src/index.ts"
+      ],
+      "@vykor/coordinator": [
+        "../../packages/coordinator/src/index.ts"
+      ],
+      "@vykor/coordinator/coordinator-mode": [
+        "../../packages/coordinator/src/coordinator-mode.ts"
+      ],
+      "@vykor/coordinator/definitions": [
+        "../../packages/coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../../packages/coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../../packages/coordinator/src/workflow/index.ts"
+      ],
+      "@vykor/core": [
+        "../../packages/core/src/index.ts"
+      ],
+      "@vykor/core/engine": [
+        "../../packages/core/src/engine/index.ts"
+      ],
+      "@vykor/core/context-budget": [
+        "../../packages/core/src/context-budget/index.ts"
+      ],
+      "@vykor/environment": [
+        "../../packages/environment/src/index.ts"
+      ],
+      "@vykor/execution-node": [
+        "../../packages/execution-node/src/index.ts"
+      ],
+      "@vykor/hooks": [
+        "../../packages/hooks/src/index.ts"
+      ],
+      "@vykor/host-config": [
+        "../../packages/host-config/src/index.ts"
+      ],
+      "@vykor/jobs": [
+        "../../packages/jobs/src/index.ts"
+      ],
+      "@vykor/mcp": [
+        "../../packages/mcp/src/index.ts"
+      ],
+      "@vykor/memory": [
+        "../../packages/memory/src/index.ts"
+      ],
+      "@vykor/output-styles": [
+        "../../packages/output-styles/src/index.ts"
+      ],
+      "@vykor/permissions": [
+        "../../packages/permissions/src/index.ts"
+      ],
+      "@vykor/personalization": [
+        "../../packages/personalization/src/index.ts"
+      ],
+      "@vykor/plugin-converters": [
+        "../../packages/plugin-converters/src/index.ts"
+      ],
+      "@vykor/plugin-sources": [
+        "../../packages/plugin-sources/src/index.ts"
+      ],
+      "@vykor/plugins": [
+        "../../packages/plugins/src/index.ts"
+      ],
+      "@vykor/plugins/sdk": [
+        "../../packages/plugins/src/sdk.ts"
+      ],
+      "@vykor/prompts": [
+        "../../packages/prompts/src/index.ts"
+      ],
+      "@vykor/protocol": [
+        "../../packages/protocol/src/index.ts"
+      ],
+      "@vykor/sandbox": [
+        "../../packages/sandbox/src/index.ts"
+      ],
+      "@vykor/server": [
+        "../../packages/server/src/index.ts"
+      ],
+      "@vykor/server/daemon-host": [
+        "../../packages/server/src/daemon-host/index.ts"
+      ],
+      "@vykor/services": [
+        "../../packages/services/src/index.ts"
+      ],
+      "@vykor/services/memory-extract": [
+        "../../packages/services/src/memory-extract.ts"
+      ],
+      "@vykor/services/workflows": [
+        "../../packages/services/src/workflows/index.ts"
+      ],
+      "@vykor/skills": [
+        "../../packages/skills/src/index.ts"
+      ],
+      "@vykor/swarm": [
+        "../../packages/swarm/src/index.ts"
+      ],
+      "@vykor/terminal": [
+        "../../packages/terminal/src/index.ts"
+      ],
+      "@vykor/terminal-node": [
+        "../../packages/terminal-node/src/index.ts"
+      ],
+      "@vykor/themes": [
+        "../../packages/themes/src/index.ts"
+      ],
+      "@vykor/tools": [
+        "../../packages/tools/src/index.ts"
+      ],
+      "@vykor/agent-runtime/kernel": [
+        "../../packages/agent-runtime/src/kernel-entry.ts"
+      ],
+      "@vykor/agent-runtime/node/workflow": [
+        "../../packages/agent-runtime/src/workflow-entry.ts"
+      ],
+      "@shared/*": [
+        "../../apps/desktop/src/shared/*"
+      ]
+    }
+  },
+  "include": [
+    "*.test.ts"
+  ]
+}

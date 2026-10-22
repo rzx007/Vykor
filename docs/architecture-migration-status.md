@@ -1,6 +1,6 @@
 # 架构重构收口与当前边界
 
-> 状态：当前收口记录。2026-09-17 核对 Stage 0–8 已全部完成；本文报告最终结果，不再作为迁移看板。
+> 状态：当前收口记录。2026-10-22 核对 Stage 0–8 与 Agent P0–P6 收口；本文报告最终结果，不再作为迁移看板。
 
 ## 如何使用本文
 
@@ -54,8 +54,8 @@
 
 ## 当前协议与数据基线
 
-- HTTP 协议版本是 `4`，请求头是 `x-vykor-protocol-version`。
-- `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 4 的版本。
+- HTTP 协议版本是 `5`，请求头是 `x-vykor-protocol-version`。
+- `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 5 的版本。
 - SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
 - 每次打开都应用迁移链（基线 + 增量）；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
 - Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@vykor/plugin-converters` 显式转换。
@@ -99,3 +99,9 @@ OpenAI-compatible Provider、外部插件导入、平台 shell 选择、可靠�
 代码收口完成不等于本机数据已经删除。开发数据库、插件、Skill、凭据或其他本机数据只能按 [开发数据重置手册](./development-data-reset.md) 逐项预检、停进程、解析最终路径并获得授权后处理。
 
 重构完成本身不构成删除真实数据的授权；是否重置数据也不影响 Stage 0–8 的代码完成状态。
+
+## Agent 包收敛（P0–P6）
+
+公共执行数据归 agent-contracts，本机配置归 host-config，本地执行/LSP 归 execution-node；Core 只负责历史和执行循环，Kernel 管 Run/Child，Node 创建默认能力并持有资源。Coordinator 保留定义解析、实例 TeamRegistry 和纯 Workflow 调度；WorkflowHost 位于 Node，文件/SQLite 仓库由宿主注入。Server 通过 HostedAgent 使用执行与宿主接口，显式执行 Goal 准入/记账和管理用例。
+
+阶段例外清零；未使用的 Coordinator 配置包装与依赖被删除。Swarm 保留独立用途，无仓库消费或发布证据不足以删公开包。SDK 安装包含声明依赖，独立消费者覆盖 Node/Kernel/Workflow、事件、子运行、关闭、错误身份及 Native Tool/PTY。具体退出码和验收矩阵见 [P6 收口记录](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)。

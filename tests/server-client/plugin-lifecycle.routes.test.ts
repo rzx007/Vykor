@@ -5,18 +5,18 @@ import {
   discoverInstalledNativePlugins, readInstalledPluginStore, verifyInstalledNativePlugin,
 } from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
-import { VykorClient } from "../../../../client/src/transport/http-client.js";
-import { dispatchSessionCommand } from "../../../../client/src/commands/session-commands.js";
-import { createInitialClientState } from "../../../../client/src/state/reducer.js";
-import type { ReloadPluginsResponse } from "../../../../client/src/types/index.js";
+import { VykorClient } from "../../packages/client/src/transport/http-client.js";
+import { dispatchSessionCommand } from "../../packages/client/src/commands/session-commands.js";
+import { createInitialClientState } from "../../packages/client/src/state/reducer.js";
+import type { ReloadPluginsResponse } from "../../packages/client/src/types/index.js";
 import {
   callInspector, expectRuntimeStopped, pluginId, settings, toolName, withNativePluginFixture,
   type NativePluginFixture,
-} from "../../../../agent-runtime/test-helpers/native-plugin-authoring.js";
-import { createDefaultPluginService } from "./plugin-service.js";
-import { DaemonOperationGate } from "../control/daemon-operation-gate.js";
-import { createServiceRoutes, type ServiceRoutesContext } from "../../http/routes/service.js";
-import { createSystemRoutes } from "../../http/routes/system.js";
+} from "../../packages/agent-runtime/test-helpers/native-plugin-authoring.js";
+import { createDefaultPluginService } from "../../packages/server/src/application/default-services/plugin-service.js";
+import { DaemonOperationGate } from "../../packages/server/src/application/control/daemon-operation-gate.js";
+import { createServiceRoutes, type ServiceRoutesContext } from "../../packages/server/src/http/routes/service.js";
+import { createSystemRoutes } from "../../packages/server/src/http/routes/system.js";
 
 function lifecycleRoutes(fixture: NativePluginFixture) {
   const gate = new DaemonOperationGate();
@@ -46,6 +46,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
       closeAllRuntimes: async () => {},
       invalidateRuntimes: async () => {},
       runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this lifecycle test"); },
+      queryExecutionObservations: () => { throw new Error("Execution observations are outside this lifecycle test"); },
       inspectRun: () => undefined,
       listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this lifecycle test"); },
     },

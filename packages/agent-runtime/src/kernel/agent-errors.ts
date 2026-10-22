@@ -8,7 +8,13 @@ export type VykorAgentState =
   | "closing"
   | "closed";
 
+const AGENT_OPERATION_CONFLICT = Symbol.for("@vykor/agent-runtime/AgentOperationConflictError");
 export class AgentOperationConflictError extends Error {
+  private readonly [AGENT_OPERATION_CONFLICT] = true;
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && AGENT_OPERATION_CONFLICT in value && value[AGENT_OPERATION_CONFLICT] === true;
+  }
+
   constructor(
     readonly agentId: string,
     readonly state: VykorAgentState,

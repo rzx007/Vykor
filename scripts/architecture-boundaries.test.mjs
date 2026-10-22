@@ -568,3 +568,73 @@ test("portable code permits Vitest only in test files",()=>{
   assert.ok(checkModuleDependency({fromFile:prefix+"scope.ts",specifier:"vitest",importedNames:["it"]},strictPolicy()).length>0);
  }
 });
+
+
+test("P6 has no stage exceptions and Client directly depends only on Protocol", () => {
+  assert.equal(targetPolicy.currentPhase, "P6");
+  assert.deepEqual(targetPolicy.stageExceptions, []);
+  assert.deepEqual(targetPolicy.packages["@vykor/client"].allowed, ["@vykor/protocol"]);
+  const fromFile = "packages/client/src/resource.ts";
+  for (const input of [
+    { specifier: "@vykor/agent-contracts", importedNames: ["McpCallResultData"], typeOnly: true },
+    { specifier: "../../agent-contracts/src/tool-data.js", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["parseMcpCallResultData"] },
+    { specifier: "@vykor/server", importedNames: ["Server"] },
+  ]) assert.ok(checkModuleDependency({ fromFile, ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["parseMcpCallResultData"], declarationOrigin: true }, strictPolicy()), []);
+});
+
+test("Client may consume canonical data through Protocol but cannot import contracts through aliases", () => {
+  policyFixture({
+    "packages/client/package.json": JSON.stringify({ name: "@vykor/client" }),
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { ".": "./src/index.ts", "./tool-data": "./src/tool-data.ts" } }),
+    "packages/agent-contracts/src/index.ts": 'export * from "./tool-data.js";',
+    "packages/agent-contracts/src/tool-data.ts": "export interface McpCallResultData { content: unknown[] }; export function parseMcpCallResultData() {}",
+    "packages/protocol/src/index.ts": 'export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts/tool-data";',
+    "packages/client/src/index.ts": 'export { parseMcpCallResultData } from "@vykor/protocol"; import type { McpCallResultData } from "@vykor/protocol";',
+  }, (directory, write) => {
+    assert.deepEqual(collectPolicyViolations(directory, strictPolicy()), []);
+    write("packages/client/tsconfig.json", JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@hidden/contracts": ["../agent-contracts/src/index.ts"] } } }));
+    write("packages/client/src/index.ts", 'export { parseMcpCallResultData } from "@hidden/contracts";');
+    assert.ok(collectPolicyViolations(directory, strictPolicy()).some(item => item.fromFile.startsWith("packages/client/") && item.target.startsWith("package:")));
+  });
+});
+
+test("Protocol can only consume the canonical data entry, including relative paths", () => {
+  const fromFile = "packages/protocol/src/events.ts";
+  for (const input of [
+    { specifier: "@vykor/agent-contracts", importedNames: ["AgentRunHandle"], typeOnly: true },
+    { specifier: "../../agent-contracts/src/execution.js", resolvedFile: "packages/agent-contracts/src/execution.ts", importedNames: ["AgentRunScope"], typeOnly: true },
+  ]) assert.ok(checkModuleDependency({ fromFile, ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/agent-contracts/tool-data", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["McpCallResultData"], typeOnly: true }, strictPolicy()), []);
+});
+
+test("retired Kernel source paths cannot return as forwarding files", () => {
+  for (const name of ["framework-agent-run", "event-source", "agent", "kernel", "runtime-builder"]) {
+    assert.ok(checkModuleDependency({ fromFile: "apps/desktop/src/fixture.test.ts", specifier: `../../packages/agent-runtime/src/${name}` }, strictPolicy()).length > 0);
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-runtime/src/index.ts", specifier: "./kernel/agent.js", resolvedFile: "packages/agent-runtime/src/kernel/agent.ts" }, strictPolicy()), []);
+});
+
+test("storage repositories and session runtime reject hosts, process execution, and model SDKs", () => {
+  const rule = targetPolicy.modules.find(rule => rule.id === "storage-hosts");
+  for (const prefix of rule.fromPaths) {
+    const fromFile = prefix + "new-storage.ts";
+    for (const specifier of ["@vykor/core", "@vykor/execution-node", "@vykor/memory", "@vykor/sandbox", "@vykor/server", "@vykor/client", "@vykor/tools", "@vykor/agent-runtime", "node-pty", "openai", "node:child_process"]) {
+      assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Host"], typeOnly: true }, strictPolicy()).length > 0, fromFile + " -> " + specifier);
+    }
+    for (const resolvedFile of ["packages/services/src/office/index.ts", "packages/services/src/autodream/index.ts", "packages/services/src/memory-extract.ts", "packages/services/src/models/host.ts", "packages/services/src/terminal/pty.ts"]) {
+      assert.ok(checkModuleDependency({ fromFile, specifier: "../hidden.js", resolvedFile, importedNames: ["Host"] }, strictPolicy()).length > 0, fromFile + " -> " + resolvedFile);
+    }
+    assert.deepEqual(checkModuleDependency({ fromFile, specifier: "../database/index.js", resolvedFile: "packages/services/src/database/index.ts", importedNames: ["StorageContext"], typeOnly: true }, strictPolicy()), []);
+  }
+});
+
+test("storage declaration tracing rejects host types wrapped behind a local storage barrel", () => {
+  policyFixture({
+    "packages/services/src/office/host.ts": "export interface OfficeHost { execute(): void }",
+    "packages/services/src/database/bridge.ts": 'import type { OfficeHost } from "../office/host.js"; export interface Hidden { host: OfficeHost }',
+    "packages/services/src/session-runtime/new-store.ts": 'import type { Hidden } from "../database/bridge.js";',
+  }, directory => {
+    assert.ok(collectPolicyViolations(directory, strictPolicy()).some(item => item.fromFile.endsWith("session-runtime/new-store.ts") && item.target.includes("office/host.ts")));
+  });
+});

@@ -72,7 +72,7 @@ Kernel 的硬规则：
 - 不启动 Sandbox；
 - 不写 `process.stderr`；
 - 不创建 `LocalAgentJobHost`；
-- child 继承 root session tree 的同一份 capability overrides；Host 覆盖必须支持整棵树；
+- child 的通用限制由 Kernel 收紧；Node 为整棵树解析宿主能力，借用资源不能由 child 关闭；
 - 没有显式 child environment 时只沿用 cwd，不查 Git、不建 worktree。
 
 可传入 Host 对象的 override 是 `terminal`、`backgroundShell`、`childEnvironment`、`workflowRepository` 和 `schedules`；Terminal 与后台 Shell 都使用 `{ value, jobs }`，确保其 Job 可观察。`jobs` 与 `memory` 只能设为 `false`，分别禁用本地 Jobs 或受管 Memory，不能用 Host 对象替换。若设 `jobs: false`，还必须同时设 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`，因为这些能力会产生或依赖 Job。权限通过 `effects.requestPermission` 提供。Artifact 与更细的 Workspace 操作还没有稳定接口，因此本阶段没有添加两个只占名字、不能工作的空对象；以后出现真实调用方时再加入。
@@ -81,16 +81,17 @@ Kernel 的硬规则：
 
 ## 发布形式
 
-当前明确公开发布 `@vykor/agent-runtime`，其他 workspace 包仍按内部包处理。发布包提供两个路径：
+公开 SDK 入口是 `@vykor/agent-runtime`；内部包随声明依赖安装，不承诺独立可替换实现。发布包提供三个路径：
 
 ```text
 @vykor/agent-runtime          默认 Node 入口
-@vykor/agent-runtime/kernel   只包含 Kernel、最小 runtime builder 和显式能力类型
+@vykor/agent-runtime/kernel   Kernel、通用执行工厂和显式类型
+@vykor/agent-runtime/node/workflow  Node Workflow 宿主与仓库
 ```
 
-构建结果在 `dist`，`main`、`types` 和 `exports` 不再指向 TypeScript 源码。Kernel ESM bundle 不需要仓库源码就能运行；完整入口也会生成可直接加载的 ESM bundle。workspace 包只作为开发期和类型 peer，`pnpm pack` 会把发布清单中的 `workspace:*` 转成正常版本号。
+构建结果在 `dist`，`main`、`types` 和 `exports` 不再指向 TypeScript 源码。Kernel ESM bundle 不需要仓库源码就能运行；完整入口也会生成可直接加载的 ESM bundle。workspace 包作为公开声明所需的正式依赖，`pnpm pack` 会把发布清单中的 `workspace:*` 转成正常版本号。
 
-`package.json` 里这些 peer 标了 `optional: true`，且源码对它们是**值导入**（不是 `import type`）。这不表示第三方可以自行提供替代实现：发布构建会用 esbuild 把 api/auth/core/tools/mcp/plugins 等一并打进 `dist/`，运行时不依赖消费者再装一套可互换的 peer。`optional: true` 只是避免 monorepo / 局部安装时 peer 警告噪声；消费方仍应把 `@vykor/agent-runtime` 当作自带组装内核的意见化 SDK，而不是可热插拔的 facade。
+esbuild 把 api/auth/core/tools/mcp/plugins 等实现打进 `dist/`。消费者安装的内部依赖用于公开声明，不用于替换 bundle 内的实现。默认入口保留 sharp、node-pty 与 Native Tool host-entry，数据库驱动不在执行闭包中。
 
 `pnpm run test:pack` 每次都会：
 
@@ -98,7 +99,9 @@ Kernel 的硬规则：
 2. 创建 npm tarball；
 3. 检查 tarball 的 manifest 不含 `workspace:`；
 4. 安装到仓库外的临时目录；
-5. 用 fake provider 跑完 root Agent、child Agent 和 close。
+5. 用 TypeScript 消费 Node/Kernel/Workflow 的公开声明；
+6. 用 fake Provider 跑 root/child、事件、幂等关闭、关闭后拒绝及跨 bundle 错误识别；
+7. 实际启动 Native Tool 和默认 PTY/Job。
 
 ## Framework 边界
 
@@ -194,3 +197,9 @@ pullFollowUps / wakeCount / mergeWake
 ```
 
 P5 中，Server 通过 GoalModelAttemptService 在实际模型请求前准入、完成事实发布前结算；Node 仅传递通用 gate，事件投影不写 Goal 账本。维护、事实和便签路由调用应用用例，文件位置、写入就绪检查与独占凭证留在应用层。
+
+## P6 长期边界
+
+架构门禁覆盖静态/类型/动态导入、再导出、别名和跨包相对路径，`stageExceptions` 必须为空。Client 直接依赖 Protocol；Server/Client 联合测试放在 `tests/server-client`，由根测试命令统一执行。存储模块（含 session-runtime）不能导入 Office/Memory 辅助宿主、模型、进程和 PTY。宿主辅助域仍保留原能力。
+
+AgentDefinition 的规范来源为 coordinator/definitions，工具数据与执行错误归 agent-contracts，Settings 归 host-config。旧 Core 配置、工具默认宿主与 Node 转发入口不保留。Swarm 保留独立文件协作用途，不接入当前 Run/Child 链路。

@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { VykorClient, syncEvents } from "../../../../client/src/index.js";
-import { SessionTranscriptProjection } from "../../application/session/transcript-projection.js";
-import { buildAgentTranscript } from "../../application/agent/agent-transcript.js";
-import { VykorHttpServer } from "../server.js";
+import { VykorClient, syncEvents } from "../../packages/client/src/index.js";
+import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript-projection.js";
+import { buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
+import { VykorHttpServer } from "../../packages/server/src/http/server.js";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
 // Fixed ASCII bodies; full-body counts distinguish previews from complete sends.
@@ -34,7 +34,7 @@ it("measures fixed long tool bodies at real HTTP snapshot, history, replay and o
       ["edit", "Edit", { file_path: "sample.ts", old_string: oldBody, new_string: newBody }, { content: [{ type: "text", text: "edited" }] }],
       ["shell", "Shell", { command: "fixture" }, { content: [{ type: "text", text: shellBody }], isError: true, failureKind: "command", executionState: "completed", recoveryHint: "inspect stderr", metadata: { outputResourceUri: "shell-output://fixture" } }],
     ] as const) {
-      projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { id, name, input } });
+      projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { type: "tool_use", id, name, input } });
       projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: id, result: result as any });
       server.store.conversations.upsertMessagePart({ id, sessionId: session.id, messageId: state.assistantMessageId!, type: "tool", metadata: { ordinaryStatusUpdate: true } });
     }

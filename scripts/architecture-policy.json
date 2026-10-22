@@ -1,7 +1,7 @@
 {
   "$schema": "./architecture-policy.schema.json",
   "version": 1,
-  "currentPhase": "P5",
+  "currentPhase": "P6",
   "packages": {
     "@vykor/agent-contracts": {
       "directory": "packages/agent-contracts",
@@ -236,11 +236,13 @@
     "@vykor/client": {
       "directory": "packages/client",
       "allowed": [
-        "@vykor/protocol",
-        "@vykor/agent-contracts"
+        "@vykor/protocol"
       ],
       "removeByPhase": "P6",
-      "migrationId": "M30"
+      "migrationId": "M30",
+      "allowedDeclarationOrigins": [
+        "@vykor/agent-contracts"
+      ]
     },
     "@vykor/plugins": {
       "directory": "packages/plugins",
@@ -456,7 +458,12 @@
         "packages/services/src/workflows/",
         "packages/services/src/attachments/",
         "packages/services/src/plugin-apps/",
-        "packages/services/src/notes/"
+        "packages/services/src/notes/",
+        "packages/services/src/session-runtime/",
+        "packages/services/src/projects/",
+        "packages/services/src/schedules/",
+        "packages/services/src/channels/",
+        "packages/services/src/token-estimation/"
       ],
       "allowed": [
         "@vykor/agent-contracts",
@@ -470,8 +477,29 @@
         "packages/services/src/autodream/",
         "packages/services/src/memory-extract.ts"
       ],
-      "removeByPhase": "P2",
-      "migrationId": "M05"
+      "removeByPhase": "P6",
+      "migrationId": "M30",
+      "allowSelfPaths": [
+        "packages/services/src/database/",
+        "packages/services/src/sessions/",
+        "packages/services/src/conversations/",
+        "packages/services/src/runs/",
+        "packages/services/src/goals/",
+        "packages/services/src/permissions/",
+        "packages/services/src/workflows/",
+        "packages/services/src/attachments/",
+        "packages/services/src/plugin-apps/",
+        "packages/services/src/notes/",
+        "packages/services/src/session-runtime/",
+        "packages/services/src/projects/",
+        "packages/services/src/schedules/",
+        "packages/services/src/channels/",
+        "packages/services/src/token-estimation/"
+      ],
+      "forbidSpecifiers": [
+        "^(?:node:)?(?:child_process|net|http|https)(?:/|$)",
+        "^(?:node-pty|@anthropic-ai/sdk|openai)$"
+      ]
     },
     {
       "id": "workflow-pure",
@@ -615,183 +643,44 @@
       ],
       "removeByPhase": "P3",
       "migrationId": "M14"
-    }
-  ],
-  "stageExceptions": [
+    },
     {
-      "fromFile": "packages/server/src/application/__test__/model-retry-flow.test.ts",
-      "target": "package:packages/client/src/index.ts#applyEvents,createInitialClientState,selectVisibleSessionMessagesWithParts",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
+      "id": "protocol-data-only",
+      "fromPaths": [
+        "packages/protocol/src/"
+      ],
+      "targetPackages": [
+        "@vykor/agent-contracts"
+      ],
+      "allowTargetPaths": [
+        "packages/agent-contracts/src/tool-data.ts"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/agent-contracts(?:/(?!tool-data$).*)?$"
+      ],
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
     {
-      "fromFile": "packages/server/src/application/__test__/model-retry-flow.test.ts",
-      "target": "package:packages/client/src/state/reducer.ts#applyEvents,createInitialClientState",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/__test__/model-retry-flow.test.ts",
-      "target": "package:packages/client/src/state/selectors.ts#selectVisibleSessionMessagesWithParts",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/agent/__test__/tool-progress-projection.test.ts",
-      "target": "package:packages/client/src/index.ts#applyEvents,createInitialClientState,syncEvents",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/agent/__test__/tool-progress-projection.test.ts",
-      "target": "package:packages/client/src/state/reducer.ts#applyEvents,createInitialClientState",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/agent/__test__/tool-progress-projection.test.ts",
-      "target": "package:packages/client/src/state/sync.ts#syncEvents",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/session/__test__/menu-rejection-cleanup.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/session/__test__/menu-rejection-cleanup.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/session/__test__/session-search.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/session/__test__/session-search.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/http.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/http.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/plugin-app-collaboration.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/plugin-app-collaboration.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/session-part-summary.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient,syncEvents",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/session-part-summary.test.ts",
-      "target": "package:packages/client/src/state/sync.ts#syncEvents",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/session-part-summary.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/session-storage.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/__test__/session-storage.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
-      "target": "package:packages/client/src/commands/session-commands.ts#dispatchSessionCommand",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
-      "target": "package:packages/client/src/state/reducer.ts#createInitialClientState",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/application/default-services/plugin-lifecycle.routes.test.ts",
-      "target": "package:packages/client/src/types/index.ts#ReloadPluginsResponse:type",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/provider-live-updates.test.ts",
-      "target": "package:packages/client/src/index.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
-      "removeByPhase": "P6",
-      "migrationId": "M30"
-    },
-    {
-      "fromFile": "packages/server/src/http/routes/provider-live-updates.test.ts",
-      "target": "package:packages/client/src/transport/http-client.ts#VykorClient",
-      "reason": "Existing at bd63a584; @vykor/server must not depend on @vykor/client",
+      "id": "retired-kernel-paths",
+      "fromPaths": [
+        "packages/",
+        "apps/",
+        "tests/"
+      ],
+      "forbidSpecifiers": [
+        "(?:^|/)agent-runtime/src/(?:framework-agent-run|event-source|agent|kernel|runtime-builder)(?:\\.[cm]?[jt]sx?)?$"
+      ],
+      "forbidPaths": [
+        "packages/agent-runtime/src/framework-agent-run.ts",
+        "packages/agent-runtime/src/event-source.ts",
+        "packages/agent-runtime/src/agent.ts",
+        "packages/agent-runtime/src/kernel.ts",
+        "packages/agent-runtime/src/runtime-builder.ts"
+      ],
       "removeByPhase": "P6",
       "migrationId": "M30"
     }
-  ]
+  ],
+  "stageExceptions": []
 }

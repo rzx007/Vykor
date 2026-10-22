@@ -1,6 +1,6 @@
 # Vykor 架构总览
 
-> 状态：当前实现的权威鸟瞰。最后核对：2026-09-17。
+> 状态：当前实现的权威鸟瞰。最后核对：2026-10-22。
 
 ## 一句话说明
 
@@ -79,13 +79,13 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 ```text
 1. 产品调用 client.sessions.admitPrompt(sessionId, input)
-2. Client 在首个业务请求前确认协议版本 4
+2. Client 在首个业务请求前确认协议版本 5
 3. POST /sessions/:id/prompts 进入 SessionInteractionService
 4. SessionOperationRunner 串行该 session，等待 ready 并取得 shared lease
 5. RunAdmissionService 在一个 Transaction 中保存 Input 和 pending Run
 6. Session lane 把 Run 交给 SessionRunExecutor
 7. AgentPool 取得或创建该 session 的 VykorAgent
-8. Agent Runtime 执行模型和 Tool，持续发出 AgentEvent
+8. Node 准备本轮捕获工具；Kernel 调 Core，每次模型请求先经 GoalModelAttemptService 准入，结束先结算再发布 AgentEvent
 9. DaemonAgentEventProjector 将事件写入 Repository/Transaction
 10. 已提交事件经 SSE 返回，Client reducer 合并到 snapshot
 11. terminal projection 完成后，Run Handle 才把最终结果交回应用层
@@ -108,8 +108,12 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 | 包或目录 | 当前定位 |
 | --- | --- |
 | `@vykor/protocol` | 跨进程请求、响应、事件、公共 DTO、错误码和协议版本 |
-| `@vykor/services` | SQLite Repository/Transaction、Memory 和 Node 本地持久服务 |
-| `@vykor/agent-runtime` | 可独立嵌入的 Agent Kernel、Run/Child handle 和事件/effect 契约 |
+| `@vykor/services` | SQLite Repository/Transaction；Office/Memory 辅助子域与存储模块隔离 |
+| `@vykor/agent-contracts` | 通用消息、工具数据、执行契约和错误；只类型引用 environment |
+| `@vykor/host-config` | 本机配置、路径、校验和原子保存 |
+| `@vykor/execution-node` | 本地进程、输出捕获、执行观察记录和 LSP |
+| `@vykor/core` | 唯一历史、模型重试/压缩、工具检查与执行 |
+| `@vykor/agent-runtime` | Kernel 运行 Run/Child；Node 负责默认能力和资源生命周期 |
 | `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
 | `@vykor/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
 | `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |

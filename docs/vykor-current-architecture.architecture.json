@@ -6,31 +6,52 @@
     "locale": "zh-CN",
     "output": "docs/vykor-current-architecture.html",
     "quality_profile": "showcase",
-    "repository": {
-      "url": "https://github.com/rzx007/Vykor.git",
-      "revision": "85d51b0eb2f2dff1a4a30bad44799271f7c8fd27"
-    },
-    "viewBox": [1320, 680],
+    "viewBox": [
+      1320,
+      680
+    ],
     "views": [
       {
         "id": "request-path",
         "label": "请求主链路",
-        "focus": ["surfaces", "client", "http", "daemon", "runtime", "provider"],
+        "focus": [
+          "surfaces",
+          "client",
+          "http",
+          "daemon",
+          "runtime",
+          "provider"
+        ],
         "note": "产品入口提交输入，经 HTTP/SSE client 到 daemon，再进入 Agent Runtime。"
       },
       {
         "id": "durable-state",
         "label": "持久状态",
-        "focus": ["daemon", "store", "workflow", "client"],
+        "focus": [
+          "daemon",
+          "store",
+          "workflow",
+          "client"
+        ],
         "note": "Session、Run、消息、权限和 Workflow 都由 daemon/store 统一持久化。"
       },
       {
         "id": "execution-capabilities",
         "label": "执行能力",
-        "focus": ["runtime", "query", "capabilities", "extensions", "provider"],
-        "note": "Runtime 组织 QueryEngine，并注入 Provider、工具、MCP、Sandbox、Terminal、插件和 Skill。"
+        "focus": [
+          "runtime",
+          "query",
+          "capabilities",
+          "extensions",
+          "provider"
+        ],
+        "note": "Node 组装宿主能力；Kernel 经通用契约调用 Core，引擎每次请求先经过 Server 准入与结算。"
       }
-    ]
+    ],
+    "repository": {
+      "url": "https://github.com/rzx007/Vykor.git",
+      "revision": "67c3aadb872bad86de9a50bf637c6ab1378084b2"
+    }
   },
   "components": [
     {
@@ -39,11 +60,25 @@
       "label": "产品入口",
       "sublabel": "CLI / TUI / Desktop",
       "tag": "apps/*",
-      "pos": [40, 270],
-      "size": [168, 76],
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        168,
+        76
+      ],
       "sources": [
-        { "path": "README.md", "line": 3, "label": "入口共用后端" },
-        { "path": "docs/architecture-overview.md", "line": 28, "label": "产品入口职责" }
+        {
+          "path": "README.md",
+          "line": 3,
+          "label": "入口共用后端"
+        },
+        {
+          "path": "docs/architecture-overview.md",
+          "line": 28,
+          "label": "产品入口职责"
+        }
       ]
     },
     {
@@ -52,11 +87,25 @@
       "label": "@vykor/client",
       "sublabel": "snapshot + SSE reducer",
       "tag": "packages/client",
-      "pos": [250, 270],
-      "size": [164, 76],
+      "pos": [
+        250,
+        270
+      ],
+      "size": [
+        164,
+        76
+      ],
       "sources": [
-        { "path": "docs/architecture-overview.md", "line": 98, "label": "client 边界" },
-        { "path": "apps/frontend/src/hooks/useServerSync.ts", "line": 224, "label": "TUI attach" }
+        {
+          "path": "docs/architecture-overview.md",
+          "line": 98,
+          "label": "client 边界"
+        },
+        {
+          "path": "apps/frontend/src/hooks/useServerSync.ts",
+          "line": 224,
+          "label": "TUI attach"
+        }
       ]
     },
     {
@@ -65,10 +114,20 @@
       "label": "@vykor/protocol",
       "sublabel": "请求/响应/事件公共类型",
       "tag": "packages/protocol",
-      "pos": [250, 120],
-      "size": [164, 72],
+      "pos": [
+        250,
+        120
+      ],
+      "size": [
+        164,
+        72
+      ],
       "sources": [
-        { "path": "docs/architecture-overview.md", "line": 95, "label": "协议类型" }
+        {
+          "path": "docs/architecture-overview.md",
+          "line": 95,
+          "label": "协议类型"
+        }
       ]
     },
     {
@@ -77,24 +136,52 @@
       "label": "Daemon HTTP 层",
       "sublabel": "Routes / auth / SSE",
       "tag": "packages/server",
-      "pos": [460, 270],
-      "size": [166, 76],
+      "pos": [
+        460,
+        270
+      ],
+      "size": [
+        166,
+        76
+      ],
       "sources": [
-        { "path": "docs/daemon-application-architecture.md", "line": 63, "label": "transport 职责" },
-        { "path": "docs/daemon-application-architecture.md", "line": 100, "label": "routes 表" }
+        {
+          "path": "docs/daemon-application-architecture.md",
+          "line": 63,
+          "label": "transport 职责"
+        },
+        {
+          "path": "docs/daemon-application-architecture.md",
+          "line": 100,
+          "label": "routes 表"
+        }
       ]
     },
     {
       "id": "daemon",
       "type": "backend",
       "label": "DaemonApplication",
-      "sublabel": "Session / Run / Recovery",
+      "sublabel": "Goal 准入 / 应用用例",
       "tag": "Durable Application",
-      "pos": [670, 270],
-      "size": [188, 76],
+      "pos": [
+        670,
+        270
+      ],
+      "size": [
+        188,
+        76
+      ],
       "sources": [
-        { "path": "docs/architecture-overview.md", "line": 37, "label": "持久应用" },
-        { "path": "docs/daemon-application-architecture.md", "line": 45, "label": "请求链" }
+        {
+          "path": "packages/server/src/application/daemon-application.ts",
+          "line": 1,
+          "label": "应用组装"
+        },
+        {
+          "path": "packages/server/src/application/goals/goal-model-attempt-service.ts",
+          "line": 1,
+          "label": "Goal 准入和记账"
+        }
       ]
     },
     {
@@ -103,50 +190,106 @@
       "label": "SessionStore / SQLite",
       "sublabel": "Session / Run / Events",
       "tag": "packages/services",
-      "pos": [690, 480],
-      "size": [188, 76],
+      "pos": [
+        690,
+        480
+      ],
+      "size": [
+        188,
+        76
+      ],
       "sources": [
-        { "path": "docs/architecture-overview.md", "line": 79, "label": "状态负责人" },
-        { "path": "docs/daemon-application-architecture.md", "line": 260, "label": "持久化 checkpoint" }
+        {
+          "path": "docs/architecture-overview.md",
+          "line": 79,
+          "label": "状态负责人"
+        },
+        {
+          "path": "docs/daemon-application-architecture.md",
+          "line": 260,
+          "label": "持久化 checkpoint"
+        }
       ]
     },
     {
       "id": "workflow",
       "type": "messagebus",
       "label": "Workflow / Jobs",
-      "sublabel": "DAG 调度、重试、Job 控制",
-      "tag": "packages/coordinator + jobs",
-      "pos": [430, 480],
-      "size": [176, 72],
+      "sublabel": "Node 宿主 / 纯调度",
+      "tag": "coordinator + jobs",
+      "pos": [
+        430,
+        480
+      ],
+      "size": [
+        176,
+        72
+      ],
       "sources": [
-        { "path": "docs/daemon-application-architecture.md", "line": 380, "label": "Workflow 与 Jobs" },
-        { "path": "packages/coordinator/package.json", "line": 1, "label": "coordinator 包" }
+        {
+          "path": "packages/agent-runtime/src/node/workflow/workflow-host.ts",
+          "line": 1,
+          "label": "宿主关闭与保存"
+        },
+        {
+          "path": "packages/coordinator/src/workflow/index.ts",
+          "line": 1,
+          "label": "纯调度"
+        }
       ]
     },
     {
       "id": "runtime",
       "type": "backend",
       "label": "@vykor/agent-runtime",
-      "sublabel": "Agent / child agent",
-      "tag": "Runtime Kernel",
-      "pos": [900, 270],
-      "size": [192, 76],
+      "sublabel": "Kernel / Node host",
+      "tag": "agent-contracts 执行契约",
+      "pos": [
+        900,
+        270
+      ],
+      "size": [
+        192,
+        76
+      ],
       "sources": [
-        { "path": "docs/architecture-overview.md", "line": 49, "label": "Runtime Kernel" },
-        { "path": "packages/agent-runtime/src/agent.ts", "line": 94, "label": "Agent 接口" }
+        {
+          "path": "packages/agent-runtime/src/kernel/agent.ts",
+          "line": 1,
+          "label": "Kernel 执行入口"
+        },
+        {
+          "path": "packages/agent-runtime/src/node/runtime/agent.ts",
+          "line": 1,
+          "label": "Node 宿主"
+        }
       ]
     },
     {
       "id": "query",
       "type": "backend",
       "label": "QueryEngine / Core",
-      "sublabel": "模型轮次、工具调用、压缩",
+      "sublabel": "历史、模型尝试、工具检查",
       "tag": "packages/core",
-      "pos": [1125, 270],
-      "size": [170, 76],
+      "pos": [
+        1125,
+        270
+      ],
+      "size": [
+        170,
+        76
+      ],
       "sources": [
-        { "path": "docs/daemon-application-architecture.md", "line": 49, "label": "QueryEngine 链路" },
-        { "path": "packages/agent-runtime/src/kernel.ts", "line": 81, "label": "创建 QueryEngine" }
+        {
+          "path": "packages/core/src/engine/query-engine.ts",
+          "line": 1,
+          "label": "唯一历史所有者"
+        },
+        {
+          "path": "packages/core/src/engine/model-attempt-runner.ts",
+          "line": 1,
+          "label": "模型尝试"
+        }
       ]
     },
     {
@@ -155,37 +298,79 @@
       "label": "模型 Provider",
       "sublabel": "Anthropic / OpenAI / Codex",
       "tag": "packages/api",
-      "pos": [1125, 70],
-      "size": [170, 72],
+      "pos": [
+        1125,
+        70
+      ],
+      "size": [
+        170,
+        72
+      ],
       "sources": [
-        { "path": "README.md", "line": 670, "label": "技术栈" },
-        { "path": "packages/api/package.json", "line": 1, "label": "api 包" }
+        {
+          "path": "README.md",
+          "line": 670,
+          "label": "技术栈"
+        },
+        {
+          "path": "packages/api/package.json",
+          "line": 1,
+          "label": "api 包"
+        }
       ]
     },
     {
       "id": "capabilities",
       "type": "cloud",
       "label": "本机执行能力",
-      "sublabel": "Tools / MCP / Terminal",
-      "tag": "packages/tools+mcp+sandbox",
-      "pos": [1125, 450],
-      "size": [170, 78],
+      "sublabel": "进程 / LSP / Terminal",
+      "tag": "execution-node + Node",
+      "pos": [
+        1125,
+        450
+      ],
+      "size": [
+        170,
+        78
+      ],
       "sources": [
-        { "path": "README.md", "line": 3, "label": "能力总览" },
-        { "path": "packages/tools/README.md", "line": 63, "label": "工具执行管线" }
+        {
+          "path": "packages/execution-node/src/index.ts",
+          "line": 1,
+          "label": "执行与LSP"
+        },
+        {
+          "path": "packages/terminal-node/src/index.ts",
+          "line": 1,
+          "label": "终端宿主"
+        }
       ]
     },
     {
       "id": "extensions",
       "type": "cloud",
       "label": "可扩展能力",
-      "sublabel": "Plugins / Skills / Memory",
-      "tag": "packages/plugins 等",
-      "pos": [900, 70],
-      "size": [192, 76],
+      "sublabel": "配置 / 插件 / Memory",
+      "tag": "host-config / Node",
+      "pos": [
+        900,
+        70
+      ],
+      "size": [
+        192,
+        76
+      ],
       "sources": [
-        { "path": "README.md", "line": 3, "label": "功能概览" },
-        { "path": "packages/plugins/package.json", "line": 1, "label": "plugins 依赖" }
+        {
+          "path": "README.md",
+          "line": 3,
+          "label": "功能概览"
+        },
+        {
+          "path": "packages/plugins/package.json",
+          "line": 1,
+          "label": "plugins 依赖"
+        }
       ]
     }
   ],
@@ -193,19 +378,34 @@
     {
       "kind": "region",
       "label": "应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态",
-      "wraps": ["surfaces", "client", "protocol"],
+      "wraps": [
+        "surfaces",
+        "client",
+        "protocol"
+      ],
       "pad": 22
     },
     {
       "kind": "security-group",
       "label": "Daemon 持久应用层：唯一负责 Session/Run/Permission/Workflow 真相",
-      "wraps": ["http", "daemon", "store", "workflow"],
+      "wraps": [
+        "http",
+        "daemon",
+        "store",
+        "workflow"
+      ],
       "pad": 24
     },
     {
       "kind": "region",
-      "label": "Agent Runtime Kernel：负责一次正在执行的 Agent 循环",
-      "wraps": ["runtime", "query", "provider", "capabilities", "extensions"],
+      "label": "Node 组装资源；Kernel 与 Core 只运行通用执行",
+      "wraps": [
+        "runtime",
+        "query",
+        "provider",
+        "capabilities",
+        "extensions"
+      ],
       "pad": 24
     }
   ],
@@ -217,7 +417,10 @@
       "label": "提交 prompt / 展示 snapshot",
       "variant": "emphasis",
       "route": "straight",
-      "labelAt": [232, 356]
+      "labelAt": [
+        232,
+        356
+      ]
     },
     {
       "id": "protocol_to_client",
@@ -225,7 +428,10 @@
       "to": "client",
       "label": "typed contract",
       "variant": "security",
-      "labelAt": [332, 210]
+      "labelAt": [
+        332,
+        210
+      ]
     },
     {
       "id": "protocol_to_http",
@@ -233,7 +439,10 @@
       "to": "http",
       "label": "decode / validate",
       "variant": "security",
-      "labelAt": [445, 210]
+      "labelAt": [
+        445,
+        210
+      ]
     },
     {
       "id": "client_to_http",
@@ -242,7 +451,10 @@
       "label": "HTTP actions",
       "variant": "emphasis",
       "route": "straight",
-      "labelAt": [435, 356]
+      "labelAt": [
+        435,
+        356
+      ]
     },
     {
       "id": "http_to_daemon",
@@ -251,7 +463,10 @@
       "label": "调用应用服务",
       "variant": "emphasis",
       "route": "straight",
-      "labelAt": [648, 356]
+      "labelAt": [
+        648,
+        356
+      ]
     },
     {
       "id": "daemon_to_runtime",
@@ -259,7 +474,10 @@
       "to": "runtime",
       "label": "AgentPool acquire",
       "variant": "emphasis",
-      "labelAt": [872, 356]
+      "labelAt": [
+        872,
+        356
+      ]
     },
     {
       "id": "runtime_to_query",
@@ -268,7 +486,10 @@
       "label": "submitMessage",
       "variant": "emphasis",
       "route": "straight",
-      "labelAt": [1095, 356]
+      "labelAt": [
+        1095,
+        356
+      ]
     },
     {
       "id": "query_to_provider",
@@ -281,17 +502,23 @@
       "id": "query_to_capabilities",
       "from": "query",
       "to": "capabilities",
-      "label": "tool / MCP / terminal 调用",
+      "label": "已捕获工具调用",
       "variant": "dashed",
-      "labelAt": [1210, 420]
+      "labelAt": [
+        1210,
+        420
+      ]
     },
     {
       "id": "extensions_to_runtime",
       "from": "extensions",
       "to": "runtime",
-      "label": "装配 prompt / hooks / skills",
+      "label": "Node 创建和注入",
       "variant": "dashed",
-      "labelAt": [996, 170]
+      "labelAt": [
+        996,
+        170
+      ]
     },
     {
       "id": "daemon_to_store",
@@ -301,8 +528,20 @@
       "variant": "security",
       "fromSide": "bottom",
       "toSide": "top",
-      "via": [[764, 400], [784, 400]],
-      "labelAt": [835, 448]
+      "via": [
+        [
+          764,
+          400
+        ],
+        [
+          784,
+          400
+        ]
+      ],
+      "labelAt": [
+        835,
+        448
+      ]
     },
     {
       "id": "daemon_to_workflow",
@@ -312,8 +551,20 @@
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "top",
-      "via": [[764, 400], [518, 400]],
-      "labelAt": [612, 420]
+      "via": [
+        [
+          764,
+          400
+        ],
+        [
+          518,
+          400
+        ]
+      ],
+      "labelAt": [
+        612,
+        420
+      ]
     },
     {
       "id": "workflow_to_store",
@@ -321,18 +572,37 @@
       "to": "store",
       "label": "workflow_run / events",
       "variant": "security",
-      "labelAt": [660, 464]
+      "labelAt": [
+        660,
+        464
+      ]
     },
     {
       "id": "runtime_events_to_store",
       "from": "runtime",
       "to": "store",
-      "label": "AgentEvent 投影",
+      "label": "Server 事件投影",
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "right",
-      "via": [[996, 390], [905, 390], [905, 518]],
-      "labelAt": [955, 382]
+      "via": [
+        [
+          996,
+          390
+        ],
+        [
+          905,
+          390
+        ],
+        [
+          905,
+          518
+        ]
+      ],
+      "labelAt": [
+        955,
+        382
+      ]
     },
     {
       "id": "store_to_client",
@@ -342,8 +612,20 @@
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "bottom",
-      "via": [[784, 600], [332, 600]],
-      "labelAt": [540, 612]
+      "via": [
+        [
+          784,
+          600
+        ],
+        [
+          332,
+          600
+        ]
+      ],
+      "labelAt": [
+        540,
+        612
+      ]
     }
   ]
 }

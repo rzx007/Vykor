@@ -76,6 +76,48 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:packages/agent-contracts
+      '@vykor/agent-runtime':
+        specifier: workspace:*
+        version: link:packages/agent-runtime
+      '@vykor/api':
+        specifier: workspace:*
+        version: link:packages/api
+      '@vykor/client':
+        specifier: workspace:*
+        version: link:packages/client
+      '@vykor/coordinator':
+        specifier: workspace:*
+        version: link:packages/coordinator
+      '@vykor/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:packages/execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:packages/host-config
+      '@vykor/jobs':
+        specifier: workspace:*
+        version: link:packages/jobs
+      '@vykor/personalization':
+        specifier: workspace:*
+        version: link:packages/personalization
+      '@vykor/plugins':
+        specifier: workspace:*
+        version: link:packages/plugins
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:packages/protocol
+      '@vykor/server':
+        specifier: workspace:*
+        version: link:packages/server
+      '@vykor/services':
+        specifier: workspace:*
+        version: link:packages/services
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -548,34 +590,12 @@ importers:
 
   packages/agent-runtime:
     dependencies:
-      '@vykor/agent-contracts':
-        specifier: workspace:*
-        version: link:../agent-contracts
-      '@vykor/execution-node':
-        specifier: workspace:*
-        version: link:../execution-node
-      '@vykor/host-config':
-        specifier: workspace:*
-        version: link:../host-config
-      '@vykor/terminal-node':
-        specifier: workspace:*
-        version: link:../terminal-node
-      better-sqlite3:
-        specifier: ^13.0.2
-        version: 13.0.2
-      node-pty:
-        specifier: ^1.0.0
-        version: 1.1.0
-      sharp:
-        specifier: 0.34.4
-        version: 0.34.4
-    devDependencies:
-      '@anthropic-ai/sdk':
-        specifier: 'catalog:'
-        version: 0.40.1
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/api':
         specifier: workspace:*
         version: link:../api
@@ -591,9 +611,15 @@ importers:
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../execution-node
       '@vykor/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
@@ -624,9 +650,22 @@ importers:
       '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
+      '@vykor/terminal-node':
+        specifier: workspace:*
+        version: link:../terminal-node
       '@vykor/tools':
         specifier: workspace:*
         version: link:../tools
+      node-pty:
+        specifier: ^1.0.0
+        version: 1.1.0
+      sharp:
+        specifier: 0.34.4
+        version: 0.34.4
+    devDependencies:
+      '@anthropic-ai/sdk':
+        specifier: 'catalog:'
+        version: 0.40.1
       esbuild:
         specifier: ^0.27.7
         version: 0.27.7
@@ -708,9 +747,6 @@ importers:
 
   packages/client:
     dependencies:
-      '@vykor/agent-contracts':
-        specifier: workspace:*
-        version: link:../agent-contracts
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -932,9 +968,6 @@ importers:
       '@vykor/agent-contracts':
         specifier: workspace:*
         version: link:../agent-contracts
-      '@vykor/environment':
-        specifier: workspace:*
-        version: link:../environment
       '@vykor/host-config':
         specifier: workspace:*
         version: link:../host-config
@@ -970,9 +1003,6 @@ importers:
       '@vykor/plugins':
         specifier: workspace:*
         version: link:../plugins
-      zod:
-        specifier: 'catalog:'
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1214,9 +1244,6 @@ importers:
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@vykor/environment':
-        specifier: workspace:*
-        version: link:../environment
       '@vykor/execution-node':
         specifier: workspace:*
         version: link:../execution-node
@@ -1229,9 +1256,6 @@ importers:
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@vykor/sandbox':
-        specifier: workspace:*
-        version: link:../sandbox
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.2
@@ -1341,6 +1365,12 @@ importers:
 
   packages/tools:
     dependencies:
+      '@types/diff':
+        specifier: 'catalog:'
+        version: 7.0.2
+      '@types/picomatch':
+        specifier: 4.0.3
+        version: 4.0.3
       '@vykor/agent-contracts':
         specifier: workspace:*
         version: link:../agent-contracts
@@ -1378,15 +1408,9 @@ importers:
         specifier: 4.0.4
         version: 4.0.4
     devDependencies:
-      '@types/diff':
-        specifier: 'catalog:'
-        version: 7.0.2
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
-      '@types/picomatch':
-        specifier: 4.0.3
-        version: 4.0.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

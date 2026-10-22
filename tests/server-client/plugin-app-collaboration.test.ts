@@ -1,4 +1,4 @@
-import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory} from "../../packages/server/test-helpers/hosted-agent.js";
 import { expect, it, vi } from "vitest";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,11 +7,11 @@ import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
 import { VykorClient } from "@vykor/client";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
-import { installNotesAppFixture } from "../../../../agent-runtime/test-helpers/notes-app-fixture.js";
-import { VykorHttpServer } from "../server.js";
-import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
-import { createDefaultSettingsService } from "../../application/default-services/settings-service.js";
-import { createDefaultModelService } from "../../application/default-services/model-service.js";
+import { installNotesAppFixture } from "../../packages/agent-runtime/test-helpers/notes-app-fixture.js";
+import { VykorHttpServer } from "../../packages/server/src/http/server.js";
+import { createDefaultPluginService } from "../../packages/server/src/application/default-services/plugin-service.js";
+import { createDefaultSettingsService } from "../../packages/server/src/application/default-services/settings-service.js";
+import { createDefaultModelService } from "../../packages/server/src/application/default-services/model-service.js";
 
 it("real model origin, app-only policy, raw result privacy, shared invalidations and lease isolation", async () => {
   const root = mkdtempSync(join(tmpdir(), "notes-http-")); vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
@@ -37,8 +37,8 @@ it("real model origin, app-only policy, raw result privacy, shared invalidations
     const address = await server.listen({ port: 0 });
     const client = new VykorClient({ baseUrl: address.url, token: "secret" });
     const opened = await client.pluginApps.open(session.id, { pluginId: fixture.pluginId, surfaceId: "notes" });
-    expect(opened.tools.map(tool => tool.name)).toContain("save_note_draft");
-    expect(opened.tools.map(tool => tool.name)).not.toContain("read_note");
+    expect(opened.tools!.map(tool => tool.name)).toContain("save_note_draft");
+    expect(opened.tools!.map(tool => tool.name)).not.toContain("read_note");
     const submit = await server.application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "read note" }, { type: "capability", kind: "plugin", pluginId: fixture.pluginId, displayName: "Notes" }] });
     await server.application.runControl.waitForRuns([submit.run!.id]);
     const part = store.conversations.listMessageParts(session.id).find(part => part.toolUseId === "model-read")!;

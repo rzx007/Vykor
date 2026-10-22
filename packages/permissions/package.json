@@ -17,7 +17,6 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/environment": "workspace:*",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/host-config": "workspace:*"
   },

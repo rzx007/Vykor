@@ -242,3 +242,9 @@ daemon 在多客户端场景下还会额外加 session / cwd / 全局层面的�
 - 子 agent 递归共享同一棵「按 ID 查 handle」的目录，但**不共享** manager 的所有权（谁创建谁关闭）。
 - `AgentSession` 不再生成 ID、保存回调，或组装宿主环境。
 - 不存在对外的 daemon adapter、run host、或 child projection 公开 API。
+
+## 模型尝试与资源所有权
+
+QueryEngine 唯一持有消息历史；turn-context 冻结本轮请求，model-attempt-runner 执行单次模型请求，tool-execution-context 构造工具上下文。主生成、重试、收尾、压缩和有真实 Run 来源的记忆请求都先等待 ModelAttemptGate，结算完成后才发布 finished。准入或结算错误不当作网络错误重试。
+
+NodeRuntimeResources 创建或借用 ExecutionRuntimeOwner、插件/MCP、Jobs、Workflow 与子环境。创建者负责关闭共享实例，child 只释放自己的视图；每轮 prepare 返回 release，准备失败、Run 终态和 close 都要释放，release 幂等。Kernel 不创建本机能力。

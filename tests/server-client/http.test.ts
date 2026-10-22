@@ -1,4 +1,4 @@
-import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory} from "../../packages/server/test-helpers/hosted-agent.js";
 import {
   existsSync,
   mkdtempSync,
@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ModelCatalogService } from "@vykor/api";
-import { VykorClient } from "../../../../client/src/index.js";
+import { VykorClient } from "../../packages/client/src/index.js";
 
 import {
   createWorkflowPlan,
@@ -27,7 +27,7 @@ import type {
   AgentRememberResult,
   VykorAgent,
 } from "@vykor/agent-runtime";
-import type { CommandCatalogProvider } from "../../commands/commands.js";
+import type { CommandCatalogProvider } from "../../packages/server/src/commands/commands.js";
 import {
   ExecutionRuntimeOwner,
 } from "@vykor/execution-node";
@@ -39,15 +39,15 @@ import { saveFacts } from "@vykor/personalization";
 import type {
   CreateDaemonAgent,
   CreateDaemonAgentContext,
-} from "../../daemon/daemon-agent.js";
-import { VykorHttpServer, startVykorServer } from "../server.js";
-import { getDefaultSessionStorePath } from "../../daemon/paths.js";
+} from "../../packages/server/src/daemon/daemon-agent.js";
+import { VykorHttpServer, startVykorServer } from "../../packages/server/src/http/server.js";
+import { getDefaultSessionStorePath } from "../../packages/server/src/daemon/paths.js";
 import type {
   VykorServerOptions,
   VykorServerServices,
-} from "../server.js";
-import type { ObservabilityEvent } from "../../shared/observability.js";
-import { projectionSettlementInput } from "../../application/agent/projection-settlement-recovery.js";
+} from "../../packages/server/src/http/server.js";
+import type { ObservabilityEvent } from "../../packages/server/src/shared/observability.js";
+import { projectionSettlementInput } from "../../packages/server/src/application/agent/projection-settlement-recovery.js";
 
 const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
 // HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
@@ -81,7 +81,7 @@ interface TestAgentProgram {
   runPrompt(input: any, run: TestAgentRunContext): Promise<unknown>;
   close(): Promise<void>;
   children?: AgentChildDirectory;
-  inspect?(): AgentInspection;
+  inspect?(): Partial<AgentInspection>;
   compact?(): Promise<{
     messageCount: number;
     transcript: Array<{ role: string; parts: Array<Record<string, any>> }>;
@@ -106,9 +106,19 @@ interface TestAgentProgramFactory {
   createRuntime(context: CreateDaemonAgentContext): Promise<TestAgentProgram>;
 }
 
+type TestAgentRuntime = Pick<VykorAgent,
+  "id" | "state" | "children" | "subscribe" | "submitMessage" | "runMessage" |
+  "getHistory" | "loadHistory" | "clear" | "setCompactContextProvider" | "compact" | "getUsage" | "close"
+> & {
+  setModel(): void;
+  remember(): Promise<AgentRememberResult>;
+  getCapabilities(): AgentCapabilitySnapshot;
+  inspect(): Partial<AgentInspection>;
+};
+
 function adaptTestAgentFactory(
   factory: TestAgentProgramFactory,
-): CreateDaemonAgent {
+): (context: CreateDaemonAgentContext) => Promise<TestAgentRuntime> {
   return async (context) => {
     const program = await factory.createRuntime(context);
     let history: Message[] = [];
@@ -323,7 +333,7 @@ function adaptTestAgentFactory(
         activeHandle = handle;
         return handle;
       },
-      async runMessage(content, options) {
+      async runMessage(this: TestAgentRuntime, content, options) {
         return await this.submitMessage(content, options).result;
       },
       getHistory: () => [...history],
@@ -1496,6 +1506,7 @@ describe("VykorHttpServer", () => {
           }),
           send,
           interrupt: async () => {},
+          interruptRun: async () => false,
           close: async () => {},
         };
         return {
@@ -2712,6 +2723,8 @@ describe("VykorHttpServer", () => {
             name: "/pr",
             description: "Write a PR",
             kind: "template",
+            skillName: "pr",
+            path: "",
             source: "user",
           },
         ];
@@ -3171,6 +3184,7 @@ describe("VykorHttpServer", () => {
       },
       {
         contextService: {
+          async usage() { throw new Error("Context usage is outside this preview test"); },
           async preview() {
             return { report: "CONTEXT REPORT" };
           },
@@ -3314,9 +3328,9 @@ describe("VykorHttpServer", () => {
       active: false,
       source: "catalog" as const,
     }));
-    const { createSystemRoutes } = await import("../routes/system.js");
+    const { createSystemRoutes } = await import("../../packages/server/src/http/routes/system.js");
     const { ProviderMutationError } = await import(
-      "../../application/default-services/provider-service.js"
+      "../../packages/server/src/application/default-services/provider-service.js"
     );
     const routes = createSystemRoutes({
       providerService: {
@@ -3335,12 +3349,14 @@ describe("VykorHttpServer", () => {
           runs: { total: 0, byStatus: {} },
           tasks: { total: 0, byStatus: {} },
           permissions: { total: 0, byStatus: {} },
+          workflows: { total: 0, byStatus: {} },
           projectionSettlements: { total: 0, pending: 0, byStatus: {} },
           sseClientCount: 0,
           warmAgentCount: 0,
           coordinator: { activeRunCount: 0, queuedRunCount: 0 },
           metrics: { counters: {}, gauges: {}, histograms: {} },
         }),
+        queryExecutionObservations: () => { throw new Error("Execution observations are outside this provider test"); },
         inspectRun: () => undefined,
         listProjectionDiagnostics: () => ({
           settlements: [],
@@ -3866,6 +3882,15 @@ describe("VykorHttpServer", () => {
             return {
               plugins: [
                 {
+                  identity: { id: "demo", name: "demo", version: "1.0.0" },
+                  origin: "native",
+                  scope: "user",
+                  installation: "installed",
+                  activation: "active",
+                  runtimeStatus: { state: "loaded", message: "Loaded", action: "none" },
+                  inventory: { skills: 1 },
+                  permissions: { requested: [], approved: [], missing: [] },
+                  diagnostics: [],
                   name: "demo",
                   version: "1.0.0",
                   enabled: true,
@@ -5152,7 +5177,7 @@ describe("VykorHttpServer", () => {
       async ({ baseUrl, token, storePath, server }) => {
         const client = new VykorClient({ baseUrl, token, fetch });
         const execute = async (sessionId: string, content: string) => {
-          const admitted = await client.sessions.admitPrompt(sessionId, { content });
+          const admitted = await client.sessions.admitPrompt(sessionId, { items: [{ type: "text", text: content }] });
           expect(admitted).toMatchObject({
             input: { sessionId, content },
             run: { sessionId, inputId: admitted.input.id },

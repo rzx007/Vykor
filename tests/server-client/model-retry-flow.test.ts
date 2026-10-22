@@ -1,4 +1,4 @@
-import { GoalModelAttemptService } from "../goals/goal-model-attempt-service.js";
+import { GoalModelAttemptService } from "../../packages/server/src/application/goals/goal-model-attempt-service.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,12 +7,12 @@ import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentEvent, type StreamingMessageClient, type ToolDefinition } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
-import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../../../client/src/index.js";
-import { FrameworkAgentRun } from "../../../../agent-runtime/src/kernel/framework-agent-run.js";
-import { AgentEventBus } from "../../../../agent-runtime/src/kernel/event-source.js";
-import { DaemonAgentEventProjector } from "../agent/daemon-agent-event-projector.js";
-import { SessionTranscriptProjection } from "../session/transcript-projection.js";
-import { buildAgentTranscript } from "../agent/agent-transcript.js";
+import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../packages/client/src/index.js";
+import { FrameworkAgentRun } from "../../packages/agent-runtime/src/kernel/framework-agent-run.js";
+import { AgentEventBus } from "../../packages/agent-runtime/src/kernel/event-source.js";
+import { DaemonAgentEventProjector } from "../../packages/server/src/application/agent/daemon-agent-event-projector.js";
+import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript-projection.js";
+import { buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
 
 const cleanup: Array<() => void> = [];
 afterEach(() => { vi.useRealTimers(); for (const close of cleanup.splice(0).reverse()) close(); });

@@ -1,6 +1,5 @@
 export * from "./types.js";
 export * from "./system-prompt.js";
-export * from "./coordinator.js";
 export * from "./teams/index.js";
 export * from "./mode-state.js";
 export * from "./task-notification.js";

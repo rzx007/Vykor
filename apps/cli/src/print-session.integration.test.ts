@@ -14,6 +14,7 @@ import type {
 } from "@vykor/agent-runtime";
 
 import { runPrintSession } from "./print-session.js";
+import { hostedAgentFixture } from "../../../packages/server/test-helpers/hosted-agent.js";
 
 function captureWrite(stream: NodeJS.WriteStream): {
   chunks: string[];
@@ -153,7 +154,7 @@ function testAgent(
       }),
       async close() {},
     };
-    return agent;
+    return hostedAgentFixture(agent);
   };
 }
 

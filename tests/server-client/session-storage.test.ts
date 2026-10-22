@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { VykorClient } from "../../../../client/src/index.js";
-import { VykorHttpServer } from "../server.js";
+import { VykorClient } from "../../packages/client/src/index.js";
+import { VykorHttpServer } from "../../packages/server/src/http/server.js";
 
 it("passes storage through the client and HTTP creation/fork routes without changing ordinary forks", async () => {
   const directory = mkdtempSync(join(tmpdir(), "oh-session-storage-http-"));
