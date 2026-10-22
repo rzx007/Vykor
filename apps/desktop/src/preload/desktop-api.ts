@@ -526,6 +526,15 @@ export const desktopAPI = {
       invoke(IpcChannels.pluginConfirmArchive, input),
     cancelArchive: (input: IpcInvokeMap[typeof IpcChannels.pluginCancelArchive]["args"][0]) =>
       invoke(IpcChannels.pluginCancelArchive, input),
+    marketplaceCatalog: (input: IpcInvokeMap[typeof IpcChannels.marketplaceCatalog]["args"][0]) => invoke(IpcChannels.marketplaceCatalog, input),
+    marketplaceSources: (input: IpcInvokeMap[typeof IpcChannels.marketplaceSources]["args"][0]) => invoke(IpcChannels.marketplaceSources, input),
+    marketplaceAddSource: (input: IpcInvokeMap[typeof IpcChannels.marketplaceAddSource]["args"][0]) => invoke(IpcChannels.marketplaceAddSource, input),
+    marketplaceSetSourceEnabled: (input: IpcInvokeMap[typeof IpcChannels.marketplaceSetSourceEnabled]["args"][0]) => invoke(IpcChannels.marketplaceSetSourceEnabled, input),
+    marketplaceRemoveSource: (input: IpcInvokeMap[typeof IpcChannels.marketplaceRemoveSource]["args"][0]) => invoke(IpcChannels.marketplaceRemoveSource, input),
+    marketplacePreview: (input: IpcInvokeMap[typeof IpcChannels.marketplacePreview]["args"][0]) => invoke(IpcChannels.marketplacePreview, input),
+    marketplaceConfirm: (input: IpcInvokeMap[typeof IpcChannels.marketplaceConfirm]["args"][0]) => invoke(IpcChannels.marketplaceConfirm, input),
+    marketplaceCancel: (input: IpcInvokeMap[typeof IpcChannels.marketplaceCancel]["args"][0]) => invoke(IpcChannels.marketplaceCancel, input),
+    marketplaceOperation: (input: IpcInvokeMap[typeof IpcChannels.marketplaceOperation]["args"][0]) => invoke(IpcChannels.marketplaceOperation, input),
     importGit: (input: IpcInvokeMap[typeof IpcChannels.pluginImportGit]["args"][0]) =>
       invoke(IpcChannels.pluginImportGit, input),
     confirmGit: (input: IpcInvokeMap[typeof IpcChannels.pluginConfirmGit]["args"][0]) =>

@@ -744,6 +744,9 @@ importers:
 
   packages/client:
     dependencies:
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -1050,6 +1053,9 @@ importers:
 
   packages/plugin-sources:
     dependencies:
+      '@vykor/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
       tar:
         specifier: ^7.5.22
         version: 7.5.22

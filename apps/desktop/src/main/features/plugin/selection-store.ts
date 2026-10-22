@@ -4,6 +4,7 @@ export interface PluginArchiveSelection {
   archivePath: string
   archiveDigest: string
   pluginName: string
+  replacementRequired?: boolean
   requestedPermissions: string[]
   createdAt: number
   expiresAt: number
@@ -16,6 +17,7 @@ export interface PluginGitSelection {
   ref?: string
   sourceDigest: string
   pluginName: string
+  replacementRequired?: boolean
   requestedPermissions: string[]
   createdAt: number
   expiresAt: number

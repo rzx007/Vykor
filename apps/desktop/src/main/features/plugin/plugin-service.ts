@@ -1,3 +1,4 @@
+import { MarketplaceService } from "./marketplace-service"
 import { supportsBundledOfficePlugin } from "../../../shared/office-platform"
 import { randomUUID } from "node:crypto"
 import { extname, join, resolve } from "node:path"
@@ -37,6 +38,7 @@ export interface DesktopPluginServiceOptions {
 }
 
 export class DesktopPluginService {
+  readonly marketplace: MarketplaceService
   private readonly icons = new PluginIconLoader()
   private readonly chooseArchive: (sender: WebContents) => Promise<string | null>
   private readonly now: () => number
@@ -47,6 +49,7 @@ export class DesktopPluginService {
   private readonly gitSelections: PluginGitSelectionStore
 
   constructor(options: DesktopPluginServiceOptions = {}) {
+    this.marketplace = new MarketplaceService(() => this.daemonClient(), options.now ?? Date.now, () => this.refreshDaemonClient())
     this.chooseArchive = options.chooseArchive ?? pickPluginArchive
     this.now = options.now ?? Date.now
     this.createSelectionId = options.createSelectionId ?? randomUUID
@@ -56,6 +59,12 @@ export class DesktopPluginService {
     this.selections = new PluginArchiveSelectionStore(this.now)
     this.gitSelections = new PluginGitSelectionStore(this.now)
   }
+
+  async marketplaceCatalog(input: { cwd: string; refresh?: boolean }) { return this.withDaemonRetry(client => client.plugins.marketplaceCatalog({ cwd: normalizeCwd(input.cwd), refresh: input.refresh })) }
+  async marketplaceSources() { return this.withDaemonRetry(client => client.plugins.marketplaceSources()) }
+  async marketplaceAddSource(input: { url: string }) { return (await this.daemonClient()).plugins.marketplaceAddSource({ url: input.url }) }
+  async marketplaceSetSourceEnabled(input: { sourceId: string; enabled: boolean }) { return (await this.daemonClient()).plugins.marketplaceSetSourceEnabled(input.sourceId, { enabled: input.enabled }) }
+  async marketplaceRemoveSource(input: { sourceId: string }) { return (await this.daemonClient()).plugins.marketplaceRemoveSource(input.sourceId) }
 
   async snapshot(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
@@ -135,7 +144,7 @@ export class DesktopPluginService {
     }
 
     const pluginName = preview.identity.displayName ?? preview.identity.name
-    if (!preview.approvalRequired) {
+    if (!preview.approvalRequired && !preview.replacementRequired) {
       try {
         await this.installArchive(cwd, archivePath, preview.archiveDigest, [])
       } catch (error) {
@@ -153,6 +162,7 @@ export class DesktopPluginService {
       archivePath,
       archiveDigest: preview.archiveDigest,
       pluginName,
+      replacementRequired: preview.replacementRequired,
       requestedPermissions: [...preview.requestedPermissions],
       createdAt,
       expiresAt: createdAt + SELECTION_TTL_MS,
@@ -161,6 +171,7 @@ export class DesktopPluginService {
       status: "approval-required",
       selectionId,
       pluginName,
+      replacementRequired: preview.replacementRequired,
       requestedPermissions: [...preview.requestedPermissions],
     }
   }
@@ -177,7 +188,8 @@ export class DesktopPluginService {
         cwd,
         selection.archivePath,
         selection.archiveDigest,
-        selection.requestedPermissions
+        selection.requestedPermissions,
+        selection.replacementRequired
       )
     } catch (error) {
       if (isConnectionFailure(error)) return unknownInstallResult(selection.pluginName)
@@ -208,7 +220,7 @@ export class DesktopPluginService {
     }
 
     const pluginName = preview.identity.displayName ?? preview.identity.name
-    if (!preview.approvalRequired) {
+    if (!preview.approvalRequired && !preview.replacementRequired) {
       try {
         await this.installGit(cwd, url, ref, preview.sourceDigest, [])
       } catch (error) {
@@ -227,6 +239,7 @@ export class DesktopPluginService {
       ...(ref ? { ref } : {}),
       sourceDigest: preview.sourceDigest,
       pluginName,
+      replacementRequired: preview.replacementRequired,
       requestedPermissions: [...preview.requestedPermissions],
       createdAt,
       expiresAt: createdAt + SELECTION_TTL_MS,
@@ -235,6 +248,7 @@ export class DesktopPluginService {
       status: "approval-required",
       selectionId,
       pluginName,
+      replacementRequired: preview.replacementRequired,
       requestedPermissions: [...preview.requestedPermissions],
     }
   }
@@ -250,7 +264,8 @@ export class DesktopPluginService {
         selection.url,
         selection.ref,
         selection.sourceDigest,
-        selection.requestedPermissions
+        selection.requestedPermissions,
+        selection.replacementRequired
       )
     } catch (error) {
       if (isConnectionFailure(error)) return unknownInstallResult(selection.pluginName)
@@ -264,6 +279,7 @@ export class DesktopPluginService {
   }
 
   clearArchiveSelections(): void {
+    this.marketplace.clear()
     this.selections.clear()
     this.gitSelections.clear()
   }
@@ -283,13 +299,15 @@ export class DesktopPluginService {
     cwd: string,
     archivePath: string,
     expectedArchiveDigest: string,
-    approvedPermissions: string[]
+    approvedPermissions: string[],
+    allowSourceChange?: boolean
   ): Promise<void> {
     await (await this.daemonClient()).plugins.installArchive({
       cwd,
       archivePath,
       expectedArchiveDigest,
       approvedPermissions,
+      ...(allowSourceChange ? { allowSourceChange: true } : {}),
     })
   }
 
@@ -298,7 +316,8 @@ export class DesktopPluginService {
     url: string,
     ref: string | undefined,
     expectedSourceDigest: string,
-    approvedPermissions: string[]
+    approvedPermissions: string[],
+    allowSourceChange?: boolean
   ): Promise<void> {
     await (await this.daemonClient()).plugins.installGit({
       cwd,
@@ -306,6 +325,7 @@ export class DesktopPluginService {
       ...(ref ? { ref } : {}),
       expectedSourceDigest,
       approvedPermissions,
+      ...(allowSourceChange ? { allowSourceChange: true } : {}),
     })
   }
 

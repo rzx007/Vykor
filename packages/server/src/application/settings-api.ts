@@ -242,6 +242,7 @@ export type PluginRuntimeStatus =
     };
 
 export interface PluginInfo {
+  provenance?: import("@vykor/plugin-contracts/marketplace").MarketplaceProvenance;
   identity: { id: string; name: string; version: string; displayName?: string };
   presentation?: import("@vykor/plugin-contracts/presentation").PluginPresentation;
   origin: "native" | "converted";
@@ -279,6 +280,7 @@ export interface PluginInfo {
 }
 
 export interface PluginArchivePreview {
+  replacementRequired?: boolean;
   archiveDigest: string;
   identity: { id: string; name: string; version: string; displayName?: string };
   requestedPermissions: string[];
@@ -288,6 +290,7 @@ export interface PluginArchivePreview {
 }
 
 export interface PluginGitPreview {
+  replacementRequired?: boolean;
   sourceDigest: string;
   url: string;
   ref?: string;
@@ -306,6 +309,7 @@ export interface PluginArchiveError {
 }
 
 export interface PluginService {
+  marketplace?: import("./default-services/marketplace-service.js").PluginMarketplaceService;
   list(input: {
     cwd: string;
   }):
@@ -319,6 +323,7 @@ export interface PluginService {
     | Promise<{ message: string; restartRuntimes?: boolean }>
     | { message: string; restartRuntimes?: boolean };
   installLocal?(input: {
+    allowSourceChange?: boolean;
     cwd: string;
     sourcePath: string;
     scope: "user";
@@ -330,6 +335,7 @@ export interface PluginService {
     archivePath: string;
   }): Promise<PluginArchivePreview>;
   installArchive?(input: {
+    allowSourceChange?: boolean;
     cwd: string;
     archivePath: string;
     expectedArchiveDigest: string;
@@ -341,6 +347,7 @@ export interface PluginService {
     ref?: string;
   }): Promise<PluginGitPreview>;
   installGit?(input: {
+    allowSourceChange?: boolean;
     cwd: string;
     url: string;
     ref?: string;

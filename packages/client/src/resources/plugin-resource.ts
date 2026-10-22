@@ -1,3 +1,4 @@
+import type { MarketplaceCatalog, MarketplaceSource, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation } from "@vykor/plugin-contracts/marketplace";
 /**
  * PluginResource: 插件发现、生命周期、本地与归档安装、Git 安装与重载资源。
  */
@@ -13,6 +14,35 @@ import type {
 export class PluginResource {
   constructor(private readonly transport: HttpTransport) {}
 
+
+  async marketplaceCatalog(options: { cwd: string; refresh?: boolean; signal?: AbortSignal }): Promise<MarketplaceCatalog> {
+    const { signal, ...query } = options;
+    return this.transport.request(this.transport.path("/plugins/marketplace/catalog", query), { signal });
+  }
+  async marketplaceSources(options: { signal?: AbortSignal } = {}): Promise<{ sources: MarketplaceSource[] }> {
+    return this.transport.request("/plugins/marketplace/sources", { method: "GET", ...options });
+  }
+  async marketplaceAddSource(input: { url: string }, options: { signal?: AbortSignal } = {}): Promise<{ sources: MarketplaceSource[] }> {
+    return this.transport.request("/plugins/marketplace/sources", { method: "POST", body: input, ...options });
+  }
+  async marketplacePreview(input: MarketplaceSelection, options: { signal?: AbortSignal } = {}): Promise<MarketplacePreview> {
+    return this.transport.request("/plugins/marketplace/preview", { method: "POST", body: input, ...options });
+  }
+  async marketplaceCancel(input: { candidateId: string }, options: { signal?: AbortSignal } = {}): Promise<{ cancelled: true }> {
+    return this.transport.request("/plugins/marketplace/cancel", { method: "POST", body: input, ...options });
+  }
+  async marketplaceInstall(input: MarketplaceInstallInput, options: { signal?: AbortSignal } = {}): Promise<MarketplaceOperation> {
+    return this.transport.request("/plugins/marketplace/install", { method: "POST", body: input, ...options });
+  }
+  async marketplaceSetSourceEnabled(sourceId: string, input: { enabled: boolean }, options: { signal?: AbortSignal } = {}): Promise<{ sources: MarketplaceSource[] }> {
+    return this.transport.request(`/plugins/marketplace/sources/${encodeURIComponent(sourceId)}`, { method: "PATCH", body: input, ...options });
+  }
+  async marketplaceRemoveSource(sourceId: string, options: { signal?: AbortSignal } = {}): Promise<{ sources: MarketplaceSource[] }> {
+    return this.transport.request(`/plugins/marketplace/sources/${encodeURIComponent(sourceId)}`, { method: "DELETE", ...options });
+  }
+  async marketplaceOperation(operationId: string, options: { signal?: AbortSignal } = {}): Promise<MarketplaceOperation> {
+    return this.transport.request(`/plugins/marketplace/operations/${encodeURIComponent(operationId)}`, options);
+  }
   /** `GET /plugins?cwd=` */
   async list(options: { cwd: string; signal?: AbortSignal }): Promise<{
     plugins: PluginInfo[];
@@ -85,6 +115,7 @@ export class PluginResource {
       archivePath: string;
       expectedArchiveDigest: string;
       approvedPermissions: string[];
+      allowSourceChange?: boolean;
     },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
@@ -121,6 +152,7 @@ export class PluginResource {
       ref?: string;
       expectedSourceDigest: string;
       approvedPermissions: string[];
+      allowSourceChange?: boolean;
     },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {

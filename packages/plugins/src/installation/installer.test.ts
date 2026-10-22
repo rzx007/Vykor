@@ -13,6 +13,26 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-install-
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("installLocalNativePlugin", () => {
+  it("rechecks reused approval under the install lock rather than silently granting revoked permissions", async () => {
+    const sourcePath = join(root, "approval-race"); await writeNativeAppFixture(sourcePath);
+    const input = { sourcePath, scope: "user" as const, cwd: root, approvedPermissions: ["ui:invoke-own-tools", "ui:render"], cacheDir: join(root, "cache"), storePath: join(root, "installed.json") };
+    const first = await installLocalNativePlugin(input); if (first.status !== "installed") throw new Error("fixture install failed");
+    await updateInstalledPluginStore(input.storePath, store => { store.plugins[`user::${first.record.id}`]!.approvedPermissions = []; });
+    expect((await installLocalNativePlugin({ ...input, reuseApprovedPermissions: true })).status).toBe("blocked");
+  });
+  it("commits provenance and receipt atomically, and requires explicit confirmation to detach the source", async () => {
+    const input = { sourcePath: fixture, scope: "user" as const, cwd: root, approvedPermissions: [], cacheDir: join(root, "cache"), storePath: join(root, "installed.json") };
+    const provenance = { sourceId: "official", catalogUrl: "https://example.com/marketplace.json", version: "1.0.0", archiveDigest: "a".repeat(64), repository: "https://github.com/example/plugins", commit: "b".repeat(40), path: "plugin" };
+    const operation = { operationId: "test-operation", fingerprint: "fixed-request", status: "installed" as const, pluginId: "dev.vykor.minimal-skill", version: "1.0.0", message: "installed", updatedAt: new Date().toISOString() };
+    expect((await installLocalNativePlugin({ ...input, provenance, operation })).status).toBe("installed");
+    const stored = await readInstalledPluginStore(input.storePath);
+    expect(stored.plugins["user::dev.vykor.minimal-skill"]?.provenance).toEqual(provenance);
+    expect(stored.installOperations?.[operation.operationId]?.status).toBe("installed");
+    const rejected = await installLocalNativePlugin(input); expect(rejected.status).toBe("blocked");
+    expect((await readInstalledPluginStore(input.storePath)).revision).toBe(stored.revision);
+    expect((await installLocalNativePlugin({ ...input, allowSourceChange: true })).status).toBe("installed");
+    expect((await readInstalledPluginStore(input.storePath)).plugins["user::dev.vykor.minimal-skill"]?.provenance).toBeUndefined();
+  });
   it("requires explicit plugin data write approval before publishing an installed app", async () => {
     const sourcePath = join(root, "autosave");
     const plugin = await writeNativeAppFixture(sourcePath);

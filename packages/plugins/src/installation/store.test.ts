@@ -10,6 +10,10 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "vk-plugin-store-"))
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 describe("installed plugin store", () => {
+  it("serializes concurrent mutations without dropping either result", async () => {
+    await Promise.all(Array.from({ length: 8 }, () => updateInstalledPluginStore(file, async () => { await new Promise(resolve => setTimeout(resolve, 2)); })));
+    expect((await readInstalledPluginStore(file)).revision).toBe(8);
+  });
   it("starts empty and atomically increments revision", async () => {
     expect(await readInstalledPluginStore(file)).toEqual({ schemaVersion: 1, revision: 0, plugins: {} });
     await updateInstalledPluginStore(file, (store) => {

@@ -454,6 +454,15 @@ export type DesktopAPI = {
     cancelArchive: (input: DesktopPluginArchiveCancelInput) => Promise<void>
     importGit: (input: DesktopPluginGitImportInput) => Promise<DesktopPluginGitImportResult>
     confirmGit: (input: DesktopPluginArchiveConfirmInput) => Promise<DesktopPluginGitConfirmResult>
+    marketplaceCatalog: (input: IpcInvokeMap[typeof IpcChannels.marketplaceCatalog]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceCatalog]["result"]>
+    marketplaceSources: (input: IpcInvokeMap[typeof IpcChannels.marketplaceSources]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceSources]["result"]>
+    marketplaceAddSource: (input: IpcInvokeMap[typeof IpcChannels.marketplaceAddSource]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceAddSource]["result"]>
+    marketplaceSetSourceEnabled: (input: IpcInvokeMap[typeof IpcChannels.marketplaceSetSourceEnabled]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceSetSourceEnabled]["result"]>
+    marketplaceRemoveSource: (input: IpcInvokeMap[typeof IpcChannels.marketplaceRemoveSource]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceRemoveSource]["result"]>
+    marketplacePreview: (input: IpcInvokeMap[typeof IpcChannels.marketplacePreview]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplacePreview]["result"]>
+    marketplaceConfirm: (input: IpcInvokeMap[typeof IpcChannels.marketplaceConfirm]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceConfirm]["result"]>
+    marketplaceCancel: (input: IpcInvokeMap[typeof IpcChannels.marketplaceCancel]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceCancel]["result"]>
+    marketplaceOperation: (input: IpcInvokeMap[typeof IpcChannels.marketplaceOperation]["args"][0]) => Promise<IpcInvokeMap[typeof IpcChannels.marketplaceOperation]["result"]>
     cancelGit: (input: DesktopPluginArchiveCancelInput) => Promise<void>
   }
   skills: {

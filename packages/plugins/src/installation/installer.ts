@@ -8,6 +8,10 @@ import { computePluginBehaviorDigest, materializePluginCache } from "./cache.js"
 import {
   installedPluginKey,
   updateInstalledPluginStore,
+  readInstalledPluginStore,
+  withPluginInstallationLock,
+  prunePluginInstallOperations,
+  type StoredPluginInstallOperation,
   type InstalledPluginRecord,
 } from "./store.js";
 
@@ -27,6 +31,12 @@ export function requestedPluginPermissions(manifest: VykorPluginManifestV1): str
 }
 
 export interface InstallLocalNativePluginInput {
+  provenance?: import("@vykor/plugin-contracts/marketplace").MarketplaceProvenance;
+  operation?: StoredPluginInstallOperation;
+  allowSourceChange?: boolean;
+  reuseApprovedPermissions?: boolean;
+  /** Source coordinators revalidate revocation/expiry at the atomic publication boundary. */
+  validateBeforeCommit?: () => Promise<void>;
   sourcePath: string;
   scope: "user";
   cwd: string;
@@ -42,6 +52,9 @@ export type InstallLocalNativePluginResult =
   | { status: "blocked" | "invalid"; diagnostics: PluginDiagnostic[] };
 
 export async function installLocalNativePlugin(input: InstallLocalNativePluginInput): Promise<InstallLocalNativePluginResult> {
+  return withPluginInstallationLock(input.storePath ?? getInstalledPluginStorePath(), () => installNativePlugin(input));
+}
+async function installNativePlugin(input: InstallLocalNativePluginInput): Promise<InstallLocalNativePluginResult> {
   const suppliedScope = (input as { scope?: unknown }).scope;
   if (suppliedScope !== "user") return { status: "blocked", diagnostics: [{
     severity: "error", phase: "install", code: "plugin_scope_not_supported",
@@ -61,6 +74,13 @@ export async function installLocalNativePlugin(input: InstallLocalNativePluginIn
   }] };
 
   const digest = await computePluginBehaviorDigest(sourcePath);
+  const current = await readInstalledPluginStore(input.storePath ?? getInstalledPluginStorePath());
+  const id = validation.plugin.manifest.id;
+  if (Object.values(current.plugins).some(record => record.id === id && record.scope === "managed")) return { status: "blocked", diagnostics: [{ severity: "error", phase: "install", code: "plugin_managed_conflict", message: "Managed plugin cannot be replaced", pluginId: id }] };
+  const previous = current.plugins[`user::${id}`];
+  if (input.reuseApprovedPermissions && requested.some(permission => !previous?.approvedPermissions.includes(permission))) return { status: "blocked", diagnostics: [{ severity: "error", phase: "install", code: "plugin_permissions_not_approved", message: "Previously approved permissions were revoked; preview and approve again", pluginId: id }] };
+  const sameSource = previous?.provenance?.sourceId === input.provenance?.sourceId && previous?.provenance?.catalogUrl === input.provenance?.catalogUrl;
+  if (previous && (previous.provenance || input.provenance) && !sameSource && !input.allowSourceChange) return { status: "blocked", diagnostics: [{ severity: "error", phase: "install", code: "plugin_source_confirmation_required", message: "Changing plugin source requires explicit confirmation", pluginId: id }] };
   let cachePath = sourcePath;
   if (!input.link) {
     let candidateDiagnostics: PluginDiagnostic[] | undefined;
@@ -88,6 +108,7 @@ export async function installLocalNativePlugin(input: InstallLocalNativePluginIn
   const manifestOrigin = metadata?.origin === "converted" ? "converted" : "native";
   const manifestSourceFormat = typeof metadata?.sourceFormat === "string" ? metadata.sourceFormat : undefined;
   const record: InstalledPluginRecord = {
+    ...(input.provenance ? { provenance: structuredClone(input.provenance) } : {}),
     id: validation.plugin.manifest.id, scope: input.scope,
     enabled: true, currentVersion: validation.plugin.manifest.version, cachePath,
     ...(!input.link ? { behaviorDigest: digest } : {}),
@@ -96,11 +117,17 @@ export async function installLocalNativePlugin(input: InstallLocalNativePluginIn
     requestedPermissions: requested, approvedPermissions: approved, installedAt: now, updatedAt: now,
   };
   const key = installedPluginKey(record);
-  const updatedStore = await updateInstalledPluginStore(input.storePath ?? getInstalledPluginStorePath(), (store) => {
+  const updatedStore = await updateInstalledPluginStore(input.storePath ?? getInstalledPluginStorePath(), async (store) => {
+    await input.validateBeforeCommit?.();
     const previous = store.plugins[key];
     store.plugins[key] = previous
       ? { ...record, enabled: previous.enabled, installedAt: previous.installedAt }
       : record;
+    if (input.operation) {
+      store.installOperations ??= {};
+      store.installOperations[input.operation.operationId] = { ...input.operation, status: "installed", updatedAt: now };
+      prunePluginInstallOperations(store);
+    }
   });
   return { status: "installed", record: updatedStore.plugins[key]!, diagnostics: [] };
 }

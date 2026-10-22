@@ -1,3 +1,5 @@
+import type { MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
+export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
 import type { PluginPresentation, PluginUiInventory } from "@vykor/protocol";
 export type { PluginUiInventory } from "@vykor/protocol";
 
@@ -19,6 +21,7 @@ export type PluginRuntimeStatus =
     };
 
 export interface PluginInfo {
+  provenance?: MarketplaceProvenance;
   identity: { id: string; name: string; version: string; displayName?: string };
   presentation?: PluginPresentation;
   origin: "native" | "converted";
@@ -61,6 +64,7 @@ export interface PluginArchivePreview {
   identity: { id: string; name: string; version: string; displayName?: string };
   requestedPermissions: string[];
   approvalRequired: boolean;
+  replacementRequired?: boolean;
   inventory: Record<string, number>;
   diagnostics: PluginInfo["diagnostics"];
 }
@@ -73,6 +77,7 @@ export interface PluginGitPreview {
   identity: { id: string; name: string; version: string; displayName?: string };
   requestedPermissions: string[];
   approvalRequired: boolean;
+  replacementRequired?: boolean;
   inventory: Record<string, number>;
   diagnostics: PluginInfo["diagnostics"];
 }

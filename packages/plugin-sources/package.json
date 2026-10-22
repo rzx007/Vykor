@@ -18,6 +18,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@vykor/plugin-contracts": "workspace:*",
     "tar": "^7.5.22",
     "yauzl": "^2.10.0"
   },

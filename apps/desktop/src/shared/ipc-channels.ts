@@ -414,6 +414,15 @@ export const IpcChannels = {
   pluginImportArchive: "plugin:import-archive",
   pluginConfirmArchive: "plugin:confirm-archive",
   pluginCancelArchive: "plugin:cancel-archive",
+  marketplaceCatalog: "plugin:marketplaceCatalog",
+  marketplaceSources: "plugin:marketplaceSources",
+  marketplaceAddSource: "plugin:marketplaceAddSource",
+  marketplaceSetSourceEnabled: "plugin:marketplaceSetSourceEnabled",
+  marketplaceRemoveSource: "plugin:marketplaceRemoveSource",
+  marketplacePreview: "plugin:marketplacePreview",
+  marketplaceConfirm: "plugin:marketplaceConfirm",
+  marketplaceCancel: "plugin:marketplaceCancel",
+  marketplaceOperation: "plugin:marketplaceOperation",
   pluginImportGit: "plugin:import-git",
   pluginConfirmGit: "plugin:confirm-git",
   pluginCancelGit: "plugin:cancel-git",
@@ -1131,6 +1140,15 @@ export interface IpcInvokeMap
     args: [input: DesktopPluginArchiveCancelInput]
     result: void
   }
+  [IpcChannels.marketplaceCatalog]: { args: [input: { cwd: string; refresh?: boolean }]; result: import("@vykor/client").MarketplaceCatalog }
+  [IpcChannels.marketplaceSources]: { args: [input: Record<string, never>]; result: { sources: import("@vykor/client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceAddSource]: { args: [input: { url: string }]; result: { sources: import("@vykor/client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceSetSourceEnabled]: { args: [input: { sourceId: string; enabled: boolean }]; result: { sources: import("@vykor/client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceRemoveSource]: { args: [input: { sourceId: string }]; result: { sources: import("@vykor/client").MarketplaceSource[] } }
+  [IpcChannels.marketplacePreview]: { args: [input: import("@vykor/client").MarketplaceSelection]; result: import("./plugin-types").DesktopMarketplacePreview }
+  [IpcChannels.marketplaceConfirm]: { args: [input: { cwd: string; selectionId: string }]; result: import("@vykor/client").MarketplaceOperation }
+  [IpcChannels.marketplaceCancel]: { args: [input: { selectionId: string }]; result: void }
+  [IpcChannels.marketplaceOperation]: { args: [input: { cwd: string; operationId: string }]; result: import("@vykor/client").MarketplaceOperation }
   [IpcChannels.pluginImportGit]: {
     args: [input: DesktopPluginGitImportInput]
     result: DesktopPluginGitImportResult

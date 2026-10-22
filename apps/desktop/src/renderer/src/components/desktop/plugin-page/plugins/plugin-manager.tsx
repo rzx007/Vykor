@@ -1,3 +1,5 @@
+import { groupPermissions } from "./plugin-permissions"
+import { Marketplace } from "./marketplace"
 import { supportsBundledOfficePlugin } from "../../../../../../shared/office-platform"
 import { useEffect, useRef, useState } from "react"
 import { CircleAlert, Ellipsis, Trash2 } from "lucide-react"
@@ -50,6 +52,7 @@ import { ExtensionIcon } from "../shared/plugin-catalog"
 import { PluginDetail } from "./plugin-detail"
 export interface PluginManagerProps {
   query: string
+  sourceAddRequest?: number
   addRequest: number
   gitAddRequest: number
   refreshRequest: number
@@ -58,43 +61,25 @@ export interface PluginManagerProps {
   onDetailChange?: (open: boolean) => void
   onUse?: (plugin: DesktopPluginInfo, prompt: string) => Promise<void>
 }
+export function PluginManager(props: PluginManagerProps): React.JSX.Element {
+  const [mode, setMode] = useState("installed")
+  useEffect(() => { if (props.sourceAddRequest) setMode("marketplace") }, [props.sourceAddRequest])
+  return <div className="flex flex-col gap-5">
+    <Tabs value={mode} onValueChange={setMode}><TabsList className="extension-tabs bg-transparent" wrapperClassName="w-auto" aria-label="插件浏览方式"><TabsTrigger value="marketplace">浏览市场</TabsTrigger><TabsTrigger value="installed">已安装</TabsTrigger></TabsList></Tabs>
+    <div hidden={mode !== "marketplace"}><Marketplace {...props} /></div>
+    <div hidden={mode !== "installed"}><InstalledPluginManager {...props} /></div>
+  </div>
+}
+
 type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }> & {
   source: "archive" | "git"
-}
-const permissionLabels: Record<string, string> = {
-  filesystem: "文件访问",
-  network: "网络访问",
-  process: "运行程序",
-  secrets: "密钥访问",
-  tool: "工具权限",
-  ui: "插件界面",
-  pluginData: "插件自身数据",
-}
-const uiPermissionLabels: Record<string, string> = {
-  "ui:render": "显示插件的隔离交互界面",
-  "ui:invoke-own-tools": "请求插件自身工具，按工具授权确认",
-  "pluginData:write": "允许已声明的应用专用工具自动保存插件自身数据；工作区导出仍单独确认",
 }
 const displayName = (plugin: DesktopPluginInfo): string =>
   plugin.identity.displayName ?? plugin.identity.name ?? plugin.identity.id
 const needsAttention = (plugin: DesktopPluginInfo): boolean =>
   plugin.runtimeStatus.state === "failed" || plugin.runtimeStatus.state === "degraded"
 const pluginRuntimeLabel = (plugin: DesktopPluginInfo): string => plugin.runtimeStatus.message
-function groupPermissions(permissions: string[]): Array<{ label: string; values: string[] }> {
-  const groups = new Map<string, string[]>()
-  for (const permission of permissions) {
-    const prefix = permission.split(/[:/]/u, 1)[0]
-    const label = permissionLabels[prefix] ?? "其他权限"
-    const suffix =
-      uiPermissionLabels[permission] ??
-      (permission.slice(prefix.length).replace(/^[:/]/u, "") || permission)
-    const values = groups.get(label) ?? []
-    if (!values.includes(suffix)) values.push(suffix)
-    groups.set(label, values)
-  }
-  return [...groups].map(([label, values]) => ({ label, values }))
-}
-export function PluginManager({
+export function InstalledPluginManager({
   query,
   addRequest,
   gitAddRequest,
@@ -678,7 +663,7 @@ export function PluginManager({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>安装「{approval?.pluginName}」？</AlertDialogTitle>
-            <AlertDialogDescription>该插件需要以下权限才能正常工作。</AlertDialogDescription>
+            <AlertDialogDescription>{approval?.replacementRequired ? "将替换现有插件并更换安装来源，请确认此操作及以下权限。" : "该插件需要以下权限才能正常工作。"}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 text-sm">
             {groupPermissions(approval?.requestedPermissions ?? []).map((group) => (

@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
+    "./marketplace": {
+      "types": "./src/marketplace.ts",
+      "import": "./src/marketplace.ts"
+    },
     "./manifest": {
       "types": "./src/manifest.ts",
       "import": "./src/manifest.ts"

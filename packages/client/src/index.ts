@@ -206,3 +206,5 @@ export { isPluginAppAdmissionRejection, type PluginAppAdmissionRejection } from 
 
 export { readPluginUiInstance, readPluginUiAction, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt, ProtocolValidationError } from "@vykor/protocol";
 export type { JsonValue, PluginUiInstanceRecord, PluginUiActionRunMetadata, PluginUiActionReceipt, PluginUiActionResponse, PluginUiSubmissionRecord, PluginUiConversationReceipt } from "@vykor/protocol";
+
+export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "./types/extension-types.js";

@@ -60,7 +60,7 @@ export async function startVykorDaemon(
       },
       services: {
         commandCatalog: createDefaultCommandCatalog(() => settingsRef.current),
-        ...createDefaultApplicationServices(settingsRef, startupAgentEnvironment, executionOwner),
+        ...createDefaultApplicationServices(settingsRef, startupAgentEnvironment, executionOwner, options.version),
       },
     });
   } catch (error) {

@@ -48,6 +48,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
   const [tab, setTab] = useState<ExtensionTab>("plugins")
   const [queries, setQueries] = useState({ plugins: "", skills: "", mcp: "" })
   const [addRequests, setAddRequests] = useState(initialCounts)
+  const [sourceAddRequest, setSourceAddRequest] = useState(0)
   const [gitAddRequest, setGitAddRequest] = useState(0)
   const [refreshRequests, setRefreshRequests] = useState(initialCounts)
   const [message, setMessage] = useState("")
@@ -129,6 +130,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => add("plugins")}>导入插件包</DropdownMenuItem>
                   <DropdownMenuItem onClick={addPluginFromGit}>从 Git 安装</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setTab("plugins"); setSourceAddRequest(value => value + 1) }}>添加插件源</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => add("mcp")}>添加 MCP 服务器</DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -181,6 +183,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 projectPath={projectPath}
                 query={queries.plugins}
                 addRequest={addRequests.plugins}
+                sourceAddRequest={sourceAddRequest}
                 gitAddRequest={gitAddRequest}
                 refreshRequest={refreshRequests.plugins}
                 notify={setMessage}

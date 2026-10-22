@@ -58,6 +58,7 @@ export type DesktopPluginArchiveImportResult =
       status: "approval-required"
       selectionId: string
       pluginName: string
+      replacementRequired?: boolean
       requestedPermissions: string[]
     }
   | DesktopPluginArchiveInstalledResult
@@ -77,4 +78,14 @@ export interface DesktopPluginSnapshot {
   cwd: string
   plugins: DesktopPluginInfo[]
   warnings: string[]
+}
+
+export interface DesktopMarketplacePreview {
+  selectionId: string
+  pluginName: string
+  requestedPermissions: string[]
+  replacementRequired: boolean
+  sourceName: string
+  approvalRequired: boolean
+  operation?: import("@vykor/client").MarketplaceOperation
 }

@@ -4,11 +4,20 @@ import type { IpcMainInvokeEvent } from "electron"
 const electron = vi.hoisted(() => ({ app: { once: vi.fn() } }))
 
 vi.mock("electron", () => electron)
+vi.mock("./plugin-service", () => ({ desktopPluginService: {} }))
 
 import { IpcChannels } from "../../../shared/ipc-channels"
 import { createPluginIpcContribution } from "./ipc"
 
 describe("plugin archive IPC", () => {
+  it("binds marketplace confirmation to its sender and strips forged install fields", async () => {
+    const service = { marketplace: { confirm: vi.fn(), preview: vi.fn() } }
+    const registrations = createPluginIpcContribution(service as never).register({} as never)
+    const confirm = registrations.find(item => item.channel === IpcChannels.marketplaceConfirm)!
+    const sender = { id: 42 }
+    await confirm.handler({ sender } as IpcMainInvokeEvent, { cwd: "C:/workspace", selectionId: "opaque", candidateId: "forged", approvedPermissions: ["process:spawn"], allowSourceChange: true })
+    expect(service.marketplace.confirm).toHaveBeenCalledWith(sender, { cwd: "C:/workspace", selectionId: "opaque" })
+  })
   it("passes the invoking sender to the native chooser and exposes only high-level confirmation inputs", async () => {
     const service = {
       importArchive: vi.fn(async () => ({ status: "cancelled" as const })),

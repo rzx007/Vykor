@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { createMarketplaceRoutes } from "./marketplace.js";
 
 import { errorResponse, jsonResponse, readJson } from "../support.js";
 import type {
@@ -41,6 +42,7 @@ export interface ServiceRoutesContext {
 
 export function createServiceRoutes(context: ServiceRoutesContext): Hono {
   return new Hono()
+    .route("/plugins/marketplace", createMarketplaceRoutes(context.pluginService?.marketplace))
     .use("*", async (c, next) => {
       const path = c.req.path;
       // Installation publishes a new snapshot for future runs; only destructive
@@ -280,7 +282,7 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
         return pluginArchiveErrorResponse(400, "plugin_archive_invalid_request", "cwd, archivePath, expectedArchiveDigest and approvedPermissions are required");
       }
       try {
-        const result = await context.pluginService.installArchive({ cwd, archivePath, expectedArchiveDigest, approvedPermissions });
+        const result = await context.pluginService.installArchive({ cwd, archivePath, expectedArchiveDigest, approvedPermissions, ...(body.allowSourceChange === true ? { allowSourceChange: true } : {}) });
         return await pluginInstalledResponse(context, result);
       } catch (error) {
         return pluginArchiveFailureResponse(error);
@@ -323,7 +325,7 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
         return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", "cwd, url, expectedSourceDigest and approvedPermissions are required");
       }
       try {
-        const result = await context.pluginService.installGit({ cwd, url, ref, expectedSourceDigest, approvedPermissions });
+        const result = await context.pluginService.installGit({ cwd, url, ref, expectedSourceDigest, approvedPermissions, ...(body.allowSourceChange === true ? { allowSourceChange: true } : {}) });
         return await pluginInstalledResponse(context, result);
       } catch (error) {
         return pluginArchiveFailureResponse(error);

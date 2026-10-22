@@ -19,6 +19,7 @@ import {
 } from "@vykor/plugin-sources";
 import type { PluginArchiveError, PluginArchivePreview, PluginGitPreview, PluginInfo, PluginService } from "../settings-api.js";
 import type { DaemonSettingsRef } from "./shared.js";
+import { createMarketplaceService } from "./marketplace-service.js";
 
 type RuntimeDiagnostic = PluginInfo["diagnostics"][number];
 type RuntimeToolStatus = NonNullable<PluginInfo["toolRuntime"]>;
@@ -118,6 +119,7 @@ async function inspectCandidate(candidateRoot: string): Promise<Omit<PluginArchi
     requestedPermissions,
     approvalRequired: requestedPermissions.length > 0
       && !permissionsCovered(requestedPermissions, previous?.approvedPermissions ?? []),
+    ...(previous?.provenance ? { replacementRequired: true } : {}),
     inventory,
     diagnostics,
   };
@@ -320,8 +322,9 @@ function runtimeStatusForPlugin(input: {
   return { state: "pending_reload", message: "已启用，下一次对话生效。", action: "reload" };
 }
 
-export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginService {
+export function createDefaultPluginService(_ref: DaemonSettingsRef, options: { hostVersion?: string } = {}): PluginService {
   return {
+    marketplace: createMarketplaceService(options),
     async list() {
       const store = await readInstalledPluginStore(getInstalledPluginStorePath());
       const plugins: PluginInfo[] = [];
@@ -359,6 +362,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
           },
           ...(manifest ? { presentation: pluginPresentation(manifest) } : {}),
           origin: record.origin,
+          ...(record.provenance ? { provenance: record.provenance } : {}),
           ...(record.sourceFormat ? { sourceFormat: record.sourceFormat } : {}),
           scope: record.scope,
           enabled: record.enabled,
@@ -405,7 +409,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
     async previewArchive({ archivePath }) {
       return await withArchive(archivePath, inspectArchive);
     },
-    async installArchive({ archivePath, expectedArchiveDigest, approvedPermissions, cwd }) {
+    async installArchive({ archivePath, expectedArchiveDigest, approvedPermissions, cwd, allowSourceChange }) {
       return await withArchive(archivePath, async (resolved) => {
         const preview = await inspectArchive(resolved);
         if (preview.archiveDigest !== expectedArchiveDigest) {
@@ -431,6 +435,8 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
             sourcePath: resolved.candidateRoot,
             scope: "user",
             approvedPermissions: effectiveApprovals,
+            allowSourceChange,
+            reuseApprovedPermissions: reusedApproval && !explicitlyApproved,
           });
         } catch (error) {
           throw archiveFailure("plugin_archive_install_failed", "The plugin archive could not be installed.", [
@@ -446,7 +452,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
     async previewGit({ url, ref }) {
       return await withGitSource({ url, ref }, inspectGitSource);
     },
-    async installGit({ url, ref, expectedSourceDigest, approvedPermissions, cwd }) {
+    async installGit({ url, ref, expectedSourceDigest, approvedPermissions, cwd, allowSourceChange }) {
       return await withGitSource({ url, ref }, async (resolved) => {
         const preview = await inspectGitSource(resolved);
         if (preview.sourceDigest !== expectedSourceDigest) {
@@ -471,6 +477,8 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
             sourcePath: resolved.candidateRoot,
             scope: "user",
             approvedPermissions: [...preview.requestedPermissions],
+            allowSourceChange,
+            reuseApprovedPermissions: reusedApproval && !explicitlyApproved,
           });
         } catch (error) {
           throw archiveFailure("plugin_git_install_failed", "The plugin Git source could not be installed.", [

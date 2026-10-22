@@ -56,7 +56,7 @@ export function createDefaultAgentPersonaService(): AgentPersonaService {
 }
 
 /** Complete resource-service set installed by the opinionated daemon application. */
-export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeDefault: AgentEnvironmentSettings | undefined, executionOwner: ExecutionRuntimeOwner) {
+export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeDefault: AgentEnvironmentSettings | undefined, executionOwner: ExecutionRuntimeOwner, hostVersion?: string) {
   return {
     settings: createDefaultSettingsService(ref, {
       agentEnvironment: createDefaultAgentEnvironmentService(activeDefault ?? ref.current.agentEnvironment),
@@ -70,7 +70,7 @@ export function createDefaultApplicationServices(ref: DaemonSettingsRef, activeD
     profile: createDefaultProfileService(),
     outputStyle: createDefaultOutputStyleService(),
     projectInit: createDefaultProjectInitService(),
-    plugin: createDefaultPluginService(ref),
+    plugin: createDefaultPluginService(ref, { hostVersion }),
     agentPersona: createDefaultAgentPersonaService(),
     hooks: createDefaultHooksService(ref),
     git: createDefaultGitService(),
