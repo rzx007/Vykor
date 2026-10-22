@@ -350,7 +350,7 @@ it.each(["pdf", "epub", "docx", "xlsx", "pptx"])(
   "returns local %s bytes without calling OfficeCLI",
   async (format) => {
     const rootPath = await createTemporaryDirectory()
-    const name = `真实名称.${format}`
+    const name = `真实名称 #1%20.${format}`
     await writeFile(join(rootPath, name), "original bytes")
     const spy = vi.spyOn(officeEngine, "readOfficeFile")
     try {

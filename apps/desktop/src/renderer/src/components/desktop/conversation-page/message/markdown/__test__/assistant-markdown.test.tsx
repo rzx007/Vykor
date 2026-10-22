@@ -135,6 +135,21 @@ it.each([
   expect(prepareFileOpenRequest(opened[0]!, "D:/repo").browserUrl).toBe(url)
 })
 
+it("keeps Chinese project file links decoded once in the file viewer", async () => {
+  const opened: Array<[string, number | undefined]> = []
+  await act(async () => render("[项目文档](/D:/repo/文档/更新%20%231%2520.md:42)", false, (path, line) => {
+    opened.push([path, line])
+  }))
+  const file = container.querySelector<HTMLButtonElement>(".assistant-file-link")!
+  expect(file).not.toBeNull()
+  act(() => file.click())
+  expect(opened).toEqual([["D:/repo/文档/更新 #1%20.md", 42]])
+  expect(prepareFileOpenRequest(opened[0]![0], "D:/repo")).toEqual({
+    openPath: "D:/repo/文档/更新 #1%20.md",
+    placeholderPath: null,
+  })
+})
+
 it("cancels a pending refresh when its virtual row unmounts", async () => {
   vi.useFakeTimers()
   await act(async () => render(prefix))

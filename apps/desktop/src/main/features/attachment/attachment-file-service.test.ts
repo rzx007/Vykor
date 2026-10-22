@@ -1,5 +1,5 @@
 import { access, readFile } from "node:fs/promises"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 
@@ -57,25 +57,30 @@ describe("AttachmentFileService", () => {
     })
   })
 
-  it("opens from its managed temporary directory, cleans it, and saves through a chosen path", async () => {
+  it.each(["report.txt", "中文附件 #1%20.pdf", "中文附件 #1%20.docx"])("opens and saves %s without changing the filename, then cleans its temporary directory", async (displayName) => {
     const temporaryRoot = await temporaryDirectory()
     const savePath = join(temporaryRoot, "saved.txt")
     const openedPaths: string[] = []
     const service = createService({
       temporaryRoot,
-      getAttachment: async (id) => readyAsset(id, "report.txt", 4),
+      getAttachment: async (id) => readyAsset(id, displayName, 4),
       downloadAttachment: async () => new Response("data"),
       openPath: async (path) => {
         openedPaths.push(path)
         return ""
       },
-      chooseSavePath: async () => savePath,
+      chooseSavePath: async (name) => {
+        expect(name).toBe(displayName)
+        return savePath
+      },
     })
 
     await service.openAttachment("asset-open")
     expect(openedPaths).toHaveLength(1)
     expect(openedPaths[0]!.startsWith(temporaryRoot)).toBe(true)
+    expect(basename(openedPaths[0]!)).toBe(displayName)
     await expect(access(openedPaths[0]!)).resolves.toBeUndefined()
+    await expect(readFile(openedPaths[0]!, "utf8")).resolves.toBe("data")
 
     await expect(service.saveAs("asset-save")).resolves.toEqual({ saved: true })
     await expect(readFile(savePath, "utf8")).resolves.toBe("data")

@@ -26,6 +26,12 @@ describe("normalizeBrowserUrl", () => {
 })
 
 describe("toLocalFileUrl", () => {
+  it("encodes Chinese project file paths once while preserving literal percent sequences", () => {
+    expect(toLocalFileUrl("D:/repo", "中文/更新 #1%20.html")).toBe(
+      "file:///D:/repo/%E4%B8%AD%E6%96%87/%E6%9B%B4%E6%96%B0%20%231%2520.html"
+    )
+  })
+
   it("joins a project root and relative HTML path", () => {
     expect(toLocalFileUrl("D:\\code\\Vykor", "examples/page demo/index.html")).toBe(
       "file:///D:/code/Vykor/examples/page%20demo/index.html"
