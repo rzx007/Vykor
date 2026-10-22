@@ -31,35 +31,11 @@ export { NoteRepository, NoteRevisionConflictError } from "./notes/index.js";
 export { estimateTokens } from "./token-estimation";
 export type { TokenEstimate } from "./token-estimation";
 
-export { LspClient } from "./lsp";
-export type { LspServerConfig } from "./lsp";
 
-export {
-  ChildAgentExecutionRegistry,
-  closeExecutionRuntimes,
-  DetachedProcessSupervisor,
-  getChildAgentExecutionRegistry,
-  getDetachedProcessSupervisor,
-  resetExecutionRuntimes,
-} from "./executions";
-export type {
-  AwaitExecutionResult,
-  ChildAgentExecution,
-  ChildAgentExecutionListener,
-  CompleteChildAgentExecutionInput,
-  DetachedProcessExecution,
-  ExecutionBackend,
-  ExecutionEvent,
-  ExecutionRuntimeScope,
-  ExecutionSnapshot,
-  ExecutionStatus,
-  ExecutionType,
-  ProcessCompletionListener,
-  ProcessExecutionListener,
-  RegisterChildAgentExecutionOptions,
-  StartAgentProcessOptions,
-  StartShellExecutionOptions,
-} from "./executions";
+
+
+
+
 
 export {
   DEFAULT_TOOL_OUTPUT_INLINE_CHARS,

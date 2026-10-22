@@ -1,4 +1,4 @@
-import type { Settings, McpServerConfig } from "@vykor/core";
+import type { Settings, McpServerConfig } from "@vykor/host-config";
 import { findByName } from "@vykor/api";
 import { checkApiKey } from "./doctor";
 import { resolveRuntimeModes } from "./runtime-modes.js";
@@ -162,7 +162,7 @@ export function buildDryRunReport(input: {
  */
 export async function runDryRun(settings: Settings, options: DryRunOptions): Promise<void> {
   const chalk = (await import("chalk")).default;
-  const { createDefaultToolRegistry } = await import("@vykor/tools");
+  const { createDefaultToolRegistry } = await import("@vykor/agent-runtime");
   const { SkillRegistry } = await import("@vykor/skills");
   const { loadSkillsThreeSources } = await import("./commands/main");
 

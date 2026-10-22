@@ -1,4 +1,5 @@
-import type { AgentEffectContext, AgentPermissionRequest, Settings } from "@vykor/core";
+import type { AgentEffectContext, AgentPermissionRequest } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
 import { normalizeApprovalMode, readRuntimeMetadata, readSessionRuntimeConfig, readSessionRuntimeRevision } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";

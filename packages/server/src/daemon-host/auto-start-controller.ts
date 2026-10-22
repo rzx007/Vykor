@@ -1,4 +1,4 @@
-import { loadSettings, updateSettings, type Settings } from "@vykor/core";
+import { loadSettings, updateSettings, type Settings } from "@vykor/host-config";
 
 import {
   DaemonSystemService,

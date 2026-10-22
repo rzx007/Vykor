@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ModelRequestFailure, QueryEngine, ToolRegistry, type AgentEvent, type StreamingMessageClient, type ToolDefinition } from "@vykor/core";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
+import {
+  QueryEngine,
+  ToolRegistry,
+  type AgentEvent,
+  type StreamingMessageClient,
+  type ToolDefinition,
+} from "@vykor/core";
 import { SessionStore } from "@vykor/services";
 import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../../../client/src/index.js";
 import { FrameworkAgentRun } from "../../../../agent-runtime/src/framework-agent-run.js";

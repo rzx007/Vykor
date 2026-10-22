@@ -1,4 +1,11 @@
-import type { ShellOutputLogStatus, ToolDefinition, ToolResult } from "@vykor/core";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type {
+  ShellOutputLogStatus,
+} from "@vykor/agent-contracts";
+import type {
+  ToolDefinition,
+  ToolResult,
+} from "@vykor/core";
 import { resolve } from "node:path";
 import {
   shellResultMetadata,
@@ -12,7 +19,7 @@ import {
 import { defaultShellExecutor } from "./executor.js";
 import { createBoundedOutputCollector, DEFAULT_MAX_OUTPUT_CHARS, formatOutput } from "./output.js";
 import type { ShellExecutor } from "./types.js";
-import { terminalOpenTool } from "../terminal/terminal-tools.js";
+import { createTerminalTools } from "../terminal/terminal-tools.js";
 import { isPersistentServiceCommand } from "../terminal/service-command.js";
 
 export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
@@ -20,7 +27,9 @@ export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
 export function createShellTool(
   shellOrExecutor?: ShellDescriptor | ShellExecutor,
   executor: ShellExecutor = defaultShellExecutor,
+  terminal?: AgentTerminalHost,
 ): ToolDefinition {
+  const terminalOpen = createTerminalTools(terminal)[0]!;
   const shell = isShellExecutor(shellOrExecutor) ? undefined : shellOrExecutor;
   const effectiveExecutor = isShellExecutor(shellOrExecutor) ? shellOrExecutor : executor;
   return {
@@ -46,7 +55,7 @@ export function createShellTool(
       const command = typeof input.command === "string" ? input.command.trim() : "";
       const descriptor = context.environment?.info.shellDescriptor ?? shell;
       const hasExplicitTimeout = input.timeout !== undefined;
-      if (command && !hasExplicitTimeout && context.terminal && context.sessionId && isPersistentServiceCommand(command)) {
+      if (command && !hasExplicitTimeout && terminal && context.sessionId && isPersistentServiceCommand(command)) {
         const workdir = typeof input.workdir === "string" ? input.workdir.trim() : "";
         const resolvedWorkdir = workdir && context.environment ? await context.environment.paths.resolve(workdir, "execute") : undefined;
         if (resolvedWorkdir && resolvedWorkdir.mountPurpose !== "workspace") return workdirDenied(resolvedWorkdir.executionPath);
@@ -56,7 +65,7 @@ export function createShellTool(
           return { content: [{ type: "text", text: "Use TerminalOpen with command for this service. Include a shell-appropriate cd to the requested subdirectory in command; terminals are scoped to the session directory." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
         }
         if (context.abortSignal?.aborted) return interruptedBeforeStart();
-        return terminalOpenTool.execute({ command, name: summarizeCommand(command) }, context);
+        return terminalOpen.execute({ command, name: summarizeCommand(command) }, context);
       }
       const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context));
       if (background) {

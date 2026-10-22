@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mcpToolCallTool } from "../../../tools/src/mcp/mcp-tools.js";
-import type { AgentEventInput, AgentExecutionContext, IPermissionChecker, Message, StreamEvent, ToolDefinition } from "../index.js";
+import { createMcpTools } from "../../../tools/src/mcp/mcp-tools.js";
+const mcpToolCallTool = createMcpTools().find(tool => tool.name === "McpToolCall")!;
+import type {
+  AgentEventInput,
+  AgentExecutionContext,
+  IPermissionChecker,
+  StreamEvent,
+  ToolDefinition,
+} from "../index.js";
+import type { Message } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { runToolRegistry, toolRegistryView } from "./tool-registry.js";

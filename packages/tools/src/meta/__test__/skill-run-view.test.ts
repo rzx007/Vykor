@@ -1,7 +1,10 @@
 import { expect, it } from "vitest";
-import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
+import type { ToolSkillDefinition as SkillDefinition } from "../../ports/skill.js";
 import type { RunCapabilityView, ToolContext } from "@vykor/core";
-import { skillTool, listSkillsTool } from "../skill.js";
+import { createSkillTools, capturedSkillCatalog } from "../skill.js";
+const skills = createSkillTools(capturedSkillCatalog);
+const skillTool = skills.find(tool => tool.name === "Skill")!;
+const listSkillsTool = skills.find(tool => tool.name === "ListSkills")!;
 
 const definition: SkillDefinition = { name: "private", source: "plugin", path: "/plugin/private/SKILL.md",
   description: "private summary", content: "private body", userInvocable: true, disableModelInvocation: false };
@@ -11,8 +14,7 @@ const view = (pluginId?: string, ownerPluginId?: string): RunCapabilityView => (
 });
 
 it("blocks loading and discovering a plugin Skill outside the current View", async () => {
-  const registry = new SkillRegistry();
-  registry.register(definition);
+  const registry = { getAll: () => [definition] };
   for (const capabilityView of [view(), view("other"), view("other", "owner")]) {
     const context = { cwd: process.cwd(), skillRegistry: registry, capabilityView };
     expect((await skillTool.execute({ name: "private", path: definition.path }, context)).isError).toBe(true);
@@ -21,8 +23,7 @@ it("blocks loading and discovering a plugin Skill outside the current View", asy
 });
 
 it("loads the captured Skill after registry replacement and checks its name/path winner", async () => {
-  const registry = new SkillRegistry();
-  registry.register({ ...definition, content: "replacement body", path: "/replacement/SKILL.md" });
+  const registry = { getAll: () => [{ ...definition, content: "replacement body", path: "/replacement/SKILL.md" }] };
   const context = { cwd: process.cwd(), skillRegistry: registry, capabilityView: view("owner", "owner") };
   const result = await skillTool.execute({ name: "private", path: definition.path }, context);
   expect(result.isError).not.toBe(true);

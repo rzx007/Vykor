@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { getDataDir } from "@vykor/core";
+import { getDataDir } from "@vykor/host-config";
 
 import {
   isCommittedModelPart,

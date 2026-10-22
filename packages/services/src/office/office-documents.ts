@@ -7,7 +7,7 @@ import {
   type OfficePreview,
 } from "@vykor/protocol";
 import { createOfficeRunner, hash } from "./office-engine.mjs";
-import { sniffOfficePackage } from "./office-package.js";
+import { sniffOfficePackage } from "../attachments/storage/attachment-media-type.js";
 import { wordParagraphText, assertCompleteOfficeText } from "./office-text.js";
 
 export const MAX_OFFICE_BYTES = 64 * 1024 * 1024;

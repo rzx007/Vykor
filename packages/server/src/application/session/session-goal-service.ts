@@ -417,7 +417,6 @@ export class SessionGoalService {
     } finally { this.context.events.publishSince(before); }
   }
 
-
   private settleExternalWait(goalId: string, expectedWait: GoalExternalWait, check: GoalWaitCheck): GoalWaitObservationResult {
     const before = this.context.events.checkpoint();
     let admittedRunId: string | undefined;

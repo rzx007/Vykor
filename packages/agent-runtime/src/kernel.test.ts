@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
 import {

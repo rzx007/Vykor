@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { getPluginDataDir, type ToolResult } from "@vykor/core";
+import { getPluginDataDir } from "@vykor/host-config";
+import { type ToolResult } from "@vykor/core";
 import { join } from "node:path";
 import type { LoadedNativePlugin } from "@vykor/plugins";
 import type {

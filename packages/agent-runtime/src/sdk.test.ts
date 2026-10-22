@@ -2,19 +2,29 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type {
-  AgentEvent,
-  Settings,
-  StreamingMessageClient,
-} from "@vykor/core";
+import type { AgentEvent, StreamingMessageClient } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
-  FileWorkflowRunRepository,
 } from "@vykor/coordinator";
-import { describe, expect, it, vi } from "vitest";
+import { FileWorkflowRunRepository } from "./node/workflow/file-workflow-run-repository.js";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createDefaultNodeAgent } from "./index.js";
+
+let sdkConfigDir: string;
+let previousConfigDir: string | undefined;
+beforeAll(() => {
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  sdkConfigDir = mkdtempSync(join(tmpdir(), "vykor-sdk-config-"));
+  process.env.VYKOR_CONFIG_DIR = sdkConfigDir;
+});
+afterAll(() => {
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+  rmSync(sdkConfigDir, { recursive: true, force: true });
+});
 
 async function withTemporaryAgent<T extends { close(): Promise<void> }, R>(
   prefix: string,
@@ -483,7 +493,7 @@ describe("programmatic agent SDK", () => {
           .filter((block) => block.type === "text")
           .map((block) => block.text)
           .join("");
-        jobReadResult = JSON.parse(text);
+        jobReadResult = toolResultPayload(params.messages, "sdk-workflow-job-read");
         yield { type: "text_delta" as const, delta: "workflow read" };
         yield { type: "complete" as const, stopReason: "end_turn" as const };
       },
@@ -643,7 +653,7 @@ describe("programmatic agent SDK", () => {
             .filter((block) => block.type === "text")
             .map((block) => block.text)
             .join("");
-          const jobId = (JSON.parse(text) as { jobId?: string }).jobId;
+          const jobId = toolResultPayload(params.messages, toolResults[0]!.toolUseId).jobId;
           if (!jobId) throw new Error(`Agent tool did not return jobId: ${text}`);
           yield {
             type: "tool_use_start" as const,
@@ -920,7 +930,7 @@ describe("programmatic agent SDK", () => {
 
         if (usedTools.includes("Agent")) {
           const toolResult = toolResultText(params.messages, "spawn-restricted-child");
-          const jobId = (JSON.parse(toolResult) as { jobId?: string }).jobId;
+          const jobId = toolResultPayload(params.messages, "spawn-restricted-child").jobId;
           if (!jobId) throw new Error(`Agent tool did not return jobId: ${toolResult}`);
           yield {
             type: "tool_use_start" as const,
@@ -1028,7 +1038,12 @@ function toolResultPayload(
   messages: Parameters<StreamingMessageClient["streamMessage"]>[0]["messages"],
   toolUseId: string,
 ): Record<string, any> {
-  const text = toolResultText(messages, toolUseId);
+  const result = messages.find(message => message.type === "tool_result" && message.toolUseId === toolUseId);
+  // Model feedback has separate identity/summary blocks before the tool's JSON body.
+  const payload = result?.type === "tool_result"
+    ? result.content.find(block => block.type === "text" && /^\s*\{/.test(block.text))
+    : undefined;
+  const text = payload?.type === "text" ? payload.text : "";
   if (!text) throw new Error(`Missing tool result: ${toolUseId}`);
   return JSON.parse(text) as Record<string, any>;
 }

@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { readAutoReviewRunMetadata } from "@vykor/protocol";
-import type { AgentChildResult, RunCapabilityView, VykorAgent } from "@vykor/core";
+import type {
+  AgentChildResult,
+} from "@vykor/agent-contracts";
+import type {
+  RunCapabilityView,
+  VykorAgent,
+} from "@vykor/core";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

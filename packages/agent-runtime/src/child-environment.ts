@@ -2,12 +2,13 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { getConfigDir, resolveGitRepository } from "@vykor/host-config";
 import {
-  getConfigDir,
-  resolveGitRepository,
   type AgentChildSpawnInput,
-  type AgentChildResult,
 } from "@vykor/core";
+import {
+  type AgentChildResult,
+} from "@vykor/agent-contracts";
 
 export interface AgentChildEnvironmentLease {
   cwd: string;

@@ -1,6 +1,7 @@
-import type { AgentDefinition } from "@vykor/coordinator";
-import type { McpServerConfig, Settings } from "@vykor/core";
-import { getSkillsDir } from "@vykor/core";
+import { loadNodeAgentDefinitions } from "./node/definitions.js";
+import type { AgentDefinition } from "@vykor/coordinator/definitions";
+import type { McpServerConfig, Settings } from "@vykor/host-config";
+import { getSkillsDir } from "@vykor/host-config";
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -69,7 +70,7 @@ export async function discoverVykorExtensions(
     userDir: getSkillsDir(),
     projectDirs: await findProjectSkillDirs(cwd),
   });
-  const agentDefinitions = plugins.flatMap((plugin) => plugin.components.agents?.value ?? []);
+  const agentDefinitions = loadNodeAgentDefinitions(plugins.flatMap((plugin) => plugin.components.agents?.value ?? []));
   const pluginMcpServers: Record<string, McpServerConfig> = {};
   for (const plugin of plugins) {
     for (const [name, server] of Object.entries(plugin.components.mcpServers?.value ?? {})) {

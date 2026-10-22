@@ -10,7 +10,7 @@ import { RunAdmissionService } from "../run-admission-service.js";
 import { SessionInteractionService } from "../session-interaction-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { createSessionRuntimeDiscovery } from "../session-runtime-discovery.js";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 const cleanup: Array<() => void> = [];
 afterEach(() => { for (const dispose of cleanup.splice(0)) dispose(); });

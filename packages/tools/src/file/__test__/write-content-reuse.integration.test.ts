@@ -4,9 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor,
-  type IPermissionChecker, type Message, type StreamEvent,
+  QueryEngine,
+  ToolRegistry,
+  type AgentExecutionContext,
+  type IHookExecutor,
+  type IPermissionChecker,
+  type StreamEvent,
 } from "@vykor/core";
+import { type Message } from "@vykor/agent-contracts";
 import { fileWriteTool } from "../write.js";
 import { computeFileChange } from "../preview.js";
 

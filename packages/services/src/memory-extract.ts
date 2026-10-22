@@ -1,4 +1,5 @@
-import type { StreamingMessageClient, ModelAttemptFinishedEvent, ModelRetryPolicy } from "@vykor/core";
+import type { StreamingMessageClient, ModelRetryPolicy } from "@vykor/core";
+import type { ModelAttemptFinishedEvent } from "@vykor/agent-contracts";
 import { streamBufferedModelWithRetry } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,

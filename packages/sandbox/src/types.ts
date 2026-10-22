@@ -1,5 +1,5 @@
 import type { StdioOptions } from "node:child_process";
-import type { SandboxConfig, Settings } from "@vykor/core";
+import type { SandboxConfig, Settings } from "@vykor/host-config";
 import type { EnvironmentExecutionOwner } from "@vykor/environment";
 
 export type SandboxBackend = "srt";

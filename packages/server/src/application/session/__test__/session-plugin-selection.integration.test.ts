@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { QueryEngine, ToolRegistry, type AgentExecutionContext, type Message, type RunCapabilityView, type StreamMessageParams } from "@vykor/core";
+import {
+  QueryEngine,
+  ToolRegistry,
+  type AgentExecutionContext,
+  type RunCapabilityView,
+  type StreamMessageParams,
+} from "@vykor/core";
+import { type Message } from "@vykor/agent-contracts";
 import { toolSearchTool } from "@vykor/tools";
 import { createRunCapabilityView, type PluginCapabilityInventory } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";

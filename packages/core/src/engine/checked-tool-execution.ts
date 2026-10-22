@@ -2,7 +2,7 @@ import type { AgentExecutionContext } from "../types/runtime";
 import { isAgentExecutionLimitError } from "../types/runtime";
 import type { HookExecutor as IHookExecutor } from "../types/hooks";
 import type { PermissionChecker as IPermissionChecker } from "../types/permissions";
-import type { Message, ToolUseBlock } from "../types/messages";
+import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
 import type {
   ToolContext,
   ToolDefinition,

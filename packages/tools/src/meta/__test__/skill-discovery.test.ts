@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import type { RunCapabilityView, ToolContext } from "@vykor/core";
-import { listSkillsTool } from "../skill.js";
+import { createSkillTools, capturedSkillCatalog } from "../skill.js";
+const listSkillsTool = createSkillTools(capturedSkillCatalog).find(tool => tool.name === "ListSkills")!;
 
 function context(count = 3): ToolContext {
   const skills = Array.from({ length: count }, (_, index) => {

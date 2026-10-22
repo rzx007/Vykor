@@ -3,13 +3,12 @@ import { isAgentExecutionLimitError } from "../types/runtime";
 
 import type {
   Message,
-  StreamEvent,
   ToolUseBlock,
   UsageSnapshot,
   ContentBlock,
   ModelAttemptFinishedEvent,
-  ToolGenerationProgressEvent,
-} from "../index";
+} from "@vykor/agent-contracts";
+import type { StreamEvent, ToolGenerationProgressEvent } from "../index";
 import type {
   AgentExecutionContext,
   StreamingMessageClient,
@@ -38,8 +37,8 @@ import {
   type CompactContextProvider,
 } from "./compact-service";
 import { CostTracker } from "./cost-tracker";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
-  ModelRequestFailure,
   nextModelRetryDelay,
   normalizeModelRetryPolicy,
   waitForModelRetry,
@@ -612,7 +611,7 @@ export class QueryEngine implements IQueryEngine {
         text: string;
       }> = [];
       let assistantPhase:
-        | import("../types/messages").AssistantMessagePhase
+        | import("@vykor/agent-contracts").AssistantMessagePhase
         | undefined;
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";

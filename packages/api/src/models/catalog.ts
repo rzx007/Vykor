@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { getConfigDir } from "@vykor/core";
+import { getConfigDir } from "@vykor/host-config";
 
 import bundledCatalog from "./api.json";
 import {

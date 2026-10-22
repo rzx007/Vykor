@@ -13,7 +13,7 @@ import {
   readOfficeBytes,
   MAX_OFFICE_BYTES,
 } from "./office-documents.js";
-import { sniffOfficePackage } from "./office-package.js";
+import { sniffOfficePackage } from "../attachments/storage/attachment-media-type.js";
 import { OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 import { AttachmentBlobStore } from "../attachments/storage/attachment-blob-store.js";
 

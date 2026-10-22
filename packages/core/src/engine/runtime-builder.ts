@@ -1,5 +1,5 @@
 import { RuntimeBundle } from "../types/runtime";
-import type { Settings } from "../index";
+import type { Settings } from "@vykor/host-config";
 import type { ToolRegistry as IToolRegistry } from "../types/tools";
 import type {
   StreamingMessageClient,

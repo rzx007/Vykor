@@ -1,18 +1,16 @@
+import type { AgentChildBudget } from "@vykor/agent-contracts";
 import type {
-  AgentChildBudget,
   AgentBackgroundShellHost,
   AgentEffects,
   AgentRequestConfigurationReader,
   AgentScheduleEffects,
   AgentRunScope,
-  PermissionMode,
-  ApprovalMode,
-  WorkMode,
-  Settings,
   StreamingMessageClient,
   ToolDefinition,
   RunCapabilityView,
 } from "@vykor/core";
+import type { PermissionMode, Settings } from "@vykor/host-config";
+import type { ApprovalMode, WorkMode } from "@vykor/protocol";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { WorkflowRunRepository } from "@vykor/coordinator";

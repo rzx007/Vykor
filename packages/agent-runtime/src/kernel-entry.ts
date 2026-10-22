@@ -1,7 +1,5 @@
-export {
-  AgentChildBudgetExceededError,
-  AgentRunNotAcceptingInputError,
-} from "@vykor/core";
+export { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+export { AgentRunNotAcceptingInputError } from "@vykor/core";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,

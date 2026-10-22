@@ -2,7 +2,7 @@ import {
   parsePermissionSettings,
   type PermissionSettings,
   type SandboxConfig,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { normalizeApprovalMode } from "@vykor/protocol";
 import { PermissionChecker } from "@vykor/permissions";
 import {

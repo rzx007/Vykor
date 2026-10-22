@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Settings, StreamingMessageClient } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import type { StreamingMessageClient } from "@vykor/core";
 import type { ApprovalReviewInput } from "@vykor/protocol";
 import { resolveApiClient } from "./default-runtime-provider.js";
 import { createConfiguredApprovalReviewer } from "./configured-approval-reviewer.js";

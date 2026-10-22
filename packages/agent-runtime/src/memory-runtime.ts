@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 
-import type { Message, StreamingMessageClient, ModelAttemptFinishedEvent, ModelAttemptStarted, ModelRetryPolicy, AgentExecutionContext, AgentRunScope } from "@vykor/core";
-import { getProjectMemoryDir, streamBufferedModelWithRetry } from "@vykor/core";
+import type { Message, ModelAttemptFinishedEvent, ModelAttemptStarted } from "@vykor/agent-contracts";
+import type {
+  StreamingMessageClient,
+  ModelRetryPolicy,
+  AgentExecutionContext,
+  AgentRunScope,
+} from "@vykor/core";
+import { getProjectMemoryDir } from "@vykor/host-config";
+import { streamBufferedModelWithRetry } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
   detectCredentialValue,

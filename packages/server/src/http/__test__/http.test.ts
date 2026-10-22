@@ -29,8 +29,8 @@ import type {
   AgentPermissionDecision,
   AgentRunHandle,
   AgentRunResult,
-  Message,
 } from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
 import type {
   AgentCapabilitySnapshot,
   AgentCompactResult,
@@ -40,7 +40,9 @@ import type {
 } from "@vykor/agent-runtime";
 import type { CommandCatalogProvider } from "../../commands/commands.js";
 import {
-  getDetachedProcessSupervisor,
+  ExecutionRuntimeOwner,
+} from "@vykor/execution-node";
+import {
   SessionStore,
 } from "@vykor/services";
 import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
@@ -1365,11 +1367,13 @@ describe("VykorHttpServer", () => {
   it("waits for background process trees to exit before shutdown completes", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vk-process-shutdown-"));
     const pidFile = join(dir, "child.pid");
+    const executionOwner = new ExecutionRuntimeOwner();
     const server = new VykorHttpServer({
       storePath: join(dir, "sessions.db"),
+      executionOwner,
       logger: () => {},
     });
-    const supervisor = getDetachedProcessSupervisor({
+    const supervisor = executionOwner.getDetachedProcessSupervisor({
       cwd: dir,
       sessionId: "shutdown-session",
     });

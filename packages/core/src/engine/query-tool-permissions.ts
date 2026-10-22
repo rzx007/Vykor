@@ -108,7 +108,7 @@ export async function emitToolLifecycle(
   execution: AgentExecutionContext | undefined,
   toolUseId: string,
   phase: "preparing" | "waiting_permission" | "queued" | "running" | "completed" | "failed" | "unknown",
-  executionState?: import("../types/tools").ToolExecutionState,
+  executionState?: import("@vykor/agent-contracts").ToolExecutionState,
 ): Promise<void> {
   await execution?.emit({ type: "domain.event", data: { name: "tool.lifecycle", payload: {
     toolUseId, toolAttemptId: `tool_attempt_${toolUseId}_1`, phase,

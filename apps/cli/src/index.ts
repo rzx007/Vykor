@@ -90,7 +90,7 @@ program
   .argument("[key]", "Config key")
   .argument("[value]", "Config value")
   .action(async (action: string, key?: string, value?: string) => {
-    const { loadSettings, updateSettings } = await import("@vykor/core");
+    const { loadSettings, updateSettings } = await import("@vykor/host-config");
     const settings = await loadSettings();
     if (action === "show" || !key) {
       console.log(JSON.stringify(settings, null, 2));
@@ -145,9 +145,9 @@ program
     console.log();
     const checks: Array<{ label: string; ok: boolean; detail?: string }> = [];
 
-    let settings: import("@vykor/core").Settings | undefined;
+    let settings: import("@vykor/host-config").Settings | undefined;
     try {
-      const { loadSettings } = await import("@vykor/core");
+      const { loadSettings } = await import("@vykor/host-config");
       settings = await loadSettings();
       checks.push({
         label: "Settings loaded",

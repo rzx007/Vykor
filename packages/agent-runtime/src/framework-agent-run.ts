@@ -1,6 +1,22 @@
 import { randomUUID } from "node:crypto";
 
-import type { AgentEffects, AgentEventContext, AgentEventInput, AgentExecutionContext, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope, AgentSteerInput, ChildFailureKind, ChildPartialResult, ContentBlock, StreamEvent } from "@vykor/core";
+import type {
+  AgentEffects,
+  AgentEventContext,
+  AgentEventInput,
+  AgentExecutionContext,
+  AgentInputReceipt,
+  AgentRunHandle,
+  AgentRunResult,
+  AgentRunScope,
+  AgentSteerInput,
+  StreamEvent,
+} from "@vykor/core";
+import type {
+  ChildFailureKind,
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
+import type { ContentBlock } from "@vykor/agent-contracts";
 import { AgentRunNotAcceptingInputError, ChildRunTerminationError, MaxTurnsExceeded, type AgentSession, type RuntimeBundle } from "@vykor/core";
 
 import type { AgentChildManager } from "./child-agent.js";

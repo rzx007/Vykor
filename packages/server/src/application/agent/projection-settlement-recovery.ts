@@ -1,4 +1,11 @@
-import type { AgentChildResult, AgentEvent, ChildFailureKind, ChildPartialResult } from "@vykor/core";
+import type {
+  AgentChildResult,
+  ChildFailureKind,
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
+import type {
+  AgentEvent,
+} from "@vykor/core";
 import type { SessionStore } from "@vykor/services";
 import type {
   CreateProjectionSettlementInput,

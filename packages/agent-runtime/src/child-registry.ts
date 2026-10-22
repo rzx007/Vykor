@@ -1,5 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
-import { AgentChildBudgetExceededError, type AgentChildBudget, type AgentChildBudgetSnapshot, type AgentChildDirectory, type AgentChildHandle } from "@vykor/core";
+import {
+  AgentChildBudgetExceededError,
+  type AgentChildBudget,
+  type AgentChildBudgetSnapshot,
+} from "@vykor/agent-contracts";
+import { type AgentChildDirectory, type AgentChildHandle } from "@vykor/core";
 
 export const DEFAULT_AGENT_CHILD_BUDGET: AgentChildBudget = {
   maxDepth: 4,

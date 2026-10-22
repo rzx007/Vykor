@@ -252,7 +252,7 @@ stateDiagram-v2
 
 ### 当前模型工具清单
 
-模型侧的统一控制面就是下面五个工具。daemon 使用持久化 `DaemonJobService`；standalone SDK 在调用方没有注入外部 host 时自动创建 `LocalAgentJobHost`，因此两种运行方式都会注册这五个工具。
+模型侧的统一控制面就是下面五个工具。daemon 使用持久化 `DaemonJobService`；standalone SDK 由 Node 默认组装创建 `LocalAgentJobHost`，因此两种运行方式都会注册这五个工具。模型工具由 `createJobTools(host)` 显式注入；两种 host 都复用其所属 WorkflowHost，不另建活动目录。
 
 | 工具        | 输入重点                                         | 返回重点                                        | 支持范围                                     |
 | ----------- | ------------------------------------------------ | ----------------------------------------------- | -------------------------------------------- |
@@ -428,12 +428,12 @@ HTTP `/jobs` 由 daemon Bearer token 保护。HTTP 里的 `sessionId` 用于选�
 | `packages/jobs/src/index.ts`                              | 可移植类型和 `AgentJobHost` 契约                        |
 | `packages/server/src/jobs/daemon-job-service.ts`          | owner 校验、聚合、状态转换、控制路由                    |
 | `packages/tools/src/job/job-tools.ts`                     | 模型可调用的五个 `Job*` 工具                            |
-| `packages/tools/src/job/local-job-host.ts`                | standalone SDK 的 child、DetachedProcessSupervisor、Workflow 本地聚合 |
+| `packages/agent-runtime/src/node/jobs/local-agent-job-host.ts`                | standalone SDK 的 child、DetachedProcessSupervisor、Workflow 本地聚合 |
 | `packages/server/src/http/routes/job.ts`                  | `/jobs` HTTP API                                        |
 | `packages/client/src/transport/http-client.ts`            | TypeScript HTTP client                                  |
 | `packages/terminal-node/src/local-terminal-provider.ts`   | Terminal 输出、等待和真实退出生命周期                   |
 | `packages/server/src/application/session/session-execution-projector.ts` | DetachedProcessSupervisor 到 durable execution 的持续投影          |
-| `packages/coordinator/src/workflow/store.ts`              | Workflow 快照、active run 取消和迟到写回保护            |
+| `packages/agent-runtime/src/node/workflow/workflow-host.ts`              | 活动 Workflow、owner 隔离、取消收尾与终态保存            |
 
 ## 已知边界
 

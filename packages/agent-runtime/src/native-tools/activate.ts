@@ -1,4 +1,5 @@
-import { RESERVED_SHELL_TOOL_NAMES, type IToolRegistry } from "@vykor/core";
+import { RESERVED_SHELL_TOOL_NAMES } from "@vykor/agent-contracts";
+import { type IToolRegistry } from "@vykor/core";
 import type { LoadedNativePlugin, PluginDiagnostic } from "@vykor/plugins";
 import { formatNativeToolAuditEvent, NativeToolCallGuard, type NativeToolAuditEvent } from "./guard.js";
 import { NativeToolHost, NativeToolHostError, type NativeToolHostState } from "./tool-host.js";

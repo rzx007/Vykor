@@ -1,4 +1,4 @@
-import type { ToolUseBlock } from "@vykor/core";
+import type { ToolUseBlock } from "@vykor/agent-contracts";
 
 /** Keep malformed calls in the conversation so the model can correct them. */
 export function parseToolInput(value: unknown): Pick<ToolUseBlock, "input" | "inputError"> {

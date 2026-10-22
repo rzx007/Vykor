@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { assembleContextUsageSnapshot } from "./assemble.js";
-import type { ContextLedgerSegment } from "./types.js";
+import type { ContextLedgerSegment } from "@vykor/agent-contracts";
 
 describe("assembleContextUsageSnapshot", () => {
   it("puts tool schema in tools and tool result text in conversation", () => {

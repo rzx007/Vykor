@@ -1,12 +1,11 @@
 import type {
   PermissionMode,
   PermissionRule,
-  PermissionDecision,
-  IPermissionChecker,
   PermissionSettings,
   PathRuleConfig,
-} from "@vykor/core";
-import { canonicalToolName, canonicalToolNames } from "@vykor/core";
+} from "@vykor/host-config";
+import type { PermissionDecision } from "@vykor/agent-contracts";
+import { canonicalToolName, canonicalToolNames } from "@vykor/agent-contracts";
 import { posix, win32 } from "node:path";
 
 export type {
@@ -16,7 +15,7 @@ export type {
   PermissionSettings,
   PathRuleConfig,
 };
-export { parsePermissionSettings } from "@vykor/core";
+export { parsePermissionSettings } from "@vykor/host-config";
 
 /**
  * 只读工具集：swarm worker（teammate）对这些工具自动放行，无需父进程开 full_auto。
@@ -62,7 +61,7 @@ export interface PermissionCheckOptions {
   pathStyle?: "windows" | "posix";
 }
 
-export class PermissionChecker implements IPermissionChecker {
+export class PermissionChecker {
   private mode: PermissionMode;
   private rules: PermissionRule[];
   private allowedTools: Set<string>;

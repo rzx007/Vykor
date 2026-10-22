@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { pluginAppHarness } from "../../../test-helpers/plugin-app-harness.js";
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { updateInstalledPluginStore } from "@vykor/plugins";
 const cleanups: Array<() => Promise<void>> = [];
 it("projects an actual successful Native model result and retrieves appData only through its own app", async () => {

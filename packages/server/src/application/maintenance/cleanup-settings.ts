@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
-import { getDataDir, getLogsDir } from "@vykor/core";
+import { getDataDir, getLogsDir } from "@vykor/host-config";
 import type { SessionStore } from "@vykor/services";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { DaemonControlService } from "../control/daemon-control-service.js";

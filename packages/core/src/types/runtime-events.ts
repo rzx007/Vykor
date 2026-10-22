@@ -1,7 +1,19 @@
-import type { ContentBlock } from "./messages.js";
-import type { GenerationIdentity, ModelAttemptStarted, ModelAttemptUsageStatus, ModelRetryState } from "../engine/model-retry.js";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import type {
+  GenerationIdentity,
+  ModelAttemptStarted,
+  ModelAttemptUsageStatus,
+  ModelRetryState,
+} from "@vykor/agent-contracts";
 import type { AgentPermissionRequest, AgentPermissionDecision, AgentRequestConfiguration } from "./runtime.js";
-import type { AgentChildSpawnInput, AgentChildResult, ChildFailureKind, ChildPartialResult } from "./runtime-child.js";
+import type {
+  AgentChildSpawnInput,
+} from "./runtime-child.js";
+import type {
+  AgentChildResult,
+  ChildFailureKind,
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
 
 export interface AgentEventContext {
   agentId: string;
@@ -55,7 +67,7 @@ export type AgentEventInput =
       type: "output.text.delta";
       data: {
         delta: string;
-        phase?: import("./messages").AssistantMessagePhase;
+        phase?: import("@vykor/agent-contracts").AssistantMessagePhase;
       };
     }
   | {
@@ -85,8 +97,8 @@ export type AgentEventInput =
         result: {
           content: ContentBlock[];
           isError?: boolean;
-          failureKind?: import("./tools").ToolFailureKind;
-          executionState?: import("./tools").ToolExecutionState;
+          failureKind?: import("@vykor/agent-contracts").ToolFailureKind;
+          executionState?: import("@vykor/agent-contracts").ToolExecutionState;
           recoveryHint?: string;
           compactSummary?: string;
           metadata?: Record<string, unknown>;
@@ -94,7 +106,7 @@ export type AgentEventInput =
         };
       };
     }
-  | { type: "usage.updated"; data: { usage: import("./usage").UsageSnapshot } }
+  | { type: "usage.updated"; data: { usage: import("@vykor/agent-contracts").UsageSnapshot } }
   | { type: "output.generation.started"; data: GenerationIdentity }
   | { type: "model.retry.scheduled"; data: ModelRetryState }
   | { type: "model.attempt.started"; data: ModelAttemptStarted }
@@ -103,7 +115,7 @@ export type AgentEventInput =
       data: GenerationIdentity & {
         status: "completed" | "failed" | "interrupted";
         usageStatus: ModelAttemptUsageStatus;
-        usage?: import("./usage").UsageSnapshot;
+        usage?: import("@vykor/agent-contracts").UsageSnapshot;
         notDispatched?: true;
       };
     }

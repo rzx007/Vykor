@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
-import type { Settings, StreamingMessageClient } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import type { StreamingMessageClient } from "@vykor/core";
 import { behaviorCases, type BehaviorCase } from "./cases.js";
 import { assertLiveSampleComplete, formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
 import { reserveBehaviorReport, runBehaviorCase } from "./run.js";

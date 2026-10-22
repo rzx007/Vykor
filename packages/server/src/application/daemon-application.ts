@@ -1,3 +1,5 @@
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
+import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { PluginUiHistoryService } from "./session/plugin-ui-history-service.js";
 import { retirePluginUiActions } from "./recovery/retire-plugin-ui-actions.js";
 import type { PluginLifecycle } from "./session/plugin-lifecycle.js";
@@ -5,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { assemblePluginApps } from "./session/plugin-app-assembly.js";
 import { PluginAppConversationService } from "./session/plugin-app-conversation-service.js";
 
-import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
+import type { AgentBackgroundShellHost } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
 import { fileReadTool } from "@vykor/tools";
@@ -22,10 +25,7 @@ import {
 import {
   AttachmentIntegrityService,
   type LocalOcrService,
-  closeExecutionRuntimes,
   executeAutoDream,
-  getChildAgentExecutionRegistry,
-  getDetachedProcessSupervisor,
   getSessionMemoryContent,
   getSessionMemoryPath,
   readLastConsolidatedAt,
@@ -35,6 +35,8 @@ import {
   type NoteRepository,
   type ApplicationOwnerLease,
 } from "@vykor/services";
+import {
+} from "@vykor/execution-node";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
 import { createDaemonAttachmentServices } from "./attachments/daemon-attachment-services.js";
@@ -135,6 +137,8 @@ import { createMcpConfigureTool } from "./mcp-configure-tool.js";
 import { McpConfigApplicationService } from "./mcp-config-application-service.js";
 
 export interface DaemonApplicationOptions {
+  /** Transferred to the application and closed with it; omitted means a private owner. */
+  executionOwner?: ExecutionRuntimeOwner;
   store: SessionStore;
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
@@ -215,6 +219,7 @@ function failMissingSettings(): never {
  * → onEvent 进投影 → 写成会话记录 → events 推给窗口。
  */
 export class DaemonApplication implements DurableAgentApplication {
+  private readonly executionOwner: ExecutionRuntimeOwner;
   readonly pluginUiHistory: PluginUiHistoryService;
   readonly pluginLifecycle: PluginLifecycle;
   readonly pluginApps: ReturnType<typeof assemblePluginApps>;
@@ -239,6 +244,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly channelRuntime?: ChannelRuntimeService;
   readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
+  readonly workflowHost: WorkflowHost;
   readonly retention: ApplicationRetentionService;
   readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
   readonly mcpOAuth: McpOAuthApplicationService;
@@ -268,6 +274,8 @@ export class DaemonApplication implements DurableAgentApplication {
   constructor(private readonly options: DaemonApplicationOptions) {
     const { store } = options;
     this.store = store;
+    const executionOwner = options.executionOwner ?? new ExecutionRuntimeOwner();
+    this.executionOwner = executionOwner;
     this.notes = store.notes;
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
@@ -294,6 +302,7 @@ export class DaemonApplication implements DurableAgentApplication {
       }
     }, options.ownerHeartbeatMs ?? 5_000);
     this.ownerHeartbeat.unref?.();
+    let createdWorkflowHost: WorkflowHost | undefined;
     try {
       const attachmentServices = createDaemonAttachmentServices({
         store,
@@ -320,6 +329,7 @@ export class DaemonApplication implements DurableAgentApplication {
         onDurableEvent: (previousEventSeq) =>
           this.eventPublisher.publishSince(previousEventSeq),
       });
+      this.workflowHost = createdWorkflowHost = new WorkflowHost(this.workflows);
       this.retention = new ApplicationRetentionService(
         store,
         new AttachmentIntegrityService({
@@ -386,7 +396,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.executionProjector = new SessionExecutionProjector({
         store,
-        getChildAgentExecutionRegistry: (scope) => getChildAgentExecutionRegistry(scope),
+        getChildAgentExecutionRegistry: (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
         events: this.eventPublisher,
         traceIdForRun: (runId) => this.traceIdForRun(runId),
         log: options.log,
@@ -423,7 +433,7 @@ export class DaemonApplication implements DurableAgentApplication {
         operationGate: jobOperationGate,
         store: taskStore,
         executionProjector: this.executionProjector,
-        getDetachedProcessSupervisor: (scope) => getDetachedProcessSupervisor(scope),
+        getDetachedProcessSupervisor: (scope) => this.executionOwner.getDetachedProcessSupervisor(scope),
         events: this.eventPublisher,
         getSettingsForCwd: async (cwd) =>
           options.getSettingsForCwd
@@ -435,9 +445,9 @@ export class DaemonApplication implements DurableAgentApplication {
       this.jobs = new DaemonJobService(
         taskStore,
         this.terminals,
-        (scope) => getDetachedProcessSupervisor(scope),
-        (scope) => getChildAgentExecutionRegistry(scope),
-        this.workflows,
+        (scope) => this.executionOwner.getDetachedProcessSupervisor(scope),
+        (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
+        this.workflowHost,
         this.executionProjector,
         jobOperationGate,
       );
@@ -464,6 +474,7 @@ export class DaemonApplication implements DurableAgentApplication {
 
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
       const loadAgent = createDaemonAgentLoader({
+        executionOwner: this.executionOwner,
         executionSurface: options.executionSurface,
         settings: options.settings,
         getSettings: options.getSettings,
@@ -516,6 +527,7 @@ export class DaemonApplication implements DurableAgentApplication {
             jobs: this.jobs.createDetachedProcessAgentHost(session),
           })),
         workflowRepository: this.workflows,
+        workflowHost: this.workflowHost,
         tools: async ({ session }) => {
           const pluginSettings = options.getSettings?.() ?? options.settings;
           return [
@@ -660,7 +672,9 @@ export class DaemonApplication implements DurableAgentApplication {
             ...(goal ? { toolMetadata: { task_focus_state: { goal } } } : {}),
           }),
         lastConsolidatedAt: readLastConsolidatedAt,
-        autoDream: executeAutoDream,
+        autoDream: (input) => executeAutoDream({
+          ...input, taskRunner: this.executionOwner.getDetachedProcessSupervisor(input.cwd),
+        }),
       });
 
       const contextUsageCache = sharedContextUsageCache;
@@ -1021,7 +1035,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverAttachments: () => this.attachments.recover(),
         reconcileBackgroundTasks: () => this.backgroundShells.reconcileActiveTasks(DAEMON_RESTART_TASK_REASON),
         recoverGoalWaits: () => { this.goals.recoverExternalWaits(); },
-        recoverWorkflows: () => recoverInterruptedWorkflows({ workflows: this.workflows }),
+        recoverWorkflows: () => recoverInterruptedWorkflows({ workflowHost: this.workflowHost }),
       });
       this.startupRecovery = recovery.run()
         .then(
@@ -1037,6 +1051,10 @@ export class DaemonApplication implements DurableAgentApplication {
         );
       void this.startupRecovery.catch(() => {});
     } catch (error) {
+      void (async () => {
+        try { await createdWorkflowHost?.close(); }
+        finally { await executionOwner.close(); }
+      })().catch(() => {});
       clearInterval(this.ownerHeartbeat);
       store.releaseApplicationOwner(this.ownerLease);
       throw error;
@@ -1102,7 +1120,12 @@ export class DaemonApplication implements DurableAgentApplication {
       failures.push(error);
     }
     try {
-      await closeExecutionRuntimes();
+      await this.workflowHost.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await this.executionOwner.close();
     } catch (error) {
       failures.push(error);
     }

@@ -2,7 +2,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getInstalledPluginStorePath, type AgentChildResult, type AgentChildSpawnInput, type Settings, type StreamMessageParams } from "@vykor/core";
+import { getInstalledPluginStorePath, type Settings } from "@vykor/host-config";
+import {
+  type AgentChildResult,
+} from "@vykor/agent-contracts";
+import {
+  type AgentChildSpawnInput,
+  type StreamMessageParams,
+} from "@vykor/core";
 import { installLocalNativePlugin, updateInstalledPluginStore } from "@vykor/plugins";
 import { createDefaultNodeAgent } from "./default-agent.js";
 import type { VykorAgent, VykorAgentOptions } from "./agent.js";

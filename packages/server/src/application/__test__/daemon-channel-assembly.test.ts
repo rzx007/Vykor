@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ChannelConfigStore } from "@vykor/auth";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
 import { VykorHttpServer } from "../../http/server.js";

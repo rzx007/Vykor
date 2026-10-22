@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentEvent, Settings, StreamMessageParams, ToolDefinition } from "@vykor/core";
-import { skillTool } from "../../tools/src/meta/skill.js";
+import type { AgentEvent, StreamMessageParams, ToolDefinition } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import { createSkillTools, capturedSkillCatalog } from "../../tools/src/meta/skill.js";
+const skillTool = createSkillTools(capturedSkillCatalog).find(tool => tool.name === "Skill")!;
 import { createAgentKernel, createBasicAgentKernelRuntime } from "./kernel.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { unavailableCapability } from "./capability-resolution.js";

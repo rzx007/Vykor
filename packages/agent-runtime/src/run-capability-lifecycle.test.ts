@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { AgentEvent, AgentChildController, Settings, StreamingMessageClient } from "@vykor/core";
+import type { AgentEvent, AgentChildController, StreamingMessageClient } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AgentRunCapabilitySnapshot, VykorAgentConfiguration } from "./agent-options.js";

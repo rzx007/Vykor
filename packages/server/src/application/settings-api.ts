@@ -418,4 +418,4 @@ export interface GitService {
     message: string;
   }): Promise<{ output: string }> | { output: string };
 }
-import type { InputSupport, ModelInputCapabilities } from "@vykor/core";
+import type { InputSupport, ModelInputCapabilities } from "@vykor/host-config";

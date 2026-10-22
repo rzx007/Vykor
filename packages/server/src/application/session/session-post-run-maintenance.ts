@@ -1,4 +1,5 @@
-import { getProjectMemoryDir, type AgentExecutionLimits, type Settings } from "@vykor/core";
+import { getProjectMemoryDir, type Settings } from "@vykor/host-config";
+import { type AgentExecutionLimits } from "@vykor/core";
 import { sessionSettingsRoot } from "../../runtime/session-settings-root.js";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";

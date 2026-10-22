@@ -1,8 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QueryEngine, ToolRegistry, type Message } from "@vykor/core";
-import { createShellOutputLogHost } from "@vykor/services/executions";
+import { QueryEngine, ToolRegistry } from "@vykor/core";
+import { type Message } from "@vykor/agent-contracts";
+import {
+  createShellOutputLogHost,
+} from "@vykor/execution-node";
 import { expect, it } from "vitest";
 import { fileReadTool } from "../../file/read.js";
 import { createShellTool } from "../shell.js";

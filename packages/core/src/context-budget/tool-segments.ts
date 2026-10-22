@@ -1,4 +1,4 @@
-import type { ContextLedgerSegment } from "./types.js";
+import type { ContextLedgerSegment } from "@vykor/agent-contracts";
 
 export type ToolSchemaKind = "builtin" | "mcp";
 

@@ -1,6 +1,6 @@
 import type { PluginDiagnostic } from "./diagnostics.js";
-import type { HookDefinition, McpServerConfig } from "@vykor/core";
-import type { AgentDefinition } from "@vykor/coordinator";
+import type { HookDefinition, McpServerConfig } from "@vykor/host-config";
+import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import type { SkillDefinition } from "@vykor/skills";
 import type { PluginPresentation } from "@vykor/protocol";
 

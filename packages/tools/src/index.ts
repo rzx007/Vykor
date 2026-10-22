@@ -1,4 +1,3 @@
-export { createDefaultToolRegistry } from "./registry.js";
 export {
   shellTool,
   createShellTool,
@@ -29,7 +28,6 @@ export {
   type FileChangePreview,
 } from "./file/index.js";
 export { grepTool } from "./search/index.js";
-export { createShellOutputLogHost } from "@vykor/services/executions";
 export {
   createWebFetchTool,
   createWebSearchTool,
@@ -52,11 +50,21 @@ export {
   type WebSearchResult,
   type WebSearchSource,
 } from "./web/index.js";
-export {
-  createAgentWorkflowRunner,
-  type AgentWorkflowRunnerOptions,
-} from "./agent/index.js";
-export { mcpAuthTool } from "./mcp/index.js";
 export { toolSearchTool } from "./meta/tool-search.js";
-export { feishuPushTool } from "./channels/index.js";
-export { LocalAgentJobHost } from "./job/index.js";
+
+export * from "./agent/index.js";
+export * from "./meta/index.js";
+export * from "./mode/index.js";
+export * from "./mcp/index.js";
+export * from "./notebook/index.js";
+export * from "./schedule/index.js";
+export * from "./terminal/index.js";
+export * from "./job/index.js";
+export * from "./background-shell/index.js";
+export { createLspTool } from "./search/index.js";
+export { createFeishuPushTool } from "./channels/feishu-push.js";
+export type { ConfigToolPort } from "./ports/config.js";
+export type { FeishuChannelPort } from "./ports/channel.js";
+export type { McpToolPort, McpResourceDescription } from "./ports/mcp.js";
+export type { SkillCatalogPort, SkillCatalogSnapshot, ToolSkillDefinition } from "./ports/skill.js";
+export type { WorkflowInvocation, WorkflowToolPort } from "./ports/workflow.js";

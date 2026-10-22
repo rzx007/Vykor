@@ -4,4 +4,6 @@ export * from "./notification.js";
 export * from "./runner.js";
 export * from "./snapshot.js";
 export * from "./reconciliation.js";
-export * from "./store.js";
+export * from "./repository.js";
+export * from "./store-decoding.js";
+export * from "./input.js";

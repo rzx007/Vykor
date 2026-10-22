@@ -1,4 +1,5 @@
-import type { Settings, UsageSnapshot } from "../index";
+import type { Settings } from "@vykor/host-config";
+import type { UsageSnapshot } from "@vykor/agent-contracts";
 
 export interface AppState {
   sessionId: string;

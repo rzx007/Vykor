@@ -1,6 +1,6 @@
 import type { ReasoningSource, StreamEvent } from "@vykor/core";
 import { externalToolMetadata, toolFeedbackFields } from "@vykor/core";
-import type { AssistantMessagePhase } from "@vykor/core";
+import type { AssistantMessagePhase } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
 import type {
   SessionEventRecord,

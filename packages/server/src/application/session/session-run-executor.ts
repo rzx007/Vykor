@@ -3,7 +3,9 @@ import { readSessionModelRetryState } from "@vykor/protocol";
 import { resolveRunPluginSelection } from "./session-plugin-selection.js";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError, type GoalRunBinding, type GoalReadSnapshot } from "@vykor/agent-runtime";
-import { isAgentExecutionLimitError, type AgentExecutionLimits, type ContentBlock, type ModelInputCapabilities } from "@vykor/core";
+import { isAgentExecutionLimitError, type AgentExecutionLimits } from "@vykor/core";
+import { type ContentBlock } from "@vykor/agent-contracts";
+import { type ModelInputCapabilities } from "@vykor/host-config";
 import type { GoalOperations, SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";

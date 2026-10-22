@@ -1,16 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
-import type {
-  ActiveMcpRuntimeHandle,
-  McpRuntimeRegistry,
-  McpServerConfig,
-  McpServerIdentity,
-  RuntimeBundle,
-  RunToolBinding,
-  Settings,
-  ToolDefinition,
-} from "@vykor/core";
-import { loadProjectSettings, loadSettings } from "@vykor/core";
+import type { ActiveMcpRuntimeHandle, McpRuntimeRegistry } from "@vykor/mcp";
+import type { McpServerConfig, McpServerIdentity, Settings } from "@vykor/host-config";
+import type { RuntimeBundle, RunToolBinding, ToolDefinition } from "@vykor/core";
+import { loadProjectSettings, loadSettings } from "@vykor/host-config";
 import { computePluginBehaviorDigest, discoverInstalledNativePlugins, loadNativeAppMetadata, verifyInstalledNativePlugin } from "@vykor/plugins";
 import {
   createMcpServerIdentity,
@@ -19,7 +12,6 @@ import {
   type CapturedMcpAppResources,
 } from "@vykor/mcp";
 import { McpOAuthCredentialStore } from "@vykor/auth";
-import { getAllAgentDefinitions } from "@vykor/coordinator";
 import { appendUserProfileUpdate } from "@vykor/prompts";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
@@ -321,13 +313,10 @@ export async function installRuntimeIntegrations(
       ownerPluginId: definition.source === "plugin" && owner?.path === definition.path ? owner.pluginId : undefined,
     };
   });
-  const agents = [
-    ...getAllAgentDefinitions([]).map((definition) => ({ definition })),
-    ...options.discovery.agentDefinitions.map((definition) => ({
-      definition,
-      ownerPluginId: inventory.agents.get(definition.name)?.pluginId,
-    })),
-  ];
+  const agents = options.discovery.agentDefinitions.map((definition) => ({
+    definition,
+    ownerPluginId: definition.source === "plugin" ? inventory.agents.get(definition.name)?.pluginId : undefined,
+  }));
 
   runtime.createRunCapabilityView = (scope) => {
     const preparationErrors = new Map<string, string[]>();

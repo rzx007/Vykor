@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 import type { ProjectRecord } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
-import { getDetachedProcessSupervisor } from "@vykor/services/executions";
+import {
+  ExecutionRuntimeOwner,
+} from "@vykor/execution-node";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -42,8 +44,9 @@ describe("ProjectApplicationService", () => {
     const store = new SessionStore({ path: join(directory, "store.db") });
     const project = store.projects.inspect(directory);
     store.sessions.create({ id: "s1", cwd: directory, projectId: project.id, model: "test" });
-    const application = new DaemonApplication({ store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
-    const manager = getDetachedProcessSupervisor({ cwd: directory, sessionId: "s1" });
+    const executionOwner = new ExecutionRuntimeOwner();
+    const application = new DaemonApplication({ executionOwner, store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
+    const manager = executionOwner.getDetachedProcessSupervisor({ cwd: directory, sessionId: "s1" });
     let finishClose!: () => void;
     const closing = new Promise<void>(resolve => { finishClose = resolve; });
     let rebinding: Promise<any> | undefined;

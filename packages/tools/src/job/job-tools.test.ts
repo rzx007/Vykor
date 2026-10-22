@@ -1,8 +1,8 @@
+import { createJobTools } from "./job-tools.js";
 import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
-import { QueryEngine, ToolRegistry, type StreamEvent } from "@vykor/core";
+import { QueryEngine, ToolRegistry, type StreamEvent, type ToolContext, type ToolResult } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
-import { jobCancelTool, jobListTool, jobReadTool, jobWaitTool } from "./job-tools.js";
 
 const snapshot: JobSnapshot = {
   id: "terminal-1",
@@ -17,9 +17,21 @@ const snapshot: JobSnapshot = {
 };
 
 describe("job tools", () => {
+  it("does not use a context host when no port was injected", async () => {
+    const list = vi.fn(async () => [snapshot]);
+    const result = await createJobTools().find(tool => tool.name === "JobList")!.execute({}, context({ list }));
+    expect(result.isError).toBe(true);
+    expect(list).not.toHaveBeenCalled();
+  });
+  it("uses the injected host with its method receiver", async () => {
+    const host = { ...context({}).jobs, output: "injected", async read() { return { text: this.output, cursor: 8, truncated: false, snapshot }; } };
+    const tool = createJobTools(host).find(tool => tool.name === "JobRead")!;
+    const result = await tool.execute({ jobId: snapshot.id }, { cwd: "/repo", sessionId: "session-1" });
+    expect(payload(result)).toMatchObject({ text: "injected", snapshot: { id: snapshot.id } });
+  });
   it.each([300, 420])("bounds a requested %s second wait to a short interval", async (timeoutSeconds) => {
     const wait = vi.fn(async () => ({ text: "", cursor: 4, truncated: false, snapshot, timedOut: true }));
-    const result = await jobWaitTool.execute({ jobIds: ["terminal-1"], timeoutSeconds }, context({ wait }));
+    const result = await executeJob("JobWait", { jobIds: ["terminal-1"], timeoutSeconds }, context({ wait }));
     expect(wait).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 60_000 }));
     expect(result.isError).not.toBe(true);
     expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("terminal-1") });
@@ -36,7 +48,8 @@ describe("job tools", () => {
         return { text: "still working", cursor: 4, truncated: false, snapshot, timedOut: true };
       });
       const registry = new ToolRegistry();
-      registry.register(jobWaitTool);
+      const jobs = context({ wait, cancel }).jobs;
+      registry.register(createJobTools(jobs).find(tool => tool.name === "JobWait")!);
       let request = 0;
       const client = {
         async *streamMessage() {
@@ -56,7 +69,7 @@ describe("job tools", () => {
         { checkTool: async () => ({ action: "allow" as const }) },
         { execute: async () => ({ blocked: false }) },
         { sessionId: "session-1", toolTimeoutMs: 5_000 });
-      engine.setJobs(context({ wait, cancel }).jobs);
+      engine.setJobs(jobs);
       const events: StreamEvent[] = [];
       const running = (async () => {
         for await (const event of engine.submitMessage("Wait for the existing job")) events.push(event);
@@ -76,7 +89,7 @@ describe("job tools", () => {
   });
   it("lists only through the durable session owner", async () => {
     const list = vi.fn(async () => [snapshot]);
-    const result = await jobListTool.execute({
+    const result = await executeJob("JobList", {
       kinds: ["terminal"],
       statuses: ["running"],
       includeFinished: false,
@@ -99,7 +112,7 @@ describe("job tools", () => {
 
   it("bounds the default model-visible list without deleting host history", async () => {
     const list = vi.fn(async () => [snapshot]);
-    const result = await jobListTool.execute({}, context({ list }));
+    const result = await executeJob("JobList", {}, context({ list }));
 
     expect(list).toHaveBeenCalledWith({ sessionId: "session-1", limit: 100 });
     expect(payload(result)).toMatchObject({
@@ -109,7 +122,7 @@ describe("job tools", () => {
 
   it("treats empty kind and status arrays as omitted filters", async () => {
     const list = vi.fn(async () => [snapshot]);
-    const result = await jobListTool.execute({
+    const result = await executeJob("JobList", {
       kinds: [],
       statuses: [],
       limit: 20,
@@ -124,7 +137,7 @@ describe("job tools", () => {
 
   it("forwards read cursors and output limits", async () => {
     const read = vi.fn(async () => ({ text: "next", cursor: 4, truncated: false, snapshot }));
-    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 3, maxChars: 40 }, context({ read }));
+    const result = await executeJob("JobRead", { jobId: "terminal-1", after: 3, maxChars: 40 }, context({ read }));
     expect(result.compactSummary).toContain("jobId=terminal-1; status=running; cursor=4");
     expect(result.compactSummary).not.toContain("next");
     expect(read).toHaveBeenCalledWith({
@@ -139,7 +152,7 @@ describe("job tools", () => {
     const read = vi.fn(async () => ({ text: "", cursor: 17, truncated: false,
       snapshot: { ...snapshot, status: "completed" as const, metadata: { outputWriteFailed: "1" } },
       details: { outputUnavailable: "Background log could not be read; output may be incomplete." } }));
-    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 17 }, context({ read }));
+    const result = await executeJob("JobRead", { jobId: "terminal-1", after: 17 }, context({ read }));
     expect(result.isError).not.toBe(true);
     expect(payload(result)).toMatchObject({ text: "", cursor: 17, snapshot: { status: "completed", metadata: { outputWriteFailed: "1" } },
       details: { outputUnavailable: expect.stringMatching(/could not be read/i) } });
@@ -147,7 +160,7 @@ describe("job tools", () => {
 
   it("reports an unknown log read failure without a fabricated cursor", async () => {
     const read = vi.fn(async () => { throw new Error("EISDIR: log read failed"); });
-    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 17 }, context({ read }));
+    const result = await executeJob("JobRead", { jobId: "terminal-1", after: 17 }, context({ read }));
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("EISDIR");
   });
@@ -155,14 +168,14 @@ describe("job tools", () => {
   it("preserves the complete 41-character task id", async () => {
     const id = `task_${"a".repeat(36)}`;
     const read = vi.fn(async () => ({ text: "", cursor: 2, truncated: false, snapshot: { ...snapshot, id } }));
-    const result = await jobReadTool.execute({ jobId: id }, context({ read }));
+    const result = await executeJob("JobRead", { jobId: id }, context({ read }));
     expect(result.compactSummary).toContain(`jobId=${id};`);
   });
 
   it("omits a whole oversized job id instead of inventing a truncated one", async () => {
     const id = `task_${"a".repeat(1100)}`;
     const read = vi.fn(async () => ({ text: "", cursor: 2, truncated: false, snapshot: { ...snapshot, id } }));
-    const result = await jobReadTool.execute({ jobId: id }, context({ read }));
+    const result = await executeJob("JobRead", { jobId: id }, context({ read }));
     expect(result.compactSummary).toContain("1 observation omitted");
     expect(result.compactSummary).not.toContain("jobId=task_");
     expect(result.compactSummary!.length).toBeLessThanOrEqual(1000);
@@ -173,7 +186,7 @@ describe("job tools", () => {
       if (input.jobId === "missing") throw new Error("not found");
       return { text: "", cursor: 1, truncated: false, snapshot: { ...snapshot, id: input.jobId }, timedOut: true };
     });
-    const result = await jobWaitTool.execute({ jobIds: ["missing", "terminal-1"] }, context({ wait }));
+    const result = await executeJob("JobWait", { jobIds: ["missing", "terminal-1"] }, context({ wait }));
     expect(result.compactSummary).toContain("1 observation without snapshot");
     expect(result.compactSummary).not.toContain("omitted");
   });
@@ -182,7 +195,7 @@ describe("job tools", () => {
     const wait = vi.fn(async (input) => ({ text: "private output", cursor: 1, truncated: false,
       snapshot: { ...snapshot, id: input.jobId, exitCode: null }, timedOut: true }));
     const jobIds = Array.from({ length: 10 }, (_, index) => `job-${index}`);
-    const result = await jobWaitTool.execute({ jobIds }, context({ wait }));
+    const result = await executeJob("JobWait", { jobIds }, context({ wait }));
     expect(result.compactSummary).toContain("2 observation omitted from summary");
     expect(result.compactSummary).toContain("jobId=job-9; status=running; cursor=1; exitCode=null");
     expect(result.compactSummary).not.toContain("private output");
@@ -191,7 +204,7 @@ describe("job tools", () => {
   it("waits without turning timeout into cancellation", async () => {
     const wait = vi.fn(async () => ({ text: "", cursor: 4, truncated: false, snapshot, timedOut: true }));
     const cancel = vi.fn(async () => snapshot);
-    const result = await jobWaitTool.execute({ jobIds: ["terminal-1"], timeoutSeconds: 2 }, context({ wait, cancel }));
+    const result = await executeJob("JobWait", { jobIds: ["terminal-1"], timeoutSeconds: 2 }, context({ wait, cancel }));
     expect(payload(result)).toMatchObject({
       action: "wait",
       results: [{ jobId: "terminal-1", timedOut: true }],
@@ -207,7 +220,7 @@ describe("job tools", () => {
       snapshot: { ...snapshot, id: input.jobId },
       timedOut: false,
     }));
-    const result = await jobWaitTool.execute({
+    const result = await executeJob("JobWait", {
       jobIds: ["terminal-1", "task-2"],
       timeoutSeconds: 1,
       after: { "terminal-1": 4, "task-2": 7 },
@@ -229,7 +242,7 @@ describe("job tools", () => {
       if (input.jobId === "missing") throw new Error("Job not found: missing");
       return { text: "done", cursor: 1, truncated: false, snapshot, timedOut: false };
     });
-    const result = await jobWaitTool.execute({
+    const result = await executeJob("JobWait", {
       jobIds: ["terminal-1", "missing"],
       timeoutSeconds: 1,
     }, context({ wait }));
@@ -244,7 +257,7 @@ describe("job tools", () => {
 
   it("rejects oversized wait batches before starting concurrent waits", async () => {
     const wait = vi.fn();
-    const result = await jobWaitTool.execute({
+    const result = await executeJob("JobWait", {
       jobIds: Array.from({ length: 33 }, (_, index) => `job-${index}`),
     }, context({ wait }));
 
@@ -258,7 +271,7 @@ describe("job tools", () => {
 
   it("cancels through the common host", async () => {
     const cancel = vi.fn(async () => ({ ...snapshot, status: "stopping" as const }));
-    await jobCancelTool.execute({ jobId: "terminal-1", reason: "done" }, context({ cancel }));
+    await executeJob("JobCancel", { jobId: "terminal-1", reason: "done" }, context({ cancel }));
     expect(cancel).toHaveBeenCalledWith({ sessionId: "session-1", jobId: "terminal-1", reason: "done" });
   });
 });
@@ -275,8 +288,12 @@ function context(overrides: Partial<AgentJobHost>) {
   return { cwd: "/repo", sessionId: "session-1", jobs };
 }
 
-function payload(result: Awaited<ReturnType<typeof jobListTool.execute>>): Record<string, unknown> {
+function payload(result: ToolResult): Record<string, unknown> {
   const block = result.content[0];
   if (!block || block.type !== "text") throw new Error("Expected text result");
   return JSON.parse(block.text) as Record<string, unknown>;
+}
+
+function executeJob(name: string, input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+  return createJobTools(context.jobs).find(tool => tool.name === name)!.execute(input, context);
 }

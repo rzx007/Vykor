@@ -1,17 +1,5 @@
-export type { ApprovalMode, WorkMode } from "@vykor/protocol";
-export type PermissionMode = "default" | "plan" | "full_auto" | import("@vykor/protocol").ApprovalMode;
-
-export interface PermissionRule {
-  tool?: string;
-  pathPattern?: string;
-  commandPattern?: string;
-  action: "allow" | "deny" | "ask";
-}
-
-export interface PermissionDecision {
-  action: "allow" | "deny" | "ask";
-  reason?: string;
-}
+import type { PermissionDecision } from "@vykor/agent-contracts";
+import type { PermissionMode } from "@vykor/host-config";
 
 export interface PermissionChecker {
   /** Runtime owners may expose their current mode; custom checkers need not. */

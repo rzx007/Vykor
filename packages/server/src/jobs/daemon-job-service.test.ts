@@ -3,8 +3,11 @@ import { mkdtempSync, rmSync, renameSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "@vykor/services";
-import { DetachedProcessSupervisor } from "@vykor/services/executions";
-import { createDefaultToolRegistry } from "@vykor/tools";
+import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
+import {
+  DetachedProcessSupervisor,
+} from "@vykor/execution-node";
+import { createJobTools } from "@vykor/tools";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
@@ -52,7 +55,7 @@ describe("DaemonJobService", () => {
       const execution = await runtime.startShellExecution({ cwd: dir, description: "output", argv: [process.execPath, "-e", "process.stdout.write('a'.repeat(20000))"] });
       await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
       store.createSessionTask({ id: execution.id, sessionId: "session-1", type: "shell", description: "output", cwd: dir, metadata: { executionBackend: "detached_process" } });
-      const service = new DaemonJobService({ ...store, getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      const service = new DaemonJobService({ ...store, getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, new WorkflowHost({} as any));
       const read = await service.read({ sessionId: "session-1", jobId: execution.id, maxChars: 15000 });
       expect(read.text.length).toBe(15000);
       expect(read.truncated).toBe(true);
@@ -72,7 +75,7 @@ describe("DaemonJobService", () => {
       await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
       await vi.waitFor(() => expect(store.getSessionTask(execution.id)?.status).toBe("completed"));
       store.updateSessionTask(execution.id, { status, error: "old failure" });
-      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store), waitForSessionTaskChange: store.waitForSessionTaskChange.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any, projector);
+      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store), waitForSessionTaskChange: store.waitForSessionTaskChange.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, new WorkflowHost({} as any), projector);
       await service.send({ sessionId: "session-1", jobId: execution.id, data: "continue" });
       expect(store.getSessionTask(execution.id)?.status).toBe("running");
       await runtime.awaitExecution(execution.id, { timeoutMs: 10000 });
@@ -88,7 +91,7 @@ describe("DaemonJobService", () => {
       store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
       store.createSessionTask({ id: "missing", sessionId: "session-1", type: "agent", cwd: dir, description: "agent", metadata: { executionBackend: "detached_process" } });
       store.updateSessionTask("missing", { status: "failed", output: "previous result", error: "previous error" });
-      const service = new DaemonJobService({ getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      const service = new DaemonJobService({ getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, new WorkflowHost({} as any));
       await expect(service.send({ sessionId: "session-1", jobId: "missing", data: "continue" })).rejects.toThrow("Execution not found");
       expect(store.getSessionTask("missing")).toMatchObject({ status: "failed", output: "previous result", error: "previous error" });
       expect(await service.wait({ sessionId: "session-1", jobId: "missing", timeoutMs: 100 })).toMatchObject({ text: "previous result", timedOut: false, snapshot: { status: "failed" } });
@@ -104,7 +107,7 @@ describe("DaemonJobService", () => {
       store.createSessionTask({ id: "race", sessionId: "session-1", type: "shell", description: "long", cwd: dir, metadata: { executionBackend: "detached_process" } });
       store.updateSessionTask("race", { status: "pending" });
       await runtime.startShellExecution({ id: "race", cwd: dir, description: "long", argv: [process.execPath, "-e", "setInterval(() => {}, 1000)"] });
-      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: id => { const task = store.getSessionTask(id); store.updateSessionTask(id, { status: "running" }); return task; }, updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, {} as any);
+      const service = new DaemonJobService({ getSession: id => store.sessions.get(id), getSessionTask: id => { const task = store.getSessionTask(id); store.updateSessionTask(id, { status: "running" }); return task; }, updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store) } as any, { list: async () => [] } as any, () => runtime, () => runtime, new WorkflowHost({} as any));
       await service.cancel({ sessionId: "session-1", jobId: "race" });
       expect(runtime.getExecution("race")?.status).toBe("stopped");
       expect(store.getSessionTask("race")?.status).toBe("stopped");
@@ -138,7 +141,7 @@ describe("DaemonJobService", () => {
           getSessionTask: (id: string) => reopened!.getSessionTask(id),
         } as any, { list: async () => [] } as any,
         () => ({}) as any, () => ({}) as any,
-        { list: () => [], load: () => undefined } as any,
+        new WorkflowHost({ list: () => [], load: () => undefined } as any),
       );
       const [job] = await service.list({ sessionId: "session-1", includeFinished: true });
       expect(job).toMatchObject({ status: "failed", exitCode: 7, metadata: { owner: "kept" } });
@@ -186,13 +189,13 @@ describe("DaemonJobService", () => {
         listSessionTasks: (id: string) => reopened!.listSessionTasks(id),
         getSessionTask: (id: string) => reopened!.getSessionTask(id),
       } as any, { list: async () => [] } as any, () => ({}) as any, () => ({}) as any,
-      { list: () => [], load: () => undefined } as any);
+      new WorkflowHost({ list: () => [], load: () => undefined } as any));
       const read = await service.read({ sessionId: "session-1", jobId: "task-1" });
       const json = JSON.stringify(read);
       expect(json).toContain('"outputDiscardedBytes":"31"');
       expect(read.text).toContain("a".repeat(100));
       expect(read.text).not.toContain("已丢失");
-      const tool = createDefaultToolRegistry({ jobs: true }).get("JobRead")!;
+      const tool = createJobTools(service).find(tool => tool.name === "JobRead")!;
       const toolResult = await tool.execute({ jobId: "task-1" }, { cwd: dir, sessionId: "session-1", jobs: service });
       expect(JSON.parse((toolResult.content[0] as { text: string }).text)).toMatchObject({ snapshot: { metadata: {
         outputDiscardedBytes: "31",
@@ -883,7 +886,7 @@ function createService(
       terminals as any,
       () => manager,
       () => childAgents,
-      (overrides.workflows ?? { list: () => [], load: () => undefined }) as any,
+      new WorkflowHost((overrides.workflows ?? { list: () => [], load: () => undefined }) as any),
     ),
     store,
     terminals,

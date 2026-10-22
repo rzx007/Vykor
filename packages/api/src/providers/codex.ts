@@ -1,14 +1,12 @@
 import { platform, machine } from "node:os";
 import { normalizeTokenMetering } from "./token-metering.js";
-import type { UsageSnapshot } from "@vykor/core";
+import type { UsageSnapshot } from "@vykor/agent-contracts";
+import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
 import type {
-  ContentBlock,
-  Message,
   StreamEvent,
   StreamingMessageClient,
   StreamMessageParams,
   ToolDefinition,
-  ToolUseBlock,
 } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
@@ -20,7 +18,7 @@ import {
 import { createRequestLifecycle } from "./retry";
 import { parseToolInput } from "./tool-input.js";
 import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
-import { ModelRequestFailure } from "@vykor/core";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   prepareNativeImagePayload,
   preparedImageDataUrl,

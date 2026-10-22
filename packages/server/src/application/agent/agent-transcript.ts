@@ -1,4 +1,4 @@
-import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core";
+import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/agent-contracts";
 import { toolFeedbackFields } from "@vykor/core";
 import {
   isCommittedModelPart,

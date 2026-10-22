@@ -1,5 +1,5 @@
 import type { ToolExecutionResult } from "../../types/tools.js";
-import type { ToolUseBlock } from "../../types/messages.js";
+import type { ToolUseBlock } from "@vykor/agent-contracts";
 
 export interface TrajectoryCall {
   toolUse: ToolUseBlock;

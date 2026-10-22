@@ -154,7 +154,7 @@ Orkas 的 `workspace.read`、`office.presentation`、`media.image` 是能力分�
 
 试点只需要转选中的能力包，没必要先造一个能转换全部 Orkas 资源的通用导入器。
 
-证据：[我们的默认工具目录](D:/code/personal-project/OpenHarness-ts/packages/tools/src/registry.ts)、[原生插件示例](D:/code/personal-project/OpenHarness-ts/examples/plugins/text-inspector/.vykor-plugin/plugin.json)、[Orkas 工具分组目录](D:/code/personal-project/Orkas/src/main/model/core-agent/tool-catalog.ts)、[Orkas 脚本运行入口](D:/code/personal-project/Orkas/bin/run-skill.cjs)。
+证据：[我们的默认工具目录（现归 Node）](../packages/agent-runtime/src/node/tools/default-tool-registry.ts)、[原生插件示例](D:/code/personal-project/OpenHarness-ts/examples/plugins/text-inspector/.vykor-plugin/plugin.json)、[Orkas 工具分组目录](D:/code/personal-project/Orkas/src/main/model/core-agent/tool-catalog.ts)、[Orkas 脚本运行入口](D:/code/personal-project/Orkas/bin/run-skill.cjs)。
 
 ### 5.4 已有文件入口和插件 UI，仍需补“当前成品”记录
 

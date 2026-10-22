@@ -2,11 +2,8 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type {
-  AgentChildController,
-  AgentExecutionContext,
-  Settings,
-} from "@vykor/core";
+import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { computePluginBehaviorDigest, installLocalNativePlugin } from "@vykor/plugins";
 import { ToolRegistry } from "@vykor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

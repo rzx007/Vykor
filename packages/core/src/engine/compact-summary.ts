@@ -1,4 +1,4 @@
-import type { Message } from "../index";
+import type { Message } from "@vykor/agent-contracts";
 import type { CompactClient } from "./compact-types";
 import { isTextBlock, toolFactsText } from "./compact-messages";
 import { COMPACT_PROMPT } from "./compact-prompt";

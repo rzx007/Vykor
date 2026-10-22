@@ -17,20 +17,19 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/auth": "workspace:*",
     "@vykor/coordinator": "workspace:*",
     "@vykor/core": "workspace:*",
     "@vykor/environment": "workspace:*",
     "@vykor/jobs": "workspace:*",
-    "@vykor/mcp": "workspace:*",
     "@vykor/sandbox": "workspace:*",
-    "@vykor/services": "workspace:*",
-    "@vykor/skills": "workspace:*",
     "@vykor/terminal": "workspace:*",
     "diff": "catalog:",
     "ignore": "7.0.6",
     "minisearch": "catalog:",
-    "picomatch": "4.0.4"
+    "picomatch": "4.0.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*"
   },
   "devDependencies": {
     "@types/diff": "catalog:",

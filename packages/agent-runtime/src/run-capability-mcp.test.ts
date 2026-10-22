@@ -1,7 +1,17 @@
 import { expect, it, vi } from "vitest";
-import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig, type ToolDefinition } from "@vykor/core";
+import {
+  QueryEngine,
+  ToolRegistry,
+  type AgentExecutionContext,
+  type IHookExecutor,
+  type ToolDefinition,
+} from "@vykor/core";
+import { type McpServerConfig } from "@vykor/host-config";
 import { McpClientManager } from "@vykor/mcp";
-import { mcpToolCallTool, listMcpResourcesTool, readMcpResourceTool, mcpAuthTool } from "../../tools/src/mcp/mcp-tools.js";
+import { createMcpTools } from "../../tools/src/mcp/mcp-tools.js";
+import { createNodeMcpPort } from "./node/tools/tool-ports.js";
+const mcpTools = createMcpTools(createNodeMcpPort());
+const readMcpResourceTool = mcpTools.find(tool => tool.name === "ReadMcpResource")!;
 import { createRunCapabilityView } from "./run-capability-view.js";
 
 // A real stdio JSON-RPC endpoint: new processes return a different version.
@@ -153,7 +163,7 @@ it.each([undefined, "another-plugin"])("blocks global MCP meta capabilities for 
   try {
     expect((await manager.connect("private", config("plugin-secret"))).status).toBe("connected");
     const registry = new ToolRegistry();
-    for (const definition of [mcpToolCallTool, listMcpResourcesTool, readMcpResourceTool, mcpAuthTool]) registry.register(definition);
+    for (const definition of mcpTools) registry.register(definition);
     const calls = [
       { name: "McpToolCall", input: { serverName: "private", toolName: "version", args: {} } },
       { name: "ListMcpResources", input: {} },

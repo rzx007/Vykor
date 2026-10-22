@@ -2,7 +2,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { getInstalledPluginStorePath, type McpServerConfig, type RuntimeBundle } from "@vykor/core";
+import { getInstalledPluginStorePath, type McpServerConfig } from "@vykor/host-config";
+import { type RuntimeBundle } from "@vykor/core";
 import { computePluginBehaviorDigest, installedPluginKey, loadNativePlugin, updateInstalledPluginStore, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
 import { SkillRegistry } from "@vykor/skills";
 import { createVykorRuntime } from "./default-runtime.js";

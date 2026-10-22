@@ -3,13 +3,11 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import type {
-  Message,
-  StreamEvent,
-  StreamingMessageClient,
-} from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
+import type { StreamEvent, StreamingMessageClient } from "@vykor/core";
 import { MemoryManager, renderMemoryFile } from "@vykor/memory";
-import { getProjectMemoryDir, ModelRequestFailure } from "@vykor/core";
+import { getProjectMemoryDir } from "@vykor/host-config";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { describe, expect, it } from "vitest";
 
 import { createAgentMemoryRuntime, extractMemories } from "./memory-runtime.js";

@@ -1,7 +1,7 @@
-import { cancelPersistentWorkflow, type WorkflowRunRepository } from "@vykor/coordinator";
+import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { DAEMON_RESTART_WORKFLOW_REASON } from "../support.js";
 export interface WorkflowRecoveryContext {
-  workflows: WorkflowRunRepository;
+  workflowHost: WorkflowHost;
 }
 
 /**
@@ -9,12 +9,12 @@ export interface WorkflowRecoveryContext {
  * Workflow still marked running is therefore closed as interrupted during startup.
  */
 export async function recoverInterruptedWorkflows(context: WorkflowRecoveryContext): Promise<void> {
-  for (const snapshot of context.workflows.list().filter((run) => run.status === "running")) {
+  const { workflowHost } = context;
+  for (const snapshot of workflowHost.repository.list().filter((run) => run.status === "running")) {
     if (!snapshot.ownerSession) continue;
 
-    context.workflows.claim(snapshot.runId);
-    await cancelPersistentWorkflow(snapshot, {
-      store: context.workflows,
+    workflowHost.repository.claim(snapshot.runId);
+    await workflowHost.cancelPersistentWorkflow(snapshot, {
       reason: DAEMON_RESTART_WORKFLOW_REASON,
     });
   }

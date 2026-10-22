@@ -1,10 +1,15 @@
 import { expect, it } from "vitest";
 import { FrameworkAgentRun } from "./framework-agent-run.js";
 import { AgentEventBus } from "./event-source.js";
-import { QueryEngine, ToolRegistry, type UsageSnapshot, type AgentEvent } from "@vykor/core";
+import { QueryEngine, ToolRegistry, type AgentEvent } from "@vykor/core";
+import { type UsageSnapshot } from "@vykor/agent-contracts";
 import { AgentChildManager } from "./child-agent.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
-import { agentTool } from "../../tools/src/agent/agent-tools.js";
+import { createAgentTool } from "../../tools/src/agent/agent-tools.js";
+
+import { getBuiltinAgentDefinitions } from "@vykor/coordinator/definitions";
+import { createTeamRegistry } from "@vykor/coordinator/teams";
+const agentTool = createAgentTool({ definitions: getBuiltinAgentDefinitions(), teams: createTeamRegistry() });
 
 it.each(["unknown_delta", "partial_delta", "complete_tool"] as const)("settles an invoked model when cancellation closes QueryEngine (%s)", async mode => {
   const hasUsage = mode !== "unknown_delta";

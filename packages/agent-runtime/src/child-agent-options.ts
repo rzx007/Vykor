@@ -1,5 +1,6 @@
-import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@vykor/core";
-import { canonicalToolName, canonicalToolNames } from "@vykor/core";
+import type { AgentChildSpawnInput, RunCapabilityView } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import { canonicalToolName, canonicalToolNames } from "@vykor/agent-contracts";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { readonlyMap, restrictRunCapabilityView } from "./run-capability-view.js";
 

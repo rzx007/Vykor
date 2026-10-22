@@ -4,8 +4,19 @@ import { mkdir } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { isDeepStrictEqual, promisify } from "node:util";
 import { tmpdir } from "node:os";
-import { getProjectConfigDir, getProjectSettingsFilePath, loadProjectSettings, loadSettings, parseAgentEnvironmentSettings,
-  saveProjectSettings, SettingsConflictError, updateSettings, withSettingsFileLock, mergeAgentEnvironmentSettings, type AgentEnvironmentSettings } from "@vykor/core";
+import {
+  getProjectConfigDir,
+  getProjectSettingsFilePath,
+  loadProjectSettings,
+  loadSettings,
+  parseAgentEnvironmentSettings,
+  saveProjectSettings,
+  SettingsConflictError,
+  updateSettings,
+  withSettingsFileLock,
+  mergeAgentEnvironmentSettings,
+  type AgentEnvironmentSettings,
+} from "@vykor/host-config";
 import { hostPathToWslPath, preflightWsl, resolveShellDescriptor } from "@vykor/sandbox";
 import { loadRuntimeSecrets, runtimeSecretsRevision, saveRuntimeSecrets } from "./runtime-secrets.js";
 

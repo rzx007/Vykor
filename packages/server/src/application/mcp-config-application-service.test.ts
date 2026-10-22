@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  McpOAuthCredentialRecord,
-  McpRuntimeSyncResult,
-  Settings,
-} from "@vykor/core";
+import type { McpOAuthCredentialRecord, McpRuntimeSyncResult, Settings } from "@vykor/host-config";
 import type { McpOAuthCredentialStore } from "@vykor/mcp";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
 import {

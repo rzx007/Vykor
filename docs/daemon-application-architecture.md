@@ -399,12 +399,15 @@ daemon 中的 Workflow 和 Session、Run 使用同一份 SQLite：
 
 ```text
 Workflow tool / daemon command
+  -> DaemonApplication 持有的 WorkflowHost
   -> Workflow scheduler
   -> SessionWorkflowRunRepository
   -> workflow_run / workflow_task_attempt / durable event
   -> DaemonJobService
   -> HTTP client / TUI / Web / Desktop
 ```
+
+DaemonApplication 为该仓库创建唯一 WorkflowHost，Agent loader、DaemonJobService、启动恢复和应用关闭共享它。Agent 只获得绑定自身 session 的视图；回收 Agent 等待本 session 的 Workflow，应用关闭等待整个 Host，然后关闭执行 owner 和存储。Jobs 取消直接进入同一个 Host，不再通过 coordinator 的全局活动目录查找。
 
 `SessionWorkflowRunRepository` 是 daemon 唯一注入的 Workflow 仓库。它保存完整快照、每个 task 的 attempt 和 Workflow 事件；不会读取 `.vykor/workflows`，也不会在启动时迁移旧 JSON。独立 CLI 如果要查看项目文件，必须明确创建 `FileWorkflowRunRepository`，详见 [Workflow CLI](./workflow-cli.md)。
 

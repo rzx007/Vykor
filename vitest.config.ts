@@ -14,17 +14,16 @@ for (const name of readdirSync(packagesDir)) {
     const pkg = JSON.parse(raw);
     if (pkg.name?.startsWith("@vykor/")) {
       aliases[pkg.name] = resolve(pkgDir, "src", "index.ts");
+      for (const [subpath, entry] of Object.entries(pkg.exports ?? {})) {
+        if (subpath === ".") continue;
+        const target = typeof entry === "string" ? entry : (entry as { import?: string }).import;
+        if (target?.startsWith("./src/")) aliases[pkg.name + subpath.slice(1)] = resolve(pkgDir, target);
+      }
     }
   } catch {}
 }
+aliases["@vykor/agent-runtime/node/workflow"] = resolve(packagesDir, "agent-runtime", "src", "workflow-entry.ts");
 
-aliases["@vykor/services/executions"] = resolve(
-  packagesDir,
-  "services",
-  "src",
-  "executions",
-  "index.ts",
-);
 aliases["@vykor/server/daemon-host"] = resolve(
   packagesDir,
   "server",

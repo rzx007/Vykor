@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
-import { ToolRegistry, type Settings } from "@vykor/core";
+import { ToolRegistry } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { createRunCapabilityView } from "./run-capability-view.js";
 

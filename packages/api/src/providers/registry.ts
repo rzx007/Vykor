@@ -1,4 +1,4 @@
-import type { InputSupport } from "@vykor/core";
+import type { InputSupport } from "@vykor/host-config";
 
 export type BackendType = "anthropic" | "openai_compat" | "codex";
 

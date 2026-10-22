@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import {
+  checkModuleDependency,
+  collectPolicyViolations,
+  collectArchitecturePolicyErrors,
+  extractModuleDependencies,
+  moduleViolations,
+  validateArchitecturePolicy,
+} from "./architecture-policy.mjs";
+
+const targetPolicy = JSON.parse(readFileSync(new URL("./architecture-policy.json", import.meta.url), "utf8"));
+const policySchema = JSON.parse(readFileSync(new URL("./architecture-policy.schema.json", import.meta.url), "utf8"));
+const strictPolicy = () => ({ ...structuredClone(targetPolicy), stageExceptions: [] });
 
 import {
   checkImportBoundary,
@@ -294,8 +306,6 @@ test("attachment layout scan covers package root barrels", (t) => {
   ]);
 });
 
-
-
 test("dependency graph rejects direct, indirect, and self cycles", () => {
   assert.deepEqual(findDependencyCycles(new Map([["a", ["b"]], ["b", ["c"]], ["c", ["a"]]])), [["a", "b", "c", "a"]]);
   assert.deepEqual(findDependencyCycles(new Map([["a", ["a"]]])), [["a", "a"]]);
@@ -332,7 +342,6 @@ test("workspace cycle checks include undeclared type imports and relative packag
   }
 });
 
-
 test("import extraction follows syntax, including side effects, types, reexports, and dynamic imports", () => {
   const source = [
     'import "side-effect";',
@@ -347,7 +356,6 @@ test("import extraction follows syntax, including side effects, types, reexports
   assert.deepEqual(extractImports(source), ["side-effect", "types", "reexport", "inline-type", "dynamic", "commonjs"]);
 });
 
-
 test("desktop boundary checks allow local styles but reject process aliases", () => {
   const renderer = "apps/desktop/src/renderer/src/main.tsx";
   const main = "apps/desktop/src/main/index.ts";
@@ -355,4 +363,198 @@ test("desktop boundary checks allow local styles but reject process aliases", ()
   assert.deepEqual(checkImportBoundary(main, "./assets/renderer.css"), []);
   assert.deepEqual(checkImportBoundary(renderer, "@main/features/session/session-service"), [renderer + " must not depend on Desktop main"]);
   assert.deepEqual(checkImportBoundary(main, "@renderer/stores/desktop-session/store"), [main + " must not depend on Desktop renderer"]);
+});
+
+test("target policy and exact exception deadlines satisfy the committed schema", () => {
+  assert.deepEqual(validateArchitecturePolicy(targetPolicy, policySchema), []);
+  const wildcard = strictPolicy();
+  wildcard.stageExceptions.push({ fromFile: "packages/**/src/*", target: "x", reason: "bad", removeByPhase: "P4", migrationId: "M18" });
+  assert.ok(validateArchitecturePolicy(wildcard, policySchema).length > 0);
+  const expired = strictPolicy();
+  expired.currentPhase = "P4";
+  expired.stageExceptions.push({ fromFile: "packages/core/src/index.ts", target: "x", reason: "legacy", removeByPhase: "P4", migrationId: "M18" });
+  assert.match(validateArchitecturePolicy(expired, policySchema).join("\n"), /Expired/);
+  const extra = strictPolicy();
+  extra.skipChecks = true;
+  assert.match(validateArchitecturePolicy(extra, policySchema).join("\n"), /unknown skipChecks/);
+});
+
+test("Kernel rejects Node subentries, relative paths, type imports and outside-workspace detours", () => {
+  for (const input of [
+    { specifier: "../node/index.js", resolvedFile: "packages/agent-runtime/src/node/index.ts" },
+    { specifier: "@vykor/agent-runtime/node", resolvedFile: "packages/agent-runtime/src/node/index.ts", typeOnly: true },
+    { specifier: "../../../../tests/bridge.js", resolvedFile: "tests/bridge.ts" },
+  ]) assert.ok(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel/agent.ts", importedNames: ["Hidden"], ...input }, strictPolicy()).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel/agent.ts", specifier: "node:fs", importedNames: ["readFileSync"] }, strictPolicy()).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel-entry.ts", specifier: "./node/index.js", resolvedFile: "packages/agent-runtime/src/node/index.ts", importedNames: ["Hidden"] }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel/agent.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentRunScope"], typeOnly: true,
+    resolvedFile: "packages/agent-contracts/src/execution.ts" }, strictPolicy()), []);
+});
+
+test("routes cannot hide SessionStore or repositories in the services root or import aliases", () => {
+  for (const name of ["SessionStore", "NoteRepository", "ConversationRepository"]) assert.ok(checkModuleDependency({
+    fromFile: "packages/server/src/http/routes/new-feature.ts", specifier: "@vykor/services", importedNames: [name], typeOnly: true,
+  }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/routes/new-feature.ts", specifier: "@vykor/protocol", importedNames: ["SessionRecord"], typeOnly: true,
+    resolvedFile: "packages/protocol/src/session.ts" }, strictPolicy()), []);
+});
+
+test("AST extraction ignores text and follows named aliases, types, namespaces and require", () => {
+  const dependencies = extractModuleDependencies([
+    'import type { SessionStore as Hidden } from "@vykor/services";',
+    'export { Hidden as Public } from "./bridge.js";',
+    'export type * from "./types.js";',
+    'type Inline = import("@vykor/services").SessionStore;',
+    'const { SessionStore: Store } = await import("@vykor/services");',
+    'const cjs = require("./node.cjs");',
+    'import legacy = require("./legacy.cjs");',
+    '// import { Fake } from "not-code";',
+    'const text = \'import("not-code")\';',
+  ].join("\n"));
+  assert.equal(dependencies.filter((item) => item.importedNames.includes("SessionStore")).length, 3);
+  assert.ok(dependencies.some((item) => item.specifier === "./types.js" && item.typeOnly));
+  assert.ok(dependencies.some((item) => item.specifier === "./legacy.cjs"));
+  assert.ok(dependencies.every((item) => item.specifier !== "not-code"));
+});
+
+function policyFixture(files, run) {
+  const directory = mkdtempSync(join(tmpdir(), "vykor-architecture-policy-"));
+  const write = (file, content) => {
+    mkdirSync(dirname(join(directory, file)), { recursive: true });
+    writeFileSync(join(directory, file), content);
+  };
+  try {
+    for (const name of ["agent-runtime", "services", "server", "protocol"]) write(`packages/${name}/package.json`, JSON.stringify({ name: `@vykor/${name}`, exports: { ".": "./src/index.ts" } }));
+    for (const [file, content] of Object.entries(files)) write(file, content);
+    return run(directory, write);
+  } finally {
+    assert.ok(directory.startsWith(join(tmpdir(), "vykor-architecture-policy-")));
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test("declaration origins expose renamed/star/local-import barrels and wrapped storage types", () => {
+  for (const bridge of [
+    'export { SessionStore as Hidden } from "@vykor/services";',
+    'export * from "@vykor/services";',
+    'import type { SessionStore as Store } from "@vykor/services"; export type { Store as Hidden };',
+    'import type { SessionStore } from "@vykor/services"; export interface Hidden { store: SessionStore }',
+    'export type Hidden = import("@vykor/services").SessionStore;',
+  ]) policyFixture({
+    "packages/services/src/index.ts": 'export { SessionStore } from "./session-runtime/store.js";',
+    "packages/services/src/session-runtime/store.ts": "export class SessionStore {}",
+    "packages/server/src/bridge.ts": bridge,
+    "packages/server/src/http/routes/new-feature.ts": 'import type { Hidden as PublicStore } from "../../bridge.js";',
+  }, (directory) => {
+    // Star exports retain the original exported name.
+    const route = join(directory, "packages/server/src/http/routes/new-feature.ts");
+    if (bridge.includes("export *")) writeFileSync(route, 'import type { SessionStore as PublicStore } from "../../bridge.js";');
+    const violations = collectPolicyViolations(directory, strictPolicy());
+    assert.ok(violations.some((item) => item.fromFile.endsWith("routes/new-feature.ts") && item.target.includes("SessionStore")), JSON.stringify(violations));
+  });
+});
+
+test("namespace/dynamic imports, source-export cycles and TS path aliases cannot hide Node declarations", () => {
+  policyFixture({
+    "packages/agent-runtime/tsconfig.base.json": JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@hidden/*": ["src/node/*"] } } }),
+    "packages/agent-runtime/tsconfig.json": JSON.stringify({ extends: "./tsconfig.base.json" }),
+    "packages/agent-runtime/src/node/host.ts": "export interface HostSettings {}",
+    "packages/agent-runtime/src/kernel/bridge.ts": 'export * from "./cycle.js"; export { HostSettings as Hidden } from "@hidden/host";',
+    "packages/agent-runtime/src/kernel/cycle.ts": 'export * from "./bridge.js";',
+    "packages/agent-runtime/src/kernel/index.ts": 'import type * as N from "./bridge.js"; const lazy = import("./bridge.js");',
+  }, (directory) => {
+    const violations = collectPolicyViolations(directory, strictPolicy());
+    assert.ok(violations.some((item) => item.fromFile.endsWith("kernel/index.ts") && item.target.includes("src/node/host.ts")));
+  });
+});
+
+test("exceptions match an exact file/target, expire, and cannot borrow another migration deadline", () => {
+  const input = { fromFile: "packages/server/src/http/routes/old.ts", specifier: "@vykor/services", importedNames: ["SessionStore"], typeOnly: true };
+  const policy = strictPolicy();
+  const item = moduleViolations(input, policy)[0];
+  policy.stageExceptions = [{ fromFile: item.fromFile, target: item.target, reason: "Migrate existing route in P5", removeByPhase: item.removeByPhase, migrationId: item.migrationId }];
+  assert.deepEqual(checkModuleDependency(input, policy), []);
+  assert.ok(checkModuleDependency({ ...input, fromFile: "packages/server/src/http/routes/new.ts" }, policy).length > 0);
+  assert.ok(checkModuleDependency({ ...input, importedNames: ["NoteRepository"] }, policy).length > 0);
+  assert.ok(checkModuleDependency({ ...input, typeOnly: false }, policy).length > 0);
+  policy.currentPhase = "P5";
+  assert.ok(checkModuleDependency(input, policy).length > 0);
+});
+
+test("stale exceptions require removal and metadata must match the responsible rule", () => {
+  policyFixture({ "packages/server/src/http/routes/old.ts": 'import type { SessionStore } from "@vykor/services";' }, (directory, write) => {
+    const policy = strictPolicy();
+    policy.stageExceptions = collectPolicyViolations(directory, policy).map(({ fromFile, target, reason, removeByPhase, migrationId }) => ({ fromFile, target, reason, removeByPhase, migrationId }));
+    assert.deepEqual(collectArchitecturePolicyErrors(directory, policy).errors, []);
+    policy.stageExceptions[0].migrationId = "M01";
+    assert.match(collectArchitecturePolicyErrors(directory, policy).errors.join("\n"), /mismatch/);
+    write("packages/server/src/http/routes/old.ts", "export {};");
+    assert.match(collectArchitecturePolicyErrors(directory, policy).errors.join("\n"), /Stale/);
+  });
+});
+
+test("portable contracts reject Node, value environment imports, and external implementations", () => {
+  for (const input of [
+    { specifier: "node:fs", importedNames: ["readFileSync"] },
+    { specifier: "zod", importedNames: ["z"] },
+    { specifier: "@vykor/environment", importedNames: ["createWorkspaceBinding"] },
+  ]) assert.ok(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools.ts", ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools.ts", specifier: "@vykor/environment", importedNames: ["ExecutionEnvironmentHandle"], typeOnly: true }, strictPolicy()), []);
+});
+
+test("shared type diamonds and export cycles preserve every forbidden origin", () => {
+  policyFixture({}, (directory, write) => {
+    write("packages/core/package.json", JSON.stringify({ name: "@vykor/core", exports: { ".": "./src/index.ts" } }));
+    write("packages/agent-runtime/src/node/host.ts", "export interface Host { closed: boolean }\nexport interface OtherHost { closed: boolean }");
+    write("packages/core/src/level0.ts", 'import type { Host, OtherHost } from "../../agent-runtime/src/node/host.js"; export interface Left0 { host: Host } export interface Right0 { host: OtherHost }');
+    for (let level = 1; level <= 18; level++) write(`packages/core/src/level${level}.ts`, `import type { Left${level - 1}, Right${level - 1} } from "./level${level - 1}.js"; export interface Left${level} { left: Left${level - 1}; right: Right${level - 1} } export interface Right${level} { left: Left${level - 1}; right: Right${level - 1} }`);
+    write("packages/core/src/index.ts", 'export type { Left18 as Root } from "./level18.js"; export * from "./cycle.js";');
+    write("packages/core/src/cycle.ts", 'export * from "./index.js";');
+    write("packages/agent-runtime/src/kernel/index.ts", 'import type { Root } from "@vykor/core"; export type Binding = Root;');
+    const violations = collectPolicyViolations(directory, strictPolicy()).filter(item => item.fromFile.endsWith("kernel/index.ts"));
+    assert.ok(violations.some(item => item.target.includes("Host") && item.target.includes("node/host.ts")));
+    assert.ok(violations.some(item => item.target.includes("OtherHost") && item.target.includes("node/host.ts")));
+  });
+});
+
+test("P1 foundation packages reject upward dependencies and config cannot depend on MCP runtime", () => {
+  const policy = strictPolicy();
+  for (const fromFile of ["packages/agent-contracts/src/messages.ts", "packages/host-config/src/settings.ts"]) {
+    for (const specifier of ["@vykor/core", "@vykor/agent-runtime", "@vykor/mcp", "@vykor/server"]) {
+      assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Settings"], typeOnly: true }, policy).length > 0);
+    }
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/host-config/src/settings.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentChildBudget"], typeOnly: true }, policy), []);
+  assert.ok(Number(policy.currentPhase.slice(1)) >= 1);
+  assert.ok(targetPolicy.stageExceptions.every(item => item.removeByPhase !== "P1"));
+});
+
+test("P2 execution resources have no storage or engine dependency and retired imports are rejected", () => {
+  const policy = strictPolicy();
+  for (const specifier of ["@vykor/core", "@vykor/services", "@vykor/agent-runtime", "@vykor/server"]) {
+    assert.ok(checkModuleDependency({ fromFile: "packages/execution-node/src/executions/runtime-owner.ts", specifier, importedNames: ["Host"], typeOnly: true }, policy).length > 0);
+  }
+  for (const specifier of ["@vykor/services/executions", "../../services/src/executions/index.js", "../../services/src/lsp/index.js"]) {
+    assert.ok(checkModuleDependency({ fromFile: "packages/tools/src/search/lsp.ts", specifier, importedNames: ["LspClient"] }, policy).length > 0);
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/execution-node/src/executions/types.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentChildResult"], typeOnly: true }, policy), []);
+  const services = JSON.parse(readFileSync(new URL("../packages/services/package.json", import.meta.url), "utf8"));
+  assert.equal(services.exports["./executions"], undefined);
+  assert.ok(targetPolicy.stageExceptions.every(item => !["P1", "P2"].includes(item.removeByPhase)));
+});
+
+test("P3 tools cannot import host implementations and coordinator entries stay pure", () => {
+  const policy = strictPolicy();
+  for (const specifier of ["@vykor/services", "@vykor/auth", "@vykor/mcp", "@vykor/skills", "@vykor/agent-runtime"]) {
+    assert.ok(checkModuleDependency({ fromFile: "packages/tools/src/ports/workflow.ts", specifier, importedNames: ["Host"] }, policy).length > 0);
+  }
+  for (const specifier of ["node:fs", "node:child_process", "@vykor/host-config"]) {
+    assert.ok(checkModuleDependency({ fromFile: "packages/coordinator/src/definitions/loader.ts", specifier, importedNames: ["read"] }, policy).length > 0);
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/coordinator/src/definitions/loader.ts", specifier: "yaml", importedNames: ["parse"] }, policy), []);
+  assert.ok(checkModuleDependency({ fromFile: "packages/coordinator/src/workflow/runner.ts", specifier: "../teams/index.js", resolvedFile: "packages/coordinator/src/teams/index.ts", importedNames: ["TeamRegistry"] }, policy).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/coordinator/src/workflow/runner.ts", specifier: "node:child_process", importedNames: ["spawn"] }, policy).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/server/src/jobs/example.ts", specifier: "@vykor/coordinator/workflow/store", importedNames: ["runPersistentWorkflow"] }, policy).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/server/src/jobs/example.ts", specifier: "@vykor/tools/agent/child-task", importedNames: ["awaitFrameworkChildTask"] }, policy).length > 0);
+  assert.ok(targetPolicy.stageExceptions.every(item => !["P1", "P2", "P3"].includes(item.removeByPhase)));
 });

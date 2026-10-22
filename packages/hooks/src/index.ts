@@ -1,14 +1,7 @@
-import type {
-  HookEvent,
-  HookType,
-  HookDefinition,
-  HookResult,
-  IHookExecutor,
-  StreamingMessageClient,
-  StreamMessageParams,
-  Settings,
-} from "@vykor/core";
-import { canonicalToolName } from "@vykor/core";
+import type { HookEvent, HookResult } from "@vykor/agent-contracts";
+import type { HookType, HookDefinition, Settings } from "@vykor/host-config";
+import type { IHookExecutor, StreamingMessageClient, StreamMessageParams } from "@vykor/core";
+import { canonicalToolName } from "@vykor/agent-contracts";
 import { createShellProcess } from "@vykor/sandbox";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 

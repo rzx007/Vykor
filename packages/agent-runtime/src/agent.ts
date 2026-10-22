@@ -6,9 +6,7 @@ import type { PluginAppBackendCatalogue } from "./plugin-app-backends.js";
 import type {
   CompactContextProvider,
   AgentChildDirectory,
-  AgentChildBudgetSnapshot,
   AgentChildInvocation,
-  AgentChildResult,
   AgentChildSpawnInput,
   AgentEffects,
   AgentExecutionLimits,
@@ -22,23 +20,28 @@ import type {
   AgentRunResult,
   AgentRunScope,
   AgentSession,
-  ContentBlock,
-  HookDefinition,
-  Message,
-  McpRuntimeRegistry,
   RuntimeBundle,
   RunCapabilityView,
-  Settings,
   AgentRequestConfigurationPatch,
   AgentRequestConfigurationSnapshot,
   AgentRequestConfigurationReader,
   AgentRequestConfigurationStore,
   ToolDescriptor,
   ToolExecutionResult,
-  ToolUseBlock,
   ToolRegistrationSource,
-  UsageSnapshot,
 } from "@vykor/core";
+import type {
+  AgentChildResult,
+} from "@vykor/agent-contracts";
+import type {
+  AgentChildBudgetSnapshot,
+  ContentBlock,
+  Message,
+  ToolUseBlock,
+  UsageSnapshot,
+} from "@vykor/agent-contracts";
+import type { HookDefinition, Settings } from "@vykor/host-config";
+import type { McpRuntimeRegistry } from "@vykor/mcp";
 import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
@@ -255,6 +258,7 @@ class DefaultVykorAgent implements VykorAgent {
     private readonly pluginSelection?: PluginSelectionCatalog,
     private readonly onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"],
     appCatalogue?: PluginAppBackendCatalogue,
+    private readonly stopBackgroundWork?: () => Promise<void>,
   ) {
     this.appRuntime = new PluginAppRuntime(session.id, appCatalogue);
     this.pluginApps = this.appRuntime.host;
@@ -624,6 +628,7 @@ class DefaultVykorAgent implements VykorAgent {
         for (const cleanup of [
           () => this.activeRun?.interrupt("Agent closed") ?? Promise.resolve(),
           () => this.maintenance?.settled ?? Promise.resolve(),
+          () => this.stopBackgroundWork?.() ?? Promise.resolve(),
           () => this.childManager.closeAll(),
           () => this.closeOwnedCapabilities(),
           () => this.eventBus.drain(),
@@ -695,6 +700,7 @@ export interface AssembledAgentOptions {
   identity: AgentIdentity | undefined;
   childManager: AgentChildManager;
   cleanup?: { close(): Promise<void> };
+  stopBackgroundWork?: () => Promise<void>;
   childDirectory: AgentChildRegistry;
   capabilities: ResolvedAgentCapabilities;
   model: string;
@@ -727,6 +733,7 @@ export function createAssembledAgent(
     options.pluginSelection,
     options.onRunCapabilities,
     options.pluginApps,
+    options.stopBackgroundWork,
   );
 }
 

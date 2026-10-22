@@ -11,10 +11,10 @@ import {
   withSettingsFileLock,
   SettingsConflictError,
   type MemoryConfig,
-} from "@vykor/core";
+} from "@vykor/host-config";
 import { discoverClaudeMdFiles } from "@vykor/prompts";
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import {
-  getDetachedProcessSupervisor,
   readLastConsolidatedAt,
 } from "@vykor/services";
 
@@ -35,7 +35,7 @@ const preferenceKeys = [
   "autoDreamMinSessions",
 ] as const;
 export async function inspectPersonalizationSettings(
-  input: { cwd?: string; userMemory?: MemoryConfig } = {},
+  input: { cwd?: string; userMemory?: MemoryConfig; executionOwner?: ExecutionRuntimeOwner } = {},
 ) {
   const user = (await loadSettings()).memory;
   const project = input.cwd
@@ -47,8 +47,9 @@ export async function inspectPersonalizationSettings(
     ...project,
   } as PersonalizationMemoryPreferences;
   const directory = input.cwd ? getProjectMemoryDir(input.cwd) : undefined;
-  const latest = input.cwd
-    ? getDetachedProcessSupervisor(input.cwd)
+  // Configuration inspection never constructs a live execution runtime. A host may supply its owner.
+  const latest = input.cwd && input.executionOwner
+    ? input.executionOwner.getDetachedProcessSupervisor(input.cwd)
         .listExecutions()
         .find((task) => task.type === "dream")
     : undefined;

@@ -24,7 +24,9 @@
     "@vykor/core": "workspace:*",
     "zod": "catalog:",
     "@vykor/skills": "workspace:*",
-    "@vykor/coordinator": "workspace:*"
+    "@vykor/coordinator": "workspace:*",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

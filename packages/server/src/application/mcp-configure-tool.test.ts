@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolRegistry, type McpRuntimeSyncResult, type Settings, type ToolContext } from "@vykor/core";
+import { ToolRegistry, type ToolContext } from "@vykor/core";
+import { type McpRuntimeSyncResult, type Settings } from "@vykor/host-config";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { PermissionChecker } from "@vykor/permissions";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";

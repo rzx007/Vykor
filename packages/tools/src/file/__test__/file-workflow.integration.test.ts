@@ -3,9 +3,8 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import {
-  QueryEngine, ToolRegistry, type AgentExecutionContext, type Message, type StreamEvent,
-} from "@vykor/core";
+import { QueryEngine, ToolRegistry, type AgentExecutionContext, type StreamEvent } from "@vykor/core";
+import { type Message } from "@vykor/agent-contracts";
 import { fileReadTool } from "../read.js";
 import { fileWriteTool } from "../write.js";
 import { fileEditTool } from "../edit.js";

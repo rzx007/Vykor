@@ -106,6 +106,15 @@ importers:
       '@opentui/react':
         specifier: 'catalog:'
         version: 0.4.5(react-devtools-core@7.0.1)(react@19.2.7)(typescript@5.9.3)(web-tree-sitter@0.25.10)(ws@8.20.0)
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../../packages/agent-contracts
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../../packages/execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../../packages/host-config
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.2
@@ -495,9 +504,6 @@ importers:
       '@vykor/client':
         specifier: workspace:*
         version: link:../../packages/client
-      '@vykor/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@vykor/themes':
         specifier: workspace:*
         version: link:../../packages/themes
@@ -527,8 +533,26 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/agent-contracts:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
   packages/agent-runtime:
     dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/terminal-node':
         specifier: workspace:*
         version: link:../terminal-node
@@ -611,9 +635,15 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 'catalog:'
         version: 0.40.1
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       openai:
         specifier: 'catalog:'
         version: 4.104.0(ws@8.20.0)(zod@3.25.76)
@@ -636,9 +666,9 @@ importers:
       '@vykor/api':
         specifier: workspace:*
         version: link:../api
-      '@vykor/core':
+      '@vykor/host-config':
         specifier: workspace:*
-        version: link:../core
+        version: link:../host-config
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -699,9 +729,9 @@ importers:
 
   packages/coordinator:
     dependencies:
-      '@vykor/core':
+      '@vykor/agent-contracts':
         specifier: workspace:*
-        version: link:../core
+        version: link:../agent-contracts
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -718,9 +748,18 @@ importers:
 
   packages/core:
     dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/coordinator':
+        specifier: workspace:*
+        version: link:../coordinator
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
@@ -753,17 +792,67 @@ importers:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
+  packages/execution-node:
+    dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/environment':
+        specifier: workspace:*
+        version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
+      '@vykor/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
   packages/hooks:
     dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/host-config:
+    dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -802,6 +891,9 @@ importers:
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -845,12 +937,15 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@vykor/core':
+      '@vykor/agent-contracts':
         specifier: workspace:*
-        version: link:../core
+        version: link:../agent-contracts
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -924,12 +1019,18 @@ importers:
 
   packages/plugins:
     dependencies:
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/coordinator':
         specifier: workspace:*
         version: link:../coordinator
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -952,12 +1053,15 @@ importers:
 
   packages/prompts:
     dependencies:
-      '@vykor/core':
+      '@vykor/agent-contracts':
         specifier: workspace:*
-        version: link:../core
+        version: link:../agent-contracts
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
@@ -989,12 +1093,15 @@ importers:
 
   packages/sandbox:
     dependencies:
-      '@vykor/core':
-        specifier: workspace:*
-        version: link:../core
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1011,6 +1118,9 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 1.19.13(hono@4.12.12)
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
@@ -1032,6 +1142,12 @@ importers:
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
@@ -1099,12 +1215,21 @@ importers:
       '@arcships/light-ocr':
         specifier: 'catalog:'
         version: 0.5.7
+      '@vykor/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent-contracts
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
@@ -1157,10 +1282,6 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/swarm:
-    dependencies:
-      '@vykor/core':
-        specifier: workspace:*
-        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1190,9 +1311,6 @@ importers:
 
   packages/terminal-node:
     dependencies:
-      '@vykor/core':
-        specifier: workspace:*
-        version: link:../core
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
@@ -1217,10 +1335,6 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/themes:
-    dependencies:
-      '@vykor/core':
-        specifier: workspace:*
-        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1234,9 +1348,9 @@ importers:
 
   packages/tools:
     dependencies:
-      '@vykor/auth':
+      '@vykor/agent-contracts':
         specifier: workspace:*
-        version: link:../auth
+        version: link:../agent-contracts
       '@vykor/coordinator':
         specifier: workspace:*
         version: link:../coordinator
@@ -1246,21 +1360,18 @@ importers:
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/execution-node':
+        specifier: workspace:*
+        version: link:../execution-node
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
-      '@vykor/mcp':
-        specifier: workspace:*
-        version: link:../mcp
       '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
-      '@vykor/services':
-        specifier: workspace:*
-        version: link:../services
-      '@vykor/skills':
-        specifier: workspace:*
-        version: link:../skills
       '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal

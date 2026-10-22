@@ -1,30 +1,11 @@
 export * from "./types.js";
 export * from "./system-prompt.js";
 export * from "./coordinator.js";
-export * from "./team-registry.js";
+export * from "./teams/index.js";
 export * from "./mode-state.js";
 export * from "./task-notification.js";
 
-export {
-  getBuiltinAgentDefinitions,
-  getAgentDefinition,
-  getAllAgentDefinitions,
-  hasRequiredMcpServers,
-  getUserAgentsDir,
-  registerPluginAgents,
-} from "./agent-definitions";
-
-export {
-  parseAgentFrontmatter,
-  buildAgentDefinition,
-  type BuildAgentOptions,
-  loadAgentsDir,
-  mergeAgentDefinitions,
-  AGENT_COLORS,
-  PERMISSION_MODES,
-  MEMORY_SCOPES,
-  ISOLATION_MODES,
-} from "./agent-loader.js";
+export * from "./definitions/index.js";
 
 export {
   isSimpleMode,
@@ -97,21 +78,5 @@ export {
   type WorkflowWorkerResult,
 } from "./workflow/index.js";
 
-export {
-  getWorkflowRunsDir,
-  decodeWorkflowRunEvent,
-  decodeWorkflowRunSnapshot,
-  cancelPersistentWorkflow,
-  resumePersistentWorkflow,
-  runPersistentWorkflow,
-  type CancelPersistentWorkflowOptions,
-  FileWorkflowRunRepository,
-  type ResumePersistentWorkflowOptions,
-  type RunPersistentWorkflowOptions,
-  type FileWorkflowRunRepositoryOptions,
-  type WorkflowRunRepository,
-  type WorkflowReadDiagnostic,
-  type WorkflowReadDiagnosticCode,
-  type WorkflowSnapshotReadResult,
-  type WorkflowEventReadResult,
-} from "./workflow/index.js";
+export * from "./workflow/repository.js";
+export * from "./workflow/store-decoding.js";

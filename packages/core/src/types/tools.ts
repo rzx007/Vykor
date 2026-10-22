@@ -1,5 +1,7 @@
-import type { ContentBlock, Message, ToolUseBlock } from "./messages";
-import type { Settings } from "./settings";
+import type { ShellOutputLogHost } from "@vykor/agent-contracts";
+import type { ToolFailureKind, ToolExecutionState } from "@vykor/agent-contracts";
+import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
+import type { Settings } from "@vykor/host-config";
 import type {
   AgentExecutionContext,
   AgentPermissionDecision,
@@ -45,38 +47,6 @@ export interface AgentBackgroundShellHost {
   }>;
 }
 
-/** One command's host-managed, bounded Shell output capture. */
-export interface ShellOutputCapture {
-  append(text: string): void;
-  /** Idempotent. `complete` means all output was received, not that the command succeeded. */
-  finish(complete: boolean): ShellOutputLogStatus;
-}
-
-export interface ShellOutputLogStatus {
-  reference?: string;
-  retainedBytes: number;
-  discardedBytes: number;
-  complete: boolean;
-  available: boolean;
-  reason?: string;
-}
-
-export type ShellOutputLogPage =
-  | { status: "unavailable" | "invalid_cursor" }
-  | { status: "ok"; text: string; nextCursor: number; eof: boolean; retainedBytes: number; discardedBytes: number; complete: boolean };
-
-export interface ShellOutputLogSearchResult {
-  status: "ok" | "unavailable" | "invalid_pattern" | "limit" | "timeout" | "search_unavailable";
-  matches: Array<{ byteOffset: number; text: string }>;
-  truncated: boolean;
-}
-
-export interface ShellOutputLogHost {
-  begin(sessionId: string | undefined, inlineChars: number): ShellOutputCapture;
-  read(input: { sessionId?: string; reference: string; cursor?: number; maxBytes?: number }): Promise<ShellOutputLogPage>;
-  search(input: { sessionId?: string; reference: string; pattern: string; caseSensitive?: boolean; signal?: AbortSignal }): Promise<ShellOutputLogSearchResult>;
-}
-
 export interface ToolContext {
   cwd: string;
   /** Complete frozen capability selection for the owning Run. */
@@ -98,7 +68,7 @@ export interface ToolContext {
   deadlineAt?: number;
   settings?: Settings;
   /** Runtime-owned narrowing/restoration only; never changes the user-selected ceiling. */
-  setPlanMode?: (enabled: boolean) => import("./permissions").PermissionMode;
+  setPlanMode?: (enabled: boolean) => import("@vykor/host-config").PermissionMode;
   /** Selected model identity for the request that invoked this tool. */
   requestConfiguration?: {
     model: string;
@@ -169,14 +139,6 @@ export interface HostFileFacts {
     bodyVisible?: boolean;
   }>;
 }
-
-/** A definite result does not imply success or completion of the user's goal. */
-export type ToolExecutionState = "not_started" | "completed" | "unknown";
-
-export type ToolFailureKind =
-  | "permission" | "policy" | "timeout" | "command" | "transport"
-  | "provider" | "interrupted" | "unknown_outcome"
-  | "invalid_input" | "precondition" | "authentication" | "configuration";
 
 export interface ToolExecutionResult extends ToolResult {
   toolUseId: string;

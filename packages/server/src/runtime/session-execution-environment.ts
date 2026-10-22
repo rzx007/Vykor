@@ -1,4 +1,4 @@
-import { getSkillsDir, type Settings } from "@vykor/core";
+import { getSkillsDir, type Settings } from "@vykor/host-config";
 import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@vykor/environment";
 import { normalizeApprovalMode, readSessionRuntimeConfig, type SessionRecord } from "@vykor/protocol";
 import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig, settingsForApprovalMode } from "@vykor/sandbox";

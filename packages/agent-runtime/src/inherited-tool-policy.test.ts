@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ToolRegistry, type Settings, type ToolDefinition } from "@vykor/core";
+import { ToolRegistry, type ToolDefinition } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createAgentKernel } from "./kernel.js";
 import { createVykorRuntime } from "./default-runtime.js";

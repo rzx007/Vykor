@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createShellOutputLogHost } from "@vykor/services/executions";
+import {
+  createShellOutputLogHost,
+} from "@vykor/execution-node";
 import { fileReadTool } from "@vykor/tools";
 import { createHash } from "node:crypto";
 import { readOfficeBytes } from "@vykor/services";

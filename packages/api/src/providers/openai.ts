@@ -5,9 +5,9 @@ import type {
   StreamMessageParams,
   StreamEvent,
   ToolDefinition,
-  ContentBlock,
 } from "@vykor/core";
-import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/host-config";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
   streamIncompleteFailure,

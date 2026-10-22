@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Message } from "../types/messages";
+import type { Message } from "@vykor/agent-contracts";
 import {
   boundaryFallsInsideToolGroup,
   sanitizeMessageHistory,

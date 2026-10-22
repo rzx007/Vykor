@@ -1,4 +1,5 @@
-import type { AgentDefinition, CoordinatorConfig, CoordinatorMode } from "./types.js";
+import type { AgentDefinition } from "./definitions/types.js";
+import type { CoordinatorConfig, CoordinatorMode } from "./types.js";
 
 export class Coordinator {
   private config: CoordinatorConfig;

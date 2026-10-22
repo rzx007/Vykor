@@ -1,4 +1,5 @@
-import type { ApprovalMode, Settings } from "@vykor/core";
+import type { ApprovalMode } from "@vykor/protocol";
+import type { Settings } from "@vykor/host-config";
 
 // Symbol.for survives the runtime bundle boundary without serializing the baseline.
 const baselineKey = Symbol.for("@vykor/approval-baseline-settings");

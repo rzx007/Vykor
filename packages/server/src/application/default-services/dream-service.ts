@@ -1,10 +1,11 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { startDreamNow } from "@vykor/services";
 
 import type { DreamService } from "../settings-api.js";
 import { openMemoryManager } from "./memory-service.js";
 import type { DaemonSettingsRef } from "./shared.js";
 
-export function createDefaultDreamService(ref: DaemonSettingsRef): DreamService {
+export function createDefaultDreamService(ref: DaemonSettingsRef, owner: ExecutionRuntimeOwner): DreamService {
   return {
     async start({ cwd, sessionId, preview }) {
       const { manager, directory } = await openMemoryManager(cwd);
@@ -21,6 +22,7 @@ export function createDefaultDreamService(ref: DaemonSettingsRef): DreamService 
       };
       const task = await startDreamNow({
         cwd,
+        taskRunner: owner.getDetachedProcessSupervisor(cwd),
         settings,
         memoryDir: directory,
         recentSessionIds: sessionId ? [sessionId] : [],

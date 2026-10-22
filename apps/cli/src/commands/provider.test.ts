@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveKeySource, applyProviderConfig, createProviderCommand } from "./provider";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 function makeSettings(partial: Partial<Settings> = {}): Settings {
   return {

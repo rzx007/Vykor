@@ -1,11 +1,7 @@
-import type {
-  McpAuthConfigureInput,
-  McpAuthHost,
-  McpServerConfig,
-  Settings,
-  IToolRegistry,
-} from "@vykor/core";
-import { loadMcpServerConfigSnapshot, saveMcpServerConfig, ToolRegistry } from "@vykor/core";
+import type { McpAuthConfigureInput, McpAuthHost, IToolRegistry } from "@vykor/core";
+import type { McpServerConfig, Settings } from "@vykor/host-config";
+import { loadMcpServerConfigSnapshot, saveMcpServerConfig } from "@vykor/host-config";
+import { ToolRegistry } from "@vykor/core";
 import { McpClientManager, resolveTransportKind, type McpConnectionActivation } from "@vykor/mcp";
 
 export interface CreateMcpAuthHostOptions {

@@ -1,16 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { normalizeTokenMetering } from "./token-metering.js";
-import type { UsageSnapshot } from "@vykor/core";
+import type { UsageSnapshot } from "@vykor/agent-contracts";
 import type {
   StreamingMessageClient,
   StreamMessageParams,
   StreamEvent,
-  Message,
   ToolDefinition,
-  ContentBlock,
-  ToolUseBlock,
 } from "@vykor/core";
-import { DEFAULT_OUTPUT_TOKEN_MAX, ModelRequestFailure } from "@vykor/core";
+import type { Message, ContentBlock, ToolUseBlock } from "@vykor/agent-contracts";
+import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/host-config";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   assertNativeImageMediaType,
   type NativeImageMediaType,

@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpRemoteServerConfig } from "@vykor/core";
+import type { McpRemoteServerConfig } from "@vykor/host-config";
 import type { McpOAuthRuntime } from "./runtime-auth.js";
 
 export async function verifyMcpOAuthConnection(input: {

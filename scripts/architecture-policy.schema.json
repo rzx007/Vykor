@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "currentPhase", "packages", "modules", "stageExceptions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "enum": [1] },
+    "currentPhase": { "$ref": "#/$defs/phase" },
+    "packages": { "type": "object", "additionalProperties": { "$ref": "#/$defs/package" } },
+    "modules": { "type": "array", "items": { "$ref": "#/$defs/module" } },
+    "stageExceptions": { "type": "array", "items": { "$ref": "#/$defs/exception" } }
+  },
+  "$defs": {
+    "phase": { "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6"] },
+    "text": { "type": "string", "minLength": 1 },
+    "list": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+    "migration": { "type": "string", "pattern": "^M(?:0[1-9]|[12][0-9]|3[0-3])$" },
+    "package": {
+      "type": "object", "additionalProperties": false,
+      "required": ["directory", "allowed", "removeByPhase", "migrationId"],
+      "properties": {
+        "directory": { "type": "string", "pattern": "^(packages|apps)/[a-z0-9-]+$" },
+        "allowed": { "$ref": "#/$defs/list" },
+        "removeByPhase": { "$ref": "#/$defs/phase" },
+        "migrationId": { "$ref": "#/$defs/migration" }
+      }
+    },
+    "module": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "removeByPhase", "migrationId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/text" },
+        "fromFiles": { "$ref": "#/$defs/list" },
+        "fromPaths": { "$ref": "#/$defs/list" },
+        "allowed": { "$ref": "#/$defs/list" },
+        "allowSelfPaths": { "$ref": "#/$defs/list" },
+        "forbidPaths": { "$ref": "#/$defs/list" },
+        "forbidSpecifiers": { "$ref": "#/$defs/list" },
+        "forbidBuiltins": { "type": "boolean" },
+        "symbols": { "$ref": "#/$defs/list" },
+        "typeOnlyPackages": { "$ref": "#/$defs/list" },
+        "targetPackages": { "$ref": "#/$defs/list" },
+        "allowExternal": { "$ref": "#/$defs/list" },
+        "removeByPhase": { "$ref": "#/$defs/phase" },
+        "migrationId": { "$ref": "#/$defs/migration" }
+      }
+    },
+    "exception": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fromFile", "target", "reason", "removeByPhase", "migrationId"],
+      "properties": {
+        "fromFile": { "type": "string", "pattern": "^(packages|apps)/[^*?\\\\]+$" },
+        "target": { "$ref": "#/$defs/text" },
+        "reason": { "$ref": "#/$defs/text" },
+        "removeByPhase": { "$ref": "#/$defs/phase" },
+        "migrationId": { "$ref": "#/$defs/migration" }
+      }
+    }
+  }
+}

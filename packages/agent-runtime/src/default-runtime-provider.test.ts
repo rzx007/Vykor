@@ -4,7 +4,7 @@ import {
   OpenAICompatibleClient,
   RequestHeaderTemplateError,
 } from "@vykor/api";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 import { resolveApiClient } from "./default-runtime-provider.js";
 

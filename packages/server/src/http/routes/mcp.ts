@@ -1,7 +1,5 @@
-import type {
-  McpRuntimeConnectionCoordinator,
-  McpServerIdentity,
-} from "@vykor/core";
+import type { McpRuntimeConnectionCoordinator } from "@vykor/mcp";
+import type { McpServerIdentity } from "@vykor/host-config";
 import {
   MCP_OAUTH_LOGIN_COMPLETED_EVENT,
   parseMcpOAuthCallbackInput,

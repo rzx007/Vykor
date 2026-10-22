@@ -1,12 +1,13 @@
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import type { AgentEvent, RuntimeBundle, Settings, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import type { AgentEvent, RuntimeBundle, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { CompositeAgentJobHost } from "@vykor/jobs";
-import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@vykor/services/executions";
-import { LocalAgentJobHost } from "../../tools/src/job/local-job-host.js";
-import { jobSendTool } from "../../tools/src/job/job-tools.js";
+import { LocalAgentJobHost } from "./node/jobs/local-agent-job-host.js";
+import { createJobTools } from "../../tools/src/job/job-tools.js";
 import { createAgentKernel, createBasicAgentKernelRuntime } from "./kernel.js";
 import { createInProcessChildEnvironmentProvider } from "./child-environment.js";
 import { unavailableCapability } from "./capability-resolution.js";
@@ -69,7 +70,7 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
     createRuntime: async (context) => {
       const prepared = createBasicAgentKernelRuntime({
         cwd: context.cwd, sessionId: context.sessionId, settings, client: client(Boolean(context.identity)),
-        tools: context.identity ? [] : [spawnTool, jobSendTool],
+        tools: context.identity ? [] : [spawnTool],
       });
       prepared.runtime.toolRegistry.register(pluginTool, { kind: "plugin", id: "P" });
       prepared.runtime.createRunCapabilityView = (pluginId) => createRunCapabilityView({
@@ -79,10 +80,14 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
       return prepared;
     },
   });
+  const executionOwner = new ExecutionRuntimeOwner();
   try {
-    rootRuntime.queryEngine.setJobs(new CompositeAgentJobHost([new LocalAgentJobHost({
+    const jobs = new CompositeAgentJobHost([new LocalAgentJobHost({
+      processes: executionOwner.getDetachedProcessSupervisor({ cwd, sessionId }),
       cwd, sessionId, childManager: agent.children,
-    })]));
+    })]);
+    rootRuntime.toolRegistry.register(createJobTools(jobs).find(tool => tool.name === "JobSend")!);
+    rootRuntime.queryEngine.setJobs(jobs);
     await agent.runMessage("spawn", { capabilityView: agent.createRunCapabilityView("P"), limits: { check: boundary => { firstLimits.push(boundary); } } });
     expect(firstLimits).toContain("child");
     const firstLimitCount = firstLimits.length;
@@ -110,8 +115,7 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
     expect(childStarts[1].context.sessionId).toBe(childStarts[0].context.sessionId);
   } finally {
     await agent.close();
-    await getDetachedProcessSupervisor({ cwd, sessionId }).aclose();
-    resetExecutionRuntimes({ cwd, sessionId });
+    await executionOwner.close();
     rmSync(cwd, { recursive: true, force: true });
   }
 });

@@ -230,7 +230,7 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
-| 工作目录根 | `packages/core/src/config/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
+| 工作目录根 | `packages/host-config/src/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
 | Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar/sidebar.tsx` | 「IM 会话」分区：按平台分组 |
 | 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 

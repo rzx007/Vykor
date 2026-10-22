@@ -1,9 +1,10 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { createSessionPluginUiHistoryRoutes } from "./routes/session-plugin-ui-history.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 
 import { SessionStore } from "@vykor/services";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import type { AttachmentLimits } from "@vykor/protocol";
 
@@ -97,6 +98,7 @@ export interface VykorServerServices {
 }
 
 export interface VykorServerOptions {
+  executionOwner?: ExecutionRuntimeOwner;
   host?: string;
   port?: number;
   token?: string;
@@ -171,6 +173,7 @@ export class VykorHttpServer {
     this.application =
       options.application ??
       createDefaultNodeApplication({
+        executionOwner: options.executionOwner,
         store: options.store,
         storePath: options.storePath,
         attachmentRoot: options.attachmentRoot,

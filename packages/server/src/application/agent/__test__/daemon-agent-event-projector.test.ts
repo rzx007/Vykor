@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@vykor/services";
-import { ChildAgentExecutionRegistry } from "@vykor/services/executions";
+import {
+  ChildAgentExecutionRegistry,
+} from "@vykor/execution-node";
 import { SessionExecutionProjector } from "../../session/session-execution-projector.js";
 import { SessionTranscriptProjection } from "../../session/transcript-projection.js";
 

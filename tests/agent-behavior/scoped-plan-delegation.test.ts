@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CompactService, type AgentEvent, type Message, type StreamMessageParams, type StreamingMessageClient, type ToolUseBlock } from "@vykor/core";
+import {
+  CompactService,
+  type AgentEvent,
+  type StreamMessageParams,
+  type StreamingMessageClient,
+} from "@vykor/core";
+import { type Message, type ToolUseBlock } from "@vykor/agent-contracts";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
 import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/protocol";

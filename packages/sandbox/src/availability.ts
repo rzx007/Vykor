@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import type { SandboxConfig } from "@vykor/core";
+import type { SandboxConfig } from "@vykor/host-config";
 import { normalizeSandboxConfig } from "./config.js";
 import { detectSandboxPlatform, supportsSandboxRuntime } from "./platform.js";
 import type { SandboxAvailability, SandboxPlatform } from "./types.js";

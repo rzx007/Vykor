@@ -1,4 +1,4 @@
-import type { Message, ToolUseBlock } from "../types/messages";
+import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
 import type { ToolDefinition, ToolExecutionResult } from "../types/tools";
 
 function reusableBody(tool: ToolDefinition, input: Record<string, unknown>, property: string): string | undefined {

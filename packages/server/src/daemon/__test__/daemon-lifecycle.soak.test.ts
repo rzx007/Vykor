@@ -11,8 +11,8 @@ import type {
   AgentEventInput,
   AgentRunHandle,
   AgentRunResult,
-  Message,
 } from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
 
 import type { CreateDaemonAgent } from "../daemon-agent.js";
 import { VykorHttpServer } from "../../http/server.js";

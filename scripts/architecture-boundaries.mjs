@@ -3,6 +3,8 @@ import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanForbiddenSurfaces } from "./forbidden-compatibility-surfaces.mjs";
 import ts from "typescript";
+import { collectArchitecturePolicyErrors } from "./architecture-policy.mjs";
+export { checkModuleDependency } from "./architecture-policy.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baselinePath = join(root, "scripts", "architecture-baseline.json");
@@ -153,7 +155,6 @@ export function checkImportBoundary(fromFile, specifier) {
 
   return [];
 }
-
 
 export function checkPackageDependency(from, to) {
   return forbiddenPackageEdges.get(from)?.has(to)
@@ -379,7 +380,9 @@ function run() {
   }
 
   const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
+  const policy = collectArchitecturePolicyErrors(root);
   const errors = [
+    ...policy.errors,
     ...collectArchitectureErrors(),
     ...validateLegacyBaseline(baseline, current),
     ...scanForbiddenSurfaces({ cwd: root }).map(
@@ -391,7 +394,7 @@ function run() {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`Architecture boundaries pass: ${JSON.stringify(current)}\n`);
+  process.stdout.write(`Architecture boundaries pass: ${JSON.stringify(current)}; policy exceptions: ${policy.exceptionCount}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) run();

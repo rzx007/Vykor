@@ -2,7 +2,7 @@ import { cp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installLocalNativePlugin } from "@vykor/plugins";
-import { getPluginDataDir } from "@vykor/core";
+import { getPluginDataDir } from "@vykor/host-config";
 import { createHash } from "node:crypto";
 export async function installNotesAppFixture(
   root: string,

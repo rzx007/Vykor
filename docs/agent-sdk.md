@@ -75,6 +75,7 @@ const agent = await createDefaultNodeAgent({
 | `effects` | 宿主交互副作用；目前 `requestPermission` 是可选 permission effect |
 | `onEvent` | 有序、可靠、可等待的 host sink；失败会终止当前 operation |
 | `extensions` / `mcpServers` | Vykor extension 与 MCP 增量配置 |
+| `workflowHost` | 可选借用已有 WorkflowHost；仓库通过 `capabilityOverrides.workflowRepository` 注入同一实例，由创建它的应用关闭 Host |
 | `childBudget` | 整棵 child 树的深度、活动数和累计创建数限制 |
 
 ## 工具限制
@@ -118,6 +119,8 @@ await createDefaultNodeAgent({
 `jobs: false` 不是独立开关：Terminal、后台 Shell、child environment 与 Workflow repository 都会产生或依赖 Job，因此必须同时写成 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`。只替换 Terminal 不会关掉本地后台 Shell 或 Memory。
 
 Host 覆盖是**借用对象**，不是由 Agent 接管的资源：它们必须能覆盖 root session 的整棵 child session tree，且由 Host 自己在合适的生命周期释放。`agent.close()` 只清理 runtime 自己创建的默认资源；不会调用 Host Terminal、后台 Shell 或其 Jobs 的释放逻辑。
+
+Node 默认创建每棵根树的 TeamRegistry 和 WorkflowHostDirectory，child 借用本树目录。Workflow、Job 工具和 Agent.close 使用同一个 owner 视图；close 等待后台 worker 和终态保存，再移除子 Agent。应用注入的共享 Host 不由单个 Agent 关闭；其创建入口为 `@vykor/agent-runtime/node/workflow`。
 
 Kernel 入口保持可嵌入：它不会创建本地 Terminal、Jobs、child environment 或其他 Node 默认能力，调用方必须明确提供运行时与所需能力。
 
@@ -246,7 +249,7 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 | child lifecycle | `packages/agent-runtime/src/child-agent.ts` |
 | Agent producer | `packages/tools/src/agent/agent-tools.ts` |
 | Job lifecycle routing | `packages/tools/src/job`、`packages/server/src/jobs` |
-| Workflow child spawn/wait | `packages/tools/src/agent/workflow/runner.ts` |
+| Workflow child spawn/wait | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` |
 | child worktree | `packages/agent-runtime/src/child-environment.ts` |
 | daemon application composition | `packages/server/src/application/daemon-application.ts` |
 | durable session -> live Agent | `packages/server/src/daemon/daemon-agent.ts` |

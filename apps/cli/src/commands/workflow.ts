@@ -3,19 +3,18 @@ import { resolve } from "node:path";
 import { Command } from "commander";
 import {
   WORKFLOW_SPEC_TEMPLATES,
-  cancelPersistentWorkflow,
   createWorkflowNotification,
   createWorkflowResultFromSnapshot,
   createWorkflowSpecFromReconciliationPlan,
   createWorkflowValidationReport,
-  FileWorkflowRunRepository,
   type WorkflowBudgetPolicyPreset,
   type WorkflowRunSummary,
   type WorkflowRunSnapshot,
   type WorkflowSpec,
   type WorkflowTemplateName,
 } from "@vykor/coordinator";
-import { getDetachedProcessSupervisor } from "@vykor/services";
+import { FileWorkflowRunRepository, WorkflowHost } from "@vykor/agent-runtime/node/workflow";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 
 interface CwdOption {
   cwd?: string;
@@ -133,12 +132,18 @@ export function createWorkflowCommand(): Command {
     .action(async (runId: string | undefined, options: CancelOptions) => {
       const store = new FileWorkflowRunRepository({ cwd: options.cwd });
       const snapshot = loadSnapshotOrThrow(store, runId);
-      const result = await cancelPersistentWorkflow(snapshot, {
-        store,
-        reason: options.reason,
-        stopTask: (taskId) => getDetachedProcessSupervisor().stopExecution(taskId),
-      });
-      printJson(createWorkflowNotification(result));
+      const workflowHost = new WorkflowHost(store);
+      const executionOwner = new ExecutionRuntimeOwner();
+      try {
+        const result = await workflowHost.cancelPersistentWorkflow(snapshot, {
+          reason: options.reason,
+          stopTask: (taskId) => executionOwner.getDetachedProcessSupervisor({ cwd: options.cwd ?? process.cwd() }).stopExecution(taskId),
+        });
+        printJson(createWorkflowNotification(result));
+      } finally {
+        try { await workflowHost.close(); }
+        finally { await executionOwner.close(); }
+      }
     });
 
   return cmd;

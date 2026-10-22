@@ -1,4 +1,4 @@
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { getNativeToolRuntimeSnapshot } from "@vykor/agent-runtime";
 import {
   installLocalNativePlugin,

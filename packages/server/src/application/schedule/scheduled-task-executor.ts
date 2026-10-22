@@ -2,7 +2,7 @@ import { mkdir, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { buildChildAgentWorktreeSlug, createChildAgentWorktreeManager } from "@vykor/agent-runtime";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/protocol";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SessionInteractionService } from "../session/session-interaction-service.js";

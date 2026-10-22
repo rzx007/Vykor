@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { getNativeToolRuntimeSnapshot } from "@vykor/agent-runtime";
 import {
   discoverInstalledNativePlugins, readInstalledPluginStore, verifyInstalledNativePlugin,

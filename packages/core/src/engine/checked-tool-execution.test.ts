@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
-  AgentEventInput, AgentExecutionContext, IHookExecutor, IPermissionChecker,
-  StreamEvent, ToolContext, ToolDefinition, ToolUseBlock,
+  AgentEventInput,
+  AgentExecutionContext,
+  IHookExecutor,
+  IPermissionChecker,
+  StreamEvent,
+  ToolContext,
+  ToolDefinition,
   ToolRegistrationSource,
 } from "../index.js";
+import type { ToolUseBlock } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { AgentExecutionLimitError } from "../types/runtime.js";

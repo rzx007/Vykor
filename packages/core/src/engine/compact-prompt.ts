@@ -1,4 +1,4 @@
-import type { Message } from "../index";
+import type { Message } from "@vykor/agent-contracts";
 import type { CompactContext, CompactContextSection } from "./compact-types";
 
 /**

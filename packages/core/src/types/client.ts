@@ -1,4 +1,4 @@
-import type { ContentBlock, Message } from "./messages";
+import type { ContentBlock, Message } from "@vykor/agent-contracts";
 import type { StreamEvent } from "./events";
 import type { ToolDefinition } from "./tools";
 

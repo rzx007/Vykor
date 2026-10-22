@@ -1,10 +1,5 @@
-import type {
-  AgentEffects,
-  StreamingMessageClient,
-  ToolDefinition,
-  RuntimeBundle,
-  Settings,
-} from "@vykor/core";
+import type { AgentEffects, StreamingMessageClient, ToolDefinition, RuntimeBundle } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import {
   createAgentSession,
   QueryEngine,

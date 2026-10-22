@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  ActiveMcpRuntimeHandle,
-  McpOAuthCredentialRecord,
-  McpRuntimeRegistry,
-  McpServerConfig,
-  McpServerIdentity,
-} from "@vykor/core";
+import type { ActiveMcpRuntimeHandle, McpRuntimeRegistry } from "@vykor/mcp";
+import type { McpOAuthCredentialRecord, McpServerConfig, McpServerIdentity } from "@vykor/host-config";
 import { McpOAuthRuntime, type McpClientManager } from "@vykor/mcp";
 
 import {

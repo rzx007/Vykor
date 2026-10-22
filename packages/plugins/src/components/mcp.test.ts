@@ -5,7 +5,7 @@ import { loadNativeMcpServers } from "./mcp.js";
 import { mkdtemp, cp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getPluginDataDir } from "@vykor/core";
+import { getPluginDataDir } from "@vykor/host-config";
 
 const fixture = fileURLToPath(new URL("../../fixtures/native-v1/agents-hooks-mcp", import.meta.url));
 

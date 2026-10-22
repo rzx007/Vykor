@@ -1,3 +1,4 @@
+import { createTeamRegistry } from "@vykor/coordinator/teams";
 import { describe, expect, it } from "vitest";
 import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type StreamMessageParams, type ToolDefinition } from "@vykor/core";
 import { createVisibilityToolRegistry, getAppToolRegistry, constrainRunCapabilityTools } from "./default-runtime-tools.js";
@@ -173,7 +174,7 @@ describe("run capability execution boundary", () => {
 
   it("keeps the real Agent Tool on its runtime definitions instead of the global fallback", async () => {
     const registry = new ToolRegistry();
-    registry.register(createAgentTool({ agentDefinitions: [{
+    registry.register(createAgentTool({ teams: createTeamRegistry(), definitions: [{
       name: "runtime-reviewer", description: "review", model: "runtime-model", systemPrompt: "captured role",
     }] }));
     const spawned: unknown[] = [];

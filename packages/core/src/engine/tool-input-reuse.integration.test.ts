@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { IHookExecutor, IPermissionChecker, Message, StreamEvent, ToolDefinition, ToolUseBlock } from "../index.js";
+import type { IHookExecutor, IPermissionChecker, StreamEvent, ToolDefinition } from "../index.js";
+import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 

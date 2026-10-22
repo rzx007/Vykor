@@ -5,6 +5,15 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": [
+        "../coordinator/src/definitions/index.ts"
+      ],
+      "@vykor/coordinator/teams": [
+        "../coordinator/src/teams/index.ts"
+      ],
+      "@vykor/coordinator/workflow": [
+        "../coordinator/src/workflow/index.ts"
+      ],
       "@vykor/coordinator": [
         "../coordinator/src/index.ts"
       ],

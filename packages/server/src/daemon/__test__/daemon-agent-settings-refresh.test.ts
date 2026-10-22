@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, saveProjectSettings } from "@vykor/core";
+import { loadSettings, saveProjectSettings } from "@vykor/host-config";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 
 import { createDaemonAgentLoader } from "../daemon-agent.js";

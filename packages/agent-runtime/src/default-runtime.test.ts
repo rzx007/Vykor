@@ -12,7 +12,8 @@ import {
   resolveRuntimeModel,
 } from "./default-runtime.js";
 import { LOCAL_READ_ONLY_TOOLS, READ_ONLY_TOOLS } from "@vykor/permissions";
-import type { Settings, ToolDefinition } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import type { ToolDefinition } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";

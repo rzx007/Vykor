@@ -18,7 +18,7 @@
     "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate && pnpm check:retired-ui",
     "check:clean-slate": "node scripts/verify-clean-slate.mjs",
     "check:clean-slate:artifacts": "node scripts/verify-clean-slate.mjs --require-build-artifacts",
-    "test": "turbo test --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins",
+    "test": "turbo test --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins && pnpm test:execution-integration",
     "test:bundled-plugins": "node scripts/test-bundled-plugins.mjs",
     "test:client-browser": "vite build --config tests/browser-client/vite.config.ts",
     "clean": "turbo clean",
@@ -28,7 +28,8 @@
     "test:clean-slate": "node --import ./apps/cli/node_modules/tsx/dist/loader.mjs --test scripts/verify-clean-slate.test.mjs scripts/clean-slate-smoke.test.mjs",
     "smoke:clean-slate": "node --import ./apps/cli/node_modules/tsx/dist/loader.mjs scripts/clean-slate-smoke.mjs",
     "prepare": "husky",
-    "check:retired-ui": "node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs"
+    "check:retired-ui": "node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs",
+    "test:execution-integration": "vitest run --config tests/execution-node/vitest.config.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

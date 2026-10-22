@@ -1,4 +1,5 @@
-import type { IHookExecutor, IToolRegistry, Settings, ToolDefinition } from "@vykor/core";
+import type { IHookExecutor, IToolRegistry, ToolDefinition } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { SkillRegistry } from "@vykor/skills";
 import { GOAL_UPDATE_TOOL_NAME } from "./goal-update-tool.js";
 import { GOAL_READ_TOOL_NAME } from "./goal-read-tool.js";

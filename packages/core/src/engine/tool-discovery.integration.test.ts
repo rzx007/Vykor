@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import { ModelRequestFailure } from "./model-retry.js";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { createRunCapabilityView } from "../../../agent-runtime/src/run-capability-view.js";
 import type { AgentExecutionContext, QueryEngineOptions, StreamEvent, StreamMessageParams, ToolDefinition, ToolUseEndEvent } from "../index.js";
 

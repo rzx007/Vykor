@@ -1,4 +1,5 @@
-export { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
+export { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+export { AgentRunNotAcceptingInputError } from "@vykor/core";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,
@@ -12,7 +13,7 @@ export {
 } from "./agent.js";
 export type { PluginSelectionCandidate, PluginSelectionCatalog, PluginSelectionResult } from "./plugin-selection.js";
 export { renderPluginDiscoveryContext } from "./plugin-discovery-context.js";
-export { createDefaultNodeAgent } from "./default-agent.js";
+export { createDefaultNodeAgent, type DefaultNodeAgentOptions } from "./default-agent.js";
 export { createConfiguredApprovalReviewer, type ConfiguredApprovalReviewerOptions } from "./configured-approval-reviewer.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
 export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";
@@ -89,3 +90,9 @@ export {
   type GitRunner,
 } from "./child-environment.js";
 export type { PluginAppRuntimeHost, PluginAppRuntimeFacts } from "./plugin-app-runtime.js";
+
+export { loadNodeAgentDefinitions } from "./node/definitions.js";
+export * from "./node/workflow/index.js";
+
+export { createDefaultToolRegistry } from "./node/tools/default-tool-registry.js";
+export { LocalAgentJobHost, type LocalAgentJobHostOptions } from "./node/jobs/local-agent-job-host.js";

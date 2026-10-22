@@ -1,5 +1,5 @@
 import type { PluginAppRuntimeHost, VykorAgent } from "@vykor/agent-runtime";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { isCommittedModelPart, readSessionRuntimeConfig, type PluginAppSource } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";
 import { SessionPluginAppService } from "./session-plugin-app-service.js";

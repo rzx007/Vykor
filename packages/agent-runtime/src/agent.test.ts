@@ -8,8 +8,8 @@ import {
   AgentRunNotAcceptingInputError,
   RuntimeBundle,
   type StreamingMessageClient,
-  type Settings,
 } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 import { McpClientManager } from "@vykor/mcp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

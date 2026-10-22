@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@vykor/client": "workspace:*",
-    "@vykor/core": "workspace:*",
     "@vykor/themes": "workspace:*",
     "@opentui/core": "catalog:",
     "@opentui/react": "catalog:",

@@ -1,11 +1,11 @@
-import type { ContentBlock, ToolUseBlock } from "./messages";
-import type { AssistantMessagePhase } from "./messages";
-import type { UsageSnapshot } from "./usage";
+import type { ContentBlock, ToolUseBlock } from "@vykor/agent-contracts";
+import type { AssistantMessagePhase } from "@vykor/agent-contracts";
+import type { UsageSnapshot } from "@vykor/agent-contracts";
 import type {
   GenerationIdentity,
   ModelAttemptFinishedEvent,
   ModelRetryState,
-} from "../engine/model-retry";
+} from "@vykor/agent-contracts";
 
 export interface TextDeltaEvent {
   type: "text_delta";
@@ -47,8 +47,8 @@ export interface ToolUseEndEvent {
   result: {
     content: ContentBlock[];
     isError?: boolean;
-    failureKind?: import("./tools").ToolFailureKind;
-    executionState?: import("./tools").ToolExecutionState;
+    failureKind?: import("@vykor/agent-contracts").ToolFailureKind;
+    executionState?: import("@vykor/agent-contracts").ToolExecutionState;
     recoveryHint?: string;
     compactSummary?: string;
     toolAttemptId?: string;
@@ -81,9 +81,6 @@ export type GenerationStartedEvent = GenerationIdentity & {
 
 /** 等待下一次重试前发出，携带次数、原因和截止时间。 */
 export type ModelRetryEvent = ModelRetryState & { type: "model_retry" };
-
-/** 每次实际请求恰好结算一次（含失败、取消和最后一次耗尽）。 */
-export type { ModelAttemptFinishedEvent };
 
 export type StreamEvent =
   | TextDeltaEvent

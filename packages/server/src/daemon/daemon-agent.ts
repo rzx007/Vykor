@@ -1,3 +1,4 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { normalizeApprovalMode } from "@vykor/protocol";
 import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
@@ -15,17 +16,18 @@ import {
   getCoordinatorUserContext,
 } from "@vykor/coordinator";
 import type { WorkflowRunRepository } from "@vykor/coordinator";
-import { PROJECT_CONFIG_DIR_NAME } from "@vykor/core";
+import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
+import { PROJECT_CONFIG_DIR_NAME } from "@vykor/host-config";
 import type {
   AgentScheduleEffects,
   AgentBackgroundShellHost,
   AgentEffects,
   AgentEventListener,
   AgentRequestConfigurationReader,
-  McpRuntimeRegistry,
-  Settings,
   ToolDefinition,
 } from "@vykor/core";
+import type { McpRuntimeRegistry } from "@vykor/mcp";
+import type { Settings } from "@vykor/host-config";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import {
@@ -89,6 +91,7 @@ export type DaemonToolsProvider = (
 ) => Promise<ToolDefinition[]> | ToolDefinition[];
 
 export interface DaemonAgentLoaderOptions {
+  executionOwner?: ExecutionRuntimeOwner;
   prepareModelMetadata?(settings: Settings): Promise<Pick<
     VykorAgentOptions,
     "resolveReasoningEfforts" | "resolveModelContextWindow" | "resolveModelOutputLimit"
@@ -129,6 +132,7 @@ export interface DaemonAgentLoaderOptions {
     session: SessionRecord,
   ): ObservableJobProducer<AgentBackgroundShellHost>;
   workflowRepository?: WorkflowRunRepository;
+  workflowHost?: WorkflowHost;
   tools?: DaemonToolsProvider;
   toolOverrides?: ToolDefinition[];
   trustedToolOverrides?: string[];
@@ -296,7 +300,11 @@ export function createDaemonAgentLoader(
             parts,
             options: agentOptions,
           })
-        : await createDefaultNodeAgent(agentOptions);
+        : await createDefaultNodeAgent({
+            ...agentOptions,
+            executionOwner: options.executionOwner,
+            workflowHost: options.workflowHost,
+          });
     } catch (error) {
       await executionEnvironment?.release();
       throw error;

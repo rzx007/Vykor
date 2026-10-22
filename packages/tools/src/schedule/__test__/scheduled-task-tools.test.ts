@@ -1,7 +1,7 @@
 import type { AgentScheduleEffects, ToolContext } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
-import { scheduleCreateTool } from "../scheduled-task-tools.js";
+import { createScheduleTools } from "../scheduled-task-tools.js";
 
 function context(schedules: AgentScheduleEffects): ToolContext {
   return {
@@ -15,6 +15,13 @@ function context(schedules: AgentScheduleEffects): ToolContext {
 }
 
 describe("Agent Scheduled task tools", () => {
+  it("does not use a context scheduler when no port was injected", async () => {
+    const list = vi.fn(async () => []);
+    const schedules: AgentScheduleEffects = { create: vi.fn(), update: vi.fn(), remove: vi.fn(), list, trigger: vi.fn(), listRuns: vi.fn() };
+    const result = await createScheduleTools().find(tool => tool.name === "ScheduleList")!.execute({}, context(schedules));
+    expect(result.isError).toBe(true);
+    expect(list).not.toHaveBeenCalled();
+  });
   it("binds chat schedules to the current durable session", async () => {
     const create = vi.fn(async (input) => ({
       id: "schedule-1",
@@ -32,7 +39,7 @@ describe("Agent Scheduled task tools", () => {
       listRuns: vi.fn(async () => []),
     };
 
-    const result = await scheduleCreateTool.execute(
+    const result = await createScheduleTools(schedules).find(tool => tool.name === "ScheduleCreate")!.execute(
       {
         name: "follow-up",
         prompt: "Check deployment status.",
@@ -88,7 +95,7 @@ describe("Agent Scheduled task tools", () => {
       listRuns: vi.fn(async () => []),
     };
 
-    await scheduleCreateTool.execute(
+    await createScheduleTools(schedules).find(tool => tool.name === "ScheduleCreate")!.execute(
       {
         name: "isolated-review",
         prompt: "Review the repository.",

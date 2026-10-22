@@ -1,8 +1,9 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { describe, expect, it } from "vitest";
-import { loadProjectSettings, loadSettings } from "@vykor/core";
+import { loadProjectSettings, loadSettings } from "@vykor/host-config";
 import {
   inspectPersonalizationSettings,
   saveMemoryConfiguration,
@@ -15,6 +16,7 @@ describe("personalization configuration", () => {
     );
     const previous = process.env.VYKOR_CONFIG_DIR;
     process.env.VYKOR_CONFIG_DIR = directory;
+    const executionOwner = new ExecutionRuntimeOwner();
     try {
       const project = join(directory, "project");
       await mkdir(join(project, ".vykor"), { recursive: true });
@@ -24,6 +26,7 @@ describe("personalization configuration", () => {
       );
       await writeFile(join(project, "AGENTS.md"), "Project rules");
       const user = await inspectPersonalizationSettings();
+      expect(user.consolidation.status).toBe("unknown");
       const preferences = {
         ...user.effective,
         autoDreamEnabled: true,
@@ -35,7 +38,7 @@ describe("personalization configuration", () => {
         expected: user.configured,
       });
       expect((await loadSettings()).memory?.autoDreamMinHours).toBe(48);
-      const inherited = await inspectPersonalizationSettings({ cwd: project });
+      const inherited = await inspectPersonalizationSettings({ cwd: project, executionOwner });
       expect(inherited.configured).toBeNull();
       expect(inherited.sources.autoDreamEnabled).toBe("用户默认");
       expect(inherited.rules).toContain(join(project, "AGENTS.md"));
@@ -47,7 +50,7 @@ describe("personalization configuration", () => {
       expect((await loadProjectSettings(project))?.systemPrompt).toBe(
         "Keep this instruction",
       );
-      const overridden = await inspectPersonalizationSettings({ cwd: project });
+      const overridden = await inspectPersonalizationSettings({ cwd: project, executionOwner });
       expect(overridden.effective.sessionMemoryEnabled).toBe(false);
       expect(overridden.sources.sessionMemoryEnabled).toBe("当前项目");
       await expect(
@@ -63,16 +66,17 @@ describe("personalization configuration", () => {
         expected: overridden.configured,
       });
       expect(
-        (await inspectPersonalizationSettings({ cwd: project })).effective
+        (await inspectPersonalizationSettings({ cwd: project, executionOwner })).effective
           .sessionMemoryEnabled,
       ).toBe(true);
       await expect(
         saveMemoryConfiguration({
           value: { ...preferences, autoDreamMinSessions: 0 },
-          expected: (await inspectPersonalizationSettings()).configured,
+          expected: (await inspectPersonalizationSettings({ executionOwner })).configured,
         }),
       ).rejects.toThrow("门槛无效");
     } finally {
+      await executionOwner.close();
       if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
       else process.env.VYKOR_CONFIG_DIR = previous;
       await rm(directory, { recursive: true, force: true });

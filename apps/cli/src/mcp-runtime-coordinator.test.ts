@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { IncompatibleProtocolError, VykorApiError } from "@vykor/client";
-import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/core";
+import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 import { createCliMcpRuntimeCoordinator } from "./mcp-runtime-coordinator.js";
 
 const identity: McpServerIdentity = {

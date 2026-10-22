@@ -1,5 +1,14 @@
-import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError, MaxTurnsExceeded } from "@vykor/core";
-import type { AgentChildResult, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope } from "@vykor/core";
+import { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+import { AgentRunNotAcceptingInputError, MaxTurnsExceeded } from "@vykor/core";
+import type {
+  AgentChildResult,
+} from "@vykor/agent-contracts";
+import type {
+  AgentInputReceipt,
+  AgentRunHandle,
+  AgentRunResult,
+  AgentRunScope,
+} from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { AgentChildManager, AgentChildRegistry } from "./child-agent.js";

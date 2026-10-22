@@ -3,11 +3,13 @@ import { AgentExecutionLimitError, isAgentExecutionLimitError } from "@vykor/cor
 import type {
   AgentChildSpawnInput,
   AgentEvent,
-  ChildFailureKind,
-  ChildPartialResult,
-  ContentBlock,
   StreamEvent,
 } from "@vykor/core";
+import type {
+  ChildFailureKind,
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
+import type { ContentBlock } from "@vykor/agent-contracts";
 import {
   type SessionStore,
 } from "@vykor/services";

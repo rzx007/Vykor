@@ -1,7 +1,9 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createShellOutputLogHost } from "@vykor/services/executions";
+import {
+  createShellOutputLogHost,
+} from "@vykor/execution-node";
 import { resolveHostShellLauncher, shellJoin } from "@vykor/sandbox";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileReadTool } from "../../file/read.js";
@@ -48,7 +50,7 @@ describe("foreground Shell log consumption", () => {
         permission: { mode: "default" as const }, sandbox: { enabled: false } },
     };
     const result = await createShellTool().execute({ command, timeout: 15000 }, context);
-    expect(result.isError).not.toBe(true);
+    expect(result.isError, JSON.stringify(result)).not.toBe(true);
     expect(text(result)).toContain("BEGIN");
     expect(text(result)).toContain("END");
     expect(text(result)).not.toContain("ONLY_MIDDLE_SENTINEL");

@@ -1,5 +1,5 @@
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";
 

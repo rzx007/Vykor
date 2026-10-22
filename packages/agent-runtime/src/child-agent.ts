@@ -2,30 +2,28 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { AgentJobAuthorization } from "@vykor/jobs";
 
+import type { AgentChildBudgetSnapshot } from "@vykor/agent-contracts";
 import type {
-  AgentChildBudgetSnapshot,
   AgentChildController,
   AgentChildDirectory,
   AgentChildHandle,
   AgentChildInput,
   AgentChildInvocation,
-  AgentChildResult,
   AgentChildSpawnInput,
   AgentInputReceipt,
   AgentExecutionLimits,
   AgentRunHandle,
   AgentRunScope,
   ChildActivitySnapshot,
-  ChildFailureKind,
   RunCapabilityView,
-  Settings,
 } from "@vykor/core";
-import {
-  AgentChildBudgetExceededError,
-  AgentRunNotAcceptingInputError,
-  ChildRunTerminationError,
-  MaxTurnsExceeded,
-} from "@vykor/core";
+import type {
+  AgentChildResult,
+  ChildFailureKind,
+} from "@vykor/agent-contracts";
+import type { Settings } from "@vykor/host-config";
+import { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+import { AgentRunNotAcceptingInputError, ChildRunTerminationError, MaxTurnsExceeded } from "@vykor/core";
 
 import type { VykorAgent, VykorAgentOptions } from "./agent.js";
 import type {

@@ -19,10 +19,10 @@ import type {
   AgentRunHandle,
   AgentRunResult,
   CompactContextProvider,
-  Message,
   StreamingMessageClient,
   ToolDefinition,
 } from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
 import type { AgentJobHost } from "@vykor/jobs";
 import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@vykor/services";
 

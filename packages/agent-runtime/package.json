@@ -15,6 +15,10 @@
     "./kernel": {
       "types": "./dist/kernel-entry.d.ts",
       "import": "./dist/kernel.js"
+    },
+    "./node/workflow": {
+      "types": "./dist/workflow-entry.d.ts",
+      "import": "./dist/workflow.js"
     }
   },
   "scripts": {
@@ -28,7 +32,10 @@
     "@vykor/terminal-node": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "node-pty": "^1.0.0",
-    "sharp": "0.34.4"
+    "sharp": "0.34.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*",
+    "@vykor/execution-node": "workspace:*"
   },
   "peerDependencies": {
     "@vykor/api": "workspace:*",
@@ -50,23 +57,57 @@
     "@vykor/tools": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@vykor/api": { "optional": true },
-    "@vykor/auth": { "optional": true },
-    "@vykor/coordinator": { "optional": true },
-    "@vykor/core": { "optional": true },
-    "@vykor/environment": { "optional": true },
-    "@vykor/hooks": { "optional": true },
-    "@vykor/jobs": { "optional": true },
-    "@vykor/mcp": { "optional": true },
-    "@vykor/memory": { "optional": true },
-    "@vykor/permissions": { "optional": true },
-    "@vykor/plugins": { "optional": true },
-    "@vykor/prompts": { "optional": true },
-    "@vykor/protocol": { "optional": true },
-    "@vykor/sandbox": { "optional": true },
-    "@vykor/skills": { "optional": true },
-    "@vykor/terminal": { "optional": true },
-    "@vykor/tools": { "optional": true }
+    "@vykor/api": {
+      "optional": true
+    },
+    "@vykor/auth": {
+      "optional": true
+    },
+    "@vykor/coordinator": {
+      "optional": true
+    },
+    "@vykor/core": {
+      "optional": true
+    },
+    "@vykor/environment": {
+      "optional": true
+    },
+    "@vykor/hooks": {
+      "optional": true
+    },
+    "@vykor/jobs": {
+      "optional": true
+    },
+    "@vykor/mcp": {
+      "optional": true
+    },
+    "@vykor/memory": {
+      "optional": true
+    },
+    "@vykor/permissions": {
+      "optional": true
+    },
+    "@vykor/plugins": {
+      "optional": true
+    },
+    "@vykor/prompts": {
+      "optional": true
+    },
+    "@vykor/protocol": {
+      "optional": true
+    },
+    "@vykor/sandbox": {
+      "optional": true
+    },
+    "@vykor/skills": {
+      "optional": true
+    },
+    "@vykor/terminal": {
+      "optional": true
+    },
+    "@vykor/tools": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@vykor/api": "workspace:*",

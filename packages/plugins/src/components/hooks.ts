@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { HOOK_EVENTS, type HookDefinition, type HookEvent } from "@vykor/core";
+import { HOOK_EVENTS, type HookEvent } from "@vykor/agent-contracts";
+import { type HookDefinition } from "@vykor/host-config";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

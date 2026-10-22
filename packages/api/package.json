@@ -20,7 +20,9 @@
     "@anthropic-ai/sdk": "catalog:",
     "@vykor/core": "workspace:*",
     "openai": "catalog:",
-    "sharp": "0.34.4"
+    "sharp": "0.34.4",
+    "@vykor/agent-contracts": "workspace:*",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

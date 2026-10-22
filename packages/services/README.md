@@ -10,10 +10,8 @@
 - **Attachment 领域根**: `src/attachments/` 是唯一入口。`persistence/` 管 SQLite 记录，`storage/` 管 Blob 和完整性，`processing/` 管 OCR 与图片标准化，`content/` 管不依赖存储的文本分类。应用用例不在本包，而在 Server 的 `AttachmentService`
 - **Database kernel**: SQLite 打开/关闭、事务协调、增量输出、owner lease、恢复与维护；不提供旧 Store 转发入口
 - **standalone session files**: 只接受当前 schema 的项目级 snapshot 与 transcript 导出；不供 daemon/TUI 保存权威状态
-- **LspClient**: 代码智能服务 (stub；ripgrep 查询走统一 Sandbox argv 入口)
-- **Execution services**: detached process 和 framework child 的进程内句柄；durable 投影仍由 daemon 保存
 
-外部工作负载进程不在 services 内直接 `spawn/exec`：`DetachedProcessSupervisor`、autodream 和 LSP 查询统一委托 `@vykor/sandbox`。framework child Agent 的回调句柄只放在 `ChildAgentExecutionRegistry`；跨端执行投影与 Scheduled Task 状态仍由 daemon `SessionStore` 持久化。
+本地进程、输出捕获、子 Agent 执行观察和 LSP 已迁入 `@vykor/execution-node`，由宿主创建的 `ExecutionRuntimeOwner` 管理。autodream 接收宿主显式传入的 taskRunner；本包不再维护默认进程目录。跨端执行投影与 Scheduled Task 状态仍由 daemon `SessionStore` 持久化。
 
 数据库包含基线 `0000_current_schema.sql` 及其后的增量迁移。从空目录一次建立当前 schema，之后每次打开都应用迁移链。不做旧库接管：与当前基线不匹配的库会带提示失败，删除后重建即可。
 

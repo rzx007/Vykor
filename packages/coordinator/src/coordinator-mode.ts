@@ -1,5 +1,5 @@
 import { COORDINATOR_MODE_ENV, COORDINATOR_SYSTEM_PROMPT, isCoordinatorMode } from "./index.js";
-import { resolveAllowedToolNames } from "@vykor/core";
+import { resolveAllowedToolNames } from "@vykor/agent-contracts";
 
 /**
  * Coordinator 模式辅助（移植自 Python coordinator_mode.py 的 mode/上下文段）。

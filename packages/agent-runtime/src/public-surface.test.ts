@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  AgentChildBudgetExceededError as CoreBudgetError,
-  AgentRunNotAcceptingInputError as CoreSteerError,
-} from "@vykor/core";
+import { AgentChildBudgetExceededError as CoreBudgetError } from "@vykor/agent-contracts";
+import { AgentRunNotAcceptingInputError as CoreSteerError } from "@vykor/core";
 
 import * as runtime from "./index.js";
 import * as kernel from "./kernel-entry.js";

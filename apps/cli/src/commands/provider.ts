@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { CODEX_DEFAULT_MODEL, detectProvider } from "@vykor/api";
 import type { ProviderSpec } from "@vykor/api";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 
 export type KeySource = "credentials" | "env" | "external" | "none";
 
@@ -66,7 +66,7 @@ export function createProviderCommand(): Command {
       const chalk = (await import("chalk")).default;
       const { PROVIDERS } = await import("@vykor/api");
       const { CredentialStorage, describeCodexAuthState } = await import("@vykor/auth");
-      const { loadSettings } = await import("@vykor/core");
+      const { loadSettings } = await import("@vykor/host-config");
 
       const settings = await loadSettings();
       const storage = new CredentialStorage();
@@ -126,7 +126,7 @@ export function createProviderCommand(): Command {
     .action(async (name: string, opts: { model?: string }) => {
       const chalk = (await import("chalk")).default;
       const { findByName } = await import("@vykor/api");
-      const { updateSettings } = await import("@vykor/core");
+      const { updateSettings } = await import("@vykor/host-config");
 
       if (!findByName(name)) {
         await warnUnknownProvider(chalk, name);
@@ -160,7 +160,7 @@ export function createProviderCommand(): Command {
         const chalk = (await import("chalk")).default;
         const { findByName } = await import("@vykor/api");
         const { CredentialStorage } = await import("@vykor/auth");
-        const { updateSettings } = await import("@vykor/core");
+        const { updateSettings } = await import("@vykor/host-config");
 
         if (!findByName(name)) {
           await warnUnknownProvider(chalk, name);
@@ -200,7 +200,7 @@ export function createProviderCommand(): Command {
       async (name: string, opts: { apiKey?: string; model?: string; baseUrl?: string }) => {
         const chalk = (await import("chalk")).default;
         const { CredentialStorage } = await import("@vykor/auth");
-        const { updateSettings } = await import("@vykor/core");
+        const { updateSettings } = await import("@vykor/host-config");
 
         if (
           opts.apiKey === undefined &&
@@ -245,7 +245,7 @@ export function createProviderCommand(): Command {
     .action(async (name: string) => {
       const chalk = (await import("chalk")).default;
       const { CredentialStorage } = await import("@vykor/auth");
-      const { loadSettings } = await import("@vykor/core");
+      const { loadSettings } = await import("@vykor/host-config");
 
       const storage = new CredentialStorage();
       await storage.clearProviderCredentials(name);

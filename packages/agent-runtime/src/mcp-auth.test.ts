@@ -2,7 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadProjectSettings, loadSettings, saveProjectSettings, saveSettings, updateSettings, withSettingsFileLock, ToolRegistry, type McpServerConfig, type Settings, type ToolDefinition } from "@vykor/core";
+import {
+  loadProjectSettings,
+  loadSettings,
+  saveProjectSettings,
+  saveSettings,
+  updateSettings,
+  withSettingsFileLock,
+  type McpServerConfig,
+  type Settings,
+} from "@vykor/host-config";
+import { ToolRegistry, type ToolDefinition } from "@vykor/core";
 import type { McpClientManager, PreparedMcpConnection } from "@vykor/mcp";
 
 import { applyMcpAuthConfig, createMcpAuthHost, defaultMcpEnvKey } from "./mcp-auth.js";

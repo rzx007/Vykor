@@ -1,6 +1,12 @@
 import { accessSync, constants, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statfsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { getDataDir, getLogsDir, getPluginCacheDir, getPluginDataDir, getTasksDir } from "@vykor/core";
+import {
+  getDataDir,
+  getLogsDir,
+  getPluginCacheDir,
+  getPluginDataDir,
+  getTasksDir,
+} from "@vykor/host-config";
 
 import type { StorageCategory, StorageReport } from "@vykor/protocol";
 export type { StorageCategory, StorageReport } from "@vykor/protocol";

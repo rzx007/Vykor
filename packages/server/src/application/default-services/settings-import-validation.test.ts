@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getConfigFilePath, loadSettings, updateSettings } from "@vykor/core";
+import { getConfigFilePath, loadSettings, updateSettings } from "@vykor/host-config";
 import { exportPortableSettings } from "../../settings-transfer.js";
 
 const probes = vi.hoisted(() => ({ catalog: vi.fn(async () => ({})), environment: vi.fn(async (config: { shell?: { executable: string } }) => {

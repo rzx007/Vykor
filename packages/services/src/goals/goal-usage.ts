@@ -1,4 +1,4 @@
-import type { ModelTokenMetering } from "@vykor/core";
+import type { ModelTokenMetering } from "@vykor/agent-contracts";
 import type {
   GoalModelAttemptKey,
   GoalUsage,

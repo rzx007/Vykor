@@ -1,10 +1,17 @@
 import type { StreamingMessageClient } from "./client";
-import type { AgentBackgroundShellHost, McpAuthHost, ShellOutputLogHost, ToolRegistry } from "./tools";
+import type {
+  AgentBackgroundShellHost,
+  McpAuthHost,
+  ToolRegistry,
+} from "./tools";
+import type {
+  ShellOutputLogHost,
+} from "@vykor/agent-contracts";
 import type { PermissionChecker } from "./permissions";
 import type { HookExecutor } from "./hooks";
-import type { ContentBlock, Message, ToolUseBlock } from "./messages";
+import type { ContentBlock, Message, ToolUseBlock } from "@vykor/agent-contracts";
 import type { StreamEvent } from "./events";
-import type { Settings } from "./settings";
+import type { Settings } from "@vykor/host-config";
 import type { CompactContextProvider } from "../engine/compact-service";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
@@ -238,41 +245,14 @@ export interface RunSkillBinding {
 
 export interface RunAgentBinding {
   readonly ownerPluginId?: string;
-  readonly definition: {
-    name: string;
-    description: string;
-    systemPrompt?: string;
-    tools?: string[];
-    disallowedTools?: string[];
-    model?: string;
-    effort?: string | number;
-    permissionMode?: string;
-    maxTurns?: number;
-    timeoutSeconds?: number;
-    skills?: string[];
-    mcpServers?: unknown[];
-    hooks?: Record<string, unknown>;
-    color?: string;
-    background?: boolean;
-    initialPrompt?: string;
-    memory?: string;
-    isolation?: string;
-    omitClaudeMd?: boolean;
-    criticalSystemReminder?: string;
-    requiredMcpServers?: string[];
-    filename?: string;
-    baseDir?: string;
-    source?: "builtin" | "user" | "plugin";
-    subagentType?: string;
-    permissions?: string[];
-  };
+  readonly definition: import("@vykor/coordinator/definitions").AgentDefinition;
 }
 
 export interface RunMcpServerBinding {
   readonly ownerPluginId?: string;
   readonly serverId: string;
   readonly serverName: string;
-  readonly definition: import("./settings").McpServerConfig;
+  readonly definition: import("@vykor/host-config").McpServerConfig;
 }
 
 export interface RunCapabilityView {
@@ -314,12 +294,11 @@ export interface AgentExecutionContext {
   closeSteering(): void;
 }
 
-
 export interface AgentRunResult {
   status: "completed";
   output: string;
   history: Message[];
-  usage: import("./usage").UsageSnapshot;
+  usage: import("@vykor/agent-contracts").UsageSnapshot;
 }
 
 export interface AgentRunHandle {
@@ -361,7 +340,7 @@ export interface QueryEngine {
   setModel(model: string): void;
   setMaxTurns(max: number): void;
   loadMessages(messages: Message[]): void;
-  getTotalUsage(): import("./usage").UsageSnapshot;
+  getTotalUsage(): import("@vykor/agent-contracts").UsageSnapshot;
   setMemoryRetriever(retriever: MemoryRetriever | undefined): void;
   setCompactContextProvider(fn: CompactContextProvider | undefined): void;
   setAllowedTools(tools: string[] | null): void;

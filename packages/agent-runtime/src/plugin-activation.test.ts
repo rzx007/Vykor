@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { HookDefinition } from "@vykor/core";
+import type { HookDefinition } from "@vykor/host-config";
 import type { LoadedNativePlugin } from "@vykor/plugins";
 
 import { activateDiscoveredPlugins } from "./plugin-activation.js";

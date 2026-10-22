@@ -26,6 +26,13 @@ await Promise.all([
     outfile: "dist/kernel.js",
     format: "esm",
   }),
+  build({
+    ...shared,
+    entryPoints: ["src/workflow-entry.ts"],
+    outfile: "dist/workflow.js",
+    format: "esm",
+    banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
+  }),
 ]);
 
 // Bundling moves NativeToolHost's import.meta.url beside dist/index.js.

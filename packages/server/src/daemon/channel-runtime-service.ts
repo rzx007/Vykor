@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { getChannelWorkspaceRoot } from "@vykor/core";
+import { getChannelWorkspaceRoot } from "@vykor/host-config";
 import type { FeishuChannelConfig } from "@vykor/auth";
 import type {
   ChannelConnectorRuntimeStatus,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { CompactService } from "./compact-service.js";
-import { loadSettings, saveProjectSettings, saveSettings } from "../config/settings.js";
+import { loadSettings, saveProjectSettings, saveSettings } from "@vykor/host-config";
 import type { StreamEvent, StreamMessageParams, ToolDefinition } from "../index.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";

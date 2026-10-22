@@ -1,7 +1,11 @@
-import type { Settings } from "@vykor/core";
-import { FileWorkflowRunRepository } from "@vykor/coordinator";
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
+import type { Settings } from "@vykor/host-config";
+import { FileWorkflowRunRepository } from "./node/workflow/file-workflow-run-repository.js";
 import { CompositeAgentJobHost, type AgentJobHost } from "@vykor/jobs";
-import { LocalAgentJobHost } from "@vykor/tools";
+import { LocalAgentJobHost } from "./node/jobs/local-agent-job-host.js";
+import type { WorkflowHostDirectory } from "./node/workflow/workflow-host-directory.js";
+import type { BoundWorkflowHost } from "./node/workflow/workflow-host.js";
+import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import type { AgentTerminalHost } from "@vykor/terminal";
 
 import type {
@@ -34,6 +38,9 @@ import {
 } from "./memory-runtime.js";
 
 export interface ResolveDefaultAgentCapabilitiesOptions {
+  workflowHosts: WorkflowHostDirectory;
+  agentDefinitions: readonly AgentDefinition[];
+  executionOwner: ExecutionRuntimeOwner;
   settings: Settings;
   configuration: VykorAgentConfiguration;
   configurationForChild?: () => VykorAgentConfiguration;
@@ -54,6 +61,7 @@ export interface ResolveDefaultAgentCapabilitiesOptions {
 }
 
 export interface ResolvedDefaultAgentEnvironment {
+  workflowTool?: BoundWorkflowHost;
   capabilities: ResolvedAgentCapabilities;
   childManager: AgentChildManager;
   memory: AgentMemoryRuntime | undefined;
@@ -90,13 +98,25 @@ export async function resolveDefaultAgentCapabilities(
     overrides.workflowRepository,
     async () => new FileWorkflowRunRepository({ cwd: options.cwd }),
   );
+  const repository = capabilityValue(workflowRepository);
+  const workflowTool = repository ? options.workflowHosts.get(repository).bind({
+    cwd: options.cwd, sessionId: options.sessionId,
+    executionOwner: options.executionOwner, definitions: options.agentDefinitions,
+    stopTask: async id => {
+      const child = childManager.get(id);
+      if (child) { await child.interrupt("Workflow cancelled"); await child.result; return; }
+      return await options.executionOwner.getDetachedProcessSupervisor({ cwd: options.cwd, sessionId: options.sessionId }).stopExecution(id);
+    },
+  }) : undefined;
+  if (workflowTool) options.cleanup.add(() => workflowTool.close(), workflowTool);
   const localJobs = overrides.jobs === false
     ? undefined
     : new LocalAgentJobHost({
+        processes: options.executionOwner.getDetachedProcessSupervisor({ cwd: options.cwd, sessionId: options.sessionId }),
         cwd: options.cwd,
         sessionId: options.sessionId,
         childManager,
-        workflowRepository: capabilityValue(workflowRepository),
+        workflows: workflowTool?.jobs,
       });
 
   const jobSources: AgentJobHost[] = [];
@@ -171,6 +191,7 @@ export async function resolveDefaultAgentCapabilities(
   };
 
   return {
+    workflowTool,
     capabilities,
     childManager,
     memory: capabilityValue(memory),

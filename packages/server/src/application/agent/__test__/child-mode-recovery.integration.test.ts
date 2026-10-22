@@ -2,12 +2,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentEvent, AgentRequestConfigurationReader, PermissionMode, Settings, StreamMessageParams, StreamingMessageClient } from "@vykor/core";
+import type {
+  AgentEvent,
+  AgentRequestConfigurationReader,
+  StreamMessageParams,
+  StreamingMessageClient,
+} from "@vykor/core";
+import type { PermissionMode, Settings } from "@vykor/host-config";
 import { createDefaultNodeAgent, type VykorAgentOptions } from "@vykor/agent-runtime";
 import { AgentChildManager } from "../../../../../agent-runtime/src/child-agent.js";
 import { AgentEventBus } from "../../../../../agent-runtime/src/event-source.js";
 import { SessionStore } from "@vykor/services";
-import { ChildAgentExecutionRegistry } from "@vykor/services/executions";
+import {
+  ChildAgentExecutionRegistry,
+} from "@vykor/execution-node";
 import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "@vykor/protocol";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 import { LiveChildAgentDirectory } from "../live-child-agent-directory.js";

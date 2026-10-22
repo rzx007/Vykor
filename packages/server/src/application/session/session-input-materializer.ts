@@ -1,4 +1,5 @@
-import type { ContentBlock, RunCapabilityView } from "@vykor/core";
+import type { ContentBlock } from "@vykor/agent-contracts";
+import type { RunCapabilityView } from "@vykor/core";
 import {
   normalizeSessionUserInputItems,
   sessionUserInputText,

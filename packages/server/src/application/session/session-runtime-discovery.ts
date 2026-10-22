@@ -1,5 +1,5 @@
 import { createPluginCapabilityInventory, discoverVykorExtensions } from "@vykor/agent-runtime";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { SessionRecord } from "@vykor/protocol";
 import { resolveSessionModelContextLimits } from "../assemble-session-context-usage.js";
 import { createDefaultModelService } from "../default-services/model-service.js";

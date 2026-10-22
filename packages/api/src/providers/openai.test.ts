@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { Message } from "@vykor/core";
+import type { Message } from "@vykor/agent-contracts";
 import {
   OpenAICompatibleClient,
   tokenLimitParamForModel,

@@ -5,7 +5,8 @@ import {
   type CompactClient,
   type CompactProgressEvent,
 } from "./compact-service.js";
-import type { Message, StreamEvent, IHookExecutor, HookResult } from "../index.js";
+import type { Message, HookResult } from "@vykor/agent-contracts";
+import type { StreamEvent, IHookExecutor } from "../index.js";
 import { AgentExecutionLimitError } from "../types/runtime.js";
 
 it("counts replayable reasoning but not display-only think text", () => {

@@ -1,13 +1,13 @@
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
+import type { TeamRegistry } from "@vykor/coordinator/teams";
+import type { WorkflowHostDirectory } from "./node/workflow/workflow-host-directory.js";
 import { randomUUID } from "node:crypto";
 
-import type {
-  AgentSession,
-  McpRuntimeRegistry,
-  McpServerConfig,
-  RuntimeBundle,
-  Settings,
-} from "@vykor/core";
-import { createAgentSession, getSkillsDir, loadSettings } from "@vykor/core";
+import type { AgentSession, RuntimeBundle } from "@vykor/core";
+import type { McpRuntimeRegistry } from "@vykor/mcp";
+import type { McpServerConfig, Settings } from "@vykor/host-config";
+import { createAgentSession } from "@vykor/core";
+import { getSkillsDir, loadSettings } from "@vykor/host-config";
 import type { McpClientManager } from "@vykor/mcp";
 import type { AgentRequestConfigurationReader } from "@vykor/core";
 import { createWorkspaceBinding } from "@vykor/environment";
@@ -69,6 +69,11 @@ export interface AgentIdentity {
 }
 
 export interface AgentCompositionContext {
+  teams: TeamRegistry;
+  workflowHosts: WorkflowHostDirectory;
+  ownsWorkflowHosts?: boolean;
+  executionOwner: ExecutionRuntimeOwner;
+  ownsExecutionOwner?: boolean;
   eventBus: AgentEventBus;
   childDirectory: AgentChildRegistry;
   identity?: AgentIdentity;
@@ -81,6 +86,7 @@ export interface AgentCompositionContext {
 }
 
 export interface AgentComposition {
+  stopBackgroundWork: () => Promise<void>;
   runtime: RuntimeBundle;
   pluginApps: PluginAppBackendCatalogue;
   pluginSelection: PluginSelectionCatalog;
@@ -100,6 +106,8 @@ export async function composeVykorAgent(
   internal: AgentCompositionContext,
 ): Promise<AgentComposition> {
   const cleanup = new CleanupStack();
+  if (internal.ownsExecutionOwner) cleanup.add(() => internal.executionOwner.close(), internal.executionOwner);
+  if (internal.ownsWorkflowHosts) cleanup.add(() => internal.workflowHosts.close(), internal.workflowHosts);
   const rollback = new CleanupStack();
   rollback.add(() => cleanup.close(), cleanup);
   try {
@@ -154,7 +162,10 @@ async function composeVykorAgentInternal(
     rollback.add(() => executionEnvironment?.release(), executionEnvironment);
   }
   const environment = await resolveDefaultAgentCapabilities({
+    workflowHosts: internal.workflowHosts,
+    agentDefinitions: discovery.agentDefinitions,
     settings,
+    executionOwner: internal.executionOwner,
     configuration: options,
     configurationForChild: () => {
       const applied = activeRuntime?.queryEngine.getAppliedRequestConfiguration?.();
@@ -195,6 +206,9 @@ async function composeVykorAgentInternal(
     );
 
   const runtime = await createVykorRuntime({
+    teams: internal.teams,
+    workflowTool: environment.workflowTool,
+    executionOwner: internal.executionOwner,
     settings,
     cwd,
     sessionId,
@@ -226,6 +240,7 @@ async function composeVykorAgentInternal(
   });
 
   return {
+    stopBackgroundWork: () => environment.workflowTool?.close() ?? Promise.resolve(),
     runtime,
     pluginSelection: mcpIntegration.pluginSelection,
     pluginApps: mcpIntegration.pluginApps,

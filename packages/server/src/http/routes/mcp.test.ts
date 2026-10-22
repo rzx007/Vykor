@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/core";
+import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 import { McpOAuthOperationService } from "../../application/mcp-oauth-operation-service.js";
 import { McpOAuthApplicationError } from "../../application/mcp-oauth-application-service.js";
 import { createMcpRoutes } from "./mcp.js";

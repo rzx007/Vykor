@@ -1,11 +1,7 @@
 import { extname, posix, win32 } from "node:path";
-import type {
-  Settings,
-  ToolContext,
-  ToolDefinition,
-  ToolFailureKind,
-  ToolResult,
-} from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolFailureKind } from "@vykor/agent-contracts";
 
 import type {
   AttachmentAuthorizationSessionResolver,

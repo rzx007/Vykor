@@ -16,7 +16,7 @@ const systemServiceMock = vi.hoisted(() => ({
   restart: vi.fn(),
 }));
 
-vi.mock("@vykor/core", () => ({
+vi.mock("@vykor/host-config", () => ({
   loadSettings: vi.fn(async () => ({ daemon: { autoStart: false } })),
 }));
 

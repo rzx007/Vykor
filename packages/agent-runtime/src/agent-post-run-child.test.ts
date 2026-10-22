@@ -2,13 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  AgentChildBudgetExceededError,
-  AgentExecutionLimitError,
-  type AgentEvent,
-  type Settings,
-  type StreamingMessageClient,
-} from "@vykor/core";
+import { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
+import { AgentExecutionLimitError, type AgentEvent, type StreamingMessageClient } from "@vykor/core";
+import { type Settings } from "@vykor/host-config";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentOperationConflictError } from "./agent.js";

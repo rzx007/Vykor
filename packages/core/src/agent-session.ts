@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { ContentBlock, Message } from "./types/messages.js";
+import type { ContentBlock, Message } from "@vykor/agent-contracts";
 import type { StreamEvent } from "./types/events.js";
 import type { AgentExecutionContext, QueryEngine as IQueryEngine } from "./types/runtime.js";
 

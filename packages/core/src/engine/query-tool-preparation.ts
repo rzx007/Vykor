@@ -1,4 +1,4 @@
-import type { Message, ToolUseBlock } from "../index";
+import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
 import type { ToolExecutionResult, ToolRegistry } from "../types/tools";
 import type { ToolFailureMemory } from "./tool-failure-memory";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";

@@ -1,4 +1,4 @@
-import type { ContentBlock } from "../index";
+import type { ContentBlock } from "@vykor/agent-contracts";
 import type { ToolContext, ToolDefinition } from "../types/tools";
 
 const DEFAULT_TOOL_TIMEOUT_MS = 300_000;

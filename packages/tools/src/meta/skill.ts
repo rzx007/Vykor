@@ -1,8 +1,7 @@
 import type { ToolDefinition } from "@vykor/core";
-import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
-import { posix, win32 } from "node:path";
+import type { SkillCatalogSnapshot, SkillCatalogPort, ToolSkillDefinition as SkillDefinition } from "../ports/skill.js";
+import { posix, win32, resolve } from "node:path";
 
-type SkillRegistryInstance = InstanceType<typeof SkillRegistry>;
 type SkillVisibility = "model" | "user" | "all";
 
 const WINDOWS_HOST_PATH = /^(?:[a-zA-Z]:[\\/]|\\\\)/;
@@ -11,135 +10,140 @@ export function hostPathDirectory(path: string): string {
   return WINDOWS_HOST_PATH.test(path) ? win32.dirname(path) : posix.dirname(path);
 }
 
-export const skillTool: ToolDefinition = {
-  name: "Skill",
-  description:
-    "Read a bundled, user, or plugin skill by name. Returns the skill's full Markdown content.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      name: { type: "string", description: "Skill name" },
-      path: {
-        type: "string",
-        description: "Optional catalog path. When supplied, it must identify the current skill winner.",
-      },
-    },
-    required: ["name"],
-  },
-  async execute(input, context) {
-    const name = input.name as string;
-    const requestedPath = typeof input.path === "string"
-      ? context.environment?.paths?.toHostPath?.(input.path) ?? input.path
-      : input.path;
-
-    const registry = await resolveSkillRegistry(context, { refreshFilesystem: true });
-
-    const resolvedByName = registry.resolve(name);
-    const skill = typeof requestedPath === "string"
-      ? registry.resolvePath(requestedPath)
-      : resolvedByName;
-    if (!skill || (typeof requestedPath === "string" && skill !== resolvedByName)) {
-      return {
-        content: [{ type: "text", text: `Skill not found: ${name}` }],
-        isError: true,
-      };
-    }
-    return {
-      content: [{ type: "text", text: formatLoadedSkill(skill, context) }],
-    };
-  },
-};
-
-export const listSkillsTool: ToolDefinition = {
-  name: "ListSkills",
-  description:
-    "List bundled, user, project, or plugin skills available in this runtime. Returns names, descriptions, sources, and slash command names, not full skill contents.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      visibility: {
-        type: "string",
-        enum: ["model", "user", "all"],
-        description:
-          "Which skills to list. 'model' lists skills visible to the model, 'user' lists slash-command skills, and 'all' lists every loaded skill.",
-      },
-      ownerPluginId: { type: "string", description: "List only Skills owned by this stable plugin ID." },
-      pluginId: { type: "string", description: "Alias for ownerPluginId." },
-      offset: { type: "integer", minimum: 0, description: "Zero-based offset after visibility and owner filters; default 0." },
-      limit: { type: "integer", minimum: 1, maximum: 100, description: "Page size; default 50, maximum 100." },
-    },
-  },
-  async execute(input, context) {
-    const visibility = parseVisibility(input.visibility);
-    const ownerPluginId = input.ownerPluginId ?? input.pluginId;
-    if ([input.ownerPluginId, input.pluginId].some(value => value !== undefined && (typeof value !== "string" || !value.trim()))
-      || (input.ownerPluginId !== undefined && input.pluginId !== undefined && input.ownerPluginId !== input.pluginId)
-      || (input.offset !== undefined && (!Number.isSafeInteger(input.offset) || (input.offset as number) < 0))
-      || (input.limit !== undefined && (!Number.isSafeInteger(input.limit) || (input.limit as number) < 1))) {
-      return { content: [{ type: "text", text: "Invalid ListSkills filter or pagination: use one matching plugin ID, offset >= 0 and limit >= 1." }], isError: true };
-    }
-    const offset = (input.offset as number | undefined) ?? 0;
-    const limit = Math.min((input.limit as number | undefined) ?? 50, 100);
-    const registry = await resolveSkillRegistry(context, { refreshFilesystem: true });
-    const skills = filterSkills(registry.getAll(), visibility).filter(skill =>
-      ownerPluginId === undefined || skillOwner(skill, context) === ownerPluginId);
-
-    if (skills.length === 0) {
-      return {
-        content: [{ type: "text", text: `No ${visibility} skills available.` }],
-      };
-    }
-    const page = skills.slice(offset, offset + limit);
-    if (!page.length) return { content: [{ type: "text", text: `No ${visibility} skills on this page (offset=${offset}, total=${skills.length}).` }] };
-    const nextOffset = offset + page.length;
-    const nextInput = { visibility, ...(ownerPluginId !== undefined ? { ownerPluginId } : {}), offset: nextOffset, limit };
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: [formatSkillList(page, visibility, context),
-            `Showing ${offset + 1}-${nextOffset} of ${skills.length} skills (offset=${offset}, limit=${limit}).`,
-            ...(nextOffset < skills.length ? [`More skills available. Call ListSkills with ${JSON.stringify(nextInput)}.`] : []),
-          ].join("\n"),
+export function createSkillTools(catalog?: SkillCatalogPort): ToolDefinition[] {
+  const skillTool: ToolDefinition = {
+    name: "Skill",
+    description:
+      "Read a bundled, user, or plugin skill by name. Returns the skill's full Markdown content.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Skill name" },
+        path: {
+          type: "string",
+          description: "Optional catalog path. When supplied, it must identify the current skill winner.",
         },
-      ],
-    };
+      },
+      required: ["name"],
+    },
+    async execute(input, context) {
+      if (!catalog) return { content: [{ type: "text", text: "Skills are not available in this host." }], isError: true };
+      const name = input.name as string;
+      const requestedPath = typeof input.path === "string"
+        ? context.environment?.paths?.toHostPath?.(input.path) ?? input.path
+        : input.path;
+
+      const registry = await catalog.resolve(context);
+
+      const resolvedByName = registry.resolve(name);
+      const skill = typeof requestedPath === "string"
+        ? registry.resolvePath(requestedPath)
+        : resolvedByName;
+      if (!skill || (typeof requestedPath === "string" && skill !== resolvedByName)) {
+        return {
+          content: [{ type: "text", text: `Skill not found: ${name}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text", text: formatLoadedSkill(skill, context) }],
+      };
+    },
+  };
+
+  const listSkillsTool: ToolDefinition = {
+    name: "ListSkills",
+    description:
+      "List bundled, user, project, or plugin skills available in this runtime. Returns names, descriptions, sources, and slash command names, not full skill contents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        visibility: {
+          type: "string",
+          enum: ["model", "user", "all"],
+          description:
+            "Which skills to list. 'model' lists skills visible to the model, 'user' lists slash-command skills, and 'all' lists every loaded skill.",
+        },
+        ownerPluginId: { type: "string", description: "List only Skills owned by this stable plugin ID." },
+        pluginId: { type: "string", description: "Alias for ownerPluginId." },
+        offset: { type: "integer", minimum: 0, description: "Zero-based offset after visibility and owner filters; default 0." },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "Page size; default 50, maximum 100." },
+      },
+    },
+    async execute(input, context) {
+      if (!catalog) return { content: [{ type: "text", text: "Skills are not available in this host." }], isError: true };
+      const visibility = parseVisibility(input.visibility);
+      const ownerPluginId = input.ownerPluginId ?? input.pluginId;
+      if ([input.ownerPluginId, input.pluginId].some(value => value !== undefined && (typeof value !== "string" || !value.trim()))
+        || (input.ownerPluginId !== undefined && input.pluginId !== undefined && input.ownerPluginId !== input.pluginId)
+        || (input.offset !== undefined && (!Number.isSafeInteger(input.offset) || (input.offset as number) < 0))
+        || (input.limit !== undefined && (!Number.isSafeInteger(input.limit) || (input.limit as number) < 1))) {
+        return { content: [{ type: "text", text: "Invalid ListSkills filter or pagination: use one matching plugin ID, offset >= 0 and limit >= 1." }], isError: true };
+      }
+      const offset = (input.offset as number | undefined) ?? 0;
+      const limit = Math.min((input.limit as number | undefined) ?? 50, 100);
+      const definitions = await catalog.resolve(context);
+      const skills = filterSkills(definitions.getAll(), visibility).filter(skill =>
+        ownerPluginId === undefined || skillOwner(skill, context) === ownerPluginId);
+
+      if (skills.length === 0) {
+        return {
+          content: [{ type: "text", text: `No ${visibility} skills available.` }],
+        };
+      }
+      const page = skills.slice(offset, offset + limit);
+      if (!page.length) return { content: [{ type: "text", text: `No ${visibility} skills on this page (offset=${offset}, total=${skills.length}).` }] };
+      const nextOffset = offset + page.length;
+      const nextInput = { visibility, ...(ownerPluginId !== undefined ? { ownerPluginId } : {}), offset: nextOffset, limit };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: [formatSkillList(page, visibility, context),
+              `Showing ${offset + 1}-${nextOffset} of ${skills.length} skills (offset=${offset}, limit=${limit}).`,
+              ...(nextOffset < skills.length ? [`More skills available. Call ListSkills with ${JSON.stringify(nextInput)}.`] : []),
+            ].join("\n"),
+          },
+        ],
+      };
+    },
+  };
+
+  return [skillTool, listSkillsTool];
+}
+
+/** Frozen Run definitions need no local filesystem or global registry. */
+export const capturedSkillCatalog: SkillCatalogPort = {
+  async resolve(context) {
+    const view = context.capabilityView;
+    if (!view) return skillCatalogSnapshot([]);
+    return skillCatalogSnapshot([...view.skills].flatMap(([name, binding]) => {
+      if (binding.definition.name !== name || binding.path !== binding.definition.path) return [];
+      if (binding.ownerPluginId !== undefined && !(view.pluginIds
+        ? view.pluginIds.has(binding.ownerPluginId)
+        : binding.ownerPluginId === view.pluginId)) return [];
+      if (binding.definition.source === "plugin" && !binding.ownerPluginId) return [];
+      return [binding.definition];
+    }));
   },
 };
-
-async function resolveSkillRegistry(
-  context: Parameters<ToolDefinition["execute"]>[1],
-  options: { refreshFilesystem?: boolean } = {},
-) {
-  if (context.capabilityView) {
-    const registry = new SkillRegistry();
-    for (const [name, binding] of context.capabilityView.skills) {
-      if (binding.definition.name !== name || binding.path !== binding.definition.path) continue;
-      if (binding.ownerPluginId !== undefined && !(context.capabilityView.pluginIds
-        ? context.capabilityView.pluginIds.has(binding.ownerPluginId)
-        : binding.ownerPluginId === context.capabilityView.pluginId)) continue;
-      if (binding.definition.source === "plugin" && !binding.ownerPluginId) continue;
-      registry.register(binding.definition);
-    }
-    return registry;
-  }
-  const sharedRegistry = context.skillRegistry as SkillRegistryInstance | undefined;
-  if (sharedRegistry && !options.refreshFilesystem) return sharedRegistry;
-
-  const { createSkillRegistrySnapshot, findProjectSkillDirs, standardUserSkillDirs } = await import("@vykor/skills");
-  const { getSkillsDir } = await import("@vykor/core");
-  const baseline = sharedRegistry?.getAll().filter((skill) =>
-    skill.source === "plugin" || !skill.path
-  ) ?? [];
-  return createSkillRegistrySnapshot({
-    baseline,
-    userDirs: standardUserSkillDirs(),
-    userDir: getSkillsDir(),
-    projectDirs: await findProjectSkillDirs(
-      context.environment?.workspace?.hostRoot ?? context.cwd,
-    ),
-  });
+export function skillCatalogSnapshot(definitions: readonly SkillDefinition[]): SkillCatalogSnapshot {
+  const skills = [...definitions].sort((a, b) => a.name.localeCompare(b.name));
+  const pathKey = (value: string) => process.platform === "win32" ? resolve(value).toLowerCase() : resolve(value);
+  return {
+    getAll: () => skills,
+    resolve(name) {
+      const trimmed = name.trim();
+      if (!trimmed) return undefined;
+      return skills.find(skill => skill.source === "plugin" && skill.commandName === trimmed)
+        ?? skills.find(skill => skill.name === trimmed)
+        ?? skills.find(skill => skill.name === trimmed.toLowerCase())
+        ?? skills.find(skill => skill.name === trimmed.charAt(0).toUpperCase() + trimmed.slice(1))
+        ?? skills.find(skill => skill.commandName === trimmed);
+    },
+    resolvePath(path) { return path.trim() ? skills.find(skill => skill.path && pathKey(skill.path) === pathKey(path)) : undefined; },
+  };
 }
 
 function parseVisibility(value: unknown): SkillVisibility {

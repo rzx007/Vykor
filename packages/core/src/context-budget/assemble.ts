@@ -1,11 +1,7 @@
 import { estimateTokens } from "../utils/token-counter.js";
 import { evaluateTips } from "./tips.js";
-import type {
-  AssembleContextUsageInput,
-  ContextBucketId,
-  ContextUsageBucket,
-  ContextUsageSnapshot,
-} from "./types.js";
+import type { AssembleContextUsageInput, ContextUsageBucket, ContextUsageSnapshot } from "./types.js";
+import type { ContextBucketId } from "@vykor/agent-contracts";
 
 const BUCKET_ORDER: readonly { id: ContextBucketId; label: string }[] = [
   { id: "system", label: "系统提示" },

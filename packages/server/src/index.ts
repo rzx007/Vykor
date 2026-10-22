@@ -102,7 +102,6 @@ export type {
   AgentChildHandle,
   AgentChildInput,
   AgentChildInvocation,
-  AgentChildResult,
   AgentChildSpawnInput,
   AgentEffects,
   AgentEvent,
@@ -111,6 +110,9 @@ export type {
   AgentRunHandle,
   AgentRunScope,
 } from "@vykor/core";
+export type {
+  AgentChildResult,
+} from "@vykor/agent-contracts";
 export { estimateCostUsd } from "./shared/index.js";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport } from "./application/maintenance/usage-settings.js";
 export type { StorageCategory, StorageReport } from "./application/maintenance/storage-settings.js";

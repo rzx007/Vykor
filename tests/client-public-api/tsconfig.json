@@ -7,6 +7,10 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
+      "@vykor/coordinator/definitions": ["../../packages/coordinator/src/definitions/index.ts"],
+      "@vykor/coordinator/teams": ["../../packages/coordinator/src/teams/index.ts"],
+      "@vykor/coordinator/workflow": ["../../packages/coordinator/src/workflow/index.ts"],
+      "@vykor/agent-runtime/node/workflow": ["../../packages/agent-runtime/src/node/workflow/index.ts"],
       "@vykor/client": ["../../packages/client/src/index.ts"]
     }
   },

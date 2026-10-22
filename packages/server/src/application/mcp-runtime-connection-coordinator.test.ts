@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  ActiveMcpRuntimeHandle,
-  McpRuntimeStatus,
-  McpServerIdentity,
-} from "@vykor/core";
+import type { ActiveMcpRuntimeHandle } from "@vykor/mcp";
+import type { McpRuntimeStatus, McpServerIdentity } from "@vykor/host-config";
 import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
 
 function identity(name: string, fingerprint: string): McpServerIdentity {

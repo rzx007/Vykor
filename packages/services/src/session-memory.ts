@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { getDataDir } from "@vykor/core";
+import { getDataDir } from "@vykor/host-config";
 import { estimateTokens } from "./token-estimation/index.js";
 
 /**

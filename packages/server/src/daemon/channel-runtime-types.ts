@@ -1,6 +1,6 @@
 import type { FeishuChannelConfig } from "@vykor/auth";
 import type { InboundMessage } from "@vykor/channels";
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type {
   ChannelConnectorRuntimeStatus,
   ChannelDeliveryRecord,

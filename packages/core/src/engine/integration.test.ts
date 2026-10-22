@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { RuntimeBuilder } from "./runtime-builder.js";
-import type { AgentEffects, AgentExecutionContext, StreamEvent, ToolDefinition, Message } from "../index.js";
+import type { AgentEffects, AgentExecutionContext, StreamEvent, ToolDefinition } from "../index.js";
+import type { Message } from "@vykor/agent-contracts";
 import { sanitizeMessageHistory } from "../utils/message-history.js";
 
 function createMockStreamClient(responses: StreamEvent[][]): {

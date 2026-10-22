@@ -1,8 +1,5 @@
-import {
-  assertValidMcpServerConfig,
-  type ToolDefinition,
-  type ToolResult,
-} from "@vykor/core";
+import { assertValidMcpServerConfig } from "@vykor/host-config";
+import { type ToolDefinition, type ToolResult } from "@vykor/core";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { PermissionChecker } from "@vykor/permissions";
 import { askInstallConfirmation } from "./ask-install-confirmation.js";

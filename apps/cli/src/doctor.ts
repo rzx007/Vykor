@@ -1,4 +1,4 @@
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
 import { findByName, detectProvider } from "@vykor/api";
 import { resolveApiKey } from "@vykor/auth";

@@ -1,6 +1,7 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { McpServerConfig, ToolDefinition } from "@vykor/core";
+import type { McpServerConfig } from "@vykor/host-config";
+import type { ToolDefinition } from "@vykor/core";
 import type {
   McpCallResultData,
   McpToolAnnotations,

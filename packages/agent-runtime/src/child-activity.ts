@@ -1,4 +1,10 @@
-import type { AgentEvent, ChildActivitySnapshot, ChildPartialResult } from "@vykor/core";
+import type {
+  AgentEvent,
+  ChildActivitySnapshot,
+} from "@vykor/core";
+import type {
+  ChildPartialResult,
+} from "@vykor/agent-contracts";
 
 const MAX_CHILD_ACTIVITY_TEXT = 2_000;
 const MAX_CHILD_PARTIAL_TEXT = 12_000;

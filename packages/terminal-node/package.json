@@ -17,7 +17,6 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/core": "workspace:*",
     "@vykor/environment": "workspace:*",
     "@vykor/jobs": "workspace:*",
     "@vykor/terminal": "workspace:*",

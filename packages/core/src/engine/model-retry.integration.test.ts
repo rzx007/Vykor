@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import { ModelRequestFailure } from "./model-retry.js";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { AgentExecutionLimitError, type AgentExecutionContext, type AgentEventInput } from "../types/runtime.js";
 import type { StreamEvent, ToolDefinition } from "../index.js";
 

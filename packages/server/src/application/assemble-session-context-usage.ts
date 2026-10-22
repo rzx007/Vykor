@@ -3,13 +3,12 @@ import {
   createTip,
   messagesToLedgerSegments,
   toolSchemasToLedgerSegments,
-  type ContextLedgerSegment,
   type ContextUsageSnapshot,
-  type Message,
-  type Settings,
   type ToolRegistrationSource,
   type ToolSchemaInput,
 } from "@vykor/core";
+import { type ContextLedgerSegment, type Message } from "@vykor/agent-contracts";
+import { type Settings } from "@vykor/host-config";
 import { buildPromptLedgerSegments } from "@vykor/prompts";
 import {
   readSessionRuntimeConfig,

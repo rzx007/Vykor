@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { AgentChildResult, VykorAgent } from "@vykor/core";
+import type {
+  AgentChildResult,
+} from "@vykor/agent-contracts";
+import type {
+  VykorAgent,
+} from "@vykor/core";
 import { readAutoReviewRunMetadata } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

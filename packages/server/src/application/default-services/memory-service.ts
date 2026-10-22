@@ -1,14 +1,14 @@
-import { getProjectMemoryDir, withSettingsFileLock } from "@vykor/core";
+import { getProjectMemoryDir, withSettingsFileLock } from "@vykor/host-config";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MemoryManager, type MemoryEntry } from "@vykor/memory";
-import { getDetachedProcessSupervisor } from "@vykor/services";
+import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { ApplicationError } from "../../shared/application-error.js";
 
 import type { MemoryEntryRecord, MemoryService } from "../settings-api.js";
 
-export function createDefaultMemoryService(): MemoryService {
+export function createDefaultMemoryService(owner: ExecutionRuntimeOwner): MemoryService {
   return {
     async list({ cwd }) {
       const { manager, directory } = await openMemoryManager(cwd);
@@ -27,7 +27,7 @@ export function createDefaultMemoryService(): MemoryService {
       return toMemoryRecord((await manager.get(entry.id))!);
     },
     async remove({ cwd, id, expectedRevision }) {
-      return withMemoryMutation(cwd, async (manager, directory) => {
+      return withMemoryMutation(owner, cwd, async (manager, directory) => {
         const entry = await manager.get(id);
         if (!entry) return false;
         if (expectedRevision !== undefined)
@@ -43,7 +43,7 @@ export function createDefaultMemoryService(): MemoryService {
         content.length > 100_000
       )
         throw new Error("记忆内容不能为空或超过 100000 字符。");
-      return withMemoryMutation(cwd, async (manager, directory) => {
+      return withMemoryMutation(owner, cwd, async (manager, directory) => {
         const entry = await manager.get(id);
         if (!entry) throw new Error("记忆条目已不存在，请重新读取。");
         assertRevision(entry, expectedRevision);
@@ -64,7 +64,7 @@ export function createDefaultMemoryService(): MemoryService {
     async clear({ cwd, expectedEntries }) {
       if (!Array.isArray(expectedEntries) || expectedEntries.length > 10_000)
         throw new Error("清理条目清单无效。");
-      return withMemoryMutation(cwd, async (manager, directory) => {
+      return withMemoryMutation(owner, cwd, async (manager, directory) => {
         const entries = await manager.getAll();
         const expected = new Map(
           expectedEntries.map((item) => [item.id, item.revision]),
@@ -116,11 +116,12 @@ export async function openMemoryManager(
 }
 
 async function withMemoryMutation<T>(
+  owner: ExecutionRuntimeOwner,
   cwd: string,
   operation: (manager: MemoryManager, directory: string) => Promise<T>,
 ) {
   const directory = getProjectMemoryDir(cwd);
-  const dreaming = getDetachedProcessSupervisor(cwd)
+  const dreaming = owner.getDetachedProcessSupervisor(cwd)
     .listExecutions()
     .some(
       (task) =>

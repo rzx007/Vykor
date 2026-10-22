@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord } from "@vykor/core";
+import type { McpOAuthCredentialRecord } from "@vykor/host-config";
 import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 const now = 10_000;

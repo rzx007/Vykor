@@ -1,4 +1,4 @@
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import type { HostShellLauncher, SandboxBackend, SandboxPolicy } from "@vykor/sandbox";
 
 export interface ShellExecRequest {

@@ -1,4 +1,4 @@
-import type { Settings } from "@vykor/core";
+import type { Settings } from "@vykor/host-config";
 import { createApprovalReviewer, type ApprovalReviewer } from "./approval-reviewer.js";
 import { resolveApiClient } from "./default-runtime-provider.js";
 

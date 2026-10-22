@@ -1,5 +1,5 @@
 import { access, rm } from "node:fs/promises";
-import { getInstalledPluginStorePath } from "@vykor/core";
+import { getInstalledPluginStorePath } from "@vykor/host-config";
 import {
   discoverInstalledNativePlugins, installLocalNativePlugin, loadNativePlugin,
   readInstalledPluginStore, validateNativePlugin, verifyInstalledNativePlugin,

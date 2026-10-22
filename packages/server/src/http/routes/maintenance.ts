@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { constants, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from "node:fs";
 import { access, statfs } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { getDataDir, getLogsDir } from "@vykor/core";
+import { getDataDir, getLogsDir } from "@vykor/host-config";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { SessionStore } from "@vykor/services";
 import type { DaemonControlService } from "../../application/control/daemon-control-service.js";
@@ -14,7 +14,7 @@ import { MaintenanceCleanupService } from "../../application/maintenance/cleanup
 import type { SessionCommandService } from "../../application/session/session-command-service.js";
 import type { SettingsService } from "../../application/settings-api.js";
 import { checkRuntimeEnvironment, inspectRuntimeEnvironment } from "../../runtime/runtime-settings.js";
-import type { AgentEnvironmentSettings } from "@vykor/core";
+import type { AgentEnvironmentSettings } from "@vykor/host-config";
 import type { StorageRetentionPolicy } from "@vykor/protocol";
 import type { DaemonTerminalService } from "../../terminal/daemon-terminal-service.js";
 import { parsePortableSettings } from "../../settings-transfer.js";

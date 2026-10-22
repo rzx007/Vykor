@@ -1,11 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { describe, expect, it, vi } from "vitest";
-import { agentTool, createAgentTool } from "../index.js";
+import { createAgentTool } from "../index.js";
 import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
-import type { AgentDefinition } from "@vykor/coordinator";
+import { getBuiltinAgentDefinitions, mergeAgentDefinitions, type AgentDefinition } from "@vykor/coordinator/definitions";
+import { createTeamRegistry } from "@vykor/coordinator/teams";
+
+const agentTool = createAgentTool({ definitions: getBuiltinAgentDefinitions(), teams: createTeamRegistry() });
 
 type SpawnInput = Parameters<AgentChildController["spawnChildAgent"]>[0];
 type SpawnResult = Awaited<ReturnType<AgentChildController["spawnChildAgent"]>>;
@@ -252,58 +251,31 @@ describe("agentTool framework child controller", () => {
     });
   });
 
-  it("resolves builtin < user < scoped plugin precedence inside each Agent tool", async () => {
-    const configDir = mkdtempSync(
-      join(tmpdir(), "vk-agent-tool-definitions-"),
-    );
-    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
-    process.env.VYKOR_CONFIG_DIR = configDir;
-    mkdirSync(join(configDir, "agents"), { recursive: true });
-    writeFileSync(
-      join(configDir, "agents", "worker.md"),
-      "---\nmodel: user-model\n---\nUser worker prompt.\n",
-    );
-    const pluginWorker: AgentDefinition = {
-      name: "worker",
-      description: "Plugin worker",
-      model: "plugin-model",
-      systemPrompt: "Plugin worker prompt.",
-      source: "plugin",
-    };
+  it("resolves only the captured runtime definitions with builtin < user < plugin precedence", async () => {
+    const userWorker: AgentDefinition = { name: "worker", description: "User worker", model: "user-model", systemPrompt: "User worker prompt.", source: "user" };
+    const pluginWorker: AgentDefinition = { name: "worker", description: "Plugin worker", model: "plugin-model", systemPrompt: "Plugin worker prompt.", source: "plugin" };
+    const userOnlyTool = createAgentTool({ definitions: mergeAgentDefinitions(getBuiltinAgentDefinitions(), [userWorker], []), teams: createTeamRegistry() });
+    const pluginTool = createAgentTool({ definitions: mergeAgentDefinitions(getBuiltinAgentDefinitions(), [userWorker], [pluginWorker]), teams: createTeamRegistry() });
+    const userScope = createAgentContext();
+    const pluginScope = createAgentContext();
+    await userOnlyTool.execute({ description: "d", prompt: "implement" }, { cwd: "/work", agent: userScope.agent });
+    await pluginTool.execute({ description: "d", prompt: "implement" }, { cwd: "/work", agent: pluginScope.agent });
+    expect(userScope.calls.at(-1)).toMatchObject({ model: "user-model", systemPrompt: "User worker prompt." });
+    expect(pluginScope.calls.at(-1)).toMatchObject({ model: "plugin-model", systemPrompt: "Plugin worker prompt." });
+  });
 
-    try {
-      const userOnlyTool = createAgentTool({ agentDefinitions: [] });
-      const pluginTool = createAgentTool({ agentDefinitions: [pluginWorker] });
-      const userScope = createAgentContext();
-      const pluginScope = createAgentContext();
-
-      await userOnlyTool.execute(
-        { description: "d", prompt: "implement" },
-        { cwd: "/work", agent: userScope.agent },
-      );
-      await pluginTool.execute(
-        { description: "d", prompt: "implement" },
-        { cwd: "/work", agent: pluginScope.agent },
-      );
-
-      expect(userScope.calls.at(-1)).toMatchObject({
-        agent: "worker",
-        model: "user-model",
-        systemPrompt: "User worker prompt.",
-      });
-      expect(pluginScope.calls.at(-1)).toMatchObject({
-        agent: "worker",
-        model: "plugin-model",
-        systemPrompt: "Plugin worker prompt.",
-      });
-    } finally {
-      if (previousConfigDir === undefined) {
-        delete process.env.VYKOR_CONFIG_DIR;
-      } else {
-        process.env.VYKOR_CONFIG_DIR = previousConfigDir;
-      }
-      rmSync(configDir, { recursive: true, force: true });
+  it("attaches spawned children only to the supplied root team registry", async () => {
+    const roots = [createTeamRegistry(), createTeamRegistry()];
+    for (const teams of roots) teams.createTeam("dev");
+    for (const [index, teams] of roots.entries()) {
+      const tool = createAgentTool({ definitions: getBuiltinAgentDefinitions(), teams });
+      const { agent } = createAgentContext(async () => ({ id: `child-${index}`, sessionId: `session-${index}`, result: Promise.resolve({ status: "completed", output: "done" }) }));
+      await tool.execute({ description: "d", prompt: "p", team: "dev" }, { cwd: "/work", agent });
     }
+    expect(roots[0]!.listTeams()[0]!.agents).toEqual(["child-0"]);
+    expect(roots[1]!.listTeams()[0]!.agents).toEqual(["child-1"]);
+    roots[0]!.deleteTeam("dev");
+    expect(roots[1]!.listTeams()[0]!.agents).toEqual(["child-1"]);
   });
 
   it("passes a generated child session id to the host", async () => {
