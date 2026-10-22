@@ -22,6 +22,26 @@ afterEach(async () => {
 });
 
 describe("SkillManagementService", () => {
+  it("quietly skips removed project directories without hiding available skills", async () => {
+    const root = await temp();
+    const project = join(root, "valid");
+    const file = join(root, "not-a-directory");
+    await writeFile(file, "file");
+    await skill(join(project, ".vykor", "skills", "valid.md"), "valid");
+    const registered = [
+      { name: "Removed", path: join(root, "missing") },
+      { name: "Invalid parent", path: join(file, "child") },
+      { name: "File", path: file },
+      { name: "Valid", path: project },
+    ];
+    const service = createSkillManagementService({ projects: { list: () => registered },
+      configDir: join(root, "config"), standardSkillsDirs: [], bundledSkills: [bundled("builtin")] });
+    const snapshot = await service.list();
+    expect(snapshot.warnings).toEqual([]);
+    expect(snapshot.projects).toEqual([{ name: "Valid", path: project }]);
+    expect(snapshot.skills.map(item => item.name)).toEqual(["builtin", "valid"]);
+    expect(registered).toHaveLength(4);
+  });
   it("discovers registered project, agent, standard, personal, and bundled skills", async () => {
     const root = await temp();
     const project = join(root, "project");
