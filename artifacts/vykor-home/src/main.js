@@ -1,110 +1,284 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
+import { mountProductDemo } from './product-demo.js';
+import { STORY_STEPS, sampleStoryProgress } from './story-state.js';
+import './product-demo.css';
 
 gsap.registerPlugin(ScrollTrigger);
+document.documentElement.classList.add('has-script');
 
-const menu = document.querySelector('.menu-toggle');
-const navigation = document.querySelector('#navigation');
-function closeMenu() {
-  menu.setAttribute('aria-expanded', 'false');
-  navigation.classList.remove('is-open');
-}
-menu.addEventListener('click', () => {
-  const open = menu.getAttribute('aria-expanded') !== 'true';
-  menu.setAttribute('aria-expanded', String(open));
-  navigation.classList.toggle('is-open', open);
+const header = document.querySelector('.site-header');
+const stage = document.querySelector('.optical-stage');
+const hero = document.querySelector('.hero-story');
+const workspace = document.querySelector('.workspace-scene');
+const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)');
+const eventLifetime = new AbortController();
+const listen = (target, event, callback, options = {}) => target.addEventListener(event, callback, { ...options, signal: eventLifetime.signal });
+const headerGithub = header.querySelector('.github-link');
+const headerDownload = header.querySelector('.header-download');
+const downloadOptions = header.querySelector('.header-download-options');
+const downloadToggle = downloadOptions.querySelector('summary');
+
+const closeDownloadOptions = (restoreFocus = false) => {
+  downloadOptions.open = false;
+  downloadToggle.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) downloadToggle.focus({ preventScroll: true });
+};
+listen(downloadOptions, 'toggle', () => {
+  downloadToggle.setAttribute('aria-expanded', String(downloadOptions.open));
 });
-navigation.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && menu.getAttribute('aria-expanded') === 'true') { closeMenu(); menu.focus(); }
+listen(document, 'pointerdown', event => {
+  if (downloadOptions.open && !downloadOptions.contains(event.target)) closeDownloadOptions();
 });
-document.addEventListener('pointerdown', event => { if (!event.target.closest('.site-header')) closeMenu(); });
-document.querySelector('.sources').addEventListener('toggle', () => ScrollTrigger.refresh());
+listen(document, 'keydown', event => {
+  if (event.key !== 'Escape' || !downloadOptions.open) return;
+  event.preventDefault();
+  closeDownloadOptions(true);
+});
+listen(downloadOptions, 'focusout', event => {
+  if (event.relatedTarget && !downloadOptions.contains(event.relatedTarget)) closeDownloadOptions();
+});
+listen(downloadOptions, 'click', event => {
+  if (event.target.closest('a')) closeDownloadOptions();
+});
+
+// Hysteresis avoids a flashing surface when the wheel rests near the threshold.
+let headerScrolled = false;
+const updateHeader = () => {
+  const next = scrollY > (headerScrolled ? 24 : 56);
+  if (next === headerScrolled) return;
+  headerScrolled = next;
+  header.classList.toggle('is-scrolled', next);
+  if (!next) {
+    closeDownloadOptions();
+    if (headerDownload.contains(document.activeElement)) headerGithub.focus({ preventScroll: true });
+  }
+  headerDownload.hidden = !next;
+};
+listen(window, 'scroll', updateHeader, { passive: true });
+updateHeader();
+
+const firstScene = document.querySelector('.first-scene');
+const perspective = document.querySelector('.assembly-perspective');
+const demoRoot = document.querySelector('#workbench');
+const demo = mountProductDemo(demoRoot);
+const fallbackCopy = document.querySelector('.story-fallback');
+const copyRoot = document.querySelector('.story-copies');
+copyRoot.innerHTML = STORY_STEPS.map(step => '<div class="story-step" data-step="' + step.id + '"><h2 id="step-' + step.id + '">' + step.title + '</h2><p>' + step.description + '</p></div>').join('');
+const copies = [...copyRoot.children];
+const caption = document.querySelector('#workspace-caption');
+const skipStory = document.querySelector('.story-skip');
 
 let optical = null;
+let opticalRequest = 0;
+let opticalLoading = null;
 let requestedProgress = 0;
-const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)');
-const stage = document.querySelector('.optical-stage');
+let destroyed = false;
 const sampleModel = progress => {
   requestedProgress = progress;
   optical?.seek(progress);
 };
-
-// Load the expensive renderer separately; all copy, links and posters work before it.
-if (!prefersReduced.matches) {
-  import('./optical.js').then(async ({ createOptical }) => {
-    optical = await createOptical(stage);
-    optical?.seek(requestedProgress);
-  }).catch(error => {
-    console.warn('Vykor: static brand image remains available.', error);
-    stage.dataset.renderer = 'poster';
-  });
+async function loadOptical() {
+  if (opticalLoading || optical || destroyed || prefersReduced.matches) return;
+  const request = ++opticalRequest;
+  opticalLoading = (async () => {
+    try {
+      const { createOptical } = await import('./optical.js');
+      if (destroyed || request !== opticalRequest || prefersReduced.matches) return;
+      const instance = await createOptical(stage);
+      if (destroyed || request !== opticalRequest || prefersReduced.matches) {
+        instance?.dispose();
+        return;
+      }
+      optical = instance;
+      optical?.seek(requestedProgress);
+      optical?.setHandoff(0);
+    } catch (error) {
+      if (request === opticalRequest) {
+        stage.classList.remove('is-ready');
+        stage.dataset.renderer = 'poster';
+        console.warn('Vykor: using the static brand image.', error);
+      }
+    }
+  })();
+  await opticalLoading;
+  opticalLoading = null;
+  if (!destroyed && !prefersReduced.matches && request !== opticalRequest) loadOptical();
 }
 
-const media = gsap.matchMedia();
-media.add({ desktop: '(min-width: 800px)', mobile: '(max-width: 799px)', reduce: '(prefers-reduced-motion: reduce)' }, context => {
-  if (context.conditions.reduce) {
-    sampleModel(1);
-    stage.classList.remove('is-ready');
-    return;
-  }
-  document.documentElement.classList.add('has-motion');
-  const mobile = context.conditions.mobile;
-  const lenis = new Lenis({ lerp: 0.16, smoothWheel: true, syncTouch: false, anchors: { offset: -28 } });
-  lenis.on('scroll', ScrollTrigger.update);
-  const tick = seconds => lenis.raf(seconds * 1000);
-  gsap.ticker.add(tick);
-  const workspaceLink = document.querySelector('a[href="#workspace"]');
-  const endOfHero = () => document.querySelector('.hero-story').offsetTop + document.querySelector('.hero-story').offsetHeight - document.querySelector('.hero-stage').clientHeight;
-  const enterWorkspace = event => {
-    event.preventDefault();
-    event.stopPropagation();
-    lenis.scrollTo(endOfHero());
-    history.replaceState(null, '', '#workspace');
-  };
-  workspaceLink.addEventListener('click', enterWorkspace);
+const motion = gsap.matchMedia();
+let initialHashApplied = false;
+motion.add({
+  mobile: '(max-width: 899px)',
+  reduce: '(prefers-reduced-motion: reduce)',
+  compact: '(max-height: 699px), (max-width: 559px) and (max-height: 799px)',
+  fine: '(hover: hover) and (pointer: fine)',
+}, context => {
+  const { reduce, compact, fine } = context.conditions;
+  const isStory = !reduce && !compact;
+  const scopedEvents = new AbortController();
+  const on = (target, event, callback, options = {}) => target.addEventListener(event, callback, { ...options, signal: scopedEvents.signal });
+  let lenis;
+  let tick;
+  let story;
+  let resizeFrame;
+  let loadFrame;
+  let width = 1;
+  let height = 1;
+  let lastProgress = 0;
+  let phase = -1;
+  let assembled;
+  document.documentElement.classList.toggle('has-motion', isStory);
+  copyRoot.hidden = !isStory;
+  fallbackCopy.hidden = isStory;
+  skipStory.hidden = !isStory;
 
-  const model = { progress: 0 };
-  gsap.set('.workspace-scene', { autoAlpha: 0, y: mobile ? 50 : 70 });
-  gsap.set('.workspace-figure', { scale: 0.89, transformOrigin: '50% 100%' });
-
-  const story = gsap.timeline({
-    defaults: { ease: 'none' },
-    scrollTrigger: {
-      trigger: '.hero-story', start: 'top top', end: 'bottom bottom', scrub: true,
-      invalidateOnRefresh: true,
-    },
-  });
-  story.to(model, { progress: 1, duration: .65, onUpdate: () => sampleModel(model.progress) }, 0)
-    .to('.hero-copy', { y: mobile ? -24 : -42, autoAlpha: 0, duration: .22 }, .06)
-    .to('.hero-foot', { autoAlpha: 0, duration: .12 }, 0)
-    .to('.optical-stage', { xPercent: mobile ? -31 : -93, yPercent: mobile ? -33 : -20, scale: mobile ? .12 : .09, duration: .47 }, .38)
-    .to('.optical-stage', { autoAlpha: 0, duration: .14 }, .72)
-    .to('.workspace-scene', { autoAlpha: 1, y: 0, duration: .28 }, .54)
-    .to('.workspace-figure', { scale: 1, duration: .42 }, .58);
-
-  document.querySelectorAll('main > section:not(.hero-story)').forEach(section => {
-    const parts = section.querySelectorAll('.reveal');
-    gsap.from(parts, {
-      y: section.id === 'coding' ? 28 : 20, opacity: 0, duration: .85,
-      stagger: .085, ease: 'power3.out',
-      scrollTrigger: { trigger: section, start: 'top 88%', once: true },
+  function render(progress) {
+    lastProgress = progress;
+    const state = sampleStoryProgress(progress);
+    // The brand is a quiet introduction, not the camera that carries the story.
+    sampleModel(isStory ? state.brandProgress : 0);
+    if (isStory) {
+      firstScene.style.opacity = state.introOpacity;
+      firstScene.style.visibility = state.introOpacity > .001 ? 'visible' : 'hidden';
+      firstScene.style.pointerEvents = state.introOpacity > .5 ? '' : 'none';
+      workspace.style.opacity = state.sceneOpacity;
+      workspace.style.visibility = state.sceneOpacity > .001 ? 'visible' : 'hidden';
+      workspace.style.pointerEvents = state.sceneOpacity > .5 ? '' : 'none';
+      workspace.setAttribute('aria-hidden', String(state.sceneOpacity < .01));
+    }
+    const camera = state.camera;
+    gsap.set(demo.machine, { x: camera.x * width, y: camera.y * height, scale: camera.scale, rotationX: camera.rotationX, rotationY: camera.rotationY });
+    demo.machine.style.setProperty('--part-radius', state.partRadius + 'px');
+    for (const [name, pose] of Object.entries(state.parts)) {
+      gsap.set(demo.parts[name], { x: pose.x * width, y: pose.y * height, z: pose.z * width, scale: pose.scale, rotationX: pose.rotationX, rotationY: pose.rotationY, autoAlpha: pose.opacity });
+    }
+    if (isStory) copies.forEach((copy, index) => {
+      gsap.set(copy, { autoAlpha: state.copyOpacities[index], y: (1 - state.copyOpacities[index]) * 8 });
+      copy.setAttribute('aria-hidden', String(index !== state.phaseIndex));
     });
+    if (phase !== state.phaseIndex) {
+      phase = state.phaseIndex;
+      workspace.dataset.phase = STORY_STEPS[phase].id;
+      if (isStory) workspace.setAttribute('aria-labelledby', 'step-' + STORY_STEPS[phase].id);
+    }
+    if (assembled !== state.assembled) {
+      assembled = state.assembled;
+      if (!assembled && demo.machine.contains(document.activeElement)) skipStory.focus({ preventScroll: true });
+      demo.setAssembled(assembled);
+      caption.textContent = assembled ? '可操作的界面演示 · 内容为示例' : '代码构建的产品演示 · 内容为示例';
+    }
+    hero.dataset.storyProgress = progress.toFixed(4);
+    hero.dataset.brandProgress = (isStory ? state.brandProgress : 0).toFixed(4);
+  }
+
+  function measure() {
+    const narrow = innerWidth < 560;
+    const aspect = narrow ? 4 / 5 : 16 / 10;
+    width = Math.max(200, Math.min(1120, perspective.clientWidth * (isStory ? (narrow ? .98 : .9) : 1), perspective.clientHeight * aspect * (isStory ? .92 : 1)));
+    height = width / aspect;
+    demo.machine.style.width = width + 'px';
+    demo.machine.style.height = height + 'px';
+    render(isStory ? lastProgress : 1);
+  }
+  if (reduce) {
+    opticalRequest++;
+    optical?.dispose();
+    optical = null;
+    stage.classList.remove('is-ready');
+    stage.dataset.renderer = 'poster';
+  } else {
+    if (!optical) loadOptical();
+    if (fine) {
+      // Let app panels scroll natively, then pass the wheel back to the page at their boundary.
+      lenis = new Lenis({ lerp: .13, smoothWheel: true, syncTouch: false, allowNestedScroll: true });
+      lenis.on('scroll', ScrollTrigger.update);
+      tick = seconds => lenis.raf(seconds * 1000);
+      gsap.ticker.add(tick);
+    }
+  }
+  measure();
+  if (isStory) {
+    story = ScrollTrigger.create({
+      trigger: hero, start: 'top top', end: 'bottom bottom',
+      onUpdate: self => render(self.progress),
+      onRefresh: self => { lastProgress = self.progress; measure(); },
+    });
+  } else {
+    workspace.setAttribute('aria-labelledby', 'workspace-title');
+    workspace.removeAttribute('aria-hidden');
+  }
+  const sizeObserver = new ResizeObserver(measure);
+  sizeObserver.observe(perspective);
+  const storyDistance = () => hero.offsetHeight - document.querySelector('.hero-stage').clientHeight;
+  function goTo(target, { immediate = false, focus = false } = {}) {
+    const inStory = isStory && (target === workspace || target === demoRoot);
+    const destination = inStory ? hero.offsetTop + storyDistance() * (target === demoRoot ? .96 : .23) : target;
+    const readingInset = header.offsetTop + header.offsetHeight + 24;
+    const finish = () => {
+      if (!focus) return;
+      if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+    };
+    if (lenis) lenis.scrollTo(destination, { offset: typeof destination === 'number' ? 0 : -readingInset, immediate, onComplete: finish });
+    else {
+      const top = typeof destination === 'number' ? destination : target.getBoundingClientRect().top + scrollY - readingInset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+      finish();
+    }
+  }
+  on(document, 'click', event => {
+    const link = event.target.closest('a[href^="#"]');
+    if (!link || event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = document.getElementById(link.hash.slice(1));
+    if (!target) return;
+    event.preventDefault();
+    history.pushState(null, '', link.hash);
+    goTo(target, { focus: true });
   });
-  const hash = location.hash;
-  if (hash && hash !== '#top') requestAnimationFrame(() => lenis.scrollTo(hash === '#workspace' ? endOfHero() : hash, { immediate: true }));
-  ScrollTrigger.refresh();
+  const restoreHashPosition = () => {
+    const target = document.getElementById(location.hash.slice(1) || 'top');
+    if (target) goTo(target, { immediate: true });
+  };
+  on(window, 'popstate', restoreHashPosition);
+  on(window, 'hashchange', restoreHashPosition);
+  if (document.readyState !== 'complete') on(window, 'load', () => {
+    loadFrame = requestAnimationFrame(() => { ScrollTrigger.refresh(); lenis?.resize(); restoreHashPosition(); });
+  }, { once: true });
+  if (!reduce && fine) {
+    on(firstScene, 'pointermove', event => {
+      if (isStory && lastProgress > .16) return;
+      const rect = stage.getBoundingClientRect();
+      optical?.setAim?.((event.clientX - rect.left) / rect.width * 2 - 1, (event.clientY - rect.top) / rect.height * 2 - 1);
+    }, { passive: true });
+    on(firstScene, 'pointerleave', () => optical?.setAim?.(0, 0));
+  }
+  resizeFrame = requestAnimationFrame(() => {
+    ScrollTrigger.refresh();
+    if (!initialHashApplied) { initialHashApplied = true; restoreHashPosition(); }
+  });
   return () => {
-    gsap.ticker.remove(tick);
-    workspaceLink.removeEventListener('click', enterWorkspace);
-    lenis.destroy();
-    story.kill();
+    cancelAnimationFrame(resizeFrame);
+    cancelAnimationFrame(loadFrame);
+    scopedEvents.abort();
+    sizeObserver.disconnect();
+    if (tick) gsap.ticker.remove(tick);
+    lenis?.destroy();
+    story?.kill();
+    firstScene.style.cssText = '';
+    workspace.style.cssText = '';
+    workspace.removeAttribute('aria-hidden');
     document.documentElement.classList.remove('has-motion');
   };
 });
 
-document.querySelectorAll('img').forEach(img => {
-  if (!img.complete) img.addEventListener('load', () => ScrollTrigger.refresh(), { once: true });
+listen(window, 'pagehide', event => {
+  if (event.persisted) return;
+  destroyed = true;
+  opticalRequest++;
+  optical?.dispose();
+  motion.revert();
+  demo.destroy();
+  eventLifetime.abort();
 });
-window.addEventListener('pagehide', event => { if (!event.persisted) { optical?.dispose(); media.revert(); } });
