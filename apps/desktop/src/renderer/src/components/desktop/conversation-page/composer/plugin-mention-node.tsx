@@ -50,7 +50,7 @@ export class PluginMentionNode extends DecoratorNode<React.JSX.Element> {
   decorate(): React.JSX.Element {
     return (
       <span className="align-baseline font-semibold !text-primary select-none">
-        <span className="mr-1 inline-block align-middle">
+        <span className="mr-1 inline-flex align-middle">
           <ExtensionIcon name="plugin" src={this.__icon} size="inline" />
         </span>
         <span>{this.__item.displayName}</span>

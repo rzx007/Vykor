@@ -4,7 +4,7 @@ import { expect, test } from "vitest"
 import { PluginMentionNode } from "../plugin-mention-node"
 
 test("renders a plugin icon instead of @ and preserves the reference and icon", () => {
-  const editor = createEditor({ nodes: [PluginMentionNode] })
+  const editor = createEditor({ nodes: [PluginMentionNode], onError: (error) => { throw error } })
   editor.update(
     () => {
       const item = {
@@ -19,12 +19,14 @@ test("renders a plugin icon instead of @ and preserves the reference and icon", 
       const markup = renderToStaticMarkup(restored.decorate())
       expect(markup).toContain(`<img`)
       expect(markup).toContain(icon)
+      expect(markup).toContain('class="mr-1 inline-flex align-middle"')
       expect(markup).not.toContain("@Reviewer")
       expect(restored.getTextContent()).toBe("@Reviewer")
       expect(restored.exportJSON().item).toEqual(item)
       expect(PluginMentionNode.clone(node).exportJSON().icon).toBe(icon)
       const fallback = renderToStaticMarkup(new PluginMentionNode(item).decorate())
       expect(fallback).toContain("lucide-plug")
+      expect(fallback).toContain('class="mr-1 inline-flex align-middle"')
       expect(fallback).toContain("Reviewer")
     },
     { discrete: true }
