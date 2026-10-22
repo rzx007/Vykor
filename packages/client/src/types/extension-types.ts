@@ -1,5 +1,5 @@
-import type { MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
-export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
+import type { MarketplaceProvenance } from "@vykor/protocol";
+export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/protocol";
 import type { PluginPresentation, PluginUiInventory } from "@vykor/protocol";
 export type { PluginUiInventory } from "@vykor/protocol";
 

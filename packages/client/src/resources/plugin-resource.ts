@@ -1,4 +1,4 @@
-import type { MarketplaceCatalog, MarketplaceSource, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation } from "@vykor/plugin-contracts/marketplace";
+import type { MarketplaceCatalog, MarketplaceSource, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation } from "@vykor/protocol";
 /**
  * PluginResource: 插件发现、生命周期、本地与归档安装、Git 安装与重载资源。
  */

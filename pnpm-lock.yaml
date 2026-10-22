@@ -744,9 +744,6 @@ importers:
 
   packages/client:
     dependencies:
-      '@vykor/plugin-contracts':
-        specifier: workspace:*
-        version: link:../plugin-contracts
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol

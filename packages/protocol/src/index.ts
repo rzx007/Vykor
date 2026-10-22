@@ -18,6 +18,7 @@ export * from "./execution-observability.js";
 export * from "./auto-review.js";
 export * from "./workspace-changes.js";
 export * from "./plugin-presentation.js";
+export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
 export * from "./notes.js";
 export * from "./memory.js";
 export * from "./office.js";

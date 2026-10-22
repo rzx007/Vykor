@@ -576,7 +576,7 @@
     },
     {
       "path": "docs/README.md",
-      "line": 141,
+      "line": 142,
       "text": "- [旧 Native UI 设计](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与 [旧固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)：历史资料，运行入口已退役；当前页面以 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)为准。",
       "reason": "Current retirement notice or historical verification reference."
     },
@@ -3330,19 +3330,19 @@
     },
     {
       "path": "packages/client/src/types/extension-types.ts",
-      "line": 1,
+      "line": 3,
       "text": "import type { PluginPresentation, PluginUiInventory } from \"@vykor/protocol\";",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
       "path": "packages/client/src/types/extension-types.ts",
-      "line": 2,
+      "line": 4,
       "text": "export type { PluginUiInventory } from \"@vykor/protocol\";",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
       "path": "packages/client/src/types/extension-types.ts",
-      "line": 48,
+      "line": 51,
       "text": "  uiInventory?: PluginUiInventory;",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
@@ -3378,7 +3378,7 @@
     },
     {
       "path": "packages/plugins/src/installation/installer.ts",
-      "line": 22,
+      "line": 26,
       "text": "  if (manifest.components.ui?.length || manifest.components.apps?.length) {",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
@@ -3486,7 +3486,7 @@
     },
     {
       "path": "packages/protocol/src/index.ts",
-      "line": 28,
+      "line": 29,
       "text": "export * from \"./plugin-ui-history.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
@@ -3600,13 +3600,13 @@
     },
     {
       "path": "packages/server/src/application/default-services/plugin-service.ts",
-      "line": 351,
+      "line": 354,
       "text": "        const uiInventory = retiredUiInventory(manifest?.components.ui?.length ?? 0);",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
       "path": "packages/server/src/application/default-services/plugin-service.ts",
-      "line": 375,
+      "line": 379,
       "text": "          ...(uiInventory ? { uiInventory } : {}),",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
@@ -3918,7 +3918,7 @@
     },
     {
       "path": "packages/server/src/application/settings-api.ts",
-      "line": 270,
+      "line": 271,
       "text": "  uiInventory?: PluginUiInventory;",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },

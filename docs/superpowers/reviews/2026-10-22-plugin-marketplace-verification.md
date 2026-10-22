@@ -6,7 +6,7 @@
 
 - 官方发布仓库：[rzx007/vykor-plugins](https://github.com/rzx007/vykor-plugins)，提交 `5062942`。
 - [公开目录](https://rzx007.github.io/vykor-plugins/marketplace.json)及 Excalidraw 1.0.0、Text Inspector 1.2.2、Notes 1.0.2 三个不可变 Release 已上线。
-- 宿主实现位于隔离工作区 `C:/Users/ruanz/.codex/worktrees/plugin-marketplace/OpenHarness-ts`，分支 `codex/plugin-marketplace`。插件许可证提交 `31698bb3` 已作为固定发布源码推送该分支；市场宿主改动保留在本地，没有合并或推送主分支。
+- 宿主实现从隔离分支 `codex/plugin-marketplace` 合入本地 `main`，合并提交 `db96047b`，保留主分支原有的 `cd11be9a` 及其全部历史。插件许可证提交 `31698bb3` 仍为已发布插件固定使用的源码提交；本次合并未推送。
 - 主工作区原有的 Agent/Protocol 改动没有被本轮覆盖、重置或带入发布源码提交。
 
 ## 定向验证
@@ -38,16 +38,32 @@
 
 发布仓库审查问题及宿主两项 P2 均经独立复审关闭，限定范围无剩余 P1/P2。
 
-## 类型检查的现有基线问题
+## 合并与类型检查修复
 
-完整 Desktop Node/Web 类型检查仍然非零；以下位置未由市场实现修改，报告没有把它们算作通过：
+- 最新主分支已修复测试中旧 `HookExecutor.register`、`StreamEvent` 导入及 Agent/Protocol 未使用符号；合并保留这些修复。
+- 剩余问题位于静态 Native 资源与 MCP 资源的返回类型推断。`verifiedStaticAppResources` 的 `readResource` 现在显式使用原 `PluginAppBackendPort` 的读取返回类型，统一只读接口，没有添加类型断言或绕过运行时授权。
+- 合并树上的 Desktop Node、Web、MCP Apps SDK 三项类型检查通过。
+- 根目录 `pnpm check-types` 通过：73 个构建/检查任务成功，随后 Server/Client 集成类型检查成功。该命令不包含 Desktop 的独立三项类型检查，两组结果分别确认。
+- 市场新增导入使退役清单中 9 个现有引用的行号偏移。逐条验证原文相同后只更新行号，保留原审核理由与检查范围。
+- 既有 Write 生成展示用例在开启模拟计时后动态加载聊天组件，首次加载耗时会占用断言的超时限额。将组件加载移到测试收集阶段，原暂停、执行次数、输出文件与聊天展示断言全部保留，没有延长超时或修改产品逻辑。
+- 与最新主分支的依赖规则对齐：Client 通过 Protocol 公开出口获取市场通信类型，移除对插件契约包的直接依赖；来源包只新增插件分发契约依赖，仍禁止依赖安装器、Agent 和 Server。新增边界回归先复现失败再修复，同时将 9 个新增公开类型登记到 Client API 清单。
 
-- `apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts:670`：测试仍使用已移除的 `HookExecutor.register`。
-- `apps/desktop/src/main/features/session/tool-summary-files.test.ts:13`、`:53`：旧 `StreamEvent` 导入和 `HookExecutor.register`。
-- `packages/server/src/application/session/plugin-app-assembly.ts:294`：Desktop Node 编译配置下的资源结果联合类型不匹配。
-- `packages/agent-contracts/src/children.ts`、`errors.ts`、`execution.ts` 和 `packages/protocol/src/requests.ts`、`scheduled.ts`：Desktop Web 编译配置将现有未使用符号判为错误。
+本次没有发布新版桌面安装器，也没有推送主分支。
 
-因此没有声称完整桌面生产构建通过，也没有发布新版桌面安装器。本轮受影响包及市场自身类型已通过，完整桌面构建需要先消除这些基线错误。
+## 本次合并复验
+
+| 范围 | 结果 |
+| --- | --- |
+| 市场契约、来源和安装存储 | 43 项通过 |
+| Server 安装、路由与 Native/MCP 应用资源、权限和回执 | 69 项通过 |
+| Desktop 市场、原安装入口、面板草稿与控制器 | 97 项通过 |
+| 原会话合并推送与文件摘要用例 | 20 项通过 |
+| Client 市场传输 | 1 项通过 |
+| 公开 API 类型夹具、架构与退役调用边界回归 | 类型夹具通过；65 项通过 |
+| Client 公开导出清单 | 4 项通过 |
+| 退役检查本身的精确审核回归 | 1 项通过 |
+
+功能定向测试共 230 项，公开 API 与检查脚本另 70 项，没有运行完整测试套件。已单独复现并修复组件首次加载导致的超时，最终 20 项会话回归通过；隔离工作区缺少最新 workflow 构建产物的问题在主工作区构建后复验通过。
 
 ## 使用边界
 

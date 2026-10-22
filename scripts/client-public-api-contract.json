@@ -1208,6 +1208,42 @@
     {
       "name": "WorkMode",
       "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceCatalog",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceSource",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceSourceView",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceEntry",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceSelection",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplacePreview",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceInstallInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceOperation",
+      "kind": "type-export"
+    },
+    {
+      "name": "MarketplaceProvenance",
+      "kind": "type-export"
     }
   ]
 }

@@ -29,6 +29,13 @@ import { DaemonAgentEventProjector } from "../../../../../../packages/server/src
 import { SessionTranscriptProjection } from "../../../../../../packages/server/src/application/session/transcript-projection"
 import { SessionEventPublisher } from "../../../../../../packages/server/src/application/session/session-event-publisher"
 
+// 在模拟计时与断言开始前加载聊天组件，避免首次加载占用用例的超时限额。
+const { ConversationTranscript } = await vi.importActual<{ ConversationTranscript: ComponentType<any> }>(
+  "../../../renderer/src/components/desktop/conversation-page/transcript/transcript")
+const { MessageScroller, MessageScrollerProvider } = await vi.importActual<{
+  MessageScroller: ComponentType<any>; MessageScrollerProvider: ComponentType<any>
+}>("../../../renderer/src/components/ui/message-scroller")
+
 const session = {
   id: "s1",
   cwd: "D:/repo",
@@ -692,11 +699,6 @@ describe("SessionSubscriptionService coalescing", () => {
         expect(pausedView.parts.filter(part => part.type === "tool")).toHaveLength(0)
         expect(executions).toBe(0)
         expect(existsSync(target)).toBe(false)
-        const { ConversationTranscript } = await vi.importActual<{ ConversationTranscript: ComponentType<any> }>(
-          "../../../renderer/src/components/desktop/conversation-page/transcript/transcript")
-        const { MessageScroller, MessageScrollerProvider } = await vi.importActual<{
-          MessageScroller: ComponentType<any>; MessageScrollerProvider: ComponentType<any>
-        }>("../../../renderer/src/components/ui/message-scroller")
         const html = renderToStaticMarkup(createElement(MessageScrollerProvider, null,
           createElement(MessageScroller, null, createElement(ConversationTranscript, {
             messages: pausedView.messages, parts: pausedView.parts, runs: pausedView.runs,

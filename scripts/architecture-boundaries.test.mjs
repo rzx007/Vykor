@@ -588,6 +588,17 @@ test("P0-P6 exceptions stay retired and Client directly depends only on Protocol
   assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["parseMcpCallResultData"], declarationOrigin: true }, strictPolicy()), []);
 });
 
+test("marketplace sources consume distribution contracts while Client still goes through Protocol", () => {
+  const input = { specifier: "@vykor/plugin-contracts/marketplace", importedNames: ["MarketplaceCatalog"], typeOnly: true };
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace.ts", ...input }, strictPolicy()), []);
+  assert.ok(checkModuleDependency({ fromFile: "packages/client/src/resources/plugin-resource.ts", ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/client/src/resources/plugin-resource.ts", ...input,
+    specifier: "@vykor/protocol", resolvedFile: "packages/plugin-contracts/src/marketplace.ts", declarationOrigin: true }, strictPolicy()), []);
+  for (const specifier of ["@vykor/server", "@vykor/agent-runtime", "@vykor/plugins"]) {
+    assert.ok(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace.ts", specifier }, strictPolicy()).length > 0);
+  }
+});
+
 test("Client may consume canonical data through Protocol but cannot import contracts through aliases", () => {
   policyFixture({
     "packages/client/package.json": JSON.stringify({ name: "@vykor/client" }),

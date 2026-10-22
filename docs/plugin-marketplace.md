@@ -49,6 +49,7 @@
 - [安装协调](../packages/server/src/application/default-services/marketplace-service.ts)：候选包、兼容要求、权限、来源和安装回执。
 - [原 Installer](../packages/plugins/src/installation/installer.ts)：代码快照与安装记录提交。
 - [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[客户端资源](../packages/client/src/resources/plugin-resource.ts)：共享请求与响应。
+- [Protocol](../packages/protocol/src/index.ts)统一公开市场通信类型；Client 仍只直接依赖 Protocol。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。
 - [桌面确认](../apps/desktop/src/main/features/plugin/marketplace-service.ts)和[市场界面](../apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/marketplace.tsx)：窗口绑定、用户确认和展示。
 
 发布仓库按固定 Vykor 提交构建首批三个插件，采用全新临时检出和确定性 ZIP。先发布不可变 Release，后更新 Pages 目录；同版本摘要变化会拒绝发布，旧版本保留。
