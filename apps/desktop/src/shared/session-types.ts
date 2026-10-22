@@ -169,6 +169,8 @@ export interface DesktopSessionRun {
 export interface DesktopSessionTask {
   id: string
   sessionId: string
+  requestNamespace?: string
+  requestId?: string
   childSessionId?: string
   runId?: string
   type: string

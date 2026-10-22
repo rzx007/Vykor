@@ -5,7 +5,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import type { DesktopWorkflowRun } from "@shared/workflow-types"
 import type { DesktopTerminalRecord } from "@shared/terminal-types"
-import type { DesktopSessionTask } from "@shared/session-types"
+import type {
+  DesktopSessionTask,
+  DesktopSessionRun,
+  DesktopSessionMessage,
+  DesktopSessionPart,
+} from "@shared/session-types"
 import { PluginAppController } from "../../../shell/plugin-apps/controller"
 import type { ResidentAppPage } from "../../../shell/plugin-apps/page-manager"
 import { mount } from "../../../shell/plugin-apps/__test__/fixtures.test-support"
@@ -16,6 +21,9 @@ const state = vi.hoisted(() => ({
   runs: [] as DesktopWorkflowRun[],
   terminals: [] as DesktopTerminalRecord[],
   tasks: [] as DesktopSessionTask[],
+  sessionRuns: [] as DesktopSessionRun[],
+  messages: [] as DesktopSessionMessage[],
+  parts: [] as DesktopSessionPart[],
   workflowSession: "chat",
   confirming: false,
   focus: vi.fn(),
@@ -49,6 +57,9 @@ beforeEach(() => {
   state.confirming = false
   state.workflowSession = "chat"
   state.tasks = []
+  state.sessionRuns = []
+  state.messages = []
+  state.parts = []
   enteredAt = Date.now()
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   container = document.createElement("div")
@@ -64,6 +75,9 @@ async function render(id = "chat") {
   await act(async () => {
     const view = emptySessionView(id)
     view.tasks = state.tasks
+    view.runs = state.sessionRuns
+    view.messages = state.messages
+    view.parts = state.parts
     root.render(
       <SessionSummaryPopover
         view={view}
@@ -296,6 +310,84 @@ it("closes when switching chat, baselines returning apps, and retains explicit c
   state.workflowSession = "chat"
   await render()
   expect(isOpen()).toBe(false)
+})
+
+it("folds shell history while retaining active jobs and exceptions from the latest input", async () => {
+  state.sessionRuns = [
+    { id: "retry", inputId: "current", createdAt: 30, status: "running" },
+    { id: "future", inputId: "next", createdAt: 40, status: "pending" },
+    { id: "old", inputId: "previous", createdAt: 10 },
+    { id: "current", inputId: "current", createdAt: 20 },
+  ].map((run) => ({
+    status: "completed",
+    ...run,
+    sessionId: "chat",
+    metadata: {},
+    updatedAt: run.createdAt,
+  })) as DesktopSessionRun[]
+  state.tasks = [
+    { id: "active", runId: "old", status: "running" },
+    { id: "pending", runId: "retry", status: "pending" },
+    { id: "failure", runId: "current", status: "failed" },
+    { id: "interrupted", runId: "retry", status: "interrupted" },
+    { id: "old-failure", runId: "old", status: "failed" },
+    { id: "completed", runId: "retry", status: "completed" },
+    { id: "unbound", status: "failed" },
+    { id: "legacy", requestNamespace: "tool", requestId: "tool:legacy-call", status: "failed" },
+  ].map((task) => ({
+    ...task,
+    sessionId: "chat",
+    type: "shell",
+    description: task.id,
+    cwd: "/repo",
+    output: `${task.id} output`,
+    metadata: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })) as DesktopSessionTask[]
+  state.messages = [
+    {
+      id: "current-message",
+      sessionId: "chat",
+      role: "assistant",
+      runId: "current",
+      seq: 1,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ]
+  state.parts = [
+    {
+      id: "legacy-part",
+      sessionId: "chat",
+      messageId: "current-message",
+      type: "tool",
+      toolUseId: "legacy-call",
+      seq: 1,
+      status: "completed",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ]
+  await render()
+  await click("当前聊天的工作摘要")
+  const history = document.querySelector<HTMLDetailsElement>('details[aria-label="历史后台命令"]')
+  expect(history).not.toBeNull()
+  expect(history!.open).toBe(false)
+  for (const id of ["active", "pending", "failure", "interrupted", "legacy"]) {
+    const summary = [...document.querySelectorAll("summary")].find((node) =>
+      node.textContent?.startsWith(id)
+    )!
+    expect(summary).toBeTruthy()
+    expect(history!.contains(summary)).toBe(false)
+  }
+  for (const id of ["old-failure", "completed", "unbound"])
+    expect(history!.textContent).toContain(id)
+  await act(async () => history!.querySelector("summary")!.click())
+  expect(history!.open).toBe(true)
+  expect(history!.textContent).toContain("old-failure output")
 })
 
 it("includes detached shell jobs without inventing a terminal and ignores subsequent output updates", async () => {
