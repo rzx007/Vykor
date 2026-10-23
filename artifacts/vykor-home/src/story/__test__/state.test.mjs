@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STORY_STEPS, sampleStoryProgress } from '../src/story-state.js';
+import { STORY_STEPS, sampleStoryProgress } from '../state.js';
 
 const PART_NAMES = ['shell', 'chrome', 'sidebar', 'conversation', 'composer', 'tools'];
 const FINAL_PART = {
@@ -20,6 +20,12 @@ function animatedNumbers(state) {
     state.sceneOpacity,
     state.brandProgress,
     state.partRadius,
+    state.modelOpacity,
+    state.introLift,
+    state.copyEntrance,
+    state.composerHandoff,
+    state.utilityOpacity,
+    state.closingOpacity,
     ...Object.values(state.camera),
     ...PART_NAMES.flatMap((name) => Object.values(state.parts[name])),
     ...state.copyOpacities,
@@ -113,7 +119,7 @@ test('clamped and invalid progress cannot produce non-finite animation values', 
 });
 
 test('poses remain continuous at story boundaries and at the ends of the scroll range', () => {
-  const boundaries = [0, 0.08, 0.1, 0.12, 0.16, 0.18, 0.25, 0.3, 0.42, 0.46, 0.58, 0.62, 0.74, 0.76, 0.8, 0.86, 0.9, 0.92, 1];
+  const boundaries = [0, 0.06, 0.12, 0.13, 0.14, 0.15, 0.16, 0.20, 0.22, 0.25, 0.27, 0.29, 0.3, 0.42, 0.46, 0.58, 0.62, 0.74, 0.76, 0.8, 0.86, 0.9, 0.92, 0.93, 0.985, 1];
   for (const progress of boundaries) {
     const before = animatedNumbers(sampleStoryProgress(progress - 1e-6));
     const after = animatedNumbers(sampleStoryProgress(progress + 1e-6));
@@ -121,4 +127,35 @@ test('poses remain continuous at story boundaries and at the ends of the scroll 
       assert.ok(Math.abs(before[index] - after[index]) < 0.002, `jump at ${progress}, value ${index}`);
     }
   }
+});
+
+test('the input takes over before the brand leaves, without a low-information gap', () => {
+  for (let index = 0; index <= 270; index++) {
+    const state = sampleStoryProgress(index / 1000);
+    assert.ok(Math.max(state.modelOpacity, state.parts.composer.opacity) >= 0.7);
+    if (state.modelOpacity < 0.5) assert.ok(state.parts.composer.opacity > 0.9);
+  }
+  assert.equal(sampleStoryProgress(0.06).composerHandoff, 0);
+  assert.equal(sampleStoryProgress(0.27).composerHandoff, 1);
+});
+
+test('the download close changes copy while keeping the assembled product exactly at rest', () => {
+  const resting = sampleStoryProgress(0.92);
+  assert.equal(resting.closingOpacity, 0);
+  assert.equal(sampleStoryProgress(1).closingOpacity, 1);
+  for (let index = 920; index <= 1000; index++) {
+    const state = sampleStoryProgress(index / 1000);
+    assert.deepEqual(state.parts, resting.parts);
+    assert.deepEqual(state.camera, resting.camera);
+    assert.equal(state.assembled, true);
+  }
+});
+
+test('the new headline never ghosts over the outgoing brand copy', () => {
+  for (let index = 0; index <= 1000; index++) {
+    const state = sampleStoryProgress(index / 1000);
+    assert.equal(Math.min(state.introOpacity, state.copyEntrance), 0);
+  }
+  assert.ok(sampleStoryProgress(0.16).copyEntrance >= 0.49, 'the arriving headline must remain readable during the handoff');
+  assert.equal(sampleStoryProgress(0.20).copyEntrance, 1);
 });

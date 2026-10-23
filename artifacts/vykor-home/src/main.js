@@ -2,7 +2,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { mountProductDemo } from './product-demo.js';
-import { STORY_STEPS, sampleStoryProgress } from './story-state.js';
+import { STORY_STEPS, sampleStoryProgress } from './story/state.js';
 import './product-demo.css';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -60,6 +60,10 @@ listen(window, 'scroll', updateHeader, { passive: true });
 updateHeader();
 
 const firstScene = document.querySelector('.first-scene');
+const heroCopy = document.querySelector('.hero-copy');
+const heroTitle = document.querySelector('#hero-title');
+const heroFoot = document.querySelector('.hero-foot');
+const poster = document.querySelector('.optical-poster');
 const perspective = document.querySelector('.assembly-perspective');
 const demoRoot = document.querySelector('#workbench');
 const demo = mountProductDemo(demoRoot);
@@ -69,6 +73,9 @@ copyRoot.innerHTML = STORY_STEPS.map(step => '<div class="story-step" data-step=
 const copies = [...copyRoot.children];
 const caption = document.querySelector('#workspace-caption');
 const skipStory = document.querySelector('.story-skip');
+const storyFooter = document.querySelector('.story-footer');
+const closing = document.querySelector('.story-closing');
+const siteFooter = document.querySelector('.site-footer');
 
 let optical = null;
 let opticalRequest = 0;
@@ -129,6 +136,9 @@ motion.add({
   let lastProgress = 0;
   let phase = -1;
   let assembled;
+  let bridgeX = 0;
+  let bridgeY = 0;
+  let copyBridgeY = 0;
   document.documentElement.classList.toggle('has-motion', isStory);
   copyRoot.hidden = !isStory;
   fallbackCopy.hidden = isStory;
@@ -140,33 +150,64 @@ motion.add({
     // The brand is a quiet introduction, not the camera that carries the story.
     sampleModel(isStory ? state.brandProgress : 0);
     if (isStory) {
-      firstScene.style.opacity = state.introOpacity;
-      firstScene.style.visibility = state.introOpacity > .001 ? 'visible' : 'hidden';
-      firstScene.style.pointerEvents = state.introOpacity > .5 ? '' : 'none';
-      workspace.style.opacity = state.sceneOpacity;
+      // The input is already present before the model leaves the same paper stage.
+      gsap.set(heroCopy, { autoAlpha: state.introOpacity, y: -36 * state.introLift });
+      gsap.set(heroFoot, { autoAlpha: state.introOpacity });
+      gsap.set(stage, { autoAlpha: state.modelOpacity });
+      firstScene.style.visibility = Math.max(state.introOpacity, state.modelOpacity) > .001 ? 'visible' : 'hidden';
+      if (state.introOpacity < .01 && firstScene.contains(document.activeElement)) headerGithub.focus({ preventScroll: true });
+      firstScene.inert = state.introOpacity < .01;
+      firstScene.setAttribute('aria-hidden', String(firstScene.inert));
+      workspace.style.opacity = '1';
       workspace.style.visibility = state.sceneOpacity > .001 ? 'visible' : 'hidden';
-      workspace.style.pointerEvents = state.sceneOpacity > .5 ? '' : 'none';
+      workspace.style.pointerEvents = 'none';
       workspace.setAttribute('aria-hidden', String(state.sceneOpacity < .01));
     }
     const camera = state.camera;
     gsap.set(demo.machine, { x: camera.x * width, y: camera.y * height, scale: camera.scale, rotationX: camera.rotationX, rotationY: camera.rotationY });
     demo.machine.style.setProperty('--part-radius', state.partRadius + 'px');
     for (const [name, pose] of Object.entries(state.parts)) {
-      gsap.set(demo.parts[name], { x: pose.x * width, y: pose.y * height, z: pose.z * width, scale: pose.scale, rotationX: pose.rotationX, rotationY: pose.rotationY, autoAlpha: pose.opacity });
+      const handoff = name === 'composer' ? 1 - state.composerHandoff : 0;
+      gsap.set(demo.parts[name], { x: (pose.x + handoff * (bridgeX - .08)) * width, y: (pose.y + handoff * (bridgeY + .3)) * height, z: pose.z * width, scale: pose.scale, rotationX: pose.rotationX, rotationY: pose.rotationY, autoAlpha: pose.opacity });
     }
     if (isStory) copies.forEach((copy, index) => {
-      gsap.set(copy, { autoAlpha: state.copyOpacities[index], y: (1 - state.copyOpacities[index]) * 8 });
-      copy.setAttribute('aria-hidden', String(index !== state.phaseIndex));
+      const opacity = state.copyOpacities[index] * state.copyEntrance * (1 - state.closingOpacity);
+      gsap.set(copy, { autoAlpha: opacity, y: (1 - state.copyEntrance) * copyBridgeY + (1 - state.copyOpacities[index]) * 10 });
+      copy.setAttribute('aria-hidden', String(index !== state.phaseIndex || state.copyEntrance < .05 || state.closingOpacity > .5));
     });
+    const activeElement = document.activeElement;
+    const closeInactive = isStory && state.closingOpacity < .5;
+    const utilityInactive = isStory && (state.closingOpacity > .5 || state.utilityOpacity < .01);
+    // Enable destinations before handing focus away from a departing scene.
+    if (!closeInactive) {
+      closing.inert = false;
+      siteFooter.inert = false;
+    }
+    if (!utilityInactive) storyFooter.inert = false;
+    gsap.set(storyFooter, { autoAlpha: isStory ? state.utilityOpacity * (1 - state.closingOpacity) : 1 });
+    gsap.set(closing, { autoAlpha: isStory ? state.closingOpacity : 1, y: isStory ? (1 - state.closingOpacity) * 12 : 0 });
+    gsap.set(siteFooter, { autoAlpha: isStory ? state.closingOpacity : 1 });
+    if (utilityInactive && storyFooter.contains(activeElement)) {
+      (closeInactive ? headerGithub : closing.querySelector('a')).focus({ preventScroll: true });
+    }
+    if (closeInactive && (closing.contains(activeElement) || siteFooter.contains(activeElement))) {
+      (utilityInactive ? headerGithub : skipStory).focus({ preventScroll: true });
+    }
+    storyFooter.inert = utilityInactive;
+    closing.inert = closeInactive;
+    siteFooter.inert = closeInactive;
+    closing.setAttribute('aria-hidden', String(closeInactive));
+    closing.style.pointerEvents = closeInactive ? 'none' : 'auto';
+    if (isStory) workspace.setAttribute('aria-labelledby', state.closingOpacity > .5 ? 'download-title' : 'step-' + STORY_STEPS[state.phaseIndex].id);
     if (phase !== state.phaseIndex) {
       phase = state.phaseIndex;
       workspace.dataset.phase = STORY_STEPS[phase].id;
-      if (isStory) workspace.setAttribute('aria-labelledby', 'step-' + STORY_STEPS[phase].id);
     }
     if (assembled !== state.assembled) {
       assembled = state.assembled;
-      if (!assembled && demo.machine.contains(document.activeElement)) skipStory.focus({ preventScroll: true });
+      if (!assembled && demo.machine.contains(document.activeElement)) (utilityInactive ? headerGithub : skipStory).focus({ preventScroll: true });
       demo.setAssembled(assembled);
+      demoRoot.style.pointerEvents = assembled ? 'auto' : 'none';
       caption.textContent = assembled ? '可操作的界面演示 · 内容为示例' : '代码构建的产品演示 · 内容为示例';
     }
     hero.dataset.storyProgress = progress.toFixed(4);
@@ -180,6 +221,15 @@ motion.add({
     height = width / aspect;
     demo.machine.style.width = width + 'px';
     demo.machine.style.height = height + 'px';
+    // Read only on resize. The bridge starts at the model's actual screen region.
+    const sceneRect = stage.getBoundingClientRect();
+    const planeRect = perspective.getBoundingClientRect();
+    const modelX = sceneRect.left + (narrow ? stage.clientWidth / 2 : poster.offsetLeft + poster.offsetWidth / 2);
+    const modelY = sceneRect.top + (narrow ? (heroCopy.offsetTop + heroCopy.offsetHeight + 20 + heroFoot.offsetTop - 18) / 2 : poster.offsetTop + poster.offsetHeight / 2);
+    bridgeX = (modelX - (planeRect.left + (perspective.clientWidth - width) / 2 + width * .42)) / width;
+    bridgeY = (modelY - (planeRect.top + (perspective.clientHeight - height) / 2 + height * .865)) / height;
+    const copySlot = document.querySelector('.story-copy-slot');
+    copyBridgeY = Math.max(0, Math.min(160, heroCopy.offsetTop + heroTitle.offsetTop - copySlot.offsetTop - copies[0].querySelector('h2').offsetTop));
     render(isStory ? lastProgress : 1);
   }
   if (reduce) {
@@ -213,8 +263,8 @@ motion.add({
   sizeObserver.observe(perspective);
   const storyDistance = () => hero.offsetHeight - document.querySelector('.hero-stage').clientHeight;
   function goTo(target, { immediate = false, focus = false } = {}) {
-    const inStory = isStory && (target === workspace || target === demoRoot);
-    const destination = inStory ? hero.offsetTop + storyDistance() * (target === demoRoot ? .96 : .23) : target;
+    const inStory = isStory && (target === workspace || target === demoRoot || target === closing);
+    const destination = inStory ? hero.offsetTop + storyDistance() * (target === closing ? .995 : target === demoRoot ? .925 : .27) : target;
     const readingInset = header.offsetTop + header.offsetHeight + 24;
     const finish = () => {
       if (!focus) return;
@@ -248,7 +298,7 @@ motion.add({
   }, { once: true });
   if (!reduce && fine) {
     on(firstScene, 'pointermove', event => {
-      if (isStory && lastProgress > .16) return;
+      if (isStory && lastProgress > .20) return;
       const rect = stage.getBoundingClientRect();
       optical?.setAim?.((event.clientX - rect.left) / rect.width * 2 - 1, (event.clientY - rect.top) / rect.height * 2 - 1);
     }, { passive: true });
@@ -267,6 +317,9 @@ motion.add({
     lenis?.destroy();
     story?.kill();
     firstScene.style.cssText = '';
+    firstScene.inert = false;
+    firstScene.removeAttribute('aria-hidden');
+    gsap.set([heroCopy, heroFoot, stage], { clearProps: 'opacity,visibility,transform' });
     workspace.style.cssText = '';
     workspace.removeAttribute('aria-hidden');
     document.documentElement.classList.remove('has-motion');

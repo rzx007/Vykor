@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "check": "node scripts/check.mjs && node --test scripts/framing.test.mjs scripts/render-quality.test.mjs scripts/vgpu-light.test.mjs scripts/paper-coverage.test.mjs scripts/story-state.test.mjs"
+    "check": "node scripts/check.mjs && node --test scripts/framing.test.mjs scripts/render-quality.test.mjs scripts/vgpu-light.test.mjs scripts/paper-coverage.test.mjs src/story/__test__/state.test.mjs"
   },
   "dependencies": {
     "@vgpu/wgsl": "0.6.0",

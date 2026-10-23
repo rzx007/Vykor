@@ -63,17 +63,22 @@ function enteringPart(start, end, amount, assembly) {
 export function sampleStoryProgress(raw) {
   const progress = clampProgress(raw);
   const assembly = smoothWindow(progress, 0.8, 0.92);
-  const prompt = smoothWindow(progress, 0.16, 0.25);
+  const prompt = smoothWindow(progress, 0.06, 0.20);
+  const handoff = smoothWindow(progress, 0.06, 0.27);
+  const copyEntrance = smoothWindow(progress, 0.12, 0.20);
+  const closing = smoothWindow(progress, 0.93, 0.985);
   const conversation = smoothWindow(progress, 0.3, 0.42);
   const sidebar = smoothWindow(progress, 0.46, 0.58);
   const tools = smoothWindow(progress, 0.62, 0.74);
   const enclosure = smoothWindow(progress, 0.76, 0.86);
 
   const composerFocus = mixPose(
-    pose({ x: 0.08, y: -0.3, z: 0.16, scale: 0.96, rotationX: -3, rotationY: 4, opacity: 0 }),
+    pose({ x: 0.08, y: -0.3, z: 0, scale: 0.88, opacity: 0 }),
     pose({ x: 0.08, y: -0.3, z: 0.08, scale: 1.32 }),
     prompt,
   );
+  // Resolve the surface early; a long translucent overlap makes the UI unreadable.
+  composerFocus.opacity = smoothWindow(progress, 0.06, 0.13);
   const composerContext = mixPose(composerFocus, pose({ x: 0.02, y: 0.02, z: 0.06 }), conversation);
 
   const parts = {
@@ -125,15 +130,21 @@ export function sampleStoryProgress(raw) {
 
   return {
     progress,
-    introOpacity: 1 - smoothWindow(progress, 0.08, 0.16),
-    sceneOpacity: smoothWindow(progress, 0.12, 0.18),
+    introOpacity: 1 - smoothWindow(progress, 0.06, 0.12),
+    modelOpacity: 1 - smoothWindow(progress, 0.12, 0.25),
+    introLift: smoothWindow(progress, 0.06, 0.22),
+    sceneOpacity: smoothWindow(progress, 0.06, 0.14),
+    copyEntrance,
+    composerHandoff: handoff,
+    utilityOpacity: smoothWindow(progress, 0.20, 0.29),
+    closingOpacity: closing,
     brandProgress: 0.055 * smoothWindow(progress, 0, 0.1),
     camera: {
-      x: mix(-0.015, 0, assembly),
-      y: mix(0.015, 0, assembly),
-      scale: mix(0.88, 1, smoothWindow(progress, 0.16, 0.92)),
-      rotationX: mix(10, 0, assembly),
-      rotationY: mix(-12, 0, assembly),
+      x: mix(-0.015 * handoff, 0, assembly),
+      y: mix(0.015 * handoff, 0, assembly),
+      scale: mix(mix(1, 0.88, handoff), 1, smoothWindow(progress, 0.27, 0.92)),
+      rotationX: mix(10 * handoff, 0, assembly),
+      rotationY: mix(-12 * handoff, 0, assembly),
     },
     parts,
     copyOpacities,
