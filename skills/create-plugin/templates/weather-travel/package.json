@@ -1,0 +1,21 @@
+{
+  "name": "weather-travel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "validate": "node scripts/validate.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "pack": "node scripts/pack.mjs"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "1.1.2",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "esbuild": "0.25.12",
+    "jsdom": "26.1.0",
+    "jszip": "3.10.1"
+  }
+}

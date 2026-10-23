@@ -1,6 +1,6 @@
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { afterEach, expect, it } from "vitest";
@@ -26,7 +26,7 @@ it("does not expose plugin authoring to the model or slash lookup without an ins
 it("loads a separately copied distribution as one user skill, not a bundled skill", async () => {
   const root = await workspace();
   const skill = join(root, "skills", "create-plugin");
-  await cp(distribution, skill, { recursive: true });
+  await cp(distribution, skill, { recursive: true, filter: path => !relative(distribution, path).split(/[\\/]/).some(part => ["node_modules", "dist"].includes(part)) });
   const registry = await createSkillRegistrySnapshot({ userDir: join(root, "skills") });
   expect(registry.resolve("create-plugin")).toMatchObject({
     source: "user", path: join(skill, "SKILL.md"), userInvocable: true,

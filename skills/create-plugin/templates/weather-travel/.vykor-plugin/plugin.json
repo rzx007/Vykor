@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "example.weather-travel",
+  "name": "weather-travel",
+  "version": "1.0.0",
+  "displayName": "天气与出行助手",
+  "license": "MIT",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMTMiIGZpbGw9IiNkN2U4ZjUiLz48cGF0aCBkPSJNMjUgNXY1TTI1IDQwdjVNNSAyNWg1TTQwIDI1aDVNMTEgMTFsNCA0TTM1IDM1bDQgNE0xMSAzOWw0LTRNMzUgMTVsNC00IiBzdHJva2U9IiMzNTZiOGUiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTIxIDUxaDI5YTkgOSAwIDAgMCAwLTE4IDEzIDEzIDAgMCAwLTI1LTEgMTAgMTAgMCAwIDAtNCAxOVoiIGZpbGw9IiNlZGYzZjYiIHN0cm9rZT0iIzM1NmI4ZSIgc3Ryb2tlLXdpZHRoPSIzIi8+PC9zdmc+",
+  "description": "查询真实天气、比较城市，在右侧协作编辑出行备忘并确认导出。",
+  "introduction": "## 天气与出行\n\n搜索目的地，查看当前、七日与逐小时天气，并比较城市。出行备忘按版本自动保存；切换面板保留草稿，冲突时对照最新内容合并。\n\n选中天气日期或出行条目引用到聊天，助手读取最新版本后继续修改。导出到工作区需要单独确认。天气来自 Open-Meteo，免费端点仅供非商业评估；页面显示来源、时区及获取时间。",
+  "prompts": [
+    {
+      "title": "看看目的地天气",
+      "prompt": "请用天气与出行助手查询杭州和苏州未来七天的天气，比较降雨情况，在右侧打开应用；说明天气来源和当地时间。"
+    },
+    {
+      "title": "整理出行备忘",
+      "prompt": "请先读取天气与出行助手当前出行备忘的最新版本，再根据我引用的条目整理安排，保留其他条目和原有 ID；不要直接导出文件。"
+    }
+  ],
+  "permissions": {
+    "pluginData": [
+      "write"
+    ],
+    "network": [
+      "api.open-meteo.com",
+      "geocoding-api.open-meteo.com"
+    ],
+    "filesystem": [
+      "workspace:write"
+    ]
+  },
+  "components": {
+    "apps": [
+      "./ui/apps.json"
+    ],
+    "skills": [
+      "./skills/weather/SKILL.md"
+    ],
+    "tools": [
+      {
+        "entry": "./dist/native/network.mjs",
+        "runtime": "node",
+        "permissions": [
+          "network:api.open-meteo.com",
+          "network:geocoding-api.open-meteo.com"
+        ]
+      },
+      {
+        "entry": "./dist/native/data.mjs",
+        "runtime": "node",
+        "permissions": []
+      },
+      {
+        "entry": "./dist/native/export.mjs",
+        "runtime": "node",
+        "permissions": [
+          "filesystem:workspace:write"
+        ]
+      }
+    ]
+  },
+  "runtime": {
+    "engine": "node",
+    "isolation": "process"
+  }
+}

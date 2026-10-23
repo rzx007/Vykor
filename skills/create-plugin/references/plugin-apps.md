@@ -1,14 +1,19 @@
 # 插件应用（MCP Apps）
 
-根清单保持 schemaVersion 1，唯一新页面入口是 `components.apps: ["./ui/apps.json"]`。复制 `assets/text-inspector/ui/apps.json`：其 schemaVersion 为 1，backend 为 `native-tools`，resources 把精确 `ui://` URI 映射到插件内单文件 HTML，tools 引用实际注册的 `TextInspectorCheck`、`TextInspectorPreview`，surfaces 提供会话打开入口。参数 schema 来自 Native Tool 注册，不能复制、改写或增加工具别名。Native Tools 仍通过原 Tool Host、Guard 和权限执行，不需要额外 MCP 进程。
+根清单保持 `schemaVersion: 1`，页面入口是 `components.apps: ["./ui/apps.json"]`，`apps.json` 也使用版本 1。默认工程通过 `scripts/create-plugin.mjs` 生成，使用同一官方 MCP Apps 页面，可选一种后台：
 
-工具保留普通 content 文字，页面数据写 `metadata.appData: { text, findings, truncated }`；宿主把它转为 MCP `structuredContent`。普通业务工具不生成可信 appId、requestId、版本或执行状态。注册 app-only 可见性不代表获得执行权限。
+- `native-tools`：`resources` 把精确 `ui://` URI 映射到插件内单文件 HTML，`tools` 引用实际注册名称与可见性。参数 schema 来自 Native Tool 注册，不在页面清单另造工具别名。工具通过原 Tool Host 和权限检查执行。
+- `mcp-server`：`server` 引用同插件声明的真实 MCP 服务，由官方 MCP SDK 注册工具与页面资源；`structuredContent` 提供页面数据。它使用 stdio 后台进程，不是浏览器直接联网。
+
+`surfaces` 提供会话内打开入口。默认天气页面只声明 `fullscreen`，从会话右侧面板打开，工具名与 `ui://<name>/panel` 从统一身份配置生成。`assets/text-inspector/` 只作为更小的 Native 接线参考。
+
+Native 工具保留普通 `content` 文字，页面数据写入 `metadata.appData`，宿主将它转成 MCP `structuredContent`。普通业务工具不生成可信 appId、requestId、控制版本或宿主执行状态。业务文档 revision 与 operationId 可以由业务维护，不能冒充宿主回执。app-only 可见性只限制调用入口，不能单独授予执行权限。
 
 ## 页面入口与结果
 
 ```js
 import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
-const app = new App({ name: "My App", version: "1.0.0" }, { availableDisplayModes: ["inline", "fullscreen"] });
+const app = new App({ name: "My Weather", version: "1.0.0" }, { availableDisplayModes: ["fullscreen"] });
 function show(result) {
   if (result.isError) throw new Error("工具失败，请查看回执");
   // 校验 structuredContent 后显示；这里不能再次调用工具或保存。
@@ -19,23 +24,45 @@ app.onhostcontextchanged = context => {
 };
 await app.connect();
 // 用户明确点击按钮后：主动返回值不会自动触发 ontoolresult。
-const result = await app.callServerTool({ name: "TextInspectorCheck", arguments: { text: "hello " } });
+// 使用当前插件实际注册的名称；完整工程从 src/identity.mjs 获取。
+const result = await app.callServerTool({ name: "MyWeatherReadPlan", arguments: {} });
 show(result);
 ```
 
-必须先登记通知再 connect。直接打开只有空表单，不伪造工具结果。完整处理错误、选区和 48,000 字节交互边界的代码见 `assets/text-inspector/ui/panel.mjs`。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
+必须先登记通知再 connect。直接打开页面时主动读取真实文档与收藏，未取到天气前显示搜索入口，不伪造天气结果。天气模板的页面源码在 `templates/weather-travel/ui/`。主题通过官方 hostContext 更新，不清空输入；沿用宿主颜色与字体，以黑白灰、清晰日期与带单位的数值组织信息，支持键盘及减少动态效果。遵循所在项目的样式查看约定，不因接入页面自动搭建预览或截图。
+
+## 插件数据的有限自动保存
+
+根清单声明 `permissions.pluginData: ["write"]`，安装时批准 `pluginData:write`。页面后端的 `toolPolicies` 只为精确 app-only 保存工具声明 `authorization: "plugin-data-write"`，并限制参数大小。例如工具名由当前配置生成后可得到：
+
+```json
+{
+  "toolPolicies": [
+    { "tool": "MyWeatherSavePlanDraft", "authorization": "plugin-data-write", "maxArgumentsBytes": 65536 },
+    { "tool": "MyWeatherSetFavorite", "authorization": "plugin-data-write", "maxArgumentsBytes": 65536 }
+  ]
+}
+```
+
+这只允许页面把已编辑的备忘、收藏保存到当前插件数据目录。保存工具不接收 URL、后台地址、数据目录、会话或文件路径，不读取网络，不导出工作区文件。模型工具 `ApplyPlanOperations` 和导出工具 `ExportPlan` 不加这项策略，继续使用普通确认。不能给模型可见工具或任意网络/文件操作套上自动保存权限。
+
+页面同一时刻只发送一次保存，收到 `saved: true` 且 operationId、文档和 revision 匹配的业务回执后才标成已保存。在途请求之后的新输入继续留在本地，不能被旧结果覆盖。后台将新版本和操作回执原子写入 SQLite：同 operationId 同参数返回原结果，异参数拒绝。
+
+冲突时显示最新文档并保留收到的草稿；迟到回复不降低已知版本，读到相同版本不取消自动保存。用户明确采用新版时，通过同一有限保存工具确认清除后台冲突草稿，收到回执后再显示成功。错误或 unknown 时保留当前输入，不自动重试写入。恢复时只查询原 operationId 的 `GetOperation`，不能换 ID 重放；没有回执也不能推断失败。导出文件已发布但后续回执提交失败时，`operation_outcome_unknown` 同样进入待核实状态。如果宿主仍阻止调用，就显示待确认状态并继续保留草稿。收藏持久化并按插件共享，天气缓存只保留在后台实例内存；出行文档、回执和冲突草稿按会话隔离。只有后台收到并保存的数据可承诺恢复，尚未送达后台的最后输入不能保证跨关闭或重启恢复。
 
 ## 可见上下文与普通消息
 
 `app.updateModelContext({ content: [{type:"text",text}], structuredContent: selection })` 把明确选中的内容加入原会话可见条目；不覆盖输入框，也不自动发送。普通发送时仍重新检查来源、授权和版本。用户可移除条目。
 
+天气模板的出行选区包含文档 URI、revision 和条目 ID；文档版本变化后旧选区不能直接作为写入依据，模型先读取最新文档。天气选区保留地点、日期、来源和时区，不能把引用操作当成修改或导出授权。
+
 `app.sendMessage({ role:"user", content:[{type:"text",text}] })` 经宿主确认后发送普通用户消息，成功保持应用打开。只支持文本角色 user，不发送主输入框已有草稿。先检查 `app.getHostCapabilities()` 的 message/updateModelContext 能力。消息总共最多 4096 个 Unicode 字符；上下文结构化 JSON 最多 32 KiB。只携带必要选区，超限提示用户减少选择，不静默裁剪。
 
-工具参数最多 64 KiB、Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、资源解码总量最多 8 MiB。样例原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果，省略交互数据。
+工具参数默认最多 64 KiB；精确工具的 `toolPolicies.maxArgumentsBytes` 可以声明符合宿主硬上限的有限值，仍应按实际业务设限。Native appData 最多 256 KiB、MCP 结果最多 1 MiB、HTML 最多 16 MiB、资源解码总量最多 8 MiB。Text Inspector 进阶参考在原文 JSON UTF-8 超过 48,000 字节时仍返回文字检查结果并省略交互数据；这个阈值不是所有插件的通用要求。
 
 ## 构建、安装和更新
 
-作者复制完整目录后执行 `npm ci`（首次新建锁文件用 `npm install`）和 `npm run build`。package.json/package-lock.json 锁定官方 `@modelcontextprotocol/ext-apps` 1.1.2，以 esbuild 正常打包模块。依赖准备需要 npm 或本地缓存；安装产物 `ui/panel.html` 是完整离线单文件，安装时不构建，也不下载依赖。不得分发 node_modules、使用 CDN、外部脚本/字体或私有页面 SDK。
+作者生成独立工程后使用 Node.js 24 执行 `npm ci` 和 `npm run build`。package.json/package-lock.json 锁定官方 `@modelcontextprotocol/ext-apps` 1.1.2，以 esbuild 打包页面；MCP 另将官方 SDK 1.29.0 打包进服务入口。依赖准备需要 npm 或本地缓存，默认工程最终安装的 `dist/ui/panel.html` 是单文件，后台入口也已构建，安装时不构建、不下载依赖。不得分发 node_modules、使用 CDN、外部脚本/字体或私有页面 SDK。完整检查和打包见 [验证与交付](verification.md)。
 
 修改源码后重建 HTML，增加插件版本，按原 install-local/重新导入流程升级。不修改用户安装快照和 dataDir；新权限仍按原规则批准。安装需要 ui:render/ui:invoke-own-tools，仍需实际工具权限、角色 allowedTools、deny 与环境检查。
 

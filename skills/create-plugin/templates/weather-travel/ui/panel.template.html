@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天气与出行</title>
+  <style>/* UI_STYLES */</style>
+</head>
+<body>
+  <main id="panel" data-ui>
+    <header class="heading"><h1 id="app-name">天气与出行</h1><button type="button" id="fullscreen" hidden>全屏</button></header>
+    <section aria-labelledby="weather-heading">
+      <h2 id="weather-heading">目的地天气</h2>
+      <form id="search-form" class="search-row">
+        <label class="grow" for="city-query">城市名称<input id="city-query" type="search" autocomplete="off" required maxlength="100"></label>
+        <button type="submit" id="search">搜索</button>
+      </form>
+      <p id="search-status" class="muted" role="status">搜索城市，再选择具体地点。</p>
+      <ul id="places" class="plain-list" aria-label="城市搜索结果"></ul>
+      <details id="favorites-section"><summary>收藏城市</summary><ul id="favorites" class="plain-list"></ul><p id="favorites-empty" class="muted">选择城市后可收藏，方便下次查看。</p></details>
+      <div id="forecast" hidden>
+        <div class="section-heading"><div><h3 id="forecast-place"></h3><p id="current" class="current"></p></div><button type="button" id="refresh-weather">刷新天气</button></div>
+        <p id="weather-meta" class="muted"></p>
+        <div class="actions"><button type="button" id="favorite-toggle">收藏城市</button><button type="button" id="compare-add">加入比较</button><button type="button" id="add-weather-entry">添加当天出行</button><button type="button" id="weather-selection" hidden>引用当天预报到聊天</button></div>
+        <div id="days" class="day-strip" role="group" aria-label="选择预报日期"></div>
+        <figure id="hourly"><figcaption id="hourly-caption"></figcaption><div id="hourly-chart"></div></figure>
+        <details><summary>逐小时数值</summary><div class="table-scroll"><table><caption class="sr-only">所选日期逐小时预报</caption><thead><tr><th scope="col">时间</th><th scope="col">气温 °C</th><th scope="col">降水 %</th><th scope="col">风速 km/h</th></tr></thead><tbody id="hours"></tbody></table></div></details>
+        <p class="source muted">天气来源：<a id="weather-source" target="_blank" rel="noreferrer">Open-Meteo</a> · 预报可能变化，请出发前刷新。</p>
+      </div>
+      <section id="comparison-section" hidden aria-labelledby="comparison-heading"><div class="section-heading"><h3 id="comparison-heading">城市比较</h3><span class="muted">最多 3 个城市</span></div><div id="comparison"></div></section>
+    </section>
+    <section id="trip-section" aria-labelledby="trip-heading">
+      <div class="section-heading"><h2 id="trip-heading">出行备忘</h2><button type="button" id="refresh-plan">读取新版</button></div>
+      <label for="plan-title">行程名称<input id="plan-title" maxlength="160" disabled></label>
+      <div class="save-line"><span id="save-state" role="status">正在读取…</span><span id="revision" class="muted"></span><button type="button" id="save" disabled>保存草稿</button><button type="button" id="check-save" hidden>核实原保存</button></div>
+      <p id="plan-error" class="error" role="status"></p>
+      <aside id="conflict" hidden aria-labelledby="conflict-heading">
+        <h3 id="conflict-heading">新版与当前草稿不同</h3><p class="muted">编辑区保留了你的输入。先对照新版调整内容，再以新版为起点保存；也可以明确替换为新版。</p>
+        <details open><summary id="remote-version">查看新版</summary><pre id="remote"></pre></details>
+        <details id="recovered-section" hidden><summary>后台保留的冲突草稿</summary><pre id="recovered"></pre></details>
+        <div class="actions"><button type="button" id="merge">已手工合并，以新版继续</button><button type="button" id="adopt">采用新版…</button></div>
+        <div id="adopt-confirmation" hidden><p>采用新版会替换编辑区当前内容。</p><div class="actions"><button type="button" id="confirm-adopt">确认采用所查看版本</button><button type="button" id="cancel-adopt">保留当前草稿</button></div></div>
+      </aside>
+      <p id="entries-empty" class="muted">添加一条出行，记录日期、地点和安排。</p>
+      <div id="entries"></div>
+      <div class="actions"><button type="button" id="add-entry" disabled>添加出行</button><button type="button" id="selection" hidden>引用所选条目到聊天</button></div>
+      <p id="selection-help" class="muted" hidden>勾选条目并确认保存后可引用，在聊天中填写要求并发送。</p>
+    </section>
+    <details id="export-section"><summary>导出行程</summary>
+      <p class="muted">先确认保存，再选择工作区内的文件路径。导出会请求宿主确认。</p>
+      <label for="export-path">保存路径<input id="export-path" placeholder="trips/行程.md" autocomplete="off"></label>
+      <label for="export-format">文件格式<select id="export-format"><option value="markdown">Markdown (.md)</option><option value="json">JSON (.json)</option></select></label>
+      <label class="check-label"><input id="overwrite" type="checkbox">允许覆盖同名文件</label>
+      <div class="actions"><button type="button" id="export" disabled>导出文件</button><button type="button" id="check-export" hidden>核实原导出</button></div>
+      <p id="export-status" class="muted" role="status"></p>
+    </details>
+    <p id="status" class="muted" role="status" aria-live="polite"></p>
+  </main>
+  <!-- UI_SCRIPT -->
+</body>
+</html>

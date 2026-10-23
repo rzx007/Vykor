@@ -1,0 +1,8 @@
+{
+  "id": "example.weather-travel",
+  "name": "weather-travel",
+  "displayName": "天气与出行助手",
+  "version": "1.0.0",
+  "toolPrefix": "WeatherTravel",
+  "backend": "native"
+}

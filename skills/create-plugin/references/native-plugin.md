@@ -30,6 +30,8 @@ ID 使用稳定的点分名称，name 使用小写连字符名称。组件路径
 
 Native 根 manifest 保持 schemaVersion 1；apps.json 使用 schemaVersion 1，Native Tool 通过 metadata.appData 提供页面数据。页面使用官方 MCP Apps API，具体接口见 [插件 UI](plugin-apps.md)。
 
+默认完整工程由 `../scripts/create-plugin.mjs` 生成，源码在 `../templates/weather-travel/`。根 `plugin.config.json` 包含 `id`、`name`、`displayName`、`version`、`toolPrefix`、`backend`；`src/identity.mjs` 据此导出实际工具名称、`ui://<name>/panel` 和 `<name>://trip`。工具名称都由 `toolPrefix` 加业务 key 组成，清单、页面、后台与 Skill 使用同一身份来源。初始化新产品时运行生成器，避免只改展示名却继续注册旧工具。
+
 ## 市场图标与使用示例
 
 在根 manifest 补充以下可选字段，市场与已安装详情共用这些信息；不是在 apps.json 或市场清单另维护一份：
@@ -76,9 +78,11 @@ export const registerTools = registration => [{
 
 `registerTools` 和 `invoke` 都可以异步返回。工具名称是全局名称，不会自动加插件前缀，因此要选择独特名称。静态校验、导入不会执行入口；激活时才由 Tool Host 子进程 import。
 
-注册上下文提供 `plugin`、`permissions`、`log(level, message)`；调用上下文提供 `plugin`、`permissions`、`cwd`、可选 `sessionId`、`deadline`、`signal`。`plugin` 包含 id、name、version、root；deadline 是 Unix 毫秒时间戳。
+注册上下文提供 `plugin`、`permissions`、`log(level, message)`；调用上下文提供 `plugin`、`permissions`、`cwd`、可选 `sessionId`、`runId`、`toolResult`，以及 `deadline`、`signal`。`plugin` 包含 `id`、`name`、`version`、`root`、`dataDir`；`deadline` 是 Unix 毫秒时间戳。
 
-`cwd` 是项目目录，`plugin.root` 才是插件自己的根目录。读取附属资源时用 `context.plugin.root` 或模块相对 URL。没有 settings、terminal、jobs、工具注册表、统一密钥或持久数据注入 API；不要猜测内部字段或宿主环境变量。
+`cwd` 是工作区，`plugin.root` 是当前插件快照，`plugin.dataDir` 是宿主分配的稳定插件数据目录，不随安装版本和 cwd 改变。附属资源从 `plugin.root` 或模块相对 URL 读取，收藏、缓存、数据库等写入 `plugin.dataDir`；会话私有数据再按真实 `sessionId` 隔离。需要会话的数据操作缺少 sessionId 时应报错，不能退回共享默认会话。数据目录、会话 ID 和后台地址不得由工具参数指定。
+
+`toolResultInput` 可声明哪个输入属性是之前的工具调用 ID；宿主只解析当前 Run 中真实、受限的结果，并通过只读 `context.toolResult` 提供 `toolUseId`、`toolName`、`content` 和可选 `isError`。它不是任意历史查询。没有 settings、terminal、jobs、工具注册表或统一密钥注入 API；不要猜测其他内部字段或宿主环境变量。
 
 返回 `ToolResult`：必需的 `content` 数组，加可选 `isError`、`failureKind`、`metadata`。不要直接返回字符串。输入的关键业务条件还应自行检查；宿主只支持常用 JSON Schema 约束，不是完整实现。`maxLength` 按 UTF-16 代码单元计数。
 
@@ -104,6 +108,8 @@ export const registerTools = registration => [{
 批准项是 `filesystem:workspace:read` 和 `tool:filesystem:workspace:read`；不是 `workspace.read`。插件级声明与 Tool 条目请求必须匹配，不要为了消除错误请求所有权限。其他权限从当前安装预览中确认，不凭空编造。
 
 Node Tool 目前仅在 local 环境激活。子进程隔离不是完整系统调用沙箱，权限声明不等于 Node 文件 API 被自动拦截。不得把本地路径直接用于 WSL/远程环境。
+
+天气模板将网络查询、插件数据操作和工作区导出分成独立 Native 入口，构建到 `dist/native/network.mjs`、`data.mjs`、`export.mjs`。网络只访问固定的 `api.open-meteo.com`、`geocoding-api.open-meteo.com` HTTPS 地址，不接受任意 URL。有限自动保存只给 app-only 的 `SavePlanDraft`、`SetFavorite`；根清单声明 `permissions.pluginData: ["write"]`，页面后端为这两个精确工具配置 `authorization: "plugin-data-write"`，安装批准项为 `pluginData:write`。详细边界见 [插件 UI](plugin-apps.md)。模型的 `ApplyPlanOperations` 和工作区 `ExportPlan` 保留普通确认。
 
 ## 其他组件
 
@@ -150,4 +156,26 @@ MCP 文件示例：
 {"servers":{"my-docs":{"type":"http","url":"https://service.example.invalid/mcp"}}}
 ```
 
-使用前必须替换成用户选择的真实服务。stdio 用 command 和可选 args/env，http/sse 用 url。宿主不会自动下载依赖、认证服务、展开插件根变量或给名称加前缀。静态加载成功不代表连接和工具发现成功。
+使用前必须替换成用户选择的真实服务。stdio 使用 `command` 和可选 `args`、`env`、`cwd`，http/sse 使用 `url`。宿主不会自动下载依赖、认证服务或给名称加前缀。静态加载成功不代表连接和工具发现成功。
+
+安装插件的 stdio 配置支持以下**完整值**绑定；它不是任意字符串插值，`prefix-${VYKOR_PLUGIN_ROOT}` 等拼接不会展开：
+
+```json
+{
+  "servers": {
+    "my-weather": {
+      "type": "stdio",
+      "command": "node",
+      "cwd": "${VYKOR_PLUGIN_ROOT}",
+      "args": ["dist/server.mjs"],
+      "env": {
+        "VYKOR_WEATHER_DATA_DIR": "${VYKOR_PLUGIN_DATA_DIR}",
+        "VYKOR_WEATHER_SESSION": "${VYKOR_SESSION_ID}",
+        "VYKOR_WEATHER_WORKSPACE": "${VYKOR_WORKSPACE_ROOT}"
+      }
+    }
+  }
+}
+```
+
+`cwd` 的插件根和 dataDir 由插件加载阶段绑定，会话值与工作区由实际运行会话绑定；会话值是不透明标识，不能据此推断用户身份。天气 MCP 服务必须检查这三个环境变量存在且已解析，缺少时停止启动；不能退回 `process.cwd()`、临时目录或固定会话。不要从工具参数补入这些值，也不要把密钥放进配置。MCP 版本依赖打包到 `dist/server.mjs`，接收者安装 ZIP 后无需安装 node_modules。

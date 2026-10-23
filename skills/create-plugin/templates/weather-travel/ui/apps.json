@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "backends": [
+    {
+      "id": "weather",
+      "kind": "native-tools",
+      "resources": [
+        {
+          "uri": "ui://weather-travel/panel",
+          "entry": "./dist/ui/panel.html"
+        }
+      ],
+      "tools": [
+        {
+          "tool": "WeatherTravelSearchPlaces",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelGetForecast",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelReadPlan",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelApplyPlanOperations",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelSavePlanDraft",
+          "visibility": [
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelReadFavorites",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelSetFavorite",
+          "visibility": [
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelExportPlan",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        },
+        {
+          "tool": "WeatherTravelGetOperation",
+          "visibility": [
+            "model",
+            "app"
+          ],
+          "ui": {
+            "resourceUri": "ui://weather-travel/panel"
+          }
+        }
+      ],
+      "toolPolicies": [
+        {
+          "tool": "WeatherTravelSavePlanDraft",
+          "authorization": "plugin-data-write"
+        },
+        {
+          "tool": "WeatherTravelSetFavorite",
+          "authorization": "plugin-data-write"
+        }
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "weather-travel",
+      "title": "天气与出行助手",
+      "backend": "weather",
+      "resourceUri": "ui://weather-travel/panel",
+      "availability": "session"
+    }
+  ]
+}
