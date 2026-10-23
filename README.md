@@ -255,6 +255,8 @@ vk config set plugins.enabled false|true
 
 页面统一使用官方 MCP Apps，由 `components.apps` 声明；Native Tool 与 MCP Server 后台复用原工具权限、审计和持久 Run。旧 Native UI 已退役，历史工具文字和回执保留，新导入不再接受 `components.ui`。见 [原生插件编写指南](docs/native-plugin-authoring.md)与 [MCP Apps 设计](docs/superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)。
 
+Excalidraw、研究与写作、办公文档的源码、测试、打包和发布统一由 [vykor-plugins 官方插件仓库](https://github.com/rzx007/vykor-plugins/tree/main/plugins)维护，通过插件市场独立安装。Vykor 宿主仓库维护插件协议、SDK、create-plugin Skill、天气模板和示例；第三方插件保留独立仓库，通过固定提交的 PR 申请市场收录。开发和发布入口见 [原生插件编写指南](docs/native-plugin-authoring.md#源码与贡献位置)与[发布说明](docs/release-process.md#官方插件独立发布)。
+
 Auth、provider、model 的关系和本地存储规则见 [docs/auth-provider-model.md](docs/auth-provider-model.md)。
 Workflow CLI 和 TUI `/workflow`（统一 Jobs Panel 的别名）的完整用法见 [docs/workflow-cli.md](docs/workflow-cli.md)。
 `vk provider use <name>` 默认只切换供应商；要同时切模型请加 `-m/--model`，例如 `vk provider use deepseek -m deepseek-chat`。

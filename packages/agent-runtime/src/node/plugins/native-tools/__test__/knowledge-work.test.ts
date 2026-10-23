@@ -1,8 +1,7 @@
 import { type ToolDefinition } from "@vykor/agent-contracts";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { QueryEngine, ToolRegistry } from "@vykor/core";
 import { loadNativePlugin, requestedPluginPermissions, validateNativePlugin } from "@vykor/plugins";
 import { SkillRegistry } from "@vykor/skills";
@@ -11,7 +10,10 @@ import { activateNativePluginTools } from "../activate.js";
 import { createWebFetchTool } from "@vykor/tools";
 import { createRunCapabilityView } from "../../run-capability-view.js";
 
-const pluginRoot = fileURLToPath(new URL("../../../../../../../plugins/knowledge-work/", import.meta.url));
+// Optional compatibility coverage against an explicit official-source checkout.
+// Normal host tests do not require the marketplace repository.
+const officialPlugins = process.env.VYKOR_OFFICIAL_PLUGINS_DIR;
+const pluginRoot = officialPlugins ? resolve(officialPlugins, "knowledge-work") : "";
 
 class TestRegistry extends ToolRegistry {}
 
@@ -49,7 +51,7 @@ function output(result: Awaited<ReturnType<ToolDefinition["execute"]>>) {
 
 const source = { id: "s1", url: "https://example.com/docs", text: "Supports text files.\nPDF files are not supported." };
 
-describe("knowledge-work official plugin (real Tool Host)", () => {
+describe.skipIf(!officialPlugins)("knowledge-work official plugin (real Tool Host)", () => {
   it("loads every research/writing tool and verifies actual WebFetch records rather than supplied summaries", async () => {
     await withKnowledge(async (checker, cwd, registry) => {
       for (const name of ["KnowledgeResearchBudget", "KnowledgeEvidenceCompress", "KnowledgeAcademicSearch", "KnowledgeWritingGate", "KnowledgeContentAudit", "KnowledgeResearchSources"]) expect(registry.has(name)).toBe(true);

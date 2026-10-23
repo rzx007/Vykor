@@ -21,7 +21,6 @@
     }
   },
   "include": [
-    "../../examples/plugins/text-inspector/tools/**/*.mjs",
-    "../../plugins/knowledge-work/tools/**/*.mjs"
+    "../../examples/plugins/text-inspector/tools/**/*.mjs"
   ]
 }

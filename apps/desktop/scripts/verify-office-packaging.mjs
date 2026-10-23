@@ -24,7 +24,7 @@ assert.equal(hash(await readFile(engine)), asset[1], "packaged OfficeCLI checksu
 const license = await readFile(join(resources, "office-engine/OFFICECLI-LICENSE"), "utf8")
 assert.equal(
   license,
-  await readFile(join(desktop, "../../plugins/office-work/licenses/OFFICECLI-LICENSE"), "utf8"),
+  await readFile(join(desktop, "../../packages/services/src/office/OFFICECLI-LICENSE"), "utf8"),
   "OfficeCLI license missing or changed"
 )
 const builder = await readFile(join(desktop, "electron-builder.yml"), "utf8")

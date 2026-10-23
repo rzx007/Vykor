@@ -56,6 +56,12 @@
 - [Protocol](../packages/protocol/src/index.ts)统一公开市场通信类型；Client 仍只直接依赖 Protocol。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。
 - [桌面确认](../apps/desktop/src/main/features/plugin/marketplace-service.ts)和[市场界面](../apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/marketplace.tsx)：窗口绑定、用户确认和展示。
 
-正式插件源码统一放在 [plugins](../plugins/README.md)，由市场单独安装，桌面不再附带研究与写作或办公文档的插件归档。Excalidraw 位于 `plugins/excalidraw`。已有安装和应用草稿不受影响；原本地安装需明确关联市场来源后才能从该来源更新。
+## 源码、贡献与发布
 
-发布仓库按固定 Vykor 提交构建插件，采用全新临时检出和确定性 ZIP。先发布不可变 Release，后更新 Pages 目录；同版本摘要变化会拒绝发布，旧版本保留。
+[官方插件源码](https://github.com/rzx007/vykor-plugins/tree/main/plugins)、测试、打包和发布统一由市场仓库维护：Excalidraw 位于 `plugins/excalidraw`，研究与写作位于 `plugins/knowledge-work`，办公文档位于 `plugins/office-work`。宿主保留协议、SDK、create-plugin Skill、天气模板及 `examples/plugins/`，桌面不附带正式插件归档。已有安装和应用草稿不受影响；原本地安装需明确关联市场来源后才能从该来源更新。
+
+市场仓库的 `marketplace.json` 是构建输入，不是公开索引。官方条目使用 `localPath` 指向市场仓库内的插件；代码、测试和版本修改通过该仓库的 PR 一起审查。第三方插件保留独立仓库；收录或升级 PR 固定 `source.repository`、完整 40 位 `source.commit` 与 `source.path`，构建时干净检出该提交。`source.path` 必须是该提交内真实子目录（如 `plugins/my-plugin`），不能使用仓库根 `.`、空段、`.`/`..` 段、冒号或反斜杠。贡献步骤见[市场贡献说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)。
+
+[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)保持独立仓库，当前待收录；需先改为真实源码子目录或另行协调兼容发布。已发布宿主在检查 `requires.host` 前解析来源路径，不能用最低版本要求跳过不兼容路径，否则整个市场目录都会被拒绝；不把源码复制到市场来绕过目录要求。
+
+官方产物记录市场 CI 实际 checkout 的提交，不能拿旧提交冒充未提交源码。本地带未提交改动的构建仅作预览，不能发布；正式构建检查、来源记录和预览发布阻断均由市场仓库负责。生成确定性 ZIP 后，先发布不可变 Release，后更新 Pages 目录；同版本摘要变化会拒绝发布，旧版本保留。宿主和插件分别发版，见[官方插件独立发布](./release-process.md#官方插件独立发布)。

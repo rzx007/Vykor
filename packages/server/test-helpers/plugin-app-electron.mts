@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { mkdtempSync, readFileSync } from "node:fs"
 import { cp } from "node:fs/promises"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { installLocalNativePlugin } from "@vykor/plugins"
 import { createDefaultNodeAgent } from "@vykor/agent-runtime"
@@ -27,8 +27,10 @@ const realNotes = process.env.VYKOR_APP_BACKEND === "notes-app"
 const realExcalidraw = process.env.VYKOR_APP_BACKEND === "excalidraw"
 setupPhase("before-install")
 const fixture = realExcalidraw ? await (async () => {
+  const officialPlugins = process.env.VYKOR_OFFICIAL_PLUGINS_DIR
+  if (!officialPlugins) throw new Error("Excalidraw compatibility tests require VYKOR_OFFICIAL_PLUGINS_DIR pointing to the official marketplace plugins directory")
   const sourcePath = join(root, "excalidraw")
-  await cp(join(workspace, "plugins/excalidraw"), sourcePath, { recursive: true,
+  await cp(resolve(officialPlugins, "excalidraw"), sourcePath, { recursive: true,
     filter: path => !path.split(/[\\/]/).includes("node_modules") })
   setupPhase("source-copied")
   const installed = await installLocalNativePlugin({ sourcePath, cwd: root, scope: "user",

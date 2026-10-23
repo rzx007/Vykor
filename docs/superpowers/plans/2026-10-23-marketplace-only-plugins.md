@@ -1,8 +1,10 @@
 # 正式插件统一由市场分发
 
-> 状态：当前实施计划。研究与写作、办公文档停止作为桌面附带归档；Excalidraw 归入正式插件目录。
+> 状态：已实施的分发调整记录；以下宿主路径、版本与验证是当时结果。后续源码归属已更新为市场仓库。
 
-## 范围与边界
+当前 Excalidraw、研究与写作、办公文档的权威源码、测试、打包和发布位于[市场仓库 plugins](https://github.com/rzx007/vykor-plugins/tree/main/plugins)，不再保留宿主 `plugins/` 副本。官方条目使用 `localPath`，CI 记录实际 checkout 提交；本地未提交改动仅作预览、不能发布。第三方插件保持独立仓库，通过固定 40 位提交的 PR 收录。现行流程见[作者指南](../../native-plugin-authoring.md#源码与贡献位置)。
+
+## 当时的范围与边界
 
 - `plugins/` 是正式插件的权威源码目录，桌面安装包不携带插件 ZIP。
 - Excalidraw 从示例目录迁到 `plugins/excalidraw`，同步测试夹具和文档引用；插件 ID 不变。
@@ -23,16 +25,16 @@
 - Excalidraw 的自动保存、草稿和选区引用使用原流程；搬迁不改变工具执行逻辑。
 - 办公归档包含声明支持平台的固定引擎及许可，官方 Skill 摘要检查和归档大小上限不放宽。
 
-## 本次发行
+## 当时的发行
 
-| 插件 ID | 版本 | 权威源码 |
+| 插件 ID | 当时版本 | 当前权威源码 |
 | --- | --- | --- |
-| `dev.vykor.excalidraw` | `1.0.2` | `plugins/excalidraw` |
-| `vykor.knowledge-work` | `1.1.1` | `plugins/knowledge-work` |
-| `vykor.office-work` | `0.12.3` | `plugins/office-work` |
+| `dev.vykor.excalidraw` | `1.0.2` | [市场仓库 Excalidraw](https://github.com/rzx007/vykor-plugins/tree/main/plugins/excalidraw) |
+| `vykor.knowledge-work` | `1.1.1` | [市场仓库研究与写作](https://github.com/rzx007/vykor-plugins/tree/main/plugins/knowledge-work) |
+| `vykor.office-work` | `0.12.3` | [市场仓库办公文档](https://github.com/rzx007/vykor-plugins/tree/main/plugins/office-work) |
 
 已通过真实市场归档打包、宿主解压与组件加载：Excalidraw 1 个 Skill、1 个 MCP 后台与1个应用；研究与写作 3 个 Skill、2 个 Agent、3 个工具入口；办公文档 5 个 Skill、3 个 Agent、1 个工具入口。办公归档约 70 MiB，包含六个平台引擎。
 
 桌面定向回归 81 项及 Node/Web 类型检查通过；Excalidraw 35 项单元测试、实际 stdio 服务及类型检查通过；两个 Native Tool 插件独立检查、文档和旧 UI 退役检查通过。Windows Word 预览在首次并发检查中操作超时，单独复跑通过，未改变业务超时或预览逻辑。
 
-发布由用户明确授权：只提交本次文件，推送源码后将发布仓库锁定到该提交，沿用先 Release 后市场目录的顺序；其他任务未提交改动保留。
+当时的发布由用户明确授权：只提交该轮文件，推送源码后将发布仓库锁定到该提交，沿用先 Release 后市场目录的顺序；其他任务未提交改动保留。这是历史授权记录，不代表后续迁移获得新的提交、推送或发布授权。

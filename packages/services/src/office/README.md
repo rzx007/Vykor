@@ -4,9 +4,9 @@
 
 仅支持 docx/xlsx/pptx，原件上限 64 MB；ZIP 目录拒绝宏、加密和过大解压体积。文字按 Read 的行范围返回；HTML 上限 8 MB。PPT 按页、Excel 按工作表切换，Word 整篇连续展示。HTML 属近似排版，桌面使用禁止脚本和联网的 iframe，只读展示。
 
-开发准备：node scripts/prepare-office-engine.mjs apps/desktop/out/office-engine。桌面构建自动准备固定版本与校验值的二进制及许可证，安装包放在 resources/office-engine。其他进程可设置 VYKOR_OFFICECLI_PATH 指定同版本引擎。
+开发准备：node scripts/prepare-office-engine.mjs apps/desktop/out/office-engine。桌面构建按本目录 `office-engine.mjs` 固定的版本与校验值准备二进制，并携带本目录的 [OfficeCLI 许可证](./OFFICECLI-LICENSE)，安装包放在 resources/office-engine。下载缓存位于 `packages/services/resources/officecli/`，准备与打包检查均不读取插件目录。其他进程可设置 VYKOR_OFFICECLI_PATH 指定同版本引擎。
 
-office-work 的 build.ps1 将本目录的 office-engine.mjs 复制进插件 ZIP，复用同一份进程调用实现；插件仍独立携带二进制，并自行负责修改策略、争锁及成果记录。agent-runtime 无 Office 专用逻辑。
+办公文档插件在独立的插件市场仓库维护自己的引擎模块、二进制和许可证，单独构建与发行；宿主只维护这里的读取功能。插件继续自行负责修改策略、争锁及成果记录。agent-runtime 无 Office 专用逻辑。
 
 Word 文字提取使用段落查询，包含表格中的段落并保留行、列路径。引擎输出超过上限或被截断时明确报错，不将部分内容当成完整结果。
 
@@ -29,6 +29,7 @@ Word 文字提取使用段落查询，包含表格中的段落并保留行、列
 | [office-documents.ts](./office-documents.ts) | `MAX_OFFICE_BYTES`、`readOfficeBytes`、`readOfficeFile` |
 | [office-engine.d.mts](./office-engine.d.mts) | Office 引擎的 TypeScript 类型声明 |
 | [office-engine.mjs](./office-engine.mjs) | `OFFICE_VERSION`、`OFFICE_ASSETS`、`hash` 等 |
+| [OFFICECLI-LICENSE](./OFFICECLI-LICENSE) | 宿主准备和安装包携带的 OfficeCLI 许可证 |
 | [office-text.ts](./office-text.ts) | `wordParagraphText`、`assertCompleteOfficeText` |
 
 ## 测试与维护

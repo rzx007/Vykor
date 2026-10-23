@@ -1,10 +1,12 @@
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import { validateNativePlugin } from "../manifest/validate.js";
 import { loadNativeSkills } from "../components/skills.js";
 
-it("loads the main Agent entry and four official Skills with their plugin source", async () => {
-  const root = fileURLToPath(new URL("../../../../plugins/office-work/", import.meta.url));
+const officialPlugins = process.env.VYKOR_OFFICIAL_PLUGINS_DIR;
+
+it.skipIf(!officialPlugins)("loads the main Agent entry and four official Skills with their plugin source", async () => {
+  const root = resolve(officialPlugins!, "office-work");
   const validation = await validateNativePlugin(root);
   expect(validation.plugin).toBeDefined();
   const loaded = await loadNativeSkills(validation.plugin!);

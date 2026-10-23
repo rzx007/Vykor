@@ -1,7 +1,9 @@
 # GitHub 插件市场分阶段方案
 
-> 状态：当前实施方案；发布源、桌面市场和自定义源已实现，验收记录见文末。
+> 状态：市场初版已实施，验收记录见文末；本文保留当时的仓库分工和构建基线。
 > 日期：2026-10-22。
+
+> 当前维护位置（2026-10-23）：Excalidraw、研究与写作、办公文档的源码、测试、打包和发布统一在[市场仓库 plugins](https://github.com/rzx007/vykor-plugins/tree/main/plugins)，官方清单使用 `localPath`，发布来源取 CI 实际 checkout 提交。第三方插件继续以独立仓库及固定 40 位提交收录；宿主保留协议、SDK、Skill、天气模板和示例。现行步骤见[作者指南](../../native-plugin-authoring.md#源码与贡献位置)与[官方插件发布](../../release-process.md#官方插件独立发布)。
 
 ## 推荐方向
 
@@ -49,7 +51,7 @@
 - `.github/workflows/validate.yml`、`publish.yml`：分别执行只读校验和正式发布。
 - `README.md`、`CONTRIBUTING.md`、许可说明：安装入口、收录流程、来源和许可责任。
 
-首期插件来源固定为当前仓库的 `plugins/excalidraw`、`examples/plugins/text-inspector`、`examples/plugins/notes-app`。后续正式插件统一放在 Vykor 源码仓库的 `plugins/` 下，发布仓库只固定源码提交，不复制源码。2026-10-23 起 Excalidraw 已迁到正式目录，研究与写作、办公文档也改为市场分发；原有示例继续留在 `examples/plugins/`。
+初版曾从 Vykor 仓库的 `plugins/excalidraw`、`examples/plugins/text-inspector`、`examples/plugins/notes-app` 固定提交构建。后续将正式插件源码与发布一起迁入市场仓库，具体归属以文首当前维护说明为准；原有示例继续留在宿主 `examples/plugins/`。
 
 当前 Text Inspector、Notes 没有独立 LICENSE，Vykor 根目录也没有可直接继承的 LICENSE。建议这两个自有示例及新仓库自有脚本采用 MIT，在首次公开分发前补齐文件和清单许可字段；两个插件分别递增至 `1.2.2`、`1.0.2`，并将发布源锁定到包含这些修改的实际提交。Excalidraw 保留现有 MIT 和第三方完整声明，不统一改写上游许可。
 

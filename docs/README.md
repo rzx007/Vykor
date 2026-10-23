@@ -132,6 +132,7 @@
 - [原生插件开发第一阶段设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)：公开开发类型、五类组件指南、文本检查参考插件及真实调用和生命周期验收。
 - [Desktop 本地 Native Plugin 包导入](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)与[实施计划](./superpowers/plans/2026-09-09-desktop-native-plugin-zip-import.md)：插件页面可选择一个本地 Native `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，后台校验后直接安装或进行一次权限确认，也支持 Git URL 安装。
 - [插件市场](./plugin-marketplace.md)：官方与自定义 HTTPS 来源、浏览安装、手动更新、来源绑定及安装结果查询。
+- [官方插件源码与贡献](https://github.com/rzx007/vykor-plugins/tree/main/plugins)：Excalidraw、研究与写作、办公文档的源码、测试、打包和发布；宿主保留协议、SDK、Skill、模板与示例。
 - [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)与[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)：重新导入同一插件 ID 的 Native 插件包完成手动更新或修复，只在新增权限时重新确认，并保留旧记录到新快照成功切换。
 - [Native Plugin Runtime 诊断 v1](./superpowers/specs/2026-09-14-native-plugin-runtime-diagnostics-v1-design.md)与[实施计划](./superpowers/plans/2026-09-14-native-plugin-runtime-diagnostics-v1.md)：Plugin Service 返回 `runtimeStatus`，Desktop 插件页显示已禁用、待生效、已加载、部分可用或加载失败，并给出一条建议动作。
 - [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：运行诊断 v1、作者体验小修和 Git 来源完成后的接手说明；Agent 对话安装、`output_styles`、自动更新、Marketplace、npm 和归档 URL 继续暂缓。

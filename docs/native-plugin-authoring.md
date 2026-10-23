@@ -2,17 +2,25 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。带页面的新插件优先从 [天气与出行模板](../skills/create-plugin/templates/weather-travel/README.md) 开始；它可生成 Native Tool 或 MCP 服务两种后台，使用同一官方 MCP Apps 页面。作者准备构建依赖，用户安装已构建的插件包。
+本文面向独立开发插件、维护官方插件或修改宿主示例的作者。带页面的新插件优先从 [天气与出行模板](../skills/create-plugin/templates/weather-travel/README.md) 开始；它可生成 Native Tool 或 MCP 服务两种后台，使用同一官方 MCP Apps 页面。作者准备构建依赖，用户安装已构建的插件包。
 
 完整的协议、调用流程图和结果返回规则见 [MCP Apps 开发说明](./mcp-apps.md)（[交互版](./mcp-apps.html)）。Native Tool 是 Vykor 的工具接口，不是旧原生界面；两种后台的页面都统一显示在右侧面板。
 
+## 源码与贡献位置
+
+- 官方插件在市场仓库直接维护：[Excalidraw](https://github.com/rzx007/vykor-plugins/tree/main/plugins/excalidraw)、[研究与写作](https://github.com/rzx007/vykor-plugins/tree/main/plugins/knowledge-work)、[办公文档](https://github.com/rzx007/vykor-plugins/tree/main/plugins/office-work)。修改代码、测试、许可证和包版本后，向该仓库提交 PR；市场清单使用 `localPath` 指向市场仓库内的插件目录。
+- 新建的第三方插件保存在自己的仓库，可安装工程放在真实子目录（如 `plugins/my-plugin`）。先在独立仓库完成检查和源码提交，再向市场提交固定 `source.repository`、40 位 `source.commit` 和实际子目录 `source.path` 的收录或升级 PR；不能用仓库根 `.`，不复制源码到市场。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)保持独立、待收录，需先调整源码子目录或另行协调兼容发布。
+- Vykor 宿主维护协议、SDK、create-plugin Skill、天气模板与 `examples/plugins/`。只有修改这些公共接口、模板或示例时才改宿主，不在宿主恢复正式插件源码。
+
+详细步骤以[市场贡献说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)为准；官方包从市场 CI 实际检出的提交构建，未提交改动只能生成本地预览，见[官方插件独立发布](./release-process.md#官方插件独立发布)。
+
 ## 创建完整工程
 
-在仓库根目录执行以下命令。新目录不能已经存在；需要 Node.js 24：
+持有本仓库时，在仓库根目录执行以下命令，将工程生成到相邻独立插件仓库的 `plugins/my-weather` 子目录；申请市场收录时，`source.path` 就是 `plugins/my-weather`。工程子目录不能已经存在；需要 Node.js 24。独立安装 Skill 的作者使用 Skill 绝对路径调用同一脚本：
 
 ```sh
-node skills/create-plugin/scripts/create-plugin.mjs --dir ./my-weather --id example.my-weather --name my-weather --backend native --display-name "我的天气助手"
-cd my-weather
+node skills/create-plugin/scripts/create-plugin.mjs --dir ../my-weather-repo/plugins/my-weather --id example.my-weather --name my-weather --backend native --display-name "我的天气助手"
+cd ../my-weather-repo/plugins/my-weather
 npm ci
 npm run build
 npm test
@@ -202,7 +210,7 @@ export const search = definePluginAppTool("search_notes");
 
 ### 自身数据自动保存
 
-Excalidraw 的完整例子见 [插件说明](../plugins/excalidraw/README.md)。根清单声明 permissions.pluginData 为 ["write"]，安装时明确批准 pluginData:write；后台在 toolPolicies 中将具体的应用专用保存工具声明为 authorization: "plugin-data-write"。两者缺一不可，model/app 双可见工具不会得到该授权。
+Excalidraw 的完整例子见[官方插件说明](https://github.com/rzx007/vykor-plugins/blob/main/plugins/excalidraw/README.md)。根清单声明 permissions.pluginData 为 ["write"]，安装时明确批准 pluginData:write；后台在 toolPolicies 中将具体的应用专用保存工具声明为 authorization: "plugin-data-write"。两者缺一不可，model/app 双可见工具不会得到该授权。
 
 宿主仍验证原插件快照、工具绑定、会话、参数和 Run；执行前先检查 deny、角色和运行环境，并继续执行 hook。授权只消除自身保存的重复确认，不能授权模型任务或工作区导出。插件进程仍是受信任的 Node 代码，这项声明本身不构成操作系统文件沙箱；作者必须固定数据目录，保存工具不接受任意文件路径。
 

@@ -84,3 +84,13 @@ pnpm release:cli -- 1.0.1
 ```
 
 必须写成与 GitHub tag 相同的 `x.y.z`，不能省略版本，也不能用 patch / minor / auto。
+
+## 官方插件独立发布
+
+Excalidraw、研究与写作、办公文档由 [vykor-plugins](https://github.com/rzx007/vykor-plugins)维护源码、测试、打包与 Release，不跟随 Desktop/CLI tag 发布。Vykor 宿主维护协议、SDK、create-plugin Skill、天气模板和示例；宿主发版不替官方插件生成安装包。
+
+1. 修改市场仓库 `plugins/<name>` 下的官方插件，同时更新清单、包版本、锁文件和必要的测试、许可证；通过市场 PR 审查。市场构建清单使用 `localPath`，以 CI 实际 checkout 的完整提交编号记录来源。
+2. 新建或升级第三方插件时，将可安装工程放在独立仓库的真实子目录（如 `plugins/my-plugin`），提交推送后再向市场提交 PR，固定 `source.repository`、40 位 `source.commit` 和实际子目录 `source.path`；不能用仓库根 `.`。第三方代码不迁入官方源码目录。GitHub 插件保持独立、待收录，需先调整源码子目录或另行协调兼容发布。
+3. 按[市场仓库说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)运行构建、测试、类型检查与归档验证。本地带未提交改动的官方构建只作预览，发布流程必须拒绝它；不能填写一个远端提交来替代本地实际内容。
+4. 正式 CI 从固定检出构建，核对实际 ZIP 的唯一清单、许可证、入口、SHA-256、大小及来源，再发布不可变 Release，最后部署 Pages 目录。已发布的同一版本不可覆盖；目录失败可重跑，插件内容变更需递增插件版本。
+5. 发布后回读公开目录并下载对应 ZIP，核对版本、来源提交、摘要和清单。插件 ID、权限、用户数据目录和现有应用草稿继续使用原有机制。

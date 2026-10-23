@@ -576,7 +576,7 @@
     },
     {
       "path": "docs/README.md",
-      "line": 142,
+      "line": 143,
       "text": "- [旧 Native UI 设计](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与 [旧固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)：历史资料，运行入口已退役；当前页面以 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)为准。",
       "reason": "Current retirement notice or historical verification reference."
     },
@@ -588,7 +588,7 @@
     },
     {
       "path": "docs/native-plugin-authoring.md",
-      "line": 414,
+      "line": 422,
       "text": "Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。页面入口统一为 `components.apps`，使用官方 MCP Apps SDK；旧 `components.ui` 仅供已安装包诊断与历史读取，新导入明确拒绝。Native Tool 的 SDK、Host、权限和数据目录保持独立。页面范围见 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。",
       "reason": "Current retirement notice or historical verification reference."
     },
@@ -3210,7 +3210,7 @@
     },
     {
       "path": "package.json",
-      "line": 31,
+      "line": 30,
       "text": "    \"check:retired-ui\": \"node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs\",",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },

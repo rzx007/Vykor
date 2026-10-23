@@ -29,7 +29,7 @@
     },
     "@vykor/agent-runtime#test": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**", "$TURBO_ROOT$/plugins/knowledge-work/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
     },
     "@vykor/server#test": {
       "dependsOn": ["^build"],
@@ -58,7 +58,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/examples/plugins/text-inspector/**",
-        "$TURBO_ROOT$/plugins/knowledge-work/**",
         "$TURBO_ROOT$/examples/plugins/notes-app/**",
         "$TURBO_ROOT$/skills/create-plugin/templates/weather-travel/**",
         "$TURBO_ROOT$/skills/create-plugin/assets/text-inspector/**",

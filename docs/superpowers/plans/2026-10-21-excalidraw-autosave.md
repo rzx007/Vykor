@@ -1,5 +1,7 @@
 # Excalidraw 自动保存与正式插件移植实施计划
 
+> 历史实施记录：`plugins/excalidraw` 是当时的宿主位置。2026-10-23 起源码、测试、打包与发布由[市场仓库](https://github.com/rzx007/vykor-plugins/tree/main/plugins/excalidraw)维护；此处保留原移植与验收过程。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. 用户已确认设计，连续实施并统一定向验证。
 
 **Goal:** 可安装、离线工作的 Excalidraw 插件，支持 Agent 建图、右侧编辑、自动保存、选区协作和导出，保留权限、回执与草稿。

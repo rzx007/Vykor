@@ -1,5 +1,7 @@
 # 插件介绍、图标与示例提示词设计
 
+> 历史设计：文中的内置研究与写作和 `plugins/knowledge-work` 为当时位置。2026-10-23 起该插件由[市场仓库](https://github.com/rzx007/vykor-plugins/tree/main/plugins/knowledge-work)维护和分发；宿主中的示例与 Skill 仍在原位置。
+
 ## 目标
 
 让仓库内的示例插件、内置「研究与写作」插件和随 create-plugin 分发的 Text Inspector 样例充分展示 Native Plugin 的图标、介绍和快速提示词。
