@@ -6,7 +6,7 @@
 
 | 目录 | 职责 |
 | --- | --- |
-| [src/kernel/](./src/kernel/README.md) | 不依赖本机配置的执行核心，管理运行、输入、事件和子 agent |
+| [src/kernel/](./src/kernel/README.md) | 负责推进 agent 任务、接收输入、发送进度通知和管理子任务；所需配置与工具由外层准备并传入 |
 | [src/node/](./src/node/README.md) | 接入配置、终端、工具、插件和文件系统，提供默认 Node agent |
 | [scripts/](./scripts/README.md) | 构建、发布包检查和执行核心依赖检查 |
 | [test-helpers/](./test-helpers/README.md) | 多个测试和其他包共用的插件夹具 |
