@@ -28,7 +28,7 @@
 | `agent-loader.ts` / `agent-definitions.ts` | frontmatter 加载与 builtin 合并 |
 | `index.ts` | 导出 + `COORDINATOR_SYSTEM_PROMPT` |
 
-真实 worker 执行在 `@vykor/tools` 的 `createAgentWorkflowRunner` / `Workflow` 工具，本包不依赖 swarm。
+真实 worker 执行由 `@vykor/agent-runtime/node/workflow` 的宿主和 runner 负责，`@vykor/tools` 的 Workflow 工具只适配调用；本包负责纯调度和团队数据接口。
 
 ## 测试
 

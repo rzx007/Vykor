@@ -128,9 +128,6 @@
       "@vykor/skills": [
         "../../packages/skills/src/index.ts"
       ],
-      "@vykor/swarm": [
-        "../../packages/swarm/src/index.ts"
-      ],
       "@vykor/terminal": [
         "../../packages/terminal/src/index.ts"
       ],
