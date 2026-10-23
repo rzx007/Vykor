@@ -2,7 +2,7 @@
 
 ## 默认使用方式
 
-插件直接加载 `vendor/officecli/skills` 下的四份官方技能：`officecli`、`officecli-docx`、`officecli-pptx`、`officecli-xlsx`。来源固定到内置引擎相同的 v1.0.139，原始 Git blob 与 SHA-256 记录在 `vendor/officecli/SOURCE.json`，原文不改写。没有安装全局技能或下载另一份引擎。
+插件直接加载 `vendor/officecli/skills` 下的四份官方技能：`officecli`、`officecli-docx`、`officecli-pptx`、`officecli-xlsx`。来源固定到插件归档中引擎相同的 v1.0.139，原始 Git blob 与 SHA-256 记录在 `vendor/officecli/SOURCE.json`，原文不改写。没有安装全局技能，运行时不下载引擎。
 
 三个专家加载通用技能与对应格式技能，使用 OfficeCLI 原生命令入口。插件自身的调用说明位于工具描述及专家指令中，说明参数传递、工作副本和结果交付；不复制官方文档制作方法。
 
@@ -46,4 +46,8 @@
 
 上游 skills/officecli/SKILL.md 为指向 ../../SKILL.md 的符号链接。插件将 v1.0.139 根目录 SKILL.md 的完整原文直接放入基础技能入口，不要求运行时解析链接；SOURCE.json 同时保留原链接及正文的 Git blob 与 SHA-256 来源。其他三份格式技能原文保持不变。
 
-打包脚本在生成 ZIP 前检查四份技能的入口、名称、Markdown 正文、固定版本来源和两种摘要，基础技能还检查关键章节与链接来源。生成 ZIP 后从包内重新执行相同检查；缺文件、只剩路径占位或正文被截断均使打包失败。专项回归测试覆盖这些失败情况。
+构建脚本检查四份技能的入口、名称、Markdown 正文、固定版本来源和两种摘要，基础技能还检查关键章节与链接来源。市场生成 ZIP 后可用同一校验脚本从包内重新执行检查；缺文件、只剩路径占位或正文被截断均使校验失败。专项回归测试覆盖这些失败情况。
+
+## 0.12.3 市场发行
+
+独立 Node 构建准备六个平台的固定版本程序和公共引擎模块，不依赖桌面打包。官方技能检查支持整个插件归档，只展开待验证的文本；Office 文档读取仍保留原有大小限制。升级沿用相同插件 ID、权限和 dataDir，文档操作与检查回执逻辑不变。

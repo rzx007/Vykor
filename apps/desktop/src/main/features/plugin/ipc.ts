@@ -150,7 +150,6 @@ export function createPluginIpcContribution(service: PluginIpcService): IpcContr
             const value = input as DesktopPluginArchiveImportInput
             return service.importArchive(event.sender, {
               cwd: value.cwd,
-              ...(value.bundledPlugin !== undefined ? { bundledPlugin: value.bundledPlugin } : {}),
             })
           },
         },

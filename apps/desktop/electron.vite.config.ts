@@ -8,9 +8,6 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
 import { browserAnnotationSelectorPlugin } from "./scripts/browser-annotation-selector-plugin"
-import { packageKnowledgeWorkPlugin, packageOfficeWorkPlugin } from "./scripts/package-bundled-plugin"
-
-import { supportsBundledOfficePlugin } from "./src/shared/office-platform"
 import { buildDocumentPreview } from "./scripts/document-preview-build"
 
 function copyRuntimeResources(): Plugin {
@@ -19,17 +16,7 @@ function copyRuntimeResources(): Plugin {
     async writeBundle(options) {
       const outputDirectory = resolve(options.dir ?? "out/main")
       const { prepareOfficeEngine } = await import(pathToFileURL(resolve("../../scripts/prepare-office-engine.mjs")).href)
-      const officeBinaryPath = await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
-      if (supportsBundledOfficePlugin(process.platform, process.arch)) {
-        await packageOfficeWorkPlugin(
-          resolve("../../plugins/office-work"),
-          resolve(outputDirectory, "../bundled-plugins"),
-          officeBinaryPath,
-          resolve("../../packages/services/src/office/office-engine.mjs")
-        )
-      } else {
-        rmSync(resolve(outputDirectory, "../bundled-plugins/office-work.zip"), { force: true })
-      }
+      await prepareOfficeEngine(resolve(outputDirectory, "../office-engine"))
       const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations")
       rmSync(migrationsDirectory, { recursive: true, force: true })
       cpSync(
@@ -40,10 +27,6 @@ function copyRuntimeResources(): Plugin {
       cpSync(
         resolve("../../packages/agent-runtime/src/node/plugins/native-tools/host-entry.mjs"),
         resolve(outputDirectory, "host-entry.mjs")
-      )
-      await packageKnowledgeWorkPlugin(
-        resolve("../../plugins/knowledge-work"),
-        resolve(outputDirectory, "../bundled-plugins")
       )
     },
   }

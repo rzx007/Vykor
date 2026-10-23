@@ -36,7 +36,7 @@
 
 ## Task 3：Excalidraw 插件
 
-- [x] 从锁定上游移植为 examples/plugins/excalidraw 的完整可安装插件；适配声明、SDK、数据目录和构建。
+- [x] 从锁定上游移植为 plugins/excalidraw 的完整可安装插件；适配声明、SDK、数据目录和构建。
 - [x] 连续编辑自动合并、单在途保存、ACK 后确认；冲突与未知保留草稿。
 - [x] 当前文档/选区引用固定 documentId、revision 和元素 ID；Agent 修改前读取最新版本。
 - [x] 文档资源更新、撤销重做、标签切换、恢复和三种格式导出；导出路径检查和覆盖确认。

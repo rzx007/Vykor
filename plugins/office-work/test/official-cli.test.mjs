@@ -2,12 +2,13 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join} from 'node:path';
 import {registerTools} from '../tools/index.mjs';
 import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 
 test('official skills remain byte-identical to their pinned source and are the active skill directory',async()=>{
-  const root=resolve('plugins/office-work');
+  const root=fileURLToPath(new URL('..',import.meta.url));
   const source=JSON.parse(await readFile(join(root,'vendor/officecli/SOURCE.json'),'utf8'));
   const manifest=JSON.parse(await readFile(join(root,'.vykor-plugin/plugin.json'),'utf8'));
   assert.equal(source.ref,'v1.0.139');assert.equal(source.files.length,4);
@@ -32,7 +33,7 @@ test('official skill CLI entry is available without a shell or per-property edit
 
 test('real OfficeCLI: official Word recipes append, replace, insert and remove on private copies',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'official-office-cli-'));
-  const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
+  const context={cwd,plugin:{root:fileURLToPath(new URL('..',import.meta.url)),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
   const tool=registerTools().find(t=>t.name==='OfficeCLI');assert.ok(tool);
   const invoke=input=>tool.invoke(input,{...context,deadline:Date.now()+60000});
   const call=async input=>{const r=await invoke(input);assert.notEqual(r.isError,true,r.content[0].text);return JSON.parse(r.content[0].text);};

@@ -1,11 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,cp,writeFile,readFile,rm,unlink} from 'node:fs/promises';
-import {join,resolve} from 'node:path';
+import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {verifyOfficialSkills} from '../scripts/verify-official-skills.mjs';
-const root=resolve('plugins/office-work');
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('..',import.meta.url));
 test('all four official skill bodies and materialized-link provenance are complete',async()=>{
  assert.equal((await verifyOfficialSkills(root)).length,4);
 });

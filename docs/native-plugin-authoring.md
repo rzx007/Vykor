@@ -167,7 +167,7 @@ Agent 调用已关联页面的工具后，宿主把结果返回 Agent，同时�
 
 ### 自身数据自动保存
 
-Excalidraw 的完整例子见 [插件说明](../examples/plugins/excalidraw/README.md)。根清单声明 permissions.pluginData 为 ["write"]，安装时明确批准 pluginData:write；后台在 toolPolicies 中将具体的应用专用保存工具声明为 authorization: "plugin-data-write"。两者缺一不可，model/app 双可见工具不会得到该授权。
+Excalidraw 的完整例子见 [插件说明](../plugins/excalidraw/README.md)。根清单声明 permissions.pluginData 为 ["write"]，安装时明确批准 pluginData:write；后台在 toolPolicies 中将具体的应用专用保存工具声明为 authorization: "plugin-data-write"。两者缺一不可，model/app 双可见工具不会得到该授权。
 
 宿主仍验证原插件快照、工具绑定、会话、参数和 Run；执行前先检查 deny、角色和运行环境，并继续执行 hook。授权只消除自身保存的重复确认，不能授权模型任务或工作区导出。插件进程仍是受信任的 Node 代码，这项声明本身不构成操作系统文件沙箱；作者必须固定数据目录，保存工具不接受任意文件路径。
 

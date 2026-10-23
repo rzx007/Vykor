@@ -28,7 +28,7 @@ const realExcalidraw = process.env.VYKOR_APP_BACKEND === "excalidraw"
 setupPhase("before-install")
 const fixture = realExcalidraw ? await (async () => {
   const sourcePath = join(root, "excalidraw")
-  await cp(join(workspace, "examples/plugins/excalidraw"), sourcePath, { recursive: true,
+  await cp(join(workspace, "plugins/excalidraw"), sourcePath, { recursive: true,
     filter: path => !path.split(/[\\/]/).includes("node_modules") })
   setupPhase("source-copied")
   const installed = await installLocalNativePlugin({ sourcePath, cwd: root, scope: "user",

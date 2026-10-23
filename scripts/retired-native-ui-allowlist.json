@@ -425,8 +425,8 @@
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/main/features/plugin/plugin-service.test.ts",
-      "line": 103,
+      "path": "apps/desktop/src/main/features/plugin/__test__/plugin-service.test.ts",
+      "line": 101,
       "text": "    expect(result).not.toHaveProperty(\"uiInventory\")",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -540,13 +540,13 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/__test__/plugin-manager.test.tsx",
-      "line": 417,
+      "line": 306,
       "text": "          uiInventory: { manifestCount: 1, componentCount: 2, validatedComponentCount: 2 },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/__test__/plugin-manager.test.tsx",
-      "line": 433,
+      "line": 322,
       "text": "          uiInventory: { manifestCount: 1, componentCount: null, validatedComponentCount: 0 },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },

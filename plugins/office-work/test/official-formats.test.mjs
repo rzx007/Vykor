@@ -2,11 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {join} from 'node:path';
 import {registerTools} from '../tools/index.mjs';
 async function fixture() {
   const cwd=await mkdtemp(join(tmpdir(),'official-formats-'));
-  const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
+  const context={cwd,plugin:{root:fileURLToPath(new URL('..',import.meta.url)),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal};
   const tool=registerTools().find(t=>t.name==='OfficeCLI');
   const invoke=input=>tool.invoke(input,{...context,deadline:Date.now()+60000});
   return {cwd,invoke,call:async input=>{const r=await invoke(input);assert.notEqual(r.isError,true,r.content[0].text);return JSON.parse(r.content[0].text);}};

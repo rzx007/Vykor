@@ -1,14 +1,35 @@
 # 研究与写作
 
-OpenHarness 官方 Native 插件，版本 1.1.0。插件包括研究与写作流程及六个检查／整理脚本，使用 Node 标准库。
+OpenHarness 官方 Native 插件，版本 1.1.1，通过插件市场独立构建和分发。插件包括研究与写作流程及六个检查／整理脚本，仅使用 Node 标准库。
 
 ## 安装、升级和授权
 
-桌面应用插件页的“研究与写作”内置行，未安装时显示“添加”，已安装 1.0.0 时显示“更新”。点击后沿用现有安装及权限确认流程，成功后从下一次对话生效；原本已禁用的插件保持禁用。也可导入同 ID 的新版包，或用 CLI 安装本目录并通过 `--approve` 明确批准 manifest 请求的权限。只重载旧安装快照不会升级工具或补齐新增权限。
+在应用插件市场中找到“研究与写作”并安装，按应用展示的权限列表授权。也可导入市场生成的 ZIP，或用 CLI 安装已准备好的本目录并通过 `--approve` 明确批准 manifest 请求的权限。安装或更新成功后从下一次对话生效；原本已禁用的插件保持禁用。只重载旧安装快照不会升级工具或补齐新增权限。
 
 本版本需要两类插件权限：读写插件自己的数据目录；来源读取限定在 `plugin.dataDir/research`；访问五个固定 HTTPS 学术 API（arXiv、OpenAlex、Crossref、Semantic Scholar、PubMed）。来源读取工具严格限定在该目录，学术访问仅用于检索书目与摘要。普通网页读取和稿件读写仍通过应用已有的 `WebFetch/Read/Write/Edit` 及会话权限执行，插件权限不替代这些授权。新增权限需要安装链路确认，具体以 [.vykor-plugin/plugin.json](.vykor-plugin/plugin.json) 和应用的权限列表为准。
 
 同一插件 ID 的导入就是更新；旧版批准不足以覆盖本版时会重新显示新增权限。安装后不会自动启用原本已禁用的插件。
+
+## 构建与测试
+
+需要 Node.js 24 或更高版本。在本目录执行市场构建使用的命令：
+
+```sh
+npm ci --ignore-scripts
+npm run build
+npm test
+```
+
+构建检查版本、许可、角色与技能目录以及工具注册入口，不下载文件，也不生成桌面应用产物。市场打包器将 manifest、角色、技能、工具、README、LICENSE 和第三方声明放入 ZIP；包内保留角色和技能的完整目录。源码与运行时均无 npm 依赖，安装后的学术检索仍需要访问 manifest 声明的 API。
+
+## 目录导航
+
+- [插件清单](.vykor-plugin/plugin.json)：固定 ID、工具入口和权限；更新沿用 `vykor.knowledge-work` 及原数据目录。
+- [构建脚本](scripts/README.md)：独立发行准备；新增构建检查放在 `scripts/`。
+- [工具](tools/README.md)：研究、来源保存、检查与审校，运行状态归插件 dataDir。
+- `agents/`：研究和写作角色；`skills/`：按需读取的操作说明与参考手册。
+- `test/`：已有离线工具测试；新增跨模块测试放在 `__test__/`。
+- [第三方声明](THIRD-PARTY-NOTICES.md)与 [MIT 许可](LICENSE)：随归档分发。
 
 ## 角色和调用
 

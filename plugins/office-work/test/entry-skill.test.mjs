@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {resolve,join} from 'node:path';
-const root=resolve('plugins/office-work');
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('..',import.meta.url));
 const manifest=JSON.parse(await readFile(join(root,'.vykor-plugin/plugin.json'),'utf8'));
 const entry=()=>readFile(join(root,'skills/office-work-entry/SKILL.md'),'utf8');
 

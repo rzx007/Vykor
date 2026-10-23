@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,rm} from 'node:fs/promises';
-import {join,resolve} from 'node:path';
+import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {createRunner,hash} from '../tools/engine.mjs';
 import {readOfficeParts} from '../tools/office-package.mjs';
 import {registerTools} from '../tools/index.mjs';
@@ -10,7 +11,7 @@ import {withFiles} from '../tools/file-access.mjs';
 import {withWorkingFile} from '../tools/working-file.mjs';
 async function fixture(){
  const cwd=await mkdtemp(join(tmpdir(),'office-v0121-'));
- const context={cwd,plugin:{root:resolve('plugins/office-work'),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal,deadline:Date.now()+180000,commandTimeoutMs:30000};
+ const context={cwd,plugin:{root:fileURLToPath(new URL('..',import.meta.url)),dataDir:join(cwd,'data')},permissions:{filesystem:['read','write'],process:['officecli']},signal:new AbortController().signal,deadline:Date.now()+180000,commandTimeoutMs:30000};
  const run=createRunner(join(context.plugin.root,'bin','officecli-win-x64.exe'),context);
  const call=async(name,input)=>{const r=await registerTools().find(t=>t.name===name).invoke(input,context);assert.notEqual(r.isError,true,r.content[0].text);return JSON.parse(r.content[0].text);};
  return {cwd,context,run,call};

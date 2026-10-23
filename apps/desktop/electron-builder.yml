@@ -6,6 +6,7 @@ directories:
 # 不要用默认 **/*，否则会扫整个 apps/desktop（含源码和构建工具）。
 files:
   - out/**
+  # 排除旧构建留下的插件包，避免被 out/** 再次收进应用。
   - '!out/bundled-plugins/**'
   - '!out/office-engine/**'
   - resources/**
@@ -13,8 +14,6 @@ files:
 extraResources:
   - from: out/office-engine
     to: office-engine
-  - from: out/bundled-plugins
-    to: bundled-plugins
 asarUnpack:
   - resources/**
   - node_modules/@arcships/light-ocr/**

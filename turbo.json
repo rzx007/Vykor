@@ -18,7 +18,7 @@
     },
     "@vykor/desktop#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/plugins/knowledge-work/**"],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["out/**"]
     },
     "check-types": {
@@ -45,7 +45,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/examples/plugins/text-inspector/**",
-        "$TURBO_ROOT$/plugins/knowledge-work/**",
         "$TURBO_ROOT$/packages/plugin-sources/src/**",
         "$TURBO_ROOT$/packages/plugins/src/**",
         "$TURBO_ROOT$/packages/server/src/application/default-services/extensions/plugin-service.ts",

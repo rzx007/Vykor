@@ -3,7 +3,7 @@
   "id": "vykor.knowledge-work",
   "name": "knowledge-work",
   "displayName": "研究与写作",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "基于网页和用户资料生成可追溯的研究报告、完整稿件，并继续修改当前成果。",
   "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZD0iTTcgMTRjMTAtNCAxOC0yIDI1IDR2MzZjLTctNi0xNS04LTI1LTR6TTU3IDE0Yy0xMC00LTE4LTItMjUgNHYzNmM3LTYgMTUtOCAyNS00eiIgZmlsbD0iI2VmZjZmZiIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMTggMjRjNC0xIDcgMCAxMCAyTTE4IDMyYzQtMSA3IDAgMTAgMk0zNiAyNmMzLTIgNi0zIDEwLTJNMzYgMzRjMy0yIDYtMyAxMC0yIiBmaWxsPSJub25lIiBzdHJva2U9IiMzYjgyZjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48cGF0aCBkPSJtNDkgNSAyIDUgNSAyLTUgMi0yIDUtMi01LTUtMiA1LTJ6IiBmaWxsPSIjZjU5ZTBiIi8+PC9zdmc+",
   "introduction": "## 从资料到有据可查的成果\n\n研究与写作插件帮助你调研主题、核对来源、整理证据并撰写稿件。研究助手可以比较资料并标注出处；写作助手可以把报告整理成文章，也可以继续修改现有稿件。\n\n网页资料通过应用现有的网页读取能力获取；学术检索仅访问插件声明的学术 API。引用与覆盖检查用于发现遗漏，不代表结论已经得到证明。插件不会自动发布内容；需要读取或写入文件时，仍按应用的现有权限流程执行。",

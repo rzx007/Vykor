@@ -49,7 +49,7 @@
 - `.github/workflows/validate.yml`、`publish.yml`：分别执行只读校验和正式发布。
 - `README.md`、`CONTRIBUTING.md`、许可说明：安装入口、收录流程、来源和许可责任。
 
-首期插件来源固定为当前仓库的 `examples/plugins/excalidraw`、`examples/plugins/text-inspector`、`examples/plugins/notes-app`。新插件以后可以直接在发布仓库的 `plugins/` 下开发；同一插件始终只有一个声明的权威源码位置。首期不移动现有示例，不改动现有宿主测试引用。
+首期插件来源固定为当前仓库的 `plugins/excalidraw`、`examples/plugins/text-inspector`、`examples/plugins/notes-app`。后续正式插件统一放在 Vykor 源码仓库的 `plugins/` 下，发布仓库只固定源码提交，不复制源码。2026-10-23 起 Excalidraw 已迁到正式目录，研究与写作、办公文档也改为市场分发；原有示例继续留在 `examples/plugins/`。
 
 当前 Text Inspector、Notes 没有独立 LICENSE，Vykor 根目录也没有可直接继承的 LICENSE。建议这两个自有示例及新仓库自有脚本采用 MIT，在首次公开分发前补齐文件和清单许可字段；两个插件分别递增至 `1.2.2`、`1.0.2`，并将发布源锁定到包含这些修改的实际提交。Excalidraw 保留现有 MIT 和第三方完整声明，不统一改写上游许可。
 

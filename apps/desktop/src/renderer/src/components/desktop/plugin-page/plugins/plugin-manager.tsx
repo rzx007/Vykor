@@ -1,6 +1,5 @@
 import { groupPermissions } from "./plugin-permissions"
 import { Marketplace } from "./marketplace"
-import { supportsBundledOfficePlugin } from "../../../../../../shared/office-platform"
 import { useEffect, useRef, useState } from "react"
 import { CircleAlert, Ellipsis, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
@@ -203,7 +202,7 @@ export function InstalledPluginManager({
       destructive: true,
     })
   }
-  async function importArchive(bundledPlugin?: "knowledge-work" | "office-work"): Promise<void> {
+  async function importArchive(): Promise<void> {
     if (!api || lock.current) return
     lock.current = true
     setBusy(true)
@@ -211,7 +210,6 @@ export function InstalledPluginManager({
       applyImportResult(
         await api.importArchive({
           cwd: projectPath,
-          ...(bundledPlugin ? { bundledPlugin } : {}),
         })
       )
     } catch {
@@ -354,16 +352,6 @@ export function InstalledPluginManager({
   const matches = (...values: (string | undefined)[]): boolean =>
     values.join(" ").toLocaleLowerCase().includes(normalizedQuery)
   const plugins = snapshot?.plugins ?? []
-  const knowledgeWork = plugins.find((plugin) => plugin.identity.id === "vykor.knowledge-work")
-  const officeWork = plugins.find((plugin) => plugin.identity.id === "vykor.office-work")
-  const officeWorkAction = !officeWork ? "添加"
-    : officeWork.identity.version.localeCompare("0.2.4", undefined, { numeric: true }) < 0 ? "更新" : null
-  const officeSupported = supportsBundledOfficePlugin(window.electron?.process?.platform ?? "", window.electron?.process?.arch ?? "")
-  const knowledgeWorkAction = !knowledgeWork
-    ? "添加"
-    : knowledgeWork.identity.version === "1.0.0"
-      ? "更新"
-      : null
   const visiblePlugins = plugins.filter(
     (plugin) =>
       matches(
@@ -400,42 +388,6 @@ export function InstalledPluginManager({
               <CircleAlert />
               <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
             </Alert>
-          ) : null}
-          {!loading && knowledgeWorkAction && matches("研究与写作", "knowledge-work") ? (
-            <section
-              className="flex items-center justify-between gap-4"
-              aria-label="内置研究与写作"
-            >
-              <div className="flex flex-col gap-1">
-                <h2 className="text-sm font-medium">研究与写作</h2>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  应用内置。整理网页和资料，生成带来源的报告、文章，并继续修改。
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                shape="pill"
-                disabled={busy || !api}
-                aria-label={`${knowledgeWorkAction}研究与写作`}
-                onClick={() => void importArchive("knowledge-work")}
-              >
-                {knowledgeWorkAction}
-              </Button>
-            </section>
-          ) : null}
-          {!loading && officeWorkAction && matches("演示文稿", "office-work", "PPTX") ? (
-            <section className="flex items-center justify-between gap-4" aria-label="内置演示文稿">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-sm font-medium">演示文稿</h2>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  应用内置。创建、读取、修改和预览可编辑 PPTX。支持 Windows x64、macOS arm64 和 Linux x64。
-                </p>
-              </div>
-              <Button variant="outline" shape="pill" disabled={busy || !api || !officeSupported}
-                aria-label={`${officeWorkAction}演示文稿`} onClick={() => void importArchive("office-work")}>
-                {officeSupported ? officeWorkAction : "当前系统暂不支持"}
-              </Button>
-            </section>
           ) : null}
           <section className="flex flex-col gap-4" aria-labelledby="plugin-installed-title">
             <div className="flex items-center justify-between gap-3">

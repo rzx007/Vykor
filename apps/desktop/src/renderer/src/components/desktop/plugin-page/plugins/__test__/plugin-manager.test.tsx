@@ -233,167 +233,56 @@ describe("PluginManager archive import", () => {
     expect(host.textContent).not.toContain("添加插件配置")
   })
 
-  it("installs the included research and writing pack only after an explicit click", async () => {
+  it.each([
+    ["win32", "x64"], ["darwin", "arm64"], ["linux", "x64"], ["linux", "arm64"],
+  ])("offers market browsing without built-in packs on %s/%s", async (platform, arch) => {
+    const previous = Object.getOwnPropertyDescriptor(window, "electron")
+    Object.defineProperty(window, "electron", {
+      configurable: true, value: { process: { platform, arch } },
+    })
+    try {
+      await render()
+      expect(host.querySelector('[aria-label="内置研究与写作"]')).toBeNull()
+      expect(host.querySelector('[aria-label="内置演示文稿"]')).toBeNull()
+      const marketTab = host.querySelector<HTMLButtonElement>(
+        '[role="tab"][data-tabs-value="marketplace"]'
+      )
+      expect(marketTab).not.toBeNull()
+      await act(async () => marketTab!.click())
+      expect(marketTab?.getAttribute("aria-selected")).toBe("true")
+      expect(api().importArchive).not.toHaveBeenCalled()
+    } finally {
+      if (previous) Object.defineProperty(window, "electron", previous)
+      else delete (window as unknown as { electron?: unknown }).electron
+    }
+  })
+
+  it.each([
+    ["vykor.knowledge-work", "研究与写作", true],
+    ["vykor.knowledge-work", "研究与写作", false],
+    ["vykor.office-work", "演示文稿", true],
+    ["vykor.office-work", "演示文稿", false],
+  ] as const)("manages an existing %s installation normally (%s, enabled=%s)", async (id, name, enabled) => {
     const installed = plugin({
       identity: {
-        id: "vykor.knowledge-work",
-        name: "knowledge-work",
-        displayName: "研究与写作",
-        version: "1.1.0",
-      },
+        id, name: id, displayName: name,
+        version: id === "vykor.knowledge-work" ? "1.0.0" : "0.1.0",
+      }, enabled,
     })
-    api().importArchive.mockResolvedValue({
-      status: "installed",
-      pluginName: "研究与写作",
-      snapshot: { ...snapshot, plugins: [installed] },
-    })
+    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
+    const operation = enabled ? api().disable : api().enable
+    operation.mockResolvedValue({ ...snapshot, plugins: [{ ...installed, enabled: !enabled }] })
     await render()
+
+    expect(host.querySelector(`[aria-label="查看 ${name} 详情"]`)).not.toBeNull()
+    expect(host.querySelector(`[aria-label="更新${name}"]`)).toBeNull()
     expect(api().importArchive).not.toHaveBeenCalled()
-    await click("添加研究与写作")
-    expect(api().importArchive).toHaveBeenCalledWith({
-      cwd: "D:/project",
-      bundledPlugin: "knowledge-work",
-    })
-    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
-    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("下次对话"))
+    expect(api().uninstall).not.toHaveBeenCalled()
+    await click(`${enabled ? "禁用" : "启用"} ${name}`)
+    expect(operation).toHaveBeenCalledWith({ cwd: "D:/project", pluginId: id })
+    expect(host.querySelector(`[aria-label="${enabled ? "启用" : "禁用"} ${name}"]`)).not.toBeNull()
+    expect(props.notify).toHaveBeenCalledWith(`${name} 已${enabled ? "禁用" : "启用"}。`)
   })
-
-  it.each([["win32", "x64"], ["darwin", "arm64"], ["linux", "x64"]])("installs the included presentation plugin on %s/%s after an explicit click", async (platform, arch) => {
-    const previous = Object.getOwnPropertyDescriptor(window, "electron")
-    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform, arch } } })
-    try {
-      api().importArchive.mockResolvedValue({ status: "installed", pluginName: "演示文稿",
-        snapshot: { ...snapshot, plugins: [plugin({ identity: { id: "vykor.office-work", name: "office-work", version: "0.2.4" } })] } })
-      await render()
-      expect(api().importArchive).not.toHaveBeenCalled()
-      await click("添加演示文稿")
-      expect(api().importArchive).toHaveBeenCalledWith({ cwd: "D:/project", bundledPlugin: "office-work" })
-      expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
-    } finally {
-      if (previous) Object.defineProperty(window, "electron", previous)
-      else delete (window as unknown as { electron?: unknown }).electron
-    }
-  })
-
-  it("shows the presentation pack but prevents installation on unsupported architectures", async () => {
-    const previous = Object.getOwnPropertyDescriptor(window, "electron")
-    Object.defineProperty(window, "electron", { configurable: true, value: { process: { platform: "linux", arch: "arm64" } } })
-    try {
-      await render()
-      const button = host.querySelector<HTMLButtonElement>('[aria-label="添加演示文稿"]')
-      expect(button?.disabled).toBe(true)
-      expect(button?.textContent).toContain("当前系统暂不支持")
-      expect(api().importArchive).not.toHaveBeenCalled()
-    } finally {
-      if (previous) Object.defineProperty(window, "electron", previous)
-      else delete (window as unknown as { electron?: unknown }).electron
-    }
-  })
-
-  it.each(["0.2.4", "1.0.0"])("does not reinstall or downgrade the installed Office plugin %s", async version => {
-    api().snapshot.mockResolvedValue({ ...snapshot, plugins: [plugin({ identity: {
-      id: "vykor.office-work", name: "office-work", version,
-    }, enabled: false })] })
-    await render()
-    expect(host.querySelector('[aria-label="添加演示文稿"]')).toBeNull()
-    expect(host.querySelector('[aria-label="更新演示文稿"]')).toBeNull()
-    expect(api().importArchive).not.toHaveBeenCalled()
-  })
-
-  it("does not reinstall an included plugin that the user has disabled", async () => {
-    api().snapshot.mockResolvedValue({
-      ...snapshot,
-      plugins: [
-        plugin({
-          identity: {
-            id: "vykor.knowledge-work",
-            name: "knowledge-work",
-            displayName: "研究与写作",
-            version: "1.1.0",
-          },
-          enabled: false,
-        }),
-      ],
-    })
-    await render()
-    expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
-    expect(api().importArchive).not.toHaveBeenCalled()
-  })
-
-  it.each([true, false])(
-    "updates the old bundled plugin only after a click and permission approval (enabled=%s)",
-    async (enabled) => {
-      const installed = plugin({
-        identity: {
-          id: "vykor.knowledge-work",
-          name: "knowledge-work",
-          displayName: "研究与写作",
-          version: "1.0.0",
-        },
-        enabled,
-      })
-      api().snapshot.mockResolvedValue({ ...snapshot, plugins: [installed] })
-      api().importArchive.mockResolvedValue({
-        status: "approval-required",
-        selectionId: "knowledge-update",
-        pluginName: "研究与写作",
-        requestedPermissions: ["network:api.openalex.org"],
-      })
-      api().confirmArchive.mockResolvedValue({
-        status: "installed",
-        pluginName: "研究与写作",
-        snapshot: {
-          ...snapshot,
-          plugins: [{ ...installed, identity: { ...installed.identity, version: "1.1.0" } }],
-        },
-      })
-      await render()
-      expect(host.querySelector('[aria-label="更新研究与写作"]')?.textContent).toBe("更新")
-      expect(api().importArchive).not.toHaveBeenCalled()
-      await click("更新研究与写作")
-      expect(api().importArchive).toHaveBeenCalledWith({
-        cwd: "D:/project",
-        bundledPlugin: "knowledge-work",
-      })
-      expect(document.body.textContent).toContain("网络访问")
-      expect(api().confirmArchive).not.toHaveBeenCalled()
-      await click("安装")
-      expect(api().confirmArchive).toHaveBeenCalledWith({
-        cwd: "D:/project",
-        selectionId: "knowledge-update",
-      })
-      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
-      expect(
-        host.querySelector(`[aria-label="${enabled ? "禁用" : "启用"} 研究与写作"]`)
-      ).not.toBeNull()
-      expect(api().enable).not.toHaveBeenCalled()
-      expect(api().disable).not.toHaveBeenCalled()
-      expect(props.notify).toHaveBeenCalledWith("研究与写作 已安装或更新，将在下次对话中生效。")
-    }
-  )
-
-  it.each(["1.1.0", "2.0.0"])(
-    "does not offer a bundled downgrade for installed version %s",
-    async (version) => {
-      api().snapshot.mockResolvedValue({
-        ...snapshot,
-        plugins: [
-          plugin({
-            identity: {
-              id: "vykor.knowledge-work",
-              name: "knowledge-work",
-              displayName: "研究与写作",
-              version,
-            },
-          }),
-        ],
-      })
-      await render()
-      expect(host.querySelector('[aria-label="添加研究与写作"]')).toBeNull()
-      expect(host.querySelector('[aria-label="更新研究与写作"]')).toBeNull()
-      expect(api().importArchive).not.toHaveBeenCalled()
-    }
-  )
 
   it("explains App permissions in the host approval dialog", async () => {
     api().importArchive.mockResolvedValue({

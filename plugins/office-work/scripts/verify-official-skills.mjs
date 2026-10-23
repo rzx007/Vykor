@@ -2,15 +2,15 @@ import {readFile,lstat} from 'node:fs/promises';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {readOfficeParts} from '../tools/office-package.mjs';
+import {readReleaseTextParts} from './release-archive.mjs';
 const names=['officecli','officecli-docx','officecli-pptx','officecli-xlsx'];
 const digest=(algorithm,bytes)=>createHash(algorithm).update(bytes).digest('hex');
 const blob=bytes=>digest('sha1',Buffer.concat([Buffer.from('blob '+bytes.length+'\0'),bytes]));
 export async function verifyOfficialSkills(root,archive) {
  const prefix='vendor/officecli/';
- const parts=archive?readOfficeParts(await readFile(archive),prefix+'SOURCE.json'):undefined;
+ const parts=archive?readReleaseTextParts(await readFile(archive),['.vykor-plugin/plugin.json',prefix+'SOURCE.json',...names.map(name=>prefix+'skills/'+name+'/SKILL.md')]):undefined;
  const read=async path=>{
-  if(parts){const text=parts.get(path);if(text===undefined)throw Error('Missing packaged official skill: '+path);return Buffer.from(text,'utf8');}
+  if(parts){const bytes=parts.get(path);if(bytes===undefined)throw Error('Missing packaged official skill: '+path);return bytes;}
   if(!(await lstat(join(root,path))).isFile())throw Error('Official skills must be materialized regular files: '+path);
   return readFile(join(root,path));
  };

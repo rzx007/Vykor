@@ -1,0 +1,12 @@
+{
+  "name": "@vykor/plugin-office-work",
+  "version": "0.12.3",
+  "private": true,
+  "description": "OpenHarness marketplace plugin for Word, Excel and PowerPoint using verified OfficeCLI binaries.",
+  "license": "MIT",
+  "type": "module",
+  "repository": { "type": "git", "url": "git+https://github.com/rzx007/Vykor.git", "directory": "plugins/office-work" },
+  "engines": { "node": ">=24.0.0" },
+  "scripts": { "build": "node scripts/build.mjs", "test": "node scripts/test.mjs", "test:native": "node scripts/test.mjs --native" },
+  "files": [".vykor-plugin", "agents", "skills", "tools", "vendor", "bin", "docs", "licenses", "LICENSE", "README.md", "THIRD-PARTY-NOTICES.md"]
+}

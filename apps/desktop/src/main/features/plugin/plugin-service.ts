@@ -1,10 +1,9 @@
 import { MarketplaceService } from "./marketplace-service"
-import { supportsBundledOfficePlugin } from "../../../shared/office-platform"
 import { randomUUID } from "node:crypto"
-import { extname, join, resolve } from "node:path"
+import { extname, resolve } from "node:path"
 
 import type { VykorClient, PluginResource } from "@vykor/client"
-import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
+import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
   DesktopPluginActionInput,
@@ -109,21 +108,7 @@ export class DesktopPluginService {
     const cwd = normalizeCwd(input.cwd)
     let archivePath: string | null
     try {
-      if (input.bundledPlugin !== undefined) {
-        if (input.bundledPlugin !== "knowledge-work" && input.bundledPlugin !== "office-work") {
-          return archiveFailure("找不到这个内置插件。", [{ code: "plugin_bundled_unknown" }])
-        }
-        if (input.bundledPlugin === "office-work" && !supportsBundledOfficePlugin(process.platform, process.arch)) {
-          return archiveFailure("Office 插件支持 Windows x64、macOS arm64 和 Linux x64；当前系统或架构暂不支持。", [{ code: "plugin_bundled_unsupported_platform" }])
-        }
-        archivePath = join(
-          app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "out"),
-          "bundled-plugins",
-          `${input.bundledPlugin}.zip`
-        )
-      } else {
-        archivePath = await this.chooseArchive(sender)
-      }
+      archivePath = await this.chooseArchive(sender)
     } catch (error) {
       return archiveFailureFromError(error)
     }

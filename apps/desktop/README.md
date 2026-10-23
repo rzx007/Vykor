@@ -16,6 +16,7 @@ Electron + React desktop shell for Vykor.
 - `src/main/features/main-window`: primary application window behavior.
 - `src/main/features/tray`: system tray menu, notification, and tray flash helpers.
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
+- [src/main/features/plugin](src/main/features/plugin/README.md): 插件列表、归档和市场安装、权限确认及操作结果。
 - `src/preload`: safe renderer-facing desktop API exposed as `window.desktop`.
 - `src/shared`: IPC channel names and shared request/result types.
 
@@ -54,6 +55,8 @@ node-gyp failed to rebuild ...\node-pty
 ## 安装包
 
 日常验证用 `pnpm --filter @vykor/desktop build:unpack`（不解 NSIS）。为什么 production 依赖必须很瘦、以及 `pnpm build:win` 卡在搜索 node modules 时看什么，见 [docs/packaging.md](./docs/packaging.md)。
+
+安装包不携带研究与写作、演示文稿等插件归档，这些插件通过市场或普通归档安装。历史构建残留的 `out/bundled-plugins` 也被排除。宿主文档功能所需的 `office-engine` 仍准备到 `out/office-engine`，并通过 `extraResources` 复制到安装包中。
 
 ## Checks
 
