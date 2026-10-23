@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { createPluginAppClient } from '../ui/app-client.mjs';
+import { textInspectorTools } from '../tools/app-tools.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function panel() {
@@ -25,7 +27,7 @@ async function panel() {
     sendMessage(value) { messages.push(value); return Promise.resolve(); }
   }
   runInNewContext(readFileSync(new URL("../ui/panel.mjs", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, ""), {
-    App, TextEncoder, document: { querySelector: el, createElement, createTextNode: text => ({ textContent: text }), documentElement: { dataset: {} } },
+    App, createPluginAppClient, textInspectorTools, TextEncoder, document: { querySelector: el, createElement, createTextNode: text => ({ textContent: text }), documentElement: { dataset: {} } },
   });
   await tick(); el("#conversation-text").value = "解释选中问题";
   return { el, app, calls, references, messages, select() { const input = el("#findings").querySelectorAll("input")[0]; input.checked = true; input.change(); } };

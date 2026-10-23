@@ -1,4 +1,5 @@
-/** @typedef {{line:number, code:'tab-indentation'|'trailing-whitespace'}} Finding */
+import { textInspectorTools } from './app-tools.mjs';
+/** @typedef {import('./app-tools.mjs').Finding} Finding */
 /** @param {string} text */
 function check(text) {
   /** @type {Finding[]} */
@@ -29,7 +30,7 @@ function proposal(text) {
 const textSchema = { type: "string", maxLength: 100000 };
 /** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
 export const registerTools = () => [{
-  name: "TextInspectorCheck",
+  name: textInspectorTools.check.name,
   description: "检查传入文本的行首制表符和行尾空白，返回行号与问题代码；较短文本也提供交互预览。",
   inputSchema: { type: "object", required: ["text"], properties: { text: textSchema }, additionalProperties: false },
   safeToRetry: true,
@@ -41,7 +42,7 @@ export const registerTools = () => [{
     return { content: [{ type: "text", text: JSON.stringify(check(input.text)) }], ...(metadata ? { metadata } : {}) };
   },
 }, {
-  name: "TextInspectorPreview",
+  name: textInspectorTools.preview.name,
   description: "仅修复选中的文本格式问题并返回预览；不读取或写入文件。",
   inputSchema: {
     type: "object", required: ["text", "selected"], additionalProperties: false,

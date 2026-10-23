@@ -1,6 +1,9 @@
 import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
+import { createPluginAppClient } from './app-client.mjs';
+import { textInspectorTools } from '../tools/app-tools.mjs';
 
 const app = new App({ name: "Text Inspector", version: "1.2.1" }, { availableDisplayModes: ["inline", "fullscreen"] });
+const tools = createPluginAppClient(app);
 const list = document.querySelector("#findings");
 const preview = document.querySelector("#preview");
 const button = document.querySelector("#preview-button");
@@ -102,13 +105,13 @@ document.querySelector("#apply-result").addEventListener("click", () => {
 note.addEventListener("input", controls);
 checkButton.addEventListener("click", () => {
   if (!checkButton.disabled) void action(async () => {
-    const result = await app.callServerTool({ name: "TextInspectorCheck", arguments: { text: preview.value } });
+    const result = await tools.call(textInspectorTools.check, { text: preview.value });
     renderResult(result);
   });
 });
 button.addEventListener("click", () => {
   if (!button.disabled) void action(async () => {
-    const result = await app.callServerTool({ name: "TextInspectorPreview", arguments: { text: data.text, selected: [...selected] } });
+    const result = await tools.call(textInspectorTools.preview, { text: data.text, selected: [...selected] });
     renderResult(result, true);
   });
 });

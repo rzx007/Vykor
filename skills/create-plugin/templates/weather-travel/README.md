@@ -20,6 +20,8 @@ npm run pack
 
 `--backend native` 也可以改成 `--backend mcp`，一次只选择一种后台；省略时默认 native。`--display-name` 和 `--version` 可选，版本默认 `1.0.0`。生成器拒绝已有目录；ID 使用稳定点分名称，name 使用小写连字符。生成工程可移到本仓库之外构建，不引用 Vykor 源码或仓库工作区包。
 
+`src/app-tools.mjs` 为页面工具声明参数和结构化结果类型，真实名称取自 `src/identity.mjs`。`ui/view.mjs` 使用 `createPluginAppClient(app)` 调用；随包的 `ui/app-client.mjs` 和 `.d.mts` 提供运行封装及类型提示，构建时正常合入离线页面。封装仍调用官方 `callServerTool`，不改变可见性检查、保存协调、错误和原操作回执处理。
+
 - `npm ci`：按锁文件安装作者的构建和测试依赖。
 - `npm run build`：将官方页面 SDK 和源码构建为 `dist/ui/panel.html`，并构建所选后台。Native 输出 `dist/native/network.mjs`、`data.mjs`、`export.mjs`；MCP 输出 `dist/server.mjs`。
 - `npm test`：检查业务与页面保存流程，天气请求使用固定响应，不代表真实联网或桌面验证。

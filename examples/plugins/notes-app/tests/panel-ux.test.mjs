@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { randomUUID } from "node:crypto";
+import { createPluginAppClient } from '../ui/app-client.mjs';
+import { noteTools } from '../src/app-tools.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function panel({ context = true } = {}) {
@@ -24,7 +26,7 @@ async function panel({ context = true } = {}) {
     updateModelContext(value) { references.push(value); return Promise.resolve(); }
   }
   runInNewContext(readFileSync(new URL("../ui/panel.mjs", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, ""), {
-    App, document: { getElementById: element, documentElement: { dataset: {} } },
+    App, createPluginAppClient, noteTools, document: { getElementById: element, documentElement: { dataset: {} } },
     ResourceListChangedNotificationSchema: {}, ReadResourceResultSchema: {}, crypto: { randomUUID },
   });
   const resource = (revision, text) => ({ contents: [{ text: JSON.stringify({ id: "welcome", revision, text }) }] });

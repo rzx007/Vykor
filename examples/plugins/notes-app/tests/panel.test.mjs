@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { randomUUID } from "node:crypto";
+import { createPluginAppClient } from '../ui/app-client.mjs';
+import { noteTools } from '../src/app-tools.mjs';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 for (const resourceFirst of [true, false]) test(`newer resource revision survives an older save receipt (resource first: ${resourceFirst})`, async () => {
   const elements = new Map(), reads = []; let notify, save, sent;
@@ -19,7 +21,7 @@ for (const resourceFirst of [true, false]) test(`newer resource revision survive
     callServerTool(request) { sent = request.arguments; return new Promise(resolve => { save = resolve; }); }
   }
   runInNewContext(readFileSync(new URL("../ui/panel.mjs", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, ""), {
-    App, document: { getElementById: element }, ResourceListChangedNotificationSchema: {}, ReadResourceResultSchema: {}, crypto: { randomUUID },
+    App, createPluginAppClient, noteTools, document: { getElementById: element }, ResourceListChangedNotificationSchema: {}, ReadResourceResultSchema: {}, crypto: { randomUUID },
   });
   const result = (revision, text) => ({ contents: [{ text: JSON.stringify({ id: "welcome", revision, text }) }] });
   await tick(); reads.shift()(result(0, "original")); await tick();

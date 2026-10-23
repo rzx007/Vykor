@@ -1,4 +1,6 @@
 import { createPlanCoordinator, isNotAccepted, readToolValue } from './coordinator.mjs';
+import { createPluginAppClient } from './app-client.mjs';
+import { createWeatherTools } from '../src/app-tools.mjs';
 
 const conditions = new Map([[0, '晴'], [1, '大部晴朗'], [2, '多云'], [3, '阴'], [45, '雾'], [48, '雾凇'], [51, '小毛毛雨'], [53, '毛毛雨'], [55, '强毛毛雨'], [56, '冻毛毛雨'], [57, '强冻毛毛雨'], [61, '小雨'], [63, '雨'], [65, '大雨'], [66, '冻雨'], [67, '强冻雨'], [71, '小雪'], [73, '雪'], [75, '大雪'], [77, '雪粒'], [80, '小阵雨'], [81, '阵雨'], [82, '强阵雨'], [85, '阵雪'], [86, '强阵雪'], [95, '雷雨'], [96, '雷雨伴冰雹'], [99, '强雷雨伴冰雹']]);
 const weather = code => conditions.get(code) || '天气资料缺失';
@@ -10,6 +12,7 @@ const samePlace = (first, second) => first?.id === second?.id;
 const describe = value => `${value.title}\n${value.entries.map(entry => `${entry.date} · ${entry.title}${entry.place ? ` · ${placeName(entry.place)}` : ''}\n${entry.notes}`).join('\n\n')}`;
 
 export function createPanel({ app, document, names, config, applyStyle = () => {} }) {
+  const client = createPluginAppClient(app), tools = createWeatherTools(names);
   const el = id => document.getElementById(id);
   const win = document.defaultView;
   const selected = new Set(), entryRows = new Map(), comparisons = new Map(), knownPlaces = new Map();
@@ -25,12 +28,18 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
   function suspendOnHidden(error) {
     if (isNotAccepted(error) && error.data.code === 'plugin_app_hidden') { admissionPaused = true; coordinator.setVisible(false); }
   }
-  async function call(key, input) {
+  /**
+   * @template {object} Input
+   * @template {object} Output
+   * @param {import('./app-client.mjs').PluginAppTool<Input, Output>} tool
+   * @param {NoInfer<Input>} input
+   */
+  async function call(tool, input) {
     if (!visible()) throw { data: { code: 'plugin_app_hidden', notAccepted: true }, message: '页面已隐藏，请回到页面后继续。' };
-    try { return await app.callServerTool({ name: names[key], arguments: input }); }
+    try { return await client.call(tool, input); }
     catch (error) { suspendOnHidden(error); throw error; }
   }
-  const coordinator = createPlanCoordinator({ call, onChange: renderPlan });
+  const coordinator = createPlanCoordinator({ call: (key, input) => call(tools[key], input), onChange: renderPlan });
   function controls() {
     const state = coordinator.state, saved = state.status === 'saved', available = connected && visible();
     el('search').disabled = !available;
@@ -132,8 +141,8 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     if (!visible() || admissionPaused || refreshing || disposed) { refreshNeeded = true; return; }
     refreshing = true; refreshNeeded = false; controls();
     try {
-      const plan = readToolValue(await call('ReadPlan', {})); coordinator.receive(plan);
-      if (visible()) { const value = readToolValue(await call('ReadFavorites', {})); if (value.kind === 'favorites') renderFavorites(value); }
+      const plan = readToolValue(await call(tools.ReadPlan, {})); coordinator.receive(plan);
+      if (visible()) { const value = readToolValue(await call(tools.ReadFavorites, {})); if (value.kind === 'favorites') renderFavorites(value); }
     } catch (error) { refreshNeeded = true; report(error.message || '读取未完成，请回到页面后点击“读取新版”。'); }
     finally { refreshing = false; controls(); }
   }
@@ -152,7 +161,7 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     const query = el('city-query').value.trim(); if (!query) return;
     const sequence = ++querySequence; el('search-status').textContent = '正在搜索城市…';
     try {
-      const value = readToolValue(await call('SearchPlaces', { query }));
+      const value = readToolValue(await call(tools.SearchPlaces, { query }));
       if (sequence !== querySequence) return;
       if (value.kind !== 'places' || !Array.isArray(value.places) || value.places.some(place => !validPlace(place))) throw new Error('城市搜索结果无效。');
       el('places').replaceChildren();
@@ -167,7 +176,7 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     } catch (error) { el('search-status').textContent = error.message || '搜索失败，请稍后重试。'; }
   }
   async function fetchForecast(place, force) {
-    const value = readToolValue(await call('GetForecast', { place, ...(force ? { force: true } : {}) }));
+    const value = readToolValue(await call(tools.GetForecast, { place, ...(force ? { force: true } : {}) }));
     if (value.kind !== 'forecast' || !validPlace(value.place) || !Array.isArray(value.days) || !Array.isArray(value.hours) || !value.current) throw new Error('天气结果无效，请刷新。');
     return value;
   }
@@ -236,7 +245,7 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     const input = { expectedRevision: favorites.revision, operationId: crypto.randomUUID(), place: clone(currentForecast.place), enabled: !favorites.places.some(place => samePlace(place, currentForecast.place)) };
     favoriteBusy = true; controls();
     try {
-      const value = readToolValue(await call('SetFavorite', input));
+      const value = readToolValue(await call(tools.SetFavorite, input));
       if (value.saved === true && value.operationId === input.operationId && value.revision === input.expectedRevision + 1) { renderFavorites(value); report('收藏已确认更新。'); }
       else if (value.conflict === true) { renderFavorites(value); report('收藏已有更新，已读取新版，请重试。'); }
       else { favoriteOperation = input; report('收藏结果待核实，请核实原收藏。'); }
@@ -253,7 +262,7 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     if (!favoriteOperation || !visible() || favoriteBusy) return;
     const input = favoriteOperation; favoriteBusy = true;
     try {
-      const value = readToolValue(await call('GetOperation', { operationId: input.operationId }));
+      const value = readToolValue(await call(tools.GetOperation, { operationId: input.operationId }));
       if (value.saved === true && value.operationId === input.operationId && value.kind === 'favorites' && value.revision === input.expectedRevision + 1) { renderFavorites(value); favoriteOperation = undefined; report('原收藏操作已确认。'); }
       else if (value.operationId === input.operationId && value.kind === 'favorites' && value.saved === false && value.conflict === true) { renderFavorites(value); favoriteOperation = undefined; report('原收藏操作未保存：收藏版本已有变化。请检查后重试。'); }
       else report('原收藏仍未确认，没有重发。');
@@ -270,7 +279,7 @@ export function createPanel({ app, document, names, config, applyStyle = () => {
     if (!input.path.toLowerCase().endsWith(extension)) { el('export-status').textContent = `请使用 ${extension} 文件路径。`; return; }
     exporting = true; el('export-status').textContent = check ? '正在核实原导出…' : '正在请求导出确认…'; controls();
     try {
-      const value = readToolValue(await call(check ? 'GetOperation' : 'ExportPlan', check ? { operationId: input.operationId } : input));
+      const value = readToolValue(check ? await call(tools.GetOperation, { operationId: input.operationId }) : await call(tools.ExportPlan, input));
       if (confirmedExport(value, input)) { exportOperation = undefined; el('export-status').textContent = `已保存：${value.path} · 版本 ${value.revision}`; }
       else if (value.saved === false && value.conflict === true) { exportOperation = undefined; coordinator.receive(value); el('export-status').textContent = '行程版本已有变化，本次未导出。请检查新版并重新选择导出。'; }
       else { exportOperation = input; el('export-status').textContent = '导出结果待核实。请核实原导出，不会重发。'; }

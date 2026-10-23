@@ -40,6 +40,7 @@ pnpm --filter @vykor/plugins check-types
 | 目录 | 用途 |
 | --- | --- |
 | [src/](./src/README.md) | 校验原生插件，读取组件，维护安装状态，并把可用能力交给运行时。 |
+| [src/app-client/](./src/app-client/README.md) | 浏览器可用的页面调用封装，通过 `@vykor/plugins/app-client` 公开，不加载本包的 Node 实现。 |
 | [src/activation/](./src/activation/README.md) | 将已加载的插件组件转换成运行时可注册的能力。 |
 | [src/components/](./src/components/README.md) | 读取插件声明的 Agent、Skill、Hook、MCP、Tool 和应用资源。 |
 | [src/installation/](./src/installation/README.md) | 维护安装路径、版本缓存、安装记录、完整性检查和安装执行。 |

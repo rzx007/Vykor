@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Notes } from "./notes.mjs";
+import { noteTools } from './app-tools.mjs';
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.VYKOR_NOTES_DATA_DIR, session = process.env.VYKOR_NOTES_SESSION;
 if (!process.env.VYKOR_NOTES_FILE && (!dataDir || !session || !/^[a-f0-9]{64}$/.test(session))) throw new Error("Notes requires the host-bound plugin data directory and session");
@@ -16,17 +17,17 @@ const schema = properties => ({ type: "object", properties, required: Object.key
 const writes = { expectedRevision: { type: "integer", minimum: 0 }, operationId: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", maxLength: 48000 } };
 server.setRequestHandler(ListToolsRequestSchema, () => ({
   tools: [
-    { name: "read_note", description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
-    { name: "apply_note_operations", description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
-    { name: "list_notes", description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
-    { name: "save_note_draft", description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } },
+    { name: noteTools.read.name, description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
+    { name: noteTools.apply.name, description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
+    { name: noteTools.list.name, description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
+    { name: noteTools.save.name, description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } },
   ]
 }));
 server.setRequestHandler(CallToolRequestSchema, async request => {
   try {
     const { name, arguments: args = {} } = request.params;
-    const data = name === "read_note" ? notes.read() : name === "list_notes" ? { notes: [{ id: "welcome", uri: "notes://welcome", title: "协作笔记" }] }
-      : name === "save_note_draft" ? notes.write(args, "save") : name === "apply_note_operations" ? notes.write(args, "replace") : undefined;
+    const data = name === noteTools.read.name ? notes.read() : name === noteTools.list.name ? { notes: [{ id: "welcome", uri: "notes://welcome", title: "协作笔记" }] }
+      : name === noteTools.save.name ? notes.write(args, "save") : name === noteTools.apply.name ? notes.write(args, "replace") : undefined;
     if (!data) throw new Error("unknown_tool");
     if (data.saved && !data.duplicate && subscriptions.has("notes://welcome")) await server.notification({ method: "notifications/resources/updated", params: { uri: "notes://welcome" } });
     return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data, _meta: { editor: "notes-app" } };

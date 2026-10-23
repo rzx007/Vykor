@@ -24,6 +24,15 @@ test("generates distinct standalone native and MCP projects with one backend", a
     await access(join(root, "adapters", backend));
     await assert.rejects(access(join(root, "adapters", backend === "native" ? "mcp" : "native")));
     assert.equal(result.root, root);
+    const { createPluginAppClient } = await import(pathToFileURL(join(root, 'ui/app-client.mjs')).href);
+    const { createWeatherTools } = await import(pathToFileURL(join(root, 'src/app-tools.mjs')).href);
+    const { names } = await import(pathToFileURL(join(root, 'src/identity.mjs')).href);
+    const requests = [];
+    const response = { content: [], structuredContent: { kind: 'places', places: [] } };
+    const client = createPluginAppClient({ async callServerTool(request) { requests.push(request); return response; } });
+    assert.equal(await client.call(createWeatherTools(names).SearchPlaces, { query: 'Shanghai' }), response);
+    assert.deepEqual(requests, [{ name: `${config.toolPrefix}SearchPlaces`, arguments: { query: 'Shanghai' } }]);
+    await access(join(root, 'ui/app-client.d.mts'));
     await assert.rejects(createPlugin({ dir: root, id: manifest.id, name: manifest.name, backend }), /exist|存在/i);
   }
   const native = JSON.parse(await readFile(join(work, "native/plugin.config.json"), "utf8"));

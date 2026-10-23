@@ -11,11 +11,15 @@
     },
     "./sdk": {
       "types": "./src/sdk.ts"
+    },
+    "./app-client": {
+      "types": "./src/app-client/client.ts",
+      "import": "./src/app-client/client.ts"
     }
   },
   "scripts": {
     "build": "exit 0",
-    "check-types": "tsc --noEmit && tsc -p tsconfig.sdk-tests.json && tsc -p tsconfig.sdk-examples.json",
+    "check-types": "tsc --noEmit && tsc -p tsconfig.sdk-tests.json && tsc -p tsconfig.sdk-examples.json && tsc -p tsconfig.app-client-tests.json && node ../../scripts/sync-plugin-app-client.mjs --check",
     "test": "vitest run",
     "clean": "rimraf dist"
   },

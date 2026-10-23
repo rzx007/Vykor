@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "allowJs": true,
+    "lib": ["ES2022", "DOM"],
+    "types": []
+  },
+  "include": ["__test__/app-client.type-test.ts", "../../examples/plugins/*/ui/__test__/*.type-test.ts", "../../skills/create-plugin/templates/weather-travel/ui/__test__/*.type-test.ts"]
+}

@@ -14,6 +14,7 @@
 | 目录 | 用途 |
 | --- | --- |
 | [activation/](./activation/README.md) | 将已加载的插件组件转换成运行时可注册的能力。 |
+| [app-client/](./app-client/README.md) | 为插件页面调用提供共享工具定义、参数和结果类型提示；沿用官方 MCP Apps 传输。 |
 | [components/](./components/README.md) | 读取插件声明的 Agent、Skill、Hook、MCP、Tool 和应用资源。 |
 | [installation/](./installation/README.md) | 维护安装路径、版本缓存、安装记录、完整性检查和安装执行。 |
 | [loading/](./loading/README.md) | 组织原生插件 manifest 校验及组件读取。 |

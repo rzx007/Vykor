@@ -17052,6 +17052,23 @@ var Notes = class {
   }
 };
 
+// ui/app-client.mjs
+function definePluginAppTool(name) {
+  return Object.freeze({ name });
+}
+
+// src/app-tools.mjs
+var noteTools = {
+  /** @type {import('../ui/app-client.mjs').PluginAppTool<Record<string, never>, Note>} */
+  read: definePluginAppTool("read_note"),
+  /** @type {import('../ui/app-client.mjs').PluginAppTool<SaveNoteInput & { start: number, end: number }, NoteReceipt>} */
+  apply: definePluginAppTool("apply_note_operations"),
+  /** @type {import('../ui/app-client.mjs').PluginAppTool<Record<string, never>, { notes: Array<{ id: string, uri: string, title: string }> }>} */
+  list: definePluginAppTool("list_notes"),
+  /** @type {import('../ui/app-client.mjs').PluginAppTool<SaveNoteInput, NoteReceipt>} */
+  save: definePluginAppTool("save_note_draft")
+};
+
 // src/server.mjs
 var root = dirname2(fileURLToPath(import.meta.url));
 var dataDir = process.env.VYKOR_NOTES_DATA_DIR;
@@ -17063,16 +17080,18 @@ var subscriptions = /* @__PURE__ */ new Set();
 var ui = { resourceUri: "ui://notes/editor", visibility: ["model", "app"] };
 var schema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 var writes = { expectedRevision: { type: "integer", minimum: 0 }, operationId: { type: "string", minLength: 1, maxLength: 128 }, text: { type: "string", maxLength: 48e3 } };
-server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [
-  { name: "read_note", description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
-  { name: "apply_note_operations", description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
-  { name: "list_notes", description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
-  { name: "save_note_draft", description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } }
-] }));
+server.setRequestHandler(ListToolsRequestSchema, () => ({
+  tools: [
+    { name: noteTools.read.name, description: "Read the shared welcome note and current document revision before editing.", inputSchema: schema({}), _meta: { ui }, annotations: { readOnlyHint: true } },
+    { name: noteTools.apply.name, description: "Replace an exact UTF-16 selection in the shared note. Requires the observed document revision and a new operationId. On conflict read and reconcile; do not blindly retry.", inputSchema: schema({ ...writes, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }), _meta: { ui } },
+    { name: noteTools.list.name, description: "List notes", inputSchema: schema({}), _meta: { ui: { visibility: ["app"] } }, annotations: { readOnlyHint: true } },
+    { name: noteTools.save.name, description: "Manually save the complete draft", inputSchema: schema(writes), _meta: { ui: { ...ui, visibility: ["app"] } } }
+  ]
+}));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args = {} } = request.params;
-    const data = name === "read_note" ? notes.read() : name === "list_notes" ? { notes: [{ id: "welcome", uri: "notes://welcome", title: "\u534F\u4F5C\u7B14\u8BB0" }] } : name === "save_note_draft" ? notes.write(args, "save") : name === "apply_note_operations" ? notes.write(args, "replace") : void 0;
+    const data = name === noteTools.read.name ? notes.read() : name === noteTools.list.name ? { notes: [{ id: "welcome", uri: "notes://welcome", title: "\u534F\u4F5C\u7B14\u8BB0" }] } : name === noteTools.save.name ? notes.write(args, "save") : name === noteTools.apply.name ? notes.write(args, "replace") : void 0;
     if (!data) throw new Error("unknown_tool");
     if (data.saved && !data.duplicate && subscriptions.has("notes://welcome")) await server.notification({ method: "notifications/resources/updated", params: { uri: "notes://welcome" } });
     return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data, _meta: { editor: "notes-app" } };
@@ -17080,10 +17099,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: error2.message }], isError: true };
   }
 });
-server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [
-  { uri: "ui://notes/editor", name: "\u534F\u4F5C\u7B14\u8BB0", mimeType: "text/html;profile=mcp-app" },
-  { uri: "notes://welcome", name: "Welcome", mimeType: "application/json" }
-] }));
+server.setRequestHandler(ListResourcesRequestSchema, () => ({
+  resources: [
+    { uri: "ui://notes/editor", name: "\u534F\u4F5C\u7B14\u8BB0", mimeType: "text/html;profile=mcp-app" },
+    { uri: "notes://welcome", name: "Welcome", mimeType: "application/json" }
+  ]
+}));
 server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates: [] }));
 server.setRequestHandler(ReadResourceRequestSchema, (request) => {
   const uri = request.params.uri;

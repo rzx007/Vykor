@@ -134,7 +134,10 @@ Native 参数 schema 来自工具真实注册结果，不在 Apps 清单另造�
 
 ```js
 import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
+import { createPluginAppClient } from "./app-client.mjs";
+import { textInspectorTools } from "../tools/app-tools.mjs";
 const app = new App({ name: "My App", version: "1.0.0" }, { availableDisplayModes: ["inline", "fullscreen"] });
+const tools = createPluginAppClient(app);
 function show(result) {
   if (result.isError) throw new Error("工具失败，请查看回执");
   // 校验 structuredContent 后显示；这里不能再次调用工具或保存。
@@ -145,7 +148,7 @@ app.onhostcontextchanged = context => {
 };
 await app.connect();
 // 用户明确点击按钮后：主动返回值不会自动触发 ontoolresult。
-const result = await app.callServerTool({ name: "TextInspectorCheck", arguments: { text: "hello " } });
+const result = await tools.call(textInspectorTools.check, { text: "hello " });
 show(result);
 ```
 
@@ -156,6 +159,38 @@ Agent 调用已关联页面的工具后，宿主把结果返回 Agent，同时�
 先登记通知再 connect，避免丢失握手时的首个结果。从具名入口直接打开时，不能假设已有 Agent 结果：Text Inspector 显示空表单；天气模板主动读取真实备忘与收藏，未查询前不伪造天气。实时结果优先在工作摘要提示，点击具名入口后定位右侧，不反复抢占焦点。
 
 完整天气接线见 [页面入口](../skills/create-plugin/templates/weather-travel/ui/panel.mjs)与[页面交互](../skills/create-plugin/templates/weather-travel/ui/view.mjs)；Text Inspector 的错误、选区和 48,000 字节交互边界见 [页面源码](../examples/plugins/text-inspector/ui/panel.mjs)。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
+
+### 页面调用的类型提示
+
+`@vykor/plugins/app-client` 提供浏览器可用的 `definePluginAppTool` 和 `createPluginAppClient`。工具定义集中保存真实名称、参数类型和页面结构化结果类型，页面通过对象属性选择工具，避免在各处手写名称字符串。Node Tool 的 `name` 或 MCP 注册也可引用同一定义的 `.name`。
+
+TypeScript 示例：
+
+```ts
+import { definePluginAppTool, createPluginAppClient } from "@vykor/plugins/app-client";
+
+const search = definePluginAppTool<
+  { query: string },
+  { items: Array<{ id: string; title: string }> }
+>("search_notes");
+
+const tools = createPluginAppClient(app);
+const result = await tools.call(search, { query: "部署流程" }, { signal });
+// result.structuredContent?.items 提供字段提示；仍须按页面规则校验结果。
+```
+
+JavaScript 插件也可在共享定义中通过 JSDoc 获得相同提示：
+
+```js
+import { definePluginAppTool } from "../ui/app-client.mjs";
+
+/** @type {import('../ui/app-client.mjs').PluginAppTool<{ query: string }, { items: Array<{ id: string, title: string }> }>} */
+export const search = definePluginAppTool("search_notes");
+```
+
+独立模板和示例随包携带 `ui/app-client.mjs` 与 `ui/app-client.d.mts`，正常构建会把运行代码打进离线 HTML，移出仓库也能使用。它们由 [页面调用源码](../packages/plugins/src/app-client/client.ts) 自动生成；在本仓库修改源码后运行 `node scripts/sync-plugin-app-client.mjs`，不手改副本。参考 [Text Inspector 共享定义](../examples/plugins/text-inspector/tools/app-tools.mjs)、[Notes 共享定义](../examples/plugins/notes-app/src/app-tools.mjs)和[天气共享定义](../skills/create-plugin/templates/weather-travel/src/app-tools.mjs)。
+
+封装仍只调用官方 `app.callServerTool()`，完整保留 `content`、`isError`、`_meta` 和原始异常，传输选项也沿用原 App。它不解析文本 JSON、不抽走结构化数据、不自动重试；`structuredContent` 可能缺失。类型提示不会注册工具、增加权限或替代已有输入与业务结果校验；结构化错误数据与成功数据不同的插件，应在输出类型中声明对应联合类型。宿主的来源检查、确认、执行记录和回执继续走原链路。
 
 ## 可见上下文与普通消息
 

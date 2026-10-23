@@ -1,6 +1,9 @@
 import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
 import { ResourceListChangedNotificationSchema, ReadResourceResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { createPluginAppClient } from './app-client.mjs';
+import { noteTools } from '../src/app-tools.mjs';
 const app = new App({ name: "Notes", version: "1.0.1" }, { availableDisplayModes: ["inline", "fullscreen"] });
+const tools = createPluginAppClient(app);
 const el = id => document.getElementById(id);
 let note, latest, adoptionRevision, dirty = false, saving = false, unconfirmed = false, connected = false;
 const report = message => { el("status").textContent = message; };
@@ -83,7 +86,7 @@ el("save").onclick = async () => {
   saving = true; controls(); el("draft").readOnly = true;
   const input = { expectedRevision: note.revision, operationId: crypto.randomUUID(), text: el("draft").value };
   try {
-    const result = await app.callServerTool({ name: "save_note_draft", arguments: input });
+    const result = await tools.call(noteTools.save, input);
     if (result.isError) { report(result.content?.map(item => item.text ?? "").join("\n") || "保存失败，草稿已保留。"); await refresh(); }
     else if (result.structuredContent?.operationId === input.operationId && result.structuredContent.saved === true) { unconfirmed = false; render(result.structuredContent, true); }
     else markUnconfirmed();

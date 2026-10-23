@@ -2,6 +2,8 @@
 
 这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在文字结果旁显示入口，打开右侧固定面板。用户编辑文本、检查、勾选问题，再经宿主确认生成修复预览。插件 ID 为 `example.text-inspector`，版本为 `1.2.1`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
 
+`tools/app-tools.mjs` 集中定义检查和预览的名称、参数及结构化结果类型，后台注册和页面调用共用。页面通过 `createPluginAppClient(app).call(textInspectorTools.check, { text })` 调用，仍使用官方 `callServerTool`；结果校验、草稿及错误处理保留原规则。`ui/app-client.mjs` 和 `.d.mts` 是随包分发的自动生成文件，构建时合入离线 HTML，无需引用仓库路径。
+
 检查规则按需展开；无问题时直接显示无需修复。协作优先使用“引用到聊天”，直接发送收在“更多协作操作”中。编辑后旧问题选择失效；新的工具结果会保留当前编辑，只有明确点击“替换当前文本，查看新结果”才替换草稿。
 
 入口由 `.vykor-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
