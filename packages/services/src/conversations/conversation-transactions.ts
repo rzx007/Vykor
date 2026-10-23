@@ -24,13 +24,13 @@ import {
   isTerminalAttemptStatus,
   maxSeq,
   now,
-} from "../session-runtime/store-state.js";
+} from "../session-runtime/persistence/store-state.js";
 import {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
   uniqueReferencedBytes,
-} from "../session-runtime/prompt-attachments.js";
-import { formatSessionTitle, isPlaceholderSessionTitle } from "../session-runtime/title.js";
+} from "../attachments/prompt-attachments.js";
+import { formatSessionTitle, isPlaceholderSessionTitle } from "../sessions/title.js";
 
 export type AdmitPromptTransactionInput = Omit<AdmitPromptInput, "content" | "items"> & {
   content?: string;

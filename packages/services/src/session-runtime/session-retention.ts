@@ -12,7 +12,7 @@ import {
   workflowExecutionClaims,
   workflowRuns,
 } from "./schema.js";
-import { now, type SessionState } from "./store-state.js";
+import { now, type SessionState } from "./persistence/store-state.js";
 
 export interface RetentionPolicy {
   durableEventMaxAgeMs: number;

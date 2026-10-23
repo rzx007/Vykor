@@ -131,7 +131,7 @@ cursor + session + inputs + messages + parts + runs + attempts + tasks + permiss
 | 公共记录类型 | `packages/protocol/src/session.ts` |
 | SQLite schema 和 migration | `packages/services/src/session-runtime/migrations` |
 | Store 写入与状态转移 | `packages/services/src/session-runtime/store.ts` |
-| Durable event registry | `packages/services/src/session-runtime/event-registry.ts` |
+| Durable event registry | `packages/services/src/session-runtime/events/event-registry.ts` |
 | Agent 事件投影 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
 | 投影恢复 | `packages/server/src/application/agent/projection-settlement-recovery.ts` |
 | Store 契约测试 | `packages/services/src/session-runtime/__test__/store.test.ts` |

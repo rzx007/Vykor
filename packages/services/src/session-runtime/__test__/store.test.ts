@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import { SessionStore, type SessionStoreOptions } from "../store.js";
-import { createDurableEventRegistry } from "../event-registry.js";
+import { createDurableEventRegistry } from "../events/event-registry.js";
 import { PermissionRepository } from "../../permissions/permission-repository.js";
 
 const fixtureEventRegistry = createDurableEventRegistry([

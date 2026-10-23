@@ -4,9 +4,9 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { CreateProjectionSettlementInput, ListProjectionSettlementsOptions } from "./commands.js";
 import type { ProjectionSettlementRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionDatabase } from "../database/session-database.js";
-import type { TemporaryControlRecords } from "../database/temporary-control-records.js";
+import type { TemporaryControlRecords } from "../database/persistence/temporary-control-records.js";
 import { projectionSettlements } from "./schema.js";
-import { decode, encode, now } from "./store-state.js";
+import { decode, encode, now } from "./persistence/store-state.js";
 
 export function createProjectionSettlement(
   database: SessionDatabase["orm"],

@@ -52,8 +52,8 @@ test("sessions, conversations, and runs cannot import server", () => {
 });
 
 test("database cannot depend on sessions, conversations, or runs", () => {
-  assert.deepEqual(checkImportBoundary("packages/services/src/database/read-model.ts", "@vykor/domain-contracts/sessions"), []);
-  assert.deepEqual(checkImportBoundary("packages/services/src/database/read-model.ts", "@vykor/services/sessions"), ["packages/services/src/database/read-model.ts must not depend on sessions"]);
+  assert.deepEqual(checkImportBoundary("packages/services/src/database/persistence/read-model.ts", "@vykor/domain-contracts/sessions"), []);
+  assert.deepEqual(checkImportBoundary("packages/services/src/database/persistence/read-model.ts", "@vykor/services/sessions"), ["packages/services/src/database/persistence/read-model.ts must not depend on sessions"]);
   assert.deepEqual(
     checkImportBoundary("packages/services/src/database/storage-context.ts", "../sessions/index.js"),
     ["packages/services/src/database/storage-context.ts must not depend on sessions"],
@@ -89,7 +89,7 @@ test("allowed imports return no errors", () => {
     [],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/services/src/sessions/session-repository.ts", "../session-runtime/store-state.js"),
+    checkImportBoundary("packages/services/src/sessions/session-repository.ts", "../session-runtime/persistence/store-state.js"),
     [],
   );
   assert.deepEqual(
@@ -638,7 +638,7 @@ test("storage repositories and session runtime reject hosts, process execution, 
     for (const specifier of ["@vykor/core", "@vykor/execution-node", "@vykor/memory", "@vykor/sandbox", "@vykor/server", "@vykor/client", "@vykor/tools", "@vykor/agent-runtime", "node-pty", "openai", "node:child_process"]) {
       assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Host"], typeOnly: true }, strictPolicy()).length > 0, fromFile + " -> " + specifier);
     }
-    for (const resolvedFile of ["packages/services/src/office/index.ts", "packages/services/src/autodream/index.ts", "packages/services/src/memory-extract.ts", "packages/services/src/models/host.ts", "packages/services/src/terminal/pty.ts"]) {
+    for (const resolvedFile of ["packages/services/src/office/index.ts", "packages/services/src/memory/autodream/index.ts", "packages/services/src/memory/memory-extract.ts", "packages/services/src/models/host.ts", "packages/services/src/terminal/pty.ts"]) {
       assert.ok(checkModuleDependency({ fromFile, specifier: "../hidden.js", resolvedFile, importedNames: ["Host"] }, strictPolicy()).length > 0, fromFile + " -> " + resolvedFile);
     }
     assert.deepEqual(checkModuleDependency({ fromFile, specifier: "../database/index.js", resolvedFile: "packages/services/src/database/index.ts", importedNames: ["StorageContext"], typeOnly: true }, strictPolicy()), []);
@@ -757,7 +757,7 @@ test("P13 keeps Server transport types out of daemon and application code", () =
 });
 
 test("P13 allows storage canonical plugin data origins without opening a direct capability dependency", () => {
-  const fromFile = "packages/services/src/database/read-model.ts";
+  const fromFile = "packages/services/src/database/persistence/read-model.ts";
   assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/manifest.ts", importedNames: ["PluginAppBackendKind"], declarationOrigin: true, typeOnly: true }, targetPolicy), []);
   assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/plugin-contracts/manifest", importedNames: ["PluginAppBackendKind"], typeOnly: true }, targetPolicy).length);
   assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/runtime.ts", importedNames: ["PluginAppRuntimeLease"], declarationOrigin: true, typeOnly: true }, targetPolicy).length);

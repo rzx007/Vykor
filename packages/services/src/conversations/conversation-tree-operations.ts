@@ -2,9 +2,9 @@ import type { CreateSessionInput } from "../sessions/commands.js";
 import type { SessionInputRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 import { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";
 import type { StorageContext } from "../database/storage-context.js";
-import { assertSynchronousCommit } from "../database/chat-persistence.js";
+import { assertSynchronousCommit } from "../database/persistence/chat-persistence.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
-import { assertSession, clone } from "../session-runtime/store-state.js";
+import { assertSession, clone } from "../session-runtime/persistence/store-state.js";
 import type { ConversationRepository } from "./conversation-repository.js";
 import type { AdmitPromptTransactionInput, ConversationTransactionTestHooks } from "./conversation-transactions.js";
 

@@ -6,14 +6,14 @@ import type { AppendEventInput } from "../conversations/commands.js";
 import type { CreateSessionInput, ListSessionsOptions, UpdateSessionInput, ClearSessionWorktreeBindingInput } from "./commands.js";
 import type { ProjectRecord, SessionEventRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 
-import { atomicWrite } from "../database/atomic-write.js";
+import { atomicWrite } from "../database/transactions/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   assertMutableSession,
   assertSession,
   clone,
   now,
-} from "../session-runtime/store-state.js";
+} from "../session-runtime/persistence/store-state.js";
 
 export interface SessionRepositoryOptions {
   storage: StorageContext;

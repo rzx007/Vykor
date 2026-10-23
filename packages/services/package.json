@@ -10,8 +10,8 @@
       "types": "./src/index.ts"
     },
     "./memory-extract": {
-      "import": "./src/memory-extract.ts",
-      "types": "./src/memory-extract.ts"
+      "import": "./src/memory/memory-extract.ts",
+      "types": "./src/memory/memory-extract.ts"
     },
     "./workflows": {
       "import": "./src/workflows/index.ts",
@@ -24,7 +24,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "drizzle-kit check --config drizzle.config.ts",
     "test": "vitest run",
-    "test:bundled-baseline": "bun run scripts/check-bundled-baseline.ts",
+    "test:bundled-baseline": "bun run scripts/__test__/bundled-baseline.test.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {

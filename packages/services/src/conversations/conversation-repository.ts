@@ -4,19 +4,19 @@ import type { AppendEventInput, CreateMessageInput, ListEventsOptions, ListMessa
 import type { SessionEventRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 
-import { atomicWrite } from "../database/atomic-write.js";
+import { atomicWrite } from "../database/transactions/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   type DurableEventRegistry,
   defaultDurableEventRegistry,
-} from "../session-runtime/event-registry.js";
+} from "../session-runtime/events/event-registry.js";
 import {
   assertMessage,
   assertSession,
   clone,
   maxSeq,
   now,
-} from "../session-runtime/store-state.js";
+} from "../session-runtime/persistence/store-state.js";
 
 export interface ConversationRepositoryOptions {
   storage: StorageContext;

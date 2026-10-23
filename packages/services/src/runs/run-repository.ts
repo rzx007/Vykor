@@ -5,7 +5,7 @@ import type { AppendEventInput } from "../conversations/commands.js";
 import type { CreateRunAttemptInput, CreateRunInput, CreateSessionTaskInput, UpdateRunAttemptInput, UpdateRunInput, UpdateSessionTaskInput } from "./commands.js";
 import type { SessionEventRecord, SessionExecutionRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 
-import { atomicWrite } from "../database/atomic-write.js";
+import { atomicWrite } from "../database/transactions/atomic-write.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   assertMutableSession,
@@ -14,7 +14,7 @@ import {
   isTerminalAttemptStatus,
   isTerminalRunStatus,
   now,
-} from "../session-runtime/store-state.js";
+} from "../session-runtime/persistence/store-state.js";
 
 export interface RunRepositoryOptions {
   storage: StorageContext;

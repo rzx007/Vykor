@@ -4,4 +4,4 @@ export {
   TransactionCoordinator,
   type TransactionCoordinatorHooks,
   type TransactionCoordinatorOptions,
-} from "./transaction-coordinator.js";
+} from "./transactions/transaction-coordinator.js";

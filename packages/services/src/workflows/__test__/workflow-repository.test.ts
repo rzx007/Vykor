@@ -1,0 +1,243 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, expect, it, vi } from "vitest";
+
+import { SessionStore } from "../../session-runtime/store.js";
+import { WorkflowRepository } from "../workflow-repository.js";
+
+describe("WorkflowRepository", () => {
+  it("keeps formal workflow foreign keys and records its actual formal owner", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-formal-workflow-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.sessions.create({ id: "formal", cwd: process.cwd(), model: "m" });
+      store.conversationTransactions.admitPrompt({ id: "formal-input", sessionId: "formal", content: "run" });
+      store.runs.createRun({ id: "formal-run", sessionId: "formal", inputId: "formal-input" });
+      store.workflows.saveRun({
+        runId: "workflow", ownerSessionId: "formal", ownerInputId: "formal-input", ownerRunId: "formal-run",
+        status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2, taskAttempts: [],
+      });
+      expect((store as any).storage.database.connection.prepare(
+        "SELECT owner_session_id, owner_input_id, owner_run_id FROM workflow_run WHERE run_id = ?",
+      ).get("workflow")).toEqual({ owner_session_id: "formal", owner_input_id: "formal-input", owner_run_id: "formal-run" });
+      expect(store.workflows.listRuns({ ownerSessionId: "formal" })[0]).toMatchObject({
+        origin: { storage: "sqlite", sessionId: "formal", inputId: "formal-input", runId: "formal-run" },
+      });
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("persists temporary workflow provenance without chat foreign keys and reloads it after the chat disappears", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-temporary-workflow-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    const input = {
+      runId: "temporary-workflow", ownerSessionId: "temporary", ownerInputId: "temporary-input",
+      ownerRunId: "temporary-run", status: "running", snapshotJson: '{"ownerSession":"temporary"}',
+      createdAt: 1, updatedAt: 2, taskAttempts: [],
+    };
+    try {
+      const main = store.sessions.create({ id: "main", cwd: process.cwd(), model: "m" });
+      (store as any).storage.state.sessions.temporary = {
+        ...main, id: "temporary", storage: "memory", metadata: { fork: { sourceSessionId: "main" } },
+      };
+      store.workflows.saveRun(input);
+      const database = (store as any).storage.database.connection;
+      expect(database.prepare("SELECT owner_session_id, owner_input_id, owner_run_id FROM workflow_run WHERE run_id = ?").get(input.runId))
+        .toEqual({ owner_session_id: null, owner_input_id: null, owner_run_id: null });
+      expect(store.workflows.loadRun(input.runId)).toMatchObject({
+        ownerSessionId: "temporary", ownerInputId: "temporary-input", ownerRunId: "temporary-run",
+        origin: { storage: "memory", sessionId: "temporary", sourceSessionId: "main", inputId: "temporary-input", runId: "temporary-run" },
+      });
+      expect(store.workflows.listRuns({ ownerSessionId: "main" })).toEqual([]);
+      delete (store as any).storage.state.sessions.temporary;
+      store.close();
+      const reopened = new SessionStore({ path });
+      try {
+        expect(reopened.workflows.listRuns({ ownerSessionId: "temporary" })).toHaveLength(1);
+        reopened.workflows.saveRun({ ...input, status: "completed", updatedAt: 3 });
+        expect(reopened.workflows.loadRun(input.runId)).toMatchObject({ status: "completed", origin: { storage: "memory", sessionId: "temporary" } });
+        expect((reopened as any).storage.database.connection.pragma("foreign_key_check")).toEqual([]);
+      } finally { reopened.close(); }
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("saves and reloads a run with its task attempts", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-repository-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const repository = new WorkflowRepository((store as any).storage);
+      repository.saveRun({
+        runId: "workflow-1",
+        status: "running",
+        snapshotJson: '{"runId":"workflow-1","status":"running"}',
+        createdAt: 10,
+        updatedAt: 20,
+        taskAttempts: [
+          {
+            taskId: "task-1",
+            attempt: 1,
+            status: "running",
+            payloadJson: '{"taskId":"task-1"}',
+            startedAt: 15,
+          },
+        ],
+      });
+
+      expect(repository.loadRun("workflow-1")).toMatchObject({
+        runId: "workflow-1",
+        status: "running",
+        snapshotJson: '{"runId":"workflow-1","status":"running"}',
+      });
+      expect(repository.listRuns({ status: "running" })).toHaveLength(1);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses the attempt insertion query when saving a large snapshot", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-batch-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const database = (store as any).storage.database.connection;
+      const prepare = vi.spyOn(database, "prepare");
+      let preparations: number;
+      try {
+        store.workflows.saveRun({
+          runId: "batch", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2,
+          taskAttempts: Array.from({ length: 30 }, (_, index) => ({
+            taskId: `task-${index}`, attempt: 1, status: "done", payloadJson: JSON.stringify({ index }), startedAt: 1,
+          })),
+        });
+        preparations = prepare.mock.calls.length;
+      } finally {
+        prepare.mockRestore();
+      }
+      expect(preparations).toBe(3);
+      expect(database.prepare("SELECT count(*) AS count FROM workflow_task_attempt WHERE workflow_run_id = ?").get("batch"))
+        .toEqual({ count: 30 });
+      expect(database.prepare("SELECT payload_json, finished_at FROM workflow_task_attempt WHERE task_id = ?").get("task-29"))
+        .toEqual({ payload_json: '{"index":29}', finished_at: null });
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rolls back the run and old attempts when replacement fails", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-rollback-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const repository = new WorkflowRepository((store as any).storage);
+      const original = {
+        runId: "workflow-rollback",
+        status: "running",
+        snapshotJson: '{"version":"old"}',
+        createdAt: 10,
+        updatedAt: 20,
+        taskAttempts: [{ taskId: "old", attempt: 1, status: "done", payloadJson: "{}", startedAt: 10 }],
+      };
+      repository.saveRun(original);
+      const database = (store as any).storage.database.connection;
+      database.exec(`CREATE TRIGGER fail_second_workflow_attempt BEFORE INSERT ON workflow_task_attempt WHEN NEW.task_id = 'second' BEGIN SELECT RAISE(ABORT, 'forced attempt failure'); END;`);
+
+      expect(() => repository.saveRun({
+        ...original,
+        status: "completed",
+        snapshotJson: '{"version":"new"}',
+        updatedAt: 30,
+        taskAttempts: [
+          { taskId: "first", attempt: 1, status: "done", payloadJson: "{}", startedAt: 20 },
+          { taskId: "second", attempt: 1, status: "done", payloadJson: "{}", startedAt: 20 },
+        ],
+      })).toThrow("forced attempt failure");
+
+      expect(repository.loadRun(original.runId)?.snapshotJson).toBe('{"version":"old"}');
+      expect(database.prepare("SELECT task_id FROM workflow_task_attempt WHERE workflow_run_id = ?").all(original.runId)).toEqual([{ task_id: "old" }]);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("orders events and enforces claim ownership", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-claim-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const repository = new WorkflowRepository((store as any).storage);
+      repository.saveRun({ runId: "workflow-claim", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      expect(repository.appendEvent({ runId: "workflow-claim", type: "started", eventJson: '{"n":1}', createdAt: 1 })).toBe(1);
+      expect(repository.appendEvent({ runId: "workflow-claim", type: "step", eventJson: '{"n":2}', createdAt: 2 })).toBe(2);
+      expect(repository.listEvents("workflow-claim")).toEqual(['{"n":1}', '{"n":2}']);
+
+      expect(repository.claimRun("workflow-claim", "owner-a")).toMatchObject({ ownerId: "owner-a", generation: 1 });
+      expect(() => repository.claimRun("workflow-claim", "owner-a")).toThrow("already claimed");
+      expect(repository.claimRun("workflow-claim", "owner-b")).toMatchObject({ ownerId: "owner-b", generation: 2 });
+      expect(() => repository.finishClaim("workflow-claim", "owner-a", "failed")).toThrow("not active");
+      repository.finishClaim("workflow-claim", "owner-b", "completed");
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps stable event record ids and order", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-event-records-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const repository = new WorkflowRepository((store as any).storage);
+      repository.saveRun({ runId: "wf-1", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      repository.appendEvent({ runId: "wf-1", type: "started", eventJson: '{"type":"workflow_started"}', createdAt: 1 });
+      repository.appendEvent({ runId: "wf-1", type: "broken", eventJson: "{broken", createdAt: 2 });
+
+      const records = repository.listEventRecords("wf-1");
+      expect(records.map((row) => row.eventJson)).toEqual(['{"type":"workflow_started"}', "{broken"]);
+      expect(records[0]?.id).toBeTruthy();
+      expect(records[1]?.id).not.toBe(records[0]?.id);
+      expect(repository.listEvents("wf-1")).toEqual(['{"type":"workflow_started"}', "{broken"]);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reloads replacements and rejects writes after the application owner changes", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-owner-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    try {
+      const lease = store.acquireApplicationOwner({ ownerId: "owner-a", pid: 1, staleAfterMs: 1_000, now: 10 });
+      const repository = store.workflows;
+      repository.saveRun({ runId: "owned", status: "running", snapshotJson: '{"v":1}', createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      repository.saveRun({ runId: "owned", status: "completed", snapshotJson: '{"v":2}', createdAt: 1, updatedAt: 2, taskAttempts: [] });
+      const returned = repository.loadRun("owned")!;
+      returned.status = "caller-mutated";
+      expect(repository.loadRun("owned")?.status).toBe("completed");
+
+      (store as any).storage.database.connection.prepare("UPDATE application_owner SET owner_id = 'owner-b' WHERE key = 'application'").run();
+      expect(() => repository.saveRun({ runId: "blocked", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] })).toThrow();
+      expect(() => repository.appendEvent({ runId: "owned", type: "x", eventJson: "{}", createdAt: 1 })).toThrow();
+      expect(() => repository.claimRun("owned", "claim-owner")).toThrow();
+      expect(() => repository.finishClaim("owned", "claim-owner", "failed")).toThrow();
+      void lease;
+    } finally {
+      store.close();
+    }
+
+    const reopened = new SessionStore({ path });
+    try {
+      expect(reopened.workflows.loadRun("owned")).toMatchObject({ status: "completed", snapshotJson: '{"v":2}' });
+    } finally {
+      reopened.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});

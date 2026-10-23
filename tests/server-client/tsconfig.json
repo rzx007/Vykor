@@ -120,7 +120,7 @@
         "../../packages/services/src/index.ts"
       ],
       "@vykor/services/memory-extract": [
-        "../../packages/services/src/memory-extract.ts"
+        "../../packages/services/src/memory/memory-extract.ts"
       ],
       "@vykor/services/workflows": [
         "../../packages/services/src/workflows/index.ts"

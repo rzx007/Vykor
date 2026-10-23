@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PluginAppRecord } from "@vykor/domain-contracts/plugin-apps";
 import type { StorageContext } from "../database/storage-context.js";
-import { assertMutableSession, assertSession, clone } from "../session-runtime/store-state.js";
+import { assertMutableSession, assertSession, clone } from "../session-runtime/persistence/store-state.js";
 
 export type CreatePluginAppInput = Omit<PluginAppRecord, "id" | "status" | "controlRevision" | "activeActionRunId" | "lastActionRunId" | "createdAt" | "updatedAt"> & { id?: string };
 

@@ -181,9 +181,9 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 
 ## 验证入口
 
-- `packages/services/src/database/transaction-coordinator.test.ts`：提交、回滚和 deferred callback；
+- `packages/services/src/database/transactions/__test__/transaction-coordinator.test.ts`：提交、回滚和 deferred callback；
 - `packages/services/src/*/*-repository.test.ts`：各领域 SQL/read model 行为；
-- `packages/services/src/conversations/conversation-transactions.test.ts`：跨域事务与失败回滚；
+- `packages/services/src/conversations/__test__/conversation-transactions.test.ts`：跨域事务与失败回滚；
 - `packages/services/src/session-runtime/__test__/store.test.ts`：数据库生命周期、owner、recovery、retention 和系统级能力；
 - `packages/services/src/session-runtime/__test__/session-task-waiting.test.ts`：task waiter 不丢唤醒；
 - `node scripts/architecture-boundaries.mjs`：依赖方向和旧平铺调用基线；

@@ -10,5 +10,5 @@ try {
   }
   const schema = database.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE ? AND name != ? ORDER BY type,name").all("sqlite_%", "__drizzle_migrations");
   const tables = schema.filter((row) => row.type === "table").map((row) => ({ name: row.name, columns: database.pragma(`table_info(${JSON.stringify(row.name)})`), foreignKeys: database.pragma(`foreign_key_list(${JSON.stringify(row.name)})`) }));
-  writeFileSync(new URL("../src/database/__fixtures__/current-schema-inventory.json", import.meta.url), JSON.stringify({ schema, tables }, null, 2) + "\n");
+  writeFileSync(new URL("../src/database/__test__/fixtures/current-schema-inventory.json", import.meta.url), JSON.stringify({ schema, tables }, null, 2) + "\n");
 } finally { database.close(); }

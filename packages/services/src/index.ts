@@ -45,7 +45,7 @@ export {
   toolOutputPreviewChars,
   microcompactToolResultChars,
   isMicrocompactableToolResult,
-} from "./tool-outputs.js";
+} from "./tool-outputs/tool-outputs.js";
 
 export {
   MAX_SESSION_MEMORY_CHARS,
@@ -57,7 +57,7 @@ export {
   buildSessionMemoryDocument,
   sessionMemoryToCompactText,
   type CheckpointMessageLike,
-} from "./session-memory.js";
+} from "./memory/session-memory.js";
 
 export {
   EXTRACTION_SYSTEM_PROMPT,
@@ -69,8 +69,8 @@ export {
   type ExtractionRecord,
   type ExtractionResult,
   type ExtractMemoriesOptions,
-} from "./memory-extract.js";
-export * from "./autodream/index.js";
+} from "./memory/memory-extract.js";
+export * from "./memory/autodream/index.js";
 export * from "./attachments/index.js";
 export * from "./plugin-apps/index.js";
 export type { GoalOperations } from "./goals/index.js";

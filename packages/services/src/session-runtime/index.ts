@@ -14,19 +14,19 @@ export {
   DurableEventRegistry,
   DurableEventRegistryError,
   DEFAULT_DURABLE_EVENT_DEFINITIONS,
-} from "./event-registry.js";
+} from "./events/event-registry.js";
 export type {
   DurableEventDefinition,
   DurableEventScope,
   PreparedDurableEvent,
-} from "./event-registry.js";
-export { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
+} from "./events/event-registry.js";
+export { formatSessionTitle, isPlaceholderSessionTitle } from "../sessions/title.js";
 export {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
   uniqueReferencedBytes,
-} from "./prompt-attachments.js";
+} from "../attachments/prompt-attachments.js";
 export type {
   NormalizedPromptAttachment,
   ReferencedAttachmentSize,
-} from "./prompt-attachments.js";
+} from "../attachments/prompt-attachments.js";

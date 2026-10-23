@@ -16,7 +16,7 @@
 ## TS 落位
 
 全部进 `packages/services/src/`（已有 tasks/lsp/compact 等子目录的既有包）：
-`tool-outputs.ts`、`session-memory.ts`、`memory-extract.ts`、`autodream/`。
+`tool-outputs/tool-outputs.ts`、`memory/session-memory.ts`、`memory/memory-extract.ts`、`autodream/`。
 
 ## 关键适配决策
 

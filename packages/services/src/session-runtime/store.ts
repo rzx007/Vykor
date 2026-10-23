@@ -40,14 +40,14 @@ export type {
 } from "../attachments/index.js";
 import { AttachmentError } from "../attachments/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
-import { DurableEventSequence } from "../database/event-sequence.js";
-import { DeltaCheckpoint } from "../database/delta-checkpoint.js";
+import { DurableEventSequence } from "../database/persistence/event-sequence.js";
+import { DeltaCheckpoint } from "../database/persistence/delta-checkpoint.js";
 import {
   cloneMutationBuffer,
   createMutationBuffer,
   hasPendingMutations,
   type MutationBuffer,
-} from "../database/mutation-buffer.js";
+} from "../database/transactions/mutation-buffer.js";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   TransactionCoordinator,
@@ -78,11 +78,11 @@ import type {
   StoredWorkflowRunInput,
   StoredWorkflowRunRecord,
 } from "../workflows/workflow-records.js";
-import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
+import { formatSessionTitle, isPlaceholderSessionTitle } from "../sessions/title.js";
 import {
   defaultDurableEventRegistry,
   type DurableEventRegistry,
-} from "./event-registry.js";
+} from "./events/event-registry.js";
 
 type StoreAdmitPromptInput = Omit<AdmitPromptInput, "content" | "items"> & {
   content?: string;
@@ -101,11 +101,11 @@ import {
   maxSeq,
   type SessionStoreOptions,
   type SessionState,
-} from "./store-state.js";
-import { persistSessionChanges } from "./store-persistence.js";
-import { assertSynchronousCommit, ChatPersistenceRouter } from "../database/chat-persistence.js";
-import { TemporaryControlRecords } from "../database/temporary-control-records.js";
-import { SqliteChatPersistence } from "../database/sqlite-chat-persistence.js";
+} from "./persistence/store-state.js";
+import { persistSessionChanges } from "./persistence/store-persistence.js";
+import { assertSynchronousCommit, ChatPersistenceRouter } from "../database/persistence/chat-persistence.js";
+import { TemporaryControlRecords } from "../database/persistence/temporary-control-records.js";
+import { SqliteChatPersistence } from "../database/persistence/sqlite-chat-persistence.js";
 import {
   abandonProjectionSettlement,
   createProjectionSettlement,
@@ -129,9 +129,9 @@ import {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
   uniqueReferencedBytes,
-} from "./prompt-attachments.js";
+} from "../attachments/prompt-attachments.js";
 
-export type { SessionStoreOptions } from "./store-state.js";
+export type { SessionStoreOptions } from "./persistence/store-state.js";
 
 export type {
   StoredWorkflowRunInput,

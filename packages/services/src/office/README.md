@@ -11,3 +11,28 @@ office-work 的 build.ps1 将本目录的 office-engine.mjs 复制进插件 ZIP�
 Word 文字提取使用段落查询，包含表格中的段落并保留行、列路径。引擎输出超过上限或被截断时明确报错，不将部分内容当成完整结果。
 
 交付检查：`node apps/desktop/scripts/verify-office-packaging.mjs`。安装包解压后用 `--artifact <resources目录>` 核对实际资源和主程序；设置 `ELECTRON_RUN_AS_NODE=1`，用解包应用可执行文件运行同一脚本并加 `--smoke`，验证运行进程可自动定位引擎及读取 Word 表格。只生成临时测试文件，不启动界面。
+
+## 入口与流程
+
+`readOfficeBytes()` 或 `readOfficeFile()` 校验格式与大小，再通过 Office 引擎读取临时副本；文字辅助函数检查输出完整性。
+
+## 状态归属
+
+原件由调用方持有，缓存按内容校验值区分；引擎操作独立临时副本并在结束时清理。
+
+## 主要文件
+
+| 文件 | 主要接口或用途 |
+| --- | --- |
+| [contracts.ts](./contracts.ts) | `OfficeDocumentPreview` |
+| [index.ts](./index.ts) | 汇总本分类的接口 |
+| [office-documents.ts](./office-documents.ts) | `MAX_OFFICE_BYTES`、`readOfficeBytes`、`readOfficeFile` |
+| [office-engine.d.mts](./office-engine.d.mts) | Office 引擎的 TypeScript 类型声明 |
+| [office-engine.mjs](./office-engine.mjs) | `OFFICE_VERSION`、`OFFICE_ASSETS`、`hash` 等 |
+| [office-text.ts](./office-text.ts) | `wordParagraphText`、`assertCompleteOfficeText` |
+
+## 测试与维护
+
+Office 读取、引擎接入和输出转换放在这里，具体界面预览由桌面端负责。
+
+测试放在所属分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移时同步导入、公开入口、资源地址、文档和旧引用清单。
