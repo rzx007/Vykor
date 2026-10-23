@@ -5,7 +5,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/client"
+} from "@rzx/client"
 
 import type { DesktopAttachmentCandidate, DesktopAttachmentUploadEvent } from "@shared/attachment-types"
 

@@ -98,7 +98,7 @@
     {
       "id": "client",
       "type": "backend",
-      "label": "@vykor/client",
+      "label": "@rzx/client",
       "sublabel": "仅 Protocol / 本地显示投影",
       "tag": "packages/client",
       "pos": [

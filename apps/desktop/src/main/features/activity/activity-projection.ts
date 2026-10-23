@@ -1,4 +1,4 @@
-import type { VykorClientState, ScheduledRunRecord, SessionBucket } from "@vykor/client"
+import type { VykorClientState, ScheduledRunRecord, SessionBucket } from "@rzx/client"
 import type {
   DesktopExecutionState,
   DesktopScheduledActivity,

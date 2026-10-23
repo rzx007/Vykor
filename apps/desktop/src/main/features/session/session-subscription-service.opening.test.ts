@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { SessionStateSnapshot } from "@vykor/client"
+import type { SessionStateSnapshot } from "@rzx/client"
 
 import { SessionSubscriptionService } from "./session-subscription-service"
 

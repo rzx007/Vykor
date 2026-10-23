@@ -22,7 +22,7 @@ for (const name of ["electron-updater", "electron-log"]) {
 }
 
 for (const name of Object.keys(packageJson.dependencies ?? {})) {
-  if (name.startsWith("@vykor/")) {
+  if (name.startsWith("@vykor/") || name === "@rzx/client") {
     failures.push(
       `${name} must not be a Desktop production dependency (bundle workspace packages; see docs/packaging.md)`,
     )

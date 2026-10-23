@@ -48,7 +48,7 @@ for (const [name, source, platform] of [
       directory = dirname(directory);
     }
   }
-  if (/(?:from\s*|import\s*\()\s*["']@vykor\//.test(bundled)) throw new Error(`${name}: unbundled workspace import`);
+  if (/(?:from\s*|import\s*\()\s*["'](?:@vykor\/|@rzx\/client(?:\/|["']))/.test(bundled)) throw new Error(`${name}: unbundled workspace import`);
   if (name === "index" && Object.keys(result.metafile.inputs).some(file => /(?:server|services|core)\/src\//.test(file)))
     throw new Error("Browser client unexpectedly includes server execution code");
   const declarations = await rollup({
@@ -66,7 +66,7 @@ for (const [name, source, platform] of [
   try { await declarations.write({ file: join(dist, `${name}.d.ts`), format: "es" }); }
   finally { await declarations.close(); }
   const declaration = await readFile(join(dist, `${name}.d.ts`), "utf8");
-  if (/(?:from\s*|import\s*\()\s*["']@vykor\//.test(declaration)) throw new Error(`${name}: public declarations leak workspace imports`);
+  if (/(?:from\s*|import\s*\()\s*["'](?:@vykor\/|@rzx\/client(?:\/|["']))/.test(declaration)) throw new Error(`${name}: public declarations leak workspace imports`);
   console.log(`Built ${name}.js and ${name}.d.ts (${platform})`);
 }
 

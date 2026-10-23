@@ -2,18 +2,18 @@
 
 > 状态：当前客户端 SDK 的独立安装、使用和发布入口。
 
-`@vykor/client` 让网页、IDE、Node 脚本和其他应用通过 HTTP 调用同一个 Vykor daemon。任务在 daemon 所在机器执行，会话、运行和权限记录由 daemon 保存；客户端保存连接和展示状态。直接在程序进程内运行 Agent 的方式见 [Agent SDK](./agent-sdk.md)。
+`@rzx/client` 让网页、IDE、Node 脚本和其他应用通过 HTTP 调用同一个 Vykor daemon。任务在 daemon 所在机器执行，会话、运行和权限记录由 daemon 保存；客户端保存连接和展示状态。直接在程序进程内运行 Agent 的方式见 [Agent SDK](./agent-sdk.md)。
 
 ## 安装与连接
 
 ```bash
-npm install @vykor/client
+npm install @rzx/client
 ```
 
 发布包提供 ESM JavaScript 和类型声明，运行时无其他 npm 依赖。Node.js 要求 >= 20.3；浏览器需支持 fetch、ReadableStream 和 AbortController。工作区开发仍使用 Protocol 源码，发布时把需要的实现和声明合并进 SDK。
 
 ```js
-import { VykorClient } from "@vykor/client";
+import { VykorClient } from "@rzx/client";
 
 const client = new VykorClient({
   baseUrl: "http://127.0.0.1:8787",
@@ -29,7 +29,7 @@ console.log(await client.sessions.list());
 
 ## 本机后台服务
 
-Node 专用功能从 `@vykor/client/service` 导入；浏览器主入口不加载进程或文件管理代码。
+Node 专用功能从 `@rzx/client/service` 导入；浏览器主入口不加载进程或文件管理代码。
 
 先把 CLI 安装到调用方项目：
 
@@ -38,8 +38,8 @@ npm install @rzx/ohs
 ```
 
 ```js
-import { VykorClient } from "@vykor/client";
-import { Service } from "@vykor/client/service";
+import { VykorClient } from "@rzx/client";
+import { Service } from "@rzx/client/service";
 
 const endpoint = await Service.ensure();
 const client = new VykorClient(Service.clientOptions(endpoint));
@@ -92,8 +92,8 @@ const endpoint = await Service.ensure({
 import {
   VykorClient, syncEvents, selectFirstPendingPermission,
   selectVisibleSessionMessagesWithParts,
-} from "@vykor/client";
-import { Service } from "@vykor/client/service";
+} from "@rzx/client";
+import { Service } from "@rzx/client/service";
 
 const model = process.env.VYKOR_MODEL;
 if (!model) throw new Error("请设置 daemon 已配置可用的 VYKOR_MODEL");
@@ -148,10 +148,10 @@ await client.permissions.reply(requestId, { status: "approved", decision: "once"
 仓库中运行：
 
 ```bash
-pnpm --filter @vykor/client build
-pnpm --filter @vykor/client check-types
-pnpm --filter @vykor/client test
-pnpm --filter @vykor/client test:pack
+pnpm --filter @rzx/client build
+pnpm --filter @rzx/client check-types
+pnpm --filter @rzx/client test
+pnpm --filter @rzx/client test:pack
 ```
 
 `test:pack` 会打包、在临时项目实际安装 tarball，验证 Node 调用、Node 服务入口、两种 TypeScript 模块解析方式和浏览器构建。它使用独立测试子进程，不操作用户已有 daemon。`pnpm pack` 的 prepack 自动构建，发布目录为 `packages/client/dist/`。
@@ -168,9 +168,9 @@ pnpm release:client:dry -- 0.1.0
 
 工作流先在 Windows/Linux、Node 20/24 验证，再发布。默认使用 SDK 专属 token，也支持 npm Trusted Publishing（由 GitHub 临时证明工作流身份，不保存长期发布 token）。首次包创建必须使用有发布权限的 token 或本机登录；包存在后才能配置工作流信任。已发布的版本不可覆盖，修复时使用新版本。
 
-首次也通过 GitHub Actions 发布时，先确保 npm `vykor` 组织已经创建，仓库的 `CLIENT_SDK_NPM_TOKEN` secret 属于账号 `rzx100`，并具有 `@vykor` 作用域的读写权限及 Bypass 2FA。SDK 单独使用这个 secret，不改 CLI 使用的 `NPM_TOKEN`。先保持 `bootstrap_token=true`、设置 `publish=false` 运行一次，检查 token 身份和所有 SDK 检查；通过后以 `publish=true` 发出首版，实际上传时由 npm 验证发布权限。token 不需要额外的组织管理权限，工作流不会打印 token。只检查 SDK 代码、暂不检查凭据时，同时设置 `bootstrap_token=false`、`publish=false`。
+首次也通过 GitHub Actions 发布时，使用现有 npm `rzx` 组织，仓库的 `CLIENT_SDK_NPM_TOKEN` secret 属于账号 `rzx100`，并具有 `@rzx` 作用域的读写权限及 Bypass 2FA。SDK 单独使用这个 secret，不复用仓库遗留的 `NPM_TOKEN`；CLI `@rzx/ohs` 已使用 `tag-release.yml` 的工作流信任，无需长期 token。先保持 `bootstrap_token=true`、设置 `publish=false` 运行一次，检查 token 身份和所有 SDK 检查；通过后以 `publish=true` 发出首版，实际上传时由 npm 验证发布权限。token 不需要额外的组织管理权限，工作流不会打印 token。只检查 SDK 代码、暂不检查凭据时，同时设置 `bootstrap_token=false`、`publish=false`。
 
-准备下一次实际发布时，可用 `npm trust github @vykor/client --repository rzx007/Vykor --file client-sdk-release.yml --allow-publish --yes` 配置工作流信任，按 npm 要求完成二次验证；使用 `npm trust list @vykor/client` 回读。新信任配置必须在两天内成功发布一次，否则会过期，因此不要在没有待发版本时提前配置。配置后将 `bootstrap_token=false`，立即通过工作流发布这个新版本；该步骤不再接收长期 token。验证成功后可撤销 SDK 专属 token，并把工作流的 `bootstrap_token` 默认值改为 `false`。发布后工作流会回读公开版本和摘要；同一版本已存在时停止，避免重复上传。具体规则见 [npm Trusted Publishing 文档](https://docs.npmjs.com/trusted-publishers/)。
+准备下一次实际发布时，可用 `npm trust github @rzx/client --repository rzx007/Vykor --file client-sdk-release.yml --allow-publish --yes` 配置工作流信任，按 npm 要求完成二次验证；使用 `npm trust list @rzx/client` 回读。新信任配置必须在两天内成功发布一次，否则会过期，因此不要在没有待发版本时提前配置。配置后将 `bootstrap_token=false`，立即通过工作流发布这个新版本；该步骤不再接收长期 token。验证成功后可撤销 SDK 专属 token，并把工作流的 `bootstrap_token` 默认值改为 `false`。发布后工作流会回读公开版本和摘要；同一版本已存在时停止，避免重复上传。具体规则见 [npm Trusted Publishing 文档](https://docs.npmjs.com/trusted-publishers/)。
 
 ## 维护入口
 

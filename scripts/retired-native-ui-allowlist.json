@@ -451,7 +451,7 @@
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/plugin-ui-history-fixture.ts",
       "line": 1,
-      "text": "import type { PluginUiInstanceRecord } from \"@vykor/client\"",
+      "text": "import type { PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
@@ -487,7 +487,7 @@
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
       "line": 9,
-      "text": "import { readPluginUiInstance, type PluginUiInstanceRecord } from \"@vykor/client\"",
+      "text": "import { readPluginUiInstance, type PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
@@ -517,7 +517,7 @@
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/plugin-ui-history-card.tsx",
       "line": 2,
-      "text": "import type { PluginUiInstanceRecord } from \"@vykor/client\"",
+      "text": "import type { PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {

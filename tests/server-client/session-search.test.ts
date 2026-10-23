@@ -9,7 +9,7 @@ import {
   type SessionQueryStore,
 } from "../../packages/server/src/application/session/session-query-service.js";
 import { createSessionRoutes } from "../../packages/server/src/http/routes/session.js";
-import { VykorClient } from "@vykor/client";
+import { VykorClient } from "@rzx/client";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 
 const session = (

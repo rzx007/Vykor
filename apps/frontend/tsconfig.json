@@ -22,7 +22,7 @@
       "@vykor/coordinator/workflow": [
         "../../packages/coordinator/src/workflow/index.ts"
       ],
-      "@vykor/client": [
+      "@rzx/client": [
         "../../packages/client/src/index.ts"
       ],
       "@vykor/services": [

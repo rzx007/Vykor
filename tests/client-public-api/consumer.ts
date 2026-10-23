@@ -1,5 +1,5 @@
 /**
- * Representative external consumer type fixture for @vykor/client.
+ * Representative external consumer type fixture for @rzx/client.
  * Verifies public contract can be cleanly consumed without any relative imports, any, or ts-ignore.
  */
 import {
@@ -42,7 +42,7 @@ import {
   type SkillSnapshot,
   type McpRuntimeSyncResult,
   type McpRuntimeStatus,
-} from "@vykor/client";
+} from "@rzx/client";
 
 async function consumePluginUiHistory(client: VykorClient, sessionId: string, instanceId: string,
   requestId: string, signal: AbortSignal): Promise<void> {

@@ -23,7 +23,7 @@
       "@vykor/agent-runtime/node/workflow": [
         "../../packages/agent-runtime/src/node/workflow/index.ts"
       ],
-      "@vykor/client": [
+      "@rzx/client": [
         "../../packages/client/src/index.ts"
       ],
       "@vykor/json-data/json": [

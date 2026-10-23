@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/client";
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 
 import { printProjectionSettlements, printRunInspection, requestDebug, printExecutionObservations } from "./debug.js";
 

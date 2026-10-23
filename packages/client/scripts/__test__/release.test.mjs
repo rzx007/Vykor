@@ -15,7 +15,7 @@ test("verifies the candidate package before dry-run publishing and restores the 
   const directory = mkdtempSync(join(tmpdir(), "vykor-sdk-release-"));
   assert.equal(dirname(directory), resolve(tmpdir()));
   const file = join(directory, "package.json");
-  const original = '{ "name": "@vykor/client", "version": "0.1.0" }\n';
+  const original = '{ "name": "@rzx/client", "version": "0.1.0" }\n';
   writeFileSync(file, original);
   const calls = [];
   try {

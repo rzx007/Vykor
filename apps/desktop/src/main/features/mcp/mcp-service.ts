@@ -1,7 +1,7 @@
 import { shell, type WebContents } from "electron"
 import { randomUUID } from "node:crypto"
-import type { VykorClient } from "@vykor/client"
-import { VykorApiError } from "@vykor/client"
+import type { VykorClient } from "@rzx/client"
+import { VykorApiError } from "@rzx/client"
 import {
   McpConfigApplicationService,
   type McpConfigOperationResult,

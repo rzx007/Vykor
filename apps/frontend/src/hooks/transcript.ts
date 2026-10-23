@@ -3,7 +3,7 @@ import {
   type SessionBucket,
   type SessionMessagePartRecord,
   type SessionMessageRecord,
-} from "@vykor/client";
+} from "@rzx/client";
 
 import type { TranscriptItem } from "../types";
 

@@ -9,7 +9,7 @@ import type {
   AttachmentStorageIssue,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/client"
+} from "@rzx/client"
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),

@@ -6,7 +6,7 @@ import { Footer } from "./Footer";
 import { Prompt } from "../../components/prompt/Prompt";
 import type { McpServerSnapshot, TranscriptItem } from "../../types";
 import type { Command } from "../../keymap/commands";
-import type { SessionModelRetryState, SessionModelUsageSummary } from "@vykor/client";
+import type { SessionModelRetryState, SessionModelUsageSummary } from "@rzx/client";
 import { parseStatus } from "../../services/status";
 
 export type AppViewProps = {

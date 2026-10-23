@@ -1,4 +1,4 @@
-import { readSessionModelRetryState } from "@vykor/client"
+import { readSessionModelRetryState } from "@rzx/client"
 import type {
   DesktopSessionMessage,
   DesktopSessionPart,

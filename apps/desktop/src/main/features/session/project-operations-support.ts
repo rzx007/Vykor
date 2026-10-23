@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { stat } from "node:fs/promises"
 import { promisify } from "node:util"
-import type { ProjectRecord } from "@vykor/client"
+import type { ProjectRecord } from "@rzx/client"
 import type { DesktopProject } from "@shared/session-types"
 import { requireString } from "./session-operation-input"
 

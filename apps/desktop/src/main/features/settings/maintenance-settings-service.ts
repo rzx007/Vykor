@@ -2,7 +2,7 @@ import { app, dialog, Notification, shell } from "electron"
 import { open, readdir, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { readDaemonRegistry } from "@vykor/server/daemon-host"
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/client"
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import type { DiagnosticFilter, DiagnosticLog, DiagnosticReport, MaintenanceBackupResult, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "../../../shared/maintenance-settings-types"
 import { desktopSessionService } from "../session/session-service"
 import { createDesktopDaemonAutoStartController } from "../daemon-autostart/daemon-autostart-service"
@@ -51,8 +51,8 @@ export class MaintenanceSettingsService {
     if (Notification.isSupported() && getDesktopPreferences().notificationMode !== "never") new Notification({ title: "Vykor 用量提醒", body: "本月已知用量或估算费用达到所设阈值。统计可能不完整；任务不会因此停止。", silent: true }).show()
   }
   cleanupPreview(input: { kind: "session" | "log"; olderThan: number }) { return this.request<import("@vykor/server").CleanupPreview>("/maintenance/cleanup/preview", input) }
-  storagePolicy() { return this.request<import("@vykor/client").StorageRetentionPolicy>("/maintenance/cleanup/policy") }
-  updateStoragePolicy(input: { enabled: boolean; days: number; expected: { enabled: boolean; days: number } }) { return this.request<import("@vykor/client").StorageRetentionPolicy>("/maintenance/cleanup/policy", input) }
+  storagePolicy() { return this.request<import("@rzx/client").StorageRetentionPolicy>("/maintenance/cleanup/policy") }
+  updateStoragePolicy(input: { enabled: boolean; days: number; expected: { enabled: boolean; days: number } }) { return this.request<import("@rzx/client").StorageRetentionPolicy>("/maintenance/cleanup/policy", input) }
   cleanupExecute(input: { previewId: string; ids: string[] }) { return this.request<import("@vykor/server").CleanupResult>("/maintenance/cleanup/execute", input) }
   cleanupAudits() { return this.request<{ audits: Record<string, unknown>[] }>("/maintenance/cleanup/audits") }
   diagnosticDetails() { return this.request<{ expiresAt: number | null }>("/maintenance/diagnostics/details") }

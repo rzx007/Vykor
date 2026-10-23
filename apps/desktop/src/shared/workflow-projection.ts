@@ -1,4 +1,4 @@
-import type { JobReadResult } from "@vykor/client"
+import type { JobReadResult } from "@rzx/client"
 import type {
   DesktopWorkflowRun,
   DesktopWorkflowTask,

@@ -17,8 +17,8 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 - ✅ **会话持久化** — TUI / 用户 print / 跨端主线使用 daemon 的 Repository/Transaction + SQLite；单会话通过原子 snapshot + SSE 恢复。daemon 持久化 child session、task 与 child run 的关联；重启会保留审计记录，并将失去进程所有权的 run/task/workflow 明确标记为中断，不会伪造自动续跑。TUI 可用 `/resume` 明确重放某次中断 run 的原始 prompt。
 - ✅ **插件系统** — Runtime 只加载版本化 Vykor Native Plugin；Skills、Agents、Hooks、MCP 通过统一 manifest、安装状态和版本 cache 激活。Claude Code 插件先经独立 Converter 生成带 plan/report/provenance 的 Native Plugin；第三方 Tool 在隔离 Runtime 完成前不会执行
 - ✅ **生产级 Durable Channels Agent 桥接** — 面向正常运行的单 daemon 场景，`MessageBus` 背压队列 + `ChannelManager`（fail-closed ACL 集中过滤）+ `DurableChannelBridge` 接 daemon，提供会话/Run/回复持久化、平台消息幂等和重启恢复；`vk channels add feishu` 支持扫码/手填接入，`vk channels serve` 长驻跑通飞书对话（文本、image/file、thread/topic、@bot 过滤）。异常崩溃窗口下的入站零丢失、持续平台故障自动重试和 `unknown` 对账暂不承诺；Telegram/Discord/Slack、媒体上传、长消息分片待补。渠道配置（含密钥）存放在 `~/.vykor/channel-credentials.json`；`settings.json` 不再承载 `channels`。完整边界见 [docs/channels-flow.md](docs/channels-flow.md#生产使用范围)
-- ✅ **TUI 前端** — opentui + React 19 终端 UI（Bun 运行时）：经 `@vykor/client` attach daemon，Markdown 渲染 + 代码块语法高亮、output style 热切换（minimal 极简工具行）、tool 行分组折叠、Edit/Write 权限框 unified diff 预览（`[y]`本次/`[a]`整个会话/`[n]`拒绝）。统一 Jobs Panel 展示和控制 Terminal、后台 shell、child Agent、dream 与 Workflow；Workflow Steps 在所选 Workflow Job 的详情中展示，不再保留独立的后台 Task/Swarm/Workflow Runs 执行面板
-- 🟢 **Daemon Application** — 主线具备 `vk serve` / `vk daemon start/status/stop`、Hono HTTP API、durable session/transcript、SSE、单 session 串行 run lane、持久化 PermissionBroker、child durable projection 和共享 `@vykor/client` reducer。`DaemonApplication` 集中组装 durable 应用，HTTP server 只负责 transport；`AgentPool` 按 session 缓存真实 `VykorAgent`。权威导览见 [docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)，framework 见 [docs/agent-runtime-framework-architecture.md](docs/agent-runtime-framework-architecture.md)，客户端同步见 [docs/client-sync-flow.md](docs/client-sync-flow.md)。
+- ✅ **TUI 前端** — opentui + React 19 终端 UI（Bun 运行时）：经 `@rzx/client` attach daemon，Markdown 渲染 + 代码块语法高亮、output style 热切换（minimal 极简工具行）、tool 行分组折叠、Edit/Write 权限框 unified diff 预览（`[y]`本次/`[a]`整个会话/`[n]`拒绝）。统一 Jobs Panel 展示和控制 Terminal、后台 shell、child Agent、dream 与 Workflow；Workflow Steps 在所选 Workflow Job 的详情中展示，不再保留独立的后台 Task/Swarm/Workflow Runs 执行面板
+- 🟢 **Daemon Application** — 主线具备 `vk serve` / `vk daemon start/status/stop`、Hono HTTP API、durable session/transcript、SSE、单 session 串行 run lane、持久化 PermissionBroker、child durable projection 和共享 `@rzx/client` reducer。`DaemonApplication` 集中组装 durable 应用，HTTP server 只负责 transport；`AgentPool` 按 session 缓存真实 `VykorAgent`。权威导览见 [docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)，framework 见 [docs/agent-runtime-framework-architecture.md](docs/agent-runtime-framework-architecture.md)，客户端同步见 [docs/client-sync-flow.md](docs/client-sync-flow.md)。
 - ✅ **Terminal** — daemon 统一持有终端 runtime，Desktop 右侧 Panel 与 Agent 终端跟随同一个 Native/WSL 会话环境；支持多终端、输出快照恢复、REST/SSE 传输和对话卡片挂接。模型用 `TerminalOpen` 创建持久终端，后续统一通过 `JobList/Read/Wait/Send/Cancel` 观察和控制。
 - ✅ **Desktop 浏览器** — Agent 可在内嵌浏览器观察与操作活动页面；默认关闭的 Developer mode 经单次授权后可检查 DOM、样式、控制台和受限网络信息。能力与数据边界见 [Desktop 浏览器能力](docs/browser-capabilities.md)。
 - ✅ **记忆体系** — 四层：工具输出预算 / 每轮 checkpoint / 持久记忆（`/remember` LLM 提取 + personalization 环境事实抽取自动注入 prompt）/ `/dream` 梦境整合（备份+锁+回滚）。详见 [docs/memory-system.md](docs/memory-system.md)
@@ -261,11 +261,11 @@ Auth、provider、model 的关系和本地存储规则见 [docs/auth-provider-mo
 Workflow CLI 和 TUI `/workflow`（统一 Jobs Panel 的别名）的完整用法见 [docs/workflow-cli.md](docs/workflow-cli.md)。
 `vk provider use <name>` 默认只切换供应商；要同时切模型请加 `-m/--model`，例如 `vk provider use deepseek -m deepseek-chat`。
 
-TUI 内斜杠命令走 daemon command catalog + client-local UI + template expand；共享呈现/派发在 `@vykor/client` `dispatchSessionCommand`（TUI 适配层 `sessionSlashCommands.ts`）。流程见 [docs/slash-commands-flow.md](docs/slash-commands-flow.md)，清单见 [docs/slash-commands.md](docs/slash-commands.md)；运行时以 TUI `/help` 与 `GET /commands` 为准。
+TUI 内斜杠命令走 daemon command catalog + client-local UI + template expand；共享呈现/派发在 `@rzx/client` `dispatchSessionCommand`（TUI 适配层 `sessionSlashCommands.ts`）。流程见 [docs/slash-commands-flow.md](docs/slash-commands-flow.md)，清单见 [docs/slash-commands.md](docs/slash-commands.md)；运行时以 TUI `/help` 与 `GET /commands` 为准。
 
 ### TUI、Web、Desktop 的共享会话
 
-默认 `vk`（与 `vk --tui`）会连接已有 daemon；没有可用/stale daemon 时会启动一个。后续 Web、Desktop 或 remote attach 客户端都应通过 `@vykor/client` 连接同一个 daemon，而不是各自启动 agent runtime。
+默认 `vk`（与 `vk --tui`）会连接已有 daemon；没有可用/stale daemon 时会启动一个。后续 Web、Desktop 或 remote attach 客户端都应通过 `@rzx/client` 连接同一个 daemon，而不是各自启动 agent runtime。
 
 `~/.vykor/settings.json` 的 `daemon.autoStart` 控制本地 daemon 是否在登录后自动启动并在异常退出后恢复，默认关闭。`vk daemon install/uninstall` 是修改该开关并立即应用的便捷命令。完整说明见 [docs/daemon-system-service.md](docs/daemon-system-service.md)。
 
@@ -351,7 +351,7 @@ Vykor/
 
 ```mermaid
 flowchart TD
-  Apps["CLI / TUI / Desktop"] --> Client["@vykor/client"]
+  Apps["CLI / TUI / Desktop"] --> Client["@rzx/client"]
   Client --> Protocol["@vykor/protocol"]
   HTTP["Server HTTP / SSE"] --> Protocol
   HTTP --> Server["Server 应用用例"]
@@ -459,7 +459,7 @@ Server 保存会话与 Goal 状态，每次模型请求先准入并结算。HTTP
 | 模块             | 说明                                                                                                                                                  |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CLI`          | Commander.js 命令行：主命令 + auth/mcp/plugin/channels/workflow/sandbox/daemon/serve/config 子命令；已安排任务通过 Agent 对话创建并由 Desktop 管理                            |
-| `TUI Frontend` | 默认交互面：opentui + React 19（Bun）。`vk` / `vk --tui` 经 `useServerSync` attach daemon，消费 `@vykor/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
+| `TUI Frontend` | 默认交互面：opentui + React 19（Bun）。`vk` / `vk --tui` 经 `useServerSync` attach daemon，消费 `@rzx/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
 | `Print`        | 用户 headless：ensure daemon → `client.sessions.admitPrompt()` + SSE 渲染 stdout                                                                         |
 
 
@@ -491,12 +491,12 @@ Server 保存会话与 Goal 状态，每次模型请求先准入并结算。HTTP
 │  ├─ 读取 daemon registry + GET /health                   │
 │  ├─ 无可用/stale daemon 时 spawn `vk serve --register`  │
 │  ├─ TUI: spawn Bun frontend                              │
-│  └─ print: @vykor/client + SSE stdout              │
+│  └─ print: @rzx/client + SSE stdout              │
 └──────────────────────────┬───────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│  @vykor/client                                     │
+│  @rzx/client                                     │
 │  TUI: snapshot/actions + SSE live events                 │
 │  print: sessions.admitPrompt + SSE stdout，run idle 后退出│
 └──────────────────────────┬───────────────────────────────┘
@@ -613,7 +613,7 @@ TUI / Web / Desktop（daemon 权威状态）：
 vk --tui  (或其它 client attach)
        │
        ▼
-  @vykor/client
+  @rzx/client
        │
        ├─ GET /sessions/:id/state   → 原子 snapshot
        │    (session / inputs / messages / parts / runs / attempts / tasks / permissions)

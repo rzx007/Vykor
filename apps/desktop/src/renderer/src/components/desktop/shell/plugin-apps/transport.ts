@@ -1,7 +1,7 @@
 import { AppBridge } from "@modelcontextprotocol/ext-apps/app-bridge"
 import { PostMessageTransport, type McpUiHostContext } from "@modelcontextprotocol/ext-apps"
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
-import { parseMcpCallResultData } from "@vykor/client"
+import { parseMcpCallResultData } from "@rzx/client"
 import type { PluginAppController } from "./controller"
 import type { AppDisplayMode, ResidentAppPage } from "./page-manager"
 import { installAppHandlers } from "./handlers"

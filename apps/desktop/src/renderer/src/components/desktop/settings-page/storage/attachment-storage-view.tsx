@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, Database, RefreshCw, TriangleAlert } from "lucide-react"
 import type * as React from "react"
-import type { AttachmentStorageIssue, AttachmentStorageReport } from "@vykor/client"
+import type { AttachmentStorageIssue, AttachmentStorageReport } from "@rzx/client"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@renderer/components/ui/card"

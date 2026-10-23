@@ -23,19 +23,19 @@ try {
   const tarball = join(sandbox, readdirSync(sandbox).find(name => name.endsWith(".tgz")));
   writeFileSync(join(sandbox, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(process.execPath, [npmCli, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", tarball], { cwd: sandbox, stdio: "pipe" });
-  const installed = join(sandbox, "node_modules/@vykor/client");
+  const installed = join(sandbox, "node_modules/@rzx/client");
   const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
   assert.equal(Object.keys(manifest.dependencies ?? {}).length, 0, "SDK must not require unpublished workspace packages");
   for (const name of ["index.js", "index.d.ts", "service.js", "service.d.ts"]) {
     const content = readFileSync(join(installed, "dist", name), "utf8");
-    assert.doesNotMatch(content, /(?:from\s*|import\s*\()\s*["']@vykor\//, `${name} leaks workspace imports`);
+    assert.doesNotMatch(content, /(?:from\s*|import\s*\()\s*["'](?:@vykor\/|@rzx\/client(?:\/|["']))/, `${name} leaks workspace imports`);
   }
 
   const fixture = fileURLToPath(new URL("../src/service/__test__/service-fixture.mjs", import.meta.url));
   writeFileSync(join(sandbox, "consumer.mjs"), `
 import assert from "node:assert/strict";
-import { VykorClient, createInitialClientState } from "@vykor/client";
-import { Service } from "@vykor/client/service";
+import { VykorClient, createInitialClientState } from "@rzx/client";
+import { Service } from "@rzx/client/service";
 const endpoint = await Service.ensure({
   file: ${JSON.stringify(join(sandbox, "registry.json"))},
   command: [process.execPath, ${JSON.stringify(fixture)}, ${JSON.stringify(join(sandbox, "registry.json"))}],
@@ -52,8 +52,8 @@ console.log("packed Node client and service: ok");
   execFileSync(process.execPath, [join(sandbox, "consumer.mjs")], { cwd: sandbox, stdio: "inherit", timeout: 20_000 });
 
   writeFileSync(join(sandbox, "consumer.ts"), `
-import { VykorClient, syncEvents, type SessionRecord, type SessionRunRecord } from "@vykor/client";
-import { Service, type ServiceEndpoint } from "@vykor/client/service";
+import { VykorClient, syncEvents, type SessionRecord, type SessionRunRecord } from "@rzx/client";
+import { Service, type ServiceEndpoint } from "@rzx/client/service";
 const client = new VykorClient({ baseUrl: "http://127.0.0.1:8787" });
 async function consume(endpoint: ServiceEndpoint) {
   const connected = new VykorClient(Service.clientOptions(endpoint));
@@ -77,7 +77,7 @@ void consume;
   }
   console.log("packed public declarations (NodeNext and Bundler): ok");
   const browser = await build({
-    stdin: { contents: 'import { VykorClient } from "@vykor/client"; window.client = new VykorClient({baseUrl:"http://localhost:8787"});', resolveDir: sandbox },
+    stdin: { contents: 'import { VykorClient } from "@rzx/client"; window.client = new VykorClient({baseUrl:"http://localhost:8787"});', resolveDir: sandbox },
     bundle: true, platform: "browser", format: "esm", write: false, metafile: true,
   });
   assert.ok(Object.keys(browser.metafile.inputs).every(name => !name.includes("service.js")), "Browser consumer imported local process management");

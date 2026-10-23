@@ -1,5 +1,5 @@
 /**
- * @vykor/client 公共导出。
+ * @rzx/client 公共导出。
  *
  * 面向 TUI / Web / Desktop：typed HTTP API、SSE 解析、事件 reducer、replay+live 同步。
  * 客户端只做展示与控制，不拥有 agent runtime。

@@ -1,4 +1,4 @@
-# @vykor/client
+# @rzx/client
 
 连接 Vykor daemon（`vk serve`）的共享客户端 SDK。面向 TUI / Web / Desktop / IDE：typed HTTP API、SSE 事件流、事件 reducer、snapshot + live 同步。
 
@@ -7,7 +7,7 @@
 ## 独立安装
 
 ```bash
-npm install @vykor/client
+npm install @rzx/client
 ```
 
 发布包包含 ESM JavaScript 和完整类型声明，不要求安装本仓库或其他 `@vykor/*` 包。浏览器入口使用标准 fetch；Node.js 要求 >= 20.3。
@@ -19,8 +19,8 @@ npm install @rzx/ohs
 ```
 
 ```ts
-import { VykorClient } from "@vykor/client";
-import { Service } from "@vykor/client/service";
+import { VykorClient } from "@rzx/client";
+import { Service } from "@rzx/client/service";
 
 const endpoint = await Service.ensure();
 const client = new VykorClient(Service.clientOptions(endpoint));
@@ -29,12 +29,12 @@ console.log(await client.sessions.list());
 
 `Service.discover()` 只查找，`Service.ensure()` 在缺少服务时启动，`Service.stop(endpoint)` 只停止传入的同一个登记实例。进程控制仅从 `/service` 子入口导入。退出脚本通常只需结束订阅，后台可以继续供其他客户端使用。
 
-完整的任务提交、结果读取、权限、取消、远程连接与发布步骤见 [Client SDK 使用指南](../../docs/client-sdk.md)。SDK npm 版本独立管理；首次发布前可先在仓库运行 `pnpm --filter @vykor/client test:pack`，验证真实 tarball 的独立安装。
+完整的任务提交、结果读取、权限、取消、远程连接与发布步骤见 [Client SDK 使用指南](../../docs/client-sdk.md)。SDK npm 版本独立管理；首次发布前可先在仓库运行 `pnpm --filter @rzx/client test:pack`，验证真实 tarball 的独立安装。
 
 ```text
 TUI / Web / Desktop
         |
-        | @vykor/client
+        | @rzx/client
         | HTTP actions + SSE events
         v
 vk serve / daemon
@@ -54,7 +54,7 @@ vk serve / daemon
 
 | 状态类别 | 包含内容 | 唯一所有者 | 规则 |
 |---|---|---|---|
-| **Durable Remote State** | Session, Input, Message, Part, Run, Task, Permission, Event cursor | `@vykor/client/state` (`reducer`, `snapshot`, `sync`) | 平台层不得自行实现第二套 Message/Run/Task 对账 |
+| **Durable Remote State** | Session, Input, Message, Part, Run, Task, Permission, Event cursor | `@rzx/client/state` (`reducer`, `snapshot`, `sync`) | 平台层不得自行实现第二套 Message/Run/Task 对账 |
 | **Connection State** | daemon registry, client instance, connected/reconnecting/error, abort/generation fencing, retry timers | 平台 connection controller / service | 纯平台生命周期持有，不混入 durable 对账 |
 | **Operation State** | create/update/archive, prompt admission, upload, job 操作, optimistic tokens | 各平台 feature store / hook | 失败只回退局部 operation，不重置全局 durable 状态 |
 | **Draft State** | composer text, attachments, plugin selection, edit state | 各平台 composer feature | 纯本地瞬态，不跨 session 混淆 |
@@ -77,7 +77,7 @@ vk serve / daemon
 import {
   VykorClient,
   syncEvents,
-} from "@vykor/client";
+} from "@rzx/client";
 
 const client = new VykorClient({
   baseUrl: "http://127.0.0.1:12345",
@@ -140,8 +140,8 @@ Client 在首次业务请求前读取 `/capabilities`，要求服务端使用相
 ## 测试
 
 ```bash
-pnpm --filter @vykor/client test
-pnpm --filter @vykor/client check-types
+pnpm --filter @rzx/client test
+pnpm --filter @rzx/client check-types
 pnpm test:client-browser
 ```
 
@@ -167,6 +167,6 @@ pnpm test:client-browser
 新增实现优先放入职责对应的分类；测试放在被测目录的 `__test__/`。迁移时同步公开导出目标、调用方导入、文档和旧引用清单。
 
 ```powershell
-pnpm --filter @vykor/client test
-pnpm --filter @vykor/client check-types
+pnpm --filter @rzx/client test
+pnpm --filter @rzx/client check-types
 ```

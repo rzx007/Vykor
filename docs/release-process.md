@@ -2,7 +2,7 @@
 
 > 状态：当前实现。稳定版 GitHub tag 同时发布 Desktop 安装包和 npm CLI；tag 只会在检查和安装包构建全部通过后创建。
 
-`@vykor/client` 使用独立的 **Client SDK Release** 工作流与 `pnpm release:client[:dry] -- x.y.z` 命令，使用方法见 [Client SDK 发布](./client-sdk.md#发布)。它不跟随 Desktop/CLI tag 改版本。
+`@rzx/client` 使用独立的 **Client SDK Release** 工作流与 `pnpm release:client[:dry] -- x.y.z` 命令，使用方法见 [Client SDK 发布](./client-sdk.md#发布)。它不跟随 Desktop/CLI tag 改版本。
 
 ## 一句话结论
 
@@ -25,7 +25,7 @@ macOS 安装包本轮不发布。Windows 当前不签名，首次安装可能被
 - GitHub Release 和 npm 必须是同一个 `X.Y.Z`。
 - Desktop 现在是 `1.0.0`。低于 `1.0.0` 的版本不会被已安装客户端识别为更新，所以统一发版的第一枪是 **`v1.0.1`**。
 - CI 只在 runner 上改根目录 `package.json`、`apps/desktop/package.json` 和 `apps/cli/package.json`，不回写 Git。仓库里的这三个版本可以暂时落后于即将发布的 tag。本机若要打安装包并对齐版本号，可临时运行 `node scripts/prepare-tag-release.mjs v1.0.1`，不要提交。
-- `@rzx/ohs` 由这条 tag 流水线发布；`@vykor/client` 通过独立 SDK 工作流发布。
+- `@rzx/ohs` 由这条 tag 流水线发布；`@rzx/client` 通过独立 SDK 工作流发布。
 
 ## 发版前检查
 

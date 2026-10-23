@@ -239,7 +239,7 @@
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
-    "@vykor/client": {
+    "@rzx/client": {
       "directory": "packages/client",
       "allowed": [
         "@vykor/protocol"

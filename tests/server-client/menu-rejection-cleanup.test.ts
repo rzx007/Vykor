@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { SessionStore } from "@vykor/services";
-import { VykorClient } from "@vykor/client";
+import { VykorClient } from "@rzx/client";
 import { SessionPluginAppService } from "../../packages/server/src/application/session/plugins/session-plugin-app-service.js";
 import { DesktopPluginAppService } from "../../apps/desktop/src/main/features/plugin-apps/plugin-app-service.js";
 import { PluginAppDocumentStore } from "../../apps/desktop/src/main/features/plugin-apps/document-store.js";

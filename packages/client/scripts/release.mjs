@@ -26,7 +26,7 @@ export function releaseClient(args, { directory = packageRoot, run = runPnpm } =
   const file = join(directory, "package.json");
   const original = readFileSync(file, "utf8");
   const manifest = JSON.parse(original);
-  if (manifest.name !== "@vykor/client") throw new Error("SDK release directory is not @vykor/client");
+  if (manifest.name !== "@rzx/client") throw new Error("SDK release directory is not @rzx/client");
   try {
     writeFileSync(file, JSON.stringify({ ...manifest, version: options.version }, null, 2) + "\n");
     // pack runs prepack/build, then installs and verifies this exact candidate.

@@ -14,7 +14,7 @@ import Figma from "@lobehub/icons/es/Figma/components/Color"
 import Notion from "@lobehub/icons/es/Notion/components/Mono"
 import Google from "@lobehub/icons/es/Google/components/Color"
 import { useEffect, useState } from "react"
-import { isPluginIconSource, isPluginWebUrl } from "@vykor/client"
+import { isPluginIconSource, isPluginWebUrl } from "@rzx/client"
 import { cn } from "@renderer/lib/utils"
 
 export function ExtensionIcon({

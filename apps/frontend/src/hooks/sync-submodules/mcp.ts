@@ -1,4 +1,4 @@
-import type { McpServerStatus } from "@vykor/client";
+import type { McpServerStatus } from "@rzx/client";
 import type { McpServerSnapshot } from "../../types";
 
 export function mcpServerSnapshot(server: McpServerStatus): McpServerSnapshot {

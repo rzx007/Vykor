@@ -11,7 +11,7 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 ```text
 CLI / TUI / Web / Desktop / Bot / Workflow
                     |
-      @vykor/client 领域 Resources
+      @rzx/client 领域 Resources
                     |
           HTTP routes + SSE transport
                     |
@@ -121,7 +121,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 | `@vykor/core` | 唯一历史、模型重试/压缩、工具检查与执行 |
 | `@vykor/agent-runtime` | Kernel 运行 Run/Child；Node 负责默认能力和资源生命周期 |
 | `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
-| `@vykor/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
+| `@rzx/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
 | `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |
 | `apps/*` | CLI、TUI、Desktop、Website 等产品入口 |
 

@@ -1,5 +1,5 @@
 import { resolve } from "node:path"
-import { normalizeApprovalMode } from "@vykor/client"
+import { normalizeApprovalMode } from "@rzx/client"
 import type { DesktopModel, DesktopPermissionMode, DesktopWorkMode, SendDesktopPromptInput, SessionUserInputItem } from "@shared/session-types"
 import type { SessionOperationsClient } from "./session-operations"
 

@@ -13,8 +13,8 @@ import type {
 const entryBuilds = vi.hoisted(() => ({ count: 0 }))
 const work = vi.hoisted(() => ({ turnCommits: new Map<string, number>(), workspaceReads: 0 }))
 
-vi.mock("@vykor/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vykor/client")>()
+vi.mock("@rzx/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@rzx/client")>()
   return {
     ...actual,
     readWorkspaceChangesMetadata: (

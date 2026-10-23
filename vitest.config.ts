@@ -12,7 +12,7 @@ for (const name of readdirSync(packagesDir)) {
   try {
     const raw = readFileSync(resolve(pkgDir, "package.json"), "utf-8");
     const pkg = JSON.parse(raw);
-    if (pkg.name?.startsWith("@vykor/")) {
+    if (pkg.name) {
       aliases[pkg.name] = resolve(pkgDir, "src", "index.ts");
       for (const [subpath, entry] of Object.entries(pkg.exports ?? {})) {
         if (subpath === ".") continue;

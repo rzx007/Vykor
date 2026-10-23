@@ -5,7 +5,7 @@ import {
   readSessionModelRetryState,
   readSessionModelUsage,
   readWorkspaceChangesMetadata,
-} from "@vykor/client"
+} from "@rzx/client"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionInput } from "@shared/session-types"
 

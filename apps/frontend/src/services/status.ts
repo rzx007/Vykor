@@ -5,7 +5,7 @@
  * AppView 各自 String(status.x ?? ...) 解析，默认值还不统一。集中到这里：
  * mode 统一缺省 "ask"，token 统一 Number(... ?? 0)。
  */
-import { normalizeApprovalMode } from "@vykor/client";
+import { normalizeApprovalMode } from "@rzx/client";
 export interface ParsedStatus {
   /** 授权档位，缺省 "ask" */
   mode: string;

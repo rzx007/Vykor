@@ -5,7 +5,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/client"
+} from "@rzx/client"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
   AlertDialog,

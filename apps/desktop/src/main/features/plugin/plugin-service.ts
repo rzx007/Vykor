@@ -2,7 +2,7 @@ import { MarketplaceService } from "./marketplace-service"
 import { randomUUID } from "node:crypto"
 import { extname, resolve } from "node:path"
 
-import type { VykorClient, PluginResource } from "@vykor/client"
+import type { VykorClient, PluginResource } from "@rzx/client"
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {

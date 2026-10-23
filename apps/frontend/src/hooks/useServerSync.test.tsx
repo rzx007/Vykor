@@ -10,7 +10,7 @@ import { testRender } from "@opentui/react/test-utils";
 
 import { useServerSync } from "./useServerSync";
 import type { TuiSessionController } from "./sessionController";
-import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/client";
+import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@rzx/client";
 
 const originalFetch = globalThis.fetch;
 

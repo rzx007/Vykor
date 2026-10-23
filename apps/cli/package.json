@@ -64,7 +64,7 @@
     "@vykor/api": "workspace:*",
     "@vykor/auth": "workspace:*",
     "@vykor/channels": "workspace:*",
-    "@vykor/client": "workspace:*",
+    "@rzx/client": "workspace:*",
     "@vykor/commands": "workspace:*",
     "@vykor/coordinator": "workspace:*",
     "@vykor/core": "workspace:*",

@@ -126,7 +126,7 @@ async function checkContract(root) {
       const indexPath = resolve(root, "packages/client/src/index.ts");
       const sourceFile = program.getSourceFile(indexPath);
       const moduleSymbol = sourceFile && checker.getSymbolAtLocation(sourceFile);
-      if (!moduleSymbol) throw new Error("cannot resolve @vykor/client module symbol");
+      if (!moduleSymbol) throw new Error("cannot resolve @rzx/client module symbol");
       const runtime = [];
       const types = [];
       for (const exported of checker.getExportsOfModule(moduleSymbol)) {

@@ -1,4 +1,4 @@
-import { VykorApiError } from "@vykor/client"
+import { VykorApiError } from "@rzx/client"
 import type { DesktopNote, UpdateDesktopNoteInput } from "@shared/note-types"
 import { afterEach, describe, expect, it, vi } from "vitest"
 

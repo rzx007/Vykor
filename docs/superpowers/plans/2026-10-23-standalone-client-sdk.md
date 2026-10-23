@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Execute this approved scope inline, one task at a time, with a review checkpoint after each verification. The user has authorized implementation, build/release tooling, local service management, and documentation.
 
-**Goal:** Make `@vykor/client` installable outside this repository, including a Node-only local service entry and a verified publishing path.
+**Goal:** Make `@rzx/client` installable outside this repository, including a Node-only local service entry and a verified publishing path.
 
 **Architecture:** Preserve the existing browser-safe client and durable session protocol. Bundle runtime code and public declarations so consumers need no workspace packages. Add a separate Node service entry that reads the daemon registry, verifies protocol/authentication, and starts an explicitly resolved CLI command without importing the server.
 
@@ -14,7 +14,7 @@
 
 - Preserve unrelated in-progress directory organization changes in the shared checkout.
 - Keep tests under the owning directory's `__test__/`; add README navigation for new categories.
-- Keep `@vykor/client` browser-compatible; import local management only from `@vykor/client/service`.
+- Keep `@rzx/client` browser-compatible; import local management only from `@rzx/client/service`.
 - Do not publish to npm or modify the user's running daemon during verification.
 - Preserve current resource APIs, protocol checks, and session synchronization semantics.
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vykor.dev/schemas/client-public-api-contract.schema.json",
-  "title": "Current @vykor/client public API",
+  "title": "Current @rzx/client public API",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "version", "entries"],

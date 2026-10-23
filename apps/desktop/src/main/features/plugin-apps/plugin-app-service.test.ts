@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events"
 import { expect, it, vi } from "vitest"
-import { VykorApiError, VykorClient, type PluginAppResponse } from "@vykor/client"
+import { VykorApiError, VykorClient, type PluginAppResponse } from "@rzx/client"
 import { DesktopPluginAppService } from "./plugin-app-service"
 import { PluginAppDocumentStore } from "./document-store"
 const source = { sessionId: "session", appId: "app" }

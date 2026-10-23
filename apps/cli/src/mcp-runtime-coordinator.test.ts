@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { IncompatibleProtocolError, VykorApiError } from "@vykor/client";
+import { IncompatibleProtocolError, VykorApiError } from "@rzx/client";
 import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 import { createCliMcpRuntimeCoordinator } from "./mcp-runtime-coordinator.js";
 
