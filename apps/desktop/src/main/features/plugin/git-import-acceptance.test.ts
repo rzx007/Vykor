@@ -18,7 +18,7 @@ import {
   loadNativePlugin,
   verifyInstalledNativePlugin,
 } from "../../../../../../packages/plugins/src/index.js"
-import { createDefaultPluginService } from "../../../../../../packages/server/src/application/default-services/plugin-service.js"
+import { createDefaultPluginService } from "../../../../../../packages/server/src/application/default-services/extensions/plugin-service.js"
 import { createServiceRoutes } from "../../../../../../packages/server/src/http/routes/service.js"
 import { createSystemRoutes } from "../../../../../../packages/server/src/http/routes/system.js"
 import { DesktopPluginService } from "./plugin-service"

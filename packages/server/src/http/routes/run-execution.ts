@@ -11,7 +11,7 @@ import {
   sessionMutationErrorStatus,
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
-import type { SessionInteractionService } from "../../application/session/session-interaction-service.js";
+import type { SessionInteractionService } from "../../application/session/interactions/session-interaction-service.js";
 
 export interface RunExecutionRoutesContext {
   application: Pick<

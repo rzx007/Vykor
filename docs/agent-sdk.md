@@ -301,7 +301,7 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 | daemon agent cache | `packages/server/src/application/agent/agent-pool.ts` |
 | durable event projection | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
 | standalone SDK contract test | `packages/agent-runtime/src/node/agent/__test__/sdk.test.ts` |
-| 插件宿主调用数据 / Server 绑定转换 | `packages/plugin-contracts/src/runtime.ts` / `packages/server/src/application/session/plugin-app-host-binding.ts` |
+| 插件宿主调用数据 / Server 绑定转换 | `packages/plugin-contracts/src/runtime.ts` / `packages/server/src/application/session/plugins/plugin-app-host-binding.ts` |
 | Job / Terminal 纯数据 | `packages/jobs/src/contracts.ts` / `packages/terminal/src/contracts.ts` |
 
 ## 非目标

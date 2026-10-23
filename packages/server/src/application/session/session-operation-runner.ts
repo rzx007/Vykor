@@ -5,7 +5,7 @@ import {
   type DaemonOperationGate,
 } from "../control/daemon-operation-gate.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { SessionEventPublisher } from "./session-event-publisher.js";
+import type { SessionEventPublisher } from "./transcript/session-event-publisher.js";
 
 export interface SessionOperationRunnerContext {
   sessions: {

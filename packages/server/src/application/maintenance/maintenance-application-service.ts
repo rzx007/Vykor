@@ -27,14 +27,14 @@ import {
 import {
   maintenanceDirectories,
   scanStorage,
-} from "../maintenance/storage-settings.js";
+} from "./storage-settings.js";
 import {
   readUsageReport,
   type UsageFilter,
   type UsagePrice,
   type UsageSettings,
-} from "../maintenance/usage-settings.js";
-import { MaintenanceCleanupService } from "../maintenance/cleanup-settings.js";
+} from "./usage-settings.js";
+import { MaintenanceCleanupService } from "./cleanup-settings.js";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SettingsService } from "../settings-api.js";
 import {
@@ -43,7 +43,7 @@ import {
 } from "../../runtime/runtime-settings.js";
 import type { AgentEnvironmentSettings } from "@vykor/host-config";
 import type { DaemonTerminalService } from "../../terminal/daemon-terminal-service.js";
-import { parsePortableSettings } from "../../settings-transfer.js";
+import { parsePortableSettings } from "../settings/settings-transfer.js";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import { createMaintenancePolicyRepository } from "./maintenance-policy-repository.js";

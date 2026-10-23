@@ -6,7 +6,7 @@ import type { AgentEvent, AgentEventInput } from "@vykor/agent-contracts";
 import type { SessionEventRecord } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { applyEvents, createInitialClientState, syncEvents } from "@vykor/client";
-import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript-projection.js";
+import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript/transcript-projection.js";
 import { DaemonAgentEventProjector } from "../../packages/server/src/application/agent/daemon-agent-event-projector.js";
 
 const cleanup: (() => void)[] = [];

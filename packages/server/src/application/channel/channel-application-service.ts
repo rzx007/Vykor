@@ -9,8 +9,8 @@ import type { ObservabilityEvent } from "../../shared/observability.js";
 import { channelConnectorLabel } from "./channel-connector-labels.js";
 import type { ChannelAttachmentDownload } from "../../daemon/channel-runtime-service.js";
 import type { SessionCommandService } from "../session/session-command-service.js";
-import type { SessionInteractionService } from "../session/session-interaction-service.js";
-import type { RunControlService } from "../session/run-control-service.js";
+import type { SessionInteractionService } from "../session/interactions/session-interaction-service.js";
+import type { RunControlService } from "../session/execution/run-control-service.js";
 
 export interface ChannelSessionQueries {
   getInput(inputId: string): SessionInputRecord | undefined;

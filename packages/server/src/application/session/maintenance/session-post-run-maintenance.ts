@@ -1,0 +1,219 @@
+import { getProjectMemoryDir, type Settings } from "@vykor/host-config";
+import { type AgentExecutionLimits } from "@vykor/agent-contracts";
+import { sessionSettingsRoot } from "../../../runtime/session-settings-root.js";
+import type { NodeAgentHost } from "@vykor/agent-runtime";
+import {
+  updateRulesFromSession,
+  type SessionMessageLike,
+} from "@vykor/personalization";
+import type { SessionStore } from "@vykor/services";
+
+import type { ObservabilityEvent } from "../../../shared/observability.js";
+import { isCommittedPublicTextPart } from "../../../session/transcript-text.js";
+
+export interface SessionPostRunMaintenanceContext {
+  data: Pick<SessionStore, "conversations" | "runs" | "sessions" | "goals">;
+  getSettings(cwd: string): Promise<Settings | undefined>;
+  personalizationUpdater?: (
+    messages: SessionMessageLike[],
+    cwd: string,
+    sessionId: string,
+  ) => number;
+  sessionMemoryWriter?: (
+    cwd: string,
+    messages: SessionMessageLike[],
+    sessionId: string,
+    goal?: string,
+  ) => void;
+  lastConsolidatedAt?: (memoryDir: string) => number;
+  autoDream?: (input: {
+    cwd: string;
+    settings: Settings;
+    memoryDir: string;
+    currentSessionId: string;
+    recentSessionIds: string[];
+    model: string;
+  }) => Promise<unknown>;
+  log(event: ObservabilityEvent): void;
+}
+
+/** Best-effort durable-memory maintenance after one root run has completed. */
+export class SessionPostRunMaintenance {
+  constructor(private readonly context: SessionPostRunMaintenanceContext) {}
+
+  async run(
+    sessionId: string,
+    runId: string,
+    host: NodeAgentHost | undefined,
+    limits?: AgentExecutionLimits,
+  ): Promise<void> {
+    try {
+      await this.runMaintenance(sessionId, runId, host, limits);
+    } catch (error) {
+      this.context.log({
+        level: "warn",
+        event: "session.post_run_maintenance_failed",
+        sessionId,
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async runMaintenance(
+    sessionId: string,
+    runId: string,
+    host: NodeAgentHost | undefined,
+    limits?: AgentExecutionLimits,
+  ): Promise<void> {
+    const session = this.context.data.sessions.get(sessionId);
+    const run = this.context.data.runs.getRun(runId);
+    if (!session || session.storage === "memory" || run?.status !== "completed")
+      return;
+
+    const messages = transcriptMessages(this.context.data, sessionId);
+    const memoryRoot = sessionSettingsRoot(session);
+
+    await this.bestEffort(
+      "session.personalization.extract_failed",
+      sessionId,
+      runId,
+      async () => {
+        const update =
+          this.context.personalizationUpdater ?? updateRulesFromSession;
+        update(messages, memoryRoot, sessionId);
+      },
+    );
+
+    const settings = await this.context.getSettings(memoryRoot);
+    if (!settings) return;
+
+    if (settings.memory?.sessionMemoryEnabled !== false) {
+      await this.bestEffort(
+        "session.memory.checkpoint_failed",
+        sessionId,
+        runId,
+        async () => {
+          const goalId = run.metadata?.goalId;
+          const goal =
+            typeof goalId === "string"
+              ? this.context.data.goals.getGoal(goalId)?.objective
+              : undefined;
+          if (goal)
+            this.context.sessionMemoryWriter?.(
+              memoryRoot,
+              messages,
+              sessionId,
+              goal,
+            );
+          else
+            this.context.sessionMemoryWriter?.(memoryRoot, messages, sessionId);
+        },
+      );
+    }
+
+    if (settings.memory?.enabled === false) return;
+
+    if (settings.memory?.autoExtractEnabled !== false) {
+      await this.bestEffort(
+        "session.memory.auto_extract_failed",
+        sessionId,
+        runId,
+        async () => {
+          const goalBound = typeof run.metadata?.goalId === "string";
+          if (goalBound && !limits) return;
+          await limits?.check("maintenance");
+          await host?.memory.remember({
+            automatic: true,
+            ...(goalBound
+              ? { execution: { scope: { sessionId, runId }, limits } }
+              : {}),
+          });
+        },
+      );
+    }
+
+    // 全局 Dream 没有这次 Run 的计量来源；Goal 触发时不另发无绑定模型任务。
+    if (
+      settings.memory?.autoDreamEnabled &&
+      typeof run.metadata?.goalId !== "string"
+    ) {
+      await this.bestEffort(
+        "session.memory.auto_dream_failed",
+        sessionId,
+        runId,
+        async () => {
+          const memoryDir = getProjectMemoryDir(memoryRoot);
+          const lastAtMs =
+            (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;
+          const recentSessionIds = this.context.data.sessions
+            .list({ includeArchived: true })
+            .filter(
+              (candidate) => sessionSettingsRoot(candidate) === memoryRoot,
+            )
+            .filter(
+              (candidate) =>
+                candidate.storage !== "memory" &&
+                candidate.updatedAt > lastAtMs,
+            )
+            .map((candidate) => candidate.id);
+          await this.context.autoDream?.({
+            cwd: memoryRoot,
+            settings,
+            memoryDir,
+            currentSessionId: sessionId,
+            recentSessionIds,
+            model: session.model,
+          });
+        },
+      );
+    }
+  }
+
+  private async bestEffort(
+    event: string,
+    sessionId: string,
+    runId: string,
+    action: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
+      this.context.log({
+        level: "warn",
+        event,
+        sessionId,
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+function transcriptMessages(
+  store: Pick<SessionStore, "conversations">,
+  sessionId: string,
+): SessionMessageLike[] {
+  return store.conversations
+    .listMessages(sessionId)
+    .sort((a, b) => a.seq - b.seq)
+    .map((message) => {
+      const content = store.conversations
+        .listMessageParts(sessionId, { messageId: message.id })
+        .sort((a, b) => a.seq - b.seq)
+        .filter(isCommittedPublicTextPart)
+        .map(
+          (part) =>
+            part.text ?? (typeof part.output === "string" ? part.output : ""),
+        )
+        .filter(Boolean)
+        .join("\n");
+      return {
+        id: message.id,
+        createdAt: message.createdAt,
+        role: message.role,
+        content,
+      };
+    })
+    .filter((message) => message.content.length > 0);
+}

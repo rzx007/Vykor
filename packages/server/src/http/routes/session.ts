@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { sessionCreateInput, sessionForkInput, sessionUpdateInput, sessionClearWorktreeInput } from "../mappers/session.js";
-import { publicPart, summarizePart } from "../part-wire-view.js";
+import { publicPart, summarizePart } from "../mappers/part-wire-view.js";
 import { parseCreateSessionRequest, parseForkSessionRequest, parseUpdateSessionRequest, parseClearSessionWorktreeBindingRequest } from "@vykor/protocol";
 
 import {
@@ -15,7 +15,7 @@ import {
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
 import type { SessionCommandService } from "../../application/session/session-command-service.js";
-import type { SessionInteractionService } from "../../application/session/session-interaction-service.js";
+import type { SessionInteractionService } from "../../application/session/interactions/session-interaction-service.js";
 import type { SessionQueryService } from "../../application/session/session-query-service.js";
 
 export interface SessionRoutesContext {

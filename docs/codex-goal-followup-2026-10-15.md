@@ -76,7 +76,7 @@ Read 装配错误的入口和结果：
 4. [query-tool-preparation.ts](../packages/core/src/engine/tools/query-tool-preparation.ts)（调查时第 47 行）找不到工具后直接返回 `Unknown tool: Read`，尚未进入参数校验，所以不是 offset 或 path 填错。
 5. [attachment-read-tool.ts](../packages/server/src/application/attachments/tools/attachment-read-tool.ts)（调查时第 32 行）本来可以把普通路径委托给标准文件读取器。
 
-随后 [goal-transactions.ts](../packages/services/src/goals/goal-transactions.ts)（调查时第 212 行）的 4 次工具上限抛错，[session-goal-service.ts](../packages/server/src/application/session/session-goal-service.ts)（调查时第 88 行）把它转换为执行限制错误，最终作为准备 Run 失败结算。
+随后 [goal-transactions.ts](../packages/services/src/goals/goal-transactions.ts)（调查时第 212 行）的 4 次工具上限抛错，[session-goal-service.ts](../packages/server/src/application/session/goals/session-goal-service.ts)（调查时第 88 行）把它转换为执行限制错误，最终作为准备 Run 失败结算。
 
 因此，“默认预算未生效”和“本次仍然选错项目”都不是这次故障的解释。项目里现有准备 runtime 测试使用纯 builtin Read，未覆盖生产中的可信宿主 Read 覆盖，这是之前测试通过而真实使用失败的具体缺口。
 

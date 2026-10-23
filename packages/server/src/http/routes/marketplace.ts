@@ -4,7 +4,7 @@ import { ProtocolValidationError, parseMarketplaceCatalogRequest, parseMarketpla
   parseMarketplaceInstallRequest, type MarketplaceCancelResponse } from "@vykor/protocol";
 import { errorResponse, jsonResponse, readJson } from "../support.js";
 import { marketplaceCatalogDto, marketplaceSourcesDto, marketplacePreviewDto, marketplaceOperationDto } from "../mappers/marketplace.js";
-import type { PluginMarketplaceService } from "../../application/default-services/marketplace-service.js";
+import type { PluginMarketplaceService } from "../../application/default-services/extensions/marketplace-service.js";
 
 export function createMarketplaceRoutes(service?: PluginMarketplaceService): Hono {
   return new Hono()

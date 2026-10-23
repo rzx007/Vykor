@@ -50,7 +50,7 @@
 
 - [目录格式与数据类型](../packages/plugin-contracts/src/marketplace.ts)：校验分发数据。
 - [来源读取和下载](../packages/plugin-sources/src/marketplace.ts)：来源配置、缓存、网络边界及下载校验。
-- [安装协调](../packages/server/src/application/default-services/marketplace-service.ts)：候选包、兼容要求、权限、来源和安装回执。
+- [安装协调](../packages/server/src/application/default-services/extensions/marketplace-service.ts)：候选包、兼容要求、权限、来源和安装回执。
 - [原 Installer](../packages/plugins/src/installation/installer.ts)：代码快照与安装记录提交。
 - [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[客户端资源](../packages/client/src/resources/plugin-resource.ts)：共享请求与响应。
 - [Protocol](../packages/protocol/src/index.ts)统一公开市场通信类型；Client 仍只直接依赖 Protocol。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。

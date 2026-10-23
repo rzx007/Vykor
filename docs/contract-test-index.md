@@ -11,9 +11,9 @@
 | A1、A2、A3、A4、A5 | [agent.test.ts](../packages/agent-runtime/src/node/agent/__test__/agent.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/node/agent/__test__/sdk.test.ts) |
 | E1、E2、E3、E4、E5 | [event-source.test.ts](../packages/agent-runtime/src/kernel/__test__/event-source.test.ts)、[agent.test.ts](../packages/agent-runtime/src/node/agent/__test__/agent.test.ts) |
 | C1、C2、C3、C4、C5、C6 | [child-agent.test.ts](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/node/children/__test__/child-environment.test.ts) |
-| D1、D2、D3、D4、D5、D6、D7 | [http.test.ts](../tests/server-client/http.test.ts)、[daemon-control-service.test.ts](../packages/server/src/application/control/__test__/daemon-control-service.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts)、[agent-pool.test.ts](../packages/server/src/application/agent/__test__/agent-pool.test.ts)、[daemon-lifecycle.soak.test.ts](../packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts) |
+| D1、D2、D3、D4、D5、D6、D7 | [http.test.ts](../tests/server-client/http.test.ts)、[daemon-control-service.test.ts](../packages/server/src/application/control/__test__/daemon-control-service.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts)、[agent-pool.test.ts](../packages/server/src/application/agent/__test__/agent-pool.test.ts)、[daemon-lifecycle.soak.test.ts](../packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts) |
 | T1、T2、T3 | [http.test.ts](../tests/server-client/http.test.ts) |
-| P1、P2、P3、P4、P5、P6、P7、P8 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)、[transcript-projection.test.ts](../packages/server/src/application/session/__test__/transcript-projection.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts)、[projection-settlement-recovery.test.ts](../packages/server/src/application/agent/__test__/projection-settlement-recovery.test.ts) |
+| P1、P2、P3、P4、P5、P6、P7、P8 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)、[transcript-projection.test.ts](../packages/server/src/application/session/transcript/__test__/transcript-projection.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts)、[projection-settlement-recovery.test.ts](../packages/server/src/application/agent/__test__/projection-settlement-recovery.test.ts) |
 
 ## Runtime Kernel
 
@@ -32,9 +32,9 @@
 | 硬规则 | 主要测试 |
 | --- | --- |
 | 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts) |
-| Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/goal-model-attempt-service.test.ts) |
+| Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts) |
 | 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
-| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/notes.test.ts) |
+| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/__test__/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/__test__/notes.test.ts) |
 
 ### 模型网络重试（2026-09-26）
 
@@ -60,10 +60,10 @@
 | 硬规则 | 主要测试 |
 |---|---|
 | SQLite schema、migration、Run/Attempt/Task/Permission/Workflow 记录可以严格往返 | [store.test.ts](../packages/services/src/session-runtime/__test__/store.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts) |
-| Run 的准入、steer、interrupt 和终态不可回退 | [run-admission-service.test.ts](../packages/server/src/application/session/__test__/run-admission-service.test.ts)、[run-control-service.test.ts](../packages/server/src/application/session/__test__/run-control-service.test.ts)、[run-coordinator.test.ts](../packages/server/src/runtime/__test__/run-coordinator.test.ts) |
-| 执行器失败时仍关闭 Agent，并保留原始失败 | [session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts) |
-| 成功 Run 才执行自动记忆维护，维护失败不回退 Run 终态 | [session-post-run-maintenance.test.ts](../packages/server/src/application/session/__test__/session-post-run-maintenance.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts) |
-| Message/Part 投影可重试，不重复写 transcript | [transcript-projection.test.ts](../packages/server/src/application/session/__test__/transcript-projection.test.ts) |
+| Run 的准入、steer、interrupt 和终态不可回退 | [run-admission-service.test.ts](../packages/server/src/application/session/execution/__test__/run-admission-service.test.ts)、[run-control-service.test.ts](../packages/server/src/application/session/execution/__test__/run-control-service.test.ts)、[run-coordinator.test.ts](../packages/server/src/runtime/__test__/run-coordinator.test.ts) |
+| 执行器失败时仍关闭 Agent，并保留原始失败 | [session-run-executor.test.ts](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts) |
+| 成功 Run 才执行自动记忆维护，维护失败不回退 Run 终态 | [session-post-run-maintenance.test.ts](../packages/server/src/application/session/maintenance/__test__/session-post-run-maintenance.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts) |
+| Message/Part 投影可重试，不重复写 transcript | [transcript-projection.test.ts](../packages/server/src/application/session/transcript/__test__/transcript-projection.test.ts) |
 | Child terminal 投影失败会留下 Settlement，重启后幂等修复 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)、[projection-settlement-recovery.test.ts](../packages/server/src/application/agent/__test__/projection-settlement-recovery.test.ts) |
 | P6：每条 durable event 必须带当前 schemaVersion | [event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts) |
 | P7：event 名字、版本、payload 和 scope 必须全部通过 registry 校验 | [event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts) |
@@ -77,7 +77,7 @@
 
 | 硬规则 | 主要测试 |
 |---|---|
-| 协议版本和 capability 必须精确匹配 | [capabilities.test.ts](../packages/protocol/src/capabilities.test.ts)、[protocol-validation.test.ts](../packages/server/src/http/routes/protocol-validation.test.ts) |
+| 协议版本和 capability 必须精确匹配 | [capabilities.test.ts](../packages/protocol/src/capabilities.test.ts)、[protocol-validation.test.ts](../packages/server/src/http/routes/__test__/protocol-validation.test.ts) |
 | 请求字段严格校验，错误返回固定形状 | [requests.test.ts](../packages/protocol/src/requests.test.ts)、[serialization.test.ts](../packages/protocol/src/serialization.test.ts)、[routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
 | snapshot 包含 Attempt/Task 等完整状态，SSE cursor 可回放和重连 | [http.test.ts](../tests/server-client/http.test.ts)、[reducer.test.ts](../packages/client/src/state/__test__/reducer.test.ts) |
 | client HTTP 封装不会偷偷改变请求或响应 | [http-client.test.ts](../packages/client/src/transport/__test__/http-client.test.ts) |
@@ -90,7 +90,7 @@
 | 硬规则 | 主要测试 |
 |---|---|
 | Workflow 按依赖、并发、重试和预算调度，状态可持久恢复 | [scheduler.test.ts](../packages/coordinator/src/workflow/__test__/scheduler.test.ts)、[Node workflow-host.test.ts](../packages/agent-runtime/src/node/workflow/__test__/workflow-host.test.ts)、[SQLite workflow-host.test.ts](../packages/server/src/application/workflow/__test__/workflow-host.test.ts) |
-| Jobs 对不同 producer 提供同一 read/wait/send/cancel 语义 | [jobs index.test.ts](../packages/jobs/src/index.test.ts)、[daemon-job-service.test.ts](../packages/server/src/jobs/daemon-job-service.test.ts)、[job route.test.ts](../packages/server/src/http/routes/job.test.ts) |
+| Jobs 对不同 producer 提供同一 read/wait/send/cancel 语义 | [jobs index.test.ts](../packages/jobs/src/index.test.ts)、[daemon-job-service.test.ts](../packages/server/src/jobs/__test__/daemon-job-service.test.ts)、[job route.test.ts](../packages/server/src/http/routes/__test__/job.test.ts) |
 | Channel 消息幂等进入 durable Session/Run，投递状态可重试 | [durable-bridge.test.ts](../packages/server/src/application/channel/__test__/durable-bridge.test.ts)、[channel routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
 | CLI print 使用 daemon 持久状态，不创建第二套 runtime | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts) |
 | TUI 只通过共享 client 同步 Session，Jobs 缓存失败不破坏 Run | [useServerSync.test.tsx](../apps/frontend/src/hooks/useServerSync.test.tsx)、[job-remote-state.test.ts](../apps/frontend/src/jobs/job-remote-state.test.ts) |
@@ -124,12 +124,12 @@
 | B02 可靠事件和结果顺序 | [事件总线](../packages/agent-runtime/src/kernel/__test__/event-source.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/__test__/index.test.ts) | `pnpm test` |
 | B03 子运行创建、TTL 和关闭 | [ChildAgent](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[子环境](../packages/agent-runtime/src/node/children/__test__/child-environment.test.ts) | `pnpm test` |
 | B04 撤销、冻结与父子缩权 | [插件生命周期](../packages/agent-runtime/src/node/plugins/__test__/run-capability-lifecycle.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/__test__/index.test.ts) | `pnpm test` |
-| B05 应用确认与可信来源 | [应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts)、[来源投影](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) | `pnpm test` |
+| B05 应用确认与可信来源 | [应用授权](../packages/server/src/application/session/plugins/__test__/session-plugin-run-authorization.test.ts)、[来源投影](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) | `pnpm test` |
 | B06 文件和 SQLite Workflow | [文件运行](../tests/agent-integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts)、[自定义宿主取消](../packages/agent-runtime/src/node/workflow/__test__/workflow-host.child-cancellation.test.ts) | `pnpm test` |
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/children/__test__/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/__test__/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/__test__/model-attempt-gate.test.ts) | `pnpm test` |
-| B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |
-| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/note-application-service.test.ts) | `pnpm test` |
+| B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |
+| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/__test__/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/__test__/note-application-service.test.ts) | `pnpm test` |
 | B11 SDK 与浏览器 | [独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs)、[浏览器入口](../tests/browser-client/vite.config.ts) | `pnpm --filter @vykor/agent-runtime test:pack`、`pnpm test:client-browser` |
 
 ## 常用命令
@@ -153,9 +153,9 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 纯数据沿选中声明及私有别名检查 Promise/AbortSignal；Protocol 的 Job/Terminal 来源只能是 /contracts，同文件合法数据仍允许 | [声明来源正反例](../scripts/architecture-boundaries.test.mjs)、[入口白名单](../scripts/architecture-policy.json) | `pnpm check:architecture` |
 | 通用 JSON 字节、指纹、原型、canonical 20 层与有界复制 32 层 | [JSON 样本](../packages/json-data/src/json.test.ts)、[通信基线](../packages/protocol/src/layering-baseline.test.ts) | json-data `src/json.test.ts`；Protocol `src/layering-baseline.test.ts` |
 | 旧模式归一化与 plan 权限上限，Client 只做显示投影 | [配置模式](../packages/host-config/src/permission-modes.test.ts)、[有效模式](../packages/permissions/src/effective-permission-mode.test.ts)、[Client 投影](../packages/client/src/runtime-configuration.test.ts) | 各文件所在包的定向 Vitest |
-| 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
-| 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
-| 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/validation.test.ts)、[附件策略](../packages/services/src/attachments/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/boundary.test.ts) | 对应包定向 Vitest |
+| 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugins/__test__/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/plugins/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
+| 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
+| 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/validation.test.ts)、[附件策略](../packages/services/src/attachments/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/__test__/boundary.test.ts) | 对应包定向 Vitest |
 | Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/index.test.ts)、[组合 Host](../packages/jobs/src/composite-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
 | Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |

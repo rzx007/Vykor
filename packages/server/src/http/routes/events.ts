@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { publicPartEvent } from "../part-wire-view.js";
+import { publicPartEvent } from "../mappers/part-wire-view.js";
 
 import type { SessionEventRecord } from "@vykor/protocol";
 

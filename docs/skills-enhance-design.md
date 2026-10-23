@@ -35,7 +35,7 @@ daemon 先用当前 cwd catalog 校验 `name + path`，再要求模型调用 `Sk
 | 用户目录 | `packages/server/src/commands/default-command-catalog.ts` | 将 `userInvocable` Skill 映射为 template command |
 | Desktop 输入 | `apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/` | `/`、`$` 选择后插入 `SkillMentionNode` |
 | TUI 输入 | `apps/frontend/src/hooks/useServerSync.ts` | template slash 转成 Skill + text items |
-| 服务端展开 | `packages/server/src/application/session/session-input-materializer.ts` | 校验引用并生成 Skill 工具调用要求 |
+| 服务端展开 | `packages/server/src/application/session/interactions/session-input-materializer.ts` | 校验引用并生成 Skill 工具调用要求 |
 | 原生工具 | `packages/tools/src/meta/skill.ts` | `Skill` / `ListSkills`，返回可信位置和正文 |
 
 ## Frontmatter

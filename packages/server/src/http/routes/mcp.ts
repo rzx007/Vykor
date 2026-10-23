@@ -7,11 +7,11 @@ import { Hono, type Context } from "hono";
 import {
   McpOAuthApplicationError,
   type McpOAuthApplicationService,
-} from "../../application/mcp-oauth-application-service.js";
+} from "../../application/mcp/mcp-oauth-application-service.js";
 import {
   McpOAuthOperationError,
   type McpOAuthOperationService,
-} from "../../application/mcp-oauth-operation-service.js";
+} from "../../application/mcp/mcp-oauth-operation-service.js";
 import { errorResponse, jsonResponse, readJson, type JsonRecord } from "../support.js";
 
 export interface McpRoutesContext {

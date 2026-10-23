@@ -64,7 +64,7 @@
 | Builtin catalog | `packages/server/src/commands/commands.ts` | `BUILTIN_SESSION_COMMANDS` + `mergeCommandCatalog` |
 | HTTP routes | `packages/server/src/http/server.ts` | `/commands` 发现接口、Session prompt、Jobs/后台 shell 等资源 API |
 | Default catalog | `packages/server/src/commands/default-command-catalog.ts` | cwd 下 skill/plugin templates 与 builtin catalog |
-| Skill input materializer | `packages/server/src/application/session/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
+| Skill input materializer | `packages/server/src/application/session/interactions/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
 | Native Skill tool | `packages/tools/src/meta/skill.ts` | 按注册表读取实际 `SKILL.md`，返回 Skill 文件、根目录和正文 |
 | Application services | `packages/server/src/application/default-application-services.ts` | settings/memory/git/plugins 等命令依赖 |
 | Shared dispatch | `packages/client/src/commands/session-commands.ts` | 呈现层 + 资源 API 调用 |

@@ -9,8 +9,8 @@ import { SessionStore } from "@vykor/services";
 import { VykorClient } from "../../client/src/index.js";
 import { VykorHttpServer } from "../src/http/server.js";
 import { installAppFixture, appFixtureSettings } from "../../agent-runtime/test-helpers/plugin-app-fixture.js";
-import { createDefaultPluginService } from "../src/application/default-services/plugin-service.js";
-import { createDefaultSettingsService } from "../src/application/default-services/settings-service.js";
+import { createDefaultPluginService } from "../src/application/default-services/extensions/plugin-service.js";
+import { createDefaultSettingsService } from "../src/application/default-services/configuration/settings-service.js";
 
 export async function pluginAppHarness(kind: "native-tools" | "mcp-server", modelTool = false, autosave = false) {
   const root = mkdtempSync(join(tmpdir(), "app-http-"));

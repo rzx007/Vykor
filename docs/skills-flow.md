@@ -19,7 +19,7 @@ Skill 是带 frontmatter 的 Markdown 方法论或提示词。运行时先把多
 | Command catalog | `packages/server/src/commands/default-command-catalog.ts` | 把 `userInvocable` Skill 暴露为 `kind="template"` |
 | Desktop picker | `apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/` | `/`、`$` 过滤与结构化 Skill 引用 |
 | TUI template 提交 | `apps/frontend/src/hooks/useServerSync.ts` | 把 `/<skill> args` 转成 Skill + text items |
-| 输入 materializer | `packages/server/src/application/session/session-input-materializer.ts` | 校验 catalog 引用并生成本轮 Skill 工具调用要求 |
+| 输入 materializer | `packages/server/src/application/session/interactions/session-input-materializer.ts` | 校验 catalog 引用并生成本轮 Skill 工具调用要求 |
 | 原生工具 | `packages/tools/src/meta/skill.ts` | `Skill` 精确加载和 `ListSkills` 列举 |
 | Runtime prompt | `packages/prompts/src/index.ts` | 向模型列出可见 Skill 的名称与描述 |
 

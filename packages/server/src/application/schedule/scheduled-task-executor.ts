@@ -5,9 +5,9 @@ import { buildChildAgentWorktreeSlug, createChildAgentWorktreeManager } from "@v
 import type { Settings } from "@vykor/host-config";
 import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/domain-contracts/schedules";
 import type { SessionCommandService } from "../session/session-command-service.js";
-import type { SessionInteractionService } from "../session/session-interaction-service.js";
+import type { SessionInteractionService } from "../session/interactions/session-interaction-service.js";
 import type { SessionQueryService } from "../session/session-query-service.js";
-import type { RunControlService } from "../session/run-control-service.js";
+import type { RunControlService } from "../session/execution/run-control-service.js";
 
 export interface ScheduledTaskExecutorOptions {
   sessionQueries: Pick<SessionQueryService, "getSession">;

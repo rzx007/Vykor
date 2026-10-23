@@ -71,7 +71,7 @@ Protocol 只拥有 HTTP/SSE 格式与解码。HTTP routes 使用 Protocol parser
 
 应用用例先验证会话 owner、revision、状态与授权，再调用 Services 的存储命令或 Node 的宿主接口。记录与纯数据校验按 `domain-contracts` 业务子入口引用；Services 的命令由自身领域模块定义，不能把 HTTP Request 直接当作内部写库输入。事件服务返回领域事件，SSE 包装与通信序列化在 HTTP 层完成。
 
-插件应用调用由 `application/session/plugin-app-host-binding.ts` 将已保存记录转换成 `PluginAppHostBinding`。其中 `instanceId = app.id` 只用于隔离与撤销，其他字段来自已核实的 owner、插件及后端身份；不把可变应用记录交给 Node。Node 保存 lease 权威并重新核对来源、generation 与绑定，Server 的 lease 适配不会增加第二份 token 表。
+插件应用调用由 `application/session/plugins/plugin-app-host-binding.ts` 将已保存记录转换成 `PluginAppHostBinding`。其中 `instanceId = app.id` 只用于隔离与撤销，其他字段来自已核实的 owner、插件及后端身份；不把可变应用记录交给 Node。Node 保存 lease 权威并重新核对来源、generation 与绑定，Server 的 lease 适配不会增加第二份 token 表。
 
 附件限额形状归 domain-contracts，默认值单独定义在 `services/src/attachments/attachment-policy.ts`，供独立 Services 和 Server 共用。Services 的 Office 转换返回自身 `OfficeDocumentPreview`；当前 Server 没有生成 Protocol `OfficePreview` 的用例，因此不设置空的查询模型或 mapper。
 
@@ -84,7 +84,7 @@ Protocol 只拥有 HTTP/SSE 格式与解码。HTTP routes 使用 Protocol parser
 | `session.model`                  | 列表、导出和统计使用的展示列       | UI 展示、导出、统计展示              |
 | `session.metadata.runtime.model` | 这条 session 下一轮真正要用的模型 | daemon 创建或重建 `VykorAgent` |
 
-配置记录与纯读取来自 `domain-contracts/sessions/runtime-config`。组合读取、patch 和变化判断在 `application/session/runtime-configuration.ts`；旧模式归一化调用 host-config，有效模式计算调用 permissions。Client 保留本地请求构造与显示投影，Server 仍负责实际运行决策。
+配置记录与纯读取来自 `domain-contracts/sessions/runtime-config`。组合读取、patch 和变化判断在 `application/session/configuration/runtime-configuration.ts`；旧模式归一化调用 host-config，有效模式计算调用 permissions。Client 保留本地请求构造与显示投影，Server 仍负责实际运行决策。
 
 当前规则：
 
@@ -117,9 +117,9 @@ Session 写操作共享 `SessionOperationRunner`。它先等待同 session 前�
 | 服务                        | 文件                                  | 负责                                                               |
 | --------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
 | `SessionCommandService`     | `application/session/session-command-service.ts`     | create/update/archive/delete/fork                                 |
-| `SessionInteractionService` | `application/session/session-interaction-service.ts` | prompt、resume、interrupt、queued prompt 与 child route           |
+| `SessionInteractionService` | `application/session/interactions/session-interaction-service.ts` | prompt、resume、interrupt、queued prompt 与 child route           |
 | `SessionQueryService`       | `application/session/session-query-service.ts`       | session/state/message/part 查询                                    |
-| `SessionMaintenanceService` | `application/session/session-maintenance-service.ts` | compact、rewind、export、remember、MCP、usage                      |
+| `SessionMaintenanceService` | `application/session/maintenance/session-maintenance-service.ts` | compact、rewind、export、remember、MCP、usage                      |
 | `DaemonControlService`      | `application/control/daemon-control-service.ts`      | runtime snapshot、run barrier、pool close/inspect                  |
 | `ScheduledTaskService`      | `daemon/scheduled-task-service.ts`                   | 保存已安排任务、启动定时器、运行 Agent、保存执行记录和需要处理状态 |
 
@@ -186,12 +186,12 @@ apps/frontend/src/hooks/useServerSync.ts
 packages/client/src/resources/session-resource.ts
 packages/client/src/transport/http-transport.ts
 packages/server/src/http/routes/run-execution.ts
-packages/server/src/application/session/session-interaction-service.ts
+packages/server/src/application/session/interactions/session-interaction-service.ts
 packages/server/src/application/session/session-operation-runner.ts
-packages/server/src/application/session/run-admission-service.ts
-packages/server/src/application/session/session-run-engine.ts
+packages/server/src/application/session/execution/run-admission-service.ts
+packages/server/src/application/session/execution/session-run-engine.ts
 packages/server/src/runtime/run-coordinator.ts
-packages/server/src/application/session/session-run-executor.ts
+packages/server/src/application/session/execution/session-run-executor.ts
 packages/server/src/application/agent/agent-pool.ts
 packages/server/src/daemon/daemon-agent.ts
 packages/agent-runtime/src/kernel/agent.ts

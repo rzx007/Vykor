@@ -36,7 +36,7 @@ export function checkRetirement(root) {
   const pureImports = {
     "packages/protocol/src/plugin-ui-history.ts": ["@vykor/domain-contracts/plugin-apps/history", "./json.js", "./requests.js", "./domain-validation.js"],
     "packages/domain-contracts/src/plugin-apps/history.ts": ["@vykor/json-data/json", "../validation-error.js"],
-    "packages/server/src/application/session/plugin-ui-history-service.ts": ["node:crypto", "@vykor/domain-contracts/sessions", "@vykor/domain-contracts/plugin-apps/history", "@vykor/json-data/json", "@vykor/services", "../../shared/application-error.js"],
+    "packages/server/src/application/session/plugins/plugin-ui-history-service.ts": ["node:crypto", "@vykor/domain-contracts/sessions", "@vykor/domain-contracts/plugin-apps/history", "@vykor/json-data/json", "@vykor/services", "../../../shared/application-error.js"],
     "packages/client/src/resources/plugin-ui-history-resource.ts": ["@vykor/protocol", "../transport/http-transport.js"],
   };
   for (const [path, allowed] of Object.entries(pureImports)) {

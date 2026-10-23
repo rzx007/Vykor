@@ -3,7 +3,7 @@ import type { SessionEventRecord } from "@vykor/domain-contracts/sessions";
 
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 import { ApplicationEventService } from "../../events/application-event-service.js";
-import { SessionEventPublisher } from "../session-event-publisher.js";
+import { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import { SessionOperationRunner } from "../session-operation-runner.js";
 
 function deferred<T>() {

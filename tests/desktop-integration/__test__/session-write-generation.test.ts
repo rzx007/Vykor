@@ -16,8 +16,8 @@ import { AgentEventBus } from "../../../packages/agent-runtime/src/kernel/event-
 import { fileWriteTool } from "../../../packages/tools/src/file/write"
 import { SessionStore } from "../../../packages/services/src/session-runtime/store"
 import { DaemonAgentEventProjector } from "../../../packages/server/src/application/agent/daemon-agent-event-projector"
-import { SessionTranscriptProjection } from "../../../packages/server/src/application/session/transcript-projection"
-import { SessionEventPublisher } from "../../../packages/server/src/application/session/session-event-publisher"
+import { SessionTranscriptProjection } from "../../../packages/server/src/application/session/transcript/transcript-projection"
+import { SessionEventPublisher } from "../../../packages/server/src/application/session/transcript/session-event-publisher"
 
 // 在模拟计时与断言开始前加载聊天组件，避免首次加载占用用例的超时限额。
 const { ConversationTranscript } = await vi.importActual<{ ConversationTranscript: ComponentType<any> }>(

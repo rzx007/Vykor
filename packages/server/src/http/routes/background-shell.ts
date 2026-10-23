@@ -4,7 +4,7 @@ import { Hono } from "hono";
 
 import type { JobReadResult } from "@vykor/protocol";
 
-import type { BackgroundShellService } from "../../application/session/background-shell-service.js";
+import type { BackgroundShellService } from "../../application/session/execution/background-shell-service.js";
 import {
   applicationErrorResponse,
   errorResponse,

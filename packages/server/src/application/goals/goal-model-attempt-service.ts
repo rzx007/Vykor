@@ -6,7 +6,7 @@ import {
   type ModelAttemptIdentity,
 } from "@vykor/agent-contracts";
 import type { SessionStore } from "@vykor/services";
-import type { SessionEventPublisher } from "../session/session-event-publisher.js";
+import type { SessionEventPublisher } from "../session/transcript/session-event-publisher.js";
 
 export interface GoalModelAttemptServiceOptions {
   store: Pick<SessionStore, "goals" | "runs">;

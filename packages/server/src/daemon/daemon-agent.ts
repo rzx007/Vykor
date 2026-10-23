@@ -33,7 +33,7 @@ import type { McpRuntimeRegistry } from "@vykor/mcp";
 import type { Settings } from "@vykor/host-config";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
-import { readSessionRuntimeConfig } from "../application/session/runtime-configuration.js";
+import { readSessionRuntimeConfig } from "../application/session/configuration/runtime-configuration.js";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
 import type { SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/domain-contracts/sessions";
 

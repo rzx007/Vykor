@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { parseCreateSessionGoalInput, parseGoalActionInput, parseUpdateSessionGoalInput } from "@vykor/protocol";
-import type { SessionGoalService } from "../../application/session/session-goal-service.js";
+import type { SessionGoalService } from "../../application/session/goals/session-goal-service.js";
 import { applicationErrorResponse, jsonResponse, readJson } from "../support.js";
 
 export function createSessionGoalRoutes(goals: SessionGoalService): Hono {

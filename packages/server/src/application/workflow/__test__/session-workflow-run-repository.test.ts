@@ -13,7 +13,7 @@ import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SessionWorkflowRunRepository } from "../session-workflow-run-repository.js";
-import { recoverInterruptedWorkflows } from "../../session/workflow-recovery.js";
+import { recoverInterruptedWorkflows } from "../../session/maintenance/workflow-recovery.js";
 
 const temporaryDirectories: string[] = [];
 

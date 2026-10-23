@@ -13,7 +13,7 @@ import {
   callInspector, expectRuntimeStopped, pluginId, settings, toolName, withNativePluginFixture,
   type NativePluginFixture,
 } from "../../packages/agent-runtime/test-helpers/native-plugin-authoring.js";
-import { createDefaultPluginService } from "../../packages/server/src/application/default-services/plugin-service.js";
+import { createDefaultPluginService } from "../../packages/server/src/application/default-services/extensions/plugin-service.js";
 import { DaemonOperationGate } from "../../packages/server/src/application/control/daemon-operation-gate.js";
 import { createServiceRoutes, type ServiceRoutesContext } from "../../packages/server/src/http/routes/service.js";
 import { createSystemRoutes } from "../../packages/server/src/http/routes/system.js";

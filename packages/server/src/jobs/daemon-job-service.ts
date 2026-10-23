@@ -16,7 +16,7 @@ import {
 } from "@vykor/jobs";
 import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
 import type { SessionExecutionRecord, SessionRecord, SessionTaskStatus } from "@vykor/domain-contracts/sessions";
-import type { SessionExecutionProjector, DetachedProcessRuntime } from "../application/session/session-execution-projector.js";
+import type { SessionExecutionProjector, DetachedProcessRuntime } from "../application/session/transcript/session-execution-projector.js";
 import type { DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
 import type { ChildActivitySnapshot } from "@vykor/agent-contracts";
 import type { TerminalSessionInfo } from "@vykor/terminal";

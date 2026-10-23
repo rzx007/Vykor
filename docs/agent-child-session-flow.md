@@ -138,6 +138,6 @@ packages/tools/src/agent/index.ts
 packages/tools/src/agent/workflow/runner.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 packages/server/src/application/agent/live-child-agent-directory.ts
-packages/server/src/application/session/session-execution-projector.ts
-packages/server/src/application/session/session-interaction-service.ts
+packages/server/src/application/session/transcript/session-execution-projector.ts
+packages/server/src/application/session/interactions/session-interaction-service.ts
 ```

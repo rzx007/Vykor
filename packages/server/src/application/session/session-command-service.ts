@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { CreateSessionInput, ForkSessionInput, ClearSessionWorktreeBindingInput } from "./inputs.js";
 import type { SessionMessagePartRecord, SessionMessageRecord, SessionMessageRole, SessionRecord } from "@vykor/domain-contracts/sessions";
 import type { UpsertMessagePartInput } from "@vykor/services";
-import { changedSessionRuntimeKeys, readSessionRuntimeConfig } from "./runtime-configuration.js";
+import { changedSessionRuntimeKeys, readSessionRuntimeConfig } from "./configuration/runtime-configuration.js";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
 import { isRecord, runtimeSessionMetadataChanged } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { PluginLifecycle, PluginLifecycleScope } from "./plugin-lifecycle.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "./plugins/plugin-lifecycle.js";
 
 export type CreateSessionCommand = CreateSessionInput;
 

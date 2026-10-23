@@ -3553,7 +3553,7 @@
     {
       "path": "packages/server/src/application/daemon-application.ts",
       "line": 9,
-      "text": "import { PluginUiHistoryService } from \"./session/plugin-ui-history-service.js\";",
+      "text": "import { PluginUiHistoryService } from \"./session/plugins/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
@@ -3587,25 +3587,25 @@
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
-      "path": "packages/server/src/application/default-services/plugin-service.test.ts",
+      "path": "packages/server/src/application/default-services/extensions/__test__/plugin-service.test.ts",
       "line": 394,
       "text": "    expect(preview).not.toHaveProperty(\"uiInventory\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/default-services/plugin-service.test.ts",
+      "path": "packages/server/src/application/default-services/extensions/__test__/plugin-service.test.ts",
       "line": 420,
       "text": "      body: { code: \"plugin_archive_invalid\", diagnostics: [expect.objectContaining({ code: \"plugin_ui_retired\" })] },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/default-services/plugin-service.ts",
+      "path": "packages/server/src/application/default-services/extensions/plugin-service.ts",
       "line": 354,
       "text": "        const uiInventory = retiredUiInventory(manifest?.components.ui?.length ?? 0);",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/server/src/application/default-services/plugin-service.ts",
+      "path": "packages/server/src/application/default-services/extensions/plugin-service.ts",
       "line": 379,
       "text": "          ...(uiInventory ? { uiInventory } : {}),",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
@@ -3647,7 +3647,7 @@
       "reason": "Startup settles original in-flight records without replay and preserves unknown facts."
     },
     {
-      "path": "packages/server/src/application/recovery/startup-recovery-service.test.ts",
+      "path": "packages/server/src/application/recovery/__test__/startup-recovery-service.test.ts",
       "line": 22,
       "text": "      recoverPluginUiActions: () => { order.push(\"ui-actions\"); },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
@@ -3665,247 +3665,247 @@
       "reason": "Startup settles original in-flight records without replay and preserves unknown facts."
     },
     {
-      "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+      "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
       "line": 312,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+      "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
       "line": 406,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+      "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
       "line": 423,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/run-admission-service.test.ts",
+      "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
       "line": 435,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/session-interaction-service-edit.test.ts",
+      "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service-edit.test.ts",
       "line": 9,
       "text": "  it.each([\"pluginUi\", \"uiAction\"])(\"rejects %s before closing the agent or editing the transcript\", async name => {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/session-interaction-service.test.ts",
+      "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
       "line": 176,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/session-interaction-service.test.ts",
+      "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
       "line": 380,
       "text": "      uiAction: { schemaVersion: 2, instanceId: \"00000000-0000-0000-0000-000000000002\", requestId: \"00000000-0000-0000-0000-000000000001\",",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/__test__/session-interaction-service.test.ts",
+      "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
       "line": 385,
       "text": "    await expect(service.resumeRun(\"s1\", \"ui-run\", {})).rejects.toMatchObject({ code: \"plugin_ui_action_not_resumable\" });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 3,
       "text": "import { isJsonObject as isPluginUiRecord } from \"@vykor/json-data/json\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 4,
       "text": "import { readPluginUiAction, readPluginUiInstance, parsePluginUiSubmissionRecord, parsePluginUiConversationReceipt } from \"@vykor/domain-contracts/plugin-apps/history\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 5,
       "text": "import type { PluginUiActionReceipt, PluginUiActionResponse, PluginUiInstanceRecord, PluginUiSubmissionRecord, PluginUiConversationReceipt } from \"@vykor/domain-contracts/plugin-apps/history\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 11,
       "text": "export class PluginUiHistoryService {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 17,
       "text": "  ): PluginUiActionResponse {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 20,
       "text": "    const action = readPluginUiAction(run.metadata)!;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 36,
       "text": "  ): PluginUiActionReceipt {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 44,
       "text": "      readPluginUiAction(run.metadata)?.instanceId !== instanceId",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 46,
       "text": "      throw new ApplicationError(404, \"找不到此操作\", \"plugin_ui_not_found\");",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 51,
       "text": "  private receipt(run: SessionRunRecord): PluginUiActionReceipt {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 52,
       "text": "    const action = readPluginUiAction(run.metadata)!;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 73,
       "text": "          (p) => readPluginUiInstance(p.metadata)?.instanceId === instanceId,",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 75,
       "text": "    const instance = part && readPluginUiInstance(part.metadata);",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 80,
       "text": "        \"plugin_ui_not_found\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 89,
       "text": "      PluginUiInstanceRecord,",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 112,
       "text": "      isPluginUiRecord(part.output) &&",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 119,
       "text": "      !Object.hasOwn(run.metadata, \"uiAction\") &&",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 130,
       "text": "  ): Extract<PluginUiConversationReceipt, { mode: \"submit\" }> {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 136,
       "text": "        \"plugin_ui_not_found\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 146,
       "text": "    if (!Object.hasOwn(part.metadata, \"pluginUiSubmission\")) return undefined;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 151,
       "text": "        \"plugin_ui_conversation_unavailable\",",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 153,
       "text": "    let record: PluginUiSubmissionRecord;",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 155,
       "text": "      record = parsePluginUiSubmissionRecord(part.metadata.pluginUiSubmission);",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 178,
       "text": "      Object.hasOwn(run.metadata, \"uiAction\") ||",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 179,
       "text": "      Object.hasOwn(input.metadata, \"pluginUiSubmission\") ||",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 180,
       "text": "      Object.hasOwn(run.metadata, \"pluginUiSubmission\")",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 183,
       "text": "    const receipt = parsePluginUiConversationReceipt({",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 215,
       "text": "    throw new ApplicationError(409, \"交接目标会话不可用\", \"plugin_ui_conversation_unavailable\");",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/plugin-ui-history-service.ts",
+      "path": "packages/server/src/application/session/plugins/plugin-ui-history-service.ts",
       "line": 230,
       "text": "function runPluginSourceMatches(run: SessionRunRecord, source: Pick<PluginUiInstanceRecord, \"pluginId\" | \"pluginVersion\" | \"pluginDigest\">): boolean {",
       "reason": "Reads original store records and verifies source ownership; no runtime/loader/tool execution."
     },
     {
-      "path": "packages/server/src/application/session/session-interaction-service.ts",
+      "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
       "line": 463,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
-      "path": "packages/server/src/application/session/session-interaction-service.ts",
+      "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
       "line": 467,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
-      "path": "packages/server/src/application/session/transcript-projection.ts",
+      "path": "packages/server/src/application/session/transcript/transcript-projection.ts",
       "line": 8,
       "text": "import { readPluginUiInstance } from \"@vykor/domain-contracts/plugin-apps/history\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/server/src/application/session/transcript-projection.ts",
+      "path": "packages/server/src/application/session/transcript/transcript-projection.ts",
       "line": 264,
       "text": "        const existing = previous && readPluginUiInstance(previous.metadata);",
       "reason": "Preserves already persisted historical source Part during transcript projection."
@@ -4109,13 +4109,13 @@
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/http/part-wire-view.test.ts",
+      "path": "packages/server/src/http/mappers/__test__/part-wire-view.test.ts",
       "line": 15,
       "text": "const part: SessionMessagePartRecord = { id: \"p\", sessionId: \"s\", messageId: \"m\", seq: 1, type: \"tool\", toolName: \"UnknownTool\", status: \"failed\", isError: true, input: { hidden: \"x\".repeat(20_000) }, output: { content: [{ type: \"text\", text: \"failure\".repeat(3000) + \" shell-output://00000000-0000-4000-8000-000000000001\" }], isError: true, failureKind: \"command\", executionState: \"completed\", recoveryHint: \"inspect log\" }, metadata: { failureKind: \"command\", executionState: \"completed\", pluginUi: { id: \"business-ui\" } }, createdAt: 1, updatedAt: 1 };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/server/src/http/routes/protocol-validation.test.ts",
+      "path": "packages/server/src/http/routes/__test__/protocol-validation.test.ts",
       "line": 41,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
@@ -4129,7 +4129,7 @@
     {
       "path": "packages/server/src/http/routes/session-plugin-ui-history.ts",
       "line": 3,
-      "text": "import type { PluginUiHistoryService } from \"../../application/session/plugin-ui-history-service.js\";",
+      "text": "import type { PluginUiHistoryService } from \"../../application/session/plugins/plugin-ui-history-service.js\";",
       "reason": "Two read-only history GET handlers; all other old namespace requests return 410."
     },
     {
@@ -4321,7 +4321,7 @@
     {
       "path": "scripts/check-retired-native-ui.mjs",
       "line": 39,
-      "text": "    \"packages/server/src/application/session/plugin-ui-history-service.ts\": [\"node:crypto\", \"@vykor/domain-contracts/sessions\", \"@vykor/domain-contracts/plugin-apps/history\", \"@vykor/json-data/json\", \"@vykor/services\", \"../../shared/application-error.js\"],",
+      "text": "    \"packages/server/src/application/session/plugins/plugin-ui-history-service.ts\": [\"node:crypto\", \"@vykor/domain-contracts/sessions\", \"@vykor/domain-contracts/plugin-apps/history\", \"@vykor/json-data/json\", \"@vykor/services\", \"../../../shared/application-error.js\"],",
       "reason": "P13 exact dependency guard: canonical historical data and wire error adapters only; no loader or execution dependencies."
     },
     {

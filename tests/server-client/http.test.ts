@@ -3330,7 +3330,7 @@ describe("VykorHttpServer", () => {
     }));
     const { createSystemRoutes } = await import("../../packages/server/src/http/routes/system.js");
     const { ProviderMutationError } = await import(
-      "../../packages/server/src/application/default-services/provider-service.js"
+      "../../packages/server/src/application/default-services/models/provider-service.js"
     );
     const routes = createSystemRoutes({
       providerService: {

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import type { ProjectApplicationService } from "../../application/project-application-service.js";
+import type { ProjectApplicationService } from "../../application/projects/project-application-service.js";
 import { errorResponse, jsonResponse, readJson } from "../support.js";
 
 export function createProjectRoutes(projects: ProjectApplicationService): Hono {

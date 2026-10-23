@@ -23,8 +23,8 @@ import type { ApplicationRetentionService } from "../../application/retention/ap
 import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
 import { CURRENT_PROTOCOL_VERSION, parseExecutionObservationFilter } from "@vykor/protocol";
 import type { AttachmentLimits, ServerCapabilities } from "@vykor/protocol";
-import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
-import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugin-lifecycle.js";
+import { settingsPatchRuntimeImpact } from "../../application/default-services/configuration/settings-service.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugins/plugin-lifecycle.js";
 
 export interface SystemRoutesContext {
   restartPreparedHealth?: () => (VykorServerHealth & { ready: false; accepting: false; restartPrepared: true }) | undefined;

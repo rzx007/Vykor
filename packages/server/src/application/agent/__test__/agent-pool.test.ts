@@ -1,4 +1,4 @@
-import {hostedAgentFactory} from "./../../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory} from "../../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { AgentPool } from "../agent-pool.js";

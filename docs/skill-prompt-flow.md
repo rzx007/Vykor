@@ -152,10 +152,10 @@ $archify 画一下系统架构
 | `apps/desktop/src/main/features/session/session-service.ts` | Desktop `sendPrompt({ items })` 转发 |
 | `apps/frontend/src/hooks/useServerSync.ts` | TUI template 命令转成 Skill + text items |
 | `packages/server/src/http/routes/run-execution.ts` | prompt HTTP 准入入口 |
-| `packages/server/src/application/session/session-interaction-service.ts` | admission、live child 和幂等校验 |
-| `packages/server/src/application/session/session-run-engine.ts` | durable input/run 与排队 |
-| `packages/server/src/application/session/session-run-executor.ts` | catalog 校验、附件路由、materialize 和 Agent 提交 |
-| `packages/server/src/application/session/session-input-materializer.ts` | Skill/context items 到本轮 Agent 输入 |
+| `packages/server/src/application/session/interactions/session-interaction-service.ts` | admission、live child 和幂等校验 |
+| `packages/server/src/application/session/execution/session-run-engine.ts` | durable input/run 与排队 |
+| `packages/server/src/application/session/execution/session-run-executor.ts` | catalog 校验、附件路由、materialize 和 Agent 提交 |
+| `packages/server/src/application/session/interactions/session-input-materializer.ts` | Skill/context items 到本轮 Agent 输入 |
 | `packages/tools/src/meta/skill.ts` | 按 name/path 读取可信 Skill、根目录和正文 |
-| `packages/server/src/application/session/transcript-projection.ts` | 把 input items 投影到用户 text part metadata |
+| `packages/server/src/application/session/transcript/transcript-projection.ts` | 把 input items 投影到用户 text part metadata |
 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` | AgentEvent 到 durable state 和 SSE |

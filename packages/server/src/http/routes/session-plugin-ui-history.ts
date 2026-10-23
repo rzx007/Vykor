@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { parsePluginUiRouteIds, ProtocolValidationError } from "@vykor/protocol";
-import type { PluginUiHistoryService } from "../../application/session/plugin-ui-history-service.js";
+import type { PluginUiHistoryService } from "../../application/session/plugins/plugin-ui-history-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { applicationErrorResponse, protocolValidationErrorResponse, jsonResponse } from "../support.js";
 export function createSessionPluginUiHistoryRoutes(service?: PluginUiHistoryService): Hono {

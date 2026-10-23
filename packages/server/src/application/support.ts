@@ -1,4 +1,4 @@
-import { runtimeMetadataChanged } from "./session/runtime-configuration.js";
+import { runtimeMetadataChanged } from "./session/configuration/runtime-configuration.js";
 
 import type { RuntimeMetricsSnapshot } from "../shared/runtime-metrics.js";
 

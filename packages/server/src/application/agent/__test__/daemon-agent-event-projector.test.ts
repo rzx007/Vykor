@@ -11,8 +11,8 @@ import { SessionStore } from "@vykor/services";
 import {
   ChildAgentExecutionRegistry,
 } from "@vykor/execution-node";
-import { SessionExecutionProjector } from "../../session/session-execution-projector.js";
-import { SessionTranscriptProjection } from "../../session/transcript-projection.js";
+import { SessionExecutionProjector } from "../../session/transcript/session-execution-projector.js";
+import { SessionTranscriptProjection } from "../../session/transcript/transcript-projection.js";
 
 import {
   DaemonAgentEventProjector,

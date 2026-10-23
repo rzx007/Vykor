@@ -31,7 +31,7 @@ import type {
   SettingsService,
   SkillService,
 } from "../application/settings-api.js";
-import { createSkillManagementService } from "../application/skill-management-service.js";
+import { createSkillManagementService } from "../application/skills/skill-management-service.js";
 import {
   TRACE_ID_HEADER,
   writeStructuredLog,

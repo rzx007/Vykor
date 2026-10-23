@@ -11,19 +11,19 @@ import type { ContentBlock } from "@vykor/agent-contracts";
 import {
   type SessionStore,
 } from "@vykor/services";
-import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../session/runtime-configuration.js";
+import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../session/configuration/runtime-configuration.js";
 import { readSessionModelUsage } from "@vykor/domain-contracts/sessions";
 import { parseSessionInputItems } from "@vykor/domain-contracts/inputs";
 import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { LiveChildAgentDirectory } from "./live-child-agent-directory.js";
-import type { SessionEventPublisher } from "../session/session-event-publisher.js";
+import type { SessionEventPublisher } from "../session/transcript/session-event-publisher.js";
 import type {
   SessionChildExecutionBridge,
   SessionExecutionProjector,
-} from "../session/session-execution-projector.js";
-import type { ActiveTranscriptProjectionState, SessionTranscriptProjection } from "../session/transcript-projection.js";
+} from "../session/transcript/session-execution-projector.js";
+import type { ActiveTranscriptProjectionState, SessionTranscriptProjection } from "../session/transcript/transcript-projection.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import {
   decodeDaemonAgentSettlement,

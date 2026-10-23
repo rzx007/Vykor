@@ -282,7 +282,7 @@ pnpm --filter @vykor/client run check-types
 
 **限制：** 首阶段只读，不写 Git 隐藏引用、不改变暂存区、不自动提交、不增加撤销操作。需要快照或回退时单独确定范围和风险。
 
-**本阶段结果：** 2026-10-06 完成，独立审查发现的三项主要问题和一项路径问题均修正并复审通过。新增的 [SessionWorkspaceChanges](../../../packages/server/src/application/session/session-workspace-changes.ts)只负责观察：Run 开始前采集基线，结束后复用既有 Git 比较结果，保存到既有 Run metadata。可选模型评审复用同一份事实，关闭时不调用模型。摘要最多保存 128 个文件、每个路径 1024 字符，不保存 patch 或文件正文。
+**本阶段结果：** 2026-10-06 完成，独立审查发现的三项主要问题和一项路径问题均修正并复审通过。新增的 [SessionWorkspaceChanges](../../../packages/server/src/application/session/execution/session-workspace-changes.ts)只负责观察：Run 开始前采集基线，结束后复用既有 Git 比较结果，保存到既有 Run metadata。可选模型评审复用同一份事实，关闭时不调用模型。摘要最多保存 128 个文件、每个路径 1024 字符，不保存 patch 或文件正文。
 
 复用已有文件汇总与评审面板展示“运行期间变更”。保存的仓库根路径和统计不被当前 Git 覆盖；点击明确查看**当前工作区差异**，不是历史快照。无法确认归属时显示不可用原因，不冒充无改动。仓库外文件和无法确定基准目录的相对路径保留原工具事实。
 
@@ -318,7 +318,7 @@ pnpm --filter @vykor/desktop exec vitest run src/shared/workspace-open-path.test
 
 **限制：** 不用 UI 的裁剪预算限制模型所需的信息，不创建第二套输出存储，不在未证实渲染瓶颈时重写整个聊天列表。
 
-**本阶段结果：** 2026-10-06 完成，独立审查的四项问题修正并复审通过。新增 [HTTP 摘要投影](../../../packages/server/src/http/part-wire-view.ts)，桌面通过 `partView=summary` 选择摘要；快照、parts 分页、事件列表、SSE live/replay 和 transcript replacement 共用此规则。默认 SDK、原存储和模型历史不裁剪。展开时按 session/message/part 三个身份读取原记录，仅补正文，不覆盖当前状态、审批或插件事实。
+**本阶段结果：** 2026-10-06 完成，独立审查的四项问题修正并复审通过。新增 [HTTP 摘要投影](../../../packages/server/src/http/mappers/part-wire-view.ts)，桌面通过 `partView=summary` 选择摘要；快照、parts 分页、事件列表、SSE live/replay 和 transcript replacement 共用此规则。默认 SDK、原存储和模型历史不裁剪。展开时按 session/message/part 三个身份读取原记录，仅补正文，不覆盖当前状态、审批或插件事实。
 
 真实链路使用同一组 ASCII 样本：Write 正文 110,000 字符，Edit 新旧字符串各 90,000 字符，失败 Shell 文本 120,000 字符；每工具三次记录更新，共九次。下表是 UTF-8 JSON 数据量，不包含传输头或 SSE framing。
 

@@ -1,4 +1,4 @@
-import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
+import {executeToolFixture} from "../../../test-helpers/tool-host-fixture.js";
 
 import { describe, expect, it, vi } from "vitest";
 import { createShellTool } from "../../shell/shell.js";

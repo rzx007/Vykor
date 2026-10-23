@@ -9,9 +9,9 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonControlService } from "../daemon-control-service.js";
 import { DaemonOperationGate } from "../daemon-operation-gate.js";
 import { DaemonApplication } from "../../daemon-application.js";
-import { SessionEventPublisher } from "../../session/session-event-publisher.js";
+import { SessionEventPublisher } from "../../session/transcript/session-event-publisher.js";
 import { SessionOperationRunner } from "../../session/session-operation-runner.js";
-import { assembleSessionRunServices } from "../../session/session-run-assembly.js";
+import { assembleSessionRunServices } from "../../session/execution/session-run-assembly.js";
 
 function createControl() {
   const sessions = [

@@ -10,7 +10,7 @@ import {
 import type { Settings, InputSupport, ModelInputCapabilities } from "@vykor/host-config";
 import type { SessionRuntimeConfig } from "@vykor/domain-contracts/sessions";
 import type { ModelProviderInfo } from "../../settings-api.js";
-import { readCatalogProvider } from "../../default-services/catalog-provider-mapping.js";
+import { readCatalogProvider } from "../../default-services/models/catalog-provider-mapping.js";
 
 export function supportsNativeImageInput(
   context: {

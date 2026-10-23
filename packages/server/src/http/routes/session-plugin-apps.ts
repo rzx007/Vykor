@@ -3,10 +3,10 @@ import { pluginAppToolInput, pluginAppConversationInput } from "../mappers/plugi
 import { PLUGIN_APP_DATA_LIMITS, ProtocolValidationError, copyPluginAppJson, parsePluginAppSource, parsePluginAppToolRequest, parsePluginAppConversationRequest } from "@vykor/protocol";
 import { isPluginAppValidationError } from "@vykor/plugin-contracts/runtime-data";
 import type { PluginAppRuntimeLease } from "@vykor/protocol";
-import type { assemblePluginApps } from "../../application/session/plugin-app-assembly.js";
-import type { PluginAppConversationService } from "../../application/session/plugin-app-conversation-service.js";
+import type { assemblePluginApps } from "../../application/session/plugins/plugin-app-assembly.js";
+import type { PluginAppConversationService } from "../../application/session/plugins/plugin-app-conversation-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
-import { PluginAppAdmissionError } from "../../application/session/plugin-app-admission-error.js";
+import { PluginAppAdmissionError } from "../../application/session/plugins/plugin-app-admission-error.js";
 import { applicationErrorResponse, jsonResponse, readJson, SSE_HEADERS } from "../support.js";
 
 export function createSessionPluginAppsRoutes(runtime: ReturnType<typeof assemblePluginApps>, conversation: PluginAppConversationService): Hono {

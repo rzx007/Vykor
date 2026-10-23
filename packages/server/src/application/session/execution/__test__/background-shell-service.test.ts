@@ -1,0 +1,675 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { SessionStore } from "@vykor/services";
+import {
+  DetachedProcessSupervisor,
+} from "@vykor/execution-node";
+import { SessionExecutionProjector } from "../../transcript/session-execution-projector.js";
+import { DaemonOperationGate } from "../../../control/daemon-operation-gate.js";
+
+import { BackgroundShellService } from "../background-shell-service.js";
+import { createWslPathResolver } from "@vykor/sandbox";
+
+let testConfigDir: string;
+let previousConfigDir: string | undefined;
+
+beforeAll(() => {
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  testConfigDir = mkdtempSync(join(tmpdir(), "oh-background-shell-config-"));
+  process.env.VYKOR_CONFIG_DIR = testConfigDir;
+});
+
+afterAll(() => {
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+  rmSync(testConfigDir, { recursive: true, force: true });
+});
+
+function createTaskService(options: {
+  acquireEnvironment?: (...args: any[]) => Promise<any>;
+} = {}) {
+  const listeners: Array<(task: any) => void> = [];
+  const manager = {
+    listExecutions: vi.fn(() => []),
+    startShellExecution: vi.fn(async (input) => ({
+      id: input.id ?? "manager-task",
+      type: "shell",
+      status: "running",
+      description: input.description,
+      cwd: input.cwd,
+      metadata: {},
+    })),
+    getExecution: vi.fn(),
+    readOutput: vi.fn(() => "live output"),
+    stopExecution: vi.fn(async (taskId) => ({
+      id: taskId,
+      type: "shell",
+      status: "stopped",
+      description: "command",
+      cwd: "/repo",
+      metadata: {},
+    })),
+    registerExecutionListener: vi.fn((listener) => {
+      listeners.push(listener);
+      return () => {
+        const index = listeners.indexOf(listener);
+        if (index >= 0) listeners.splice(index, 1);
+      };
+    }),
+  };
+  let durableTask = {
+    id: "task-1",
+    sessionId: "s1",
+    type: "shell",
+    status: "running",
+    description: "command",
+    cwd: "/repo",
+    output: "durable output",
+    metadata: { taskManagerId: "manager-task" } as Record<string, unknown>,
+  };
+  const store = {
+    getSession: vi.fn(() => ({ id: "s1", cwd: "/repo", status: "running" })),
+    listSessions: vi.fn(() => [{ id: "s1", cwd: "/repo", status: "running" }]),
+    listSessionTasks: vi.fn(() => [durableTask]),
+    getSessionTask: vi.fn(() => durableTask),
+    createSessionTask: vi.fn((input) => ({ ...durableTask, ...input })),
+    reserveSessionTask: vi.fn((input) => {
+      durableTask = { ...durableTask, ...input, status: "pending", metadata: input.metadata };
+      return { task: durableTask, created: true };
+    }),
+    transitionPendingSessionTask: vi.fn((_taskId, input) => {
+      if (durableTask.status !== "pending") {
+        return { task: durableTask, transitioned: false };
+      }
+      durableTask = {
+        ...durableTask,
+        ...input,
+        metadata: { ...durableTask.metadata, ...(input.metadata ?? {}) },
+      };
+      return { task: durableTask, transitioned: true };
+    }),
+    updateSessionTask: vi.fn((_taskId, input) => {
+      durableTask = {
+        ...durableTask,
+        ...input,
+        metadata: { ...durableTask.metadata, ...(input.metadata ?? {}) },
+      };
+      return durableTask;
+    }),
+  };
+  const executionProjector = {
+    trackProcessExecution: vi.fn(),
+    syncPersistentExecution: vi.fn(),
+  };
+  const broadcastSince = vi.fn();
+  const checkpoint = vi.fn(() => 7);
+  const getDetachedProcessSupervisor = vi.fn(() => manager as any);
+  const service = new BackgroundShellService({
+    store: store as any,
+    executionProjector: executionProjector as any,
+    getDetachedProcessSupervisor,
+    events: { checkpoint, publishSince: broadcastSince },
+    getSettingsForCwd: async () => ({ model: "test" } as any),
+    acquireEnvironment: options.acquireEnvironment,
+  });
+  return { service, store, executionProjector, manager, checkpoint, broadcastSince, listeners, getDetachedProcessSupervisor };
+}
+
+describe("BackgroundShellService", () => {
+  it("combines a delayed WSL startup retry with real durable ownership and executionCwd", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-wsl-start-cwd-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
+    // Persist a host-native absolute cwd on every OS. The acquired executor and
+    // its WSL mount are simulated, so the execution root is independent of it.
+    const hostRoot = dir;
+    const binding = { kind: "wsl" as const, hostRoot, executionRoot: "/mnt/d/project" };
+    const executionCwd = `${binding.executionRoot}/sub`;
+    const gate = new DaemonOperationGate();
+    let releaseAcquire!: (value: any) => void;
+    let finishProcess!: (value: { exitCode: number }) => void;
+    let launches = 0;
+    let releases = 0;
+    const acquired = new Promise<any>((resolve) => { releaseAcquire = resolve; });
+    const waited = new Promise<{ exitCode: number }>((resolve) => { finishProcess = resolve; });
+    const projector = new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); },
+      events: { checkpoint: () => 0, publishSince: () => {} }, traceIdForRun: () => "", log: () => {} });
+    const service = new BackgroundShellService({ operationGate: gate, store: {
+      getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store),
+      reserveSessionTask: store.reserveSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store),
+      transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store),
+    } as any, executionProjector: projector, events: { checkpoint: () => 0, publishSince: () => {} },
+      getDetachedProcessSupervisor: () => manager, acquireEnvironment: () => acquired });
+    try {
+      store.sessions.create({ id: "wsl-session", cwd: hostRoot, model: "test" });
+      const input = { requestId: "same-cwd-start", sessionId: "wsl-session", command: "pwd", executionCwd,
+        settings: { model: "test", sandbox: { enabled: false }, permission: { mode: "full_auto" } } as any };
+      const first = service.create(input);
+      const retry = service.create(input);
+      await Promise.resolve(); await Promise.resolve();
+      expect(manager.listExecutions()).toEqual([]);
+      expect(gate.tryEnterBarrier({ kind: "global" }, () => true)).toBeUndefined();
+      releaseAcquire({ workspace: binding, paths: createWslPathResolver(binding), release: async () => { releases++; },
+        process: { async execShell(command: string, options: { cwd: string }) {
+          launches++;
+          if (command !== "pwd") throw new Error("Unexpected process command");
+          return { write() {}, end() {}, onOutput(listener: (chunk: Uint8Array) => void) { listener(Buffer.from(options.cwd)); return () => {}; },
+            wait: () => waited, async signal() { finishProcess({ exitCode: 0 }); } };
+        }, async execProcess() { throw new Error("Unexpected argv process"); } },
+      });
+      const [a, b] = await Promise.all([first, retry]);
+      expect(a.execution.id).toBe(b.execution.id);
+      expect(launches).toBe(1);
+      expect(a.execution.cwd).toBe(hostRoot);
+      await vi.waitFor(() => expect(manager.readOutput(a.execution.id)).toBe(executionCwd));
+      await expect(service.create({ ...input, executionCwd: `${binding.executionRoot}/other` })).rejects.toMatchObject({ status: 409 });
+      const barrier = gate.tryEnterBarrier({ kind: "global" }, () => true);
+      expect(barrier).toBeDefined(); barrier?.release();
+      finishProcess({ exitCode: 0 });
+      await vi.waitFor(() => expect(releases).toBe(1));
+      expect(store.getSessionTask(a.execution.id)?.status).toBe("completed");
+    } finally { finishProcess({ exitCode: 0 }); await manager.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("does not silently ignore an executionCwd without an environment owner", async () => {
+    const { service, store, manager } = createTaskService();
+    await expect(service.create({ requestId: "unowned", sessionId: "s1", command: "pwd", executionCwd: "/repo/sub" }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(store.reserveSessionTask).not.toHaveBeenCalled();
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+  });
+  it("passes a WSL execution subdirectory to the acquired executor without changing host ownership", async () => {
+    const binding = { kind: "wsl" as const, hostRoot: "D:\\repo", executionRoot: "/mnt/d/repo" };
+    const launched: string[] = [];
+    const release = vi.fn(async () => {});
+    const { service, store, manager, listeners } = createTaskService({ acquireEnvironment: async () => ({
+      release, workspace: binding, paths: createWslPathResolver(binding), process: {
+        async execShell(_command: string, options: { cwd: string }) { launched.push(options.cwd); return { wait: async () => ({ exitCode: 0 }) }; },
+        async execProcess(_argv: string[], options: { cwd: string }) { launched.push(options.cwd); return { wait: async () => ({ exitCode: 0 }) }; },
+      },
+    }) });
+    store.getSession.mockReturnValue({ id: "s1", cwd: "D:\\repo", status: "running" });
+    const started = await service.create({ requestId: "subdir", sessionId: "s1", command: "npm dev", executionCwd: "/mnt/d/repo/sub" } as any);
+    const input = manager.startShellExecution.mock.calls[0]![0];
+    await input.processExecutor.execShell("pwd", { cwd: "D:\\repo" });
+    await input.processExecutor.execProcess(["pwd"], { cwd: "D:\\repo" });
+    expect(launched).toEqual(["/mnt/d/repo/sub", "/mnt/d/repo/sub"]);
+    expect(input.cwd).toBe("D:\\repo");
+    expect(release).not.toHaveBeenCalled();
+    for (const listener of listeners) listener({ ...started.execution, status: "completed" });
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce());
+  });
+
+  it("includes executionCwd in retry conflict checks", async () => {
+    const { service, store, manager } = createTaskService({ acquireEnvironment: async () => ({
+      release: async () => {}, workspace: { executionRoot: "/repo" },
+      paths: { resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace" }) },
+      process: { execShell() {}, execProcess() {} },
+    }) });
+    const input = { requestId: "cwd-conflict", sessionId: "s1", command: "npm dev", executionCwd: "/repo/one" };
+    await service.create(input as any);
+    store.reserveSessionTask.mockReturnValue({ task: store.getSessionTask(), created: false });
+    await expect(service.create({ ...input, executionCwd: "/repo/two" } as any)).rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an execution directory outside the acquired workspace and releases the lease", async () => {
+    const release = vi.fn(async () => {});
+    const binding = { kind: "wsl" as const, hostRoot: "D:\\repo", executionRoot: "/mnt/d/repo" };
+    const { service, manager, store } = createTaskService({ acquireEnvironment: async () => ({ release,
+      workspace: binding, paths: createWslPathResolver(binding), process: { execShell() {}, execProcess() {} } }) });
+    await expect(service.create({ requestId: "outside", sessionId: "s1", command: "pwd", executionCwd: "/home/alex" } as any))
+      .rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+    expect(store.getSessionTask().status).toBe("failed");
+    expect(release).toHaveBeenCalledOnce();
+  });
+  it.each(["start", "failure", "cancel"])("joins complete environment acquisition on retry: %s", async (outcome) => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-shell-env-retry-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const manager = new DetachedProcessSupervisor(join(dir, "tasks"));
+    let releaseAcquire!: (value: any) => void;
+    let rejectAcquire!: (error: Error) => void;
+    const acquisition = new Promise<any>((resolve, reject) => { releaseAcquire = resolve; rejectAcquire = reject; });
+    const launches: string[] = [];
+    let releases = 0;
+    const gate = new DaemonOperationGate();
+    const settings = { model: "test", sandbox: { enabled: false }, permission: { mode: "full_auto" } } as any;
+    const projector = new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); }, events: { checkpoint: () => 0, publishSince: () => {} }, traceIdForRun: () => "", log: () => {} });
+    const service = new BackgroundShellService({ operationGate: gate, store: { getSession: (id: string) => store.sessions.get(id), getSessionTask: store.getSessionTask.bind(store), reserveSessionTask: store.reserveSessionTask.bind(store), updateSessionTask: store.updateSessionTask.bind(store), transitionPendingSessionTask: store.transitionPendingSessionTask.bind(store) } as any, executionProjector: projector, events: { checkpoint: () => 0, publishSince: () => {} }, getDetachedProcessSupervisor: () => manager, acquireEnvironment: () => acquisition });
+    try {
+      store.sessions.create({ id: "s1", cwd: dir, model: "test" });
+      const input = { requestId: "retry", sessionId: "s1", command: "environment-command", settings };
+      const first = service.create(input);
+      const firstResult = first.then(value => value, error => error);
+      await Promise.resolve();
+      const retry = service.create(input);
+      const retryResult = retry.then(value => value, error => error);
+      await Promise.resolve(); await Promise.resolve();
+      expect(manager.listExecutions()).toEqual([]);
+      expect(gate.tryEnterBarrier({ kind: "global" }, () => true)).toBeUndefined();
+      const id = store.listSessionTasks("s1")[0]!.id;
+      if (outcome === "cancel") store.transitionPendingSessionTask(id, { status: "stopped" });
+      if (outcome === "failure") rejectAcquire(new Error("environment denied"));
+      else releaseAcquire({ release: async () => { releases += 1; }, workspace: { executionRoot: dir }, paths: {
+        resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace", mountMode: "rw" }),
+      }, process: {
+        execShell: async (_command: string, options: { cwd: string }) => {
+          launches.push(options.cwd);
+          const child = spawn(process.execPath, ["-e", "process.stdout.write('environment output');setInterval(() => {}, 1000)"], { cwd: options.cwd, windowsHide: true });
+          const completed = new Promise<{ exitCode: number | null }>(resolve => child.once("close", exitCode => resolve({ exitCode })));
+          return { pid: child.pid, write: (data: string) => { child.stdin.write(data); }, end: () => child.stdin.end(), onOutput: (listener: (chunk: Uint8Array) => void) => { child.stdout.on("data", listener); return () => child.stdout.off("data", listener); }, wait: () => completed, signal: async () => { child.kill(); } };
+        }, execProcess: async () => { throw new Error("unused"); },
+      } });
+      const [a, b] = await Promise.all([firstResult, retryResult]);
+      const idle = gate.tryEnterBarrier({ kind: "global" }, () => true);
+      expect(idle).toBeDefined();
+      idle?.release();
+      expect(b instanceof Error ? b.message : b.execution.status).toBe(a instanceof Error ? a.message : a.execution.status);
+      expect(launches).toEqual(outcome === "failure" ? [] : [dir]);
+      expect(store.getSessionTask(id)?.status).toBe(outcome === "cancel" ? "stopped" : outcome === "failure" ? "failed" : "running");
+      if (outcome === "start") {
+        await vi.waitFor(() => expect(manager.readOutput(id)).toContain("environment output"));
+        await service.stop(id, { sessionId: "s1" });
+      }
+      if (outcome !== "failure") await vi.waitFor(() => expect(releases).toBe(1));
+    } finally { await manager.aclose(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("holds a background environment lease until the process finishes", async () => {
+    const release = vi.fn(async () => {});
+    const acquireEnvironment = vi.fn(async () => ({
+      release,
+      workspace: { executionRoot: "/mnt/d/repo" },
+      paths: { resolve: async (executionPath: string) => ({ executionPath, mountPurpose: "workspace", mountMode: "rw" }) },
+      process: {
+        execShell: vi.fn(),
+        execProcess: vi.fn(),
+      },
+    }));
+    const { service, listeners } = createTaskService({ acquireEnvironment });
+
+    const result = await service.create({
+      requestId: "tool:lease",
+      sessionId: "s1",
+      command: "long-running",
+      origin: "tool",
+    });
+
+    expect(acquireEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "s1" }),
+      expect.any(Object),
+      { kind: "background", id: result.execution.id },
+    );
+    expect(release).not.toHaveBeenCalled();
+    for (const listener of listeners) listener({ ...result.execution, status: "completed" });
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce());
+  });
+  it("marks an active durable task interrupted when recovery finds no runtime", async () => {
+    const { service, store } = createTaskService();
+
+    await expect(service.reconcileActiveTasks("runtime gone")).resolves.toBe(1);
+    expect(store.updateSessionTask).toHaveBeenCalledWith("task-1", {
+      status: "interrupted",
+      error: "runtime gone",
+      metadata: { admissionPhase: "runtime_missing" },
+    });
+  });
+
+  it("does not allocate process supervisors for sessions without tasks, including archived sessions", async () => {
+    const { service, store, getDetachedProcessSupervisor } = createTaskService();
+    store.listSessions.mockReturnValue([
+      { id: "s1", cwd: "/repo", status: "running" },
+      { id: "old", cwd: "/repo", status: "archived" },
+    ]);
+    store.listSessionTasks.mockReturnValue([]);
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(0);
+
+    expect(getDetachedProcessSupervisor).not.toHaveBeenCalled();
+  });
+
+  it("interrupts a missing child runtime without allocating a process supervisor", async () => {
+    const { service, store, getDetachedProcessSupervisor } = createTaskService();
+    store.listSessionTasks.mockReturnValue([{
+      ...store.getSessionTask(), type: "agent", metadata: {},
+    }]);
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(1);
+
+    expect(store.getSessionTask().status).toBe("interrupted");
+    expect(getDetachedProcessSupervisor).not.toHaveBeenCalled();
+  });
+
+  it("reattaches an active durable task when its runtime still exists", async () => {
+    const { service, store, manager, executionProjector } = createTaskService();
+    const runtime = {
+      id: "manager-task",
+      type: "shell",
+      status: "running",
+      description: "command",
+      cwd: "/repo",
+      metadata: {},
+    };
+    manager.getExecution.mockReturnValue(runtime);
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(1);
+    expect(executionProjector.trackProcessExecution).toHaveBeenCalledWith(manager, "manager-task");
+    expect(executionProjector.syncPersistentExecution).toHaveBeenCalledWith(runtime, manager, "task-1");
+    expect(store.updateSessionTask).toHaveBeenCalledWith("task-1", {
+      metadata: { admissionPhase: "recovered_live" },
+    });
+  });
+
+  it("stops an orphan runtime without reverting its durable terminal state", async () => {
+    const { service, store, manager } = createTaskService();
+    store.updateSessionTask("task-1", { status: "completed" });
+    manager.getExecution.mockReturnValue({
+      id: "manager-task",
+      type: "shell",
+      status: "running",
+      description: "command",
+      cwd: "/repo",
+      metadata: {},
+    });
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(1);
+    expect(manager.stopExecution).toHaveBeenCalledWith("manager-task");
+    expect(store.updateSessionTask).toHaveBeenLastCalledWith("task-1", {
+      metadata: { admissionPhase: "orphan_runtime_stopped" },
+    });
+    expect(store.getSessionTask().status).toBe("completed");
+  });
+
+  it("includes archived sessions when reconciling orphan runtimes", async () => {
+    const { service, store, manager } = createTaskService();
+    store.listSessions.mockReturnValue([{ id: "s1", cwd: "/repo", status: "archived" }]);
+    store.updateSessionTask("task-1", { status: "completed" });
+    manager.getExecution.mockReturnValue({
+      id: "manager-task",
+      type: "shell",
+      status: "running",
+      description: "command",
+      cwd: "/repo",
+      metadata: {},
+    });
+
+    await expect(service.reconcileActiveTasks()).resolves.toBe(1);
+
+    expect(store.listSessions).toHaveBeenCalledWith({ includeArchived: true });
+    expect(manager.stopExecution).toHaveBeenCalledWith("manager-task");
+    expect(store.getSessionTask().status).toBe("completed");
+  });
+
+  it("creates a session shell task and its durable projection", async () => {
+    const { service, store, executionProjector, broadcastSince } = createTaskService();
+
+    const result = await service.create({ requestId: "http:create-1", sessionId: "s1", command: "pnpm test" });
+    const task = result.execution as { id: string };
+
+    expect(task.id).toMatch(/^task_/);
+    expect(store.reserveSessionTask).toHaveBeenCalledWith(expect.objectContaining({
+      id: task.id,
+      sessionId: "s1",
+      cwd: "/repo",
+      requestNamespace: "http",
+      requestId: "http:create-1",
+      metadata: expect.objectContaining({
+        origin: "http",
+        admissionPhase: "reserved",
+        executionBackend: "detached_process",
+      }),
+    }));
+    expect(store.updateSessionTask).toHaveBeenCalledWith(task.id, expect.objectContaining({
+      metadata: { admissionPhase: "dispatching" },
+    }));
+    expect(store.transitionPendingSessionTask).toHaveBeenCalledWith(task.id, expect.objectContaining({
+      status: "running",
+      metadata: expect.objectContaining({ admissionPhase: "confirmed", runtimeExecutionId: task.id }),
+    }));
+    expect(executionProjector.trackProcessExecution).toHaveBeenCalledWith(expect.anything(), task.id);
+    expect(executionProjector.syncPersistentExecution).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), expect.anything());
+    expect(broadcastSince).toHaveBeenCalledWith(7);
+  });
+
+  it("passes tool settings to the process runtime and records the creation origin", async () => {
+    const { service, store, manager } = createTaskService();
+    const settings = { model: "test-model" } as any;
+
+    const result = await service.create({
+      requestId: "tool:create-2",
+      sessionId: "s1",
+      command: "pnpm dev",
+      settings,
+      origin: "tool",
+    });
+
+    expect(manager.startShellExecution).toHaveBeenCalledWith(expect.objectContaining({ settings }));
+    expect(store.reserveSessionTask).toHaveBeenCalledWith(expect.objectContaining({
+      id: result.execution.id,
+      requestNamespace: "tool",
+      metadata: expect.objectContaining({ origin: "tool" }),
+    }));
+  });
+
+  it("advances the event cursor after each published admission phase", async () => {
+    const { service, checkpoint, broadcastSince } = createTaskService();
+    checkpoint
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(11)
+      .mockReturnValueOnce(12);
+
+    await service.create({
+      requestId: "http:event-cursor",
+      sessionId: "s1",
+      command: "pnpm dev",
+    });
+
+    expect(broadcastSince.mock.calls).toEqual([[10], [11], [12]]);
+  });
+
+  it("uses durable output when manager output is unavailable after restart", () => {
+    const { service, manager } = createTaskService();
+    manager.readOutput.mockImplementation(() => {
+      throw new Error("manager task is gone");
+    });
+
+    const result = service.get("task-1", { sessionId: "s1" });
+
+    expect(result).toMatchObject({ output: "durable output" });
+  });
+
+  it("does not start a process when durable reservation fails", async () => {
+    const { service, store, manager } = createTaskService();
+    const reservationError = new Error("database unavailable");
+    store.reserveSessionTask.mockImplementation(() => { throw reservationError; });
+
+    await expect(service.create({
+      requestId: "http:reserve-failure",
+      sessionId: "s1",
+      command: "pnpm test",
+    })).rejects.toBe(reservationError);
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+  });
+
+  it("rejects a session-scoped cwd override before reserving or starting anything", async () => {
+    const { service, store, manager } = createTaskService();
+
+    await expect(service.create({
+      requestId: "http:wrong-cwd",
+      sessionId: "s1",
+      cwd: "/another-repo",
+      command: "pnpm dev",
+    })).rejects.toMatchObject({ status: 409, message: "Background shell cwd mismatch" });
+
+    expect(store.reserveSessionTask).not.toHaveBeenCalled();
+    expect(manager.startShellExecution).not.toHaveBeenCalled();
+  });
+
+  it.each(["closing", "archived"])(
+    "does not admit new work for a %s session",
+    async (status) => {
+      const { service, store, manager } = createTaskService();
+      store.getSession.mockReturnValue({ id: "s1", cwd: "/repo", status });
+
+      await expect(service.create({
+        requestId: `http:${status}`,
+        sessionId: "s1",
+        command: "pnpm dev",
+      })).rejects.toMatchObject({ status: 409 });
+
+      expect(store.reserveSessionTask).not.toHaveBeenCalled();
+      expect(manager.startShellExecution).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps a failed durable task when process startup fails", async () => {
+    const { service, store, manager } = createTaskService();
+    manager.startShellExecution.mockRejectedValue(new Error("spawn denied"));
+
+    await expect(service.create({
+      requestId: "http:start-failure",
+      sessionId: "s1",
+      command: "pnpm test",
+    })).rejects.toThrow("spawn denied");
+    expect(store.transitionPendingSessionTask).toHaveBeenLastCalledWith(expect.any(String), {
+      status: "failed",
+      error: "spawn denied",
+      metadata: { admissionPhase: "failed" },
+    });
+  });
+
+  it("stops a process that confirms after its pending reservation was cancelled", async () => {
+    const { service, store, manager } = createTaskService();
+    let confirm!: (task: any) => void;
+    manager.startShellExecution.mockImplementation(() => new Promise((resolve) => { confirm = resolve; }));
+    const creating = service.create({
+      requestId: "http:cancel-race",
+      sessionId: "s1",
+      command: "pnpm dev",
+    });
+    await Promise.resolve();
+    const reservedId = store.reserveSessionTask.mock.calls[0]![0].id;
+    store.updateSessionTask(reservedId, { status: "stopped" });
+    confirm({
+      id: reservedId,
+      type: "shell",
+      status: "running",
+      description: "pnpm dev",
+      cwd: "/repo",
+      metadata: {},
+    });
+
+    await expect(creating).resolves.toMatchObject({
+      execution: { id: reservedId, status: "stopped" },
+      created: true,
+    });
+    expect(manager.stopExecution).toHaveBeenCalledWith(reservedId);
+  });
+
+  it("returns the existing job when the same request is retried", async () => {
+    const { service, store, manager } = createTaskService();
+    const input = { requestId: "tool:retry", sessionId: "s1", command: "pnpm dev", origin: "tool" as const };
+    const first = await service.create(input);
+    const durable = store.getSessionTask();
+    store.reserveSessionTask.mockReturnValue({ task: durable, created: false });
+    manager.getExecution.mockReturnValue(first.execution);
+
+    const retry = await service.create(input);
+
+    expect(retry.execution.id).toBe(first.execution.id);
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes a concurrent retry wait for the first process startup", async () => {
+    const { service, store, manager } = createTaskService();
+    const originalReserve = store.reserveSessionTask.getMockImplementation()!;
+    let reservationCount = 0;
+    store.reserveSessionTask.mockImplementation((input) => {
+      reservationCount += 1;
+      return reservationCount === 1
+        ? originalReserve(input)
+        : { task: store.getSessionTask(), created: false };
+    });
+    let finishStart!: (task: any) => void;
+    const starting = new Promise<any>((resolve) => { finishStart = resolve; });
+    manager.startShellExecution.mockImplementation(() => starting);
+    manager.getExecution.mockImplementation((id) => ({
+      id,
+      type: "shell",
+      status: "running",
+      description: "pnpm dev",
+      cwd: "/repo",
+      sessionId: "s1",
+      metadata: {},
+    }));
+    const input = {
+      requestId: "tool:concurrent-retry",
+      sessionId: "s1",
+      command: "pnpm dev",
+      origin: "tool" as const,
+    };
+
+    const first = service.create(input);
+    await Promise.resolve();
+    await Promise.resolve();
+    const retry = service.create(input);
+    let retrySettled = false;
+    void retry.then(() => { retrySettled = true; });
+    await Promise.resolve();
+
+    expect(retrySettled).toBe(false);
+    const taskId = store.getSessionTask().id;
+    finishStart({
+      id: taskId,
+      type: "shell",
+      status: "running",
+      description: "pnpm dev",
+      cwd: "/repo",
+      sessionId: "s1",
+      metadata: {},
+    });
+
+    await expect(Promise.all([first, retry])).resolves.toMatchObject([
+      { execution: { id: taskId }, created: true },
+      { execution: { id: taskId }, created: false },
+    ]);
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the same request identity with different parameters", async () => {
+    const { service, store, manager } = createTaskService();
+    const input = { requestId: "tool:conflict", sessionId: "s1", command: "pnpm dev", origin: "tool" as const };
+    await service.create(input);
+    const durable = store.getSessionTask();
+    store.reserveSessionTask.mockReturnValue({
+      task: { ...durable, metadata: { ...durable.metadata, requestFingerprint: "different" } },
+      created: false,
+    });
+
+    await expect(service.create({ ...input, command: "pnpm test" }))
+      .rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the same request identity when execution settings differ", async () => {
+    const { service, store, manager } = createTaskService();
+    const input = {
+      requestId: "tool:settings-conflict",
+      sessionId: "s1",
+      command: "pnpm dev",
+      origin: "tool" as const,
+      settings: { model: "first-model" } as any,
+    };
+    await service.create(input);
+    const durable = store.getSessionTask();
+    store.reserveSessionTask.mockReturnValue({ task: durable, created: false });
+
+    await expect(service.create({
+      ...input,
+      settings: { model: "second-model" } as any,
+    })).rejects.toMatchObject({ status: 409 });
+    expect(manager.startShellExecution).toHaveBeenCalledTimes(1);
+  });
+});

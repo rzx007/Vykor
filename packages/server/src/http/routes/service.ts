@@ -14,7 +14,7 @@ import type {
   SkillService,
 } from "../../application/index.js";
 import type { DaemonControlService } from "../../application/control/index.js";
-import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugin-lifecycle.js";
+import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugins/plugin-lifecycle.js";
 
 export interface ServiceRoutesContext {
   pluginLifecycle?: PluginLifecycle;

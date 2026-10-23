@@ -10,13 +10,13 @@ import { SessionStore } from "@vykor/services";
 import {
   ChildAgentExecutionRegistry,
 } from "@vykor/execution-node";
-import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../../session/runtime-configuration.js";
+import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../../session/configuration/runtime-configuration.js";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 import { LiveChildAgentDirectory } from "../live-child-agent-directory.js";
 import { AgentPool } from "../agent-pool.js";
-import { SessionEventPublisher } from "../../session/session-event-publisher.js";
-import { SessionExecutionProjector } from "../../session/session-execution-projector.js";
-import { SessionTranscriptProjection } from "../../session/transcript-projection.js";
+import { SessionEventPublisher } from "../../session/transcript/session-event-publisher.js";
+import { SessionExecutionProjector } from "../../session/transcript/session-execution-projector.js";
+import { SessionTranscriptProjection } from "../../session/transcript/transcript-projection.js";
 import { createDaemonAgentLoader } from "../../../daemon/daemon-agent.js";
 
 const directories: string[] = [];

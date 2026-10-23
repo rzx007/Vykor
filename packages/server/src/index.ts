@@ -147,10 +147,10 @@ export {
 } from "./permissions/settings-management.js";
 export { loadRuntimeSecrets, saveRuntimeSecrets } from "./runtime/runtime-secrets.js";
 export { inspectRuntimeEnvironment, saveRuntimeEnvironment, listRuntimeDistributions, checkRuntimeEnvironment, validateRuntimeEnvironmentConfig } from "./runtime/runtime-settings.js";
-export { exportPortableSettings, importPortableSettings, parsePortableSettings } from "./settings-transfer.js";
-export { inspectPersonalizationSettings, saveMemoryConfiguration } from "./personalization-settings.js";
-export { createDesktopGitWorktree } from "./desktop-git-workspaces.js";
-export { testStoredProviderConnection, storedProviderConnectionFingerprint } from "./provider-connection-test.js";
+export { exportPortableSettings, importPortableSettings, parsePortableSettings } from "./application/settings/settings-transfer.js";
+export { inspectPersonalizationSettings, saveMemoryConfiguration } from "./application/personalization/personalization-settings.js";
+export { createDesktopGitWorktree } from "./application/projects/desktop-git-workspaces.js";
+export { testStoredProviderConnection, storedProviderConnectionFingerprint } from "./application/default-services/models/provider-connection-test.js";
 export {
   StorePermissionBroker,
   type ListPermissionRequestsInput,

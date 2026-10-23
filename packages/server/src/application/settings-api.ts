@@ -309,7 +309,7 @@ export interface PluginArchiveError {
 }
 
 export interface PluginService {
-  marketplace?: import("./default-services/marketplace-service.js").PluginMarketplaceService;
+  marketplace?: import("./default-services/extensions/marketplace-service.js").PluginMarketplaceService;
   list(input: {
     cwd: string;
   }):

@@ -33,7 +33,7 @@ Codex 的完成审查依赖模型结合证据判断，不能理解为一个自�
 - `GoalAssessment` 的目标、版本和运行标识由宿主绑定，服务端检查事件归属。
 - Goal 正文独立持久化，不只依靠聊天历史保存。
 
-对应入口：[SessionGoalService](../packages/server/src/application/session/session-goal-service.ts)、[SessionRunEngine](../packages/server/src/application/session/session-run-engine.ts)、[事件投影](../packages/server/src/application/agent/daemon-agent-event-projector.ts)。
+对应入口：[SessionGoalService](../packages/server/src/application/session/goals/session-goal-service.ts)、[SessionRunEngine](../packages/server/src/application/session/execution/session-run-engine.ts)、[事件投影](../packages/server/src/application/agent/daemon-agent-event-projector.ts)。
 
 ## 4. 问题与建议
 

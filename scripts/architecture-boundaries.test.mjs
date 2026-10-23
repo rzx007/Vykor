@@ -146,8 +146,8 @@ test("server routes cannot import SessionStore or repositories", () => {
 
 test("application services cannot import DaemonApplication", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/server/src/application/session/session-interaction-service.ts", "../daemon-application.js"),
-    ["packages/server/src/application/session/session-interaction-service.ts must not depend on DaemonApplication"],
+    checkImportBoundary("packages/server/src/application/session/interactions/session-interaction-service.ts", "../../daemon-application.js"),
+    ["packages/server/src/application/session/interactions/session-interaction-service.ts must not depend on DaemonApplication"],
   );
 });
 
@@ -182,12 +182,12 @@ test("session query service cannot import runtime", () => {
 
 test("run admission and control services keep their stage 4C boundaries", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/server/src/application/session/run-admission-service.ts", "../../http/routes/sessions.js"),
-    ["packages/server/src/application/session/run-admission-service.ts must not depend on http or Daemon"],
+    checkImportBoundary("packages/server/src/application/session/execution/run-admission-service.ts", "../../../http/routes/sessions.js"),
+    ["packages/server/src/application/session/execution/run-admission-service.ts must not depend on http or Daemon"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/server/src/application/session/run-control-service.ts", "./session-run-executor.js"),
-    ["packages/server/src/application/session/run-control-service.ts must not depend on SessionRunExecutor"],
+    checkImportBoundary("packages/server/src/application/session/execution/run-control-service.ts", "./session-run-executor.js"),
+    ["packages/server/src/application/session/execution/run-control-service.ts must not depend on SessionRunExecutor"],
   );
 });
 

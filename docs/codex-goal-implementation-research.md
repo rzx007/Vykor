@@ -178,7 +178,7 @@ state/src/runtime/goals.rs
 
 ### 5.1 优先修复：等待具体任务，而不是等待会话存在
 
-当前 [GoalWaitVerifier](../packages/server/src/application/session/goal-wait-verifier.ts) 第 29～41 行有两条判断：
+当前 [GoalWaitVerifier](../packages/server/src/application/session/goals/goal-wait-verifier.ts) 第 29～41 行有两条判断：
 
 - 找到 Run 时要求 `run.sessionId === rootSessionId`，否则 missing。
 - 找不到 Run 时只要子代理目录能解析出相同根会话，就返回 running。
@@ -191,7 +191,7 @@ state/src/runtime/goals.rs
 
 ### 5.2 保存可区分的停止原因
 
-[SessionGoalService](../packages/server/src/application/session/session-goal-service.ts) 第 211、226、312、333、355、359 行等把运行失败、评估缺失、等待无效、续跑额度耗尽和下一步缺失都写成 paused；用户暂停和重启恢复也使用 paused。文本虽有说明，客户端和恢复逻辑仍难可靠分类。
+[SessionGoalService](../packages/server/src/application/session/goals/session-goal-service.ts) 第 211、226、312、333、355、359 行等把运行失败、评估缺失、等待无效、续跑额度耗尽和下一步缺失都写成 paused；用户暂停和重启恢复也使用 paused。文本虽有说明，客户端和恢复逻辑仍难可靠分类。
 
 先新增结构化停止原因，例如用户暂停、自动续跑上限、Token 预算、服务商限制、运行错误、评估错误、等待失效、重启恢复，并据此选择下一步操作。用枚举解释停止原因即可，暂不需要照搬全部 Codex 状态或增加大量前端状态。
 
@@ -213,7 +213,7 @@ state/src/runtime/goals.rs
 
 ### 5.4 给模型可读取的目标状态与稳定要求清单
 
-本项目已持久化评估，但 [SessionRunExecutor](../packages/server/src/application/session/session-run-executor.ts) 第 239～247 行只向扩展绑定正文、ID 和 revision；[goal-extension.ts](../packages/server/src/application/goals/goal-run-contribution.ts) 主要提供正文提示和 `GoalAssessment`。续跑输入只有上一评估的 `nextStep`。
+本项目已持久化评估，但 [SessionRunExecutor](../packages/server/src/application/session/execution/session-run-executor.ts) 第 239～247 行只向扩展绑定正文、ID 和 revision；[goal-extension.ts](../packages/server/src/application/goals/goal-run-contribution.ts) 主要提供正文提示和 `GoalAssessment`。续跑输入只有上一评估的 `nextStep`。
 
 建议提供宿主绑定的只读 `get_goal`，或每轮注入精简的持久摘要：完整正文、稳定要求 ID、已完成/剩余项、最新有效证据、上轮结论、当前等待和用量。长证据按需读取；上下文压缩或恢复后仍能从这些状态继续。
 
@@ -223,7 +223,7 @@ state/src/runtime/goals.rs
 
 ### 5.5 改进“有进展”的判断
 
-[SessionGoalService](../packages/server/src/application/session/session-goal-service.ts) 第 230～233、342～344 行把成功工具的 `[名称, 输入, 输出]` 序列化结果是否首次出现作为进展信号。带时间戳的新日志会变成“新证据”；重复但必要的验证可能没有新签名。[GoalRepository](../packages/services/src/goals/goal-repository.ts) 第 321 行按整个 Goal ID 读取历史签名，正文修改后仍与旧目标内容的签名比较。
+[SessionGoalService](../packages/server/src/application/session/goals/session-goal-service.ts) 第 230～233、342～344 行把成功工具的 `[名称, 输入, 输出]` 序列化结果是否首次出现作为进展信号。带时间戳的新日志会变成“新证据”；重复但必要的验证可能没有新签名。[GoalRepository](../packages/services/src/goals/goal-repository.ts) 第 321 行按整个 Goal ID 读取历史签名，正文修改后仍与旧目标内容的签名比较。
 
 建议让进展关联“哪个要求推进了、交付物发生了什么变化、可信任务状态如何变化”，工具结果的新颖性只作为辅助线索。分别维护目标正文版本和一般状态版本；正文编辑后明确旧要求、旧证据和阻塞记录的继承范围。
 

@@ -167,7 +167,7 @@ runtimeStatus:
 - `packages/plugins/src/installation/verify.ts`：Runtime 激活前校验入口；
 - `packages/agent-runtime/src/node/plugins/extensions.ts`：Runtime 组合插件贡献的入口；
 - `packages/agent-runtime/src/node/plugins/native-tools/`：Native Tool 进程启动、调用和失败；
-- `packages/server/src/application/default-services/plugin-service.ts`：Desktop 和 CLI 共用的插件管理应用层；
+- `packages/server/src/application/default-services/extensions/plugin-service.ts`：Desktop 和 CLI 共用的插件管理应用层；
 - `packages/server/src/application/settings-api.ts`：管理接口类型；
 - `packages/client/src/types/index.ts`：前端共享类型；
 - `apps/desktop/src/main/features/plugin/plugin-service.ts`：Desktop 主进程插件操作；
@@ -321,7 +321,7 @@ runtimeStatus:
 4. [Desktop 本地 Native Plugin 包导入设计](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)：当前导入入口；
 5. [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)：同 ID 重装、权限复用和旧记录保留；
 6. `packages/plugins/src/installation/`：安装与快照；
-7. `packages/server/src/application/default-services/plugin-service.ts`：统一管理入口；
+7. `packages/server/src/application/default-services/extensions/plugin-service.ts`：统一管理入口；
 8. `packages/agent-runtime/src/node/plugins/extensions.ts`：Runtime 激活入口；
 9. `apps/desktop/src/renderer/src/components/desktop/plugin-page/`：插件管理 UI。
 

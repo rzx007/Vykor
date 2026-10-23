@@ -85,8 +85,8 @@
 | `packages/agent-runtime/src/node/plugins/plugin-activation.ts` | 注册 Hooks、激活 Native Tool |
 | `packages/agent-runtime/src/node/plugins/native-tools/` | Tool Host 子进程、IPC 协议、调用闸门、运行状态 |
 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts` | 生成单轮 Run 的冻结能力视图 |
-| `packages/server/src/application/default-services/plugin-service.ts` | 安装 / 启停 / 卸载 / 预览 / 列出的统一应用层 |
-| `packages/server/src/application/session/session-plugin-capability-service.ts` | 决定一次输入能不能带 `pluginId`，以及带哪一个 |
+| `packages/server/src/application/default-services/extensions/plugin-service.ts` | 安装 / 启停 / 卸载 / 预览 / 列出的统一应用层 |
+| `packages/server/src/application/session/plugins/session-plugin-capability-service.ts` | 决定一次输入能不能带 `pluginId`，以及带哪一个 |
 | `packages/server/src/http/routes/service.ts` | `/plugins/**` HTTP 路由 |
 | `packages/client/src/resources/plugin-resource.ts` | 各前端共用的插件 HTTP 客户端 |
 | `apps/cli/src/commands/plugin.ts` | `vk plugin` 子命令 |
@@ -611,8 +611,8 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 | 改插件发现/冲突规则 | `packages/agent-runtime/src/node/plugins/plugin-discovery.ts`、`plugin-capability-inventory.ts` |
 | 把发现接成活 Runtime | `packages/agent-runtime/src/node/runtime/runtime-integrations.ts` |
 | 改 Hook 的执行方式或边界 | `packages/agent-runtime/src/node/plugins/plugin-activation.ts`、`packages/hooks/src/index.ts` |
-| 改 Run 可见性 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts`、`packages/server/src/application/session/session-plugin-capability-service.ts` |
-| 改管理接口 | `packages/server/src/application/default-services/plugin-service.ts`、`packages/server/src/http/routes/service.ts` |
+| 改 Run 可见性 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts`、`packages/server/src/application/session/plugins/session-plugin-capability-service.ts` |
+| 改管理接口 | `packages/server/src/application/default-services/extensions/plugin-service.ts`、`packages/server/src/http/routes/service.ts` |
 | 加命令 | `apps/cli/src/commands/plugin.ts` |
 | 改插件页 | `apps/desktop/src/main/features/plugin/plugin-service.ts`、`apps/desktop/src/renderer/src/components/desktop/plugin-page` |
 | 改打包后 Tool Host 入口 | `packages/agent-runtime/scripts/build.mjs`、`apps/desktop/electron.vite.config.ts`、`apps/desktop/scripts/verify-update-packaging.mjs` |

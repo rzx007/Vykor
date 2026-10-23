@@ -3,7 +3,7 @@ import type { SessionStore } from "@vykor/services";
 import type { ExecutionObservationExport, ExecutionObservationFilter } from "../observability/query-models.js";
 
 import type { HookInfo } from "../settings-api.js";
-import type { RunControlService } from "../session/run-control-service.js";
+import type { RunControlService } from "../session/execution/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { ExecutionObservationService } from "../observability/execution-observation-service.js";
 import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";

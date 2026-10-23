@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ContextUsageSnapshot } from "@vykor/core";
 
 import { SessionApplicationError } from "../session-application-error.js";
-import { ContextUsageCache } from "../../context-usage-cache.js";
+import { ContextUsageCache } from "../../context-usage/context-usage-cache.js";
 import {
   SessionCommandService,
   type SessionCommandServiceOptions,

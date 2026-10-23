@@ -54,7 +54,7 @@ vi.mock("./runtime-settings-service", () => ({
 }))
 vi.mock("@vykor/server", async () => ({
   createDesktopGitWorktree: (
-    await import("../../../../../../packages/server/src/desktop-git-workspaces")
+    await import("../../../../../../packages/server/src/application/projects/desktop-git-workspaces")
   ).createDesktopGitWorktree,
 }))
 import { GitSettingsService, worktreeCleanupAllowed } from "./git-settings-service"

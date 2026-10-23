@@ -9,9 +9,9 @@ import { VykorClient } from "@vykor/client";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { installNotesAppFixture } from "../../packages/agent-runtime/test-helpers/notes-app-fixture.js";
 import { VykorHttpServer } from "../../packages/server/src/http/server.js";
-import { createDefaultPluginService } from "../../packages/server/src/application/default-services/plugin-service.js";
-import { createDefaultSettingsService } from "../../packages/server/src/application/default-services/settings-service.js";
-import { createDefaultModelService } from "../../packages/server/src/application/default-services/model-service.js";
+import { createDefaultPluginService } from "../../packages/server/src/application/default-services/extensions/plugin-service.js";
+import { createDefaultSettingsService } from "../../packages/server/src/application/default-services/configuration/settings-service.js";
+import { createDefaultModelService } from "../../packages/server/src/application/default-services/models/model-service.js";
 
 it("real model origin, app-only policy, raw result privacy, shared invalidations and lease isolation", async () => {
   const root = mkdtempSync(join(tmpdir(), "notes-http-")); vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));

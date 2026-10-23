@@ -11,7 +11,7 @@ import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWith
 import { FrameworkAgentRun } from "../../packages/agent-runtime/src/kernel/framework-agent-run.js";
 import { AgentEventBus } from "../../packages/agent-runtime/src/kernel/event-source.js";
 import { DaemonAgentEventProjector } from "../../packages/server/src/application/agent/daemon-agent-event-projector.js";
-import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript-projection.js";
+import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript/transcript-projection.js";
 import { buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
 
 const cleanup: Array<() => void> = [];

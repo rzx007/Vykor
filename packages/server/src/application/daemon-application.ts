@@ -2,16 +2,16 @@ import { createNoteApplicationService, type NoteApplicationService } from "./not
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
-import {hostedContextUsageAgent} from "./assemble-session-context-usage.js";
+import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
 import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
-import { PluginUiHistoryService } from "./session/plugin-ui-history-service.js";
+import { PluginUiHistoryService } from "./session/plugins/plugin-ui-history-service.js";
 import { retirePluginUiActions } from "./recovery/retire-plugin-ui-actions.js";
-import type { PluginLifecycle } from "./session/plugin-lifecycle.js";
+import type { PluginLifecycle } from "./session/plugins/plugin-lifecycle.js";
 import { randomUUID } from "node:crypto";
-import { assemblePluginApps } from "./session/plugin-app-assembly.js";
-import { PluginAppConversationService } from "./session/plugin-app-conversation-service.js";
+import { assemblePluginApps } from "./session/plugins/plugin-app-assembly.js";
+import { PluginAppConversationService } from "./session/plugins/plugin-app-conversation-service.js";
 
 import type { AgentBackgroundShellHost } from "@vykor/tools";
 import type { Settings } from "@vykor/host-config";
@@ -23,7 +23,7 @@ import {
   type ObservableJobProducer,
 } from "@vykor/agent-runtime";
 import type { AgentTerminalHost } from "@vykor/terminal";
-import { readSessionRuntimeConfig } from "./session/runtime-configuration.js";
+import { readSessionRuntimeConfig } from "./session/configuration/runtime-configuration.js";
 import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import {
@@ -43,12 +43,12 @@ import {
 
 import { AttachmentService } from "./attachments/attachment-service.js";
 import { createDaemonAttachmentServices } from "./attachments/daemon-attachment-services.js";
-import { createModelMetadataResolvers } from "./default-services/model-limit-resolution.js";
-import { validateRequestSelection } from "./session/request-selection-validation.js";
+import { createModelMetadataResolvers } from "./default-services/models/model-limit-resolution.js";
+import { validateRequestSelection } from "./session/interactions/request-selection-validation.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
-import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
-import { McpOAuthApplicationService } from "./mcp-oauth-application-service.js";
-import { McpOAuthOperationService } from "./mcp-oauth-operation-service.js";
+import { McpRuntimeConnectionCoordinator } from "./mcp/mcp-runtime-connection-coordinator.js";
+import { McpOAuthApplicationService } from "./mcp/mcp-oauth-application-service.js";
+import { McpOAuthOperationService } from "./mcp/mcp-oauth-operation-service.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
 import { DaemonJobService, readPersistedChildActivity } from "../jobs/daemon-job-service.js";
@@ -77,33 +77,33 @@ import {
   DaemonOperationUnavailableError,
 } from "./control/daemon-operation-gate.js";
 import { LiveChildAgentDirectory } from "./agent/live-child-agent-directory.js";
-import { SessionInteractionService } from "./session/session-interaction-service.js";
+import { SessionInteractionService } from "./session/interactions/session-interaction-service.js";
 import { SessionOperationRunner } from "./session/session-operation-runner.js";
 import { SessionCommandService } from "./session/session-command-service.js";
-import { SessionGoalService } from "./session/session-goal-service.js";
-import { GoalWaitVerifier } from "./session/goal-wait-verifier.js";
-import { SessionEventPublisher } from "./session/session-event-publisher.js";
-import { SessionMaintenanceService } from "./session/session-maintenance-service.js";
+import { SessionGoalService } from "./session/goals/session-goal-service.js";
+import { GoalWaitVerifier } from "./session/goals/goal-wait-verifier.js";
+import { SessionEventPublisher } from "./session/transcript/session-event-publisher.js";
+import { SessionMaintenanceService } from "./session/maintenance/session-maintenance-service.js";
 import { SessionQueryService } from "./session/session-query-service.js";
-import { SessionRunEngine } from "./session/session-run-engine.js";
-import { assembleSessionRunServices } from "./session/session-run-assembly.js";
-import { assembleSessionRunExecutor } from "./session/session-run-executor-assembly.js";
+import { SessionRunEngine } from "./session/execution/session-run-engine.js";
+import { assembleSessionRunServices } from "./session/execution/session-run-assembly.js";
+import { assembleSessionRunExecutor } from "./session/execution/session-run-executor-assembly.js";
 import { SessionAutoReviewService } from "./auto-review/session-auto-review-service.js";
 import { createGitRunChangeInspector } from "./auto-review/git-run-change-inspector.js";
-import { SessionWorkspaceChanges } from "./session/session-workspace-changes.js";
-import { createSessionRuntimeDiscovery } from "./session/session-runtime-discovery.js";
-import { RunAdmissionService } from "./session/run-admission-service.js";
-import { RunControlService } from "./session/run-control-service.js";
-import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
-import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
-import { SessionExecutionProjector } from "./session/session-execution-projector.js";
-import { BackgroundShellService } from "./session/background-shell-service.js";
+import { SessionWorkspaceChanges } from "./session/execution/session-workspace-changes.js";
+import { createSessionRuntimeDiscovery } from "./session/configuration/session-runtime-discovery.js";
+import { RunAdmissionService } from "./session/execution/run-admission-service.js";
+import { RunControlService } from "./session/execution/run-control-service.js";
+import { SessionPluginCapabilityService } from "./session/plugins/session-plugin-capability-service.js";
+import { SessionPostRunMaintenance } from "./session/maintenance/session-post-run-maintenance.js";
+import { SessionExecutionProjector } from "./session/transcript/session-execution-projector.js";
+import { BackgroundShellService } from "./session/execution/background-shell-service.js";
 import { ApplicationError } from "../shared/application-error.js";
-import { SessionTranscriptProjection } from "./session/transcript-projection.js";
-import { recoverInterruptedWorkflows } from "./session/workflow-recovery.js";
+import { SessionTranscriptProjection } from "./session/transcript/transcript-projection.js";
+import { recoverInterruptedWorkflows } from "./session/maintenance/workflow-recovery.js";
 import { StartupRecoveryService } from "./recovery/startup-recovery-service.js";
 import { ApplicationEventService } from "./events/application-event-service.js";
-import { ProjectApplicationService } from "./project-application-service.js";
+import { ProjectApplicationService } from "./projects/project-application-service.js";
 import { ChannelApplicationService } from "./channel/channel-application-service.js";
 import type { ChannelOnboardingService } from "./channel/channel-onboarding-service.js";
 import type { ChannelRuntimeService } from "../daemon/channel-runtime-service.js";
@@ -115,13 +115,13 @@ import { readWorkflowExecutionObservations } from "./observability/workflow-exec
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachments/resources/compact-attachment-catalog.js";
 import { SessionAttachmentResources } from "./attachments/resources/session-attachment-resources.js";
-import { sharedContextUsageCache } from "./context-usage-cache.js";
+import { sharedContextUsageCache } from "./context-usage/context-usage-cache.js";
 import {
   assembleSessionContextUsage,
   tryAssembleSessionContextUsageLive,
   type SessionContextUsageAgent,
-} from "./assemble-session-context-usage.js";
-import { bindContextUsageLiveAssembler } from "./context-usage-live-binder.js";
+} from "./context-usage/assemble-session-context-usage.js";
+import { bindContextUsageLiveAssembler } from "./context-usage/context-usage-live-binder.js";
 import {
   createAttachmentAuthorizationSessionResolver,
   createAttachmentOcrService,
@@ -134,10 +134,10 @@ import {
   createDaemonImageToTextTool,
 } from "./visual-tools/index.js";
 import { createBrowserDeveloperTool, createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
-import { createDefaultPluginService } from "./default-services/plugin-service.js";
-import { createPluginInstallTool } from "./plugin-install-tool.js";
-import { createMcpConfigureTool } from "./mcp-configure-tool.js";
-import { McpConfigApplicationService } from "./mcp-config-application-service.js";
+import { createDefaultPluginService } from "./default-services/extensions/plugin-service.js";
+import { createPluginInstallTool } from "./plugins/plugin-install-tool.js";
+import { createMcpConfigureTool } from "./mcp/mcp-configure-tool.js";
+import { McpConfigApplicationService } from "./mcp/mcp-config-application-service.js";
 
 export interface DaemonApplicationOptions {
   /** Transferred to the application and closed with it; omitted means a private owner. */

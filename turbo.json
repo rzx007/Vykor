@@ -48,7 +48,7 @@
         "$TURBO_ROOT$/plugins/knowledge-work/**",
         "$TURBO_ROOT$/packages/plugin-sources/src/**",
         "$TURBO_ROOT$/packages/plugins/src/**",
-        "$TURBO_ROOT$/packages/server/src/application/default-services/plugin-service.ts",
+        "$TURBO_ROOT$/packages/server/src/application/default-services/extensions/plugin-service.ts",
         "$TURBO_ROOT$/packages/server/src/http/routes/service.ts",
         "$TURBO_ROOT$/packages/client/src/transport/http-client.ts",
         "$TURBO_ROOT$/packages/client/src/types/index.ts"
