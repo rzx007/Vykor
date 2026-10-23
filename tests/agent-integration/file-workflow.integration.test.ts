@@ -6,14 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentExecutionContext, type StreamEvent } from "@vykor/agent-contracts";
 import { type Message } from "@vykor/agent-contracts";
-import { fileReadTool } from "../../../../tools/src/file/read.js";
-import { fileWriteTool } from "../../../../tools/src/file/write.js";
-import { fileEditTool } from "../../../../tools/src/file/edit.js";
-import { applyPatchTool } from "../../../../tools/src/file/apply-patch.js";
+import { fileReadTool } from "../../packages/tools/src/file/read.js";
+import { fileWriteTool } from "../../packages/tools/src/file/write.js";
+import { fileEditTool } from "../../packages/tools/src/file/edit.js";
+import { applyPatchTool } from "../../packages/tools/src/file/apply-patch.js";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import { CodexSubscriptionClient } from "@vykor/api";
 import { OpenAICompatibleClient } from "@vykor/api";
-import { computeFileChange } from "../../../../tools/src/file/preview.js";
+import { computeFileChange } from "../../packages/tools/src/file/preview.js";
 
 async function defaultPrompt(cwd: string) {
   const previousConfigDir = process.env.VYKOR_CONFIG_DIR;

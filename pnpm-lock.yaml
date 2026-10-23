@@ -73,6 +73,9 @@ importers:
 
   .:
     devDependencies:
+      '@anthropic-ai/sdk':
+        specifier: 'catalog:'
+        version: 0.40.1
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
@@ -103,12 +106,18 @@ importers:
       '@vykor/jobs':
         specifier: workspace:*
         version: link:packages/jobs
+      '@vykor/permissions':
+        specifier: workspace:*
+        version: link:packages/permissions
       '@vykor/personalization':
         specifier: workspace:*
         version: link:packages/personalization
       '@vykor/plugins':
         specifier: workspace:*
         version: link:packages/plugins
+      '@vykor/prompts':
+        specifier: workspace:*
+        version: link:packages/prompts
       '@vykor/protocol':
         specifier: workspace:*
         version: link:packages/protocol
@@ -118,9 +127,15 @@ importers:
       '@vykor/services':
         specifier: workspace:*
         version: link:packages/services
+      '@vykor/tools':
+        specifier: workspace:*
+        version: link:packages/tools
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      openai:
+        specifier: 'catalog:'
+        version: 4.104.0(ws@8.20.0)(zod@3.25.76)
       rimraf:
         specifier: ^6.0.1
         version: 6.1.3
@@ -663,15 +678,9 @@ importers:
         specifier: 0.34.4
         version: 0.34.4
     devDependencies:
-      '@anthropic-ai/sdk':
-        specifier: 'catalog:'
-        version: 0.40.1
       esbuild:
         specifier: ^0.27.7
         version: 0.27.7
-      openai:
-        specifier: 'catalog:'
-        version: 4.104.0(ws@8.20.0)(zod@3.25.76)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -1348,18 +1357,6 @@ importers:
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.17
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
-
-  packages/swarm:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

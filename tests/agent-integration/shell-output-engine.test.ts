@@ -1,4 +1,4 @@
-import {createFileReadTool} from "../../../../tools/src/file/read.js";
+import {createFileReadTool} from "../../packages/tools/src/file/read.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,9 +8,9 @@ import {
   createShellOutputLogHost,
 } from "@vykor/execution-node";
 import { expect, it } from "vitest";
-import { fileReadTool } from "../../../../tools/src/file/read.js";
-import { createShellTool } from "../../../../tools/src/shell/shell.js";
-import type { ShellExecutor } from "../../../../tools/src/shell/types.js";
+import { fileReadTool } from "../../packages/tools/src/file/read.js";
+import { createShellTool } from "../../packages/tools/src/shell/shell.js";
+import type { ShellExecutor } from "../../packages/tools/src/shell/types.js";
 
 it("reconstructs a long single-line Shell log through repeated engine Read results at the minimum budget", async () => {
   const directory = mkdtempSync(join(tmpdir(), "oh-shell-engine-pages-"));

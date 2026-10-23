@@ -18,7 +18,7 @@
     "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate && pnpm check:retired-ui",
     "check:clean-slate": "node scripts/verify-clean-slate.mjs",
     "check:clean-slate:artifacts": "node scripts/verify-clean-slate.mjs --require-build-artifacts",
-    "test": "turbo test --continue=always --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins && pnpm test:execution-integration && pnpm test:server-client",
+    "test": "turbo test --continue=always --concurrency=2 && pnpm test:scripts && pnpm test:bundled-plugins && pnpm test:execution-integration && pnpm test:agent-integration && pnpm test:server-client",
     "test:bundled-plugins": "node scripts/test-bundled-plugins.mjs",
     "test:client-browser": "vite build --config tests/browser-client/vite.config.ts",
     "clean": "turbo clean",
@@ -31,7 +31,8 @@
     "check:retired-ui": "node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs",
     "test:execution-integration": "vitest run --config tests/execution-node/vitest.config.ts",
     "check-types:server-client": "tsc -p tests/server-client/tsconfig.json",
-    "test:server-client": "vitest run --config tests/server-client/vitest.config.ts"
+    "test:server-client": "vitest run --config tests/server-client/vitest.config.ts",
+    "test:agent-integration": "vitest run --config tests/agent-integration/vitest.config.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -54,7 +55,12 @@
     "turbo": "^2.8.12",
     "typescript": "^5.7.3",
     "vite": "^7.3.2",
-    "vitest": "^3.1.1"
+    "vitest": "^3.1.1",
+    "@vykor/tools": "workspace:*",
+    "@vykor/permissions": "workspace:*",
+    "@vykor/prompts": "workspace:*",
+    "@anthropic-ai/sdk": "catalog:",
+    "openai": "catalog:"
   },
   "packageManager": "pnpm@10.30.2"
 }
