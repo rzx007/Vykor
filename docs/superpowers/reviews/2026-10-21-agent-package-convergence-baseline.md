@@ -54,7 +54,7 @@
 
 | 基线 | 当前事实与位置 | 本次证据 |
 | --- | --- | --- |
-| 模型错误身份 | [model-retry.ts](../../../packages/core/src/engine/model-retry.ts)：`Symbol.for("@vykor/core/ModelRequestFailure")` | 源码核对；跨发布 bundle 的完整验证仍归 P6 |
+| 模型错误身份 | [model-retry.ts](../../../packages/core/src/engine/model/model-retry.ts)：`Symbol.for("@vykor/core/ModelRequestFailure")` | 源码核对；跨发布 bundle 的完整验证仍归 P6 |
 | 执行限制错误身份 | [runtime.ts](../../../packages/core/src/types/runtime.ts)：`Symbol.for("@vykor/core/AgentExecutionLimitError")` | 源码核对 |
 | 尝试用量状态 | ModelAttemptUsageStatus 固定为 complete / partial / unknown；未发出用 notDispatched 标记 | 源码核对，不新增持久枚举 |
 | Run 回执 | [FrameworkAgentRun](../../../packages/agent-runtime/src/kernel/framework-agent-run.ts) 等待可靠 run.started 后完成 started；终态可靠处理结束后完成 result | Kernel/事件/Child 回归通过；本次未改状态机 |
@@ -63,7 +63,7 @@
 | Goal 尝试唯一键 | [schema.ts](../../../packages/services/src/session-runtime/schema.ts) 的 session_goal_model_attempt 主键为 runId/generationId/attempt；[goal-usage.ts](../../../packages/services/src/goals/goal-usage.ts) 按同一身份查写 | 源码核对；未做 schema 或预算实现改动 |
 | 文件 Workflow claim | [文件仓库（P3 后位置）](../../../packages/agent-runtime/src/node/workflow/file-workflow-run-repository.ts) 在本基线中返回 file:pid、generation=1；finish 为空操作 | 源码核对；不具备跨进程互斥保证 |
 | SQLite Workflow claim | [workflow-repository.ts](../../../packages/services/src/workflows/workflow-repository.ts) 在事务中递增 generation；同 Application 已 running 的重复 claim 拒绝，其他 owner 可产生新 generation | 源码核对；不将 generation 记录等同于完整的跨进程执行排他 |
-| 应用精确授权 | [plugin-app-approval.test.ts](../../../packages/core/src/engine/plugin-app-approval.test.ts) 检查同一 Run/绑定/参数的授权不重复询问，deny/Hook 仍生效，不能借给模型受众调用 | 2 项通过；补充执行以覆盖本阶段要求记录的授权基线 |
+| 应用精确授权 | [plugin-app-approval.test.ts](../../../packages/core/src/engine/tools/__test__/plugin-app-approval.test.ts) 检查同一 Run/绑定/参数的授权不重复询问，deny/Hook 仍生效，不能借给模型受众调用 | 2 项通过；补充执行以覆盖本阶段要求记录的授权基线 |
 
 ## 5. 实际验证
 

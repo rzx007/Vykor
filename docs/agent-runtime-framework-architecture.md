@@ -46,7 +46,7 @@ await agent.close();
 | `AgentChildManager` | `packages/agent-runtime/src/kernel/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
 | `AgentChildRegistry` | `packages/agent-runtime/src/kernel/child-registry.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
 | child environment | `packages/agent-runtime/src/kernel/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
-| `AgentSession` | `packages/core/src/agent-session.ts` | 对 QueryEngine 的薄包装 |
+| `AgentSession` | `packages/core/src/session/agent-session.ts` | 对 QueryEngine 的薄包装 |
 | `QueryEngine` | `packages/core/src/engine/query-engine.ts` | 真正跑「模型 ↔ 工具」循环，并维护历史 |
 | AgentDefinition / TeamRegistry | `packages/coordinator/src/definitions/`、`src/teams/` | 唯一角色类型与纯解析；团队由 Node 根树创建实例 |
 | WorkflowHost | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 持有活动 Workflow，负责取消、worker 收尾与保存终态 |

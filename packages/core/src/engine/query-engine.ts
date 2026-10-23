@@ -1,7 +1,7 @@
-import { createToolExecutionContext } from "./tool-execution-context";
+import { createToolExecutionContext } from "./tools/tool-execution-context";
 import { createTurnRequest, composeTurnPrompt, appendSystemGuidance } from "./turn-context";
-import { runModelAttempt } from "./model-attempt-runner";
-import { isModelAttemptControlFailure } from "./model-attempt-control";
+import { runModelAttempt } from "./model/model-attempt-runner";
+import { isModelAttemptControlFailure } from "./model/model-attempt-control";
 import { randomUUID } from "node:crypto";
 import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
 
@@ -21,8 +21,8 @@ import {
   CompactService,
   type CompactClient,
   type CompactContextProvider,
-} from "./compact-service";
-import { CostTracker } from "./cost-tracker";
+} from "./compaction/compact-service";
+import { CostTracker } from "./usage/cost-tracker";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   nextModelRetryDelay,
@@ -30,29 +30,29 @@ import {
   waitForModelRetry,
   type ModelRetryPolicy,
   type RetryCounters,
-} from "./model-retry";
-import { streamBufferedModelWithRetry } from "./buffered-model-retry";
+} from "./model/model-retry";
+import { streamBufferedModelWithRetry } from "./model/buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
-import { executeCheckedTools } from "./checked-tool-execution";
-import { withToolInputReuseHint } from "./tool-input-reuse";
+import { executeCheckedTools } from "./tools/checked-tool-execution";
+import { withToolInputReuseHint } from "./tools/tool-input-reuse";
 import {
   attemptFinishedEvent,
-} from "./query-model-attempt";
-import { applyToolOutputBudget } from "./query-tool-limits";
-import { ToolFailureMemory } from "./tool-failure-memory";
+} from "./model/query-model-attempt";
+import { applyToolOutputBudget } from "./tools/query-tool-limits";
+import { ToolFailureMemory } from "./tools/tool-failure-memory";
 import {
   formatToolResultForModel,
   toolFeedbackFields,
-} from "./tool-result-feedback";
-import { toolDefinitionIdentity } from "./tool-definition-identity";
-import { RunToolDiscovery } from "./tool-discovery";
+} from "./tools/tool-result-feedback";
+import { toolDefinitionIdentity } from "./tools/tool-definition-identity";
+import { RunToolDiscovery } from "./tools/tool-discovery";
 import {
   capturedToolRegistry,
   runToolRegistry as runToolRegistryForRun,
   toolRegistryForNames,
   toolRegistryView,
   visibleToolRegistry,
-} from "./tool-registry";
+} from "./tools/tool-registry";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -97,7 +97,7 @@ function toCompactClient(
     onAttemptFinished?: (
       event: ModelAttemptFinishedEvent,
     ) => void | Promise<void>;
-    onAttemptStarted?: import("./buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
+    onAttemptStarted?: import("./model/buffered-model-retry").BufferedModelRetryOptions["onAttemptStarted"];
     limits?: import("@vykor/agent-contracts").AgentExecutionLimits;
     scope?: import("@vykor/agent-contracts").AgentRunScope;
     modelAttempts?: import("@vykor/agent-contracts").ModelAttemptGate;

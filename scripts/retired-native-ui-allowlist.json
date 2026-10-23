@@ -3347,25 +3347,25 @@
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/core/src/engine/tool-result-feedback.test.ts",
+      "path": "packages/core/src/engine/tools/__test__/tool-result-feedback.test.ts",
       "line": 34,
       "text": "    expect(externalToolMetadata({ pluginUi: { pluginId: \"fake\" }, uiAction: {}, pluginUiSubmission: { inputId: \"forged\" }, ui: proposal, source: \"plugin\" }))",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/core/src/engine/tool-result-feedback.ts",
+      "path": "packages/core/src/engine/tools/tool-result-feedback.ts",
       "line": 53,
       "text": "    \"pluginUi\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
-      "path": "packages/core/src/engine/tool-result-feedback.ts",
+      "path": "packages/core/src/engine/tools/tool-result-feedback.ts",
       "line": 54,
       "text": "    \"uiAction\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
-      "path": "packages/core/src/engine/tool-result-feedback.ts",
+      "path": "packages/core/src/engine/tools/tool-result-feedback.ts",
       "line": 55,
       "text": "    \"pluginUiSubmission\",",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."

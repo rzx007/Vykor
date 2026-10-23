@@ -1,6 +1,6 @@
 import type { StreamingMessageClient, AgentExecutionContext, ToolUseBlock, ContentBlock, Message, StreamEvent, RunToolBinding } from "@vykor/agent-contracts";
-import type { CompactContextProvider } from "../engine/compact-service";
-import type { ModelRetryPolicy } from "../engine/model-retry";
+import type { CompactContextProvider } from "../engine/compaction/compact-service";
+import type { ModelRetryPolicy } from "../engine/model/model-retry";
 
 /** A fully prepared model request captured at one request boundary. */
 export type QueryRequestConfiguration = {
@@ -99,7 +99,7 @@ export interface QueryEngineOptions {
   executionEnvironment?: import("@vykor/environment").ExecutionEnvironmentHandle;
   /** Optional per-run trajectory policy factory. False disables the default tracker. */
   trajectoryTrackerFactory?: false | (() => import("../engine/trajectory/tracker").TrajectoryTracker);
-  compactProgressCallback?: import("../engine/compact-service").CompactProgressCallback;
+  compactProgressCallback?: import("../engine/compaction/compact-service").CompactProgressCallback;
   /** 有界模型网络重试策略；`maxTotalRetries: 0` 可显式关闭自动重试。 */
   modelRetry?: Partial<ModelRetryPolicy>;
 }

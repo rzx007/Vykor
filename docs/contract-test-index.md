@@ -31,7 +31,7 @@
 
 | 硬规则 | 主要测试 |
 | --- | --- |
-| 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model-attempt-gate.test.ts) |
+| 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts) |
 | Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/goal-model-attempt-service.test.ts) |
 | 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
 | 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/notes.test.ts) |
@@ -40,8 +40,8 @@
 
 | 硬规则 | 主要测试 |
 |---|---|
-| 仅重试当前模型调用，次数有界、等待可取消，工具不重复执行 | [model-retry.integration.test.ts](../packages/core/src/engine/model-retry.integration.test.ts)、[model-retry.test.ts](../packages/core/src/engine/model-retry.test.ts) |
-| 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/node/memory/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
+| 仅重试当前模型调用，次数有界、等待可取消，工具不重复执行 | [model-retry.integration.test.ts](../packages/core/src/engine/model/__test__/model-retry.integration.test.ts)、[model-retry.test.ts](../packages/core/src/engine/model/__test__/model-retry.test.ts) |
+| 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/model/__test__/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/node/memory/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
 | 实时结果、SQLite 历史、客户端重放一致，投影失败不重发模型 | [model-retry-flow.test.ts](../tests/server-client/model-retry-flow.test.ts) |
 | Desktop 即使跳过中间快照也正确替换输出，倒计时独立更新 | [session-subscription-service.coalescing.test.ts](../apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts)、[model-retry-countdown.test.tsx](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/notices/__test__/model-retry-countdown.test.tsx) |
 | CLI 最终 JSON 不拼接失效输出，流式 JSON 可识别替换 | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts)、[renderer.test.ts](../apps/cli/src/renderer.test.ts) |
@@ -120,14 +120,14 @@
 | A05 定义、团队、Workflow | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[WorkflowHost](../packages/agent-runtime/src/node/workflow/workflow-host.test.ts) | `pnpm test` |
 | A06 HTTP 与存储边界 | [架构反例](../scripts/architecture-boundaries.test.mjs)、[应用重启](../packages/server/src/http/__test__/application-maintenance-restart.test.ts) | `pnpm check:architecture`、`pnpm test` |
 | A07 P0–P6 旧例外清零与依赖 | [架构策略](../scripts/architecture-policy.json)、[导入图扫描](../scripts/architecture-policy.mjs)；Protocol 迁移前的关系保留在 [P7 历史基线](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md)，当前 P13 `stageExceptions` 为空 | `pnpm check:architecture` |
-| B01 Run 输入、互斥与重试 | [Agent](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[模型重试](../packages/core/src/engine/model-retry.integration.test.ts) | `pnpm test` |
+| B01 Run 输入、互斥与重试 | [Agent](../packages/agent-runtime/src/node/runtime/agent.test.ts)、[模型重试](../packages/core/src/engine/model/__test__/model-retry.integration.test.ts) | `pnpm test` |
 | B02 可靠事件和结果顺序 | [事件总线](../packages/agent-runtime/src/kernel/event-source.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/index.test.ts) | `pnpm test` |
 | B03 子运行创建、TTL 和关闭 | [ChildAgent](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[子环境](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) | `pnpm test` |
 | B04 撤销、冻结与父子缩权 | [插件生命周期](../packages/agent-runtime/src/node/plugins/run-capability-lifecycle.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/index.test.ts) | `pnpm test` |
 | B05 应用确认与可信来源 | [应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts)、[来源投影](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) | `pnpm test` |
 | B06 文件和 SQLite Workflow | [文件运行](../packages/agent-runtime/src/node/integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts)、[自定义宿主取消](../packages/agent-runtime/src/node/workflow/workflow-host.child-cancellation.test.ts) | `pnpm test` |
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts) | `pnpm test` |
-| B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts) | `pnpm test` |
+| B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |
 | B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/note-application-service.test.ts) | `pnpm test` |
 | B11 SDK 与浏览器 | [独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs)、[浏览器入口](../tests/browser-client/vite.config.ts) | `pnpm --filter @vykor/agent-runtime test:pack`、`pnpm test:client-browser` |

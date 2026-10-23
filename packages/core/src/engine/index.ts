@@ -5,5 +5,5 @@ export {
   toolRegistryView,
   modelToolRegistry,
   toolRegistryForNames,
-} from "./tool-registry.js";
-export { RunToolDiscovery } from "./tool-discovery.js";
+} from "./tools/tool-registry.js";
+export { RunToolDiscovery } from "./tools/tool-discovery.js";

@@ -2,7 +2,7 @@ import type { AgentEvent, AgentRunResult, StreamingMessageClient, ToolDefinition
 import type { Message } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { fileURLToPath } from "node:url";
-import { validateToolInput } from "../../packages/core/src/engine/tool-input-schema.js";
+import { validateToolInput } from "../../packages/core/src/engine/tools/tool-input-schema.js";
 
 export interface BehaviorObservation {
   history: Message[];

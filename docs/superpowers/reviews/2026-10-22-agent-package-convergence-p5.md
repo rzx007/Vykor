@@ -68,7 +68,7 @@ AST 反例补充了经类型别名和 Pick 包装隐藏 Store 的情况。检查
 
 主要证据入口：
 
-- [Core gate 回归](../../../packages/core/src/engine/model-attempt-gate.test.ts)
+- [Core gate 回归](../../../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)
 - [Node gate 与记忆来源](../../../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts)
 - [Goal 服务](../../../packages/server/src/application/goals/goal-model-attempt-service.test.ts)
 - [投影重放与子 Run](../../../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)

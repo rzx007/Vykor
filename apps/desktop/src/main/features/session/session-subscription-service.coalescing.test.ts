@@ -18,9 +18,7 @@ import type {
   DesktopSessionView,
 } from "../../../shared/session-types"
 import { OpenAICompatibleClient } from "../../../../../../packages/api/src/providers/openai"
-import { QueryEngine } from "../../../../../../packages/core/src/engine/query-engine"
-import { ToolRegistry } from "../../../../../../packages/core/src/engine/tool-registry"
-import { AgentSession } from "../../../../../../packages/core/src/agent-session"
+import { QueryEngine, ToolRegistry, AgentSession } from "@vykor/core"
 import { FrameworkAgentRun } from "../../../../../../packages/agent-runtime/src/kernel/framework-agent-run"
 import { AgentEventBus } from "../../../../../../packages/agent-runtime/src/kernel/event-source"
 import { fileWriteTool } from "../../../../../../packages/tools/src/file/write"

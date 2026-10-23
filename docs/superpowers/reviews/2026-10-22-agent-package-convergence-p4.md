@@ -57,7 +57,7 @@ Kernel 发布可靠的 run.started 后完成本轮宿主登记，再交付 start
 - [MCP 准备与认证范围](../../../packages/agent-runtime/src/node/runtime/prepare-run-tools.test.ts)
 - [根树目录隔离](../../../packages/agent-runtime/src/node/capabilities/node-run-catalogue.test.ts)
 - [可信来源投影](../../../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts)
-- [请求配置与回合上限](../../../packages/core/src/engine/request-configuration.test.ts)
+- [请求配置与回合上限](../../../packages/core/src/engine/__test__/request-configuration.test.ts)
 
 ## 5. 验证证据
 

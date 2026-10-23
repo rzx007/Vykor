@@ -117,7 +117,7 @@ T3 当前交接代码优先选择最新请求、最近回答和原始要求；�
 
 优先验证压缩后能否继续遵守最新要求、不做事项、已完成证据、未完成工作和等待句柄。只有样本证明缺口后，才通过现有压缩与上下文入口补充有限事实；必要时在原有访问权限内补读消息，不默认读取其他会话，不建立大型记忆系统。
 
-已有入口：[压缩服务](../../../packages/core/src/engine/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/node/runtime/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
+已有入口：[压缩服务](../../../packages/core/src/engine/compaction/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/node/runtime/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
 
 ### 行为方向三 计划模式与权限及待办进度分开
 
@@ -383,7 +383,7 @@ Git 定向检查先后 20 项、16 项通过，两个组有重叠，不合并成
 
 **本阶段结果：** 2026-10-06 完成，独立审查通过。新增 [ordinary-continuity.test.ts](../../../tests/agent-behavior/ordinary-continuity.test.ts)，样本 `ordinary-continuity-v2`：A 有过去验收记录，B 使用 `job-b-41` 等待，用户修改 B 并禁止 C；外部摘要故意省略这些信息，随后只请求继续 B。原实现从 119 条、34,048 估算 token 压成 12 条后，实际下一请求不含原始要求、纠正、A 证据或等待句柄，确认是数据交接丢失。
 
-[compact-continuity.ts](../../../packages/core/src/engine/compact-continuity.ts)在既有 full/simple 摘要末尾保留有限历史片段：优先近期真实用户来源，再用剩余预算保留成对工具观察，按历史顺序展示。最多 6,000 字符、24 条完整条目、每段 1,200 字符，工具观察另共用 900 字符预算；过大内容或标识明确省略，不截成假完整标识。状态是过去观察，不是当前验证结论，不授予权限。
+[compact-continuity.ts](../../../packages/core/src/engine/compaction/compact-continuity.ts)在既有 full/simple 摘要末尾保留有限历史片段：优先近期真实用户来源，再用剩余预算保留成对工具观察，按历史顺序展示。最多 6,000 字符、24 条完整条目、每段 1,200 字符，工具观察另共用 900 字符预算；过大内容或标识明确省略，不截成假完整标识。状态是过去观察，不是当前验证结论，不授予权限。
 
 仅程序生成的 `compactRole=summary` 能恢复末尾自有容器；原始用户、普通 assistant 或模型摘要里的类似标记不作为来源解析。既有文本 metadata 保存和恢复已知 summary/boundary 标记，支持恢复后二次压缩。审查发现后续截短会破坏合法容器，已改为只裁生成正文、保留有界来源片段，不豁免任意长摘要；没有新数据库、Goal 或 System 指令升级。
 
@@ -464,7 +464,7 @@ node node_modules/vitest/vitest.mjs run --config tests/agent-behavior/vitest.con
 
 已查到的会话标题和目标/错误分类使用确定性规则；摘要与两处记忆提取继续共用无工具的辅助调用，不加载 Skill、MCP 或项目执行。只修正这条共用消费链中确认的两个问题：
 
-- [buffered-model-retry.ts](../../../packages/core/src/engine/buffered-model-retry.ts)原本接受 max_tokens / length 完成原因，可能把截断正文当作成功。现在释放缓冲前报告既有不可重试失败，保留一次失败用量结算，不自动重发同一长度请求或增加 token 上限；压缩继续走原来的有界兜底。
+- [buffered-model-retry.ts](../../../packages/core/src/engine/model/buffered-model-retry.ts)原本接受 max_tokens / length 完成原因，可能把截断正文当作成功。现在释放缓冲前报告既有不可重试失败，保留一次失败用量结算，不自动重发同一长度请求或增加 token 上限；压缩继续走原来的有界兜底。
 - [extraction.ts](../../../packages/memory/src/extraction.ts)原本把对象或数字 title/body 强转成文字后写入记忆。现在只接受字符串标题和正文，其他默认值、噪声容忍、归属过滤和三条上限不变。两记忆入口共用此检查，没有重复加保护层。
 
 三批实际失败反例后，12 个相关测试文件共 148 项通过：core 43、services 21、memory 7、tools 34、server Jobs/验证 28、外部等待选定 2、runtime 记忆 13；core/memory 类型检查通过。生产只改两个文件、测试改三个文件。最终另做阶段六至八的 44 项实际请求串联和桌面 14 项面板、10 项文件列表检查，均通过；不重复累加为跨阶段唯一总数。当前本地差异检查通过。

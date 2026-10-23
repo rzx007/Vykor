@@ -11,7 +11,7 @@ import { runBehaviorCase } from "./run.js";
 import type { BehaviorCase } from "./cases.js";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
 import type { SessionMessageRecord, SessionMessagePartRecord } from "@vykor/protocol";
-import { appendContinuityExcerpts } from "../../packages/core/src/engine/compact-continuity.js";
+import { appendContinuityExcerpts } from "../../packages/core/src/engine/compaction/compact-continuity.js";
 
 // Fixed offline fixture; the only substituted boundary is the external model.
 export const ordinaryContinuityFixtureVersion = "ordinary-continuity-v2";

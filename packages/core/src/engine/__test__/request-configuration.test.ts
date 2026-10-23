@@ -1,0 +1,498 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
+import type { AgentExecutionContext, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
+import { QueryEngine } from "../query-engine.js";
+import { ToolRegistry } from "../tools/tool-registry.js";
+
+function createExecutionContext(
+  takeSteeredInputs: AgentExecutionContext["takeSteeredInputs"],
+  hardMaxTurns?: number,
+): AgentExecutionContext {
+  return {
+    scope: {
+      agentId: "agent-test", sessionId: "session-test", inputId: "input-test",
+      runId: "run-test", traceId: "trace-test", cwd: "/work",
+      signal: new AbortController().signal,
+    },
+    ...(hardMaxTurns === undefined ? {} : { hardMaxTurns }),
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    children: {
+      hasChildAgent: () => false,
+      spawnChildAgent: async () => { throw new Error("not implemented in this test"); },
+      sendChildInput: async () => { throw new Error("not implemented in this test"); },
+      interruptChildAgent: async () => {},
+      awaitChildAgent: async () => { throw new Error("not implemented in this test"); },
+    },
+    emit: async () => {}, closeSteering: () => {}, takeSteeredInputs,
+  };
+}
+
+describe("QueryEngine request configuration", () => {
+  it.each([undefined, 0])("continues beyond 100 requests with unlimited maxTurns %s", async (maxTurns) => {
+    let requests = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage() {
+        requests++;
+        if (requests <= 101) {
+          yield { type: "tool_use_start" as const, toolUse: {
+            type: "tool_use", id: `step-${requests}`, name: "Step", input: {},
+          } };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({ name: "Step", description: "Next step", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: `step ${requests}` }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) },
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns, trajectoryTrackerFactory: false, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "test", client, maxTurns,
+      }) },
+    );
+    for await (const _ of engine.submitMessage("complete all steps")) { /* consume */ }
+    expect(requests).toBe(102);
+  });
+
+  it("passes the current model identity to dynamically injected tools", async () => {
+    const requests: StreamMessageParams[] = [];
+    const toolRequests: Array<{ model: string; provider?: string; apiFormat?: "openai" | "anthropic" } | undefined> = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params);
+        if (requests.length === 1) {
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "browser-1", name: "Browser", input: { action: "inspect" } },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Browser",
+      description: "Inspect the page",
+      inputSchema: { type: "object" },
+      execute: async (_input, context) => {
+        toolRequests.push(context.requestConfiguration);
+        return {
+          content: [{ type: "text" as const, text: "Page text: Settings" }],
+        };
+      },
+    });
+    const engine = new QueryEngine(
+      client,
+      tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) },
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      {
+        maxTurns: 2,
+        resolveRequestConfiguration: async () => ({
+          revision: 0,
+          model: "text-only-model",
+          client,
+          maxTurns: 2,
+        }),
+      },
+    );
+
+    for await (const _ of engine.submitMessage("inspect the page")) { /* consume */ }
+
+    expect(toolRequests).toEqual([{ model: "text-only-model" }]);
+    expect(requests).toHaveLength(2);
+  });
+
+  it("reads configuration at the next automatic request after checking for follow-ups", async () => {
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        models.push(params.model);
+        if (models.length === 1) {
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "echo", name: "Echo", input: {} },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echoes", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    let model = "model-a";
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 2, resolveRequestConfiguration: async () => ({
+        revision: 0, model, client, maxTurns: 2,
+      }) },
+    );
+    for await (const _ of engine.submitMessage("start", {
+      execution: createExecutionContext(async () => { model = "model-b"; return []; }),
+    })) { /* consume */ }
+    expect(models).toEqual(["model-a", "model-b"]);
+  });
+
+  it("accepts a steered follow-up when the turn limit rises during a tool-free response", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let requestCount = 0;
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requestCount++;
+        models.push(params.model);
+        if (requestCount === 1) { started(); await held; }
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    let maxTurns = 1;
+    let model = "model-a";
+    let pending = true;
+    const engine = new QueryEngine(client, new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model, client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      for await (const _ of engine.submitMessage("first", {
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          model = "model-b";
+          maxTurns = 1;
+          return [{ id: "follow-up", content: "continue" }];
+        }),
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 2;
+    release();
+    await running;
+    expect(requestCount).toBe(2);
+    expect(models).toEqual(["model-a", "model-b"]);
+  });
+
+  it("uses an increased turn limit after tools and finishes an accepted follow-up", async () => {
+    const requests: string[] = [];
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params.model);
+        if (requests.length === 1) {
+          started();
+          await held;
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "echo", name: "Echo", input: {} },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+          return;
+        }
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    let maxTurns = 1;
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "model-a", client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      let pending = true;
+      for await (const _ of engine.submitMessage("run", {
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          maxTurns = 1;
+          return [{ id: "follow-up", content: "continue" }];
+        }),
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 2;
+    release();
+    await running;
+    expect(requests).toEqual(["model-a", "model-a"]);
+  });
+
+  it.each([50, 0])("keeps the run's frozen hard cap when setMaxTurns changes to %s", async (maxTurns) => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let requests = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests++;
+        if (requests === 1) { started(); await held; }
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "final" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${requests}`, name: "Echo", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1 },
+    );
+    const running = (async () => {
+      for await (const _ of engine.submitMessage("run", {
+        execution: createExecutionContext(async () => [], 1),
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    engine.setMaxTurns(maxTurns);
+    release();
+    await expect(running).rejects.toThrow("Exceeded maximum agentic turns (1)");
+    expect(requests).toBe(1);
+  });
+
+  it("stops an accepted follow-up at the frozen hard cap even when the request limit rises", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let maxTurns = 1;
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        models.push(params.model);
+        if (models.length === 1) { started(); await held; }
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "final" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${models.length}`, name: "Echo", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "model-a", client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      let accepted = false;
+      for await (const _ of engine.submitMessage("run", {
+        execution: createExecutionContext(async () => {
+          if (accepted) return [];
+          accepted = true;
+          maxTurns = 10;
+          return [{ id: "follow-up", content: "continue" }];
+        }, 2),
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 5;
+    release();
+    await expect(running).rejects.toThrow("Exceeded maximum agentic turns (2)");
+    expect(models).toEqual(["model-a", "model-a"]);
+  });
+
+  it("prepares a steered follow-up with the client selected for its request", async () => {
+    const prepared: string[] = [];
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    const firstClient: StreamingMessageClient = {
+      prepareUserContent: async (content) => { prepared.push(`a:${String(content)}`); return content; },
+      async *streamMessage() {
+        started();
+        await held;
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    const secondClient: StreamingMessageClient = {
+      prepareUserContent: async (content) => { prepared.push(`b:${String(content)}`); return content; },
+      async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" }; },
+    };
+    let selected = { revision: 0, model: "a", client: firstClient };
+    let pending = true;
+    const engine = new QueryEngine(
+      firstClient, new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { resolveRequestConfiguration: async () => selected },
+    );
+    const run = (async () => {
+      for await (const _ of engine.submitMessage("initial", {
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          return [{ id: "followup", content: "later" }];
+        }),
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    selected = { revision: 1, model: "b", client: secondClient };
+    release();
+    await run;
+    expect(prepared).toEqual(["a:initial", "b:later"]);
+  });
+
+  it("uses a changed configuration for the request after a completed tool call", async () => {
+    const initialRequests: StreamMessageParams[] = [];
+    const updatedRequests: StreamMessageParams[] = [];
+    let releaseFirstRequest!: () => void;
+    let signalFirstRequest!: () => void;
+    const firstRequestHeld = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+    const firstRequestStarted = new Promise<void>((resolve) => {
+      signalFirstRequest = resolve;
+    });
+    const toolExecutions = vi.fn(async () => ({
+      content: [{ type: "text" as const, text: "echoed" }],
+    }));
+    const initialClient: StreamingMessageClient = {
+      async *streamMessage(params) {
+        initialRequests.push(params);
+        if (initialRequests.length > 1) {
+          throw new Error("the old client received a later request");
+        }
+        signalFirstRequest();
+        await firstRequestHeld;
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: "echo-1", name: "Echo", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const updatedClient: StreamingMessageClient = {
+      async *streamMessage(params) {
+        updatedRequests.push(params);
+        yield { type: "text_delta" as const, delta: "done" };
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    let selected = {
+      revision: 0,
+      model: "model-a",
+      reasoningEffort: "low",
+      client: initialClient,
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo",
+      description: "Returns its input.",
+      inputSchema: {},
+      execute: toolExecutions,
+    });
+    const engine = new QueryEngine(
+      initialClient,
+      tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      {
+        resolveRequestConfiguration: async () => selected,
+      },
+    );
+
+    const run = (async () => {
+      for await (const _event of engine.submitMessage("use Echo")) {
+        // Consume the real stream so the engine can execute the tool and continue.
+      }
+    })();
+    await firstRequestStarted;
+    selected = {
+      revision: 1,
+      model: "model-b",
+      reasoningEffort: "high",
+      client: updatedClient,
+    };
+    releaseFirstRequest();
+    await run;
+
+    expect(initialRequests).toHaveLength(1);
+    expect(initialRequests[0]).toMatchObject({
+      model: "model-a",
+      reasoningEffort: "low",
+    });
+    expect(toolExecutions).toHaveBeenCalledTimes(1);
+    expect(updatedRequests).toHaveLength(1);
+    expect(updatedRequests[0]).toMatchObject({
+      model: "model-b",
+      reasoningEffort: "high",
+    });
+    expect(updatedRequests[0]!.messages.some((message) => message.type === "tool_result"))
+      .toBe(true);
+  });
+
+  it("forwards maxOutputTokens to the streaming request", async () => {
+    const requests: StreamMessageParams[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params);
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    const engine = new QueryEngine(
+      client,
+      new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      {
+        resolveRequestConfiguration: async () => ({
+          revision: 0,
+          model: "m",
+          client,
+          maxOutputTokens: 32_000,
+        }),
+      },
+    );
+    for await (const _ of engine.submitMessage("hi")) { /* consume */ }
+    expect(requests[0]).toMatchObject({ maxTokens: 32_000 });
+  });
+});

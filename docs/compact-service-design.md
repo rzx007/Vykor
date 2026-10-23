@@ -1,9 +1,9 @@
 # CompactService 设计说明
 
-> 状态：当前 Runtime 上下文压缩说明；主实现以 `packages/core/src/engine/compact-service.ts` 为准。
+> 状态：当前 Runtime 上下文压缩说明；主实现以 `packages/core/src/engine/compaction/compact-service.ts` 为准。
 
 `CompactService` 是 Vykor 的上下文压缩服务。唯一实现位于
-`packages/core/src/engine/compact-service.ts`，由 `QueryEngine` 在每轮模型调用前自动触发，也可通过
+`packages/core/src/engine/compaction/compact-service.ts`，由 `QueryEngine` 在每轮模型调用前自动触发，也可通过
 `/compact` 手动触发。
 
 ---
@@ -270,9 +270,9 @@ LLM 摘要请求不会发送原始图片 payload，而是替换为：
 
 主要测试在：
 
-- `packages/core/src/engine/index.test.ts`
-- `packages/core/src/engine/compact-service-advanced.test.ts`
-- `packages/core/src/engine/integration.test.ts`
+- `packages/core/src/engine/__test__/index.test.ts`
+- `packages/core/src/engine/compaction/__test__/compact-service-advanced.test.ts`
+- `packages/core/src/engine/__test__/integration.test.ts`
 
 覆盖点包括：
 
