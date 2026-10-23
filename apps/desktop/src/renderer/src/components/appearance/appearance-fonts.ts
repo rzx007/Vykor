@@ -19,9 +19,10 @@ const CJK_MONO_FALLBACK = '"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans C
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
   {
     id: "system",
-    label: "系统默认",
+    label: "默认（微软雅黑）",
     source: "system-generic",
-    family: `-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", ${CJK_SANS_FALLBACK}`,
+    family:
+      '"Microsoft YaHei", "Microsoft YaHei UI", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif',
   },
   {
     id: "inter",
