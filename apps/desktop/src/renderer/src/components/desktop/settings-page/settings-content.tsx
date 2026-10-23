@@ -31,7 +31,7 @@ const pages: Record<string, () => React.JSX.Element> = {
   权限: PermissionSettings,
   个性化: PersonalizationSettings,
   键盘快捷键: KeyboardShortcutsSettings,
-  用量与费用: UsageSettings,
+  用量统计: UsageSettings,
   连接: ConnectionsSettings,
   终端: TerminalSettings,
   Git: GitSettings,
@@ -43,6 +43,7 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
   const target = useRouterState({ select: (state) => state.location.hash })
   useEffect(() => {
     if (!target) return
+    // eslint-disable-next-line prefer-const -- reveal 可能在 observer 赋值前调用，需先初始化为 undefined。
     let observer: MutationObserver | undefined
     const reveal = () => {
       const element = document.getElementById(target)

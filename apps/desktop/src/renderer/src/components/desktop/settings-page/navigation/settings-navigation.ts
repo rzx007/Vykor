@@ -3,7 +3,7 @@ import {
   BrainCircuit,
   CircleUserRound,
   Code2,
-  CreditCard,
+  ChartNoAxesCombined,
   GitBranch,
   HardDrive,
   Keyboard,
@@ -33,7 +33,7 @@ export const agentSettingsNavigation: SettingsNavigationItem[] = [
   { label: "模型供应商", slug: "providers", icon: BrainCircuit },
   { label: "权限", slug: "permissions", icon: ShieldCheck },
   { label: "个性化", slug: "personalization", icon: Sparkles },
-  { label: "用量与费用", slug: "billing", icon: CreditCard },
+  { label: "用量统计", slug: "billing", icon: ChartNoAxesCombined },
 ]
 
 export const integrationSettingsNavigation: SettingsNavigationItem[] = [
