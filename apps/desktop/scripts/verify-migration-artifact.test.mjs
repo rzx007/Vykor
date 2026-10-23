@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  isMigrationDocumentation,
   validateMigrationInventory,
   verifyPlatformInventories,
 } from "./verify-migration-artifact.mjs"
@@ -71,3 +72,18 @@ function inventory(platform, entries = migrations) {
     migrations: entries,
   }
 }
+
+test("excludes only directory README files from packaged migration entries", () => {
+  for (const path of ["README.md", "meta/README.md"]) {
+    assert.equal(isMigrationDocumentation(path), true)
+  }
+  for (const path of [...expected, "0009_extra.sql", "meta/0009_snapshot.json", "unexpected.txt"]) {
+    assert.equal(isMigrationDocumentation(path), false)
+  }
+  assert.throws(() => validateMigrationInventory(inventory("linux", [...migrations,
+    { path: "unexpected.txt", sha256: "f".repeat(64) }]), expected), /unexpected\.txt/)
+  const packaged = [...migrations, { path: "README.md", sha256: "f".repeat(64) },
+    { path: "meta/README.md", sha256: "f".repeat(64) }]
+  assert.deepEqual(validateMigrationInventory(inventory("linux", packaged.filter(
+    (entry) => !isMigrationDocumentation(entry.path))), expected).migrations, migrations)
+})

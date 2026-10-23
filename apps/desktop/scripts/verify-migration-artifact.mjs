@@ -64,6 +64,10 @@ export function verifyPlatformInventories(values, expectedPaths) {
   return { win: byPlatform.win, linux: byPlatform.linux }
 }
 
+export function isMigrationDocumentation(path) {
+  return path === "README.md" || path === "meta/README.md"
+}
+
 export async function writePackagedMigrationInventory(platform, expectedPaths) {
   if (platform !== "win" && platform !== "linux") {
     throw new Error(`expected platform win or linux, received ${String(platform)}`)
@@ -84,7 +88,7 @@ export async function writePackagedMigrationInventory(platform, expectedPaths) {
       return !stat.files && !stat.link
     })
     .map((entry) => ({ ...entry, path: entry.normalizedPath.slice(prefix.length) }))
-    .filter((entry) => entry.path)
+    .filter((entry) => entry.path && !isMigrationDocumentation(entry.path))
     .sort((left, right) => left.path.localeCompare(right.path))
   const migrations = packagedFiles.map(({ archiveKey, path }) => ({
     path,
