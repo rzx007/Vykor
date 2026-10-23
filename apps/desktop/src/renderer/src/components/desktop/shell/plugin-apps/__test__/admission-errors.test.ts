@@ -5,7 +5,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js"
 import { PluginAppController } from "../controller"
 import { installAppHandlers } from "../handlers"
-import { mount } from "./fixtures.test-support.ts"
+import { mount } from "./fixtures.test-support"
 
 it.each(["busy", "hidden", "hidden-during-prepare"] as const)("delivers a structured %s non-admission proof through the official AppBridge", async reason => {
   const invokeTool = vi.fn(async () => ({ code: "plugin_app_busy", notAccepted: true, requestId: "fixed" }))
