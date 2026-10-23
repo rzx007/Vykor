@@ -1,0 +1,121 @@
+name: Client SDK Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Explicit SDK version (x.y.z)
+        required: true
+        type: string
+      bootstrap_token:
+        description: First publish only - use the existing NPM_TOKEN repository secret
+        type: boolean
+        default: false
+      publish:
+        description: Publish after checks (disable to verify configuration only)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-sdk-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Check candidate version and registry state
+        env:
+          CLIENT_SDK_VERSION: ${{ inputs.version }}
+          BOOTSTRAP_TOKEN: ${{ inputs.bootstrap_token }}
+        run: |
+          node --input-type=module <<'JS'
+          import { parseReleaseArgs } from './packages/client/scripts/release.mjs';
+          const { version } = parseReleaseArgs([process.env.CLIENT_SDK_VERSION]);
+          const response = await fetch('https://registry.npmjs.org/@vykor%2fclient', { signal: AbortSignal.timeout(15000) });
+          if (response.status === 404) {
+            if (process.env.BOOTSTRAP_TOKEN !== 'true') throw new Error('First publication requires bootstrap_token and an NPM_TOKEN with @vykor publish access. Configure the trusted publisher after the package exists.');
+          } else {
+            if (!response.ok) throw new Error(`npm registry check failed: ${response.status}`);
+            const metadata = await response.json();
+            if (metadata.versions?.[version]) throw new Error(`@vykor/client@${version} already exists; verify the previous run instead of republishing.`);
+          }
+          console.log(`Candidate: @vykor/client@${version}`);
+          JS
+      - name: Verify bootstrap token identity
+        if: inputs.bootstrap_token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN" || { echo 'NPM_TOKEN is missing' >&2; exit 1; }
+          IDENTITY="$(npm whoami --registry=https://registry.npmjs.org --fetch-retries=0)"
+          test "$IDENTITY" = 'rzx100' || { echo "Unexpected npm identity: $IDENTITY" >&2; exit 1; }
+
+  verify:
+    needs: preflight
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @vykor/client check-types
+      - run: pnpm --filter @vykor/client test
+      - run: pnpm --filter @vykor/client test:pack
+
+  publish:
+    needs: verify
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@latest
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify and publish candidate SDK
+        env:
+          CLIENT_SDK_VERSION: ${{ inputs.version }}
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ inputs.bootstrap_token && secrets.NPM_TOKEN || '' }}
+        run: pnpm release:client -- "$CLIENT_SDK_VERSION"
+      - name: Verify public registry version
+        env:
+          CLIENT_SDK_VERSION: ${{ inputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          const version = process.env.CLIENT_SDK_VERSION;
+          for (let attempt = 0; attempt < 20; attempt++) {
+            const response = await fetch(`https://registry.npmjs.org/@vykor%2fclient/${version}`, { signal: AbortSignal.timeout(15000) });
+            if (response.ok) {
+              const metadata = await response.json();
+              if (metadata.name !== '@vykor/client' || metadata.version !== version || !metadata.dist?.integrity) throw new Error('Published metadata is incomplete or mismatched');
+              console.log(JSON.stringify({ name: metadata.name, version: metadata.version, integrity: metadata.dist.integrity, gitHead: metadata.gitHead }));
+              process.exit(0);
+            }
+            if (response.status !== 404 && response.status < 500) throw new Error(`Registry verification failed: ${response.status}`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+          throw new Error('Published package visibility is still unknown. Read the registry before retrying publication.');
+          JS

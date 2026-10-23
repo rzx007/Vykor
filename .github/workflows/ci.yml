@@ -33,6 +33,9 @@ jobs:
       - name: Type check
         run: pnpm check-types
 
+      - name: Verify standalone client package
+        run: pnpm --filter @vykor/client test:pack
+
       - name: Check architecture
         run: pnpm check:architecture
 

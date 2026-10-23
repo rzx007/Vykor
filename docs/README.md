@@ -183,6 +183,7 @@
 ## 第 4 层：开发和运维入口
 
 - 直接嵌入 Agent：[Vykor Agent SDK](./agent-sdk.md)
+- 通过网络或本机后台调用：[Vykor Client SDK](./client-sdk.md)
 - 使用 Workflow 文件 CLI：[Workflow CLI](./workflow-cli.md)
 - 使用 slash command：[Slash Commands](./slash-commands.md)
 - 远程连接 daemon：[Remote Attach](./remote-attach.md)

@@ -4,6 +4,33 @@
 
 客户端只负责展示与控制，不拥有 agent runtime。
 
+## 独立安装
+
+```bash
+npm install @vykor/client
+```
+
+发布包包含 ESM JavaScript 和完整类型声明，不要求安装本仓库或其他 `@vykor/*` 包。浏览器入口使用标准 fetch；Node.js 要求 >= 20.3。
+
+连接已启动的 daemon 时提供地址和 token。需要由程序启动本机 daemon 时，在调用方项目另装 CLI：
+
+```bash
+npm install @rzx/ohs
+```
+
+```ts
+import { VykorClient } from "@vykor/client";
+import { Service } from "@vykor/client/service";
+
+const endpoint = await Service.ensure();
+const client = new VykorClient(Service.clientOptions(endpoint));
+console.log(await client.sessions.list());
+```
+
+`Service.discover()` 只查找，`Service.ensure()` 在缺少服务时启动，`Service.stop(endpoint)` 只停止传入的同一个登记实例。进程控制仅从 `/service` 子入口导入。退出脚本通常只需结束订阅，后台可以继续供其他客户端使用。
+
+完整的任务提交、结果读取、权限、取消、远程连接与发布步骤见 [Client SDK 使用指南](../../docs/client-sdk.md)。SDK npm 版本独立管理；首次发布前可先在仓库运行 `pnpm --filter @vykor/client test:pack`，验证真实 tarball 的独立安装。
+
 ```text
 TUI / Web / Desktop
         |
@@ -103,7 +130,7 @@ for await (const update of syncEvents(client, { sessionId: session.id })) {
 - **长期入口：** `protocol` 和各命名 Resource，是业务调用的默认选择。
 - **高级入口：** Resource class 与 state/sync 工具。底层 transport 由 Client 内部持有，不作为实例 API 暴露。
 
-Client 在首次业务请求前读取 `/capabilities`，要求服务端精确使用协议版本 4；握手成功后，业务请求都携带 `x-vykor-protocol-version: 4`。`/health` 和 `/capabilities` 是仅有的握手例外。
+Client 在首次业务请求前读取 `/capabilities`，要求服务端使用相同的 `CURRENT_PROTOCOL_VERSION`（当前为 5）；握手成功后，业务请求都携带 `x-vykor-protocol-version`。`/health` 和 `/capabilities` 是仅有的握手例外。SDK npm 版本与 CLI 版本不要求相同，协议版本必须相同。
 
 ## 相关文档
 
@@ -127,9 +154,11 @@ pnpm test:client-browser
 | [src/configuration/](./src/configuration/README.md) | 处理客户端提交运行配置时使用的公共规则。 |
 | [src/protocol/](./src/protocol/README.md) | 在传输层之上统一处理协议请求和公共数据格式。 |
 | [src/resources/](./src/resources/README.md) | 按业务职责组织访问 daemon 的资源接口。 |
+| [src/service/](./src/service/README.md) | Node 专用的本机后台服务查找、启动和停止。 |
 | [src/state/](./src/state/README.md) | 把服务端快照与持续事件合并成可展示、可查询的会话状态。 |
 | [src/transport/](./src/transport/README.md) | 实现 HTTP 请求、协议握手和 SSE 事件连接。 |
 | [src/types/](./src/types/README.md) | 集中定义附件、扩展能力和状态同步使用的客户端类型。 |
+| [scripts/](./scripts/README.md) | 构建、独立安装验证和 SDK 发布。 |
 
 入口与流程：创建传输层和协议客户端，再构造资源接口；命令调用这些接口，状态模块结合快照和事件更新本地视图。
 
