@@ -16,6 +16,7 @@
 | [configuration/](./configuration/README.md) | 处理客户端提交运行配置时使用的公共规则。 |
 | [protocol/](./protocol/README.md) | 在传输层之上统一处理协议请求和公共数据格式。 |
 | [resources/](./resources/README.md) | 按业务职责组织访问 daemon 的资源接口。 |
+| [service/](./service/README.md) | Node 专用后台服务管理，从独立子入口使用。 |
 | [state/](./state/README.md) | 把服务端快照与持续事件合并成可展示、可查询的会话状态。 |
 | [transport/](./transport/README.md) | 实现 HTTP 请求、协议握手和 SSE 事件连接。 |
 | [types/](./types/README.md) | 集中定义附件、扩展能力和状态同步使用的客户端类型。 |

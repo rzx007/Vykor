@@ -32,7 +32,9 @@
     "check-types:server-client": "tsc -p tests/server-client/tsconfig.json",
     "test:server-client": "vitest run --config tests/server-client/vitest.config.ts",
     "test:agent-integration": "vitest run --config tests/agent-integration/vitest.config.ts",
-    "test:desktop-integration": "vitest run --config tests/desktop-integration/vitest.config.ts"
+    "test:desktop-integration": "vitest run --config tests/desktop-integration/vitest.config.ts",
+    "release:client": "node packages/client/scripts/release.mjs",
+    "release:client:dry": "node packages/client/scripts/release.mjs --dry-run"
   },
   "devDependencies": {
     "@modelcontextprotocol/ext-apps": "1.1.2",
