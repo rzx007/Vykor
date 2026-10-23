@@ -107,6 +107,25 @@ describe("marketplace browsing", () => {
     document.body.innerHTML = ""
     vi.unstubAllGlobals()
   })
+  it("uses an already installed plugin example after reopening the marketplace", async () => {
+    const plugin = {
+      identity: { id: entry.plugin.id, name: "demo", version: "2.0.0" },
+      enabled: true, installation: "installed", permissions: { missing: [] },
+      runtimeStatus: { state: "ready" },
+    }
+    api.snapshot.mockResolvedValue({ plugins: [plugin] })
+    api.marketplaceCatalog.mockResolvedValue({
+      entries: [{ ...entry, installedVersion: "2.0.0", updateAvailable: false }], sources,
+    })
+    const onUse = vi.fn(async () => undefined)
+    await act(async () => root.render(
+      <Marketplace query="" projectPath="D:/project" refreshRequest={0} notify={vi.fn()} onUse={onUse} />
+    ))
+    await click("查看 测试插件 详情")
+    await click("使用示例：整理资料")
+    expect(onUse).toHaveBeenCalledWith(plugin, entry.plugin.prompts[0]!.prompt)
+    expect(api.marketplaceConfirm).not.toHaveBeenCalled()
+  })
   async function render(query = "", refreshRequest = 0): Promise<void> {
     await act(async () =>
       root.render(

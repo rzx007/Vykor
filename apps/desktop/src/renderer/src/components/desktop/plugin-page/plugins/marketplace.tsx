@@ -46,6 +46,7 @@ export function Marketplace({
   const [selected, setSelected] = useState<MarketplaceEntry | null>(null)
   const [approval, setApproval] = useState<DesktopMarketplacePreview | null>(null)
   const [operation, setOperation] = useState<MarketplaceOperation | null>(null)
+  const [installedPlugins, setInstalledPlugins] = useState<DesktopPluginInfo[]>([])
   const [installed, setInstalled] = useState<DesktopPluginInfo | null>(null)
   const generation = useRef(0)
   const handle = useRef<string | null>(null)
@@ -75,8 +76,10 @@ export function Marketplace({
     const current = generation.current
     try {
       const result = await api.marketplaceCatalog({ cwd: projectPath, refresh })
+      const snapshot = await api.snapshot({ cwd: projectPath })
       if (current === generation.current) {
         setCatalog(result)
+        setInstalledPlugins(snapshot?.plugins ?? [])
         setError("")
       }
     } catch (cause) {
@@ -176,21 +179,21 @@ export function Marketplace({
     operationEntry.current?.sourceId === detail.sourceId &&
     operationEntry.current.plugin.id === detail.plugin.id
   )
+  const usablePlugin = installedPlugins.find((plugin) => plugin.identity.id === detail?.plugin.id) ??
+    (ownsReceipt && operation?.status === "installed" ? installed : null)
   const canUseInstalled =
-    ownsReceipt &&
-    operation?.status === "installed" &&
-    installed?.identity.id === detail?.plugin.id &&
-    installed?.identity.version === detail?.plugin.version &&
-    installed?.enabled &&
-    installed?.installation === "installed" &&
-    installed?.permissions.missing.length === 0 &&
-    installed?.runtimeStatus.state !== "failed" &&
+    usablePlugin?.identity.id === detail?.plugin.id &&
+    usablePlugin?.identity.version === detail?.plugin.version &&
+    usablePlugin?.enabled &&
+    usablePlugin?.installation === "installed" &&
+    usablePlugin?.permissions.missing.length === 0 &&
+    usablePlugin?.runtimeStatus.state !== "failed" &&
     detail?.installedSourceId === detail?.sourceId &&
     !detail?.updateAvailable
   function useInstalled(prompt = ""): void {
-    if (!canUseInstalled || !installed || !onUse) return
+    if (!canUseInstalled || !usablePlugin || !onUse) return
     void run(async () => {
-      await onUse(installed, prompt)
+      await onUse(usablePlugin, prompt)
     })
   }
   function action(entry: MarketplaceEntry, inDetail = false): React.JSX.Element {
@@ -308,7 +311,7 @@ export function Marketplace({
           starting={busy}
           onPrompt={canUseInstalled && onUse ? useInstalled : undefined}
           action={
-            canUseInstalled && installed && onUse ? (
+            canUseInstalled && usablePlugin && onUse ? (
               <Button shape="pill" disabled={busy} onClick={() => useInstalled()}>
                 新建对话使用
               </Button>

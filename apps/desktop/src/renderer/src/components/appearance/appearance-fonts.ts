@@ -9,26 +9,30 @@ export type AppearanceFontOption<Id extends string> = {
 }
 
 /**
- * 中文优先使用平台字体；只有本机缺字时才使用 Noto / 思源回退。
+ * 西文字体在前，中文平台字体及 Noto / 思源在后，通用字体最后兜底。
  * 与 assets/main.css 的 @theme 字体栈保持一致。
  */
 const CJK_SANS_FALLBACK =
-  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
-const CJK_MONO_FALLBACK = '"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", monospace'
+  '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans CN", sans-serif'
+const SYSTEM_SANS_FAMILY =
+  `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, ${CJK_SANS_FALLBACK}`
+const SYSTEM_MONO_FAMILY =
+  '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", "Courier New", monospace'
+const CJK_MONO_FALLBACK =
+  '"SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", "Courier New", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans CN", monospace'
 
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
   {
     id: "system",
-    label: "默认（微软雅黑）",
+    label: "默认（系统字体）",
     source: "system-generic",
-    family:
-      '"Microsoft YaHei", "Microsoft YaHei UI", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif',
+    family: SYSTEM_SANS_FAMILY,
   },
   {
     id: "inter",
     label: "Inter",
     source: "bundled",
-    family: `"Inter Variable", ${CJK_SANS_FALLBACK}`,
+    family: `"Inter Variable", ${SYSTEM_SANS_FAMILY}`,
   },
   {
     id: "segoe-ui",
@@ -40,6 +44,12 @@ export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
 ]
 
 export const CODE_FONT_OPTIONS: readonly AppearanceFontOption<CodeFontId>[] = [
+  {
+    id: "system",
+    label: "默认（系统等宽）",
+    source: "system-generic",
+    family: SYSTEM_MONO_FAMILY,
+  },
   {
     id: "geist-mono",
     label: "Geist Mono",

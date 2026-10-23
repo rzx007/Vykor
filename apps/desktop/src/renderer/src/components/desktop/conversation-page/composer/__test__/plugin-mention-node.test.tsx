@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { createEditor } from "lexical"
 import { expect, test } from "vitest"
-import { PluginMentionNode } from "../plugin-mention-node"
+import { PluginMentionIcons, PluginMentionNode } from "../plugin-mention-node"
 
 test("renders a plugin icon instead of @ and preserves the reference and icon", () => {
   const editor = createEditor({ nodes: [PluginMentionNode], onError: (error) => { throw error } })
@@ -24,6 +24,14 @@ test("renders a plugin icon instead of @ and preserves the reference and icon", 
       expect(restored.getTextContent()).toBe("@Reviewer")
       expect(restored.exportJSON().item).toEqual(item)
       expect(PluginMentionNode.clone(node).exportJSON().icon).toBe(icon)
+      const fromDraft = new PluginMentionNode(item)
+      const draftMarkup = renderToStaticMarkup(
+        <PluginMentionIcons.Provider value={new Map([[item.pluginId, icon]])}>
+          {fromDraft.decorate()}
+        </PluginMentionIcons.Provider>
+      )
+      expect(draftMarkup).toContain(icon)
+      expect(fromDraft.exportJSON().item).toEqual(item)
       const fallback = renderToStaticMarkup(new PluginMentionNode(item).decorate())
       expect(fallback).toContain("lucide-plug")
       expect(fallback).toContain('class="mr-1 inline-flex align-middle"')

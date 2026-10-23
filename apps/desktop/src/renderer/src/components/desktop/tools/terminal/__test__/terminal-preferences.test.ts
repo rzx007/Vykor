@@ -30,6 +30,6 @@ describe("terminal preferences", () => {
 
   it("follows the current code font while respecting terminal size and reduced motion", () => {
     expect(terminalDisplayOptions({ ...DEFAULT_TERMINAL_SETTINGS, fontSize: 17, scrollback: 12000, cursorStyle: "bar" }, "CodeFont, monospace", true)).toEqual({ fontFamily: "CodeFont, monospace", fontSize: 17, scrollback: 12000, cursorStyle: "bar", cursorBlink: false })
-    expect(terminalDisplayOptions({ ...DEFAULT_TERMINAL_SETTINGS, fontMode: "independent", fontFamily: "Consolas" }, "CodeFont", false)).toMatchObject({ cursorBlink: true, fontFamily: '"Consolas", "Geist Mono Variable", "Microsoft YaHei UI", monospace' })
+    expect(terminalDisplayOptions({ ...DEFAULT_TERMINAL_SETTINGS, fontMode: "independent", fontFamily: "Consolas" }, "CodeFont, monospace", false)).toMatchObject({ cursorBlink: true, fontFamily: '"Consolas", CodeFont, monospace' })
   })
 })

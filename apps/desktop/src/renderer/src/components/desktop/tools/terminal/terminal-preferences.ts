@@ -2,7 +2,7 @@ import type { TerminalSettings } from "@shared/terminal-settings-types"
 
 export function terminalDisplayOptions(settings: TerminalSettings, codeFont: string, reducedMotion: boolean) {
   return {
-    fontFamily: settings.fontMode === "code" ? codeFont : `"${settings.fontFamily.replace(/["\\]/g, "")}", "Geist Mono Variable", "Microsoft YaHei UI", monospace`,
+    fontFamily: settings.fontMode === "code" ? codeFont : `"${settings.fontFamily.replace(/["\\]/g, "")}", ${codeFont}`,
     fontSize: settings.fontSize,
     scrollback: settings.scrollback,
     cursorStyle: settings.cursorStyle,

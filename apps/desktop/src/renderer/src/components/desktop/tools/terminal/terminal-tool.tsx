@@ -233,14 +233,13 @@ export function TerminalTool({
     const terminal = new XTermTerminal({
       allowProposedApi: false,
       convertEol: true,
-      cursorBlink: true,
-      fontFamily: "Cascadia Mono, CaskaydiaCove Nerd Font, Consolas, Microsoft YaHei UI, monospace",
-      fontSize: 13,
+      ...terminalDisplayOptions(terminalSettingsRef.current,
+        getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace",
+        document.documentElement.dataset.reducedMotion === "true"),
       fontWeight: 400,
       fontWeightBold: 600,
       lineHeight: 1.22,
       minimumContrastRatio: 4.5,
-      scrollback: 5_000,
       theme: getXtermTheme(),
       windowsMode: window.navigator.userAgent.includes("Windows"),
     })

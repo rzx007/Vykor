@@ -16,7 +16,7 @@ import { ComposerSubmitPlugin } from "./composer-submit-plugin"
 import type { ComposerSkill } from "./composer-types"
 import { ResourceMentionNode } from "./resource-mention-node"
 import { SkillMentionNode } from "./skill-mention-node"
-import { PluginMentionNode } from "./plugin-mention-node"
+import { PluginMentionIcons, PluginMentionNode } from "./plugin-mention-node"
 import { openComposerTextMenu } from "../shared/conversation-text-actions"
 
 export type { ComposerSkill } from "./composer-types"
@@ -89,64 +89,70 @@ export function RichPromptInput({
     [id]
   )
 
+  const pluginIcons = useMemo(() => new Map(contextItems.flatMap((item) =>
+    item.action.kind === "plugin" && item.icon ? [[item.action.pluginId, item.icon] as const] : []
+  )), [contextItems])
+
   return (
-    <LexicalComposer key={id} initialConfig={initialConfig}>
-      <div
-        className={cn("relative", disabled && "pointer-events-none opacity-60")}
-        onCompositionStart={() => setIsComposing(true)}
-        onCompositionEnd={() => setIsComposing(false)}
-      >
-        <RichTextPlugin
-          contentEditable={
-            <ContentEditable
-              id={id}
-              aria-label="输入对话内容"
-              aria-multiline="true"
-              onContextMenu={(event) => void openComposerTextMenu(event, disabled)}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              className={cn(
-                "text-chat block max-h-44 min-h-18 w-full overflow-y-auto bg-transparent px-4 pt-3 break-words whitespace-pre-wrap text-foreground outline-none",
-                "**:text-inherit empty:before:content-none focus-visible:outline-none",
-                className
-              )}
-              style={{ minHeight }}
-            />
-          }
-          placeholder={
-            <RichPromptPlaceholder
-              placeholder={placeholder}
-              className={cn(className?.includes("pt-4") && "top-4")}
-            />
-          }
-          ErrorBoundary={LexicalErrorBoundary}
-        />
-        <HistoryPlugin />
-        <ComposerClipboardPlugin
-          onPasteFiles={onPasteFiles}
-          onPasteTextAttachment={onPasteTextAttachment}
-          skills={skills}
-        />
-        <SyncDraftPlugin value={value} onChange={onChange} />
-        <ComposerPickerPlugin
-          skills={skills}
-          commands={commands}
-          contextItems={contextItems}
-          contextPickerRequest={contextPickerRequest}
-          contextPickerOpen={contextPickerOpen}
-          onContextAction={onContextAction}
-          onContextPickerOpenChange={onContextPickerOpenChange}
-          onCommand={onCommand}
-          onCommandError={setCommandError}
-        />
-        {!isComposing && !disabled ? <ComposerSubmitPlugin onSubmit={onSubmit} /> : null}
-        {commandError ? (
-          <p role="alert" className="px-4 text-sm text-destructive">
-            {commandError}
-          </p>
-        ) : null}
-      </div>
-    </LexicalComposer>
+    <PluginMentionIcons.Provider value={pluginIcons}>
+      <LexicalComposer key={id} initialConfig={initialConfig}>
+        <div
+          className={cn("relative", disabled && "pointer-events-none opacity-60")}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
+        >
+          <RichTextPlugin
+            contentEditable={
+              <ContentEditable
+                id={id}
+                aria-label="输入对话内容"
+                aria-multiline="true"
+                onContextMenu={(event) => void openComposerTextMenu(event, disabled)}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                className={cn(
+                  "text-chat block max-h-44 min-h-18 w-full overflow-y-auto bg-transparent px-4 pt-3 break-words whitespace-pre-wrap text-foreground outline-none",
+                  "**:text-inherit empty:before:content-none focus-visible:outline-none",
+                  className
+                )}
+                style={{ minHeight }}
+              />
+            }
+            placeholder={
+              <RichPromptPlaceholder
+                placeholder={placeholder}
+                className={cn(className?.includes("pt-4") && "top-4")}
+              />
+            }
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          <HistoryPlugin />
+          <ComposerClipboardPlugin
+            onPasteFiles={onPasteFiles}
+            onPasteTextAttachment={onPasteTextAttachment}
+            skills={skills}
+          />
+          <SyncDraftPlugin value={value} onChange={onChange} />
+          <ComposerPickerPlugin
+            skills={skills}
+            commands={commands}
+            contextItems={contextItems}
+            contextPickerRequest={contextPickerRequest}
+            contextPickerOpen={contextPickerOpen}
+            onContextAction={onContextAction}
+            onContextPickerOpenChange={onContextPickerOpenChange}
+            onCommand={onCommand}
+            onCommandError={setCommandError}
+          />
+          {!isComposing && !disabled ? <ComposerSubmitPlugin onSubmit={onSubmit} /> : null}
+          {commandError ? (
+            <p role="alert" className="px-4 text-sm text-destructive">
+              {commandError}
+            </p>
+          ) : null}
+        </div>
+      </LexicalComposer>
+    </PluginMentionIcons.Provider>
   )
 }
 

@@ -10,7 +10,7 @@ vi.mock("@modelcontextprotocol/ext-apps/app-bridge", () => ({ AppBridge: class {
   setRequestHandler(schema: { shape: { method: { value: string } } }) { host.requests.push(schema.shape.method.value) }
   setHostContext(context: Record<string, unknown>) { host.contexts.push(context) }
 } }))
-afterEach(() => { host.contexts = []; host.requests = []; document.documentElement.classList.remove("dark") })
+afterEach(() => { host.contexts = []; host.requests = []; document.documentElement.classList.remove("dark"); document.documentElement.style.removeProperty("--font-sans"); document.documentElement.style.removeProperty("--font-mono") })
 it("records why SDK 1.1.2 cannot negotiate the optional namespace through its public capability schemas", () => {
   const caps = { experimental: { "vykor/widgetState": {} } }
   expect(McpUiHostCapabilitiesSchema.parse(caps).experimental).toEqual({})
@@ -23,7 +23,13 @@ it("does not advertise unassembled APIs or widgetState and keeps theme changes i
   expect(host.capabilities).not.toHaveProperty("updateModelContext")
   expect(host.capabilities).not.toHaveProperty("experimental")
   expect(host.requests).not.toContain("ui/set-widget-state")
-  document.documentElement.classList.add("dark"); transport.updateContext()
-  expect(host.contexts.at(-1)).toMatchObject({ theme: "dark" })
+  document.documentElement.classList.add("dark")
+  document.documentElement.style.setProperty("--font-sans", 'Arial, "PingFang SC", sans-serif')
+  document.documentElement.style.setProperty("--font-mono", '"JetBrains Mono", monospace')
+  transport.updateContext()
+  expect(host.contexts.at(-1)).toMatchObject({ theme: "dark", styles: { variables: {
+    "--font-sans": 'Arial, "PingFang SC", sans-serif',
+    "--font-mono": '"JetBrains Mono", monospace',
+  } } })
   expect(host.contexts.at(-1)).not.toHaveProperty("vykor/widgetState")
 })

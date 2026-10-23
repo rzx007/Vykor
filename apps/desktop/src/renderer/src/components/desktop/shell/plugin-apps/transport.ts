@@ -133,6 +133,7 @@ export function readHostContext(): McpUiHostContext {
     ["--color-text-secondary", "--muted-foreground"], ["--color-text-inverse", "--primary-foreground"],
     ["--color-text-danger", "--destructive"], ["--color-border-primary", "--border"],
     ["--color-ring-primary", "--ring"], ["--font-sans", "--font-sans"],
+    ["--font-mono", "--font-mono"],
   ] as const) {
     const value = style.getPropertyValue(source).trim()
     if (value) variables[target] = value

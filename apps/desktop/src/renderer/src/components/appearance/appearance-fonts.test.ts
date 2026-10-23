@@ -19,6 +19,7 @@ describe("appearance font registry", () => {
       expect.objectContaining({ id: "segoe-ui", source: "local" }),
     ])
     expect(CODE_FONT_OPTIONS).toEqual([
+      expect.objectContaining({ id: "system", source: "system-generic" }),
       expect.objectContaining({ id: "geist-mono", source: "bundled" }),
       expect.objectContaining({ id: "cascadia-code", source: "local" }),
       expect.objectContaining({ id: "cascadia-mono", source: "local" }),
@@ -45,12 +46,9 @@ describe("appearance font registry", () => {
     ])
   })
 
-  it("appends a deterministic CJK fallback to every font stack", () => {
-    for (const option of [...UI_FONT_OPTIONS, ...CODE_FONT_OPTIONS]) {
-      expect(option.family, option.id).toContain('"Microsoft YaHei UI"')
-    }
-
+  it("uses sans-serif and monospace fallbacks for their respective content", () => {
     for (const option of UI_FONT_OPTIONS) {
+      expect(option.family, option.id).toContain('"Microsoft YaHei UI"')
       expect(option.family, option.id).toContain('"PingFang SC"')
       expect(option.family, option.id).toMatch(/sans-serif$/)
     }

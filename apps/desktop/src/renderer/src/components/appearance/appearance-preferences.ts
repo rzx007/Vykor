@@ -7,7 +7,7 @@ export const GLASS_STRENGTH_RANGE = { min: 0, max: 100 } as const
 export type AppearanceTheme = "system" | "light" | "dark"
 export type AccentPresetId = "neutral" | "blue" | "violet" | "terracotta" | "green"
 export type UiFontId = "system" | "segoe-ui" | "inter"
-export type CodeFontId = "cascadia-code" | "cascadia-mono" | "geist-mono" | "consolas"
+export type CodeFontId = "system" | "cascadia-code" | "cascadia-mono" | "geist-mono" | "consolas"
 export type ReducedMotionPreference = "system" | "on" | "off"
 export type AppearancePalette = {
   background: `#${string}` | null
@@ -36,7 +36,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
     dark: { background: null, foreground: null },
   },
   uiFont: "system",
-  codeFont: "geist-mono",
+  codeFont: "system",
   uiFontSize: 14,
   codeFontSize: 14,
   reducedMotion: "system",
@@ -46,7 +46,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
 const THEMES = new Set<AppearanceTheme>(["system", "light", "dark"])
 const ACCENT_PRESETS = new Set<AccentPresetId>(["neutral", "blue", "violet", "terracotta", "green"])
 const UI_FONTS = new Set<UiFontId>(["system", "segoe-ui", "inter"])
-const CODE_FONTS = new Set<CodeFontId>(["cascadia-code", "cascadia-mono", "geist-mono", "consolas"])
+const CODE_FONTS = new Set<CodeFontId>(["system", "cascadia-code", "cascadia-mono", "geist-mono", "consolas"])
 const REDUCED_MOTION_VALUES = new Set<ReducedMotionPreference>(["system", "on", "off"])
 
 function createDefaultPreferences(): AppearancePreferences {

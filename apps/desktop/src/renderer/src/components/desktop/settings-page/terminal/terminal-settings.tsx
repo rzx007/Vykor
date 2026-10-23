@@ -37,6 +37,8 @@ import type { DesktopDetectedTerminalShell } from "@shared/terminal-types"
 import { TerminalTool, type TerminalPanelCommand } from "../../tools/terminal/terminal-tool"
 import { errorMessage } from "../shared/settings-error-message"
 
+const TERMINAL_FONT_OPTIONS = CODE_FONT_OPTIONS.filter((font) => font.source !== "system-generic")
+
 export function TerminalSettings() {
   const [snapshot, setSnapshot] = useState<TerminalSettingsSnapshot | null>(null)
   const [shells, setShells] = useState<DesktopDetectedTerminalShell[]>([])
@@ -453,7 +455,7 @@ export function TerminalSettings() {
             <SelectContent>
               <SelectGroup>
                 <SelectItem value="code">跟随代码字体</SelectItem>
-                {CODE_FONT_OPTIONS.map((font) => (
+                {TERMINAL_FONT_OPTIONS.map((font) => (
                   <SelectItem
                     key={font.id}
                     value={font.id === "geist-mono" ? "Geist Mono Variable" : font.label}
@@ -463,8 +465,8 @@ export function TerminalSettings() {
                     {fontAvailability[font.id] === false ? "（未安装）" : ""}
                   </SelectItem>
                 ))}
-                {!["Geist Mono Variable", "Cascadia Code", "Cascadia Mono", "Consolas"].includes(
-                  value.fontFamily
+                {!TERMINAL_FONT_OPTIONS.some(
+                  (font) => (font.id === "geist-mono" ? "Geist Mono Variable" : font.label) === value.fontFamily
                 ) && <SelectItem value={value.fontFamily}>{value.fontFamily}</SelectItem>}
               </SelectGroup>
             </SelectContent>

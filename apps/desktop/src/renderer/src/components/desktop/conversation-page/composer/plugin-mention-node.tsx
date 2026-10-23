@@ -1,6 +1,9 @@
+import { createContext, useContext } from "react"
 import { DecoratorNode, type NodeKey, type SerializedLexicalNode } from "lexical"
 import type { SessionUserInputItem } from "@shared/session-types"
 import { ExtensionIcon } from "../../plugin-page/shared/plugin-catalog"
+
+export const PluginMentionIcons = createContext<ReadonlyMap<string, string>>(new Map())
 
 type PluginReference = Extract<SessionUserInputItem, { type: "capability" }>
 type SerializedPluginMention = SerializedLexicalNode & { item: PluginReference; icon?: string }
@@ -51,10 +54,15 @@ export class PluginMentionNode extends DecoratorNode<React.JSX.Element> {
     return (
       <span className="align-baseline font-semibold !text-primary select-none">
         <span className="mr-1 inline-flex align-middle">
-          <ExtensionIcon name="plugin" src={this.__icon} size="inline" />
+          <PluginReferenceIcon item={this.__item} icon={this.__icon} />
         </span>
         <span>{this.__item.displayName}</span>
       </span>
     )
   }
+}
+
+function PluginReferenceIcon({ item, icon }: { item: PluginReference; icon?: string }): React.JSX.Element {
+  const icons = useContext(PluginMentionIcons)
+  return <ExtensionIcon name={item.displayName} src={icons.get(item.pluginId) ?? icon} size="inline" />
 }

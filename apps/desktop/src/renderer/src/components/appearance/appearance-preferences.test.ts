@@ -42,7 +42,7 @@ describe("appearance preferences", () => {
         dark: { background: null, foreground: null },
       },
       uiFont: "system",
-      codeFont: "geist-mono",
+      codeFont: "system",
       uiFontSize: 14,
       codeFontSize: 14,
       reducedMotion: "system",
@@ -50,7 +50,7 @@ describe("appearance preferences", () => {
     })
   })
 
-  it("parses every supported preference from version 1 JSON", () => {
+  it.each(["system", "geist-mono", "cascadia-code", "cascadia-mono", "consolas"] as const)("restores the saved %s code font from version 1 JSON", (codeFont) => {
     expect(
       parseAppearancePreferences(
         JSON.stringify({
@@ -58,7 +58,7 @@ describe("appearance preferences", () => {
           theme: "dark",
           accent: { kind: "custom", value: "#0a6aff" },
           uiFont: "inter",
-          codeFont: "consolas",
+          codeFont,
           uiFontSize: 16,
           codeFontSize: 15,
           reducedMotion: "on",
@@ -73,7 +73,7 @@ describe("appearance preferences", () => {
         dark: { background: null, foreground: null },
       },
       uiFont: "inter",
-      codeFont: "consolas",
+      codeFont,
       uiFontSize: 16,
       codeFontSize: 15,
       reducedMotion: "on",
@@ -104,7 +104,7 @@ describe("appearance preferences", () => {
         dark: { background: null, foreground: null },
       },
       uiFont: "system",
-      codeFont: "geist-mono",
+      codeFont: "system",
       uiFontSize: 14,
       codeFontSize: 14,
       reducedMotion: "system",
