@@ -166,11 +166,11 @@ pnpm release:client:dry -- 0.1.0
 
 正式发布可手动运行 `pnpm release:client -- 0.1.0`，或触发 GitHub Actions 的 **Client SDK Release**，填写明确的 `x.y.z`。脚本临时设置候选版本，先构建并验证该版本安装包，再发布；无论成功失败都恢复本地 manifest。验证失败不上传，预演带 `--dry-run` 不上传。
 
-工作流先在 Windows/Linux、Node 20/24 验证，再通过 npm Trusted Publishing 发布。首次使用前，需要在 npm 的 `@vykor/client` 包设置中配置对应仓库与工作流文件 `client-sdk-release.yml`；首次包创建可用已登录账号运行本地发布。仓库内不会自动创建 npm 授权。已发布的版本不可覆盖，修复时使用新版本。
+工作流先在 Windows/Linux、Node 20/24 验证，再发布。默认使用 SDK 专属 token，也支持 npm Trusted Publishing（由 GitHub 临时证明工作流身份，不保存长期发布 token）。首次包创建必须使用有发布权限的 token 或本机登录；包存在后才能配置工作流信任。已发布的版本不可覆盖，修复时使用新版本。
 
-首次也通过 GitHub Actions 发布时，先确保 npm `vykor` 组织已经创建，仓库的 `NPM_TOKEN` secret 属于账号 `rzx100`，并具有该作用域的读写权限及 Bypass 2FA。先设置 `bootstrap_token=true`、`publish=false` 运行一次，检查 token 身份和所有 SDK 检查；通过后以 `publish=true` 发出首版，实际上传时由 npm 验证发布权限。token 不需要额外的组织管理权限，工作流不会打印 token。
+首次也通过 GitHub Actions 发布时，先确保 npm `vykor` 组织已经创建，仓库的 `CLIENT_SDK_NPM_TOKEN` secret 属于账号 `rzx100`，并具有 `@vykor` 作用域的读写权限及 Bypass 2FA。SDK 单独使用这个 secret，不改 CLI 使用的 `NPM_TOKEN`。先保持 `bootstrap_token=true`、设置 `publish=false` 运行一次，检查 token 身份和所有 SDK 检查；通过后以 `publish=true` 发出首版，实际上传时由 npm 验证发布权限。token 不需要额外的组织管理权限，工作流不会打印 token。只检查 SDK 代码、暂不检查凭据时，同时设置 `bootstrap_token=false`、`publish=false`。
 
-包创建后，可用 `npm trust github @vykor/client --repository rzx007/Vykor --file client-sdk-release.yml --allow-publish --yes` 配置工作流信任，按 npm 要求完成二次验证；使用 `npm trust list @vykor/client` 回读。之后保持 `bootstrap_token=false`，发布使用 GitHub 临时凭据，不向该步骤提供 `NPM_TOKEN`。发布后工作流会回读公开版本和摘要；同一版本已存在时停止，避免重复上传。
+准备下一次实际发布时，可用 `npm trust github @vykor/client --repository rzx007/Vykor --file client-sdk-release.yml --allow-publish --yes` 配置工作流信任，按 npm 要求完成二次验证；使用 `npm trust list @vykor/client` 回读。新信任配置必须在两天内成功发布一次，否则会过期，因此不要在没有待发版本时提前配置。配置后将 `bootstrap_token=false`，立即通过工作流发布这个新版本；该步骤不再接收长期 token。验证成功后可撤销 SDK 专属 token，并把工作流的 `bootstrap_token` 默认值改为 `false`。发布后工作流会回读公开版本和摘要；同一版本已存在时停止，避免重复上传。具体规则见 [npm Trusted Publishing 文档](https://docs.npmjs.com/trusted-publishers/)。
 
 ## 维护入口
 

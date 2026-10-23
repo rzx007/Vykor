@@ -8,9 +8,9 @@ on:
         required: true
         type: string
       bootstrap_token:
-        description: First publish only - use the existing NPM_TOKEN repository secret
+        description: Use CLIENT_SDK_NPM_TOKEN (disable after configuring trusted publishing)
         type: boolean
-        default: false
+        default: true
       publish:
         description: Publish after checks (disable to verify configuration only)
         type: boolean
@@ -36,13 +36,14 @@ jobs:
         env:
           CLIENT_SDK_VERSION: ${{ inputs.version }}
           BOOTSTRAP_TOKEN: ${{ inputs.bootstrap_token }}
+          PUBLISH: ${{ inputs.publish }}
         run: |
           node --input-type=module <<'JS'
           import { parseReleaseArgs } from './packages/client/scripts/release.mjs';
           const { version } = parseReleaseArgs([process.env.CLIENT_SDK_VERSION]);
           const response = await fetch('https://registry.npmjs.org/@vykor%2fclient', { signal: AbortSignal.timeout(15000) });
           if (response.status === 404) {
-            if (process.env.BOOTSTRAP_TOKEN !== 'true') throw new Error('First publication requires bootstrap_token and an NPM_TOKEN with @vykor publish access. Configure the trusted publisher after the package exists.');
+            if (process.env.PUBLISH === 'true' && process.env.BOOTSTRAP_TOKEN !== 'true') throw new Error('First publication requires bootstrap_token and CLIENT_SDK_NPM_TOKEN with @vykor publish access. Configure the trusted publisher after the package exists.');
           } else {
             if (!response.ok) throw new Error(`npm registry check failed: ${response.status}`);
             const metadata = await response.json();
@@ -53,9 +54,9 @@ jobs:
       - name: Verify bootstrap token identity
         if: inputs.bootstrap_token
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.CLIENT_SDK_NPM_TOKEN }}
         run: |
-          test -n "$NODE_AUTH_TOKEN" || { echo 'NPM_TOKEN is missing' >&2; exit 1; }
+          test -n "$NODE_AUTH_TOKEN" || { echo 'CLIENT_SDK_NPM_TOKEN is missing' >&2; exit 1; }
           IDENTITY="$(npm whoami --registry=https://registry.npmjs.org --fetch-retries=0)"
           test "$IDENTITY" = 'rzx100' || { echo "Unexpected npm identity: $IDENTITY" >&2; exit 1; }
 
@@ -98,7 +99,7 @@ jobs:
         env:
           CLIENT_SDK_VERSION: ${{ inputs.version }}
           NPM_CONFIG_PROVENANCE: "true"
-          NODE_AUTH_TOKEN: ${{ inputs.bootstrap_token && secrets.NPM_TOKEN || '' }}
+          NODE_AUTH_TOKEN: ${{ inputs.bootstrap_token && secrets.CLIENT_SDK_NPM_TOKEN || '' }}
         run: pnpm release:client -- "$CLIENT_SDK_VERSION"
       - name: Verify public registry version
         env:
