@@ -38,6 +38,7 @@
     "release:client:dry": "node packages/client/scripts/release.mjs --dry-run"
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "1.1.2",
     "@types/node": "catalog:",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/agent-runtime": "workspace:*",
