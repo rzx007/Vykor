@@ -4289,13 +4289,13 @@
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
-      "path": "packages/skills/src/create-plugin-distribution.test.ts",
+      "path": "packages/skills/src/__test__/create-plugin-distribution.test.ts",
       "line": 66,
       "text": "  expect(result.metadata.ui).toBeUndefined();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/skills/src/create-plugin-distribution.test.ts",
+      "path": "packages/skills/src/__test__/create-plugin-distribution.test.ts",
       "line": 84,
       "text": "  expect(panel).not.toMatch(/VykorPluginUi|requestAction|requestConversation/);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."

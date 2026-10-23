@@ -51,7 +51,7 @@ await agent.close();
 | AgentDefinition / TeamRegistry | `packages/coordinator/src/definitions/`、`src/teams/` | 唯一角色类型与纯解析；团队由 Node 根树创建实例 |
 | WorkflowHost | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 持有活动 Workflow，负责取消、worker 收尾与保存终态 |
 | 默认工具接线 / 本地 Jobs | `packages/agent-runtime/src/node/tools/`、`src/node/jobs/` | 创建宿主能力并注入工具；Jobs 复用 Host 的 Workflow 视图 |
-| execution contracts | `packages/agent-contracts/src/execution.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
+| execution contracts | `packages/agent-contracts/src/execution/execution.ts` | 事件、回调、handle、内部执行上下文的类型约定 |
 
 ## 创建流程
 

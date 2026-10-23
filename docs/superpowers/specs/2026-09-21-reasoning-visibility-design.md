@@ -26,7 +26,7 @@
 
 - 桌面端已经具备渲染能力：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts:80-83` 把 `reasoning` part 生成独立单元；`message/assistant-message.tsx:91-100` 渲染成 `<details>` 折叠块，标题是"思考过程"；`transcript/transcript-visibility.ts:5-12` 用 `showReasoning === false` 过滤，默认显示。
 - 但没有任何代码路径会创建这种 part：
-  - `packages/agent-contracts/src/events.ts:5-54` 的 `StreamEvent` 只有 text/tool/error/usage/complete，没有 reasoning 事件。
+  - `packages/agent-contracts/src/execution/events.ts:5-54` 的 `StreamEvent` 只有 text/tool/error/usage/complete，没有 reasoning 事件。
   - `packages/server/src/application/session/transcript-projection.ts` 只产出 `text` / `tool` / `attachment` / `error` 四类 part。
   - `packages/client/src/state/reducer.ts:281` 硬编码 `field === "text"`，`reasoning` 增量被直接丢弃。
   - `packages/protocol/src/session/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 字面量只有 `"text"`。
@@ -80,7 +80,7 @@
 
 ### core 事件与消息
 
-`packages/agent-contracts/src/events.ts` 新增：
+`packages/agent-contracts/src/execution/events.ts` 新增：
 
 ```ts
 export interface ReasoningDeltaEvent {

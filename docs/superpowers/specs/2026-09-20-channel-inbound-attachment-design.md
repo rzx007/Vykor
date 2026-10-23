@@ -5,7 +5,7 @@
 
 ## 1. 背景与目标
 
-现状：飞书机器人收到图片/文件消息时，`FeishuAdapter` 只解出平台标识（`image_key`/`file_key`），写进 `ChannelAttachment.externalId`，**不下载字节**（`packages/channels/src/impl/feishu.ts:156-185`）。因此：
+现状：飞书机器人收到图片/文件消息时，`FeishuAdapter` 只解出平台标识（`image_key`/`file_key`），写进 `ChannelAttachment.externalId`，**不下载字节**（`packages/channels/src/adapters/feishu/feishu.ts:156-185`）。因此：
 
 - 图片消息的正文是空字符串，Agent 只看到"有一条空消息"，看不到图。
 - 文件消息同理，Agent 不知道文件里是什么。
@@ -47,7 +47,7 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 
 三元组来源：
 
-- `message_id` = `DurableChannelMessageInput.externalMessageId`（`packages/channels/src/impl/feishu.ts:227` 已保存原始 `message_id`）。
+- `message_id` = `DurableChannelMessageInput.externalMessageId`（`packages/channels/src/adapters/feishu/feishu.ts:227` 已保存原始 `message_id`）。
 - `file_key` = `attachment.externalId`（`feishu.ts:164`/`179`）。
 - `type` = `attachment.type`，只接受 `image`/`file`。
 
@@ -122,11 +122,11 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 
 | 文件 | 动作 |
 |---|---|
-| `packages/channels/src/impl/feishu.ts` | 扩展 `LarkClient`（`messageResource.get`）；新增 `downloadAttachment` |
+| `packages/channels/src/adapters/feishu/feishu.ts` | 扩展 `LarkClient`（`messageResource.get`）；新增 `downloadAttachment` |
 | `packages/server/src/application/channel/channel-application-service.ts` | context 加 `attachments` + `downloadChannelAttachment`；`handleMessageInLane` 下载/导入/传入 |
 | `packages/server/src/daemon/channel-runtime-service.ts` | 下载器字段 + 赋值/清空 + 公开方法 |
 | `packages/server/src/application/daemon-application.ts` | 注入 `attachments` 与下载回调 |
-| `packages/channels/src/impl/__test__/feishu.test.ts` | 下载测试 |
+| `packages/channels/src/adapters/feishu/__test__/feishu.test.ts` | 下载测试 |
 | `packages/server/src/application/channel/__test__/channel-application-service.test.ts` | 导入/幂等/失败测试 |
 | `packages/server/src/daemon/channel-runtime-service.test.ts` | 下载器生命周期测试 |
 | `docs/channels-flow.md` | 补入站附件说明 |

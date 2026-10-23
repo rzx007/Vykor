@@ -264,7 +264,7 @@ node apps/desktop/scripts/verify-workspace-boundaries.mjs
 
 - skills/create-plugin/SKILL.md、README.md、references/native-plugin.md、plugin-ui.md、verification.md 和 docs/native-plugin-authoring.md。
 - 两份 examples/plugins/text-inspector 与 skills/create-plugin/assets/text-inspector 的 UI manifest、tools UI proposal、panel 源码/模板/HTML、SDK/stylesheet 和 build-ui.mjs。
-- packages/skills/src/create-plugin-distribution.test.ts、Desktop text-inspector-example.test.ts；既有 Electron UI harness 的源码与断言。
+- packages/skills/src/__test__/create-plugin-distribution.test.ts、Desktop text-inspector-example.test.ts；既有 Electron UI harness 的源码与断言。
 - 完工验证/复盘记录、README 索引；旧完整规格仅加指向现行设计的提示，不改历史交付事实。
 
 - [ ] Skill 编辑前用未更新 Skill 做独立作者任务基线：在临时目录制作一个固定 panel、读取选择并主动交给助手的 Native 插件，不安装/link、不调用网络。记录是否生成旧 surfaces/schema、openSidebar 或误把 UI action 当模型消息；这是本次指南更新的失败证据，不做源文本 grep 测试。

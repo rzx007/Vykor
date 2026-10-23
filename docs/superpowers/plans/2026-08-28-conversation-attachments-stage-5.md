@@ -49,7 +49,7 @@
 **交付物：** 不支持图片的主 Agent 收到 OCR 资源提示并能真实调用本地工具；工具被过滤时 Provider 零调用。
 
 **文件：**
-- 修改：`packages/agent-contracts/src/tools.ts`、`events.ts`、`runtime.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`、`events.ts`、`runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`、`default-runtime.ts`、`kernel.ts`、`child-agent.ts`
 - 修改：`packages/tools/src/registry.ts`

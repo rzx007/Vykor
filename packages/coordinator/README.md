@@ -1,6 +1,6 @@
 # @vykor/coordinator
 
-多 Agent 协调：内置 / 用户 / 插件 Agent 定义、Coordinator mode prompt，以及**硬调度器**（`WorkflowSpec` / `runWorkflow` / 持久化 store）。
+协调多个 Agent：解析角色定义、生成协调模式提示词、管理团队，并按任务依赖和并发上限执行工作流。
 
 ## 文档
 
@@ -14,21 +14,17 @@
 
 | 模块 | 职责 |
 |------|------|
-| `workflow/` | Workflow 的数据结构、校验、执行、快照与持久化 |
-| `workflow/model.ts` | `WorkflowSpec`、plan、snapshot、notification、reconciliation 等核心类型 |
-| `workflow/validation.ts` | DAG、三种 mode、依赖、writeScope 与 spec 校验 |
-| `workflow/budget.ts` | budget preset、hard/soft limit、usage 汇总 |
-| `workflow/runner.ts` | 纯内存调度循环：ready queue、并发、失败策略、budget、blocked task |
-| `workflow/task-runner.ts` | 单 task 执行、retry、timeout、progress budget |
-| `workflow/snapshot.ts` | run id、snapshot、summary、snapshot/result 转换 |
-| `workflow/notification.ts` | `<workflow-notification>` formatter/parser |
-| `workflow/reconciliation.ts` | changed-file / write-scope overlap 检测、summary、follow-up spec |
-| `workflow/store.ts` | `.vykor/workflows` 快照 + events；resume/cancel/list |
-| `coordinator-mode.ts` | `getCoordinatorTools` / prompt / user context |
-| `agent-loader.ts` / `agent-definitions.ts` | frontmatter 加载与 builtin 合并 |
-| `index.ts` | 导出 + `COORDINATOR_SYSTEM_PROMPT` |
+| [src](src/README.md) | 公开导出和分类导航 |
+| [src/runtime](src/runtime/README.md) | 协调模式开关、提示词和任务通知 |
+| [src/definitions](src/definitions/README.md) | 角色类型、Markdown 头部解析和内置定义 |
+| [src/teams](src/teams/README.md) | 团队、成员和团队消息的内存注册表 |
+| [src/workflow](src/workflow/README.md) | 工作流校验、调度、预算、快照和持久化接口 |
 
-真实 worker 执行由 `@vykor/agent-runtime/node/workflow` 的宿主和 runner 负责，`@vykor/tools` 的 Workflow 工具只适配调用；本包负责纯调度和团队数据接口。
+公开入口为 [`src/index.ts`](src/index.ts)，对应 `@vykor/coordinator`。还提供 `/coordinator-mode`、`/definitions`、`/teams`、`/workflow` 四个子入口，映射见 [`package.json`](package.json)。
+
+调用方提供 `WorkflowSpec` 和单任务执行函数，`runWorkflow()` 校验依赖后挑选可执行任务，按并发、写入范围和预算限制执行，再返回结果并发出快照、事件回调。运行中的队列和结果保存在调度函数内存中，团队由 `TeamRegistry` 保存。快照与事件的长期保存通过 `WorkflowRunRepository` 交给宿主，本包不实现磁盘 store。
+
+真实 worker 执行由 `@vykor/agent-runtime/node/workflow` 的宿主和 runner 负责，`@vykor/tools` 的 Workflow 工具负责适配调用。新增代码按上表职责放置，测试放在对应分类的同层 `__test__/`；跨分类测试放在 [`src/__test__`](src/__test__)。
 
 ## 测试
 

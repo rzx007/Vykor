@@ -148,7 +148,7 @@ pnpm --filter @vykor/agent-contracts --filter @vykor/core --filter @vykor/api ch
 
 - 新建：`packages/host-config/` 的 package/tsconfig 和 `src/settings.ts`、`paths.ts`、`permissions.ts`、`environment.ts`、`hooks.ts`、`mcp-config.ts`、`mcp-credentials.ts`、`settings-mutation.ts`、`atomic-json-write.ts`、`git.ts`、`tool-configuration.ts`、入口与测试。
 - 迁移：core `src/config/`、`types/settings.ts`、`types/mcp-oauth.ts` 中配置部分；Hook 配置数据类型；M02–M04。
-- 新建：`packages/mcp/src/runtime-coordination.ts`，承接 ActiveMcpRuntimeHandle、Registry/Coordinator 等活体接口与当前默认 unavailable 实现。
+- 新建：`packages/mcp/src/connections/runtime-coordination.ts`，承接 ActiveMcpRuntimeHandle、Registry/Coordinator 等活体接口与当前默认 unavailable 实现。
 - 修改：api/auth/permissions/hooks/sandbox/mcp/plugins/prompts/services/tools/terminal-node/agent-runtime/server/apps 的相关导入、package.json 和锁文件。
 
 **接口：** 配置函数保留原参数、默认值、返回类型和文件路径。ApprovalMode/WorkMode 的跨端规范继续在 protocol；Settings 属于 host-config。请求超时默认值属于 api，重试算法属于 core。

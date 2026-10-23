@@ -13,7 +13,7 @@
 ## 文件职责
 
 - 修改 `packages/skills/src/index.ts`：提供标准目录函数、多个 user 目录加载和规范化去重。
-- 修改 `packages/skills/src/index.test.ts`：验证目录生成、优先级、重复目录和 project 排除。
+- 修改 `packages/skills/src/__test__/index.test.ts`：验证目录生成、优先级、重复目录和 project 排除。
 - 修改 `packages/agent-runtime/src/node/plugins/extensions.ts`：Session 技能发现接入标准目录。
 - 修改 `packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`：验证 runtime snapshot 调用标准目录。
 - 修改 `packages/tools/src/meta/skill.ts`：Skill/ListSkills 文件系统刷新接入标准目录。
@@ -32,7 +32,7 @@
 **文件：**
 
 - 修改：`packages/skills/src/index.ts`
-- 测试：`packages/skills/src/index.test.ts`
+- 测试：`packages/skills/src/__test__/index.test.ts`
 
 - [ ] **步骤 1：编写标准目录失败测试**
 
@@ -127,7 +127,7 @@ pnpm --filter @vykor/skills test
 - [ ] **步骤 7：提交目录基础能力**
 
 ```powershell
-git add -- packages/skills/src/index.ts packages/skills/src/index.test.ts
+git add -- packages/skills/src/index.ts packages/skills/src/__test__/index.test.ts
 git commit -m "feat(skills): discover standard global skill directories"
 ```
 

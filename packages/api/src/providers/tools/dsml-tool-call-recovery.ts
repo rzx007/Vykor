@@ -1,0 +1,444 @@
+import type { ToolGenerationProgressEvent } from "@vykor/agent-contracts";
+import { isFileTool, safeFilePath } from "./tool-path-summary.js";
+import { streamIncompleteFailure } from "../../errors/index.js";
+
+export interface RecoveredToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface DsmlScanResult {
+  visible: string;
+  toolCalls: RecoveredToolCall[];
+  progress: ToolGenerationProgressEvent[];
+}
+
+export interface DsmlRecoveryScanner {
+  push(chunk: string): DsmlScanResult;
+  flush(): DsmlScanResult;
+}
+
+const TOOL_CALLS_KEYWORDS = ["tool_calls", "toolcalls", "tool-calls", "calls"] as const;
+
+// Safety valve: never hold more than this many characters waiting for a block
+// to close. Beyond it the held text is released as plain content.
+const MAX_HELD_CHARS = 4_000_000;
+
+const INVOKE_CLOSE_RE = /<\/(?:(?:[|｜▁\s]*DSML[|｜▁\s]*)?invoke|[|｜▁\s]*DSML[|｜▁\s]*(?:tool[_\-]?calls|toolcalls|calls))[|｜▁\s]*>/i;
+const TRAILING_WRAPPER_CLOSE_RE = /<\/[^<>]*(?:tool[_\-]?calls|toolcalls|calls)[^<>]*>/i;
+const PARAM_TAG_RE = /<(?![\/])[^<>]*?parameter[^<>]*>/i;
+const PARAM_CLOSE_RE = /<\/[^<>]*?parameter[^<>]*>/i;
+const PARAM_BARE_CLOSE_RE = /<\/[|｜▁\s]*DSML[|｜▁\s]*>/i;
+
+function isFillerChar(ch: string): boolean {
+  return ch === "|" || ch === "｜" || ch === "▁" || /\s/.test(ch);
+}
+
+function isWhitespaceChar(ch: string): boolean {
+  return /\s/.test(ch);
+}
+
+function skipFiller(s: string, i: number): number {
+  let pos = i;
+  while (pos < s.length && isFillerChar(s[pos]!)) pos++;
+  return pos;
+}
+
+function matchKeyword(s: string, i: number, keyword: string): number | "prefix" | "no" {
+  for (let k = 0; k < keyword.length; k++) {
+    const index = i + k;
+    if (index >= s.length) return "prefix";
+    if (s[index]!.toLowerCase() !== keyword[k]) return "no";
+  }
+  return i + keyword.length;
+}
+
+function matchFirstKeyword(
+  s: string,
+  i: number,
+  keywords: readonly string[],
+): { end: number; keyword: string } | "prefix" | "no" {
+  let sawPrefix = false;
+  for (const keyword of keywords) {
+    const result = matchKeyword(s, i, keyword);
+    if (result === "prefix") {
+      sawPrefix = true;
+      continue;
+    }
+    if (result !== "no") return { end: result, keyword };
+  }
+  return sawPrefix ? "prefix" : "no";
+}
+
+type InvokeOpenRead =
+  | { kind: "no" }
+  | { kind: "prefix" }
+  | { kind: "open"; end: number; name: string };
+
+/**
+ * Read a DSML invoke open tag starting at `start`.
+ *
+ * Tolerates the degraded shapes DeepSeek V4 emits at long context: fullwidth
+ * or ASCII bar fillers, a missing `<｜DSML｜tool_calls>` wrapper, misspelled
+ * wrapper names (including a bare `calls`), a missing invoke close tag, and
+ * compact markup without newlines.
+ */
+function readInvokeOpen(s: string, start: number): InvokeOpenRead {
+  let i = start + 1;
+  i = skipFiller(s, i);
+
+  const direct = matchFirstKeyword(s, i, ["invoke"]);
+  if (direct === "prefix") return { kind: "prefix" };
+  if (direct !== "no") return finishInvokeOpen(s, direct.end);
+
+  const dsml = matchKeyword(s, i, "dsml");
+  if (dsml === "prefix") return { kind: "prefix" };
+  if (dsml === "no") return { kind: "no" };
+
+  i = skipFiller(s, dsml);
+  const afterDsml = matchFirstKeyword(s, i, ["invoke", ...TOOL_CALLS_KEYWORDS]);
+  if (afterDsml === "prefix") return { kind: "prefix" };
+  if (afterDsml === "no") return { kind: "no" };
+  if (afterDsml.keyword === "invoke") return finishInvokeOpen(s, afterDsml.end);
+
+  i = skipFiller(s, afterDsml.end);
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== ">") return { kind: "no" };
+  i = skipFiller(s, i + 1);
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== "<") return { kind: "no" };
+  i = skipFiller(s, i + 1);
+
+  const innerDsml = matchKeyword(s, i, "dsml");
+  if (innerDsml === "prefix") return { kind: "prefix" };
+  if (innerDsml !== "no") i = skipFiller(s, innerDsml);
+
+  const inner = matchKeyword(s, i, "invoke");
+  if (inner === "prefix") return { kind: "prefix" };
+  if (inner === "no") return { kind: "no" };
+  return finishInvokeOpen(s, inner);
+}
+
+function finishInvokeOpen(s: string, i: number): InvokeOpenRead {
+  if (i >= s.length) return { kind: "prefix" };
+  if (!isWhitespaceChar(s[i]!)) return { kind: "no" };
+  i = skipFiller(s, i + 1);
+
+  const nameKeyword = matchKeyword(s, i, "name");
+  if (nameKeyword === "prefix") return { kind: "prefix" };
+  if (nameKeyword === "no") return { kind: "no" };
+  i = skipFiller(s, nameKeyword);
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== "=") return { kind: "no" };
+  i = skipFiller(s, i + 1);
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== '"') return { kind: "no" };
+
+  const nameStart = i + 1;
+  let cursor = nameStart;
+  while (cursor < s.length && s[cursor] !== '"' && s[cursor] !== "<" && s[cursor] !== ">") {
+    cursor++;
+  }
+  if (cursor >= s.length) return { kind: "prefix" };
+  if (s[cursor] !== '"') return { kind: "no" };
+  const name = s.slice(nameStart, cursor).trim();
+
+  cursor++;
+  while (cursor < s.length && s[cursor] !== ">" && s[cursor] !== "<") cursor++;
+  if (cursor >= s.length) return { kind: "prefix" };
+  if (s[cursor] !== ">") return { kind: "no" };
+  return { kind: "open", end: cursor + 1, name };
+}
+
+function readTrailingWrapperClose(s: string, start: number): InvokeOpenRead {
+  let i = start;
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] === "\\") {
+    i++;
+    if (i >= s.length) return { kind: "prefix" };
+  }
+  if (s[i] !== "<") return { kind: "no" };
+  i++;
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== "/") return { kind: "no" };
+  i = skipFiller(s, i + 1);
+
+  const dsml = matchKeyword(s, i, "dsml");
+  if (dsml === "prefix") return { kind: "prefix" };
+  if (dsml === "no") return { kind: "no" };
+  i = skipFiller(s, dsml);
+
+  const wrapper = matchFirstKeyword(s, i, TOOL_CALLS_KEYWORDS);
+  if (wrapper === "prefix") return { kind: "prefix" };
+  if (wrapper === "no") return { kind: "no" };
+  i = skipFiller(s, wrapper.end);
+  if (i >= s.length) return { kind: "prefix" };
+  if (s[i] !== ">") return { kind: "no" };
+  return { kind: "open", end: i + 1, name: "tool_calls" };
+}
+
+function extractAttribute(tag: string, attribute: string): string | undefined {
+  const pattern = new RegExp(`\\b${attribute}\\s*=\\s*"([^"]*)"`, "i");
+  return pattern.exec(tag)?.[1];
+}
+
+function matchIndex(pattern: RegExp, text: string): number {
+  return pattern.exec(text)?.index ?? -1;
+}
+
+function coerceParameterValue(raw: string, tag: string): unknown {
+  const value = raw.trim();
+  const stringFlag = extractAttribute(tag, "string");
+  if (stringFlag?.toLowerCase() === "true") return value;
+  if (!value) return "";
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function parseParameters(body: string): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  let cursor = 0;
+
+  while (cursor < body.length) {
+    const open = PARAM_TAG_RE.exec(body.slice(cursor));
+    if (!open) break;
+    const tag = open[0];
+    const tagEnd = cursor + open.index + tag.length;
+    const rest = body.slice(tagEnd);
+
+    const boundaries = [
+      matchIndex(PARAM_CLOSE_RE, rest),
+      matchIndex(PARAM_BARE_CLOSE_RE, rest),
+      matchIndex(PARAM_TAG_RE, rest),
+    ].filter((index) => index !== -1);
+    const valueEnd = tagEnd + (boundaries.length ? Math.min(...boundaries) : rest.length);
+
+    const name = extractAttribute(tag, "name")?.replace(/\\([_-])/g, "$1");
+    const rawValue = body.slice(tagEnd, valueEnd);
+    const value = rawValue.endsWith("\\") && body[valueEnd] === "<"
+      ? rawValue.slice(0, -1)
+      : rawValue;
+    if (name) input[name] = coerceParameterValue(value, tag);
+
+    cursor = Math.max(valueEnd, tagEnd);
+  }
+
+  return input;
+}
+
+type Candidate =
+  | { kind: "none" }
+  | { kind: "hold"; index: number; name?: string; bodyStart?: number }
+  | { kind: "release"; index: number; end: number }
+  | { kind: "call"; index: number; name: string; input: Record<string, unknown>; end: number };
+
+function findCandidate(s: string, declared: ReadonlySet<string>, rejectMalformed: boolean): Candidate {
+  let searchFrom = 0;
+
+  for (;;) {
+    const start = s.indexOf("<", searchFrom);
+    if (start === -1) return { kind: "none" };
+
+    const open = readInvokeOpen(s, start);
+    if (open.kind === "no") {
+      // Keep orphan parameters until EOF: a later DSML close proves this is
+      // broken tool syntax rather than ordinary XML. Never guess the tool.
+      if (rejectMalformed) {
+        const tail = s.slice(start);
+        const marker = /^<\/?[|｜▁\s]*/i.exec(tail)![0];
+        const rest = tail.slice(marker.length).toLowerCase();
+        if ("<parameter".startsWith(tail.toLowerCase()) ||
+          /^<parameter(?:\s|>)/i.test(tail) ||
+          "dsml".startsWith(rest) || /^dsml[|｜▁\s]/i.test(rest)) {
+          return { kind: "hold", index: start };
+        }
+      }
+      searchFrom = start + 1;
+      continue;
+    }
+    if (open.kind === "prefix") return { kind: "hold", index: start };
+    if (!declared.has(open.name) && !rejectMalformed) return { kind: "release", index: start, end: open.end };
+
+    const close = INVOKE_CLOSE_RE.exec(s.slice(open.end));
+    if (!close) return declared.has(open.name)
+      ? { kind: "hold", index: start, name: open.name, bodyStart: open.end }
+      : { kind: "hold", index: start };
+
+    const body = s.slice(open.end, open.end + close.index);
+    let end = open.end + close.index + close[0].length;
+    const trailing = /^\s*/.exec(s.slice(end))!;
+    const wrapperClose = TRAILING_WRAPPER_CLOSE_RE.exec(s.slice(end + trailing[0].length));
+    if (wrapperClose) end += trailing[0].length + wrapperClose[0].length;
+
+    if (!declared.has(open.name)) return { kind: "release", index: start, end };
+
+    return { kind: "call", index: start, name: open.name, input: parseParameters(body), end };
+  }
+}
+
+export function createDsmlRecoveryScanner(options: {
+  declaredToolNames: ReadonlySet<string>;
+  rejectMalformed?: boolean;
+}): DsmlRecoveryScanner {
+  const declared = options.declaredToolNames;
+  let buffer = "";
+  let nextCallIndex = 0;
+  let afterCall = false;
+  let active: { id: string; name: string; cursor: number; bodyStart: number; tag: string; tagOverflow?: boolean;
+    parameter?: string; valueTag?: string; value: string; pathAmbiguous?: boolean; filePath?: string; receivedChars: number } | undefined;
+
+  // Scan only newly received body characters. Tags/paths are bounded; content is never retained here.
+  function progressFor(name: string, bodyStart: number, bodyEnd = buffer.length): ToolGenerationProgressEvent | undefined {
+    if (!isFileTool(name)) return undefined;
+    active ??= { id: `dsml_${nextCallIndex}`, name, cursor: bodyStart, bodyStart, tag: "", value: "", receivedChars: 0 };
+    function appendPath(text: string) {
+      if (active!.parameter !== "file_path") return;
+      if (active!.value.length + text.length > 4096 * 6 + 2) active!.pathAmbiguous = true;
+      else active!.value += text;
+    }
+    function finishParameter() {
+      if (active!.parameter === "file_path") {
+        let value: unknown;
+        if (!active!.pathAmbiguous) {
+          const raw = active!.value.endsWith("\\") ? active!.value.slice(0, -1) : active!.value;
+          if (extractAttribute(active!.valueTag ?? "", "string")?.toLowerCase() === "true") value = raw.trim();
+          else { try { value = JSON.parse(raw.trim()); } catch { /* Ambiguous path: omit the summary. */ } }
+        }
+        active!.filePath = safeFilePath(value);
+      }
+      active!.parameter = undefined; active!.value = ""; active!.pathAmbiguous = false;
+    }
+    for (; active.cursor < bodyEnd; active.cursor++) {
+      const ch = buffer[active.cursor]!;
+      if (active.tagOverflow) {
+        if (ch === ">") active.tagOverflow = false;
+      } else if (ch === "<" && !active.tag) active.tag = "<";
+      else if (active.tag) {
+        active.tag += ch;
+        if (active.tag.length > 512) {
+          if (active.parameter === "file_path") active.pathAmbiguous = true;
+          active.tag = ""; active.tagOverflow = ch !== ">";
+        }
+        else if (ch === ">") {
+          const boundary = [PARAM_CLOSE_RE.exec(active.tag), PARAM_BARE_CLOSE_RE.exec(active.tag), PARAM_TAG_RE.exec(active.tag)]
+            .filter((match): match is RegExpExecArray => match !== null).sort((a, b) => a.index - b.index)[0];
+          if (boundary) {
+            appendPath(active.tag.slice(0, boundary.index));
+            finishParameter();
+            if (PARAM_TAG_RE.test(boundary[0])) {
+              active.parameter = extractAttribute(boundary[0], "name") ?? "";
+              active.valueTag = boundary[0];
+            }
+          } else appendPath(active.tag);
+          active.tag = "";
+        }
+      } else appendPath(ch);
+    }
+    active.receivedChars = Math.max(active.receivedChars, bodyEnd - active.bodyStart);
+    return { type: "tool_generation_progress", toolKey: active.id, toolUseId: active.id, toolName: active.name,
+      receivedChars: active.receivedChars, ...(active.filePath ? { filePath: active.filePath } : {}),
+    };
+  }
+
+  function discard(): ToolGenerationProgressEvent[] {
+    if (!active) return [];
+    const progress: ToolGenerationProgressEvent = { type: "tool_generation_progress", toolKey: active.id, toolUseId: active.id,
+      toolName: active.name, receivedChars: active.receivedChars, discarded: true };
+    active = undefined;
+    // Only completed recovery increments the existing call counter.
+    return [progress];
+  }
+
+  function drain(): DsmlScanResult {
+    let visible = "";
+    const toolCalls: RecoveredToolCall[] = [];
+    const progress: ToolGenerationProgressEvent[] = [];
+
+    for (;;) {
+      if (afterCall) {
+        let i = 0;
+        while (i < buffer.length && isWhitespaceChar(buffer[i]!)) i++;
+        if (i === buffer.length) break;
+        const trailingClose = readTrailingWrapperClose(buffer, i);
+        if (trailingClose.kind === "prefix") break;
+        if (trailingClose.kind === "open") {
+          buffer = buffer.slice(trailingClose.end);
+          afterCall = false;
+          continue;
+        }
+        afterCall = false;
+      }
+
+      const candidate = findCandidate(buffer, declared, options.rejectMalformed === true);
+      if (candidate.kind === "none") {
+        visible += buffer;
+        buffer = "";
+        break;
+      }
+      if (candidate.index > 0) {
+        visible += buffer.slice(0, candidate.index);
+        buffer = buffer.slice(candidate.index);
+        continue;
+      }
+      if (candidate.kind === "hold") {
+        if (candidate.name && candidate.bodyStart !== undefined) {
+          const update = progressFor(candidate.name, candidate.bodyStart);
+          if (update) progress.push(update);
+        }
+        break;
+      }
+      if (candidate.kind === "release") {
+        visible += buffer.slice(0, candidate.end);
+        buffer = buffer.slice(candidate.end);
+        continue;
+      }
+
+      const open = readInvokeOpen(buffer, 0);
+      if (open.kind === "open") {
+        const close = INVOKE_CLOSE_RE.exec(buffer.slice(open.end));
+        const update = progressFor(candidate.name, open.end, open.end + (close?.index ?? 0));
+        if (update) progress.push(update);
+      }
+      toolCalls.push({
+        id: `dsml_${nextCallIndex++}`,
+        name: candidate.name,
+        input: candidate.input,
+      });
+      active = undefined;
+      buffer = buffer.slice(candidate.end);
+      afterCall = true;
+    }
+
+    return { visible, toolCalls, progress };
+  }
+
+  return {
+    push(chunk: string): DsmlScanResult {
+      buffer += chunk;
+      if (buffer.length > MAX_HELD_CHARS) {
+        if (options.rejectMalformed && /<\/?[|｜▁\s]*DSML[|｜▁\s]/i.test(buffer)) {
+          throw streamIncompleteFailure("工具调用标记不完整或超过解析上限，请重新生成完整调用");
+        }
+        const released = buffer;
+        buffer = "";
+        afterCall = false;
+        return { visible: released, toolCalls: [], progress: discard() };
+      }
+      return drain();
+    },
+
+    flush(): DsmlScanResult {
+      if (options.rejectMalformed && /<\/?[|｜▁\s]*DSML[|｜▁\s]/i.test(buffer)) {
+        throw streamIncompleteFailure("工具调用标记不完整，未执行工具，请重新生成完整调用");
+      }
+      const held = buffer;
+      buffer = "";
+      afterCall = false;
+      return { visible: held, toolCalls: [], progress: discard() };
+    },
+  };
+}

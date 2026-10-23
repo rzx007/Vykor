@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { EventBus } from "../bus/index.js";
-import { FeishuAdapter } from "../impl/feishu.js";
+import { FeishuAdapter } from "../adapters/feishu/feishu.js";
 import type { ChannelAdapterCapabilities, ChannelMessage } from "../index.js";
 
 describe("ChannelMessage contract", () => {

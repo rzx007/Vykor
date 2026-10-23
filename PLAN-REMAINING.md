@@ -120,7 +120,7 @@
 ### A.5 coordinator mode env 一致性 ✅ 已收口
 - `isCoordinatorMode()` 统一读取 `VYKOR_COORDINATOR_MODE`；不再兼容 `CLAUDE_CODE_COORDINATOR_MODE` / `COORDINATOR_MODE` / `VYKOR_COORDINATOR` / `CLAUDE_CODE_COORDINATOR`。
 - 简单模式统一读取 `VYKOR_COORDINATOR_SIMPLE`。
-- **文件**：`packages/coordinator/src/index.ts`、`packages/coordinator/src/coordinator-mode.ts`
+- **文件**：`packages/coordinator/src/index.ts`、`packages/coordinator/src/runtime/coordinator-mode.ts`
 
 ---
 
@@ -252,7 +252,7 @@
 - ✅ Bash / hooks / Cron / LSP / MCP stdio 走 sandbox-aware process entry。
 - ✅ Docker active 时 Read/Write/Edit/Glob/Grep 通过 `FileOperations` 进入容器执行，并有真实 Docker E2E 覆盖。
 - 留待：接入 CI 中有 Docker daemon/SRT 的 job。
-- **文件**：`packages/sandbox/src/*`、`packages/tools/src/file/operations.ts`、`packages/mcp/src/sandbox-stdio-transport.ts`
+- **文件**：`packages/sandbox/src/*`、`packages/tools/src/file/operations.ts`、`packages/mcp/src/connections/sandbox-stdio-transport.ts`
 
 ### D.4 Bridge 多进程会话（按需）
 - ✅ `spawn(command, cwd)`：`child_process.spawn(shell:true)`，stdout+stderr 并行泵入 `~/.vykor/bridge/logs/<id>.log`。

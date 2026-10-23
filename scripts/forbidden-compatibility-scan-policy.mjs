@@ -15,7 +15,7 @@ export const forbiddenScanDefaultAllow = Object.freeze([
   "packages/plugins/src/manifest/__test__/schema-v1.test.ts",
   "packages/protocol/src/runtime/__test__/terminal.type-test.ts",
   "packages/server/src/http/routes/__test__/terminal.test.ts",
-  "packages/skills/src/index.test.ts",
+  "packages/skills/src/__test__/index.test.ts",
   "docs/compatibility-surface-audit.md",
   "docs/plans/",
   "docs/superpowers/plans/",

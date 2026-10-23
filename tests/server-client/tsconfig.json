@@ -15,7 +15,7 @@
         "../../packages/agent-contracts/src/index.ts"
       ],
       "@vykor/agent-contracts/tool-data": [
-        "../../packages/agent-contracts/src/tool-data.ts"
+        "../../packages/agent-contracts/src/tools/tool-data.ts"
       ],
       "@vykor/agent-runtime": [
         "../../packages/agent-runtime/src/index.ts"
@@ -39,7 +39,7 @@
         "../../packages/coordinator/src/index.ts"
       ],
       "@vykor/coordinator/coordinator-mode": [
-        "../../packages/coordinator/src/coordinator-mode.ts"
+        "../../packages/coordinator/src/runtime/coordinator-mode.ts"
       ],
       "@vykor/coordinator/definitions": [
         "../../packages/coordinator/src/definitions/index.ts"

@@ -63,7 +63,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 
 ### 4.2 飞书接入核心（`packages/channels`）
 
-- `packages/channels/src/impl/feishu-registration.ts`
+- `packages/channels/src/adapters/feishu/feishu-registration.ts`
   - `class FeishuRegistration`：包一层 SDK `registerApp`（可注入，便于测试），
     暴露 `start(options)` / `status()` / `cancel()`。
   - 状态：`starting` | `qr_ready` | `polling` | `slow_down` | `domain_switched` |
@@ -84,7 +84,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
   - 扫码成功结果里的 `user_info.tenant_brand`（`"feishu" | "lark"`）用于推导 `domain`；
     缺失时回退到用户选择（默认 `feishu`）。
   - 经 `packages/channels/src/index.ts` 导出，供 CLI 使用。
-- `packages/channels/src/impl/feishu-verify.ts`
+- `packages/channels/src/adapters/feishu/feishu-verify.ts`
   - `verifyFeishuCredentials({ appId, appSecret, domain, fetchImpl? })`：
     1) **必做**：`POST /open-apis/auth/v3/tenant_access_token/internal` 换 token；失败即校验失败。
     2) **尽力**：`GET /open-apis/bot/v3/info/` 取机器人信息；该 legacy 接口响应是顶层
@@ -92,7 +92,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
        取不到只影响展示，不影响“接入成功”。
   - 返回 `{ appId, name?, openId?, activated? }`；错误分类：凭据错误 / 网络错误 / 地区不符，
     错误信息不回显密钥。
-- `FeishuConfig`（`packages/channels/src/impl/feishu.ts`）增加 `domain?: "feishu" | "lark"`，
+- `FeishuConfig`（`packages/channels/src/adapters/feishu/feishu.ts`）增加 `domain?: "feishu" | "lark"`，
   并在 `connect()` 里传给 `lark.Client` 与 `lark.WSClient`（具体取值形式以实现时 SDK 类型为准，
   计划里安排一次真实验证：Lark 与 Feishu 各连一次）。
 
@@ -104,7 +104,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
   - **异步** API：`get(appId): Promise<string | undefined>`、
     `set(appId, secret): Promise<void>`、`delete(appId): Promise<void>`。
   - 文件结构：`{ version: 1, credentials: { [appId]: { appSecret } } }`，逐字段校验。
-  - 实现照 `packages/auth/src/mcp-oauth-credential-store.ts`：同目录临时文件 + rename 原子写、
+  - 实现照 `packages/auth/src/mcp/mcp-oauth-credential-store.ts`：同目录临时文件 + rename 原子写、
     POSIX `0600`（Windows 跳过 chmod，依赖用户目录 ACL）、跨进程文件锁。
   - **坏文件处理**：文件不存在（ENOENT）当空；结构非法/JSON 解析失败 **抛明确错误**
     （不回显内容），与 §7 “不做兼容 fallback” 一致。测试名按此定。

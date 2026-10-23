@@ -81,7 +81,7 @@ interface ChildPartialResult {
 
 ### Task 2：角色预算选择与轮数硬上限
 
-**改动：** `packages/coordinator/src/types.ts`、`packages/coordinator/src/agent-loader.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.ts`、`packages/agent-runtime/src/kernel/child-agent.ts`、`packages/agent-runtime/src/kernel/agent.ts`、`packages/agent-runtime/src/kernel/framework-agent-run.ts`、`packages/core/src/types/runtime.ts`、`packages/core/src/engine/query-engine.ts`。**测试：** `packages/coordinator/src/__test__/agent-loader.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`、`packages/agent-runtime/src/node/runtime/framework-agent-run-input.test.ts`、`packages/core/src/engine/integration.test.ts`、`packages/core/src/engine/request-configuration.test.ts`。
+**改动：** `packages/coordinator/src/runtime/types.ts`、`packages/coordinator/src/agent-loader.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.ts`、`packages/agent-runtime/src/kernel/child-agent.ts`、`packages/agent-runtime/src/kernel/agent.ts`、`packages/agent-runtime/src/kernel/framework-agent-run.ts`、`packages/core/src/types/runtime.ts`、`packages/core/src/engine/query-engine.ts`。**测试：** `packages/coordinator/src/definitions/__test__/agent-loader.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent-options.test.ts`、`packages/agent-runtime/src/node/runtime/child-agent.test.ts`、`packages/agent-runtime/src/node/runtime/framework-agent-run-input.test.ts`、`packages/core/src/engine/integration.test.ts`、`packages/core/src/engine/request-configuration.test.ts`。
 
 - [ ] 先写测试：角色 `timeoutSeconds` 被加载；Child 的有效 `maxTurns` 在每次 Run 启动时冻结；后续请求配置、`setMaxTurns`、已接受 follow-up 试图调大时仍在已冻结轮数结束；同一 Child 的下一个 Run 重新取得当时配置；root Agent 的动态配置测试保持原行为。
 - [ ] 分别运行 `pnpm --filter @vykor/coordinator exec vitest run src/__test__/agent-loader.test.ts`、`pnpm --filter @vykor/agent-runtime exec vitest run src/child-agent-options.test.ts src/child-agent.test.ts src/framework-agent-run-input.test.ts`、`pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts src/engine/request-configuration.test.ts`。预期新增 Child 上限用例失败。
@@ -202,7 +202,7 @@ interface ChildPartialResult {
 
 ### Task 13：角色指导与对照评估
 
-**改动：** `packages/coordinator/src/agent-definitions.ts`、`packages/coordinator/src/system-prompt.ts`、`packages/tools/src/agent/agent-tools.ts`、`docs/agent-child-session-flow.md`。**测试：** 创建 `packages/coordinator/src/agent-definitions.test.ts`，并运行 `packages/tools/src/agent/__test__/agent-tools.test.ts`。
+**改动：** `packages/coordinator/src/agent-definitions.ts`、`packages/coordinator/src/runtime/system-prompt.ts`、`packages/tools/src/agent/agent-tools.ts`、`docs/agent-child-session-flow.md`。**测试：** 创建 `packages/coordinator/src/definitions/__test__/agent-definitions.test.ts`，并运行 `packages/tools/src/agent/__test__/agent-tools.test.ts`。
 
 - [ ] 先写测试：只读 `review` 角色可用 Read/Grep/Glob，不能使用 Shell、Write、Edit、Agent；`verification` 继续验证实现；角色选择及 Agent 工具描述能表达范围和预期交付。
 - [ ] 运行 `pnpm --filter @vykor/coordinator exec vitest run src/agent-definitions.test.ts` 和 `pnpm --filter @vykor/tools exec vitest run src/agent/__test__/agent-tools.test.ts`；预期新增 review 角色行为用例失败。

@@ -30,7 +30,7 @@
 - `packages/agent-runtime/src/node/capabilities/capability-resolution.ts`：能力三态、诊断快照、简单 override 解析和配置一致性校验。
 - `packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts`：三态解析、Settings 归一化与 Jobs 关闭约束。
 - `packages/jobs/src/composite-agent-job-host.ts`：多个 `AgentJobHost` 的合并、归属缓存和路由。
-- `packages/jobs/src/composite-agent-job-host.test.ts`：合并、去重、冲突和五个 Job 操作的路由测试。
+- `packages/jobs/src/__test__/composite-agent-job-host.test.ts`：合并、去重、冲突和五个 Job 操作的路由测试。
 
 ### 修改
 
@@ -192,7 +192,7 @@ git commit -m "refactor(agent-runtime): define capability override model"
 **文件：**
 
 - 创建：`packages/jobs/src/composite-agent-job-host.ts`
-- 创建：`packages/jobs/src/composite-agent-job-host.test.ts`
+- 创建：`packages/jobs/src/__test__/composite-agent-job-host.test.ts`
 - 修改：`packages/jobs/src/index.ts`
 
 - [ ] **步骤 1：先写 list 合并、对象身份去重与 Job ID 冲突测试**
@@ -267,7 +267,7 @@ pnpm --filter @vykor/jobs check-types
 - [ ] **步骤 7：提交 Jobs 组合器**
 
 ```bash
-git add packages/jobs/src/composite-agent-job-host.ts packages/jobs/src/composite-agent-job-host.test.ts packages/jobs/src/index.ts
+git add packages/jobs/src/composite-agent-job-host.ts packages/jobs/src/__test__/composite-agent-job-host.test.ts packages/jobs/src/index.ts
 git commit -m "feat(jobs): compose multiple job control sources"
 ```
 

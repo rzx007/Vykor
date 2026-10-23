@@ -356,6 +356,6 @@ Windows Native 默认不再优先自动发现的 `bash.exe`。Windows Git Bash �
 
 已知、独立记录的全仓基线问题：
 
-- `packages/sandbox/e2e/wsl.e2e.test.ts` 在真实 WSL PTY/中断时序上不稳定；多次运行分别出现 AbortSignal 10 秒超时，以及 PTY 中断后未在等待窗口收到 `after-interrupt`。
+- `packages/sandbox/__test__/e2e/wsl.e2e.test.ts` 在真实 WSL PTY/中断时序上不稳定；多次运行分别出现 AbortSignal 10 秒超时，以及 PTY 中断后未在等待窗口收到 `after-interrupt`。
 - `pnpm build` 被 Desktop 两个既有类型错误阻断：`runtime-setting-model.ts` 未使用参数，`terminal-tool.tsx` 的 `scope` 可空性与 `UserTerminalCreateInput` 不一致。
 - 根命令 `pnpm lint` 因 Turbo 配置中不存在全局 `lint` 任务而无法运行。

@@ -14,9 +14,9 @@
     "build": "exit 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "vitest run --config ../../vitest.e2e.config.ts e2e",
-    "e2e:wsl": "vitest run --config ../../vitest.e2e.config.ts e2e/wsl.e2e.test.ts",
-    "e2e:srt": "vitest run --config ../../vitest.e2e.config.ts e2e/srt.e2e.test.ts",
+    "e2e": "vitest run --config ../../vitest.e2e.config.ts __test__/e2e",
+    "e2e:wsl": "vitest run --config ../../vitest.e2e.config.ts __test__/e2e/wsl.e2e.test.ts",
+    "e2e:srt": "vitest run --config ../../vitest.e2e.config.ts __test__/e2e/srt.e2e.test.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {

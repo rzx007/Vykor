@@ -19,14 +19,14 @@
 | Modify | `packages/core/src/types/settings.ts` | Extend `SandboxConfig` and nested config types |
 | Modify | `packages/core/src/config/settings.ts` | Defaults and environment overrides |
 | Replace | `packages/sandbox/src/index.ts` | Public exports |
-| Create | `packages/sandbox/src/types.ts` | Shared sandbox types |
-| Create | `packages/sandbox/src/platform.ts` | Platform detection and support matrix |
-| Create | `packages/sandbox/src/availability.ts` | Backend availability checks |
-| Create | `packages/sandbox/src/path-validator.ts` | Sandbox filesystem boundary checks |
-| Create | `packages/sandbox/src/srt-adapter.ts` | `srt` argv wrapping and temp config |
+| Create | `packages/sandbox/src/environment/types.ts` | Shared sandbox types |
+| Create | `packages/sandbox/src/environment/platform.ts` | Platform detection and support matrix |
+| Create | `packages/sandbox/src/environment/availability.ts` | Backend availability checks |
+| Create | `packages/sandbox/src/policy/path-validator.ts` | Sandbox filesystem boundary checks |
+| Create | `packages/sandbox/src/process/srt-adapter.ts` | `srt` argv wrapping and temp config |
 | Create | `packages/sandbox/src/docker-backend.ts` | Docker argv/session helpers |
 | Create | `packages/sandbox/src/session.ts` | Active sandbox session registry |
-| Create | `packages/sandbox/src/shell.ts` | Shared shell command spawning |
+| Create | `packages/sandbox/src/process/shell.ts` | Shared shell command spawning |
 | Modify | `packages/tools/package.json` | Add `@vykor/sandbox` dependency |
 | Modify | `packages/tools/src/shell/bash.ts` | Route through shared sandbox-aware shell helper |
 | Modify | `packages/tools/src/file/{read,write,edit,glob,grep}.ts` | Apply sandbox path validation when active |

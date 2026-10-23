@@ -1,5 +1,5 @@
-export { CredentialStorage } from "./credential-storage";
-export type { CredentialData } from "./credential-storage";
+export { CredentialStorage } from "./credentials/credential-storage";
+export type { CredentialData } from "./credentials/credential-storage";
 export {
   CODEX_AUTH_SOURCE,
   CODEX_PROVIDER,
@@ -7,12 +7,12 @@ export {
   getCodexAuthPath,
   isCredentialExpired,
   loadCodexCredential,
-} from "./external";
-export type { ExternalAuthCredential, ExternalAuthState } from "./external";
+} from "./credentials/external";
+export type { ExternalAuthCredential, ExternalAuthState } from "./credentials/external";
 export {
   resolveApiKey,
   type ApiKeyResolutionOptions,
-} from "./credential-resolution";
+} from "./credentials/credential-resolution";
 
 export interface AuthCredentials {
   provider: string;
@@ -160,9 +160,9 @@ export {
   McpOAuthStoreError,
   shouldReuseCredentialAfterLock,
   type ExclusiveCredentialOperation,
-} from "./mcp-oauth-credential-store";
+} from "./mcp/mcp-oauth-credential-store";
 export {
   ChannelConfigStore,
   ChannelConfigStoreError,
-} from "./channel-config-store";
-export type { FeishuChannelConfig, ChannelConfigFile, FeishuDomain } from "./channel-config-store";
+} from "./channels/channel-config-store";
+export type { FeishuChannelConfig, ChannelConfigFile, FeishuDomain } from "./channels/channel-config-store";

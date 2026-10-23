@@ -23,7 +23,7 @@
 | `packages/client/src/types/index.ts` | `ModelInfo.reasoningEfforts` 镜像 |
 | `packages/core/src/types/settings.ts` | `effort?: string` |
 | `packages/protocol/src/runtime/runtime-config.ts` | `effortValue` 真值表 |
-| `packages/agent-contracts/src/model.ts` | `StreamMessageParams.reasoningEffort` |
+| `packages/agent-contracts/src/model/model.ts` | `StreamMessageParams.reasoningEffort` |
 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions.reasoningEffort` |
 | `packages/core/src/engine/query-engine.ts` | 透传 `reasoningEffort` |
 | `packages/api/src/providers/openai.ts` | 请求体写 `reasoning_effort` |
@@ -320,15 +320,15 @@ git commit -m "feat(protocol): allow free-form reasoning effort with clear senti
 ## 任务 3：请求链路透传 reasoningEffort
 
 **文件：**
-- 修改：`packages/agent-contracts/src/model.ts:5-13`
+- 修改：`packages/agent-contracts/src/model/model.ts:5-13`
 - 修改：`packages/core/src/types/runtime.ts:488-509`
 - 修改：`packages/core/src/engine/query-engine.ts:156-201,365-371`
 - 修改：`packages/api/src/providers/openai.ts:183-191`
-- 测试：`packages/api/src/providers/openai.test.ts`
+- 测试：`packages/api/src/providers/__test__/openai.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/api/src/providers/openai.test.ts` 末尾追加：
+在 `packages/api/src/providers/__test__/openai.test.ts` 末尾追加：
 
 ```ts
 describe("OpenAICompatibleClient reasoning effort", () => {
@@ -388,7 +388,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
 
 - [ ] **步骤 3：加参数类型**
 
-`packages/agent-contracts/src/model.ts` 的 `StreamMessageParams` 内、`temperature?: number;` 之后加：
+`packages/agent-contracts/src/model/model.ts` 的 `StreamMessageParams` 内、`temperature?: number;` 之后加：
 
 ```ts
   reasoningEffort?: string;
@@ -447,7 +447,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add packages/agent-contracts/src/model.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/agent-contracts/src/model/model.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "feat(api): forward reasoning effort to openai-compatible requests"
 ```
 
@@ -807,7 +807,7 @@ function isRuntimeEffort(value: unknown): value is string {
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add packages/server/src/daemon/scheduled-task-service.ts packages/tools/src/schedule/scheduled-task-tools.ts packages/client/src/commands/session-commands.ts packages/coordinator/src/agent-loader.ts packages/server/src/application/agent/daemon-agent-event-projector.ts packages/coordinator/src/__test__/agent-loader.test.ts
+git add packages/server/src/daemon/scheduled-task-service.ts packages/tools/src/schedule/scheduled-task-tools.ts packages/client/src/commands/session-commands.ts packages/coordinator/src/agent-loader.ts packages/server/src/application/agent/daemon-agent-event-projector.ts packages/coordinator/src/definitions/__test__/agent-loader.test.ts
 git commit -m "feat: relax effort validation to non-empty strings"
 ```
 

@@ -117,7 +117,7 @@ git commit -m "feat(protocol): add channel runtime DTOs and parsers"
 
 **文件：**
 - 修改：`packages/channels/src/core/durable-bridge.ts`、`packages/channels/src/core/manager.ts`
-- 测试：`packages/channels/src/__test__/durable-bridge.test.ts`、`packages/channels/src/__test__/manager.test.ts`
+- 测试：`packages/channels/src/__test__/durable-bridge.test.ts`、`packages/channels/src/core/__test__/manager.test.ts`
 
 **Interfaces：**
 - Produces：
@@ -170,7 +170,7 @@ it("stopInbound disconnects adapters but still dispatches queued outbound", asyn
 
 ```bash
 pnpm --filter @vykor/channels test -- --run
-git add packages/channels/src/core/durable-bridge.ts packages/channels/src/core/manager.ts packages/channels/src/__test__/durable-bridge.test.ts packages/channels/src/__test__/manager.test.ts
+git add packages/channels/src/core/durable-bridge.ts packages/channels/src/core/manager.ts packages/channels/src/__test__/durable-bridge.test.ts packages/channels/src/core/__test__/manager.test.ts
 git commit -m "feat(channels): add per-message cwd, bounded stop and stopInbound"
 ```
 

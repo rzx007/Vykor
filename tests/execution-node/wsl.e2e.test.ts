@@ -9,8 +9,8 @@ import { createEnvironmentFileSystem } from "../../packages/tools/src/file/opera
 import {
   DetachedProcessSupervisor,
 } from "@vykor/execution-node";
-import { SandboxStdioClientTransport } from "../../packages/mcp/src/sandbox-stdio-transport.js";
-import { LocalTerminalProvider } from "../../packages/terminal-node/src/local-terminal-provider.js";
+import { SandboxStdioClientTransport } from "../../packages/mcp/src/connections/sandbox-stdio-transport.js";
+import { LocalTerminalProvider } from "../../packages/terminal-node/src/providers/local-terminal-provider.js";
 
 const maybeDescribe = process.platform === "win32" ? describe : describe.skip;
 

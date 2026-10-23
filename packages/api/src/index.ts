@@ -46,5 +46,5 @@ export {
   RequestHeaderTemplateError,
   expandRequestHeaderTemplates,
   normalizeRequestHeaderTemplates,
-} from "./providers/request-header-templates";
-export type { RequestHeaderTemplateContext } from "./providers/request-header-templates";
+} from "./providers/requests/request-header-templates";
+export type { RequestHeaderTemplateContext } from "./providers/requests/request-header-templates";

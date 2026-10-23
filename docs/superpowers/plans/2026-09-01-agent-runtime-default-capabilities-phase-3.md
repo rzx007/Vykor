@@ -31,8 +31,8 @@ pnpm --filter @vykor/server test
 
 ### 新建
 
-- `packages/terminal-node/src/agent-terminal-host.ts`：把 `LocalTerminalProvider` 适配成 Agent Terminal producer 与 Job source。
-- `packages/terminal-node/src/agent-terminal-host.test.ts`：open、list、read、wait、send、cancel 和 session 边界测试。
+- `packages/terminal-node/src/host/agent-terminal-host.ts`：把 `LocalTerminalProvider` 适配成 Agent Terminal producer 与 Job source。
+- `packages/terminal-node/src/host/__test__/agent-terminal-host.test.ts`：open、list、read、wait、send、cancel 和 session 边界测试。
 - `packages/agent-runtime/src/node/runtime/cleanup-stack.ts`：runtime-owned cleanup 的逆序、去重、幂等执行。
 - `packages/agent-runtime/src/node/runtime/cleanup-stack.test.ts`：顺序、共享 identity、失败汇总和幂等测试。
 - `packages/agent-runtime/src/node/runtime/default-node-terminal.ts`：创建默认 Node Terminal bundle 并返回 cleanup。
@@ -55,8 +55,8 @@ pnpm --filter @vykor/server test
 
 **文件：**
 
-- 创建：`packages/terminal-node/src/agent-terminal-host.ts`
-- 创建：`packages/terminal-node/src/agent-terminal-host.test.ts`
+- 创建：`packages/terminal-node/src/host/agent-terminal-host.ts`
+- 创建：`packages/terminal-node/src/host/__test__/agent-terminal-host.test.ts`
 - 修改：`packages/terminal-node/src/index.ts`
 - 修改：`packages/terminal-node/package.json`
 - 修改：`pnpm-lock.yaml`
@@ -329,7 +329,7 @@ git commit -m "feat(agent-runtime): install default local terminal"
 - 修改：`packages/agent-runtime/src/node/runtime/agent.test.ts`
 - 修改：`packages/tools/src/terminal/__test__/terminal-tools.test.ts`
 - 修改：`packages/server/src/daemon/__test__/daemon-agent.test.ts`
-- 修改：`packages/terminal-node/src/agent-terminal-host.test.ts`
+- 修改：`packages/terminal-node/src/host/__test__/agent-terminal-host.test.ts`
 
 - [ ] **步骤 1：写真实本地 Terminal 联合测试**
 

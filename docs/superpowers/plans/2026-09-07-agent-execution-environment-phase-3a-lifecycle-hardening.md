@@ -43,7 +43,7 @@
 - `packages/server/src/runtime/installation-id.test.ts`：Windows/POSIX 路径归一化与稳定性测试。
 - `packages/sandbox/src/docker-orphan-reconciler.ts`：Docker inventory、纯清理决策和动作执行。
 - `packages/sandbox/src/docker-orphan-reconciler.test.ts`：所有权验证与不误删测试。
-- `packages/sandbox/e2e/docker-orphan-reconciliation.e2e.test.ts`：真实 Docker 崩溃残留清理测试。
+- `packages/sandbox/__test__/e2e/docker-orphan-reconciliation.e2e.test.ts`：真实 Docker 崩溃残留清理测试。
 
 ### 修改文件
 
@@ -52,12 +52,12 @@
 - `packages/environment/src/types.ts`：加入 daemon/environment 运行身份和执行 owner。
 - `packages/sandbox/src/execution-environment-manager.ts`：在调用 `create()` 前生成 environment ID 并传入身份。
 - `packages/sandbox/src/execution-environment-manager.test.ts`：同一 record 身份共享与新 record 换 ID。
-- `packages/sandbox/src/execution-environment.ts`：把身份传给 Docker Runtime。
+- `packages/sandbox/src/environment/execution-environment.ts`：把身份传给 Docker Runtime。
 - `packages/sandbox/src/lifecycle.ts`：Sandbox Runtime 接收身份。
-- `packages/sandbox/src/types.ts`：Sandbox Session 身份契约。
+- `packages/sandbox/src/environment/types.ts`：Sandbox Session 身份契约。
 - `packages/sandbox/src/docker-backend.ts`：容器 labels、exec/PTY owner 环境变量和严格复用校验。
 - `packages/sandbox/src/index.ts`：导出身份 label 与 reconciler。
-- `packages/sandbox/src/index.test.ts`：Docker argv、labels 与 exec 环境变量测试。
+- `packages/sandbox/src/__test__/index.test.ts`：Docker argv、labels 与 exec 环境变量测试。
 - `packages/terminal-node/e2e/docker-pty.e2e.test.ts`：真实共享环境使用完整 daemon identity。
 - `packages/services/src/executions/detached-process-supervisor.ts`：以 durable task ID 标记后台 Docker 进程。
 - `packages/services/src/executions/__test__/detached-process-supervisor.test.ts`：后台 owner 传递测试。
@@ -162,11 +162,11 @@ git commit -m "fix(settings): save configuration atomically (task 1/4)"
 - 修改：`packages/environment/src/types.ts`
 - 修改：`packages/sandbox/src/execution-environment-manager.ts`
 - 修改：`packages/sandbox/src/execution-environment-manager.test.ts`
-- 修改：`packages/sandbox/src/execution-environment.ts`
+- 修改：`packages/sandbox/src/environment/execution-environment.ts`
 - 修改：`packages/sandbox/src/lifecycle.ts`
-- 修改：`packages/sandbox/src/types.ts`
+- 修改：`packages/sandbox/src/environment/types.ts`
 - 修改：`packages/sandbox/src/docker-backend.ts`
-- 修改：`packages/sandbox/src/index.test.ts`
+- 修改：`packages/sandbox/src/__test__/index.test.ts`
 - 修改：`packages/terminal-node/e2e/docker-pty.e2e.test.ts`
 - 修改：`packages/services/src/executions/detached-process-supervisor.ts`
 - 修改：`packages/services/src/executions/__test__/detached-process-supervisor.test.ts`
@@ -405,7 +405,7 @@ git commit -m "feat(runtime): reconcile Docker orphans on startup (task 3/4)"
 
 **文件：**
 
-- 创建：`packages/sandbox/e2e/docker-orphan-reconciliation.e2e.test.ts`
+- 创建：`packages/sandbox/__test__/e2e/docker-orphan-reconciliation.e2e.test.ts`
 - 修改：`packages/sandbox/package.json`
 - 修改：`docs/sandbox-runtime-flow.md`
 - 修改：`docs/superpowers/specs/2026-09-07-agent-runtime-environment-and-terminal-design.md`

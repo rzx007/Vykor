@@ -24,11 +24,11 @@
 
 | 文件 | 职责 | 动作 |
 |---|---|---|
-| `packages/auth/src/channel-config-store.ts` | 渠道配置读写（v2） | 新建 |
-| `packages/auth/src/__test__/channel-config-store.test.ts` | 存储测试 | 新建 |
+| `packages/auth/src/channels/channel-config-store.ts` | 渠道配置读写（v2） | 新建 |
+| `packages/auth/src/channels/__test__/channel-config-store.test.ts` | 存储测试 | 新建 |
 | `packages/auth/src/index.ts` | 导出新类/类型 | 修改 |
 | `packages/channels/src/core/manager.ts` | 按渠道策略 | 修改 |
-| `packages/channels/src/__test__/manager.test.ts` | 策略测试 | 修改 |
+| `packages/channels/src/core/__test__/manager.test.ts` | 策略测试 | 修改 |
 | `apps/cli/src/commands/channels.ts` | 组装/serve/status 改读 store | 修改 |
 | `apps/cli/src/commands/channels.test.ts` | 组装测试改写 | 修改 |
 | `apps/cli/src/commands/channels-onboarding.ts` | add/allow 只写 store | 修改 |
@@ -48,8 +48,8 @@
 ## 任务 1：新增 `ChannelConfigStore`
 
 **文件：**
-- 新建：`packages/auth/src/channel-config-store.ts`
-- 测试：`packages/auth/src/__test__/channel-config-store.test.ts`（新建）
+- 新建：`packages/auth/src/channels/channel-config-store.ts`
+- 测试：`packages/auth/src/channels/__test__/channel-config-store.test.ts`（新建）
 - 修改：`packages/auth/src/index.ts`（追加导出，保留旧导出到任务 5）
 
 **Interfaces：**
@@ -60,7 +60,7 @@
 
 - [ ] **步骤 1：编写失败的测试**
 
-新建 `packages/auth/src/__test__/channel-config-store.test.ts`：
+新建 `packages/auth/src/channels/__test__/channel-config-store.test.ts`：
 
 ```ts
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -155,7 +155,7 @@ describe("ChannelConfigStore", () => {
 
 - [ ] **步骤 3：实现**
 
-新建 `packages/auth/src/channel-config-store.ts`（保留旧文件的 `read`/`write`/`withLock`/`isStaleLock` 机制，换结构与方法）：
+新建 `packages/auth/src/channels/channel-config-store.ts`（保留旧文件的 `read`/`write`/`withLock`/`isStaleLock` 机制，换结构与方法）：
 
 ```ts
 import { randomUUID } from "node:crypto";
@@ -405,7 +405,7 @@ export type { FeishuChannelConfig, ChannelConfigFile, FeishuDomain } from "./cha
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/auth/src/channel-config-store.ts packages/auth/src/__test__/channel-config-store.test.ts packages/auth/src/index.ts
+git add packages/auth/src/channels/channel-config-store.ts packages/auth/src/channels/__test__/channel-config-store.test.ts packages/auth/src/index.ts
 git commit -m "feat(auth): add v2 channel config store"
 ```
 
@@ -556,7 +556,7 @@ git commit -m "feat(tools): read feishu push config from the channel store"
 
 **文件：**
 - 修改：`packages/channels/src/core/manager.ts`
-- 修改：`packages/channels/src/__test__/manager.test.ts`
+- 修改：`packages/channels/src/core/__test__/manager.test.ts`
 
 **Interfaces：**
 - Produces：`ChannelManagerOptions.channelPolicies?: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }>`
@@ -618,7 +618,7 @@ it("按渠道应用 sendProgress/sendToolHints 策略", async () => {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/core/manager.ts packages/channels/src/__test__/manager.test.ts
+git add packages/channels/src/core/manager.ts packages/channels/src/core/__test__/manager.test.ts
 git commit -m "feat(channels): allow per-channel progress policy"
 ```
 

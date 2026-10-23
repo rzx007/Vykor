@@ -17,7 +17,7 @@ Feishu adapter 支持了 thread/topic 路由、入站 image/file、mention/bot �
 3. Feishu adapter 在**有 `threadId` 但没有 `platformMeta.rootMessageId`** 时
    直接抛错；只有在拿到 `rootMessageId` 时才调用
    `im.message.reply({ path: { message_id }, data: { reply_in_thread: true } })`
-   （`packages/channels/src/impl/feishu.ts` 的 outbound thread 分支）。
+   （`packages/channels/src/adapters/feishu/feishu.ts` 的 outbound thread 分支）。
    没有线程上下文时走 `im.message.create`，与本文档无关。
 4. 入站事件里的 `root_id` 目前只在 channels 内部被拍平进 `metadata`
    （`packages/channels/src/core/manager.ts:140-146`），随后落到
@@ -57,7 +57,7 @@ input/output 类型」。本设计**取代**该限制：本阶段的核心动作
 
 ```
 Feishu 入站事件
-  -> FeishuAdapter._handleEvent           packages/channels/src/impl/feishu.ts
+  -> FeishuAdapter._handleEvent           packages/channels/src/adapters/feishu/feishu.ts
        生成 ChannelMessage.platformMeta {chatType?, threadId?, rootMessageId?}
   -> ChannelManager.handleInbound         packages/channels/src/core/manager.ts
        metadata = { ...msg.metadata, _message_id, conversationId?, attachments?,
@@ -291,14 +291,14 @@ server（`packages/server/src/application/channel/*.test.ts`）：
 - `pendingDeliveries` 返回的 delivery 带 `platformMeta`。
 
 channels：
-- `packages/channels/src/__test__/manager.test.ts`：`handleInbound` 将
+- `packages/channels/src/core/__test__/manager.test.ts`：`handleInbound` 将
   `msg.platformMeta` 复制到 `InboundMessage.platformMeta`。
 - `packages/channels/src/__test__/durable-bridge.test.ts`：
   - `handle` 把 platformMeta 传给 `handleChannelMessage`；
   - `publish` 把 `delivery.platformMeta` 放进 outbound；
   - **恢复分支**：`listPendingChannelDeliveries` 返回带 platformMeta 的 delivery 后，
     outbound 带出同一 platformMeta。
-- `packages/channels/src/impl/__test__/feishu.test.ts`：
+- `packages/channels/src/adapters/feishu/__test__/feishu.test.ts`：
   现有 thread outbound 测试断言完整 reply payload（`path.message_id`、
   `data.content`、`data.msg_type`、`data.reply_in_thread === true`），
   且 `create` 未被调用。
@@ -328,7 +328,7 @@ channels：
   ```
   rg -n -g '!**/*.test.ts' -g '!**/__test__/**' \
     "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" \
-    packages/channels/src/core packages/channels/src/bus packages/channels/src/impl/feishu.ts \
+    packages/channels/src/core packages/channels/src/bus packages/channels/src/adapters/feishu/feishu.ts \
     packages/server/src/application/channel packages/protocol/src/channels/channel.ts
   ```
   允许合法 text 分支与解释语义的注释；命中项需人工确认不是「把缺失 thread/root

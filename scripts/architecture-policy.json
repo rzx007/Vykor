@@ -683,8 +683,8 @@
         "@vykor/agent-contracts"
       ],
       "allowTargetPaths": [
-        "packages/agent-contracts/src/tool-data.ts",
-        "packages/agent-contracts/src/permissions.ts"
+        "packages/agent-contracts/src/tools/tool-data.ts",
+        "packages/agent-contracts/src/policy/permissions.ts"
       ],
       "forbidSpecifiers": [
         "^@vykor/agent-contracts(?:/(?!tool-data$|permissions$).*)?$"
@@ -785,8 +785,8 @@
         "packages/domain-contracts/src/",
         "packages/jobs/src/contracts.ts",
         "packages/terminal/src/contracts.ts",
-        "packages/agent-contracts/src/permissions.ts",
-        "packages/agent-contracts/src/tool-data.ts"
+        "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/tools/tool-data.ts"
       ],
       "allowTargetPaths": [
         "packages/json-data/src/",
@@ -794,8 +794,8 @@
         "packages/domain-contracts/src/",
         "packages/jobs/src/contracts.ts",
         "packages/terminal/src/contracts.ts",
-        "packages/agent-contracts/src/permissions.ts",
-        "packages/agent-contracts/src/tool-data.ts"
+        "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/tools/tool-data.ts"
       ],
       "allowExternal": [],
       "forbidBuiltins": true,
@@ -852,8 +852,8 @@
         "@vykor/terminal"
       ],
       "allowTargetPaths": [
-        "packages/agent-contracts/src/tool-data.ts",
-        "packages/agent-contracts/src/permissions.ts",
+        "packages/agent-contracts/src/tools/tool-data.ts",
+        "packages/agent-contracts/src/policy/permissions.ts",
         "packages/domain-contracts/src/",
         "packages/plugin-contracts/src/",
         "packages/json-data/src/json.ts",

@@ -390,7 +390,7 @@ test("Kernel rejects Node subentries, relative paths, type imports and outside-w
   assert.ok(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel/agent.ts", specifier: "node:fs", importedNames: ["readFileSync"] }, strictPolicy()).length > 0);
   assert.ok(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel-entry.ts", specifier: "./node/index.js", resolvedFile: "packages/agent-runtime/src/node/index.ts", importedNames: ["Hidden"] }, strictPolicy()).length > 0);
   assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-runtime/src/kernel/agent.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentRunScope"], typeOnly: true,
-    resolvedFile: "packages/agent-contracts/src/execution.ts" }, strictPolicy()), []);
+    resolvedFile: "packages/agent-contracts/src/execution/execution.ts" }, strictPolicy()), []);
 });
 
 test("routes cannot hide SessionStore or repositories in the services root or import aliases", () => {
@@ -503,8 +503,8 @@ test("portable contracts reject Node, value environment imports, and external im
     { specifier: "node:fs", importedNames: ["readFileSync"] },
     { specifier: "zod", importedNames: ["z"] },
     { specifier: "@vykor/environment", importedNames: ["createWorkspaceBinding"] },
-  ]) assert.ok(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools.ts", ...input }, strictPolicy()).length > 0);
-  assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools.ts", specifier: "@vykor/environment", importedNames: ["ExecutionEnvironmentHandle"], typeOnly: true }, strictPolicy()), []);
+  ]) assert.ok(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools/tools.ts", ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/agent-contracts/src/tools/tools.ts", specifier: "@vykor/environment", importedNames: ["ExecutionEnvironmentHandle"], typeOnly: true }, strictPolicy()), []);
 });
 
 test("shared type diamonds and export cycles preserve every forbidden origin", () => {
@@ -524,7 +524,7 @@ test("shared type diamonds and export cycles preserve every forbidden origin", (
 
 test("P1 foundation packages reject upward dependencies and config cannot depend on MCP runtime", () => {
   const policy = strictPolicy();
-  for (const fromFile of ["packages/agent-contracts/src/messages.ts", "packages/host-config/src/settings/settings.ts"]) {
+  for (const fromFile of ["packages/agent-contracts/src/conversation/messages.ts", "packages/host-config/src/settings/settings.ts"]) {
     for (const specifier of ["@vykor/core", "@vykor/agent-runtime", "@vykor/mcp", "@vykor/server"]) {
       assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Settings"], typeOnly: true }, policy).length > 0);
     }
@@ -582,10 +582,10 @@ test("P0-P6 exceptions stay retired and Client directly depends only on Protocol
   const fromFile = "packages/client/src/resource.ts";
   for (const input of [
     { specifier: "@vykor/agent-contracts", importedNames: ["McpCallResultData"], typeOnly: true },
-    { specifier: "../../agent-contracts/src/tool-data.js", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["parseMcpCallResultData"] },
+    { specifier: "../../agent-contracts/src/tools/tool-data.js", resolvedFile: "packages/agent-contracts/src/tools/tool-data.ts", importedNames: ["parseMcpCallResultData"] },
     { specifier: "@vykor/server", importedNames: ["Server"] },
   ]) assert.ok(checkModuleDependency({ fromFile, ...input }, strictPolicy()).length > 0);
-  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["parseMcpCallResultData"], declarationOrigin: true }, strictPolicy()), []);
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", resolvedFile: "packages/agent-contracts/src/tools/tool-data.ts", importedNames: ["parseMcpCallResultData"], declarationOrigin: true }, strictPolicy()), []);
 });
 
 test("marketplace sources consume distribution contracts while Client still goes through Protocol", () => {
@@ -602,9 +602,9 @@ test("marketplace sources consume distribution contracts while Client still goes
 test("Client may consume canonical data through Protocol but cannot import contracts through aliases", () => {
   policyFixture({
     "packages/client/package.json": JSON.stringify({ name: "@vykor/client" }),
-    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { ".": "./src/index.ts", "./tool-data": "./src/tool-data.ts" } }),
-    "packages/agent-contracts/src/index.ts": 'export * from "./tool-data.js";',
-    "packages/agent-contracts/src/tool-data.ts": "export interface McpCallResultData { content: unknown[] }; export function parseMcpCallResultData() {}",
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { ".": "./src/index.ts", "./tool-data": "./src/tools/tool-data.ts" } }),
+    "packages/agent-contracts/src/index.ts": 'export * from "./tools/tool-data.js";',
+    "packages/agent-contracts/src/tools/tool-data.ts": "export interface McpCallResultData { content: unknown[] }; export function parseMcpCallResultData() {}",
     "packages/protocol/src/index.ts": 'export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-contracts/tool-data";',
     "packages/client/src/index.ts": 'export { parseMcpCallResultData } from "@vykor/protocol"; import type { McpCallResultData } from "@vykor/protocol";',
   }, (directory, write) => {
@@ -619,9 +619,9 @@ test("Protocol can only consume the canonical data entry, including relative pat
   const fromFile = "packages/protocol/src/events.ts";
   for (const input of [
     { specifier: "@vykor/agent-contracts", importedNames: ["AgentRunHandle"], typeOnly: true },
-    { specifier: "../../agent-contracts/src/execution.js", resolvedFile: "packages/agent-contracts/src/execution.ts", importedNames: ["AgentRunScope"], typeOnly: true },
+    { specifier: "../../agent-contracts/src/execution/execution.js", resolvedFile: "packages/agent-contracts/src/execution/execution.ts", importedNames: ["AgentRunScope"], typeOnly: true },
   ]) assert.ok(checkModuleDependency({ fromFile, ...input }, strictPolicy()).length > 0);
-  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/agent-contracts/tool-data", resolvedFile: "packages/agent-contracts/src/tool-data.ts", importedNames: ["McpCallResultData"], typeOnly: true }, strictPolicy()), []);
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/agent-contracts/tool-data", resolvedFile: "packages/agent-contracts/src/tools/tool-data.ts", importedNames: ["McpCallResultData"], typeOnly: true }, strictPolicy()), []);
 });
 
 test("retired Kernel source paths cannot return as forwarding files", () => {
@@ -766,8 +766,8 @@ test("P13 allows storage canonical plugin data origins without opening a direct 
 
 test("pure data tracing checks arrow signatures and inferred async returns without scanning function bodies", () => {
   policyFixture({
-    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/permissions.ts" } }),
-    "packages/agent-contracts/src/permissions.ts": [
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/policy/permissions.ts" } }),
+    "packages/agent-contracts/src/policy/permissions.ts": [
       'export const arrow = (): Promise<void> => Promise.resolve();',
       'export async function inferred() {}',
       'export const asyncArrow = async () => {};',
@@ -785,8 +785,8 @@ test("pure data tracing checks arrow signatures and inferred async returns witho
 
 test("pure data tracing checks runtime references in the selected declaration and its private aliases", () => {
   policyFixture({
-    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/permissions.ts" } }),
-    "packages/agent-contracts/src/permissions.ts": 'type Pending = Promise<string>; type Stop = AbortSignal; export interface PermissionChecker { check(): Pending; signal: Stop } export type ApprovalMode = "ask";',
+    "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { "./permissions": "./src/policy/permissions.ts" } }),
+    "packages/agent-contracts/src/policy/permissions.ts": 'type Pending = Promise<string>; type Stop = AbortSignal; export interface PermissionChecker { check(): Pending; signal: Stop } export type ApprovalMode = "ask";',
     "packages/domain-contracts/package.json": JSON.stringify({ name: "@vykor/domain-contracts" }),
     "packages/domain-contracts/src/bridge.ts": 'import type { PermissionChecker as Checker } from "@vykor/agent-contracts/permissions"; type Private = Checker; export interface Wrapped { checker: Private }',
     "packages/domain-contracts/src/bad.ts": 'import type { Wrapped as Alias } from "./bridge.js"; export type Data = Alias;',

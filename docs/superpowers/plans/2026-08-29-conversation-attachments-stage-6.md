@@ -16,7 +16,7 @@
 
 - `packages/services/src/attachment/attachment-text.ts`：文本候选分类、严格编码识别、换行归一化和有界按行读取。
 - `packages/services/src/attachment/attachment-application-service.ts`：对 ready asset 暴露受控文本读取和只读资源物化。
-- `packages/agent-contracts/src/tools.ts`、`packages/core/src/types/runtime.ts`：定义并注入 `AgentAttachmentResourceHost`。
+- `packages/agent-contracts/src/tools/tools.ts`、`packages/core/src/types/runtime.ts`：定义并注入 `AgentAttachmentResourceHost`。
 - `packages/tools/src/file/attachment-uri.ts`、`packages/tools/src/file/read.ts`：解析 `attachment://` 并复用现有 Read。
 - `packages/server/src/application/attachment-routing/*`：文本/代码路由、预览和二进制阻止。
 - `packages/server/src/application/attachment-resource/*`：校验 session 引用、调用 Attachment Service、管理会话只读资源目录。
@@ -82,7 +82,7 @@ git commit -m "feat(attachments): route safe text resources"
 ### 任务 2：让现有 Read 安全读取 attachment URI（已完成）
 
 **文件：**
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/core/src/index.ts`
@@ -149,10 +149,10 @@ git commit -m "feat(tools): read conversation attachment resources"
 - 创建：`packages/server/src/application/attachment-resource/__test__/session-attachment-resources.test.ts`
 - 修改：`packages/server/src/application/session/session-run-executor.ts`
 - 修改：`packages/server/src/application/session/__test__/session-run-executor.test.ts`
-- 修改：`packages/sandbox/src/types.ts`
+- 修改：`packages/sandbox/src/environment/types.ts`
 - 修改：`packages/sandbox/src/lifecycle.ts`
 - 修改：`packages/sandbox/src/docker-backend.ts`
-- 修改：`packages/sandbox/src/index.test.ts`
+- 修改：`packages/sandbox/src/__test__/index.test.ts`
 - 修改：`apps/desktop/src/shared/attachment-types.ts`
 - 修改：`apps/desktop/src/shared/attachment-types.test.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/composer-attachments.tsx`

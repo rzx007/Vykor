@@ -26,9 +26,9 @@ Base UI/shadcn 组件、pnpm workspace。
 
 ### 新建
 
-- `packages/api/src/providers/request-header-templates.ts`：请求头规范化、变量校验和
+- `packages/api/src/providers/requests/request-header-templates.ts`：请求头规范化、变量校验和
   模板展开；不读取 settings，不识别供应商。
-- `packages/api/src/providers/request-header-templates.test.ts`：模板与 HTTP 请求头
+- `packages/api/src/providers/requests/__test__/request-header-templates.test.ts`：模板与 HTTP 请求头
   安全规则单元测试。
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/request-header-form.ts`：
   Desktop 请求头行与 Record 之间的纯函数转换、表单级完整性校验。
@@ -109,8 +109,8 @@ Base UI/shadcn 组件、pnpm workspace。
 
 **文件：**
 
-- 创建：`packages/api/src/providers/request-header-templates.ts`
-- 创建：`packages/api/src/providers/request-header-templates.test.ts`
+- 创建：`packages/api/src/providers/requests/request-header-templates.ts`
+- 创建：`packages/api/src/providers/requests/__test__/request-header-templates.test.ts`
 - 修改：`packages/api/src/index.ts`
 
 - [ ] **步骤 1：把专用测试改写为模板契约的失败测试**
@@ -227,8 +227,8 @@ pnpm --filter @vykor/api check-types
 - [ ] **步骤 5：提交模板内核**
 
 ```bash
-git add packages/api/src/providers/request-header-templates.ts `
-  packages/api/src/providers/request-header-templates.test.ts `
+git add packages/api/src/providers/requests/request-header-templates.ts `
+  packages/api/src/providers/requests/__test__/request-header-templates.test.ts `
   packages/api/src/index.ts
 git commit -m "feat(api): add provider request header templates"
 ```

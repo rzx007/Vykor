@@ -1,50 +1,45 @@
 # @vykor/mcp
 
-MCP (Model Context Protocol) client with stdio transport support.
+MCP（让模型发现外部工具并调用它们的协议）客户端。支持 stdio 本地进程、Streamable HTTP 和 SSE 连接，统一发现工具、调用工具和读取资源。
 
-## Streamable HTTP OAuth
+## 目录导航
 
-HTTP OAuth 支持 PKCE、metadata 发现、动态客户端注册和 Token 刷新。网络、429、5xx 等临时刷新失败保留凭据；确认失效才提示重新授权。401 最多刷新恢复一次，旧请求失败不会把另一轮登录保存的新凭据标成失效。
+- [src/](src/README.md)：`McpClientManager`、公开导出和完整连接流程。
+- [src/connections/](src/connections/README.md)：传输选择、本地进程传输和运行实例协调接口。
+- [src/resources/](src/resources/README.md)：绑定具体连接的应用资源读取和订阅。
+- [src/oauth/](src/oauth/README.md)：HTTP 授权发现、登录、刷新、回调和状态判断。
 
-- `oauth.resourceUrl` 可指定 Token 的资源标识；发现结果必须与预期标识一致，并包含当前 MCP endpoint。授权、交换和刷新使用同一个已验证值。
-- `oauth.callbackUrl` 可指定固定 loopback HTTP 地址或手动模式的 HTTPS 接收地址，不能与 `oauth.callbackPort` 同时设置。HTTPS 接收地址由用户自行提供，本项目不托管回调代理。
-- 权限、资源或固定回调配置变化后，下次使用会提示重新授权，不自动打开浏览器或重放工具调用。
+## 入口与运行过程
 
-本包只处理协议和连接决策。凭据文件及跨进程锁由 `@vykor/auth` 管理，登录/退出编排与活动 Session 同步由 `@vykor/server` 管理。
-
-凭据继续保存在独立明文 JSON 文件，OS Keyring 与 file fallback 暂缓。新代码可读 v1，第一次实际修改写为 v2；v2 仅增加退出计数，防止退出前开始的旧登录迟到后恢复凭据。只读查询不迁移。旧客户端不能读取 v2，同一配置目录的 CLI、daemon 和 Desktop 应一起更新。
-
-## 功能
-
-- **McpClientManager**: MCP 服务器连接管理
-- **StdioTransport**: stdio 传输（通过 @modelcontextprotocol/sdk）
-- **工具发现**: 自动发现并注册 MCP 工具
-- **资源读取**: MCP 资源读取
-
-## 使用
+包入口是 [src/index.ts](src/index.ts)。`McpClientManager.connect` 选择传输，连接 SDK 客户端并发现工具与资源；`getAsToolDefinitions` 返回 Agent 能调用的工具定义。工具名带 `mcp__<server>__<tool>` 前缀；`callTool` 返回统一结果，`readResource` 返回资源文本，`disconnectAll` 释放连接。
 
 ```ts
 import { McpClientManager } from "@vykor/mcp";
 
 const manager = new McpClientManager();
-await manager.connect("my-server", {
+await manager.connect("files", {
   command: "npx",
-  args: ["-y", "@modelcontextprotocol/server-filesystem"]
+  args: ["-y", "@modelcontextprotocol/server-filesystem"],
 });
-
-// 获取工具
 const tools = manager.getAsToolDefinitions();
+// 宿主结束使用后调用 await manager.disconnectAll()。
 ```
 
-## API
+管理器持有连接、SDK 客户端和传输的内存 Map。工具与应用资源绑定具体客户端，替换同名连接不会把旧调用转发到新客户端；活动 Run 可通过 `retainCurrentConnections` 暂时保留旧连接。
 
-- `connect(name, config)` - 连接 MCP 服务器
-- `disconnect(name)` - 断开连接
-- `callTool(server, tool, args)` - 调用工具
-- `readResource(server, uri)` - 读取资源
+## Streamable HTTP OAuth
 
-## 测试
+OAuth 支持 PKCE（使用一次性校验值保护授权码交换）、元数据发现、动态客户端注册和令牌刷新。网络、429、5xx 等临时刷新失败保留凭据；确认失效才提示重新授权。401 最多刷新恢复一次，旧请求失败不会把另一轮登录保存的新凭据标成失效。
+
+`oauth.resourceUrl` 指定令牌资源标识；发现结果须匹配预期并包含当前 endpoint，授权、交换、刷新使用同一验证值。`oauth.callbackUrl` 支持固定 loopback HTTP 或手动模式的 HTTPS 接收地址，不能与 `oauth.callbackPort` 同时设置；HTTPS 接收地址由用户提供。权限、资源或固定回调变化后提示重新授权，运行请求不会自动打开浏览器或重放工具调用。
+
+协议与连接决策在本包；凭据文件及跨进程锁由 `@vykor/auth` 管理，登录/退出编排与活动 Session 同步由 `@vykor/server` 管理。凭据是独立明文 JSON，系统凭据库（OS Keyring）及配套文件兜底方案暂缓。存储可读 v1，首次实际修改写 v2；v2 增加退出计数，拒绝迟到的旧登录恢复凭据。只读不迁移；旧客户端不能读取 v2，共享配置目录的 CLI、daemon 和 Desktop 应一起更新。
+
+## 新增代码与检查
+
+传输与协调接口、资源能力、授权协议分别进入三个分类。单模块测试放同层 `__test__/`；管理器及跨分类连接场景放 `src/__test__/`。
 
 ```bash
 pnpm --filter @vykor/mcp test
+pnpm --filter @vykor/mcp check-types
 ```

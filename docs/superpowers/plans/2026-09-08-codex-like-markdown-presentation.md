@@ -14,8 +14,8 @@
 
 - 修改 `packages/prompts/src/index.ts`：定义并导出 Markdown 表达规范生成函数，在运行时提示词选项中公开关闭选项。
 - 修改 `packages/prompts/src/prompt-segments-assembly.ts`：在稳定系统层的单一位置装配表达规范。
-- 修改 `packages/prompts/src/index.test.ts`：验证默认启用和显式关闭的扁平系统提示词。
-- 修改 `packages/prompts/src/ledger-segments.test.ts`：验证规范进入稳定 `system` 分段。
+- 修改 `packages/prompts/src/__test__/index.test.ts`：验证默认启用和显式关闭的扁平系统提示词。
+- 修改 `packages/prompts/src/__test__/ledger-segments.test.ts`：验证规范进入稳定 `system` 分段。
 - 修改 `apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx`：只拓宽消息正文区域。
 - 修改 `apps/desktop/src/renderer/src/assets/main.css`：增加助手消息专用的标题、列表、引用块、段落和链接覆盖。
 - 修改 `apps/desktop/src/renderer/src/markdown-table-styles.test.ts`：扩展为对话 Markdown 排版样式回归测试。
@@ -26,12 +26,12 @@
 
 - 修改：`packages/prompts/src/index.ts`
 - 修改：`packages/prompts/src/prompt-segments-assembly.ts`
-- 测试：`packages/prompts/src/index.test.ts`
-- 测试：`packages/prompts/src/ledger-segments.test.ts`
+- 测试：`packages/prompts/src/__test__/index.test.ts`
+- 测试：`packages/prompts/src/__test__/ledger-segments.test.ts`
 
 - [ ] **步骤 1：编写失败的扁平提示词测试**
 
-在 `packages/prompts/src/index.test.ts` 的 `buildRuntimeSystemPrompt` 测试组增加两个测试：默认运行时提示词包含 `# Markdown Presentation`，传入 `includeMarkdownPresentation: false` 后不包含该标题。
+在 `packages/prompts/src/__test__/index.test.ts` 的 `buildRuntimeSystemPrompt` 测试组增加两个测试：默认运行时提示词包含 `# Markdown Presentation`，传入 `includeMarkdownPresentation: false` 后不包含该标题。
 
 ```ts
 it("includes the Markdown presentation policy by default", async () => {
@@ -53,7 +53,7 @@ it("can omit the Markdown presentation policy", async () => {
 
 - [ ] **步骤 2：编写失败的分层测试**
 
-在 `packages/prompts/src/ledger-segments.test.ts` 调用默认 `buildTaggedPromptSegments`，确认标题所在分段为 `layer: "stable"`、`bucket: "system"`，且只出现一次。
+在 `packages/prompts/src/__test__/ledger-segments.test.ts` 调用默认 `buildTaggedPromptSegments`，确认标题所在分段为 `layer: "stable"`、`bucket: "system"`，且只出现一次。
 
 ```ts
 const presentation = tagged.filter((segment) =>
@@ -119,7 +119,7 @@ pnpm --filter @vykor/prompts test -- src/index.test.ts src/ledger-segments.test.
 - [ ] **步骤 6：提交提示词规范**
 
 ```powershell
-git add -- packages/prompts/src/index.ts packages/prompts/src/prompt-segments-assembly.ts packages/prompts/src/index.test.ts packages/prompts/src/ledger-segments.test.ts
+git add -- packages/prompts/src/index.ts packages/prompts/src/prompt-segments-assembly.ts packages/prompts/src/__test__/index.test.ts packages/prompts/src/__test__/ledger-segments.test.ts
 git commit -m "feat(prompts): guide compact markdown responses"
 ```
 

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { normalizeTokenMetering } from "./token-metering.js";
+import { normalizeTokenMetering } from "./streaming/token-metering.js";
 import type { StreamingMessageClient, StreamMessageParams, StreamEvent, ToolDefinition } from "@vykor/agent-contracts";
 import type { ContentBlock } from "@vykor/agent-contracts";
 import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/host-config";
@@ -8,20 +8,20 @@ import {
   streamIncompleteFailure,
   toModelRequestFailure,
 } from "../errors/index";
-import { createRequestLifecycle } from "./retry";
+import { createRequestLifecycle } from "./requests/retry";
 import {
   createDsmlRecoveryScanner,
   type RecoveredToolCall,
-} from "./dsml-tool-call-recovery.js";
-import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
+} from "./tools/dsml-tool-call-recovery.js";
+import { createToolPathSummary, isFileTool } from "./tools/tool-path-summary.js";
 import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
   replaceMissingToolResultImages,
-} from "./native-image-payload.js";
-import { extractThinkBlocks } from "./think-blocks.js";
-import { parseToolInput } from "./tool-input.js";
+} from "./media/native-image-payload.js";
+import { extractThinkBlocks } from "./streaming/think-blocks.js";
+import { parseToolInput } from "./tools/tool-input.js";
 
 // Model families that reject `max_tokens` and require `max_completion_tokens`.
 const MAX_COMPLETION_TOKEN_MODEL_PREFIXES = ["gpt-5", "o1", "o3", "o4"];

@@ -441,7 +441,7 @@ HTTP `/jobs` 由 daemon Bearer token 保护。HTTP 里的 `sessionId` 用于选�
 | `packages/agent-runtime/src/node/jobs/local-agent-job-host.ts`                | standalone SDK 的 child、DetachedProcessSupervisor、Workflow 本地聚合 |
 | `packages/server/src/http/routes/job.ts`                  | `/jobs` HTTP API                                        |
 | `packages/client/src/transport/http-client.ts`            | TypeScript HTTP client                                  |
-| `packages/terminal-node/src/local-terminal-provider.ts`   | Terminal 输出、等待和真实退出生命周期                   |
+| `packages/terminal-node/src/providers/local-terminal-provider.ts`   | Terminal 输出、等待和真实退出生命周期                   |
 | `packages/server/src/application/session/transcript/session-execution-projector.ts` | DetachedProcessSupervisor 到 durable execution 的持续投影          |
 | `packages/agent-runtime/src/node/workflow/workflow-host.ts`              | 活动 Workflow、owner 隔离、取消收尾与终态保存            |
 

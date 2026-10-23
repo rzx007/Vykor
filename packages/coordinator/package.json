@@ -10,8 +10,8 @@
       "types": "./src/index.ts"
     },
     "./coordinator-mode": {
-      "import": "./src/coordinator-mode.ts",
-      "types": "./src/coordinator-mode.ts"
+      "import": "./src/runtime/coordinator-mode.ts",
+      "types": "./src/runtime/coordinator-mode.ts"
     },
     "./definitions": {
       "import": "./src/definitions/index.ts",

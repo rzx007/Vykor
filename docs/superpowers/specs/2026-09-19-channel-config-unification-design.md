@@ -171,7 +171,7 @@ export interface ChannelConfigFile {
 | `packages/auth/src/__test__/channel-credential-store.test.ts` | 重命名为 `channel-config-store.test.ts`；改为 v2 用例 + v1 当空用例 |
 | `packages/auth/src/index.ts` | 导出 `ChannelConfigStore`、`ChannelConfigStoreError`、`FeishuChannelConfig`；删除旧 `ChannelCredentialStore*` 导出 |
 | `packages/channels/src/core/manager.ts` | 新增 `channelPolicies`，按渠道门控 |
-| `packages/channels/src/__test__/manager.test.ts` | 新增“按渠道开关”用例 |
+| `packages/channels/src/core/__test__/manager.test.ts` | 新增“按渠道开关”用例 |
 | `apps/cli/src/commands/channels.ts` | `AssembledChannels` 增 `policies`；`assembleChannelAdapters(store)`；`serve`/`status` 读 store；删除 `settings.channels` 读取 |
 | `apps/cli/src/commands/channels-onboarding.ts` | 依赖接口改为 store 语义（`getFeishu/setFeishu/updateFeishu`）；删除 `loadSettings/saveSettings` 依赖与跨文件回滚 |
 | `apps/cli/src/commands/channels.test.ts` / `channels-onboarding.test.ts` | 改为注入 `ChannelConfigStore`；删跨文件回滚用例 |

@@ -167,7 +167,7 @@ settings 与 credentials 是两个文件，现有 Provider Service 无法提供�
 
 ### 3. Header Template：唯一的展开边界
 
-在 `packages/api/src/providers/request-header-templates.ts` 新增一个与具体供应商
+在 `packages/api/src/providers/requests/request-header-templates.ts` 新增一个与具体供应商
 无关的小模块。它同时提供规范化校验和运行时展开：
 
 ```ts

@@ -6,7 +6,7 @@
 
 - 删除 apps/mcp-feishu 的唯一源码 src/index.ts。这个独立 stdio MCP 入口提供旧 send_feishu_message 工具，仍读取 settings.json 的 channels.feishu；没有包清单、构建、启动、安装或 CI 接入。
 - README 项目结构不再列出旧入口；全仓检索未发现其他把它作为当前入口的文档。历史方案与交接记录保留原文，供追溯，不作为现行运行说明。
-- 当前飞书渠道继续使用 [FeishuAdapter](../../../packages/channels/src/impl/feishu.ts)，推送继续使用 [FeishuPush](../../../packages/tools/src/channels/feishu-push.ts)，通过 [Node 默认工具注册表](../../../packages/agent-runtime/src/node/tools/default-tool-registry.ts) 和配置适配取得 channel-credentials.json 中的配置。
+- 当前飞书渠道继续使用 [FeishuAdapter](../../../packages/channels/src/adapters/feishu/feishu.ts)，推送继续使用 [FeishuPush](../../../packages/tools/src/channels/feishu-push.ts)，通过 [Node 默认工具注册表](../../../packages/agent-runtime/src/node/tools/default-tool-registry.ts) 和配置适配取得 channel-credentials.json 中的配置。
 - 不改变现行飞书实现、工具注册、配置、依赖或 CI；不修改其他并行任务的代码。
 
 ## 集中验证

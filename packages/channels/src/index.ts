@@ -74,15 +74,15 @@ export type { InboundMessage, OutboundMessage } from "./bus/queue";
 export { isAllowed } from "./bus/acl";
 export { ChannelManager } from "./core/manager";
 export type { ChannelManagerOptions, ChannelStatus } from "./core/manager";
-export { StdioAdapter } from "./impl/stdio";
-export { HttpAdapter } from "./impl/http";
-export { FeishuAdapter } from "./impl/feishu";
-export type { FeishuConfig } from "./impl/feishu";
-export { FeishuRegistration, FEISHU_ONBOARDING_TENANT_SCOPES } from "./impl/feishu-registration";
+export { StdioAdapter } from "./adapters/stdio/stdio";
+export { HttpAdapter } from "./adapters/http/http";
+export { FeishuAdapter } from "./adapters/feishu/feishu";
+export type { FeishuConfig } from "./adapters/feishu/feishu";
+export { FeishuRegistration, FEISHU_ONBOARDING_TENANT_SCOPES } from "./adapters/feishu/feishu-registration";
 export type {
   FeishuRegistrationState,
   FeishuRegistrationStatus,
   FeishuRegistrationCredentials,
-} from "./impl/feishu-registration";
-export { verifyFeishuCredentials } from "./impl/feishu-verify";
-export type { VerifiedFeishuBot } from "./impl/feishu-verify";
+} from "./adapters/feishu/feishu-registration";
+export { verifyFeishuCredentials } from "./adapters/feishu/feishu-verify";
+export type { VerifiedFeishuBot } from "./adapters/feishu/feishu-verify";

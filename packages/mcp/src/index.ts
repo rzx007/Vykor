@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import {
   captureMcpAppResources,
   type CapturedMcpAppResources,
-} from "./app-resources.js";
-export type { CapturedMcpAppResources } from "./app-resources.js";
+} from "./resources/app-resources.js";
+export type { CapturedMcpAppResources } from "./resources/app-resources.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -12,9 +12,9 @@ import type { McpRemoteServerConfig, McpServerConfig, Settings } from "@vykor/ho
 import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
-import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
+import { SandboxStdioClientTransport } from "./connections/sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
-import { resolveTransportKind } from "./connection-types.js";
+import { resolveTransportKind } from "./connections/connection-types.js";
 import { McpResultDataError, mcpResultModelText, normalizeMcpToolMetadata, parseMcpCallResultData } from "@vykor/agent-contracts";
 import type {
   McpConnection,
@@ -24,10 +24,10 @@ import type {
   McpToolInfo,
   McpTransportKind,
   PreparedMcpConnection,
-} from "./connection-types.js";
+} from "./connections/connection-types.js";
 
 export type { McpServerConfig };
-export { resolveTransportKind } from "./connection-types.js";
+export { resolveTransportKind } from "./connections/connection-types.js";
 export type {
   McpConnection,
   McpConnectionActivation,
@@ -36,7 +36,7 @@ export type {
   McpToolInfo,
   McpTransportKind,
   PreparedMcpConnection,
-} from "./connection-types.js";
+} from "./connections/connection-types.js";
 
 export class McpClientManager {
   private connections = new Map<string, McpConnection>();
@@ -652,4 +652,4 @@ export {
   type McpRuntimeConnectionCoordinator,
   type ActiveMcpRuntimeHandle,
   type McpRuntimeRegistry,
-} from "./runtime-coordination.js";
+} from "./connections/runtime-coordination.js";

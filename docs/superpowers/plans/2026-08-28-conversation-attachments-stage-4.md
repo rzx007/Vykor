@@ -234,11 +234,11 @@ git commit -m "feat(attachments): route safe native image blocks (stage 4 task 2
 **文件：**
 
 - 修改：`packages/api/src/providers/openai.ts`
-- 修改：`packages/api/src/providers/openai.test.ts`
+- 修改：`packages/api/src/providers/__test__/openai.test.ts`
 - 修改：`packages/api/src/providers/codex.ts`
-- 修改：`packages/api/src/providers/codex.test.ts`
+- 修改：`packages/api/src/providers/__test__/codex.test.ts`
 - 修改：`packages/api/src/providers/anthropic.ts`
-- 修改：`packages/api/src/providers/anthropic.test.ts`
+- 修改：`packages/api/src/providers/__test__/anthropic.test.ts`
 - 修改：`packages/api/src/errors/index.ts`（只在统一 mismatch 分类需要时）
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`

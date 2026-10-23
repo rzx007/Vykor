@@ -26,11 +26,11 @@
 - `packages/environment/tsconfig.json`：环境契约包 TypeScript 配置。
 - `packages/environment/src/types.ts`：环境、工作区、路径、进程与文件接口。
 - `packages/environment/src/index.ts`：环境契约公共导出。
-- `packages/environment/src/types.test.ts`：工作区绑定和环境信息的不变量测试。
-- `packages/sandbox/src/execution-config.ts`：Desktop/CLI 环境配置解析与校验。
-- `packages/sandbox/src/execution-config.test.ts`：surface、优先级和当前配置结构测试。
-- `packages/sandbox/src/execution-environment.ts`：Local/Docker 第一阶段环境句柄。
-- `packages/sandbox/src/execution-environment.test.ts`：环境创建顺序、信息与 fail-closed 测试。
+- `packages/environment/src/__test__/types.test.ts`：工作区绑定和环境信息的不变量测试。
+- `packages/sandbox/src/configuration/execution-config.ts`：Desktop/CLI 环境配置解析与校验。
+- `packages/sandbox/src/configuration/__test__/execution-config.test.ts`：surface、优先级和当前配置结构测试。
+- `packages/sandbox/src/environment/execution-environment.ts`：Local/Docker 第一阶段环境句柄。
+- `packages/sandbox/src/environment/__test__/execution-environment.test.ts`：环境创建顺序、信息与 fail-closed 测试。
 - `packages/tools/src/file/access/environment-path.ts`：文件工具的执行路径解析适配。
 - `packages/tools/src/file/access/__test__/environment-path.test.ts`：容器路径、相对路径和越界测试。
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/runtime-setting-control.tsx`：运行环境设置控件。
@@ -41,27 +41,27 @@
 
 - `packages/core/src/types/settings.ts`：增加 Terminal 设置。
 - `packages/core/src/config/settings.ts`：Terminal 默认值与深合并。
-- `packages/agent-contracts/src/tools.ts`：ToolContext 环境能力和工具执行域。
+- `packages/agent-contracts/src/tools/tools.ts`：ToolContext 环境能力和工具执行域。
 - `packages/core/src/engine/tool-registry.ts`：保留执行域元数据。
 - `packages/core/package.json`：增加环境契约依赖。
-- `packages/sandbox/src/types.ts`：受管挂载、surface 和环境启动参数。
-- `packages/sandbox/src/config.ts`：受管 Desktop 配置归一化。
+- `packages/sandbox/src/environment/types.ts`：受管挂载、surface 和环境启动参数。
+- `packages/sandbox/src/configuration/config.ts`：受管 Desktop 配置归一化。
 - `packages/sandbox/src/docker-backend.ts`：统一 `/workspace`、Skills rw 挂载和单版本替换。
 - `packages/sandbox/src/lifecycle.ts`：从受管挂载创建环境。
-- `packages/sandbox/src/shell.ts`：通过环境进程能力执行。
+- `packages/sandbox/src/process/shell.ts`：通过环境进程能力执行。
 - `packages/sandbox/src/index.ts`：导出新环境 API。
-- `packages/sandbox/src/index.test.ts`：挂载与过期容器替换测试。
-- `packages/sandbox/e2e/docker.e2e.test.ts`：真实挂载、路径和单版本测试。
+- `packages/sandbox/src/__test__/index.test.ts`：挂载与过期容器替换测试。
+- `packages/sandbox/__test__/e2e/docker.e2e.test.ts`：真实挂载、路径和单版本测试。
 - `packages/tools/src/file/operations.ts`：删除宿主路径到容器路径的工具内转换。
 - `packages/tools/src/file/path.ts`：按 execution cwd 解析路径。
 - `packages/tools/src/file/access/sandbox-guard.ts`：改用结构化环境路径。
 - `packages/tools/src/file/read.ts`、`write.ts`、`edit.ts`、`glob.ts`、`grep.ts`：消费环境文件能力。
 - `packages/tools/src/file/__test__/operations.test.ts`、`read.test.ts`、`edit.test.ts`、`glob.test.ts`：容器路径契约测试。
 - `packages/permissions/src/index.ts`：按 execution path 裁决，并携带可选 host path。
-- `packages/permissions/src/index.test.ts`：当前 pathRules 路径域与审批路径测试。
+- `packages/permissions/src/__test__/index.test.ts`：当前 pathRules 路径域与审批路径测试。
 - `packages/permissions/package.json`：增加环境契约依赖。
 - `packages/prompts/src/index.ts`：接收已经探测的环境信息。
-- `packages/prompts/src/index.test.ts`：本机/Docker 环境段测试。
+- `packages/prompts/src/__test__/index.test.ts`：本机/Docker 环境段测试。
 - `packages/agent-runtime/src/node/runtime/agent-options.ts`：接收环境覆盖。
 - `packages/agent-runtime/src/node/runtime/agent-composition.ts`：先创建环境，再创建 Prompt 和 Runtime。
 - `packages/agent-runtime/src/node/runtime/default-runtime.ts`：删除内部 Sandbox attach，使用环境句柄。
@@ -74,7 +74,7 @@
 - `packages/tools/src/meta/skill.ts`：Skill file/root 使用环境路径呈现。
 - `packages/tools/src/meta/__test__/meta.test.ts`：Skill 路径和 Registry 刷新测试。
 - `packages/skills/src/index.ts`：可从不可变基线重建 Registry。
-- `packages/skills/src/index.test.ts`：删除、重命名和来源优先级测试。
+- `packages/skills/src/__test__/index.test.ts`：删除、重命名和来源优先级测试。
 - `apps/desktop/src/shared/settings-types.ts`：Desktop 环境状态和更新输入。
 - `apps/desktop/src/shared/ipc-channels.ts`、`desktop-api-contract.ts`：运行环境设置 IPC。
 - `apps/desktop/src/preload/desktop-api.ts`：暴露更新方法。
@@ -94,7 +94,7 @@
 - 创建：`packages/environment/tsconfig.json`
 - 创建：`packages/environment/src/types.ts`
 - 创建：`packages/environment/src/index.ts`
-- 创建：`packages/environment/src/types.test.ts`
+- 创建：`packages/environment/src/__test__/types.test.ts`
 - 修改：`pnpm-lock.yaml`
 
 - [ ] **步骤 1：编写 WorkspaceBinding 不变量测试**
@@ -188,8 +188,8 @@ git commit -m "feat(environment): define execution environment contracts"
 
 **文件：**
 
-- 创建：`packages/sandbox/src/execution-config.ts`
-- 创建：`packages/sandbox/src/execution-config.test.ts`
+- 创建：`packages/sandbox/src/configuration/execution-config.ts`
+- 创建：`packages/sandbox/src/configuration/__test__/execution-config.test.ts`
 - 修改：`packages/core/src/types/settings.ts`
 - 修改：`packages/core/src/config/settings.ts`
 - 修改：`packages/sandbox/src/index.ts`
@@ -311,12 +311,12 @@ git commit -m "feat(sandbox): resolve managed execution environment settings"
 
 **文件：**
 
-- 修改：`packages/sandbox/src/types.ts`
-- 修改：`packages/sandbox/src/config.ts`
+- 修改：`packages/sandbox/src/environment/types.ts`
+- 修改：`packages/sandbox/src/configuration/config.ts`
 - 修改：`packages/sandbox/src/docker-backend.ts`
 - 修改：`packages/sandbox/src/lifecycle.ts`
-- 修改：`packages/sandbox/src/index.test.ts`
-- 修改：`packages/sandbox/e2e/docker.e2e.test.ts`
+- 修改：`packages/sandbox/src/__test__/index.test.ts`
+- 修改：`packages/sandbox/__test__/e2e/docker.e2e.test.ts`
 
 - [ ] **步骤 1：编写受管挂载参数测试**
 
@@ -388,9 +388,9 @@ git commit -m "feat(sandbox): manage workspace and skill mounts"
 
 **文件：**
 
-- 创建：`packages/sandbox/src/execution-environment.ts`
-- 创建：`packages/sandbox/src/execution-environment.test.ts`
-- 修改：`packages/sandbox/src/shell.ts`
+- 创建：`packages/sandbox/src/environment/execution-environment.ts`
+- 创建：`packages/sandbox/src/environment/__test__/execution-environment.test.ts`
+- 修改：`packages/sandbox/src/process/shell.ts`
 - 修改：`packages/sandbox/src/index.ts`
 - 修改：`packages/sandbox/package.json`
 
@@ -465,7 +465,7 @@ git commit -m "feat(sandbox): expose local and Docker environment handles"
 
 **文件：**
 
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/package.json`
 - 创建：`packages/tools/src/file/access/environment-path.ts`
 - 创建：`packages/tools/src/file/access/__test__/environment-path.test.ts`
@@ -558,7 +558,7 @@ git commit -m "refactor(tools): resolve files through execution environment"
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 - 修改：`packages/prompts/src/index.ts`
-- 修改：`packages/prompts/src/index.test.ts`
+- 修改：`packages/prompts/src/__test__/index.test.ts`
 - 修改：`packages/agent-runtime/package.json`
 - 修改：`packages/prompts/package.json`
 
@@ -640,7 +640,7 @@ git commit -m "refactor(agent-runtime): bind agents to resolved environments"
 
 **文件：**
 
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 修改：`packages/tools/src/registry.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
@@ -725,7 +725,7 @@ git commit -m "feat(runtime): enforce tool execution domains"
 **文件：**
 
 - 修改：`packages/skills/src/index.ts`
-- 修改：`packages/skills/src/index.test.ts`
+- 修改：`packages/skills/src/__test__/index.test.ts`
 - 修改：`packages/tools/src/meta/skill.ts`
 - 修改：`packages/tools/src/meta/__test__/meta.test.ts`
 - 修改：`packages/tools/package.json`
@@ -900,7 +900,7 @@ git commit -m "test(runtime): cover projectless Docker agents"
 
 **文件：**
 
-- 修改：`packages/sandbox/e2e/docker.e2e.test.ts`
+- 修改：`packages/sandbox/__test__/e2e/docker.e2e.test.ts`
 - 修改：`packages/tools/e2e/docker-file-tools.e2e.test.ts`
 - 修改：`docs/sandbox-runtime-flow.md`
 - 修改：`docs/superpowers/specs/2026-09-07-agent-runtime-environment-and-terminal-design.md`

@@ -33,7 +33,7 @@
 ### Task 1: core 事件与消息契约
 
 **Files:**
-- Modify: `packages/agent-contracts/src/events.ts`
+- Modify: `packages/agent-contracts/src/execution/events.ts`
 - Modify: `packages/core/src/types/messages.ts:15-25`
 - Modify: `packages/core/src/types/runtime.ts:241-248`
 - Modify: `packages/core/src/index.ts:17-25`
@@ -81,7 +81,7 @@ Expected: FAIL —— `reasoning_delta` 不在 `StreamEvent` 联合里（类型�
 
 - [ ] **Step 3: 实现类型**
 
-`packages/agent-contracts/src/events.ts` 新增并加入联合：
+`packages/agent-contracts/src/execution/events.ts` 新增并加入联合：
 
 ```ts
 export type ReasoningSource = "reasoning_content" | "think";
@@ -147,7 +147,7 @@ Expected: PASS，类型无错误。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/agent-contracts/src/events.ts packages/core/src/types/messages.ts packages/core/src/types/runtime.ts packages/core/src/index.ts packages/core/src/types/reasoning-contracts.test.ts
+git add packages/agent-contracts/src/execution/events.ts packages/core/src/types/messages.ts packages/core/src/types/runtime.ts packages/core/src/index.ts packages/core/src/types/reasoning-contracts.test.ts
 git commit -m "feat(core): 新增 reasoning 事件与助手消息思考字段"
 ```
 
@@ -157,7 +157,7 @@ git commit -m "feat(core): 新增 reasoning 事件与助手消息思考字段"
 
 **Files:**
 - Modify: `packages/api/src/providers/openai.ts:276-280`（`reasoning_content` 累积处）
-- Test: `packages/api/src/providers/openai.test.ts`
+- Test: `packages/api/src/providers/__test__/openai.test.ts`
 
 **Interfaces:**
 - Consumes: Task 1 的 `ReasoningDeltaEvent`
@@ -165,7 +165,7 @@ git commit -m "feat(core): 新增 reasoning 事件与助手消息思考字段"
 
 - [ ] **Step 1: 写失败测试**
 
-在 `packages/api/src/providers/openai.test.ts` 文件末尾追加：
+在 `packages/api/src/providers/__test__/openai.test.ts` 文件末尾追加：
 
 ```ts
 describe("OpenAICompatibleClient reasoning deltas", () => {
@@ -252,7 +252,7 @@ Expected: PASS（含原有用例）。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/api/src/providers/openai.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "feat(api): reasoning_content 增量产出 reasoning_delta 事件"
 ```
 
@@ -261,10 +261,10 @@ git commit -m "feat(api): reasoning_content 增量产出 reasoning_delta 事件"
 ### Task 3: `<think>` 抽取改为产出思考内容（含 EOF 语义）
 
 **Files:**
-- Create: `packages/api/src/providers/think-blocks.ts`
-- Create: `packages/api/src/providers/think-blocks.test.ts`
+- Create: `packages/api/src/providers/streaming/think-blocks.ts`
+- Create: `packages/api/src/providers/streaming/__test__/think-blocks.test.ts`
 - Modify: `packages/api/src/providers/openai.ts`（正文分支与 EOF 分支）
-- Modify: `packages/api/src/providers/openai.test.ts`（删除迁移后的 `stripThinkBlocks` 测试）
+- Modify: `packages/api/src/providers/__test__/openai.test.ts`（删除迁移后的 `stripThinkBlocks` 测试）
 
 **Interfaces:**
 - Consumes: Task 1 的 `reasoning_delta`
@@ -273,7 +273,7 @@ git commit -m "feat(api): reasoning_content 增量产出 reasoning_delta 事件"
 - [ ] **Step 1: 写失败测试**
 
 ```ts
-// packages/api/src/providers/think-blocks.test.ts
+// packages/api/src/providers/streaming/__test__/think-blocks.test.ts
 import { describe, expect, it } from "vitest";
 import { extractThinkBlocks } from "./think-blocks.js";
 
@@ -335,7 +335,7 @@ Expected: FAIL —— 模块不存在。
 - [ ] **Step 3: 实现 think-blocks 模块**
 
 ```ts
-// packages/api/src/providers/think-blocks.ts
+// packages/api/src/providers/streaming/think-blocks.ts
 export interface ThinkExtraction {
   visible: string;
   reasoning: string;
@@ -469,7 +469,7 @@ Expected: PASS。
 - [ ] **Step 7: 提交**
 
 ```bash
-git add packages/api/src/providers/think-blocks.ts packages/api/src/providers/think-blocks.test.ts packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/api/src/providers/streaming/think-blocks.ts packages/api/src/providers/streaming/__test__/think-blocks.test.ts packages/api/src/providers/openai.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "feat(api): <think> 块抽取为 reasoning 事件（含流结束语义）"
 ```
 
@@ -589,7 +589,7 @@ git commit -m "feat(core): 引擎累积思考内容并写入助手消息"
 
 **Files:**
 - Modify: `packages/api/src/providers/openai.ts:168`、`:449-455`、`:341-346`
-- Test: `packages/api/src/providers/openai.test.ts`
+- Test: `packages/api/src/providers/__test__/openai.test.ts`
 
 **Interfaces:**
 - Consumes: Task 4 写入的 `AssistantMessage.reasoningReplay`
@@ -597,7 +597,7 @@ git commit -m "feat(core): 引擎累积思考内容并写入助手消息"
 
 - [ ] **Step 1: 写失败测试**
 
-在 `packages/api/src/providers/openai.test.ts` 的 `convertMessages reasoning_content gating` describe 内追加：
+在 `packages/api/src/providers/__test__/openai.test.ts` 的 `convertMessages reasoning_content gating` describe 内追加：
 
 ```ts
   it("replays reasoning from the assistant message field", async () => {
@@ -669,7 +669,7 @@ Expected: PASS；`grep -n "reasoningHistory" packages/api/src/providers/openai.t
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/api/src/providers/openai.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "fix(api): 思考内容回传改读消息字段，删除按下标存取的 reasoningHistory"
 ```
 

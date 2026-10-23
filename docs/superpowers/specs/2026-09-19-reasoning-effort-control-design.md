@@ -99,7 +99,7 @@ reasoningEfforts?: string[];
 
 ### 请求链路
 
-- `packages/agent-contracts/src/model.ts:5-13` `StreamMessageParams` 增加 `reasoningEffort?: string`。
+- `packages/agent-contracts/src/model/model.ts:5-13` `StreamMessageParams` 增加 `reasoningEffort?: string`。
 - `packages/core/src/types/runtime.ts:488` `QueryEngineOptions` 增加 `reasoningEffort?: string`。
 - `packages/agent-runtime/src/node/runtime/agent-options.ts:41-73` `VykorAgentConfiguration` 增加 `reasoningEffort?: string`。
 

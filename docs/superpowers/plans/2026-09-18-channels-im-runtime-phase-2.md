@@ -29,8 +29,8 @@
 - 修改：`packages/channels/src/core/manager.ts`
 - 修改：`packages/channels/src/core/durable-bridge.ts`
 - 修改：`packages/channels/src/index.ts`
-- 测试：`packages/channels/src/bus/queue.test.ts`
-- 测试：`packages/channels/src/__test__/manager.test.ts`
+- 测试：`packages/channels/src/bus/__test__/queue.test.ts`
+- 测试：`packages/channels/src/core/__test__/manager.test.ts`
 - 测试：`packages/channels/src/__test__/durable-bridge.test.ts`
 
 - [ ] **步骤 1：编写失败的附件传输测试**
@@ -101,7 +101,7 @@ manager 入站映射必须直接复制 `msg.attachments`、`msg.messageType`，�
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/index.ts packages/channels/src/bus/queue.ts packages/channels/src/core/manager.ts packages/channels/src/core/durable-bridge.ts packages/channels/src/bus/queue.test.ts packages/channels/src/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
+git add packages/channels/src/index.ts packages/channels/src/bus/queue.ts packages/channels/src/core/manager.ts packages/channels/src/core/durable-bridge.ts packages/channels/src/bus/__test__/queue.test.ts packages/channels/src/core/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
 git commit -m "feat(channels): carry attachment metadata through runtime"
 ```
 
@@ -110,8 +110,8 @@ git commit -m "feat(channels): carry attachment metadata through runtime"
 ## 任务 2：Feishu 入站 image/file 映射
 
 **文件：**
-- 修改：`packages/channels/src/impl/feishu.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu.test.ts`
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
 
 - [ ] **步骤 1：编写失败测试**
 
@@ -169,7 +169,7 @@ if (msg.msg_type === "text") {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/impl/feishu.ts packages/channels/src/impl/__test__/feishu.test.ts
+git add packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/adapters/feishu/__test__/feishu.test.ts
 git commit -m "feat(feishu): map image and file inbound messages"
 ```
 
@@ -178,8 +178,8 @@ git commit -m "feat(feishu): map image and file inbound messages"
 ## 任务 3：Feishu 出站 image/file payload
 
 **文件：**
-- 修改：`packages/channels/src/impl/feishu.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu.test.ts`
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
 
 - [ ] **步骤 1：编写失败测试**
 
@@ -235,7 +235,7 @@ switch (message.messageType ?? "text") {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/impl/feishu.ts packages/channels/src/impl/__test__/feishu.test.ts
+git add packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/adapters/feishu/__test__/feishu.test.ts
 git commit -m "feat(feishu): send image and file attachments"
 ```
 
@@ -244,10 +244,10 @@ git commit -m "feat(feishu): send image and file attachments"
 ## 任务 4：thread/topic 入站与出站路由
 
 **文件：**
-- 修改：`packages/channels/src/impl/feishu.ts`
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
 - 修改：`packages/channels/src/core/manager.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu.test.ts`
-- 测试：`packages/channels/src/__test__/manager.test.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
+- 测试：`packages/channels/src/core/__test__/manager.test.ts`
 - 测试：`packages/channels/src/__test__/durable-bridge.test.ts`
 
 - [ ] **步骤 1：编写失败测试**
@@ -289,7 +289,7 @@ manager 出站构造原样传递 `threadId` 和 `platformMeta`；Feishu 入站�
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/impl/feishu.ts packages/channels/src/core/manager.ts packages/channels/src/bus/queue.ts packages/channels/src/impl/__test__/feishu.test.ts packages/channels/src/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
+git add packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/core/manager.ts packages/channels/src/bus/queue.ts packages/channels/src/adapters/feishu/__test__/feishu.test.ts packages/channels/src/core/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
  git commit -m "feat(channels): preserve Feishu thread routing"
 ```
 
@@ -298,9 +298,9 @@ git add packages/channels/src/impl/feishu.ts packages/channels/src/core/manager.
 ## 任务 5：mention/bot 边界和 capability release gate
 
 **文件：**
-- 修改：`packages/channels/src/impl/feishu.ts`
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
 - 修改：`packages/channels/src/index.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu.test.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
 - 测试：`packages/channels/src/__test__/index.test.ts`
 
 - [ ] **步骤 1：编写失败测试**
@@ -330,7 +330,7 @@ git add packages/channels/src/impl/feishu.ts packages/channels/src/core/manager.
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/index.ts packages/channels/src/impl/feishu.ts packages/channels/src/impl/__test__/feishu.test.ts packages/channels/src/__test__/index.test.ts
+git add packages/channels/src/index.ts packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/adapters/feishu/__test__/feishu.test.ts packages/channels/src/__test__/index.test.ts
 git commit -m "feat(feishu): finalize media and mention capabilities"
 ```
 
@@ -360,7 +360,7 @@ git commit -m "feat(feishu): finalize media and mention capabilities"
 
 - [ ] **步骤 4：检查严格契约残留**
 
-运行：`rg -n "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/impl/feishu.ts`
+运行：`rg -n "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/adapters/feishu/feishu.ts`
 预期：不存在把 image/file/thread 缺失字段伪造成 text/chat/随机 ID 的生产实现；合法的 text message 分支不应被该扫描误报。
 
 - [ ] **步骤 5：检查 diff 和工作区**

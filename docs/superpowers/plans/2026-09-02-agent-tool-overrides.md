@@ -12,12 +12,12 @@
 
 ## 文件结构
 
-- 修改 `packages/agent-contracts/src/tools.ts`：定义 Tool 来源、诊断结果和严格 Registry 接口。
+- 修改 `packages/agent-contracts/src/tools/tools.ts`：定义 Tool 来源、诊断结果和严格 Registry 接口。
 - 修改 `packages/core/src/engine/tool-registry.ts`：实现新增/覆盖互斥、稳定错误和来源记录。
 - 修改 `packages/core/src/engine/index.test.ts`：锁定 Registry 的新增、覆盖、拼写错误和注销行为。
 - 修改 `packages/core/src/index.ts`：导出新增类型和错误。
 - 修改 `packages/permissions/src/index.ts`：允许 Runtime 标记失去内置本地只读信任的 Tool 名称。
-- 修改 `packages/permissions/src/index.test.ts`：验证覆盖后的 `Read` 不再按名称自动放行。
+- 修改 `packages/permissions/src/__test__/index.test.ts`：验证覆盖后的 `Read` 不再按名称自动放行。
 - 修改 `packages/tools/src/registry.ts`：将默认 Tool 明确登记为 `builtin`。
 - 修改 `packages/agent-runtime/src/node/runtime/agent-options.ts`：增加 `tools` 与 `toolOverrides` 公共配置。
 - 修改 `packages/agent-runtime/src/node/runtime/default-runtime.ts`：原子应用调用方 Tool、修正可见性计算和权限信任。
@@ -40,7 +40,7 @@
 ### 任务 1：严格 ToolRegistry 与来源诊断
 
 **文件：**
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 修改：`packages/core/src/engine/index.test.ts`
 - 修改：`packages/core/src/index.ts`
@@ -89,7 +89,7 @@ pnpm --filter @vykor/core test -- src/engine/index.test.ts
 
 - [x] **步骤 3：实现 Registry 类型与严格语义**
 
-在 `packages/agent-contracts/src/tools.ts` 增加：
+在 `packages/agent-contracts/src/tools/tools.ts` 增加：
 
 ```ts
 export interface ToolRegistrationSource {
@@ -160,7 +160,7 @@ pnpm --filter @vykor/core check-types
 - [x] **步骤 6：提交 Registry 语义**
 
 ```powershell
-git add packages/agent-contracts/src/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/core/src/engine/query-engine.ts packages/core/src/index.ts
+git add packages/agent-contracts/src/tools/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/core/src/engine/query-engine.ts packages/core/src/index.ts
 git commit -m "feat(core): make tool overrides explicit"
 ```
 
@@ -168,7 +168,7 @@ git commit -m "feat(core): make tool overrides explicit"
 
 **文件：**
 - 修改：`packages/permissions/src/index.ts`
-- 修改：`packages/permissions/src/index.test.ts`
+- 修改：`packages/permissions/src/__test__/index.test.ts`
 - 修改：`packages/tools/src/registry.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
@@ -220,7 +220,7 @@ it.each([
 
 - [x] **步骤 2：先写覆盖 Tool 权限降级测试**
 
-在 `packages/permissions/src/index.test.ts` 增加：
+在 `packages/permissions/src/__test__/index.test.ts` 增加：
 
 ```ts
 it("does not auto-approve an overridden local read-only tool", async () => {
@@ -306,7 +306,7 @@ pnpm --filter @vykor/agent-runtime check-types
 - [x] **步骤 8：提交 Agent API**
 
 ```powershell
-git add packages/permissions/src/index.ts packages/permissions/src/index.test.ts packages/tools/src/registry.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent.test.ts packages/agent-runtime/src/node/runtime/child-agent-options.ts packages/agent-runtime/src/node/runtime/child-agent-options.test.ts
+git add packages/permissions/src/index.ts packages/permissions/src/__test__/index.test.ts packages/tools/src/registry.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent.test.ts packages/agent-runtime/src/node/runtime/child-agent-options.ts packages/agent-runtime/src/node/runtime/child-agent-options.test.ts
 git commit -m "feat(agent-runtime): support explicit tool overrides"
 ```
 

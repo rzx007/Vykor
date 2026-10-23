@@ -27,9 +27,9 @@
 - Modify: `packages/core/src/config/settings.ts`
 - Test: `packages/core/src/config/settings.test.ts`
 - Modify: `packages/api/src/providers/registry.ts`
-- Test: `packages/api/src/providers/registry.test.ts`
+- Test: `packages/api/src/providers/__test__/registry.test.ts`
 - Modify: `packages/api/src/providers/openai.ts`
-- Test: `packages/api/src/providers/openai.test.ts`
+- Test: `packages/api/src/providers/__test__/openai.test.ts`
 - Modify: `packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - Test: `packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 

@@ -13,7 +13,7 @@
 ## 文件结构
 
 - 修改 `packages/prompts/src/index.ts`：提供经过安全扫描的 USER profile 立即追加函数，并让 pending 审批复用它。
-- 修改 `packages/prompts/src/index.test.ts`：验证追加、保留旧内容和危险内容拒绝。
+- 修改 `packages/prompts/src/__test__/index.test.ts`：验证追加、保留旧内容和危险内容拒绝。
 - 创建 `packages/agent-runtime/src/node/memory/remember-tool.ts`：定义 `Remember` 工具和两个作用域的路由。
 - 创建 `packages/agent-runtime/src/node/memory/remember-tool.test.ts`：验证 user/project/disabled/invalid 输入行为。
 - 修改 `packages/agent-runtime/src/node/runtime/agent-composition.ts`：用当前 memory runtime 注册工具。
@@ -28,7 +28,7 @@
 
 **文件：**
 - 修改：`packages/prompts/src/index.ts:458-565`
-- 测试：`packages/prompts/src/index.test.ts:547`
+- 测试：`packages/prompts/src/__test__/index.test.ts:547`
 
 - [x] **步骤 1：先写失败测试**
 
@@ -81,7 +81,7 @@ export async function appendUserProfileUpdate(rawContent: string): Promise<strin
 - [x] **步骤 5：提交**
 
 ```bash
-git add packages/prompts/src/index.ts packages/prompts/src/index.test.ts
+git add packages/prompts/src/index.ts packages/prompts/src/__test__/index.test.ts
 git commit -m "feat(memory): 支持安全追加用户偏好"
 ```
 

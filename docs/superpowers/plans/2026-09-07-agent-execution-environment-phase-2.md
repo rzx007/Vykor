@@ -40,9 +40,9 @@
 ### Environment 与 Sandbox
 
 - `packages/environment/src/types.ts`：增加通用交互终端目标、控制器和 lease 契约。
-- `packages/environment/src/types.test.ts`：验证 PTY 与 lease 的最小类型行为。
+- `packages/environment/src/__test__/types.test.ts`：验证 PTY 与 lease 的最小类型行为。
 - `packages/sandbox/src/docker-backend.ts`：生成受监督的 `docker exec -it` 启动参数并停止单个 exec 进程组。
-- `packages/sandbox/src/execution-environment.ts`：向环境句柄暴露交互终端目标工厂。
+- `packages/sandbox/src/environment/execution-environment.ts`：向环境句柄暴露交互终端目标工厂。
 - `packages/sandbox/src/execution-environment-manager.ts`：唯一的内存环境记录、并发 acquire 和引用计数。
 - `packages/sandbox/src/execution-environment-manager.test.ts`：覆盖共享、并发、幂等 release 和配置冲突。
 - `packages/sandbox/src/index.ts`：导出 Manager 和 PTY 相关能力。
@@ -53,9 +53,9 @@
 - `packages/protocol/src/serialization/serialization.ts`：严格解码新终端响应。
 - `packages/protocol/src/serialization/__test__/serialization.test.ts`：覆盖 project/session 两种 scope。
 - `packages/terminal/src/provider.ts`：让 Terminal Provider 接收已解析的 PTY target 和释放回调。
-- `packages/terminal-node/src/local-terminal-provider.ts`：统一使用 node-pty，删除普通 pipe 的 sandbox terminal。
-- `packages/terminal-node/src/environment-terminal-target.ts`：把本机或环境 PTY target 转成 node-pty 参数。
-- `packages/terminal-node/src/local-terminal-provider.test.ts`：覆盖输入、resize、信号和只释放本终端。
+- `packages/terminal-node/src/providers/local-terminal-provider.ts`：统一使用 node-pty，删除普通 pipe 的 sandbox terminal。
+- `packages/terminal-node/src/providers/environment-terminal-target.ts`：把本机或环境 PTY target 转成 node-pty 参数。
+- `packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts`：覆盖输入、resize、信号和只释放本终端。
 - `packages/terminal-node/e2e/docker-pty.e2e.test.ts`：真实 Docker PTY 闭环。
 - `packages/server/src/runtime/environment-owner.ts`：从 Session、Project、fork 和 cwd 计算 workspace owner。
 - `packages/server/src/runtime/environment-owner.test.ts`：覆盖 owner 继承规则。
@@ -183,12 +183,12 @@ git commit -m "feat(terminal): add project and session scopes"
 **文件：**
 
 - 修改：`packages/environment/src/types.ts`
-- 修改：`packages/environment/src/types.test.ts`
-- 修改：`packages/sandbox/src/types.ts`
+- 修改：`packages/environment/src/__test__/types.test.ts`
+- 修改：`packages/sandbox/src/environment/types.ts`
 - 修改：`packages/sandbox/src/docker-backend.ts`
-- 修改：`packages/sandbox/src/index.test.ts`
-- 修改：`packages/sandbox/src/execution-environment.ts`
-- 修改：`packages/sandbox/src/execution-environment.test.ts`
+- 修改：`packages/sandbox/src/__test__/index.test.ts`
+- 修改：`packages/sandbox/src/environment/execution-environment.ts`
+- 修改：`packages/sandbox/src/environment/__test__/execution-environment.test.ts`
 
 - [ ] **步骤 1：编写 Docker PTY 启动参数测试**
 
@@ -473,10 +473,10 @@ git commit -m "refactor(server): lease agent execution environments"
 
 **文件：**
 
-- 创建：`packages/terminal-node/src/environment-terminal-target.ts`
-- 创建：`packages/terminal-node/src/environment-terminal-target.test.ts`
-- 修改：`packages/terminal-node/src/local-terminal-provider.ts`
-- 修改：`packages/terminal-node/src/local-terminal-provider.test.ts`
+- 创建：`packages/terminal-node/src/providers/environment-terminal-target.ts`
+- 创建：`packages/terminal-node/src/providers/__test__/environment-terminal-target.test.ts`
+- 修改：`packages/terminal-node/src/providers/local-terminal-provider.ts`
+- 修改：`packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts`
 - 修改：`packages/terminal/src/provider.ts`
 
 - [ ] **步骤 1：编写统一 PTY Provider 测试**
@@ -800,7 +800,7 @@ git commit -m "feat(desktop): make terminals follow the Agent environment"
 
 - 创建：`packages/terminal-node/e2e/docker-pty.e2e.test.ts`
 - 修改：`packages/terminal-node/package.json`
-- 修改：`packages/sandbox/e2e/docker.e2e.test.ts`
+- 修改：`packages/sandbox/__test__/e2e/docker.e2e.test.ts`
 - 修改：`packages/server/src/application/__test__/durable-agent-application.test.ts`
 
 - [ ] **步骤 1：编写真实 Docker PTY E2E**

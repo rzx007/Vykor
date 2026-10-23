@@ -68,7 +68,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | 活动执行与关闭 | `packages/agent-runtime/src/node/workflow/workflow-host.ts` | 同应用共享 Host，session 绑定视图；取消等待 worker 和终态保存 |
 | 文件持久化实现 | `packages/agent-runtime/src/node/workflow/file-workflow-run-repository.ts` | `FileWorkflowRunRepository`；`.vykor/workflows/<runId>.json` + `.events.ndjson` |
 | daemon 持久化实现 | `packages/server/src/application/workflow/session-workflow-run-repository.ts` | `SessionWorkflowRunRepository`；写入统一 SQLite |
-| Coordinator 模式 | `packages/coordinator/src/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
+| Coordinator 模式 | `packages/coordinator/src/runtime/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
 | System prompt | `packages/coordinator/src/index.ts` | `COORDINATOR_SYSTEM_PROMPT` 说明何时用 Workflow vs Agent |
 | Workflow 工具 | `packages/tools/src/agent/workflow/tool.ts` | 校验参数并传递真实 scope/signal、children 和捕获的角色集合；一次合法调用只 invoke 一次 |
 | Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/local-agent-job-host.ts` | Workflow 普通 list/read/wait/cancel |

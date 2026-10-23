@@ -36,13 +36,13 @@
 
 | 部分 | 文件 | 当前职责及计划变化 |
 |---|---|---|
-| 模型调用接口 | `packages/agent-contracts/src/model.ts` | `StreamingMessageClient` 和请求参数；补充单次请求时间限制 |
-| 流事件 | `packages/agent-contracts/src/events.ts` | `StreamEvent`；新增生成尝试开始、等待重试事件 |
+| 模型调用接口 | `packages/agent-contracts/src/model/model.ts` | `StreamingMessageClient` 和请求参数；补充单次请求时间限制 |
+| 流事件 | `packages/agent-contracts/src/execution/events.ts` | `StreamEvent`；新增生成尝试开始、等待重试事件 |
 | 引擎配置与 Agent 事件 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions`、`AgentEventInput`；增加重试策略和事件映射 |
 | 重试策略 | 新增 `packages/core/src/engine/model-retry.ts` | 纯策略计算、共享错误类型和可取消等待，不依赖 API 包 |
 | 引擎 | `packages/core/src/engine/query-engine.ts` | 在当前模型调用边界重试，成功后才提交消息及执行工具 |
 | 提供商适配器 | `packages/api/src/providers/openai.ts`、`anthropic.ts`、`codex.ts` | 收敛为单次调用，保留错误原因，验证完整响应 |
-| API 错误及超时 | `packages/api/src/errors/index.ts`、`packages/api/src/providers/retry.ts` | 归一化错误和读取超时；移除被替代的等待逻辑前检查所有调用者 |
+| API 错误及超时 | `packages/api/src/errors/index.ts`、`packages/api/src/providers/requests/retry.ts` | 归一化错误和读取超时；移除被替代的等待逻辑前检查所有调用者 |
 | 框架运行结果 | `packages/agent-runtime/src/kernel/framework-agent-run.ts` | 修正直接累加 `output`，映射新事件 |
 | 服务端投影 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` | 将生成尝试、重试状态写入会话记录 |
 | 消息投影 | `packages/server/src/application/session/transcript-projection.ts` | 记录当前尝试所有 part，失败后标记被替代 |
@@ -226,7 +226,7 @@ pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts
 ## 任务 1：建立共享错误、重试策略与事件类型
 
 **新增：** `packages/core/src/engine/model-retry.ts`、`model-retry.test.ts`。
-**修改：** `packages/agent-contracts/src/events.ts`、`types/client.ts`、`types/runtime.ts`、`index.ts`。
+**修改：** `packages/agent-contracts/src/execution/events.ts`、`types/client.ts`、`types/runtime.ts`、`index.ts`。
 
 **输入：** 原始时间和重试计数、`ModelRequestFailure.info`。
 **输出：** 上文错误/事件类型，以及以下明确接口：

@@ -25,7 +25,7 @@
 
 **Files:**
 - Modify: `packages/api/src/providers/openai.ts:362-365`
-- Test: `packages/api/src/providers/openai.test.ts`（新增 `describe`）
+- Test: `packages/api/src/providers/__test__/openai.test.ts`（新增 `describe`）
 
 **Interfaces:**
 - Consumes: 无
@@ -33,7 +33,7 @@
 
 - [ ] **Step 1: 写失败测试**
 
-在 `packages/api/src/providers/openai.test.ts` 末尾追加：
+在 `packages/api/src/providers/__test__/openai.test.ts` 末尾追加：
 
 ```ts
 describe("OpenAICompatibleClient stop reason normalization", () => {
@@ -106,7 +106,7 @@ Expected: PASS，全部通过。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/api/src/providers/openai.ts packages/api/src/providers/openai.test.ts
+git add packages/api/src/providers/openai.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "fix(api): normalize OpenAI length stop reason to max_tokens"
 ```
 
@@ -508,7 +508,7 @@ git commit -m "feat(server): add catalog context and output limit helpers"
 - Modify: `packages/api/src/providers/openai.ts:1-8, 166`
 - Modify: `packages/api/src/providers/anthropic.ts:1-9, 61`
 - Test: `packages/core/src/engine/request-configuration.test.ts`
-- Test: `packages/api/src/providers/openai.test.ts`
+- Test: `packages/api/src/providers/__test__/openai.test.ts`
 
 **Interfaces:**
 - Consumes: `DEFAULT_OUTPUT_TOKEN_MAX`（Task 3 导出）
@@ -551,7 +551,7 @@ git commit -m "feat(server): add catalog context and output limit helpers"
 
 - [ ] **Step 2: 写失败测试（provider 兜底）**
 
-在 `packages/api/src/providers/openai.test.ts` 末尾追加：
+在 `packages/api/src/providers/__test__/openai.test.ts` 末尾追加：
 
 ```ts
 describe("OpenAICompatibleClient output token cap", () => {
@@ -640,7 +640,7 @@ Expected: PASS。
 - [ ] **Step 6: 提交**
 
 ```bash
-git add packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/anthropic.ts packages/core/src/engine/request-configuration.test.ts packages/api/src/providers/openai.test.ts
+git add packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/api/src/providers/openai.ts packages/api/src/providers/anthropic.ts packages/core/src/engine/request-configuration.test.ts packages/api/src/providers/__test__/openai.test.ts
 git commit -m "feat(core): forward maxOutputTokens and raise provider output fallback to 32k"
 ```
 

@@ -37,11 +37,11 @@
 
 **交付物：** 新增事实能回查到会话与消息；助手猜测不会入库。重复扫描同一条历史消息不改变它的观察时间。
 
-**Files:** `packages/personalization/src/index.ts`、`packages/personalization/src/index.test.ts`、上述两个 server 会话服务及其测试、`docs/memory-system.md`。
+**Files:** `packages/personalization/src/index.ts`、`packages/personalization/src/__test__/index.test.ts`、上述两个 server 会话服务及其测试、`docs/memory-system.md`。
 
 **Interfaces:** 给 `SessionMessageLike` 增加可选 `id?: string`、`createdAt?: number`；给 `ExtractedFact` 增加可选 `sourceSessionId?: string`、`sourceMessageId?: string`、`observedAt?: string`，兼容已有 JSON。把 `updateRulesFromSession(messages, cwd)` 改为 `updateRulesFromSession(messages, cwd, sessionId)`；新自动写入只接收带有效消息 ID 和创建时间的 `role: "user"` 消息。
 
-- [x] **Step 1: 写失败测试。** 在 `packages/personalization/src/index.test.ts` 用固定时间 `2026-09-24T00:00:00.000Z` 构造一条用户消息和一条包含另一个 IP 的助手消息；断言 `facts.json` 只有用户 IP，且该条的 `sourceSessionId === "s1"`、`sourceMessageId === "u1"`、`observedAt` 等于固定时间。再次传入相同消息，断言时间不变。测试数据示例：
+- [x] **Step 1: 写失败测试。** 在 `packages/personalization/src/__test__/index.test.ts` 用固定时间 `2026-09-24T00:00:00.000Z` 构造一条用户消息和一条包含另一个 IP 的助手消息；断言 `facts.json` 只有用户 IP，且该条的 `sourceSessionId === "s1"`、`sourceMessageId === "u1"`、`observedAt` 等于固定时间。再次传入相同消息，断言时间不变。测试数据示例：
 
   ```ts
   const messages = [
@@ -106,7 +106,7 @@
 
 **交付物：** 已有 `facts.json` 和 `rules.md` 不删除；无来源或含明显凭据值的旧事实仍可在文件中查看，但不进入模型提示词。`/context status` 显示有来源与无来源数量；有来源不等于事实已重新核验。
 
-**Files:** `packages/personalization/src/index.ts`、`index.test.ts`、`packages/prompts/src/index.test.ts`、`packages/server/src/application/default-services/context-service.ts`、`packages/server/src/application/__test__/default-application-services.test.ts`、`docs/context-memory-map.md`、`docs/memory-policy.md`。
+**Files:** `packages/personalization/src/index.ts`、`index.test.ts`、`packages/prompts/src/__test__/index.test.ts`、`packages/server/src/application/default-services/context-service.ts`、`packages/server/src/application/__test__/default-application-services.test.ts`、`docs/context-memory-map.md`、`docs/memory-policy.md`。
 
 **Interfaces:** 增加 `hasFactSource(fact: ExtractedFact): boolean`，要求 `sourceSessionId`、`sourceMessageId` 非空且 `observedAt` 是有效 ISO 时间。`loadLocalRules(cwd)` 从 `loadFacts(cwd).facts.filter(hasFactSource)` 生成模型可见文本；`rules.md` 继续由写入流程生成，供人查看，不再作为提示词的信任来源。`loadFacts(cwd)` 继续返回全量，供诊断与人工整理。
 

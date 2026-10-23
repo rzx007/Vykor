@@ -14,7 +14,7 @@
 
 ### 任务 1：扩展内部环境契约并实现 WSL 基础适配器
 
-**文件：** `packages/environment/src/types.ts`、`packages/sandbox/src/wsl-environment.ts`、`packages/sandbox/src/execution-environment.ts`、对应测试与导出。
+**文件：** `packages/environment/src/types.ts`、`packages/sandbox/src/environment/wsl-environment.ts`、`packages/sandbox/src/environment/execution-environment.ts`、对应测试与导出。
 
 - [x] 写失败测试：`local | wsl` binding、Windows 盘符双向转换、UNC 项目拒绝、非 Windows/缺少 WSL 时 fail-closed。
 - [x] 实现默认发行版预检、path resolver、`wsl.exe --exec` Shell/argv executor 和 PTY target，不管理发行版列表。
@@ -23,7 +23,7 @@
 
 ### 任务 2：接通 WSL 文件工具和所有环境工作负载
 
-**文件：** `packages/tools/src/file/operations.ts`、`sandbox-guard.ts`、shell executor/registry、`packages/mcp/src/sandbox-stdio-transport.ts`、`packages/hooks/src/index.ts`、`packages/services/src/lsp/index.ts`、detached supervisor、background shell service 与对应测试。
+**文件：** `packages/tools/src/file/operations.ts`、`sandbox-guard.ts`、shell executor/registry、`packages/mcp/src/connections/sandbox-stdio-transport.ts`、`packages/hooks/src/index.ts`、`packages/services/src/lsp/index.ts`、detached supervisor、background shell service 与对应测试。
 
 - [x] 写失败测试：WSL stat/list/text/binary/glob/grep 使用环境进程；`/home` 不因“未挂载”被拒绝；命令转后台后仍使用 WSL executor。
 - [x] 实现 WSL FileOperations 和环境进程注入；路径与内容使用 argv/stdin 传输。
@@ -73,7 +73,7 @@
 
 ### 任务 7：文档与真实 WSL 验收
 
-**文件：** `packages/sandbox/e2e/wsl.e2e.test.ts`、sandbox scripts、runtime acceptance、sandbox flow/design、安全边界、CLI README。
+**文件：** `packages/sandbox/__test__/e2e/wsl.e2e.test.ts`、sandbox scripts、runtime acceptance、sandbox flow/design、安全边界、CLI README。
 
 - [x] E2E 验证 uname、环境变量、退出码、带空格路径、文件、glob/grep、Ctrl-C 和 resize；无 WSL 时明确 skip。
 - [x] 验证盘符项目与 Skill 路径映射；验证 WSL UNC 项目返回不支持。

@@ -72,11 +72,11 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 
 主要落地点：
 
-- `packages/sandbox/src/policy.ts`：新增 `DefaultSandboxPolicyService`、`resolveSandboxPolicy`、`SandboxPolicyDeniedError` 和失败分类函数。
-- `packages/sandbox/src/types.ts`：新增 policy scope、mode、enforcement、filesystem/network 快照、结构化 denial 和 `runner | policy | command` 失败类型。
-- `packages/sandbox/src/shell.ts`：`createProcess` / `createShellProcess` 每次调用解析或接收显式 policy。MCP stdio、cron、background task 和 agent task 都经过这两个中央入口。
+- `packages/sandbox/src/policy/policy.ts`：新增 `DefaultSandboxPolicyService`、`resolveSandboxPolicy`、`SandboxPolicyDeniedError` 和失败分类函数。
+- `packages/sandbox/src/environment/types.ts`：新增 policy scope、mode、enforcement、filesystem/network 快照、结构化 denial 和 `runner | policy | command` 失败类型。
+- `packages/sandbox/src/process/shell.ts`：`createProcess` / `createShellProcess` 每次调用解析或接收显式 policy。MCP stdio、cron、background task 和 agent task 都经过这两个中央入口。
 - `packages/sandbox/src/lifecycle.ts`：runtime 启动也消费同一 policy，不再单独解释 `failIfUnavailable` 和 backend。
-- `packages/sandbox/src/path-validator.ts`：路径结果增加 `decision`、`failureKind: "policy"` 和 `filesystem_denied`；显式空 `allowWrite` 现在能真实表达 read-only。
+- `packages/sandbox/src/policy/path-validator.ts`：路径结果增加 `decision`、`failureKind: "policy"` 和 `filesystem_denied`；显式空 `allowWrite` 现在能真实表达 read-only。
 - `packages/tools/src/file/*`：文件路径检查和 host/Docker operations 选择改为消费 policy。
 - `packages/tools/src/shell/*`：resolved shell spec 携带 policy，启动阶段能区分 runner failure 和 policy denial。
 - `packages/mcp`、`packages/services/src/cron`、`packages/services/src/tasks`：增加可选显式 policy，并沿调用链传到中央 process factory；agent task 会继续把 policy 转交给实际子进程。
@@ -118,7 +118,7 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 - `packages/tools/src/web/fetch.ts`：`WebFetch` 工具，直接执行 HTTP fetch，并做简单 HTML-to-text。
 - `packages/tools/src/shell/bash.ts`：`Bash` 工具，包含 shell dialect 检查、命令执行、超时、截断、取消和输出格式化。
 - `packages/sandbox/src/*`：sandbox runtime，已经支持 `srt` / `docker` backend、网络模式、可复用容器、路径校验、active session 和生命周期管理。
-- `packages/mcp/src/sandbox-stdio-transport.ts`：MCP stdio server 通过 `@vykor/sandbox` 的 `createProcess` 启动，让 MCP 也走相同 sandbox 规则。
+- `packages/mcp/src/connections/sandbox-stdio-transport.ts`：MCP stdio server 通过 `@vykor/sandbox` 的 `createProcess` 启动，让 MCP 也走相同 sandbox 规则。
 - `packages/services`、`packages/server`、`packages/coordinator`、`packages/tools/src/agent`：已有 task/workflow/child-agent 等后台任务相关能力，但模型侧协议还可以更统一。
 
 整体看，Vykor 已经具备“能跑”的 runtime 和工具能力，下一步最有价值的是把 provider、policy、tool rendering 和长期任务控制拆清楚。
@@ -282,7 +282,7 @@ DeepSeek Harness 把 provider 和 tool 拆得很细，这适合稳定平台 API 
 - `packages/tools/src/web/runtime.ts`
 - `packages/tools/src/web/providers/http-fetch.ts`
 - `packages/tools/src/shell/executor.ts`
-- `packages/sandbox/src/policy.ts`
+- `packages/sandbox/src/policy/policy.ts`
 
 等接口稳定后，再考虑拆出 `@vykor/web`、`@vykor/shell` 等独立包。
 

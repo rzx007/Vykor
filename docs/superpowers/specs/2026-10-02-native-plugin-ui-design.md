@@ -66,7 +66,7 @@ CLI、TUI、普通 Web、IDE 和 Bot 在首版继续使用工具文字结果；�
 | 安装授权根据 manifest 重新计算 | `packages/plugins/src/installation/installer.ts`、`verify.ts` | UI 新增授权必须同时进入预览、安装和安装后校验 |
 | 安装快照包含内容摘要，开发 link 单独处理 | `packages/plugins/src/installation/cache.ts` | UI 必须绑定准确快照；不能只按插件 ID 找“当前最新版” |
 | Native Tool 已有来源登记和 Run 能力视图 | `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`、`run-capability-view.ts` | 后台可证明工具属于哪个插件，并固定本次运行的定义和调用函数 |
-| 工具结果支持自由 metadata，宿主身份字段会过滤 | `packages/agent-contracts/src/tools.ts`、`engine/tool-result-feedback.ts` | 插件只能提议 UI；最终身份、状态和权限仍由宿主生成 |
+| 工具结果支持自由 metadata，宿主身份字段会过滤 | `packages/agent-contracts/src/tools/tools.ts`、`engine/tool-result-feedback.ts` | 插件只能提议 UI；最终身份、状态和权限仍由宿主生成 |
 | 工具结果会进入会话 Part 的 output 与 metadata | `packages/server/src/application/session/transcript-projection.ts` | 原始工具结果保持不变，UI 当前状态放在该 Part 的宿主 metadata 中 |
 | Run 可以没有 inputId；调度器接受 work 回调 | `packages/services/src/runs/run-repository.ts`、`packages/server/src/runtime/run-coordinator.ts` | UI 操作复用 Run 和会话执行车道，无需伪造模型 Prompt |
 | 工具校验、授权、Hook、超时和取消目前在 QueryEngine 内组合 | `packages/core/src/engine/query-engine.ts` | 必须提取可复用的受检工具执行入口，不能直接调用 `tool.execute()` |

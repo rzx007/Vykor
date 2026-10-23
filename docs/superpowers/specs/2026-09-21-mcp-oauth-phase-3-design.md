@@ -235,7 +235,7 @@ Desktop 的现有入口为“主页 → 插件 → MCP tab”，由 `plugin-page
 主要现有落点：
 
 - `packages/mcp/src/oauth/runtime-auth.ts`、`protocol.ts`、`login.ts`、`callback.ts`：协议校验与错误分类。
-- `packages/auth/src/mcp-oauth-credential-store.ts`：锁、最小记录格式升级与退出计数。
+- `packages/auth/src/mcp/mcp-oauth-credential-store.ts`：锁、最小记录格式升级与退出计数。
 - `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`：配置字段和领域契约。
 - `packages/server/src/application/mcp-oauth-application-service.ts`、`packages/server/src/http/routes/mcp.ts`：操作编排与路由。
 - `packages/client/src/resources/configuration/mcp-resource.ts`、CLI MCP command、Desktop MCP service：用户入口与 typed API。

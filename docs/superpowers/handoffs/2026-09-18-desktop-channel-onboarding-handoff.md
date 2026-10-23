@@ -19,9 +19,9 @@
 
 ## 可复用的核心（不要重写）
 
-- `packages/channels/src/impl/feishu-registration.ts`（扫码状态机，`onCredentials` 回调）
-- `packages/channels/src/impl/feishu-verify.ts`（凭据校验）
-- `packages/auth/src/channel-config-store.ts`（`ChannelConfigStore`：读写 `channel-credentials.json`，现含渠道配置与密钥）
+- `packages/channels/src/adapters/feishu/feishu-registration.ts`（扫码状态机，`onCredentials` 回调）
+- `packages/channels/src/adapters/feishu/feishu-verify.ts`（凭据校验）
+- `packages/auth/src/channels/channel-config-store.ts`（`ChannelConfigStore`：读写 `channel-credentials.json`，现含渠道配置与密钥）
 - `packages/core`：`getChannelCredentialsFilePath`
 - `packages/channels/src/bus/acl.ts` + `core/manager.ts` 的 `onDenied`
 - CLI 编排参考：`apps/cli/src/commands/channels-onboarding.ts`

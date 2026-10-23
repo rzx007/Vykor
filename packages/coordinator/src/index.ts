@@ -1,8 +1,8 @@
-export * from "./types.js";
-export * from "./system-prompt.js";
+export * from "./runtime/types.js";
+export * from "./runtime/system-prompt.js";
 export * from "./teams/index.js";
-export * from "./mode-state.js";
-export * from "./task-notification.js";
+export * from "./runtime/mode-state.js";
+export * from "./runtime/task-notification.js";
 
 export * from "./definitions/index.js";
 
@@ -12,7 +12,7 @@ export {
   getCoordinatorTools,
   getCoordinatorUserContext,
   getCoordinatorSystemPrompt,
-} from "./coordinator-mode.js";
+} from "./runtime/coordinator-mode.js";
 
 export {
   createWorkflowPlan,

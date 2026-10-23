@@ -1,32 +1,20 @@
 # @vykor/hooks
 
-Hook execution system for before/after LLM queries.
+执行模型调用、工具使用等运行事件上的钩子。钩子是事件发生时运行的命令、HTTP 请求或模型检查。
 
 ## 功能
 
-- **HookRegistry**: 钩子注册表
-- **executeHook()**: 同步/异步钩子执行
-- **register()**: last-writer-wins 注册
+- `HookExecutor` 按事件、启用状态和匹配条件挑选钩子，按优先级顺序执行。
+- `HookLoader` 从配置或 `.hook.js`、`.hook.ts` 文件读取定义。
+- 相同 ID 后注册的钩子覆盖已有定义。
 
-## Hook 类型
+## 目录与入口
 
-- `before_model`: Model 调用前
-- `after_model`: Model 调用后
-- `before_tool_use`: 工具调用前
-- `after_tool_use`: 工具调用后
+公开入口是 [`src/index.ts`](src/index.ts)，通过 `@vykor/hooks` 导入 `HookExecutor`、`HookLoader` 和钩子类型。完整文件职责见 [src 源码说明](src/README.md)，测试在 [`src/__test__`](src/__test__)。
 
-## 使用
+宿主加载定义后，在运行事件发生时调用 `execute(event, context)`。执行器筛选钩子并依次运行，返回是否阻止后续操作及原因。`command` 执行命令，`http` 读取服务响应，`prompt` 与 `agent` 使用宿主注入的模型客户端检查条件；没有模型客户端时跳过模型类检查。
 
-```ts
-import { HookRegistry, executeHook } from "@vykor/hooks";
-
-const registry = new HookRegistry();
-registry.register({
-  type: "before_model",
-  name: "my-hook",
-  handler: async (ctx) => { /* ... */ }
-});
-```
+注册定义和模型客户端由执行器实例保存在内存中，轮询计时器由加载器保存，配置文件由宿主管理。新增执行或加载逻辑放在 `src/`，测试放在同层 `__test__/`。
 
 ## 测试
 

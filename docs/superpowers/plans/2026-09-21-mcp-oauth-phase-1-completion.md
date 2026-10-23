@@ -15,7 +15,7 @@
 ### 新建文件
 
 - `packages/mcp/src/oauth/snapshot.ts`：规范化 HTTP endpoint、计算 fingerprint，并构造统一的无秘密认证快照。
-- `packages/mcp/src/oauth/snapshot.test.ts`：覆盖 OAuth/Bearer/custom/none、scope 和 endpoint identity。
+- `packages/mcp/src/oauth/__test__/snapshot.test.ts`：覆盖 OAuth/Bearer/custom/none、scope 和 endpoint identity。
 - `packages/server/src/application/mcp-runtime-connection-coordinator.ts`：活动 Runtime registry、per-identity generation、串行同步和聚合状态。
 - `packages/server/src/application/mcp-runtime-connection-coordinator.test.ts`：覆盖 identity 筛选、并发同步、通知乱序与失败聚合。
 - `packages/server/src/http/routes/mcp.ts`：提供只读 Runtime 状态与幂等同步路由。
@@ -28,10 +28,10 @@
 ### 修改文件
 
 - `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/index.ts`：增加 `McpAuthMode`、`McpRuntimeStatus`、identity、snapshot 与同步结果 DTO。
-- `packages/agent-contracts/src/tools.ts`、`packages/core/src/engine/tool-registry.ts`、对应测试：增加 `replaceBySource()` 原子提交。
+- `packages/agent-contracts/src/tools/tools.ts`、`packages/core/src/engine/tool-registry.ts`、对应测试：增加 `replaceBySource()` 原子提交。
 - `packages/mcp/src/index.ts`、对应测试：增加 prepared connection、同步激活和可观察的断开错误。
 - `packages/mcp/src/oauth/login.ts`、对应测试：候选凭据先在内存验证，验证成功后才允许持久化。
-- `packages/auth/src/mcp-oauth-credential-store.ts`、对应测试：复用 `runExclusive()` 串行化最终提交，不改变凭据文件格式。
+- `packages/auth/src/mcp/mcp-oauth-credential-store.ts`、对应测试：复用 `runExclusive()` 串行化最终提交，不改变凭据文件格式。
 - `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`、`packages/agent-runtime/src/node/runtime/agent-options.ts`、`packages/agent-runtime/src/node/runtime/agent-composition.ts`、对应测试：在连接前登记 Runtime handle，在清理时注销，并使用原子 Registry 替换。
 - `packages/server/src/application/mcp-oauth-application-service.ts`、对应测试：编排 settings 与 credential 的提交、Runtime 同步及稳定错误阶段。
 - `packages/server/src/application/daemon-application.ts`、`packages/server/src/daemon/daemon-agent.ts`、对应测试：把 Runtime registry 注入每个 Session agent。
@@ -46,10 +46,10 @@
 - 修改：`packages/core/src/types/mcp-oauth.ts`
 - 修改：`packages/core/src/index.ts`
 - 创建：`packages/mcp/src/oauth/snapshot.ts`
-- 创建：`packages/mcp/src/oauth/snapshot.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/snapshot.test.ts`
 - 修改：`packages/mcp/src/index.ts`
 - 修改：`packages/mcp/src/oauth/status.ts`
-- 测试：`packages/mcp/src/oauth/status.test.ts`
+- 测试：`packages/mcp/src/oauth/__test__/status.test.ts`
 
 - [ ] **步骤 1：为状态矩阵和 identity 编写失败测试**
 
@@ -135,14 +135,14 @@ export interface McpAuthServerSnapshot {
 - [ ] **步骤 6：提交共享模型**
 
 ```bash
-git add packages/core/src/types/mcp-oauth.ts packages/core/src/index.ts packages/mcp/src/oauth/snapshot.ts packages/mcp/src/oauth/snapshot.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/status.test.ts packages/mcp/src/index.ts
+git add packages/core/src/types/mcp-oauth.ts packages/core/src/index.ts packages/mcp/src/oauth/snapshot.ts packages/mcp/src/oauth/__test__/snapshot.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/__test__/status.test.ts packages/mcp/src/index.ts
 git commit -m "feat(mcp): add unified OAuth status snapshot"
 ```
 
 ## 任务 2：Tool Registry 按来源原子替换
 
 **文件：**
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/engine/tool-registry.ts`
 - 测试：`packages/core/src/engine/index.test.ts`
 - 测试：`packages/agent-runtime/src/node/plugins/run-capability-mcp.test.ts`
@@ -188,7 +188,7 @@ replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void;
 - [ ] **步骤 5：提交 Registry 原子替换**
 
 ```bash
-git add packages/agent-contracts/src/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/agent-runtime/src/node/plugins/run-capability-mcp.test.ts
+git add packages/agent-contracts/src/tools/tools.ts packages/core/src/engine/tool-registry.ts packages/core/src/engine/index.test.ts packages/agent-runtime/src/node/plugins/run-capability-mcp.test.ts
 git commit -m "feat(core): replace tools atomically by source"
 ```
 
@@ -196,7 +196,7 @@ git commit -m "feat(core): replace tools atomically by source"
 
 **文件：**
 - 修改：`packages/mcp/src/index.ts`
-- 测试：`packages/mcp/src/index.test.ts`
+- 测试：`packages/mcp/src/__test__/index.test.ts`
 - 修改：`packages/agent-runtime/src/node/mcp/mcp-auth.ts`
 - 测试：`packages/agent-runtime/src/node/mcp/mcp-auth.test.ts`
 
@@ -244,7 +244,7 @@ await activation.closePrevious();
 - [ ] **步骤 7：提交 staged connection**
 
 ```bash
-git add packages/mcp/src/index.ts packages/mcp/src/index.test.ts packages/agent-runtime/src/node/mcp/mcp-auth.ts packages/agent-runtime/src/node/mcp/mcp-auth.test.ts
+git add packages/mcp/src/index.ts packages/mcp/src/__test__/index.test.ts packages/agent-runtime/src/node/mcp/mcp-auth.ts packages/agent-runtime/src/node/mcp/mcp-auth.test.ts
 git commit -m "feat(mcp): activate prepared connections atomically"
 ```
 
@@ -327,7 +327,7 @@ git commit -m "feat(server): coordinate active MCP runtimes"
 
 **文件：**
 - 修改：`packages/mcp/src/oauth/login.ts`
-- 测试：`packages/mcp/src/oauth/login.test.ts`
+- 测试：`packages/mcp/src/oauth/__test__/login.test.ts`
 - 修改：`packages/server/src/application/mcp-oauth-application-service.ts`
 - 测试：`packages/server/src/application/mcp-oauth-application-service.test.ts`
 - 修改：`packages/core/src/config/settings.ts`
@@ -395,7 +395,7 @@ logout 先尽力把旧凭据 scopes 回填到 settings，回填失败记录警�
 - [ ] **步骤 9：提交 OAuth 原子提交逻辑**
 
 ```bash
-git add packages/mcp/src/oauth/login.ts packages/mcp/src/oauth/login.test.ts packages/server/src/application/mcp-oauth-application-service.ts packages/server/src/application/mcp-oauth-application-service.test.ts packages/core/src/config/settings.ts packages/core/src/config/settings.test.ts
+git add packages/mcp/src/oauth/login.ts packages/mcp/src/oauth/__test__/login.test.ts packages/server/src/application/mcp-oauth-application-service.ts packages/server/src/application/mcp-oauth-application-service.test.ts packages/core/src/config/settings.ts packages/core/src/config/settings.test.ts
 git commit -m "feat(mcp): commit verified OAuth credentials atomically"
 ```
 

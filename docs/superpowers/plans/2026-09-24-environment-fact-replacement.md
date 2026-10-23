@@ -18,7 +18,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `packages/personalization/src/index.ts`、`index.test.ts`、`packages/prompts/src/index.test.ts` | 状态、来源、替换、重扫防复活、提示词过滤的权威逻辑和真实文件 / prompt 测试 |
+| `packages/personalization/src/index.ts`、`index.test.ts`、`packages/prompts/src/__test__/index.test.ts` | 状态、来源、替换、重扫防复活、提示词过滤的权威逻辑和真实文件 / prompt 测试 |
 | `packages/server/src/http/routes/facts.ts`、`facts.test.ts` | cwd 范围的列表与替换 HTTP 边界、输入及错误码、写入锁 |
 | `packages/server/src/http/server.ts` | 装配 `/facts` 路由 |
 | `packages/client/src/resources/configuration/system-resource.ts` | 两个 HTTP 资源方法及客户端可见的响应类型 |
@@ -28,9 +28,9 @@
 
 ## 任务 1：事实状态与安全替换
 
-**文件：** 修改 `packages/personalization/src/index.ts`、`packages/personalization/src/index.test.ts`、`packages/prompts/src/index.test.ts`。
+**文件：** 修改 `packages/personalization/src/index.ts`、`packages/personalization/src/__test__/index.test.ts`、`packages/prompts/src/__test__/index.test.ts`。
 
-- [x] **步骤 1：先写失败测试。** 使用临时 `VYKOR_CONFIG_DIR` 的真实文件，先存入 `ssh_host:ops@10.1.2.3`、`ip_address:10.1.2.3` 和另一台主机。调用拟新增的 `replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4", { sessionId: "s1" })`，断言只有选中键被取代、结果列出仍含旧 IP 的 `ip_address:10.1.2.3`、新值有 `manual_replace` 来源。重复提交同一操作，断言操作 ID 不变。再以原用户消息调用 `updateRulesFromSession()` 并重新 `loadFacts()`，断言旧键仍为 `superseded`，`loadLocalRules()` 不含旧 SSH 值。分别以不存在旧键、不同类型格式、凭据值和已失效目标键测试“抛错且文件字节不变”。测试还要覆盖损坏文件不被覆盖、其他项目不受影响。在 `packages/prompts/src/index.test.ts` 加真实 prompt 回归：即使 `rules.md` 缓存仍含旧 SSH 值，组装后的 prompt 只含新 SSH 值。
+- [x] **步骤 1：先写失败测试。** 使用临时 `VYKOR_CONFIG_DIR` 的真实文件，先存入 `ssh_host:ops@10.1.2.3`、`ip_address:10.1.2.3` 和另一台主机。调用拟新增的 `replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4", { sessionId: "s1" })`，断言只有选中键被取代、结果列出仍含旧 IP 的 `ip_address:10.1.2.3`、新值有 `manual_replace` 来源。重复提交同一操作，断言操作 ID 不变。再以原用户消息调用 `updateRulesFromSession()` 并重新 `loadFacts()`，断言旧键仍为 `superseded`，`loadLocalRules()` 不含旧 SSH 值。分别以不存在旧键、不同类型格式、凭据值和已失效目标键测试“抛错且文件字节不变”。测试还要覆盖损坏文件不被覆盖、其他项目不受影响。在 `packages/prompts/src/__test__/index.test.ts` 加真实 prompt 回归：即使 `rules.md` 缓存仍含旧 SSH 值，组装后的 prompt 只含新 SSH 值。
 
   核心断言示例：
 

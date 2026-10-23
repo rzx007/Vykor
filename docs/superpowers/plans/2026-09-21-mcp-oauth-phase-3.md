@@ -28,7 +28,7 @@
 | `packages/mcp/src/oauth/runtime-auth.ts`、`errors.ts`、`protocol.ts` | 结构化刷新失败、Token 使用版本、发现来源、资源选择 |
 | 新建 `packages/mcp/src/oauth/resource-binding.ts` | 资源标识精确比较及 endpoint 包含关系，集中复用 |
 | `packages/mcp/src/oauth/login.ts`、`callback.ts` | 配置快照、URL 通知、可取消授权与完整 callback |
-| `packages/auth/src/mcp-oauth-credential-store.ts` | 继续作为唯一存储入口，锁、最小 v1/v2 兼容、epoch、原子删除 |
+| `packages/auth/src/mcp/mcp-oauth-credential-store.ts` | 继续作为唯一存储入口，锁、最小 v1/v2 兼容、epoch、原子删除 |
 | `packages/core/src/types/mcp-oauth.ts`、`config/settings.ts` | resource/callback 配置、binding 和操作上下文类型 |
 | 新建 `packages/server/src/application/mcp-oauth-operation-service.ts` | 进程内有界登录操作、幂等、取消与订阅 |
 | `packages/server/src/application/mcp-oauth-application-service.ts` | 实际授权提交/退出用例，仍为协议与存储编排入口 |
@@ -41,9 +41,9 @@
 
 ## 任务 1：刷新错误分类与条件诊断
 
-**修改：** `packages/mcp/src/oauth/runtime-auth.ts`、`errors.ts`、`protocol.ts`、`login.ts`、`packages/auth/src/mcp-oauth-credential-store.ts`、`packages/core/src/types/mcp-oauth.ts`。
+**修改：** `packages/mcp/src/oauth/runtime-auth.ts`、`errors.ts`、`protocol.ts`、`login.ts`、`packages/auth/src/mcp/mcp-oauth-credential-store.ts`、`packages/core/src/types/mcp-oauth.ts`。
 
-**测试：** `packages/mcp/src/oauth/runtime-auth.test.ts`、`login.test.ts`、`packages/auth/src/mcp-oauth-credential-store.test.ts`。
+**测试：** `packages/mcp/src/oauth/__test__/runtime-auth.test.ts`、`login.test.ts`、`packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts`。
 
 **交付物：** 临时失败保留凭据，旧失败不会损坏新登录，401 最多恢复一次。
 
@@ -91,9 +91,9 @@ function validateResourceBinding(input: ResourceBindingInput): URL;
 
 ## 任务 3：最小文件格式与跨进程退出保护
 
-**修改：** `packages/auth/src/mcp-oauth-credential-store.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/mcp/src/oauth/login.ts`。
+**修改：** `packages/auth/src/mcp/mcp-oauth-credential-store.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/mcp/src/oauth/login.ts`。
 
-**测试：** `packages/auth/src/mcp-oauth-credential-store.test.ts`、`packages/mcp/src/oauth/login.test.ts`。
+**测试：** `packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts`、`packages/mcp/src/oauth/__test__/login.test.ts`。
 
 **交付物：** 保留现有明文记录和单文件锁，只增加退出计数及原子删除。与任务 5 一起验收，不把始终返回 0 的占位实现当成保护。
 
@@ -117,7 +117,7 @@ interface McpOAuthStoreV2 {
 
 **修改：** `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`、`packages/mcp/src/oauth/callback.ts`、`login.ts`。
 
-**测试：** `packages/mcp/src/oauth/callback.test.ts`、`login.test.ts`、`packages/core/src/config/settings.test.ts`。
+**测试：** `packages/mcp/src/oauth/__test__/callback.test.ts`、`login.test.ts`、`packages/core/src/config/settings.test.ts`。
 
 **交付物：** 本地固定 callback 与 HTTPS 手动 callback 共用一次性验证。
 
@@ -137,7 +137,7 @@ await deps.onAuthorizationUrl?.(authorizationUrl.toString());
 
 **修改：** `packages/server/src/application/mcp-oauth-application-service.ts`、`packages/mcp/src/oauth/login.ts`；维护现有 CLI 本地调用兼容。
 
-**测试：** `packages/server/src/application/mcp-oauth-application-service.test.ts`、`packages/auth/src/mcp-oauth-credential-store.test.ts`。
+**测试：** `packages/server/src/application/mcp-oauth-application-service.test.ts`、`packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts`。
 
 **交付物：** 本地/daemon 登录共用明确提交点，迟到回调不复活凭据。
 

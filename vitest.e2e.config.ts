@@ -22,7 +22,7 @@ for (const name of readdirSync(packagesDir)) {
 
 export default defineConfig({
   test: {
-    include: ["e2e/**/*.test.ts", "packages/*/e2e/**/*.test.ts"],
+    include: ["e2e/**/*.test.ts", "__test__/e2e/**/*.test.ts", "packages/*/__test__/e2e/**/*.test.ts"],
     testTimeout: 120_000,
     hookTimeout: 120_000,
   },

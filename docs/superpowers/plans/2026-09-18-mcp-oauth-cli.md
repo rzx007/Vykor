@@ -17,19 +17,19 @@
 ### 新建
 
 - `packages/core/src/types/mcp-oauth.ts`：纯配置/凭据/状态 DTO，不引用 MCP SDK。
-- `packages/auth/src/mcp-oauth-credential-store.ts`：版本化 JSON、exclusive lock、原子写入和权限控制。
-- `packages/auth/src/mcp-oauth-credential-store.test.ts`：存储损坏、并发写、锁回收和脱敏回归。
+- `packages/auth/src/mcp/mcp-oauth-credential-store.ts`：版本化 JSON、exclusive lock、原子写入和权限控制。
+- `packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts`：存储损坏、并发写、锁回收和脱敏回归。
 - `packages/mcp/src/oauth/errors.ts`：稳定错误码和不携带 secret 的错误类型。
 - `packages/mcp/src/oauth/security.ts`：HTTPS/loopback、issuer、callback 和 scope 子集校验。
-- `packages/mcp/src/oauth/security.test.ts`：安全边界单元测试。
+- `packages/mcp/src/oauth/__test__/security.test.ts`：安全边界单元测试。
 - `packages/mcp/src/oauth/callback.ts`：loopback callback listener 与粘贴 URL 竞速、一次性 state 消费。
-- `packages/mcp/src/oauth/callback.test.ts`：callback、超时、取消、state/iss 测试。
+- `packages/mcp/src/oauth/__test__/callback.test.ts`：callback、超时、取消、state/iss 测试。
 - `packages/mcp/src/oauth/login.ts`：discovery、DCR、PKCE、exchange、临时连接验证和撤销编排。
-- `packages/mcp/src/oauth/login.test.ts`：登录服务的协议级测试。
+- `packages/mcp/src/oauth/__test__/login.test.ts`：登录服务的协议级测试。
 - `packages/mcp/src/oauth/runtime-auth.ts`：连接前刷新、跨进程去重、401 单次恢复和 403 拒绝扩权。
-- `packages/mcp/src/oauth/runtime-auth.test.ts`：刷新、并发、scope 和单次重试测试。
+- `packages/mcp/src/oauth/__test__/runtime-auth.test.ts`：刷新、并发、scope 和单次重试测试。
 - `packages/mcp/src/oauth/status.ts`：纯本地授权状态计算。
-- `packages/mcp/src/oauth/status.test.ts`：状态矩阵测试。
+- `packages/mcp/src/oauth/__test__/status.test.ts`：状态矩阵测试。
 - `apps/cli/src/commands/mcp.test.ts`：Codex 兼容命令解析、输出与退出码测试。
 - `packages/mcp/src/oauth/test-server.test.ts`：真实 SDK transport 对接本地 OAuth/MCP server 的集成测试。
 
@@ -169,8 +169,8 @@ git commit -m "feat(mcp): define OAuth configuration contracts"
 ## 任务 2：实现安全的 MCP OAuth 凭据仓库
 
 **文件：**
-- 创建：`packages/auth/src/mcp-oauth-credential-store.ts`
-- 创建：`packages/auth/src/mcp-oauth-credential-store.test.ts`
+- 创建：`packages/auth/src/mcp/mcp-oauth-credential-store.ts`
+- 创建：`packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts`
 - 修改：`packages/auth/src/index.ts`
 
 - [ ] **步骤 1：先写存储、损坏文件和权限测试**
@@ -264,7 +264,7 @@ export class McpOAuthCredentialStore {
 - [ ] **步骤 7：提交**
 
 ```bash
-git add packages/auth/src/mcp-oauth-credential-store.ts packages/auth/src/mcp-oauth-credential-store.test.ts packages/auth/src/index.ts
+git add packages/auth/src/mcp/mcp-oauth-credential-store.ts packages/auth/src/mcp/__test__/mcp-oauth-credential-store.test.ts packages/auth/src/index.ts
 git commit -m "feat(auth): persist MCP OAuth credentials safely"
 ```
 
@@ -273,9 +273,9 @@ git commit -m "feat(auth): persist MCP OAuth credentials safely"
 **文件：**
 - 创建：`packages/mcp/src/oauth/errors.ts`
 - 创建：`packages/mcp/src/oauth/security.ts`
-- 创建：`packages/mcp/src/oauth/security.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/security.test.ts`
 - 创建：`packages/mcp/src/oauth/callback.ts`
-- 创建：`packages/mcp/src/oauth/callback.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/callback.test.ts`
 
 - [ ] **步骤 1：编写 HTTPS、issuer、scope 和 callback URL 失败测试**
 
@@ -349,7 +349,7 @@ export function assertOAuthEndpoint(url: URL, options?: { allowLoopbackHttp?: bo
 - [ ] **步骤 7：提交**
 
 ```bash
-git add packages/mcp/src/oauth/errors.ts packages/mcp/src/oauth/security.ts packages/mcp/src/oauth/security.test.ts packages/mcp/src/oauth/callback.ts packages/mcp/src/oauth/callback.test.ts
+git add packages/mcp/src/oauth/errors.ts packages/mcp/src/oauth/security.ts packages/mcp/src/oauth/__test__/security.test.ts packages/mcp/src/oauth/callback.ts packages/mcp/src/oauth/__test__/callback.test.ts
 git commit -m "feat(mcp): add OAuth security and callback primitives"
 ```
 
@@ -357,7 +357,7 @@ git commit -m "feat(mcp): add OAuth security and callback primitives"
 
 **文件：**
 - 创建：`packages/mcp/src/oauth/login.ts`
-- 创建：`packages/mcp/src/oauth/login.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/login.test.ts`
 - 修改：`packages/mcp/src/index.ts`
 
 - [ ] **步骤 1：编写 discovery issuer、approvedScopes 和 DCR 顺序测试**
@@ -454,7 +454,7 @@ export async function loginMcpOAuth(input: {
 - [ ] **步骤 7：提交**
 
 ```bash
-git add packages/mcp/src/oauth/login.ts packages/mcp/src/oauth/login.test.ts packages/mcp/src/index.ts
+git add packages/mcp/src/oauth/login.ts packages/mcp/src/oauth/__test__/login.test.ts packages/mcp/src/index.ts
 git commit -m "feat(mcp): implement interactive OAuth login"
 ```
 
@@ -462,9 +462,9 @@ git commit -m "feat(mcp): implement interactive OAuth login"
 
 **文件：**
 - 创建：`packages/mcp/src/oauth/runtime-auth.ts`
-- 创建：`packages/mcp/src/oauth/runtime-auth.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/runtime-auth.test.ts`
 - 创建：`packages/mcp/src/oauth/status.ts`
-- 创建：`packages/mcp/src/oauth/status.test.ts`
+- 创建：`packages/mcp/src/oauth/__test__/status.test.ts`
 - 创建：`packages/mcp/src/oauth/verify-connection.ts`
 - 修改：`packages/mcp/src/index.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/runtime-integrations.ts`
@@ -562,7 +562,7 @@ HTTP 且没有显式 `Authorization` Header 时，为 `StreamableHTTPClientTrans
 - [ ] **步骤 9：提交**
 
 ```bash
-git add packages/mcp/src/oauth/runtime-auth.ts packages/mcp/src/oauth/runtime-auth.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/status.test.ts packages/mcp/src/oauth/verify-connection.ts packages/mcp/src/index.ts packages/agent-runtime/src/node/runtime/runtime-integrations.ts packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts
+git add packages/mcp/src/oauth/runtime-auth.ts packages/mcp/src/oauth/__test__/runtime-auth.test.ts packages/mcp/src/oauth/status.ts packages/mcp/src/oauth/__test__/status.test.ts packages/mcp/src/oauth/verify-connection.ts packages/mcp/src/index.ts packages/agent-runtime/src/node/runtime/runtime-integrations.ts packages/agent-runtime/src/node/runtime/runtime-integrations.test.ts
 git commit -m "feat(mcp): refresh OAuth credentials at runtime"
 ```
 

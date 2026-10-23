@@ -29,7 +29,7 @@
 
 ### `@vykor/core`
 
-- 修改 `packages/agent-contracts/src/tools.ts`：删除附件/OCR Host 类型和 `ToolContext` 字段。
+- 修改 `packages/agent-contracts/src/tools/tools.ts`：删除附件/OCR Host 类型和 `ToolContext` 字段。
 - 修改 `packages/core/src/types/runtime.ts`：删除 `setAttachments()`、`setImageToText()`。
 - 修改 `packages/core/src/engine/query-engine.ts` 与测试：删除 Host 状态和 ToolContext 注入。
 - 修改 `packages/core/src/engine/compact-service.ts`：删除附件 Catalog 类型和格式化，增加通用 `CompactContextSection` 限额处理。
@@ -692,7 +692,7 @@ git commit -m "feat(server): install attachment-aware tool overrides"
 
 **文件：**
 
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/types/runtime.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/core/src/engine/integration.test.ts`（若 fixture 实现 setter）
@@ -791,7 +791,7 @@ pnpm --filter @vykor/server check-types
 - [x] **步骤 7：提交 Capability 清理**
 
 ```bash
-git add -- packages/agent-contracts/src/tools.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/core/src/engine/integration.test.ts packages/core/src/index.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/capabilities/capability-resolution.ts packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts packages/agent-runtime/src/kernel/index.ts packages/agent-runtime/src/node/runtime/host-assembly.test.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/child-agent.test.ts
+git add -- packages/agent-contracts/src/tools/tools.ts packages/core/src/types/runtime.ts packages/core/src/engine/query-engine.ts packages/core/src/engine/integration.test.ts packages/core/src/index.ts packages/agent-runtime/src/node/runtime/agent-options.ts packages/agent-runtime/src/node/capabilities/capability-resolution.ts packages/agent-runtime/src/node/capabilities/capability-resolution.test.ts packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts packages/agent-runtime/src/kernel/index.ts packages/agent-runtime/src/node/runtime/host-assembly.test.ts packages/agent-runtime/src/node/runtime/default-runtime.ts packages/agent-runtime/src/node/runtime/default-runtime.test.ts packages/agent-runtime/src/kernel/agent.ts packages/agent-runtime/src/node/runtime/agent-composition.ts packages/agent-runtime/src/node/runtime/child-agent.test.ts
 git diff --cached --check
 git diff --cached --stat
 git commit -m "refactor(agent-runtime): remove attachment capabilities"

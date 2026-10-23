@@ -28,7 +28,7 @@
 | 修改 `packages/core/src/engine/compact-service.ts` | 新摘要/boundary 写入 `compactRole` |
 | 修改 `packages/core/src/index.ts` | 导出 context-budget 与类型 |
 | 创建 `packages/prompts/src/ledger-segments.ts` | `buildPromptLedgerSegments()`：按段打标，不改模型可见文案 |
-| 创建 `packages/prompts/src/ledger-segments.test.ts` | tagged 段覆盖 |
+| 创建 `packages/prompts/src/__test__/ledger-segments.test.ts` | tagged 段覆盖 |
 | 修改 `packages/prompts/src/index.ts` | re-export |
 | 修改 `packages/server/src/application/settings-api.ts` | `ContextService.usage` |
 | 创建 `packages/server/src/application/context-usage-cache.ts` | sessionId → snapshot 缓存与失效 |
@@ -225,7 +225,7 @@ git commit -m "feat(core): compact 消息标记与 conversation/summary 分桶"
 
 **文件：**
 - 创建：`packages/prompts/src/ledger-segments.ts`
-- 创建：`packages/prompts/src/ledger-segments.test.ts`
+- 创建：`packages/prompts/src/__test__/ledger-segments.test.ts`
 - 修改：`packages/prompts/src/index.ts`
 
 - [ ] **步骤 1：编写失败的测试**
@@ -271,7 +271,7 @@ it("does not put full memory preview into segments by default", async () => {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/prompts/src/ledger-segments.ts packages/prompts/src/ledger-segments.test.ts packages/prompts/src/index.ts
+git add packages/prompts/src/ledger-segments.ts packages/prompts/src/__test__/ledger-segments.test.ts packages/prompts/src/index.ts
 git commit -m "feat(prompts): 输出带桶标签的 prompt ledger 段"
 ```
 

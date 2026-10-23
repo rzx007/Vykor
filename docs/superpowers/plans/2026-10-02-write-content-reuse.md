@@ -24,7 +24,7 @@
 
 **Files:**
 
-- Modify: `packages/agent-contracts/src/tools.ts`
+- Modify: `packages/agent-contracts/src/tools/tools.ts`
 - Create: `packages/core/src/engine/tool-input-reuse.ts`
 - Modify: `packages/core/src/engine/query-tool-preparation.ts`
 - Modify: `packages/core/src/engine/query-engine.ts`

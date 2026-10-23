@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { normalizeTokenMetering } from "./token-metering.js";
+import { normalizeTokenMetering } from "./streaming/token-metering.js";
 import type { UsageSnapshot } from "@vykor/agent-contracts";
 import type { StreamingMessageClient, StreamMessageParams, StreamEvent, ToolDefinition } from "@vykor/agent-contracts";
 import type { Message, ContentBlock, ToolUseBlock } from "@vykor/agent-contracts";
@@ -14,14 +14,14 @@ import {
   streamIncompleteFailure,
   toModelRequestFailure,
 } from "../errors/index";
-import { createRequestLifecycle } from "./retry";
-import { parseToolInput } from "./tool-input.js";
-import { createToolPathSummary, isFileTool } from "./tool-path-summary.js";
+import { createRequestLifecycle } from "./requests/retry";
+import { parseToolInput } from "./tools/tool-input.js";
+import { createToolPathSummary, isFileTool } from "./tools/tool-path-summary.js";
 import {
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
   replaceMissingToolResultImages,
-} from "./native-image-payload.js";
+} from "./media/native-image-payload.js";
 
 export class AnthropicClient implements StreamingMessageClient {
   private client: Anthropic;

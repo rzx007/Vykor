@@ -342,7 +342,7 @@
         "typeOnly": true
       },
       {
-        "fromFile": "packages/mcp/src/app-resources.test.ts",
+        "fromFile": "packages/mcp/src/resources/__test__/app-resources.test.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PLUGIN_APP_LIMITS",
@@ -351,7 +351,7 @@
         "typeOnly": false
       },
       {
-        "fromFile": "packages/mcp/src/app-resources.ts",
+        "fromFile": "packages/mcp/src/resources/app-resources.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PLUGIN_APP_LIMITS",
@@ -436,7 +436,7 @@
         "typeOnly": true
       },
       {
-        "fromFile": "packages/sandbox/src/approval-policy.ts",
+        "fromFile": "packages/sandbox/src/policy/approval-policy.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "ApprovalMode"

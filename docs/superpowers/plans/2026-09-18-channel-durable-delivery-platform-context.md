@@ -30,7 +30,7 @@
 | `packages/channels/src/bus/queue.ts` | `InboundMessage`/`OutboundMessage` | 修改 |
 | `packages/channels/src/core/manager.ts` | 入站映射、出站分发 | 修改 |
 | `packages/channels/src/core/durable-bridge.ts` | durable 入站转交、出站发布 | 修改 |
-| `packages/channels/src/__test__/manager.test.ts` | manager 测试 | 修改 |
+| `packages/channels/src/core/__test__/manager.test.ts` | manager 测试 | 修改 |
 | `packages/channels/src/__test__/durable-bridge.test.ts` | bridge 测试 | 修改 |
 | `packages/channels/src/__test__/durable-thread-reply.test.ts` | Feishu 线程回复端到端集成测试 | 新建 |
 | `packages/services/src/session-runtime/schema.ts` | DB schema | 修改 |
@@ -186,7 +186,7 @@ git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 - 修改：`packages/channels/src/bus/queue.ts`
 - 修改：`packages/channels/src/core/manager.ts`
 - 修改：`packages/channels/src/core/durable-bridge.ts`
-- 测试：`packages/channels/src/__test__/manager.test.ts`
+- 测试：`packages/channels/src/core/__test__/manager.test.ts`
 - 测试：`packages/channels/src/__test__/durable-bridge.test.ts`
 
 **Interfaces：**
@@ -198,7 +198,7 @@ git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/channels/src/__test__/manager.test.ts` 的 `describe("ChannelManager")` 内追加：
+在 `packages/channels/src/core/__test__/manager.test.ts` 的 `describe("ChannelManager")` 内追加：
 
 ```ts
   it("preserves platformMeta on the inbound message", async () => {
@@ -346,7 +346,7 @@ git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/bus/queue.ts packages/channels/src/core/manager.ts packages/channels/src/core/durable-bridge.ts packages/channels/src/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
+git add packages/channels/src/bus/queue.ts packages/channels/src/core/manager.ts packages/channels/src/core/durable-bridge.ts packages/channels/src/core/__test__/manager.test.ts packages/channels/src/__test__/durable-bridge.test.ts
 git commit -m "feat(channels): propagate platformMeta through the durable runtime"
 ```
 
@@ -1001,7 +1001,7 @@ pnpm exec turbo build --output-logs=full
 - [ ] **步骤 5：反 fallback 扫描**
 
 ```powershell
-rg -n -g '!**/*.test.ts' -g '!**/__test__/**' "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/bus packages/channels/src/impl/feishu.ts packages/server/src/application/channel packages/protocol/src/channels/channel.ts
+rg -n -g '!**/*.test.ts' -g '!**/__test__/**' "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/bus packages/channels/src/adapters/feishu/feishu.ts packages/server/src/application/channel packages/protocol/src/channels/channel.ts
 ```
 
 预期：无生产性伪造；如有注释命中，人工确认不是「把缺失 thread/root 字段伪造成 chat/随机值」。

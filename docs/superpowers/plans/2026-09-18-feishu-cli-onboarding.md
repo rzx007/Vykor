@@ -28,12 +28,12 @@
 | 文件 | 职责 | 动作 |
 |---|---|---|
 | `packages/channels/package.json` | SDK 版本 | 修改 |
-| `packages/channels/src/impl/feishu.ts` | `FeishuConfig.domain` + `connect()` 透传 | 修改 |
-| `packages/channels/src/impl/__test__/feishu-connect.test.ts` | 断言 domain 透传 | 新建 |
-| `packages/channels/src/impl/feishu-registration.ts` | 扫码注册状态机 | 新建 |
-| `packages/channels/src/impl/__test__/feishu-registration.test.ts` | 状态机测试 | 新建 |
-| `packages/channels/src/impl/feishu-verify.ts` | 凭据校验（tenant token + bot info） | 新建 |
-| `packages/channels/src/impl/__test__/feishu-verify.test.ts` | 校验测试 | 新建 |
+| `packages/channels/src/adapters/feishu/feishu.ts` | `FeishuConfig.domain` + `connect()` 透传 | 修改 |
+| `packages/channels/src/adapters/feishu/__test__/feishu-connect.test.ts` | 断言 domain 透传 | 新建 |
+| `packages/channels/src/adapters/feishu/feishu-registration.ts` | 扫码注册状态机 | 新建 |
+| `packages/channels/src/adapters/feishu/__test__/feishu-registration.test.ts` | 状态机测试 | 新建 |
+| `packages/channels/src/adapters/feishu/feishu-verify.ts` | 凭据校验（tenant token + bot info） | 新建 |
+| `packages/channels/src/adapters/feishu/__test__/feishu-verify.test.ts` | 校验测试 | 新建 |
 | `packages/channels/src/index.ts` | 导出接入核心 | 修改 |
 | `packages/core/src/config/paths.ts` | `getChannelCredentialsFilePath` | 修改 |
 | `packages/core/src/index.ts` | 导出新路径函数 | 修改 |
@@ -44,9 +44,9 @@
 | `packages/auth/src/__test__/channel-credential-store.test.ts` | 存储测试 | 新建 |
 | `packages/auth/src/index.ts` | 导出存储 | 修改 |
 | `packages/channels/src/bus/acl.ts` | ACL 支持会话匹配 | 修改 |
-| `packages/channels/src/bus/queue.test.ts` | ACL 测试 | 修改 |
+| `packages/channels/src/bus/__test__/queue.test.ts` | ACL 测试 | 修改 |
 | `packages/channels/src/core/manager.ts` | 传 chatId、`onDenied` | 修改 |
-| `packages/channels/src/__test__/manager.test.ts` | 拒绝回调测试 | 修改 |
+| `packages/channels/src/core/__test__/manager.test.ts` | 拒绝回调测试 | 修改 |
 | `apps/cli/src/commands/channels.ts` | `add`/`allow`/`serve` 接线 | 修改 |
 | `apps/cli/src/commands/channels-onboarding.ts` | 向导流程（可注入） | 新建 |
 | `apps/cli/src/commands/channels-onboarding.test.ts` | 向导测试 | 新建 |
@@ -61,8 +61,8 @@
 
 **文件：**
 - 修改：`packages/channels/package.json`
-- 修改：`packages/channels/src/impl/feishu.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu-connect.test.ts`（新建）
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu-connect.test.ts`（新建）
 
 **Interfaces：**
 - Produces：`FeishuConfig.domain?: "feishu" | "lark"`；`connect()` 把 domain 映射为 `lark.Domain.Feishu / lark.Domain.Lark` 传给 `Client` 与 `WSClient`。
@@ -73,7 +73,7 @@
 
 - [ ] **步骤 2：编写失败的测试**
 
-新建 `packages/channels/src/impl/__test__/feishu-connect.test.ts`：
+新建 `packages/channels/src/adapters/feishu/__test__/feishu-connect.test.ts`：
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
@@ -138,7 +138,7 @@ describe("FeishuAdapter.connect domain", () => {
 
 - [ ] **步骤 4：最小实现**
 
-`packages/channels/src/impl/feishu.ts`：
+`packages/channels/src/adapters/feishu/feishu.ts`：
 
 1. `FeishuConfig` 增加：
 
@@ -164,7 +164,7 @@ describe("FeishuAdapter.connect domain", () => {
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/channels/package.json pnpm-lock.yaml packages/channels/src/impl/feishu.ts packages/channels/src/impl/__test__/feishu-connect.test.ts
+git add packages/channels/package.json pnpm-lock.yaml packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/adapters/feishu/__test__/feishu-connect.test.ts
 git commit -m "feat(channels): upgrade lark sdk and support feishu/lark domain"
 ```
 
@@ -173,8 +173,8 @@ git commit -m "feat(channels): upgrade lark sdk and support feishu/lark domain"
 ## 任务 2：扫码注册状态机
 
 **文件：**
-- 新建：`packages/channels/src/impl/feishu-registration.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu-registration.test.ts`（新建）
+- 新建：`packages/channels/src/adapters/feishu/feishu-registration.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu-registration.test.ts`（新建）
 
 **Interfaces：**
 - Produces：
@@ -185,7 +185,7 @@ git commit -m "feat(channels): upgrade lark sdk and support feishu/lark domain"
 
 - [ ] **步骤 1：编写失败的测试**
 
-新建 `packages/channels/src/impl/__test__/feishu-registration.test.ts`：
+新建 `packages/channels/src/adapters/feishu/__test__/feishu-registration.test.ts`：
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
@@ -271,7 +271,7 @@ describe("FeishuRegistration", () => {
 
 - [ ] **步骤 3：实现**
 
-新建 `packages/channels/src/impl/feishu-registration.ts`（移植并简化 `dsh-im` 的 RegistrationManager）：
+新建 `packages/channels/src/adapters/feishu/feishu-registration.ts`（移植并简化 `dsh-im` 的 RegistrationManager）：
 
 ```ts
 type FeishuDomain = "feishu" | "lark";
@@ -571,7 +571,7 @@ export class FeishuRegistration {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/impl/feishu-registration.ts packages/channels/src/impl/__test__/feishu-registration.test.ts
+git add packages/channels/src/adapters/feishu/feishu-registration.ts packages/channels/src/adapters/feishu/__test__/feishu-registration.test.ts
 git commit -m "feat(channels): add feishu QR registration state machine"
 ```
 
@@ -580,8 +580,8 @@ git commit -m "feat(channels): add feishu QR registration state machine"
 ## 任务 3：凭据校验
 
 **文件：**
-- 新建：`packages/channels/src/impl/feishu-verify.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu-verify.test.ts`（新建）
+- 新建：`packages/channels/src/adapters/feishu/feishu-verify.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu-verify.test.ts`（新建）
 
 **Interfaces：**
 - Produces：`verifyFeishuCredentials({ appId, appSecret, domain, fetchImpl?, timeoutMs? }): Promise<{ appId; name?; openId?; activated? }>`。
@@ -589,7 +589,7 @@ git commit -m "feat(channels): add feishu QR registration state machine"
 
 - [ ] **步骤 1：编写失败的测试**
 
-新建 `packages/channels/src/impl/__test__/feishu-verify.test.ts`：
+新建 `packages/channels/src/adapters/feishu/__test__/feishu-verify.test.ts`：
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
@@ -666,7 +666,7 @@ describe("verifyFeishuCredentials", () => {
 
 - [ ] **步骤 3：实现**
 
-新建 `packages/channels/src/impl/feishu-verify.ts`：
+新建 `packages/channels/src/adapters/feishu/feishu-verify.ts`：
 
 ```ts
 type FeishuDomain = "feishu" | "lark";
@@ -785,7 +785,7 @@ export type { VerifiedFeishuBot } from "./impl/feishu-verify";
 ```
 
 ```bash
-git add packages/channels/src/impl/feishu-verify.ts packages/channels/src/impl/__test__/feishu-verify.test.ts packages/channels/src/index.ts
+git add packages/channels/src/adapters/feishu/feishu-verify.ts packages/channels/src/adapters/feishu/__test__/feishu-verify.test.ts packages/channels/src/index.ts
 git commit -m "feat(channels): verify feishu credentials via tenant token"
 ```
 
@@ -883,7 +883,7 @@ describe("ChannelCredentialStore", () => {
 
 - [ ] **步骤 4：实现（照 mcp 存储移植）**
 
-新建 `packages/auth/src/channel-credential-store.ts`：复制 `packages/auth/src/mcp-oauth-credential-store.ts` 的
+新建 `packages/auth/src/channel-credential-store.ts`：复制 `packages/auth/src/mcp/mcp-oauth-credential-store.ts` 的
 文件读写/锁/原子写机制（`read` 的 ENOENT 空、`write` 的临时文件 + rename + POSIX chmod、`withLock`），
 把结构换成：
 
@@ -1088,9 +1088,9 @@ git commit -m "feat(core): move feishu secret out of settings to credential stor
 
 **文件：**
 - 修改：`packages/channels/src/bus/acl.ts`
-- 修改：`packages/channels/src/bus/queue.test.ts`
+- 修改：`packages/channels/src/bus/__test__/queue.test.ts`
 - 修改：`packages/channels/src/core/manager.ts`
-- 修改：`packages/channels/src/__test__/manager.test.ts`
+- 修改：`packages/channels/src/core/__test__/manager.test.ts`
 
 **Interfaces：**
 - Produces：
@@ -1099,7 +1099,7 @@ git commit -m "feat(core): move feishu secret out of settings to credential stor
 
 - [ ] **步骤 1：编写失败的测试**
 
-`packages/channels/src/bus/queue.test.ts` 的 `isAllowed` 用例改为/增加：
+`packages/channels/src/bus/__test__/queue.test.ts` 的 `isAllowed` 用例改为/增加：
 
 ```ts
   it("匹配发送者", () => {
@@ -1126,7 +1126,7 @@ git commit -m "feat(core): move feishu secret out of settings to credential stor
   });
 ```
 
-`packages/channels/src/__test__/manager.test.ts` 增加：
+`packages/channels/src/core/__test__/manager.test.ts` 增加：
 
 ```ts
   it("ACL 拒绝时调用 onDenied 并带 sender/chatId", async () => {
@@ -1210,7 +1210,7 @@ export function isAllowed(
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/bus/acl.ts packages/channels/src/bus/queue.test.ts packages/channels/src/core/manager.ts packages/channels/src/__test__/manager.test.ts
+git add packages/channels/src/bus/acl.ts packages/channels/src/bus/__test__/queue.test.ts packages/channels/src/core/manager.ts packages/channels/src/core/__test__/manager.test.ts
 git commit -m "feat(channels): match ACL by sender or chat and report denials"
 ```
 

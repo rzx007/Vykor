@@ -26,7 +26,7 @@
 - Modify: `packages/memory/src/index.ts`
 - Modify: `packages/agent-runtime/src/node/memory/memory-runtime.ts`
 - Modify: `packages/services/src/memory-extract.ts`
-- Test: `packages/memory/src/extraction.test.ts`
+- Test: `packages/memory/src/__test__/extraction.test.ts`
 - Test: `packages/agent-runtime/src/node/memory/memory-runtime.test.ts`
 - Test: `packages/services/src/memory-extract.test.ts`
 

@@ -481,7 +481,7 @@ git diff --check
 | `packages/protocol/src/channels/channel-runtime.ts` + `packages/protocol/src/channels/__test__/channel-runtime.test.ts` | 新建 |
 | `packages/protocol/src/index.ts` | 导出新类型与 parser |
 | `packages/channels/src/core/durable-bridge.ts` + `packages/channels/src/__test__/durable-bridge.test.ts` | `cwd` 支持函数；`stop({drainTimeoutMs})` |
-| `packages/channels/src/core/manager.ts` + `packages/channels/src/__test__/manager.test.ts` | 新增 `stopInbound()` |
+| `packages/channels/src/core/manager.ts` + `packages/channels/src/core/__test__/manager.test.ts` | 新增 `stopInbound()` |
 | `packages/core/src/config/paths.ts` + `packages/core/src/config/paths.test.ts`、`packages/core/src/index.ts` | 新增 `getChannelWorkspaceRoot` |
 | `packages/server/src/daemon/channel-runtime-service.ts` + `packages/server/src/daemon/channel-runtime-service.test.ts` | 新建 |
 | `packages/server/src/application/channel/channel-onboarding-service.ts` + `packages/server/src/application/channel/__test__/channel-onboarding-service.test.ts` | 新建 |

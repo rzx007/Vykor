@@ -39,7 +39,7 @@
 
 ### Agent 工具和 Runtime
 
-- 修改 `packages/agent-contracts/src/tools.ts`：增加 `AgentContextMemoryHost` 和 ToolContext capability。
+- 修改 `packages/agent-contracts/src/tools/tools.ts`：增加 `AgentContextMemoryHost` 和 ToolContext capability。
 - 修改 `packages/agent-runtime/src/node/runtime/agent-options.ts`、`agent-composition.ts`、`default-runtime.ts` 和 QueryEngine setter：贯通 host。
 - 创建 `packages/tools/src/context/context-tools.ts`：Remember、ResolveContextDecision、RecallContext、UpdateContext、ForgetContext。
 - 修改 `packages/tools/src/registry.ts`：仅 host 可用时注册工具。
@@ -265,7 +265,7 @@ git commit -m "feat(context): resolve and govern context mutations"
 ### 任务 4：Agent 语义工具和 daemon host 接线
 
 **文件：**
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/core/src/engine/query-engine.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
@@ -456,7 +456,7 @@ git commit -m "feat(context): add resource API and client commands"
 **文件：**
 - 创建：`packages/tools/src/file/managed-resource-policy.ts`
 - 创建：`packages/tools/src/file/__test__/managed-resource-policy.test.ts`
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/tools/src/file/write.ts`
 - 修改：`packages/tools/src/file/editing/edit.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`

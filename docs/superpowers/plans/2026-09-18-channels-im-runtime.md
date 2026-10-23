@@ -140,7 +140,7 @@ git commit -m "feat(channels): add strict message capability contract"
 
 **文件：**
 - 修改：`packages/channels/src/core/manager.ts`
-- 测试：`packages/channels/src/__test__/manager.test.ts`
+- 测试：`packages/channels/src/core/__test__/manager.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
@@ -240,7 +240,7 @@ private handleInbound(channelName: string, msg: ChannelMessage): void {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/core/manager.ts packages/channels/src/__test__/manager.test.ts
+git add packages/channels/src/core/manager.ts packages/channels/src/core/__test__/manager.test.ts
 git commit -m "feat(channels): enforce strict manager routing semantics"
 ```
 
@@ -249,8 +249,8 @@ git commit -m "feat(channels): enforce strict manager routing semantics"
 ## 任务 3：Feishu 适配器实现严格能力与消息映射
 
 **文件：**
-- 修改：`packages/channels/src/impl/feishu.ts`
-- 测试：`packages/channels/src/impl/__test__/feishu.test.ts`
+- 修改：`packages/channels/src/adapters/feishu/feishu.ts`
+- 测试：`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
@@ -394,7 +394,7 @@ export class FeishuAdapter implements ChannelAdapter {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/channels/src/impl/feishu.ts packages/channels/src/impl/__test__/feishu.test.ts
+git add packages/channels/src/adapters/feishu/feishu.ts packages/channels/src/adapters/feishu/__test__/feishu.test.ts
 git commit -m "feat(feishu): implement strict runtime mapping and capabilities"
 ```
 

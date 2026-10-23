@@ -1190,7 +1190,7 @@
     },
     {
       "id": "R13",
-      "member": "packages/coordinator/src/system-prompt.ts",
+      "member": "packages/coordinator/src/runtime/system-prompt.ts",
       "sha256": "8f963e219b8ab4d44c320ce7b8042a30737386d2a6e181f88d00371d9bc832ea",
       "startLine": 1,
       "endLine": 22,

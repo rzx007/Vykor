@@ -16,8 +16,8 @@
 
 - 创建 `packages/environment/src/shell-descriptor.ts`：定义 ShellDescriptor、ShellResultMetadata 和类型守卫。
 - 修改 `packages/environment/src/types.ts` 与 `index.ts`：让 EffectiveEnvironmentInfo 暴露 descriptor。
-- 修改 `packages/sandbox/src/shell.ts`：实现候选选择、可执行验证、版本/能力探测和 argv 组装。
-- 修改 `packages/sandbox/src/execution-environment.ts`：Local/WSL 创建时固化 descriptor，process adapter 使用它。
+- 修改 `packages/sandbox/src/process/shell.ts`：实现候选选择、可执行验证、版本/能力探测和 argv 组装。
+- 修改 `packages/sandbox/src/environment/execution-environment.ts`：Local/WSL 创建时固化 descriptor，process adapter 使用它。
 - 创建 `packages/tools/src/shell/shell.ts`：动态创建唯一 `Shell` 工具并返回结构化结果。
 - 删除 `packages/tools/src/shell/bash.ts`：不保留可调用别名。
 - 修改 `packages/tools/src/registry.ts` 和 `packages/tools/src/background-shell/background-shell-tools.ts`：根据 descriptor 创建前后台工具。
@@ -33,7 +33,7 @@
 - 创建：`packages/environment/src/shell-descriptor.ts`
 - 修改：`packages/environment/src/types.ts`
 - 修改：`packages/environment/src/index.ts`
-- 测试：`packages/environment/src/types.test.ts`
+- 测试：`packages/environment/src/__test__/types.test.ts`
 
 - [ ] **步骤 1：编写失败的契约测试**
 
@@ -116,12 +116,12 @@ git commit -m "feat(environment): define shell runtime contract"
 ### 任务 2：在 Execution Environment 启动时确定 Shell
 
 **文件：**
-- 修改：`packages/sandbox/src/shell.ts`
-- 修改：`packages/sandbox/src/execution-environment.ts`
+- 修改：`packages/sandbox/src/process/shell.ts`
+- 修改：`packages/sandbox/src/environment/execution-environment.ts`
 - 修改：`packages/sandbox/src/index.ts`
-- 测试：`packages/sandbox/src/execution-environment.test.ts`
-- 测试：`packages/sandbox/src/wsl-environment.test.ts`
-- 测试：`packages/sandbox/src/index.test.ts`
+- 测试：`packages/sandbox/src/environment/__test__/execution-environment.test.ts`
+- 测试：`packages/sandbox/src/environment/__test__/wsl-environment.test.ts`
+- 测试：`packages/sandbox/src/__test__/index.test.ts`
 
 - [ ] **步骤 1：编写 Windows 候选顺序与不静默回落测试**
 
@@ -276,7 +276,7 @@ git commit -m "refactor(tools): replace Bash with environment-bound Shell"
 **文件：**
 - 修改：`packages/tools/src/background-shell/background-shell-tools.ts`
 - 修改：`packages/tools/src/background-shell/index.ts`
-- 修改：`packages/agent-contracts/src/tools.ts`
+- 修改：`packages/agent-contracts/src/tools/tools.ts`
 - 修改：`packages/server/src/jobs/daemon-job-service.ts`
 - 测试：`packages/tools/src/background-shell/__test__/background-shell-create.test.ts`
 - 测试：`packages/server/src/jobs/daemon-job-service.test.ts`
@@ -332,7 +332,7 @@ git commit -m "refactor(jobs): bind background commands to session shell"
 - 修改：`packages/plugins/src/activation/activate.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/child-agent-options.ts`
-- 修改：`packages/coordinator/src/coordinator-mode.ts`
+- 修改：`packages/coordinator/src/runtime/coordinator-mode.ts`
 - 修改：`packages/server/src/permissions/permission-broker.ts`
 - 修改：上述文件的相应 `*.test.ts`
 
@@ -387,7 +387,7 @@ git commit -m "refactor(runtime): migrate Bash tool references to Shell"
 **文件：**
 - 修改：`packages/prompts/src/index.ts`
 - 修改：`packages/prompts/src/prompt-segments-assembly.ts`
-- 修改：`packages/prompts/src/index.test.ts`
+- 修改：`packages/prompts/src/__test__/index.test.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/default-runtime.test.ts`
 

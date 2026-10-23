@@ -38,7 +38,7 @@
 | 已有能力 | 入口 | 本计划只补什么 |
 | --- | --- | --- |
 | Job 状态、游标、等待是否到期 | `packages/protocol/src/runtime/job.ts` | 统一退出码及真实执行状态的表达 |
-| 工具错误分类 | `packages/agent-contracts/src/tools.ts` | 必要分类、是否实际执行、模型可见的下一步信息 |
+| 工具错误分类 | `packages/agent-contracts/src/tools/tools.ts` | 必要分类、是否实际执行、模型可见的下一步信息 |
 | 工具执行权限和去重 | `packages/core/src/engine/query-engine.ts`、`tool-failure-memory.ts` | 保持授权与去重；补反馈，不新建自动重试循环 |
 | 工具完成事件与持久记录 | `framework-agent-run.ts`、`transcript-projection.ts` | 实时结果和重载历史都保留反馈 |
 | 上下文按桶统计 | `packages/core/src/context-budget/` | 区分真正发送的工具定义与可发现目录 |
@@ -262,8 +262,8 @@ pnpm exec vitest run --config tests/agent-behavior/vitest.config.ts tests/agent-
 
 ### 任务 1：统一 Job 退出事实，贯通持久化和客户端
 
-**修改：** `packages/protocol/src/runtime/job.ts`、`serialization.ts`；`packages/services/src/executions/types.ts`、`detached-process-supervisor.ts`；`packages/tools/src/job/local-job-host.ts`；`packages/terminal-node/src/agent-terminal-host.ts`；`packages/server/src/jobs/daemon-job-service.ts`；`packages/server/src/application/session/session-execution-projector.ts`。
-**测试：** `packages/protocol/src/serialization/__test__/serialization.test.ts`、`packages/tools/src/job/local-job-host.test.ts`、`job-tools.test.ts`、`packages/terminal-node/src/agent-terminal-host.test.ts`、`packages/server/src/jobs/daemon-job-service.test.ts`、`packages/server/src/http/routes/job.test.ts`；新增 `packages/client/src/resources/runtime/__test__/job-resource.test.ts`。
+**修改：** `packages/protocol/src/runtime/job.ts`、`serialization.ts`；`packages/services/src/executions/types.ts`、`detached-process-supervisor.ts`；`packages/tools/src/job/local-job-host.ts`；`packages/terminal-node/src/host/agent-terminal-host.ts`；`packages/server/src/jobs/daemon-job-service.ts`；`packages/server/src/application/session/session-execution-projector.ts`。
+**测试：** `packages/protocol/src/serialization/__test__/serialization.test.ts`、`packages/tools/src/job/local-job-host.test.ts`、`job-tools.test.ts`、`packages/terminal-node/src/host/__test__/agent-terminal-host.test.ts`、`packages/server/src/jobs/daemon-job-service.test.ts`、`packages/server/src/http/routes/job.test.ts`；新增 `packages/client/src/resources/runtime/__test__/job-resource.test.ts`。
 **输入：** 后端已知退出码；**输出：** 第 3.1 节 JobSnapshot 契约。
 
 - [ ] 先增加 decoder 测试：旧 snapshot 无 exitCode 仍可读；0、7、null 原样保留；字符串、NaN、Infinity、小数被拒绝。完整 fixture 复用现有 serialization 测试的 JobSnapshot。
@@ -288,7 +288,7 @@ expect(cancelled.snapshot.status).toBe("killed");
 
 ### 任务 2：把执行事实和失败建议送到模型，而非仅留在日志
 
-**修改：** `packages/agent-contracts/src/tools.ts`、`types/messages.ts`、`types/events.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`。
+**修改：** `packages/agent-contracts/src/tools/tools.ts`、`types/messages.ts`、`types/events.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`。
 **新增：** `packages/core/src/engine/tool-result-feedback.ts`、`tool-result-feedback.test.ts`。
 **跨层接线：** `packages/agent-runtime/src/kernel/framework-agent-run.ts`；`packages/server/src/application/session/transcript-projection.ts`、`application/agent/agent-transcript.ts`。
 **测试：** core `engine/integration.test.ts`、`engine/recovery-evidence.test.ts`；agent-runtime `stream-event-mapping.test.ts`；server `application/session/__test__/transcript-projection.test.ts`、`application/agent/__test__/agent-transcript.test.ts`。
@@ -391,7 +391,7 @@ compactSummary?: string;
 
 ### 任务 6：可关闭的工具发现实验（准入后）
 
-**修改：** `packages/agent-contracts/src/tools.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`；`packages/agent-runtime/src/node/runtime/agent-options.ts`、`default-runtime.ts`；`packages/tools/src/meta/tool-search.ts`；`packages/server/src/application/assemble-session-context-usage.ts`。
+**修改：** `packages/agent-contracts/src/tools/tools.ts`、`types/runtime.ts`、`index.ts`、`engine/query-engine.ts`；`packages/agent-runtime/src/node/runtime/agent-options.ts`、`default-runtime.ts`；`packages/tools/src/meta/tool-search.ts`；`packages/server/src/application/assemble-session-context-usage.ts`。
 **新增：** `packages/core/src/engine/tool-exposure.ts`、`tool-exposure.test.ts`；`packages/agent-runtime/src/node/integration/tool-search.test.ts`。
 **测试补充：** core `integration.test.ts`；agent-runtime `run-capability-view.test.ts`、`default-runtime.test.ts`；API `providers/openai.test.ts`、`anthropic.test.ts`、`codex.test.ts`。
 **输入：** 本轮 runToolRegistry、exposure 配置、历史工具名和搜索结果；**输出：** 第 3.4 节加载行为。

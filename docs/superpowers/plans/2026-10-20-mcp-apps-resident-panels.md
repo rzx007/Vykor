@@ -115,9 +115,9 @@ interface PluginAppBackendPort {
 
 **Files:**
 
-- Create: `packages/agent-contracts/src/tool-data.ts`、`mcp-apps.test.ts`。
-- Modify: protocol 公开导出、`packages/mcp/src/connection-types.ts`、`index.ts`。
-- Modify: `packages/agent-contracts/src/tools.ts`、`engine/checked-tool-execution.ts`、`engine/tool-result-feedback.ts`。
+- Create: `packages/agent-contracts/src/tools/tool-data.ts`、`mcp-apps.test.ts`。
+- Modify: protocol 公开导出、`packages/mcp/src/connections/connection-types.ts`、`index.ts`。
+- Modify: `packages/agent-contracts/src/tools/tools.ts`、`engine/checked-tool-execution.ts`、`engine/tool-result-feedback.ts`。
 - Modify: Server `application/agent/agent-transcript.ts`、`http/part-wire-view.ts` 与实际结果序列化入口。
 - Test: mcp `index.test.ts`、core `tool-result-feedback.test.ts`、Server `part-wire-view.test.ts`。
 

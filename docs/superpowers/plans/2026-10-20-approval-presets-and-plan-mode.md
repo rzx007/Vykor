@@ -28,7 +28,7 @@
 **Files:**
 - Create: `packages/protocol/src/permissions/approval-mode.ts`。
 - Modify: `packages/protocol/src/runtime/runtime-config.ts`、`packages/protocol/src/requests/requests.ts`、`packages/protocol/src/index.ts`。
-- Modify: `packages/core/src/types/settings.ts`、`packages/agent-contracts/src/permissions.ts`；最终设置格式及 `packages/core/src/config/permission-settings.ts` 的严格切换随 Task 6 一起完成。
+- Modify: `packages/core/src/types/settings.ts`、`packages/agent-contracts/src/policy/permissions.ts`；最终设置格式及 `packages/core/src/config/permission-settings.ts` 的严格切换随 Task 6 一起完成。
 - Modify: `packages/agent-runtime/src/node/runtime/agent-options.ts`、`packages/agent-runtime/src/node/runtime/default-runtime.ts`、`packages/server/src/daemon/daemon-agent.ts`。
 - Test: `packages/protocol/src/runtime-config.test.ts`、`packages/core/src/config/permission-settings.test.ts`、`tests/agent-behavior/scoped-modes.test.ts`。
 
@@ -176,7 +176,7 @@ pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop
 - Modify: `packages/sandbox/src/{policy,types,path-validator,shell}.ts`。
 - Modify: `packages/agent-runtime/src/node/runtime/default-runtime.ts`、`packages/agent-runtime/src/node/runtime/default-runtime-sandbox.ts`。
 - Modify: 文件工具、终端、PTY、后台 Shell 的现有执行策略传递点，仅补齐本策略所需参数。
-- Test: `packages/sandbox/src/policy.test.ts`、`packages/sandbox/src/execution-environment.test.ts`、`tests/agent-behavior/scoped-modes.test.ts`。
+- Test: `packages/sandbox/src/policy/__test__/policy.test.ts`、`packages/sandbox/src/environment/__test__/execution-environment.test.ts`、`tests/agent-behavior/scoped-modes.test.ts`。
 
 **Interfaces:**
 - Consumes: 当前会话的 `approvalMode`、`workMode` 和强制策略。

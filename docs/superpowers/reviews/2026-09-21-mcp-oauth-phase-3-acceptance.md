@@ -81,7 +81,7 @@
 
 - `packages/mcp/src/oauth/runtime-auth.ts`：按 SDK 结构化 `errorCode` 分类；临时失败（网络/超时/429/5xx/`server_error`/`temporarily_unavailable`）保持记录；`invalid_grant` 才标记重新授权；配置类错误提示检查客户端；取消原样结束。失效写入改为 CAS：仅当 `revision`、`serverUrl`、`issuer`、`resourceUrl` 与本次实际使用的 Token 身份一致才写入；未命中不写文件、不递增 revision。
 - `packages/mcp/src/oauth/errors.ts`：沿用 `McpOAuthError(code, message, retryable)`。
-- `packages/auth/src/mcp-oauth-credential-store.ts`：`runExclusive` 增加 `CredentialMutationContext`（`nextRevision`、`logoutEpoch`），操作返回原记录视为 no-op，不写文件、不增 revision。
+- `packages/auth/src/mcp/mcp-oauth-credential-store.ts`：`runExclusive` 增加 `CredentialMutationContext`（`nextRevision`、`logoutEpoch`），操作返回原记录视为 no-op，不写文件、不增 revision。
 - 测试：`runtime-auth.test.ts`（表驱动 timeout/429/503/取消/普通 message 与 SDK `InvalidGrantError`）、`mcp-oauth-credential-store.test.ts`（no-op 不改文件、CAS 未命中不复活删除项）。
 
 ### 任务 2：resource 发现来源、配置与凭据绑定

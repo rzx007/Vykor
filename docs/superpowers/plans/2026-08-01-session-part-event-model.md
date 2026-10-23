@@ -162,7 +162,7 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 
 ### QueryEngine / Runtime Adapter（实施前基线）
 
-- `packages/agent-contracts/src/events.ts`
+- `packages/agent-contracts/src/execution/events.ts`
   - QueryEngine 事件只有：
     - `text_delta`
     - `tool_use_start`

@@ -26,11 +26,11 @@
 
 | 文件 | 职责 | 动作 |
 |---|---|---|
-| `packages/channels/src/impl/feishu.ts` | `messageResource.get` 接口 + `downloadAttachment` | 修改 |
+| `packages/channels/src/adapters/feishu/feishu.ts` | `messageResource.get` 接口 + `downloadAttachment` | 修改 |
 | `packages/server/src/application/channel/channel-application-service.ts` | 下载/导入/传入 admitPrompt | 修改 |
 | `packages/server/src/daemon/channel-runtime-service.ts` | 下载器持有与生命周期 | 修改 |
 | `packages/server/src/application/daemon-application.ts` | 装配注入 | 修改 |
-| `packages/channels/src/impl/__test__/feishu.test.ts` | 下载测试 | 修改 |
+| `packages/channels/src/adapters/feishu/__test__/feishu.test.ts` | 下载测试 | 修改 |
 | `packages/server/src/application/channel/__test__/channel-application-service.test.ts` | 导入/幂等/失败测试 | 修改 |
 | `packages/server/src/daemon/channel-runtime-service.test.ts` | 下载器生命周期测试 | 修改 |
 | `docs/channels-flow.md` | 入站附件说明 | 修改 |
@@ -39,7 +39,7 @@
 
 ## 任务 1：`FeishuAdapter.downloadAttachment`
 
-**文件：** `packages/channels/src/impl/feishu.ts`、`packages/channels/src/impl/__test__/feishu.test.ts`
+**文件：** `packages/channels/src/adapters/feishu/feishu.ts`、`packages/channels/src/adapters/feishu/__test__/feishu.test.ts`
 
 - Produces：`FeishuAdapter.downloadAttachment(input: { messageId: string; fileKey: string; type: "image" | "file" }): Promise<{ stream: ReadableStream<Uint8Array>; mimeType?: string; sizeBytes?: number }>`
 
