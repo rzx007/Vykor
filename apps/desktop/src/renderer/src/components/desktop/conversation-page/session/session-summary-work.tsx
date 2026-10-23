@@ -2,7 +2,6 @@ import { useSyncExternalStore, type ReactNode } from "react"
 import { GitBranch, PanelsTopLeft, SquareTerminal } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import type { DesktopTerminalRecord } from "@shared/terminal-types"
-import type { DesktopSessionTask } from "@shared/session-types"
 import type { DesktopWorkflowRun } from "@shared/workflow-types"
 import type { ResidentAppPage } from "../../shell/plugin-apps/page-manager"
 import { workflowProgress, workflowStatus } from "../../tools/workflows/workflow-model"
@@ -63,8 +62,6 @@ export function SessionSummaryWork({
   pages,
   runs,
   terminals,
-  shellTasks,
-  currentTaskIds,
   terminalError,
   workflowError,
   workflowReconnecting,
@@ -75,8 +72,6 @@ export function SessionSummaryWork({
   pages: ResidentAppPage[]
   runs: DesktopWorkflowRun[]
   terminals: DesktopTerminalRecord[]
-  shellTasks: DesktopSessionTask[]
-  currentTaskIds: ReadonlySet<string>
   terminalError: string | null
   workflowError?: string | null
   workflowReconnecting?: boolean
@@ -84,15 +79,6 @@ export function SessionSummaryWork({
   onOpenWorkflow(id: string): void
   onOpenTerminal?: (id: string) => void
 }) {
-  const visibleShellTasks: DesktopSessionTask[] = []
-  const historicalShellTasks: DesktopSessionTask[] = []
-  for (const task of shellTasks) {
-    const active = task.status === "pending" || task.status === "running"
-    const currentException =
-      currentTaskIds.has(task.id) && (task.status === "failed" || task.status === "interrupted")
-    const group = active || currentException ? visibleShellTasks : historicalShellTasks
-    group.push(task)
-  }
   return (
     <>
       {pages.length > 0 && (
@@ -107,7 +93,6 @@ export function SessionSummaryWork({
       )}
       {(runs.length > 0 ||
         terminals.length > 0 ||
-        shellTasks.length > 0 ||
         workflowError ||
         terminalError) && (
         <section aria-label="聊天工作流和长任务" className="flex flex-col gap-1 py-3">
@@ -145,19 +130,6 @@ export function SessionSummaryWork({
               onOpen={() => onOpenTerminal?.(terminal.id)}
             />
           ))}
-          {visibleShellTasks.map((task) => (
-            <ShellTaskRow key={task.id} task={task} />
-          ))}
-          {historicalShellTasks.length > 0 && (
-            <details aria-label="历史后台命令" className="px-1.5 py-1.5 text-sm">
-              <summary className="cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring">
-                历史后台命令（{historicalShellTasks.length}）
-              </summary>
-              {historicalShellTasks.map((task) => (
-                <ShellTaskRow key={task.id} task={task} />
-              ))}
-            </details>
-          )}
           {terminalError && (
             <p role="status" className="text-xs text-destructive">
               终端状态暂不可用：{terminalError}
@@ -166,33 +138,5 @@ export function SessionSummaryWork({
         </section>
       )}
     </>
-  )
-}
-
-function ShellTaskRow({ task }: { task: DesktopSessionTask }) {
-  return (
-    <details key={task.id} className="px-1.5 py-1.5 text-sm">
-      <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
-        <span className="ml-1">{task.description || "后台命令"}</span>
-        <span className="ml-2 text-xs text-muted-foreground">
-          后台命令 ·{" "}
-          {
-            {
-              pending: "等待启动",
-              running: "运行中",
-              completed: "已完成",
-              failed: "执行失败",
-              stopped: "已停止",
-              interrupted: "已中断",
-            }[task.status]
-          }
-        </span>
-      </summary>
-      {(task.error || task.output) && (
-        <pre className="mt-2 max-h-48 overflow-auto text-xs break-all whitespace-pre-wrap text-muted-foreground">
-          {task.error || task.output}
-        </pre>
-      )}
-    </details>
   )
 }

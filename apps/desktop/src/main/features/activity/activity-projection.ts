@@ -14,7 +14,16 @@ export function projectSessionActivity(
   const session = bucket?.session
   if (!session) return undefined
   const permission = Object.values(bucket.permissions)
-    .filter((item) => item.status === "pending")
+    .filter((item) => {
+      if (item.status !== "pending") return false
+      // Pending includes automatic handling, not just requests waiting for a person.
+      if (typeof item.payload.reusedApprovalRequestId === "string" && item.payload.reusedApprovalRequestId) return false
+      const review = item.payload.approvalReview
+      const status = review && typeof review === "object" && !Array.isArray(review)
+        ? (review as Record<string, unknown>).status
+        : undefined
+      return status !== "reviewing" && status !== "approved" && status !== "denied"
+    })
     .sort((a, b) => b.updatedAt - a.updatedAt)[0]
   const run = latestRun(bucket)
   const executionState: DesktopExecutionState = permission

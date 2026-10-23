@@ -13,8 +13,7 @@
 - [new-conversation-start.tsx](new-conversation-start.tsx)
 - [session-more-menu.tsx](session-more-menu.tsx)
 - [session-summary-popover.tsx](session-summary-popover.tsx)
-- [session-summary-work.tsx](session-summary-work.tsx)：展示当前聊天的应用、工作流、终端和后台命令；点击沿用原面板，后台命令只读展开原输出。
-  后台命令默认只展开等待中、运行中和本轮失败/中断；完成记录及旧异常收进默认折叠的历史，不删除原输出。本轮优先取运行中的 Run，否则取最新 Run，同一次输入的重试共用归属。旧命令没有 Run ID 时，从工具调用 ID 对应到消息所属 Run，不按时间猜测。
+- [session-summary-work.tsx](session-summary-work.tsx)：展示当前聊天的应用、工作流和终端；点击沿用原面板。后台命令及其历史不进入工作摘要，也不触发摘要自动弹出，执行与记录保持不变。
 - [session-summary-attention.ts](session-summary-attention.ts)：每次进入聊天按事项身份提醒一次，跳过已加载的应用和迟到历史任务；手动收起不清空记录。
 - [use-session-summary-terminals.ts](use-session-summary-terminals.ts)：在消息行外读取和订阅当前聊天的真实终端，摘要收起时继续跟踪；不执行命令。
 

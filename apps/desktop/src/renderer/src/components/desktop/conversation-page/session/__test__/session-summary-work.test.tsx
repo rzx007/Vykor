@@ -312,7 +312,7 @@ it("closes when switching chat, baselines returning apps, and retains explicit c
   expect(isOpen()).toBe(false)
 })
 
-it("folds shell history while retaining active jobs and exceptions from the latest input", async () => {
+it("omits shell jobs of every status, including current exceptions and history", async () => {
   state.sessionRuns = [
     { id: "retry", inputId: "current", createdAt: 30, status: "running" },
     { id: "future", inputId: "next", createdAt: 40, status: "pending" },
@@ -374,23 +374,12 @@ it("folds shell history while retaining active jobs and exceptions from the late
   await render()
   await click("当前聊天的工作摘要")
   const history = document.querySelector<HTMLDetailsElement>('details[aria-label="历史后台命令"]')
-  expect(history).not.toBeNull()
-  expect(history!.open).toBe(false)
-  for (const id of ["active", "pending", "failure", "interrupted", "legacy"]) {
-    const summary = [...document.querySelectorAll("summary")].find((node) =>
-      node.textContent?.startsWith(id)
-    )!
-    expect(summary).toBeTruthy()
-    expect(history!.contains(summary)).toBe(false)
-  }
-  for (const id of ["old-failure", "completed", "unbound"])
-    expect(history!.textContent).toContain(id)
-  await act(async () => history!.querySelector("summary")!.click())
-  expect(history!.open).toBe(true)
-  expect(history!.textContent).toContain("old-failure output")
+  expect(history).toBeNull()
+  expect(document.querySelector('section[aria-label="聊天工作流和长任务"]')).toBeNull()
+  for (const task of state.tasks) expect(document.body.textContent).not.toContain(task.output)
 })
 
-it("includes detached shell jobs without inventing a terminal and ignores subsequent output updates", async () => {
+it("does not auto-open or announce detached shell jobs or subsequent status updates", async () => {
   await render()
   state.tasks = [
     {
@@ -407,12 +396,12 @@ it("includes detached shell jobs without inventing a terminal and ignores subseq
     },
   ]
   await render()
-  expect(isOpen()).toBe(true)
-  expect(document.body.textContent).toContain("构建项目")
-  expect(document.body.textContent).toContain("后台命令 · 运行中")
+  expect(isOpen()).toBe(false)
+  await click("当前聊天的工作摘要")
+  expect(document.body.textContent).not.toContain("构建项目")
+  expect(document.body.textContent).not.toContain("后台命令")
   expect(state.openTerminal).not.toHaveBeenCalled()
-  await act(async () => (document.querySelector<HTMLDetailsElement>("details")!.open = true))
-  expect(document.body.textContent).toContain("正在编译")
+  expect(document.body.textContent).not.toContain("正在编译")
   await click("收起工作摘要")
   state.tasks = state.tasks.map((task) => ({
     ...task,
