@@ -1,4 +1,4 @@
-import {hostedAgentFactory,hostedAgentFixture} from "./../../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory,hostedAgentFixture} from "../../../../test-helpers/hosted-agent.js";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";

@@ -1,4 +1,4 @@
-import { loadNodeAgentDefinitions } from "../definitions.js";
+import { loadNodeAgentDefinitions } from "../definitions/definitions.js";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import type { McpServerConfig, Settings } from "@vykor/host-config";
 import { getSkillsDir } from "@vykor/host-config";

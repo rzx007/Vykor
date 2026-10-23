@@ -183,7 +183,7 @@ state/src/runtime/goals.rs
 - 找到 Run 时要求 `run.sessionId === rootSessionId`，否则 missing。
 - 找不到 Run 时只要子代理目录能解析出相同根会话，就返回 running。
 
-[LiveChildAgentDirectory](../packages/server/src/application/agent/live-child-agent-directory.ts) 第 34～39 行只确认 `children.get(childId)` 仍有句柄；[ChildAgent](../packages/agent-runtime/src/kernel/child-agent.ts) 第 544～552 行在回合完成后把代理置 idle，仍保留句柄。子 Run 完成投影也不在该分支注销代理目录。
+[LiveChildAgentDirectory](../packages/server/src/application/agent/live-child-agent-directory.ts) 第 34～39 行只确认 `children.get(childId)` 仍有句柄；[ChildAgent](../packages/agent-runtime/src/kernel/children/child-agent.ts) 第 544～552 行在回合完成后把代理置 idle，仍保留句柄。子 Run 完成投影也不在该分支注销代理目录。
 
 因此存在一条源码可见的风险路径：子代理完成 → 会话仍可继续接收任务 → Goal 等待仍判 running → 最后因等待期限耗尽暂停。直接给子代理 Run ID 又会因为子会话归属不同被判 missing。这是静态代码判断，尚未运行端到端复现。
 

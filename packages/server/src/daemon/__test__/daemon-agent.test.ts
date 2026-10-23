@@ -1,4 +1,4 @@
-import {hostedAgentFactory,hostedAgentFixture} from "./../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory,hostedAgentFixture} from "../../../test-helpers/hosted-agent.js";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vykor/coordinator", async (importOriginal) => {

@@ -1,6 +1,6 @@
 import type { Settings } from "@vykor/host-config";
 import { createApprovalReviewer, type ApprovalReviewer } from "./approval-reviewer.js";
-import { resolveApiClient } from "../runtime/default-runtime-provider.js";
+import { resolveApiClient } from "../configuration/default-runtime-provider.js";
 
 export interface ConfiguredApprovalReviewerOptions {
   settings: Settings;

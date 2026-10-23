@@ -1,0 +1,12 @@
+# 子 agent 执行核心
+
+| 文件 | 用途 |
+| --- | --- |
+| `child-agent.ts` | `AgentChildManager`，创建、运行、等待、继续和关闭直接子 agent |
+| `child-registry.ts` | `AgentChildRegistry`，登记子 agent、保留创建额度并按 ID 查询 |
+| `child-environment.ts` | 工作目录申请与释放的接口，以及复用当前目录的实现 |
+| `child-activity.ts` | 从可信事件中累计子运行进度，保留有长度限制的部分结果 |
+
+父 agent 通过子管理器提交创建请求，先保留额度，再申请目录和创建子实例；子运行事件更新登记表中的活动记录，结果交给等待者。登记表由同一棵 agent 树共享，直接子实例和目录租约由管理器负责释放。
+
+Git 工作目录创建和本机配置继承放在 [Node 子管理](../../node/children/README.md)。本层只依赖注入的环境与创建接口。测试放在同层 `__test__/`，整体父子生命周期也由 `../__test__/` 覆盖。

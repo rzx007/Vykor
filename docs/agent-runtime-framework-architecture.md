@@ -43,9 +43,9 @@ await agent.close();
 | `VykorAgent` | `packages/agent-runtime/src/kernel/agent.ts` | 通用执行入口；管当前运行、互斥与显式租约释放 |
 | `FrameworkAgentRun` | `packages/agent-runtime/src/kernel/framework-agent-run.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
 | `AgentEventBus` | `packages/agent-runtime/src/kernel/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
-| `AgentChildManager` | `packages/agent-runtime/src/kernel/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
-| `AgentChildRegistry` | `packages/agent-runtime/src/kernel/child-registry.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
-| child environment | `packages/agent-runtime/src/kernel/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
+| `AgentChildManager` | `packages/agent-runtime/src/kernel/children/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
+| `AgentChildRegistry` | `packages/agent-runtime/src/kernel/children/child-registry.ts` | 整棵子树共用的「按 ID 查 handle」目录 |
+| child environment | `packages/agent-runtime/src/kernel/children/child-environment.ts` | 给子 agent 申请/释放工作目录（worktree） |
 | `AgentSession` | `packages/core/src/session/agent-session.ts` | 对 QueryEngine 的薄包装 |
 | `QueryEngine` | `packages/core/src/engine/query-engine.ts` | 真正跑「模型 ↔ 工具」循环，并维护历史 |
 | AgentDefinition / TeamRegistry | `packages/coordinator/src/definitions/`、`src/teams/` | 唯一角色类型与纯解析；团队由 Node 根树创建实例 |

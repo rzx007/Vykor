@@ -57,7 +57,7 @@ import {
   createNodeMcpPort,
   createNodeSkillCatalog,
 } from "./tool-ports.js";
-import { loadNodeAgentDefinitions } from "../definitions.js";
+import { loadNodeAgentDefinitions } from "../definitions/definitions.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export function createDefaultToolRegistry(

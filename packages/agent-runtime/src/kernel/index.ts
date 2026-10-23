@@ -18,8 +18,8 @@ import { AgentEventBus } from "./event-source.js";
 import {
   AgentChildManager,
   type AgentChildManagerOptions,
-} from "./child-agent.js";
-import { AgentChildRegistry } from "./child-registry.js";
+} from "./children/child-agent.js";
+import { AgentChildRegistry } from "./children/child-registry.js";
 export interface AgentKernelOptions {
   id?: string;
   sessionId?: string;

@@ -338,12 +338,12 @@ detached run 先返回 Job receipt：
 | 范围 | 文件 |
 |------|------|
 | 纯调度（fake runner） | `packages/coordinator/src/workflow/__test__/scheduler.test.ts` |
-| 文件仓库兼容 | `packages/agent-runtime/src/node/workflow/file-workflow-run-repository.test.ts` |
-| Node 动作 / timeline / history | `packages/agent-runtime/src/node/workflow/workflow-actions.test.ts` |
-| runner 单元 | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.test.ts` |
-| 工具 → scheduler → framework child smoke | `packages/agent-runtime/src/node/workflow/workflow-smoke.test.ts` |
+| 文件仓库兼容 | `packages/agent-runtime/src/node/workflow/__test__/file-workflow-run-repository.test.ts` |
+| Node 动作 / timeline / history | `packages/agent-runtime/src/node/workflow/__test__/workflow-actions.test.ts` |
+| runner 单元 | `packages/agent-runtime/src/node/workflow/__test__/agent-workflow-runner.test.ts` |
+| 工具 → scheduler → framework child smoke | `packages/agent-runtime/src/node/workflow/__test__/workflow-smoke.test.ts` |
 
-工具参数与单次 port 调用见 `packages/tools/src/agent/workflow/tool.test.ts`；内存/文件/SQLite 共用生命周期场景见 `tests/workflow/lifecycle-scenarios.ts`，Node Host 和 Server Host 测试分别执行。真实 Agent.close 顺序见 `packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts`。
+工具参数与单次 port 调用见 `packages/tools/src/agent/workflow/tool.test.ts`；内存/文件/SQLite 共用生命周期场景见 `tests/workflow/lifecycle-scenarios.ts`，Node Host 和 Server Host 测试分别执行。真实 Agent.close 顺序见 `packages/agent-runtime/src/node/workflow/__test__/agent-workflow-close.test.ts`。
 
 ## J. 当前能力边界
 

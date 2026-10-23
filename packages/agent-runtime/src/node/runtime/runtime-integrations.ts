@@ -40,7 +40,7 @@ import {
   getAppToolRegistry,
   getDelegationToolRegistry,
   getTrustedToolCatalogue,
-} from "./default-runtime-tools.js";
+} from "../tools/default-runtime-tools.js";
 import {
   captureNativePluginAppBackend,
   createNativePluginAppResourceSnapshot,

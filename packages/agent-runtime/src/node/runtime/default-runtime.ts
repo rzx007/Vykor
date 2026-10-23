@@ -51,21 +51,21 @@ import { normalizeApprovalMode } from "@vykor/host-config";
 import type { SkillRegistry } from "@vykor/skills";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
-import type { VykorAgentConfiguration } from "./agent-options.js";
+import type { VykorAgentConfiguration } from "../agent/agent-options.js";
 import type { ResolvedAgentCapabilities } from "../capabilities/capability-resolution.js";
 import {
   resolveApiClient,
   resolveCustomProviderRuntime,
   resolveRuntimeModel,
   type CustomProviderRuntimeConfig,
-} from "./default-runtime-provider.js";
-import { attachSandboxRuntime } from "./default-runtime-sandbox.js";
+} from "../configuration/default-runtime-provider.js";
+import { attachSandboxRuntime } from "../environment/default-runtime-sandbox.js";
 import {
   applyConfiguredTools,
   createVisibilityToolRegistry,
   getInternalToolRegistry,
   type ToolLimit,
-} from "./default-runtime-tools.js";
+} from "../tools/default-runtime-tools.js";
 
 export type { ToolLimit };
 export type { CustomProviderRuntimeConfig };

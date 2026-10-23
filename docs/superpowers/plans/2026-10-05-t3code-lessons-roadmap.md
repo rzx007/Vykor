@@ -35,7 +35,7 @@ T3 也保留底层代理的基础提示词，例如 Claude 接入在 `claude_cod
 
 **对我们的要求：** 区分上游输入、解析结果、执行前文件状态和最终结果。典型失败应能转成脱敏样本，重复验证同一条链路，避免只增加一个局部测试就宣布整条流程已经修复。
 
-**已有基础：** [真实 SDK 到引擎的重试测试](../../../tests/agent-integration/upstream-retry.integration.test.ts)、[工具执行链路测试](../../../packages/agent-runtime/src/kernel/engine-tool-workflow.integration.test.ts)、现有 Run Inspector 和关联 ID。优先扩展这些入口，不另建通用回放平台。
+**已有基础：** [真实 SDK 到引擎的重试测试](../../../tests/agent-integration/upstream-retry.integration.test.ts)、[工具执行链路测试](../../../packages/agent-runtime/src/kernel/__test__/engine-tool-workflow.integration.test.ts)、现有 Run Inspector 和关联 ID。优先扩展这些入口，不另建通用回放平台。
 
 T3 证据：`apps/server/src/provider/Layers/EventNdjsonLogger.ts:195`；`docs/orchestration-v2/testing-strategy.md:7`。
 
@@ -117,7 +117,7 @@ T3 当前交接代码优先选择最新请求、最近回答和原始要求；�
 
 优先验证压缩后能否继续遵守最新要求、不做事项、已完成证据、未完成工作和等待句柄。只有样本证明缺口后，才通过现有压缩与上下文入口补充有限事实；必要时在原有访问权限内补读消息，不默认读取其他会话，不建立大型记忆系统。
 
-已有入口：[压缩服务](../../../packages/core/src/engine/compaction/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/node/runtime/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
+已有入口：[压缩服务](../../../packages/core/src/engine/compaction/compact-service.ts)、[服务端上下文接线](../../../packages/server/src/application/daemon-application.ts)、[压缩上下文提供者](../../../packages/agent-runtime/src/node/memory/compact-context.ts)。T3 证据：`apps/server/src/orchestration-v2/ContextHandoffBudget.ts:227`。
 
 ### 行为方向三 计划模式与权限及待办进度分开
 

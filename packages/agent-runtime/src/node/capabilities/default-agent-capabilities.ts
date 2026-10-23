@@ -1,5 +1,5 @@
-import { NodeChildManager, type NodeChildManagerOptions } from "../runtime/node-child-manager.js";
-import type { AgentChildManager } from "../../kernel/child-agent.js";
+import { NodeChildManager, type NodeChildManagerOptions } from "../children/node-child-manager.js";
+import type { AgentChildManager } from "../../kernel/children/child-agent.js";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import type { Settings } from "@vykor/host-config";
 import { FileWorkflowRunRepository } from "../workflow/file-workflow-run-repository.js";
@@ -15,7 +15,7 @@ import type {
   AgentEffectOverrides,
   ObservableJobProducer,
   VykorAgentConfiguration,
-} from "../runtime/agent-options.js";
+} from "../agent/agent-options.js";
 import {
   assertJobConfiguration,
   disabledCapability,
@@ -27,10 +27,10 @@ import {
 import {
   type AgentChildEnvironmentProvider,
   type AgentChildRegistry,
-} from "../../kernel/child-agent.js";
-import { createDefaultChildEnvironmentProvider } from "../runtime/child-environment.js";
+} from "../../kernel/children/child-agent.js";
+import { createDefaultChildEnvironmentProvider } from "../children/child-environment.js";
 import type { CleanupStack } from "../runtime/cleanup-stack.js";
-import type { DefaultNodeTerminalResolution } from "../runtime/default-node-terminal.js";
+import type { DefaultNodeTerminalResolution } from "../environment/default-node-terminal.js";
 import type { AgentEventBus } from "../../kernel/event-source.js";
 import {
   createAgentMemoryRuntime,

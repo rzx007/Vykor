@@ -52,10 +52,10 @@ Kernel 发布可靠的 run.started 后完成本轮宿主登记，再交付 start
 
 主要回归入口：
 
-- [Kernel 生命周期与子工具范围](../../../packages/agent-runtime/src/kernel/index.test.ts)
-- [执行环境所有权](../../../packages/agent-runtime/src/node/runtime/execution-ownership.test.ts)
-- [MCP 准备与认证范围](../../../packages/agent-runtime/src/node/runtime/prepare-run-tools.test.ts)
-- [根树目录隔离](../../../packages/agent-runtime/src/node/capabilities/node-run-catalogue.test.ts)
+- [Kernel 生命周期与子工具范围](../../../packages/agent-runtime/src/kernel/__test__/index.test.ts)
+- [执行环境所有权](../../../packages/agent-runtime/src/node/runtime/__test__/execution-ownership.test.ts)
+- [MCP 准备与认证范围](../../../packages/agent-runtime/src/node/tools/__test__/prepare-run-tools.test.ts)
+- [根树目录隔离](../../../packages/agent-runtime/src/node/capabilities/__test__/node-run-catalogue.test.ts)
 - [可信来源投影](../../../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts)
 - [请求配置与回合上限](../../../packages/core/src/engine/__test__/request-configuration.test.ts)
 

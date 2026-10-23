@@ -291,16 +291,16 @@ daemon 不实例化 QueryEngine，不接收 runtime factory，也不复制 child
 | SDK facade 与 run handle | `packages/agent-runtime/src/kernel/agent.ts` |
 | 默认 composition root | `packages/agent-runtime/src/node/runtime/default-runtime.ts` |
 | ordered sink 与 observers | `packages/agent-runtime/src/kernel/event-source.ts` |
-| child lifecycle | `packages/agent-runtime/src/kernel/child-agent.ts` |
+| child lifecycle | `packages/agent-runtime/src/kernel/children/child-agent.ts` |
 | Agent producer | `packages/tools/src/agent/agent-tools.ts` |
 | Job lifecycle routing | `packages/tools/src/job`、`packages/server/src/jobs` |
 | Workflow child spawn/wait | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` |
-| child worktree | `packages/agent-runtime/src/kernel/child-environment.ts` |
+| child worktree | `packages/agent-runtime/src/kernel/children/child-environment.ts` |
 | daemon application composition | `packages/server/src/application/daemon-application.ts` |
 | durable session -> live Agent | `packages/server/src/daemon/daemon-agent.ts` |
 | daemon agent cache | `packages/server/src/application/agent/agent-pool.ts` |
 | durable event projection | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
-| standalone SDK contract test | `packages/agent-runtime/src/node/runtime/sdk.test.ts` |
+| standalone SDK contract test | `packages/agent-runtime/src/node/agent/__test__/sdk.test.ts` |
 | 插件宿主调用数据 / Server 绑定转换 | `packages/plugin-contracts/src/runtime.ts` / `packages/server/src/application/session/plugin-app-host-binding.ts` |
 | Job / Terminal 纯数据 | `packages/jobs/src/contracts.ts` / `packages/terminal/src/contracts.ts` |
 

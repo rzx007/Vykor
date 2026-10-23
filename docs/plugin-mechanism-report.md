@@ -223,7 +223,7 @@ link 安装（`vk plugin link`）跳过复制和摘要，直接引用开发目�
 - 通过后再 `loadNativePlugin` 静态加载组件。
 - 最后用 `createPluginCapabilityInventory` 算出“谁能用哪些组件”，并处理同名冲突。
 
-发现结果只是数据。把它接成“活的 Runtime”的入口是 `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：它调用上面的发现与激活，并挂上 `runtime.createRunCapabilityView`，也就是第 10 节那个按 Run 过滤的能力视图。选中插件的 Native Tool 没起来、MCP 没连上时，“插件不可用”的 readiness 错误就是在这一层产生的，对应回归测试是 `packages/agent-runtime/src/node/plugins/runtime-plugin-readiness.test.ts`。改插件装载链路时，这个文件是必须一起看的入口。
+发现结果只是数据。把它接成“活的 Runtime”的入口是 `packages/agent-runtime/src/node/runtime/runtime-integrations.ts`：它调用上面的发现与激活，并挂上 `runtime.createRunCapabilityView`，也就是第 10 节那个按 Run 过滤的能力视图。选中插件的 Native Tool 没起来、MCP 没连上时，“插件不可用”的 readiness 错误就是在这一层产生的，对应回归测试是 `packages/agent-runtime/src/node/plugins/__test__/runtime-plugin-readiness.test.ts`。改插件装载链路时，这个文件是必须一起看的入口。
 
 ### 6.4 运行前校验
 
@@ -396,7 +396,7 @@ Hooks 不走 Tool Host。`packages/agent-runtime/src/node/plugins/plugin-activat
 
 ### 10.1 子视图到底收了什么
 
-这里容易把“交集”说得太满。`packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildCapabilityView` 实际只收窄两类能力：
+这里容易把“交集”说得太满。`packages/agent-runtime/src/node/children/child-agent-options.ts` 的 `deriveChildCapabilityView` 实际只收窄两类能力：
 
 | 能力 | 子视图实际行为 |
 | --- | --- |
@@ -583,7 +583,7 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 | 根联接是被哪一道检查拦下的 | 另跑一个探针，对同一联接同时打印 `lstat()` 的 `isDirectory()`/`isSymbolicLink()`、realpath 比对结果，以及 `readdir` 的 `Dirent` 标志 | `lstat` 对联接报 `isDirectory()=false`、`isSymbolicLink()=true`，所以是 `assertRegularPluginCacheSnapshot` 的第一道检查触发；realpath 比对是独立兜底。归因已改正（第 5 节） |
 | `@vykor/plugins` 的依赖声明 | 读 `packages/agent-runtime/package.json` 与构建脚本 | 是 optional peer + dev 依赖，靠 esbuild 打包进产物；已补入第 13 节 |
 | Tool Host 入口缺失时到底报哪个错误码 | 把 `tool-host.ts` 复制到一个没有 `host-entry.mjs` 的目录，构造带一个 Tool 声明的插件并直接调 `start()` | 实际是 `tool_host_crashed`（子进程 code=1 退出），不是 `tool_host_spawn_failed` 或 `tool_host_unavailable`；同时发现失败后 `host.state` 会被 `stop()` 归零成 `inactive`。两处都已按实测改写（第 8.3、11.1 节） |
-| 子视图是否真的是“交集” | 读 `packages/agent-runtime/src/node/runtime/child-agent-options.ts` 的 `deriveChildCapabilityView` | 只收窄 `tools` 与 `mcpServers`；`skills` 与 `agents` 原样继承。已把第 10 节的“取交集”改成按能力分类的实际规则（第 10.1 节） |
+| 子视图是否真的是“交集” | 读 `packages/agent-runtime/src/node/children/child-agent-options.ts` 的 `deriveChildCapabilityView` | 只收窄 `tools` 与 `mcpServers`；`skills` 与 `agents` 原样继承。已把第 10 节的“取交集”改成按能力分类的实际规则（第 10.1 节） |
 
 ### 15.3 仍未验证的部分
 

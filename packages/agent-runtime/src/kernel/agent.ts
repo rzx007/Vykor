@@ -34,7 +34,7 @@ import {
   type VykorAgentState,
 } from "./agent-errors.js";
 import { AgentEventBus } from "./event-source.js";
-import { AgentChildManager } from "./child-agent.js";
+import { AgentChildManager } from "./children/child-agent.js";
 import {
   FrameworkAgentRun,
   type FrameworkAgentRunToolActivity,

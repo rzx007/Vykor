@@ -132,8 +132,8 @@ child run 完成后进入 idle。默认 5 分钟无输入：
 ## 代码位置
 
 ```text
-packages/agent-runtime/src/kernel/child-agent.ts
-packages/agent-runtime/src/kernel/child-environment.ts
+packages/agent-runtime/src/kernel/children/child-agent.ts
+packages/agent-runtime/src/kernel/children/child-environment.ts
 packages/tools/src/agent/index.ts
 packages/tools/src/agent/workflow/runner.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts

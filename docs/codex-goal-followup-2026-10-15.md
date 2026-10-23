@@ -71,7 +71,7 @@ REA 全包分析首次报告完整性冲突：一个 unpacked 串口 `bindings.n
 Read 装配错误的入口和结果：
 
 1. [daemon-application.ts](../packages/server/src/application/daemon-application.ts)（调查时第 600 行）用支持附件的宿主 Read 覆盖标准 Read，并标记 `trustedToolOverrides: ["Read"]`。
-2. [default-runtime-tools.ts](../packages/agent-runtime/src/node/runtime/default-runtime-tools.ts)（调查时第 68 行）却把覆盖后的来源登记为 `kind: agent`。
+2. [default-runtime-tools.ts](../packages/agent-runtime/src/node/tools/default-runtime-tools.ts)（调查时第 68 行）却把覆盖后的来源登记为 `kind: agent`。
 3. [run-capability-view.ts](../packages/agent-runtime/src/node/plugins/run-capability-view.ts)（调查时第 81 行）的准备工具过滤仅保留 `kind: builtin`，把这个可信宿主 Read 也丢掉。
 4. [query-tool-preparation.ts](../packages/core/src/engine/tools/query-tool-preparation.ts)（调查时第 47 行）找不到工具后直接返回 `Unknown tool: Read`，尚未进入参数校验，所以不是 offset 或 path 填错。
 5. [attachment-read-tool.ts](../packages/server/src/application/attachments/tools/attachment-read-tool.ts)（调查时第 32 行）本来可以把普通路径委托给标准文件读取器。

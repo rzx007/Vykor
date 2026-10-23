@@ -7,8 +7,8 @@ import type { AgentTerminalHost } from "@vykor/terminal";
 import type {
   AgentCapabilityOverrides,
   CapabilityOverride,
-} from "../runtime/agent-options.js";
-import type { AgentChildEnvironmentProvider } from "../runtime/child-environment.js";
+} from "../agent/agent-options.js";
+import type { AgentChildEnvironmentProvider } from "../children/child-environment.js";
 import type { AgentMemoryRuntime } from "../memory/memory-runtime.js";
 
 export type ResolvedCapability<T> =

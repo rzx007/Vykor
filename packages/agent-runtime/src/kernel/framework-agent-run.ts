@@ -24,7 +24,7 @@ import type {
 import type { ContentBlock } from "@vykor/agent-contracts";
 import { MaxTurnsExceeded } from "@vykor/core/engine";
 
-import type { AgentChildManager } from "./child-agent.js";
+import type { AgentChildManager } from "./children/child-agent.js";
 import { abortError, serializeError } from "./agent-errors.js";
 import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 

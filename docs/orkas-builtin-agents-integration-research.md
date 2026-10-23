@@ -144,7 +144,7 @@ Agent 加载器会解析 `skills`、`memory` 等字段。但已检查的 Agent �
 
 第一版可以直接在专家提示词中写明要通过 Skill 工具加载的真实技能名称，以及插件检查工具的调用方式，复用现有能力范围和权限检查。只有需要自动消费 Agent 的 `skills` 声明、强制按专家缩小技能范围或额外检查领域运行组件时，再扩展这层机制；这些属于可选增强。缺失的实际运行组件应返回清晰错误。
 
-证据：[字段解析](D:/code/personal-project/OpenHarness-ts/packages/coordinator/src/agent-loader.ts)、[Agent 调度参数（第 120 行）](D:/code/personal-project/OpenHarness-ts/packages/tools/src/agent/agent-tools.ts)、[Workflow 调度参数（第 126 行）](D:/code/personal-project/OpenHarness-ts/packages/tools/src/agent/workflow/runner.ts)、[子运行能力派生（第 110 行）](D:/code/personal-project/OpenHarness-ts/packages/agent-runtime/src/node/runtime/child-agent-options.ts)、[提示词组装（第 251 行）](D:/code/personal-project/OpenHarness-ts/packages/agent-runtime/src/node/runtime/default-runtime.ts)。
+证据：[字段解析](D:/code/personal-project/OpenHarness-ts/packages/coordinator/src/agent-loader.ts)、[Agent 调度参数（第 120 行）](D:/code/personal-project/OpenHarness-ts/packages/tools/src/agent/agent-tools.ts)、[Workflow 调度参数（第 126 行）](D:/code/personal-project/OpenHarness-ts/packages/tools/src/agent/workflow/runner.ts)、[子运行能力派生（第 110 行）](D:/code/personal-project/OpenHarness-ts/packages/agent-runtime/src/node/children/child-agent-options.ts)、[提示词组装（第 251 行）](D:/code/personal-project/OpenHarness-ts/packages/agent-runtime/src/node/runtime/default-runtime.ts)。
 
 ### 5.3 工具组、脚本入口和运行环境需要转换
 

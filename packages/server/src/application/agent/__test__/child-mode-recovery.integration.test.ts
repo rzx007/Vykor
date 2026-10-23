@@ -1,4 +1,4 @@
-import {hostedAgentFactory} from "./../../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory} from "../../../../test-helpers/hosted-agent.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

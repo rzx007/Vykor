@@ -1,4 +1,4 @@
-import {hostedAgentFactory} from "./../../../test-helpers/hosted-agent.js";
+import {hostedAgentFactory} from "../../../test-helpers/hosted-agent.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

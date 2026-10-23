@@ -13,13 +13,13 @@ export {
   type VykorAgentState,
   type VykorAgentSubmitOptions,
   type VykorAgentRunToolOptions,
-} from "./node/runtime/agent.js";
+} from "./node/agent/agent.js";
 export type { PluginSelectionCandidate, PluginSelectionCatalog, PluginSelectionResult } from "./node/plugins/plugin-selection.js";
 export { renderPluginDiscoveryContext } from "./node/plugins/plugin-discovery-context.js";
-export { createDefaultNodeAgent, type DefaultNodeAgentOptions } from "./node/runtime/default-agent.js";
+export { createDefaultNodeAgent, type DefaultNodeAgentOptions } from "./node/agent/default-agent.js";
 export { createConfiguredApprovalReviewer, type ConfiguredApprovalReviewerOptions } from "./node/review/configured-approval-reviewer.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./node/plugins/run-capability-view.js";
-export { createCompactContextProvider, type CompactContextSources } from "./node/runtime/compact-context.js";
+export { createCompactContextProvider, type CompactContextSources } from "./node/memory/compact-context.js";
 export type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
@@ -27,7 +27,7 @@ export type {
   CapabilityOverride,
   ObservableJobProducer,
   VykorAgentConfiguration,
-} from "./node/runtime/agent-options.js";
+} from "./node/agent/agent-options.js";
 export {
   assertJobConfiguration,
   disabledCapability,
@@ -76,7 +76,7 @@ export {
   getNativeToolRuntimeSnapshot,
   type NativeToolRuntimeSnapshot,
 } from "./node/plugins/native-tools/status.js";
-export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./kernel/child-agent.js";
+export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./kernel/children/child-agent.js";
 export type { PluginAppBackendPort, PluginAppBackendCatalogue, CapturedPluginAppBackend, PluginAppResultView } from "./node/plugin-apps/plugin-app-backends.js";
 export { nativeToolResultToAppResult } from "./node/plugin-apps/native-plugin-app-backend.js";
 export { mcpToolResultToAppResult } from "./node/plugin-apps/mcp-plugin-app-backend.js";
@@ -88,10 +88,10 @@ export {
   createInProcessChildEnvironmentProvider,
   type ChildAgentWorktreeManager,
   type GitRunner,
-} from "./node/runtime/child-environment.js";
+} from "./node/children/child-environment.js";
 export type { PluginAppRuntimeHost, PluginAppRuntimeFacts } from "./node/plugin-apps/plugin-app-runtime.js";
 
-export { loadNodeAgentDefinitions } from "./node/definitions.js";
+export { loadNodeAgentDefinitions } from "./node/definitions/definitions.js";
 export * from "./node/workflow/index.js";
 
 export { createDefaultToolRegistry } from "./node/tools/default-tool-registry.js";

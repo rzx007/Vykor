@@ -80,7 +80,7 @@ export interface RuntimeSandboxStatus {
 }
 
 export class NodeRuntimeResources {
-  childManager?: import("../../kernel/child-agent.js").AgentChildManager;
+  childManager?: import("../../kernel/children/child-agent.js").AgentChildManager;
   toolFactoryOptions?: Parameters<
     typeof import("../tools/default-tool-registry.js").createDefaultToolRegistry
   >[0];
