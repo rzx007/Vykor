@@ -35,7 +35,7 @@ X-Vykor-Filename: screenshot.png
 
 ### 新建
 
-- `packages/protocol/src/attachment.ts`：公共 asset/reference/representation/limits 类型与运行时解析函数。
+- `packages/protocol/src/attachments/attachment.ts`：公共 asset/reference/representation/limits 类型与运行时解析函数。
 - `packages/protocol/src/attachment.test.ts`：附件限制与公共记录解析测试。
 - `packages/services/src/session-runtime/migrations/0013_attachments.sql`：附件资产表和索引。
 - `packages/services/src/attachment/attachment-errors.ts`：稳定应用错误码及 HTTP 可映射错误类。
@@ -53,8 +53,8 @@ X-Vykor-Filename: screenshot.png
 ### 修改
 
 - `packages/protocol/src/index.ts`：导出附件协议。
-- `packages/protocol/src/capabilities.ts`：在 capabilities 中解析可选 attachment limits。
-- `packages/protocol/src/capabilities.test.ts`：新能力兼容测试。
+- `packages/protocol/src/runtime/capabilities.ts`：在 capabilities 中解析可选 attachment limits。
+- `packages/protocol/src/runtime/__test__/capabilities.test.ts`：新能力兼容测试。
 - `packages/services/src/session-runtime/schema.ts`：Drizzle `attachmentAsset` schema。
 - `packages/services/src/session-runtime/store.ts`：附件元数据 CRUD 和恢复查询。
 - `packages/services/src/session-runtime/__test__/store.test.ts`：migration、状态转换和旧库升级测试。
@@ -95,11 +95,11 @@ export const DEFAULT_ATTACHMENT_LIMITS: AttachmentLimits = {
 ### 任务 1：定义附件公共协议和能力协商
 
 **文件：**
-- 创建：`packages/protocol/src/attachment.ts`
+- 创建：`packages/protocol/src/attachments/attachment.ts`
 - 创建：`packages/protocol/src/attachment.test.ts`
 - 修改：`packages/protocol/src/index.ts`
-- 修改：`packages/protocol/src/capabilities.ts`
-- 修改：`packages/protocol/src/capabilities.test.ts`
+- 修改：`packages/protocol/src/runtime/capabilities.ts`
+- 修改：`packages/protocol/src/runtime/__test__/capabilities.test.ts`
 
 - [x] **步骤 1：编写失败的附件协议测试**
 
@@ -191,7 +191,7 @@ pnpm --filter @vykor/protocol check-types
 - [x] **步骤 5：提交该独立变更**
 
 ```powershell
-git add packages/protocol/src/attachment.ts packages/protocol/src/attachment.test.ts packages/protocol/src/index.ts packages/protocol/src/capabilities.ts packages/protocol/src/capabilities.test.ts
+git add packages/protocol/src/attachments/attachment.ts packages/protocol/src/attachment.test.ts packages/protocol/src/index.ts packages/protocol/src/runtime/capabilities.ts packages/protocol/src/runtime/__test__/capabilities.test.ts
 git commit -m "feat(protocol): define attachment assets and limits"
 ```
 

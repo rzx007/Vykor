@@ -2,8 +2,8 @@ import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/host-conf
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { validateNativePlugin } from "../manifest/validate.js";
-import type { PluginDiagnostic, } from "../diagnostics.js";
-import type { VykorPluginManifestV1 } from "../types.js";
+import type { PluginDiagnostic, } from "../shared/diagnostics.js";
+import type { VykorPluginManifestV1 } from "../shared/types.js";
 import { computePluginBehaviorDigest, materializePluginCache } from "./cache.js";
 import {
   installedPluginKey,

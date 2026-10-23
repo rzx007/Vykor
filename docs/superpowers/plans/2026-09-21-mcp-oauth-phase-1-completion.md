@@ -20,8 +20,8 @@
 - `packages/server/src/application/mcp-runtime-connection-coordinator.test.ts`：覆盖 identity 筛选、并发同步、通知乱序与失败聚合。
 - `packages/server/src/http/routes/mcp.ts`：提供只读 Runtime 状态与幂等同步路由。
 - `packages/server/src/http/routes/mcp.test.ts`：验证请求参数、响应形状以及请求不携带 endpoint/Token。
-- `packages/client/src/resources/mcp-resource.ts`：封装 daemon MCP Runtime 状态与同步 HTTP 调用。
-- `packages/client/src/resources/__test__/mcp-resource.test.ts`：验证 URL、请求体和错误传播。
+- `packages/client/src/resources/configuration/mcp-resource.ts`：封装 daemon MCP Runtime 状态与同步 HTTP 调用。
+- `packages/client/src/resources/configuration/__test__/mcp-resource.test.ts`：验证 URL、请求体和错误传播。
 - `apps/cli/src/mcp-runtime-coordinator.ts`：从 daemon registry 创建 `@vykor/client` 调用；daemon 缺席时返回 `unavailable`。
 - `apps/cli/src/mcp-runtime-coordinator.test.ts`：覆盖 daemon 在线、离线、认证失败和协议不兼容。
 
@@ -406,8 +406,8 @@ git commit -m "feat(mcp): commit verified OAuth credentials atomically"
 - 创建：`packages/server/src/http/routes/mcp.test.ts`
 - 修改：`packages/server/src/http/server.ts`
 - 修改：`packages/server/src/http/__test__/http.test.ts`
-- 创建：`packages/client/src/resources/mcp-resource.ts`
-- 创建：`packages/client/src/resources/__test__/mcp-resource.test.ts`
+- 创建：`packages/client/src/resources/configuration/mcp-resource.ts`
+- 创建：`packages/client/src/resources/configuration/__test__/mcp-resource.test.ts`
 - 修改：`packages/client/src/resources/index.ts`
 - 修改：`packages/client/src/transport/http-client.ts`
 - 修改：`packages/client/src/index.ts`
@@ -465,7 +465,7 @@ class McpResource {
 - [ ] **步骤 7：提交控制面与 client**
 
 ```bash
-git add packages/server/src/http/routes/mcp.ts packages/server/src/http/routes/mcp.test.ts packages/server/src/http/server.ts packages/server/src/http/__test__/http.test.ts packages/client/src/resources/mcp-resource.ts packages/client/src/resources/__test__/mcp-resource.test.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/__test__/public-api.test.ts
+git add packages/server/src/http/routes/mcp.ts packages/server/src/http/routes/mcp.test.ts packages/server/src/http/server.ts packages/server/src/http/__test__/http.test.ts packages/client/src/resources/configuration/mcp-resource.ts packages/client/src/resources/configuration/__test__/mcp-resource.test.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/__test__/public-api.test.ts
 git commit -m "feat(client): add MCP runtime control resource"
 ```
 

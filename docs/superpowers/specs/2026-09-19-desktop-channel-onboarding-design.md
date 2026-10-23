@@ -149,7 +149,7 @@ export function getChannelWorkspaceRoot(): string {
 
 ## 7. 协议与 API 契约
 
-新增 `packages/protocol/src/channel-runtime.ts`（不动 `channel.ts` 里的 durable 类型），手写 parser（沿用 `record/required/optional` 风格），并在 `packages/protocol/src/index.ts` 增加一行 `export * from "./channel-runtime.js"`。
+新增 `packages/protocol/src/channels/channel-runtime.ts`（不动 `channel.ts` 里的 durable 类型），手写 parser（沿用 `record/required/optional` 风格），并在 `packages/protocol/src/index.ts` 增加一行 `export * from "./channel-runtime.js"`。
 
 ### 7.1 DTO
 
@@ -236,7 +236,7 @@ export interface FeishuRegistrationSnapshot {
 
 ### 7.3 client
 
-`packages/client/src/resources/channel-resource.ts` 新增方法，**每个方法的返回类型与对应路由的响应体完全相同**：
+`packages/client/src/resources/workspace/channel-resource.ts` 新增方法，**每个方法的返回类型与对应路由的响应体完全相同**：
 
 ```ts
 runtimeStatus(): Promise<ChannelRuntimeStatus>
@@ -478,7 +478,7 @@ git diff --check
 | 文件 | 动作 |
 |---|---|
 | `docs/superpowers/specs/2026-09-19-desktop-channel-onboarding-design.md` | 新建（本文件） |
-| `packages/protocol/src/channel-runtime.ts` + `packages/protocol/src/channel-runtime.test.ts` | 新建 |
+| `packages/protocol/src/channels/channel-runtime.ts` + `packages/protocol/src/channels/__test__/channel-runtime.test.ts` | 新建 |
 | `packages/protocol/src/index.ts` | 导出新类型与 parser |
 | `packages/channels/src/core/durable-bridge.ts` + `packages/channels/src/__test__/durable-bridge.test.ts` | `cwd` 支持函数；`stop({drainTimeoutMs})` |
 | `packages/channels/src/core/manager.ts` + `packages/channels/src/__test__/manager.test.ts` | 新增 `stopInbound()` |
@@ -490,7 +490,7 @@ git diff --check
 | `packages/server/src/http/server.ts` | 挂载新路由并传入 runtime/onboarding |
 | `packages/server/src/application/daemon-application.ts` | 装配、自动启动、停机顺序、接口暴露 |
 | `packages/server/package.json` | 新增 `@vykor/channels` 依赖 |
-| `packages/client/src/resources/channel-resource.ts` + 测试 | 新增方法 |
+| `packages/client/src/resources/workspace/channel-resource.ts` + 测试 | 新增方法 |
 | `scripts/client-public-api-contract.json` | 新增 DTO 类型与资源方法（无条件同步） |
 | `tests/client-public-api/consumer.ts`、`packages/client/src/__test__/public-api.test.ts` | 同步 |
 | `apps/cli/src/commands/channels.ts` + `apps/cli/src/commands/channels.test.ts` | 改为委托，删本地装配 |

@@ -1,6 +1,6 @@
 import {createFileReadTool} from "../read.js";
-import {createFileEditTool} from "../edit.js";
-import {createApplyPatchTool} from "../apply-patch.js";
+import {createFileEditTool} from "../editing/edit.js";
+import {createApplyPatchTool} from "../editing/apply-patch.js";
 import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 import {createFileWriteTool} from "./../write.js";
 import { createHash } from "node:crypto";
@@ -12,11 +12,11 @@ import type { Settings } from "@vykor/host-config";
 import type { ToolContext, ToolDefinition } from "@vykor/agent-contracts";
 import { createWorkspaceBinding } from "@vykor/environment";
 import { createExecutionEnvironment, resolveExecutionEnvironmentConfig } from "@vykor/sandbox";
-import { applyPatchTool } from "../apply-patch.js";
-import { fileEditTool } from "../edit.js";
+import { applyPatchTool } from "../editing/apply-patch.js";
+import { fileEditTool } from "../editing/edit.js";
 import { HostFileOperations } from "../operations.js";
 import { fileReadTool } from "../read.js";
-import { sandboxPathError } from "../sandbox-guard.js";
+import { sandboxPathError } from "../access/sandbox-guard.js";
 import { fileWriteTool } from "../write.js";
 
 const secret = "private original body\n";

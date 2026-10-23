@@ -73,8 +73,8 @@ export type { AgentBackgroundShellHost, McpAuthConfigureInput, McpAuthConfigureR
 
 export { createFileReadTool } from "./file/read.js";
 export { createFileWriteTool } from "./file/write.js";
-export { createFileEditTool } from "./file/edit.js";
-export { createApplyPatchTool } from "./file/apply-patch.js";
-export { createGlobTool } from "./file/glob.js";
+export { createFileEditTool } from "./file/editing/edit.js";
+export { createApplyPatchTool } from "./file/editing/apply-patch.js";
+export { createGlobTool } from "./file/search/glob.js";
 export { createGrepTool } from "./search/grep.js";
 export type { ToolHostPolicyPort, FileToolHost, ShellToolHost } from "./ports/policy.js";

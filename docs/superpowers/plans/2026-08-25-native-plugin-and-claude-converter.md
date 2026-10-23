@@ -76,9 +76,9 @@ apps/cli
 
 - `packages/plugins/src/manifest/schema-v1.ts`
 - `packages/plugins/src/manifest/validate.ts`
-- `packages/plugins/src/paths.ts`
-- `packages/plugins/src/diagnostics.ts`
-- `packages/plugins/src/types.ts`
+- `packages/plugins/src/installation/paths.ts`
+- `packages/plugins/src/shared/diagnostics.ts`
+- `packages/plugins/src/shared/types.ts`
 - `packages/plugins/src/components/{skills,agents,hooks,mcp}.ts`
 - `packages/plugins/src/installation/{store,cache,installer}.ts`
 - `packages/plugins/src/activation/activate.ts`
@@ -124,13 +124,13 @@ apps/cli
 **文件：**
 
 - Create: `packages/plugins/src/manifest/schema-v1.ts`
-- Create: `packages/plugins/src/manifest/schema-v1.test.ts`
+- Create: `packages/plugins/src/manifest/__test__/schema-v1.test.ts`
 - Create: `packages/plugins/src/manifest/validate.ts`
-- Create: `packages/plugins/src/manifest/validate.test.ts`
-- Create: `packages/plugins/src/paths.ts`
-- Create: `packages/plugins/src/paths.test.ts`
-- Create: `packages/plugins/src/diagnostics.ts`
-- Create: `packages/plugins/src/types.ts`
+- Create: `packages/plugins/src/manifest/__test__/validate.test.ts`
+- Create: `packages/plugins/src/installation/paths.ts`
+- Create: `packages/plugins/src/installation/__test__/paths.test.ts`
+- Create: `packages/plugins/src/shared/diagnostics.ts`
+- Create: `packages/plugins/src/shared/types.ts`
 - Modify: `packages/plugins/src/index.ts`
 
 **产出接口：**
@@ -223,15 +223,15 @@ git diff --check
 **文件：**
 
 - Create: `packages/plugins/src/components/skills.ts`
-- Create: `packages/plugins/src/components/skills.test.ts`
+- Create: `packages/plugins/src/components/__test__/skills.test.ts`
 - Create: `packages/plugins/src/components/agents.ts`
-- Create: `packages/plugins/src/components/agents.test.ts`
+- Create: `packages/plugins/src/components/__test__/agents.test.ts`
 - Create: `packages/plugins/src/components/hooks.ts`
-- Create: `packages/plugins/src/components/hooks.test.ts`
+- Create: `packages/plugins/src/components/__test__/hooks.test.ts`
 - Create: `packages/plugins/src/components/mcp.ts`
-- Create: `packages/plugins/src/components/mcp.test.ts`
-- Create: `packages/plugins/src/load-native-plugin.ts`
-- Create: `packages/plugins/src/load-native-plugin.test.ts`
+- Create: `packages/plugins/src/components/__test__/mcp.test.ts`
+- Create: `packages/plugins/src/loading/load-native-plugin.ts`
+- Create: `packages/plugins/src/loading/__test__/load-native-plugin.test.ts`
 - Modify: `packages/plugins/src/index.ts`
 
 **产出接口：**
@@ -312,11 +312,11 @@ pnpm --filter @vykor/plugins check-types
 **文件：**
 
 - Create: `packages/plugins/src/installation/store.ts`
-- Create: `packages/plugins/src/installation/store.test.ts`
+- Create: `packages/plugins/src/installation/__test__/store.test.ts`
 - Create: `packages/plugins/src/installation/cache.ts`
-- Create: `packages/plugins/src/installation/cache.test.ts`
+- Create: `packages/plugins/src/installation/__test__/cache.test.ts`
 - Create: `packages/plugins/src/installation/installer.ts`
-- Create: `packages/plugins/src/installation/installer.test.ts`
+- Create: `packages/plugins/src/installation/__test__/installer.test.ts`
 - Modify: `packages/plugins/src/index.ts`
 - Modify: `packages/core/src/config/paths.ts`
 - Test: `packages/core/src/config/paths.test.ts`
@@ -655,11 +655,11 @@ pnpm --filter @vykor/cli check-types
 - Create: `packages/plugin-converters/tsconfig.json`
 - Create: `packages/plugin-converters/src/core/converter.ts`
 - Create: `packages/plugin-converters/src/core/registry.ts`
-- Create: `packages/plugin-converters/src/core/registry.test.ts`
+- Create: `packages/plugin-converters/src/core/__test__/registry.test.ts`
 - Create: `packages/plugin-converters/src/core/plan.ts`
 - Create: `packages/plugin-converters/src/core/report.ts`
 - Create: `packages/plugin-converters/src/core/digest.ts`
-- Create: `packages/plugin-converters/src/core/digest.test.ts`
+- Create: `packages/plugin-converters/src/core/__test__/digest.test.ts`
 - Create: `packages/plugin-converters/src/index.ts`
 - Modify: `pnpm-lock.yaml`（仅 workspace link 产生真实变化时）
 
@@ -829,7 +829,7 @@ pnpm --filter @vykor/plugins exec vitest run src/activation
 **文件：**
 
 - Create: `packages/plugin-converters/src/claude-code/converter.ts`
-- Create: `packages/plugin-converters/src/claude-code/converter.test.ts`
+- Create: `packages/plugin-converters/src/claude-code/__test__/converter.test.ts`
 - Modify: `apps/cli/src/commands/plugin.ts`
 - Modify/Create: `apps/cli/src/commands/plugin.test.ts`
 - Modify: `packages/server/src/application/default-services/plugin-service.ts`

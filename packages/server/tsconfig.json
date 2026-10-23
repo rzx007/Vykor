@@ -30,22 +30,22 @@
         "../json-data/src/json.ts"
       ],
       "@vykor/plugin-contracts/manifest": [
-        "../plugin-contracts/src/manifest.ts"
+        "../plugin-contracts/src/manifest/manifest.ts"
       ],
       "@vykor/plugin-contracts/presentation": [
-        "../plugin-contracts/src/presentation.ts"
+        "../plugin-contracts/src/marketplace/presentation.ts"
       ],
       "@vykor/plugin-contracts/validation": [
-        "../plugin-contracts/src/validation.ts"
+        "../plugin-contracts/src/manifest/validation.ts"
       ],
       "@vykor/plugin-contracts/limits": [
-        "../plugin-contracts/src/limits.ts"
+        "../plugin-contracts/src/manifest/limits.ts"
       ],
       "@vykor/plugin-contracts/runtime": [
-        "../plugin-contracts/src/runtime.ts"
+        "../plugin-contracts/src/runtime/runtime.ts"
       ],
       "@vykor/plugin-contracts/runtime-data": [
-        "../plugin-contracts/src/runtime-data.ts"
+        "../plugin-contracts/src/runtime/runtime-data.ts"
       ],
       "@vykor/domain-contracts/sessions": [
         "../domain-contracts/src/sessions/index.ts"

@@ -47,7 +47,7 @@
 | 服务端投影 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` | 将生成尝试、重试状态写入会话记录 |
 | 消息投影 | `packages/server/src/application/session/transcript-projection.ts` | 记录当前尝试所有 part，失败后标记被替代 |
 | 数据写入 | `packages/services/src/runs/run-repository.ts`、`packages/services/src/conversations/incremental-output.ts`、`conversation-repository.ts` | 复用 Run metadata 和消息 metadata，保证缓冲数据与替换顺序 |
-| 协议 | `packages/protocol/src/session.ts`、`capabilities.ts` | 重试 metadata 的类型与读取校验、协议版本 |
+| 协议 | `packages/protocol/src/session/session.ts`、`capabilities.ts` | 重试 metadata 的类型与读取校验、协议版本 |
 | 客户端 | `packages/client/src/state/reducer.ts`、`selectors.ts` | 去重、屏蔽被替代输出、读取重试状态 |
 | Desktop | `apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/transcript.tsx` | 重试状态提示、隐藏失败尝试输出 |
 | TUI | `apps/frontend/src/routes/session/Session.tsx`、`parts.tsx`、`apps/frontend/src/hooks/transcript.ts` | 同步展示状态与输出替换；该包并非 Web 页面 |
@@ -440,7 +440,7 @@ pnpm --filter @vykor/agent-runtime check-types
 
 ## 任务 5：持久化重试状态和被替代输出
 
-**修改：** `packages/protocol/src/session.ts`、`index.ts`；`packages/server/src/application/agent/daemon-agent-event-projector.ts`；`packages/server/src/application/session/transcript-projection.ts`；`packages/services/src/runs/run-repository.ts`、`conversations/incremental-output.ts`、`conversation-repository.ts`（只补缺少的原子写入能力）。
+**修改：** `packages/protocol/src/session/session.ts`、`index.ts`；`packages/server/src/application/agent/daemon-agent-event-projector.ts`；`packages/server/src/application/session/transcript-projection.ts`；`packages/services/src/runs/run-repository.ts`、`conversations/incremental-output.ts`、`conversation-repository.ts`（只补缺少的原子写入能力）。
 **测试：** 上述服务端投影对应 `__test__` 文件，以及 `packages/services/src/runs/run-repository.test.ts`、`conversations/incremental-output.test.ts`。
 
 **输入：** 新 Agent 事件。
@@ -460,7 +460,7 @@ export function isSupersededModelPart(part: SessionMessagePartRecord): boolean;
 - [ ] 在投影状态增加当前 generationId、attempt、当前尝试所有 part ID 集合。text/reasoning/tool part 均带 modelGeneration metadata；没有边界事件的旧测试/外部事件继续按原逻辑处理。
 - [ ] 新格式 part 初始化 committed=false，仅本次完整响应确认后改为 true；最终失败/取消不将残缺输出改成 committed。任务 5A 据此区分可见的残缺文字和可作为模型历史的有效内容。
 - [ ] 注册 session.model.attempt.finished 及对应校验测试，使用现有事件记录按 `(runId, generationId, attempt)` 去重。事务内保存结算记录并更新 run.metadata.modelUsage；modelRetry 清理不能清除 modelUsage。重复投影、刷新、store 重开后 unknownAttempts/partialAttempts 不增加。
-- [ ] 新增/扩展 `packages/protocol/src/session.test.ts`，测试 SessionModelAttemptUsage 的解析：unknown 不允许伪造 usage，partial/complete 必须有合法数字；旧记录无完整性数据时不推断为完整。
+- [ ] 新增/扩展 `packages/protocol/src/session/__test__/session.test.ts`，测试 SessionModelAttemptUsage 的解析：unknown 不允许伪造 usage，partial/complete 必须有合法数字；旧记录无完整性数据时不推断为完整。
 - [ ] model.retry.scheduled 合并写 `run.metadata.modelRetry` 并发布 `session.run.updated`，run.status 保持 running。
 - [ ] 同一 generation 新尝试开始时，先 flush 旧 part 缓冲 delta，再在现有事务能力内标记旧 part 被替代、清除活动引用和重试 metadata，最后发布更新。重复应用同事件必须无副作用。
 - [ ] 文本与思考交替时，上一尝试中已经关闭的 part 同样标记；不得改动上一个成功 generation 的 part 和工具结果。
@@ -484,7 +484,7 @@ pnpm --filter @vykor/server check-types
 
 ## 任务 5A：过滤重建历史和公开文本中的失败尝试
 
-**修改：** `packages/protocol/src/session.ts`、`index.ts`；`packages/server/src/application/agent/agent-transcript.ts`；`packages/server/src/session/transcript-text.ts`；按实际过滤结果调整 `export-session.ts`、`rewind.ts`。
+**修改：** `packages/protocol/src/session/session.ts`、`index.ts`；`packages/server/src/application/agent/agent-transcript.ts`；`packages/server/src/session/transcript-text.ts`；按实际过滤结果调整 `export-session.ts`、`rewind.ts`。
 **测试：** `packages/server/src/application/agent/__test__/agent-transcript.test.ts`；新增 `packages/server/src/session/__test__/transcript-text.test.ts`；扩展现有 `export-session.test.ts`、`rewind.test.ts`。
 
 **输入：** 持久 part 的 superseded/committed 标记。
@@ -512,7 +512,7 @@ pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/agent
 
 ## 任务 6：客户端恢复、去重和协议一致性
 
-**修改：** `packages/client/src/state/reducer.ts`、`selectors.ts`、`state/index.ts` 和公开导出；`packages/protocol/src/capabilities.ts`、`capabilities.test.ts`。
+**修改：** `packages/client/src/state/reducer.ts`、`selectors.ts`、`state/index.ts` 和公开导出；`packages/protocol/src/runtime/capabilities.ts`、`capabilities.test.ts`。
 **测试：** `packages/client/src/state/__test__/reducer.test.ts`、`sync.test.ts`；新增 `selectors.test.ts`。
 
 **输入：** Run/part 更新、完整 snapshot、事件重放。

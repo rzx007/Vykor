@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { HOOK_EVENTS, type HookEvent } from "@vykor/agent-contracts";
 import { type HookDefinition } from "@vykor/host-config";
-import { resolveNativePluginPath } from "../paths.js";
-import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
+import type { PluginComponentResult, ValidatedNativePlugin } from "../shared/types.js";
 
 const eventSet = new Set<string>(HOOK_EVENTS);
 const typeSet = new Set(["command", "http", "prompt", "agent"]);

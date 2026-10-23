@@ -26,8 +26,8 @@
 ## Task 1: 独立模式协议、持久化与工具限制
 
 **Files:**
-- Create: `packages/protocol/src/approval-mode.ts`。
-- Modify: `packages/protocol/src/runtime-config.ts`、`packages/protocol/src/requests.ts`、`packages/protocol/src/index.ts`。
+- Create: `packages/protocol/src/permissions/approval-mode.ts`。
+- Modify: `packages/protocol/src/runtime/runtime-config.ts`、`packages/protocol/src/requests/requests.ts`、`packages/protocol/src/index.ts`。
 - Modify: `packages/core/src/types/settings.ts`、`packages/agent-contracts/src/permissions.ts`；最终设置格式及 `packages/core/src/config/permission-settings.ts` 的严格切换随 Task 6 一起完成。
 - Modify: `packages/agent-runtime/src/node/runtime/agent-options.ts`、`packages/agent-runtime/src/node/runtime/default-runtime.ts`、`packages/server/src/daemon/daemon-agent.ts`。
 - Test: `packages/protocol/src/runtime-config.test.ts`、`packages/core/src/config/permission-settings.test.ts`、`tests/agent-behavior/scoped-modes.test.ts`。
@@ -99,7 +99,7 @@ pnpm --filter @vykor/desktop run typecheck:web
 ## Task 3: 独立、无工具的审批审查
 
 **Files:**
-- Create: `packages/protocol/src/approval-review.ts` 及 `approval-review.test.ts`。
+- Create: `packages/protocol/src/permissions/approval-review.ts` 及 `approval-review.test.ts`。
 - Create: `packages/agent-runtime/src/node/review/approval-reviewer.ts` 及 `approval-reviewer.test.ts`。
 - Modify: `packages/agent-runtime/src/node/runtime/default-runtime-provider.ts`、`packages/agent-runtime/src/index.ts`、`packages/protocol/src/index.ts`。
 

@@ -10,7 +10,7 @@
 
 ## 背景与现状
 
-`packages/tools/src/file/edit.ts` 的匹配核心只有一行：
+`packages/tools/src/file/editing/edit.ts` 的匹配核心只有一行：
 
 ```ts
 if (!content.includes(oldString)) {
@@ -28,7 +28,7 @@ if (!content.includes(oldString)) {
 
 - 空 `old_string` → `"old_string must not be empty."`
 - 未命中 → `"old_string not found in file."`
-- 命中多处且未开 `replace_all` → `"Found N matches at lines .... Make old_string more specific or use replace_all to replace all."`（`findMatchLines` 计算行号；`packages/tools/src/file/__test__/edit.test.ts:30` 精确断言了这条文案）
+- 命中多处且未开 `replace_all` → `"Found N matches at lines .... Make old_string more specific or use replace_all to replace all."`（`findMatchLines` 计算行号；`packages/tools/src/file/editing/__test__/edit.test.ts:30` 精确断言了这条文案）
 - 成功 → `"Successfully edited ${filePath}"`
 
 ## 术语
@@ -41,7 +41,7 @@ if (!content.includes(oldString)) {
 
 ## 设计决策
 
-1. **匹配逻辑抽成独立纯函数模块** `packages/tools/src/file/edit-replacers.ts`，`edit.ts` 变薄。理由：9 级策略各自需要独立单测，混在工具执行流程里无法单独验证。
+1. **匹配逻辑抽成独立纯函数模块** `packages/tools/src/file/editing/edit-replacers.ts`，`edit.ts` 变薄。理由：9 级策略各自需要独立单测，混在工具执行流程里无法单独验证。
 
 2. **移植 opencode 的 9 级兜底链**，顺序即优先级：精确 → 逐行 trim → 首尾锚点(Levenshtein ≥0.65) → 空白归一 → 缩进无关 → 转义还原 → 边界 trim → 上下文行(≥50%) → 多 occurrence。该链路源自 cline / gemini-cli 的实践，opencode 已在多供应商环境验证。全部为纯函数。锚点策略只扫描可能满足块长度约束的结尾：`BlockAnchorReplacer` 限定为目标行数 ±25%，`ContextAwareReplacer` 直接检查固定结尾，不能对每个首锚点遍历文件剩余部分。
 
@@ -71,7 +71,7 @@ if (!content.includes(oldString)) {
 
 ## 接口
 
-### 新模块 `packages/tools/src/file/edit-replacers.ts`
+### 新模块 `packages/tools/src/file/editing/edit-replacers.ts`
 
 ```ts
 export type Replacer = (content: string, find: string) => Generator<string, void, unknown>;
@@ -217,7 +217,7 @@ export class EditMatchError extends Error {
 
 ## 测试
 
-### `packages/tools/src/file/__test__/edit-replacers.test.ts`（纯函数）
+### `packages/tools/src/file/editing/__test__/edit-replacers.test.ts`（纯函数）
 
 - 9 个 replacer 各至少一条：命中与不命中。
 - 空候选：纯空白查找不得让任何模糊策略产出可替换的空串；`replaceAll` 不得向字符边界插入内容。
@@ -231,7 +231,7 @@ export class EditMatchError extends Error {
 - 同一行多个空白变体：包括互相重叠的变体都要产出；非 `replaceAll` 多位置报歧义，`replaceAll` 只替换全部不重叠位置，存在重叠则报歧义。
 - 重复锚点：验证候选结果正确，并用宽松上限防止固定大小的上下文策略退化为全文件成对扫描。
 
-### `packages/tools/src/file/__test__/edit.test.ts`（端到端，追加）
+### `packages/tools/src/file/editing/__test__/edit.test.ts`（端到端，追加）
 
 保留现有 2 条（歧义报行号、sandbox 拒绝），并让端到端测试覆盖以下行为；其中第 6 项已由现有歧义行号用例覆盖，其余为新增用例：
 

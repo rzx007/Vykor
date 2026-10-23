@@ -32,9 +32,9 @@
 | `packages/core/src/types/mcp-oauth.ts`、`config/settings.ts` | resource/callback 配置、binding 和操作上下文类型 |
 | 新建 `packages/server/src/application/mcp-oauth-operation-service.ts` | 进程内有界登录操作、幂等、取消与订阅 |
 | `packages/server/src/application/mcp-oauth-application-service.ts` | 实际授权提交/退出用例，仍为协议与存储编排入口 |
-| 新建 `packages/protocol/src/mcp-oauth.ts` | HTTP 操作输入/输出与安全事件 DTO、运行时校验 |
+| 新建 `packages/protocol/src/extensions/mcp-oauth.ts` | HTTP 操作输入/输出与安全事件 DTO、运行时校验 |
 | `packages/server/src/http/routes/mcp.ts`、`routes/system.ts`、`server.ts` | 路由、能力声明、SSE，沿用已有中间件 |
-| `packages/client/src/resources/mcp-resource.ts` | typed 操作资源，不在 CLI/Desktop 写裸 fetch |
+| `packages/client/src/resources/configuration/mcp-resource.ts` | typed 操作资源，不在 CLI/Desktop 写裸 fetch |
 | CLI MCP command、Desktop MCP main/IPC、主页插件页 MCP tab | 用户交互、授权 URL 与回调输入、状态和取消 |
 
 新增实现文件各自配同名 `.test.ts`；React 测试使用现有 `.test.tsx` 位置。不增加通用存储插件框架、后台刷新队列或持久 OAuth 事件日志。
@@ -186,9 +186,9 @@ interface OAuthOperationView {
 
 ## 任务 7：协议、HTTP/SSE 和 typed client
 
-**创建：** `packages/protocol/src/mcp-oauth.ts`、`mcp-oauth.test.ts`。
+**创建：** `packages/protocol/src/extensions/mcp-oauth.ts`、`mcp-oauth.test.ts`。
 
-**修改：** `packages/protocol/src/index.ts`、`capabilities.ts`、`capabilities.test.ts`、`packages/server/src/http/routes/mcp.ts`、`mcp.test.ts`、`routes/system.ts`、`http/server.ts`、`packages/client/src/resources/mcp-resource.ts`、`resources/__test__/mcp-resource.test.ts`、`packages/client/src/index.ts`、`types/index.ts`、`scripts/client-public-api-contract.json`、`tests/client-public-api/consumer.ts`。
+**修改：** `packages/protocol/src/index.ts`、`capabilities.ts`、`capabilities.test.ts`、`packages/server/src/http/routes/mcp.ts`、`mcp.test.ts`、`routes/system.ts`、`http/server.ts`、`packages/client/src/resources/configuration/mcp-resource.ts`、`resources/__test__/mcp-resource.test.ts`、`packages/client/src/index.ts`、`types/index.ts`、`scripts/client-public-api-contract.json`、`tests/client-public-api/consumer.ts`。
 
 **交付物：** 设计列出的七个 OAuth 接口可通过受认证的 client 调用。
 

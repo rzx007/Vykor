@@ -34,3 +34,28 @@ vk config set plugins.enabled true
 pnpm --filter @vykor/plugins test
 pnpm --filter @vykor/plugins check-types
 ```
+
+## 目录与维护
+
+| 目录 | 用途 |
+| --- | --- |
+| [src/](./src/README.md) | 校验原生插件，读取组件，维护安装状态，并把可用能力交给运行时。 |
+| [src/activation/](./src/activation/README.md) | 将已加载的插件组件转换成运行时可注册的能力。 |
+| [src/components/](./src/components/README.md) | 读取插件声明的 Agent、Skill、Hook、MCP、Tool 和应用资源。 |
+| [src/installation/](./src/installation/README.md) | 维护安装路径、版本缓存、安装记录、完整性检查和安装执行。 |
+| [src/loading/](./src/loading/README.md) | 组织原生插件 manifest 校验及组件读取。 |
+| [src/manifest/](./src/manifest/README.md) | 检查原生插件 manifest 的结构和字段。 |
+| [src/shared/](./src/shared/README.md) | 提供加载、安装和激活共同使用的数据类型与诊断结构。 |
+| [__test__/](./__test__/README.md) | 通过 TypeScript 编译检查公开插件 SDK 的使用约束。 |
+| [fixtures/](./fixtures/README.md) | 保存原生 manifest 和组件组合，覆盖有效及无效插件。 |
+
+入口与流程：先校验 manifest，再读取声明的组件；安装流程维护缓存和记录，激活流程将组件交给上层使用。
+
+状态归属：安装文件和安装记录由 installation 管理；加载与激活结果、运行期实例由调用方管理。
+
+新增实现优先放入职责对应的分类；测试放在被测目录的 `__test__/`。迁移时同步公开导出目标、调用方导入、文档和旧引用清单。
+
+```powershell
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/plugins check-types
+```

@@ -9,7 +9,7 @@ import { QueryEngine, ToolRegistry } from "@vykor/core";
 import { McpClientManager } from "@vykor/mcp";
 import { loadNativePlugin, validateNativePlugin } from "@vykor/plugins";
 import { PLUGIN_APP_DEFAULT_LIMITS } from "../policy.js";
-import { writeNativeAppFixture } from "../../../../../plugins/src/test-helpers/native-app.js";
+import { writeNativeAppFixture } from "../../../../../plugins/src/__test__/helpers/native-app.js";
 import { activateNativePluginTools } from "../../plugins/native-tools/activate.js";
 import { captureNativePluginAppBackend, nativeToolResultToAppResult } from "../native-plugin-app-backend.js";
 import { createVisibilityToolRegistry, getAppToolRegistry, getTrustedToolCatalogue } from "../../tools/default-runtime-tools.js";

@@ -71,11 +71,11 @@ git diff -- packages/plugins packages/protocol packages/server/src/application/d
 | 新增 `packages/plugins/src/components/ui-schema.test.ts` | 字段、ID、数量、重复声明和 Unicode 长度 |
 | 新增 `packages/plugins/src/components/ui.ts` | 普通文件检查、有界读取、HTML 编码、摘要与 metadata |
 | 新增 `packages/plugins/src/components/ui.test.ts` | 文件、链接、跨 manifest 重复、摘要和无执行副作用 |
-| 新增 `packages/plugins/src/test-helpers/native-ui.ts` | 仅测试使用的临时插件构造，不从 package exports 暴露 |
-| 修改 `packages/plugins/src/types.ts`、`index.ts`、`package.json` | UI metadata 类型、组件结果和 workspace protocol 直接依赖 |
+| 新增 `packages/plugins/src/__test__/helpers/native-ui.ts` | 仅测试使用的临时插件构造，不从 package exports 暴露 |
+| 修改 `packages/plugins/src/shared/types.ts`、`index.ts`、`package.json` | UI metadata 类型、组件结果和 workspace protocol 直接依赖 |
 | 修改 `pnpm-lock.yaml` 中对应 workspace 记录 | 仅同步新增的 protocol 直接依赖，不升级第三方版本 |
 | 修改 `packages/plugins/src/manifest/schema-v1.ts`、`validate.ts` 及对应测试 | 外层数量限制、嵌套 UI 内容在安装前校验 |
-| 修改 `packages/plugins/src/load-native-plugin.ts` 及对应测试 | UI 从 unsupported 变成静态 metadata 加载 |
+| 修改 `packages/plugins/src/loading/load-native-plugin.ts` 及对应测试 | UI 从 unsupported 变成静态 metadata 加载 |
 | 修改 `packages/plugins/src/installation/installer.ts`、`installer.test.ts` | 推导授权和真实安装验收 |
 | 新增 `packages/plugins/src/installation/verify-ui.test.ts` | 已安装 UI 授权和摘要的真实验证 |
 | 修改 Server plugin-service 与测试 | 安装预览、列表数量、当前权限请求和诊断 |
@@ -304,7 +304,7 @@ export async function writeNativeUiFixture(
 
 ## Task 3: 有界文件读取与 Native UI metadata 加载
 
-**Files:** 新增 `packages/plugins/src/components/ui.ts`、`ui.test.ts`；修改 `packages/plugins/src/types.ts`、`index.ts`。
+**Files:** 新增 `packages/plugins/src/components/ui.ts`、`ui.test.ts`；修改 `packages/plugins/src/shared/types.ts`、`index.ts`。
 
 **Interfaces:** 产出 `loadNativeUiMetadata(plugin: ValidatedNativePlugin): Promise<PluginComponentResult<NativeUiComponentMetadata[]>>`。metadata 只含定义、路径和摘要，不含可执行函数或 HTML 正文。
 

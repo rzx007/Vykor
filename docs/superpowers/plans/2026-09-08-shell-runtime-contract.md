@@ -192,7 +192,7 @@ git commit -m "feat(sandbox): resolve one shell per execution environment"
 - 修改：`packages/tools/src/shell/index.ts`
 - 删除：`packages/tools/src/shell/bash.ts`
 - 重命名：`packages/tools/src/shell/__test__/bash-tool.test.ts` → `shell-tool.test.ts`
-- 重命名：`packages/tools/src/shell/bash.test.ts` → `shell-description.test.ts`
+- 重命名：`packages/tools/src/shell/__test__/shell-dialect.test.ts` → `shell-description.test.ts`
 - 修改：`packages/tools/src/registry.ts`
 - 修改：`packages/tools/src/index.ts`
 - 测试：`packages/tools/src/__test__/registry.test.ts`
@@ -528,9 +528,9 @@ git commit -m "feat(core): converge repeated failed tool calls per run"
 ### 任务 9：建立确定性三端验收与离线回放
 
 **文件：**
-- 创建：`packages/tools/src/shell/__fixtures__/ai-radar-baseline.json`
+- 创建：`packages/tools/src/shell/__test__/fixtures/ai-radar-baseline.json`
 - 创建：`packages/tools/src/shell/trace-eval.ts`
-- 创建：`packages/tools/src/shell/trace-eval.test.ts`
+- 创建：`packages/tools/src/shell/__test__/trace-eval.test.ts`
 - 测试：`packages/server/src/http/__test__/http.test.ts`
 - 修改：`docs/superpowers/specs/2026-09-08-shell-runtime-contract-design.md`
 

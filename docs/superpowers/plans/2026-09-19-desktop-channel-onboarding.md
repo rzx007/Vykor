@@ -27,7 +27,7 @@
 
 | 文件 | 职责 | 动作 |
 |---|---|---|
-| `packages/protocol/src/channel-runtime.ts` | 渠道运行时 DTO 与 parser | 新建 |
+| `packages/protocol/src/channels/channel-runtime.ts` | 渠道运行时 DTO 与 parser | 新建 |
 | `packages/protocol/src/index.ts` | 导出新模块 | 修改 |
 | `packages/channels/src/core/durable-bridge.ts` | `cwd` 解析函数、`stop({drainTimeoutMs})` | 修改 |
 | `packages/channels/src/core/manager.ts` | `stopInbound()` | 修改 |
@@ -41,7 +41,7 @@
 | `packages/server/src/application/daemon-application.ts` | 装配、自动启动、停机顺序、接口暴露 | 修改 |
 | `packages/server/src/application/default-node-application.ts` | 默认注入 `ChannelConfigStore` | 修改 |
 | `packages/server/package.json` | 新增 `@vykor/channels` | 修改 |
-| `packages/client/src/resources/channel-resource.ts` | 新方法 | 修改 |
+| `packages/client/src/resources/workspace/channel-resource.ts` | 新方法 | 修改 |
 | `packages/client/src/index.ts` | 导出新 DTO 类型 | 修改 |
 | `scripts/client-public-api-contract.json` | 导出清单 | 修改 |
 | `tests/client-public-api/consumer.ts` | 代表性调用 | 修改 |
@@ -64,8 +64,8 @@
 ## 任务 1：protocol 渠道运行时 DTO 与 parser
 
 **文件：**
-- 新建：`packages/protocol/src/channel-runtime.ts`
-- 测试：`packages/protocol/src/channel-runtime.test.ts`（新建）
+- 新建：`packages/protocol/src/channels/channel-runtime.ts`
+- 测试：`packages/protocol/src/channels/__test__/channel-runtime.test.ts`（新建）
 - 修改：`packages/protocol/src/index.ts`
 
 **Interfaces：**
@@ -101,13 +101,13 @@ it("rejects allow ids outside ou_/oc_", () => {
 
 - [x] **步骤 3：实现**
 
-按 spec §7.1 定义类型（含 `bootId`、`seq`、`attempt`、`domain`、`warning`；`FeishuChannelSnapshot` 不含 `appSecret`），parser 沿用 `packages/protocol/src/channel.ts` 的 `record/required/optional` 风格；`parseFeishuAllowInput` 校验 `ou_`/`oc_` 前缀并把空白 `name` 视为缺省。`packages/protocol/src/index.ts` 增加 `export * from "./channel-runtime.js";`。
+按 spec §7.1 定义类型（含 `bootId`、`seq`、`attempt`、`domain`、`warning`；`FeishuChannelSnapshot` 不含 `appSecret`），parser 沿用 `packages/protocol/src/channels/channel.ts` 的 `record/required/optional` 风格；`parseFeishuAllowInput` 校验 `ou_`/`oc_` 前缀并把空白 `name` 视为缺省。`packages/protocol/src/index.ts` 增加 `export * from "./channel-runtime.js";`。
 
 - [x] **步骤 4：运行确认通过 + Commit**
 
 ```bash
 pnpm --filter @vykor/protocol test -- --run
-git add packages/protocol/src/channel-runtime.ts packages/protocol/src/channel-runtime.test.ts packages/protocol/src/index.ts
+git add packages/protocol/src/channels/channel-runtime.ts packages/protocol/src/channels/__test__/channel-runtime.test.ts packages/protocol/src/index.ts
 git commit -m "feat(protocol): add channel runtime DTOs and parsers"
 ```
 
@@ -375,8 +375,8 @@ git commit -m "feat(server): expose channel runtime and onboarding over HTTP"
 ## 任务 7：client 资源方法
 
 **文件：**
-- 修改：`packages/client/src/resources/channel-resource.ts`、`packages/client/src/index.ts`、`scripts/client-public-api-contract.json`、`tests/client-public-api/consumer.ts`、`packages/client/src/__test__/public-api.test.ts`
-- 测试：`packages/client/src/resources/channel-resource.test.ts`（若无则新建）
+- 修改：`packages/client/src/resources/workspace/channel-resource.ts`、`packages/client/src/index.ts`、`scripts/client-public-api-contract.json`、`tests/client-public-api/consumer.ts`、`packages/client/src/__test__/public-api.test.ts`
+- 测试：`packages/client/src/resources/workspace/__test__/channel-resource.test.ts`（若无则新建）
 
 - [x] **步骤 1：编写失败的测试**：每个方法的路径/方法/body/返回解包与 spec §7.3 一致；`removeFeishuAllow` 对 key 做 `encodeURIComponent`。
 - [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/client test -- --run src/resources/channel-resource.test.ts`
@@ -385,7 +385,7 @@ git commit -m "feat(server): expose channel runtime and onboarding over HTTP"
 
 ```bash
 pnpm --filter @vykor/client test -- --run
-git add packages/client/src/resources/channel-resource.ts packages/client/src/resources/channel-resource.test.ts packages/client/src/index.ts scripts/client-public-api-contract.json tests/client-public-api/consumer.ts packages/client/src/__test__/public-api.test.ts
+git add packages/client/src/resources/workspace/channel-resource.ts packages/client/src/resources/workspace/__test__/channel-resource.test.ts packages/client/src/index.ts scripts/client-public-api-contract.json tests/client-public-api/consumer.ts packages/client/src/__test__/public-api.test.ts
 git commit -m "feat(client): add channel runtime and onboarding methods"
 ```
 

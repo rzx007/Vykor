@@ -23,7 +23,7 @@ SQLite 是 daemon 的业务真相。客户端快照和 SSE 都从这些记录产
 
 ## 固定记录
 
-下表列的是稳定责任，不代替 TypeScript 的逐字段定义。精确字段以 `packages/protocol/src/session.ts` 和 migrations 为准。
+下表列的是稳定责任，不代替 TypeScript 的逐字段定义。精确字段以 `packages/protocol/src/session/session.ts` 和 migrations 为准。
 
 | 记录 | 主键与关系 | 必须保存的内容 | 终态或删除规则 |
 |---|---|---|---|
@@ -128,7 +128,7 @@ cursor + session + inputs + messages + parts + runs + attempts + tasks + permiss
 
 | 内容 | 位置 |
 |---|---|
-| 公共记录类型 | `packages/protocol/src/session.ts` |
+| 公共记录类型 | `packages/protocol/src/session/session.ts` |
 | SQLite schema 和 migration | `packages/services/src/session-runtime/migrations` |
 | Store 写入与状态转移 | `packages/services/src/session-runtime/store.ts` |
 | Durable event registry | `packages/services/src/session-runtime/events/event-registry.ts` |

@@ -1,6 +1,6 @@
 import type { RegisteredHookExecutor as IHookExecutor } from "@vykor/host-config";
-import type { LoadedNativePlugin, NativePluginComponentKind } from "../types.js";
-import type { PluginDiagnostic } from "../diagnostics.js";
+import type { LoadedNativePlugin, NativePluginComponentKind } from "../shared/types.js";
+import type { PluginDiagnostic } from "../shared/diagnostics.js";
 
 export interface NativePluginActivationContext {
   hookExecutor: IHookExecutor;

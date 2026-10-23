@@ -163,7 +163,7 @@ runtimeStatus:
 接手时建议先看这些文件，具体命名以当前代码为准：
 
 - `packages/plugins/src/installation/`：安装记录、不可变快照、安装前后校验；
-- `packages/plugins/src/load-native-plugin.ts`：Native Plugin 加载和 unsupported 组件诊断；
+- `packages/plugins/src/loading/load-native-plugin.ts`：Native Plugin 加载和 unsupported 组件诊断；
 - `packages/plugins/src/installation/verify.ts`：Runtime 激活前校验入口；
 - `packages/agent-runtime/src/node/plugins/extensions.ts`：Runtime 组合插件贡献的入口；
 - `packages/agent-runtime/src/node/plugins/native-tools/`：Native Tool 进程启动、调用和失败；

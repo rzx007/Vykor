@@ -183,7 +183,7 @@ sequenceDiagram
 
 ```text
 apps/frontend/src/hooks/useServerSync.ts
-packages/client/src/resources/session-resource.ts
+packages/client/src/resources/session/session-resource.ts
 packages/client/src/transport/http-transport.ts
 packages/server/src/http/routes/run-execution.ts
 packages/server/src/application/session/interactions/session-interaction-service.ts

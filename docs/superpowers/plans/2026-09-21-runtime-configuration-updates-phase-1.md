@@ -43,7 +43,7 @@
 - Modify: `packages/core/src/types/runtime.ts`、`packages/core/src/index.ts`
 - Create: `packages/agent-runtime/src/node/configuration/request-configuration.ts`
 - Create: `packages/agent-runtime/src/node/configuration/request-configuration.test.ts`
-- Modify: `packages/protocol/src/runtime-config.ts`、`packages/protocol/src/runtime-config.test.ts`
+- Modify: `packages/protocol/src/runtime/runtime-config.ts`、`packages/protocol/src/runtime-config.test.ts`
 
 **Interfaces:**
 

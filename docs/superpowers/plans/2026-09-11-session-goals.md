@@ -16,7 +16,7 @@
 
 ## 任务 1：共享协议与持久化
 
-新增 `packages/protocol/src/session-goals.ts` 并从 `index.ts` 导出；使用设计文档的 GoalStatus。创建、修改、动作请求都必须带 requestId，修改及动作带 expectedRevision。限制 objective 为非空文本、最长 32,000 字符；maxAutoTurns 为 1—1,000 的整数，默认 20。
+新增 `packages/protocol/src/session/session-goals.ts` 并从 `index.ts` 导出；使用设计文档的 GoalStatus。创建、修改、动作请求都必须带 requestId，修改及动作带 expectedRevision。限制 objective 为非空文本、最长 32,000 字符；maxAutoTurns 为 1—1,000 的整数，默认 20。
 
 ```ts
 type GoalAction = 'pause' | 'resume' | 'cancel'

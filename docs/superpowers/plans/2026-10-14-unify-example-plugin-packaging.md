@@ -13,7 +13,7 @@
 ## 文件与职责
 
 - 创建 `packages/plugin-sources/scripts/package-example-plugins.mjs`：负责扫描、校验并生成示例插件 ZIP；导出可由测试调用的打包函数，命令行入口使用仓库默认路径。
-- 创建 `packages/plugin-sources/src/package-example-plugins.test.ts`：沿用 Vitest 当前的 `src/**/*.test.ts` 匹配规则，用临时插件目录验证 ZIP 内容、覆盖行为、无关文件保留和清单错误。
+- 创建 `packages/plugin-sources/scripts/__test__/package-example-plugins.test.ts`：沿用 Vitest 当前的 `src/**/*.test.ts` 匹配规则，用临时插件目录验证 ZIP 内容、覆盖行为、无关文件保留和清单错误。
 - 修改 `packages/plugin-sources/package.json`：增加 `package:examples` 命令。
 - 移动 `artifacts/plugin-test/agent-reviewer/` 至 `examples/plugins/agent-reviewer/`：将 Agent Reviewer 唯一源码放在示例插件目录。
 - 修改 `.gitignore`：忽略仓库根目录的 `.plugin-dist/`。
@@ -23,7 +23,7 @@
 
 **文件：**
 - 创建：`packages/plugin-sources/scripts/package-example-plugins.mjs`
-- 创建：`packages/plugin-sources/src/package-example-plugins.test.ts`
+- 创建：`packages/plugin-sources/scripts/__test__/package-example-plugins.test.ts`
 - 修改：`packages/plugin-sources/package.json`
 
 - [x] **步骤 1：编写打包器失败测试**
@@ -129,7 +129,7 @@ it("fails when a direct child directory has no Native Plugin manifest", async ()
 - [x] **步骤 5：提交打包器及其测试**
 
 ```powershell
-git add -- packages/plugin-sources/package.json packages/plugin-sources/scripts/package-example-plugins.mjs packages/plugin-sources/src/package-example-plugins.test.ts
+git add -- packages/plugin-sources/package.json packages/plugin-sources/scripts/package-example-plugins.mjs packages/plugin-sources/scripts/__test__/package-example-plugins.test.ts
 git commit --only -m "feat(插件打包): 添加示例插件 ZIP 生成命令" -m "复用 JSZip 将示例插件源码打包到本地分发目录，并覆盖缺失清单、重复构建和无关文件保留行为。" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>" -- packages/plugin-sources/package.json packages/plugin-sources/scripts/package-example-plugins.mjs packages/plugin-sources/scripts/package-example-plugins.test.mjs
 ```
 

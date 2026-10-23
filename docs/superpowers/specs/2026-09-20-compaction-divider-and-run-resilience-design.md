@@ -132,7 +132,7 @@ pumpSession 循环
 ### 涉及文件
 
 - `packages/client/src/transport/sse-transport.ts`（+ 新增 `transport/__test__/sse-transport.test.ts`）
-- `packages/client/src/resources/event-resource.ts`（透传 `idleTimeoutMs`）
+- `packages/client/src/resources/session/event-resource.ts`（透传 `idleTimeoutMs`）
 - `packages/client/src/state/sync.ts`（重连重取快照；+ 新增 `state/__test__/sync.test.ts`）
 - `packages/client/src/types/index.ts`（`EventSyncOptions` 增加 `idleTimeoutMs`）
 - `apps/desktop/src/main/features/session/session-subscription-service.ts`（+ 新增/扩展单测）

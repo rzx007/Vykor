@@ -27,7 +27,7 @@
 
 **文件：**
 
-- 修改 `packages/protocol/src/session-goals.ts`、`session-goals.test.ts`：评估契约与解析。
+- 修改 `packages/protocol/src/session/session-goals.ts`、`session-goals.test.ts`：评估契约与解析。
 - 修改 `packages/agent-runtime/src/goal-assessment-tool.ts`、`goal-assessment-tool.test.ts`：工具输入与运行绑定。
 - 新建 `packages/server/src/application/session/goal-assessment-policy.ts`：完成判断与引用校验，不负责投递 Run。
 - 修改 `packages/server/src/application/session/session-goal-service.ts`：调用判断结果。

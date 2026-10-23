@@ -1,0 +1,7 @@
+export { type GoalStatus, type GoalUserActor, type GoalVersion, type GoalAction, type GoalUsage, type GoalModelAttemptKey, type GoalStopReason, type GoalExternalWait, type GoalWait, type SessionGoal, type CreateSessionGoalInput, type UpdateSessionGoalInput, type GoalActionInput, type GoalUpdateInput, MAX_GOAL_AUTO_TURNS, MAX_GOAL_OBJECTIVE_CHARS } from "@vykor/domain-contracts/goals";
+import { parseCreateSessionGoalInput as domainparseCreateSessionGoalInput, parseUpdateSessionGoalInput as domainparseUpdateSessionGoalInput, parseGoalActionInput as domainparseGoalActionInput, parseGoalUpdateInput as domainparseGoalUpdateInput, type CreateSessionGoalInput, type UpdateSessionGoalInput, type GoalActionInput, type GoalUpdateInput } from "@vykor/domain-contracts/goals";
+import { adaptDomainValidation } from "../requests/domain-validation.js";
+export function parseCreateSessionGoalInput(value: unknown): CreateSessionGoalInput { return adaptDomainValidation(() => domainparseCreateSessionGoalInput(value)); }
+export function parseUpdateSessionGoalInput(value: unknown): UpdateSessionGoalInput { return adaptDomainValidation(() => domainparseUpdateSessionGoalInput(value)); }
+export function parseGoalActionInput(value: unknown): GoalActionInput { return adaptDomainValidation(() => domainparseGoalActionInput(value)); }
+export function parseGoalUpdateInput(value: unknown): GoalUpdateInput { return adaptDomainValidation(() => domainparseGoalUpdateInput(value)); }

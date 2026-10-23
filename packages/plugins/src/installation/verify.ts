@@ -1,5 +1,5 @@
-import type { PluginDiagnostic } from "../diagnostics.js";
-import type { ValidatedNativePlugin, VykorPluginManifestV1 } from "../types.js";
+import type { PluginDiagnostic } from "../shared/diagnostics.js";
+import type { ValidatedNativePlugin, VykorPluginManifestV1 } from "../shared/types.js";
 import { validateNativePlugin } from "../manifest/validate.js";
 import { assertRegularPluginCacheSnapshot, computePluginBehaviorDigest } from "./cache.js";
 import { requestedPluginPermissions } from "./installer.js";

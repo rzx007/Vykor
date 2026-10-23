@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { computeFileChange } from "../preview.js";
-import { buildUnifiedDiff, computeToolDiff, truncateDiff } from "../diff.js";
+import { buildUnifiedDiff, computeToolDiff, truncateDiff } from "../editing/diff.js";
 import { HostFileOperations } from "../operations.js";
 
 let dir: string;

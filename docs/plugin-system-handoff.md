@@ -732,7 +732,7 @@ LSP 不进入以上近期顺序。
 3. [用户级 Native Plugin 安装设计](./superpowers/specs/2026-09-02-user-scoped-native-plugin-installation-design.md)：不可变快照与权限边界；
 4. [原生插件与外部转换器设计](./superpowers/specs/2026-08-25-native-plugin-and-converters-design.md)：完整历史设计；
 5. [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：真实样本和保守转换原则；
-6. `packages/plugins/src/load-native-plugin.ts`：当前支持与 deferred Component；
+6. `packages/plugins/src/loading/load-native-plugin.ts`：当前支持与 deferred Component；
 7. `packages/plugins/src/installation/`：安装、store、cache 和激活前验证；
 8. `packages/plugin-converters/src/`：Converter SPI 与 Claude Code 实现；
 9. `packages/agent-runtime/src/node/plugins/extensions.ts`：Runtime 组合入口；

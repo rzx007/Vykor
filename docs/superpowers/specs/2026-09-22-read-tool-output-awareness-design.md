@@ -40,7 +40,7 @@
 - **有三处**测试精确断言了 `fileReadTool` 的文本输出，追加尾部提示会全部破坏，必须同步更新：
   - `packages/tools/src/file/__test__/read.test.ts:37` → `toBe("2: two")`
   - `packages/tools/src/file/__test__/operations.test.ts:17` → `toMatchObject({ text: "1: hello" })`
-  - `packages/tools/src/file/__test__/environment-path.test.ts:63` → `toMatchObject({ text: "1: hello" })`
+  - `packages/tools/src/file/access/__test__/environment-path.test.ts:63` → `toMatchObject({ text: "1: hello" })`
 
   已全仓 grep 确认没有其它文本格式精确断言点。`read.test.ts` 另有图片、错误图片、无效二进制、sandbox 与目录行为测试，必须保持或按本规格明确更新，不能在重写文件分支时删除。
 - 该工具经 `packages/tools/src/registry.ts:92` 注册为内置工具，daemon / CLI / Desktop 共用。

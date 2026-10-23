@@ -8,7 +8,7 @@ import { ToolRegistry } from "@vykor/core";
 import { McpClientManager } from "@vykor/mcp";
 import { installLocalNativePlugin, installedPluginKey, loadNativePlugin, updateInstalledPluginStore, validateNativePlugin } from "@vykor/plugins";
 import { SkillRegistry } from "@vykor/skills";
-import { nativeAppDefinition, writeNativeAppFixture } from "../../../../../plugins/src/test-helpers/native-app.js";
+import { nativeAppDefinition, writeNativeAppFixture } from "../../../../../plugins/src/__test__/helpers/native-app.js";
 import { createVykorRuntime } from "../../runtime/default-runtime.js";
 import { NativeToolHost } from "../../plugins/native-tools/tool-host.js";
 import { captureNativePluginAppBackend, createNativePluginAppResourceSnapshot } from "../native-plugin-app-backend.js";

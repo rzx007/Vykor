@@ -72,13 +72,13 @@
 | --- | --- |
 | `packages/plugins/src/manifest/schema-v1.ts` | Native v1 manifest 的 zod 严格校验 |
 | `packages/plugins/src/manifest/validate.ts` | 读 `.vykor-plugin/plugin.json`，解析 + 校验组件路径，产出诊断 |
-| `packages/plugins/src/paths.ts` | 组件路径边界检查（lexical 与 symlink 真实路径双重校验） |
-| `packages/plugins/src/load-native-plugin.ts` | 静态加载五类组件，其余组件给 unsupported warning |
+| `packages/plugins/src/installation/paths.ts` | 组件路径边界检查（lexical 与 symlink 真实路径双重校验） |
+| `packages/plugins/src/loading/load-native-plugin.ts` | 静态加载五类组件，其余组件给 unsupported warning |
 | `packages/plugins/src/components/` | 五类组件各自的解析：`tools.ts`、`skills.ts`、`agents.ts`、`hooks.ts`、`mcp.ts` |
 | `packages/plugins/src/installation/` | `installer.ts` 安装、`cache.ts` 不可变快照与摘要、`store.ts` 安装记录、`verify.ts` 运行前校验 |
 | `packages/plugins/src/sdk.ts` | 插件作者的开发期类型入口，经 `@vykor/plugins/sdk` 暴露 |
-| `packages/plugin-sources/src/local-zip.ts` | 把 `.zip`/`.tar`/`.tar.gz`/`.tgz` 安全解压成候选目录 |
-| `packages/plugin-sources/src/git-source.ts` | 用系统 `git` 固定到具体 commit，删掉 `.git` 后交付候选目录 |
+| `packages/plugin-sources/src/sources/local-zip.ts` | 把 `.zip`/`.tar`/`.tar.gz`/`.tgz` 安全解压成候选目录 |
+| `packages/plugin-sources/src/sources/git-source.ts` | 用系统 `git` 固定到具体 commit，删掉 `.git` 后交付候选目录 |
 | `packages/plugin-converters/src/` | Claude Code / Codex 外部格式 → Native Plugin 的转换 |
 | `packages/agent-runtime/src/node/plugins/plugin-discovery.ts` | 发现、校验并静态加载已安装插件 |
 | `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts` | 安装优先级、组件归属与同名冲突判定 |
@@ -88,7 +88,7 @@
 | `packages/server/src/application/default-services/extensions/plugin-service.ts` | 安装 / 启停 / 卸载 / 预览 / 列出的统一应用层 |
 | `packages/server/src/application/session/plugins/session-plugin-capability-service.ts` | 决定一次输入能不能带 `pluginId`，以及带哪一个 |
 | `packages/server/src/http/routes/service.ts` | `/plugins/**` HTTP 路由 |
-| `packages/client/src/resources/plugin-resource.ts` | 各前端共用的插件 HTTP 客户端 |
+| `packages/client/src/resources/plugins/plugin-resource.ts` | 各前端共用的插件 HTTP 客户端 |
 | `apps/cli/src/commands/plugin.ts` | `vk plugin` 子命令 |
 | `apps/desktop/src/main/features/plugin/plugin-service.ts` | Desktop 主进程的导入、确认与刷新 |
 | `apps/desktop/src/renderer/src/components/desktop/plugin-page` | 插件管理页面 |
@@ -138,7 +138,7 @@ lspServers, workflows, channels, providers, ui, outputStyles, themes, monitors, 
 }
 ```
 
-路径安全由 `packages/plugins/src/paths.ts` 兜底：必须相对且以 `./` 开头，先做字符串边界检查，再看符号链接解析后的真实路径是否仍在插件根内；目标尚不存在时，从最近存在的父目录继续做同样的检查。校验阶段还会拒绝重复组件来源（同一真实文件被两个组件引用）。
+路径安全由 `packages/plugins/src/installation/paths.ts` 兜底：必须相对且以 `./` 开头，先做字符串边界检查，再看符号链接解析后的真实路径是否仍在插件根内；目标尚不存在时，从最近存在的父目录继续做同样的检查。校验阶段还会拒绝重复组件来源（同一真实文件被两个组件引用）。
 
 ## 5. 磁盘布局与安装记录
 
@@ -449,7 +449,7 @@ POST   /plugins/reload                  关闭该 cwd 的 Runtime，下次使用
 
 注意两点：一是“缺批准”是**抛异常**，不是返回 `status: "blocked"`——`ConversionReport.status` 的联合类型里有 `blocked`/`failed`，但当前代码路径不会返回它们，想按状态分支的调用方会踩空；二是 Codex 的 `convert()` 会先从源重新推导一次 plan 并比对摘要，plan 过期或源已变化都会先于批准检查抛错。两个转换器在 `convert()` 里都会拒绝已存在的输出目录、源在 plan 之后被改动、以及“没有任何可转换组件”的源。
 
-**客户端**（`packages/client/src/resources/plugin-resource.ts`）：路由映射与上面的 HTTP 表一致，注意 `installLocal()` 一个方法覆盖 `/plugins/install-local` 与 `/plugins/link-local` 两条路由，靠 `link` 参数分流，没有单独的 link 方法。`reload()` 返回 `ReloadPluginsResponse`（`message` + 插件列表 + `warnings`）。CLI 与会话命令展示重载结果用 `packages/client/src/commands/plugin-presentation.ts` 的 `formatPluginReload`，输出会明确写“重载只让 Runtime 失效，实际加载发生在下一次使用”，并在权限缺失时提示重新 link/安装并补 `--approve`。
+**客户端**（`packages/client/src/resources/plugins/plugin-resource.ts`）：路由映射与上面的 HTTP 表一致，注意 `installLocal()` 一个方法覆盖 `/plugins/install-local` 与 `/plugins/link-local` 两条路由，靠 `link` 参数分流，没有单独的 link 方法。`reload()` 返回 `ReloadPluginsResponse`（`message` + 插件列表 + `warnings`）。CLI 与会话命令展示重载结果用 `packages/client/src/commands/plugin-presentation.ts` 的 `formatPluginReload`，输出会明确写“重载只让 Runtime 失效，实际加载发生在下一次使用”，并在权限缺失时提示重新 link/安装并补 `--approve`。
 
 **CLI**（`apps/cli/src/commands/plugin.ts`）：
 
@@ -577,7 +577,7 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 
 | 项 | 做法 | 结果 |
 | --- | --- | --- |
-| 客户端资源路由映射与重载返回 | 逐行读 `packages/client/src/resources/plugin-resource.ts` 与 `packages/client/src/commands/plugin-presentation.ts` | 与 HTTP 路由对应（`installLocal` 一个方法覆盖 install-local 与 link-local），已补入第 11 节 |
+| 客户端资源路由映射与重载返回 | 逐行读 `packages/client/src/resources/plugins/plugin-resource.ts` 与 `packages/client/src/commands/plugin-presentation.ts` | 与 HTTP 路由对应（`installLocal` 一个方法覆盖 install-local 与 link-local），已补入第 11 节 |
 | 转换器批准链路 | 读两个转换器的 `plan()` 与 `convert()` 实现 | 发现两个转换器的批准门不同，且缺批准是抛异常而非返回 `blocked` 状态；已按实际重写第 11 节转换器一段 |
 | Windows 目录联接是否被拦 | 在临时目录用 `mklink /J` 造根联接与嵌套联接，直接调用 `assertRegularPluginCacheSnapshot` 与 `computePluginBehaviorDigest`，并带真实目录做对照 | 根联接被快照守卫拒绝、嵌套联接被摘要遍历拒绝；已补入第 5 节 |
 | 根联接是被哪一道检查拦下的 | 另跑一个探针，对同一联接同时打印 `lstat()` 的 `isDirectory()`/`isSymbolicLink()`、realpath 比对结果，以及 `readdir` 的 `Dirent` 标志 | `lstat` 对联接报 `isDirectory()=false`、`isSymbolicLink()=true`，所以是 `assertRegularPluginCacheSnapshot` 的第一道检查触发；realpath 比对是独立兜底。归因已改正（第 5 节） |
@@ -601,9 +601,9 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 
 | 想做什么 | 看哪里 |
 | --- | --- |
-| 加/改 manifest 字段 | `packages/plugins/src/manifest/schema-v1.ts`、`packages/plugins/src/types.ts` |
-| 改路径安全规则 | `packages/plugins/src/paths.ts` |
-| 新增一种组件的加载 | `packages/plugins/src/components/`、`packages/plugins/src/load-native-plugin.ts` |
+| 加/改 manifest 字段 | `packages/plugins/src/manifest/schema-v1.ts`、`packages/plugins/src/shared/types.ts` |
+| 改路径安全规则 | `packages/plugins/src/installation/paths.ts` |
+| 新增一种组件的加载 | `packages/plugins/src/components/`、`packages/plugins/src/loading/load-native-plugin.ts` |
 | 改安装与快照语义 | `packages/plugins/src/installation/installer.ts`、`cache.ts`、`store.ts`、`verify.ts` |
 | 改运行前校验 | `packages/plugins/src/installation/verify.ts` |
 | 改 Tool 子进程协议 | `packages/agent-runtime/src/node/plugins/native-tools/protocol.ts`、`tool-host.ts`、`host-entry.mjs` |

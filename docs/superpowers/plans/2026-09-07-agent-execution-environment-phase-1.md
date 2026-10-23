@@ -31,8 +31,8 @@
 - `packages/sandbox/src/execution-config.test.ts`：surface、优先级和当前配置结构测试。
 - `packages/sandbox/src/execution-environment.ts`：Local/Docker 第一阶段环境句柄。
 - `packages/sandbox/src/execution-environment.test.ts`：环境创建顺序、信息与 fail-closed 测试。
-- `packages/tools/src/file/environment-path.ts`：文件工具的执行路径解析适配。
-- `packages/tools/src/file/__test__/environment-path.test.ts`：容器路径、相对路径和越界测试。
+- `packages/tools/src/file/access/environment-path.ts`：文件工具的执行路径解析适配。
+- `packages/tools/src/file/access/__test__/environment-path.test.ts`：容器路径、相对路径和越界测试。
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/runtime-setting-control.tsx`：运行环境设置控件。
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/runtime-setting-model.ts`：设置页纯状态转换。
 - `apps/desktop/src/renderer/src/components/desktop/settings-page/runtime-setting-model.test.ts`：local/docker/SRT/restart 状态测试。
@@ -54,7 +54,7 @@
 - `packages/sandbox/e2e/docker.e2e.test.ts`：真实挂载、路径和单版本测试。
 - `packages/tools/src/file/operations.ts`：删除宿主路径到容器路径的工具内转换。
 - `packages/tools/src/file/path.ts`：按 execution cwd 解析路径。
-- `packages/tools/src/file/sandbox-guard.ts`：改用结构化环境路径。
+- `packages/tools/src/file/access/sandbox-guard.ts`：改用结构化环境路径。
 - `packages/tools/src/file/read.ts`、`write.ts`、`edit.ts`、`glob.ts`、`grep.ts`：消费环境文件能力。
 - `packages/tools/src/file/__test__/operations.test.ts`、`read.test.ts`、`edit.test.ts`、`glob.test.ts`：容器路径契约测试。
 - `packages/permissions/src/index.ts`：按 execution path 裁决，并携带可选 host path。
@@ -467,15 +467,15 @@ git commit -m "feat(sandbox): expose local and Docker environment handles"
 
 - 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/core/package.json`
-- 创建：`packages/tools/src/file/environment-path.ts`
-- 创建：`packages/tools/src/file/__test__/environment-path.test.ts`
+- 创建：`packages/tools/src/file/access/environment-path.ts`
+- 创建：`packages/tools/src/file/access/__test__/environment-path.test.ts`
 - 修改：`packages/tools/src/file/operations.ts`
 - 修改：`packages/tools/src/file/path.ts`
-- 修改：`packages/tools/src/file/sandbox-guard.ts`
+- 修改：`packages/tools/src/file/access/sandbox-guard.ts`
 - 修改：`packages/tools/src/file/read.ts`
 - 修改：`packages/tools/src/file/write.ts`
-- 修改：`packages/tools/src/file/edit.ts`
-- 修改：`packages/tools/src/file/glob.ts`
+- 修改：`packages/tools/src/file/editing/edit.ts`
+- 修改：`packages/tools/src/file/search/glob.ts`
 - 修改：`packages/tools/src/search/grep.ts`
 - 修改：`packages/tools/package.json`
 - 修改：`packages/permissions/src/index.ts`

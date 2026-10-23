@@ -274,7 +274,7 @@
         "typeOnly": true
       },
       {
-        "fromFile": "packages/host-config/src/permissions.ts",
+        "fromFile": "packages/host-config/src/permissions/permissions.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "ApprovalMode"
@@ -360,7 +360,7 @@
         "typeOnly": false
       },
       {
-        "fromFile": "packages/plugins/src/components/app-resources.test.ts",
+        "fromFile": "packages/plugins/src/components/__test__/app-resources.test.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PLUGIN_APP_LIMITS",
@@ -386,7 +386,7 @@
         "typeOnly": true
       },
       {
-        "fromFile": "packages/plugins/src/components/apps.test.ts",
+        "fromFile": "packages/plugins/src/components/__test__/apps.test.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PLUGIN_APP_LIMITS"
@@ -420,7 +420,7 @@
         "typeOnly": false
       },
       {
-        "fromFile": "packages/plugins/src/test-helpers/native-app.ts",
+        "fromFile": "packages/plugins/src/__test__/helpers/native-app.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PluginAppManifest"
@@ -428,7 +428,7 @@
         "typeOnly": true
       },
       {
-        "fromFile": "packages/plugins/src/types.ts",
+        "fromFile": "packages/plugins/src/shared/types.ts",
         "specifier": "@vykor/protocol",
         "importedNames": [
           "PluginPresentation"
@@ -2674,7 +2674,7 @@
   },
   "types": [
     {
-      "file": "packages/protocol/src/session.ts",
+      "file": "packages/protocol/src/session/session.ts",
       "symbol": "SessionRecord",
       "extends": [],
       "fields": [
@@ -2751,7 +2751,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session.ts",
+      "file": "packages/protocol/src/session/session.ts",
       "symbol": "SessionInputRecord",
       "extends": [],
       "fields": [
@@ -2808,7 +2808,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session.ts",
+      "file": "packages/protocol/src/session/session.ts",
       "symbol": "SessionEventRecord",
       "extends": [],
       "fields": [
@@ -2850,7 +2850,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session.ts",
+      "file": "packages/protocol/src/session/session.ts",
       "symbol": "SessionRunRecord",
       "extends": [],
       "fields": [
@@ -2907,7 +2907,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session.ts",
+      "file": "packages/protocol/src/session/session.ts",
       "symbol": "SessionRunAttemptRecord",
       "extends": [],
       "fields": [
@@ -2989,7 +2989,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session-goals.ts",
+      "file": "packages/protocol/src/session/session-goals.ts",
       "symbol": "SessionGoal",
       "extends": [],
       "fields": [
@@ -3086,7 +3086,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session-goals.ts",
+      "file": "packages/protocol/src/session/session-goals.ts",
       "symbol": "GoalUsage",
       "extends": [],
       "fields": [
@@ -3133,17 +3133,17 @@
       ]
     },
     {
-      "file": "packages/protocol/src/session-goals.ts",
+      "file": "packages/protocol/src/session/session-goals.ts",
       "symbol": "GoalAction",
       "type": "\"pause\" | \"resume\" | \"cancel\" | \"budget\" | \"cancel_resume\""
     },
     {
-      "file": "packages/protocol/src/session-goals.ts",
+      "file": "packages/protocol/src/session/session-goals.ts",
       "symbol": "GoalWait",
       "type": "| {\n      kind: \"user\";\n      questionId: string;\n      question: string;\n      objectiveVersion: number;\n      replyInputId?: string;\n      /** Accepted answer restored after a queued Run could not be dispatched. */\n      response?: string;\n    }\n  | { kind: \"approval\"; permissionRequestId: string }\n  | GoalExternalWait"
     },
     {
-      "file": "packages/protocol/src/attachment.ts",
+      "file": "packages/protocol/src/attachments/attachment.ts",
       "symbol": "AttachmentAssetRecord",
       "extends": [],
       "fields": [
@@ -3210,7 +3210,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/attachment.ts",
+      "file": "packages/protocol/src/attachments/attachment.ts",
       "symbol": "AttachmentLimits",
       "extends": [],
       "fields": [
@@ -3252,7 +3252,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/plugin-apps.ts",
+      "file": "packages/protocol/src/extensions/plugin-apps.ts",
       "symbol": "PluginAppRecord",
       "extends": [],
       "fields": [
@@ -3344,7 +3344,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/plugin-apps.ts",
+      "file": "packages/protocol/src/extensions/plugin-apps.ts",
       "symbol": "PluginAppActionMetadata",
       "extends": [],
       "fields": [
@@ -3441,7 +3441,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/plugin-apps.ts",
+      "file": "packages/protocol/src/extensions/plugin-apps.ts",
       "symbol": "PluginAppRuntimeLease",
       "extends": [],
       "fields": [
@@ -3458,7 +3458,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/plugin-apps.ts",
+      "file": "packages/protocol/src/extensions/plugin-apps.ts",
       "symbol": "PluginAppToolPolicy",
       "extends": [],
       "fields": [
@@ -3480,7 +3480,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/approval-review.ts",
+      "file": "packages/protocol/src/permissions/approval-review.ts",
       "symbol": "ApprovalReviewOutcome",
       "extends": [
         "extends ApprovalReviewResult"
@@ -3494,7 +3494,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/approval-review.ts",
+      "file": "packages/protocol/src/permissions/approval-review.ts",
       "symbol": "ApprovalReviewRecord",
       "extends": [],
       "fields": [
@@ -3526,7 +3526,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/job.ts",
+      "file": "packages/protocol/src/runtime/job.ts",
       "symbol": "JobSnapshot",
       "extends": [],
       "fields": [
@@ -3598,17 +3598,17 @@
       ]
     },
     {
-      "file": "packages/protocol/src/job.ts",
+      "file": "packages/protocol/src/runtime/job.ts",
       "symbol": "JobStatus",
       "type": "| \"running\"\n  | \"stopping\"\n  | \"completed\"\n  | \"killed\"\n  | \"failed\""
     },
     {
-      "file": "packages/protocol/src/terminal.ts",
+      "file": "packages/protocol/src/runtime/terminal.ts",
       "symbol": "TerminalScope",
       "type": "| { kind: \"project\"; projectId: string }\n  | { kind: \"session\"; sessionId: string }"
     },
     {
-      "file": "packages/protocol/src/terminal.ts",
+      "file": "packages/protocol/src/runtime/terminal.ts",
       "symbol": "TerminalSessionInfo",
       "extends": [],
       "fields": [
@@ -3705,7 +3705,7 @@
       ]
     },
     {
-      "file": "packages/protocol/src/scheduled.ts",
+      "file": "packages/protocol/src/runtime/scheduled.ts",
       "symbol": "ScheduledTaskRecord",
       "extends": [],
       "fields": [
@@ -3975,7 +3975,7 @@
       "sha256": "a113e13aba0e53fcfed795334dbaf2e94f20064cecd7123d5b254452ea68696c"
     },
     {
-      "file": "packages/protocol/src/terminal.type-test.ts",
+      "file": "packages/protocol/src/runtime/__test__/terminal.type-test.ts",
       "sha256": "c3c80f377146716bd98fd199924189081f0c482f44600a9b901a1da88b7168fb"
     }
   ],

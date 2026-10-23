@@ -18,10 +18,10 @@
   - 取值定义在 `packages/core/src/types/settings.ts:151`（`"low" | "medium" | "high"`），默认 `medium`（`packages/core/src/config/settings.ts:49`）。
   - 提示词注入在 `packages/prompts/src/prompt-segments-assembly.ts:113-115`（输出 `- Effort: high`）。
   - `packages/api/src/providers/*` 里搜不到任何 effort / reasoning_effort 相关代码（命中的 `reasoning_content`、`reasoning.encrypted_content` 是另一回事）。
-- 会话运行时的 `effort` 已可用：`packages/protocol/src/runtime-config.ts:13` 定义了 `SessionRuntimeConfig.effort`，`packages/server/src/daemon/daemon-agent.ts:248-276` 的 `agentConfigurationFromSession` 会把它合成进 Agent 配置的 `effort`；`packages/agent-runtime/src/node/runtime/default-runtime.ts:221` 用它生成系统提示词。
+- 会话运行时的 `effort` 已可用：`packages/protocol/src/runtime/runtime-config.ts:13` 定义了 `SessionRuntimeConfig.effort`，`packages/server/src/daemon/daemon-agent.ts:248-276` 的 `agentConfigurationFromSession` 会把它合成进 Agent 配置的 `effort`；`packages/agent-runtime/src/node/runtime/default-runtime.ts:221` 用它生成系统提示词。
 - `effort` 被硬编码成 `low|medium|high` 的校验点共 8 处：
   1. `packages/core/src/types/settings.ts:151`（类型）
-  2. `packages/protocol/src/runtime-config.ts:13,45-47,72`（类型 + `effortValue` + switch）
+  2. `packages/protocol/src/runtime/runtime-config.ts:13,45-47,72`（类型 + `effortValue` + switch）
   3. `packages/agent-runtime/src/node/runtime/child-agent-options.ts:56-60`（`isSupportedEffort`）
   4. `packages/server/src/daemon/scheduled-task-service.ts:441`（定时任务校验）
   5. `packages/tools/src/schedule/scheduled-task-tools.ts:55,189`（工具 schema `enum`）
@@ -106,7 +106,7 @@ reasoningEfforts?: string[];
 ### 设置与协议放宽
 
 - `packages/core/src/types/settings.ts:151`：`effort?: string`。
-- `packages/protocol/src/runtime-config.ts`：`SessionRuntimeConfig.effort?: string`；`effortValue` 按下面的真值表实现。
+- `packages/protocol/src/runtime/runtime-config.ts`：`SessionRuntimeConfig.effort?: string`；`effortValue` 按下面的真值表实现。
 - 其余 6 处硬编码校验（背景第 4-8 条）统一放宽为「非空字符串」；`scheduled-task-tools.ts` 的两处工具 schema 去掉 `enum`，保留 `type: "string"`。
 
 ## 行为规格

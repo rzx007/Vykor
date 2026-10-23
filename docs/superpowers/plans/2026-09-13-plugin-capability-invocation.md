@@ -17,7 +17,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `packages/agent-runtime/src/node/plugins/plugin-capability-inventory.ts` | 当前 Runtime 的插件及 Skill/MCP/Tool/Agent 所有权目录 |
-| `packages/protocol/src/session-input-items.ts` | PluginCapabilityRef、PluginAgentRef 和输入校验 |
+| `packages/protocol/src/session/session-input-items.ts` | PluginCapabilityRef、PluginAgentRef 和输入校验 |
 | `packages/server/src/application/session/session-plugin-capability-service.ts` | admission 校验单 pluginId、强制 queue、推导插件 Skill/Agent owner |
 | `packages/agent-runtime/src/node/plugins/run-capability-view.ts` | Run 开始时从当前 Runtime 生成冻结 View |
 | `packages/core/src/types/runtime.ts`、`engine/query-engine.ts` | 通用按 Run 工具可见性和调用前 guard |
@@ -47,7 +47,7 @@
 
 **文件：**
 
-- 修改 `packages/protocol/src/session-input-items.ts`、`session-input-items.test.ts`
+- 修改 `packages/protocol/src/session/session-input-items.ts`、`session-input-items.test.ts`
 - 创建 `packages/server/src/application/session/session-plugin-capability-service.ts`
 - 创建 `packages/server/src/application/session/__test__/session-plugin-capability-service.test.ts`
 - 修改 `packages/server/src/application/session/session-application-service.ts`
@@ -161,7 +161,7 @@ type RunCapabilityView = {
 
 **文件：**
 
-- 修改 `packages/protocol/src/session-goals.ts`
+- 修改 `packages/protocol/src/session/session-goals.ts`
 - 修改 `packages/services/src/session-runtime/store.ts` 和当前 Goal schema/migration
 - 修改 `packages/server/src/application/session/session-goal-service.ts` 及测试
 - 修改 `packages/server/src/application/session/session-run-engine.ts` 及测试

@@ -147,7 +147,7 @@ $archify 画一下系统架构
 
 | 位置 | 职责 |
 | --- | --- |
-| `packages/protocol/src/session-input-items.ts` | `SessionUserInputItem`、校验、规范化和纯文本派生 |
+| `packages/protocol/src/session/session-input-items.ts` | `SessionUserInputItem`、校验、规范化和纯文本派生 |
 | `apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/` | Skill 选择、行内节点和 composer document |
 | `apps/desktop/src/main/features/session/session-service.ts` | Desktop `sendPrompt({ items })` 转发 |
 | `apps/frontend/src/hooks/useServerSync.ts` | TUI template 命令转成 Skill + text items |

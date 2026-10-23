@@ -14,8 +14,8 @@
 
 **文件：**
 
-- 创建：`packages/plugin-sources/src/git-source.ts`
-- 创建：`packages/plugin-sources/src/git-source.test.ts`
+- 创建：`packages/plugin-sources/src/sources/git-source.ts`
+- 创建：`packages/plugin-sources/src/sources/__test__/git-source.test.ts`
 - 修改：`packages/plugin-sources/src/index.ts`
 
 - [x] 增加 `resolveGitPluginSource()`，调用系统 `git`，返回 `candidateRoot`、`commit`、`sourceDigest` 和 `cleanup`。

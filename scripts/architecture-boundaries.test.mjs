@@ -215,18 +215,18 @@ test("maintenance services cannot hold a full SessionStore", () => {
 
 test("client resources cannot import VykorClient or Server", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/client/src/resources/session-resource.ts", "../transport/http-client.js"),
-    ["packages/client/src/resources/session-resource.ts must not depend on VykorClient or Server"],
+    checkImportBoundary("packages/client/src/resources/session/session-resource.ts", "../../transport/http-client.js"),
+    ["packages/client/src/resources/session/session-resource.ts must not depend on VykorClient or Server"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/client/src/resources/session-resource.ts", "@vykor/server"),
-    ["packages/client/src/resources/session-resource.ts must not depend on VykorClient or Server"],
+    checkImportBoundary("packages/client/src/resources/session/session-resource.ts", "@vykor/server"),
+    ["packages/client/src/resources/session/session-resource.ts must not depend on VykorClient or Server"],
   );
 });
 
 test("client transport cannot import resources", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/client/src/transport/http-transport.ts", "../resources/session-resource.js"),
+    checkImportBoundary("packages/client/src/transport/http-transport.ts", "../resources/session/session-resource.js"),
     ["packages/client/src/transport/http-transport.ts must not depend on Resource"],
   );
 });
@@ -398,7 +398,7 @@ test("routes cannot hide SessionStore or repositories in the services root or im
     fromFile: "packages/server/src/http/routes/new-feature.ts", specifier: "@vykor/services", importedNames: [name], typeOnly: true,
   }, strictPolicy()).length > 0);
   assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/routes/new-feature.ts", specifier: "@vykor/protocol", importedNames: ["SessionRecord"], typeOnly: true,
-    resolvedFile: "packages/protocol/src/session.ts" }, strictPolicy()), []);
+    resolvedFile: "packages/protocol/src/session/session.ts" }, strictPolicy()), []);
 });
 
 test("AST extraction ignores text and follows named aliases, types, namespaces and require", () => {
@@ -524,12 +524,12 @@ test("shared type diamonds and export cycles preserve every forbidden origin", (
 
 test("P1 foundation packages reject upward dependencies and config cannot depend on MCP runtime", () => {
   const policy = strictPolicy();
-  for (const fromFile of ["packages/agent-contracts/src/messages.ts", "packages/host-config/src/settings.ts"]) {
+  for (const fromFile of ["packages/agent-contracts/src/messages.ts", "packages/host-config/src/settings/settings.ts"]) {
     for (const specifier of ["@vykor/core", "@vykor/agent-runtime", "@vykor/mcp", "@vykor/server"]) {
       assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Settings"], typeOnly: true }, policy).length > 0);
     }
   }
-  assert.deepEqual(checkModuleDependency({ fromFile: "packages/host-config/src/settings.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentChildBudget"], typeOnly: true }, policy), []);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/host-config/src/settings/settings.ts", specifier: "@vykor/agent-contracts", importedNames: ["AgentChildBudget"], typeOnly: true }, policy), []);
   assert.ok(Number(policy.currentPhase.slice(1)) >= 1);
   assert.ok(targetPolicy.stageExceptions.every(item => item.removeByPhase !== "P1"));
 });
@@ -590,12 +590,12 @@ test("P0-P6 exceptions stay retired and Client directly depends only on Protocol
 
 test("marketplace sources consume distribution contracts while Client still goes through Protocol", () => {
   const input = { specifier: "@vykor/plugin-contracts/marketplace", importedNames: ["MarketplaceCatalog"], typeOnly: true };
-  assert.deepEqual(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace.ts", ...input }, strictPolicy()), []);
-  assert.ok(checkModuleDependency({ fromFile: "packages/client/src/resources/plugin-resource.ts", ...input }, strictPolicy()).length > 0);
-  assert.deepEqual(checkModuleDependency({ fromFile: "packages/client/src/resources/plugin-resource.ts", ...input,
-    specifier: "@vykor/protocol", resolvedFile: "packages/plugin-contracts/src/marketplace.ts", declarationOrigin: true }, strictPolicy()), []);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace/marketplace.ts", ...input }, strictPolicy()), []);
+  assert.ok(checkModuleDependency({ fromFile: "packages/client/src/resources/plugins/plugin-resource.ts", ...input }, strictPolicy()).length > 0);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/client/src/resources/plugins/plugin-resource.ts", ...input,
+    specifier: "@vykor/protocol", resolvedFile: "packages/plugin-contracts/src/marketplace/marketplace.ts", declarationOrigin: true }, strictPolicy()), []);
   for (const specifier of ["@vykor/server", "@vykor/agent-runtime", "@vykor/plugins"]) {
-    assert.ok(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace.ts", specifier }, strictPolicy()).length > 0);
+    assert.ok(checkModuleDependency({ fromFile: "packages/plugin-sources/src/marketplace/marketplace.ts", specifier }, strictPolicy()).length > 0);
   }
 });
 
@@ -659,11 +659,11 @@ test("Protocol layering rejects new imports and manifests in all nine lower pack
   for (const name of ["agent-runtime", "channels", "host-config", "jobs", "mcp", "plugins", "sandbox", "services", "terminal"]) {
     for (const fromFile of [`packages/${name}/src/new-capability.ts`, `packages/${name}/src/new.test.ts`, `packages/${name}/package.json`]) {
       assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/protocol", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy).length, fromFile);
-      assert.ok(checkModuleDependency({ fromFile, specifier: "../../protocol/src/job.js", resolvedFile: "packages/protocol/src/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy).length, fromFile);
+      assert.ok(checkModuleDependency({ fromFile, specifier: "../../protocol/src/job.js", resolvedFile: "packages/protocol/src/runtime/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy).length, fromFile);
     }
   }
   assert.ok(checkModuleDependency({ fromFile: "packages/server/src/application/session/new.ts", specifier: "@vykor/protocol", importedNames: ["parseCreateSessionRequest"] }, targetPolicy).length);
-  assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/routes/new.ts", specifier: "@vykor/protocol", resolvedFile: "packages/protocol/src/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy), []);
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/server/src/http/routes/new.ts", specifier: "@vykor/protocol", resolvedFile: "packages/protocol/src/runtime/job.ts", importedNames: ["JobSnapshot"], typeOnly: true }, targetPolicy), []);
 });
 
 test("Protocol layering follows wrapped types, function signatures, dynamic imports and aliases", () => {
@@ -758,9 +758,9 @@ test("P13 keeps Server transport types out of daemon and application code", () =
 
 test("P13 allows storage canonical plugin data origins without opening a direct capability dependency", () => {
   const fromFile = "packages/services/src/database/persistence/read-model.ts";
-  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/manifest.ts", importedNames: ["PluginAppBackendKind"], declarationOrigin: true, typeOnly: true }, targetPolicy), []);
+  assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/manifest/manifest.ts", importedNames: ["PluginAppBackendKind"], declarationOrigin: true, typeOnly: true }, targetPolicy), []);
   assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/plugin-contracts/manifest", importedNames: ["PluginAppBackendKind"], typeOnly: true }, targetPolicy).length);
-  assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/runtime.ts", importedNames: ["PluginAppRuntimeLease"], declarationOrigin: true, typeOnly: true }, targetPolicy).length);
+  assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/domain-contracts/plugin-apps", resolvedFile: "packages/plugin-contracts/src/runtime/runtime.ts", importedNames: ["PluginAppRuntimeLease"], declarationOrigin: true, typeOnly: true }, targetPolicy).length);
   assert.ok(checkModuleDependency({ fromFile: "packages/protocol/src/new.ts", specifier: "<local-types>", resolvedFile: "packages/protocol/src/new.ts", importedNames: ["AbortSignal"], typeOnly: true, typeReferences: ["AbortSignal"] }, targetPolicy).length);
 });
 
@@ -812,13 +812,13 @@ test("Protocol pins Job and Terminal imports and wrapped origins to contracts en
     "packages/terminal/src/provider.ts": 'export interface TerminalProvider { wait(): Promise<void> }',
     "packages/terminal/src/contracts.ts": 'export interface TerminalSessionInfo { id: string }',
     "packages/protocol/src/jobs.ts": 'import type { JobWaitRequest } from "@vykor/jobs";',
-    "packages/protocol/src/terminal.ts": 'import type { TerminalProvider } from "../../terminal/src/provider.js";',
+    "packages/protocol/src/runtime/terminal.ts": 'import type { TerminalProvider } from "../../../terminal/src/provider.js";',
     "packages/protocol/src/bridge.ts": 'export type { TerminalProvider as Hidden } from "@vykor/terminal";',
     "packages/protocol/src/wrapped.ts": 'import type { Hidden } from "./bridge.js";',
     "packages/protocol/src/good.ts": 'import type { JobSnapshot } from "@vykor/jobs/contracts"; import type { TerminalSessionInfo } from "@vykor/terminal/contracts";',
   }, directory => {
     const violations = collectPolicyViolations(directory, targetPolicy);
-    for (const name of ["jobs.ts", "terminal.ts", "bridge.ts", "wrapped.ts"]) assert.ok(violations.some(item => item.fromFile.endsWith(`/src/${name}`)), name);
+    for (const name of ["jobs.ts", "runtime/terminal.ts", "bridge.ts", "wrapped.ts"]) assert.ok(violations.some(item => item.fromFile.endsWith(`/src/${name}`)), name);
     assert.ok(!violations.some(item => item.fromFile.endsWith("/good.ts")));
   });
 });

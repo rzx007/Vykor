@@ -206,7 +206,7 @@ pnpm --filter @vykor/plugins --filter @vykor/agent-runtime check-types
 
 **Files:**
 
-- Create: `packages/protocol/src/plugin-apps.ts`、`plugin-apps.test.ts`。
+- Create: `packages/protocol/src/extensions/plugin-apps.ts`、`plugin-apps.test.ts`。
 - Create: `packages/services/src/plugin-apps/index.ts`、`repository.ts`、`repository.test.ts`。
 - Modify: services `session-runtime/schema.ts`、`store.ts`、`store-state.ts`、`store-persistence.ts`、数据库 mutation-buffer/回滚/删除/临时数据清理入口。
 - Generate: 下一条应用表 migration（基线下一个编号 0008）及 journal/snapshot、当前 schema inventory。
@@ -408,7 +408,7 @@ type PluginAppResourceNotice =
 
 **Files — 历史与退役识别:**
 
-- Create: `packages/protocol/src/plugin-ui-history.ts`、Server `application/session/plugin-ui-history-service.ts`、HTTP `routes/session-plugin-ui-history.ts`、Client `resources/plugin-ui-history-resource.ts` 及测试。
+- Create: `packages/protocol/src/extensions/plugin-ui-history.ts`、Server `application/session/plugin-ui-history-service.ts`、HTTP `routes/session-plugin-ui-history.ts`、Client `resources/plugin-ui-history-resource.ts` 及测试。
 - Modify: 安装/发现/验证入口，保留有限 retired components.ui 诊断与历史权限推导；新安装拒绝退役入口。
 - Modify: 启动恢复、插件生命周期切换和迁移诊断，明确结算旧在途操作。
 

@@ -51,7 +51,7 @@
 
 基线保存 22 个类型声明的字段/可选性/联合类型，覆盖 Session、Run、Goal、附件、插件应用、审批、Job、Terminal 和 Schedule；另存 3 个现有类型消费样本的路径与 LF 文本摘要。
 
-JSON 固定样本包含数字键、原型键、中文 UTF-8 字节、数组和空对象，保存确定字符串、字节数与 SHA-256。新增[行为回归](../../../packages/protocol/src/layering-baseline.test.ts)验证精确字节上限、非有限数/循环值、空原型对象、canonical 与插件复制的不同深度、7 种存储权限值、6 种执行模式组合，以及错误 code/field/reason 包装。
+JSON 固定样本包含数字键、原型键、中文 UTF-8 字节、数组和空对象，保存确定字符串、字节数与 SHA-256。新增[行为回归](../../../packages/protocol/src/__test__/layering-baseline.test.ts)验证精确字节上限、非有限数/循环值、空原型对象、canonical 与插件复制的不同深度、7 种存储权限值、6 种执行模式组合，以及错误 code/field/reason 包装。
 
 其中 canonical 数组可嵌套 20 层，插件复制可嵌套 32 层；对象自身也占层级。MCP 结果继续保留原有 `depth > 32` 和 100,000 节点规则，本阶段没有改它的算法。协议版本固定为 5，SQLite 和文件格式未改动。
 

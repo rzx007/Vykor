@@ -1,12 +1,12 @@
-import type { PluginDiagnostic } from "../diagnostics.js";
-import { resolveNativePluginPath } from "../paths.js";
+import type { PluginDiagnostic } from "../shared/diagnostics.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
 import type {
   NativeToolComponent,
   NativeToolMetadata,
   VykorPluginPermissions,
   PluginComponentResult,
   ValidatedNativePlugin,
-} from "../types.js";
+} from "../shared/types.js";
 
 const PERMISSION_CATEGORIES = ["filesystem", "network", "process", "secrets"] as const;
 type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];

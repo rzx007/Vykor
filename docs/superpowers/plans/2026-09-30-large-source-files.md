@@ -100,7 +100,7 @@
 | `packages/prompts/src/index.ts` | 939 | 个人提示词文件检查与系统提示词组装放同包文件 |
 | `apps/desktop/src/renderer/src/assets/main.css` | 934 | 按现有页面样式归类；先核对选择器覆盖及加载顺序 |
 | `apps/desktop/src/shared/ipc-channels.ts` | 925 | IPC 常量与调用映射按现有功能域归类，保留原导出 |
-| `packages/protocol/src/session.ts` | 835 | 会话、运行、事件类型按概念分文件；协议语义不变 |
+| `packages/protocol/src/session/session.ts` | 835 | 会话、运行、事件类型按概念分文件；协议语义不变 |
 | `packages/core/src/types/runtime.ts` | 738 | 请求配置、子代理、事件类型按概念分文件 |
 | `apps/desktop/src/main/features/session/session-operations.ts` | 726 | 项目操作与会话操作留在 `features/session/` |
 | `packages/client/src/types/index.ts` | 690 | 按资源或请求类型归类，保留对外类型入口 |
@@ -269,7 +269,7 @@
 
 ### 2026-10-01：协议会话类型归类
 
-- `packages/protocol/src/session.ts` 从 835 行降至 270 行，保留基础会话、消息、运行记录和原导出路径。模型重试／用量解析归入 `session-model.ts`，定时任务类型归入 `scheduled.ts`，创建与查询请求类型归入 `session-requests.ts`。
+- `packages/protocol/src/session/session.ts` 从 835 行降至 270 行，保留基础会话、消息、运行记录和原导出路径。模型重试／用量解析归入 `session-model.ts`，定时任务类型归入 `scheduled.ts`，创建与查询请求类型归入 `session-requests.ts`。
 - 验证：protocol 包类型检查及完整 Vitest 13 个文件、146 条通过；全仓 `pnpm check-types` 61 项通过。
 
 ### 2026-10-01：Core 运行类型归类

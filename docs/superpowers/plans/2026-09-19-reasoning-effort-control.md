@@ -22,7 +22,7 @@
 | `packages/server/src/application/settings-api.ts` | `ModelInfo.reasoningEfforts` |
 | `packages/client/src/types/index.ts` | `ModelInfo.reasoningEfforts` 镜像 |
 | `packages/core/src/types/settings.ts` | `effort?: string` |
-| `packages/protocol/src/runtime-config.ts` | `effortValue` 真值表 |
+| `packages/protocol/src/runtime/runtime-config.ts` | `effortValue` 真值表 |
 | `packages/agent-contracts/src/model.ts` | `StreamMessageParams.reasoningEffort` |
 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions.reasoningEffort` |
 | `packages/core/src/engine/query-engine.ts` | 透传 `reasoningEffort` |
@@ -237,7 +237,7 @@ git commit -m "feat(models): derive reasoning effort tiers from catalog"
 
 **文件：**
 - 修改：`packages/core/src/types/settings.ts:151`
-- 修改：`packages/protocol/src/runtime-config.ts:13,45-47`
+- 修改：`packages/protocol/src/runtime/runtime-config.ts:13,45-47`
 - 测试：`packages/protocol/src/runtime-config.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
@@ -279,13 +279,13 @@ git commit -m "feat(models): derive reasoning effort tiers from catalog"
   effort?: string;
 ```
 
-`packages/protocol/src/runtime-config.ts:13` 改为：
+`packages/protocol/src/runtime/runtime-config.ts:13` 改为：
 
 ```ts
   effort?: string;
 ```
 
-`packages/protocol/src/runtime-config.ts:45-47` 的 `effortValue` 改为：
+`packages/protocol/src/runtime/runtime-config.ts:45-47` 的 `effortValue` 改为：
 
 ```ts
 function effortValue(value: unknown): string | undefined {
@@ -311,7 +311,7 @@ function effortValue(value: unknown): string | undefined {
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/core/src/types/settings.ts packages/protocol/src/runtime-config.ts packages/protocol/src/runtime-config.test.ts
+git add packages/core/src/types/settings.ts packages/protocol/src/runtime/runtime-config.ts packages/protocol/src/runtime-config.test.ts
 git commit -m "feat(protocol): allow free-form reasoning effort with clear sentinel"
 ```
 

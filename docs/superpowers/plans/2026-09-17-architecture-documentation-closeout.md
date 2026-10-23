@@ -180,7 +180,7 @@ Mermaid 和示例中的协议版本必须是 4。说明入口、关键步骤、�
 
 - [ ] **步骤 5：校准 Client 同步文档**
 
-从 `packages/client/src/index.ts` 和 `packages/client/src/resources/session-resource.ts` 核实公开入口，将业务示例写成 `client.sessions.*` 等领域 Resource。明确首个业务请求前的协议握手、snapshot 基线、SSE 增量、checkpoint 恢复、reducer 合并和稳定 ID 的调用方责任。
+从 `packages/client/src/index.ts` 和 `packages/client/src/resources/session/session-resource.ts` 核实公开入口，将业务示例写成 `client.sessions.*` 等领域 Resource。明确首个业务请求前的协议握手、snapshot 基线、SSE 增量、checkpoint 恢复、reducer 合并和稳定 ID 的调用方责任。
 
 - [ ] **步骤 6：执行定向过时内容检查**
 

@@ -43,8 +43,8 @@
 
 ### 新建
 
-- `packages/protocol/src/execution-observability.ts`：公共类型、枚举、过滤参数解析。
-- `packages/protocol/src/execution-observability.test.ts`：协议解析、枚举和边界测试。
+- `packages/protocol/src/runtime/execution-observability.ts`：公共类型、枚举、过滤参数解析。
+- `packages/protocol/src/runtime/__test__/execution-observability.test.ts`：协议解析、枚举和边界测试。
 - `packages/server/src/application/observability/session-execution-observation-reader.ts`：Session Run、attempt、Child Session/Task 投影。
 - `packages/server/src/application/observability/session-execution-observation-reader.test.ts`：Root/Child、follow-up、usage、unknown 终态测试。
 - `packages/server/src/application/observability/workflow-execution-observation-reader.ts`：Workflow Run/Task 四态投影、事件时间、backing 关联。
@@ -80,8 +80,8 @@
 
 **文件：**
 
-- 创建：`packages/protocol/src/execution-observability.ts`
-- 创建：`packages/protocol/src/execution-observability.test.ts`
+- 创建：`packages/protocol/src/runtime/execution-observability.ts`
+- 创建：`packages/protocol/src/runtime/__test__/execution-observability.test.ts`
 - 修改：`packages/protocol/src/index.ts`
 
 - [ ] **步骤 1：编写协议失败测试**
@@ -283,7 +283,7 @@ pnpm --filter @vykor/protocol run check-types
 - [ ] **步骤 5：提交任务 1**
 
 ```powershell
-git add packages/protocol/src/execution-observability.ts packages/protocol/src/execution-observability.test.ts packages/protocol/src/index.ts
+git add packages/protocol/src/runtime/execution-observability.ts packages/protocol/src/runtime/__test__/execution-observability.test.ts packages/protocol/src/index.ts
 git commit -m "feat(protocol): define execution observation contract"
 ```
 

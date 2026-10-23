@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isPluginIconSource } from "@vykor/plugin-contracts/presentation";
 import { PLUGIN_APP_MANIFEST_LIMITS } from "@vykor/plugin-contracts/limits";
-import type { VykorPluginManifestV1 } from "../types.js";
+import type { VykorPluginManifestV1 } from "../shared/types.js";
 
 const declaredPathSchema = z
   .string()

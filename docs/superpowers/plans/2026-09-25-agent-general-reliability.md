@@ -37,7 +37,7 @@
 
 | 已有能力 | 入口 | 本计划只补什么 |
 | --- | --- | --- |
-| Job 状态、游标、等待是否到期 | `packages/protocol/src/job.ts` | 统一退出码及真实执行状态的表达 |
+| Job 状态、游标、等待是否到期 | `packages/protocol/src/runtime/job.ts` | 统一退出码及真实执行状态的表达 |
 | 工具错误分类 | `packages/agent-contracts/src/tools.ts` | 必要分类、是否实际执行、模型可见的下一步信息 |
 | 工具执行权限和去重 | `packages/core/src/engine/query-engine.ts`、`tool-failure-memory.ts` | 保持授权与去重；补反馈，不新建自动重试循环 |
 | 工具完成事件与持久记录 | `framework-agent-run.ts`、`transcript-projection.ts` | 实时结果和重载历史都保留反馈 |
@@ -262,8 +262,8 @@ pnpm exec vitest run --config tests/agent-behavior/vitest.config.ts tests/agent-
 
 ### 任务 1：统一 Job 退出事实，贯通持久化和客户端
 
-**修改：** `packages/protocol/src/job.ts`、`serialization.ts`；`packages/services/src/executions/types.ts`、`detached-process-supervisor.ts`；`packages/tools/src/job/local-job-host.ts`；`packages/terminal-node/src/agent-terminal-host.ts`；`packages/server/src/jobs/daemon-job-service.ts`；`packages/server/src/application/session/session-execution-projector.ts`。
-**测试：** `packages/protocol/src/serialization.test.ts`、`packages/tools/src/job/local-job-host.test.ts`、`job-tools.test.ts`、`packages/terminal-node/src/agent-terminal-host.test.ts`、`packages/server/src/jobs/daemon-job-service.test.ts`、`packages/server/src/http/routes/job.test.ts`；新增 `packages/client/src/resources/job-resource.test.ts`。
+**修改：** `packages/protocol/src/runtime/job.ts`、`serialization.ts`；`packages/services/src/executions/types.ts`、`detached-process-supervisor.ts`；`packages/tools/src/job/local-job-host.ts`；`packages/terminal-node/src/agent-terminal-host.ts`；`packages/server/src/jobs/daemon-job-service.ts`；`packages/server/src/application/session/session-execution-projector.ts`。
+**测试：** `packages/protocol/src/serialization/__test__/serialization.test.ts`、`packages/tools/src/job/local-job-host.test.ts`、`job-tools.test.ts`、`packages/terminal-node/src/agent-terminal-host.test.ts`、`packages/server/src/jobs/daemon-job-service.test.ts`、`packages/server/src/http/routes/job.test.ts`；新增 `packages/client/src/resources/runtime/__test__/job-resource.test.ts`。
 **输入：** 后端已知退出码；**输出：** 第 3.1 节 JobSnapshot 契约。
 
 - [ ] 先增加 decoder 测试：旧 snapshot 无 exitCode 仍可读；0、7、null 原样保留；字符串、NaN、Infinity、小数被拒绝。完整 fixture 复用现有 serialization 测试的 JobSnapshot。

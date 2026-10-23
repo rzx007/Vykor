@@ -313,7 +313,7 @@ git commit -m "feat(tools): add read output helpers and limits"
 - 修改：`packages/tools/src/file/read.ts`（`execute` 文件分支 + `description`）
 - 修改：`packages/tools/src/file/__test__/read.test.ts`（更新 `:37` + 追加）
 - 修改：`packages/tools/src/file/__test__/operations.test.ts`（仅改 `:17` 断言）
-- 修改：`packages/tools/src/file/__test__/environment-path.test.ts`（仅改 `:63` 断言）
+- 修改：`packages/tools/src/file/access/__test__/environment-path.test.ts`（仅改 `:63` 断言）
 
 - [ ] **步骤 1：更新文本断言与二进制文案断言**
 
@@ -713,7 +713,7 @@ import { fileOperationsFor, type FileOperations } from "./operations.js";
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add packages/tools/src/file/read.ts packages/tools/src/file/__test__/read.test.ts packages/tools/src/file/__test__/operations.test.ts packages/tools/src/file/__test__/environment-path.test.ts
+git add packages/tools/src/file/read.ts packages/tools/src/file/__test__/read.test.ts packages/tools/src/file/__test__/operations.test.ts packages/tools/src/file/access/__test__/environment-path.test.ts
 git commit -m "feat(tools): make read output self-describing and bounded"
 ```
 

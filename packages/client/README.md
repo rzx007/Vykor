@@ -117,3 +117,27 @@ pnpm --filter @vykor/client test
 pnpm --filter @vykor/client check-types
 pnpm test:client-browser
 ```
+
+## 目录与维护
+
+| 目录 | 用途 |
+| --- | --- |
+| [src/](./src/README.md) | 通过 HTTP 与事件流访问 daemon，并维护客户端展示所需的会话状态。 |
+| [src/commands/](./src/commands/README.md) | 将会话、设置、诊断等界面操作组织成可复用命令。 |
+| [src/configuration/](./src/configuration/README.md) | 处理客户端提交运行配置时使用的公共规则。 |
+| [src/protocol/](./src/protocol/README.md) | 在传输层之上统一处理协议请求和公共数据格式。 |
+| [src/resources/](./src/resources/README.md) | 按业务职责组织访问 daemon 的资源接口。 |
+| [src/state/](./src/state/README.md) | 把服务端快照与持续事件合并成可展示、可查询的会话状态。 |
+| [src/transport/](./src/transport/README.md) | 实现 HTTP 请求、协议握手和 SSE 事件连接。 |
+| [src/types/](./src/types/README.md) | 集中定义附件、扩展能力和状态同步使用的客户端类型。 |
+
+入口与流程：创建传输层和协议客户端，再构造资源接口；命令调用这些接口，状态模块结合快照和事件更新本地视图。
+
+状态归属：远端业务数据由 daemon 保存；连接、订阅和展示状态保存在客户端对象中。
+
+新增实现优先放入职责对应的分类；测试放在被测目录的 `__test__/`。迁移时同步公开导出目标、调用方导入、文档和旧引用清单。
+
+```powershell
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/client check-types
+```

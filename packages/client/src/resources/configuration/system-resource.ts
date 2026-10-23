@@ -1,0 +1,295 @@
+/**
+ * SystemResource: 系统配置、命令、上下文、记忆、Dream 与环境设定资源。
+ */
+
+import type { PluginCatalogEntry, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
+import type { HttpTransport } from "../../transport/http-transport.js";
+import type {
+  CommandCatalogEntry,
+  ListCommandsOptions,
+  McpServerStatus,
+  MemoryEntryRecord,
+  MemoryListResponse,
+  OutputStyleInfo,
+  StartDreamResponse,
+} from "../../types/index.js";
+
+export interface ProjectFactRecord {
+  key: string;
+  type: string;
+  label: string;
+  value: string;
+  confidence: number;
+  observedAt?: string;
+  sourceSessionId?: string;
+  sourceMessageId?: string;
+  status?: "superseded";
+  replacement?: { byKey: string; operationId: string; at: string };
+  manualSource?: { kind: "manual_replace"; operationId: string; oldKey: string; at: string; sessionId?: string };
+}
+
+export interface FactReplacementResult {
+  oldKey: string;
+  newKey: string;
+  operationId: string;
+  relatedActiveKeys: string[];
+  cacheWarning?: string;
+}
+
+export interface DaemonRestartPreview {
+  runs: Array<{ id: string; sessionId: string; status: string }>
+  tasks: Array<{ id: string; sessionId: string; status: string }>
+  terminals: Array<{ id: string; status: string }>
+}
+
+export class SystemResource {
+  constructor(private readonly transport: HttpTransport) {}
+
+  /** `GET /commands` */
+  async listCommands(
+    options: ListCommandsOptions & { signal?: AbortSignal },
+  ): Promise<CommandCatalogEntry[]> {
+    const { signal, ...query } = options;
+    const response = await this.transport.request<{ commands: CommandCatalogEntry[] }>(
+      this.transport.path("/commands", query),
+      { signal },
+    );
+    return response.commands;
+  }
+
+  /** `GET /settings` */
+  async getSettings(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Record<string, unknown>> {
+    const response = await this.transport.request<{ settings: Record<string, unknown> }>(
+      "/settings",
+      { signal: options.signal },
+    );
+    return response.settings;
+  }
+
+  async getRestartPreview(options: { signal?: AbortSignal } = {}): Promise<DaemonRestartPreview> {
+    return this.transport.request<DaemonRestartPreview>("/maintenance/restart-preview", { signal: options.signal });
+  }
+
+  async prepareRestart(options: { signal?: AbortSignal } = {}): Promise<{ prepared: true }> {
+    return this.transport.request<{ prepared: true }>("/maintenance/prepare-restart", { method: "POST", signal: options.signal });
+  }
+
+  /** `PATCH /settings` */
+  async patchSettings(
+    patch: Record<string, unknown>,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Record<string, unknown>> {
+    const response = await this.transport.request<{ settings: Record<string, unknown> }>(
+      "/settings",
+      {
+        method: "PATCH",
+        body: patch,
+        signal: options.signal,
+      },
+    );
+    return response.settings;
+  }
+
+  /** `GET /sessions/:id/mcp` */
+  async getSessionMcp(
+    sessionId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<McpServerStatus[]> {
+    const response = await this.transport.request<{ servers: McpServerStatus[] }>(
+      `/sessions/${encodeURIComponent(sessionId)}/mcp`,
+      { signal: options.signal },
+    );
+    return response.servers;
+  }
+
+  /** `GET /memory?cwd=` */
+  async listMemory(options: {
+    cwd: string;
+    signal?: AbortSignal;
+  }): Promise<MemoryListResponse> {
+    const { signal, ...query } = options;
+    return await this.transport.request<MemoryListResponse>(
+      this.transport.path("/memory", query),
+      { signal },
+    );
+  }
+
+  /** `GET /facts?cwd=` — current project environment facts. */
+  async listFacts(options: { cwd: string; signal?: AbortSignal }): Promise<{ facts: ProjectFactRecord[] }> {
+    const { signal, ...query } = options;
+    return await this.transport.request<{ facts: ProjectFactRecord[] }>(
+      this.transport.path("/facts", query), { signal },
+    );
+  }
+
+  /** `POST /facts/replace` — replace exactly one selected environment fact. */
+  async replaceFact(
+    input: { cwd: string; oldKey: string; newValue: string; sessionId?: string },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<FactReplacementResult> {
+    const response = await this.transport.request<{ result: FactReplacementResult }>(
+      "/facts/replace", { method: "POST", body: input, signal: options.signal },
+    );
+    return response.result;
+  }
+
+  /** `GET /memory/:id?cwd=` */
+  async getMemory(
+    entryId: string,
+    options: { cwd: string; signal?: AbortSignal },
+  ): Promise<MemoryEntryRecord> {
+    const { signal, cwd } = options;
+    const response = await this.transport.request<{ entry: MemoryEntryRecord }>(
+      this.transport.path(`/memory/${encodeURIComponent(entryId)}`, { cwd }),
+      { signal },
+    );
+    return response.entry;
+  }
+
+  /** `POST /memory` */
+  async addMemory(
+    input: { cwd: string; content: string; tags?: string[] },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<MemoryEntryRecord> {
+    const response = await this.transport.request<{ entry: MemoryEntryRecord }>(
+      "/memory",
+      {
+        method: "POST",
+        body: input,
+        signal: options.signal,
+      },
+    );
+    return response.entry;
+  }
+
+  /** `DELETE /memory/:id?cwd=` */
+  async removeMemory(
+    entryId: string,
+    options: { cwd: string; signal?: AbortSignal; expectedRevision?: string },
+  ): Promise<void> {
+    const { signal, cwd, expectedRevision } = options;
+    await this.transport.request<{ deleted: boolean }>(
+      this.transport.path(`/memory/${encodeURIComponent(entryId)}`, { cwd, expectedRevision }),
+      { method: "DELETE", signal },
+    );
+  }
+
+  async updateMemory(input: UpdateMemoryEntryInput, options: { signal?: AbortSignal } = {}): Promise<MemoryEntryRecord> {
+    const { id, ...body } = input;
+    const result = await this.transport.request<{ entry: MemoryEntryRecord }>(`/memory/${encodeURIComponent(id)}`, { method: "PATCH", body, signal: options.signal });
+    return result.entry;
+  }
+  async clearMemory(input: ClearMemoryInput, options: { signal?: AbortSignal } = {}): Promise<{ deleted: number }> {
+    return this.transport.request<{ deleted: number }>("/memory/clear", { method: "POST", body: input, signal: options.signal });
+  }
+
+  /** `GET /context/plugins?cwd=` — safe plugin picker metadata. */
+  async listContextPlugins(options: {
+    cwd: string;
+    signal?: AbortSignal;
+  }): Promise<PluginCatalogEntry[]> {
+    const { signal, ...query } = options;
+    const response = await this.transport.request<{ plugins: PluginCatalogEntry[] }>(
+      this.transport.path("/context/plugins", query),
+      { signal },
+    );
+    return response.plugins;
+  }
+
+  /** `GET /context?cwd=` */
+  async getContextPreview(options: {
+    cwd: string;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const { signal, ...query } = options;
+    const response = await this.transport.request<{ report: string }>(
+      this.transport.path("/context", query),
+      { signal },
+    );
+    return response.report;
+  }
+
+  /** `GET /context/status?cwd=` */
+  async getContextStatus(options: {
+    cwd: string;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const { signal, ...query } = options;
+    const response = await this.transport.request<{ report: string }>(
+      this.transport.path("/context/status", query),
+      { signal },
+    );
+    return response.report;
+  }
+
+  /** `GET /context/usage?cwd=&sessionId=&refresh=` */
+  async getContextUsage(options: {
+    cwd: string;
+    sessionId?: string;
+    refresh?: boolean;
+    previousContextWindow?: number;
+    signal?: AbortSignal;
+  }): Promise<{ snapshot: unknown; report: string }> {
+    const { signal, refresh, previousContextWindow, ...rest } = options;
+    const query: Record<string, string | undefined> = {
+      ...rest,
+      ...(refresh !== undefined ? { refresh: refresh ? "true" : "false" } : {}),
+      ...(previousContextWindow !== undefined
+        ? { previousContextWindow: String(previousContextWindow) }
+        : {}),
+    };
+    return await this.transport.request<{ snapshot: unknown; report: string }>(
+      this.transport.path("/context/usage", query),
+      { signal },
+    );
+  }
+
+  /** `POST /dream` */
+  async startDream(
+    input: { cwd: string; sessionId?: string; preview?: boolean },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<StartDreamResponse> {
+    return await this.transport.request<StartDreamResponse>("/dream", {
+      method: "POST",
+      body: input,
+      signal: options.signal,
+    });
+  }
+
+  /** `GET /profile` */
+  async getProfileStatus(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<string> {
+    const response = await this.transport.request<{ report: string }>("/profile", {
+      signal: options.signal,
+    });
+    return response.report;
+  }
+
+  /** `POST /profile/init` */
+  async initProfile(options: { signal?: AbortSignal } = {}): Promise<string> {
+    const response = await this.transport.request<{ report: string }>(
+      "/profile/init",
+      {
+        method: "POST",
+        signal: options.signal,
+      },
+    );
+    return response.report;
+  }
+
+  /** `GET /output-styles` */
+  async listOutputStyles(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<OutputStyleInfo[]> {
+    const response = await this.transport.request<{ styles: OutputStyleInfo[] }>(
+      "/output-styles",
+      {
+        signal: options.signal,
+      },
+    );
+    return response.styles;
+  }
+}

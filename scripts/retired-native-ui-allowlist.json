@@ -661,7 +661,7 @@
     {
       "path": "docs/superpowers/plans/2026-10-02-native-plugin-ui-a1.md",
       "line": 74,
-      "text": "| 新增 `packages/plugins/src/test-helpers/native-ui.ts` | 仅测试使用的临时插件构造，不从 package exports 暴露 |",
+      "text": "| 新增 `packages/plugins/src/__test__/helpers/native-ui.ts` | 仅测试使用的临时插件构造，不从 package exports 暴露 |",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
@@ -2005,7 +2005,7 @@
     {
       "path": "docs/superpowers/plans/2026-10-20-mcp-apps-resident-panels.md",
       "line": 411,
-      "text": "- Create: `packages/protocol/src/plugin-ui-history.ts`、Server `application/session/plugin-ui-history-service.ts`、HTTP `routes/session-plugin-ui-history.ts`、Client `resources/plugin-ui-history-resource.ts` 及测试。",
+      "text": "- Create: `packages/protocol/src/extensions/plugin-ui-history.ts`、Server `application/session/plugin-ui-history-service.ts`、HTTP `routes/session-plugin-ui-history.ts`、Client `resources/plugin-ui-history-resource.ts` 及测试。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
@@ -2371,7 +2371,7 @@
     {
       "path": "docs/superpowers/specs/2026-10-02-native-plugin-ui-design.md",
       "line": 64,
-      "text": "| Manifest 已认识 `components.ui: string[]` | `packages/plugins/src/types.ts`、`manifest/schema-v1.ts` | 沿用 Native manifest schemaVersion 1；为 UI 文件单独定义格式版本 |",
+      "text": "| Manifest 已认识 `components.ui: string[]` | `packages/plugins/src/shared/types.ts`、`manifest/schema-v1.ts` | 沿用 Native manifest schemaVersion 1；为 UI 文件单独定义格式版本 |",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {
@@ -3247,65 +3247,65 @@
     {
       "path": "packages/client/src/resources/index.ts",
       "line": 6,
-      "text": "export * from \"./plugin-ui-history-resource.js\";",
+      "text": "export * from \"./plugins/plugin-ui-history-resource.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.test.ts",
+      "path": "packages/client/src/resources/plugins/__test__/plugin-ui-history-resource.test.ts",
       "line": 2,
-      "text": "import { PluginUiHistoryResource } from \"./plugin-ui-history-resource.js\";",
+      "text": "import { PluginUiHistoryResource } from \"../plugin-ui-history-resource.js\";",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.test.ts",
+      "path": "packages/client/src/resources/plugins/__test__/plugin-ui-history-resource.test.ts",
       "line": 6,
       "text": "  const history = new PluginUiHistoryResource({ request } as never);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.test.ts",
+      "path": "packages/client/src/resources/plugins/__test__/plugin-ui-history-resource.test.ts",
       "line": 10,
       "text": "  expect(request.mock.calls.map(call => call[0])).toEqual([`/sessions/s/plugin-ui/${id}/actions/${rid}`, `/sessions/s/plugin-ui/${id}/conversation/submissions/${rid}`]);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 1,
       "text": "import { parsePluginUiConversationReceipt, ProtocolValidationError, type PluginUiActionResponse, type PluginUiConversationReceipt } from \"@vykor/protocol\";",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 4,
       "text": "  return `/sessions/${encodeURIComponent(sessionId)}/plugin-ui/${encodeURIComponent(instanceId)}`;",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 7,
       "text": "export class PluginUiHistoryResource {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 14,
       "text": "  ): Promise<Extract<PluginUiConversationReceipt, { mode: \"submit\" }>> {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 27,
       "text": "  ): Extract<PluginUiConversationReceipt, { mode: \"submit\" }> {",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 28,
       "text": "    const receipt = parsePluginUiConversationReceipt(value);",
       "reason": "Only the two original authenticated history GET addresses."
     },
     {
-      "path": "packages/client/src/resources/plugin-ui-history-resource.ts",
+      "path": "packages/client/src/resources/plugins/plugin-ui-history-resource.ts",
       "line": 45,
       "text": "  ): Promise<PluginUiActionResponse> {",
       "reason": "Only the two original authenticated history GET addresses."
@@ -3371,7 +3371,7 @@
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
     {
-      "path": "packages/plugin-sources/src/package-example-plugins.test.ts",
+      "path": "packages/plugin-sources/scripts/__test__/package-example-plugins.test.ts",
       "line": 31,
       "text": "  expect(html).not.toContain(\"VykorPluginUi\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
@@ -3383,85 +3383,85 @@
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/plugins/src/installation/retired-ui.test.ts",
+      "path": "packages/plugins/src/installation/__test__/retired-ui.test.ts",
       "line": 5,
-      "text": "import { writeNativeUiFixture } from \"../test-helpers/native-ui.js\";",
+      "text": "import { writeNativeUiFixture } from \"../../__test__/helpers/native-ui.js\";",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/installation/retired-ui.test.ts",
+      "path": "packages/plugins/src/installation/__test__/retired-ui.test.ts",
       "line": 15,
       "text": "    const plugin = await writeNativeUiFixture(root);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/installation/retired-ui.test.ts",
+      "path": "packages/plugins/src/installation/__test__/retired-ui.test.ts",
       "line": 24,
       "text": "    expect(checked.diagnostics[0]?.code).toBe(\"plugin_ui_retired\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/installation/retired-ui.test.ts",
+      "path": "packages/plugins/src/installation/__test__/retired-ui.test.ts",
       "line": 32,
       "text": "    expect(imported.diagnostics[0]?.code).toBe(\"plugin_ui_retired\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/load-native-plugin.test.ts",
+      "path": "packages/plugins/src/loading/__test__/load-native-plugin.test.ts",
       "line": 8,
-      "text": "import { writeNativeUiFixture } from \"./test-helpers/native-ui.js\";",
+      "text": "import { writeNativeUiFixture } from \"../../__test__/helpers/native-ui.js\";",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/load-native-plugin.test.ts",
+      "path": "packages/plugins/src/loading/__test__/load-native-plugin.test.ts",
       "line": 17,
       "text": "      await writeNativeUiFixture(root);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/load-native-plugin.test.ts",
+      "path": "packages/plugins/src/loading/__test__/load-native-plugin.test.ts",
       "line": 25,
       "text": "      expect(changed.components.unsupported?.ui?.diagnostics[0]?.code).toBe(\"plugin_ui_retired\");",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/load-native-plugin.ts",
+      "path": "packages/plugins/src/loading/load-native-plugin.ts",
       "line": 36,
       "text": "  if (plugin.manifest.components.ui?.length) {",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/plugins/src/load-native-plugin.ts",
+      "path": "packages/plugins/src/loading/load-native-plugin.ts",
       "line": 37,
       "text": "    components.unsupported = { ui: { status: \"unsupported\", diagnostics: [{ severity: \"warning\", phase: \"load\", code: \"plugin_ui_retired\", message: \"components.ui has retired; Native tools and skills remain available\", component: \"ui\", pluginId: plugin.manifest.id }] } };",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/plugins/src/manifest/validate.test.ts",
+      "path": "packages/plugins/src/manifest/__test__/validate.test.ts",
       "line": 6,
-      "text": "import { writeNativeUiFixture } from \"../test-helpers/native-ui.js\";",
+      "text": "import { writeNativeUiFixture } from \"../../__test__/helpers/native-ui.js\";",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/manifest/validate.test.ts",
+      "path": "packages/plugins/src/manifest/__test__/validate.test.ts",
       "line": 26,
       "text": "    await writeNativeUiFixture(root);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/manifest/validate.test.ts",
+      "path": "packages/plugins/src/manifest/__test__/validate.test.ts",
       "line": 31,
       "text": "    expect(result.rootManifest?.components.ui).toEqual([\"./ui/manifest.json\"]);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/manifest/validate.test.ts",
+      "path": "packages/plugins/src/manifest/__test__/validate.test.ts",
       "line": 33,
       "text": "      expect.objectContaining({ component: \"ui\", code: \"plugin_ui_retired\" }),",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "packages/plugins/src/manifest/validate.test.ts",
+      "path": "packages/plugins/src/manifest/__test__/validate.test.ts",
       "line": 38,
       "text": "    await writeNativeUiFixture(root);",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
@@ -3479,7 +3479,7 @@
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },
     {
-      "path": "packages/plugins/src/test-helpers/native-ui.ts",
+      "path": "packages/plugins/src/__test__/helpers/native-ui.ts",
       "line": 7,
       "text": "export async function writeNativeUiFixture(",
       "reason": "Files-only old installed package fixture for retirement validation; never loaded as a page."
@@ -3487,59 +3487,59 @@
     {
       "path": "packages/protocol/src/index.ts",
       "line": 30,
-      "text": "export * from \"./plugin-ui-history.js\";",
+      "text": "export * from \"./extensions/plugin-ui-history.js\";",
       "reason": "Public read-only historical parsers/resource or retired installation inventory; no execution method."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 1,
       "text": "export { type PluginUiInventory, type PluginUiInstanceRecord, type PluginUiActionReceipt, type PluginUiActionResponse, type PluginUiActionRunMetadata, readPluginUiInstance, readPluginUiAction, type PluginUiConversationReceipt, type PluginUiSubmissionRecord } from \"@vykor/domain-contracts/plugin-apps/history\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 2,
       "text": "import { parsePluginUiConversationReceipt as domainConversationReceipt, parsePluginUiSubmissionRecord as domainSubmissionRecord, type PluginUiConversationReceipt, type PluginUiSubmissionRecord } from \"@vykor/domain-contracts/plugin-apps/history\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 3,
-      "text": "import { isUuid as isPluginUiUuid } from \"./json.js\";",
+      "text": "import { isUuid as isPluginUiUuid } from \"../serialization/json.js\";",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 6,
       "text": "export function parsePluginUiConversationReceipt(value: unknown): PluginUiConversationReceipt { return adaptDomainValidation(() => domainConversationReceipt(value)); }",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 7,
       "text": "export function parsePluginUiSubmissionRecord(value: unknown): PluginUiSubmissionRecord { return adaptDomainValidation(() => domainSubmissionRecord(value)); }",
       "reason": "P13 reviewed ownership migration: original historical record parsing, reserved metadata defense, or wire error adapter only; no new execution API."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 8,
       "text": "export function parsePluginUiRouteIds(value: { sessionId: string; instanceId: string; requestId?: string }) {",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 10,
       "text": "  if (!isPluginUiUuid(value.instanceId)) throw new ProtocolValidationError(\"instanceId must be a UUID\", \"instanceId\");",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
-      "path": "packages/protocol/src/plugin-ui-history.ts",
+      "path": "packages/protocol/src/extensions/plugin-ui-history.ts",
       "line": 11,
       "text": "  if (value.requestId !== undefined && !isPluginUiUuid(value.requestId)) throw new ProtocolValidationError(\"requestId must be a UUID\", \"requestId\");",
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
-      "path": "packages/protocol/src/requests.test.ts",
+      "path": "packages/protocol/src/requests/__test__/requests.test.ts",
       "line": 42,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
@@ -4315,7 +4315,7 @@
     {
       "path": "scripts/check-retired-native-ui.mjs",
       "line": 37,
-      "text": "    \"packages/protocol/src/plugin-ui-history.ts\": [\"@vykor/domain-contracts/plugin-apps/history\", \"./json.js\", \"./requests.js\", \"./domain-validation.js\"],",
+      "text": "    \"packages/protocol/src/extensions/plugin-ui-history.ts\": [\"@vykor/domain-contracts/plugin-apps/history\", \"../serialization/json.js\", \"../requests/requests.js\", \"../requests/domain-validation.js\"],",
       "reason": "P13 exact dependency guard: canonical historical data and wire error adapters only; no loader or execution dependencies."
     },
     {
@@ -4327,7 +4327,7 @@
     {
       "path": "scripts/check-retired-native-ui.mjs",
       "line": 40,
-      "text": "    \"packages/client/src/resources/plugin-ui-history-resource.ts\": [\"@vykor/protocol\", \"../transport/http-transport.js\"],",
+      "text": "    \"packages/client/src/resources/plugins/plugin-ui-history-resource.ts\": [\"@vykor/protocol\", \"../../transport/http-transport.js\"],",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },
     {
@@ -4467,6 +4467,24 @@
       "line": 49,
       "text": "  const action: PluginUiActionResponse = await client.pluginUiHistory.getAction(sessionId, instanceId, requestId, { signal });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
+    },
+    {
+      "path": "packages/client/src/resources/plugins/README.md",
+      "line": 12,
+      "text": "| [plugin-ui-history-resource.ts](./plugin-ui-history-resource.ts) | `PluginUiHistoryResource` |",
+      "reason": "Directory documentation for an existing read-only historical record reader or test fixture; no legacy runtime entry is added."
+    },
+    {
+      "path": "packages/plugins/src/__test__/helpers/README.md",
+      "line": 8,
+      "text": "- [native-ui.ts](./native-ui.ts)",
+      "reason": "Directory documentation for an existing read-only historical record reader or test fixture; no legacy runtime entry is added."
+    },
+    {
+      "path": "packages/protocol/src/extensions/README.md",
+      "line": 13,
+      "text": "| [plugin-ui-history.ts](./plugin-ui-history.ts) | `parsePluginUiConversationReceipt`、`parsePluginUiSubmissionRecord`、`parsePluginUiRouteIds` |",
+      "reason": "Directory documentation for an existing read-only historical record reader or test fixture; no legacy runtime entry is added."
     }
   ]
 }

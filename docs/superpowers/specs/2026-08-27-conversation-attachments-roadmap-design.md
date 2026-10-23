@@ -1133,7 +1133,7 @@ daemon 启动时：
 
 #### 主要代码区域
 
-- `packages/protocol/src/attachment.ts`；
+- `packages/protocol/src/attachments/attachment.ts`；
 - `packages/services/src/session-runtime/schema.ts` 和 migrations；
 - `packages/services/src/attachment/`；
 - `packages/server/src/application/daemon-application.ts`；
@@ -1171,11 +1171,11 @@ daemon 启动时：
 
 #### 主要代码区域
 
-- `packages/protocol/src/session.ts`；
+- `packages/protocol/src/session/session.ts`；
 - `packages/services/src/session-runtime/store.ts`；
 - `packages/server/src/application/session/`；
 - `packages/server/src/application/agent/agent-transcript.ts`；
-- `packages/protocol/src/serialization.ts`；
+- `packages/protocol/src/serialization/serialization.ts`；
 - `packages/client/src/`。
 
 #### 验收门槛

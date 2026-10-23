@@ -61,8 +61,8 @@ CLI、TUI、普通 Web、IDE 和 Bot 在首版继续使用工具文字结果；�
 
 | 当前能力 | 代码位置 | 设计影响 |
 | --- | --- | --- |
-| Manifest 已认识 `components.ui: string[]` | `packages/plugins/src/types.ts`、`manifest/schema-v1.ts` | 沿用 Native manifest schemaVersion 1；为 UI 文件单独定义格式版本 |
-| UI 仍在延后支持的组件列表 | `packages/plugins/src/load-native-plugin.ts` | 必须实现 UI 元数据加载，不能把识别字段等同于已能显示 |
+| Manifest 已认识 `components.ui: string[]` | `packages/plugins/src/shared/types.ts`、`manifest/schema-v1.ts` | 沿用 Native manifest schemaVersion 1；为 UI 文件单独定义格式版本 |
+| UI 仍在延后支持的组件列表 | `packages/plugins/src/loading/load-native-plugin.ts` | 必须实现 UI 元数据加载，不能把识别字段等同于已能显示 |
 | 安装授权根据 manifest 重新计算 | `packages/plugins/src/installation/installer.ts`、`verify.ts` | UI 新增授权必须同时进入预览、安装和安装后校验 |
 | 安装快照包含内容摘要，开发 link 单独处理 | `packages/plugins/src/installation/cache.ts` | UI 必须绑定准确快照；不能只按插件 ID 找“当前最新版” |
 | Native Tool 已有来源登记和 Run 能力视图 | `packages/agent-runtime/src/node/plugins/native-tools/activate.ts`、`run-capability-view.ts` | 后台可证明工具属于哪个插件，并固定本次运行的定义和调用函数 |
@@ -70,7 +70,7 @@ CLI、TUI、普通 Web、IDE 和 Bot 在首版继续使用工具文字结果；�
 | 工具结果会进入会话 Part 的 output 与 metadata | `packages/server/src/application/session/transcript-projection.ts` | 原始工具结果保持不变，UI 当前状态放在该 Part 的宿主 metadata 中 |
 | Run 可以没有 inputId；调度器接受 work 回调 | `packages/services/src/runs/run-repository.ts`、`packages/server/src/runtime/run-coordinator.ts` | UI 操作复用 Run 和会话执行车道，无需伪造模型 Prompt |
 | 工具校验、授权、Hook、超时和取消目前在 QueryEngine 内组合 | `packages/core/src/engine/query-engine.ts` | 必须提取可复用的受检工具执行入口，不能直接调用 `tool.execute()` |
-| Snapshot、SSE 和 Part/Run 更新已存在 | `packages/protocol/src/session.ts`、`packages/client/src/resources/session-resource.ts` | 不新增 UI 专用持久数据库或另一条会话同步连接 |
+| Snapshot、SSE 和 Part/Run 更新已存在 | `packages/protocol/src/session/session.ts`、`packages/client/src/resources/session/session-resource.ts` | 不新增 UI 专用持久数据库或另一条会话同步连接 |
 | Desktop 已禁止 Node integration，主页面限制内联脚本 | `apps/desktop/src/main/features/main-window/window.ts`、`src/renderer/index.html` | 插件文档必须使用独立文档来源，不能靠放宽主页面 CSP 运行 |
 | MCP 结果目前被压成文本 | `packages/mcp/src/index.ts` | MCP Apps 需要另外完成原始结果与工具 UI 元信息保留 |
 | Claude Converter 处理传统 Hook 事件映射 | `packages/plugin-converters/src/claude-code/converter.ts` | Mods 的 `modules` 入口必须明确诊断为不支持，不得宣传直接兼容 |

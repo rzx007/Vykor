@@ -25,8 +25,8 @@
 
 | 文件 | 职责 | 动作 |
 |---|---|---|
-| `packages/protocol/src/channel.ts` | durable channel 线协议类型与解析 | 修改 |
-| `packages/protocol/src/channel.test.ts` | 协议解析测试 | 新建 |
+| `packages/protocol/src/channels/channel.ts` | durable channel 线协议类型与解析 | 修改 |
+| `packages/protocol/src/channels/__test__/channel.test.ts` | 协议解析测试 | 新建 |
 | `packages/channels/src/bus/queue.ts` | `InboundMessage`/`OutboundMessage` | 修改 |
 | `packages/channels/src/core/manager.ts` | 入站映射、出站分发 | 修改 |
 | `packages/channels/src/core/durable-bridge.ts` | durable 入站转交、出站发布 | 修改 |
@@ -50,8 +50,8 @@
 ## 任务 1：protocol 增加 platformMeta
 
 **文件：**
-- 修改：`packages/protocol/src/channel.ts`
-- 测试：`packages/protocol/src/channel.test.ts`（新建）
+- 修改：`packages/protocol/src/channels/channel.ts`
+- 测试：`packages/protocol/src/channels/__test__/channel.test.ts`（新建）
 
 **Interfaces：**
 - Produces：
@@ -61,7 +61,7 @@
 
 - [ ] **步骤 1：编写失败的测试**
 
-新建 `packages/protocol/src/channel.test.ts`：
+新建 `packages/protocol/src/channels/__test__/channel.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -121,7 +121,7 @@ describe("parseDurableChannelMessageInput platformMeta", () => {
 
 - [ ] **步骤 3：最小实现**
 
-在 `packages/protocol/src/channel.ts`：
+在 `packages/protocol/src/channels/channel.ts`：
 
 1. `ChannelDeliveryRecord` 增加：
 
@@ -174,7 +174,7 @@ function optionalObject(
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/protocol/src/channel.ts packages/protocol/src/channel.test.ts
+git add packages/protocol/src/channels/channel.ts packages/protocol/src/channels/__test__/channel.test.ts
 git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 ```
 
@@ -1001,7 +1001,7 @@ pnpm exec turbo build --output-logs=full
 - [ ] **步骤 5：反 fallback 扫描**
 
 ```powershell
-rg -n -g '!**/*.test.ts' -g '!**/__test__/**' "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/bus packages/channels/src/impl/feishu.ts packages/server/src/application/channel packages/protocol/src/channel.ts
+rg -n -g '!**/*.test.ts' -g '!**/__test__/**' "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" packages/channels/src/core packages/channels/src/bus packages/channels/src/impl/feishu.ts packages/server/src/application/channel packages/protocol/src/channels/channel.ts
 ```
 
 预期：无生产性伪造；如有注释命中，人工确认不是「把缺失 thread/root 字段伪造成 chat/随机值」。

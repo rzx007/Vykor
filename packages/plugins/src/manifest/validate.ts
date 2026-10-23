@@ -1,8 +1,8 @@
 import { loadNativeAppMetadata } from "../components/apps.js";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import type { PluginDiagnostic } from "../diagnostics.js";
-import { NativePluginPathError, resolveNativePluginPath } from "../paths.js";
+import type { PluginDiagnostic } from "../shared/diagnostics.js";
+import { NativePluginPathError, resolveNativePluginPath } from "../installation/paths.js";
 import {
   NATIVE_PLUGIN_COMPONENT_KINDS,
   type NativePluginComponentKind,
@@ -10,11 +10,11 @@ import {
   type NativeToolComponent,
   type VykorPluginManifestV1,
   type ValidatedNativePlugin,
-} from "../types.js";
+} from "../shared/types.js";
 import { VykorPluginManifestV1Schema } from "./schema-v1.js";
 
 
-export type { NativePluginValidationResult } from "../types.js";
+export type { NativePluginValidationResult } from "../shared/types.js";
 
 const MANIFEST_RELATIVE_PATH = join(".vykor-plugin", "plugin.json");
 

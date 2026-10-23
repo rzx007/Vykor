@@ -12,7 +12,7 @@
 
 ## 全局约束
 
-- 新模块路径固定为 `packages/tools/src/file/edit-replacers.ts`，测试在 `packages/tools/src/file/__test__/edit-replacers.test.ts`。
+- 新模块路径固定为 `packages/tools/src/file/editing/edit-replacers.ts`，测试在 `packages/tools/src/file/editing/__test__/edit-replacers.test.ts`。
 - 导出名固定：`Replacer`、`replace`、`EditMatchError`、`EditMatchErrorKind`、`editMatchMessage`、`isDisproportionateMatch`、`normalizeLineEndings`、`detectLineEnding`、`convertToLineEnding`，以及 9 个 replacer 常量（`SimpleReplacer`、`LineTrimmedReplacer`、`BlockAnchorReplacer`、`WhitespaceNormalizedReplacer`、`IndentationFlexibleReplacer`、`EscapeNormalizedReplacer`、`TrimmedBoundaryReplacer`、`ContextAwareReplacer`、`MultiOccurrenceReplacer`）。
 - `EditMatchErrorKind` 精确为 `"identical" | "not_found" | "ambiguous" | "disproportionate"`。
 - 四类错误文案（逐字，不得改动）：
@@ -29,7 +29,7 @@
 - `identical` 校验必须发生在 `edit.ts` 的**内联精确替换之前**，但在路径、managed persistence、系统目录和 sandbox 校验之后。
 - 不新增依赖；Levenshtein 内联实现。
 - 不修改 `packages/tools/src/file/operations.ts`、`write.ts`、`read.ts`。
-- 不修改 `packages/tools/src/file/__test__/edit.test.ts` 中现有 2 条用例的断言。
+- 不修改 `packages/tools/src/file/editing/__test__/edit.test.ts` 中现有 2 条用例的断言。
 - 测试命令：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`（端到端为 `... src/file/__test__/edit.test.ts`）。
 - 类型检查：`pnpm --filter @vykor/tools run check-types`。
 
@@ -38,12 +38,12 @@
 ### 任务 1：错误类型、行尾函数与吞大段护栏
 
 **文件：**
-- 创建：`packages/tools/src/file/edit-replacers.ts`
-- 创建：`packages/tools/src/file/__test__/edit-replacers.test.ts`
+- 创建：`packages/tools/src/file/editing/edit-replacers.ts`
+- 创建：`packages/tools/src/file/editing/__test__/edit-replacers.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
-创建 `packages/tools/src/file/__test__/edit-replacers.test.ts`：
+创建 `packages/tools/src/file/editing/__test__/edit-replacers.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -121,7 +121,7 @@ describe("EditMatchError", () => {
 
 - [ ] **步骤 3：编写最少实现代码**
 
-创建 `packages/tools/src/file/edit-replacers.ts`：
+创建 `packages/tools/src/file/editing/edit-replacers.ts`：
 
 ```ts
 // 匹配策略移植自 opencode 的 edit 工具（MIT），其实现又源自 cline（Apache-2.0）
@@ -187,7 +187,7 @@ export function isDisproportionateMatch(search: string, oldString: string): bool
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/tools/src/file/edit-replacers.ts packages/tools/src/file/__test__/edit-replacers.test.ts
+git add packages/tools/src/file/editing/edit-replacers.ts packages/tools/src/file/editing/__test__/edit-replacers.test.ts
 git commit -m "feat(tools): add edit match error, line-ending helpers and guard"
 ```
 
@@ -196,12 +196,12 @@ git commit -m "feat(tools): add edit match error, line-ending helpers and guard"
 ### 任务 2：基础 replacer 策略
 
 **文件：**
-- 修改：`packages/tools/src/file/edit-replacers.ts`
-- 修改：`packages/tools/src/file/__test__/edit-replacers.test.ts`
+- 修改：`packages/tools/src/file/editing/edit-replacers.ts`
+- 修改：`packages/tools/src/file/editing/__test__/edit-replacers.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/tools/src/file/__test__/edit-replacers.test.ts` 的 import 中加入 `SimpleReplacer`、`LineTrimmedReplacer`、`WhitespaceNormalizedReplacer`、`IndentationFlexibleReplacer`、`EscapeNormalizedReplacer`、`TrimmedBoundaryReplacer`、`MultiOccurrenceReplacer`，并追加：
+在 `packages/tools/src/file/editing/__test__/edit-replacers.test.ts` 的 import 中加入 `SimpleReplacer`、`LineTrimmedReplacer`、`WhitespaceNormalizedReplacer`、`IndentationFlexibleReplacer`、`EscapeNormalizedReplacer`、`TrimmedBoundaryReplacer`、`MultiOccurrenceReplacer`，并追加：
 
 ```ts
 const collect = (replacer: Replacer, content: string, find: string): string[] => [
@@ -323,7 +323,7 @@ describe("MultiOccurrenceReplacer", () => {
 
 - [ ] **步骤 3：编写最少实现代码**
 
-在 `packages/tools/src/file/edit-replacers.ts` 末尾追加：
+在 `packages/tools/src/file/editing/edit-replacers.ts` 末尾追加：
 
 ```ts
 export type Replacer = (content: string, find: string) => Generator<string, void, unknown>;
@@ -515,7 +515,7 @@ export const MultiOccurrenceReplacer: Replacer = function* (content, find) {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/tools/src/file/edit-replacers.ts packages/tools/src/file/__test__/edit-replacers.test.ts
+git add packages/tools/src/file/editing/edit-replacers.ts packages/tools/src/file/editing/__test__/edit-replacers.test.ts
 git commit -m "feat(tools): add basic edit replacer strategies"
 ```
 
@@ -524,8 +524,8 @@ git commit -m "feat(tools): add basic edit replacer strategies"
 ### 任务 3：相似度类 replacer（锚点与上下文）
 
 **文件：**
-- 修改：`packages/tools/src/file/edit-replacers.ts`
-- 修改：`packages/tools/src/file/__test__/edit-replacers.test.ts`
+- 修改：`packages/tools/src/file/editing/edit-replacers.ts`
+- 修改：`packages/tools/src/file/editing/__test__/edit-replacers.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
@@ -615,7 +615,7 @@ describe("ContextAwareReplacer", () => {
 
 - [ ] **步骤 3：编写最少实现代码**
 
-在 `packages/tools/src/file/edit-replacers.ts` 末尾追加：
+在 `packages/tools/src/file/editing/edit-replacers.ts` 末尾追加：
 
 ```ts
 const BLOCK_SIMILARITY_THRESHOLD = 0.65;
@@ -737,7 +737,7 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/tools/src/file/edit-replacers.ts packages/tools/src/file/__test__/edit-replacers.test.ts
+git add packages/tools/src/file/editing/edit-replacers.ts packages/tools/src/file/editing/__test__/edit-replacers.test.ts
 git commit -m "feat(tools): add similarity-based edit replacers"
 ```
 
@@ -746,8 +746,8 @@ git commit -m "feat(tools): add similarity-based edit replacers"
 ### 任务 4：`replace()` 组合算法
 
 **文件：**
-- 修改：`packages/tools/src/file/edit-replacers.ts`
-- 修改：`packages/tools/src/file/__test__/edit-replacers.test.ts`
+- 修改：`packages/tools/src/file/editing/edit-replacers.ts`
+- 修改：`packages/tools/src/file/editing/__test__/edit-replacers.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
@@ -914,7 +914,7 @@ describe("replace", () => {
 
 - [ ] **步骤 3：编写最少实现代码**
 
-在 `packages/tools/src/file/edit-replacers.ts` 末尾追加：
+在 `packages/tools/src/file/editing/edit-replacers.ts` 末尾追加：
 
 ```ts
 export const REPLACERS: Replacer[] = [
@@ -1003,7 +1003,7 @@ export function replace(
 - [ ] **步骤 5：Commit**
 
 ```bash
-git add packages/tools/src/file/edit-replacers.ts packages/tools/src/file/__test__/edit-replacers.test.ts
+git add packages/tools/src/file/editing/edit-replacers.ts packages/tools/src/file/editing/__test__/edit-replacers.test.ts
 git commit -m "feat(tools): add the edit replacer fallback chain"
 ```
 
@@ -1012,12 +1012,12 @@ git commit -m "feat(tools): add the edit replacer fallback chain"
 ### 任务 5：接入 `edit.ts`
 
 **文件：**
-- 修改：`packages/tools/src/file/edit.ts`
-- 修改：`packages/tools/src/file/__test__/edit.test.ts`
+- 修改：`packages/tools/src/file/editing/edit.ts`
+- 修改：`packages/tools/src/file/editing/__test__/edit.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**
 
-把 `packages/tools/src/file/__test__/edit.test.ts` 顶部的 `node:fs/promises` import 改为：
+把 `packages/tools/src/file/editing/__test__/edit.test.ts` 顶部的 `node:fs/promises` import 改为：
 
 ```ts
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -1303,7 +1303,7 @@ it("keeps sandbox denial ahead of the identical-string check", async () => {
 
 - [ ] **步骤 3：改写 `edit.ts` 的匹配与写回部分**
 
-在 `packages/tools/src/file/edit.ts` 顶部补充 import：
+在 `packages/tools/src/file/editing/edit.ts` 顶部补充 import：
 
 ```ts
 import {
@@ -1405,7 +1405,7 @@ import {
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/tools/src/file/edit.ts packages/tools/src/file/__test__/edit.test.ts
+git add packages/tools/src/file/editing/edit.ts packages/tools/src/file/editing/__test__/edit.test.ts
 git commit -m "feat(tools): use fuzzy matching fallback in the edit tool"
 ```
 

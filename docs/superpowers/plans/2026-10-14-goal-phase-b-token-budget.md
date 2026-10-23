@@ -51,12 +51,12 @@
 | 单元 | 新建 / 修改文件 | 责任 |
 | --- | --- | --- |
 | B1 | 新建 `packages/services/src/goals/goal-usage.ts`；修改 `goal-records.ts`、`goal-repository.ts`、`goal-transactions.ts`、`goals/index.ts`、`session-runtime/store.ts` | 单尝试记录、合并/汇总、GoalOperations 接口 |
-| B1 | `packages/protocol/src/session-goals.ts`、`session.ts`；services 的 `session-runtime/schema.ts`、现行初始化 SQL / 最新 snapshot / inventory、`database/temporary-control-records.ts`、`session-runtime/event-registry.ts` | 当前格式、memory 事务、usage 事件 |
+| B1 | `packages/protocol/src/session/session-goals.ts`、`session.ts`；services 的 `session-runtime/schema.ts`、现行初始化 SQL / 最新 snapshot / inventory、`database/temporary-control-records.ts`、`session-runtime/event-registry.ts` | 当前格式、memory 事务、usage 事件 |
 | B2 | 新建 `packages/api/src/providers/token-metering.ts`；修改 `anthropic.ts`、`openai.ts`、`codex.ts`；`packages/core/src/types/usage.ts`、`types/runtime-events.ts`、`engine/model-retry.ts`、`query-model-attempt.ts` | 单次报告规范化，原始字段与完整性 |
 | B2 | `packages/core/src/engine/query-engine.ts`、`buffered-model-retry.ts`、`compact-service.ts`；`packages/agent-runtime/src/kernel/event-source.ts`、`framework-agent-run.ts`、`agent.ts`、`child-agent.ts`、`memory-runtime.ts`、`goal-extension.ts` | 所有已绑定原生模型请求的身份/报告/宿主限制参数，以及限制错误的可靠传递 |
 | B2/B3 | `packages/server/src/application/agent/daemon-agent-event-projector.ts`；`session/session-run-executor.ts`、`session-run-assembly.ts`、`session-post-run-maintenance.ts`；`auto-review/session-auto-review-service.ts`；`daemon-application.ts` | 可信事件落账、后置来源、依赖注入；不复制公式 |
 | B3 | `packages/core/src/types/runtime.ts`、`engine/checked-tool-execution.ts`；server 的 `session-goal-service.ts`、`run-admission-service.ts`、`run-control-service.ts`、`recovery/startup-recovery-service.ts` | 通用执行检查、预算动作、停止/恢复和启动对账 |
-| B4 | `packages/client/src/resources/session-resource.ts`、`types/index.ts`；核对原 `state/reducer.ts` / `session-stream-state.ts` / `session-sync-controller.ts`；Desktop 的 `shared/session-types.ts`、`main/features/session/session-service.ts` / `session-subscription-service.ts`、`renderer/src/stores/desktop-session/types.ts` / `goal-actions.ts` / `store.ts` / `goal-refresh-scheduler.ts`；原 Composer / GoalBanner | 动作类型透传；usage 事件沿原订阅触发 GET，独立 seq 合并；轻量预算输入与展示。现有链路已满足的文件只补定点回归，不强制改代码 |
+| B4 | `packages/client/src/resources/session/session-resource.ts`、`types/index.ts`；核对原 `state/reducer.ts` / `session-stream-state.ts` / `session-sync-controller.ts`；Desktop 的 `shared/session-types.ts`、`main/features/session/session-service.ts` / `session-subscription-service.ts`、`renderer/src/stores/desktop-session/types.ts` / `goal-actions.ts` / `store.ts` / `goal-refresh-scheduler.ts`；原 Composer / GoalBanner | 动作类型透传；usage 事件沿原订阅触发 GET，独立 seq 合并；轻量预算输入与展示。现有链路已满足的文件只补定点回归，不强制改代码 |
 
 `0006_snapshot.json` 是当前最后结构快照。实施前若其他任务推进结构，核对最新文件再同步，不覆盖其他字段、不追加旧数据转换迁移。现有 HTTP actions 和 IPC 通道已能透传动作，按真实类型检查结果调整；不新增预算专用通道。
 

@@ -1,9 +1,9 @@
 import type { FileToolHost } from "../ports/policy.js";
 import type { ToolDefinition } from "@vykor/agent-contracts";
 import { fileOperationsFor } from "../file/operations.js";
-import { resolveToolPathInContext } from "../file/environment-path.js";
-import { sandboxPathError } from "../file/sandbox-guard.js";
-import { GREP_LIMIT_HINT, GREP_OUTPUT_BYTES, GrepSearchError } from "../file/grep-search.js";
+import { resolveToolPathInContext } from "../file/access/environment-path.js";
+import { sandboxPathError } from "../file/access/sandbox-guard.js";
+import { GREP_LIMIT_HINT, GREP_OUTPUT_BYTES, GrepSearchError } from "../file/search/grep-search.js";
 
 export function createGrepTool(host: FileToolHost = {}): ToolDefinition {
   return {

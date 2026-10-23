@@ -13,7 +13,7 @@
 ## 文件结构
 
 - 修改 `packages/plugins/src/installation/installer.ts`：替换同一用户插件时保留 `enabled` 和 `installedAt`。
-- 修改 `packages/plugins/src/installation/installer.test.ts`：锁定重新安装的状态继承行为。
+- 修改 `packages/plugins/src/installation/__test__/installer.test.ts`：锁定重新安装的状态继承行为。
 - 修改 `packages/server/src/application/settings-api.ts`：给 Archive preview 增加 `approvalRequired`。
 - 修改 `packages/server/src/application/default-services/plugin-service.ts`：从安装记录计算权限覆盖关系，并在 install 时再次校验。
 - 修改 `packages/server/src/application/default-services/plugin-service.test.ts`：覆盖权限复用、新增权限和失败不切换记录。
@@ -28,7 +28,7 @@
 
 **文件：**
 - 修改：`packages/plugins/src/installation/installer.ts`
-- 测试：`packages/plugins/src/installation/installer.test.ts`
+- 测试：`packages/plugins/src/installation/__test__/installer.test.ts`
 
 - [ ] **步骤 1：编写失败的安装器测试**
 
@@ -114,7 +114,7 @@ pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts
 - [ ] **步骤 5：提交安装器改动**
 
 ```sh
-git add packages/plugins/src/installation/installer.ts packages/plugins/src/installation/installer.test.ts
+git add packages/plugins/src/installation/installer.ts packages/plugins/src/installation/__test__/installer.test.ts
 git commit -m "fix(plugins): preserve state on reinstall"
 ```
 
@@ -508,7 +508,7 @@ git status --short
 若自审或代码审查产生修复：
 
 ```sh
-git add packages/plugins/src/installation/installer.ts packages/plugins/src/installation/installer.test.ts packages/server/src/application/settings-api.ts packages/server/src/application/default-services/plugin-service.ts packages/server/src/application/default-services/plugin-service.test.ts packages/client/src/types/index.ts apps/desktop/src/main/features/plugin/plugin-service.ts apps/desktop/src/main/features/plugin/plugin-service.test.ts apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx docs/native-plugin-authoring.md docs/plugin-system-handoff.md docs/plugins-contributions-design.md
+git add packages/plugins/src/installation/installer.ts packages/plugins/src/installation/__test__/installer.test.ts packages/server/src/application/settings-api.ts packages/server/src/application/default-services/plugin-service.ts packages/server/src/application/default-services/plugin-service.test.ts packages/client/src/types/index.ts apps/desktop/src/main/features/plugin/plugin-service.ts apps/desktop/src/main/features/plugin/plugin-service.test.ts apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx docs/native-plugin-authoring.md docs/plugin-system-handoff.md docs/plugins-contributions-design.md
 git commit -m "fix(plugins): harden reinstall flow"
 ```
 

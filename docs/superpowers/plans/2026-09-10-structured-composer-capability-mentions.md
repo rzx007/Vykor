@@ -35,7 +35,7 @@ type SessionUserInputItem =
 
 | 模块 | 当前文件 | 结果 |
 | --- | --- | --- |
-| 协议 | `packages/protocol/src/session-input-items.ts` | items 类型、限制、规范化和纯文本派生 |
+| 协议 | `packages/protocol/src/session/session-input-items.ts` | items 类型、限制、规范化和纯文本派生 |
 | 存储 | `packages/services/src/session-runtime/schema.ts`、`store.ts` | `items_json` 持久化和旧记录不兼容处理 |
 | Skill registry | `packages/skills/src/index.ts` | 当前赢家的 name/path 解析 |
 | Command catalog | `packages/server/src/commands/default-command-catalog.ts` | user-invocable Skill template 与 path |
@@ -116,7 +116,7 @@ type SessionUserInputItem =
 
 自动测试集中在：
 
-- `packages/protocol/src/session-input-items.test.ts`
+- `packages/protocol/src/session/__test__/session-input-items.test.ts`
 - `packages/services/src/session-runtime/__test__/store.test.ts`
 - `packages/server/src/application/session/__test__/session-input-materializer.test.ts`
 - `packages/server/src/application/session/__test__/session-run-executor.test.ts`

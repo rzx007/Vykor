@@ -4,32 +4,32 @@
   "type": "module",
   "exports": {
     "./marketplace": {
-      "types": "./src/marketplace.ts",
-      "import": "./src/marketplace.ts"
+      "types": "./src/marketplace/marketplace.ts",
+      "import": "./src/marketplace/marketplace.ts"
     },
     "./manifest": {
-      "types": "./src/manifest.ts",
-      "import": "./src/manifest.ts"
+      "types": "./src/manifest/manifest.ts",
+      "import": "./src/manifest/manifest.ts"
     },
     "./presentation": {
-      "types": "./src/presentation.ts",
-      "import": "./src/presentation.ts"
+      "types": "./src/marketplace/presentation.ts",
+      "import": "./src/marketplace/presentation.ts"
     },
     "./validation": {
-      "types": "./src/validation.ts",
-      "import": "./src/validation.ts"
+      "types": "./src/manifest/validation.ts",
+      "import": "./src/manifest/validation.ts"
     },
     "./limits": {
-      "types": "./src/limits.ts",
-      "import": "./src/limits.ts"
+      "types": "./src/manifest/limits.ts",
+      "import": "./src/manifest/limits.ts"
     },
     "./runtime": {
-      "types": "./src/runtime.ts",
-      "import": "./src/runtime.ts"
+      "types": "./src/runtime/runtime.ts",
+      "import": "./src/runtime/runtime.ts"
     },
     "./runtime-data": {
-      "types": "./src/runtime-data.ts",
-      "import": "./src/runtime-data.ts"
+      "types": "./src/runtime/runtime-data.ts",
+      "import": "./src/runtime/runtime-data.ts"
     }
   },
   "scripts": {

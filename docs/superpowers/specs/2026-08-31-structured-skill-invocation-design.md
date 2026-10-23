@@ -64,7 +64,7 @@ $archify 画一下系统架构
 
 ## 数据结构
 
-协议事实来源是 `packages/protocol/src/session-input-items.ts`：
+协议事实来源是 `packages/protocol/src/session/session-input-items.ts`：
 
 ```ts
 type SessionUserInputItem =

@@ -164,12 +164,12 @@ id, seq, type, schemaVersion, optional sessionId, payload, createdAt
 
 | 内容 | 位置 |
 |---|---|
-| capabilities 解析与精确匹配 | `packages/protocol/src/capabilities.ts` |
-| 请求 decoder 与 ProtocolError | `packages/protocol/src/requests.ts` |
-| 领域记录 / snapshot 和通信组合 | `packages/domain-contracts/src/` / `packages/protocol/src/session.ts` |
+| capabilities 解析与精确匹配 | `packages/protocol/src/runtime/capabilities.ts` |
+| 请求 decoder 与 ProtocolError | `packages/protocol/src/requests/requests.ts` |
+| 领域记录 / snapshot 和通信组合 | `packages/domain-contracts/src/` / `packages/protocol/src/session/session.ts` |
 | 通用 JSON / 插件数据 | `packages/json-data/src/json.ts` / `packages/plugin-contracts/src/` |
 | HTTP 输入与响应转换 | `packages/server/src/http/mappers/` |
-| 严格序列化检查 | `packages/protocol/src/serialization.ts` |
+| 严格序列化检查 | `packages/protocol/src/serialization/serialization.ts` |
 | HTTP client 与重连 | `packages/client/src/transport/http-client.ts`、`packages/client/src/state/sync.ts` |
 | 共享 reducer | `packages/client/src/state/reducer.ts` |
 | 服务端 capabilities | `packages/server/src/http/routes/system.ts` |

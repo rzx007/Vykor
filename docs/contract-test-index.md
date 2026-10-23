@@ -77,8 +77,8 @@
 
 | 硬规则 | 主要测试 |
 |---|---|
-| 协议版本和 capability 必须精确匹配 | [capabilities.test.ts](../packages/protocol/src/capabilities.test.ts)、[protocol-validation.test.ts](../packages/server/src/http/routes/__test__/protocol-validation.test.ts) |
-| 请求字段严格校验，错误返回固定形状 | [requests.test.ts](../packages/protocol/src/requests.test.ts)、[serialization.test.ts](../packages/protocol/src/serialization.test.ts)、[routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
+| 协议版本和 capability 必须精确匹配 | [capabilities.test.ts](../packages/protocol/src/runtime/__test__/capabilities.test.ts)、[protocol-validation.test.ts](../packages/server/src/http/routes/__test__/protocol-validation.test.ts) |
+| 请求字段严格校验，错误返回固定形状 | [requests.test.ts](../packages/protocol/src/requests/__test__/requests.test.ts)、[serialization.test.ts](../packages/protocol/src/serialization/__test__/serialization.test.ts)、[routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
 | snapshot 包含 Attempt/Task 等完整状态，SSE cursor 可回放和重连 | [http.test.ts](../tests/server-client/http.test.ts)、[reducer.test.ts](../packages/client/src/state/__test__/reducer.test.ts) |
 | client HTTP 封装不会偷偷改变请求或响应 | [http-client.test.ts](../packages/client/src/transport/__test__/http-client.test.ts) |
 | 浏览器 client 不依赖 Node polyfill | [根测试脚本](../package.json) 中的 `test:client-browser` |
@@ -102,7 +102,7 @@
 | 硬规则 | 主要测试 |
 |---|---|
 | Permission 请求持久化、回复幂等、过期后不能重新批准 | [permission-broker.test.ts](../packages/server/src/permissions/__test__/permission-broker.test.ts)、[permission-controller.test.ts](../packages/server/src/permissions/__test__/permission-controller.test.ts) |
-| Sandbox 统一限制命令和文件访问 | [sandbox policy.test.ts](../packages/sandbox/src/policy.test.ts)、[sandbox index.test.ts](../packages/sandbox/src/index.test.ts)、[file Edit test.ts](../packages/tools/src/file/__test__/edit.test.ts) |
+| Sandbox 统一限制命令和文件访问 | [sandbox policy.test.ts](../packages/sandbox/src/policy.test.ts)、[sandbox index.test.ts](../packages/sandbox/src/index.test.ts)、[file Edit test.ts](../packages/tools/src/file/editing/__test__/edit.test.ts) |
 | MCP manager 缺失和认证失败会明确返回错误 | [mcp-tools.test.ts](../packages/tools/src/mcp/__test__/mcp-tools.test.ts)、[mcp-auth.test.ts](../packages/agent-runtime/src/node/mcp/__test__/mcp-auth.test.ts) |
 
 对应契约：[Security and Trust Boundaries](./security-and-trust-boundaries.md)、[Permission Flow](./permission-flow.md)、[Sandbox Runtime Flow](./sandbox-runtime-flow.md)。
@@ -151,18 +151,18 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | --- | --- | --- |
 | 禁止底层与应用层依赖 Protocol，拒绝隐藏包装、动态导入、别名和根入口绕行 | [架构反例](../scripts/architecture-boundaries.test.mjs)、[策略及声明扫描](../scripts/architecture-policy.mjs) | `pnpm check:architecture` |
 | 纯数据沿选中声明及私有别名检查 Promise/AbortSignal；Protocol 的 Job/Terminal 来源只能是 /contracts，同文件合法数据仍允许 | [声明来源正反例](../scripts/architecture-boundaries.test.mjs)、[入口白名单](../scripts/architecture-policy.json) | `pnpm check:architecture` |
-| 通用 JSON 字节、指纹、原型、canonical 20 层与有界复制 32 层 | [JSON 样本](../packages/json-data/src/json.test.ts)、[通信基线](../packages/protocol/src/layering-baseline.test.ts) | json-data `src/json.test.ts`；Protocol `src/layering-baseline.test.ts` |
-| 旧模式归一化与 plan 权限上限，Client 只做显示投影 | [配置模式](../packages/host-config/src/permission-modes.test.ts)、[有效模式](../packages/permissions/src/effective-permission-mode.test.ts)、[Client 投影](../packages/client/src/runtime-configuration.test.ts) | 各文件所在包的定向 Vitest |
-| 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugins/__test__/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/plugins/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
-| 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
+| 通用 JSON 字节、指纹、原型、canonical 20 层与有界复制 32 层 | [JSON 样本](../packages/json-data/src/json.test.ts)、[通信基线](../packages/protocol/src/__test__/layering-baseline.test.ts) | json-data `src/json.test.ts`；Protocol `src/layering-baseline.test.ts` |
+| 旧模式归一化与 plan 权限上限，Client 只做显示投影 | [配置模式](../packages/host-config/src/permissions/__test__/permission-modes.test.ts)、[有效模式](../packages/permissions/src/effective-permission-mode.test.ts)、[Client 投影](../packages/client/src/configuration/__test__/runtime-configuration.test.ts) | 各文件所在包的定向 Vitest |
+| 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/manifest/__test__/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugins/__test__/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/plugins/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
+| 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/extensions/__test__/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
 | 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/validation.test.ts)、[附件策略](../packages/services/src/attachments/__test__/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/__test__/boundary.test.ts) | 对应包定向 Vitest |
 | Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/index.test.ts)、[组合 Host](../packages/jobs/src/composite-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
-| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/resources/plugins/__test__/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
 ## 维护规则
 
-跨包 API/Engine/工具组合回归见 [Agent 集成测试](../tests/agent-integration/README.md)，命令为 `pnpm test:agent-integration`，已接入普通 CI 的 `pnpm test`。ToolSearch 与 Job 工具测试分别由 [搜索测试](../packages/tools/src/meta/tool-search.test.ts)和 [Job 测试](../packages/tools/src/job/job-tools.test.ts)覆盖；依赖真实 Engine/ToolRegistry 的用例保留在集成组，不引入 tools → core 的依赖。
+跨包 API/Engine/工具组合回归见 [Agent 集成测试](../tests/agent-integration/README.md)，命令为 `pnpm test:agent-integration`，已接入普通 CI 的 `pnpm test`。ToolSearch 与 Job 工具测试分别由 [搜索测试](../packages/tools/src/meta/__test__/tool-search.test.ts)和 [Job 测试](../packages/tools/src/job/__test__/job-tools.test.ts)覆盖；依赖真实 Engine/ToolRegistry 的用例保留在集成组，不引入 tools → core 的依赖。
 
 - 新增或删除硬规则时，同时更新权威文档和本索引。
 - 移动测试文件时，`pnpm check-docs` 必须失败，直到这里的链接更新。

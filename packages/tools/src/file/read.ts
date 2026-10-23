@@ -2,12 +2,12 @@ import type { FileToolHost } from "../ports/policy.js";
 import { createHash } from "node:crypto";
 import { extname, posix, win32 } from "node:path";
 import { type ToolContext, type ToolDefinition, type ToolResult } from "@vykor/agent-contracts";
-import { resolveToolPathInContext } from "./environment-path.js";
-import { sandboxPathError } from "./sandbox-guard.js";
+import { resolveToolPathInContext } from "./access/environment-path.js";
+import { sandboxPathError } from "./access/sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
 import { decodeUtf8Text } from "./text-content.js";
-import { managedPersistencePathKind } from "./managed-persistence-path.js";
-import { isSystemPath } from "./file-mutation-guard.js";
+import { managedPersistencePathKind } from "./access/managed-persistence-path.js";
+import { isSystemPath } from "./access/file-mutation-guard.js";
 
 export { BINARY_CONTROL_RATIO, BINARY_SAMPLE_CHARS, isBinaryContent } from "./text-content.js";
 

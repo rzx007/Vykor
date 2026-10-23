@@ -13,7 +13,7 @@ Skill 是带 frontmatter 的 Markdown 方法论或提示词。运行时先把多
 
 | 组件 | 文件 | 职责 |
 | --- | --- | --- |
-| 输入协议 | `packages/protocol/src/session-input-items.ts` | 定义、校验和规范化 text/skill/mention/context items |
+| 输入协议 | `packages/protocol/src/session/session-input-items.ts` | 定义、校验和规范化 text/skill/mention/context items |
 | Skill registry 与标准目录 | `packages/skills/src/index.ts` | frontmatter 解析、标准目录、按名称/路径解析、可见性和覆盖关系 |
 | 扩展发现 | `packages/agent-runtime/src/node/plugins/extensions.ts` | 发现 bundled、用户、项目和 plugin 扩展，组装 registry |
 | Command catalog | `packages/server/src/commands/default-command-catalog.ts` | 把 `userInvocable` Skill 暴露为 `kind="template"` |

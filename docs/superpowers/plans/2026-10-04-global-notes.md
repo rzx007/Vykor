@@ -23,8 +23,8 @@
 
 ### 协议与持久化
 
-- 创建 `packages/protocol/src/notes.ts`：记录类型、输入类型、长度常量和请求解析。
-- 创建 `packages/protocol/src/notes.test.ts`：创建/更新输入边界测试。
+- 创建 `packages/protocol/src/knowledge/notes.ts`：记录类型、输入类型、长度常量和请求解析。
+- 创建 `packages/protocol/src/knowledge/__test__/notes.test.ts`：创建/更新输入边界测试。
 - 修改 `packages/protocol/src/index.ts`：公开便签协议。
 - 创建 `packages/services/src/notes/note-repository.ts`：SQLite CRUD、排序和 revision 冲突。
 - 创建 `packages/services/src/notes/note-repository.test.ts`：重开、排序、清空、删除和冲突测试。
@@ -44,7 +44,7 @@
 - 创建 `packages/server/src/http/routes/notes.test.ts`：HTTP 成功、400、404、409。
 - 修改 `packages/server/src/application/daemon-application.ts`：把 `store.notes` 暴露为应用能力。
 - 修改 `packages/server/src/http/server.ts`：挂载 `/notes`。
-- 创建 `packages/client/src/resources/note-resource.ts`：typed HTTP 调用。
+- 创建 `packages/client/src/resources/workspace/note-resource.ts`：typed HTTP 调用。
 - 修改 `packages/client/src/resources/index.ts`、`packages/client/src/transport/http-client.ts`、`packages/client/src/index.ts`、`packages/client/src/types/index.ts`：公开 `client.notes` 和类型。
 - 修改 `packages/client/src/transport/__test__/http-client.test.ts`、`packages/client/src/__test__/public-api.test.ts`：请求路径和公共表面。
 - 修改 `scripts/client-public-api-contract.json`：登记 `NoteResource`、便签类型和 `notes` client resource。
@@ -92,8 +92,8 @@
 
 **文件：**
 
-- 创建：`packages/protocol/src/notes.ts`
-- 创建：`packages/protocol/src/notes.test.ts`
+- 创建：`packages/protocol/src/knowledge/notes.ts`
+- 创建：`packages/protocol/src/knowledge/__test__/notes.test.ts`
 - 修改：`packages/protocol/src/index.ts`
 
 - [ ] **步骤 1：编写失败的协议测试**
@@ -149,7 +149,7 @@ pnpm --filter @vykor/protocol exec vitest run src/notes.test.ts
 
 - [ ] **步骤 3：实现最小协议**
 
-`packages/protocol/src/notes.ts` 的公共表面固定为：
+`packages/protocol/src/knowledge/notes.ts` 的公共表面固定为：
 
 ```ts
 import { ProtocolValidationError } from "./requests.js";
@@ -247,7 +247,7 @@ pnpm --filter @vykor/protocol check-types
 - [ ] **步骤 5：提交协议交付物**
 
 ```bash
-git add packages/protocol/src/notes.ts packages/protocol/src/notes.test.ts packages/protocol/src/index.ts
+git add packages/protocol/src/knowledge/notes.ts packages/protocol/src/knowledge/__test__/notes.test.ts packages/protocol/src/index.ts
 git commit -m "feat(protocol): add global note contracts"
 ```
 
@@ -472,7 +472,7 @@ git commit -m "feat(services): persist global notes"
 - 创建：`packages/server/src/http/routes/notes.test.ts`
 - 修改：`packages/server/src/application/daemon-application.ts`
 - 修改：`packages/server/src/http/server.ts`
-- 创建：`packages/client/src/resources/note-resource.ts`
+- 创建：`packages/client/src/resources/workspace/note-resource.ts`
 - 修改：`packages/client/src/resources/index.ts`
 - 修改：`packages/client/src/transport/http-client.ts`
 - 修改：`packages/client/src/index.ts`
@@ -694,7 +694,7 @@ pnpm --filter @vykor/client check-types
 - [ ] **步骤 7：提交 HTTP 与 client 交付物**
 
 ```bash
-git add packages/server/src/http/routes/notes.ts packages/server/src/http/routes/notes.test.ts packages/server/src/http/server.ts packages/server/src/application/daemon-application.ts packages/client/src/resources/note-resource.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/types/index.ts packages/client/src/transport/__test__/http-client.test.ts packages/client/src/__test__/public-api.test.ts scripts/client-public-api-contract.json docs/superpowers/plans/2026-10-04-global-notes.md
+git add packages/server/src/http/routes/notes.ts packages/server/src/http/routes/notes.test.ts packages/server/src/http/server.ts packages/server/src/application/daemon-application.ts packages/client/src/resources/workspace/note-resource.ts packages/client/src/resources/index.ts packages/client/src/transport/http-client.ts packages/client/src/index.ts packages/client/src/types/index.ts packages/client/src/transport/__test__/http-client.test.ts packages/client/src/__test__/public-api.test.ts scripts/client-public-api-contract.json docs/superpowers/plans/2026-10-04-global-notes.md
 git commit -m "feat(api): expose global notes"
 ```
 

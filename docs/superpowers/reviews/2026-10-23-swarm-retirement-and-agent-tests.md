@@ -19,8 +19,8 @@
 | tool-input-recovery.test.ts | tests/agent-integration/tool-input-recovery.test.ts |
 | upstream-retry.integration.test.ts | tests/agent-integration/upstream-retry.integration.test.ts |
 | write-content-reuse.integration.test.ts | tests/agent-integration/write-content-reuse.integration.test.ts |
-| job-tools.test.ts | 工具行为迁到 packages/tools/src/job/job-tools.test.ts；Engine 等待时限用例迁到 tests/agent-integration/job-tools.integration.test.ts |
-| tool-search.test.ts | 工具行为迁到 packages/tools/src/meta/tool-search.test.ts；两个真实 ToolRegistry 用例迁到 tests/agent-integration/tool-search.integration.test.ts |
+| job-tools.test.ts | 工具行为迁到 packages/tools/src/job/__test__/job-tools.test.ts；Engine 等待时限用例迁到 tests/agent-integration/job-tools.integration.test.ts |
+| tool-search.test.ts | 工具行为迁到 packages/tools/src/meta/__test__/tool-search.test.ts；两个真实 ToolRegistry 用例迁到 tests/agent-integration/tool-search.integration.test.ts |
 
 使用 TypeScript 语法树核对迁移前后的每个测试声明及正文，64 段逐一相同；参数化展开后共 81 项。只调整导入、目录和必需的测试辅助函数，没有删除有效断言。
 

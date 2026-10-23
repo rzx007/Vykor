@@ -1,4 +1,4 @@
-import { PluginAppResource } from "../resources/plugin-app-resource.js";
+import { PluginAppResource } from "../resources/plugins/plugin-app-resource.js";
 /**
  * daemon HTTP/SSE 客户端。
  *

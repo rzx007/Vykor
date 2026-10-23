@@ -21,7 +21,7 @@
 | `packages/personalization/src/index.ts`、`index.test.ts`、`packages/prompts/src/index.test.ts` | 状态、来源、替换、重扫防复活、提示词过滤的权威逻辑和真实文件 / prompt 测试 |
 | `packages/server/src/http/routes/facts.ts`、`facts.test.ts` | cwd 范围的列表与替换 HTTP 边界、输入及错误码、写入锁 |
 | `packages/server/src/http/server.ts` | 装配 `/facts` 路由 |
-| `packages/client/src/resources/system-resource.ts` | 两个 HTTP 资源方法及客户端可见的响应类型 |
+| `packages/client/src/resources/configuration/system-resource.ts` | 两个 HTTP 资源方法及客户端可见的响应类型 |
 | `packages/client/src/commands/session-commands.ts`、`__test__/session-commands.test.ts` | `/facts list`、`/facts replace` 的解析和呈现 |
 | `packages/server/src/commands/commands.ts`、`__test__/commands.test.ts` | 斜杠命令发现与帮助 |
 | `docs/memory-system.md`、`docs/context-memory-map.md`、`docs/memory-policy.md` | 写清已落地行为与剩余限制 |
@@ -116,7 +116,7 @@
 
 ## 任务 3：用户可用的 `/facts` 命令
 
-**文件：** 修改 `packages/client/src/resources/system-resource.ts`、`packages/client/src/commands/session-commands.ts`、`packages/client/src/commands/__test__/session-commands.test.ts`、`packages/server/src/commands/commands.ts`、`packages/server/src/commands/__test__/commands.test.ts`。
+**文件：** 修改 `packages/client/src/resources/configuration/system-resource.ts`、`packages/client/src/commands/session-commands.ts`、`packages/client/src/commands/__test__/session-commands.test.ts`、`packages/server/src/commands/commands.ts`、`packages/server/src/commands/__test__/commands.test.ts`。
 
 - [x] **步骤 1：先写失败测试。** 通过真实命令分发测试 `/facts list`：输出键、状态、观察日期和来源；测试 `/facts replace ssh_host:ops@10.1.2.3 => ops@10.1.2.4`：传入准确 cwd、旧键、新值和现有 sessionId，并显示操作 ID 及 `relatedActiveKeys` 提醒。缺少 `=>`、空旧键/新值只显示用法且不发写请求。命令目录测试验证 `/facts` 可被发现，说明与 `/memory` 不同。
 

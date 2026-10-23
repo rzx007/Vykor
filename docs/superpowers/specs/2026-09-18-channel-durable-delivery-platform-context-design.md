@@ -12,7 +12,7 @@ Feishu adapter 支持了 thread/topic 路由、入站 image/file、mention/bot �
 1. 生产上**唯一**的出站消息生产者是
    `DurableChannelBridge.publish()`（`packages/channels/src/core/durable-bridge.ts`）。
 2. 它只能读到 `ChannelDeliveryRecord`。该协议类型没有平台路由字段
-   （`packages/protocol/src/channel.ts:15-34`），数据库表 `channel_delivery`
+   （`packages/protocol/src/channels/channel.ts:15-34`），数据库表 `channel_delivery`
    也没有对应列（`packages/services/src/session-runtime/schema.ts:397-431`）。
 3. Feishu adapter 在**有 `threadId` 但没有 `platformMeta.rootMessageId`** 时
    直接抛错；只有在拿到 `rootMessageId` 时才调用
@@ -106,7 +106,7 @@ Feishu 入站事件
 `DurableChannelMessageInput` 是 `POST /channels/messages` 的请求体，
 `ChannelDeliveryRecord` 是 `/channels/status` 与 `/channels/deliveries/pending`
 的返回体，二者都是受 `CURRENT_PROTOCOL_VERSION`（当前 4，
-`packages/protocol/src/capabilities.ts:3`）约束的线协议。
+`packages/protocol/src/runtime/capabilities.ts:3`）约束的线协议。
 
 本设计**不升级** `CURRENT_PROTOCOL_VERSION`，理由：
 
@@ -329,7 +329,7 @@ channels：
   rg -n -g '!**/*.test.ts' -g '!**/__test__/**' \
     "fallback|fall back|Date\.now\(\)|msg\.message_id \?\?|senderId .*chat_id|image.*text|file.*text|thread.*chat" \
     packages/channels/src/core packages/channels/src/bus packages/channels/src/impl/feishu.ts \
-    packages/server/src/application/channel packages/protocol/src/channel.ts
+    packages/server/src/application/channel packages/protocol/src/channels/channel.ts
   ```
   允许合法 text 分支与解释语义的注释；命中项需人工确认不是「把缺失 thread/root
   字段伪造成 chat/随机值」的实现。硬性保证以测试为准，扫描只作辅助复核。

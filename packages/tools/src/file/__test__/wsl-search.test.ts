@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { EnvironmentProcessOptions } from "@vykor/environment";
 import { WslFileOperations } from "../operations.js";
-import { filterGlobOutput } from "../host-search.js";
+import { filterGlobOutput } from "../search/host-search.js";
 
 const files = [...Array.from({ length: 45 }, (_, i) => `unmatched-${i}.txt`), ".hidden.ts", "src/main.js", ".git/ignored.ts", "node_modules/ignored.ts"];
 const text = new Map([[".hidden.ts", "needle hidden"], ["src/main.js", "needle source"]]);

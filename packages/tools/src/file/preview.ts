@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { parseTextEdits, planTextEdits } from "./edit-plan.js";
+import { parseTextEdits, planTextEdits } from "./editing/edit-plan.js";
 import { decodeUtf8Text } from "./text-content.js";
 import { HostFileOperations, isFileNotFoundError } from "./operations.js";
 

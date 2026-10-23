@@ -18,7 +18,7 @@ export {
 export {
   ProtocolClient,
 } from "./protocol/index.js";
-export type { DaemonRestartPreview } from "./resources/system-resource.js";
+export type { DaemonRestartPreview } from "./resources/configuration/system-resource.js";
 export {
   SystemResource,
   ProviderResource,
@@ -39,7 +39,7 @@ export {
   McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
-export { normalizeApprovalMode, isWorkMode, patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "./runtime-configuration.js";
+export { normalizeApprovalMode, isWorkMode, patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "./configuration/runtime-configuration.js";
 export type { ApprovalMode, WorkMode, ApprovalReviewRecord } from "@vykor/protocol";
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
@@ -196,8 +196,8 @@ export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
 export { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/protocol";
 export type { OfficeFormat, OfficePreview } from "@vykor/protocol";
 
-export { PluginAppResource } from "./resources/plugin-app-resource.js";
-export { getPluginAppToolPolicy } from "./plugin-app-policy.js";
+export { PluginAppResource } from "./resources/plugins/plugin-app-resource.js";
+export { getPluginAppToolPolicy } from "./resources/plugins/plugin-app-policy.js";
 export type { PluginAppToolPolicy, PluginAppToolDescriptor } from "@vykor/protocol";
 export type { PluginAppToolRequest, PluginAppConversationRequest, PluginAppActionResponse, PluginAppActionReceipt, PluginAppSubmissionReceipt, PluginAppRecord, PluginAppSource, PluginAppRuntimeLease, PluginAppResponse } from "@vykor/protocol";
 export { PLUGIN_APP_INPUT_LIMITS, PLUGIN_APP_DATA_LIMITS, PLUGIN_APP_RESOURCE_LIMITS, parsePluginAppConversationRequest, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest } from "@vykor/protocol";

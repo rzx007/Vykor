@@ -38,8 +38,8 @@
 | `packages/tools/src/file/__test__/write.test.ts` | 修改 | Write 端到端行为 |
 | `packages/tools/src/file/text-content.ts` | 创建 | Read/ApplyPatch 共用严格 UTF-8 与二进制判断 |
 | `packages/tools/src/file/read.ts` | 修改 | 改为导入共享文本 helper，不改变行为 |
-| `packages/tools/src/file/apply-patch.ts` | 创建 | patch 解析、预演、复核、落盘 |
-| `packages/tools/src/file/__test__/apply-patch.test.ts` | 创建 | ApplyPatch 纯函数与端到端测试 |
+| `packages/tools/src/file/editing/apply-patch.ts` | 创建 | patch 解析、预演、复核、落盘 |
+| `packages/tools/src/file/editing/__test__/apply-patch.test.ts` | 创建 | ApplyPatch 纯函数与端到端测试 |
 | `packages/tools/src/file/index.ts` | 修改 | 文件工具导出 |
 | `packages/tools/src/index.ts` | 修改 | 包导出 |
 | `packages/tools/src/registry.ts` | 修改 | 注册内置 ApplyPatch |
@@ -418,7 +418,7 @@ git commit -m "feat(tools): make whole-file writes explicit and safe"
 ### 任务 3：验证并锁定 diff@7 行为
 
 **文件：**
-- 创建：`packages/tools/src/file/__test__/diff-library-contract.test.ts`
+- 创建：`packages/tools/src/file/editing/__test__/diff-library-contract.test.ts`
 
 - [ ] **步骤 1：编写三方库契约测试**
 
@@ -463,7 +463,7 @@ pnpm --filter @vykor/tools exec vitest run src/file/__test__/diff-library-contra
 - [ ] **步骤 3：Commit**
 
 ```bash
-git add packages/tools/src/file/__test__/diff-library-contract.test.ts
+git add packages/tools/src/file/editing/__test__/diff-library-contract.test.ts
 git commit -m "test(tools): lock jsdiff patch behavior"
 ```
 
@@ -474,8 +474,8 @@ git commit -m "test(tools): lock jsdiff patch behavior"
 **文件：**
 - 创建：`packages/tools/src/file/text-content.ts`
 - 修改：`packages/tools/src/file/read.ts`
-- 创建：`packages/tools/src/file/patch-path.ts`（若少于约 50 行且仅一处使用，可并入 `apply-patch.ts`）
-- 创建：`packages/tools/src/file/__test__/patch-path.test.ts`
+- 创建：`packages/tools/src/file/editing/patch-path.ts`（若少于约 50 行且仅一处使用，可并入 `apply-patch.ts`）
+- 创建：`packages/tools/src/file/editing/__test__/patch-path.test.ts`
 - 修改：`packages/tools/src/file/__test__/read.test.ts`
 
 - [ ] **步骤 1：先写路径失败测试**
@@ -533,7 +533,7 @@ pnpm --filter @vykor/tools run check-types
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/tools/src/file/text-content.ts packages/tools/src/file/read.ts packages/tools/src/file/patch-path.ts packages/tools/src/file/__test__/read.test.ts packages/tools/src/file/__test__/patch-path.test.ts
+git add packages/tools/src/file/text-content.ts packages/tools/src/file/read.ts packages/tools/src/file/editing/patch-path.ts packages/tools/src/file/__test__/read.test.ts packages/tools/src/file/editing/__test__/patch-path.test.ts
 git commit -m "refactor(tools): share text and patch path validation"
 ```
 
@@ -542,8 +542,8 @@ git commit -m "refactor(tools): share text and patch path validation"
 ### 任务 5：实现 ApplyPatch 预演
 
 **文件：**
-- 创建：`packages/tools/src/file/apply-patch.ts`
-- 创建：`packages/tools/src/file/__test__/apply-patch.test.ts`
+- 创建：`packages/tools/src/file/editing/apply-patch.ts`
+- 创建：`packages/tools/src/file/editing/__test__/apply-patch.test.ts`
 
 - [ ] **步骤 1：编写纯预演失败测试**
 
@@ -631,7 +631,7 @@ pnpm --filter @vykor/tools run check-types
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add packages/tools/src/file/apply-patch.ts packages/tools/src/file/__test__/apply-patch.test.ts packages/tools/src/file/file-mutation-guard.ts
+git add packages/tools/src/file/editing/apply-patch.ts packages/tools/src/file/editing/__test__/apply-patch.test.ts packages/tools/src/file/access/file-mutation-guard.ts
 git commit -m "feat(tools): plan validated unified patches"
 ```
 
@@ -642,8 +642,8 @@ git commit -m "feat(tools): plan validated unified patches"
 ### 任务 6：ApplyPatch 落盘、反馈和注册
 
 **文件：**
-- 修改：`packages/tools/src/file/apply-patch.ts`
-- 修改：`packages/tools/src/file/__test__/apply-patch.test.ts`
+- 修改：`packages/tools/src/file/editing/apply-patch.ts`
+- 修改：`packages/tools/src/file/editing/__test__/apply-patch.test.ts`
 - 修改：`packages/tools/src/file/index.ts`
 - 修改：`packages/tools/src/index.ts`
 - 修改：`packages/tools/src/registry.ts`
@@ -743,7 +743,7 @@ pnpm --filter @vykor/environment run check-types
 - [ ] **步骤 7：Commit**
 
 ```bash
-git add packages/tools/src/file/apply-patch.ts packages/tools/src/file/__test__/apply-patch.test.ts packages/tools/src/file/index.ts packages/tools/src/index.ts packages/tools/src/registry.ts packages/tools/src/file/edit.ts
+git add packages/tools/src/file/editing/apply-patch.ts packages/tools/src/file/editing/__test__/apply-patch.test.ts packages/tools/src/file/index.ts packages/tools/src/index.ts packages/tools/src/registry.ts packages/tools/src/file/editing/edit.ts
 git commit -m "feat(tools): add validated multi-file patching"
 ```
 

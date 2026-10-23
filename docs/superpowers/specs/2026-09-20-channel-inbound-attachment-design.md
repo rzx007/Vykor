@@ -87,7 +87,7 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 
 ## 7. 幂等与重投递（最高风险）
 
-`durableChannelInputId` 只用 `connector + accountId + externalMessageId`（`packages/protocol/src/channel.ts:70-78`）。若同一消息被重复投递而每次都重新 `import`，会产生新的 `assetId`，导致 `promptAttachmentFingerprint` 变化，`admitPrompt` 抛 `prompt_id_conflict` → 409。
+`durableChannelInputId` 只用 `connector + accountId + externalMessageId`（`packages/protocol/src/channels/channel.ts:70-78`）。若同一消息被重复投递而每次都重新 `import`，会产生新的 `assetId`，导致 `promptAttachmentFingerprint` 变化，`admitPrompt` 抛 `prompt_id_conflict` → 409。
 
 **必须**：导入前先 `sessionQueries.getInput(inputId)`；若已存在且已带附件引用，**复用**，不重新下载/导入。
 

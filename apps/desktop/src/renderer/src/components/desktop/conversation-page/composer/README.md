@@ -73,7 +73,7 @@ type SessionUserInputItem =
   | { type: "context"; kind: "conversation"; id: string; displayName: string }
 ```
 
-跨 Desktop、client 和 server 的权威定义位于 `packages/protocol/src/session-input-items.ts`。本功能直接采用当前协议，不提供旧 composer 协议迁移或双读。
+跨 Desktop、client 和 server 的权威定义位于 `packages/protocol/src/session/session-input-items.ts`。本功能直接采用当前协议，不提供旧 composer 协议迁移或双读。
 
 ## `@` 与 `+` 数据流
 
@@ -159,7 +159,7 @@ Composer 触发的系统操作通过 metadata presentation 展示，不作为普
 - `composer/__test__/rich-prompt-input.interaction.test.tsx`
 - `composer/__test__/composer.attach-button.test.ts`
 - `composer/__test__/composer-attachment-preview.test.ts`
-- `packages/protocol/src/session-input-items.test.ts`
+- `packages/protocol/src/session/__test__/session-input-items.test.ts`
 - `packages/server/src/application/session/__test__/session-input-materializer.test.ts`
 
 运行相关测试：

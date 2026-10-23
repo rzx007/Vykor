@@ -29,9 +29,9 @@
   - `packages/agent-contracts/src/events.ts:5-54` 的 `StreamEvent` 只有 text/tool/error/usage/complete，没有 reasoning 事件。
   - `packages/server/src/application/session/transcript-projection.ts` 只产出 `text` / `tool` / `attachment` / `error` 四类 part。
   - `packages/client/src/state/reducer.ts:281` 硬编码 `field === "text"`，`reasoning` 增量被直接丢弃。
-  - `packages/protocol/src/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 字面量只有 `"text"`。
+  - `packages/protocol/src/session/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 字面量只有 `"text"`。
   - 上游事件模型同样缺失：`packages/core/src/types/runtime.ts:241-248` 只有 `output.text.delta`。
-- 协议层已经预留：`packages/protocol/src/session.ts:15-23` 的 `SessionMessagePartType` 含 `"reasoning"`；`packages/services/src/session-runtime/event-registry.ts:178-181` 的 delta 字段校验已允许 `"reasoning"`。
+- 协议层已经预留：`packages/protocol/src/session/session.ts:15-23` 的 `SessionMessagePartType` 含 `"reasoning"`；`packages/services/src/session-runtime/event-registry.ts:178-181` 的 delta 字段校验已允许 `"reasoning"`。
 - TUI 目前把 reasoning 和正文混成同一条 assistant 条目、不区分样式：`apps/frontend/src/hooks/transcript.ts:53-60`。
 
 ### 回传现状（隐患一）
@@ -53,7 +53,7 @@
 
 - `packages/core/src/types/settings.ts:125-156` 没有"是否显示思考过程"字段。
 - 桌面 `showReasoning` 只是组件参数（`transcript.tsx:36,51`），唯一显式关闭在子智能体只读回放 `tools/agents/agents-tool.tsx:322`（本设计保留该行为）。
-- 设置的下发路径已有：`packages/server/src/application/settings-api.ts` → `GET/PATCH /settings`（`packages/server/src/http/routes/system.ts:180-243`）→ 客户端 `packages/client/src/resources/system-resource.ts:32-57`。
+- 设置的下发路径已有：`packages/server/src/application/settings-api.ts` → `GET/PATCH /settings`（`packages/server/src/http/routes/system.ts:180-243`）→ 客户端 `packages/client/src/resources/configuration/system-resource.ts:32-57`。
 
 ## 术语
 
@@ -105,7 +105,7 @@ reasoningReplay?: string;
 
 ### 协议
 
-`packages/protocol/src/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 从 `"text"` 放开为 `"text" | "reasoning"`。`SessionMessagePartType` 已含 `"reasoning"`，无需改动；无需数据库 schema 迁移。
+`packages/protocol/src/session/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 从 `"text"` 放开为 `"text" | "reasoning"`。`SessionMessagePartType` 已含 `"reasoning"`，无需改动；无需数据库 schema 迁移。
 
 reasoning part 的来源记录在 `metadata.source`（`"reasoning_content" | "think"`）：part 记录没有专有字段，`metadata` 是协议留给扩展的位置。重建历史时要靠它区分哪些能回传。
 

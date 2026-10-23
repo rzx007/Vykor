@@ -18,10 +18,10 @@
 - 创建 `packages/agent-runtime/src/node/memory/remember-tool.test.ts`：验证 user/project/disabled/invalid 输入行为。
 - 修改 `packages/agent-runtime/src/node/runtime/agent-composition.ts`：用当前 memory runtime 注册工具。
 - 修改 `packages/agent-runtime/src/index.ts`：按现有公开 API 方式导出工具工厂和类型。
-- 创建 `packages/tools/src/file/managed-persistence-path.ts`：集中判断 USER profile 和当前项目记忆路径。
-- 创建 `packages/tools/src/file/__test__/managed-persistence-path.test.ts`：验证路径边界和大小写/子路径处理。
+- 创建 `packages/tools/src/file/access/managed-persistence-path.ts`：集中判断 USER profile 和当前项目记忆路径。
+- 创建 `packages/tools/src/file/access/__test__/managed-persistence-path.test.ts`：验证路径边界和大小写/子路径处理。
 - 修改 `packages/tools/src/file/write.ts`：写入前拒绝受管理路径。
-- 修改 `packages/tools/src/file/edit.ts`：编辑前拒绝受管理路径。
+- 修改 `packages/tools/src/file/editing/edit.ts`：编辑前拒绝受管理路径。
 - 修改 `packages/tools/src/file/__test__/operations.test.ts`：验证 Write/Edit 拒绝受管理路径且普通文件不受影响。
 
 ### 任务 1：安全立即追加 USER profile
@@ -177,10 +177,10 @@ git commit -m "feat(memory): 添加受管理的 Remember 工具"
 ### 任务 3：阻止 Write/Edit 误写受管理记忆路径
 
 **文件：**
-- 创建：`packages/tools/src/file/managed-persistence-path.ts`
-- 创建：`packages/tools/src/file/__test__/managed-persistence-path.test.ts`
+- 创建：`packages/tools/src/file/access/managed-persistence-path.ts`
+- 创建：`packages/tools/src/file/access/__test__/managed-persistence-path.test.ts`
 - 修改：`packages/tools/src/file/write.ts:18-55`
-- 修改：`packages/tools/src/file/edit.ts:18-65`
+- 修改：`packages/tools/src/file/editing/edit.ts:18-65`
 - 修改：`packages/tools/src/file/__test__/operations.test.ts`
 
 - [x] **步骤 1：先写路径边界失败测试**
@@ -242,7 +242,7 @@ pnpm --filter @vykor/tools check-types
 - [x] **步骤 6：提交**
 
 ```bash
-git add packages/tools/src/file/managed-persistence-path.ts packages/tools/src/file/__test__/managed-persistence-path.test.ts packages/tools/src/file/write.ts packages/tools/src/file/edit.ts packages/tools/src/file/__test__/operations.test.ts
+git add packages/tools/src/file/access/managed-persistence-path.ts packages/tools/src/file/access/__test__/managed-persistence-path.test.ts packages/tools/src/file/write.ts packages/tools/src/file/editing/edit.ts packages/tools/src/file/__test__/operations.test.ts
 git commit -m "fix(memory): 阻止文件工具误写持久化记忆"
 ```
 

@@ -663,7 +663,7 @@ PDF 和 Office 不应简单追加到文本分类器。建议单独确定：
 
 ### 协议和存储
 
-- `packages/protocol/src/attachment.ts`
+- `packages/protocol/src/attachments/attachment.ts`
 - `packages/services/src/attachment/attachment-application-service.ts`
 - `packages/services/src/attachment/attachment-blob-store.ts`
 - `packages/services/src/session-runtime/migrations/0013_attachments.sql`

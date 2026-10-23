@@ -26,11 +26,11 @@
 
 ### 修改文件
 
-- `packages/protocol/src/attachment.ts`：定义并解析 `SessionInputAttachmentRecord`。
+- `packages/protocol/src/attachments/attachment.ts`：定义并解析 `SessionInputAttachmentRecord`。
 - `packages/protocol/src/attachment.test.ts`：引用记录协议测试。
-- `packages/protocol/src/session.ts`：Prompt 附件输入、必填 `attachments`、attachment/transformation part 类型。
-- `packages/protocol/src/requests.ts`、`packages/protocol/src/requests.test.ts`：解析 HTTP Prompt 的附件数组。
-- `packages/protocol/src/serialization.ts`、`packages/protocol/src/serialization.test.ts`：严格解析 Snapshot、SSE 中的附件与新 part。
+- `packages/protocol/src/session/session.ts`：Prompt 附件输入、必填 `attachments`、attachment/transformation part 类型。
+- `packages/protocol/src/requests/requests.ts`、`packages/protocol/src/requests/__test__/requests.test.ts`：解析 HTTP Prompt 的附件数组。
+- `packages/protocol/src/serialization/serialization.ts`、`packages/protocol/src/serialization/__test__/serialization.test.ts`：严格解析 Snapshot、SSE 中的附件与新 part。
 - `packages/protocol/src/index.ts`：导出新增协议类型和解析函数。
 - `packages/services/src/session-runtime/migrations/0000_session_runtime.sql`：新数据库基线移除 `session_run.input_id` 唯一约束。
 - `packages/services/src/session-runtime/migrations/0011_storage_format.sql`：新数据库直接写入 storage format 2。
@@ -74,13 +74,13 @@
 
 **文件：**
 
-- 修改：`packages/protocol/src/attachment.ts`
+- 修改：`packages/protocol/src/attachments/attachment.ts`
 - 修改：`packages/protocol/src/attachment.test.ts`
-- 修改：`packages/protocol/src/session.ts`
-- 修改：`packages/protocol/src/requests.ts`
-- 修改：`packages/protocol/src/requests.test.ts`
-- 修改：`packages/protocol/src/serialization.ts`
-- 修改：`packages/protocol/src/serialization.test.ts`
+- 修改：`packages/protocol/src/session/session.ts`
+- 修改：`packages/protocol/src/requests/requests.ts`
+- 修改：`packages/protocol/src/requests/__test__/requests.test.ts`
+- 修改：`packages/protocol/src/serialization/serialization.ts`
+- 修改：`packages/protocol/src/serialization/__test__/serialization.test.ts`
 - 修改：`packages/protocol/src/index.ts`
 - 修改：`packages/client/src/types/index.ts`
 - 修改：`packages/client/src/index.ts`

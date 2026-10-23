@@ -1,5 +1,5 @@
 import type { JobSnapshot } from "@vykor/protocol";
-import { normalizeApprovalMode } from "../runtime-configuration.js";
+import { normalizeApprovalMode } from "../configuration/runtime-configuration.js";
 import { hasActiveRun, type SessionCommandHost, type SlashLine } from "./session-commands.js";
 
 type ReadPresentation = (key: string, title: string, load: () => Promise<string>) => Promise<void>;

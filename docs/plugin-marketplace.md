@@ -22,7 +22,7 @@
 
 通过插件页“添加 → 添加插件源”输入 HTTPS 目录地址，也可在市场的“插件源”中管理已有来源。来源停用或移除会撤销待确认安装，但保留已安装插件及其数据。内置来源可以停用，不能移除。
 
-自定义源的 ZIP 必须与目录同源，不能重定向到陌生域名。目录格式来自 [市场契约源码](../packages/plugin-contracts/src/marketplace.ts)：插件 ID、名称、版本必须与实际包一致；安装包需要明确的 SHA-256、大小及宿主最低版本，Node 和平台要求按需声明。官方源的 GitHub Release 跳转只允许固定仓库与正常资源域名。
+自定义源的 ZIP 必须与目录同源，不能重定向到陌生域名。目录格式来自 [市场契约源码](../packages/plugin-contracts/src/marketplace/marketplace.ts)：插件 ID、名称、版本必须与实际包一致；安装包需要明确的 SHA-256、大小及宿主最低版本，Node 和平台要求按需声明。官方源的 GitHub Release 跳转只允许固定仓库与正常资源域名。
 
 来源身份绑定规范化目录地址，不相信远端清单自称官方，也不因市场名称相同而合并。目录缓存 15 分钟，手动刷新跳过缓存；离线展示缓存和更新时间，不能用过期的不可用来源开始新安装。
 
@@ -48,11 +48,11 @@
 
 ## 代码职责
 
-- [目录格式与数据类型](../packages/plugin-contracts/src/marketplace.ts)：校验分发数据。
-- [来源读取和下载](../packages/plugin-sources/src/marketplace.ts)：来源配置、缓存、网络边界及下载校验。
+- [目录格式与数据类型](../packages/plugin-contracts/src/marketplace/marketplace.ts)：校验分发数据。
+- [来源读取和下载](../packages/plugin-sources/src/marketplace/marketplace.ts)：来源配置、缓存、网络边界及下载校验。
 - [安装协调](../packages/server/src/application/default-services/extensions/marketplace-service.ts)：候选包、兼容要求、权限、来源和安装回执。
 - [原 Installer](../packages/plugins/src/installation/installer.ts)：代码快照与安装记录提交。
-- [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[客户端资源](../packages/client/src/resources/plugin-resource.ts)：共享请求与响应。
+- [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[客户端资源](../packages/client/src/resources/plugins/plugin-resource.ts)：共享请求与响应。
 - [Protocol](../packages/protocol/src/index.ts)统一公开市场通信类型；Client 仍只直接依赖 Protocol。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。
 - [桌面确认](../apps/desktop/src/main/features/plugin/marketplace-service.ts)和[市场界面](../apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/marketplace.tsx)：窗口绑定、用户确认和展示。
 

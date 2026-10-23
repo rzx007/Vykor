@@ -227,7 +227,7 @@ Notes 的远端更新保留本地草稿。采用远端正文需要确认，保�
 | --- | --- |
 | 根清单字段 | packages/plugins/src/manifest/schema-v1.ts |
 | 文件与旧 UI 校验 | packages/plugins/src/manifest/validate.ts |
-| 当前可激活组件 | packages/plugins/src/load-native-plugin.ts |
+| 当前可激活组件 | packages/plugins/src/loading/load-native-plugin.ts |
 | 安装权限汇总 | packages/plugins/src/installation/installer.ts |
 | 任务可用能力的绑定 | packages/agent-runtime/src/node/plugins/run-capability-view.ts |
 | 自动与显式插件范围 | packages/server/src/application/session/plugins/session-plugin-capability-service.ts |

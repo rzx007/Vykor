@@ -1,4 +1,4 @@
-import { patchSessionRuntimeMetadata } from "../runtime-configuration.js";
+import { patchSessionRuntimeMetadata } from "../configuration/runtime-configuration.js";
 import type { SessionCommandHost, SlashLine } from "./session-commands.js";
 
 type ReadPresentation = (key: string, title: string, load: () => Promise<string>) => Promise<void>;

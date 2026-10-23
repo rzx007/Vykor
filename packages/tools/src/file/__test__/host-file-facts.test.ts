@@ -1,8 +1,8 @@
 import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 import {createFileReadTool} from "./../read.js";
 import {createFileWriteTool} from "./../write.js";
-import {createFileEditTool} from "./../edit.js";
-import {createApplyPatchTool} from "./../apply-patch.js";
+import {createFileEditTool} from "../editing/edit.js";
+import {createApplyPatchTool} from "../editing/apply-patch.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,8 +11,8 @@ import { createTwoFilesPatch } from "diff";
 import { describe, expect, it } from "vitest";
 import { fileReadTool, hostFileFacts } from "../read.js";
 import { fileWriteTool } from "../write.js";
-import { fileEditTool } from "../edit.js";
-import { applyPatchTool } from "../apply-patch.js";
+import { fileEditTool } from "../editing/edit.js";
+import { applyPatchTool } from "../editing/apply-patch.js";
 import { HostFileOperations } from "../operations.js";
 
 const digest = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;

@@ -27,7 +27,7 @@
 
 | 位置 | 改动及职责 |
 | --- | --- |
-| packages/protocol/src/session-goals.ts | 最小 Goal、正文编辑、用户动作及 GoalUpdate 请求；只做结构校验 |
+| packages/protocol/src/session/session-goals.ts | 最小 Goal、正文编辑、用户动作及 GoalUpdate 请求；只做结构校验 |
 | packages/services/src/goals/goal-records.ts、goal-repository.ts、goal-transactions.ts、goal-version.ts | 最小状态与简单正文记录；删除准备、评估和证据存取 |
 | packages/services/src/session-runtime/schema.ts；packages/services/src/database/temporary-control-records.ts | 同步 SQLite 与临时会话结构；保留现有事务语义 |
 | packages/server/src/application/goals/goal-run-contribution.ts、goal-read-tool.ts、agent.ts | 简短目标注入、普通工具能力及绑定工具 |
@@ -37,7 +37,7 @@
 | packages/server/src/application/session/session-run-executor.ts；packages/server/src/application/daemon-application.ts | 装配 Goal 绑定及宿主回调，不判断完成语义 |
 | packages/server/src/application/agent/daemon-agent-event-projector.ts | 移除旧评估事件分支；保留真实用量、父子 Run 归属和通用投影 |
 | packages/server/src/application/session/goal-wait-verifier.ts、goal-external-wait-observer.ts | 保留具体任务核验、退避与唯一恢复，去除准备/验收依赖 |
-| packages/client/src/resources/session-resource.ts；packages/server/src/http/routes/session-goal.ts | 同步当前请求形状，沿用既有路由 |
+| packages/client/src/resources/session/session-resource.ts；packages/server/src/http/routes/session-goal.ts | 同步当前请求形状，沿用既有路由 |
 | apps/desktop/src/renderer/src/stores/desktop-session/goal-actions.ts、types.ts | 删除变更类型、验收回执和重整目标动作，保留正文草稿与取消 |
 | apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/goal-banner.tsx、goal-edit-fields.tsx、composer.tsx、goal-stop-reason-label.ts | 删除准备/验收展示及必填变更原因，保留已有简洁目标栏和二级详情 |
 | apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx | 同步 Composer 参数和提交按钮条件，移除旧必填变更原因检查 |

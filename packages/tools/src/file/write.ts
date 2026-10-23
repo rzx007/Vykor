@@ -1,11 +1,11 @@
 import type { FileToolHost } from "../ports/policy.js";
 import { createHash } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
-import { resolveToolPathInContext } from "./environment-path.js";
-import { sandboxPathError } from "./sandbox-guard.js";
+import { resolveToolPathInContext } from "./access/environment-path.js";
+import { sandboxPathError } from "./access/sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, fileSnapshotMatches } from "./operations.js";
-import { managedPersistencePathKind } from "./managed-persistence-path.js";
-import { isSystemPath } from "./file-mutation-guard.js";
+import { managedPersistencePathKind } from "./access/managed-persistence-path.js";
+import { isSystemPath } from "./access/file-mutation-guard.js";
 import { fileDigest, hostFileFacts } from "./read.js";
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;

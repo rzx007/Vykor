@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { SkillLoader, SkillRegistry, type SkillDefinition } from "@vykor/skills";
-import { resolveNativePluginPath } from "../paths.js";
-import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
+import type { PluginComponentResult, ValidatedNativePlugin } from "../shared/types.js";
 
 export async function loadNativeSkills(
   plugin: ValidatedNativePlugin,

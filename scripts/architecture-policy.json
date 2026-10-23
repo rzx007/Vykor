@@ -886,9 +886,9 @@
         "@vykor/plugin-contracts"
       ],
       "allowTargetPaths": [
-        "packages/plugin-contracts/src/manifest.ts",
-        "packages/plugin-contracts/src/runtime-data.ts",
-        "packages/plugin-contracts/src/limits.ts"
+        "packages/plugin-contracts/src/manifest/manifest.ts",
+        "packages/plugin-contracts/src/runtime/runtime-data.ts",
+        "packages/plugin-contracts/src/manifest/limits.ts"
       ],
       "removeByPhase": "P13",
       "migrationId": "M40"

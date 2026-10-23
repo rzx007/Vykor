@@ -159,8 +159,8 @@ pnpm-workspace.yaml
 
 **文件：**
 
-- 创建：`packages/protocol/src/auto-review.ts`
-- 创建：`packages/protocol/src/auto-review.test.ts`
+- 创建：`packages/protocol/src/permissions/auto-review.ts`
+- 创建：`packages/protocol/src/permissions/__test__/auto-review.test.ts`
 - 修改：`packages/protocol/src/index.ts`
 - 修改：`packages/core/src/types/settings.ts`
 - 修改：`packages/core/src/config/settings.ts`
@@ -231,7 +231,7 @@ pnpm --filter @vykor/server run check-types
 - [ ] **步骤 6：提交**
 
 ```powershell
-git add packages/protocol/src/auto-review.ts packages/protocol/src/auto-review.test.ts packages/protocol/src/index.ts packages/core/src/types/settings.ts packages/core/src/config/settings.ts packages/core/src/config/settings.test.ts apps/cli/src/config-coerce.ts apps/cli/src/index.test.ts packages/server/src/application/auto-review
+git add packages/protocol/src/permissions/auto-review.ts packages/protocol/src/permissions/__test__/auto-review.test.ts packages/protocol/src/index.ts packages/core/src/types/settings.ts packages/core/src/config/settings.ts packages/core/src/config/settings.test.ts apps/cli/src/config-coerce.ts apps/cli/src/index.test.ts packages/server/src/application/auto-review
 git commit -m "feat(review): define risk-based auto review policy"
 ```
 
@@ -556,8 +556,8 @@ git commit -m "feat(server): trigger bounded post-run reviews"
 
 **文件：**
 
-- 修改：`packages/protocol/src/execution-observability.ts`
-- 修改：`packages/protocol/src/execution-observability.test.ts`
+- 修改：`packages/protocol/src/runtime/execution-observability.ts`
+- 修改：`packages/protocol/src/runtime/__test__/execution-observability.test.ts`
 - 修改：`packages/server/src/application/observability/session-execution-observation-reader.ts`
 - 修改：`packages/server/src/application/observability/session-execution-observation-reader.test.ts`
 - 修改：`packages/server/src/application/observability/execution-observation-service.ts`
@@ -600,7 +600,7 @@ pnpm --filter @vykor/protocol exec vitest run src/execution-observability.test.t
 pnpm --filter @vykor/server exec vitest run src/application/observability src/http/routes/__test__/routes.test.ts
 pnpm --filter @rzx/ohs exec vitest run src/commands/debug.test.ts
 pnpm --filter @vykor/server run check-types
-git add packages/protocol/src/execution-observability.ts packages/protocol/src/execution-observability.test.ts packages/server/src/application/observability packages/server/src/http/routes/__test__/routes.test.ts apps/cli/src/commands/debug.ts apps/cli/src/commands/debug.test.ts
+git add packages/protocol/src/runtime/execution-observability.ts packages/protocol/src/runtime/__test__/execution-observability.test.ts packages/server/src/application/observability packages/server/src/http/routes/__test__/routes.test.ts apps/cli/src/commands/debug.ts apps/cli/src/commands/debug.test.ts
 git commit -m "feat(observability): expose automatic review outcomes"
 ```
 

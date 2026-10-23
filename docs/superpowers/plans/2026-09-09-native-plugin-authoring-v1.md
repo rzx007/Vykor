@@ -12,7 +12,7 @@
 
 ## 任务 1：公开插件作者使用的类型
 
-**文件：** 新建 `packages/plugins/src/sdk.ts`、`packages/plugins/type-tests/sdk.ts`、`packages/plugins/tsconfig.sdk-tests.json`；修改 `packages/plugins/package.json` 与 `packages/agent-runtime/src/node/plugins/native-tools/protocol.ts`。
+**文件：** 新建 `packages/plugins/src/sdk.ts`、`packages/plugins/__test__/sdk.type-test.ts`、`packages/plugins/tsconfig.sdk-tests.json`；修改 `packages/plugins/package.json` 与 `packages/agent-runtime/src/node/plugins/native-tools/protocol.ts`。
 
 - [x] 先编写类型样例，定义正确的 `NativeToolRegister`，并以 `@ts-expect-error` 覆盖缺少 invoke、结果类型错误、调用 context.terminal/context.settings 的情况。
 - [x] 配置独立类型测试的 tsconfig：继承包配置、rootDir 为包根、include 为类型测试目录、noEmit 为 true；从公开子路径导入类型，验证 package exports 可被解析。

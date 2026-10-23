@@ -119,10 +119,10 @@
 
 ### 任务 7：协议、HTTP/SSE 与 typed client
 
-- 新建 `packages/protocol/src/mcp-oauth.ts`（+测试）：登录/回调/操作视图/事件/状态快照 DTO 与校验；长度上限、禁止任意 endpoint/redirect 覆盖、错误响应只含安全字段。
+- 新建 `packages/protocol/src/extensions/mcp-oauth.ts`（+测试）：登录/回调/操作视图/事件/状态快照 DTO 与校验；长度上限、禁止任意 endpoint/redirect 覆盖、错误响应只含安全字段。
 - `capabilities.ts`（+测试）：`features.mcpOAuth = 1` 与 `mcpOAuth: { instanceId }`，缺失仍兼容旧 server。
 - `packages/server/src/http/routes/mcp.ts`（+测试）：`GET /mcp/oauth/status`、`POST /mcp/:name/oauth/login`、`GET/DELETE /mcp/oauth/operations/:loginId`、`GET .../events`（SSE）、`POST .../callback`、`POST /mcp/:name/oauth/logout`，全部 `no-store`，callbackUrl 仅 POST body；操作错误映射 400/404/409/429/503。`routes/system.ts`、`http/server.ts` 注入 instanceId 与两个服务。
-- `packages/client/src/resources/mcp-resource.ts`（+测试）：`authStatus/startLogin/getLogin/watchLogin/submitCallback/cancelLogin/logout`，SSE 复用现有 transport 并支持 `AbortSignal`。
+- `packages/client/src/resources/configuration/mcp-resource.ts`（+测试）：`authStatus/startLogin/getLogin/watchLogin/submitCallback/cancelLogin/logout`，SSE 复用现有 transport 并支持 `AbortSignal`。
 - 未改动 `packages/client/src/index.ts` 导出集合，`check:client-api` 保持通过。
 
 ### 计划任务 8：未实现

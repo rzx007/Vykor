@@ -49,9 +49,9 @@
 
 ### Terminal、协议与服务
 
-- `packages/protocol/src/terminal.ts`：定义 `TerminalScope`，让 `projectId` 可选并保留解析后的 scope。
-- `packages/protocol/src/serialization.ts`：严格解码新终端响应。
-- `packages/protocol/src/serialization.test.ts`：覆盖 project/session 两种 scope。
+- `packages/protocol/src/runtime/terminal.ts`：定义 `TerminalScope`，让 `projectId` 可选并保留解析后的 scope。
+- `packages/protocol/src/serialization/serialization.ts`：严格解码新终端响应。
+- `packages/protocol/src/serialization/__test__/serialization.test.ts`：覆盖 project/session 两种 scope。
 - `packages/terminal/src/provider.ts`：让 Terminal Provider 接收已解析的 PTY target 和释放回调。
 - `packages/terminal-node/src/local-terminal-provider.ts`：统一使用 node-pty，删除普通 pipe 的 sandbox terminal。
 - `packages/terminal-node/src/environment-terminal-target.ts`：把本机或环境 PTY target 转成 node-pty 参数。
@@ -83,9 +83,9 @@
 
 **文件：**
 
-- 修改：`packages/protocol/src/terminal.ts`
-- 修改：`packages/protocol/src/serialization.ts`
-- 修改：`packages/protocol/src/serialization.test.ts`
+- 修改：`packages/protocol/src/runtime/terminal.ts`
+- 修改：`packages/protocol/src/serialization/serialization.ts`
+- 修改：`packages/protocol/src/serialization/__test__/serialization.test.ts`
 - 修改：`packages/client/src/transport/http-client.ts`
 - 修改：`packages/server/src/http/routes/terminal.ts`
 - 修改：`packages/server/src/http/routes/terminal.test.ts`

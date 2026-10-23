@@ -109,7 +109,7 @@ packages/server/src/application/visual-tools/remote-image-source.ts
 
 ### 4.3 Client
 
-`packages/client/src/resources/attachment-resource.ts` 保持原位。它已经符合 Client 的领域 Resource 规则，没有同层重复入口，也不承载服务端业务逻辑。
+`packages/client/src/resources/session/attachment-resource.ts` 保持原位。它已经符合 Client 的领域 Resource 规则，没有同层重复入口，也不承载服务端业务逻辑。
 
 ### 4.4 Desktop
 

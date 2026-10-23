@@ -15,7 +15,7 @@
 | 已存在的能力 | 当前入口 | 对本阶段的影响 |
 | --- | --- | --- |
 | Native manifest 与路径校验 | `packages/plugins/src/manifest/schema-v1.ts`、`paths.ts` | 延续 schemaVersion 1，不增加第二种格式 |
-| 五类组件加载 | `packages/plugins/src/load-native-plugin.ts` | 文档覆盖 Skills、Agents、Hooks、MCP、Node Tools |
+| 五类组件加载 | `packages/plugins/src/loading/load-native-plugin.ts` | 文档覆盖 Skills、Agents、Hooks、MCP、Node Tools |
 | Tool 注册与调用 | `packages/agent-runtime/src/node/plugins/native-tools/host-entry.mjs` | 导出 `registerTools()`，工具提供 `invoke()`；不能写成宿主内部的 `execute()` |
 | 调用上下文 | `native-tools/protocol.ts` 与 `host-entry.mjs` | 提供 cwd、sessionId、deadline、signal、plugin、permissions |
 | 独立进程与调用保护 | `native-tools/tool-host.ts`、`activate.ts`、`guard.ts` | 复用参数检查、超时、取消、审计、名称冲突和清理 |

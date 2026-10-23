@@ -1,8 +1,8 @@
 import type { ToolResult } from "@vykor/agent-contracts";
-import type { VykorPluginPermissions } from "./types.js";
+import type { VykorPluginPermissions } from "./shared/types.js";
 
 export type { ToolResult } from "@vykor/agent-contracts";
-export type { VykorPluginPermissions } from "./types.js";
+export type { VykorPluginPermissions } from "./shared/types.js";
 
 export interface NativeToolPluginIdentity {
   id: string;

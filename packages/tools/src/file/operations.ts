@@ -16,11 +16,11 @@ import {
   runHostProcess,
   startHostSearch,
   SKIP_DIRS,
-} from "./host-search.js";
-import { checkGrepOptions, consumeGrepProcess, withGrepDeadline } from "./grep-search.js";
-import { FALLBACK_FILE_BYTES, searchFallback } from "./grep-fallback.js";
+} from "./search/host-search.js";
+import { checkGrepOptions, consumeGrepProcess, withGrepDeadline } from "./search/grep-search.js";
+import { FALLBACK_FILE_BYTES, searchFallback } from "./search/grep-fallback.js";
 
-export { globToRegex } from "./host-search.js";
+export { globToRegex } from "./search/host-search.js";
 
 export interface FileEntry {
   name: string;

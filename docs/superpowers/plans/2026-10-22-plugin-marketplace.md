@@ -29,8 +29,8 @@
 
 | 现有位置 | 可以复用的能力 | 市场需要补的部分 |
 | --- | --- | --- |
-| `packages/plugin-sources/src/local-zip.ts` | ZIP/TAR 解压、安全路径检查、100 MiB 压缩包与 250 MiB 解压上限 | HTTPS 下载、市场目录解析、下载内容校验 |
-| `packages/plugin-sources/src/git-source.ts` | Git 固定提交、来源摘要 | 保留给开发安装；当前只认仓库根目录，不作为市场安装主路径 |
+| `packages/plugin-sources/src/sources/local-zip.ts` | ZIP/TAR 解压、安全路径检查、100 MiB 压缩包与 250 MiB 解压上限 | HTTPS 下载、市场目录解析、下载内容校验 |
+| `packages/plugin-sources/src/sources/git-source.ts` | Git 固定提交、来源摘要 | 保留给开发安装；当前只认仓库根目录，不作为市场安装主路径 |
 | `packages/server/src/application/default-services/plugin-service.ts` | 预览实际清单、权限确认、拒绝替换受管理插件 | 从市场选择版本、记录来源、安装和更新的统一结果 |
 | `packages/plugins/src/installation/installer.ts` 与 `store.ts` | 内容摘要、不可变代码快照、原子更新安装记录 | 可选市场来源信息、有界安装回执，限制跨源替换 |
 | Desktop 插件页与 Main 的 `selection-store.ts` | 已安装列表、详情、权限弹窗、短期选择凭据 | 浏览市场、更新状态、市场选择凭据 |

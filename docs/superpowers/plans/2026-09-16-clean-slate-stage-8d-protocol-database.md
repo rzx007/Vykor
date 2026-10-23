@@ -12,7 +12,7 @@
 
 ## 文件结构
 
-- 修改：`packages/protocol/src/capabilities.ts` 与测试，提升协议版本并固定 header 常量。
+- 修改：`packages/protocol/src/runtime/capabilities.ts` 与测试，提升协议版本并固定 header 常量。
 - 修改：`packages/client/src/transport/http-transport.ts`、`sse-transport.ts` 与测试，实现共享握手状态。
 - 创建：`packages/server/src/http/protocol-middleware.ts` 与测试。
 - 修改：`packages/server/src/http/server.ts`、`routes/system.ts`，全局注册 middleware。
@@ -20,7 +20,7 @@
 - 重建：`packages/services/src/session-runtime/migrations/meta/_journal.json`。
 - 删除：原 `0000_session_runtime.sql` 至 `0020_session_goal_plugin.sql`。
 - 修改：`packages/services/src/database/migrations.ts` 与数据库测试。
-- 修改：`packages/core/src/config/settings.ts`、`packages/protocol/src/runtime-config.ts` 及测试，保持当前配置严格解析。
+- 修改：`packages/core/src/config/settings.ts`、`packages/protocol/src/runtime/runtime-config.ts` 及测试，保持当前配置严格解析。
 
 ### 任务 1：定义协议硬切契约
 

@@ -34,7 +34,7 @@
 | `.../transcript/transcript.tsx` | 修改 | 按渲染计划输出（A3） |
 | `packages/client/src/transport/sse-transport.ts` | 修改 | 原始帧空闲超时（B1） |
 | `packages/client/src/types/index.ts` | 修改 | `EventSyncOptions.idleTimeoutMs`（B1） |
-| `packages/client/src/resources/event-resource.ts` | 修改 | 透传 `idleTimeoutMs`（B1） |
+| `packages/client/src/resources/session/event-resource.ts` | 修改 | 透传 `idleTimeoutMs`（B1） |
 | `packages/client/src/state/sync.ts` | 修改 | 重连时重新取快照 + 透传 idle 超时（B2） |
 | `packages/client/src/transport/__test__/http-client.test.ts` | 修改 | 同步既有「session 流不重取快照」断言（B2 行为变更） |
 | `apps/desktop/src/main/features/session/session-subscription-pump.ts` | 新建 | 带退避的订阅重建循环（纯函数，B3） |
@@ -959,7 +959,7 @@ Expected: 无错误
 **Files:**
 - Modify: `packages/client/src/transport/sse-transport.ts`
 - Modify: `packages/client/src/types/index.ts`（`EventSyncOptions` 增加 `idleTimeoutMs?: number`）
-- Modify: `packages/client/src/resources/event-resource.ts`（透传）
+- Modify: `packages/client/src/resources/session/event-resource.ts`（透传）
 - Test: `packages/client/src/transport/__test__/sse-transport.test.ts`（新建）
 
 **Interfaces:**
@@ -1175,7 +1175,7 @@ async function* readRawSseFrames(
   idleTimeoutMs?: number
 ```
 
-`packages/client/src/resources/event-resource.ts` 的 `sse.stream(...)` 调用里增加：
+`packages/client/src/resources/session/event-resource.ts` 的 `sse.stream(...)` 调用里增加：
 
 ```ts
         idleTimeoutMs: options.idleTimeoutMs,

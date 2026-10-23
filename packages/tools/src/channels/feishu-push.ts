@@ -1,6 +1,6 @@
 import type { ToolDefinition } from "@vykor/agent-contracts";
 import type { FeishuChannelPort } from "../ports/channel.js";
-import { createToolAbortScope } from "../abort.js";
+import { createToolAbortScope } from "../shared/abort.js";
 
 /** 飞书/Lark 开放平台 API 基址；lark 地区走 open.larksuite.com。 */
 export function feishuApiBase(domain: "feishu" | "lark" | undefined): string {

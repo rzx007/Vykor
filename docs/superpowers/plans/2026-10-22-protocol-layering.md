@@ -67,7 +67,7 @@ assert.ok(checkModuleDependency({
 
 ## P8：基础数据与能力契约（M31–M33）
 
-**新建：** packages/json-data/package.json、src/json.ts、src/json.test.ts；packages/jobs/src/contracts.ts；packages/terminal/src/contracts.ts；packages/host-config/src/permission-modes.ts；packages/permissions/src/effective-permission-mode.ts。
+**新建：** packages/json-data/package.json、src/json.ts、src/json.test.ts；packages/jobs/src/contracts.ts；packages/terminal/src/contracts.ts；packages/host-config/src/permissions/permission-modes.ts；packages/permissions/src/effective-permission-mode.ts。
 
 **修改：** agent-contracts/src/permissions.ts、children.ts；host-config/src/permissions.ts；sandbox/src/approval-policy.ts；jobs/src/index.ts；terminal/src/provider.ts、events.ts；Protocol 对应文件及 Node 配置/审查调用方；相关 package.json、tsconfig、Vitest aliases 与锁文件。
 

@@ -31,7 +31,7 @@ test("aggregates every clean-slate violation with category, file and line", asyn
     write(root, "packages/services/src/session-runtime/migrations/0000_current_schema.sql", "select 1;\n");
     write(root, "packages/services/src/session-runtime/migrations/0001_old.sql", "select 2;\n");
     write(root, "packages/services/src/session-runtime/migrations/meta/_journal.json", JSON.stringify({ entries: [] }));
-    write(root, "packages/protocol/src/capabilities.ts", "export const CURRENT_PROTOCOL_VERSION = 3;\nexport const PROTOCOL_VERSION_HEADER = 'wrong';\n");
+    write(root, "packages/protocol/src/runtime/capabilities.ts", "export const CURRENT_PROTOCOL_VERSION = 3;\nexport const PROTOCOL_VERSION_HEADER = 'wrong';\n");
     write(root, "packages/client/src/transport/http-transport.ts", "const nope = true;\n");
     write(root, "packages/server/src/http/protocol-middleware.ts", "const nope = true;\n");
     write(root, ".github/workflows/tag-release.yml", "jobs:\n  publish-release:\n  create-tag:\n");

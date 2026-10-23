@@ -194,7 +194,7 @@ pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence
 - [ ] **步骤 6：提交 Memory 所有权调整**
 
 ```bash
-git add packages/agent-runtime/src packages/tools/src/file/__test__/managed-persistence-path.test.ts
+git add packages/agent-runtime/src packages/tools/src/file/access/__test__/managed-persistence-path.test.ts
 git commit -m "refactor(memory): keep managed runtime agent-owned"
 ```
 

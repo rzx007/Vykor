@@ -16,7 +16,7 @@
 - 修改：Desktop main services、renderer store/hook 及 Frontend 调用，统一领域 Resource。
 - 修改：`packages/environment/src/types.ts`、`packages/tools/src/shell/shell.ts`。
 - 修改：`packages/skills/src/index.ts`、`bundled.ts`、README 和测试。
-- 修改：`packages/plugins/src/types.ts`、manifest schema、installation、activation、diagnostics 和测试。
+- 修改：`packages/plugins/src/shared/types.ts`、manifest schema、installation、activation、diagnostics 和测试。
 - 删除：`packages/plugins/src/compatibility.ts` 及对应测试/export。
 - 修改：`packages/plugin-converters`，仅删除旧 Vykor native schema 分支，保留 Codex/Claude 显式导入。
 - 修改：`packages/agent-runtime` 的 plugin scope/environment 消费者。
@@ -61,7 +61,7 @@ pnpm --filter @vykor/frontend test
 
 - [ ] **步骤 1：把当前协议字段改成必填测试**
 
-`packages/protocol/src/terminal.ts` 中 `TerminalCreateRequest.scope` 改为必填，删除兼容用的顶层 `projectId` 和 `sessionId`。类型 fixture 对缺失 scope、只给 `projectId`、只给 `sessionId` 分别使用 `@ts-expect-error`，当前请求使用：
+`packages/protocol/src/runtime/terminal.ts` 中 `TerminalCreateRequest.scope` 改为必填，删除兼容用的顶层 `projectId` 和 `sessionId`。类型 fixture 对缺失 scope、只给 `projectId`、只给 `sessionId` 分别使用 `@ts-expect-error`，当前请求使用：
 
 ```ts
 const request: TerminalCreateRequest = {

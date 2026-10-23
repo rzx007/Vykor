@@ -1,6 +1,6 @@
 import { lstat, open, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import { resolveNativePluginPath } from "../paths.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
 
 export class PluginFileReadError extends Error {
   constructor(readonly reason: "invalid" | "too_large") { super(`Plugin file ${reason}`); }

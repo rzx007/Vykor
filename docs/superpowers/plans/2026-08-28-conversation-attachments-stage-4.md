@@ -51,7 +51,7 @@
 - `packages/server/src/application/session/session-run-executor.ts`：运行前路由、ContentBlock 提交和结构化失败结算。
 - `packages/server/src/application/session/transcript-projection.ts`：direct transformation 投影。
 - `packages/server/src/application/daemon-application.ts`：向 executor 注入附件服务和能力解析依赖。
-- `packages/protocol/src/session.ts`、`packages/protocol/src/serialization.ts`：仅在结构化错误事件需要时补齐类型化字段，不改变存储格式版本。
+- `packages/protocol/src/session/session.ts`、`packages/protocol/src/serialization/serialization.ts`：仅在结构化错误事件需要时补齐类型化字段，不改变存储格式版本。
 - `apps/desktop/src/renderer/src/components/desktop/conversation-page/message-attachment.tsx`：稳定错误码的人话展示。
 - 上述模块的现有 `*.test.ts` / `*.test.tsx`：contract、集成与回归测试。
 - `docs/superpowers/specs/2026-08-27-conversation-attachments-roadmap-design.md`、`docs/superpowers/specs/2026-08-28-conversation-attachments-stage-4-design.md`：完成后记录真实结果和验证证据。
@@ -318,7 +318,7 @@ git commit -m "feat(attachments): send native images to providers (stage 4 task 
 - 修改：`packages/server/src/application/agent/daemon-agent-event-projector.ts`
 - 修改：`packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`
 - 修改：`packages/server/src/application/session/__test__/session-run-engine.test.ts`
-- 修改：`packages/protocol/src/session.ts`、`packages/protocol/src/serialization.ts`（若事件结构需要公开 errorKind）
+- 修改：`packages/protocol/src/session/session.ts`、`packages/protocol/src/serialization/serialization.ts`（若事件结构需要公开 errorKind）
 
 - [ ] **步骤 1：写 Executor 集成失败测试，覆盖成功和全部阻止语义**
 
@@ -368,7 +368,7 @@ rg -n "data:image|base64,|originalPath" packages/server/src/application/session 
 - [ ] **步骤 5：只提交任务 4 文件**
 
 ```powershell
-git add packages/server/src/application/session packages/server/src/application/daemon-application.ts packages/server/src/application/agent/daemon-agent-event-projector.ts packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts packages/protocol/src/session.ts packages/protocol/src/serialization.ts
+git add packages/server/src/application/session packages/server/src/application/daemon-application.ts packages/server/src/application/agent/daemon-agent-event-projector.ts packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts packages/protocol/src/session/session.ts packages/protocol/src/serialization/serialization.ts
 git commit -m "feat(attachments): execute durable native image runs (stage 4 task 4/5)"
 ```
 

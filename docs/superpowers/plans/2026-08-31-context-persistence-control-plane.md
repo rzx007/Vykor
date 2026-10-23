@@ -458,7 +458,7 @@ git commit -m "feat(context): add resource API and client commands"
 - 创建：`packages/tools/src/file/__test__/managed-resource-policy.test.ts`
 - 修改：`packages/agent-contracts/src/tools.ts`
 - 修改：`packages/tools/src/file/write.ts`
-- 修改：`packages/tools/src/file/edit.ts`
+- 修改：`packages/tools/src/file/editing/edit.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-options.ts`
 - 修改：`packages/agent-runtime/src/node/runtime/agent-composition.ts`
 - 修改：`packages/server/src/daemon/daemon-agent.ts`

@@ -1,6 +1,6 @@
 import type { ToolHostPolicyPort } from "../ports/policy.js";
 import type { ToolDefinition } from "@vykor/agent-contracts";
-import { createToolAbortScope } from "../abort.js";
+import { createToolAbortScope } from "../shared/abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
 import { sandboxNetworkGuard } from "./sandbox-network.js";
 import { formatWebError, webErrorFacts } from "./tool-errors.js";

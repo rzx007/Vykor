@@ -8,8 +8,8 @@ import { type AgentExecutionContext, type StreamEvent } from "@vykor/agent-contr
 import { type Message } from "@vykor/agent-contracts";
 import { fileReadTool } from "../../packages/tools/src/file/read.js";
 import { fileWriteTool } from "../../packages/tools/src/file/write.js";
-import { fileEditTool } from "../../packages/tools/src/file/edit.js";
-import { applyPatchTool } from "../../packages/tools/src/file/apply-patch.js";
+import { fileEditTool } from "../../packages/tools/src/file/editing/edit.js";
+import { applyPatchTool } from "../../packages/tools/src/file/editing/apply-patch.js";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import { CodexSubscriptionClient } from "@vykor/api";
 import { OpenAICompatibleClient } from "@vykor/api";

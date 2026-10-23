@@ -24,7 +24,7 @@ type SessionUserInputItem =
 
 ## 最终文件结构
 
-- `packages/protocol/src/session-input-items.ts`：共享 items 类型、校验、规范化和纯文本派生。
+- `packages/protocol/src/session/session-input-items.ts`：共享 items 类型、校验、规范化和纯文本派生。
 - `packages/client/src/transport/http-client.ts`：保留普通 `admitPrompt()`，不提供 Skill command POST。
 - `packages/server/src/commands/default-command-catalog.ts`：只发现 `userInvocable` Skill，并携带当前 path。
 - `packages/server/src/application/session/session-input-materializer.ts`：校验当前 catalog 引用，生成本轮工具调用要求。
@@ -92,7 +92,7 @@ $archify 画一下系统架构
 
 相关自动测试位于：
 
-- `packages/protocol/src/session-input-items.test.ts`
+- `packages/protocol/src/session/__test__/session-input-items.test.ts`
 - `packages/server/src/application/session/__test__/session-input-materializer.test.ts`
 - `packages/server/src/application/session/__test__/session-run-executor.test.ts`
 - `packages/server/src/application/session/__test__/transcript-projection.test.ts`

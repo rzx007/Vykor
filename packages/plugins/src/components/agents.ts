@@ -5,8 +5,8 @@ import {
   parseAgentFrontmatter,
   type AgentDefinition,
 } from "@vykor/coordinator/definitions";
-import { resolveNativePluginPath } from "../paths.js";
-import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
+import type { PluginComponentResult, ValidatedNativePlugin } from "../shared/types.js";
 
 async function collectMarkdown(path: string): Promise<string[]> {
   const info = await stat(path);

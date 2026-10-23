@@ -971,7 +971,7 @@ const REASONING_TRUNCATION_NOTICE = "\n\n…（思考内容过长，已截断）
 
 同一个 Step 还要放开协议类型（**计划修订**：这一步原本写在 Task 9，但 server 投影在类型检查里必须有它才能编译，故提前到本任务；Task 9 只保留 reducer 改动）：
 
-`packages/protocol/src/session.ts` 的 `AppendMessagePartDeltaInput`：
+`packages/protocol/src/session/session.ts` 的 `AppendMessagePartDeltaInput`：
 
 ```ts
   /** 增量写入的字段；reasoning 用于模型的思考内容。 */
@@ -1200,7 +1200,7 @@ git commit -m "fix(server): 历史重建与压缩重写保留思考内容且不�
 ### Task 9: 协议增量字段与客户端 reducer
 
 **Files:**
-- Modify: `packages/protocol/src/session.ts:513-519`
+- Modify: `packages/protocol/src/session/session.ts:513-519`
 - Modify: `packages/client/src/state/reducer.ts:275-317`
 - Test: `packages/client/src/state/__test__/reducer.test.ts`
 
@@ -1244,7 +1244,7 @@ Expected: FAIL —— part 不存在（`field: "reasoning"` 被直接丢弃）�
 
 - [ ] **Step 3: 实现**
 
-`packages/protocol/src/session.ts` 的 `AppendMessagePartDeltaInput.field` 已在 Task 7 放开为 `"text" | "reasoning"`（计划修订），本任务不重复修改。
+`packages/protocol/src/session/session.ts` 的 `AppendMessagePartDeltaInput.field` 已在 Task 7 放开为 `"text" | "reasoning"`（计划修订），本任务不重复修改。
 
 `packages/client/src/state/reducer.ts` 的 `appendPartDelta`（`:275-317`）改两处。第一处是入口校验（`:281`）：
 
@@ -1269,7 +1269,7 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add packages/protocol/src/session.ts packages/client/src/state/reducer.ts packages/client/src/state/__test__/reducer.test.ts
+git add packages/protocol/src/session/session.ts packages/client/src/state/reducer.ts packages/client/src/state/__test__/reducer.test.ts
 git commit -m "feat(client): 支持 reasoning part 增量与占位 part"
 ```
 

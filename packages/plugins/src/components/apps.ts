@@ -3,7 +3,7 @@ import { PLUGIN_APP_MANIFEST_LIMITS } from "@vykor/plugin-contracts/limits";
 import type { PluginAppManifest } from "@vykor/plugin-contracts/manifest";
 import { validatePluginAppManifest } from "@vykor/plugin-contracts/validation";
 import { stringifyCanonicalJson } from "@vykor/json-data/json";
-import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
+import type { PluginComponentResult, ValidatedNativePlugin } from "../shared/types.js";
 import { loadNativeMcpServers } from "./mcp.js";
 import { loadPluginAppResource, type PluginAppResourceMetadata } from "./app-resources.js";
 import { readPluginFileBytes } from "./safe-files.js";

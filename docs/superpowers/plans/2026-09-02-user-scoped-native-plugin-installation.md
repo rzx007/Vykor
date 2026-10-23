@@ -16,8 +16,8 @@
 - `packages/plugins/src/installation/cache.ts`: materialize immutable snapshots, reject redirected snapshot roots, and repair corrupted snapshots during reinstall.
 - `packages/plugins/src/installation/verify.ts`: provide shared installed-record verification for every plugin consumer.
 - `packages/plugins/src/installation/store.ts`: represent legacy records, return globally applicable records plus legacy warnings.
-- `packages/plugins/src/installation/installer.test.ts`: installer scope and digest regression tests.
-- `packages/plugins/src/installation/store.test.ts`: legacy discovery warning tests.
+- `packages/plugins/src/installation/__test__/installer.test.ts`: installer scope and digest regression tests.
+- `packages/plugins/src/installation/__test__/store.test.ts`: legacy discovery warning tests.
 - `packages/agent-runtime/src/node/plugins/extensions.ts`: verify the actual cached plugin against its record before loading.
 - `packages/agent-runtime/src/node/plugins/extensions.test.ts`: runtime fail-closed and link behavior tests.
 - `packages/server/src/application/settings-api.ts`, `packages/server/src/http/routes/service.ts`: user-only service contract and request validation.

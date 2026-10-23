@@ -199,7 +199,7 @@ state/src/runtime/goals.rs
 
 ### 5.3 建立真实用量账本，继续保留轮数上限
 
-[session-goals.ts](../packages/protocol/src/session-goals.ts) 当前只有 `maxAutoTurns/autoTurnsUsed`，默认续跑上限 20；初次运行、编辑、手动恢复和用户回合不属于自动续跑计数。它是防止无限续跑的次数限制，不能表达成本预算。
+[session-goals.ts](../packages/protocol/src/session/session-goals.ts) 当前只有 `maxAutoTurns/autoTurnsUsed`，默认续跑上限 20；初次运行、编辑、手动恢复和用户回合不属于自动续跑计数。它是防止无限续跑的次数限制，不能表达成本预算。
 
 可以复用 [DaemonAgentEventProjector](../packages/server/src/application/agent/daemon-agent-event-projector.ts) 第 709 行附近已有的按调用去重的用量记录，增加可选预算和 Goal 归属账本：
 

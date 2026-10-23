@@ -10,8 +10,8 @@
       "types": "./src/index.ts"
     },
     "./permission-modes": {
-      "import": "./src/permission-modes.ts",
-      "types": "./src/permission-modes.ts"
+      "import": "./src/permissions/permission-modes.ts",
+      "types": "./src/permissions/permission-modes.ts"
     }
   },
   "scripts": {

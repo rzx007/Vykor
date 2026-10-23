@@ -13,12 +13,12 @@
 ## 文件职责
 
 - `packages/plugin-converters/src/claude-code/converter.ts`：把 Claude 组件转换或复制到 Native 顶层目录，生成 Native manifest 和转换审计文件。
-- `packages/plugin-converters/src/claude-code/converter.test.ts`：约束转换目录、manifest 来源字段，以及不存在 Claude `payload/generated` 包装层。
-- `packages/plugin-converters/src/acceptance.test.ts`：证明转换产物能直接走 Native validate/install/discover/load 流程。
+- `packages/plugin-converters/src/claude-code/__test__/converter.test.ts`：约束转换目录、manifest 来源字段，以及不存在 Claude `payload/generated` 包装层。
+- `packages/plugin-converters/src/__test__/acceptance.test.ts`：证明转换产物能直接走 Native validate/install/discover/load 流程。
 - `packages/plugins/src/installation/cache.ts`：原子替换 `cache/<plugin-id>/current/`，失败时恢复旧缓存。
-- `packages/plugins/src/installation/cache.test.ts`：约束单目录缓存、重装替换和失败回滚。
+- `packages/plugins/src/installation/__test__/cache.test.ts`：约束单目录缓存、重装替换和失败回滚。
 - `packages/plugins/src/installation/installer.ts`：从 Native manifest metadata 读取通用来源信息，不解析 Claude 源结构。
-- `packages/plugins/src/installation/installer.test.ts`：约束缓存路径和 converted 来源识别。
+- `packages/plugins/src/installation/__test__/installer.test.ts`：约束缓存路径和 converted 来源识别。
 - `docs/superpowers/specs/2026-08-25-native-plugin-and-converters-design.md`：修正转换产物和各层职责。
 - `docs/plugins-contributions-design.md`：更新面向贡献者的实际目录与安装流程。
 

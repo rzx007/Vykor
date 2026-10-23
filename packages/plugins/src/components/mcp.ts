@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { getPluginDataDir, type McpServerConfig } from "@vykor/host-config";
 import { join } from "node:path";
-import { resolveNativePluginPath } from "../paths.js";
-import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
+import { resolveNativePluginPath } from "../installation/paths.js";
+import type { PluginComponentResult, ValidatedNativePlugin } from "../shared/types.js";
 
 function parseServer(name: string, raw: unknown): McpServerConfig {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${name} must be an object`);

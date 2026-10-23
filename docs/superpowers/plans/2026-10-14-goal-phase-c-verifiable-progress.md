@@ -42,7 +42,7 @@
 
 | 单元 | 文件 | 唯一责任 |
 | --- | --- | --- |
-| C1 | `packages/protocol/src/session-goals.ts` / `session-goals.test.ts`；services `goals/goal-records.ts` / `goal-repository.ts` / `goal-transactions.ts` / `index.ts` / 根 `index.ts` | 当前条件、阶段、版本/请求类型与原子存储 |
+| C1 | `packages/protocol/src/session/session-goals.ts` / `session-goals.test.ts`；services `goals/goal-records.ts` / `goal-repository.ts` / `goal-transactions.ts` / `index.ts` / 根 `index.ts` | 当前条件、阶段、版本/请求类型与原子存储 |
 | C1 | 新建 `packages/services/src/goals/goal-version.ts` / `goal-version.test.ts`；修改 `session-runtime/schema.ts` / `store.ts`、`database/temporary-control-records.ts` 及测试、现行 SQL / 最新 snapshot / inventory | 版本行存取、memory journal、当前格式；不调模型 |
 | C2 | server `application/session/session-goal-service.ts` / `run-admission-service.ts` / `session-run-executor.ts` / `session-run-assembly.ts` / `session-post-run-maintenance.ts` / `run-auto-review.ts`；`application/agent/daemon-agent-event-projector.ts` / `application/daemon-application.ts` / `application/recovery/startup-recovery-service.ts` | 批次、阶段接纳、准备限制、恢复记录与 ready 唯一派发 |
 | C2 | runtime `agent.ts` / `framework-agent-run.ts` / `goal-extension.ts` / `goal-assessment-tool.ts` / `run-capability-view.ts` / `index.ts`；新建 `goal-read-tool.ts` 及测试；core `types/runtime.ts` / `engine/query-engine.ts` / `query-tool-permissions.ts` / `checked-tool-execution.ts` / `compact-service.ts` | 绑定摘要/只读查询；通用输出上限与工具检查，准备不开放副作用 |

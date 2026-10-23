@@ -280,8 +280,8 @@ Applied patch to N files: C created, U updated, D deleted.
 | 文件 | 职责 |
 |---|---|
 | `packages/tools/src/file/write.ts` | Write 新语义、hash/no-op/overwrite 校验、结果反馈 |
-| `packages/tools/src/file/apply-patch.ts` | patch 编排：解析结果校验、权限、预演、冲突复核、落盘 |
-| `packages/tools/src/file/patch-path.ts` | 极薄的 patch 路径规范化、命名空间 identity 与安全校验；不含 diff 算法 |
+| `packages/tools/src/file/editing/apply-patch.ts` | patch 编排：解析结果校验、权限、预演、冲突复核、落盘 |
+| `packages/tools/src/file/editing/patch-path.ts` | 极薄的 patch 路径规范化、命名空间 identity 与安全校验；不含 diff 算法 |
 | `packages/tools/src/file/text-content.ts` | Read/ApplyPatch 共用的严格 UTF-8 解码与文本二进制判定（仅在抽取能消除复制时创建） |
 | `packages/environment/src/types.ts` | 扩展所有执行环境共享的文件系统能力契约 |
 | `packages/tools/src/file/operations.ts` | Host/WSL 的 `createTextExclusive`、`writeTextAtomic` 与 `removeFile` |
