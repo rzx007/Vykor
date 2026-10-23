@@ -1,5 +1,5 @@
 import { toast } from "@renderer/lib/toast"
-import { useEffect, useState } from "react"
+import { createElement, useEffect, useState } from "react"
 import { Brain, Image, Sparkles } from "lucide-react"
 import {
   Select,
@@ -11,14 +11,13 @@ import {
 } from "@renderer/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import { Field, FieldLabel } from "@renderer/components/ui/field"
+import { Card, CardContent } from "@renderer/components/ui/card"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@renderer/components/ui/card"
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleIndicator,
+  CollapsibleTrigger,
+} from "@renderer/components/motion/collapsible"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import { Skeleton } from "@renderer/components/ui/skeleton"
@@ -90,8 +89,10 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
     snapshot?.effort && savedModel?.reasoningEfforts?.includes(snapshot.effort)
       ? snapshot.effort
       : null
-  const sameModel = draft?.provider === snapshot?.provider && draft?.model === snapshot?.model
-  const dirty = Boolean(snapshot?.disabled || !sameModel || draft?.effort !== savedEffort)
+  const sameModel =
+    draft?.provider === (snapshot?.provider ?? "") && draft?.model === (snapshot?.model ?? "")
+  const draftChanged = !sameModel || draft?.effort !== savedEffort
+  const dirty = Boolean(snapshot?.disabled || draftChanged)
   function chooseProvider(provider: string) {
     if (!snapshot || busy) return
     const model = snapshot.models.find((item) => item.providerName === provider)
@@ -151,9 +152,14 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
   }
   return (
     <section className="flex w-full flex-col gap-4" aria-labelledby="provider-defaults-heading">
-      <h2 id="provider-defaults-heading" className="text-base font-semibold">
-        默认模型
-      </h2>
+      <div className="flex flex-col gap-1">
+        <h2 id="provider-defaults-heading" className="text-base font-semibold">
+          默认模型
+        </h2>
+        <p id="provider-defaults-description" className="text-xs text-muted-foreground">
+          用于新对话，不改变已有对话。
+        </p>
+      </div>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -181,19 +187,16 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
           <Skeleton className="h-28 w-full" />
         )
       ) : (
-        <Card className="gap-0 py-0">
-          <CardHeader className="sr-only">
-            <CardTitle>新对话的默认模型</CardTitle>
-            <CardDescription>选择供应商、模型和思考方式后保存，不改变已有对话。</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-4 py-4">
+        <Card
+          className="@container/model-defaults gap-0 rounded-2xl py-0"
+          aria-label="新对话的默认模型"
+          aria-describedby="provider-defaults-description"
+        >
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
             <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
-              <span
-                className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted"
-                aria-hidden="true"
-              >
+              <span className="grid size-9 shrink-0 place-items-center" aria-hidden="true">
                 {BrandIcon ? (
-                  <BrandIcon size={24} />
+                  createElement(BrandIcon, { size: 28 })
                 ) : (
                   <Sparkles className="size-5 text-muted-foreground" />
                 )}
@@ -205,12 +208,12 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>{providerLabel || "先连接供应商"}</span>
                   {selected?.inputCapabilities?.image === "native" ? (
-                    <Badge variant="secondary">
-                      <Image data-icon="inline-start" />
+                    <span className="inline-flex items-center gap-1">
+                      <Image className="size-3.5" aria-hidden="true" />
                       可读图片
-                    </Badge>
+                    </span>
                   ) : null}
-                  {selected && !dirty ? <Badge variant="outline">当前默认</Badge> : null}
+                  {selected && !dirty ? <span>当前默认</span> : null}
                   {dirty && selected ? <Badge variant="outline">待保存</Badge> : null}
                 </div>
               </div>
@@ -278,82 +281,127 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
                   </SelectContent>
                 </Select>
               </Field>
-              {dirty ? (
-                <Button
-                  size="sm"
-                  disabled={busy || !selected}
-                  aria-label="保存默认设置"
-                  onClick={() => void save()}
-                >
-                  {busy ? "保存中…" : "保存"}
-                </Button>
-              ) : null}
             </div>
           </CardContent>
-          <CardFooter className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div className="px-5 pb-4">
             {efforts.length ? (
-              <Field
-                orientation="horizontal"
-                className="w-auto min-w-0 flex-1 flex-wrap items-center gap-3"
-              >
-                <FieldLabel id="provider-thinking-heading">
+              <div className="flex min-w-0 flex-col gap-2.5 @min-[32rem]/model-defaults:flex-row @min-[32rem]/model-defaults:items-center @min-[32rem]/model-defaults:gap-5">
+                <span
+                  id="provider-thinking-heading"
+                  className="flex shrink-0 items-center gap-2 text-xs font-medium"
+                >
                   <Brain className="size-4 text-muted-foreground" aria-hidden="true" />
                   思考方式
-                </FieldLabel>
-                <ToggleGroup
-                  aria-labelledby="provider-thinking-heading"
-                  variant="outline"
-                  size="sm"
-                  value={[draft.effort ?? "_default"]}
-                  disabled={busy}
-                  onValueChange={(values) => {
-                    const value = values[0]
-                    if (typeof value === "string") {
-                      setDraft({ ...draft, effort: value === "_default" ? null : value })
-                      setError(null)
-                    }
-                  }}
-                  className="flex max-w-full flex-wrap justify-start"
-                >
-                  <ToggleGroupItem value="_default">交给模型</ToggleGroupItem>
-                  {efforts.map((effort) => (
-                    <ToggleGroupItem key={effort} value={effort}>
-                      {thinkingLabels[effort] ?? effortLabel(effort)}
+                </span>
+                <div className="max-w-full min-w-0 scrollbar-thin overflow-x-auto overscroll-x-contain">
+                  <ToggleGroup
+                    aria-labelledby="provider-thinking-heading"
+                    variant="default"
+                    size="sm"
+                    value={[draft.effort ?? "_default"]}
+                    disabled={busy}
+                    onValueChange={(values) => {
+                      const value = values[0]
+                      if (typeof value === "string") {
+                        setDraft({ ...draft, effort: value === "_default" ? null : value })
+                        setError(null)
+                      }
+                    }}
+                    className="w-max gap-1 rounded-xl bg-muted/60 p-1"
+                  >
+                    <ToggleGroupItem
+                      value="_default"
+                      className="h-8 rounded-lg px-3 text-muted-foreground transition-colors aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-border"
+                    >
+                      交给模型
                     </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </Field>
+                    {efforts.map((effort) => (
+                      <ToggleGroupItem
+                        key={effort}
+                        value={effort}
+                        className="h-8 rounded-lg px-3 text-muted-foreground transition-colors aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-border"
+                      >
+                        {thinkingLabels[effort] ?? effortLabel(effort)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </div>
+              </div>
             ) : (
-              <span className="text-xs text-muted-foreground">用于新对话</span>
+              <p className="text-xs text-muted-foreground">该模型没有提供可调整的思考选项。</p>
             )}
-            <details className="max-w-full text-xs text-muted-foreground">
-              <summary className="cursor-pointer">模型详情</summary>
-              <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-2">
+          </div>
+          <Collapsible className="border-t border-border/60">
+            <CollapsibleTrigger className="min-h-10 gap-2 rounded-none px-5 py-2.5 text-xs font-normal text-muted-foreground hover:text-foreground focus-visible:ring-inset">
+              模型详情
+              <CollapsibleIndicator className="ml-auto" />
+            </CollapsibleTrigger>
+            <CollapsibleContent contentClassName="px-5 pb-4 pt-1">
+              <dl className="grid min-w-0 gap-x-6 gap-y-4 text-xs @min-[28rem]/model-defaults:grid-cols-3">
                 {selected ? (
                   <>
-                    <dt>上下文容量</dt>
-                    <dd>
-                      {selected.contextWindow
-                        ? `${selected.contextWindow.toLocaleString()} Token`
-                        : "服务未提供"}
-                    </dd>
-                    <dt>图片输入</dt>
-                    <dd>
-                      {selected.inputCapabilities?.image === "native"
-                        ? "支持"
-                        : selected.inputCapabilities?.image === "unsupported"
-                          ? "不支持"
-                          : "尚未确认"}
-                    </dd>
-                    <dt>思考选项</dt>
-                    <dd>{efforts.length ? "可调整" : "服务未提供可调选项"}</dd>
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <dt className="text-muted-foreground">上下文容量</dt>
+                      <dd className="leading-relaxed tabular-nums">
+                        {selected.contextWindow
+                          ? `${selected.contextWindow.toLocaleString()} Token`
+                          : "服务未提供"}
+                      </dd>
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <dt className="text-muted-foreground">图片输入</dt>
+                      <dd className="leading-relaxed">
+                        {selected.inputCapabilities?.image === "native"
+                          ? "支持"
+                          : selected.inputCapabilities?.image === "unsupported"
+                            ? "不支持"
+                            : "尚未确认"}
+                      </dd>
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <dt className="text-muted-foreground">思考选项</dt>
+                      <dd className="leading-relaxed">
+                        {efforts.length ? "可调整" : "服务未提供可调选项"}
+                      </dd>
+                    </div>
                   </>
                 ) : null}
-                <dt>加速模式</dt>
-                <dd className="break-words">{snapshot.fastModeReason}</dd>
+                <div className="flex min-w-0 flex-col gap-1.5 @min-[28rem]/model-defaults:col-span-3">
+                  <dt className="text-muted-foreground">加速模式</dt>
+                  <dd className="leading-relaxed [overflow-wrap:anywhere]">
+                    {snapshot.fastModeReason}
+                  </dd>
+                </div>
               </dl>
-            </details>
-          </CardFooter>
+            </CollapsibleContent>
+          </Collapsible>
+          {dirty && selected ? (
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
+              {draftChanged ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  shape="pill"
+                  disabled={busy}
+                  onClick={() => {
+                    accept(snapshot)
+                    setError(null)
+                  }}
+                >
+                  取消
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                shape="pill"
+                disabled={busy || !selected}
+                aria-label="保存默认设置"
+                onClick={() => void save()}
+              >
+                {busy ? "保存中…" : "保存"}
+              </Button>
+            </div>
+          ) : null}
         </Card>
       )}
       {snapshot && !snapshot.models.length ? (
