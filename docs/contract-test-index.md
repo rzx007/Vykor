@@ -43,7 +43,7 @@
 | 仅重试当前模型调用，次数有界、等待可取消，工具不重复执行 | [model-retry.integration.test.ts](../packages/core/src/engine/model/__test__/model-retry.integration.test.ts)、[model-retry.test.ts](../packages/core/src/engine/model/__test__/model-retry.test.ts) |
 | 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/model/__test__/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/node/memory/__test__/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
 | 实时结果、SQLite 历史、客户端重放一致，投影失败不重发模型 | [model-retry-flow.test.ts](../tests/server-client/model-retry-flow.test.ts) |
-| Desktop 即使跳过中间快照也正确替换输出，倒计时独立更新 | [session-subscription-service.coalescing.test.ts](../apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts)、[model-retry-countdown.test.tsx](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/notices/__test__/model-retry-countdown.test.tsx) |
+| Desktop 即使跳过中间快照也正确替换输出，倒计时独立更新；Write 生成状态到正式执行只交接一次 | [session-subscription-service.coalescing.test.ts](../apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts)、[model-retry-countdown.test.tsx](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/notices/__test__/model-retry-countdown.test.tsx)、[跨包 Write 流程](../tests/desktop-integration/__test__/session-write-generation.test.ts)（`pnpm test:desktop-integration`） |
 | CLI 最终 JSON 不拼接失效输出，流式 JSON 可识别替换 | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts)、[renderer.test.ts](../apps/cli/src/renderer.test.ts) |
 
 | 硬规则 | 主要测试 |
