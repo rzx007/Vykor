@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "turbo dev",
-    "dev:apps": "turbo dev --filter=@vykor/desktop",
+    "dev:apps": "turbo dev --filter=@vykor/desktop --ui=stream",
     "build": "turbo build",
     "lint": "turbo lint",
     "check-types": "turbo check-types --concurrency=2 && pnpm check-types:server-client",

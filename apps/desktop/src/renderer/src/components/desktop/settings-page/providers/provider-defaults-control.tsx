@@ -1,6 +1,6 @@
 import { toast } from "@renderer/lib/toast"
-import { createElement, useEffect, useState } from "react"
-import { Brain, Image, Sparkles } from "lucide-react"
+import { createElement, useEffect, useRef, useState } from "react"
+import { AudioLines, Brain, CircleHelp, FileText, Image, Sparkles, Type, Video } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -18,7 +18,7 @@ import {
   CollapsibleIndicator,
   CollapsibleTrigger,
 } from "@renderer/components/motion/collapsible"
-import { Badge } from "@renderer/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { Button } from "@renderer/components/ui/button"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -37,28 +37,55 @@ const thinkingLabels: Record<string, string> = {
   max: "充分推敲",
   default: "模型默认",
 }
+const inputTypes = [
+  { id: "text", label: "文本", icon: Type },
+  { id: "image", label: "图片", icon: Image },
+  { id: "video", label: "视频", icon: Video },
+  { id: "audio", label: "音频", icon: AudioLines },
+  { id: "pdf", label: "PDF", icon: FileText },
+] as const
 type Draft = { provider: string; model: string; effort: string | null }
+// A reopened settings page must read after a save started by the previous instance.
+let pendingDefaultsSave: Promise<void> | null = null
+
+function draftFromSnapshot(next: ProviderDefaultsSnapshot): Draft {
+  const model = next.models.find(
+    (item) => item.providerName === next.provider && item.id === next.model
+  )
+  return {
+    provider: next.provider ?? "",
+    model: next.model ?? "",
+    effort: next.effort && model?.reasoningEfforts?.includes(next.effort) ? next.effort : null,
+  }
+}
 
 export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promise<void> }) {
   const [snapshot, setSnapshot] = useState<ProviderDefaultsSnapshot | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const mounted = useRef(false)
+  const saving = useRef(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSave = useRef<(() => Promise<void>) | null>(null)
+
   function accept(next: ProviderDefaultsSnapshot) {
-    const model = next.models.find(
-      (item) => item.providerName === next.provider && item.id === next.model
-    )
     setSnapshot(next)
-    setDraft({
-      provider: next.provider ?? "",
-      model: next.model ?? "",
-      effort: next.effort && model?.reasoningEfforts?.includes(next.effort) ? next.effort : null,
+    setDraft(draftFromSnapshot(next))
+    useDesktopSessionStore.setState({
+      models: next.models,
+      defaultModel: next.model ?? undefined,
+      defaultProvider: next.provider ?? undefined,
     })
   }
   useEffect(() => {
     let cancelled = false
-    void window.desktop.providerDefaults
-      .snapshot()
+    mounted.current = true
+    const read = async () => {
+      await pendingDefaultsSave
+      return window.desktop.providerDefaults.snapshot()
+    }
+    void read()
       .then((next) => {
         if (!cancelled) accept(next)
       })
@@ -67,6 +94,12 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
       })
     return () => {
       cancelled = true
+      mounted.current = false
+      if (timer.current !== null) clearTimeout(timer.current)
+      // Leaving settings must not drop a choice made during the debounce window.
+      const flush = pendingSave.current
+      pendingSave.current = null
+      if (flush) void flush()
     }
   }, [])
   const selected = snapshot?.models.find(
@@ -82,115 +115,191 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
   const BrandIcon = draft?.provider ? resolveProviderBrandIcon(draft.provider) : undefined
   const providerLabel = providers.find(([name]) => name === draft?.provider)?.[1] ?? draft?.provider
   const efforts = [...new Set(selected?.reasoningEfforts ?? [])]
-  const savedModel = snapshot?.models.find(
-    (item) => item.providerName === snapshot.provider && item.id === snapshot.model
-  )
-  const savedEffort =
-    snapshot?.effort && savedModel?.reasoningEfforts?.includes(snapshot.effort)
-      ? snapshot.effort
-      : null
-  const sameModel =
-    draft?.provider === (snapshot?.provider ?? "") && draft?.model === (snapshot?.model ?? "")
-  const draftChanged = !sameModel || draft?.effort !== savedEffort
-  const dirty = Boolean(snapshot?.disabled || draftChanged)
+  const inputModalities = new Set(selected ? (selected.inputModalities ?? ["text"]) : [])
+  if (selected?.inputCapabilities?.image === "native") inputModalities.add("image")
+  if (selected?.inputCapabilities?.image === "unsupported") inputModalities.delete("image")
+
+  function queueSave(next: Draft) {
+    if (!snapshot || saving.current) return
+    setDraft(next)
+    setError(null)
+    if (timer.current !== null) clearTimeout(timer.current)
+    pendingSave.current = null
+    const saved = draftFromSnapshot(snapshot)
+    if (
+      !snapshot.disabled &&
+      next.provider === saved.provider &&
+      next.model === saved.model &&
+      next.effort === saved.effort
+    )
+      return
+    pendingSave.current = async () => {
+      const request = save(next)
+      pendingDefaultsSave = request
+      try {
+        await request
+      } finally {
+        if (pendingDefaultsSave === request) pendingDefaultsSave = null
+      }
+    }
+    timer.current = setTimeout(() => {
+      timer.current = null
+      const flush = pendingSave.current
+      pendingSave.current = null
+      if (flush) void flush()
+    }, 400)
+  }
   function chooseProvider(provider: string) {
-    if (!snapshot || busy) return
+    if (!snapshot || saving.current) return
     const model = snapshot.models.find((item) => item.providerName === provider)
-    setDraft({
+    queueSave({
       provider,
       model: model?.id ?? "",
       effort:
         draft?.effort && model?.reasoningEfforts?.includes(draft.effort) ? draft.effort : null,
     })
-    setError(null)
   }
   function chooseModel(id: string) {
-    if (!draft || busy) return
+    if (!draft || saving.current) return
     const model = providerModels.find((item) => item.id === id)
     if (!model) return
-    setDraft({
+    queueSave({
       ...draft,
       model: id,
       effort: draft.effort && model.reasoningEfforts?.includes(draft.effort) ? draft.effort : null,
     })
-    setError(null)
   }
-  async function save() {
-    if (!snapshot || !draft || !selected || !dirty || busy) return
+  async function reload() {
+    if (saving.current) return
+    saving.current = true
     setBusy(true)
-    setError(null)
     try {
-      if (sameModel && !snapshot.disabled) {
-        accept(
-          await window.desktop.providerDefaults.updateEffort({
-            effort: draft.effort,
-            expectedRevision: snapshot.revision,
-          })
-        )
+      const next = await window.desktop.providerDefaults.snapshot()
+      if (mounted.current) {
+        accept(next)
+        setError(null)
+      }
+    } catch (failure) {
+      if (mounted.current) setError(errorMessage(failure))
+    } finally {
+      saving.current = false
+      if (mounted.current) setBusy(false)
+    }
+  }
+  async function save(nextDraft: Draft) {
+    if (
+      !snapshot ||
+      saving.current ||
+      !snapshot.models.some(
+        (item) => item.providerName === nextDraft.provider && item.id === nextDraft.model
+      )
+    )
+      return
+    saving.current = true
+    if (mounted.current) setBusy(true)
+    let modelSaved = false
+    try {
+      let next: ProviderDefaultsSnapshot
+      if (
+        nextDraft.provider === snapshot.provider &&
+        nextDraft.model === snapshot.model &&
+        !snapshot.disabled
+      ) {
+        next = await window.desktop.providerDefaults.updateEffort({
+          effort: nextDraft.effort,
+          expectedRevision: snapshot.revision,
+        })
       } else {
         const bootstrap = await window.desktop.sessions.setDefaultModel({
-          provider: draft.provider,
-          model: draft.model,
-          effort: draft.effort ?? "",
+          provider: nextDraft.provider,
+          model: nextDraft.model,
+          effort: nextDraft.effort ?? "",
         })
+        modelSaved = true
         useDesktopSessionStore.setState({
           models: bootstrap.models,
           defaultModel: bootstrap.defaultModel,
           defaultProvider: bootstrap.defaultProvider,
         })
-        accept(await window.desktop.providerDefaults.snapshot())
+        next = await window.desktop.providerDefaults.snapshot()
       }
-      await onChanged()
-      toast.success("默认设置已更新，新对话就用它。")
+      if (mounted.current) accept(next)
+      if (mounted.current) {
+        try {
+          await onChanged()
+        } catch (failure) {
+          const message = `设置已保存，但列表刷新失败：${errorMessage(failure)}`
+          if (mounted.current) setError(message)
+          else toast.error(message)
+        }
+      }
     } catch (failure) {
-      const message = errorMessage(failure)
-      if (message.startsWith("当前有任务正在运行")) toast.error(message)
-      else setError(message)
+      let recovered: ProviderDefaultsSnapshot | null = null
+      if (!modelSaved && mounted.current) {
+        // Either write API may reject after persisting, while preparing its response.
+        try {
+          recovered = await window.desktop.providerDefaults.snapshot()
+        } catch {
+          // Keep the choice hidden until its actual saved value can be read.
+        }
+      }
+      const message = modelSaved
+        ? `默认模型已保存，但重新读取失败：${errorMessage(failure)}`
+        : errorMessage(failure)
+      if (mounted.current) {
+        if (recovered) {
+          accept(recovered)
+        } else setSnapshot(null)
+        if (recovered && message.startsWith("当前有任务正在运行")) toast.error(message)
+        else setError(message)
+      } else toast.error(message)
     } finally {
-      setBusy(false)
+      saving.current = false
+      if (mounted.current) setBusy(false)
     }
   }
   return (
     <section className="flex w-full flex-col gap-4" aria-labelledby="provider-defaults-heading">
-      <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
         <h2 id="provider-defaults-heading" className="text-base font-semibold">
           默认模型
         </h2>
-        <p id="provider-defaults-description" className="text-xs text-muted-foreground">
-          用于新对话，不改变已有对话。
-        </p>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                shape="circle"
+                aria-label="默认模型说明"
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <CircleHelp className="size-3.5" aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent>用于新对话，不改变已有对话。</TooltipContent>
+        </Tooltip>
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void reload()}>
+            重新读取
+          </Button>
+        </div>
       ) : null}
 
       {!snapshot || !draft ? (
-        error ? (
-          <Button
-            variant="ghost"
-            className="self-start"
-            onClick={() =>
-              void window.desktop.providerDefaults
-                .snapshot()
-                .then((next) => {
-                  accept(next)
-                  setError(null)
-                })
-                .catch((failure) => setError(errorMessage(failure)))
-            }
-          >
-            重新读取
-          </Button>
-        ) : (
+        error ? null : (
           <Skeleton className="h-28 w-full" />
         )
       ) : (
         <Card
           className="@container/model-defaults gap-0 rounded-2xl py-0"
           aria-label="新对话的默认模型"
-          aria-describedby="provider-defaults-description"
         >
           <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
             <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
@@ -207,14 +316,32 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>{providerLabel || "先连接供应商"}</span>
-                  {selected?.inputCapabilities?.image === "native" ? (
-                    <span className="inline-flex items-center gap-1">
-                      <Image className="size-3.5" aria-hidden="true" />
-                      可读图片
+                  {selected ? (
+                    <span
+                      className="inline-flex items-center gap-2 border-l border-border pl-2"
+                      aria-label="模型输入能力"
+                    >
+                      {inputTypes
+                        .filter((type) => inputModalities.has(type.id))
+                        .map(({ id, label, icon: Icon }) => (
+                          <Tooltip key={id}>
+                            <TooltipTrigger
+                              render={
+                                <span
+                                  role="img"
+                                  tabIndex={0}
+                                  aria-label={`支持${label}输入`}
+                                  className="inline-flex rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                              }
+                            >
+                              <Icon className="size-3.5" aria-hidden="true" />
+                            </TooltipTrigger>
+                            <TooltipContent>{`支持${label}输入`}</TooltipContent>
+                          </Tooltip>
+                        ))}
                     </span>
                   ) : null}
-                  {selected && !dirty ? <span>当前默认</span> : null}
-                  {dirty && selected ? <Badge variant="outline">待保存</Badge> : null}
                 </div>
               </div>
             </div>
@@ -303,8 +430,7 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
                     onValueChange={(values) => {
                       const value = values[0]
                       if (typeof value === "string") {
-                        setDraft({ ...draft, effort: value === "_default" ? null : value })
-                        setError(null)
+                        queueSave({ ...draft, effort: value === "_default" ? null : value })
                       }
                     }}
                     className="w-max gap-1 rounded-xl bg-muted/60 p-1"
@@ -375,33 +501,6 @@ export function ProviderDefaultsControl({ onChanged }: { onChanged: () => Promis
               </dl>
             </CollapsibleContent>
           </Collapsible>
-          {dirty && selected ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
-              {draftChanged ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  shape="pill"
-                  disabled={busy}
-                  onClick={() => {
-                    accept(snapshot)
-                    setError(null)
-                  }}
-                >
-                  取消
-                </Button>
-              ) : null}
-              <Button
-                size="sm"
-                shape="pill"
-                disabled={busy || !selected}
-                aria-label="保存默认设置"
-                onClick={() => void save()}
-              >
-                {busy ? "保存中…" : "保存"}
-              </Button>
-            </div>
-          ) : null}
         </Card>
       )}
       {snapshot && !snapshot.models.length ? (
