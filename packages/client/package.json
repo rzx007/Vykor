@@ -1,5 +1,5 @@
 {
-  "name": "@vykor/client",
+  "name": "@rzx/client",
   "version": "0.1.0",
   "type": "module",
   "description": "Browser-compatible Vykor HTTP and event client with Node.js local service management",

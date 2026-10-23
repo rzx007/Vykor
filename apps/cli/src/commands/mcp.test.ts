@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { McpOAuthCredentialRecord, McpRuntimeStatus, Settings } from "@vykor/host-config";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
 import { McpOAuthApplicationError } from "@vykor/server";
-import { VykorApiError } from "@vykor/client";
+import { VykorApiError } from "@rzx/client";
 import { createMcpCommand, type McpCommandDeps } from "./mcp.js";
 
 function credential(): McpOAuthCredentialRecord {

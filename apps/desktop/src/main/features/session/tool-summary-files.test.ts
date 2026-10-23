@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import { applyPatchTool } from "../../../../../../packages/tools/src/file/editing/apply-patch.js";
 import { fileEditTool } from "../../../../../../packages/tools/src/file/editing/edit.js";
 import { VykorHttpServer } from "../../../../../../packages/server/src/http/server.js";
-import { VykorClient } from "@vykor/client";
+import { VykorClient } from "@rzx/client";
 import type { DesktopSessionPart } from "@shared/session-types";
 import { collectChangedFiles } from "../../../renderer/src/components/desktop/conversation-page/message/message-render-model";
 import { SessionStore } from "../../../../../../packages/services/src/index.js";

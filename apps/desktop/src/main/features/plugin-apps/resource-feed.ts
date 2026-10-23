@@ -1,4 +1,4 @@
-import type { VykorClient } from "@vykor/client"
+import type { VykorClient } from "@rzx/client"
 import type { AppMountBinding } from "./plugin-app-service"
 
 /** One authenticated stream for the whole owning window, including hidden mounted pages. */

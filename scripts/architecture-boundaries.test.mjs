@@ -241,7 +241,7 @@ test("frontend cannot import electron or desktop", () => {
     ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
   );
   assert.deepEqual(
-    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@vykor/client"),
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@rzx/client"),
     [],
   );
   assert.deepEqual(
@@ -578,7 +578,7 @@ test("P0-P6 exceptions stay retired and Client directly depends only on Protocol
   assert.ok(targetPolicy.stageExceptions.every(item => Number(item.migrationId.slice(1)) >= 31 && Number(item.removeByPhase.slice(1)) > 7));
   assert.ok(targetPolicy.stageExceptions.every(item => /^package:(?:@vykor\/protocol(?:#|\/)|packages\/protocol\/)/.test(item.target)
     || item.target.startsWith("server-application-protocol:")), "P7 exceptions cannot reopen an unrelated old boundary");
-  assert.deepEqual(targetPolicy.packages["@vykor/client"].allowed, ["@vykor/protocol"]);
+  assert.deepEqual(targetPolicy.packages["@rzx/client"].allowed, ["@vykor/protocol"]);
   const fromFile = "packages/client/src/resource.ts";
   for (const input of [
     { specifier: "@vykor/agent-contracts", importedNames: ["McpCallResultData"], typeOnly: true },
@@ -601,7 +601,7 @@ test("marketplace sources consume distribution contracts while Client still goes
 
 test("Client may consume canonical data through Protocol but cannot import contracts through aliases", () => {
   policyFixture({
-    "packages/client/package.json": JSON.stringify({ name: "@vykor/client" }),
+    "packages/client/package.json": JSON.stringify({ name: "@rzx/client" }),
     "packages/agent-contracts/package.json": JSON.stringify({ name: "@vykor/agent-contracts", exports: { ".": "./src/index.ts", "./tool-data": "./src/tools/tool-data.ts" } }),
     "packages/agent-contracts/src/index.ts": 'export * from "./tools/tool-data.js";',
     "packages/agent-contracts/src/tools/tool-data.ts": "export interface McpCallResultData { content: unknown[] }; export function parseMcpCallResultData() {}",
@@ -635,7 +635,7 @@ test("storage repositories and session runtime reject hosts, process execution, 
   const rule = targetPolicy.modules.find(rule => rule.id === "storage-hosts");
   for (const prefix of rule.fromPaths) {
     const fromFile = prefix + "new-storage.ts";
-    for (const specifier of ["@vykor/core", "@vykor/execution-node", "@vykor/memory", "@vykor/sandbox", "@vykor/server", "@vykor/client", "@vykor/tools", "@vykor/agent-runtime", "node-pty", "openai", "node:child_process"]) {
+    for (const specifier of ["@vykor/core", "@vykor/execution-node", "@vykor/memory", "@vykor/sandbox", "@vykor/server", "@rzx/client", "@vykor/tools", "@vykor/agent-runtime", "node-pty", "openai", "node:child_process"]) {
       assert.ok(checkModuleDependency({ fromFile, specifier, importedNames: ["Host"], typeOnly: true }, strictPolicy()).length > 0, fromFile + " -> " + specifier);
     }
     for (const resolvedFile of ["packages/services/src/office/index.ts", "packages/services/src/memory/autodream/index.ts", "packages/services/src/memory/memory-extract.ts", "packages/services/src/models/host.ts", "packages/services/src/terminal/pty.ts"]) {

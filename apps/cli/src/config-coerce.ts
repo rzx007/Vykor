@@ -1,5 +1,5 @@
 /** Shared config value coercion for `/config set` and daemon settings patches. */
-import { normalizeApprovalMode } from "@vykor/client";
+import { normalizeApprovalMode } from "@rzx/client";
 
 export function coerceConfigValue(key: string, value: string): unknown {
   switch (key) {

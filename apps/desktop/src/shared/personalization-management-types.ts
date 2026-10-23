@@ -1,4 +1,4 @@
-import type { MemoryEntryRecord, MemoryRevision } from "@vykor/client"
+import type { MemoryEntryRecord, MemoryRevision } from "@rzx/client"
 export interface PersonalizationMemoryPreferences {
   enabled: boolean
   autoExtractEnabled: boolean

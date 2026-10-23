@@ -40,10 +40,10 @@ vk -p "summarize the current session" \
 
 ## Web/Desktop SDK
 
-`@vykor/client` 对普通 HTTP 与 SSE 都使用 `fetch`，因此 bearer token 通过 `Authorization` header 发送，不会出现在事件流 URL 中。
+`@rzx/client` 对普通 HTTP 与 SSE 都使用 `fetch`，因此 bearer token 通过 `Authorization` header 发送，不会出现在事件流 URL 中。
 
 ```ts
-import { VykorClient, syncEvents } from "@vykor/client";
+import { VykorClient, syncEvents } from "@rzx/client";
 
 const client = new VykorClient({
   baseUrl: "https://daemon.example",

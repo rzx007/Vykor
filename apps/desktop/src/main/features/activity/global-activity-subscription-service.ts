@@ -4,7 +4,7 @@ import {
   type ScheduledRunRecord,
   type SessionEventRecord,
   type SyncEventUpdate,
-} from "@vykor/client"
+} from "@rzx/client"
 import type {
   DesktopActivityUpdate,
   DesktopScheduledActivity,

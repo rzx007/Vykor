@@ -4,7 +4,7 @@ import type {
   ScheduledTaskRecord,
   ScheduledTaskStatusSummary,
   UpdateScheduledTaskInput,
-} from "@vykor/client"
+} from "@rzx/client"
 
 export type DesktopScheduledTask = ScheduledTaskRecord
 export type DesktopScheduledRun = ScheduledRunRecord

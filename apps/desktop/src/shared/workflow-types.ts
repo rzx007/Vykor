@@ -1,4 +1,4 @@
-import type { JobStatus } from "@vykor/client"
+import type { JobStatus } from "@rzx/client"
 
 export type DesktopWorkflowTaskStatus =
   "pending" | "running" | "completed" | "failed" | "killed" | "skipped" | "unknown"

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from "electron"
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs"
 import { isAbsolute, join, relative, resolve } from "node:path"
-import { VykorClient } from "@vykor/client"
+import { VykorClient } from "@rzx/client"
 import { type BrowserHost, type VykorHttpServer } from "@vykor/server"
 import {
   clearDaemonRegistry,

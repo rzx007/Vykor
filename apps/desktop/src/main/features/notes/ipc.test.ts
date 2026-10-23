@@ -1,4 +1,4 @@
-import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/client"
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@rzx/client"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import { describe, expect, it, vi } from "vitest"
 

@@ -4,7 +4,7 @@ import type {
   VykorClientState,
   PresentationReadRequest,
   SlashLine,
-} from "@vykor/client";
+} from "@rzx/client";
 import {
   LOCAL_COMMAND_DETAILS,
   LOCAL_COMMAND_NAMES,
@@ -13,7 +13,7 @@ import {
   mergeCommandDetails,
   parseSlashLine,
   resolveSessionCwd,
-} from "@vykor/client";
+} from "@rzx/client";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import type { FrontendConfig } from "../types";

@@ -4,7 +4,7 @@
 
 ## 边界
 
-`@vykor/client` 负责四件事：
+`@rzx/client` 负责四件事：
 
 1. 在首个业务请求前确认 Client 与 daemon 使用同一个协议版本；
 2. 通过领域 Resource 发起 typed HTTP 请求；

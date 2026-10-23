@@ -8,15 +8,15 @@ vi.mock("./ensure-daemon.js", () => ({
   })),
 }));
 
-vi.mock("@vykor/client", async () => {
-  const actual = await vi.importActual<typeof import("@vykor/client")>("@vykor/client");
+vi.mock("@rzx/client", async () => {
+  const actual = await vi.importActual<typeof import("@rzx/client")>("@rzx/client");
   return {
     ...actual,
     VykorClient: vi.fn(),
   };
 });
 
-import { VykorClient } from "@vykor/client";
+import { VykorClient } from "@rzx/client";
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { buildPrintSessionMetadata, runPrintSession } from "./print-session.js";
 

@@ -1,5 +1,5 @@
-import type { ServerCapabilities } from "@vykor/client"
-import { officeFormat } from "@vykor/client"
+import type { ServerCapabilities } from "@rzx/client"
+import { officeFormat } from "@rzx/client"
 
 type DesktopAttachmentLimits = NonNullable<ServerCapabilities["attachments"]>["limits"]
 

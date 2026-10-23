@@ -167,7 +167,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/client"
+} from "@rzx/client"
 import type { DesktopUpdateState } from "./update-types"
 import type {
   DesktopMcpAddInput,
@@ -183,7 +183,7 @@ import type {
   DesktopMcpSnapshot,
   DesktopMcpUpdateInput,
 } from "./mcp-types"
-import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/client"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@rzx/client"
 import type {
   DesktopConnectionsSnapshot,
   DesktopFeishuAllowInput,

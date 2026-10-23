@@ -12,7 +12,7 @@
 | `devDependencies` | React、Tailwind、图标、workspace 包、electron-vite 等 | 开发期用；渲染进程和主进程 JS 已经打进 `out/` |
 | `electron-builder.yml` 的 `files` | `out/**`、`resources/**`、`package.json` | 不要默认拷整个 `apps/desktop` |
 
-Desktop 只直接依赖 `@vykor/client` 和 `@vykor/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/session-runtime/migrations`，以匹配 bundle 后迁移加载器相对于 `out/main/index.js` 的路径。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
+Desktop 只直接依赖 `@rzx/client` 和 `@vykor/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/session-runtime/migrations`，以匹配 bundle 后迁移加载器相对于 `out/main/index.js` 的路径。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
 
 正式发布时，各平台会从实际生成的 `dist/*-unpacked/resources/app.asar` 读取 migration，生成 `clean-slate-migrations-<platform>.json`。Tag 创建前必须同时拿到 Windows 和 Linux inventory，确认包含基线与全部增量迁移（`.sql` 与 `meta/*.json`，清单从源迁移目录推导），并且两边文件哈希一致；只检查构建目录 `out/` 不算发布产物验证。
 

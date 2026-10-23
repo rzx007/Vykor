@@ -12,9 +12,9 @@ const baselinePath = join(root, "scripts", "architecture-baseline.json");
 const forbiddenPackageEdges = new Map([
   [
     "@vykor/protocol",
-    new Set(["@vykor/services", "@vykor/server", "@vykor/client"]),
+    new Set(["@vykor/services", "@vykor/server", "@rzx/client"]),
   ],
-  ["@vykor/services", new Set(["@vykor/server", "@vykor/client"])],
+  ["@vykor/services", new Set(["@vykor/server", "@rzx/client"])],
   ["@vykor/agent-runtime", new Set(["@vykor/server"])],
 ]);
 

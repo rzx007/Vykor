@@ -5,7 +5,7 @@ import {
   parseCreateSessionGoalInput,
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
-} from "@vykor/client"
+} from "@rzx/client"
 
 import type {
   CheckoutDesktopProjectBranchInput,
@@ -310,7 +310,7 @@ export class SessionOperations {
     return project.path
   }
 
-  async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/client").PluginAppConversationRequest[]): Promise<void> {
+  async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput, pluginAppContexts?: import("@rzx/client").PluginAppConversationRequest[]): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     const items = requirePromptItems(input.items)

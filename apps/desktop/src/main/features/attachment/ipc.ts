@@ -23,7 +23,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/client"
+} from "@rzx/client"
 import { IpcChannels, IpcEvents } from "../../../shared/ipc-channels"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"

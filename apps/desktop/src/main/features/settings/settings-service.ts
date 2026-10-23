@@ -1,4 +1,4 @@
-import type { ProtocolClient, SystemResource } from "@vykor/client"
+import type { ProtocolClient, SystemResource } from "@rzx/client"
 
 import {
   buildDesktopSettingsSnapshot,

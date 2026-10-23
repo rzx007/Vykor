@@ -7,7 +7,7 @@ import {
   type SessionRecord,
   type SessionTransformationMessagePartRecord,
   type SyncEventUpdate,
-} from "@vykor/client"
+} from "@rzx/client"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type {

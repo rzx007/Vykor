@@ -9,8 +9,8 @@ Node 入口内联跨进程锁的实现，并将这些第三方代码的许可证
 `release.mjs` 是根命令 `release:client` / `release:client:dry` 的实现，要求明确 `x.y.z`。临时设置候选版本，验证安装包后才调用发布；始终恢复 manifest。发布顺序和预演回归放在 `__test__/release.test.mjs`。
 
 ```powershell
-pnpm --filter @vykor/client build
-pnpm --filter @vykor/client test:pack
+pnpm --filter @rzx/client build
+pnpm --filter @rzx/client test:pack
 ```
 
 构建文件位于包内 `dist/`，业务数据仍在 daemon 中。新增发布产物检查放在这里，脚本自身的行为回归放在 `__test__/`。

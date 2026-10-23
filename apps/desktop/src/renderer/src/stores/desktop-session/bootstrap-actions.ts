@@ -1,4 +1,4 @@
-import { normalizeApprovalMode } from "@vykor/client"
+import { normalizeApprovalMode } from "@rzx/client"
 import type {
   DesktopBootstrapData,
   DesktopProject,

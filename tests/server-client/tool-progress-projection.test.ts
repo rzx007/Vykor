@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent, AgentEventInput } from "@vykor/agent-contracts";
 import type { SessionEventRecord } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
-import { applyEvents, createInitialClientState, syncEvents } from "@vykor/client";
+import { applyEvents, createInitialClientState, syncEvents } from "@rzx/client";
 import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript/transcript-projection.js";
 import { DaemonAgentEventProjector } from "../../packages/server/src/application/agent/daemon-agent-event-projector.js";
 

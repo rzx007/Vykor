@@ -1,6 +1,6 @@
 import { groupPermissions } from "./plugin-permissions"
 import { useEffect, useRef, useState } from "react"
-import type { MarketplaceCatalog, MarketplaceEntry, MarketplaceOperation } from "@vykor/client"
+import type { MarketplaceCatalog, MarketplaceEntry, MarketplaceOperation } from "@rzx/client"
 import type { DesktopMarketplacePreview, DesktopPluginInfo } from "@shared/plugin-types"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"

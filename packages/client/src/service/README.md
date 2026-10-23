@@ -1,6 +1,6 @@
 # 本机后台服务管理
 
-公开入口为 `@vykor/client/service`，仅在 Node.js 中使用。浏览器入口不导入这里。
+公开入口为 `@rzx/client/service`，仅在 Node.js 中使用。浏览器入口不导入这里。
 
 | 文件 | 用途 |
 | --- | --- |

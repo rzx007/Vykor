@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
-import type { ModelInfo, ModelProviderInfo } from "@vykor/client";
+import type { ModelInfo, ModelProviderInfo } from "@rzx/client";
 
 import { ThemeProvider } from "../theme/ThemeContext";
 import { ModelPickerDialog } from "./ModelPickerDialog";

@@ -1,4 +1,4 @@
-import { isPluginIconSource, isPluginWebUrl } from "@vykor/client"
+import { isPluginIconSource, isPluginWebUrl } from "@rzx/client"
 
 const MAX_BYTES = 512 * 1024
 

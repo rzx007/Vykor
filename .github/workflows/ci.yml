@@ -34,7 +34,7 @@ jobs:
         run: pnpm check-types
 
       - name: Verify standalone client package
-        run: pnpm --filter @vykor/client test:pack
+        run: pnpm --filter @rzx/client test:pack
 
       - name: Check architecture
         run: pnpm check:architecture

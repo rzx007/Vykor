@@ -1,5 +1,5 @@
 import { expect, it } from "vitest"
-import type { VykorClient, JobSnapshot } from "@vykor/client"
+import type { VykorClient, JobSnapshot } from "@rzx/client"
 import { readDesktopWorkflows } from "./read-workflows"
 
 it("retains a workflow with unavailable details instead of dropping its failed read", async () => {

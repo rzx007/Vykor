@@ -3,7 +3,7 @@ import {
   IncompatibleProtocolError,
   VykorApiError,
   type McpRuntimeSyncResult,
-} from "@vykor/client"
+} from "@rzx/client"
 import { createDesktopMcpRuntimeCoordinator } from "./mcp-runtime-coordinator"
 
 const identity = {

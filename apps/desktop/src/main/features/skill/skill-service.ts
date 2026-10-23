@@ -1,4 +1,4 @@
-import type { VykorClient } from "@vykor/client"
+import type { VykorClient } from "@rzx/client"
 import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,

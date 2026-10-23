@@ -6,7 +6,7 @@ import type {
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@vykor/client"
+} from "@rzx/client"
 
 export type DesktopDetectedTerminalShell = { id: string; label: string }
 

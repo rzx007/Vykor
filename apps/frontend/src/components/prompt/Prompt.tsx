@@ -1,4 +1,4 @@
-import { normalizeApprovalMode } from "@vykor/client";
+import { normalizeApprovalMode } from "@rzx/client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useKeyboard } from "@opentui/react";
 import { TextAttributes, decodePasteBytes, stripAnsiSequences } from "@opentui/core";

@@ -2,7 +2,7 @@ import {
   applyEvent,
   type VykorClientState,
   type SessionEventRecord,
-} from "@vykor/client"
+} from "@rzx/client"
 
 const projectedTypes = new Set([
   "session.created",

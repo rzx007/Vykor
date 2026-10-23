@@ -26,7 +26,7 @@
 
 ## 共享 client 的标准流程
 
-TUI、Web、Desktop 和 IDE 应复用 `@vykor/client`：
+TUI、Web、Desktop 和 IDE 应复用 `@rzx/client`：
 
 1. 调 `/capabilities`，协议版本必须完全匹配。
 2. 获取 Session snapshot。

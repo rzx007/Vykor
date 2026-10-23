@@ -1,4 +1,4 @@
-import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/client"
+import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@rzx/client"
 
 export type DesktopNote = NoteRecord
 export type CreateDesktopNoteInput = CreateNoteInput

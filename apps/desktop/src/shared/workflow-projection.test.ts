@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { JobReadResult } from "@vykor/client"
+import type { JobReadResult } from "@rzx/client"
 import { projectWorkflowRun } from "./workflow-projection"
 
 function read(details: Record<string, unknown> = {}): JobReadResult {
