@@ -761,16 +761,16 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
 </div>
 <main class="am-doc">
-<header class="am-head"><h1>Vykor 新插件体系</h1><p class="am-sub">从插件包到实际调用：结构、安装、权限与开发入口</p><div class="am-head-meta"><span><b>source</b>当前工作区源码 · 2026-10-21</span></div><div class="am-intro am-md"><div class="am-md"><blockquote>
+<header class="am-head"><h1>Vykor 新插件体系</h1><p class="am-sub">从插件包到实际调用：结构、安装、权限与开发入口</p><div class="am-head-meta"><span><b>source</b>当前工作区源码 · 2026-10-23</span></div><div class="am-intro am-md"><div class="am-md"><blockquote>
 <p>状态：当前插件体系开发说明；以当前源码和插件清单校验规则为准。</p>
 </blockquote>
 <p>插件以 Native Plugin 包为入口。技能、工具和页面分别加载，调用始终受实际权限约束。</p>
 <p>这份文档介绍插件整体机制。页面协议和常驻面板见独立的 <a href="mcp-apps.html">MCP Apps 文档</a>。</p>
 </div></div></header>
 <div class="am-doc-layout">
-<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 先分清四个名称</a><a href="#panel-B">B · 一个插件包包含什么</a><a href="#panel-C">C · 安装以后，能力怎样进入一次任务</a><a href="#panel-D">D · 如何安装、开发和更新</a><a href="#panel-E">E · 哪些检查真正决定能否执行</a><a href="#panel-F">F · 代码、配置、草稿和业务数据放在哪里</a><a href="#panel-G">G · 两个示例怎样覆盖这套机制</a><a href="#panel-H">H · 开发验收与源码导航</a></nav><div class="am-doc-body">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 先分清插件包、工具、服务和页面</a><a href="#panel-B">B · 一个插件包包含什么</a><a href="#panel-C">C · 安装以后，能力怎样进入一次任务</a><a href="#panel-D">D · 如何安装、开发和更新</a><a href="#panel-E">E · 哪些检查真正决定能否执行</a><a href="#panel-F">F · 代码、配置、草稿和业务数据放在哪里</a><a href="#panel-G">G · 从完整模板到已有示例</a><a href="#panel-H">H · 开发验收与源码导航</a></nav><div class="am-doc-body">
 <section class="am-panel" id="panel-A">
-<header class="am-panel-head"><span class="am-panel-id">A</span><h2>先分清四个名称</h2></header>
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>先分清插件包、工具、服务和页面</h2></header>
 <div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
 <thead>
 <tr>
@@ -809,7 +809,53 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <div class="am-callout am-callout--info" role="note"><div class="am-callout-title">核心关系</div><div class="am-callout-body am-md"><p>插件可以只提供技能或工具，也可以附带应用页面。
 Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 </div></div>
-<div class="am-md"><p>当前可激活 Skills、Agents、Hooks、MCP、Node Tools 和 Apps。Wasm Tool 尚不激活。</p>
+<div class="am-md"><h3>两种带页面的插件怎样选</h3>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>组合</th>
+<th>作者实现什么</th>
+<th>Vykor 怎样执行</th>
+<th>页面怎样得到结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Native Tool＋MCP Apps</td>
+<td>registerTools 工具入口、Apps 清单和 HTML 页面</td>
+<td>校验后由 Tool Host 调用 invoke</td>
+<td>metadata.appData 转为 structuredContent</td>
+</tr>
+<tr>
+<td>MCP 服务＋MCP Apps</td>
+<td>标准 MCP 工具与资源、服务配置、Apps 清单和 HTML 页面</td>
+<td>校验后由 MCP Client 调用服务</td>
+<td>直接使用 MCP structuredContent</td>
+</tr>
+</tbody></table></div>
+<p>两种页面都使用官方 App SDK，与 Vykor 通过标准 MCP Apps 协议通信。Native 的适配只发生在后台工具接口这一段。</p>
+<p>MCP 服务提供页面 HTML，但页面实际运行在 Vykor 右侧。服务进程与页面沙箱分别运行；页面不能直接操作服务进程或宿主文件。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>谁发起</th>
+<th>请求入口</th>
+<th>结果回来后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Agent</td>
+<td>已关联页面的模型工具</td>
+<td>返回 Agent，并由宿主投递给页面的 ontoolresult</td>
+</tr>
+<tr>
+<td>页面按钮</td>
+<td>作者绑定事件，调用 app.callServerTool</td>
+<td>返回原 Promise，由页面显示；不重复推送 ontoolresult</td>
+</tr>
+</tbody></table></div>
+<p>两种组合都保留原工具权限、安装批准和操作回执。协议不会自动替作者完成按钮绑定、草稿保存或版本冲突处理。</p>
+<p>两套完整流程图和页面接线示例见 <a href="mcp-apps.html">MCP Apps 开发与运行机制</a>。</p>
+<p>当前可激活 Skills、Agents、Hooks、MCP、Node Tools 和 Apps。Wasm Tool 尚不激活。</p>
 <p>LSP、Workflows、Channels 等字段可被识别，但尚无对应激活能力。不要把清单通过校验当成能力已经可用。</p>
 </div></div>
 </section>
@@ -991,7 +1037,7 @@ Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 </tr>
 <tr>
 <td>长期业务数据</td>
-<td>context.plugin.dataDir</td>
+<td>Native 使用 context.plugin.dataDir；MCP 使用宿主注入的插件数据目录</td>
 <td>普通更新和卸载不主动删除</td>
 </tr>
 <tr>
@@ -1010,8 +1056,11 @@ Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-G">
-<header class="am-panel-head"><span class="am-panel-id">G</span><h2>两个示例怎样覆盖这套机制</h2></header>
-<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>从完整模板到已有示例</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>新插件优先从 <a href="../skills/create-plugin/templates/weather-travel/README.md">天气与出行模板</a> 生成。初始化时选择 --backend native 或 --backend mcp，两版共用页面与业务逻辑，可分别构建、校验和打包。</p>
+<p>Native 版生成 components.tools 和 native-tools 后台。MCP 版生成 components.mcpServers、stdio 服务配置和 mcp-server 后台。两版都生成 components.apps，无需叠加两套工具入口。</p>
+<p>天气模板覆盖真实天气查询、收藏、会话出行备忘、有限自动保存、选区引用和确认导出。初始化命令及安装步骤见 <a href="native-plugin-authoring.md">原生插件开发指南</a>。</p>
+<div class="am-table-wrap"><table>
 <thead>
 <tr>
 <th>示例</th>
@@ -1074,15 +1123,15 @@ Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 </tr>
 <tr>
 <td>任务可用能力的绑定</td>
-<td>packages/agent-runtime/src/run-capability-view.ts</td>
+<td>packages/agent-runtime/src/node/plugins/run-capability-view.ts</td>
 </tr>
 <tr>
 <td>自动与显式插件范围</td>
-<td>packages/server/src/application/session/session-plugin-capability-service.ts</td>
+<td>packages/server/src/application/session/plugins/session-plugin-capability-service.ts</td>
 </tr>
 <tr>
 <td>Native Tool 校验</td>
-<td>packages/agent-runtime/src/native-tools/guard.ts</td>
+<td>packages/agent-runtime/src/node/plugins/native-tools/guard.ts</td>
 </tr>
 </tbody></table></div>
 <p>源码基准为 D:/code/personal-project/OpenHarness-ts 当前工作区。本文记录实现状态，不把历史设计方案当作已上线能力。</p>
@@ -1107,13 +1156,13 @@ Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。</p>
 <div class="am-lightbox-canvas am-diagram"></div>
 </div>
 </div>
-<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.5.0 · 2026-10-21 13:21 · <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">★ Star on GitHub</a></footer>
+<footer class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.5.0 · 2026-10-23 12:52 · <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">★ Star on GitHub</a></footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 title: Vykor 新插件体系
 subtitle: 从插件包到实际调用：结构、安装、权限与开发入口
 template: doc
 theme: paper
-source: 当前工作区源码 · 2026-10-21
+source: 当前工作区源码 · 2026-10-23
 ---
 &gt; 状态：当前插件体系开发说明；以当前源码和插件清单校验规则为准。
 
@@ -1121,7 +1170,7 @@ source: 当前工作区源码 · 2026-10-21
 
 这份文档介绍插件整体机制。页面协议和常驻面板见独立的 [MCP Apps 文档](mcp-apps.html)。
 
-## A 先分清四个名称
+## A 先分清插件包、工具、服务和页面
 
 | 名称 | 实际做什么 | 当前定位 |
 | --- | --- | --- |
@@ -1135,6 +1184,26 @@ source: 当前工作区源码 · 2026-10-21
 插件可以只提供技能或工具，也可以附带应用页面。
 Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。
 ```
+
+### 两种带页面的插件怎样选
+
+| 组合 | 作者实现什么 | Vykor 怎样执行 | 页面怎样得到结果 |
+| --- | --- | --- | --- |
+| Native Tool＋MCP Apps | registerTools 工具入口、Apps 清单和 HTML 页面 | 校验后由 Tool Host 调用 invoke | metadata.appData 转为 structuredContent |
+| MCP 服务＋MCP Apps | 标准 MCP 工具与资源、服务配置、Apps 清单和 HTML 页面 | 校验后由 MCP Client 调用服务 | 直接使用 MCP structuredContent |
+
+两种页面都使用官方 App SDK，与 Vykor 通过标准 MCP Apps 协议通信。Native 的适配只发生在后台工具接口这一段。
+
+MCP 服务提供页面 HTML，但页面实际运行在 Vykor 右侧。服务进程与页面沙箱分别运行；页面不能直接操作服务进程或宿主文件。
+
+| 谁发起 | 请求入口 | 结果回来后 |
+| --- | --- | --- |
+| Agent | 已关联页面的模型工具 | 返回 Agent，并由宿主投递给页面的 ontoolresult |
+| 页面按钮 | 作者绑定事件，调用 app.callServerTool | 返回原 Promise，由页面显示；不重复推送 ontoolresult |
+
+两种组合都保留原工具权限、安装批准和操作回执。协议不会自动替作者完成按钮绑定、草稿保存或版本冲突处理。
+
+两套完整流程图和页面接线示例见 [MCP Apps 开发与运行机制](mcp-apps.html)。
 
 当前可激活 Skills、Agents、Hooks、MCP、Node Tools 和 Apps。Wasm Tool 尚不激活。
 
@@ -1275,7 +1344,7 @@ Node 子进程隔离崩溃和宿主环境，但不是操作系统级沙箱。
 | --- | --- | --- |
 | 插件代码 | 安装快照或开发链接目录 | 正式快照不原地修改 |
 | 批准与启用状态 | 插件安装记录 | 与根清单分开保存 |
-| 长期业务数据 | context.plugin.dataDir | 普通更新和卸载不主动删除 |
+| 长期业务数据 | Native 使用 context.plugin.dataDir；MCP 使用宿主注入的插件数据目录 | 普通更新和卸载不主动删除 |
 | 页面未保存草稿 | 当前 iframe 的内存 | 切换和收起保留，重启不保证恢复 |
 | 应用身份与操作回执 | 宿主会话存储 | 用于来源核对及恢复，不由页面伪造 |
 
@@ -1283,7 +1352,13 @@ dataDir 的约定位置是 ~/.vykor/plugins/data/插件ID。它与代码版本�
 
 插件负责数据格式、迁移和清理。页面需要持久保存时，应调用原有后台工具。
 
-## G 两个示例怎样覆盖这套机制
+## G 从完整模板到已有示例
+
+新插件优先从 [天气与出行模板](../skills/create-plugin/templates/weather-travel/README.md) 生成。初始化时选择 --backend native 或 --backend mcp，两版共用页面与业务逻辑，可分别构建、校验和打包。
+
+Native 版生成 components.tools 和 native-tools 后台。MCP 版生成 components.mcpServers、stdio 服务配置和 mcp-server 后台。两版都生成 components.apps，无需叠加两套工具入口。
+
+天气模板覆盖真实天气查询、收藏、会话出行备忘、有限自动保存、选区引用和确认导出。初始化命令及安装步骤见 [原生插件开发指南](native-plugin-authoring.md)。
 
 | 示例 | 组成与后台 | 主要体验 | 数据行为 |
 | --- | --- | --- | --- |
@@ -1313,13 +1388,14 @@ Notes 的远端更新保留本地草稿。采用远端正文需要确认，保�
 | 文件与旧 UI 校验 | packages/plugins/src/manifest/validate.ts |
 | 当前可激活组件 | packages/plugins/src/load-native-plugin.ts |
 | 安装权限汇总 | packages/plugins/src/installation/installer.ts |
-| 任务可用能力的绑定 | packages/agent-runtime/src/run-capability-view.ts |
-| 自动与显式插件范围 | packages/server/src/application/session/session-plugin-capability-service.ts |
-| Native Tool 校验 | packages/agent-runtime/src/native-tools/guard.ts |
+| 任务可用能力的绑定 | packages/agent-runtime/src/node/plugins/run-capability-view.ts |
+| 自动与显式插件范围 | packages/server/src/application/session/plugins/session-plugin-capability-service.ts |
+| Native Tool 校验 | packages/agent-runtime/src/node/plugins/native-tools/guard.ts |
 
 源码基准为 D:/code/personal-project/OpenHarness-ts 当前工作区。本文记录实现状态，不把历史设计方案当作已上线能力。
 
-继续阅读：[MCP Apps 开发与运行机制](mcp-apps.html)。</textarea>
+继续阅读：[MCP Apps 开发与运行机制](mcp-apps.html)。
+</textarea>
 <script>
 (() => {
   const root = document.documentElement;

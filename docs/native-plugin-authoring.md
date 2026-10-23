@@ -2,7 +2,29 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含 Skill、Plugin Agent、独立 Node 工具和使用公开浏览器 SDK 的单文件 UI，没有外部服务或安装后的运行依赖。页面使用官方 MCP Apps SDK，作者通过 npm 准备构建依赖。
+本文面向在本仓库内开发插件的作者。带页面的新插件优先从 [天气与出行模板](../skills/create-plugin/templates/weather-travel/README.md) 开始；它可生成 Native Tool 或 MCP 服务两种后台，使用同一官方 MCP Apps 页面。作者准备构建依赖，用户安装已构建的插件包。
+
+完整的协议、调用流程图和结果返回规则见 [MCP Apps 开发说明](./mcp-apps.md)（[交互版](./mcp-apps.html)）。Native Tool 是 Vykor 的工具接口，不是旧原生界面；两种后台的页面都统一显示在右侧面板。
+
+## 创建完整工程
+
+在仓库根目录执行以下命令。新目录不能已经存在；需要 Node.js 24：
+
+```sh
+node skills/create-plugin/scripts/create-plugin.mjs --dir ./my-weather --id example.my-weather --name my-weather --backend native --display-name "我的天气助手"
+cd my-weather
+npm ci
+npm run build
+npm test
+npm run validate
+npm run pack
+```
+
+需要 MCP 后台时，在新目录用 `--backend mcp` 初始化。生成器只保留所选后台，两版不要求互相启动；它们共用业务代码、页面及相同的权限和保存规则。`plugin.config.json` 是身份配置入口，构建脚本统一生成工具名、页面 URI 和清单。
+
+`dist` 内包含离线页面与所选后台入口，打包输出以生成工程说明为准。安装时不下载依赖、不现场构建；业务数据使用宿主提供的插件数据目录，不写代码快照。
+
+若只想理解不写数据的 Native Tool 接线，可使用 [文本检查助手](../examples/plugins/text-inspector/README.md)。它包含 Skill、Plugin Agent、Node 工具与单文件页面，不依赖天气服务。
 
 ## 从样例开始
 
@@ -53,7 +75,7 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
 
 系统在后台复制、校验和准备插件内容；不申请权限的插件会直接安装，申请权限的插件只会出现一次完整权限确认。重新导入同一插件 ID 就是更新或修复：之前的批准能够覆盖本次权限时不重复确认，新增权限时才重新确认；安装成功前保留旧记录，且不会自动启用原本已禁用的插件。页面只反馈成功、失败或无法确认的安装结果；成功后插件在下一次对话中生效。
 
-对话中也可以让 Agent 使用 `PluginInstall` 安装本地插件包或 Git URL/ref。工具先展示插件身份、固定来源和完整权限；只有用户回复“确认安装”才会调用同一安装服务，新插件从下一次对话生效。插件开发指导改为单独分发的 [create-plugin Skill](../skills/create-plugin/README.md)，不再内置；用户自行安装该 Skill 后才能通过 `/create-plugin` 或 `Skill` 调用。自动更新、独立 Repair 命令、版本回滚、Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 仍未支持。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
+对话中也可以让 Agent 使用 `PluginInstall` 安装本地插件包或 Git URL/ref。工具先展示插件身份、固定来源和完整权限；只有用户回复“确认安装”才会调用同一安装服务，新插件从下一次对话生效。插件开发指导改为单独分发的 [create-plugin Skill](../skills/create-plugin/README.md)，不再内置；用户自行安装该 Skill 后才能通过 `/create-plugin` 或 `Skill` 调用。市场浏览、来源绑定和手动更新见 [插件市场](./plugin-marketplace.md)。自动更新、独立 Repair 命令、版本回滚、Claude Code/Codex 转换、npm 和归档 URL 仍未支持。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
 
 本地插件包导入的作者侧检查很短：
 
@@ -91,9 +113,22 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 
 ## 插件应用（MCP Apps）
 
-根清单保持 schemaVersion 1，唯一新页面入口是 `components.apps: ["./ui/apps.json"]`。复制 `assets/text-inspector/ui/apps.json`：其 schemaVersion 为 1，backend 为 `native-tools`，resources 把精确 `ui://` URI 映射到插件内单文件 HTML，tools 引用实际注册的 `TextInspectorCheck`、`TextInspectorPreview`，surfaces 提供会话打开入口。参数 schema 来自 Native Tool 注册，不能复制、改写或增加工具别名。Native Tools 仍通过原 Tool Host、Guard 和权限执行，不需要额外 MCP 进程。
+根清单保持 schemaVersion 1，页面入口是 `components.apps: ["./ui/apps.json"]`。Apps 清单也使用 schemaVersion 1，`surfaces` 提供会话内的具名打开入口。
 
-工具保留普通 content 文字，页面数据写 `metadata.appData: { text, findings, truncated }`；宿主把它转为 MCP `structuredContent`。普通业务工具不生成可信 appId、requestId、版本或执行状态。注册 app-only 可见性不代表获得执行权限。
+| 作者步骤 | Native Tool＋MCP Apps | MCP 服务＋MCP Apps |
+| --- | --- | --- |
+| 注册后台 | 根清单 components.tools；入口导出 registerTools | 根清单 components.mcpServers；配置实际 MCP 服务 |
+| 关联 Apps | kind: native-tools；tools 引用真实注册名，ui.resourceUri 关联页面 | kind: mcp-server；server 引用同插件服务名 |
+| 提供页面 | resources 将 ui:// URI 映射到包内离线 HTML | MCP 服务响应 resources/read，返回 text/html;profile=mcp-app |
+| 关联模型工具 | Apps tools 项声明 ui.resourceUri 和 visibility | MCP 工具元数据声明 _meta.ui.resourceUri 和 visibility |
+| 返回页面数据 | metadata.appData；宿主转换为 structuredContent | MCP 工具结果直接带 structuredContent |
+| 页面调用的执行路径 | 宿主校验 → Native 适配 → Tool Host／Guard → invoke | 宿主校验 → MCP Client → 服务工具处理函数 |
+
+Native 参数 schema 来自工具真实注册结果，不在 Apps 清单另造别名或参数定义；接入页面不需要额外 MCP 进程。MCP 模板通过 stdio 启动服务，服务向宿主提供 HTML，HTML 在宿主页面沙箱中运行。
+
+两者的页面都使用官方 MCP Apps SDK，无需按后台类型改写通信协议。工具保留普通 content 文字，页面消费结构化数据。普通业务工具不生成可信 appId、requestId、宿主控制版本或执行状态；业务 revision 不能替代宿主授权版本。app-only 可见性只限制调用方，不授予权限。
+
+安装批准后，宿主才装配组件、读取页面并按原规则执行工具。Native 从 context 取得原会话、数据目录和 cwd；天气 MCP 模板通过宿主注入的环境绑定取得对应信息。不要让页面参数指定会话、数据根目录或导出根目录。
 
 ## 页面入口与结果
 
@@ -104,7 +139,7 @@ function show(result) {
   if (result.isError) throw new Error("工具失败，请查看回执");
   // 校验 structuredContent 后显示；这里不能再次调用工具或保存。
 }
-app.ontoolresult = show; // 只消费初始/模型主动推送
+app.ontoolresult = show; // Agent 结果；必须在 connect 前注册。
 app.onhostcontextchanged = context => {
   if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
 };
@@ -114,7 +149,13 @@ const result = await app.callServerTool({ name: "TextInspectorCheck", arguments:
 show(result);
 ```
 
-必须先登记通知再 connect。直接打开只有空表单，不伪造工具结果。完整处理错误、选区和 48,000 字节交互边界的代码见 `assets/text-inspector/ui/panel.mjs`。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
+上面用 Text Inspector 演示接线，真实按钮必须由作者绑定事件，并处理异常与等待状态。工具名使用当前插件真实名称；天气工程从 `src/identity.mjs` 取得，不能照搬示例名称。
+
+Agent 调用已关联页面的工具后，宿主把结果返回 Agent，同时投递给对应会话页面的 `ontoolresult`。页面按钮的调用结果则返回 `callServerTool` 的 Promise，不再触发这份通知。两个入口可以共用渲染函数，渲染时不再次执行工具或保存。
+
+先登记通知再 connect，避免丢失握手时的首个结果。从具名入口直接打开时，不能假设已有 Agent 结果：Text Inspector 显示空表单；天气模板主动读取真实备忘与收藏，未查询前不伪造天气。实时结果优先在工作摘要提示，点击具名入口后定位右侧，不反复抢占焦点。
+
+完整天气接线见 [页面入口](../skills/create-plugin/templates/weather-travel/ui/panel.mjs)与[页面交互](../skills/create-plugin/templates/weather-travel/ui/view.mjs)；Text Inspector 的错误、选区和 48,000 字节交互边界见 [页面源码](../examples/plugins/text-inspector/ui/panel.mjs)。主题通过官方 hostContext 更新，不清空输入；使用宿主语义颜色，支持键盘及减少动态效果。
 
 ## 可见上下文与普通消息
 

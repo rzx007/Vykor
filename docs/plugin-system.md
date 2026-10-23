@@ -3,7 +3,7 @@ title: Vykor 新插件体系
 subtitle: 从插件包到实际调用：结构、安装、权限与开发入口
 template: doc
 theme: paper
-source: 当前工作区源码 · 2026-10-21
+source: 当前工作区源码 · 2026-10-23
 ---
 > 状态：当前插件体系开发说明；以当前源码和插件清单校验规则为准。
 
@@ -11,7 +11,7 @@ source: 当前工作区源码 · 2026-10-21
 
 这份文档介绍插件整体机制。页面协议和常驻面板见独立的 [MCP Apps 文档](mcp-apps.html)。
 
-## A 先分清四个名称
+## A 先分清插件包、工具、服务和页面
 
 | 名称 | 实际做什么 | 当前定位 |
 | --- | --- | --- |
@@ -25,6 +25,26 @@ source: 当前工作区源码 · 2026-10-21
 插件可以只提供技能或工具，也可以附带应用页面。
 Native Tool 接入 MCP Apps 时，无需另起 MCP 服务。
 ```
+
+### 两种带页面的插件怎样选
+
+| 组合 | 作者实现什么 | Vykor 怎样执行 | 页面怎样得到结果 |
+| --- | --- | --- | --- |
+| Native Tool＋MCP Apps | registerTools 工具入口、Apps 清单和 HTML 页面 | 校验后由 Tool Host 调用 invoke | metadata.appData 转为 structuredContent |
+| MCP 服务＋MCP Apps | 标准 MCP 工具与资源、服务配置、Apps 清单和 HTML 页面 | 校验后由 MCP Client 调用服务 | 直接使用 MCP structuredContent |
+
+两种页面都使用官方 App SDK，与 Vykor 通过标准 MCP Apps 协议通信。Native 的适配只发生在后台工具接口这一段。
+
+MCP 服务提供页面 HTML，但页面实际运行在 Vykor 右侧。服务进程与页面沙箱分别运行；页面不能直接操作服务进程或宿主文件。
+
+| 谁发起 | 请求入口 | 结果回来后 |
+| --- | --- | --- |
+| Agent | 已关联页面的模型工具 | 返回 Agent，并由宿主投递给页面的 ontoolresult |
+| 页面按钮 | 作者绑定事件，调用 app.callServerTool | 返回原 Promise，由页面显示；不重复推送 ontoolresult |
+
+两种组合都保留原工具权限、安装批准和操作回执。协议不会自动替作者完成按钮绑定、草稿保存或版本冲突处理。
+
+两套完整流程图和页面接线示例见 [MCP Apps 开发与运行机制](mcp-apps.html)。
 
 当前可激活 Skills、Agents、Hooks、MCP、Node Tools 和 Apps。Wasm Tool 尚不激活。
 
@@ -165,7 +185,7 @@ Node 子进程隔离崩溃和宿主环境，但不是操作系统级沙箱。
 | --- | --- | --- |
 | 插件代码 | 安装快照或开发链接目录 | 正式快照不原地修改 |
 | 批准与启用状态 | 插件安装记录 | 与根清单分开保存 |
-| 长期业务数据 | context.plugin.dataDir | 普通更新和卸载不主动删除 |
+| 长期业务数据 | Native 使用 context.plugin.dataDir；MCP 使用宿主注入的插件数据目录 | 普通更新和卸载不主动删除 |
 | 页面未保存草稿 | 当前 iframe 的内存 | 切换和收起保留，重启不保证恢复 |
 | 应用身份与操作回执 | 宿主会话存储 | 用于来源核对及恢复，不由页面伪造 |
 
@@ -173,7 +193,13 @@ dataDir 的约定位置是 ~/.vykor/plugins/data/插件ID。它与代码版本�
 
 插件负责数据格式、迁移和清理。页面需要持久保存时，应调用原有后台工具。
 
-## G 两个示例怎样覆盖这套机制
+## G 从完整模板到已有示例
+
+新插件优先从 [天气与出行模板](../skills/create-plugin/templates/weather-travel/README.md) 生成。初始化时选择 --backend native 或 --backend mcp，两版共用页面与业务逻辑，可分别构建、校验和打包。
+
+Native 版生成 components.tools 和 native-tools 后台。MCP 版生成 components.mcpServers、stdio 服务配置和 mcp-server 后台。两版都生成 components.apps，无需叠加两套工具入口。
+
+天气模板覆盖真实天气查询、收藏、会话出行备忘、有限自动保存、选区引用和确认导出。初始化命令及安装步骤见 [原生插件开发指南](native-plugin-authoring.md)。
 
 | 示例 | 组成与后台 | 主要体验 | 数据行为 |
 | --- | --- | --- | --- |
