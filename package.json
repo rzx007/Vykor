@@ -36,6 +36,7 @@
     "test:desktop-integration": "vitest run --config tests/desktop-integration/vitest.config.ts"
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "1.1.2",
     "@types/node": "catalog:",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/agent-runtime": "workspace:*",
