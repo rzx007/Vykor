@@ -19,7 +19,7 @@ description: Use when creating, extending, validating, packaging, or preparing m
 ## 先找对源码位置
 
 - 修改官方插件：直接在市场仓库的 [Excalidraw](https://github.com/rzx007/vykor-plugins/tree/main/plugins/excalidraw)、[研究与写作](https://github.com/rzx007/vykor-plugins/tree/main/plugins/knowledge-work)、[办公文档](https://github.com/rzx007/vykor-plugins/tree/main/plugins/office-work)目录修改代码、测试、版本和许可证，并向市场仓库提交 PR。官方构建条目使用 `localPath`。
-- 新建第三方插件：在作者自己的仓库中生成独立工程，放在真实子目录（如 `plugins/my-plugin`）。市场收录或升级通过 PR 固定外部仓库、40 位提交及实际 `source.path`；不能用仓库根 `.`。源码继续独立维护。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)保持独立、待收录，需先调整源码子目录或另行协调兼容发布。
+- 新建第三方插件：在作者自己的仓库中生成独立工程，放在真实子目录（如 `plugins/my-plugin`）。市场收录或升级通过 PR 固定外部仓库、40 位提交及实际 `source.path`；不能用仓库根 `.`。源码继续独立维护。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github/tree/main/plugins/github)保持独立，市场来源路径为该仓库的真实子目录 `plugins/github`。
 - 修改公共协议、SDK、本 Skill、天气模板或宿主示例：改 Vykor 宿主仓库。宿主不保存上述正式插件源码。
 
 创建工程不包含提交、推送或市场发布；用户要求贡献或发布时读取[验证与交付](references/verification.md#发布到插件市场)。官方包来源必须是市场 CI 实际 checkout 的提交；含未提交改动的本地构建只能作预览，不能发布。

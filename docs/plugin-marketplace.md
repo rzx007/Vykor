@@ -62,6 +62,6 @@
 
 市场仓库的 `marketplace.json` 是构建输入，不是公开索引。官方条目使用 `localPath` 指向市场仓库内的插件；代码、测试和版本修改通过该仓库的 PR 一起审查。第三方插件保留独立仓库；收录或升级 PR 固定 `source.repository`、完整 40 位 `source.commit` 与 `source.path`，构建时干净检出该提交。`source.path` 必须是该提交内真实子目录（如 `plugins/my-plugin`），不能使用仓库根 `.`、空段、`.`/`..` 段、冒号或反斜杠。贡献步骤见[市场贡献说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)。
 
-[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)保持独立仓库，当前待收录；需先改为真实源码子目录或另行协调兼容发布。已发布宿主在检查 `requires.host` 前解析来源路径，不能用最低版本要求跳过不兼容路径，否则整个市场目录都会被拒绝；不把源码复制到市场来绕过目录要求。
+[GitHub 插件](https://github.com/rzx007/vykor-plugin-github/tree/main/plugins/github)保持独立仓库，通过真实子目录 `plugins/github` 和固定源码提交收录，插件 ID 保持 `dev.vykor.github`。已发布宿主在检查 `requires.host` 前解析来源路径，不能用最低版本要求跳过不兼容路径，否则整个市场目录都会被拒绝；不把源码复制到市场来绕过目录要求。
 
 官方产物记录市场 CI 实际 checkout 的提交，不能拿旧提交冒充未提交源码。本地带未提交改动的构建仅作预览，不能发布；正式构建检查、来源记录和预览发布阻断均由市场仓库负责。生成确定性 ZIP 后，先发布不可变 Release，后更新 Pages 目录；同版本摘要变化会拒绝发布，旧版本保留。宿主和插件分别发版，见[官方插件独立发布](./release-process.md#官方插件独立发布)。

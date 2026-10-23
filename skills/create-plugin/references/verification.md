@@ -59,7 +59,7 @@ tar -czf my-plugin.tgz my-plugin
 - 第三方插件：源码继续放在独立仓库，可安装工程必须位于仓库内真实子目录，例如 `plugins/my-plugin`。先在自己的仓库提交推送，通过市场 PR 录入 `source.repository`、完整 40 位 `source.commit` 与实际子目录 `source.path`；升级也通过 PR 更新固定提交。构建必须干净检出并核对这个提交，不能用 branch、tag 或 `main` 代替。
 - Vykor 宿主：只维护协议、SDK、本 Skill、天气模板和示例；不要将正式或第三方插件源码复制到宿主作为发布源。
 
-`source.path` 必须指向固定提交内的真实子目录，使用正斜杠。不接受仓库根 `.`、空路径或空段、`.`/`..` 段、冒号、反斜杠及逃出仓库的路径。已发布宿主会在检查最低版本要求前解析来源路径，不能靠提高 `requires.host` 绕过这条规则，否则会使整个目录无法读取。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)仍在独立仓库，当前待收录；需先改为符合要求的源码子目录，或另行协调兼容发布，不把源码复制到市场来绕过目录要求。
+`source.path` 必须指向固定提交内的真实子目录，使用正斜杠。不接受仓库根 `.`、空路径或空段、`.`/`..` 段、冒号、反斜杠及逃出仓库的路径。已发布宿主会在检查最低版本要求前解析来源路径，不能靠提高 `requires.host` 绕过这条规则，否则会使整个目录无法读取。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github/tree/main/plugins/github)在独立仓库的 `plugins/github` 提供可安装工程，市场按固定提交收录；不放宽宿主路径校验，也不把源码复制到市场。
 
 本地官方源码含未提交改动时，构建结果只能标为预览；发布流程必须拒绝预览包。不能因为已经生成 ZIP 就补写某个远端提交，声称它对应本地内容。正式发布从市场 CI 实际检出的提交生成离线包和公开索引，不提交依赖、临时检出目录或用户数据。维护命令、上传和部署流程以[市场贡献说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)为准。
 

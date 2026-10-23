@@ -9,7 +9,7 @@
 ## 源码与贡献位置
 
 - 官方插件在市场仓库直接维护：[Excalidraw](https://github.com/rzx007/vykor-plugins/tree/main/plugins/excalidraw)、[研究与写作](https://github.com/rzx007/vykor-plugins/tree/main/plugins/knowledge-work)、[办公文档](https://github.com/rzx007/vykor-plugins/tree/main/plugins/office-work)。修改代码、测试、许可证和包版本后，向该仓库提交 PR；市场清单使用 `localPath` 指向市场仓库内的插件目录。
-- 新建的第三方插件保存在自己的仓库，可安装工程放在真实子目录（如 `plugins/my-plugin`）。先在独立仓库完成检查和源码提交，再向市场提交固定 `source.repository`、40 位 `source.commit` 和实际子目录 `source.path` 的收录或升级 PR；不能用仓库根 `.`，不复制源码到市场。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github)保持独立、待收录，需先调整源码子目录或另行协调兼容发布。
+- 新建的第三方插件保存在自己的仓库，可安装工程放在真实子目录（如 `plugins/my-plugin`）。先在独立仓库完成检查和源码提交，再向市场提交固定 `source.repository`、40 位 `source.commit` 和实际子目录 `source.path` 的收录或升级 PR；不能用仓库根 `.`，不复制源码到市场。[GitHub 插件](https://github.com/rzx007/vykor-plugin-github/tree/main/plugins/github)保持独立仓库，可安装工程位于 `plugins/github`，按同样流程提交市场升级 PR。
 - Vykor 宿主维护协议、SDK、create-plugin Skill、天气模板与 `examples/plugins/`。只有修改这些公共接口、模板或示例时才改宿主，不在宿主恢复正式插件源码。
 
 详细步骤以[市场贡献说明](https://github.com/rzx007/vykor-plugins/blob/main/CONTRIBUTING.md)为准；官方包从市场 CI 实际检出的提交构建，未提交改动只能生成本地预览，见[官方插件独立发布](./release-process.md#官方插件独立发布)。
