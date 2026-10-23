@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentExecutionContext, type HookExecutor as IHookExecutor, type PermissionChecker as IPermissionChecker, type StreamEvent } from "@vykor/agent-contracts";
 import { type Message } from "@vykor/agent-contracts";
-import { fileWriteTool } from "../../../../tools/src/file/write.js";
-import { computeFileChange } from "../../../../tools/src/file/preview.js";
+import { fileWriteTool } from "../../packages/tools/src/file/write.js";
+import { computeFileChange } from "../../packages/tools/src/file/preview.js";
 
 async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string; changeBeforeRetry?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "oh-write-reuse-"));

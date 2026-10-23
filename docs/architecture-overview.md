@@ -1,6 +1,8 @@
 # Vykor 架构总览
 
-> 状态：当前实现的权威鸟瞰。最后核对：2026-10-22。
+> 状态：当前实现的权威鸟瞰。最后核对：2026-10-23。
+
+2026-10-23 清理：已删除无业务调用的旧 swarm 包；团队状态由 coordinator 的 TeamRegistry、Node 宿主和 Kernel child 管理。跨包回归放在 [tests/agent-integration](../tests/agent-integration/README.md)，通过根测试命令进入 CI；工具自身的回归保留在 tools，Agent Runtime 不再承接它们。
 
 ## 一句话说明
 

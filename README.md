@@ -12,7 +12,7 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 - ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule`* 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
 - ✅ **多 Agent 编排** — 内置 7 agent + 用户/插件自定义 agent（`~/.vykor/agents/*.md`），以及统一 Jobs 控制、`Workflow` DAG、sequential/parallel/pipeline、retry、预算、timeline、reconcile/cancel、Workflow 工具/CLI 的 reconciliation follow-up spec 生成和 `vk workflow` 管理命令。daemon/TUI/print 主路径使用 daemon 内 child session；task、child session 与 child run 的关联通过 daemon 事件持久化，跨客户端可重放。
 - ✅ **MCP 协议** — stdio + HTTP(streamable)/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权，以及 Streamable HTTP 的 OAuth 2.1 登录、独立凭据存储、刷新、状态查询和失败隔离
-- ✅ **权限系统** — default / plan / full_auto + 工具黑白名单、路径规则、命令拒绝；swarm worker 只读自动放行 + 写操作转 leader 集中裁决；TUI 下 Edit/Write 改文件前显示 unified diff 预览，可本次/整个会话批准
+- ✅ **权限系统** — default / plan / full_auto + 工具黑白名单、路径规则、命令拒绝；子 Agent 继承宿主绑定的权限上限；TUI 下 Edit/Write 改文件前显示 unified diff 预览，可本次/整个会话批准
 - ✅ **Hook 生命周期** — 10 类事件、priority 排序、command/http/prompt/agent 四种类型、matcher 过滤、`$ARGUMENTS` 注入+shell 转义
 - ✅ **会话持久化** — TUI / 用户 print / 跨端主线使用 daemon 的 Repository/Transaction + SQLite；单会话通过原子 snapshot + SSE 恢复。daemon 持久化 child session、task 与 child run 的关联；重启会保留审计记录，并将失去进程所有权的 run/task/workflow 明确标记为中断，不会伪造自动续跑。TUI 可用 `/resume` 明确重放某次中断 run 的原始 prompt。
 - ✅ **插件系统** — Runtime 只加载版本化 Vykor Native Plugin；Skills、Agents、Hooks、MCP 通过统一 manifest、安装状态和版本 cache 激活。Claude Code 插件先经独立 Converter 生成带 plan/report/provenance 的 Native Plugin；第三方 Tool 在隔离 Runtime 完成前不会执行
@@ -296,8 +296,7 @@ Vykor/
 ├── apps/
 │   ├── cli/                  # CLI 应用（Commander.js）
 │   ├── desktop/              # Electron Desktop 主进程、preload 与 renderer
-│   ├── frontend/             # TUI 前端（opentui + React 19）
-│   └── mcp-feishu/           # 飞书 MCP 辅助入口（独立源码目录）
+│   └── frontend/             # TUI 前端（opentui + React 19）
 ├── packages/
 │   ├── agent-runtime/        # Agent Kernel、Run/Child handle 与默认 Node 组装
 │   ├── api/                  # Provider 抽象与客户端
@@ -331,7 +330,6 @@ Vykor/
 │   ├── server/               # daemon Application、HTTP、恢复与投影
 │   ├── services/             # SQLite Repository/Transaction 与本地服务
 │   ├── skills/               # Skill 加载与管理
-│   ├── swarm/                # 多 Agent 团队状态
 │   ├── terminal/             # /contracts 纯数据；Provider 活体接口
 │   ├── terminal-node/        # Node PTY 实现
 │   ├── themes/               # 终端主题

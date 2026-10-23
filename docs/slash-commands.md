@@ -142,7 +142,7 @@ skill 经 command catalog 以 template 形式出现。
 | 工具                        | 说明                                                                          |
 | --------------------------- | ----------------------------------------------------------------------------- |
 | `Agent`                     | 派发子代理执行任务                                                            |
-| `TeamCreate` / `TeamDelete` | 创建/解散 swarm 团队（`~/.vykor/teams/<team>/`，team.json 生命周期） |
+| `TeamCreate` / `TeamDelete` | 通过 Node 宿主持有的 coordinator TeamRegistry 创建/解散团队；不创建旧式 team.json 或文件邮箱 |
 
 ### 后台任务（task/）
 

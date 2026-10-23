@@ -4,7 +4,7 @@
 
 硬调度器用**代码**决定哪个子 agent 先跑、哪个后跑、哪些能并行、失败后怎么办，而不是只靠 Coordinator prompt 让模型自己记住。
 
-它不替代 swarm。分工是：
+当前职责分工是：
 
 ```text
 Coordinator  → 理解目标、提交 Workflow spec、汇总结果
@@ -227,7 +227,7 @@ createAgentWorkflowRunner()(context)
             metadata: agentId, workerTaskId, backendType, worktree, diff, changedFiles
 ```
 
-调度器本身不依赖 swarm；adapter 放在 `@vykor/agent-runtime/node/workflow`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。
+worker adapter 放在 `@vykor/agent-runtime/node/workflow`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。旧的文件邮箱、团队文件和权限同步包已经退役，不参与执行。
 
 ## D. 持久化与恢复
 

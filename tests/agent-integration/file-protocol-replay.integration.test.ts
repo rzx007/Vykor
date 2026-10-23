@@ -6,7 +6,7 @@ import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type StreamEvent } from "@vykor/agent-contracts";
 import { OpenAICompatibleClient } from "@vykor/api";
 import { PermissionChecker } from "@vykor/permissions";
-import { fileWriteTool } from "../../../../tools/src/file/write.js";
+import { fileWriteTool } from "../../packages/tools/src/file/write.js";
 
 // Synthetic replays of observed failure shapes, not captured provider transcripts.
 // Only the HTTP boundary is replaced; SDK decoding, permissions and file writes run for real.

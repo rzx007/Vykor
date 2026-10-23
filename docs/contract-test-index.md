@@ -125,7 +125,7 @@
 | B03 子运行创建、TTL 和关闭 | [ChildAgent](../packages/agent-runtime/src/node/runtime/child-agent.test.ts)、[子环境](../packages/agent-runtime/src/node/runtime/child-environment.test.ts) | `pnpm test` |
 | B04 撤销、冻结与父子缩权 | [插件生命周期](../packages/agent-runtime/src/node/plugins/run-capability-lifecycle.test.ts)、[通用 Kernel](../packages/agent-runtime/src/kernel/index.test.ts) | `pnpm test` |
 | B05 应用确认与可信来源 | [应用授权](../packages/server/src/application/session/__test__/session-plugin-run-authorization.test.ts)、[来源投影](../packages/server/src/application/agent/__test__/tool-app-origin-projector.test.ts) | `pnpm test` |
-| B06 文件和 SQLite Workflow | [文件运行](../packages/agent-runtime/src/node/integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts)、[自定义宿主取消](../packages/agent-runtime/src/node/workflow/workflow-host.child-cancellation.test.ts) | `pnpm test` |
+| B06 文件和 SQLite Workflow | [文件运行](../tests/agent-integration/file-workflow.integration.test.ts)、[应用 WorkflowHost](../packages/server/src/application/workflow/__test__/workflow-host.test.ts)、[自定义宿主取消](../packages/agent-runtime/src/node/workflow/workflow-host.child-cancellation.test.ts) | `pnpm test` |
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/runtime/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/goal-usage.test.ts) | `pnpm test` |
@@ -161,6 +161,8 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
 ## 维护规则
+
+跨包 API/Engine/工具组合回归见 [Agent 集成测试](../tests/agent-integration/README.md)，命令为 `pnpm test:agent-integration`，已接入普通 CI 的 `pnpm test`。ToolSearch 与 Job 工具测试分别由 [搜索测试](../packages/tools/src/meta/tool-search.test.ts)和 [Job 测试](../packages/tools/src/job/job-tools.test.ts)覆盖；依赖真实 Engine/ToolRegistry 的用例保留在集成组，不引入 tools → core 的依赖。
 
 - 新增或删除硬规则时，同时更新权威文档和本索引。
 - 移动测试文件时，`pnpm check-docs` 必须失败，直到这里的链接更新。
