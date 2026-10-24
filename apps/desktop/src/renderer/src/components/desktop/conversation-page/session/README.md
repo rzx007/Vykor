@@ -10,7 +10,7 @@
 
 ## 主要文件
 
-- [new-conversation-start.tsx](new-conversation-start.tsx)
+- [new-conversation-start.tsx](new-conversation-start.tsx)：新对话输入及项目、分支、模型选择入口；挂载时创建随机头像身份，复用 [AoraAvatar](../../shared/aora-bot/README.md) 展示，输入和选项变化保持当前头像。
 - [session-more-menu.tsx](session-more-menu.tsx)
 - [session-summary-popover.tsx](session-summary-popover.tsx)
 - [session-summary-work.tsx](session-summary-work.tsx)：展示当前聊天的应用、工作流和终端；点击沿用原面板。后台命令及其历史不进入工作摘要，也不触发摘要自动弹出，执行与记录保持不变。

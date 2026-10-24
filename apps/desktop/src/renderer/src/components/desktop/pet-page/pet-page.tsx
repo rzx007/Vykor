@@ -1,15 +1,15 @@
-import { Blobatar } from "@blobatar/react"
 import { useEffect, useRef, useState } from "react"
-import "blobatar/motion.css"
+
+import { AoraAvatar } from "@renderer/components/desktop/shared/aora-bot/aora-avatar"
 
 const singleClickDelayMs = 280
 
 export function PetWindow(): React.JSX.Element {
-  const [blobatarName, setBlobatarName] = useState(() => crypto.randomUUID())
+  const [avatarName, setAvatarName] = useState(() => crypto.randomUUID())
   const clickTimerRef = useRef<number | null>(null)
 
   const switchAvatar = (): void => {
-    setBlobatarName(crypto.randomUUID())
+    setAvatarName(crypto.randomUUID())
   }
 
   const cancelPendingClick = (): void => {
@@ -46,7 +46,7 @@ export function PetWindow(): React.JSX.Element {
           void window.desktop.window.showMain()
         }}
       >
-        <Blobatar name={blobatarName} animate="always" size={100} />
+        <AoraAvatar name={avatarName} size={100} />
       </button>
     </main>
   )

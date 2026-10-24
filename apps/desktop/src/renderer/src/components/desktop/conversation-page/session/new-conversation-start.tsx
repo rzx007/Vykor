@@ -1,8 +1,7 @@
-import { Blobatar } from "@blobatar/react"
 import { Box, Folder, GitBranch, Monitor, PanelRight, Plus, Search, X } from "lucide-react"
 import { useState } from "react"
-import "blobatar/motion.css"
 
+import { AoraAvatar } from "@renderer/components/desktop/shared/aora-bot/aora-avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
@@ -146,7 +145,7 @@ export function NewConversationStart({
   onOpenContextUsage?: () => void
 }): React.JSX.Element {
   const [activePicker, setActivePicker] = useState<StartPicker | null>(null)
-  const [blobatarName] = useState(() => crypto.randomUUID())
+  const [avatarName] = useState(() => crypto.randomUUID())
   const [projectQuery, setProjectQuery] = useState("")
   const [branchQuery, setBranchQuery] = useState("")
   const [creatingBranch, setCreatingBranch] = useState(false)
@@ -176,13 +175,7 @@ export function NewConversationStart({
       ) : null}
       <div className="mx-auto flex h-full w-full max-w-190 min-w-0 flex-col items-center justify-center pb-[5vh]">
         <div className="mb-7 flex max-w-full min-w-0 flex-col items-center px-2 text-center">
-          <Blobatar
-            name={blobatarName}
-            animate="always"
-            size={64}
-            className="mb-5"
-            aria-hidden="true"
-          />
+          <AoraAvatar name={avatarName} size={64} className="mb-5" />
           <h2 className="max-w-full text-[length:var(--ui-font-size-display)] leading-9 font-medium wrap-break-word text-foreground">
             {selectedProject ? (
               <>

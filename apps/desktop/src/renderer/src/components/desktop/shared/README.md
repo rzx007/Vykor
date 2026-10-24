@@ -11,6 +11,7 @@
 ## 主要文件
 
 - [desktop-empty-state.tsx](desktop-empty-state.tsx)
+- [aora-bot](aora-bot/README.md)：宠物和新对话起始页共用的本地 SVG 头像。页面持有随机标识与操作状态，适配器创建和清理动画实例。
 
 ## 维护约定
 

@@ -11,6 +11,12 @@ files:
   - '!out/office-engine/**'
   - resources/**
   - package.json
+  - from: src/renderer/src/components/desktop/shared/aora-bot/upstream
+    to: third-party/aora-bot
+    filter:
+      - LICENSE
+      - NOTICE.md
+      - LICENSE-COMMERCIAL.md
 extraResources:
   - from: out/office-engine
     to: office-engine

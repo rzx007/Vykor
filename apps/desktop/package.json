@@ -46,7 +46,6 @@
   "devDependencies": {
     "@annotorious/annotorious": "3.9.3",
     "@base-ui/react": "^1.7.0",
-    "@blobatar/react": "^2.5.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/preload": "^3.0.2",
@@ -81,7 +80,6 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "beautiful-mermaid": "^1.1.3",
-    "blobatar": "^2.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
