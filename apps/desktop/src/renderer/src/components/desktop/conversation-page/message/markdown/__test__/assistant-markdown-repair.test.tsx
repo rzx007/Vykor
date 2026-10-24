@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ComponentProps } from "react"
 import { createRoot } from "react-dom/client"
+import { MotionConfig } from "motion/react"
 import { expect, it, vi } from "vitest"
 import { AssistantMarkdown } from "../assistant-markdown"
 
@@ -38,23 +39,27 @@ it("matches full parsing after real incomplete-Markdown repair changes the previ
     for (let end = 1; end <= source.length; end++) {
       await act(async () =>
         root.render(
-          <AssistantMarkdown
-            text={source.slice(0, end)}
-            streaming
-            animateInitialText={false}
-            onOpenFile={onOpenFile}
-          />
+          <MotionConfig reducedMotion="always">
+            <AssistantMarkdown
+              text={source.slice(0, end)}
+              streaming
+              animateInitialText={false}
+              onOpenFile={onOpenFile}
+            />
+          </MotionConfig>
         )
       )
     }
     await act(async () =>
       root.render(
-        <AssistantMarkdown
-          text={`${source}，继续追加**\n\n最终一段`}
-          streaming
-          animateInitialText={false}
-          onOpenFile={onOpenFile}
-        />
+        <MotionConfig reducedMotion="always">
+          <AssistantMarkdown
+            text={`${source}，继续追加**\n\n最终一段`}
+            streaming
+            animateInitialText={false}
+            onOpenFile={onOpenFile}
+          />
+        </MotionConfig>
       )
     )
     expect(checked.inputs.some((input) => input.source === `${source}**`)).toBe(true)
