@@ -243,9 +243,9 @@ export class FrameworkAgentRun implements AgentRunHandle {
       traceId: this.traceId,
       signal: this.controller.signal,
     };
-    const createExecution = async (
+    const createExecution = (
       run: import("@vykor/agent-contracts").PreparedAgentRun,
-    ): Promise<AgentExecutionContext> => {
+    ): AgentExecutionContext => {
       const tools = this.options.tools
         ? readonlyMap(
             [...run.tools].filter(
@@ -259,14 +259,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
         : readonlyMap(run.tools);
       if (this.delivery && (tools.has("SubmitResult") || [run.contribution, this.options.contribution].some(item => item?.tools?.some(tool => tool.definition.name === "SubmitResult"))))
         throw new Error("SubmitResult is reserved for this Run's structured delivery contract");
-      const toolResults = await bindPreparedToolResults(run, tools);
-      this.controller.signal.throwIfAborted();
       // The factory is host authority to bind a scope; tools receive only the bound store.
       const { bindToolResults: _provider, toolResults: _prebound, ...capabilities } = run;
       return {
         scope,
         ...capabilities,
-        toolResults,
         toolSafety: this.options.toolSafety ?? run.toolSafety,
         limits: this.options.limits ?? run.limits,
         profile:
@@ -313,8 +310,14 @@ export class FrameworkAgentRun implements AgentRunHandle {
       const prepared = await this.options.preparation.prepare(scope);
       releaseCapabilities = prepared.release;
       this.controller.signal.throwIfAborted();
-      const execution = await createExecution(prepared.run);
+      const preparedExecution = createExecution(prepared.run);
       await this.emit({ type: "run.started", data: {} });
+      this.controller.signal.throwIfAborted();
+      // Reliable Run projection must create the durable record before archive authorization.
+      const execution: AgentExecutionContext = {
+        ...preparedExecution,
+        toolResults: await bindPreparedToolResults(prepared.run, preparedExecution.tools!),
+      };
       this.controller.signal.throwIfAborted();
       this.start.resolve({
         sessionId: this.sessionId,

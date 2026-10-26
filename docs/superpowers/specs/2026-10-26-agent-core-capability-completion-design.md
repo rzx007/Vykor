@@ -1,6 +1,6 @@
 # OpenHarness-ts 核心 Agent 能力补齐方案
 
-> 状态：当前分阶段设计；S1 已接入并完成限定范围验证，见[S1 验收](../reviews/2026-10-26-s1-tool-operation-safety.md)。按用户 2026-10-26 调整，S2/S3 暂缓。P1-B 长结果补读和 P1-A 工具式结构化交付已在独立分支实现，尚未提交合并；范围与验证见[本轮验收](../reviews/2026-10-26-result-reading-and-structured-delivery.md)和[实施计划](../plans/2026-10-26-result-reading-and-structured-delivery.md)。
+> 状态：当前分阶段设计；S1 已接入并完成限定范围验证，见[S1 验收](../reviews/2026-10-26-s1-tool-operation-safety.md)。按用户 2026-10-26 调整，S2/S3 暂缓。P1-B 长结果补读和 P1-A 工具式结构化交付已实现并完成合并前复审，通过 `main` 交付；范围与验证见[本轮验收](../reviews/2026-10-26-result-reading-and-structured-delivery.md)和[实施计划](../plans/2026-10-26-result-reading-and-structured-delivery.md)。
 
 > 日期：2026-10-26。源码基线：`25812866`。
 > 范围：OpenHarness-ts/Vykor 核心执行能力。初版仅交付方案；S1 实施范围见[实施计划](../plans/2026-10-26-s1-tool-operation-safety.md)，不讨论 Boban 业务迁移。

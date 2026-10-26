@@ -93,9 +93,12 @@ describe("ScheduleRepository", () => {
         first.acquireApplicationOwner({ ownerId: "first", pid: 1, now: 1, staleAfterMs: 1_000 });
         first.schedules.createTask({ ...taskInput, id: "task" });
         first.schedules.createRun({ ...runInput, id: "run" });
-        const tasks = second.schedules.listTasks();
-        const runs = second.schedules.listRuns();
-        const events = second.conversations.listEvents();
+        // The second store refreshes its cached events when it acquires ownership.
+        // Compare against the first owner's committed records before the rejected write.
+        const tasks = first.schedules.listTasks();
+        const runs = first.schedules.listRuns();
+        const events = first.conversations.listEvents();
+        const before = structuredClone(storage.state);
         const takeOver = () => second.acquireApplicationOwner({ ownerId: "second", pid: 2, now: 2_000, staleAfterMs: 1_000 });
         if (timing === "before owner check") takeOver();
         else storage.assertWritable = () => {
@@ -117,6 +120,13 @@ describe("ScheduleRepository", () => {
         expect(second.schedules.listTasks()).toEqual(tasks);
         expect(second.schedules.listRuns()).toEqual(runs);
         expect(second.conversations.listEvents()).toEqual(events);
+        expect(storage.state).toEqual(before);
+        const reopened = new SessionStore({ path });
+        try {
+          expect(reopened.schedules.listTasks()).toEqual(tasks);
+          expect(reopened.schedules.listRuns()).toEqual(runs);
+          expect(reopened.conversations.listEvents()).toEqual(events);
+        } finally { reopened.close(); }
       } finally {
         storage.assertWritable = assertWritable;
         first.close();

@@ -1,6 +1,6 @@
 # 长结果补读与结构化交付实施计划
 
-> 状态：已按先文档后实现完成本轮范围，见[验收记录](../reviews/2026-10-26-result-reading-and-structured-delivery.md)；改动尚未提交合并，S2 执行恢复暂缓。
+> 状态：已按先文档后实现完成本轮范围并通过合并前审查，见[验收记录](../reviews/2026-10-26-result-reading-and-structured-delivery.md)；本轮通过 `main` 交付，S2 执行恢复暂缓。
 > For agentic workers: 使用有明确文件边界的任务分工，先稳定合同，再实现与独立审查；测试先建立失败证据。
 
 **目标：** 长工具结果截断后仍能按引用补读，daemon 重启后仍可读取；宿主需要机器可读结果时，Agent 通过统一工具提交经过结构校验的交付。

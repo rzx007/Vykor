@@ -86,8 +86,8 @@ describe("business record rollback", () => {
 
   it.each(["session", "run", "message", "part", "event"] as const)("rejects an independent %s write before changing memory or SQLite after owner takeover", (kind) => {
     fixture((store, storage, directory) => {
-      const before = structuredClone(storage.state);
       store.acquireApplicationOwner({ ownerId: "first", pid: 1, staleAfterMs: 1000 });
+      const before = structuredClone(storage.state);
       storage.database.connection.prepare("UPDATE application_owner SET owner_id = ?, generation = generation + 1 WHERE key = 'application'").run("second");
       const sessions = new SessionRepository({ storage, projects: store.projects });
       const runs = new RunRepository(storage);

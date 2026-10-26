@@ -3,7 +3,66 @@ import type { AgentRunScope, RunToolBinding, ToolDefinition, ToolResultRef } fro
 import { MemoryToolResultArchive } from "@vykor/core";
 import { createAgentKernel, createBasicAgentKernelRuntime } from "../index.js";
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
 describe("Kernel final result-store binding", () => {
+  it("waits for reliable Run start projection before binding and for binding before acknowledging or requesting a model", async () => {
+    const archive = new MemoryToolResultArchive();
+    const projecting = deferred(), releaseProjection = deferred(), binding = deferred(), releaseBinding = deferred();
+    let projected = false, bound = false, acknowledged = false, modelRequests = 0;
+    const agent = await createAgentKernel({ id: "projected-results", cwd: "/workspace",
+      effects: { requestPermission: async () => ({ status: "approved" }) },
+      engine: createBasicAgentKernelRuntime({ cwd: "/workspace", client: { async *streamMessage() {
+        modelRequests++;
+        yield { type: "text_delta", delta: "done" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } } }),
+      onEvent: async event => {
+        if (event.type !== "run.started") return;
+        projecting.resolve();
+        await releaseProjection.promise;
+        projected = true;
+      },
+      preparation: { async prepare(scope) { return { run: { tools: new Map(), bindToolResults: async tools => {
+        if (!projected) throw new Error("The durable Run has not been projected");
+        binding.resolve();
+        await releaseBinding.promise;
+        bound = true;
+        return archive.forRun(scope, tools);
+      } }, release() { archive.releaseRun(scope.runId); } }; } },
+    });
+    const run = agent.submitMessage("hello");
+    void run.started.then(() => { acknowledged = true; }, () => { acknowledged = true; });
+    try {
+      await Promise.race([projecting.promise, run.result]);
+      expect(projected).toBe(false);
+      expect(bound).toBe(false);
+      expect(acknowledged).toBe(false);
+      expect(modelRequests).toBe(0);
+
+      releaseProjection.resolve();
+      await Promise.race([binding.promise, run.result]);
+      expect(projected).toBe(true);
+      expect(bound).toBe(false);
+      expect(acknowledged).toBe(false);
+      expect(modelRequests).toBe(0);
+
+      releaseBinding.resolve();
+      await run.started;
+      expect(bound).toBe(true);
+      await expect(run.result).resolves.toMatchObject({ output: "done" });
+      expect(modelRequests).toBe(1);
+    } finally {
+      releaseProjection.resolve();
+      releaseBinding.resolve();
+      await agent.close();
+    }
+  });
+
   it("binds an async provider after filtering and keeps the provider outside tool execution capabilities", async () => {
     const archive = new MemoryToolResultArchive();
     let bound: ReadonlyMap<string, RunToolBinding> | undefined, turn = 0;

@@ -41,8 +41,15 @@ describe("application backup notes", () => {
         // so restore re-runs 0006 and recreates the table. Deleting only the
         // newest row would leave 0006 recorded after later migrations were
         // added, so the table would never be recreated.
+        // Remove the tables introduced by 0009 as well, since their migration
+        // record is cleared and restore must create them again.
         Reflect.get(source, "storage").database.connection.exec(
-          "DROP TABLE session_plugin_app; DROP TABLE note_file_index; DELETE FROM __drizzle_migrations WHERE created_at >= 1791186378776;",
+          `DROP TABLE tool_dispatch_attempt;
+           DROP TABLE tool_operation;
+           DROP TABLE execution;
+           DROP TABLE session_plugin_app;
+           DROP TABLE note_file_index;
+           DELETE FROM __drizzle_migrations WHERE created_at >= 1791186378776;`,
         );
         await source.backupDatabase(join(backup, "database.sqlite"));
         writeFileSync(

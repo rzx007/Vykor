@@ -63,13 +63,27 @@ it.each(["native-tools", "mcp-server"] as const)("deduplicates %s by stable iden
   expect(h.reviews[0]?.evidence.userInstruction).toContain("approved");
 }, 30_000);
 
-it("persists host-completed execution even when the Native plugin returns a forged not_started business error", async () => {
+it("keeps a Native write error unknown and blocks replay despite a forged not_started result", async () => {
   const h = await fixture("native-tools");
-  const receipt = await h.client().pluginApps.invoke({ ...h.request, args: { value: "forge" } }); await h.wait(receipt.receipt.runId);
-  expect((await h.client().pluginApps.getAction(h.opened.source, "request")).receipt).toMatchObject({ status: "failed", executionState: "completed" });
+  const request = { ...h.request, args: { value: "forge" } };
+  const accepted = await h.client().pluginApps.invoke(request); await h.wait(accepted.receipt.runId);
+  const response = await h.client().pluginApps.getAction(h.opened.source, "request");
+  // The IPC response proves the callback returned, not that every write effect is known.
+  expect(response.receipt).toMatchObject({ status: "failed", executionState: "unknown" });
+  expect(response.result).toBeUndefined();
+  const parts = h.store().conversations.listMessageParts(h.session.id).filter(p => p.type === "tool");
+  expect(parts).toHaveLength(1);
+  expect(parts[0]?.output).toMatchObject({ content: [{ type: "text", text: "Saved" }], isError: true, executionState: "unknown", metadata: { appData: { value: "forge" } } });
+  const operations = h.store().toolOperations.list({ runId: accepted.receipt.runId });
+  expect(operations).toHaveLength(1);
+  expect(operations[0]).toMatchObject({ kind: "non_replayable", state: "unknown", result: parts[0]?.output });
+  expect(h.store().toolOperations.listAttempts(operations[0]!.id)).toMatchObject([{ status: "unknown", result: parts[0]?.output }]);
+  expect((await h.client().pluginApps.invoke(request)).receipt).toEqual(response.receipt);
+  const prepared = await h.client().pluginApps.prepare(h.opened.source);
+  expect(prepared.availability).toMatchObject({ canInvokeTools: false, reason: "action-unconfirmed" });
+  await expect(h.client().pluginApps.invoke({ ...request, requestId: "retry", lease: prepared.lease!, expectedRevision: prepared.app.controlRevision })).rejects.toMatchObject({ status: 409 });
   expect(h.effects()).toBe(1); expect(h.modelCalls()).toBe(0);
-  const part = h.store().conversations.listMessageParts(h.session.id).find(p => p.type === "tool");
-  expect(part?.output).toMatchObject({ isError: true, executionState: "completed" });
+  expect(h.store().runs.listRuns(h.session.id)).toHaveLength(1);
 }, 30_000);
 
 it.each(["native-tools", "mcp-server"] as const)("preserves closed state and unknown execution when a running %s call is cancelled", async kind => {
@@ -115,19 +129,33 @@ it.each(["native-tools", "mcp-server"] as const)("rechecks %s approval after rev
   expect(h.effects()).toBe(0); expect(h.modelCalls()).toBe(0);
 }, 30_000);
 
-it.each(["approved", "forge"])("keeps one Native Run and original SQLite Part after a post-hook failure (%s)", async value => {
+it.each(["approved", "forge"])("retains the Native write outcome and original SQLite Part after a post-hook failure (%s)", async value => {
   const h = await fixture("native-tools");
   const postHook = vi.spyOn(HookExecutor.prototype, "execute").mockImplementation(async event => {
     if (event === "post_tool_use") throw new Error("post-return hook failed"); return { blocked: false };
   });
-  const accepted = await h.client().pluginApps.invoke({ ...h.request, args: { value } }); await h.wait(accepted.receipt.runId);
+  const request = { ...h.request, args: { value } };
+  const accepted = await h.client().pluginApps.invoke(request); await h.wait(accepted.receipt.runId);
   const response = await h.client().pluginApps.getAction(h.opened.source, "request");
-  expect(response.receipt).toMatchObject({ status: value === "forge" ? "failed" : "completed", executionState: "completed" });
-  expect(response.result).toMatchObject({ content: [{ type: "text", text: "Saved" }], structuredContent: { value } });
-  expect(response.result?.isError === true).toBe(value === "forge");
+  const executionState = value === "forge" ? "unknown" : "completed";
+  expect(response.receipt).toMatchObject({ status: value === "forge" ? "failed" : "completed", executionState });
+  if (value === "forge") expect(response.result).toBeUndefined();
+  else expect(response.result).toMatchObject({ content: [{ type: "text", text: "Saved" }], structuredContent: { value } });
   const parts = h.store().conversations.listMessageParts(h.session.id).filter(p => p.type === "tool");
   expect(parts).toHaveLength(1);
-  expect(parts[0]?.output).toMatchObject({ content: [{ type: "text", text: "Saved" }], executionState: "completed", metadata: { appData: { value } } });
+  expect(parts[0]?.output).toMatchObject({ content: [{ type: "text", text: "Saved" }], executionState, metadata: { appData: { value } } });
+  expect(parts[0]?.isError).toBe(value === "forge");
+  const operations = h.store().toolOperations.list({ runId: accepted.receipt.runId });
+  expect(operations).toHaveLength(1);
+  const state = value === "forge" ? "unknown" : "confirmed";
+  // The archive handle is attached after S1 saves the unmodified tool result.
+  const { resultRef, ...storedOutput } = parts[0]!.output as Record<string, unknown>;
+  if (value === "forge") expect(resultRef).toBeUndefined();
+  else expect(resultRef).toMatchObject({ toolName: "SaveDocument", totalChars: 5 });
+  expect(operations[0]).toMatchObject({ kind: "non_replayable", state, result: storedOutput });
+  expect(operations[0]!.result).not.toHaveProperty("resultRef");
+  expect(h.store().toolOperations.listAttempts(operations[0]!.id)).toMatchObject([{ status: state, result: storedOutput }]);
+  expect((await h.client().pluginApps.invoke(request)).receipt).toEqual(response.receipt);
   expect(postHook.mock.calls.some(([event]) => event === "post_tool_use")).toBe(true);
   expect(h.effects()).toBe(1); expect(h.store().runs.listRuns(h.session.id)).toHaveLength(1); expect(h.modelCalls()).toBe(0);
 }, 30_000);
