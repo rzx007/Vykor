@@ -86,6 +86,7 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [架构、拆分粒度与复杂度审查计划](./superpowers/plans/2026-10-26-architecture-complexity-review-plan.md)：当前工作区的审查证据，以及同步、测试分支和运行编排的分批简化建议，尚未实施。
 - [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
 - [记忆归属与写入规则](./memory-policy.md)：记忆优化目标及验收用例。
