@@ -10,10 +10,10 @@ HTTP 接入层在调用应用前，也使用这里的解析函数检查 Session�
 
 ## HTTP 协议版本
 
-当前协议版本是 `4`，请求头是 `x-vykor-protocol-version`。
+当前协议版本及握手示例以[协议契约](../../docs/protocol-contract.md#当前版本)为准；规范常量是 `src/runtime/capabilities.ts` 的 `CURRENT_PROTOCOL_VERSION`，请求头是 `x-vykor-protocol-version`。
 
 - `/health` 与 `/capabilities` 不要求协议头，供启动探测和握手使用。
-- Client 在第一个业务请求前调用 `/capabilities`，版本不是 4 时不发送该业务请求。
+- Client 在第一个业务请求前调用 `/capabilities`，版本不等于本地常量时不发送该业务请求。
 - 握手成功后，每个 HTTP/SSE 业务请求仍携带版本头。
 - Server 在进入业务 handler 前拒绝缺失、旧版或未来版本，避免产生数据库或进程副作用。
 

@@ -154,7 +154,7 @@ pnpm --filter @rzx/client test
 pnpm --filter @rzx/client test:pack
 ```
 
-`test:pack` 会打包、在临时项目实际安装 tarball，验证 Node 调用、Node 服务入口、两种 TypeScript 模块解析方式和浏览器构建。它使用独立测试子进程，不操作用户已有 daemon。`pnpm pack` 的 prepack 自动构建，发布目录为 `packages/client/dist/`。
+`test:pack` 会打包、在临时项目实际安装 tarball，验证 Node 调用、Node 服务入口、两种 TypeScript 模块解析方式和浏览器构建。它使用独立测试子进程，不操作用户已有 daemon。`pnpm pack` 的 prepack 自动构建，产物写入客户端包内的 `dist/`，该目录由构建生成，不进入版本库。
 
 ## 发布
 

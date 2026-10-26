@@ -2,250 +2,108 @@
 
 > 状态：当前文档总入口。
 
-这里不是按文件名堆链接，而是按“先看全局，再逐层下钻”的顺序组织。第一次了解项目从第 0 层开始；修改具体模块时，直接进入对应层级。
+先看[架构总览](./architecture-overview.md)，修改模块时进入对应主题及包 README。每类信息的维护入口、文档状态和更新规则见[文档维护约定](./documentation-policy.md)。下方将当前手册、待实施提案、历史资料分别列出，计划的完成状态以实现和验收证据核实。
 
-本目录常用词的白话含义：
+## 架构与跨模块规则
 
-- durable：状态已经写进数据库或明确的持久文件，进程退出后还能查到。
-- terminal：这项运行已经结束，例如 completed、failed、interrupted 或 killed，不能再假装回到 running。
-- projection：把 Agent 运行中发生的事写成数据库记录和客户端可读状态。
-- repository：保存和读取某类记录的明确接口，例如 daemon 的 SQLite Workflow repository。
-- contract：代码重构后也不能静默改变的硬规则。
-- snapshot：某一时刻的完整状态；SSE 是服务端持续推送后续变化的连接。
-
-## 阅读顺序
-
-```text
-第 0 层：系统鸟瞰
-  整个产品由哪些层组成，CLI/TUI/Web/Desktop/IDE/Bot/Workflow 怎样共用一套能力
-    ↓
-第 1 层：跨模块硬规则
-  哪些状态归谁、记录长什么样、运行怎样收尾、失败后怎样恢复
-    ↓
-第 2 层：子系统架构
-  Runtime、Durable Application、Client、Workflow、Jobs、Memory、Sandbox 各自怎样工作
-    ↓
-第 3 层：端到端流程
-  一条 prompt、一个 child、一次 permission、一个 Bot 消息实际经过哪些步骤
-    ↓
-第 4 层：开发和运维入口
-  SDK、CLI、daemon、远程连接、排障、备份恢复怎样使用
-    ↓
-第 5 层：可执行验证
-  每条硬规则由哪些测试证明，改动后最少要跑什么
-    ↓
-第 6 层：决策与历史
-  ADR 解释长期决定；plans/reviews 只解释当时怎样落地
-```
-
-## 第 0 层：系统鸟瞰
-
-1. [Vykor 架构总览](./architecture-overview.md)：先看 CLI/TUI/Web/Desktop/IDE/Bot/Workflow 怎样共用一套 Application 和 Runtime。
-2. [可交互架构图](./vykor-current-architecture.html)：用组件图查看 Client、Application、Storage 和 Runtime 的主依赖方向。
-3. [架构重构收口与当前边界](./architecture-migration-status.md)：确认 Stage 0–8 的最终结果、已删除兼容面和长期门禁。
-4. [产品入口接入边界](./product-surface-integration.md)：再看每种产品自己负责什么、哪些状态必须共用。
-5. [Framework 与 Durable Application 的能力边界](./agent-framework-capability-boundary.md)：继续下钻 Runtime、daemon 和产品界面的所有权。
-6. [Daemon Application Architecture](./daemon-application-architecture.md)：追踪一个请求怎样进入 durable state 和 Agent Runtime。
-7. [Client Sync Flow](./client-sync-flow.md)：理解 snapshot、SSE、cursor 和多端收敛。
-
-## 第 1 层：跨模块硬规则
-
-这一层记录“不管内部类名怎么改，都必须一直成立”的约束。
-
-| 核心保证 | 权威文档 |
-|---|---|
-| 每条运行记录有稳定 ID、固定字段、版本和关系 | [Durable Execution Data Model](./durable-execution-data-model.md) |
-| 每个 Run、Attempt、Tool、Child 和 Workflow 最终都进入明确终态 | [Agent Lifecycle Contract](./agent-lifecycle-contract.md)、[Projection Settlement ADR](./adr/0001-projection-settlement-failure-policy.md) |
-| 子 Agent 不得无限递归、无限并发或靠关闭后重建绕过上限 | [Agent Child Session Flow：Child 预算](./agent-child-session-flow.md#child-预算防止无限叫人) |
-| 相同请求可以安全重试，不同内容不能复用同一个 ID | [Durable Execution Data Model：ID 和安全重试](./durable-execution-data-model.md#id-和安全重试) |
-| 已结束状态不能被迟到事件重新改回 running | [Agent Lifecycle Contract：D3](./agent-lifecycle-contract.md#daemon)、[Jobs Protocol：状态机](./jobs-protocol.md#状态机) |
-| 投影失败不能假装成功，重启后要继续收束 | [Projection Settlement ADR](./adr/0001-projection-settlement-failure-policy.md)、[Agent Lifecycle Contract：P8](./agent-lifecycle-contract.md#durable-projection) |
-| 一个数据目录只有一个活动 Application Owner | [Operations and Recovery：Application Owner](./operations-and-recovery.md#application-owner) |
-| 客户端与服务端必须使用完全相同的协议版本 | [Protocol Contract](./protocol-contract.md) |
-| 清理、备份和恢复不能留下半完成状态 | [Operations and Recovery](./operations-and-recovery.md) |
-| 开发数据重置必须先解析最终路径并逐项授权 | [Vykor 开发数据重置手册](./development-data-reset.md) |
-
-三条一级保证的入口：
-
-```text
-固定格式的运行记录  → durable-execution-data-model.md
-所有运行正确收尾    → agent-lifecycle-contract.md 是权威契约
-限制子 Agent        → agent-child-session-flow.md 的 Child 预算章节
-```
-
-## 第 2 层：子系统架构
-
-### Agent Runtime Kernel
-
-- [Agent Runtime 框架架构](./agent-runtime-framework-architecture.md)：Kernel 对象、创建流程、Run、事件、Handle 和状态机。
-- [Vykor Agent SDK](./agent-sdk.md)：程序中怎样直接创建和使用 Agent。
-- [Agent Child Session Flow](./agent-child-session-flow.md)：child 创建、等待、follow-up、预算、关闭和 durable 投影。
-- [CompactService](./compact-service-design.md)：上下文压缩、checkpoint、Tool 配对和失败策略。
-- [模型请求自动重试与工具参数恢复](./model-network-retry-design.md)：当前网络错误分类、断流恢复、工具执行保护与重试上限。
-- [工具参数包装 Spec](./superpowers/specs/2026-10-02-tool-arguments-normalization-design.md) / [实施计划](./superpowers/plans/2026-10-02-tool-arguments-normalization.md)：统一处理多层 arguments 包装，保留校验、权限及重复失败保护。
-- [模型网络自动重试执行计划](./superpowers/plans/2026-09-25-model-network-retry.md)：逐阶段文件清单、接口、测试命令、验收与发布边界。
-- [Prompt Layering](./prompt-layering-design.md)：系统提示词怎样分层组装。
-- [Personalization](./personalization-design.md)：用户个性化设置的边界。
-
-### Durable Agent Application
-
-- [架构重构收口与当前边界](./architecture-migration-status.md)：Stage 0–8 的最终结果、四层边界、协议/数据基线和长期门禁。
-- [Daemon Application Architecture](./daemon-application-architecture.md)：Session、Input、Run、Permission、Workflow、Owner、恢复和关闭的总入口。
-- [Session Runtime 存储架构](./session-runtime-storage-architecture.md)：SQLite、Repository、Transaction、`SessionStore`、owner lease 和提交/回滚边界。
-- [Durable Execution Data Model](./durable-execution-data-model.md)：所有运行记录的固定格式、关系、终态和版本。
-- [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE，以及 json-data、plugin-contracts、domain-contracts 和能力纯数据入口的所有权。
-- [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。
-- [Observability](./observability.md)：trace、结构化日志、runtime snapshot 和排障。
-- [按风险自动评审](./auto-review.md)：Run 结束后按固定风险规则对可归因改动做只读评审，并把通过/发现问题/失败/超时记录为真实状态。
-- [Scheduled Tasks Flow](./scheduled-tasks-flow.md)：定时任务怎样保存、触发、运行和记录结果。
-- [Channels Flow](./channels-flow.md)：Bot/Channel 消息怎样进入同一套 durable Session/Run。
-- [Daemon System Service](./daemon-system-service.md)：daemon 怎样作为系统常驻服务运行。
-
-### Workflow、Coordinator 与 Jobs
-
-- [Coordinator 硬调度器调用链](./coordinator-hard-scheduler-flow.md)：DAG、并发、重试、预算、repository 和 child runner。
-- [Coordinator Agents](./coordinator-agents-design.md)：Coordinator 角色与 Agent 定义。
-- [Jobs Protocol](./jobs-protocol.md)：Terminal、shell、Agent、dream、Workflow 的统一观察与控制协议。
-- [Workflow CLI](./workflow-cli.md)：项目文件 CLI 与 daemon SQLite Workflow 的边界。
-- 调度器真实测试入口统一列在 [契约与测试索引](./contract-test-index.md)；`workflow-scheduler-test.md` 只是冲突测试夹具，不是产品文档。
-
-### Context、Memory 与 Prompt
-
-- [Context And Memory Map](./context-memory-map.md)：进入模型上下文的信息总图。
-- [记忆归属与写入规则（提案）](./memory-policy.md)：下一阶段记忆优化的目标规则和验收用例。
-- [记忆写入质量实施计划](./superpowers/plans/2026-09-24-memory-write-quality.md)：按来源、凭据检查、旧事实读取三步实施。
-- [原生视觉图片预处理](./native-vision-image-preprocessing.md)：图片入历史前的预检、2000px/5 MiB 限制、进程内缓存和 Provider 出口。
-- [Memory System](./memory-system.md)：Memory 的读取、写入和检索。
-- [Memory Quartet](./services-memory-quartet-design.md)：四类 memory service 的职责。
-- [Prompt Runtime Audit](./prompt-runtime-audit.md)：prompt 运行时审计记录。
-
-### 工具、扩展与执行环境
-
-- [Permission Flow](./permission-flow.md)：权限请求、durable decision 和取消。
-- [Desktop 浏览器能力](./browser-capabilities.md)：普通 Browser 的页面操作、Developer mode 的受控检查、授权和数据范围。
-- [Agent 运行环境调用链](./sandbox-runtime-flow.md)：Native/WSL 中命令、文件和终端实际在哪里执行。
-- [Native / WSL 运行环境与 SRT](./sandbox-runtime-design.md)：运行位置与本机 SRT 权限边界。
-- [LSP Client 设计](./lsp-client-design.md)：把当前正则/ripgrep 近似实现替换成真实语言服务器连接，说明协议库选型、Runtime 生命周期、环境路径、权限和分阶段验收。
-- [MCP HTTP Transport](./mcp-http-transport-design.md)：MCP HTTP/SSE 与鉴权。
-- [Vykor 原生插件与外部转换器设计](./superpowers/specs/2026-08-25-native-plugin-and-converters-design.md)：Native Plugin 唯一运行时契约，以及 Claude Code、Codex 等外部格式的独立转换设计。
-- [Vykor 插件系统最终形态交接](./plugin-system-handoff.md)：面向后续开发者说明最终用户形态、Native Plugin 契约、转换与安装边界、当前完成度和建议实施顺序。
-- [原生插件开发第一阶段设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)：公开开发类型、五类组件指南、文本检查参考插件及真实调用和生命周期验收。
-- [Desktop 本地 Native Plugin 包导入](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)与[实施计划](./superpowers/plans/2026-09-09-desktop-native-plugin-zip-import.md)：插件页面可选择一个本地 Native `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，后台校验后直接安装或进行一次权限确认，也支持 Git URL 安装。
-- [插件市场](./plugin-marketplace.md)：官方与自定义 HTTPS 来源、浏览安装、手动更新、来源绑定及安装结果查询。
-- [官方插件源码与贡献](https://github.com/rzx007/vykor-plugins/tree/main/plugins)：Excalidraw、研究与写作、办公文档的源码、测试、打包和发布；宿主保留协议、SDK、Skill、模板与示例。
-- [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)与[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)：重新导入同一插件 ID 的 Native 插件包完成手动更新或修复，只在新增权限时重新确认，并保留旧记录到新快照成功切换。
-- [Native Plugin Runtime 诊断 v1](./superpowers/specs/2026-09-14-native-plugin-runtime-diagnostics-v1-design.md)与[实施计划](./superpowers/plans/2026-09-14-native-plugin-runtime-diagnostics-v1.md)：Plugin Service 返回 `runtimeStatus`，Desktop 插件页显示已禁用、待生效、已加载、部分可用或加载失败，并给出一条建议动作。
-- [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：运行诊断 v1、作者体验小修和 Git 来源完成后的接手说明；Agent 对话安装、`output_styles`、自动更新、Marketplace、npm 和归档 URL 继续暂缓。
-- [Native Plugin v1 与 Claude Code Converter 实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)：按 Native schema、安装激活、格式硬切、Converter core 和 Claude 转换闭环拆分的可执行任务。
-- [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
-- [插件体系开发说明](./plugin-system.md)（[交互版](./plugin-system.html)）与 [MCP Apps 开发说明](./mcp-apps.md)（[交互版](./mcp-apps.html)）：Native Tool＋MCP Apps、MCP 服务＋MCP Apps 两种开发流程；Agent 和页面调用的结果返回、权限、回执与草稿边界。
-- [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
-- [旧 Native UI 设计](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与 [旧固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)：历史资料，运行入口已退役；当前页面以 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)为准。
-- [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop 本地插件包导入、安装调试与当前能力边界。
-- [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
-- [插件机制现状调研报告](./plugin-mechanism-report.md)：按当前代码逐段说明 manifest 契约、安装快照、发现与激活、Native Tool 子进程、权限三层、Run 级可见性与管理面，并列出未覆盖的缺口与容易误判的代码事实。
-- [Rome Apps 详细分析报告](./rome-apps-analysis-report.md)：按本地源码说明 app 声明、构建安装、服务端执行、Web 页面、工作区与聊天内联交互，区分安全和历史状态边界，并给出 OHS 内联与侧栏的借鉴建议。
-- [Orkas 内置智能体调研](./orkas-builtin-agents-integration-research.md)：记录内置资源、依赖与能力范围，研究与写作插件已完成第一版接入，其他能力保留为集成建议。
-- [Codex Goal 本地实现调研](./codex-goal-implementation-research.md)：基于指定本地安装版本分析目标状态、继续执行和用量控制，并记录本项目的改进建议。
-- [Slash Commands](./slash-commands.md) 与 [Slash Command Flow](./slash-commands-flow.md)：当前命令清单、三层分流和执行入口。
-- [Skills Flow](./skills-flow.md) 与 [Skill Prompt Flow](./skill-prompt-flow.md)：Skill 的发现、可见性，以及结构化 Skill 输入从发送到 Run 收尾。
-
-### 产品界面
-
-- [Desktop 长对话性能优化复盘与维护约定](./desktop-conversation-performance.md)：本轮优化的职责边界、实测结果、取舍、复测入口与维护约定。
-- [Desktop 会话流式输出传输历史分析](./desktop-session-streaming-performance-analysis.md)：记录 2026-10-08 的完整快照链路分析和增量传输建议，当前实现见性能复盘。
-- [桌面设置完整需求](./desktop-settings-requirements.md)：按页面定义权限、终端、Git、运行环境及其余设置的完整功能、保存生效规则和验收标准，供逐页实现。
-- [Product Surface Integration](./product-surface-integration.md)：各种上层产品共同使用 Application 的规则。
-- [输入框能力需求](./composer-capabilities-requirements.md)：`@`、`+`、Slash、Skill、附件与上下文选择的当前契约。
-- [会话目标设计](./session-goals-design.md)：目标输入、持久状态、自动续跑、验收与恢复规则。
-- [Goal 实现复盘](./session-goals-retrospective.md)：Codex 开源实现对照、当前缺口与调整顺序。
-- [TUI Flow](./tui-flow.md)：TUI 怎样连接 daemon 和渲染运行状态。
-- [Desktop Agent Message Rendering](./desktop-agent-message-rendering.md)：Desktop 消息和文件变更展示。
-- [Desktop Terminal PTY](./desktop-terminal-pty-design.md)：Desktop 终端、PTY、IPC 和 Native/WSL 环境跟随。
-
-## 第 3 层：端到端流程
-
-按实际问题找文档：
-
-| 想追踪的流程 | 文档 |
+| 要了解什么 | 当前文档 |
 | --- | --- |
-| 用户发送 prompt，直到 Run 和 transcript 收尾 | [Daemon Application Architecture：TUI 发送 hi](./daemon-application-architecture.md#tui-发送-hi) |
-| 用户发送带 Skill 的 prompt，直到工具加载和 Run 收尾 | [Skill Prompt Flow](./skill-prompt-flow.md) |
-| child Agent 创建、运行、继续输入和关闭 | [Agent Child Session Flow](./agent-child-session-flow.md) |
-| Tool 请求权限，UI 回复，Run 继续 | [Permission Flow](./permission-flow.md) |
-| Bot 收消息、幂等执行、发送或重试回复 | [Channels Flow](./channels-flow.md) |
-| Workflow 拆任务、调度、持久化和恢复 | [Coordinator 硬调度器调用链](./coordinator-hard-scheduler-flow.md) |
-| Job 创建后怎样 read/wait/send/cancel | [Jobs Protocol](./jobs-protocol.md) |
-| 客户端首次同步、断线重连和去重 | [Client Sync Flow](./client-sync-flow.md) |
-| Agent 在 Native/WSL 中怎样启动和停止进程 | [Agent 运行环境调用链](./sandbox-runtime-flow.md) |
-| 定时任务到点后怎样启动 Agent | [Scheduled Tasks Flow](./scheduled-tasks-flow.md) |
-| TUI 怎样 attach daemon | [TUI Flow](./tui-flow.md) |
+| 系统分层、入口、状态归属和依赖方向 | [架构总览](./architecture-overview.md)、[可交互架构图](./vykor-current-architecture.html) |
+| 重构后的边界与持续检查 | [架构收口记录](./architecture-migration-status.md) |
+| 产品如何接入共同后台 | [产品接入边界](./product-surface-integration.md) |
+| Agent 执行层和持久应用如何分工 | [能力边界](./agent-framework-capability-boundary.md) |
+| Run、工具、子 Agent 如何正确结束 | [生命周期契约](./agent-lifecycle-contract.md) |
+| 运行记录的 ID、关系、版本和安全重试 | [持久运行数据](./durable-execution-data-model.md) |
+| 数据库、记录读写与原子提交 | [Session Runtime 存储架构](./session-runtime-storage-architecture.md) |
+| HTTP/SSE 请求、响应、错误和版本 | [协议契约](./protocol-contract.md) |
+| 身份、凭据、授权与执行范围 | [安全与信任边界](./security-and-trust-boundaries.md) |
+| 持久化失败的分类与恢复决定 | [Projection Settlement ADR](./adr/0001-projection-settlement-failure-policy.md) |
 
-## 第 4 层：开发和运维入口
+术语：daemon 是共用后台进程；Run 是一次执行；child 是子 Agent；snapshot 是某一时刻的完整状态，SSE 持续推送其后的变化；projection 是把运行事件写成持久记录与客户端状态；repository 是一类记录的读写接口。
 
-- 直接嵌入 Agent：[Vykor Agent SDK](./agent-sdk.md)
-- 通过网络或本机后台调用：[Vykor Client SDK](./client-sdk.md)
-- 使用 Workflow 文件 CLI：[Workflow CLI](./workflow-cli.md)
-- 使用 slash command：[Slash Commands](./slash-commands.md)
-- 远程连接 daemon：[Remote Attach](./remote-attach.md)
-- 安装和管理常驻 daemon：[Daemon System Service](./daemon-system-service.md)
-- 发布 Desktop 和 CLI：[Desktop 与 CLI Tag 发版](./release-process.md)
-- 配置认证、Provider 和 Model：[Auth、Provider、Model](./auth-provider-model.md)
-- 查看 trace、metrics 和运行诊断：[Observability](./observability.md)
-- 处理启动恢复、Owner、Retention 和备份：[Operations and Recovery](./operations-and-recovery.md)
-- 检查认证、权限和 Sandbox 边界：[Security and Trust Boundaries](./security-and-trust-boundaries.md)
+## Agent、工具和执行环境
 
-## 第 5 层：可执行验证
+- [Agent SDK](./agent-sdk.md)：在程序中创建 Agent、提交消息、订阅结果与关闭资源。
+- [Agent 内部架构](./agent-runtime-framework-architecture.md)：执行核心、Node 组装、Run 与状态机。
+- [子 Agent 流程](./agent-child-session-flow.md)：创建、等待、继续输入、预算、关闭和持久记录。
+- [Workflow 调度流程](./coordinator-hard-scheduler-flow.md)、[Coordinator Agent 定义](./coordinator-agents-design.md)：步骤依赖、并发、重试、预算与实际执行。
+- [Jobs 协议](./jobs-protocol.md)：统一读取、等待、输入和取消后台工作。
+- [Workflow CLI](./workflow-cli.md)：项目文件命令与 daemon SQLite 运行的区别。
+- [权限流程](./permission-flow.md)：审批请求、决定、取消、三档授权与独立计划模式。
+- [Native/WSL 执行流程](./sandbox-runtime-flow.md)、[运行环境与 SRT 配置](./sandbox-runtime-design.md)：文件与命令在哪里执行，以及本机可选限制。
+- [模型网络重试与参数恢复](./model-network-retry-design.md)：断流、工具执行保护和重试上限。
+- [上下文压缩](./compact-service-design.md)：摘要、检查点、工具配对和失败处理。
+- [原生视觉图片预处理](./native-vision-image-preprocessing.md)：图片进入历史前的尺寸、大小、缓存和错误处理。
 
-- [跨任务行为评测基线](./agent-behavior-evaluation.md)：本地脚本场景、工具链路验证、真实模型评测的授权与证据边界。
+## 后台请求、同步和产品流程
 
-- [真实运行验收提示词](./runtime-acceptance-prompts.md)：把典型用户输入直接发给真实模型，人工核对 Run、Tool、Child、Job、Permission、Workflow、Memory、Bot 和 Schedule 是否真的工作。
-- [契约与测试索引](./contract-test-index.md)：把 Runtime、durable 数据、协议、Client、Workflow、Jobs、Channel、Permission 和 Sandbox 的硬规则映射到具体测试文件。
-- `pnpm check-docs`：检查文档状态、总目录必备入口和所有本地 Markdown 链接。
-- `pnpm check-types`：检查跨包 TypeScript 接口。
-- `pnpm test`：运行当前工作区测试。
-- `pnpm test:client-browser`：确认共享 client 能在浏览器构建，不依赖 Node polyfill。
+- [Daemon Application 运行索引](./daemon-application-architecture.md)：输入接纳、运行、授权、子 Agent、上下文与收尾。
+- [客户端同步](./client-sync-flow.md)：完整快照、SSE、游标、重连和状态合并。
+- [渠道消息](./channels-flow.md)：飞书接入、身份过滤、会话映射、消息去重与回复恢复。
+- [已安排任务](./scheduled-tasks-flow.md)：定时触发 Agent、保存任务与运行结果。
+- [会话目标](./session-goals-design.md)：用户显式目标、续跑、用量、暂停、等待与恢复。
+- [按风险自动审查](./auto-review.md)：任务结束后可选的只读代码审查，及其真实结果状态。
+- [TUI 流程](./tui-flow.md)：终端界面连接 daemon、提交输入和呈现运行结果。
+- [输入框能力](./composer-capabilities-requirements.md)：文本、Skill、插件、附件与上下文的当前交互。
+- [Desktop 消息呈现](./desktop-agent-message-rendering.md)：消息、工具和文件变更。
+- [Desktop 长对话性能](./desktop-conversation-performance.md)：职责、测量范围与复测入口。
+- [Desktop 终端](./desktop-terminal-pty-design.md)：终端进程、IPC 及 Native/WSL 环境跟随。
+- [Desktop 浏览器能力](./browser-capabilities.md)：页面操作、开发者模式、授权与数据范围。
 
-## 第 6 层：决策、计划和历史
+## 插件、Skill、提示词和记忆
 
-- [Agent 核心能力分阶段方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)与 [S1 工具操作安全实施计划](./superpowers/plans/2026-10-26-s1-tool-operation-safety.md)：S1 的接口、操作记录、强制检查及验收范围；S2 的检查点续跑和 S3 的持久审批分别交付。
-- [Agent 核心包架构收敛方案](./superpowers/specs/2026-10-21-agent-package-convergence-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-21-agent-package-convergence.md)：P0–P6 已实施并验收，阶段例外清零，SDK 和权威文档完成收口，见 [P6 验收记录](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)。
-- [Protocol 分层收敛方案](./superpowers/specs/2026-10-22-protocol-layering-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-22-protocol-layering.md)：P7–P13 实现与集中验收完成，当前 `stageExceptions` 为零，详见[最终验收记录](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)。[P7 记录](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md)保留迁移前快照，不代表当前依赖或例外数量。
-- `docs/adr/`：已经作出的长期决定。当前有 [Projection Settlement 失败分类与恢复边界](./adr/0001-projection-settlement-failure-policy.md)。
-- `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
-- `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。
-- [超长源码整理与分阶段拆分计划](./superpowers/plans/2026-09-30-large-source-files.md)：48 个非测试源码与样式文件的盘点、目录归纳和分阶段实施顺序；阶段 1 正在执行。
-- [T3 Code 借鉴方向与分阶段改进路线图](./superpowers/plans/2026-10-05-t3code-lessons-roadmap.md)：六个运行可靠性方向和七个行为能力方向，依次验证失败回放、状态恢复、改动结果、数据边界、职责、长任务连续性、提示词、计划委派与辅助执行；阶段一、二已完成，阶段三至九尚未开始。
-- 文件名包含 `review`、`notes` 或明确标为“历史设计”的文档：用于解释过去，不用于决定当前 API。
-- [Compatibility surface 实施审计](./compatibility-surface-audit.md)：Stage 8 删除/保留裁定的实施证据，不是当前 API 清单。
-- [Session 存储增强历史设计](./session-storage-design.md)：已经退场的项目级 JSON snapshot 设计；当前 SQLite 边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)。
-- [Output Styles 历史设计](./output-styles-design.md)、[Skills Enhancement 历史设计](./skills-enhance-design.md)、[Slash Batch 历史设计](./slash-batch-design.md)：保留迁移前背景，当前入口以各文档状态栏指向的新文档为准。
+- [插件体系](./plugin-system.md)（[交互版](./plugin-system.html)）：安装、激活、Native Tool、页面与持久数据。
+- [原生插件作者指南](./native-plugin-authoring.md)：清单、各类组件、打包、安装和排障。
+- [插件市场](./plugin-marketplace.md)：官方及自定义 HTTPS 来源、安装、手动更新、权限和回执。
+- [插件安装与贡献格式](./plugins-contributions-design.md)：Native manifest、不可变快照与外部转换。
+- [插件能力调用](./plugin-capability-invocation-design.md)：选择插件后，本轮运行怎样装配并继承能力限制。
+- [MCP Apps](./mcp-apps.md)（[交互版](./mcp-apps.html)）：常驻页面、工具调用、授权、回执与草稿。
+- [MCP HTTP/SSE 与 OAuth](./mcp-http-transport-design.md)：传输、静态鉴权、登录、刷新和重连。
+- [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：固定样本的转换、安装和发现验证。
+- [斜杠命令清单](./slash-commands.md)、[分流流程](./slash-commands-flow.md)：命令由客户端还是后台处理。
+- [Skill 总览](./skills-flow.md)、[结构化输入流程](./skill-prompt-flow.md)：发现、选择、校验、加载和收尾。
+- [上下文与记忆索引](./context-memory-map.md)：信息来源、写入位置和注入时机。
+- [记忆系统](./memory-system.md)：长期记忆的读取、写入和检索。
+- [提示词分层](./prompt-layering-design.md)、[提示词运行入口](./prompt-runtime-audit.md)：统一组装与当前接线。
+- [个性化设置](./personalization-design.md)：用户偏好和项目环境事实。
 
-当前文档、ADR、计划和历史发生冲突时，优先级是：
+## 使用、运维和验证
 
-```text
-当前代码、migration、自动化测试
-  > 标为“权威契约 / 当前实现”的文档
-  > ADR
-  > plans、specs、reviews 和历史设计
-```
+- [CLI 使用说明](../apps/cli/README.md)、[Client SDK](./client-sdk.md)：安装、参数、调用与客户端独立发布。
+- [认证、Provider 和 Model](./auth-provider-model.md)：配置文件、凭据来源和解析顺序。
+- [远程连接](./remote-attach.md)、[daemon 系统服务](./daemon-system-service.md)：连接发现和系统常驻。
+- [运维与恢复](./operations-and-recovery.md)：启动恢复、数据目录写入者、清理、备份和格式演进。
+- [开发数据重置](./development-data-reset.md)：人工预检及逐项授权的操作说明。
+- [诊断与可观测性](./observability.md)：运行追踪、日志、状态快照和排障。
+- [发布流程](./release-process.md)：Desktop、CLI 与官方插件的发布边界。
+- [契约与测试索引](./contract-test-index.md)：按受影响规则选择自动化测试；S1 的本次验证范围见[工具操作安全验收记录](./superpowers/reviews/2026-10-26-s1-tool-operation-safety.md)。
+- [跨任务行为评测](./agent-behavior-evaluation.md)：脚本场景、真实模型证据及费用授权范围。
+- [真实运行验收提示词](./runtime-acceptance-prompts.md)：连接真实环境后的人工验收。
 
-## 当前格式策略
+日常文档检查运行 `pnpm check-docs` 与 `pnpm check:retired-ui`。有代码改动时按影响范围增加类型检查和测试，完整命令见[根 README](../README.md#检查与发布)。
 
-项目已经删除旧 API 别名、re-export façade、字段别名和旧数据读取路径。当前版本只接受当前接口；数据格式以当前迁移基线为准，每次打开都会应用迁移链，与基线不匹配的旧库不做兼容：
+## 待实施或待评审的提案
 
-- SQLite 迁移以 `0000_current_schema.sql` 为基线，其后为增量迁移链，每次打开按 `__drizzle_migrations` 水位线应用；
-- 不做旧库接管、字段猜测或读取时降级；与当前基线不匹配的库删除重建即可；
-- event、settings、Session snapshot、Memory 和 Swarm 文件都有明确版本标记；
-- 需要版本标记的数据缺失标记或版本不同时直接失败；声明为必填的字段缺失或字段名过时时直接失败；
-- schema 演进见 [Operations and Recovery](./operations-and-recovery.md#schema-演进)。
+本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
-## 写文档时的约定
+- [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
+- [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
+- [记忆归属与写入规则](./memory-policy.md)：记忆优化目标及验收用例。
+- [真实 LSP 客户端](./lsp-client-design.md)：用语言服务器替换近似搜索的方案。
 
-- 当前文档先讲入口、关键步骤、状态放在哪里、结果从哪里返回，再讲类型名。
-- 第一次出现英文术语时，要同时解释它实际做什么。
-- 一条跨模块硬规则只指定一份权威文档，其他地方链接过去，不复制整段契约。
-- 每份当前文档开头必须标明“当前实现”或“权威契约”；计划和历史资料也必须明确状态。
-- 修改公开入口、持久化格式、协议版本、状态机或所有权边界时，必须同步更新本目录和对应权威文档。
-- 修改 Client Resource、Server Application Service、Repository/Transaction 或 Runtime 所有权时，同时核对架构总览、对应专题文档、根 README 和 `vykor-current-architecture.architecture.json` 图源。
-- 不增加兼容代码来维持过时文档。
+## 决策、阶段记录和历史资料
+
+旧文件保留路径，开头链接当前说明。阶段计划只证明当时的安排，验收记录只证明当次验证的范围；历史统计和旧路径不作为当前 API。
+
+- [阶段计划目录](./plans/README.md)、[方案与验收记录目录](./superpowers/README.md)、[研究资料目录](./research/README.md)。
+- [Agent 包收敛验收](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)、[Protocol 分层验收](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)、[Swarm 退役与测试迁移](./superpowers/reviews/2026-10-23-swarm-retirement-and-agent-tests.md)：各阶段的代码与检查证据；后续决定以较新的实现和验收为准。
+- [兼容面实施审计](./compatibility-surface-audit.md)：旧入口的删除与保留裁定。
+- [插件系统交接](./plugin-system-handoff.md)、[插件后续阶段交接](./native-plugin-next-stage-handoff.md)、[插件机制调研](./plugin-mechanism-report.md)：旧阶段能力和路线快照。
+- [Goal 早期复盘](./session-goals-retrospective.md)：收缩设计之前的证据和建议。
+- [记忆四件套移植记录](./services-memory-quartet-design.md)、[Workflow 早期设计](./coordinator-hard-scheduler-design.md)、[Jobs 收口记录](./jobs-task-workflow-convergence.md)。
+- [旧会话存储](./session-storage-design.md)、[旧 CLI 体验](./cli-experience-design.md)、[旧 TUI 渲染](./tui-render-tail-design.md)、[旧 Output Styles](./output-styles-design.md)、[旧 Skills Enhancement](./skills-enhance-design.md)、[旧 Slash Batch](./slash-batch-design.md)。
+- [Desktop 流式传输历史分析](./desktop-session-streaming-performance-analysis.md)、[旧缺陷审计](./bugs-unfixed.md)、[Jobs 早期审阅](./jobs-protocol-review-2026-08-17.md)。
+- [Codex Goal 实现调研](./codex-goal-implementation-research.md)、[Goal 跟进](./codex-goal-followup-2026-10-15.md)、[对话界面研究](./codex-conversation-ui-style-research.md)、[提示词研究](./codex-prompt-system-research.md)、[Windows 侧栏研究](./codex-windows-translucent-sidebar-research.md)。
+- [Rome Apps](./rome-apps-analysis-report.md)、[Orkas 能力](./orkas-builtin-agents-integration-research.md)、[DeepSeek Harness 笔记](./deepseek-harness-reference-notes.md)：特定源码或版本的分析。
+
+`workflow-scheduler-test.md` 是测试夹具，不进入产品说明。根 [PLAN-NEXT.md](../PLAN-NEXT.md) 与 [PLAN-REMAINING.md](../PLAN-REMAINING.md) 已归档；不再从它们推断当前缺口。

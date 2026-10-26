@@ -13,7 +13,7 @@ Composer 是会话页的结构化输入入口。它负责编辑文本、选择 S
 | `+` | 用鼠标打开与 `@` 相同的“添加上下文”面板，不改写正文 |
 | 拖拽/粘贴 | 添加附件，继续使用独立的附件上传链路 |
 
-`@` 与 `+` 共用 Context Picker，但不是新的命令或 Skill 入口。
+`@` 与 `+` 共用 Context Picker，可选择插件或添加上下文；Skill 仍使用 `/` 或 `$` 入口。
 
 ## 当前范围
 
@@ -22,6 +22,7 @@ Context Picker 当前提供：
 - 文件和文件夹：继续调用现有文件选择与附件上传逻辑。
 - 计划模式：独立切换当前会话的 `workMode`，保留原授权档位；支持从标记或 `/plan` 退出。
 - 历史对话：插入结构化、只读的会话引用。
+- 插件：按服务端目录插入本轮插件引用，后端决定实际可用的 Skill、工具与 Agent；选择插件不授予执行权限。
 - 目标：进入独立目标输入模式；提交后由会话级 Banner 展示和控制状态。
 
 目标暂停时若补充消息仍在处理，可以点击“排队继续”。后台为每个目标保留一个待继续请求，
@@ -34,7 +35,7 @@ Context Picker 当前提供：
 当前不提供：
 
 - 站点
-- 插件、应用和文件聊天搜索（没有稳定数据源前不展示）
+- 独立应用和文件聊天搜索（没有稳定数据源前不展示）
 
 ## 主要文件
 
@@ -49,7 +50,7 @@ Context Picker 当前提供：
 | `composer-attachments.tsx` | 待发送附件的预览、进度、取消、重试和移除 |
 | `composer-file-input.ts` | 拖拽、粘贴和文件输入解析 |
 | `context-usage-control.tsx` | 当前上下文用量入口 |
-| `goal-banner.tsx` | 当前目标状态、详情、暂停/继续、验收和取消入口 |
+| `goal-banner.tsx` | 当前目标状态、详情、暂停/继续和取消入口 |
 | `../../../../stores/desktop-session/goal-actions.ts` | 按会话隔离的目标草稿、请求和状态同步 |
 
 ## 数据模型
@@ -63,17 +64,7 @@ interface ComposerDocument {
 }
 ```
 
-当前输入项包括：
-
-```ts
-type SessionUserInputItem =
-  | { type: "text"; text: string }
-  | { type: "skill"; name: string; path: string; displayName?: string; source?: SkillSource }
-  | { type: "mention"; name: string; path: string; displayName?: string }
-  | { type: "context"; kind: "conversation"; id: string; displayName: string }
-```
-
-跨 Desktop、client 和 server 的权威定义位于 `packages/protocol/src/session/session-input-items.ts`。本功能直接采用当前协议，不提供旧 composer 协议迁移或双读。
+输入项包括文本、Skill、资源引用、历史对话、插件及插件 Agent。规范数据定义位于 `packages/domain-contracts/src/inputs/items.ts`，`packages/protocol/src/session/session-input-items.ts` 将其作为通信数据公开。这里不复制整份联合类型，新增输入项时同步核对编辑器节点、发送与服务端校验。
 
 ## `@` 与 `+` 数据流
 
@@ -83,7 +74,8 @@ type SessionUserInputItem =
 Context Picker
         ↓
 文件 ─────→ 现有附件选择和上传链路
-计划模式 ─→ 更新现有 permission mode
+计划模式 ─→ 更新 workMode，保留 approvalMode
+插件 ─────→ 插入 plugin capability item
 历史对话 ─→ 插入 conversation context item
         ↓
 ComposerDocument
@@ -160,7 +152,7 @@ Composer 触发的系统操作通过 metadata presentation 展示，不作为普
 - `composer/__test__/composer.attach-button.test.ts`
 - `composer/__test__/composer-attachment-preview.test.ts`
 - `packages/protocol/src/session/__test__/session-input-items.test.ts`
-- `packages/server/src/application/session/__test__/session-input-materializer.test.ts`
+- `packages/server/src/application/session/interactions/__test__/session-input-materializer.test.ts`
 
 运行相关测试：
 

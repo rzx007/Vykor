@@ -111,7 +111,7 @@ Workflow retry 会创建新的 child 和 Attempt，仍消耗同一预算。Workf
 
 ## Native Plugin 与 Converter
 
-Runtime 只读取 installed store 指向、且通过 `validateNativePlugin()` 的 Native Plugin。所有 component path 都检查规范化路径和符号链接后的真实路径。第三方 Tool 在隔离执行环境完成前只返回 unsupported，daemon 不动态 import 插件模块。
+Runtime 只读取 installed store 指向、且通过 `validateNativePlugin()` 的 Native Plugin。所有 component path 都检查规范化路径和符号链接后的真实路径。已支持的 Node Native Tool 在独立 Tool Host 子进程中加载，经过参数校验、权限检查和输出限制；daemon 不动态 import 工具模块。独立子进程不等于操作系统沙箱，插件的 command/http Hook 也不受 Tool Host 的进程边界保护。具体限制见[插件作者指南](./native-plugin-authoring.md)。
 
 Claude Code 等外部插件由独立 Converter 离线读取。detect、inspect、plan、convert 不执行脚本、不启动 Hook/MCP、不安装依赖、不联网；plan 后源内容变化时拒绝物化。权限必须明确批准，并由 daemon 根据最终 Native manifest 重新计算。
 

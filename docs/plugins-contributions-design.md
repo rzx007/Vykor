@@ -1,10 +1,10 @@
 # Native Plugin 当前实现
 
-> 状态：当前实现。完整设计见 [原生插件与外部转换器设计](./superpowers/specs/2026-08-25-native-plugin-and-converters-design.md)，执行进度见 [实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)。
+> 状态：当前安装与贡献格式索引。作者用法见[原生插件指南](./native-plugin-authoring.md)，整体流程见[插件体系](./plugin-system.md)，来源和更新见[插件市场](./plugin-marketplace.md)。
 
 ## 运行流程
 
-Desktop 默认支持 `@/+` 选择插件；协议 3 的服务通过 `pluginCapabilities: 1` 声明完整支持。安装并启用表示可被发现，用户在当前输入中选定 pluginId 才会把该插件的 Skill、MCP、Native Tool、Agent 加入本轮能力范围。具体流程见[插件能力召唤与运行](./plugin-capability-invocation-design.md)。
+Desktop 默认支持 `@/+` 选择插件；基础协议按[协议契约](./protocol-contract.md#当前版本)精确匹配，服务通过 `pluginCapabilities: 1` 声明插件选择能力。安装并启用表示可被发现，用户在当前输入中选定 pluginId 才会把该插件的 Skill、MCP、Native Tool、Agent 加入本轮能力范围。具体流程见[插件能力召唤与运行](./plugin-capability-invocation-design.md)。
 
 Run 从暖 Runtime 的已加载状态生成冻结的内存 View，固定工具定义及调用对象，不创建新的持久化快照。插件更新使后续 Runtime 重建；已开始的 Run 不切换绑定。linked 目录外部修改在显式 `/reload-plugins`、重启或新会话后生效。
 
@@ -17,7 +17,7 @@ Plugin Agent 由 root 的 Agent 工具创建 Child，继承所选插件的父 Vi
   -> 不可变 cache 快照
   -> installed.json
   -> Runtime 读取用户安装记录并重新校验快照
-  -> 加载 Skills / Agents / Hooks / MCP / Node Tool
+  -> 加载 Skills / Agents / Hooks / MCP / Node Tool / Apps
 ```
 
 Runtime 唯一识别的 manifest 是：
@@ -34,7 +34,7 @@ Runtime 唯一识别的 manifest 是：
 
 Native v1 使用 `schemaVersion: 1`、稳定 dotted `id`、kebab-case `name` 和显式 `components`。每条组件路径必须以 `./` 开头。Validator 会同时检查规范化路径和符号链接后的真实路径，越界、缺失或重复来源都会产生结构化诊断。
 
-Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会在 daemon 主进程动态 import；Runtime 会为每个插件版本启动独立 Tool Host 子进程。插件 Agent 使用插件 ID 前缀注册，例如 `example.text-inspector:reviewer`；只有用户本轮选择该插件时，Agent 工具才会看到这些定义。LSP、Workflow、Channel、Provider、UI 等已预留 schema，但会返回 unsupported 诊断。
+Skills、Agents、Hooks、MCP、Node Tool 和 Apps 已进入加载闭环。Tool 不会在 daemon 主进程动态 import；Runtime 会为每个插件版本启动独立 Tool Host 子进程。插件 Agent 使用插件 ID 前缀注册，例如 `example.text-inspector:reviewer`；只有用户本轮选择该插件时，Agent 工具才会看到这些定义。LSP、Workflow、Channel 和 Provider 等字段可被识别，但尚无对应激活能力；Wasm Tool 尚不激活。插件页面使用官方 MCP Apps，接线与权限见 [MCP Apps](./mcp-apps.md)。
 
 ## 安装状态
 
@@ -48,7 +48,7 @@ Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会�
 
 安装流程先校验源目录，再复制到 `cache/<plugin-id>/` 下的临时候选目录并校验副本，校验成功后原子改名为不可变的 `<version>-<digest>/` 快照，最后更新 `installed.json` 指向该快照。最终快照必须是真实目录，不能是符号链接或 Windows 目录联接。`installed.json` 同时记录 manifest version、内容摘要和权限批准。重装同一 ID 会创建新快照，不会原地替换正在被旧 Runtime 使用的目录；若同摘要快照已经损坏，重装会先隔离损坏目录，再从已验证的原始内容重建。普通卸载保留 `data/`。
 
-Native Plugin 只支持用户级安装；当前 cwd 只作为插件运行时的工作目录，不形成独立安装或独立权限批准。旧的 project/local 记录会被忽略并提示重新以 user scope 安装，不能自动扩大成全局授权。Runtime 加载前先确认非 link 缓存根不是符号链接或目录联接，再重新核对实际 manifest 的 ID、版本和权限，并校验内容摘要；任一项与安装记录不一致都会拒绝激活。启停使用稳定插件 ID，不再修改 Settings。
+Native Plugin 的安装器只写用户级安装；store 读取接受 `user` 和预置的 `managed`。当前 cwd 只作为插件运行时的工作目录，不形成独立安装或独立权限批准。旧 `project/local` scope 会使安装记录校验失败，不会被忽略或自动扩大为全局授权；校验入口是 `packages/plugins/src/installation/store.ts`。Runtime 加载前先确认非 link 缓存根不是符号链接或目录联接，再重新核对实际 manifest 的 ID、版本和权限，并校验内容摘要；任一项与安装记录不一致都会拒绝激活。启停使用稳定插件 ID，不再修改 Settings。
 
 ### Desktop 插件页安装
 
@@ -58,7 +58,7 @@ Plugin Service 会为每个已安装插件计算 `runtimeStatus`，Desktop 列�
 
 作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，包内允许有一层包装目录，但必须只有一个 `.vykor-plugin/plugin.json`；如果从 Git 安装，仓库 checkout 后也必须满足同一目录规则。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
 
-Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、npm、归档 URL 或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
+Desktop 还支持[市场浏览、安装与手动更新](./plugin-marketplace.md)；Agent 对话中的 `PluginInstall` 可在明确确认后安装本地包或 Git 来源。自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Desktop 内 Claude Code/Codex 转换、npm 和任意归档 URL 安装仍未提供。外部格式转换继续使用独立 Converter，不由 Runtime 猜测格式。
 
 ## 外部转换
 

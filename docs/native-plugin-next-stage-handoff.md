@@ -1,6 +1,6 @@
 # Native Plugin 后续工作交接
 
-> 状态：当前阶段交接。
+> 状态：历史阶段交接。正文保留 2026-09-14 的路线；Agent 对话安装、市场和 MCP Apps 已有后续实现。当前入口见[插件体系](./plugin-system.md)、[插件市场](./plugin-marketplace.md)和[作者指南](./native-plugin-authoring.md)。
 > 日期：2026-09-14
 > 适用范围：Native Plugin 安装后诊断、插件管理界面、作者体验、本地插件包格式、后续来源扩展与明确暂缓项。
 

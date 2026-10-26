@@ -1,6 +1,6 @@
 # 插件能力召唤与运行设计
 
-> 状态：当前实现。Desktop 默认开放 `@/+` 插件选择；协议版本 3，服务能力 `pluginCapabilities: 1`。旧协议或缺少该能力时明确拒绝连接，Desktop 与 daemon 需要同时升级。不承诺插件执行环境精确重放。
+> 状态：当前实现。Desktop 默认开放 `@/+` 插件选择；基础协议见[协议契约](./protocol-contract.md#当前版本)，服务能力为 `pluginCapabilities: 1`。版本不匹配或缺少该能力时明确拒绝连接，Desktop 与 daemon 需要同时升级。不承诺插件执行环境精确重放。
 
 ## 1. 核心决定
 

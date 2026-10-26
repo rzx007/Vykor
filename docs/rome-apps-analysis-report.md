@@ -1,6 +1,6 @@
 # Rome Apps 详细分析报告
 
-> 状态：当前调研报告；记录本地源码快照，不是 OHS 已批准的实现规格。
+> 状态：历史调研快照，记录本地源码分析及当时建议。当前插件页面机制见 [MCP Apps](./mcp-apps.md)，本文不作为已批准的实现规格。
 > 调研日期：2026-10-11。
 > 对象：`D:/code/personal-project/rome`；Rome HEAD：`3ddf88cbb950c543822676253d650204bdbce782`。
 > OHS 对照基线：`feb050a3992096e9f73b4a6dece2a59c8ad9aaf4`。

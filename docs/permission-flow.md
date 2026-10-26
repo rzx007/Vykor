@@ -69,9 +69,9 @@ sequenceDiagram
 
 | 行为 | 文件 |
 |---|---|
-| permission checker 与 tool gate | `packages/core/src/engine/query-engine.ts` |
-| request/decision/event contracts | `packages/core/src/types/runtime.ts` |
-| framework event/callback 调用 | `packages/agent-runtime/src/kernel/agent.ts` |
+| 工具权限检查与 callback 调用 | `packages/core/src/engine/tools/query-tool-permissions.ts` |
+| request/decision contracts | `packages/agent-contracts/src/policy/permissions.ts` |
+| 执行 effects 与事实事件 | `packages/agent-contracts/src/execution/execution.ts`、`packages/agent-contracts/src/execution/events.ts` |
 | daemon callback 注入 | `packages/server/src/daemon/daemon-agent.ts` |
 | durable broker | `packages/server/src/permissions/permission-broker.ts` |
 | live resolver/expiration | `packages/server/src/permissions/permission-controller.ts` |
@@ -105,7 +105,7 @@ permission resolver 只存在于创建它的 daemon 进程。新 daemon 启动�
 
 `full_access` 使用当前会话的执行设置副本，统一传给文件、网络、终端和后台任务，不修改全局沙箱。现有禁止规则和计划限制继续先行。
 
-职责分工：`protocol` 定义状态和审查数据格式；`core` 定义工具审批请求；`agent-runtime` 在内部解析模型与凭据，只对外提供审查器；`server` 读取可信用户输入、保存操作参数快照并处理审批结果；`services` 保存记录和事件。审批业务服务通过注入的 `review` 函数调用审查，不导入运行时实现类型。
+职责分工：`agent-contracts/permissions` 定义执行授权与审查数据，`protocol` 只负责通信格式，持久审查记录归 `domain-contracts`；`core` 在工具执行前发起审批，`agent-runtime` 在内部解析模型与凭据并提供审查器；`server` 读取可信用户输入、保存操作参数快照并处理审批结果；`services` 保存记录和事件。审批业务服务通过注入的 `review` 函数调用审查，不导入运行时实现类型。
 
 架构检查同时读取包声明和实际源码导入，包含纯类型导入、动态导入及相对路径跨包引用；发现包依赖形成闭环时失败。
 

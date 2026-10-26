@@ -70,8 +70,8 @@ vk --tui "带初始提示打开 TUI"
 | `--permission-mode`               | `ask` / `auto_review` / `full_access` |
 | `--plan`                          | 独立开启计划模式，保留当前授权档位 |
 | `--work-mode`                     | `execute` / `plan` |
-| `--max-turns`                     | 最大 agent 轮次                        |
-| `--effort`                        | `low` | `medium` | `high`          |
+| `--max-turns`                     | 最大 Agent 轮次；0 表示不限轮数，默认值见仓库配置说明 |
+| `--effort`                        | `low` / `medium` / `high`          |
 | `--no-plugins`                    | 本次会话不加载已安装插件贡献                     |
 | `--dangerously-skip-permissions`  | 跳过权限确认                             |
 | `--dry-run`                       | 预览解析后的配置，不调模型                      |
@@ -79,6 +79,8 @@ vk --tui "带初始提示打开 TUI"
 
 
 完整参数见 `vk --help`。
+
+授权档位与计划模式是独立设置。旧值 `default`、`plan` 会归一化为 `ask`，`full_auto` 归一化为 `auto_review`；旧 `plan` 还会启用计划限制。计划模式不会提高授权范围，完全访问也保留禁止规则。详细行为见仓库 `docs/permission-flow.md`。
 
 ## 常用子命令
 
