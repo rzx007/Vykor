@@ -32,6 +32,7 @@ export function createApprovalReviewer(options: ApprovalReviewerOptions): Approv
     async review(input, signal) {
       if (signal?.aborted) throw signal.reason ?? new Error("Approval review interrupted");
       if (hasApprovalSecrets(input)) return approvalReviewFallback("审查资料包含凭据信息，需要你直接确认。", "unavailable");
+      const reviewContent = JSON.stringify(input);
       const controller = new AbortController();
       let timeout: ReturnType<typeof setTimeout> | undefined;
       let abort: (() => void) | undefined;
@@ -51,35 +52,45 @@ export function createApprovalReviewer(options: ApprovalReviewerOptions): Approv
         }, 30_000);
       });
       const request = async (): Promise<ApprovalReviewOutcome> => {
-        let text = "";
-        let complete = false;
-        for await (const event of options.client.streamMessage({
-          model: options.model,
-          system: SYSTEM_PROMPT,
-          messages: [{ type: "user", content: JSON.stringify(input) }],
-          tools: [],
-          maxTokens: 1024,
-          abortSignal: controller.signal,
-          requestTimeoutMs: 30_000,
-          streamIdleTimeoutMs: 30_000,
-        })) {
-          if (controller.signal.aborted) throw controller.signal.reason;
-          if (event.type === "error") throw event.error;
-          if (event.type === "tool_use_start" || event.type === "tool_use_end" || event.type === "tool_generation_progress") {
-            return approvalReviewFallback("自动审查尝试调用工具，需要你确认。", "invalid_response");
+        // Reasoning shares the provider's output budget. Retry a truncated answer
+        // once from the same evidence; partial model output never authorizes a tool.
+        for (const maxTokens of [4096, 8192]) {
+          controller.signal.throwIfAborted();
+          let text = "";
+          let complete = false;
+          let truncated = false;
+          for await (const event of options.client.streamMessage({
+            model: options.model,
+            system: SYSTEM_PROMPT,
+            messages: [{ type: "user", content: reviewContent }],
+            tools: [],
+            maxTokens,
+            abortSignal: controller.signal,
+            requestTimeoutMs: 30_000,
+            streamIdleTimeoutMs: 30_000,
+          })) {
+            if (controller.signal.aborted) throw controller.signal.reason;
+            if (event.type === "error") throw event.error;
+            if (event.type === "tool_use_start" || event.type === "tool_use_end" || event.type === "tool_generation_progress") {
+              return approvalReviewFallback("自动审查尝试调用工具，需要你确认。", "invalid_response");
+            }
+            if (event.type === "text_delta") {
+              text += event.delta;
+              if (text.length > 16_384) return approvalReviewFallback("自动审查输出过长，需要你确认。", "invalid_response");
+            }
+            if (event.type === "complete") {
+              // Anthropic/OpenAI use end_turn; the Codex adapter also emits stop.
+              if (complete || !["end_turn", "stop", "max_tokens"].includes(event.stopReason)) return approvalReviewFallback("自动审查输出未完整结束，需要你确认。", "invalid_response");
+              complete = true;
+              truncated = event.stopReason === "max_tokens";
+            }
           }
-          if (event.type === "text_delta") {
-            text += event.delta;
-            if (text.length > 16_384) return approvalReviewFallback("自动审查输出过长，需要你确认。", "invalid_response");
-          }
-          if (event.type === "complete") {
-            // Anthropic/OpenAI use end_turn; the Codex adapter also emits stop.
-            if (complete || !["end_turn", "stop"].includes(event.stopReason)) return approvalReviewFallback("自动审查输出未完整结束，需要你确认。", "invalid_response");
-            complete = true;
-          }
+          controller.signal.throwIfAborted();
+          if (!complete) return approvalReviewFallback("自动审查没有完整结果，需要你确认。", "invalid_response");
+          if (truncated) continue;
+          return parseApprovalReviewResult(text) ?? approvalReviewFallback("自动审查结果格式无效，需要你确认。", "invalid_response");
         }
-        if (!complete) return approvalReviewFallback("自动审查没有完整结果，需要你确认。", "invalid_response");
-        return parseApprovalReviewResult(text) ?? approvalReviewFallback("自动审查结果格式无效，需要你确认。", "invalid_response");
+        return approvalReviewFallback("自动审查重试后仍达到输出上限，需要你确认。", "invalid_response");
       };
       try {
         return await Promise.race([request(), deadline, cancellation]);

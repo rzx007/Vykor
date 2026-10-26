@@ -124,7 +124,6 @@ export function McpManager({
   const [busyName, setBusyName] = useState<string | null>(null)
   const [loginOperation, setLoginOperation] = useState<DesktopMcpLoginState | null>(null)
   const seenAdd = useRef(addRequest)
-  const seenRefresh = useRef(refreshRequest)
 
   const servers = snapshot?.servers ?? []
 
@@ -141,10 +140,14 @@ export function McpManager({
   }
 
   useEffect(() => {
-    void load()
-    // Load once on mount; refreshes go through refreshRequest.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    let disposed = false
+    queueMicrotask(() => {
+      if (!disposed) void load()
+    })
+    return () => {
+      disposed = true
+    }
+  }, [refreshRequest])
 
   useEffect(() => {
     if (addRequest <= seenAdd.current) {
@@ -155,13 +158,6 @@ export function McpManager({
     setDetailName(null)
     setEditor((current) => current ?? { initial: newDocument() })
   }, [addRequest])
-
-  useEffect(() => {
-    if (refreshRequest === seenRefresh.current) return
-    seenRefresh.current = refreshRequest
-    void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshRequest])
 
   useEffect(() => {
     if (loginOperation?.state !== "pending") return

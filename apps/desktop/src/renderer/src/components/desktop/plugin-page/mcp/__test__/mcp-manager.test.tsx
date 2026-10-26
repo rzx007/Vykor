@@ -176,6 +176,37 @@ describe("MCP manager against the desktop API", () => {
     return [...container.querySelectorAll("[data-extension-row]")]
   }
 
+  it.each([false, true])(
+    "cancels a queued snapshot read when leaving the page (refresh: %s)",
+    async (refresh) => {
+      const desktop = installDesktop()
+      if (refresh) await render()
+      const started = desktop.mcp.snapshot.mock.calls.length
+      act(() =>
+        root.render(
+          <McpManager query="" addRequest={0} refreshRequest={refresh ? 1 : 0} notify={notify} />
+        )
+      )
+      act(() => root.unmount())
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(started)
+    }
+  )
+
+  it("reads once on mount and once per explicit refresh, without reloading for search", async () => {
+    const desktop = installDesktop()
+    await render()
+    expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(1)
+    await render({ query: "linear" })
+    expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(1)
+    await render({ refreshRequest: 1 })
+    expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(2)
+    await render({ refreshRequest: 1 })
+    expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(2)
+  })
+
   it("shows globally configured servers and never reads the old localStorage demo data", async () => {
     localStorage.setItem(
       'vykor:mcp:local:v1:"D:/project"',
