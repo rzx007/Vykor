@@ -86,6 +86,7 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [核心 Agent 能力补齐方案（待评审）](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：P0 可恢复执行、可恢复审批、安全工具提交，以及 P1 交付能力与验收标准。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
 - [记忆归属与写入规则](./memory-policy.md)：记忆优化目标及验收用例。
 - [真实 LSP 客户端](./lsp-client-design.md)：用语言服务器替换近似搜索的方案。
