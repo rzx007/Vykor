@@ -1,5 +1,6 @@
 import type { AgentRunScope, RunToolBinding, RunToolResultStore } from "@vykor/agent-contracts";
-import { isToolResultReader, ToolResultAccessError, toolResultList } from "@vykor/core";
+import { ToolResultAccessError, toolResultList } from "@vykor/core";
+import { isToolResultReader } from "@vykor/agent-runtime";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
 import { ToolResultReader, type ApplicationOwnerLease, type SessionStore, type StoredToolResultReference } from "@vykor/services";
 

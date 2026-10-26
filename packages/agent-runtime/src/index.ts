@@ -99,3 +99,6 @@ export { createDefaultToolRegistry } from "./node/tools/default-tool-registry.js
 export { LocalAgentJobHost, type LocalAgentJobHostOptions } from "./node/jobs/local-agent-job-host.js";
 
 export type { RunCapabilityView, NodeRunToolBinding, RunSkillBinding, RunAgentBinding, RunMcpServerBinding, RuntimeSandboxStatus } from "./node/runtime/node-runtime-resources.js";
+
+// Hosts must use the same bundle's identity maps as Node capability capture.
+export { markTrustedReadOnlyTool, isTrustedReadOnlyTool, isToolResultReader } from "@vykor/core";

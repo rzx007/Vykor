@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ToolExecutionResult } from "@vykor/agent-contracts/tool-data";
 import type { StoredToolOperationIntent } from "../commands.js";
@@ -13,7 +13,11 @@ function setup(storage: "sqlite" | "memory" = "sqlite") {
   const directory = mkdtempSync(join(tmpdir(), "vykor-operation-"));
   const path = join(directory, "sessions.db");
   const store = new SessionStore({ path });
-  cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  cleanups.push(() => {
+    const target = resolve(directory), child = relative(resolve(tmpdir()), target);
+    if (!child || child.startsWith("..") || isAbsolute(child) || !target.includes("vykor-operation-")) throw new Error("Unsafe temporary cleanup");
+    rmSync(target, { recursive: true, force: true });
+  });
   cleanups.push(() => store.close());
   store.sessions.create({ id: "s", cwd: directory, model: "m", storage });
   store.runs.createRun({ id: "r", sessionId: "s" });
@@ -259,4 +263,34 @@ describe("tool operation repository", () => {
     expect(() => f.store.toolOperations.dispatch({ intent, operation: auth, policyVersion: "p1", ownerId: "owner" })).toThrow(/unsettled|unknown/i);
     expect(f.store.toolOperations.listAttempts(op.operationId)).toEqual([]);
   });
+});
+
+it("keeps applied reconciliation unknown when its result omits executionState and preserves evidence after reopen", () => {
+  const f = setup(), { receipt } = dispatch(f);
+  f.store.toolOperations.settle({ receipt, result: result("unknown") });
+  const before = f.store.toolOperations.get(receipt.operationId)!;
+  const { executionState: _state, ...unspecified } = result();
+  const reviewed = f.store.toolOperations.reconcile({ operationId: before.operationId, expectedRevision: before.revision, outcome: "applied", evidence: "record exists but execution completion cannot be verified", result: unspecified });
+  expect(reviewed.state).toBe("unknown");
+  f.store.close();
+  const reopened = new SessionStore({ path: f.path }); cleanups.push(() => reopened.close());
+  expect(reopened.toolOperations.get(before.operationId)).toMatchObject({ state: "unknown", reconciliations: [{ outcome: "applied", evidence: "record exists but execution completion cannot be verified" }], result: { executionState: "unknown" } });
+  expect(reopened.toolOperations.listAttempts(before.operationId)).toMatchObject([{ status: "unknown", result: { executionState: "unknown" }, reconciliations: [{ outcome: "applied" }] }]);
+});
+
+it("accepts the same attempt's real late completion after manual not_applied and retains review history", () => {
+  const f = setup(), { receipt } = dispatch(f);
+  f.store.toolOperations.settle({ receipt, result: result("unknown") });
+  const before = f.store.toolOperations.get(receipt.operationId)!;
+  f.store.toolOperations.reconcile({ operationId: before.operationId, expectedRevision: before.revision, outcome: "not_applied", evidence: "remote observation was absent before completion" });
+  f.store.runs.updateRun("r", { status: "failed" });
+  expect(() => f.store.toolOperations.settle({ receipt: { ...receipt, revision: receipt.revision + 1 }, result: result(), late: true })).toThrow(/receipt/i);
+  expect(() => f.store.toolOperations.settle({ receipt: { ...receipt, ownerId: "other" }, result: result(), late: true })).toThrow(/receipt/i);
+  expect(() => f.store.toolOperations.settle({ receipt, result: { ...result(), toolUseId: "other" }, late: true })).toThrow(/identity/i);
+  f.store.toolOperations.settle({ receipt, result: result(), late: true });
+  expect(f.store.toolOperations.get(before.operationId)).toMatchObject({ state: "confirmed", activeAttemptId: receipt.toolAttemptId, result: { executionState: "completed" }, reconciliations: [{ outcome: "not_applied" }] });
+  expect(f.store.toolOperations.listAttempts(before.operationId)).toMatchObject([{ id: receipt.toolAttemptId, status: "confirmed", result: { executionState: "completed" }, reconciliations: [{ outcome: "not_applied" }] }]);
+  f.store.close();
+  const reopened = new SessionStore({ path: f.path }); cleanups.push(() => reopened.close());
+  expect(reopened.toolOperations.get(before.operationId)).toMatchObject({ state: "confirmed", result: { executionState: "completed" }, reconciliations: [{ outcome: "not_applied" }] });
 });

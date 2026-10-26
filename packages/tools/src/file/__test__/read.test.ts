@@ -3,7 +3,7 @@ import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 import {createFileReadTool} from "./../read.js";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HostFileOperations } from "../operations.js";
 import {
@@ -22,7 +22,38 @@ import {
 } from "../read.js";
 
 describe("fileReadTool", () => {
-  it("reports a target disappearing after stat as a definite unmet file condition", async () => {
+  it("reports a failed actual byte read as completed instead of an unknown write outcome", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-read-io-failure-"));
+    try {
+      const file = join(dir, "data.txt"); await writeFile(file, "before read");
+      class FailingFiles extends HostFileOperations {
+        override async readBytes(_path: string): Promise<Uint8Array> { throw Object.assign(new Error("I/O read failed"), { code: "EIO" }); }
+      }
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: file }, { cwd: dir, environment: {
+        workspace: { hostRoot: dir }, files: new FailingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
+      } } as never);
+      expect(result).toMatchObject({ isError: true, executionState: "completed" });
+      expect(JSON.stringify(result.content)).toContain("I/O read failed");
+    } finally {
+      const target = resolve(dir), child = relative(resolve(tmpdir()), target);
+      if (!child || child.startsWith("..") || isAbsolute(child) || !target.includes("oh-read-io-failure-")) throw new Error("Unsafe temporary cleanup");
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+  it("keeps cancellation before reading not_started", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-read-cancel-"));
+    try {
+      const controller = new AbortController(); controller.abort();
+      const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "absent.txt") }, { cwd: dir, abortSignal: controller.signal });
+      expect(result).toMatchObject({ isError: true, failureKind: "interrupted", executionState: "not_started" });
+    } finally {
+      const target = resolve(dir), child = relative(resolve(tmpdir()), target);
+      if (!child || child.startsWith("..") || isAbsolute(child) || !target.includes("oh-read-cancel-")) throw new Error("Unsafe temporary cleanup");
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a target disappearing after stat as a completed failed read", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-disappeared-"));
     try {
       const file = join(dir, "data.txt");
@@ -34,14 +65,14 @@ describe("fileReadTool", () => {
         workspace: { hostRoot: dir },
         files: new DisappearingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) },
       } } as never);
-      expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
+      expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "completed" });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
   it("reports a definitely missing target even when its missing parent has no suggestions", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-missing-parent-"));
     try {
       const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "absent-parent", "data.txt") }, { cwd: dir });
-      expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
+      expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "completed" });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
   it.each(["binary", "file-offset", "directory-offset"])("separates current target conditions from malformed arguments: %s", async mode => {
@@ -511,7 +542,7 @@ describe("fileReadTool", () => {
         });
 
       expect(result.isError).toBe(true);
-      expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
+      expect(result).toMatchObject({ failureKind: "precondition", executionState: "completed" });
       const text = (result.content[0] as { text: string }).text;
       expect(text).toContain("Error reading file:");
       expect(text).not.toContain("Did you mean");
@@ -532,7 +563,7 @@ describe("fileReadTool", () => {
           return { executionPath: path, mountMode: "rw" };
         } } },
       } as never);
-      expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
+      expect(result).toMatchObject({ failureKind: "precondition", executionState: "completed" });
       expect(JSON.stringify(result.content)).not.toContain("optional parent inspection failed");
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
@@ -543,7 +574,7 @@ describe("fileReadTool", () => {
       const result = await executeToolFixture(host => createFileReadTool(host), { file_path: join(dir, "zzz.ts") }, { cwd: dir });
 
       expect(result.isError).toBe(true);
-      expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
+      expect(result).toMatchObject({ failureKind: "precondition", executionState: "completed" });
       expect((result.content[0] as { text: string }).text).toBe(`File not found: ${join(dir, "zzz.ts")}`);
     } finally {
       await rm(dir, { recursive: true, force: true });

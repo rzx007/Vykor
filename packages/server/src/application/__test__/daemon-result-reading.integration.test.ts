@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, relative, isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import type { AgentEvent, StreamingMessageClient, ToolResultRef } from "@vykor/agent-contracts";
@@ -72,17 +72,17 @@ describe("daemon result reading wiring", () => {
     } finally { await application?.close().catch(() => {}); store.close(); rmSync(directory, { recursive: true, force: true }); }
   });
 
-  it("keeps a same-name replacement and its read-only hints outside the builtin read promise", async () => {
+  it.each(["ToolResult", "Read", "Glob", "Grep"])("keeps a same-name %s replacement and hints outside the builtin read promise", async name => {
     const directory = mkdtempSync(join(tmpdir(), "daemon-result-impostor-")), store = new SessionStore({ path: join(directory, "state.db") });
     let phase = 0;
     const application = new DaemonApplication({ store,
       settings: { model: "test-model", apiFormat: "openai", maxTurns: 3, permission: { mode: "full_access" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } },
       createAgent: async context => {
         const agent = await createDefaultNodeAgent({ ...context.options,
-          toolOverrides: [...(context.options.toolOverrides ?? []), { name: "ToolResult", description: "same-name external implementation", inputSchema: { type: "object" },
+          toolOverrides: [...(context.options.toolOverrides ?? []), { name, description: "same-name external implementation", inputSchema: { type: "object" },
             safeToRetry: true, annotations: { readOnlyHint: true }, execute: async () => ({ content: [{ type: "text", text: "replacement body" }], executionState: "completed" }) }],
           client: { async *streamMessage() {
-            if (phase++ === 0) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "impostor", name: "ToolResult", input: {} } };
+            if (phase++ === 0) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "impostor", name, input: {} } };
             yield { type: "complete", stopReason: phase === 1 ? "tool_use" : "end_turn" };
           } } });
         return { agent, host: agent.host };
@@ -92,9 +92,59 @@ describe("daemon result reading wiring", () => {
       const session = application.commands.createSession({ cwd: directory, model: "test-model" });
       const admission = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "use replacement" }] });
       expect((await application.runControl.awaitRun(session.id, admission.run!.id)).status).toBe("completed");
-      expect(store.toolOperations.list({ sessionId: session.id })).toMatchObject([{ toolName: "ToolResult", kind: "non_replayable", state: "confirmed" }]);
+      expect(store.toolOperations.list({ sessionId: session.id })).toMatchObject([{ toolName: name, kind: "non_replayable", state: "confirmed" }]);
       const part = store.conversations.listMessageParts(session.id).find(part => part.toolUseId === "impostor")!;
-      expect(part.metadata.resultRef).toMatchObject({ toolName: "ToolResult" });
+      expect(part.metadata.resultRef).toMatchObject({ toolName: name });
     } finally { await application.close().catch(() => {}); store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+
+describe("daemon trusted file reads", () => {
+  it.each([false, true])("keeps actual Read available after missing reads or unknown writes (unknown=%s)", async unknown => {
+    const directory = mkdtempSync(join(tmpdir(), "daemon-safe-read-"));
+    const store = new SessionStore({ path: join(directory, "state.db") });
+    writeFileSync(join(directory, "known.txt"), "known fact");
+    let phase = 0, reads = "", writeCount = 0;
+    const calls = unknown
+      ? [{ id: "unknown", name: "Uncertain", input: {} }, { id: "read", name: "Read", input: { file_path: "known.txt" } }, { id: "write", name: "Mutate", input: {} }]
+      : [{ id: "missing", name: "Read", input: { file_path: "missing.txt" } }, { id: "read", name: "Read", input: { file_path: "known.txt" } }, { id: "write", name: "Mutate", input: {} }];
+    const application = new DaemonApplication({ store,
+      settings: { model: "test-model", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } },
+      createAgent: async context => {
+        const agent = await createDefaultNodeAgent({ ...context.options,
+          tools: [...(context.options.tools ?? []),
+            { name: "Uncertain", description: "unknown result", inputSchema: { type: "object" }, execute: async () => ({ content: [{ type: "text", text: "unknown" }], executionState: "unknown" }) },
+            { name: "Mutate", description: "observable write", inputSchema: { type: "object" }, execute: async () => { writeCount++; writeFileSync(join(directory, "effect.txt"), "done"); return { content: [{ type: "text", text: "done" }] }; } }],
+          client: { async *streamMessage(params) {
+            reads = JSON.stringify(params.messages);
+            const call = calls[phase++];
+            if (call) yield { type: "tool_use_start", toolUse: { type: "tool_use", ...call } };
+            yield { type: "complete", stopReason: call ? "tool_use" : "end_turn" };
+          } } });
+        return { agent, host: agent.host };
+      }, log: () => {} });
+    try {
+      await application.ready();
+      const session = application.commands.createSession({ cwd: directory, model: "test-model" });
+      const admitted = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "check then continue" }] });
+      await application.runControl.awaitRun(session.id, admitted.run!.id);
+      if (unknown) {
+        // An unknown execution deliberately ends its Run. The next input may inspect safely.
+        const next = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "inspect the uncertain result before continuing" }] });
+        await application.runControl.awaitRun(session.id, next.run!.id);
+      }
+      const operations = store.toolOperations.list({ sessionId: session.id });
+      expect(operations.filter(row => row.toolName === "Read")).toHaveLength(unknown ? 1 : 2);
+      expect(operations.filter(row => row.toolName === "Read").every(row => row.kind === "read_only" && row.state === "confirmed")).toBe(true);
+      expect(reads).toContain("known fact");
+      expect(writeCount).toBe(unknown ? 0 : 1);
+      if (!unknown) expect(readFileSync(join(directory, "effect.txt"), "utf8")).toBe("done");
+    } finally {
+      await application.close().catch(() => {}); store.close();
+      const cleanup = resolve(directory), within = relative(resolve(tmpdir()), cleanup);
+      if (!within || within.startsWith("..") || isAbsolute(within) || !cleanup.includes("daemon-safe-read-")) throw new Error("Unsafe temporary cleanup");
+      rmSync(cleanup, { recursive: true, force: true });
+    }
   });
 });

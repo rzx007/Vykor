@@ -1,9 +1,10 @@
 import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
+import { ToolOperationReviewService } from "./session/execution/tool-operation-review-service.js";
 import { ToolOperationService } from "./session/execution/tool-operation-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
-import { isToolResultReader } from "@vykor/core";
+import { isTrustedReadOnlyTool, markTrustedReadOnlyTool } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
@@ -191,6 +192,8 @@ export interface DurableAgentApplication {
   readonly commands: SessionCommandService;
   readonly runControl: RunControlService;
   readonly permissions: StorePermissionBroker;
+  /** Optional for custom embedders; the production Daemon always provides manual review. */
+  readonly toolOperationReview?: Pick<ToolOperationReviewService, "list" | "get" | "reconcile">;
   readonly backgroundShells: BackgroundShellService;
   readonly maintenance: SessionMaintenanceService;
   readonly control: DaemonControlService;
@@ -237,6 +240,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
+  readonly toolOperationReview: Pick<ToolOperationReviewService, "list" | "get" | "reconcile">;
   readonly backgroundShells: BackgroundShellService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
@@ -492,7 +496,9 @@ export class DaemonApplication implements DurableAgentApplication {
       const toolSafety = new ToolOperationService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting,
         describe: ({ binding }) => binding?.source?.kind === "builtin"
-          && isToolResultReader(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+          && isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+      this.toolOperationReview = new ToolOperationReviewService({ store, ownerLease: () => this.ownerLease,
+        accepting: () => this.readyState === "ready" && this.operationGate.accepting, reconcile: input => toolSafety.reconcile(input) });
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const loadAgent = createDaemonAgentLoader({
@@ -583,14 +589,18 @@ export class DaemonApplication implements DurableAgentApplication {
             createBrowserDeveloperTool(options.browserHost),
           ]
         },
-        toolDecorators: [{name:"Read",decorate:base=>createAttachmentReadTool({
+        toolDecorators: [{ name: "Read", decorate: base => {
+          const decorated = createAttachmentReadTool({
             defaultTool: base,
             authorizationSessions: attachmentAuthorizationSessions,
             attachmentReader,
             supportsImageInput: async (context) =>
               supportsNativeImageInput(context, await this.modelCatalog.load()),
             localOcr: this.localOcr,
-          })}],
+          });
+          // Only this host-owned read wrapper may inherit the verified builtin promise.
+          return isTrustedReadOnlyTool(base) ? markTrustedReadOnlyTool(decorated) : decorated;
+        } }],
         requestPermission: async (request, context) => {
           const owner = store.sessions.get(context.sessionId);
           const settings = owner && options.getSettingsForCwd

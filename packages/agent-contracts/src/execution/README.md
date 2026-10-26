@@ -11,6 +11,8 @@
 
 经 [../index.ts](../index.ts) 从 `@vykor/agent-contracts` 导出。宿主实现这些接口后，运行方可申请准备资源、调用模型与工具、发布事件，再通过 `AgentRunHandle.result` 返回结果。这里仅约定交互形式；它不实现这些运行步骤。
 
+`AgentPostRunChildParent.childOutputContract` 是宿主为本次系统子 Agent 明确选择的合同，不属于可序列化的 `AgentChildSpawnInput`，也不从父 Agent 继承。`AgentChildResult.delivery` 返回实际的格式检查和宿主核验回执；核验通过与报告自身的业务结论分别表达。
+
 运行句柄、子 Agent 目录、预算计数、事件顺序和模型尝试记录都由消费方管理。错误类只保存失败原因或限制值。新增运行相关定义放本目录，测试建议放同层 `__test__/`；跨分类测试放 [../__test__](../__test__/)。
 
 `PreparedAgentRun.bindToolResults(finalTools)` 在执行核心完成本轮工具范围收窄后创建结果读取能力，参数保留实际工具定义、来源和调用函数。该工厂只供宿主准备过程使用，不进入工具执行上下文。只提供静态 `toolResults` 时，最终工具集合与绑定必须完整等价；收窄或替换来源、定义、调用函数后，执行核心关闭该静态读取能力，工具会收到明确的不可用结果。

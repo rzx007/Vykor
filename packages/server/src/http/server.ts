@@ -62,6 +62,7 @@ import { createMemoryRoutes } from "./routes/memory.js";
 import { createFactsRoutes } from "./routes/facts.js";
 import { createPermissionRoutes } from "./routes/permission.js";
 import { createProjectRoutes } from "./routes/project.js";
+import { createToolOperationReviewRoutes } from "./routes/tool-operation-review.js";
 import { createRunExecutionRoutes } from "./routes/run-execution.js";
 import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
@@ -469,6 +470,9 @@ export class VykorHttpServer {
         traces: this.requestTraces,
       }),
     );
+    if (this.application.toolOperationReview) {
+      this.app.route("/sessions", createToolOperationReviewRoutes(this.application.toolOperationReview));
+    }
     this.app.route("/sessions", createSessionGoalRoutes(this.application.goals));
     this.app.route("/sessions", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));
     if (this.application.pluginApps && this.application.pluginAppConversation) {

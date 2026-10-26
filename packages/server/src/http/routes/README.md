@@ -47,3 +47,7 @@
 新接口放入对应资源文件，复杂业务放到 application，响应形状转换放到 mappers。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+[tool-operation-review.ts](tool-operation-review.ts) 独立挂到 `/sessions/:sessionId/tool-operations`：GET 列出同根会话树 unknown 及原 Run 已结束的 dispatching 身份和版本；GET `/:operationId` 返回有界预览；POST `/:operationId/reconcile` 提交人工核对。沿用 daemon 的协议版本和 Bearer 认证。会话归属和状态检查由 `ToolOperationReviewService` 执行；参数错误返回 400，版本、运行或实际调用仍活跃等状态拒绝返回 409。dispatching 不能直接核对，响应带 `recoveryHint` 指引既有重启恢复。详情可能包含原工具数据，仅供宿主查看，不自动注入模型。
+
+生产 Daemon 始终提供人工核对资源；旧的自定义宿主可以省略 `toolOperationReview`，此时不挂载上述路由，返回 404，其他会话接口继续工作。

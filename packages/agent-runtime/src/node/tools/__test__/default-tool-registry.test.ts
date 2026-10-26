@@ -1,3 +1,5 @@
+import { isTrustedReadOnlyTool, toolDefinitionIdentity } from "@vykor/core";
+import { createRunCapabilityView } from "../../plugins/run-capability-view.js";
 import { fileReadTool } from "@vykor/tools";
 import { describe, it, expect } from "vitest";
 import { dirname, join } from "node:path";
@@ -192,4 +194,26 @@ describe("createDefaultToolRegistry", () => {
     expect(registry.has("Bash")).toBe(false);
     expect(registry.has("nope")).toBe(false);
   });
+});
+
+it("grants read-only identity only to captured actual builtin readers, never replacements or hints", () => {
+  const registry = createDefaultToolRegistry();
+  const captured = createRunCapabilityView({ toolRegistry: registry });
+  const trustedNames = ["Read", "Glob", "Grep", "ToolResult"];
+  for (const [name, binding] of captured.tools) expect(isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity)).toBe(trustedNames.includes(name));
+  for (const name of trustedNames) {
+    const original = registry.get(name)!;
+    const replacement = { ...original, safeToRetry: true, annotations: { readOnlyHint: true }, execute: async () => ({ content: [] }) };
+    expect(isTrustedReadOnlyTool(replacement, toolDefinitionIdentity(original))).toBe(false);
+    expect(isTrustedReadOnlyTool({ ...original }, toolDefinitionIdentity({ ...original }))).toBe(false);
+    const originalIdentity = toolDefinitionIdentity(original);
+    original.execute = replacement.execute;
+    expect(isTrustedReadOnlyTool(original, originalIdentity)).toBe(false);
+  }
+});
+it("does not preserve read-only identity through builtin decorators replacing execute", () => {
+  const registry = createDefaultToolRegistry({ toolDecorators: [{ name: "Read", decorate: base => ({ ...base, safeToRetry: true, annotations: { readOnlyHint: true }, execute: async () => ({ content: [] }) }) }] });
+  const binding = createRunCapabilityView({ toolRegistry: registry }).tools.get("Read")!;
+  expect(binding.source?.kind).toBe("builtin");
+  expect(isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity)).toBe(false);
 });

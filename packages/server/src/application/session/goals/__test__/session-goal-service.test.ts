@@ -92,6 +92,28 @@ function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-r
 }
 
 describe("SessionGoalService simple lifecycle", () => {
+  it.each(["partial", "blocked", "waiting"] as const)("pauses a completed GoalUpdate that contradicts %s delivery", async status => {
+    const h = harness(); await h.create();
+    const runId = h.run().id;
+    h.store.runs.updateRun(runId, { metadata: { delivery: {
+      status, summary: "work remains", data: {}, validation: "schema_valid", verification: "passed",
+    } } });
+    await h.finish({ status: "completed", reason: "all done" });
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "run_error", runId } });
+    expect(h.current().reason).toContain(status);
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(1);
+  });
+
+  it.each(["done", "waiting"] as const)("keeps %s delivery independent from Goal state without an explicit update", async status => {
+    const h = harness(); await h.create();
+    h.store.runs.updateRun(h.run().id, { metadata: { delivery: {
+      status, summary: "report", data: {}, validation: "schema_valid", verification: "passed",
+    } } });
+    await h.finish();
+    expect(h.current().status).toBe("active");
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(2);
+  });
+
   it.each([false, true])("blocks resume after a settlement write fails (terminal recovery also failed: %s)", async recoveryFailed => {
     const h = harness();
     await h.create({ tokenBudget: 100 });

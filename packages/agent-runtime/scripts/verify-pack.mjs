@@ -11,6 +11,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const cwd = process.cwd();
+// Exercise actual dist imports before installation; source aliases hide duplicated identity maps.
+execFileSync(process.execPath, ["--test", resolve(cwd, "scripts/__test__/tool-identity-bundle.test.mjs")], {
+  cwd,
+  stdio: "inherit",
+});
 const temp = mkdtempSync(join(tmpdir(), "vykor-agent-runtime-pack-"));
 const packagesRoot = resolve(cwd, "..");
 const pnpmCli = process.env.VYKOR_PNPM_CLI ?? process.env.npm_execpath;

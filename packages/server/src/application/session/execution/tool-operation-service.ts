@@ -24,6 +24,8 @@ export class ToolOperationService implements AgentToolSafety {
   private readonly symbolIds = new Map<symbol, string>();
   /** Receipt failures must stop sibling dispatch before async Run failure projection. */
   private readonly unsettledFailures = new Set<string>();
+  /** Actual calls can outlive their Run; only their own promise releases manual review. */
+  private readonly pendingInvocations = new Map<string, Promise<void>>();
   private readonly runs = new Map<string, { policyVersion: string; tools: ReadonlyMap<string, RunToolBinding>; environment?: unknown }>();
   private readonly atomic: SessionStore["transaction"];
   private readonly assertLease: SessionStore["assertApplicationOwner"];
@@ -51,6 +53,19 @@ export class ToolOperationService implements AgentToolSafety {
         this.assertUnblocked(input.intent, input.operation.kind);
         return store.toolOperations.dispatch({ ...input, ownerId: this.options.ownerLease().ownerId });
       }),
+      observeInvocation: ({ receipt, settled }) => {
+        this.atomic(() => {
+          this.assertOwner();
+          const operation = store.toolOperations.get(receipt.operationId);
+          if (receipt.ownerId !== this.options.ownerLease().ownerId || operation?.activeAttemptId !== receipt.toolAttemptId || operation.state !== "dispatching")
+            throw new Error("Tool invocation receipt is no longer current");
+        });
+        this.pendingInvocations.set(receipt.operationId, settled);
+        const finished = () => {
+          if (this.pendingInvocations.get(receipt.operationId) === settled) this.pendingInvocations.delete(receipt.operationId);
+        };
+        void settled.then(finished, finished);
+      },
       settle: async input => {
         try {
           this.atomic(() => {
@@ -100,7 +115,12 @@ export class ToolOperationService implements AgentToolSafety {
   }
   /** Only authorized host-side read-only evidence may call this method. */
   reconcile(input: Parameters<SessionStore["toolOperations"]["reconcile"]>[0]) {
-    const operation = this.atomic(() => { this.assertOwner(); return this.options.store.toolOperations.reconcile(input); });
+    const operation = this.atomic(() => {
+      this.assertOwner();
+      if (input.outcome !== "unknown" && this.pendingInvocations.has(input.operationId))
+        throw new Error("Tool invocation is still executing; only unknown evidence may be recorded until it settles");
+      return this.options.store.toolOperations.reconcile(input);
+    });
     this.clearResolvedFailure(operation.operationId);
     return operation;
   }
@@ -128,7 +148,7 @@ export class ToolOperationService implements AgentToolSafety {
   private assertUnblocked(intent: ToolOperationIntent, kind: ToolOperationKind): void {
     if (kind === "read_only") return;
     const rootSessionId = this.rootSessionId(intent.scope.sessionId);
-    const blocked = this.options.store.toolOperations.list().some(row => {
+    const blocked = this.options.store.toolOperations.list().find(row => {
       const settlementFailed = this.unsettledFailures.has(row.id);
       if (row.kind === "read_only" && !settlementFailed) return false;
       const run = row.state === "dispatching" ? this.options.store.runs.getRun(row.runId) : undefined;
@@ -136,7 +156,7 @@ export class ToolOperationService implements AgentToolSafety {
         && (!run || (run.status !== "pending" && run.status !== "running")));
       return unresolved && this.rootSessionId(row.sessionId) === rootSessionId;
     });
-    if (blocked) throw new Error("Unknown or unresolved write operation blocks dangerous dispatch in this session tree");
+    if (blocked) throw new Error(`Unknown or unresolved write operation ${blocked.id} blocks dangerous dispatch in this session tree; review with GET /sessions/${encodeURIComponent(rootSessionId)}/tool-operations`);
   }
   private rootSessionId(sessionId: string): string {
     const visited = new Set<string>();
@@ -151,7 +171,8 @@ export class ToolOperationService implements AgentToolSafety {
     }
   }
   private sameBinding(captured: RunToolBinding, actual: RunToolBinding | undefined): boolean {
-    return !!actual && captured.definitionIdentity === actual.definitionIdentity && captured.invoke === actual.invoke && captured.definition.execute === actual.definition.execute;
+    return !!actual && captured.definitionIdentity === actual.definitionIdentity && captured.invoke === actual.invoke && captured.definition.execute === actual.definition.execute
+      && captured.source?.kind === actual.source?.kind && captured.source?.id === actual.source?.id;
   }
   private identity(intent: ToolOperationIntent, environment: unknown): string {
     const binding = intent.binding;

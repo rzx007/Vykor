@@ -2,7 +2,7 @@ import type { StoredToolOperationIntent } from "./commands.js";
 import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { ToolDispatchReceipt, ToolExecutionResult, ToolOperationKind, ToolOperationTicket } from "@vykor/agent-contracts/tool-data";
-import type { ToolDispatchAttemptRecord, ToolOperationRecord } from "@vykor/domain-contracts/executions";
+import type { ToolDispatchAttemptRecord, ToolOperationRecord, ToolOperationSummary, ToolOperationReviewPreview, ReconcileToolOperationRequest } from "@vykor/domain-contracts/executions";
 import type { StorageContext } from "../database/storage-context.js";
 import { ExecutionRepository, type ExecutionFilter } from "../execution-records/execution-repository.js";
 import { assertMutableSession, assertSession, clone } from "../session-runtime/persistence/store-state.js";
@@ -13,13 +13,13 @@ export type PrepareToolOperationInput = StoredToolOperationIntent & {
   businessKey?: string;
   toolIdentity: string;
 };
-export interface ReconcileToolOperationInput {
+function summary(row: ToolOperationRecord): ToolOperationSummary {
+  const { operationId, sessionId, runId, executionId, toolCallId, toolName, kind, state, revision, createdAt, updatedAt } = row;
+  return { operationId, sessionId, runId, executionId, toolCallId, toolName, kind, state, revision, createdAt, updatedAt };
+}
+
+export interface ReconcileToolOperationInput extends ReconcileToolOperationRequest {
   operationId: string;
-  expectedRevision: number;
-  outcome: "applied" | "not_applied" | "unknown";
-  /** 来自授权宿主的只读查询；模型文本和工具报错不能充当证据。 */
-  evidence: string;
-  result?: ToolExecutionResult;
 }
 
 /** 有序 JSON 同时用于摘要和重复回执比较，不包含宿主函数、signal 或绑定定义。 */
@@ -172,7 +172,8 @@ export class ToolOperationRepository {
       if (attempt.result && canonical(attempt.result) === canonical(input.result)) return;
       const state = input.result.executionState === "unknown" ? "unknown" : input.result.executionState === "not_started" ? "not_applied" : "confirmed";
       if (attempt.result && !(attempt.status === "unknown" && state === "confirmed" && input.late)) throw new Error("Tool result conflicts with saved receipt");
-      if (row.state !== "dispatching" && !(row.state === "unknown" && state === "confirmed" && input.late)) throw new Error(`Cannot settle ${row.state} operation`);
+      // Manual absence observations cannot override the same attempt's later actual completion.
+      if (row.state !== "dispatching" && !((row.state === "unknown" || row.state === "not_applied") && state === "confirmed" && input.late)) throw new Error(`Cannot settle ${row.state} operation`);
       this.mutable(row); this.mutableAttempt(attempt);
       row.state = state;
       row.result = clone(input.result);
@@ -198,6 +199,22 @@ export class ToolOperationRepository {
   get(operationId: string): ToolOperationRecord | undefined { const row = this.storage.state.toolOperations[operationId]; return row && clone(row); }
   list(filter: ExecutionFilter = {}): ToolOperationRecord[] {
     return clone(Object.values(this.storage.state.toolOperations).filter(row => (!filter.sessionId || row.sessionId === filter.sessionId) && (!filter.runId || row.runId === filter.runId)));
+  }
+  getSummary(operationId: string): ToolOperationSummary | undefined {
+    const row = this.storage.state.toolOperations[operationId];
+    return row && summary(row);
+  }
+  /** Projects finite identity fields before cloning; never copies full output into a listing. */
+  listReviewCandidates(): ToolOperationSummary[] {
+    return Object.values(this.storage.state.toolOperations).filter(row => row.state === "unknown" || row.state === "dispatching").map(summary);
+  }
+  getReviewPreview(operationId: string): ToolOperationReviewPreview {
+    const row = this.require(operationId);
+    return { ...summary(row), ...(row.activeAttemptId ? { activeAttemptId: row.activeAttemptId } : {}),
+      inputPreview: JSON.stringify(row.normalizedInput).slice(0, 4000),
+      ...(row.result ? { resultPreview: JSON.stringify(row.result).slice(0, 4000) } : {}),
+      reconciliations: (row.reconciliations ?? []).slice(-20).map(item => ({ ...item, evidence: item.evidence.slice(0, 4000) })),
+    };
   }
   listAttempts(operationId: string): ToolDispatchAttemptRecord[] {
     return clone(Object.values(this.storage.state.toolDispatchAttempts).filter(row => row.operationId === operationId).sort((a, b) => a.startedAt - b.startedAt));
@@ -236,7 +253,7 @@ export class ToolOperationRepository {
         attempt.reconciliations = [...(attempt.reconciliations ?? []), clone(row.reconciliation)];
       }
       if (input.outcome === "not_applied") { row.state = "not_applied"; delete row.result; }
-      if (input.outcome === "applied" && input.result && input.result.executionState !== "unknown" && input.result.executionState !== "not_started") {
+      if (input.outcome === "applied" && input.result && input.result.executionState === "completed") {
         row.state = "confirmed"; row.result = clone(input.result);
       }
       return ticket(row);

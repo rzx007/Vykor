@@ -12,4 +12,10 @@
 
 启动时宿主确认旧 owner 失活，在取得写入权的同一事务内重新读取持久状态，再调用 `recoverDispatching` 将所有遗留未结算尝试标记 unknown；固定 ownerId 也不能跳过旧派发。不重新调用工具。合法迟到结果可将同一个 unknown Attempt 确认为 completed，即使 Run 已结束，但不能重新交付模型或取得新派发权。
 
+人工核对曾标记 `not_applied`，但同一 active Attempt 后来送达真实完成回执时，以该回执收敛为 confirmed，并保留操作及原 Attempt 的核对历史。回执仍须匹配尝试编号、修订号、owner 和结果身份；已经产生新 Attempt 时，旧回执不能覆盖它。
+
 状态归属为共享 SessionState、MutationBuffer 及同一个 SQLite 连接，memory 会话按 sessionId 路由到内存。写入使用原有 owner 校验、事务和回滚日志；会话删除一起删除三个新集合，普通保留清理不删除这些审计记录。新增操作状态与核对逻辑放本目录，真实临时 SQLite 测试放 [__test__/tool-operation-repository.test.ts](__test__/tool-operation-repository.test.ts)。
+
+人工检查使用 `listReviewCandidates()` 先投影 unknown 和 dispatching 的有限身份、状态和版本字段，不复制输入、原始结果或内部实现身份；Server 再排除原 Run 仍活跃的 dispatching。`getSummary()` 用于宿主先核验归属，之后 `getReviewPreview()` 才生成各最多 4000 字符的输入和原始结果预览，以及最近 20 条有界证据。详情可能含原始工具数据，只供已认证宿主人工查看，不自动写入模型上下文。原始正文与 Attempt 仍只保存在原操作记录中。
+
+`reconcile` 的 `applied` 只有收到明确标记 `executionState: completed` 且身份匹配的真实结果才转为 confirmed；省略执行状态、结果缺失或仍未知都继续保持 unknown。证据追加到操作和原 Attempt，原未知回执不被核对结果覆盖。

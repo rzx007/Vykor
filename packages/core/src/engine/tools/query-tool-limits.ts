@@ -92,6 +92,7 @@ export async function executeToolWithTimeout(
   timeoutMs: number,
   externalSignal?: AbortSignal,
   onLateOutcome?: (outcome: { returned: Awaited<ReturnType<ToolDefinition["execute"]>> } | { error: unknown }) => Promise<void>,
+  observeInvocation?: (settled: Promise<void>) => void,
 ): Promise<Awaited<ReturnType<ToolDefinition["execute"]>>> {
   const controller = new AbortController();
   const timeoutError = new ToolTimeoutError(timeoutMs);
@@ -136,10 +137,14 @@ export async function executeToolWithTimeout(
     error => { if (abandoned) return onLateOutcome?.({ error }); },
   ).catch(error => { process.emitWarning(`Late tool outcome callback failed: ${String(error)}`); });
   try {
-    return await Promise.race([
-      invocation,
-      timeoutPromise,
-    ]);
+    const raced = Promise.race([invocation, timeoutPromise]);
+    try {
+      // Register before the invocation microtask runs; a timeout does not settle this promise.
+      observeInvocation?.(invocation.then(() => undefined, () => undefined));
+    } catch (error) {
+      controller.abort(error);
+    }
+    return await raced;
   } catch (error) {
     abandoned = controller.signal.aborted;
     throw error;

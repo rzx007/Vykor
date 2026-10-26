@@ -21,6 +21,9 @@ Produce your summary in two sections:
 - Concise narrative of the conversation progress
 - Key state: files modified, tools used, results obtained
 - Any pending items or follow-up actions needed
+- The current goal and the latest user constraints, keeping later corrections authoritative
+- Distinguish confirmed observations, plans, actions not started, and actions with unknown outcomes
+- Preserve artifact paths and full-result references needed for the next step; an unknown outcome must be checked before repeating an action
 </summary>
 
 Keep the summary concise and focused on information needed for continuing the task.`;

@@ -410,3 +410,5 @@ export interface InterruptSessionResponse {
 }
 
 export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
+
+export type { ToolOperationSummary, ToolOperationReviewPreview, ReconcileToolOperationRequest } from "@vykor/protocol";

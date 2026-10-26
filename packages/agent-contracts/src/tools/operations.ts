@@ -17,6 +17,8 @@ export interface ToolOperationGate {
   prepare(intent: ToolOperationIntent): Promise<ToolOperationTicket>;
   authorize(input: { intent: ToolOperationIntent; operation: ToolOperationTicket; policyVersion: string }): Promise<ToolOperationTicket>;
   dispatch(input: { intent: ToolOperationIntent; operation: ToolOperationTicket; policyVersion: string }): Promise<ToolDispatchReceipt>;
+  /** Synchronous host registration before invocation; settled follows the actual call, including after timeout/abort. Never persisted. */
+  observeInvocation?(input: { receipt: ToolDispatchReceipt; settled: Promise<void> }): void;
   settle(input: { receipt: ToolDispatchReceipt; result: ToolExecutionResult; late?: boolean }): Promise<void>;
   reject(input: { intent: ToolOperationIntent; operation: ToolOperationTicket; result: ToolExecutionResult }): Promise<void>;
 }

@@ -79,3 +79,5 @@ export {
   toolResultId,
   isToolResultMessage,
 } from "./utils/message-history";
+
+export { markTrustedReadOnlyTool, isTrustedReadOnlyTool } from "./engine/tools/trusted-read-only-identity.js";

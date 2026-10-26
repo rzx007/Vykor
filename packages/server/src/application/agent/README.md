@@ -12,6 +12,8 @@ AgentPool 与子 Agent 目录保存活跃实例；消息、运行和结算进度
 
 `agent-transcript.ts` 在替换和重建历史时保存可信结果引用：只有带 `toolResultReferenceVersion: 1` 的元数据才会恢复为 `resultRef`，并校验引用形状和工具名。旧版自由工具元数据不能提升为可补读引用，原始结果正文仍由宿主操作记录保管。
 
+`daemon-agent-event-projector.ts` 只把 Kernel `run.completed` 事件携带的真实交付回执保存到 Run 的 `metadata.delivery`。若终态事件没有回执，会清空调用方元数据中同名的交付声明，避免普通文本或自填元数据影响 Goal 结算。交付进展与 Run 是否正常结束分别保存。
+
 ## 主要文件
 
 | 文件 | 主要接口或用途 |

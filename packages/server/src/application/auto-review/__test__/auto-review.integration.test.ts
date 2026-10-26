@@ -5,10 +5,13 @@ import { dirname, join } from "node:path";
 
 import type {
   AgentChildResult,
+  AgentEvent,
+  StreamingMessageClient,
 } from "@vykor/agent-contracts";
 import type {
   VykorAgent,
 } from "@vykor/agent-runtime/kernel";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -27,8 +30,11 @@ import { SessionWorkspaceChanges } from "../../session/execution/session-workspa
 
 const MARKER = "AUTO_REVIEW_SECRET_MARKER";
 
-function okOutput() {
-  return JSON.stringify({ version: 1, verdict: "pass", summary: "ok", findings: [] });
+function verifiedReview(data: Record<string, unknown> = { version: 1, verdict: "pass", summary: "ok", findings: [] }): AgentChildResult {
+  return { status: "completed", output: "Report submitted", delivery: {
+    status: data.verdict === "partial" ? "partial" : "done", summary: String(data.summary), data,
+    validation: "schema_valid", verification: "passed",
+  } };
 }
 
 describe("risk-based auto review integration", () => {
@@ -145,7 +151,7 @@ describe("risk-based auto review integration", () => {
     const baseline = await observation.capture(runId, repo, repo);
     await svc.captureBaseline({ sessionId, runId, cwd: repo, mode: "off", observation: baseline });
     const changes = await observation.settle(runId);
-    const harness = fakeAgent({ status: "completed", output: okOutput() });
+    const harness = fakeAgent(verifiedReview());
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-off", runId, traceId: "trace-1", cwd: repo,
       agent: harness.agent, signal: new AbortController().signal,
@@ -160,7 +166,7 @@ describe("risk-based auto review integration", () => {
   it("skips a documentation-only change", async () => {
     const { review, harness } = await reviewRunCountless({
       mutate: () => write("docs/a.md", "# base\nmore docs\n"),
-      result: { status: "completed", output: okOutput() },
+      result: verifiedReview(),
     });
     expect(review).toMatchObject({ status: "skipped", riskLevel: "low" });
     expect(harness.calls).toHaveLength(0);
@@ -169,7 +175,7 @@ describe("risk-based auto review integration", () => {
   it("runs a read-only review for a medium source change and records pass", async () => {
     const { runId, review, harness } = await reviewRunCountless({
       mutate: () => write("packages/server/src/a.ts", `export const a = 2; // ${MARKER}\n`),
-      result: { status: "completed", output: okOutput() },
+      result: verifiedReview(),
     });
     expect(review).toMatchObject({ status: "passed", riskLevel: "medium", verdict: "pass" });
     expect(harness.calls).toHaveLength(1);
@@ -197,6 +203,44 @@ describe("risk-based auto review integration", () => {
     expect(meta(runId)?.status).toBe("passed");
   });
 
+  it.each([
+    { verdict: "pass", status: "passed", deliveryStatus: "done" },
+    { verdict: "fail", status: "findings", deliveryStatus: "done" },
+    { verdict: "partial", status: "partial", deliveryStatus: "partial" },
+  ] as const)("consumes a real Node system child's $verdict SubmitResult report", async ({ verdict, status, deliveryStatus }) => {
+    const runId = createRun();
+    const svc = service();
+    await svc.captureBaseline({ sessionId, runId, cwd: repo, mode: "risk_based" });
+    write("packages/server/src/a.ts", "export const a = 2;\n");
+    const events: AgentEvent[] = [];
+    const tools: string[][] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        tools.push((params.tools ?? []).map(tool => tool.name));
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "review-report", name: "SubmitResult", input: {
+          status: deliveryStatus, summary: "review ready", data: { version: 1, verdict, summary: "review ready",
+            findings: verdict === "fail" ? [{ severity: "important", title: "Incorrect value", file: "packages/server/src/a.ts", evidence: "a changed to 2" }] : [],
+          },
+        } } };
+        yield { type: "complete", stopReason: "tool_use" };
+      },
+    };
+    const agent = await createDefaultNodeAgent({ cwd: repo, settings: {
+      apiFormat: "openai", model: "test-model", maxTurns: 3,
+      permission: { mode: "default" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false },
+    }, client, onEvent: event => { events.push(event); } });
+    try {
+      const review = await svc.reviewCompletedRun({ sessionId, inputId: `input-${runId}`, runId, traceId: "trace-real",
+        cwd: repo, agent, signal: new AbortController().signal });
+      expect(review).toMatchObject({ status, verdict });
+      expect(tools).toEqual([["SubmitResult"]]);
+      expect(events.find(event => event.type === "run.completed")?.data).toMatchObject({ delivery: {
+        status: deliveryStatus, validation: "schema_valid", verification: "passed", data: { verdict },
+      } });
+      expect(JSON.stringify(events)).not.toContain("childOutputContract");
+    } finally { await agent.close(); }
+  });
+
   it("records high-risk findings with counts", async () => {
     const output = JSON.stringify({
       version: 1,
@@ -208,7 +252,7 @@ describe("risk-based auto review integration", () => {
     });
     const { review } = await reviewRunCountless({
       mutate: () => write("packages/auth/src/token.ts", "export const token = 2;\n"),
-      result: { status: "completed", output },
+      result: verifiedReview(JSON.parse(output)),
     });
     expect(review).toMatchObject({ status: "findings", riskLevel: "high", verdict: "fail", findingCount: 1, highestSeverity: "critical" });
   });
@@ -238,7 +282,7 @@ describe("risk-based auto review integration", () => {
     write("packages/server/src/a.ts", "export const a = 11;\n");
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-overlap", runId, traceId: "trace-1", cwd: repo,
-      agent: fakeAgent({ status: "completed", output: okOutput() }).agent,
+      agent: fakeAgent(verifiedReview()).agent,
       signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "unavailable", reasons: ["preexisting_dirty_overlap"] });
@@ -271,7 +315,7 @@ describe("risk-based auto review integration", () => {
     for (let index = 0; index < 65; index += 1) {
       const { review } = await reviewRunCountless({
         mutate: () => undefined,
-        result: { status: "completed", output: okOutput() },
+        result: verifiedReview(),
         inspector,
       });
       expect(review.status).toBe("passed");

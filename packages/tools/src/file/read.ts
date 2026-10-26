@@ -142,12 +142,12 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
 }
 
 /** 诊断是否可用只影响说明，不改变原始读取失败的事实。 */
-function readErrorResult(error: unknown): ToolResult {
+function readErrorResult(error: unknown, started = true): ToolResult {
   const missing = isFileNotFoundError(error);
   return {
     content: [{ type: "text", text: `Error reading file: ${error}` }], isError: true,
     failureKind: missing ? "precondition" : "unknown_outcome",
-    executionState: missing ? "not_started" : "unknown",
+    executionState: started ? "completed" : "not_started",
   };
 }
 
@@ -185,6 +185,7 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
       const offset = normalizeReadInteger(input.offset, 1);
       const limit = normalizeReadInteger(input.limit, DEFAULT_READ_LIMIT);
 
+      let started = false;
       try {
         const filePath = await resolveToolPathInContext(rawPath, context, "read");
         const sandboxError = await sandboxPathError(filePath, cwd, "read", host.settings, context.environment);
@@ -198,7 +199,9 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
           };
         }
 
+        if (context.abortSignal?.aborted) return { content: [{ type: "text", text: "Read cancelled before execution." }], isError: true, failureKind: "interrupted", executionState: "not_started" };
         const operations = fileOperationsFor(context);
+        started = true;
         if (input.info_only === true) return await inspectFileInfo(operations, filePath, rawPath, context, host);
         let fileStat: Awaited<ReturnType<FileOperations["stat"]>>;
         try {
@@ -269,7 +272,7 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
           compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
         };
       } catch (error) {
-        return readErrorResult(error);
+        return readErrorResult(error, started);
       }
     },
   };
@@ -300,7 +303,7 @@ async function readShellOutput(
     if (page.status !== "ok") return page.status === "invalid_cursor"
       ? invalid("Invalid Shell output cursor: use a UTF-8 character boundary within retained bytes.")
       : { content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
-          isError: true, failureKind: "unknown_outcome", executionState: "unknown" };
+          isError: true, failureKind: "precondition", executionState: "completed" };
     const header = `Shell output: cursor=${cursor}; nextCursor=${page.nextCursor}; eof=${page.eof}; retainedBytes=${page.retainedBytes}; discardedBytes=${page.discardedBytes}; complete=${page.complete}\n`;
     if (header.length + page.text.length <= budget) {
       return { content: [{ type: "text", text: header + page.text }], executionState: "completed", compactSummary: `Read Shell output: cursor=${cursor}; nextCursor=${page.nextCursor}` };

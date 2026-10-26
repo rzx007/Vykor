@@ -1,4 +1,4 @@
-import type { Message } from "@vykor/agent-contracts";
+import type { Message, ToolExecutionResult, ToolResultRef } from "@vykor/agent-contracts";
 import { toolFeedbackFields } from "../tools/tool-result-feedback";
 
 const MARKER = "[history-excerpts-v1]";
@@ -10,6 +10,28 @@ interface Excerpt {
   text: string;
   toolUseId?: string;
   toolName?: string;
+  executionState?: ToolExecutionResult["executionState"];
+  isError?: boolean;
+  resultRef?: ToolResultRef;
+}
+
+/** Keep only the existing opaque reference, never free-form tool metadata. */
+function resultReference(value: unknown): ToolResultRef | undefined {
+  if (!value || typeof value !== "object") return;
+  const ref = value as ToolResultRef;
+  if (typeof ref.id !== "string" || !ref.id || typeof ref.toolName !== "string" || !ref.toolName
+    || !Number.isSafeInteger(ref.totalChars) || ref.totalChars < 0) return;
+  return { id: ref.id, toolName: ref.toolName, totalChars: ref.totalChars };
+}
+
+function outcomeFields(value: Partial<ToolExecutionResult>): Pick<Excerpt, "executionState" | "isError" | "resultRef"> {
+  const { executionState } = toolFeedbackFields(value);
+  const resultRef = resultReference(value.resultRef);
+  return {
+    ...(executionState === undefined ? {} : { executionState }),
+    ...(typeof value.isError === "boolean" ? { isError: value.isError } : {}),
+    ...(resultRef ? { resultRef } : {}),
+  };
 }
 
 /** Only the final host container of an owned summary is carried forward. */
@@ -28,7 +50,7 @@ function readOwned(message: Message): { entries: Excerpt[]; omitted: boolean } |
       if (entry.source === "tool_result" &&
           (typeof entry.toolUseId !== "string" || typeof entry.toolName !== "string")) return;
       entries.push({ source: entry.source, order: entry.order, text: entry.text,
-        ...(entry.source === "tool_result" ? { toolUseId: entry.toolUseId, toolName: entry.toolName } : {}) });
+        ...(entry.source === "tool_result" ? { toolUseId: entry.toolUseId, toolName: entry.toolName, ...outcomeFields(entry) } : {}) });
     }
     return { entries, omitted: value.omitted };
   } catch { return; }
@@ -68,10 +90,11 @@ export function appendContinuityExcerpts(summary: string, older: Message[]): str
       const toolName = calls.get(message.toolUseId);
       if (!toolName) continue;
       const facts = toolFeedbackFields(message);
+      const outcome = outcomeFields(message);
       const text = facts.compactSummary ?? message.content
         .filter((block) => block.type === "text").map((block) => block.text).join("\n");
-      if (text.trim()) entries.push({ source: "tool_result", order, text,
-        toolUseId: message.toolUseId, toolName });
+      if (text.trim() || Object.keys(outcome).length) entries.push({ source: "tool_result", order, text,
+        toolUseId: message.toolUseId, toolName, ...outcome });
     }
   }
   const kept: Excerpt[] = [];

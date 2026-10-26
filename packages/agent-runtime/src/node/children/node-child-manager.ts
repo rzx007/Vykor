@@ -3,6 +3,7 @@ import type {
   AgentChildSpawnInput,
   AgentModelConfiguration,
   AgentRunScope,
+  AgentOutputContract,
   RunToolBinding,
 } from "@vykor/agent-contracts";
 import {
@@ -89,12 +90,13 @@ export class NodeChildManager extends AgentChildManager {
     input: AgentChildSpawnInput,
     content: string,
     tools?: ReadonlyMap<string, RunToolBinding> | RunCapabilityView,
+    outputContract?: AgentOutputContract,
   ) {
     if (tools && "tools" in tools) {
       this.runCatalogue.register(tools);
-      return super.spawnSystemChild(scope, input, content, tools.tools);
+      return super.spawnSystemChild(scope, input, content, tools.tools, outputContract);
     }
-    return super.spawnSystemChild(scope, input, content, tools);
+    return super.spawnSystemChild(scope, input, content, tools, outputContract);
   }
   constructor(options: NodeChildManagerOptions) {
     const childCatalogues = new Map<string, RunCapabilityView>();
@@ -164,6 +166,7 @@ export class NodeChildManager extends AgentChildManager {
             const agent = await options.createAgent(
               {
                 ...resolved,
+                ...(input.system && input.outputContract ? { outputContract: input.outputContract } : {}),
                 requestConfigurationStoreForSession,
                 requestConfigurationStore:
                   requestConfigurationStoreForSession?.(input.sessionId),

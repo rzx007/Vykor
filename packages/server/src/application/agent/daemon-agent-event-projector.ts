@@ -848,6 +848,9 @@ export class DaemonAgentEventProjector {
         const metadataPatch: Record<string, unknown> = { toolGeneration: [] };
         if (event.type === "run.completed" && event.data.delivery) {
           metadataPatch.delivery = structuredClone(event.data.delivery);
+        } else if (existingRun?.metadata.delivery !== undefined) {
+          // Caller metadata is not a Kernel delivery receipt and must not reach Goal settlement.
+          metadataPatch.delivery = null;
         }
         if (event.type === "run.completed" && event.data.stopReason) {
           metadataPatch.stopReason = event.data.stopReason;
