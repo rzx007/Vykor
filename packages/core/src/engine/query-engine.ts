@@ -40,6 +40,7 @@ import {
 } from "./model/query-model-attempt";
 import { applyToolOutputBudget } from "./tools/query-tool-limits";
 import { ToolFailureMemory } from "./tools/tool-failure-memory";
+import { decideToolBatchRecovery, RECOVERY_TOOL_TURNS } from "./tools/tool-batch-recovery";
 import {
   formatToolResultForModel,
   toolFeedbackFields,
@@ -63,8 +64,6 @@ import {
 
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
-const RECOVERY_TOOL_TURNS = 2;
-const TOOL_CORRECTION_LIMITS = { invalid_input: 8, precondition: 5 } as const;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
@@ -156,42 +155,6 @@ export class MaxTurnsExceeded extends Error {
   ) {
     super(`Exceeded maximum agentic turns (${maxTurns})`);
     this.name = "MaxTurnsExceeded";
-  }
-}
-
-class ToolCorrectionsExceeded extends Error {
-  constructor(
-    kind: keyof typeof TOOL_CORRECTION_LIMITS | "recovery_guard",
-    turns: number,
-    lastFailure?: ToolExecutionResult,
-  ) {
-    const toolName = lastFailure?.toolName ?? "未知工具";
-    const displayName =
-      toolName.length > 80 ? toolName.slice(0, 80) + "…" : toolName;
-    const hint = lastFailure
-      ? toolFeedbackFields(lastFailure).recoveryHint
-      : undefined;
-    const reason =
-      kind === "recovery_guard"
-        ? "重复失败调用的恢复额度（" + turns + "轮）已耗尽"
-        : (kind === "invalid_input" ? "工具参数" : "文件条件") +
-          "在未完全成功的工具批次中累计 " +
-          turns +
-          " 轮失败";
-    super(
-      reason +
-        "，本轮已停止自动纠错。最后失败工具：" +
-        displayName +
-        "。" +
-        (hint ?? "请根据工具反馈检查参数和目标状态。") +
-        " 此次停止不代表任务已完成。",
-    );
-    this.name =
-      kind === "recovery_guard"
-        ? "ToolRecoveryExceeded"
-        : kind === "invalid_input"
-          ? "ToolInputCorrectionsExceeded"
-          : "ToolPreconditionsExceeded";
   }
 }
 
@@ -378,7 +341,7 @@ export class QueryEngine implements IQueryEngine {
           new DefaultTrajectoryTracker());
     const trajectoryControl = createTrajectoryLoopControl();
     let recoveryToolTurnsRemaining: number | null = null;
-    const correctionTurns = { invalid_input: 0, precondition: 0 };
+    let correctionTurns = { invalid_input: 0, precondition: 0 };
     let forceFinalResponse = false;
     let childFinalizing = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
@@ -797,50 +760,29 @@ export class QueryEngine implements IQueryEngine {
           options.execution?.closeSteering();
           return;
         }
-        // Evaluate the whole batch so a successful alternative cancels recovery
-        // regardless of whether it appears before or after a rejected retry.
-        if (results.some((result) => !result.isError))
-          recoveryToolTurnsRemaining = null;
-        // Only a fully successful batch resets allowances; switching tools or failure kinds does not.
-        if (results.every((result) => !result.isError)) {
-          correctionTurns.invalid_input = correctionTurns.precondition = 0;
-        }
-        for (const kind of ["invalid_input", "precondition"] as const) {
-          const failed = results.filter(
-            (result) => result.isError && result.failureKind === kind,
-          );
-          if (failed.length) correctionTurns[kind]++;
-          // The entire batch is settled before stopping; no extra model finalization request.
-          if (correctionTurns[kind] >= TOOL_CORRECTION_LIMITS[kind]) {
-            throw new ToolCorrectionsExceeded(
-              kind,
-              correctionTurns[kind],
-              failed.at(-1),
+        const recovery = decideToolBatchRecovery({
+          results,
+          correctionTurns,
+          recoveryToolTurnsRemaining,
+          recoveringAtTurnStart,
+          observeTrajectory: () => {
+            // Single removable integration point for trajectory decisions.
+            applyTrajectoryTracker(
+              trajectoryTracker,
+              {
+                calls: toolUses.map((toolUse, index) => ({
+                  toolUse,
+                  result: results[index]!,
+                })),
+              },
+              trajectoryControl,
             );
-          }
-        }
-        // Single removable integration point: commenting out this statement disables trajectory decisions.
-        applyTrajectoryTracker(
-          trajectoryTracker,
-          {
-            calls: toolUses.map((toolUse, index) => ({
-              toolUse,
-              result: results[index]!,
-            })),
+            return trajectoryControl.forceFinal;
           },
-          trajectoryControl,
-        );
-        if (trajectoryControl.forceFinal) forceFinalResponse = true;
-        if (recoveringAtTurnStart && recoveryToolTurnsRemaining !== null) {
-          recoveryToolTurnsRemaining--;
-          if (recoveryToolTurnsRemaining <= 0) {
-            throw new ToolCorrectionsExceeded(
-              "recovery_guard",
-              RECOVERY_TOOL_TURNS,
-              results.filter((result) => result.isError).at(-1),
-            );
-          }
-        }
+        });
+        correctionTurns = recovery.correctionTurns;
+        recoveryToolTurnsRemaining = recovery.recoveryToolTurnsRemaining;
+        if (recovery.forceFinalResponse) forceFinalResponse = true;
         turnCount++;
         if (this.options.resolveRequestConfiguration) {
           preparedNextRequestConfiguration =
