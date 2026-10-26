@@ -69,7 +69,11 @@ export function prepareNodeRunTools(
                     agent: {
                       ...agent,
                       children: runtime.childManager.createController(
-                        { ...agent.scope, limits: agent.limits },
+                        {
+                          ...agent.scope,
+                          limits: agent.limits,
+                          toolSafety: agent.toolSafety,
+                        },
                         delegation,
                       ),
                     },

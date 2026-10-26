@@ -6,6 +6,172 @@ import { deriveChildCapabilityView } from "../../children/child-agent-options.js
 import { prepareNodeRunTools } from "../prepare-run-tools.js";
 import { McpClientManager } from "@vykor/mcp";
 import { createDefaultNodeAgent } from "../../agent/default-agent.js";
+import type { AgentToolSafety, ToolDefinition } from "@vykor/agent-contracts";
+import { AgentChildManager } from "../../../kernel/children/child-agent.js";
+import { AgentEventBus } from "../../../kernel/event-source.js";
+import {
+  createAgentKernel,
+  createBasicAgentKernelRuntime,
+} from "../../../kernel/index.js";
+import type {
+  NodeRuntimeResources,
+  RunCapabilityView,
+} from "../../runtime/node-runtime-resources.js";
+
+it.each([false, true])(
+  "preserves preparation-only safety through Node child tool binding: %s",
+  async (withSafety) => {
+    let effects = 0;
+    let safetyChecks = 0;
+    const safety: AgentToolSafety = {
+      operations: {
+        prepare: async () => {
+          safetyChecks++;
+          throw new Error("denied by safety");
+        },
+        authorize: async () => {
+          throw new Error("unused");
+        },
+        dispatch: async () => {
+          throw new Error("unused");
+        },
+        settle: async () => {},
+        reject: async () => {},
+      },
+      requiredPolicy: {
+        check: async () => ({ allowed: false, policyVersion: "v1" }),
+      },
+    };
+    const write: ToolDefinition = {
+      name: "Write",
+      description: "count a real child tool effect",
+      inputSchema: { type: "object" },
+      execute: async () => {
+        effects++;
+        return { content: [{ type: "text", text: "effect" }] };
+      },
+    };
+    const manager = new AgentChildManager({
+      cwd: process.cwd(),
+      eventBus: new AgentEventBus(),
+      resolveChild: (input) => ({
+        spawn: input.spawn,
+        createAgent: async () => {
+          let requests = 0;
+          return createAgentKernel({
+            sessionId: input.sessionId,
+            cwd: process.cwd(),
+            engine: createBasicAgentKernelRuntime({
+              tools: [write],
+              client: {
+                async *streamMessage() {
+                  if (requests++ === 0) {
+                    yield {
+                      type: "tool_use_start",
+                      toolUse: {
+                        type: "tool_use",
+                        id: "write",
+                        name: "Write",
+                        input: {},
+                      },
+                    };
+                    yield { type: "complete", stopReason: "tool_use" };
+                  } else yield { type: "complete", stopReason: "end_turn" };
+                },
+              },
+            }),
+            effects: {
+              requestPermission: async () => ({ status: "approved" }),
+            },
+            preparation: {
+              prepare: async () => ({
+                run: {
+                  tools: new Map([
+                    ["Write", { definition: write, invoke: write.execute }],
+                  ]),
+                },
+              }),
+            },
+          });
+        },
+      }),
+    });
+    const definition: ToolDefinition = {
+      name: "Agent",
+      description: "spawn a child through the real Node wrapper",
+      inputSchema: { type: "object" },
+      execute: async (_input, context) => {
+        const child = await context.agent!.children!.spawnChildAgent({
+          description: "child",
+          prompt: "task",
+          agent: "worker",
+          cwd: process.cwd(),
+        });
+        await child.result;
+        return { content: [] };
+      },
+    };
+    const view: RunCapabilityView = {
+      tools: new Map([
+        [
+          "Agent",
+          {
+            definition,
+            invoke: definition.execute,
+            source: { kind: "builtin" },
+          },
+        ],
+        [
+          "Write",
+          {
+            definition: write,
+            invoke: write.execute,
+            source: { kind: "builtin" },
+          },
+        ],
+      ]),
+      agents: new Map(),
+      skills: new Map(),
+      mcpServers: new Map(),
+    };
+    const tools = prepareNodeRunTools(
+      {
+        runCatalogue: new NodeRunCatalogue(),
+        childManager: manager,
+      } as NodeRuntimeResources,
+      view,
+    );
+    const scope = {
+      agentId: "root",
+      sessionId: "root",
+      runId: "r",
+      inputId: "i",
+      traceId: "t",
+      cwd: process.cwd(),
+      signal: new AbortController().signal,
+    };
+    try {
+      await tools.get("Agent")!.invoke(
+        {},
+        {
+          cwd: process.cwd(),
+          agent: {
+            scope,
+            toolSafety: withSafety ? safety : undefined,
+            children: manager.createController({
+              ...scope,
+              toolSafety: withSafety ? safety : undefined,
+            }),
+          },
+        },
+      );
+      expect(effects).toBe(withSafety ? 0 : 1);
+      expect(safetyChecks).toBe(withSafety ? 1 : 0);
+    } finally {
+      await manager.closeAll();
+    }
+  },
+);
 
 it("captures a configured disconnected HTTP server for authentication during Node assembly", async () => {
   const connect = vi
