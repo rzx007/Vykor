@@ -1,6 +1,6 @@
 # 架构、拆分粒度与复杂度审查计划
 
-> 状态：基于当前工作区的审查与改造提案，尚未实施。审查日期：2026-10-26。
+> 状态：批次一至五已完成实施、验证和分批独立审查（2026-10-27），并在拉取最新 `main` 后完成合并前复核、按五批独立提交。审查日期：2026-10-26；下文旧审查基线与规模数据保留为取证背景，不是回退目标。首次实施与后续整合记录见文末。
 
 ## 结论
 
@@ -109,7 +109,7 @@ Runtime：当前进程中的历史、执行对象、取消信号与资源
 
 ## 验证入口与完成条件
 
-本次是审查，未运行行为测试或真实模型。以下是实施时按批次选择的入口，不应在每批重复运行整个仓库：
+原审查阶段未运行行为测试或真实模型。以下是实施时按批次选择的入口；本次实施结果见文末，不应在每批重复运行整个仓库：
 
 - 批次一：Client `state/__test__/sync.test.ts`、`session-sync-controller.test.ts`；Desktop `session-subscription-pump.test.ts`；TUI `apps/frontend/src/hooks/useServerSync.test.tsx`。
 - 批次二：Server 的 `daemon-agent-event-projector.test.ts`、`projection-settlement-recovery.test.ts`、`child-mode-recovery.integration.test.ts`；Services 的 `session-runtime/__test__/store.test.ts`。
@@ -123,7 +123,7 @@ Runtime：当前进程中的历史、执行对象、取消信号与资源
 # 批次一
 pnpm --filter @rzx/client exec vitest run src/state/__test__/sync.test.ts src/state/__test__/session-sync-controller.test.ts
 pnpm --filter @vykor/desktop exec vitest run src/main/features/session/session-subscription-pump.test.ts
-pnpm --filter @vykor/frontend exec vitest run src/hooks/useServerSync.test.tsx
+pnpm --filter @vykor/frontend exec bun test src/hooks/useServerSync.test.tsx
 # 批次二
 pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/daemon-agent-event-projector.test.ts src/application/agent/__test__/projection-settlement-recovery.test.ts src/application/agent/__test__/child-mode-recovery.integration.test.ts
 pnpm --filter @vykor/services exec vitest run src/session-runtime/__test__/store.test.ts
@@ -143,3 +143,57 @@ pnpm --filter @vykor/core exec vitest run src/engine/tools/__test__/tool-input-c
 完成应以删除了哪套重复规则、状态是否仍由唯一负责人持有、错误和取消路径是否保持来证明，不以新增类数、拆文件数或测试数量证明。前五批保持现有协议、SQLite 格式与外部 SDK 入口，无新服务、依赖、环境变量或凭据需求，回滚只需撤销对应代码变更，不改用户数据。
 
 本计划假设继续保留多端入口、独立 SDK 和持久运行记录。若产品明确放弃这些能力，相应边界才值得另行收缩；在此之前合包不能消除这些职责。
+
+## 实施记录（2026-10-27）
+
+本节记录首次交付时的状态，后续提交与整合见下一节。实际工作区为 `E:/code/openharness-ts`，分支为 `codex/architecture-simplification`。请求中的 D 盘路径在当前环境不存在；首次实施基线 HEAD `748c9de1` 已包含计划提交 `758ac024`。开始时暂存区和已跟踪文件均无未提交修改；原有未跟踪 `plugins/` 未修改、未清理。没有回退到旧审查基线，首次交付时尚未提交或推送。
+
+五批按顺序分别实施、验证并通过独立审查：
+
+1. **统一同步规则。** `sync.ts` 保留唯一快照、补洞与重连算法，控制器只适配缓存、回调、代次和取消。会话刷新快照成功后才重新开流；连续快照失败保留已有显示状态。保留两接口原有默认超时差异、摘要、初始缓存与游标。新增共用回归覆盖断流、重复、快照失败、各异步阶段取消及旧订阅迟到；Desktop IPC 投递确认未改。Client 定向 **50/50**、全套 **218/218**，Desktop pump/coalescing/IPC **28/28**，TUI **23/23**。
+2. **删除测试专用生产路径。** 投影身份改为必填，删除内存待补偿字段、内存重试及持久能力探测；测试接入真实 SQLite 结算依赖。四种子任务关闭结果均验证写入失败、重启恢复和重复事件。删除 `saveWorkflowRun/loadWorkflowRun/listWorkflowRuns/listWorkflowEvents` 四个纯转发，保留类型导出及 `appendWorkflowEvent` 的聊天事件发布。Server **56/56**，Services **70/70**。
+3. **显式传入 Desktop client。** 分支操作持有调用参数中的 client，删除共享临时 client 和穿透连接私有 Promise 的入口；测试改为构造依赖注入。新增三个先失败后通过的交错、迟到连接回归；默认连接、IPC 参数和生命周期保持。Desktop **39/39**。
+4. **减少队列转发。** 控制和准入共用一份队列能力对象，删除组装处 **12 个**逐方法纯转发；其余直连方法绑定原 Coordinator。保留接纳时抢占、执行前复核、事件发布、steer 拒绝恢复和 Goal 结算。插件宿主操作仍与模型共用排序、取消和等待，等待包含 Goal 结算；状态变更串行器与长任务队列未合并。Server **238/238**，含四项新增表征回归及插件、Goal 路径。
+5. **提取恢复决策。** `tools/tool-batch-recovery.ts` 的普通函数返回下一轮状态或原有错误，状态仍归本次 `submitMessage()`。保留结果保存、交付、失败/取消、成功结束运行、纠错上限、轨迹观察、恢复额度、轮数与后续输入的顺序。三个顺序表征在提取前已通过；提取后 Core **209/209**，覆盖混合结果、切换工具/失败种类、阈值、取消/迟到回执、子任务收尾、补读与用量结算。
+
+收尾联合类型检查发现第二批还遗漏了三个仓库级测试构造。已补齐 `tests/server-client/model-retry-flow.test.ts`、`tests/server-client/tool-progress-projection.test.ts` 和 `tests/desktop-integration/__test__/session-write-generation.test.ts` 的实际投影及根会话身份，沿用真实存储，不放宽生产必填要求。全仓核实 37 个构造均已完整；补跑跨包测试 **29/29**、联合类型检查通过。这是本次遗漏并已修正，不归为原有问题。
+
+上述定向命令另补以下入口：批次一的 `src/main/features/session/session-subscription-service.coalescing.test.ts`、`ipc.test.ts`；批次二的 `src/application/agent/__test__/tool-lifecycle-identity.test.ts`；批次三的 `src/main/features/session/__test__/session-branch-client.test.ts`；批次五的 `src/engine/tools/__test__/tool-batch-recovery.test.ts`、`operation-execution.test.ts`、`checked-tool-execution.test.ts`、`tool-discovery.integration.test.ts`、`src/engine/trajectory/__test__/` 及 `src/engine/__test__/integration.test.ts`。所有测试仍使用上方对应包的 `pnpm --filter ... exec vitest run`；TUI 文件导入 `bun:test`，因此修正为上方 Bun 原生入口，没有改测试框架或削弱检查。
+
+每批受影响包的类型检查和 `node scripts/architecture-boundaries.mjs`、`pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check` 均通过。Desktop 实际入口为 `pnpm --filter @vykor/desktop typecheck`，包含 node、web、MCP SDK 三项。收尾还执行：
+
+```powershell
+pnpm --filter @vykor/agent-runtime build
+pnpm -r --workspace-concurrency=2 --filter @rzx/client --filter @vykor/core --filter @vykor/services --filter @vykor/server --filter @vykor/frontend check-types
+pnpm --filter @vykor/desktop typecheck
+pnpm check:client-api
+pnpm check-types:server-client
+pnpm --filter @vykor/frontend exec bun test src/hooks/useServerSync.test.tsx
+pnpm exec vitest run --config tests/server-client/vitest.config.ts tests/server-client/model-retry-flow.test.ts tests/server-client/tool-progress-projection.test.ts
+pnpm exec vitest run --config tests/desktop-integration/vitest.config.ts tests/desktop-integration/__test__/session-write-generation.test.ts
+```
+
+以上收尾命令均退出 0；重建后 TUI 仍为 **23/23**，Client API 消费者类型、66 项边界检查和 4 项公开 API 测试通过。Core 会打入 Agent Runtime 发行文件，因此先重建，再检查消费方和真实 daemon，避免陈旧产物掩盖结果。
+
+环境中原有的 Agent Runtime 生成文件陈旧、两个已声明 DiceBear 依赖未安装，分别通过构建和冻结锁文件安装恢复，未改依赖声明、版本或锁文件。原有 React `act(...)` 测试警告及审计输出保留，没有修改无关测试来消除输出。首次交付没有新增未解决的生产问题；当时验证范围为计划定向测试和受影响类型，尚未运行全仓完整测试，后续完整尝试及环境限制见下一节。
+
+协议、SQLite 格式、外部 SDK 入口、权限及来源校验保持；持久补偿、启动恢复、事件去重、IPC 投递确认、两个串行器、恢复阈值 8/5/2、重试、预算、压缩和历史规则继续保留。工具结果补读、结构化交付及防重复执行未删除。没有新增 Manager、服务、框架、依赖或配置，也未实施工具面板整理、Daemon 组装拆分或存储性能优化；桌面未搭预览、未截图。
+
+## 最新 main 上的合并前复核（2026-10-27）
+
+用户随后授权先 pull、重新 review，无问题则合并到 `main` 并推送。先单独备份本任务 36 个文件，排除原有 `plugins/`，再执行 `git pull --ff-only origin main`，基线从 `748c9de1` 快进到 `3ac9f7aa`。恢复五批改动没有文本冲突；重点复核了自动合并的五个文件，确认最新主线的交付元数据清除、真实工具调用登记、可信只读身份、人工核对入口和相关说明均完整保留。
+
+独立源码审查未发现 Critical、Important 或需要本轮修复的 Minor。代码按五批分别提交，保留独立回滚边界：`ec8cad24`（同步）、`0a54aaaa`（持久结算）、`2a92965d`（Desktop client）、`75c75941`（运行队列）、`8cecb9a9`（恢复决策）。默认预提交钩子始终开启，各批提交前均再次通过 `pnpm check-types`；暂存检查发现并删除了新 Core 文件末尾一个多余空行，没有改变执行行为。
+
+在这份最新主线与五批改动的组合上，重新执行以下验证：
+
+- `pnpm --filter @vykor/agent-runtime build`：退出 0。
+- `pnpm test`：退出 1，包任务 71/73 成功；只有三项测试在创建文件符号链接的准备阶段因 Windows `EPERM` 失败。两项位于 `packages/server/src/application/visual-tools/__test__/daemon-image-to-text-tool.test.ts`，一项位于 `packages/plugins/src/components/__test__/app-resources.test.ts`。对应测试和产品文件相对 `origin/main` 没有差异；只导入 Node 标准库的独立临时文件探针也复现相同 `EPERM`，因此归为本机权限限制，不归为架构简化回归。没有跳过、放宽或修改这些测试，完整测试不记为全绿。
+- 同次包测试中，Client 219、Core 494、Services 624、Runtime 794、Desktop 2822、CLI 243 项通过；Server 1947 项通过，另有上述两项环境失败。
+- 因包任务失败而未自动进入的后续链逐项补跑：`pnpm test:scripts` 为 32 项通过；`pnpm test:agent-integration` 为 60 项通过；`pnpm test:desktop-integration` 为 1 项通过；`pnpm test:server-client` 为 124 项通过，均退出 0。`pnpm test:execution-integration` 退出 0，但 4 项 Windows 内 Linux 环境（WSL）用例因本机不可用按原条件跳过，未计为通过。
+- `pnpm check-types`：72/72 个任务成功，并完成 Server/Client 联合类型检查，退出 0；`pnpm --filter @vykor/desktop typecheck` 的 node、web、MCP SDK 三项也全部通过。
+- `pnpm check:client-api`：消费者类型、66 项 Node 检查和 4 项公开 API 测试通过。
+- `node --test packages/agent-runtime/scripts/__test__/tool-identity-bundle.test.mjs`：实际发行产物的三项身份检查通过，确认可信只读与结果读取身份没有在打包后失效。
+- `node scripts/architecture-boundaries.mjs`：104 个存储平铺调用、0 个策略例外；`pnpm check:retired-ui` 无错误；`pnpm check-docs` 的 4 项策略测试与 911 个 Markdown、403 个模块 README 通过；`git diff --check` 和各批暂存差异检查通过。
+
+合并结论依据独立源码审查、完整类型和上述运行验证；三项文件链接权限失败与四项 WSL 跳过作为已证实的环境限制保留，没有通过修改无关文件或削弱检查来取得通过。本次提交范围仍只有五批代码、受影响测试与文档，原有 `plugins/` 未纳入提交。
