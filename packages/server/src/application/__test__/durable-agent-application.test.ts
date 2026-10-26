@@ -405,11 +405,30 @@ describe("DaemonApplication", () => {
       const otherAdmission = await application.interactions.admitPrompt(otherSession.id, {
         items: [{ type: "text", text: "try the other session attachment" }],
       });
+      // Undeclared tools are non-replayable: an error stops the Run, while the
+      // original tool Part must still prove that cross-session access was denied.
       await expect(
         application.runControl.awaitRun(otherSession.id, otherAdmission.run!.id),
       ).resolves.toMatchObject({
-        status: "completed",
-        output: expect.stringContaining("attachment_resource_access_denied"),
+        status: "failed",
+        error: expect.stringContaining("has an unknown outcome"),
+      });
+      const deniedPart = store.conversations.listMessageParts(otherSession.id)
+        .find((part) => part.toolUseId === "other-read-attachment");
+      expect(deniedPart).toMatchObject({
+        type: "tool",
+        status: "failed",
+        isError: true,
+        output: {
+          isError: true,
+          executionState: "unknown",
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              type: "text",
+              text: expect.stringContaining("attachment_resource_access_denied"),
+            }),
+          ]),
+        },
       });
     } finally {
       await application.close().catch(() => {});

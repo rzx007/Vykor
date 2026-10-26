@@ -75,7 +75,7 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
-  it("persists the full MCP result through tool completion and SQLite close/reopen", () => {
+  it("persists the full MCP result and actual dispatch identity through completion and SQLite close/reopen", () => {
     const directory = mkdtempSync(join(tmpdir(), "oh-mcp-result-"));
     const path = join(directory, "store.db");
     let store = new SessionStore({ path });
@@ -83,14 +83,27 @@ describe("SessionTranscriptProjection", () => {
     try {
       store.sessions.create({ id: "s1", cwd: directory, model: "m" });
       store.runs.createRun({ id: "r1", sessionId: "s1" });
+      const intent = {
+        scope: { sessionId: "s1", runId: "r1", inputId: "i1", agentId: "s1", cwd: directory, traceId: "r1" },
+        toolUse: { id: "call", name: "ReadMcpResource", input: {} },
+      };
+      const operation = store.toolOperations.prepare({ ...intent, toolIdentity: "projection-mcp-fixture" });
+      const authorized = store.toolOperations.authorize({ intent, operation, policyVersion: "p1" });
+      const receipt = store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p1", ownerId: "owner" });
+      const result = {
+        content: [{ type: "text" as const, text: "saved" }], mcpResult: raw, executionState: "completed" as const,
+        toolUseId: "call", toolName: "ReadMcpResource", operationId: operation.operationId, toolAttemptId: receipt.toolAttemptId,
+      };
+      store.toolOperations.settle({ receipt, result });
       const projection = new SessionTranscriptProjection(store);
       const state = projection.beginRun("s1", "i1", "r1", createInput());
-      projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result: { content: [{ type: "text", text: "saved" }], mcpResult: raw, executionState: "completed" } });
+      projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result });
       store.close();
       store = new SessionStore({ path });
       const saved = store.conversations.listMessageParts("s1").find(part => part.type === "tool")!;
       expect((saved.output as { mcpResult: unknown }).mcpResult).toEqual(raw);
-      expect(saved.metadata).toMatchObject({ executionState: "completed", toolFeedbackVersion: 1 });
+      expect(saved.metadata).toMatchObject({ executionState: "completed", toolFeedbackVersion: 1, operationId: operation.operationId, toolAttemptId: receipt.toolAttemptId });
+      expect(store.toolOperations.listAttempts(operation.operationId)).toMatchObject([{ id: receipt.toolAttemptId, status: "confirmed" }]);
       expect(saved.metadata.mcpResult).toBeUndefined();
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
   });
@@ -130,7 +143,8 @@ describe("SessionTranscriptProjection", () => {
     projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call-1", result });
     const part = store.upsertMessagePart.mock.calls.at(-1)![0];
     expect(part.output.content).toEqual(result.content);
-    expect(part.metadata).toMatchObject({ toolCallId: "call-1", toolAttemptId: "tool_attempt_call-1_1", outcome: "failed", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started", custom: "keep" });
+    // Permission denial happens before dispatch, so forged metadata cannot invent an attempt.
+    expect(part.metadata).toMatchObject({ toolCallId: "call-1", toolAttemptId: null, outcome: "failed", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started", custom: "keep" });
     for (const key of ["modelGeneration", "committed", "superseded"]) expect(part.metadata).not.toHaveProperty(key);
   });
   it("supersedes the previous attempt's parts on a retry and commits the successful attempt", () => {
