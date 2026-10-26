@@ -1,3 +1,5 @@
+import type { ContentBlock } from "../tools/tool-data.js";
+export type { ContentBlock, TextBlock, ImageBlock, ImageSource, VisionImagePreparationMetadata } from "../tools/tool-data.js";
 export interface SystemMessage {
   type: "system";
   content: string;
@@ -46,32 +48,6 @@ export type Message =
   | AssistantMessage
   | ToolResultMessage;
 
-export interface TextBlock {
-  type: "text";
-  text: string;
-}
-
-export interface ImageBlock {
-  type: "image";
-  source: ImageSource;
-}
-
-export interface ImageSource {
-  type: "file";
-  mediaType: string;
-  path: string;
-  sizeBytes?: number;
-  prepared?: VisionImagePreparationMetadata;
-}
-
-export interface VisionImagePreparationMetadata {
-  mediaType: string;
-  width: number;
-  height: number;
-  base64Bytes: number;
-  policyVersion: string;
-}
-
 export interface ToolUseBlock {
   type: "tool_use";
   id: string;
@@ -86,5 +62,3 @@ export interface ToolUseBlock {
     stopReason?: string;
   };
 }
-
-export type ContentBlock = TextBlock | ImageBlock;

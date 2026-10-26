@@ -9,6 +9,7 @@
 | 目录 | 用途 |
 | --- | --- |
 | [sessions](src/sessions/README.md) | 会话、运行与消息记录 |
+| [executions](src/executions/README.md) | 执行头、工具操作、独立派发尝试及核对证据 |
 | [inputs](src/inputs/README.md) | 用户输入项、附件引用与输入校验 |
 | [goals](src/goals/README.md) | 持续目标、预算、等待和操作校验 |
 | [attachments](src/attachments/README.md) | 附件资源、转换结果和格式校验 |

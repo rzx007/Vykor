@@ -190,6 +190,7 @@ export interface AssembledAgentOptions {
   pluginSelection?: PluginSelectionCatalog;
   onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
   modelAttempts?: VykorAgentConfiguration["modelAttempts"];
+  toolSafety?: VykorAgentConfiguration["toolSafety"];
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
   retainMcpConnectionsForRun?: () => () => void;
@@ -227,6 +228,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       cwd: assembled.childManager.cwd,
       engine: assembled.runtime.queryEngine,
       effects: assembled.effects,
+      toolSafety: assembled.toolSafety,
       eventBus: assembled.eventBus,
       childManager: assembled.childManager,
       childDirectory: assembled.childDirectory,
@@ -402,6 +404,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
         const registration = await this.assembled.onRunCapabilities?.(
           Object.freeze({
             scope: Object.freeze({ ...scope }),
+            executionEnvironment: this.runtime.toolFactoryOptions?.environment ? { info: this.runtime.toolFactoryOptions.environment.info, workspace: this.runtime.toolFactoryOptions.environment.workspace } : undefined,
             identity: this.assembled.identity,
             capabilityView: view,
             pluginCandidates: Object.freeze(accepted),
@@ -419,6 +422,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
         run: {
           tools: view.tools,
           modelAttempts: this.assembled.modelAttempts,
+          toolSafety: this.assembled.toolSafety,
           profile: { toolResultReferences: ids.size > 0 },
           ...(guidance ? { contribution: { systemGuidance: guidance } } : {}),
         },

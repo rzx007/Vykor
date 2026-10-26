@@ -712,6 +712,7 @@ export class QueryEngine implements IQueryEngine {
             requestToolRegistry,
             internalTools,
             toolDiscovery,
+            generationId,
           );
         const deliveredResults: ToolExecutionResult[] = [];
         for (let i = 0; i < results.length; i++) {
@@ -1147,6 +1148,7 @@ export class QueryEngine implements IQueryEngine {
     ),
     internalTools: ReadonlySet<string> = new Set(),
     toolDiscovery?: RunToolDiscovery,
+    generationId?: string,
   ): Promise<{
     results: ToolExecutionResult[];
     failure?: { error: unknown };
@@ -1156,6 +1158,7 @@ export class QueryEngine implements IQueryEngine {
     const catalogNames = new Set(toolDiscovery?.catalog.map((row) => row.name));
     const outcome = await executeCheckedTools({
       toolUses,
+      generationId,
       toolRegistry,
       messages: this.messages,
       permissionChecker: this.permissionChecker,
@@ -1304,7 +1307,7 @@ export class QueryEngine implements IQueryEngine {
     requestConfiguration?: ToolContext["requestConfiguration"], toolDiscovery?: ToolDiscovery,
     onUnexposedTool?: (name: string) => void,
   ): ToolContext {
-    return createToolExecutionContext({
+    const context = createToolExecutionContext({
       cwd: this.cwd, sessionId: this.sessionId, environment: this.options.executionEnvironment,
       toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration, toolDiscovery,
       setPlanMode: this.options.setPlanMode,
@@ -1346,7 +1349,7 @@ export class QueryEngine implements IQueryEngine {
                 // The delegated target is not an additional model-issued tool part.
                 if (
                   event.type === "domain.event" &&
-                  event.data.name === "tool.lifecycle"
+                  event.data.name === "tool.lifecycle" && !execution.toolSafety
                 )
                   return;
                 await execution.emit(event);
@@ -1354,13 +1357,14 @@ export class QueryEngine implements IQueryEngine {
             }
           : undefined;
         const { results, failure } = await executeCheckedTools({
-          toolUses: [{ type: "tool_use", id: toolUse.id, name, input }],
+          toolUses: [{ type: "tool_use", id: execution?.toolSafety ? `nested_${randomUUID()}` : toolUse.id, name, input }],
           toolRegistry,
           messages: [],
           permissionChecker: this.permissionChecker,
           hookExecutor: this.hookExecutor,
           signal: innerSignal,
           execution: innerExecution,
+          parentOperationId: context.operationId,
           timeoutMs:
             options?.deadlineAt === undefined
               ? this.options.toolTimeoutMs
@@ -1380,6 +1384,7 @@ export class QueryEngine implements IQueryEngine {
         return results[0]!;
       },
     });
+    return context;
   }
   private isTrustedSummary(
     toolUse: ToolUseBlock,

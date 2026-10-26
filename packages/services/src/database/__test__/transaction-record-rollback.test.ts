@@ -170,8 +170,8 @@ describe("record transaction boundaries", () => {
   it.each(["admission", "replace"] as const)("rejects a composite %s without save before any work after owner takeover", (kind) => {
     fixture((store, storage) => {
       const transactions = new ConversationTransactions({ storage, conversations: store.conversations });
-      const before = structuredClone(storage.state);
       store.acquireApplicationOwner({ ownerId: "first", pid: 1, staleAfterMs: 1000 });
+      const before = structuredClone(storage.state);
       storage.database.connection.prepare("UPDATE application_owner SET owner_id = 'second', generation = generation + 1 WHERE key = 'application'").run();
       let touched = false;
       transactions.setTestHooks({ afterInputWrite() { touched = true; }, afterTranscriptReplacement() { touched = true; } });

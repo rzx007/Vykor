@@ -1,6 +1,7 @@
 import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
+import { ToolOperationService } from "./session/execution/tool-operation-service.js";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
@@ -486,7 +487,10 @@ export class DaemonApplication implements DurableAgentApplication {
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
       const modelAttempts = new GoalModelAttemptService({ store, events: this.eventPublisher,
         requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
+      const toolSafety = new ToolOperationService({ store, ownerLease: () => this.ownerLease,
+        accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const loadAgent = createDaemonAgentLoader({
+        toolSafety,
         modelAttempts,
         executionOwner: this.executionOwner,
         executionSurface: options.executionSurface,
@@ -623,8 +627,12 @@ export class DaemonApplication implements DurableAgentApplication {
           listRuns: async (taskId) => this.schedules.listRuns({ taskId }),
         },
         onRunCapabilities: snapshot => {
-          pluginCapabilities.authorizeRun(snapshot);
-          return toolAppOrigins.capture(snapshot);
+          const releaseToolSafety = toolSafety.onRunCapabilities(snapshot);
+          try {
+            pluginCapabilities.authorizeRun(snapshot);
+            const releaseOrigins = toolAppOrigins.capture(snapshot);
+            return () => { try { releaseOrigins(); } finally { releaseToolSafety(); } };
+          } catch (error) { releaseToolSafety(); throw error; }
         },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
@@ -1039,6 +1047,7 @@ export class DaemonApplication implements DurableAgentApplication {
       const recovery = new StartupRecoveryService({
         recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
+        recoverToolOperations: () => { toolSafety.recoverDispatching(); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
         reconcileGoalModelAttempts: () => { store.goals.reconcileGoalModelAttempts(); },
         failIncompleteReviewsOnStartup: () => { workspaceChanges.failIncompleteOnStartup(); return autoReview.failIncompleteReviewsOnStartup(); },

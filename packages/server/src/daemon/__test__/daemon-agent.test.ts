@@ -89,10 +89,12 @@ describe("createDaemonAgentLoader", () => {
 
   it("passes the host-only Run capability lifecycle unchanged into the runtime", async () => {
     const onRunCapabilities = vi.fn(() => vi.fn());
+    const toolSafety = { operations: {}, requiredPolicy: {} } as never;
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
-    const loader = createDaemonAgentLoader({ createAgent:hostedAgentFactory(createAgent), onRunCapabilities })!;
+    const loader = createDaemonAgentLoader({ createAgent:hostedAgentFactory(createAgent), onRunCapabilities, toolSafety })!;
     await loader({ session, history: [], parts: [] });
     expect(createAgent.mock.calls[0]![0].options.onRunCapabilities).toBe(onRunCapabilities);
+    expect(createAgent.mock.calls[0]![0].options.toolSafety).toBe(toolSafety);
   });
 
   it("retains the warm default Agent's local execution evidence and rejects WSL/custom Agents", async () => {

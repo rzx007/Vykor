@@ -10,6 +10,8 @@ ChatPersistence 规定同步读写接口，SQLite 实现调用状态加载和保
 
 正式会话写入 SQLite；临时会话与临时控制记录保存在内存；检查点、序号预留和计时器由对应实例管理。
 
+执行头、工具操作与派发尝试也经 ChatPersistenceRouter 按 sessionId 分流；正式数据在 read-model 中加载，memory 会话关闭后不留下 SQLite 记录。删除会话同时删除三个集合，普通保留清理保留工具审计与未决操作。
+
 ## 主要文件
 
 | 文件 | 主要接口或用途 |

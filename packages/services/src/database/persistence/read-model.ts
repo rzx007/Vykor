@@ -4,7 +4,7 @@ import type { SessionDatabase } from "../session-database.js";
 import {
   sessions, sessionInputs, sessionInputAttachments, sessionMessages,
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
-  permissionRequests, sessionEvents, sessionEventSequence, sessionPluginApps,
+  permissionRequests, sessionEvents, sessionEventSequence, sessionPluginApps, executions, toolOperations, toolDispatchAttempts,
 } from "../../session-runtime/schema.js";
 import { normalizeSessionUserInputItems, sessionUserInputText, type SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { type PermissionRequestRecord, type SessionEventRecord, type SessionExecutionRecord, type SessionInputRecord, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunAttemptRecord, type SessionRunRecord } from "@vykor/domain-contracts/sessions";
@@ -27,6 +27,9 @@ export function loadSessionReadModel(
   eventRegistry: DurableEventRegistry,
 ): LoadedSessionReadModel {
   const state = emptyState();
+  for (const row of database.select().from(executions).all()) state.executions[row.id] = JSON.parse(row.dataJson);
+  for (const row of database.select().from(toolOperations).all()) state.toolOperations[row.id] = JSON.parse(row.dataJson);
+  for (const row of database.select().from(toolDispatchAttempts).all()) state.toolDispatchAttempts[row.id] = JSON.parse(row.dataJson);
   for (const row of database.select().from(sessionPluginApps).all()) {
     const { originJson, activeActionRunId, lastActionRunId, ...fields } = row;
     state.pluginApps[row.id] = {

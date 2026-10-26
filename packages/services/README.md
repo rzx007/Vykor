@@ -30,6 +30,7 @@ pnpm --filter @vykor/services test
 | [src/channels/](./src/channels/README.md) | 保存外部渠道会话映射、消息投递结果及平台附加信息。 |
 | [src/conversations/](./src/conversations/README.md) | 管理输入、消息、消息部件、增量输出以及会话树操作。 |
 | [src/database/](./src/database/README.md) | 打开 SQLite、应用迁移链，并为领域模块提供数据库和共享状态接口。 |
+| [src/execution-records/](./src/execution-records/README.md) | 保存每个 Run 的执行头和实际生命周期。 |
 | [src/goals/](./src/goals/README.md) | 保存会话目标、版本、执行请求、等待与模型尝试用量。 |
 | [src/memory/](./src/memory/README.md) | 从会话中提取长期记忆，并维护压缩后继续对话所需的会话记忆文件。 |
 | [src/notes/](./src/notes/README.md) | 保存笔记索引，并协调 Markdown 文件与记录修订。 |
@@ -43,6 +44,7 @@ pnpm --filter @vykor/services test
 | [src/sessions/](./src/sessions/README.md) | 保存会话属性、工作树绑定，并提供默认标题识别与标题生成。 |
 | [src/token-estimation/](./src/token-estimation/README.md) | 提供不依赖模型请求的文本 Token 数量估算。 |
 | [src/tool-outputs/](./src/tool-outputs/README.md) | 集中定义工具结果内联、预览和压缩的长度规则。 |
+| [src/tool-operations/](./src/tool-operations/README.md) | 保存操作、派发尝试、完整结果及只读核对证据，阻止未知写操作重放。 |
 | [src/workflows/](./src/workflows/README.md) | 保存工作流运行、任务尝试、事件及执行占用记录。 |
 | [scripts/](./scripts/README.md) | 维护数据库测试清单，并检查打包后能否应用迁移链。 |
 | [resources/](./resources/README.md) | 保存开发与打包所需的服务资源目录。 |

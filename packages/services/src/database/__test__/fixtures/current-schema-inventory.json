@@ -50,6 +50,18 @@
     },
     {
       "type": "index",
+      "name": "execution_run_idx",
+      "tbl_name": "execution",
+      "sql": "CREATE UNIQUE INDEX `execution_run_idx` ON `execution` (`run_id`)"
+    },
+    {
+      "type": "index",
+      "name": "execution_session_idx",
+      "tbl_name": "execution",
+      "sql": "CREATE INDEX `execution_session_idx` ON `execution` (`session_id`)"
+    },
+    {
+      "type": "index",
       "name": "external_conversation_identity_unique",
       "tbl_name": "external_conversation",
       "sql": "CREATE UNIQUE INDEX `external_conversation_identity_unique` ON `external_conversation` (`connector`,`account_id`,`chat_id`,`thread_id`)"
@@ -314,6 +326,30 @@
     },
     {
       "type": "index",
+      "name": "tool_dispatch_attempt_operation_idx",
+      "tbl_name": "tool_dispatch_attempt",
+      "sql": "CREATE INDEX `tool_dispatch_attempt_operation_idx` ON `tool_dispatch_attempt` (`operation_id`)"
+    },
+    {
+      "type": "index",
+      "name": "tool_dispatch_attempt_session_idx",
+      "tbl_name": "tool_dispatch_attempt",
+      "sql": "CREATE INDEX `tool_dispatch_attempt_session_idx` ON `tool_dispatch_attempt` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "tool_operation_call_idx",
+      "tbl_name": "tool_operation",
+      "sql": "CREATE UNIQUE INDEX `tool_operation_call_idx` ON `tool_operation` (`session_id`,`run_id`,`logical_call_id`)"
+    },
+    {
+      "type": "index",
+      "name": "tool_operation_session_state_idx",
+      "tbl_name": "tool_operation",
+      "sql": "CREATE INDEX `tool_operation_session_state_idx` ON `tool_operation` (`session_id`,`state`)"
+    },
+    {
+      "type": "index",
       "name": "workflow_event_run_seq_idx",
       "tbl_name": "workflow_event",
       "sql": "CREATE INDEX `workflow_event_run_seq_idx` ON `workflow_event` (`workflow_run_id`,`seq`)"
@@ -359,6 +395,12 @@
       "name": "channel_delivery",
       "tbl_name": "channel_delivery",
       "sql": "CREATE TABLE `channel_delivery` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`conversation_id` text NOT NULL,\n\t`connector` text NOT NULL,\n\t`account_id` text NOT NULL,\n\t`chat_id` text NOT NULL,\n\t`thread_id` text DEFAULT '' NOT NULL,\n\t`session_id` text NOT NULL,\n\t`input_id` text NOT NULL,\n\t`run_id` text NOT NULL,\n\t`external_message_id` text NOT NULL,\n\t`content` text NOT NULL,\n\t`status` text NOT NULL,\n\t`attempt_count` integer DEFAULT 0 NOT NULL,\n\t`external_delivery_id` text,\n\t`platform_meta_json` text,\n\t`error` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`sent_at` integer,\n\tFOREIGN KEY (`conversation_id`) REFERENCES `external_conversation`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE cascade\n)"
+    },
+    {
+      "type": "table",
+      "name": "execution",
+      "tbl_name": "execution",
+      "sql": "CREATE TABLE `execution` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`run_id` text NOT NULL,\n\t`data_json` text NOT NULL\n)"
     },
     {
       "type": "table",
@@ -521,6 +563,18 @@
       "name": "session_task",
       "tbl_name": "session_task",
       "sql": "CREATE TABLE `session_task` (\n\t`id` text PRIMARY KEY,\n\t`session_id` text NOT NULL,\n\t`request_namespace` text,\n\t`request_id` text,\n\t`child_session_id` text,\n\t`run_id` text,\n\t`type` text NOT NULL,\n\t`status` text NOT NULL,\n\t`description` text NOT NULL,\n\t`cwd` text NOT NULL,\n\t`output` text,\n\t`error` text,\n\t`metadata_json` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`started_at` integer,\n\t`finished_at` integer,\n\t`updated_at` integer NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "tool_dispatch_attempt",
+      "tbl_name": "tool_dispatch_attempt",
+      "sql": "CREATE TABLE `tool_dispatch_attempt` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`operation_id` text NOT NULL,\n\t`data_json` text NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "tool_operation",
+      "tbl_name": "tool_operation",
+      "sql": "CREATE TABLE `tool_operation` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`run_id` text NOT NULL,\n\t`logical_call_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`data_json` text NOT NULL\n)"
     },
     {
       "type": "table",
@@ -1104,6 +1158,44 @@
           "match": "NONE"
         }
       ]
+    },
+    {
+      "name": "execution",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "data_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
     },
     {
       "name": "external_conversation",
@@ -3825,6 +3917,98 @@
           "cid": 16,
           "name": "updated_at",
           "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "tool_dispatch_attempt",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "operation_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "data_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "tool_operation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "logical_call_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "state",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "data_json",
+          "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
           "pk": 0

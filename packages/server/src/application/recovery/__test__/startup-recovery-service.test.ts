@@ -19,6 +19,7 @@ describe("StartupRecoveryService", () => {
     const order: string[] = [];
     const recovery = new StartupRecoveryService({
       recoverProjectionSettlements: () => { order.push("projection"); },
+      recoverToolOperations: () => { order.push("tool-operations"); },
       recoverPluginUiActions: () => { order.push("ui-actions"); },
       interruptActiveRuns: () => { order.push("runs"); store.interruptActiveRuns("restart"); },
       reconcileGoalModelAttempts: () => { order.push("usage"); store.goals.reconcileGoalModelAttempts(); },
@@ -37,7 +38,7 @@ describe("StartupRecoveryService", () => {
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     await recovery.run();
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
-    expect(order.slice(0, 8)).toEqual(["projection", "ui-actions", "runs", "usage", "goals", "inputs", "permissions", "sessions"]);
+    expect(order.slice(0, 9)).toEqual(["projection", "tool-operations", "ui-actions", "runs", "usage", "goals", "inputs", "permissions", "sessions"]);
     expect(order.filter((entry) => entry === "workflows")).toHaveLength(2);
     expect(order.filter((entry) => entry === "goal-waits")).toHaveLength(2);
   });

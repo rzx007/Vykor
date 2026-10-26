@@ -1,10 +1,19 @@
-import type { AgentExecutionContext } from "@vykor/agent-contracts";
-import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
-import type { HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
-import type { PermissionChecker as IPermissionChecker } from "@vykor/agent-contracts";
-import type { Message, ToolUseBlock } from "@vykor/agent-contracts";
-import type { MutableToolRegistry as ToolRegistry } from "@vykor/agent-contracts";
-import type { ToolContext, ToolDefinition, ToolExecutionResult } from "@vykor/agent-contracts";
+import type {
+  AgentExecutionContext,
+  HookExecutor,
+  PermissionChecker,
+  Message,
+  ToolUseBlock,
+  MutableToolRegistry,
+  ToolContext,
+  ToolDefinition,
+  ToolExecutionResult,
+} from "@vykor/agent-contracts";
+import {
+  isAgentExecutionLimitError,
+  parseMcpCallResultData,
+  publicToolResult,
+} from "@vykor/agent-contracts";
 import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCall, emitToolLifecycle } from "./query-tool-permissions";
 import {
@@ -19,29 +28,50 @@ import {
   toolFeedbackFields,
   validHostFileFacts,
 } from "./tool-result-feedback";
-import { parseMcpCallResultData, publicToolResult } from "@vykor/agent-contracts";
+import {
+  assertToolOperationDispatchable,
+  checkRequiredToolPolicy,
+  operationIntent,
+  rememberToolPersistenceFailure,
+  RequiredToolPolicyError,
+  validateToolSafety,
+  type ActiveToolOperation,
+} from "./operation-execution";
 
 export interface CheckedToolExecutionOptions {
   toolUses: ToolUseBlock[];
-  toolRegistry: ToolRegistry;
+  toolRegistry: MutableToolRegistry;
   messages?: readonly Message[];
-  permissionChecker: IPermissionChecker;
-  hookExecutor: IHookExecutor;
+  permissionChecker: PermissionChecker;
+  hookExecutor: HookExecutor;
   signal?: AbortSignal;
   execution?: AgentExecutionContext;
+  parentOperationId?: string;
+  generationId?: string;
   timeoutMs?: number;
   internalTools?: ReadonlySet<string>;
   failedToolCalls?: ToolFailureMemory;
   createToolContext(toolUse: ToolUseBlock, toolAttemptId: string): ToolContext;
   isTrustedSummary(toolUse: ToolUseBlock, definition: ToolDefinition): boolean;
 }
-
 export interface CheckedToolExecutionResult {
   results: ToolExecutionResult[];
   failure?: { error: unknown };
 }
 
-/** Shared checked pipeline; running tools retain their original cancellation context. */
+function finishResult(result: ToolExecutionResult): ToolExecutionResult {
+  result.executionState ??= result.isError ? "unknown" : "completed";
+  if (result.executionState === "unknown") result.isError = true;
+  if (result.isError) {
+    result.hostFileFacts = undefined;
+    result.failureKind ??= "unknown_outcome";
+    result.recoveryHint ??= defaultRecoveryHint(result);
+    result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
+  }
+  return result;
+}
+
+/** One path for model, explicit, and nested tool calls. Persist before publishing any outcome. */
 export async function executeCheckedTools(
   options: CheckedToolExecutionOptions,
 ): Promise<CheckedToolExecutionResult> {
@@ -71,12 +101,15 @@ export async function executeCheckedTools(
     ...(signal ? [signal] : []),
     ...(execution?.scope.signal ? [execution.scope.signal] : []),
   ]);
+  const runningSignal = AbortSignal.any([
+    ...(signal ? [signal] : []),
+    ...(execution?.scope.signal ? [execution.scope.signal] : []),
+  ]);
   let failure: { error: unknown } | undefined;
   const failBatch = (error: unknown) => {
     failure ??= { error };
     batchController.abort(error);
   };
-  // Only approval/start work sees batch cancellation. Running tools retain the original context.
   const pendingExecution = execution
     ? {
         ...execution,
@@ -91,27 +124,84 @@ export async function executeCheckedTools(
         },
       }
     : undefined;
-
   const preparedByIndex = new Map(
     readyForPermission.map((call) => [call.idx, call]),
   );
   const groupTails = new Map<string, Promise<ToolExecutionResult>>();
   const executedIndexes = new Set<number>();
-  // A mode change affects authorization of every later call in this response.
   const changesMode = readyForPermission.some(
     ({ tool }) => tool.serialGroup === "permission-mode",
   );
-  const tasks = toolUses.map((toolUse, idx) => {
+  const tasks = toolUses.map((originalUse, idx) => {
     const group = changesMode
       ? "permission-mode"
-      : toolRegistry.get(toolUse.name)?.serialGroup;
+      : toolRegistry.get(originalUse.name)?.serialGroup;
     const previous = group ? groupTails.get(group) : undefined;
     const task = (async (): Promise<ToolExecutionResult> => {
-      const toolAttemptId = `tool_attempt_${toolUse.id}_1`;
-      let started = false;
+      let toolUse = originalUse;
+      let toolAttemptId = `tool_attempt_${toolUse.id}_1`;
+      let started = false,
+        reused = false;
+      let operation: ActiveToolOperation | undefined;
       let result: ToolExecutionResult;
+      let finishInitialSettlement!: () => void;
+      const initialSettlement = new Promise<void>((resolve) => {
+        finishInitialSettlement = resolve;
+      });
+      const identity = () =>
+        operation
+          ? {
+              operationId: operation.ticket.operationId,
+              ...(operation.receipt
+                ? { toolAttemptId: operation.receipt.toolAttemptId }
+                : operation.ticket.state === "confirmed" &&
+                    operation.ticket.result?.toolAttemptId
+                  ? { toolAttemptId: operation.ticket.result.toolAttemptId }
+                  : {}),
+              ...(operation.intent.parentOperationId
+                ? { parentOperationId: operation.intent.parentOperationId }
+                : {}),
+            }
+          : execution?.toolSafety !== undefined
+            ? {}
+            : undefined;
+      const returnedResult = (
+        returned: Awaited<ReturnType<ToolDefinition["execute"]>>,
+        tool: ToolDefinition,
+      ) => {
+        if (!returned || !Array.isArray(returned.content))
+          throw new Error("Tool returned malformed content");
+        const normalized = {
+          content: returned.content,
+          isError: returned.isError,
+          ...(returned.mcpResult !== undefined
+            ? { mcpResult: parseMcpCallResultData(returned.mcpResult) }
+            : {}),
+          ...toolFeedbackFields(returned),
+          toolUseId: toolUse.id,
+          toolName: toolUse.name,
+          toolAttemptId,
+          ...(operation ? { operationId: operation.ticket.operationId } : {}),
+          metadata: externalToolMetadata(returned.metadata),
+          hostFileFacts:
+            isTrustedSummary(toolUse, tool) && !returned.isError
+              ? validHostFileFacts(returned.metadata?.hostFileFacts)
+              : undefined,
+          compactSummary: isTrustedSummary(toolUse, tool)
+            ? toolFeedbackFields(returned).compactSummary
+            : undefined,
+        } satisfies ToolExecutionResult;
+        // Only the checked host can prove a dispatched tool was never invoked.
+        if (
+          operation &&
+          (normalized.executionState === "not_started" ||
+            (normalized.isError && operation.ticket.kind !== "read_only"))
+        )
+          normalized.executionState = "unknown";
+        return finishResult(normalized);
+      };
       try {
-        if (previous)
+        if (previous && !execution?.toolSafety)
           await emitToolLifecycle(
             pendingExecution,
             toolUse.id,
@@ -139,90 +229,247 @@ export async function executeCheckedTools(
             executionState: "not_started",
             metadata: { recoveryGuard: "serial_group_blocked" },
           };
-        } else if (results[idx]) {
-          result = results[idx]!;
-        } else {
-          const prepared = preparedByIndex.get(idx)!;
-          const denied = await authorizeToolCall(
-            prepared,
-            permissionChecker,
-            hookExecutor,
-            pendingExecution,
-            internalTools,
-            startSignal,
-          );
-          if (denied) {
-            result = denied;
-          } else {
-            const tool = prepared.tool;
-            const context = createToolContext(toolUse, toolAttemptId);
-            startSignal.throwIfAborted();
-            await emitToolLifecycle(pendingExecution, toolUse.id, "running");
-            startSignal.throwIfAborted();
-            await execution?.limits?.check("tool", {
-              toolName: tool.name,
-              toolAttemptId,
-            });
-            startSignal.throwIfAborted();
-            started = true;
-            executedIndexes.add(idx);
-            const returned = await executeToolWithTimeout(
-              tool,
-              toolUse.input,
-              context,
-              timeoutMs,
-              signal,
+        } else if (results[idx]) result = results[idx]!;
+        else {
+          let prepared = preparedByIndex.get(idx)!;
+          if (execution?.toolSafety !== undefined) {
+            validateToolSafety(execution.toolSafety);
+            const intent = operationIntent(
+              execution,
+              prepared.toolUse,
+              options.parentOperationId,
+              options.generationId,
             );
-            result = {
-              content: returned.content,
-              isError: returned.isError,
-              ...(returned.mcpResult !== undefined
-                ? { mcpResult: parseMcpCallResultData(returned.mcpResult) }
-                : {}),
-              ...toolFeedbackFields(returned),
-              toolUseId: toolUse.id,
-              toolName: toolUse.name,
-              toolAttemptId,
-              metadata: externalToolMetadata(returned.metadata),
-              // A tool's own top-level field cannot claim host trust. Promote only captured builtin receipts.
-              hostFileFacts:
-                isTrustedSummary(toolUse, tool) && !returned.isError
-                  ? validHostFileFacts(returned.metadata?.hostFileFacts)
-                  : undefined,
-              compactSummary: isTrustedSummary(toolUse, tool)
-                ? toolFeedbackFields(returned).compactSummary
+            const ticket =
+              await execution.toolSafety.operations.prepare(intent);
+            operation = { safety: execution.toolSafety, intent, ticket };
+            toolUse = intent.toolUse;
+            prepared = { ...prepared, toolUse };
+            if (ticket.state === "confirmed") {
+              if (!ticket.result)
+                throw new Error("Confirmed tool operation has no saved result");
+              result = structuredClone(ticket.result);
+              reused = true;
+            } else
+              assertToolOperationDispatchable(operation.safety, intent, ticket);
+          }
+          if (!reused) {
+            const denied = await authorizeToolCall(
+              prepared,
+              permissionChecker,
+              hookExecutor,
+              pendingExecution,
+              internalTools,
+              startSignal,
+              operation
+                ? async () => {
+                    const policyVersion = await checkRequiredToolPolicy(
+                      operation!.safety,
+                      operation!.intent,
+                      operation!.ticket,
+                      "authorization",
+                      startSignal,
+                    );
+                    startSignal.throwIfAborted();
+                    operation!.ticket =
+                      await operation!.safety.operations.authorize({
+                        intent: operation!.intent,
+                        operation: operation!.ticket,
+                        policyVersion,
+                      });
+                  }
                 : undefined,
-            };
+              identity(),
+            );
+            if (denied) result = denied;
+            else {
+              const tool = prepared.tool;
+              startSignal.throwIfAborted();
+              await execution?.limits?.check("tool", {
+                toolName: tool.name,
+                toolAttemptId,
+              });
+              startSignal.throwIfAborted();
+              if (operation) {
+                const policyVersion = await checkRequiredToolPolicy(
+                  operation.safety,
+                  operation.intent,
+                  operation.ticket,
+                  "dispatch",
+                  startSignal,
+                );
+                startSignal.throwIfAborted();
+                assertToolOperationDispatchable(
+                  operation.safety,
+                  operation.intent,
+                  operation.ticket,
+                );
+                operation.receipt = await operation.safety.operations.dispatch({
+                  intent: operation.intent,
+                  operation: operation.ticket,
+                  policyVersion,
+                });
+                toolAttemptId = operation.receipt.toolAttemptId;
+              }
+              const context = createToolContext(toolUse, toolAttemptId);
+              if (operation) {
+                context.operationId = operation.ticket.operationId;
+                context.parentOperationId = operation.intent.parentOperationId;
+                context.toolAttemptId = toolAttemptId;
+              }
+              await emitToolLifecycle(
+                pendingExecution,
+                toolUse.id,
+                "running",
+                undefined,
+                identity(),
+              );
+              startSignal.throwIfAborted();
+              started = true;
+              executedIndexes.add(idx);
+              const returned = await executeToolWithTimeout(
+                tool,
+                toolUse.input,
+                context,
+                timeoutMs,
+                runningSignal,
+                operation
+                  ? async (outcome) => {
+                      await initialSettlement;
+                      let late: ToolExecutionResult;
+                      try {
+                        late =
+                          "returned" in outcome
+                            ? returnedResult(outcome.returned, tool)
+                            : finishResult({
+                                toolUseId: toolUse.id,
+                                toolName: toolUse.name,
+                                toolAttemptId,
+                                operationId: operation!.ticket.operationId,
+                                content: [
+                                  { type: "text", text: String(outcome.error) },
+                                ],
+                                isError: true,
+                                executionState: "unknown",
+                              });
+                        await operation!.safety.operations.settle({
+                          receipt: operation!.receipt!,
+                          result: structuredClone(late),
+                          late: true,
+                        });
+                      } catch (error) {
+                        rememberToolPersistenceFailure(
+                          operation!.safety,
+                          operation!.intent.scope.runId,
+                          error,
+                        );
+                        failBatch(error);
+                        try {
+                          await execution!.emit({
+                            type: "domain.event",
+                            data: {
+                              name: "tool.operation.audit_failed",
+                              payload: {
+                                ...identity(),
+                                error: String(error),
+                                late: true,
+                              },
+                            },
+                          });
+                        } catch (emitError) {
+                          process.emitWarning(
+                            `Late tool receipt and diagnostic delivery failed: ${String(error)}; ${String(emitError)}`,
+                          );
+                        }
+                      }
+                    }
+                  : undefined,
+              );
+              result = returnedResult(returned, tool);
+            }
           }
         }
       } catch (error) {
         if (isAgentExecutionLimitError(error)) failBatch(error);
-        // Reliable emits already recorded their error, including concurrent user cancellation.
-        // Exceptions from a running tool remain ordinary tool feedback.
-        if (!started && !startSignal.aborted) failBatch(error);
-        const failureKind = (started ? signal?.aborted : startSignal.aborted)
-          ? ("interrupted" as const)
-          : error instanceof ToolTimeoutError
-            ? ("timeout" as const)
-            : ("unknown_outcome" as const);
+        if (
+          !started &&
+          !startSignal.aborted &&
+          !(error instanceof RequiredToolPolicyError)
+        )
+          failBatch(error);
         result = {
           toolUseId: toolUse.id,
           toolName: toolUse.name,
           toolAttemptId,
           content: [{ type: "text", text: String(error) }],
           isError: true,
-          failureKind,
-          executionState: started ? "unknown" : "not_started",
+          failureKind: (started ? runningSignal.aborted : startSignal.aborted)
+            ? "interrupted"
+            : error instanceof RequiredToolPolicyError
+              ? "policy"
+              : error instanceof ToolTimeoutError
+                ? "timeout"
+                : "unknown_outcome",
+          executionState:
+            started ||
+            operation?.ticket.state === "unknown" ||
+            operation?.ticket.state === "dispatching"
+              ? "unknown"
+              : "not_started",
         };
       }
-      result.executionState ??= result.isError ? "unknown" : "completed";
-      if (result.executionState === "unknown") result.isError = true;
-      if (result.isError) {
-        result.hostFileFacts = undefined;
-        result.failureKind ??= "unknown_outcome";
-        result.recoveryHint ??= defaultRecoveryHint(result);
-        result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
+      result = reused ? result! : finishResult(result!);
+      if (execution?.toolSafety !== undefined && !operation?.receipt && !reused)
+        delete result.toolAttemptId;
+      if (operation && !reused) {
+        result.operationId = operation.ticket.operationId;
+        if (operation.receipt)
+          result.toolAttemptId = operation.receipt.toolAttemptId;
+        try {
+          if (operation.receipt)
+            await operation.safety.operations.settle({
+              receipt: operation.receipt,
+              result: structuredClone(result),
+            });
+          else if (
+            !["unknown", "dispatching", "confirmed"].includes(
+              operation.ticket.state,
+            )
+          )
+            await operation.safety.operations.reject({
+              intent: operation.intent,
+              operation: operation.ticket,
+              result: structuredClone(result),
+            });
+        } catch (error) {
+          rememberToolPersistenceFailure(
+            operation.safety,
+            operation.intent.scope.runId,
+            error,
+          );
+          failBatch(error);
+          result = finishResult({
+            ...result,
+            isError: true,
+            executionState: started ? "unknown" : "not_started",
+            failureKind: "unknown_outcome",
+            content: [
+              {
+                type: "text",
+                text: `Tool operation result could not be saved: ${String(error)}`,
+              },
+            ],
+            hostFileFacts: undefined,
+          });
+        }
       }
+      finishInitialSettlement();
+      if (operation && result.executionState === "unknown")
+        failBatch(
+          new Error(
+            `Tool operation ${operation.ticket.operationId} has an unknown outcome`,
+          ),
+        );
       results[idx] = result;
       try {
         await emitToolLifecycle(
@@ -234,6 +481,7 @@ export async function executeCheckedTools(
               ? "failed"
               : "completed",
           result.executionState,
+          identity(),
         );
       } catch (error) {
         failBatch(error);
@@ -244,8 +492,6 @@ export async function executeCheckedTools(
     return task;
   });
   await Promise.all(tasks);
-
-  // Post hooks do not replace results already returned during cancellation.
   for (const idx of executedIndexes) {
     const result = results[idx]!;
     if (signal?.aborted || execution?.profile?.executableHooks === false) break;
@@ -258,6 +504,5 @@ export async function executeCheckedTools(
       failBatch(error);
     }
   }
-
   return { results, failure };
 }

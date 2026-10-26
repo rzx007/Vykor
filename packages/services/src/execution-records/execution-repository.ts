@@ -1,0 +1,37 @@
+import { randomUUID } from "node:crypto";
+import type { ExecutionRecord } from "@vykor/domain-contracts/executions";
+import type { StorageContext } from "../database/storage-context.js";
+import { assertMutableSession, assertSession, clone } from "../session-runtime/persistence/store-state.js";
+
+export interface ExecutionFilter { sessionId?: string; runId?: string }
+
+export class ExecutionRepository {
+  constructor(private readonly storage: StorageContext) {}
+  ensure(input: { id?: string; sessionId: string; runId: string }): ExecutionRecord {
+    return this.storage.atomic(() => {
+      this.storage.assertWritable();
+      const session = assertSession(this.storage.state, input.sessionId);
+      const run = this.storage.state.runs[input.runId];
+      if (!run || run.sessionId !== input.sessionId) throw new Error("Execution Run does not belong to session");
+      const existing = this.list({ runId: input.runId })[0];
+      if (existing) {
+        if (input.id && existing.id !== input.id) throw new Error("Execution identity conflict");
+        return existing;
+      }
+      assertMutableSession(session);
+      if (run.status !== "pending" && run.status !== "running") throw new Error("Execution Run is terminal");
+      const id = input.id ?? `execution_${randomUUID()}`;
+      if (this.storage.state.executions[id]) throw new Error("Execution identity conflict");
+      const timestamp = Date.now();
+      const row: ExecutionRecord = { id, sessionId: input.sessionId, runId: input.runId, status: run.status, ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }), createdAt: timestamp, updatedAt: timestamp };
+      this.storage.rollback?.capture(this.storage.state.executions, id);
+      this.storage.state.executions[id] = row;
+      this.storage.mutations.executions.add(id);
+      return clone(row);
+    });
+  }
+  get(id: string): ExecutionRecord | undefined { const row = this.storage.state.executions[id]; return row && clone(row); }
+  list(filter: ExecutionFilter = {}): ExecutionRecord[] {
+    return clone(Object.values(this.storage.state.executions).filter(row => (!filter.sessionId || row.sessionId === filter.sessionId) && (!filter.runId || row.runId === filter.runId)));
+  }
+}

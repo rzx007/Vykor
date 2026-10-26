@@ -58,6 +58,8 @@ export function externalToolMetadata(
     "toolName",
     "toolCallId",
     "toolAttemptId",
+    "operationId",
+    "parentOperationId",
     "outcome",
     "modelGeneration",
     "committed",

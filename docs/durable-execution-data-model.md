@@ -43,6 +43,28 @@ SQLite 是 daemon 的业务真相。客户端快照和 SSE 都从这些记录产
 
 ## 状态规则
 
+### S1 工具操作记录
+
+S1 新增的 Execution 是关联一次逻辑执行的头记录。当前每个 Run 建立一份，状态跟随原 Run；它与已有 Session Execution 长期工作记录分开。S1 未保存模型检查点，也没有开启跨 Run 续跑。
+
+| 记录 | 归属与内容 | 入口 |
+|---|---|---|
+| execution | 关联 sessionId/runId，保存状态与时间 | `SessionStore.executions` |
+| tool_operation | 一个逻辑操作，绑定工具来源、规范化参数、意图摘要、策略版本、业务键与确认结果 | `SessionStore.toolOperations.prepare/authorize/reject` |
+| tool_dispatch_attempt | 每次实际派发单独保存，关联 owner、操作、开始/结束时间与回执 | `SessionStore.toolOperations.dispatch/settle` |
+
+同一个 session、Run、generationId 和 toolCallId 的内容相同才返回已有操作；generationId 是宿主的模型回合身份，不同回合复用 provider ID 不会复用旧效果。显式 runTool 未提供回合身份时保留同 ID 重投语义；traceId 只作审计。相同参数的两个独立调用有不同 operationId，安全重试保留 operationId 和业务键，但创建新的 toolAttemptId。
+
+Operation 状态为 prepared、authorized、dispatching、confirmed、not_applied、unknown、rejected、cancelled。派发意图已保存而结果未保存时，不能认为操作没发生；启动恢复只把失去活体的 dispatching 标为 unknown，不重新调用工具。
+
+已确认结果重复提交必须相同。unknown 只能凭授权宿主的可信查询核对；证据追加保存，结果不明就继续保留。Run 已结束或被取消后，合法迟到回执仍可补记审计，不能重开 Run 或继续模型。
+
+三类记录与现有会话共用 SessionState、MutationBuffer、事务回滚、owner 校验和 SQLite/memory 路由。memory 会话退出后不保留这些记录。会话删除同时处理关联记录，普通保留清理不提前删除未知操作的审计事实。
+
+精确字段见 `packages/domain-contracts/src/executions/records.ts`，存储入口见 `packages/services/src/tool-operations/`。跨进程崩溃证据由 `tests/agent-integration/__test__/durable-tool-operations.integration.test.ts` 验证；S2 的冻结检查点仍按后续方案实施。
+
+### 现有公共状态
+
 当前公共状态枚举：
 
 ```text

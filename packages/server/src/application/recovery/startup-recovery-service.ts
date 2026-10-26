@@ -1,5 +1,6 @@
 export interface StartupRecoveryServiceOptions {
   recoverProjectionSettlements(): void;
+  recoverToolOperations?(): void;
   recoverPluginUiActions?(): void;
   interruptActiveRuns(): void;
   reconcileGoalModelAttempts?(): void;
@@ -20,6 +21,7 @@ export class StartupRecoveryService {
 
   async run(): Promise<void> {
     this.options.recoverProjectionSettlements();
+    this.options.recoverToolOperations?.();
     this.options.recoverPluginUiActions?.();
     this.options.interruptActiveRuns();
     this.options.reconcileGoalModelAttempts?.();

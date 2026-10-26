@@ -1,6 +1,30 @@
 import { sql } from "drizzle-orm";
 import { blob, check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+/** S1 审计头保留独立 JSON 版本；和原有会话使用同一个连接与事务。 */
+export const executions = sqliteTable("execution", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  runId: text("run_id").notNull(),
+  dataJson: text("data_json").notNull(),
+}, table => [uniqueIndex("execution_run_idx").on(table.runId), index("execution_session_idx").on(table.sessionId)]);
+
+export const toolOperations = sqliteTable("tool_operation", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  runId: text("run_id").notNull(),
+  logicalCallId: text("logical_call_id").notNull(),
+  state: text("state").notNull(),
+  dataJson: text("data_json").notNull(),
+}, table => [uniqueIndex("tool_operation_call_idx").on(table.sessionId, table.runId, table.logicalCallId), index("tool_operation_session_state_idx").on(table.sessionId, table.state)]);
+
+export const toolDispatchAttempts = sqliteTable("tool_dispatch_attempt", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  operationId: text("operation_id").notNull(),
+  dataJson: text("data_json").notNull(),
+}, table => [index("tool_dispatch_attempt_operation_idx").on(table.operationId), index("tool_dispatch_attempt_session_idx").on(table.sessionId)]);
+
 export const sessions = sqliteTable(
   "session",
   {

@@ -6,6 +6,8 @@
 
 store-state 创建状态并提供记录断言、编码和克隆；`persistSessionChanges()` 按 MutationBuffer 中的变化执行增量写入，调用方提供外层事务。
 
+执行头、工具操作和独立派发尝试同样进入共享状态和变更集合；保存完整 JSON 结果及可查询的身份索引，不另开数据库连接。会话路由先按 sessionId 分流，memory 数据只写内存集合，失败时由同一个回滚日志恢复。
+
 ## 状态归属
 
 共享状态由 SessionStore 持有，持久事实位于 SQLite；当前变更集合由事务与修改记录模块管理。

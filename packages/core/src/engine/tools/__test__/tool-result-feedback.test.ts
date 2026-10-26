@@ -36,6 +36,9 @@ describe("formatToolResultForModel", () => {
     const result: ToolExecutionResult = { toolUseId: "a", toolName: "Inspect", content: [{ type: "text", text: "Found one issue" }], metadata: { ui: proposal } };
     expect(formatToolResultForModel(result)).toEqual([{ type: "text", text: "Found one issue" }]);
   });
+  it("strips tool-supplied operation identities from free metadata", () => {
+    expect(externalToolMetadata({ operationId: "forged", parentOperationId: "forged-parent", toolAttemptId: "forged-attempt", useful: 1 })).toEqual({ useful: 1 });
+  });
   it("labels explicit unknown output even when isError is absent", () => {
     const content = formatToolResultForModel({ toolUseId: "unknown", toolName: "Write", executionState: "unknown",
       content: [{ type: "text", text: "existing output" }] });

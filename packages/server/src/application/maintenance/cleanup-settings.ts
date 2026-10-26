@@ -94,6 +94,9 @@ export class MaintenanceCleanupService {
     })) return "仍绑定独立工作目录；请先在 Git 设置中安全清理独立工作目录";
     if (this.control.hasAnyActiveRuns() || this.control.runtimeSnapshot().coordinator.queuedRunCount > 0) return "后台仍有活动或排队任务，请收尾后重试";
     if (ids.some(id => this.store.runs.listRuns(id).some(run => run.status === "pending" || run.status === "running"))) return "包含活动或排队运行记录";
+    if (ids.some(sessionId => this.store.toolOperations.list({ sessionId }).some(operation =>
+      ["prepared", "authorized", "dispatching", "unknown"].includes(operation.state),
+    ))) return "包含尚未结算的工具操作，请先核对结果或取消未派发操作";
     if (ids.some(id => this.store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"))) return "包含活动子任务或后台任务";
     if (this.store.permissions.list().some(permission => ids.includes(permission.sessionId) && permission.status === "pending")) return "仍有待批准操作";
     if (this.store.listProjectionSettlements().some(row => ids.includes(row.rootSessionId) && (row.status === "pending" || row.status === "retrying"))) return "仍有待收束的数据记录";

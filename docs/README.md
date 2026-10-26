@@ -208,6 +208,7 @@
 
 ## 第 6 层：决策、计划和历史
 
+- [Agent 核心能力分阶段方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)与 [S1 工具操作安全实施计划](./superpowers/plans/2026-10-26-s1-tool-operation-safety.md)：S1 的接口、操作记录、强制检查及验收范围；S2 的检查点续跑和 S3 的持久审批分别交付。
 - [Agent 核心包架构收敛方案](./superpowers/specs/2026-10-21-agent-package-convergence-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-21-agent-package-convergence.md)：P0–P6 已实施并验收，阶段例外清零，SDK 和权威文档完成收口，见 [P6 验收记录](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)。
 - [Protocol 分层收敛方案](./superpowers/specs/2026-10-22-protocol-layering-design.md)与[分阶段实施计划](./superpowers/plans/2026-10-22-protocol-layering.md)：P7–P13 实现与集中验收完成，当前 `stageExceptions` 为零，详见[最终验收记录](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)。[P7 记录](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md)保留迁移前快照，不代表当前依赖或例外数量。
 - `docs/adr/`：已经作出的长期决定。当前有 [Projection Settlement 失败分类与恢复边界](./adr/0001-projection-settlement-failure-policy.md)。

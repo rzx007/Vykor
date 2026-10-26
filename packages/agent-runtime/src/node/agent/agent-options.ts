@@ -22,6 +22,7 @@ import type { PluginSelectionCandidate } from "../plugins/plugin-selection.js";
 
 /** Trusted prepared bindings for one actual Run; never serialized into model context or events. */
 export interface AgentRunCapabilitySnapshot {
+  readonly executionEnvironment?: { info: ExecutionEnvironmentHandle["info"]; workspace: ExecutionEnvironmentHandle["workspace"] };
   readonly resolveToolAppOrigin: (
     binding:
       import("../runtime/node-runtime-resources.js").NodeRunToolBinding | undefined,
@@ -62,6 +63,8 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Optional host-owned tool ledger and mandatory policy; descendants retain this pair. */
+  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   /** Host-owned admission and durable settlement for this agent tree's actual model attempts. */
   modelAttempts?: import("@vykor/agent-contracts").ModelAttemptGate;
   /** Reliable host-only registration after durable Run start, before model dispatch. Return a terminal cleanup. */

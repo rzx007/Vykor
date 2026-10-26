@@ -1,3 +1,4 @@
+import { validateToolSafety } from "../../kernel/tool-safety.js";
 import { NodeRunCatalogue } from "../capabilities/node-run-catalogue.js";
 import type { AgentEffects } from "@vykor/agent-contracts";
 import { WorkflowHostDirectory } from "../workflow/workflow-host-directory.js";
@@ -58,6 +59,7 @@ export async function createDefaultNodeAgentWithInternals(
   options: DefaultNodeAgentOptions,
   internals: DefaultNodeAgentInternals,
 ): Promise<DefaultNodeAgent> {
+  validateToolSafety(options.toolSafety);
   const eventBus = new AgentEventBus(options.onEvent);
   return await createDefaultNodeAgentInternal(
     options,
@@ -122,6 +124,7 @@ async function createDefaultNodeAgentInternal(
       childDirectory: internal.childDirectory,
       onRunCapabilities: options.onRunCapabilities,
       modelAttempts: options.modelAttempts,
+      toolSafety: options.toolSafety,
     });
   } catch (error) {
     return cleanupAfterInitializationFailure(composition.cleanup, error);

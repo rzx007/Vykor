@@ -24,6 +24,7 @@
 | [channels/](./channels/README.md) | 保存外部渠道会话映射、消息投递结果及平台附加信息。 |
 | [conversations/](./conversations/README.md) | 管理输入、消息、消息部件、增量输出以及会话树操作。 |
 | [database/](./database/README.md) | 打开 SQLite、应用迁移链，并为领域模块提供数据库和共享状态接口。 |
+| [execution-records/](./execution-records/README.md) | 保存每个 Run 的执行头，跟随 Run 状态变化。 |
 | [goals/](./goals/README.md) | 保存会话目标、版本、执行请求、等待与模型尝试用量。 |
 | [memory/](./memory/README.md) | 从会话中提取长期记忆，并维护压缩后继续对话所需的会话记忆文件。 |
 | [notes/](./notes/README.md) | 保存笔记索引，并协调 Markdown 文件与记录修订。 |
@@ -37,6 +38,7 @@
 | [sessions/](./sessions/README.md) | 保存会话属性、工作树绑定，并提供默认标题识别与标题生成。 |
 | [token-estimation/](./token-estimation/README.md) | 提供不依赖模型请求的文本 Token 数量估算。 |
 | [tool-outputs/](./tool-outputs/README.md) | 集中定义工具结果内联、预览和压缩的长度规则。 |
+| [tool-operations/](./tool-operations/README.md) | 保存工具操作、独立尝试、完整结果和核对证据，阻止未知写操作重放。 |
 | [workflows/](./workflows/README.md) | 保存工作流运行、任务尝试、事件及执行占用记录。 |
 
 ## 测试与维护

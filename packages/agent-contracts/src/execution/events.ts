@@ -50,6 +50,7 @@ export interface ToolUseEndEvent {
     executionState?: import("../index.js").ToolExecutionState;
     recoveryHint?: string;
     compactSummary?: string;
+    operationId?: string;
     toolAttemptId?: string;
     metadata?: Record<string, unknown>;
   };

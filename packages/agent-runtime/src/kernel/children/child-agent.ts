@@ -56,7 +56,7 @@ type ChildTools = ReadonlyMap<string, RunToolBinding>;
 export type TrustedChildRunParent = Pick<
   AgentRunScope,
   "sessionId" | "runId" | "signal"
-> & { limits?: AgentExecutionLimits };
+> & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety };
 
 interface ChildRecord {
   id: string;
@@ -169,7 +169,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   createController(
-    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety },
     tools?: ChildTools,
   ): AgentChildController {
     const captured = tools && readonlyMap(tools);
@@ -232,7 +232,7 @@ export class AgentChildManager implements AgentChildDirectory {
    * the child's first message; it never appears in persisted spawn summaries.
    */
   async spawnSystemChild(
-    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety },
     input: AgentChildSpawnInput,
     sensitiveInitialContent: string,
     tools?: ChildTools,
@@ -248,7 +248,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private async spawn(
-    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety },
     input: AgentChildSpawnInput,
     tools?: ChildTools,
   ): Promise<AgentChildInvocation> {
@@ -256,7 +256,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private async spawnInternal(
-    parentScope: AgentRunScope & { limits?: AgentExecutionLimits },
+    parentScope: AgentRunScope & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety },
     input: AgentChildSpawnInput,
     options: {
       tools?: ChildTools;
@@ -1003,6 +1003,7 @@ function captureParent(scope: TrustedChildRunParent): TrustedChildRunParent {
     runId: scope.runId,
     signal: scope.signal,
     ...(scope.limits ? { limits: scope.limits } : {}),
+    ...(scope.toolSafety ? { toolSafety: scope.toolSafety } : {}),
   };
 }
 

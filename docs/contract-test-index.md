@@ -6,6 +6,19 @@
 
 ## 生命周期契约编号
 
+### S1 工具操作安全
+
+| 契约 | 自动验证入口 | 检查范围 |
+|---|---|---|
+| P9 强制检查与保存顺序 | [core 操作执行](../packages/core/src/engine/tools/__test__/operation-execution.test.ts)、[真实管道与 SQLite](../tests/agent-integration/__test__/s1-tool-safety-pipeline.integration.test.ts) | 规则失败零调用、真实尝试、结果保存失败停止、未知和迟到回执 |
+| P9 持久记录与原事务 | [操作仓库](../packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts) | 意图冲突、版本、owner、回滚、memory 隔离、核对证据 |
+| P9 崩溃窗口 | [独立 worker 强制退出](../tests/agent-integration/__test__/durable-tool-operations.integration.test.ts) | 派发后、外部生效后、确认后退出；重开 SQLite 并核对独立效果记录 |
+| P9 SDK 与实际消息身份 | [SDK 接线](../packages/agent-runtime/src/__test__/tool-safety-wiring.test.ts)、[操作身份投影](../packages/server/src/application/agent/__test__/tool-lifecycle-identity.test.ts) | root/child/runTool 的宿主能力与真实派发身份，不把等待当成执行 |
+
+这些入口验证 S1，不代替 S2 的模型检查点继续或 S3 的持久审批验收。
+
+### 其余生命周期契约
+
 | 编号 | 主要测试 |
 |---|---|
 | A1、A2、A3、A4、A5 | [agent.test.ts](../packages/agent-runtime/src/node/agent/__test__/agent.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/node/agent/__test__/sdk.test.ts) |

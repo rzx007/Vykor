@@ -149,7 +149,7 @@ describe("SessionDatabase", () => {
         expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
         first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
         journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-        expect(journal).toHaveLength(9);
+        expect(journal).toHaveLength(10);
       } finally {
         first.close();
       }
@@ -172,6 +172,7 @@ describe("SessionDatabase", () => {
       "0006_note_file_index.sql",
       "0007_goal_simplification.sql",
       "0008_session_plugin_apps.sql",
+      "0009_exotic_owl.sql",
     ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
     expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
@@ -184,6 +185,7 @@ describe("SessionDatabase", () => {
       "0006_note_file_index",
       "0007_goal_simplification",
       "0008_session_plugin_apps",
+      "0009_exotic_owl",
     ]);
   });
 

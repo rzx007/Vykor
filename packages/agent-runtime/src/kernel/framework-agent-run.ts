@@ -29,6 +29,7 @@ import { abortError, serializeError } from "./agent-errors.js";
 import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 
 export interface FrameworkAgentRunOptions {
+  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   agentId: string;
   session: {
     id: string;
@@ -254,6 +255,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       return {
         scope,
         ...run,
+        toolSafety: this.options.toolSafety ?? run.toolSafety,
         limits: this.options.limits ?? run.limits,
         profile:
           this.options.profile || run.profile
@@ -275,7 +277,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
           : {}),
         effects: this.options.effects,
         children: this.options.children.createController(
-          { ...scope, limits: this.options.limits ?? run.limits },
+          { ...scope, limits: this.options.limits ?? run.limits, toolSafety: this.options.toolSafety ?? run.toolSafety },
           tools,
         ),
         emit: (event) => this.emit(event),

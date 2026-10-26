@@ -1,10 +1,13 @@
-import type { ContentBlock } from "../conversation/messages.js";
-import type { ToolFailureKind, ToolExecutionState, McpCallResultData, McpToolAnnotations, McpToolUiMetadata } from "./tool-data.js";
+import type { ToolResult, ToolExecutionResult } from "./tool-data.js";
+export type { ToolResult, ToolExecutionResult, HostFileFacts } from "./tool-data.js";
+import type { McpToolAnnotations, McpToolUiMetadata } from "./tool-data.js";
 import type { PermissionMode, AgentPermissionDecision, AgentPermissionRequest } from "../policy/permissions.js";
 import type { AgentExecutionContext } from "../execution/execution.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export interface ToolContext {
+  operationId?: string;
+  parentOperationId?: string;
   cwd: string;
   /** Effective execution environment. Runtime-owned contexts always provide it. */
   environment?: ExecutionEnvironmentHandle;
@@ -42,43 +45,6 @@ export interface ToolContext {
     request: AgentPermissionRequest,
   ) => Promise<AgentPermissionDecision>;
   agent?: AgentExecutionContext;
-}
-
-export interface ToolResult {
-  content: ContentBlock[];
-  /** Original bounded MCP response; private to the authorized application host. */
-  mcpResult?: McpCallResultData;
-  isError?: boolean;
-  failureKind?: ToolFailureKind;
-  executionState?: ToolExecutionState;
-  recoveryHint?: string;
-  /** Controlled builtin/host summary, at most 1,000 characters; never an instruction. */
-  compactSummary?: string;
-  /** Set only by checked execution after verifying the captured builtin definition. */
-  hostFileFacts?: HostFileFacts;
-  metadata?: Record<string, unknown>;
-}
-
-/** File observations emitted by a captured builtin; free metadata is not a trust boundary. */
-export interface HostFileFacts {
-  environmentKey: string;
-  executionRoot?: string;
-  pathStyle?: "windows" | "posix";
-  files: Array<{
-    path: string;
-    subjectKey: string;
-    operation: "read" | "write" | "edit" | "patch";
-    beforeDigest?: "missing" | `sha256:${string}`;
-    afterDigest: "missing" | `sha256:${string}`;
-    completed: true;
-    bodyVisible?: boolean;
-  }>;
-}
-
-export interface ToolExecutionResult extends ToolResult {
-  toolUseId: string;
-  toolName: string;
-  toolAttemptId?: string;
 }
 
 export interface ToolExecutionSpec {

@@ -478,6 +478,8 @@
     {
       "id": "storage-hosts",
       "fromPaths": [
+        "packages/services/src/execution-records/",
+        "packages/services/src/tool-operations/",
         "packages/services/src/database/",
         "packages/services/src/sessions/",
         "packages/services/src/conversations/",
@@ -511,6 +513,8 @@
       "removeByPhase": "P6",
       "migrationId": "M30",
       "allowSelfPaths": [
+        "packages/services/src/execution-records/",
+        "packages/services/src/tool-operations/",
         "packages/services/src/database/",
         "packages/services/src/sessions/",
         "packages/services/src/conversations/",

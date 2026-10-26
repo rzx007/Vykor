@@ -8,6 +8,7 @@
 | --- | --- |
 | [src/kernel/](./src/kernel/README.md) | 负责推进 agent 任务、接收输入、发送进度通知和管理子任务；所需配置与工具由外层准备并传入 |
 | [src/node/](./src/node/README.md) | 接入配置、终端、工具、插件和文件系统，提供默认 Node agent |
+| [src/__test__/](./src/__test__/README.md) | 验证 Kernel 与 Node 共同承担的接线行为 |
 | [scripts/](./scripts/README.md) | 构建、发布包检查和执行核心依赖检查 |
 | [test-helpers/](./test-helpers/README.md) | 多个测试和其他包共用的插件夹具 |
 

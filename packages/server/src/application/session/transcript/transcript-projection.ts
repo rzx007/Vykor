@@ -242,7 +242,6 @@ export class SessionTranscriptProjection {
           input: event.toolUse.input,
           metadata: {
             toolCallId: event.toolUse.id,
-            toolAttemptId: `tool_attempt_${event.toolUse.id}_1`,
             outcome: "pending",
             toolProgress: { phase: "preparing", executionState: "not_started" },
             ...this.generationMetadata(state),
@@ -302,7 +301,8 @@ export class SessionTranscriptProjection {
                 pluginAppSource: { ...trusted?.toolAppOrigin, sessionId: state.sessionId, runId: state.runId, sourcePartId: active.partId, toolUseId: event.toolUseId },
               } : {}),
             toolCallId: event.toolUseId,
-            toolAttemptId: event.result.toolAttemptId ?? `tool_attempt_${event.toolUseId}_1`,
+            ...(event.result.operationId ? { operationId: event.result.operationId } : {}),
+            toolAttemptId: event.result.toolAttemptId ?? (event.result.operationId || event.result.executionState === "not_started" ? null : `tool_attempt_${event.toolUseId}_1`),
             outcome: event.result.isError ? "failed" : "completed",
             toolProgress: null,
             ...feedback,

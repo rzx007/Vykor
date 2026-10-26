@@ -5,6 +5,7 @@
 | 目录 | 公开入口 | 用途 |
 | --- | --- | --- |
 | [sessions](sessions/README.md) | `@vykor/domain-contracts/sessions` | 会话、运行与消息记录 |
+| [executions](executions/README.md) | `@vykor/domain-contracts/executions` | 执行头、工具操作、派发尝试及核对证据 |
 | [inputs](inputs/README.md) | `@vykor/domain-contracts/inputs` | 用户输入项、附件引用与输入校验 |
 | [goals](goals/README.md) | `@vykor/domain-contracts/goals` | 持续目标、预算、等待和操作校验 |
 | [attachments](attachments/README.md) | `@vykor/domain-contracts/attachments` | 附件资源、转换结果和格式校验 |

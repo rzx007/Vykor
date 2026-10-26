@@ -8,7 +8,7 @@ import { loadSessionReadModel } from "./read-model.js";
 import type { DurableEventRegistry } from "../../session-runtime/events/event-registry.js";
 import {
   sessions, sessionInputs, sessionMessages, sessionMessageParts, sessionRuns,
-  sessionRunAttempts, sessionTasks, sessionEvents, permissionRequests, scheduledRuns, scheduledTasks, sessionPluginApps,
+  sessionRunAttempts, sessionTasks, sessionEvents, permissionRequests, scheduledRuns, scheduledTasks, sessionPluginApps, executions, toolOperations, toolDispatchAttempts,
 } from "../../session-runtime/schema.js";
 
 /** Only this implementation translates chat changes into Drizzle database writes. */
@@ -57,6 +57,9 @@ export class SqliteChatPersistence implements ChatPersistence {
     database.update(scheduledTasks).set({ createdFromSessionId: null, updatedAt: timestamp })
       .where(inArray(scheduledTasks.createdFromSessionId, sessionIds)).run();
     database.delete(permissionRequests).where(inArray(permissionRequests.sessionId, sessionIds)).run();
+    database.delete(toolDispatchAttempts).where(inArray(toolDispatchAttempts.sessionId, sessionIds)).run();
+    database.delete(toolOperations).where(inArray(toolOperations.sessionId, sessionIds)).run();
+    database.delete(executions).where(inArray(executions.sessionId, sessionIds)).run();
     database.delete(sessionPluginApps).where(inArray(sessionPluginApps.sessionId, sessionIds)).run();
     database.delete(sessionTasks).where(inArray(sessionTasks.sessionId, sessionIds)).run();
     database.delete(sessionRunAttempts).where(inArray(sessionRunAttempts.runId,

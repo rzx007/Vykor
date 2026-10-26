@@ -138,6 +138,14 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
   return context.storage.atomic(() => {
     if (!context.storage.chatPersistence) throw new Error("Chat persistence is not configured");
     assertSynchronousCommit(context.storage.chatPersistence.deleteSessions(sessionIds));
+    for (const table of ["executions", "toolOperations", "toolDispatchAttempts"] as const) {
+      for (const [id, row] of Object.entries(context.storage.state[table])) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        context.storage.rollback?.capture(context.storage.state[table], id);
+        delete context.storage.state[table][id];
+        context.storage.mutations[table].delete(id);
+      }
+    }
 
     for (const id of sessionIds) {
       context.storage.rollback?.capture(context.storage.state.sessions, id);

@@ -67,6 +67,8 @@ import {
   IncrementalOutput,
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
+import { ExecutionRepository } from "../execution-records/execution-repository.js";
+import { ToolOperationRepository } from "../tool-operations/tool-operation-repository.js";
 import { NoteRepository } from "../notes/note-repository.js";
 import { PluginAppRepository } from "../plugin-apps/index.js";
 import {
@@ -175,6 +177,8 @@ export class SessionStore {
   readonly sessions!: SessionRepository;
   readonly conversations!: ConversationRepository;
   readonly runs!: RunRepository;
+  readonly executions!: ExecutionRepository;
+  readonly toolOperations!: ToolOperationRepository;
   readonly conversationTransactions!: ConversationTransactions;
   readonly incrementalOutput!: IncrementalOutput;
   private storage!: StorageContext;
@@ -269,6 +273,8 @@ export class SessionStore {
         appendEvent: (input) => this.conversations.appendEvent(input),
         save: () => this.save(),
       });
+      this.executions = new ExecutionRepository(this.storage);
+      this.toolOperations = new ToolOperationRepository(this.storage, this.executions);
       this.permissions = new PermissionRepository({
         storage: this.storage,
         assertSession: (sessionId) => assertSession(this.state, sessionId),
@@ -389,8 +395,12 @@ export class SessionStore {
     /** 仅在调用方已经独立确认当前 owner 不可能继续写入时返回 true。 */
     canTakeOver?: (current: ApplicationOwnerLease) => boolean;
   }): ApplicationOwnerLease {
+    if (this.coordinator.inTransaction || hasPendingMutations(this.storage.mutations)
+      || this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
+      throw new Error("Application ownership requires a settled local store");
+    }
     const timestamp = input.now ?? Date.now();
-    const lease = this.database.transaction(() => {
+    const acquired = this.database.transaction(() => {
       const row = this.orm.select().from(applicationOwners)
         .where(eq(applicationOwners.key, "application")).get();
       const current = row ? applicationOwnerFromRow(row) : undefined;
@@ -411,10 +421,17 @@ export class SessionStore {
       };
       this.orm.insert(applicationOwners).values({ key: "application", ...next })
         .onConflictDoUpdate({ target: applicationOwners.key, set: next }).run();
-      return next;
+      // Construction may precede the old owner's final commit. Read under the
+      // same write lock as the claim, before startup recovery can inspect state.
+      const state = new SqliteChatPersistence(this.databaseKernel).load(this.eventRegistry);
+      this.storage.chatPersistence?.restoreTemporaryState(state);
+      const eventSequence = DurableEventSequence.load(this.orm, state);
+      return { lease: next, state, eventSequence };
     })();
-    this.activeOwnerLease = lease;
-    return lease;
+    this.storage.state = acquired.state;
+    this.storage.eventSequence = acquired.eventSequence;
+    this.activeOwnerLease = acquired.lease;
+    return acquired.lease;
   }
 
   heartbeatApplicationOwner(

@@ -131,6 +131,7 @@ stateDiagram-v2
 - **P6**：每条 durable event 必须携带 `schemaVersion`；消费者只有在理解该版本后才能应用事件并推进 cursor，未知版本必须明确报错，不能静默跳过。
 - **P7**：durable event 必须在集中 registry 中登记并通过当前版本、payload 和 scope 校验；版本不完全匹配时直接失败，不在读取边界升级。
 - **P8**：child required projection 失败必须先持久化可序列化 Settlement；同一 root 的 pending Settlement 未解决前不得应用后续事件，重启只能恢复 durable 状态，不能假装复活旧 live Handle。
+- **P9**：接入 AgentToolSafety 后，强制规则失败不能派发工具；派发意图先于实际调用保存，结果保存先于后续推进。未知操作与合法迟到回执必须保留，不能因 Run 结束而重放或删除；消息投影中的实际尝试身份来自已提交操作记录。
 
 ## 失败矩阵
 

@@ -6,4 +6,6 @@
 
 测试使用离线响应、临时目录或注入的执行器，不需要模型凭据。工具自身的输入校验、搜索和 Job 参数适配测试保留在 `packages/tools/src/meta/__test__/tool-search.test.ts` 与 `packages/tools/src/job/__test__/job-tools.test.ts`。
 
+`__test__/durable-tool-operations.integration.test.ts` 启动独立 Node worker 和真实临时 SQLite，在三个已知提交位置强制杀进程，再以新 owner 重开数据库。测试分别核对派发意图、未知结果与已确认回执，并用独立效果文件确认没有重复写入；它不验证 S2 的模型检查点续跑。夹具位于 `__test__/fixtures/`。
+
 运行 `pnpm test:agent-integration`；根 `pnpm test` 已包含此命令，普通 CI 的 Test 步骤会继续执行。两个工具测试由 `pnpm --filter @vykor/tools test` 覆盖。跨包测试直接运行，避免沿用 Runtime 包的缓存而遗漏 API 或工具变化。

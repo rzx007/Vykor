@@ -91,6 +91,7 @@ export async function executeToolWithTimeout(
   context: ToolContext,
   timeoutMs: number,
   externalSignal?: AbortSignal,
+  onLateOutcome?: (outcome: { returned: Awaited<ReturnType<ToolDefinition["execute"]>> } | { error: unknown }) => Promise<void>,
 ): Promise<Awaited<ReturnType<ToolDefinition["execute"]>>> {
   const controller = new AbortController();
   const timeoutError = new ToolTimeoutError(timeoutMs);
@@ -120,15 +121,28 @@ export async function executeToolWithTimeout(
     }
   });
 
+  let abandoned = false;
+  const invocation = Promise.resolve().then(() => {
+    controller.signal.throwIfAborted();
+    return tool.execute(input, {
+      ...context,
+      abortSignal: controller.signal,
+      deadlineAt,
+    });
+  });
+  // Register after the race is consumed; errors from late auditing remain the host's responsibility.
+  void invocation.then(
+    returned => { if (abandoned) return onLateOutcome?.({ returned }); },
+    error => { if (abandoned) return onLateOutcome?.({ error }); },
+  ).catch(error => { process.emitWarning(`Late tool outcome callback failed: ${String(error)}`); });
   try {
     return await Promise.race([
-      tool.execute(input, {
-        ...context,
-        abortSignal: controller.signal,
-        deadlineAt,
-      }),
+      invocation,
       timeoutPromise,
     ]);
+  } catch (error) {
+    abandoned = controller.signal.aborted;
+    throw error;
   } finally {
     clearTimeout(timeout);
     if (abortListener) {

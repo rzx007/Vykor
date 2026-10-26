@@ -15,3 +15,5 @@ export * from "./tools/tools.js";
 export * from "./execution/execution.js";
 export * from "./execution/events.js";
 export * from "./conversation/collections.js";
+export * from "./tools/operations.js";
+export * from "./policy/required-policy.js";

@@ -1,3 +1,4 @@
+import { validateToolSafety } from "./tool-safety.js";
 import {
   readonlyMap,
   type AgentEffects,
@@ -52,6 +53,7 @@ export interface VykorAgentSubmitOptions {
   childRunParent?:
     | (Pick<AgentRunScope, "sessionId" | "runId" | "signal"> & {
         limits?: AgentExecutionLimits;
+        toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
       })
     | null;
   signal?: AbortSignal;
@@ -120,6 +122,7 @@ export interface VykorAgent {
   close(): Promise<void>;
 }
 export interface KernelAgentOptions {
+  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   id: string;
   cwd: string;
   engine: QueryEngine;
@@ -151,6 +154,7 @@ export class KernelAgent implements VykorAgent {
   };
   private closePromise?: Promise<void>;
   constructor(private readonly options: KernelAgentOptions) {
+    validateToolSafety(options.toolSafety);
     this.id = options.id;
     this.children = options.childDirectory;
   }
@@ -181,6 +185,7 @@ export class KernelAgent implements VykorAgent {
       },
       engine: this.options.engine,
       preparation: options.preparation ?? this.options.preparation,
+      toolSafety: this.options.toolSafety ?? options.childRunParent?.toolSafety,
       tools: options.tools,
       contribution: options.contribution,
       eventBus: this.options.eventBus,
@@ -251,35 +256,41 @@ export class KernelAgent implements VykorAgent {
     return this.runMaintenance(
       "tool",
       async () => {
-        await options.onToolEvent?.({
-          type: "tool.started",
-          data: { toolUse },
-        });
-        let attempted = false;
-        const deliver = async (result: ToolExecutionResult) => {
-          if (attempted) return;
-          attempted = true;
+        const prepared = this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
+        const toolSafety = this.options.toolSafety ?? prepared?.run.toolSafety;
+        try {
+          validateToolSafety(toolSafety);
           await options.onToolEvent?.({
-            type: "tool.completed",
-            data: { toolUseId: toolUse.id, result },
+            type: "tool.started",
+            data: { toolUse },
           });
-        };
-        const result = await this.options.engine.executeTool(toolUse, {
-          signal,
-          onResult: deliver,
-          execution: {
-            scope,
-            tools,
-            confirmTool: options.confirmTool,
-            effects: this.options.effects,
-            children: this.options.childManager.createController(scope, tools),
-            emit: options.onToolEvent ?? (async () => {}),
-            takeSteeredInputs: async () => [],
-            closeSteering: () => {},
-          },
-        });
-        if (!attempted) await deliver(result);
-        return result;
+          let attempted = false;
+          const deliver = async (result: ToolExecutionResult) => {
+            if (attempted) return;
+            attempted = true;
+            await options.onToolEvent?.({
+              type: "tool.completed",
+              data: { toolUseId: toolUse.id, result },
+            });
+          };
+          const result = await this.options.engine.executeTool(toolUse, {
+            signal,
+            onResult: deliver,
+            execution: {
+              scope,
+              toolSafety,
+              tools,
+              confirmTool: options.confirmTool,
+              effects: this.options.effects,
+              children: this.options.childManager.createController({ ...scope, toolSafety }, tools),
+              emit: options.onToolEvent ?? (async () => {}),
+              takeSteeredInputs: async () => [],
+              closeSteering: () => {},
+            },
+          });
+          if (!attempted) await deliver(result);
+          return result;
+        } finally { await prepared?.release?.(); }
       },
       controller,
     );
@@ -327,22 +338,27 @@ export class KernelAgent implements VykorAgent {
         cwd: this.options.cwd,
         signal: parent.signal ?? new AbortController().signal,
       };
-      const invocation = await this.options.childManager.spawnSystemChild(
-        scope,
-        input,
-        content,
-        tools,
-      );
-      let result: AgentChildResult;
+      const prepared = this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
+      const toolSafety = this.options.toolSafety ?? prepared?.run.toolSafety;
       try {
-        result = await invocation.result;
-      } finally {
-        await this.options.childManager.close(
-          invocation.id,
-          "Post-run child finished",
+        validateToolSafety(toolSafety);
+        const invocation = await this.options.childManager.spawnSystemChild(
+          { ...scope, toolSafety },
+          input,
+          content,
+          tools,
         );
-      }
-      return { invocation, result };
+        let result: AgentChildResult;
+        try {
+          result = await invocation.result;
+        } finally {
+          await this.options.childManager.close(
+            invocation.id,
+            "Post-run child finished",
+          );
+        }
+        return { invocation, result };
+      } finally { await prepared?.release?.(); }
     });
   }
   getUsage(): UsageSnapshot {

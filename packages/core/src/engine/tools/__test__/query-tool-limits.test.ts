@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyToolOutputBudget } from "../query-tool-limits.js";
+import { applyToolOutputBudget, executeToolWithTimeout } from "../query-tool-limits.js";
 
 const ref = "[tool-output-ref: opaque://abc]";
 const text = (content: ReturnType<typeof applyToolOutputBudget>) => content.filter((block) => block.type === "text").map((block) => block.text).join("");
@@ -34,4 +34,15 @@ describe("tool output history budget", () => {
     const result = applyToolOutputBudget(content);
     expect(text(result)).not.toContain("tool-output-ref");
   });
+});
+
+it("does not invoke if cancellation arrives before the scheduled invocation", async () => {
+  const controller = new AbortController();
+  let effects = 0;
+  const pending = executeToolWithTimeout({ name: "Write", description: "fixture", inputSchema: { type: "object" },
+    execute: async () => { effects++; return { content: [] }; },
+  }, {}, { cwd: "/" }, 1_000, controller.signal);
+  controller.abort(new Error("cancelled before invocation"));
+  await expect(pending).rejects.toThrow("cancelled before invocation");
+  expect(effects).toBe(0);
 });

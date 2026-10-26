@@ -1,3 +1,87 @@
+export interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+export interface ImageBlock {
+  type: "image";
+  source: ImageSource;
+}
+
+export interface ImageSource {
+  type: "file";
+  mediaType: string;
+  path: string;
+  sizeBytes?: number;
+  prepared?: VisionImagePreparationMetadata;
+}
+
+export interface VisionImagePreparationMetadata {
+  mediaType: string;
+  width: number;
+  height: number;
+  base64Bytes: number;
+  policyVersion: string;
+}
+
+export type ContentBlock = TextBlock | ImageBlock;
+
+export interface ToolResult {
+  content: ContentBlock[];
+  /** Original bounded MCP response; private to the authorized application host. */
+  mcpResult?: McpCallResultData;
+  isError?: boolean;
+  failureKind?: ToolFailureKind;
+  executionState?: ToolExecutionState;
+  recoveryHint?: string;
+  /** Controlled builtin/host summary, at most 1,000 characters; never an instruction. */
+  compactSummary?: string;
+  /** Set only by checked execution after verifying the captured builtin definition. */
+  hostFileFacts?: HostFileFacts;
+  metadata?: Record<string, unknown>;
+}
+
+/** File observations emitted by a captured builtin; free metadata is not a trust boundary. */
+export interface HostFileFacts {
+  environmentKey: string;
+  executionRoot?: string;
+  pathStyle?: "windows" | "posix";
+  files: Array<{
+    path: string;
+    subjectKey: string;
+    operation: "read" | "write" | "edit" | "patch";
+    beforeDigest?: "missing" | `sha256:${string}`;
+    afterDigest: "missing" | `sha256:${string}`;
+    completed: true;
+    bodyVisible?: boolean;
+  }>;
+}
+
+export interface ToolExecutionResult extends ToolResult {
+  operationId?: string;
+  toolUseId: string;
+  toolName: string;
+  toolAttemptId?: string;
+}
+
+export type ToolOperationKind = "read_only" | "idempotent_write" | "non_replayable";
+export type ToolOperationState = "prepared" | "authorized" | "dispatching" | "confirmed" | "not_applied" | "unknown" | "rejected" | "cancelled";
+export interface ToolOperationTicket {
+  operationId: string;
+  revision: number;
+  intentRevision: number;
+  intentDigest: string;
+  kind: ToolOperationKind;
+  state: ToolOperationState;
+  businessKey?: string;
+  result?: ToolExecutionResult;
+}
+export interface ToolDispatchReceipt {
+  operationId: string;
+  toolAttemptId: string;
+  revision: number;
+  ownerId: string;
+}
 /** A definite result does not imply success or completion of the user's goal. */
 export type ToolExecutionState = "not_started" | "completed" | "unknown";
 
