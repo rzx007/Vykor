@@ -6,6 +6,16 @@ import {
 } from "../session-interaction-service.js";
 
 describe("SessionInteractionService editLatestPrompt", () => {
+  it("rejects reusing an edit ID with another output contract", async () => {
+    const context = editContext({ getInput: vi.fn(() => ({
+      id: "edit-1", sessionId: "session-1", content: "replacement", delivery: "queue", attachments: [],
+      metadata: { outputSchema: { type: "string" }, edit: { kind: "latest_prompt", sourceMessageId: "message-1" } },
+    })) });
+    const service = new SessionInteractionService(context as any);
+    await expect(service.editLatestPrompt("session-1", { id: "edit-1", content: "replacement", sourceMessageId: "message-1", traceId: "trace-edit", metadata: { outputSchema: { type: "object" } } } as any)).rejects.toMatchObject({ status: 409 });
+    expect(context.agentPool.close).not.toHaveBeenCalled();
+    expect(context.runEngine.replaceLatestPrompt).not.toHaveBeenCalled();
+  });
   it.each(["pluginUi", "uiAction"])("rejects %s before closing the agent or editing the transcript", async name => {
     const context = editContext();
     const service = new SessionInteractionService(context as any);

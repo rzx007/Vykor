@@ -1,4 +1,5 @@
 import { validateToolSafety } from "./tool-safety.js";
+import { bindPreparedToolResults } from "./tool-results.js";
 import {
   readonlyMap,
   type AgentEffects,
@@ -45,6 +46,7 @@ export {
   type VykorAgentState,
 } from "./agent-errors.js";
 export interface VykorAgentSubmitOptions {
+  outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
   preparation?: AgentRunPreparation;
   contribution?: AgentRunContribution;
   tools?: ReadonlyMap<string, RunToolBinding>;
@@ -68,6 +70,7 @@ export interface VykorAgentSubmitOptions {
   };
 }
 export interface VykorAgentRunToolOptions {
+  toolResults?: import("@vykor/agent-contracts").RunToolResultStore;
   tools: ReadonlyMap<string, RunToolBinding>;
   scope: AgentRunScope;
   signal?: AbortSignal;
@@ -122,6 +125,7 @@ export interface VykorAgent {
   close(): Promise<void>;
 }
 export interface KernelAgentOptions {
+  outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
   toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   id: string;
   cwd: string;
@@ -186,6 +190,7 @@ export class KernelAgent implements VykorAgent {
       engine: this.options.engine,
       preparation: options.preparation ?? this.options.preparation,
       toolSafety: this.options.toolSafety ?? options.childRunParent?.toolSafety,
+      outputContract: options.outputContract ?? this.options.outputContract,
       tools: options.tools,
       contribution: options.contribution,
       eventBus: this.options.eventBus,
@@ -256,10 +261,12 @@ export class KernelAgent implements VykorAgent {
     return this.runMaintenance(
       "tool",
       async () => {
-        const prepared = this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
+        const prepared = options.toolResults && this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
         const toolSafety = this.options.toolSafety ?? prepared?.run.toolSafety;
         try {
           validateToolSafety(toolSafety);
+          const toolResults = options.toolResults ?? (prepared ? await bindPreparedToolResults(prepared.run, tools) : undefined);
+          signal.throwIfAborted();
           await options.onToolEvent?.({
             type: "tool.started",
             data: { toolUse },
@@ -279,6 +286,7 @@ export class KernelAgent implements VykorAgent {
             execution: {
               scope,
               toolSafety,
+              toolResults,
               tools,
               confirmTool: options.confirmTool,
               effects: this.options.effects,

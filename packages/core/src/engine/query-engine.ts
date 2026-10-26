@@ -43,7 +43,9 @@ import { ToolFailureMemory } from "./tools/tool-failure-memory";
 import {
   formatToolResultForModel,
   toolFeedbackFields,
+  toolResultReferenceHint,
 } from "./tools/tool-result-feedback";
+import { isToolResultReader } from "./results/result-reader-identity.js";
 import { toolDefinitionIdentity } from "./tools/tool-definition-identity";
 import { RunToolDiscovery } from "./tools/tool-discovery";
 import {
@@ -321,7 +323,7 @@ export class QueryEngine implements IQueryEngine {
     );
     this.messages = sanitizeMessageHistory(this.messages).map((message) =>
       message.type === "tool_result"
-        ? { ...message, content: applyToolOutputBudget(message.content, this.options.toolOutputPolicy) }
+        ? { ...message, content: this.budgetToolResultContent(message) }
         : message,
     );
     this.messages.push({ type: "user", content: preparedContent });
@@ -759,15 +761,16 @@ export class QueryEngine implements IQueryEngine {
           this.messages.push({
             type: "tool_result",
             toolUseId: result.toolUseId,
-            content: applyToolOutputBudget(result.content, this.options.toolOutputPolicy),
+            content: this.budgetToolResultContent(result),
             isError: result.isError,
             ...toolFeedbackFields(result),
+            ...(result.resultRef ? { resultRef: result.resultRef } : {}),
           });
           // Keep the model-only result formatting out of host-facing events for
           // retained plugin results. Ordinary results keep their existing
           // feedback blocks for consumers that rely on execution details.
           deliveredResults.push(
-            rawResult.metadata?.toolResultReadable === true
+            rawResult.metadata?.toolResultReadable === true || rawResult.resultRef
               ? rawResult
               : result,
           );
@@ -1200,7 +1203,7 @@ export class QueryEngine implements IQueryEngine {
             }
           : result;
       });
-    outcome.results = this.retainToolResults(outcome.results, execution);
+    outcome.results = await this.retainToolResults(outcome.results, execution);
     return { ...outcome, discoveryBlockedCalls };
   }
 
@@ -1239,7 +1242,7 @@ export class QueryEngine implements IQueryEngine {
       isTrustedSummary: (call, definition) =>
         this.isTrustedSummary(call, definition, toolRegistry, execution),
     });
-    const result = this.retainToolResults(results, execution)[0]!;
+    const result = (await this.retainToolResults(results, execution))[0]!;
     try {
       await options.onResult?.(result);
     } catch (error) {
@@ -1250,17 +1253,38 @@ export class QueryEngine implements IQueryEngine {
     return result;
   }
 
-  private retainToolResults(
+  private async retainToolResults(
     results: ToolExecutionResult[],
     execution?: AgentExecutionContext,
-  ): ToolExecutionResult[] {
-    if (!execution?.profile?.toolResultReferences) return results;
+  ): Promise<ToolExecutionResult[]> {
+    const archived: ToolExecutionResult[] = [];
+    for (const original of results) {
+      // Tool-returned data never establishes an archive capability.
+      const { resultRef: _untrusted, ...result } = original;
+      const binding = execution?.tools?.get(result.toolName);
+      const reader = binding?.source?.kind === "builtin" && isToolResultReader(binding.definition, binding.definitionIdentity);
+      if (execution?.toolResults && binding && !reader && result.executionState !== "not_started"
+        && result.executionState !== "unknown" && !execution.scope.signal.aborted) {
+        try {
+          const resultRef = await execution.toolResults.retain(result, binding.source);
+          if (!execution.scope.signal.aborted) {
+            archived.push({ ...result, resultRef });
+            continue;
+          }
+        } catch (error) {
+          // Cancellation revokes the bound archive, but committed results still need delivery.
+          if (!execution.scope.signal.aborted) throw error;
+        }
+      }
+      archived.push(result);
+    }
+    if (!execution?.profile?.toolResultReferences) return archived;
     for (const [id, entry] of this.recentToolResults)
       if (entry.runId !== execution.scope.runId)
         this.recentToolResults.delete(id);
     const view = execution.tools;
-    if (!view) return results;
-    return results.map((result) => {
+    if (!view) return archived;
+    return archived.map((result) => {
       this.recentToolResults.delete(result.toolUseId);
       if (result.executionState === "not_started") return result;
       const binding = view.get(result.toolName);
@@ -1299,6 +1323,15 @@ export class QueryEngine implements IQueryEngine {
         metadata: { ...result.metadata, toolResultReadable: true },
       };
     });
+  }
+
+  private budgetToolResultContent(result: Pick<ToolExecutionResult, "content" | "resultRef">): ContentBlock[] {
+    const hint = result.resultRef ? toolResultReferenceHint(result.resultRef) : undefined;
+    const content = hint?.type === "text"
+      ? result.content.filter(block => block.type !== "text" || block.text !== hint.text)
+      : result.content;
+    const budgeted = applyToolOutputBudget(content, this.options.toolOutputPolicy);
+    return hint ? [...budgeted, hint] : budgeted;
   }
 
   private createToolContext(

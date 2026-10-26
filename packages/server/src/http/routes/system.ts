@@ -94,6 +94,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               ...(context.pluginAppsReady ? { pluginApps: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
+              structuredDelivery: 1,
               ...(context.memoryManagementReady ? { memoryManagement: 1 } : {}),
             },
             attachments: {

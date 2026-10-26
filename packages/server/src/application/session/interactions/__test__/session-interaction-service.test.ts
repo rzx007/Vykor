@@ -375,6 +375,16 @@ describe("SessionInteractionService", () => {
     expect(broadcastSince).toHaveBeenCalledWith(7);
   });
 
+  it("rejects changing the output contract before returning an existing recovery", async () => {
+    const sourceRun = { id: "source-run", sessionId: "s1", inputId: "source-input", status: "interrupted", metadata: {} };
+    const { service, store, runEngine } = createService({ run: sourceRun,
+      input: { id: "source-input", sessionId: "s1", metadata: { outputSchema: { type: "string" } } },
+    });
+    store.listRunsByInput.mockReturnValue([{ id: "recovery-run", status: "pending", metadata: { recovery: { sourceRunId: "source-run" } } }] as any);
+    await expect(service.resumeRun("s1", "source-run", { traceId: "trace-1", metadata: { outputSchema: { type: "object" } } })).rejects.toMatchObject({ status: 400 });
+    expect(runEngine.replayInput).not.toHaveBeenCalled();
+  });
+
   it("explicitly rejects UI action prompt replay even if an input ID is present", async () => {
     const { service } = createService({ run: { id: "ui-run", sessionId: "s1", inputId: "source-input", status: "interrupted", metadata: {
       uiAction: { schemaVersion: 2, instanceId: "00000000-0000-0000-0000-000000000002", requestId: "00000000-0000-0000-0000-000000000001",

@@ -161,11 +161,42 @@ function createStoredAdmission() {
     replaceLatestPromptWithAdmission: (input) => store.conversationTransactions.replaceLatestPromptWithAdmission({ ...input, createRun: input.createRun ?? false }),
     getInput: (id) => store.conversations.getInput(id),
   };
-  options.runOperations = store.runs;
+  options.runOperations = {
+    getRun: id => store.runs.getRun(id), findRunByInput: id => store.runs.findRunByInput(id),
+    createRun: input => store.runs.createRun(input), updateRun: (id, input) => store.runs.updateRun(id, input),
+    createReplayRun: (id, input) => store.conversationTransactions.createReplayRun(id, input),
+  };
   return { store, options, enqueueRunFn, steerFn, service: new RunAdmissionService(options) };
 }
 
 describe("RunAdmissionService synchronous queued persistence", () => {
+  it("keeps the original output contract on replay and cannot add one through replay metadata", async () => {
+    const f = createStoredAdmission();
+    const first = await f.service.admitPromptAndMaybeRun("s1", { id: "plain", items: [{ type: "text", text: "report" }] });
+    f.store.runs.updateRun(first.run!.id, { status: "interrupted" });
+    expect(() => f.service.replayInput(first.input.id, { id: "changed", metadata: { outputSchema: { type: "string" } } })).toThrow(/schema|contract/i);
+    expect(f.store.runs.getRun("changed")).toBeUndefined();
+    const schema = { type: "string" };
+    const structured = await f.service.admitPromptAndMaybeRun("s1", { id: "typed", items: [{ type: "text", text: "report" }], outputSchema: schema });
+    f.store.runs.updateRun(structured.run!.id, { status: "interrupted" });
+    expect(f.service.replayInput(structured.input.id, { id: "replayed" }).run?.metadata.outputSchema).toEqual(schema);
+  });
+  it("persists the requested output schema and rejects a changed schema under the same prompt ID", async () => {
+    const f = createStoredAdmission();
+    const outputSchema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
+    const input = { id: "structured-input", items: [{ type: "text" as const, text: "report" }], outputSchema };
+    const admitted = await f.service.admitPromptAndMaybeRun("s1", input);
+    expect(f.store.conversations.getInput(admitted.input.id)?.metadata.outputSchema).toEqual(outputSchema);
+    expect(f.store.runs.getRun(admitted.run!.id)?.metadata.outputSchema).toEqual(outputSchema);
+    await expect(f.service.admitPromptAndMaybeRun("s1", { ...input, outputSchema: { type: "string" } })).rejects.toThrow(/already used|conflict/i);
+  });
+  it("rejects unsupported output constraints and changing a contract through steer before admission", async () => {
+    const f = createStoredAdmission();
+    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "invalid-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", pattern: "x" } })).rejects.toThrow(/schema|constraint/i);
+    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "steered-output", items: [{ type: "text", text: "report" }], delivery: "steer", outputSchema: { type: "object" } })).rejects.toThrow(/queue|steer/i);
+    expect(f.store.conversations.getInput("invalid-output")).toBeUndefined();
+    expect(f.store.conversations.getInput("steered-output")).toBeUndefined();
+  });
   it.each([false, true])("notifies queued Goal resumes after clearing an admission, including preparation failure (%s)", async failed => {
     const { options, conversationTransactions } = createMockOptions();
     if (failed) vi.mocked(conversationTransactions.admitPromptWithRun).mockImplementationOnce(() => { throw new Error("prepare failed"); });

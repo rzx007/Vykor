@@ -22,6 +22,7 @@ import {
 } from "./children/child-agent.js";
 import { AgentChildRegistry } from "./children/child-registry.js";
 export interface AgentKernelOptions {
+  outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
   toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   id?: string;
   sessionId?: string;
@@ -69,6 +70,7 @@ export async function createAgentKernel(
     effects: options.effects,
     preparation: options.preparation,
     toolSafety: options.toolSafety,
+    outputContract: options.outputContract,
     eventBus,
     childManager: children,
     childDirectory: directory,

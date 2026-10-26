@@ -6,6 +6,8 @@ import type { AgentExecutionContext } from "../execution/execution.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export interface ToolContext {
+  /** Host-bound authorized archive; model input cannot choose another session. */
+  toolResults?: import("./result-data.js").RunToolResultStore;
   operationId?: string;
   parentOperationId?: string;
   cwd: string;

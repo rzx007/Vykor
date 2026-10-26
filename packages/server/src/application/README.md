@@ -10,6 +10,8 @@
 
 应用持有服务实例与资源生命周期；持久记录通过 services 提供的接口访问，各业务目录保存自己的临时协调状态。
 
+`DaemonApplication` 为 Agent 注入当前 owner 与接纳状态约束下的 S1 结果读取工厂，正文沿用已有工具操作记录。`__test__/daemon-result-reading.integration.test.ts` 通过实际 Node Agent 与真实 SQLite 关闭重开验证长结果尾部补读、查询结果不递归归档、查询错误的只读分类及同名替换边界。
+
 ## 主要文件
 
 | 文件 | 主要接口或用途 |

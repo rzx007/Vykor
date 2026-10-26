@@ -15,7 +15,7 @@ import type {
   RunToolBinding,
   AgentEventInput,
 } from "@vykor/agent-contracts";
-import type { AgentSession } from "@vykor/core";
+import { MemoryToolResultArchive, type AgentSession } from "@vykor/core";
 import type {
   AgentRequestConfigurationReader,
   AgentRequestConfigurationPatch,
@@ -185,6 +185,8 @@ export interface AgentInspection {
   capabilities: AgentCapabilitySnapshot;
 }
 export interface AssembledAgentOptions {
+  outputContract?: VykorAgentConfiguration["outputContract"];
+  toolResults?: VykorAgentConfiguration["toolResults"];
   runtime: RuntimeBundle;
   pluginApps?: PluginAppBackendCatalogue;
   pluginSelection?: PluginSelectionCatalog;
@@ -213,6 +215,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
   readonly host: NodeAgentHost;
   private readonly appRuntime: PluginAppRuntime;
   private readonly runtime: RuntimeBundle;
+  private readonly toolResultArchive = new MemoryToolResultArchive();
   private readonly requestConfigurationStore: AgentRequestConfigurationReader;
   private model: string;
   private readonly preparedRegistrations = new Map<
@@ -229,6 +232,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       engine: assembled.runtime.queryEngine,
       effects: assembled.effects,
       toolSafety: assembled.toolSafety,
+      outputContract: assembled.outputContract,
       eventBus: assembled.eventBus,
       childManager: assembled.childManager,
       childDirectory: assembled.childDirectory,
@@ -346,6 +350,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
     const release = async () => {
       if (released) return;
       released = true;
+      if (!this.assembled.toolResults) this.toolResultArchive.releaseRun(scope.runId);
       this.preparedRegistrations.delete(scope.runId);
       try {
         await releaseHost?.();
@@ -421,6 +426,14 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       return {
         run: {
           tools: view.tools,
+          bindToolResults: async (tools: ReadonlyMap<string, RunToolBinding>) => {
+            scope.signal.throwIfAborted();
+            const store = this.assembled.toolResults
+              ? await this.assembled.toolResults(scope, tools)
+              : this.toolResultArchive.forRun(scope, tools);
+            scope.signal.throwIfAborted();
+            return store;
+          },
           modelAttempts: this.assembled.modelAttempts,
           toolSafety: this.assembled.toolSafety,
           profile: { toolResultReferences: ids.size > 0 },

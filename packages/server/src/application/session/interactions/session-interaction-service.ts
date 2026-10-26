@@ -19,6 +19,7 @@ import {
 } from "../../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
+import { normalizeOutputSchema } from "../execution/run-admission-work.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
@@ -95,6 +96,7 @@ export class SessionInteractionService {
     input: EditLatestPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
+    input = normalizeOutputSchema(input);
     return this.context.operationRunner.run(sessionId, async () => {
       const session = this.requireSession(sessionId);
       const items = inputItems(input);
@@ -124,6 +126,7 @@ export class SessionInteractionService {
             })),
           ) !== promptAttachmentFingerprint(attachments) ||
           edit?.kind !== "latest_prompt" ||
+          !jsonEqual(existingInput.metadata.outputSchema, input.metadata?.outputSchema) ||
           edit.sourceMessageId !== input.sourceMessageId
         ) {
           throw new SessionApplicationError(
@@ -217,6 +220,10 @@ export class SessionInteractionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
+    input = normalizeOutputSchema(input);
+    if (input.outputSchema && this.context.liveChildren.has(sessionId)) {
+      throw new SessionApplicationError(409, "A live child cannot change its output schema; submit a separate queued Run");
+    }
     const work = () => this.context.operationRunner.run(sessionId, () =>
       this.admitPromptWork(this.requireSession(sessionId), input),
     );
@@ -487,6 +494,9 @@ export class SessionInteractionService {
           409,
           "The original prompt is unavailable",
         );
+      }
+      if (input.metadata?.outputSchema !== undefined && !jsonEqual(input.metadata.outputSchema, sourceInput.metadata.outputSchema)) {
+        throw new SessionApplicationError(400, "Replay must preserve the original output schema contract");
       }
 
       const requestedRecovery = input.id

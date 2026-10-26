@@ -51,6 +51,7 @@ export interface ToolUseEndEvent {
     recoveryHint?: string;
     compactSummary?: string;
     operationId?: string;
+    resultRef?: import("../tools/result-data.js").ToolResultRef;
     toolAttemptId?: string;
     metadata?: Record<string, unknown>;
   };
@@ -136,7 +137,7 @@ export type AgentEventInput =
       };
     }
   | { type: "run.started"; data: Record<string, never> }
-  | { type: "run.completed"; data: { output: string; stopReason?: string } }
+  | { type: "run.completed"; data: { output: string; stopReason?: string; delivery?: import("./delivery.js").DeliveryReceipt } }
   | {
       type: "run.failed";
       data: {

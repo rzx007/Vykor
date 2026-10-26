@@ -82,6 +82,15 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("persists a validated delivery receipt separately from Run completion status", async () => {
+    const { store, projector, goal } = goalProjector();
+    const delivery = { status: "blocked" as const, summary: "Need a file", data: { path: "report.md" }, validation: "schema_valid" as const, verification: "not_requested" as const };
+    store.runs.createRun({ id: "structured", sessionId: "parent" });
+    store.runs.updateRun("structured", { status: "running" });
+    await projector.apply(event("run.completed", { output: delivery.summary, delivery }, { sessionId: "parent", runId: "structured" }));
+    expect(store.runs.getRun("structured")).toMatchObject({ status: "completed", metadata: { delivery } });
+    expect(store.goals.getGoal(goal.id)?.status).toBe("active");
+  });
   it("records plugin selection purpose and usage while the main Run is pending", async () => {
     const { store, goal, projector, gate } = goalProjector();
     store.runs.createRun({ id: "selecting", sessionId: "parent", metadata: { goalId: goal.id, goalObjectiveVersion: 1 } });

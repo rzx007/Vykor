@@ -2,6 +2,8 @@ import { createNoteApplicationService, type NoteApplicationService } from "./not
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolOperationService } from "./session/execution/tool-operation-service.js";
+import { ToolResultService } from "./session/execution/tool-result-service.js";
+import { isToolResultReader } from "@vykor/core";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
@@ -488,9 +490,14 @@ export class DaemonApplication implements DurableAgentApplication {
       const modelAttempts = new GoalModelAttemptService({ store, events: this.eventPublisher,
         requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
       const toolSafety = new ToolOperationService({ store, ownerLease: () => this.ownerLease,
+        accepting: () => this.readyState === "ready" && this.operationGate.accepting,
+        describe: ({ binding }) => binding?.source?.kind === "builtin"
+          && isToolResultReader(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+      const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const loadAgent = createDaemonAgentLoader({
         toolSafety,
+        toolResults: (scope, tools) => toolResults.forRun(scope, tools),
         modelAttempts,
         executionOwner: this.executionOwner,
         executionSurface: options.executionSurface,

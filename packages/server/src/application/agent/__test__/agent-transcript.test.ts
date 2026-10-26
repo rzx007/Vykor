@@ -4,6 +4,25 @@ import { CompactService } from "@vykor/core";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../agent-transcript.js";
 
 describe("agent transcript codec", () => {
+  it("round trips host result references while rejecting unversioned legacy metadata", () => {
+    const ref = { id: "result_opaque", toolName: "Read", totalChars: 300_000 };
+    const input: any[] = [
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "call", name: "Read", input: {} }] },
+      { type: "tool_result", toolUseId: "call", content: [{ type: "text", text: "preview" }], resultRef: ref },
+    ];
+    const rows = agentMessagesToTranscript(input);
+    const messages: any[] = rows.map((row, seq) => ({ ...row, id: `m${seq}`, seq, metadata: {} }));
+    const parts: any[] = rows.flatMap((row, index) => row.parts.map((part, seq) => ({ ...part, messageId: `m${index}`, seq, metadata: part.metadata ?? {} })));
+    expect(buildAgentTranscript(messages, parts).messages.find(message => message.type === "tool_result")).toHaveProperty("resultRef", ref);
+    parts[0]!.metadata = { resultRef: ref };
+    expect(buildAgentTranscript(messages, parts).messages.find(message => message.type === "tool_result")).not.toHaveProperty("resultRef");
+  });
+  it("keeps the result's tool identity when a replacement transcript has no original call", () => {
+    const ref = { id: "result_opaque", toolName: "Read", totalChars: 3 };
+    const rows = agentMessagesToTranscript([{ type: "tool_result", toolUseId: "call", content: [{ type: "text", text: "abc" }], resultRef: ref }]);
+    const parts: any[] = rows[0]!.parts.map((part, seq) => ({ ...part, messageId: "m", seq, metadata: part.metadata ?? {} }));
+    expect(buildAgentTranscript([{ id: "m", seq: 0, role: "assistant", metadata: {} } as any], parts).messages.find(message => message.type === "tool_result")).toHaveProperty("resultRef", ref);
+  });
   it("keeps raw MCP results out of replayed, compacted and imported model history", () => {
     const raw = { content: [{ type: "text", text: "saved" }], structuredContent: { revision: 2 }, _meta: { uiOnly: { cursor: 8 } } };
     const history = buildAgentTranscript([{ id: "m", seq: 0, role: "assistant", metadata: {} } as any], [

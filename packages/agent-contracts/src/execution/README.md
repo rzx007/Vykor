@@ -7,7 +7,10 @@
 | [execution.ts](execution.ts) | 运行上下文、工具绑定、准备与释放、模型尝试准入和结算接口 |
 | [children.ts](children.ts) | 子 Agent 预算、创建输入、控制句柄、结果及终止错误 |
 | [events.ts](events.ts) | 模型流事件和带会话、运行、顺序号的 Agent 事件 |
+| [delivery.ts](delivery.ts) | 可选输出合同、交付内容与区分格式校验/业务核验的回执 |
 
 经 [../index.ts](../index.ts) 从 `@vykor/agent-contracts` 导出。宿主实现这些接口后，运行方可申请准备资源、调用模型与工具、发布事件，再通过 `AgentRunHandle.result` 返回结果。这里仅约定交互形式；它不实现这些运行步骤。
 
 运行句柄、子 Agent 目录、预算计数、事件顺序和模型尝试记录都由消费方管理。错误类只保存失败原因或限制值。新增运行相关定义放本目录，测试建议放同层 `__test__/`；跨分类测试放 [../__test__](../__test__/)。
+
+`PreparedAgentRun.bindToolResults(finalTools)` 在执行核心完成本轮工具范围收窄后创建结果读取能力，参数保留实际工具定义、来源和调用函数。该工厂只供宿主准备过程使用，不进入工具执行上下文。只提供静态 `toolResults` 时，最终工具集合与绑定必须完整等价；收窄或替换来源、定义、调用函数后，执行核心关闭该静态读取能力，工具会收到明确的不可用结果。

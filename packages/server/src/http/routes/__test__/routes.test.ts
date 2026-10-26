@@ -275,6 +275,7 @@ describe("system routes", () => {
     const body = (await response.json()) as { features: Record<string, number> };
     expect(response.status).toBe(200);
     expect(body.features.executionObservability).toBe(1);
+    expect(body.features.structuredDelivery).toBe(1);
   });
 
   it("lists built-in and provider commands", async () => {

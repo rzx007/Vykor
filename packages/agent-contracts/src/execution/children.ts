@@ -48,6 +48,7 @@ export interface ChildPartialResult {
 }
 
 export interface AgentChildResult {
+  delivery?: import("./delivery.js").DeliveryReceipt;
   status: "completed" | "failed" | "interrupted" | "stopped";
   output: string;
   error?: string;

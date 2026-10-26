@@ -32,6 +32,27 @@ import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 
 `src/index.ts` 提供默认 Node 接入，`src/kernel-entry.ts` 提供执行核心，`src/workflow-entry.ts` 提供工作流宿主。跨包调用优先使用这三个入口。构建将实现打包到 `dist/`，并生成对应类型声明。
 
+## 长结果补读与结构化交付
+
+默认 Node Agent 提供 `ToolResult`，支持 `list`、`read`、`search`。普通工具结果在模型内容截断前保存，模型收到 `resultRef` 后可分页读取。默认存储有容量上限，只在当前 Agent 生命周期内跨 Run 保留；Server 注入已有 S1 操作记录读取能力，SQLite 重开仍可按当前权限找回结果。查询不会重新运行原工具，也不会读取任意文件。详情见 [core 结果存储](../core/src/engine/results/README.md)。
+
+```ts
+const result = await agent.runMessage("生成报告", {
+  outputContract: {
+    schema: {
+      type: "object",
+      properties: { path: { type: "string" } },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    verify: async delivery => ({ ok: await reportExists(delivery.data) }),
+  },
+});
+console.log(result.delivery); // status / summary / data / validation / verification
+```
+
+`reportExists` 由调用方实现，检查当前产物。公开 HTTP/Client prompt 使用纯数据 `outputSchema`；核验函数只能由可信宿主配置。缺少有效交付会明确失败，结构错误或核验拒绝会交回模型纠正。未配置合同的任务仍返回普通文本。规则见 [Kernel 交付](./src/kernel/delivery/README.md)。
+
 ## 测试与维护
 
 测试放在被测分类同层的 `__test__/`，专用辅助代码随测试放置。跨包组合回归由仓库的 `tests/agent-integration/` 管理，共用插件夹具保留在 `test-helpers/`。

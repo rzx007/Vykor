@@ -71,6 +71,10 @@ Feature 用于同一基本协议下的能力选择。例如客户端使用 Workf
 
 ## 请求解码
 
+结构化交付使用附加能力 `features.structuredDelivery = 1`。`POST /sessions/:id/prompts` 可指定纯数据 `outputSchema`，仅对新排队 Run 生效；Server 在保存输入前拒绝未支持的 Schema 约束、超过 64 KiB 的 Schema、`steer` 更换合同和活跃子运行更换合同。相同输入 ID 必须保持同一 Schema，重放沿用原合同。
+
+Client 提交 `outputSchema` 前检查该附加能力，不支持时不发送 Prompt，避免旧服务忽略格式要求。业务核验函数只在可信 SDK 宿主中配置，不能通过 HTTP 传入。完成结果见 Run 的 `metadata.delivery`，含 `status`、`summary`、`data`、`validation`、`verification`；格式有效且没有宿主业务核验时保持 `not_requested`，不能等同于业务验收或 Goal 完成。支持的格式子集见 [Kernel 交付](../packages/agent-runtime/src/kernel/delivery/README.md)。
+
 会话授权管理是同一基础协议下的附加能力，`features.permissionApprovals = 1`。`GET /permissions/approvals` 返回当前可复用的会话工具授权；`POST /permissions/:requestId/revoke` 撤销所选当前授权，返回持久撤销记录。撤销保留原批准记录，后续调用重新询问；单次批准不能通过此入口撤销为另一种决定。
 
 已清理工作目录的绑定维护使用附加能力 `features.gitWorktreeBindings = 1`。`POST /sessions/:sessionId/worktree-cleared` 仅接收原绑定 `{id, path, branch}`，要求会话已归档、绑定匹配且目录确实不存在（`ENOENT`）。它只移除 `metadata.desktop.worktree`，保留 `settingsRoot` 和其余元数据，持久保存并发布会话更新；已无绑定时幂等。普通归档会话编辑仍被禁止。客户端检查返回的会话身份、归档状态和绑定已移除；目录已删但更新失败时保留待刷新记录，重试只更新绑定。

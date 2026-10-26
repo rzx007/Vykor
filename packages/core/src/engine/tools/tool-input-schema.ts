@@ -141,7 +141,8 @@ function validateValue(schema: unknown, value: unknown, path: string, inferAlias
     if (aliasConflict) errors.push(`${path} ${aliasConflict}`);
     for (const [key, propertySchema] of Object.entries(properties)) {
       if (Object.prototype.hasOwnProperty.call(value, key)) {
-        errors.push(...validateValue(propertySchema, value[key], `${path}.${key}`, inferAliases));
+        // Only the outer tool arguments are normalized; nested JSON keys are business data.
+        errors.push(...validateValue(propertySchema, value[key], `${path}.${key}`, false));
       }
     }
 
@@ -157,7 +158,7 @@ function validateValue(schema: unknown, value: unknown, path: string, inferAlias
 
   if (Array.isArray(value) && schema.items !== undefined) {
     value.forEach((item, index) => {
-      errors.push(...validateValue(schema.items, item, `${path}[${index}]`, inferAliases));
+      errors.push(...validateValue(schema.items, item, `${path}[${index}]`, false));
     });
   }
 

@@ -7,6 +7,8 @@
 | [tools.ts](tools.ts) | 工具定义、调用上下文、注册表、发现接口和结果 |
 | [operations.ts](operations.ts) | 含可信运行作用范围和工具绑定的宿主工具安全接口 |
 | [tool-data.ts](tool-data.ts) | 纯内容块、完整结果、操作票据和派发回执，以及 MCP 数据校验与公开过滤 |
+| [result-data.ts](result-data.ts) | 稳定结果引用、页、检索结果和宿主绑定的结果访问能力 |
+| [result-text.ts](result-text.ts) | 无存储状态的文本视图、UTF-16 分页、字面检索和边界检查 |
 | [tool-names.ts](tool-names.ts) | 名称去空格、去重，以及 `Bash` 到 `Shell` 的名称统一 |
 | [shell-output.ts](shell-output.ts) | 有大小限制的 Shell 输出采集、分页读取和搜索接口 |
 

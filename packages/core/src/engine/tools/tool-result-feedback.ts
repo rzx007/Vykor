@@ -54,6 +54,8 @@ export function externalToolMetadata(
     "uiAction",
     "pluginUiSubmission",
     "toolResultReadable",
+    "resultRef",
+    "toolResultReferenceVersion",
     "toolUseId",
     "toolName",
     "toolCallId",
@@ -165,4 +167,12 @@ export function formatToolResultForModel(
     },
     ...result.content,
   ];
+}
+
+/** Added after the inline budget so the host archive handle remains usable. */
+export function toolResultReferenceHint(ref: import("@vykor/agent-contracts").ToolResultRef): ContentBlock {
+  return {
+    type: "text",
+    text: `[tool-output-ref: ${ref.id}]\nUse ToolResult with {"action":"read","id":${JSON.stringify(ref.id)}} to read more; action=list finds available references.`,
+  };
 }

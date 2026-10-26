@@ -22,6 +22,7 @@
 | [mode/](./mode/README.md) | 提交计划模式及 Git worktree 相关操作。 |
 | [notebook/](./notebook/README.md) | 读取或修改 Notebook 文档中的单元格。 |
 | [ports/](./ports/README.md) | 定义工具依赖的配置、权限、文件、渠道、Skill、MCP 和工作流接口。 |
+| [results/](./results/README.md) | 通过宿主授权能力列出、分页读取和检索历史工具结果。 |
 | [schedule/](./schedule/README.md) | 向宿主提交计划任务的读取与修改操作。 |
 | [search/](./search/README.md) | 向模型提供文本搜索和语言服务工具。 |
 | [shared/](./shared/README.md) | 复用工具执行时的取消信号处理。 |

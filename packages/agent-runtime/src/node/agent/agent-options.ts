@@ -3,6 +3,9 @@ import type {
   AgentRunScope,
   StreamingMessageClient,
   ToolDefinition,
+  AgentOutputContract,
+  RunToolBinding,
+  RunToolResultStore,
 } from "@vykor/agent-contracts";
 import type {
   AgentRequestConfigurationReader,
@@ -63,6 +66,10 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Trusted host-owned result validation; ordinary chat output remains unrestricted when omitted. */
+  outputContract?: AgentOutputContract;
+  /** Bind the host's authorized archive to the final captured tools for each Run. */
+  toolResults?: (scope: AgentRunScope, tools: ReadonlyMap<string, RunToolBinding>) => RunToolResultStore | Promise<RunToolResultStore>;
   /** Optional host-owned tool ledger and mandatory policy; descendants retain this pair. */
   toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   /** Host-owned admission and durable settlement for this agent tree's actual model attempts. */

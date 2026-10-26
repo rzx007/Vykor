@@ -478,6 +478,7 @@
     {
       "id": "storage-hosts",
       "fromPaths": [
+        "packages/services/src/tool-results/",
         "packages/services/src/execution-records/",
         "packages/services/src/tool-operations/",
         "packages/services/src/database/",
@@ -513,6 +514,7 @@
       "removeByPhase": "P6",
       "migrationId": "M30",
       "allowSelfPaths": [
+        "packages/services/src/tool-results/",
         "packages/services/src/execution-records/",
         "packages/services/src/tool-operations/",
         "packages/services/src/database/",
@@ -790,6 +792,8 @@
         "packages/jobs/src/contracts.ts",
         "packages/terminal/src/contracts.ts",
         "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/tools/result-data.ts",
+        "packages/agent-contracts/src/tools/result-text.ts",
         "packages/agent-contracts/src/tools/tool-data.ts"
       ],
       "allowTargetPaths": [
@@ -799,6 +803,8 @@
         "packages/jobs/src/contracts.ts",
         "packages/terminal/src/contracts.ts",
         "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/tools/result-data.ts",
+        "packages/agent-contracts/src/tools/result-text.ts",
         "packages/agent-contracts/src/tools/tool-data.ts"
       ],
       "allowExternal": [],

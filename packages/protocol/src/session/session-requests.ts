@@ -40,6 +40,8 @@ export interface AdmitPromptInput {
   id?: string;
   sessionId: string;
   delivery?: InputDelivery;
+  /** Validated structured delivery required for this queued Run. */
+  outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];
   attachments?: AdmitPromptAttachmentInput[];
   metadata?: Record<string, unknown>;

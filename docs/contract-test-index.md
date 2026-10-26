@@ -21,6 +21,15 @@
 
 这些入口验证 S1，不代替 S2 的模型检查点继续或 S3 的持久审批验收。
 
+### 长结果补读与结构化交付
+
+| 契约 | 自动验证入口 | 检查范围 |
+| --- | --- | --- |
+| 长结果与读取权限 | [内存存储](../packages/core/src/engine/results/__test__/memory-tool-result-archive.test.ts)、[持久读取](../packages/services/src/tool-results/__test__/tool-result-reader.test.ts)、[宿主权限](../packages/server/src/application/session/execution/__test__/tool-result-service.test.ts) | 超过 300 KB 的正文、分页/字面检索、容量边界、精确会话/来源/owner/权限版本检查 |
+| 实际默认 Agent 补读 | [SDK 跨 Run](../packages/agent-runtime/src/node/agent/__test__/tool-result-reading.test.ts)、[daemon 重启](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts) | 保存先于截断、历史清理后找回、SQLite 重开、真实只读分类、同名伪造及查询不递归归档 |
+| 交付收尾与业务核验 | [实际 Kernel 循环](../packages/agent-runtime/src/kernel/delivery/__test__/delivery-run.test.ts)、[真实 S1 与产物](../tests/agent-integration/__test__/result-delivery.integration.test.ts) | 结构纠错、派发前业务核验、回执归属、普通文本兼容与取消后的迟到核验 |
+| 公共交付入口 | [请求解析](../packages/protocol/src/requests/__test__/requests.test.ts)、[准入](../packages/server/src/application/session/execution/__test__/run-admission-service.test.ts)、[客户端](../packages/client/src/resources/session/__test__/structured-delivery.test.ts) | Schema 保留、ID 冲突、格式拒绝、附加能力检查后发送 |
+
 ### 其余生命周期契约
 
 | 编号 | 主要测试 |

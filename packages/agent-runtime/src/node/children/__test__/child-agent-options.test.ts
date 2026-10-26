@@ -20,6 +20,13 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("does not force a root delivery schema onto an unrelated default child", () => {
+    const options = deriveChildAgentOptions({
+      configuration: { outputContract: { schema: { type: "object", required: ["rootReport"] } } },
+      settings: {} as Settings, child: { description: "inspect", prompt: "inspect", agent: "worker", cwd: "/repo" }, cwd: "/repo", sessionId: "child",
+    });
+    expect(options.outputContract).toBeUndefined();
+  });
   it("does not turn an unlimited parent into a zero-turn child or erase an explicit child cap", () => {
     expect(resolveChildMaxTurns({ settingsMaxTurns: 0 })).toBeUndefined();
     expect(resolveChildMaxTurns({ requestConfigurationMaxTurns: 0, settingsMaxTurns: 50 })).toBeUndefined();

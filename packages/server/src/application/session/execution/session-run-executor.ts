@@ -26,6 +26,7 @@ import {
 import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionAutoReviewService } from "../../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
+import { normalizeOutputSchema } from "./run-admission-work.js";
 import type { SessionPostRunMaintenance } from "../maintenance/session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import type { SessionTranscriptProjection } from "../transcript/transcript-projection.js";
@@ -180,6 +181,10 @@ export class SessionRunExecutor {
       if (!admitted) throw new Error(`Session input not found: ${inputId}`);
       const storedRun = this.context.data.runs.getRun(runId);
       if (!storedRun) throw new Error(`Run not found: ${runId}`);
+      const { outputSchema } = normalizeOutputSchema({
+        metadata: { outputSchema: admitted.metadata?.outputSchema },
+        runMetadata: { outputSchema: storedRun.metadata?.outputSchema },
+      });
       workContext.signal.throwIfAborted();
       const hasStructuredContext = admitted.items.some(
         (item) =>
@@ -455,6 +460,7 @@ export class SessionRunExecutor {
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
       const run = agent.submitMessage(submittedContent, {
+        ...(outputSchema ? { outputContract: { schema: outputSchema } } : {}),
         ...(capabilityView
           ? { preparation: host!.plugins.prepareRun(capabilityView) }
           : {}),

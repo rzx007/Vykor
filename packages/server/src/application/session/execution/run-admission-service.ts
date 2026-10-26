@@ -10,7 +10,8 @@ import {
   promptAttachmentFingerprint,
 } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
-import { admitPromptWork, inputItems } from "./run-admission-work.js";
+import { admitPromptWork, inputItems, normalizeOutputSchema } from "./run-admission-work.js";
+import { SessionApplicationError } from "../session-application-error.js";
 
 function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
   return items.some(
@@ -23,6 +24,7 @@ export interface AdmitPromptInput {
   pluginAppContexts?: import("../plugins/plugin-app-inputs.js").PluginAppConversationRequest[];
   id?: string;
   delivery?: "queue" | "steer";
+  outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];
   content?: string;
   metadata?: Record<string, unknown>;
@@ -420,6 +422,7 @@ export class RunAdmissionService {
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
     assertPromptMetadataAllowed(input);
+    input = normalizeOutputSchema(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -458,6 +461,7 @@ export class RunAdmissionService {
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
     assertPromptMetadataAllowed(input);
+    input = normalizeOutputSchema(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -498,6 +502,10 @@ export class RunAdmissionService {
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const sourceInput = this.options.conversationTransactions.getInput(inputId);
     if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
+    if (input.metadata?.outputSchema !== undefined && !jsonEqual(input.metadata.outputSchema, sourceInput.metadata.outputSchema)) {
+      throw new SessionApplicationError(400, "Replay must preserve the original output schema contract");
+    }
+    const contract = normalizeOutputSchema({ metadata: { outputSchema: sourceInput.metadata.outputSchema } });
     const existing = input.id ? this.options.runOperations.getRun(input.id) : undefined;
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -506,7 +514,7 @@ export class RunAdmissionService {
     const before = this.options.events.checkpoint();
     const run = this.options.runOperations.createReplayRun(inputId, {
       id: input.id,
-      metadata: { ...(input.metadata ?? {}), traceId },
+      metadata: { ...(input.metadata ?? {}), ...(contract.outputSchema ? { outputSchema: contract.outputSchema } : {}), traceId },
     });
     this.options.events.publishSince(before);
     if (existing || run.status !== "pending") {
@@ -529,6 +537,7 @@ export class RunAdmissionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
+    input = normalizeOutputSchema(input);
     this.assertReady();
     if (!this.accepting) {
       return Promise.reject(new Error("Session run engine is stopping"));

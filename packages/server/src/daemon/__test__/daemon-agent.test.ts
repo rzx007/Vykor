@@ -97,6 +97,14 @@ describe("createDaemonAgentLoader", () => {
     expect(createAgent.mock.calls[0]![0].options.toolSafety).toBe(toolSafety);
   });
 
+  it("forwards the host result-store factory unchanged into the runtime", async () => {
+    const toolResults = async () => ({}) as never;
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
+    const loader = createDaemonAgentLoader({ createAgent: hostedAgentFactory(createAgent), toolResults })!;
+    await loader({ session, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.toolResults).toBe(toolResults);
+  });
+
   it("retains the warm default Agent's local execution evidence and rejects WSL/custom Agents", async () => {
     const local = { loadHistory: vi.fn(), close: vi.fn() } as any;
     vi.mocked(createDefaultNodeAgent).mockResolvedValueOnce(local);

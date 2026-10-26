@@ -32,9 +32,10 @@ import {
   toolSearchTool,
   createWebFetchTool,
   createWebSearchTool,
+  createToolResultTool,
 } from "@vykor/tools";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
-import { ToolRegistry } from "@vykor/core";
+import { ToolRegistry, markToolResultReader } from "@vykor/core";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import {
   createTeamRegistry,
@@ -143,6 +144,7 @@ export function createDefaultToolRegistry(
   ))
     registerBuiltin(tool, controlPlane());
   registerBuiltin(toolSearchTool, controlPlane());
+  registerBuiltin(markToolResultReader(createToolResultTool()), controlPlane());
   registerBuiltin(askUserTool, controlPlane());
   registerBuiltin(briefTool, controlPlane());
   if (options.backgroundShell !== false) {

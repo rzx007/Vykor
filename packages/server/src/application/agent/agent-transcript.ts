@@ -1,4 +1,4 @@
-import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/agent-contracts";
+import type { ContentBlock, Message, TextBlock, ToolUseBlock, ToolResultRef } from "@vykor/agent-contracts";
 import { toolFeedbackFields } from "@vykor/core";
 import { isCommittedModelPart } from "@vykor/domain-contracts/sessions";
 import type { AttachmentIntent } from "@vykor/domain-contracts/attachments";
@@ -92,6 +92,8 @@ export function buildAgentTranscript(
     for (const part of messageParts.filter(
       (candidate) => candidate.type === "tool" && candidate.toolUseId && candidate.output !== undefined,
     )) {
+      const resultRef = part.metadata.toolResultReferenceVersion === 1
+        ? validResultRef(part.metadata.resultRef, part.toolName) : undefined;
       output.push({
         type: "tool_result",
         toolUseId: part.toolUseId!,
@@ -99,6 +101,7 @@ export function buildAgentTranscript(
         isError: part.isError === true,
         // Earlier versions spread arbitrary tool metadata here; do not promote it to facts.
         ...(part.metadata.toolFeedbackVersion === 1 ? toolFeedbackFields(part.metadata) : {}),
+        ...(resultRef ? { resultRef } : {}),
       });
     }
   }
@@ -215,30 +218,45 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
       );
       if (!part) continue;
       const facts = toolFeedbackFields(message);
-      part.output = { content: message.content, ...facts };
+      const resultRef = validResultRef(message.resultRef, part.toolName);
+      part.output = { content: message.content, ...facts, ...(resultRef ? { resultRef } : {}) };
       if (Object.keys(facts).length) part.metadata = { ...part.metadata, ...facts, toolFeedbackVersion: 1 };
+      if (resultRef) part.metadata = { ...part.metadata, resultRef, toolResultReferenceVersion: 1 };
       part.isError = message.isError === true;
       attached = true;
       break;
     }
     if (!attached) {
+      const facts = toolFeedbackFields(message);
+      const resultRef = validResultRef(message.resultRef);
+      const metadata = {
+        ...(Object.keys(facts).length ? { ...facts, toolFeedbackVersion: 1 } : {}),
+        ...(resultRef ? { resultRef, toolResultReferenceVersion: 1 } : {}),
+      };
       output.push({
         role: "assistant",
         parts: [{
           type: "tool",
           status: "completed",
           toolUseId: message.toolUseId,
-          toolName: "unknown",
-          output: { content: message.content, ...toolFeedbackFields(message) },
-          ...(Object.keys(toolFeedbackFields(message)).length
-            ? { metadata: { ...toolFeedbackFields(message), toolFeedbackVersion: 1 } }
-            : {}),
+          toolName: resultRef?.toolName ?? "unknown",
+          output: { content: message.content, ...facts, ...(resultRef ? { resultRef } : {}) },
+          ...(Object.keys(metadata).length ? { metadata } : {}),
           isError: message.isError === true,
         }],
       });
     }
   }
   return output;
+}
+
+function validResultRef(value: unknown, toolName?: string): ToolResultRef | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const ref = value as ToolResultRef;
+  if (typeof ref.id !== "string" || !ref.id || ref.id.length > 200
+    || typeof ref.toolName !== "string" || !ref.toolName || (toolName && ref.toolName !== toolName)
+    || !Number.isSafeInteger(ref.totalChars) || ref.totalChars < 0) return undefined;
+  return { id: ref.id, toolName: ref.toolName, totalChars: ref.totalChars };
 }
 
 function assistantPhaseFromParts(

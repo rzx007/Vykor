@@ -124,6 +124,7 @@ export interface AdmitClientPromptInput {
   id?: string;
   items: SessionUserInputItem[];
   delivery?: InputDelivery;
+  outputSchema?: Record<string, unknown>;
   attachments?: AdmitPromptAttachmentInput[];
   metadata?: Record<string, unknown>;
 }

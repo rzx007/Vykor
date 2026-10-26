@@ -43,6 +43,7 @@ export function createToolExecutionContext(
     toolRegistry: toolRegistryView(options.toolRegistry),
     ...(options.toolDiscovery ? { toolDiscovery: options.toolDiscovery } : {}),
     readToolResult: options.readToolResult,
+    ...(execution?.toolResults ? { toolResults: execution.toolResults } : {}),
     invokeTool: options.invokeTool,
     ...(execution?.effects?.askUserPrompt
       ? {

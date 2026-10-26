@@ -25,8 +25,12 @@ export interface VisionImagePreparationMetadata {
 }
 
 export type ContentBlock = TextBlock | ImageBlock;
+export type { ToolResultRef, ToolResultPage, ToolResultSearch, ToolResultList, RunToolResultStore } from "./result-data.js";
+export { assertToolResultId, ToolResultAccessError, toolResultBounds, toolResultText, toolResultList, toolResultPage, toolResultSearch } from "./result-text.js";
 
 export interface ToolResult {
+  /** Added by the trusted result archive after preserving the original output. */
+  resultRef?: import("./result-data.js").ToolResultRef;
   content: ContentBlock[];
   /** Original bounded MCP response; private to the authorized application host. */
   mcpResult?: McpCallResultData;

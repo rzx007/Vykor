@@ -846,6 +846,9 @@ export class DaemonAgentEventProjector {
         }
         const existingRun = this.context.store.runs.getRun(runId);
         const metadataPatch: Record<string, unknown> = { toolGeneration: [] };
+        if (event.type === "run.completed" && event.data.delivery) {
+          metadataPatch.delivery = structuredClone(event.data.delivery);
+        }
         if (event.type === "run.completed" && event.data.stopReason) {
           metadataPatch.stopReason = event.data.stopReason;
         }
@@ -877,7 +880,8 @@ export class DaemonAgentEventProjector {
       const child = this.children.get(event.context.childId);
       if (child) {
         const result = event.type === "run.completed"
-          ? { status: "completed" as const, output: event.data.output }
+          ? { status: "completed" as const, output: event.data.output,
+              ...(event.data.delivery ? { delivery: structuredClone(event.data.delivery) } : {}) }
           : {
             status: interrupted ? "interrupted" as const : "failed" as const,
             output: event.data.output ?? error ?? "",

@@ -132,6 +132,7 @@ export interface DaemonAgentLoaderOptions {
   schedules?: AgentScheduleEffects;
   modelAttempts?: VykorAgentOptions["modelAttempts"];
   toolSafety?: VykorAgentOptions["toolSafety"];
+  toolResults?: VykorAgentOptions["toolResults"];
   createTerminal?(
     session: SessionRecord,
   ): ObservableJobProducer<AgentTerminalHost>;
@@ -321,6 +322,7 @@ export function createDaemonAgentLoader(
       ...modelMetadata,
       ...(options.modelAttempts ? { modelAttempts: options.modelAttempts } : {}),
       ...(options.toolSafety ? { toolSafety: options.toolSafety } : {}),
+      ...(options.toolResults ? { toolResults: options.toolResults } : {}),
       reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),

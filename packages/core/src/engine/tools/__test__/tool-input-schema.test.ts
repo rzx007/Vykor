@@ -174,6 +174,15 @@ describe("normalizeToolInput", () => {
     expect(validateToolInput(schema, { payload: { file_path: 123, path: "business.txt" } })).not.toBeNull();
   });
 
+  it("keeps nested business keys independent while retaining top-level tool alias checks", () => {
+    const business = { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: true };
+    const data = { path: "source.txt", file_path: "destination.txt" };
+    expect(validateToolInput(business, data)).toMatch(/conflicting aliases/);
+    expect(validateToolInput({ type: "object", properties: { data: business } }, { data })).toBeNull();
+    expect(validateToolInput({ type: "object", properties: { data: { type: "array", items: business } } }, { data: [data] })).toBeNull();
+    expect(validateToolInput({ type: "object", properties: { data: business } }, { data: { path: 42, file_path: "destination.txt" } })).toMatch(/must be string/);
+  });
+
   it("unwraps a sole arguments object when it satisfies the tool schema", () => {
     const shellSchema = {
       type: "object",

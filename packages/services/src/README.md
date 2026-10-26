@@ -39,6 +39,7 @@
 | [token-estimation/](./token-estimation/README.md) | 提供不依赖模型请求的文本 Token 数量估算。 |
 | [tool-outputs/](./tool-outputs/README.md) | 集中定义工具结果内联、预览和压缩的长度规则。 |
 | [tool-operations/](./tool-operations/README.md) | 保存工具操作、独立尝试、完整结果和核对证据，阻止未知写操作重放。 |
+| [tool-results/](./tool-results/README.md) | 复用已有操作结果，提供重启后可读取的引用、文本分页和字面检索。 |
 | [workflows/](./workflows/README.md) | 保存工作流运行、任务尝试、事件及执行占用记录。 |
 
 ## 测试与维护

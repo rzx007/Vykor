@@ -1,4 +1,6 @@
 import { readonlyMap } from "@vykor/agent-contracts";
+import { bindPreparedToolResults } from "./tool-results.js";
+import { createStructuredDelivery, type StructuredDeliveryController } from "./delivery/structured-delivery.js";
 import type {
   AgentEffects,
   AgentEventContext,
@@ -29,6 +31,7 @@ import { abortError, serializeError } from "./agent-errors.js";
 import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 
 export interface FrameworkAgentRunOptions {
+  outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
   toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
   agentId: string;
   session: {
@@ -136,6 +139,7 @@ export function streamEventToAgentEvent(
 }
 
 export class FrameworkAgentRun implements AgentRunHandle {
+  private readonly delivery?: StructuredDeliveryController;
   readonly id: string;
   readonly inputId: string;
   readonly sessionId: string;
@@ -156,6 +160,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
   private externalAbort?: () => void;
 
   constructor(private readonly options: FrameworkAgentRunOptions) {
+    this.delivery = options.outputContract ? createStructuredDelivery(options.outputContract) : undefined;
     this.id = options.ids.runId;
     this.inputId = options.ids.inputId;
     this.sessionId = options.session.id;
@@ -238,9 +243,9 @@ export class FrameworkAgentRun implements AgentRunHandle {
       traceId: this.traceId,
       signal: this.controller.signal,
     };
-    const createExecution = (
+    const createExecution = async (
       run: import("@vykor/agent-contracts").PreparedAgentRun,
-    ): AgentExecutionContext => {
+    ): Promise<AgentExecutionContext> => {
       const tools = this.options.tools
         ? readonlyMap(
             [...run.tools].filter(
@@ -252,9 +257,16 @@ export class FrameworkAgentRun implements AgentRunHandle {
             ),
           )
         : readonlyMap(run.tools);
+      if (this.delivery && (tools.has("SubmitResult") || [run.contribution, this.options.contribution].some(item => item?.tools?.some(tool => tool.definition.name === "SubmitResult"))))
+        throw new Error("SubmitResult is reserved for this Run's structured delivery contract");
+      const toolResults = await bindPreparedToolResults(run, tools);
+      this.controller.signal.throwIfAborted();
+      // The factory is host authority to bind a scope; tools receive only the bound store.
+      const { bindToolResults: _provider, toolResults: _prebound, ...capabilities } = run;
       return {
         scope,
-        ...run,
+        ...capabilities,
+        toolResults,
         toolSafety: this.options.toolSafety ?? run.toolSafety,
         limits: this.options.limits ?? run.limits,
         profile:
@@ -267,10 +279,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
                   this.options.profile?.toolResultReferences,
               }
             : undefined,
-        contribution: mergeContribution(
-          run.contribution,
-          this.options.contribution,
-        ),
+        contribution: mergeContribution(mergeContribution(run.contribution, this.options.contribution), this.delivery?.contribution),
         tools,
         ...(this.options.hardMaxTurns !== undefined
           ? { hardMaxTurns: this.options.hardMaxTurns }
@@ -304,7 +313,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       const prepared = await this.options.preparation.prepare(scope);
       releaseCapabilities = prepared.release;
       this.controller.signal.throwIfAborted();
-      const execution = createExecution(prepared.run);
+      const execution = await createExecution(prepared.run);
       await this.emit({ type: "run.started", data: {} });
       this.controller.signal.throwIfAborted();
       this.start.resolve({
@@ -355,15 +364,18 @@ export class FrameworkAgentRun implements AgentRunHandle {
         throw abortError(this.controller.signal);
       this.acceptingInput = false;
       this.rejectPendingSteers();
+      const delivery = this.delivery?.requireReceipt();
+      if (delivery && !output) output = delivery.summary;
       await this.emit({
         type: "run.completed",
-        data: { output, ...(stopReason ? { stopReason } : {}) },
+        data: { output, ...(stopReason ? { stopReason } : {}), ...(delivery ? { delivery: structuredClone(delivery) } : {}) },
       });
       return {
         status: "completed",
         output,
         history: this.options.session.getHistory(),
         usage: this.options.engine.getTotalUsage(),
+        ...(delivery ? { delivery } : {}),
       };
     } catch (error) {
       this.acceptingInput = false;

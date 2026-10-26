@@ -47,6 +47,14 @@ export function createPromptRequestId(): string {
 export class SessionResource {
   constructor(private readonly transport: HttpTransport) {}
 
+  private async checkOutputSchema(input: { outputSchema?: unknown; metadata?: Record<string, unknown> }, signal?: AbortSignal): Promise<void> {
+    if (input.outputSchema === undefined && input.metadata?.outputSchema === undefined) return;
+    const capabilities = await this.transport.ensureProtocol(signal);
+    if ((capabilities.features.structuredDelivery ?? 0) < 1) {
+      throw new Error("Server does not support structured delivery (outputSchema)");
+    }
+  }
+
   /** `GET /sessions/search` - search saved conversation text without opening it. */
   async search(
     options: SearchSessionsOptions & { signal?: AbortSignal },
@@ -225,6 +233,7 @@ export class SessionResource {
     input: AdmitClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
+    await this.checkOutputSchema(input, options.signal);
     return await this.transport.request<PromptResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/prompts`,
       {
@@ -241,6 +250,7 @@ export class SessionResource {
     input: EditLatestClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
+    await this.checkOutputSchema(input, options.signal);
     return await this.transport.request<PromptResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/prompts/latest/edit`,
       {
@@ -287,6 +297,7 @@ export class SessionResource {
     input: ResumeInterruptedRunInput = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<ResumeInterruptedRunResponse> {
+    await this.checkOutputSchema(input, options.signal);
     return await this.transport.request<ResumeInterruptedRunResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/resume`,
       {

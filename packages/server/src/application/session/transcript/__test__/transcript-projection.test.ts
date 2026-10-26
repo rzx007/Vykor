@@ -6,6 +6,7 @@ import { SessionStore } from "@vykor/services";
 import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 
 import { SessionTranscriptProjection } from "../transcript-projection.js";
+import { buildAgentTranscript } from "../../../agent/agent-transcript.js";
 
 function createStore() {
   let messageSeq = 0;
@@ -75,6 +76,31 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
+  it("reopens typed result references after projection without accepting free metadata forgeries", () => {
+    const directory = mkdtempSync(join(tmpdir(), "oh-result-ref-")), path = join(directory, "store.db");
+    let store = new SessionStore({ path });
+    const ref = { id: "result_opaque", toolName: "Read", totalChars: 300_000 };
+    try {
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.runs.createRun({ id: "r1", sessionId: "s1" });
+      const projection = new SessionTranscriptProjection(store);
+      const state = projection.beginRun("s1", "i1", "r1", createInput());
+      for (const id of ["trusted", "forged"]) {
+        projection.projectStreamEvent(state, { type: "tool_use_start", toolUse: { type: "tool_use", id, name: "Read", input: {} } });
+        projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: id, result: { content: [{ type: "text", text: "preview" }],
+          ...(id === "trusted" ? { resultRef: ref } : {}), metadata: { resultRef: { ...ref, id: "forged" }, toolResultReferenceVersion: 1 } } });
+      }
+      store.close(); store = new SessionStore({ path });
+      const parts = store.conversations.listMessageParts("s1");
+      const trusted = parts.find(part => part.toolUseId === "trusted")!, forged = parts.find(part => part.toolUseId === "forged")!;
+      expect(trusted.metadata).toMatchObject({ resultRef: ref, toolResultReferenceVersion: 1 });
+      expect(forged.metadata).not.toHaveProperty("resultRef");
+      expect(forged.metadata).not.toHaveProperty("toolResultReferenceVersion");
+      const history = buildAgentTranscript(store.conversations.listMessages("s1"), parts).messages;
+      expect(history.find(message => message.type === "tool_result" && message.toolUseId === "trusted")).toHaveProperty("resultRef", ref);
+      expect(history.find(message => message.type === "tool_result" && message.toolUseId === "forged")).not.toHaveProperty("resultRef");
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it("persists the full MCP result through tool completion and SQLite close/reopen", () => {
     const directory = mkdtempSync(join(tmpdir(), "oh-mcp-result-"));
     const path = join(directory, "store.db");
@@ -130,7 +156,7 @@ describe("SessionTranscriptProjection", () => {
     projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call-1", result });
     const part = store.upsertMessagePart.mock.calls.at(-1)![0];
     expect(part.output.content).toEqual(result.content);
-    expect(part.metadata).toMatchObject({ toolCallId: "call-1", toolAttemptId: "tool_attempt_call-1_1", outcome: "failed", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started", custom: "keep" });
+    expect(part.metadata).toMatchObject({ toolCallId: "call-1", toolAttemptId: null, outcome: "failed", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started", custom: "keep" });
     for (const key of ["modelGeneration", "committed", "superseded"]) expect(part.metadata).not.toHaveProperty(key);
   });
   it("supersedes the previous attempt's parts on a retry and commits the successful attempt", () => {

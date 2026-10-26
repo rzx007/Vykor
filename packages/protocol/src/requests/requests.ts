@@ -288,6 +288,7 @@ export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {
   assertPromptMetadataAllowed(body);
   const id = optionalString(body, "id");
   const delivery = optionalEnum(body, "delivery", ["queue", "steer"] as const);
+  const outputSchema = optionalRecord(body, "outputSchema");
   const metadata = optionalRecord(body, "metadata");
   const attachments = parsePromptAttachments(body.attachments);
   return {
@@ -296,6 +297,7 @@ export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {
     attachments,
     ...(id !== undefined ? { id } : {}),
     ...(delivery !== undefined ? { delivery } : {}),
+    ...(outputSchema !== undefined ? { outputSchema } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
   };
 }

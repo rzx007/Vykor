@@ -1,10 +1,37 @@
 import { randomUUID } from "node:crypto";
+import { assertSupportedOutputSchema } from "@vykor/agent-runtime";
+import { SessionApplicationError } from "../session-application-error.js";
 import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { AttachmentError, normalizePromptAttachments, promptAttachmentFingerprint } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 import type { AdmitPromptInput, AdmitPromptResult, RunAdmissionServiceOptions } from "./run-admission-service.js";
+
+/** Snapshot the requested contract before admitting either the Input or its Run. */
+export function normalizeOutputSchema<T extends {
+  outputSchema?: Record<string, unknown>;
+  delivery?: "queue" | "steer";
+  metadata?: Record<string, unknown>;
+  runMetadata?: Record<string, unknown>;
+}>(input: T): T & { outputSchema?: Record<string, unknown> } {
+  const candidates = [input.outputSchema, input.metadata?.outputSchema, input.runMetadata?.outputSchema]
+    .filter(value => value !== undefined);
+  if (!candidates.length) return input;
+  if (input.delivery === "steer") throw new SessionApplicationError(400, "outputSchema requires a queued Run; steer cannot change its contract");
+  try {
+    for (const candidate of candidates) assertSupportedOutputSchema(candidate as Record<string, unknown>);
+    if (candidates.some(value => !jsonEqual(value, candidates[0]))) throw new Error("Conflicting output schemas");
+    const serialized = JSON.stringify(candidates[0]);
+    if (Buffer.byteLength(serialized, "utf8") > 65_536) throw new Error("Output schema exceeds 64 KiB");
+    const schema = JSON.parse(serialized) as Record<string, unknown>;
+    return { ...input, outputSchema: schema,
+      metadata: { ...input.metadata, outputSchema: schema },
+      runMetadata: { ...input.runMetadata, outputSchema: schema } };
+  } catch (error) {
+    throw new SessionApplicationError(400, `Invalid output schema: ${error instanceof Error ? error.message : "unsupported constraint"}`);
+  }
+}
 
 export function inputItems(input: {
   items?: readonly SessionUserInputItem[];

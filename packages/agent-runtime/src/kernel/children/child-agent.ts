@@ -426,7 +426,7 @@ export class AgentChildManager implements AgentChildDirectory {
         sessionId,
         inputId: receipt.inputId,
         runId: receipt.runId,
-        result: record.result,
+        result: record.result.then(result => structuredClone(result)),
         ...(lease.worktree ? { worktree: lease.worktree } : {}),
       };
     } catch (error) {
@@ -670,6 +670,7 @@ export class AgentChildManager implements AgentChildDirectory {
       .then<AgentChildResult>((completed) => ({
         status: "completed",
         output: completed.output,
+        ...(completed.delivery ? { delivery: structuredClone(completed.delivery) } : {}),
       }))
       .catch<AgentChildResult>((error) => {
         const message = errorMessage(error);
@@ -739,7 +740,7 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private async awaitResult(childId: string): Promise<AgentChildResult> {
-    return await this.require(childId).result;
+    return structuredClone(await this.require(childId).result);
   }
 
   private trimRequestHistory(record: ChildRecord): void {
@@ -883,7 +884,7 @@ export class AgentChildManager implements AgentChildDirectory {
     }
     record.agent = undefined;
     try {
-      await record.lease.release(result);
+      await record.lease.release(structuredClone(result));
     } catch (error) {
       failures.push(error);
     }
@@ -892,7 +893,7 @@ export class AgentChildManager implements AgentChildDirectory {
         try {
           await this.emitChild(record, {
             type: "child.closed",
-            data: { childId: record.id, sessionId: record.sessionId, result },
+            data: { childId: record.id, sessionId: record.sessionId, result: structuredClone(result) },
           });
         } catch (error) {
           failures.push(error);
@@ -967,7 +968,7 @@ class ChildHandle implements AgentChildHandle {
     return this.record().state;
   }
   get result(): Promise<AgentChildResult> {
-    return this.record().result;
+    return this.record().result.then(result => structuredClone(result));
   }
   get activity(): ChildActivitySnapshot | undefined {
     const snapshot = this.record().activity?.snapshot;

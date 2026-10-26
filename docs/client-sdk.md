@@ -130,6 +130,24 @@ for await (const update of syncEvents(client, {
 
 需要重试同一笔提交时，重用相同 `id` 和内容；新任务使用新 `id`。提交结果可能表示开始、排队或对正在运行的任务补充输入，调用方应检查返回的 `input`、`run` 和 `queue_state`。已有会话存在并发工作时，用服务端返回的运行 ID 区分每次任务。
 
+## 结构化交付
+
+提交新排队任务时可指定 `outputSchema`；Client 检查服务端 `features.structuredDelivery >= 1` 后才发送。它要求模型用 `SubmitResult` 提交 `status`、`summary` 和符合 Schema 的 `data`；没有有效交付会明确失败。
+
+```ts
+const admitted = await client.sessions.admitPrompt(session.id, {
+  id: crypto.randomUUID(),
+  items: [{ type: "text", text: "生成报告并返回路径。" }],
+  outputSchema: {
+    type: "object", properties: { path: { type: "string" } },
+    required: ["path"], additionalProperties: false,
+  },
+});
+// 通过上文 syncEvents 取得完成后的 run，再读取 run.metadata.delivery。
+```
+
+回执的 `validation: schema_valid` 表示格式有效；HTTP 不传业务核验函数，因此 `verification` 为 `not_requested`。可信 SDK 宿主可配置核验器读取真实产物，通过后才标为 `passed`。Run 的 `completed` 和交付的 `done/partial/blocked/waiting` 分开：本轮正常结束也可能仍需补充资料。支持的 Schema 子集见 [Kernel 交付](../packages/agent-runtime/src/kernel/delivery/README.md)，它不等同于完整 JSON Schema。
+
 ## 权限、取消与错误
 
 真实应用可以把 `selectFirstPendingPermission(bucket)` 的请求显示给用户，再提交：

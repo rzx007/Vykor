@@ -24,6 +24,7 @@
 | [session-run-engine.ts](./session-run-engine.ts) | `SessionRunEngineContext`、`SessionRunEngine` |
 | [session-run-executor-assembly.ts](./session-run-executor-assembly.ts) | `SessionRunExecutorAssemblyOptions`、`assembleSessionRunExecutor` |
 | [tool-operation-service.ts](./tool-operation-service.ts) | 将操作记录和强制规则接到当前 owner、会话和运行；提供只读证据核对入口 |
+| [tool-result-service.ts](./tool-result-service.ts) | 将补读能力绑定当前运行和实际工具来源；每次检查会话、运行状态及权限版本 |
 | [session-run-executor.ts](./session-run-executor.ts) | `SessionRunExecutorContext`、`ExecuteSessionRunInput`、`SessionRunExecutor` |
 | [session-workspace-changes.ts](./session-workspace-changes.ts) | `WorkspaceChangeResult`、`WorkspaceBaselineResult`、`WORKSPACE_CAPTURE_BUDGET_MS`、`WORKSPACE_SETTLE_BUDGET_MS` 等 |
 
@@ -38,5 +39,11 @@
 默认工具都按 `non_replayable`（不承诺可安全重放）处理，不采信工具名、`safeToRetry` 或 MCP 提示。宿主若提供 `describe`，必须按实际捕获的定义身份或调用函数验证声明；只有明确声明的只读核对可穿过未知写入阻塞。未知危险操作阻止同一根会话及其子会话后续危险派发，包括新调用 ID、其他工具入口和新建兄弟子会话；无关根会话不受影响。结果未提交且所属运行已结束的 `dispatching` 操作也按未决操作阻塞，不必等到重启。取消或运行终态仍可保存属于当前 owner 的合法迟到回执，旧 owner 不可写入。`reconcile` 仅供授权宿主提交只读查询证据，没有对模型开放核对写入口。
 
 S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身份；重启后的同名实现不会自动继承旧实现的重放承诺。
+
+用户可为排队输入指定 `outputSchema`。准入前验证支持范围并固定快照，保存到 Input/Run 的既有 metadata；相同输入 ID 更换格式会冲突。执行器据此建立本轮 `outputContract`，完成投影保存 `metadata.delivery`。`steer` 与活跃子 Agent 的补充输入不能更换正在运行的合同。重试/重放沿用原输入合同，未配置时仍使用普通聊天。
+
+`ToolResultService.forRun(scope, bindings)` 从当前实际工具集合建立只读补读能力。旧记录的来源必须与当前获准工具来源精确相符，历史实现版本不影响读取。每次查询重新检查应用 owner、精确会话、运行是否结束或取消、工作目录及权限配置版本；父子或兄弟会话不能互读。正文仍由 S1 操作记录保存，本服务不复制正文，也不重新执行原操作。
+
+当前捕获的内置结果读取工具自身输出不进入 `list`，也不能通过推测引用再 `read/search`，避免查询结果逐层变成新的补读正文。识别依赖定义身份和执行函数，不按名称屏蔽普通替换工具。历史权限仍按工具名和来源核对：可信宿主以相同 builtin 来源更换实现时，视为同一授权来源；如需区分这类历史实现语义，需另行保存持久能力标记。
 
 回执提交失败时，宿主立即按操作 ID 保存内存阻塞，即使所属运行仍显示运行中，也禁止同树其他运行新派发危险操作。已开始的调用仍可结算；只有对应操作成功保存确定结果，或可信核对确认已生效/未生效，才清除该项阻塞。一次成功结算不会清除其他操作的失败；重启后由持久 `dispatching` 记录转为未知继续保护。

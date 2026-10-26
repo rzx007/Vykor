@@ -14,6 +14,22 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it.each(["run", "input"])("passes the persisted %s output schema to the actual submit entry", async source => {
+    const schema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
+    const store = createStore(source === "input" ? { metadata: { outputSchema: schema } } : {});
+    if (source === "run") Object.assign(store.spies.getRun(), { metadata: { outputSchema: schema } });
+    const submitMessage = vi.fn(() => completedHandle());
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments,
+      agentPool: { configured: true, acquireHostedSession: async () => hostedAgentFixture({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 0, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitMessage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ outputContract: { schema } }));
+  });
   it("exposes multiple eligible plugins without a selection request or a manual session selection", async () => {
     const f = autoSelectionFixture();
     await f.execute();

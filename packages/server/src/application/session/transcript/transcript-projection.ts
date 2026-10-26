@@ -307,6 +307,7 @@ export class SessionTranscriptProjection {
             toolProgress: null,
             ...feedback,
             ...(Object.keys(feedback).length ? { toolFeedbackVersion: 1 } : {}),
+            ...(event.result.resultRef ? { resultRef: { ...event.result.resultRef }, toolResultReferenceVersion: 1 } : {}),
           },
         });
         if (!event.result.isError) {

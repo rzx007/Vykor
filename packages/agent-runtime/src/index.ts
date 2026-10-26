@@ -1,5 +1,6 @@
 export { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
 export { AgentRunNotAcceptingInputError } from "@vykor/agent-contracts";
+export { assertSupportedOutputSchema } from "./kernel/delivery/schema.js";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,

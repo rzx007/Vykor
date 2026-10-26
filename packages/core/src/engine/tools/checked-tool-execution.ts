@@ -59,6 +59,31 @@ export interface CheckedToolExecutionResult {
   failure?: { error: unknown };
 }
 
+class ToolPreflightError extends Error {}
+async function validateBeforeDispatch(
+  validate: NonNullable<import("@vykor/agent-contracts").AgentRunToolContribution["beforeDispatch"]>,
+  input: Record<string, unknown>, context: ToolContext, signal: AbortSignal, timeoutMs: number,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abort: (() => void) | undefined;
+  try {
+    signal.throwIfAborted();
+    const reason = await Promise.race([
+      Promise.resolve().then(() => validate(input, context)),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new ToolPreflightError("Host validation timed out")), timeoutMs); timer.unref?.(); }),
+      new Promise<never>((_, reject) => { abort = () => reject(signal.reason ?? new Error("Host validation cancelled")); signal.addEventListener("abort", abort, { once: true }); if (signal.aborted) abort(); }),
+    ]);
+    signal.throwIfAborted();
+    if (reason) throw new ToolPreflightError(reason);
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw error instanceof ToolPreflightError ? error : new ToolPreflightError(error instanceof Error ? error.message : "Host validation failed");
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (abort) signal.removeEventListener("abort", abort);
+  }
+}
+
 function finishResult(result: ToolExecutionResult): ToolExecutionResult {
   result.executionState ??= result.isError ? "unknown" : "completed";
   if (result.executionState === "unknown") result.isError = true;
@@ -95,6 +120,14 @@ export async function executeCheckedTools(
     toolRegistry,
     messages,
   );
+  if (toolUses.length > 1) for (let index = readyForPermission.length - 1; index >= 0; index--) {
+    const item = readyForPermission[index]!;
+    const exclusive = execution?.contribution?.tools?.some(contribution => contribution.definition === item.tool && contribution.requiresSoloBatch === true);
+    if (exclusive) {
+      results[item.idx] = { toolUseId: item.toolUse.id, toolName: item.toolUse.name, content: [{ type: "text", text: "Submit this finalization tool alone after the other calls have settled." }], isError: true, executionState: "not_started", failureKind: "invalid_input" };
+      readyForPermission.splice(index, 1);
+    }
+  }
   const batchController = new AbortController();
   const startSignal = AbortSignal.any([
     batchController.signal,
@@ -290,6 +323,8 @@ export async function executeCheckedTools(
                 toolAttemptId,
               });
               startSignal.throwIfAborted();
+              const preflight = execution?.contribution?.tools?.find(item => item.definition === tool)?.beforeDispatch;
+              if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId), startSignal, timeoutMs);
               if (operation) {
                 const policyVersion = await checkRequiredToolPolicy(
                   operation.safety,
@@ -394,7 +429,8 @@ export async function executeCheckedTools(
         if (
           !started &&
           !startSignal.aborted &&
-          !(error instanceof RequiredToolPolicyError)
+          !(error instanceof RequiredToolPolicyError) &&
+          !(error instanceof ToolPreflightError)
         )
           failBatch(error);
         result = {
@@ -405,6 +441,8 @@ export async function executeCheckedTools(
           isError: true,
           failureKind: (started ? runningSignal.aborted : startSignal.aborted)
             ? "interrupted"
+            : error instanceof ToolPreflightError
+              ? "invalid_input"
             : error instanceof RequiredToolPolicyError
               ? "policy"
               : error instanceof ToolTimeoutError

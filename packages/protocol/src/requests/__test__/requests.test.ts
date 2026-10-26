@@ -25,6 +25,11 @@ function expectInvalid(run: () => unknown, field?: string): void {
 }
 
 describe("HTTP request parsers", () => {
+  it("preserves an explicit structured output schema and rejects non-object schemas", () => {
+    const outputSchema = { type: "object", properties: { report: { type: "string" } }, required: ["report"] };
+    expect(parseAdmitPromptRequest({ content: "report", outputSchema })).toHaveProperty("outputSchema", outputSchema);
+    expectInvalid(() => parseAdmitPromptRequest({ content: "report", outputSchema: [] }), "outputSchema");
+  });
   it("preserves an optional machine-readable reason when converting validation errors", () => {
     const error = new ProtocolValidationError("too large", "args", "payload_too_large");
     expect(error.toProtocolError()).toEqual({

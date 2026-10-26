@@ -1,4 +1,6 @@
 export type { QueryEngine as IQueryEngine, QueryEngineOptions, QueryRequestConfiguration, MemoryRetriever } from "./types/runtime";
+export { validateToolInput } from "./engine/tools/tool-input-schema.js";
+export * from "./engine/results/index.js";
 export type { ModelRetryPolicy, RetryCounters, NextModelRetryDelayInput } from "./engine/model/model-retry";
 export {
   DEFAULT_MODEL_RETRY_POLICY,

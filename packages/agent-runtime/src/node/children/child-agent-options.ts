@@ -62,7 +62,7 @@ export function deriveChildAgentOptions(
     : configuration.effort;
   const inheritsModel = childModel === configuration.model;
   const effortUnchanged = childEffort === configuration.effort;
-  const { requestConfigurationStore: _parentReader, ...inherited } =
+  const { requestConfigurationStore: _parentReader, outputContract: _parentOutputContract, ...inherited } =
     configuration;
   const parentMode =
     configuration.permissionMode ??

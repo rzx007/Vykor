@@ -158,6 +158,23 @@ function fixture(
 }
 
 describe("durable checked tool operations", () => {
+  it("rejects trusted validation before dispatch rights and preserves a definite no-start result", async () => {
+    const f = fixture();
+    const execution = { ...f.execution, contribution: { tools: [{ definition: f.definition, permission: "host-internal" as const, beforeDispatch: async () => "Evidence is missing" }] } };
+    const outcome = await f.run([call()], { execution });
+    expect(f.effects).toBe(0);
+    expect(outcome.results[0]).toMatchObject({ isError: true, executionState: "not_started", failureKind: "invalid_input" });
+    expect(outcome.results[0]?.toolAttemptId).toBeUndefined();
+    expect(f.saved[0]?.result.executionState).toBe("not_started");
+  });
+  it("does not finalize beside sibling effects when the trusted contribution requires its own batch", async () => {
+    const f = fixture();
+    const execution = { ...f.execution, contribution: { tools: [{ definition: f.definition, permission: "host-internal" as const, requiresSoloBatch: true as const }] } };
+    const outcome = await f.run([call("a"), call("b")], { execution });
+    expect(f.effects).toBe(0);
+    expect(outcome.results.every(result => result.executionState === "not_started")).toBe(true);
+    expect(f.intents).toHaveLength(0);
+  });
   it.each(["deny", "throw", "timeout", "missing-policy", "missing-operations"])(
     "prevents all effects for required policy %s, including internal tools with hooks disabled",
     async (mode) => {

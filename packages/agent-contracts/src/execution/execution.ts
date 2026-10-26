@@ -53,6 +53,10 @@ export interface AgentEffects {
 }
 
 export interface AgentRunToolContribution {
+  /** Trusted finalization tools may require a batch with no sibling effects. */
+  readonly requiresSoloBatch?: true;
+  /** Trusted host validation after authorization and before taking dispatch rights. */
+  readonly beforeDispatch?: (input: Record<string, unknown>, context: import("../tools/tools.js").ToolContext) => Promise<string | undefined>;
   readonly definition: import("../tools/tools.js").ToolDefinition;
   readonly permission: "host-internal";
   /** End only after this exact definition succeeds and the whole batch is delivered. */
@@ -77,6 +81,7 @@ export interface RunToolBinding {
 
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
+  readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
   readonly toolSafety?: import("../tools/operations.js").AgentToolSafety;
   readonly limits?: AgentExecutionLimits;
   readonly modelAttempts?: ModelAttemptGate;
@@ -97,6 +102,7 @@ export interface AgentExecutionContext {
 }
 
 export interface AgentRunResult {
+  delivery?: import("./delivery.js").DeliveryReceipt;
   status: "completed";
   output: string;
   history: Message[];
@@ -116,6 +122,10 @@ export interface AgentRunHandle {
 
 
 export interface PreparedAgentRun {
+  /** Called after the framework fixes the final Run tool ceiling; never exposed to tools. */
+  readonly bindToolResults?: (tools: ReadonlyMap<string, RunToolBinding>) => import("../tools/result-data.js").RunToolResultStore | Promise<import("../tools/result-data.js").RunToolResultStore>;
+  /** Prebound stores stay usable only while final tool bindings remain equivalent to this preparation. */
+  readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
   readonly toolSafety?: import("../tools/operations.js").AgentToolSafety;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
   readonly contribution?: AgentRunContribution;

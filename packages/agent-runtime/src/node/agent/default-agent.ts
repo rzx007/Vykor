@@ -125,6 +125,8 @@ async function createDefaultNodeAgentInternal(
       onRunCapabilities: options.onRunCapabilities,
       modelAttempts: options.modelAttempts,
       toolSafety: options.toolSafety,
+      outputContract: options.outputContract,
+      toolResults: options.toolResults,
     });
   } catch (error) {
     return cleanupAfterInitializationFailure(composition.cleanup, error);
