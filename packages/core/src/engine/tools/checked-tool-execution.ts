@@ -419,6 +419,9 @@ export async function executeCheckedTools(
                       }
                     }
                   : undefined,
+                operation?.safety.operations.observeInvocation
+                  ? settled => operation!.safety.operations.observeInvocation!({ receipt: operation!.receipt!, settled })
+                  : undefined,
               );
               result = returnedResult(returned, tool);
             }

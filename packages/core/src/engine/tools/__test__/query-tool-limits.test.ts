@@ -46,3 +46,26 @@ it("does not invoke if cancellation arrives before the scheduled invocation", as
   await expect(pending).rejects.toThrow("cancelled before invocation");
   expect(effects).toBe(0);
 });
+
+it("registers the actual invocation before execution and settles observation on rejection", async () => {
+  const order: string[] = [];
+  let reject!: (error: Error) => void;
+  let observed: Promise<void> | undefined;
+  const pending = executeToolWithTimeout({ name: "Write", description: "fixture", inputSchema: {},
+    execute: () => { order.push("executed"); return new Promise((_resolve, rejectResult) => { reject = rejectResult; }); },
+  }, {}, { cwd: "/" }, 1_000, undefined, undefined, settled => { order.push("observed"); observed = settled; });
+  await Promise.resolve();
+  expect(order).toEqual(["observed", "executed"]);
+  reject(new Error("request failed"));
+  await expect(pending).rejects.toThrow("request failed");
+  await expect(observed).resolves.toBeUndefined();
+});
+
+it("does not start the tool when invocation observation fails", async () => {
+  let effects = 0;
+  const pending = executeToolWithTimeout({ name: "Write", description: "fixture", inputSchema: {},
+    execute: async () => { effects++; return { content: [] }; },
+  }, {}, { cwd: "/" }, 1_000, undefined, undefined, () => { throw new Error("owner unavailable"); });
+  await expect(pending).rejects.toThrow("owner unavailable");
+  expect(effects).toBe(0);
+});

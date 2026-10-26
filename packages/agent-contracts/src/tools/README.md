@@ -6,8 +6,8 @@
 | --- | --- |
 | [tools.ts](tools.ts) | 工具定义、调用上下文、注册表、发现接口和结果 |
 | [operations.ts](operations.ts) | 含可信运行作用范围和工具绑定的宿主工具安全接口 |
-| [tool-data.ts](tool-data.ts) | 纯内容块、完整结果、操作票据和派发回执，以及 MCP 数据校验与公开过滤 |
-| [result-data.ts](result-data.ts) | 稳定结果引用、页、检索结果和宿主绑定的结果访问能力 |
+| [tool-data.ts](tool-data.ts) | 纯内容块、完整结果、结果引用与分页数据、操作票据和派发回执，以及 MCP 数据校验与公开过滤 |
+| [result-data.ts](result-data.ts) | 宿主绑定的结果访问能力；引用和分页数据转导出自纯数据入口 |
 | [result-text.ts](result-text.ts) | 无存储状态的文本视图、UTF-16 分页、字面检索和边界检查 |
 | [tool-names.ts](tool-names.ts) | 名称去空格、去重，以及 `Bash` 到 `Shell` 的名称统一 |
 | [shell-output.ts](shell-output.ts) | 有大小限制的 Shell 输出采集、分页读取和搜索接口 |
@@ -21,3 +21,5 @@
 工具注册表、执行记录和 Shell 输出正文由消费方持有，解析函数只使用本次调用的临时计数。新增工具契约或数据辅助函数放本目录，测试放 [__test__](__test__/)。具体工具执行实现放对应功能包。
 
 `AgentToolSafety` 将操作记录 Gate 和强制规则 Gate 成对传给执行上下文。流程为准备、授权、取得派发回执、调用、结算；`operationId` 与父操作身份进入 ToolContext。这里只定义接口，独立 SDK 不自动创建数据库；持久化由宿主实现。
+
+可选 `ToolOperationGate.observeInvocation` 在实际调用前同步接收真实回执与调用结束 Promise。超时或取消不等于调用已结束，宿主可用它阻止仍在执行的调用被提前人工核对为已生效或未生效。Promise 只用于本进程追踪，不写入工具结果、事件或数据库；未实现此 Hook 的宿主保持原接口兼容。

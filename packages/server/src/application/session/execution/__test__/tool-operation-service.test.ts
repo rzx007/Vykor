@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { SessionStore } from "@vykor/services";
 import type { ToolOperationIntent } from "@vykor/agent-contracts";
 import type { AgentRunCapabilitySnapshot } from "@vykor/agent-runtime";
+import { isTrustedReadOnlyTool, markTrustedReadOnlyTool, toolDefinitionIdentity } from "@vykor/core";
 import { ToolOperationService } from "../tool-operation-service.js";
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).reverse().forEach(cleanup => cleanup()));
 async function fixture(transactionHooks?: { beforeCommit(): void }) {
   const directory = mkdtempSync(join(tmpdir(), "tool-operation-host-"));
   const store = new SessionStore({ path: join(directory, "store.db"), transactionHooks });
-  cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  cleanups.push(() => {
+    const target = resolve(directory), child = relative(resolve(tmpdir()), target);
+    if (!child || child.startsWith("..") || isAbsolute(child) || !target.includes("tool-operation-host-")) throw new Error("Unsafe temporary cleanup");
+    rmSync(target, { recursive: true, force: true });
+  });
   cleanups.push(store.close.bind(store));
   const ownership = { acquire: store.acquireApplicationOwner.bind(store), release: store.releaseApplicationOwner.bind(store) };
   const lease = ownership.acquire({ ownerId: "owner", pid: process.pid, staleAfterMs: 30_000 });
@@ -51,6 +56,8 @@ describe("daemon tool operation host", () => {
       const operation = await f.service.operations.prepare(next);
       const policy = await f.service.requiredPolicy.check({ intent: next, operation, phase: "authorization" });
       expect(policy.allowed).toBe(false);
+      expect(policy.reason).toContain(receipt.operationId);
+      expect(policy.reason).toContain("GET /sessions/s/tool-operations");
     }
   });
   it("rejects changed runtime policy and accepts legal terminal late receipts", async () => {
@@ -217,4 +224,15 @@ describe("daemon tool operation host", () => {
     await expect(f.service.operations.dispatch(waiting)).resolves.toMatchObject({ ownerId: "owner" });
   });
 
+});
+
+it("refuses a forged builtin source even when the definition and invocation match a captured trusted reader", async () => {
+  const f = await fixture();
+  const definition = markTrustedReadOnlyTool({ name: "Read", description: "host reader", inputSchema: {}, execute: async () => ({ content: [] }) });
+  const binding = { definition, definitionIdentity: toolDefinitionIdentity(definition), invoke: definition.execute.bind(definition), source: { kind: "plugin" as const, id: "foreign" } };
+  const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease,
+    describe: ({ binding }) => binding?.source?.kind === "builtin" && isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+  service.onRunCapabilities({ scope: f.intent.scope, capabilityView: { tools: new Map([["Read", binding]]) } } as unknown as AgentRunCapabilitySnapshot);
+  const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, name: "Read" }, binding: { ...binding, source: { kind: "builtin" as const } } };
+  expect((await service.operations.prepare(intent)).kind).toBe("non_replayable");
 });

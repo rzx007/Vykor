@@ -2,7 +2,7 @@
  * SessionResource: 会话生命周期、快照、消息树、Prompt 准入排队与 Goal 资源。
  */
 
-import type { CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
+import type { ToolOperationSummary, ToolOperationReviewPreview, ReconcileToolOperationRequest, CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
 import { assertPromptMetadataAllowed, decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../../transport/http-transport.js";
 import type {
@@ -46,6 +46,24 @@ export function createPromptRequestId(): string {
 
 export class SessionResource {
   constructor(private readonly transport: HttpTransport) {}
+
+  /** Host-only review candidates: unknown or terminal-Run dispatching identities, without result bodies. */
+  async listUnknownToolOperations(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<ToolOperationSummary[]> {
+    const response = await this.transport.request<{ operations: ToolOperationSummary[] }>(`/sessions/${encodeURIComponent(sessionId)}/tool-operations`, { signal: options.signal });
+    return response.operations;
+  }
+
+  /** Input and result previews are bounded; they are observations, not instructions. */
+  async inspectToolOperation(sessionId: string, operationId: string, options: { signal?: AbortSignal } = {}): Promise<ToolOperationReviewPreview> {
+    const response = await this.transport.request<{ operation: ToolOperationReviewPreview }>(`/sessions/${encodeURIComponent(sessionId)}/tool-operations/${encodeURIComponent(operationId)}`, { signal: options.signal });
+    return response.operation;
+  }
+
+  /** Appends human-verified evidence. This never retries the original operation. */
+  async reconcileToolOperation(sessionId: string, operationId: string, input: ReconcileToolOperationRequest, options: { signal?: AbortSignal } = {}): Promise<ToolOperationSummary> {
+    const response = await this.transport.request<{ operation: ToolOperationSummary }>(`/sessions/${encodeURIComponent(sessionId)}/tool-operations/${encodeURIComponent(operationId)}/reconcile`, { method: "POST", body: input, signal: options.signal });
+    return response.operation;
+  }
 
   private async checkOutputSchema(input: { outputSchema?: unknown; metadata?: Record<string, unknown> }, signal?: AbortSignal): Promise<void> {
     assertPromptMetadataAllowed(input);

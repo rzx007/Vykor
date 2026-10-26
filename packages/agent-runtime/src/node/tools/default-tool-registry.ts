@@ -35,7 +35,7 @@ import {
   createToolResultTool,
 } from "@vykor/tools";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
-import { ToolRegistry, markToolResultReader } from "@vykor/core";
+import { ToolRegistry, markToolResultReader, markTrustedReadOnlyTool } from "@vykor/core";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
 import {
   createTeamRegistry,
@@ -119,12 +119,12 @@ export function createDefaultToolRegistry(
     ),
     environment(),
   );
-  registerBuiltin(createFileReadTool(options.host), environment());
+  registerBuiltin(markTrustedReadOnlyTool(createFileReadTool(options.host)), environment());
   registerBuiltin(createFileWriteTool(options.host), environment());
   registerBuiltin(createFileEditTool(options.host), environment());
   registerBuiltin(createApplyPatchTool(options.host), environment());
-  registerBuiltin(createGlobTool(options.host), environment());
-  registerBuiltin(createGrepTool(options.host), environment());
+  registerBuiltin(markTrustedReadOnlyTool(createGlobTool(options.host)), environment());
+  registerBuiltin(markTrustedReadOnlyTool(createGrepTool(options.host)), environment());
   registerBuiltin(
     createWebFetchTool(undefined, options.host),
     controlPlane(true),
@@ -144,7 +144,7 @@ export function createDefaultToolRegistry(
   ))
     registerBuiltin(tool, controlPlane());
   registerBuiltin(toolSearchTool, controlPlane());
-  registerBuiltin(markToolResultReader(createToolResultTool()), controlPlane());
+  registerBuiltin(markTrustedReadOnlyTool(markToolResultReader(createToolResultTool())), controlPlane());
   registerBuiltin(askUserTool, controlPlane());
   registerBuiltin(briefTool, controlPlane());
   if (options.backgroundShell !== false) {

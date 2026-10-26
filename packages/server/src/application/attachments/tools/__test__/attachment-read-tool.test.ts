@@ -32,7 +32,7 @@ describe("attachment Read tool", () => {
       const allowed = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "owner" });
       expect((allowed.content[0] as { text: string }).text).toContain("recover this Shell output");
       const denied = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "other", shellOutputLogs: logs });
-      expect(denied).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown" });
+      expect(denied).toMatchObject({ isError: true, failureKind: "precondition", executionState: "completed" });
       expect((denied.content[0] as { text: string }).text).toMatch(/unavailable/i);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });

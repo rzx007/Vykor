@@ -82,6 +82,16 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("clears a caller-supplied delivery claim when the Kernel completes without a receipt", async () => {
+    const { store, projector } = goalProjector();
+    store.runs.createRun({ id: "forged-delivery", sessionId: "parent", metadata: {
+      delivery: { status: "partial", validation: "schema_valid", verification: "passed", data: {} },
+    } });
+    store.runs.updateRun("forged-delivery", { status: "running" });
+    await projector.apply(event("run.completed", { output: "ordinary text" }, { sessionId: "parent", runId: "forged-delivery" }));
+    expect(store.runs.getRun("forged-delivery")?.metadata.delivery).toBeNull();
+  });
+
   it("persists a validated delivery receipt separately from Run completion status", async () => {
     const { store, projector, goal } = goalProjector();
     const delivery = { status: "blocked" as const, summary: "Need a file", data: { path: "report.md" }, validation: "schema_valid" as const, verification: "not_requested" as const };

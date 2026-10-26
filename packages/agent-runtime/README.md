@@ -32,6 +32,8 @@ import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 
 `src/index.ts` 提供默认 Node 接入，`src/kernel-entry.ts` 提供执行核心，`src/workflow-entry.ts` 提供工作流宿主。跨包调用优先使用这三个入口。构建将实现打包到 `dist/`，并生成对应类型声明。
 
+宿主核验 Node 工具身份时，从同一个 `@vykor/agent-runtime` 实例导入 `markTrustedReadOnlyTool`、`isTrustedReadOnlyTool` 和 `isToolResultReader`。这些函数直接使用本 Runtime 包内部的身份表，覆盖冻结后的工具绑定和已核验的宿主读取包装；独立加载的 Core 副本不共享这份私有表。工具名称、元数据提示或替换后的执行函数不能取得承诺。Server 不应混用另一个 Core 副本来识别 Runtime 创建的定义。
+
 ## 长结果补读与结构化交付
 
 默认 Node Agent 提供 `ToolResult`，支持 `list`、`read`、`search`。普通工具结果在模型内容截断前保存，模型收到 `resultRef` 后可分页读取。默认存储有容量上限，只在当前 Agent 生命周期内跨 Run 保留；Server 注入已有 S1 操作记录读取能力，SQLite 重开仍可按当前权限找回结果。查询不会重新运行原工具，也不会读取任意文件。详情见 [core 结果存储](../core/src/engine/results/README.md)。

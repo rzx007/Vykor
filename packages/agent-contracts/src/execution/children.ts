@@ -179,6 +179,8 @@ export interface AgentRunScope {
  * be attributed to. Callers cannot widen this into a forged session/agent/cwd.
  */
 export interface AgentPostRunChildParent {
+  /** Host-selected contract for this system child only; never serialized or inherited. */
+  childOutputContract?: import("./delivery.js").AgentOutputContract;
   limits?: AgentExecutionLimits;
   inputId: string;
   runId: string;

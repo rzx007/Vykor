@@ -61,6 +61,38 @@ function reviewInput(cwd: string) {
 }
 
 describe("runChildForCompletedRun", () => {
+  it("runs the host-contracted system child with only SubmitResult and returns its verified receipt", async () => {
+    const cwd = tempDir();
+    const events: AgentEvent[] = [];
+    let visibleTools: string[] = [];
+    let verified = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        visibleTools = (params.tools ?? []).map(tool => tool.name);
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "submit-review", name: "SubmitResult", input: {
+          status: "done", summary: "review ready", data: { verdict: "fail" },
+        } } };
+        yield { type: "complete", stopReason: "tool_use" };
+      },
+    };
+    const agent = await createDefaultNodeAgent({ cwd, settings: SETTINGS, client, onEvent: event => { events.push(event); } });
+    try {
+      const parent = { ...PARENT, childOutputContract: {
+        schema: { type: "object", properties: { verdict: { type: "string", enum: ["fail"] } }, required: ["verdict"], additionalProperties: false },
+        verify: () => { verified++; return { ok: true }; },
+      } };
+      const outcome = await agent.runChildForCompletedRun(reviewInput(cwd), parent, "patch");
+      expect(outcome.result).toMatchObject({ status: "completed", delivery: {
+        status: "done", data: { verdict: "fail" }, validation: "schema_valid", verification: "passed",
+      } });
+      expect(visibleTools).toEqual(["SubmitResult"]);
+      expect(verified).toBe(1);
+      expect(JSON.stringify(events)).not.toContain("childOutputContract");
+      expect(() => structuredClone(events)).not.toThrow();
+      expect(events.find(event => event.type === "run.completed")?.data).toHaveProperty("delivery");
+    } finally { await agent.close(); }
+  });
+
   it("preserves a started rejection with zero client calls and later terminal delivery", async () => {
     const cwd = tempDir();
     let calls = 0;

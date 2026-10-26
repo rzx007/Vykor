@@ -25,12 +25,21 @@ export interface VisionImagePreparationMetadata {
 }
 
 export type ContentBlock = TextBlock | ImageBlock;
-export type { ToolResultRef, ToolResultPage, ToolResultSearch, ToolResultList, RunToolResultStore } from "./result-data.js";
+/** Opaque handle into an authorized result store; never a filesystem path. */
+export interface ToolResultRef { id: string; toolName: string; totalChars: number }
+export interface ToolResultPage { ref: ToolResultRef; text: string; offset: number; nextOffset?: number }
+export interface ToolResultSearch {
+  ref: ToolResultRef;
+  matches: Array<{ offset: number; text: string }>;
+  nextOffset?: number;
+}
+export interface ToolResultList { items: ToolResultRef[]; nextOffset?: number }
+export type { RunToolResultStore } from "./result-data.js";
 export { assertToolResultId, ToolResultAccessError, toolResultBounds, toolResultText, toolResultList, toolResultPage, toolResultSearch } from "./result-text.js";
 
 export interface ToolResult {
   /** Added by the trusted result archive after preserving the original output. */
-  resultRef?: import("./result-data.js").ToolResultRef;
+  resultRef?: ToolResultRef;
   content: ContentBlock[];
   /** Original bounded MCP response; private to the authorized application host. */
   mcpResult?: McpCallResultData;

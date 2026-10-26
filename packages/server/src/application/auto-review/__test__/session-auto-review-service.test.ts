@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
-import type { AgentChildResult, RunToolBindings } from "@vykor/agent-contracts";
+import type { AgentChildResult, AgentOutputContract, RunToolBindings } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime/kernel";
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -41,18 +41,22 @@ function inspectorWith(compareResult: GitRunChangeSet | { attribution: "unavaila
   };
 }
 
-function completed(output: string): AgentChildResult {
-  return { status: "completed", output };
+function verifiedReview(data: Record<string, unknown>): AgentChildResult {
+  return { status: "completed", output: "Report submitted", delivery: {
+    status: data.verdict === "partial" ? "partial" : "done", summary: String(data.summary), data,
+    validation: "schema_valid", verification: "passed",
+  } };
 }
 
-const PASS = JSON.stringify({ version: 1, verdict: "pass", summary: "ok", findings: [] });
+const PASS_REPORT = { version: 1, verdict: "pass", summary: "ok", findings: [] };
+const PASS = JSON.stringify(PASS_REPORT);
 
 describe("SessionAutoReviewService", () => {
   let dir: string;
   let store: SessionStore;
   let sessionId: string;
   let runId: string;
-  let calls: Array<{ input: Record<string, unknown>; sensitive: string; view?: RunToolBindings }>;
+  let calls: Array<{ input: Record<string, unknown>; parent: { childOutputContract?: AgentOutputContract }; sensitive: string; view?: RunToolBindings }>;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vykor-auto-review-"));
@@ -71,11 +75,11 @@ describe("SessionAutoReviewService", () => {
     return {
       runChildForCompletedRun: async (
         input: Record<string, unknown>,
-        _parent: unknown,
+        parent: { childOutputContract?: AgentOutputContract },
         sensitive: string,
         view?: RunToolBindings,
       ) => {
-        calls.push({ input, sensitive, view });
+        calls.push({ input, parent, sensitive, view });
         return {
           invocation: { id, sessionId: "child-session", result: Promise.resolve(result) },
           result,
@@ -118,7 +122,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "off" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "disabled", mode: "off" });
     expect(calls).toHaveLength(0);
@@ -142,7 +146,7 @@ describe("SessionAutoReviewService", () => {
     expect(metadata()).toMatchObject({ status: "unavailable", reasons: ["not_git_repository"] });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "unavailable", reasons: ["not_git_repository"] });
     expect(calls).toHaveLength(0);
@@ -161,7 +165,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "skipped", riskLevel: "none", reasons: ["no_changes"] });
     expect(calls).toHaveLength(0);
@@ -173,7 +177,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "skipped", riskLevel: "low" });
     expect(calls).toHaveLength(0);
@@ -184,12 +188,80 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({
       status: "passed", riskLevel: "medium", verdict: "pass", findingCount: 0, reviewTaskId: "child-review-1",
     });
     expect(reviewEvents().at(-1)?.payload.review).toEqual(metadata());
+  });
+
+  it("rejects ordinary JSON text without a structured delivery receipt", async () => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent({ status: "completed", output: PASS }), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: "failed", reasons: ["review_output_invalid"] });
+  });
+
+  it.each(["done", "partial"] as const)("consumes verified %s receipt data instead of output text", async status => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent({ status: "completed", output: "Report submitted", delivery: {
+        status, summary: "ok", data: { version: 1, verdict: status === "done" ? "pass" : "partial", summary: "ok", findings: [] },
+        validation: "schema_valid", verification: "passed",
+      } }), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: status === "done" ? "passed" : "partial" });
+  });
+
+  it("rejects a schema-valid receipt without host verification", async () => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent({ status: "completed", output: PASS, delivery: {
+        status: "done", summary: "ok", data: JSON.parse(PASS), validation: "schema_valid", verification: "not_requested",
+      } }), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: "failed", reasons: ["review_output_invalid"] });
+  });
+
+  it.each([
+    { ...PASS_REPORT, summary: "x".repeat(4097) },
+    { version: 1, verdict: "fail", summary: "bad reference", findings: [
+      { severity: "important", title: "Problem", file: "outside.ts", evidence: "patch" },
+    ] },
+    { ...PASS_REPORT, verdict: "fail" },
+  ])("defensively rejects invalid receipt data %#", async data => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    const review = await svc.reviewCompletedRun({ sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(verifiedReview(data)), signal: new AbortController().signal });
+    expect(review).toMatchObject({ status: "failed", reasons: ["review_output_invalid"] });
+  });
+
+  it("provides a host-only contract that verifies negative and partial reports and rejects invalid references", async () => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    await svc.reviewCompletedRun({ sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal });
+    const contract = calls[0]?.parent.childOutputContract;
+    expect(contract).toBeDefined();
+    expect(calls[0]?.input).not.toHaveProperty("outputContract");
+    const report = { version: 1, verdict: "fail", summary: "problem", findings: [
+      { severity: "important", title: "Problem", file: "packages/server/src/a.ts", evidence: "patch evidence" },
+    ] };
+    await expect(contract!.verify!({ status: "done", summary: "ready", data: report })).resolves.toMatchObject({ ok: true });
+    await expect(contract!.verify!({ status: "partial", summary: "prefix", data: { ...report, verdict: "partial" } })).resolves.toMatchObject({ ok: true });
+    await expect(contract!.verify!({ status: "done", summary: "ready", data: { ...report, findings: [
+      { ...report.findings[0], file: "outside.ts" },
+    ] } })).resolves.toMatchObject({ ok: false });
+    await expect(contract!.verify!({ status: "done", summary: "ready", data: { ...report, verdict: "partial" } })).resolves.toMatchObject({ ok: false });
   });
 
   it("preempts an active reviewer for a new user prompt without claiming pass", async () => {
@@ -201,7 +273,7 @@ describe("SessionAutoReviewService", () => {
       runChildForCompletedRun: async (_spawn: unknown, parent: { signal: AbortSignal }) => {
         started();
         await new Promise<void>((resolve) => parent.signal.addEventListener("abort", () => resolve(), { once: true }));
-        return { invocation: { id: "child-preempted" }, result: completed(PASS) };
+        return { invocation: { id: "child-preempted" }, result: verifiedReview(PASS_REPORT) };
       },
     } as unknown as VykorAgent;
     const review = svc.reviewCompletedRun({
@@ -228,7 +300,7 @@ describe("SessionAutoReviewService", () => {
     store.runs.createRun({ sessionId });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "skipped", reasons: ["review_preempted_by_user"] });
     expect(calls).toHaveLength(0);
@@ -250,7 +322,7 @@ describe("SessionAutoReviewService", () => {
     const controller = new AbortController();
     const review = svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: controller.signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: controller.signal,
     });
     await started;
     if (reason === "new_user") svc.preemptForUserInput(sessionId);
@@ -275,7 +347,7 @@ describe("SessionAutoReviewService", () => {
     });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(output)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(JSON.parse(output))), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({
       status: "findings", riskLevel: "high", verdict: "fail", findingCount: 2,
@@ -291,7 +363,7 @@ describe("SessionAutoReviewService", () => {
     const output = JSON.stringify({ version: 1, verdict: "partial", summary: "partial", findings: [] });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(output)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(JSON.parse(output))), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "partial", verdict: "partial" });
   });
@@ -301,7 +373,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed("here is my review, no json")), signal: new AbortController().signal,
+      agent: fakeAgent({ status: "completed", output: "here is my review, no json" }), signal: new AbortController().signal,
     });
     expect(review.status).toBe("failed");
     expect(review.reasons).toContain("review_output_invalid");
@@ -339,7 +411,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "unavailable", reasons: ["preexisting_dirty_overlap"] });
     expect(calls).toHaveLength(0);
@@ -350,7 +422,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     const review = await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(review).toMatchObject({ status: "partial", verdict: "partial", patchTruncated: true });
     expect(review.status).not.toBe("passed");
@@ -362,7 +434,7 @@ describe("SessionAutoReviewService", () => {
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
     await svc.reviewCompletedRun({
       sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
-      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+      agent: fakeAgent(verifiedReview(PASS_REPORT)), signal: new AbortController().signal,
     });
     expect(calls).toHaveLength(1);
     const call = calls[0]!;

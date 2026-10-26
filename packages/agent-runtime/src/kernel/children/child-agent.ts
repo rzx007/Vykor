@@ -23,6 +23,7 @@ import type {
   ChildFailureKind,
   RunToolBinding,
   AgentModelConfiguration,
+  AgentOutputContract,
 } from "@vykor/agent-contracts";
 import { MaxTurnsExceeded } from "@vykor/core/engine";
 import type { VykorAgent } from "../agent.js";
@@ -145,6 +146,7 @@ export interface AgentChildManagerOptions {
     parentScope: AgentRunScope;
     tools?: ChildTools;
     system: boolean;
+    outputContract?: AgentOutputContract;
   }): ResolvedChildExecution;
 }
 
@@ -228,7 +230,8 @@ export class AgentChildManager implements AgentChildDirectory {
    * Trusted host-only spawn for a bounded post-run system child (for example a
    * read-only reviewer). It counts toward depth and activeChildren, runs at most
    * one at a time, never consumes the model-callable cumulative child budget, and
-   * is force-limited to zero model-visible tools. The sensitive initial content is
+   * is force-limited to zero ordinary tools; a host contract may add SubmitResult.
+   * The sensitive initial content is
    * the child's first message; it never appears in persisted spawn summaries.
    */
   async spawnSystemChild(
@@ -236,6 +239,7 @@ export class AgentChildManager implements AgentChildDirectory {
     input: AgentChildSpawnInput,
     sensitiveInitialContent: string,
     tools?: ChildTools,
+    outputContract?: AgentOutputContract,
   ): Promise<AgentChildInvocation> {
     if (this.systemChildId !== undefined) {
       throw new Error("A system review child is already active");
@@ -244,6 +248,7 @@ export class AgentChildManager implements AgentChildDirectory {
       system: true,
       ...(tools ? { tools } : {}),
       initialContent: sensitiveInitialContent,
+      outputContract,
     });
   }
 
@@ -262,6 +267,7 @@ export class AgentChildManager implements AgentChildDirectory {
       tools?: ChildTools;
       system?: boolean;
       initialContent?: string;
+      outputContract?: AgentOutputContract;
     },
   ): Promise<AgentChildInvocation> {
     await parentScope.limits?.check("child");
@@ -322,6 +328,7 @@ export class AgentChildManager implements AgentChildDirectory {
         parentScope,
         tools: options.tools,
         system,
+        ...(system && options.outputContract ? { outputContract: options.outputContract } : {}),
       });
     } catch (error) {
       budgetReservation.rollback();

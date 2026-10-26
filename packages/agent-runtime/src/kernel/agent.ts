@@ -340,8 +340,9 @@ export class KernelAgent implements VykorAgent {
   }> {
     return this.runMaintenance("post_run_child", async () => {
       await parent.limits?.check("maintenance");
+      const { childOutputContract, ...parentIdentity } = parent;
       const scope = {
-        ...parent,
+        ...parentIdentity,
         agentId: this.id,
         sessionId: this.id,
         cwd: this.options.cwd,
@@ -356,6 +357,7 @@ export class KernelAgent implements VykorAgent {
           input,
           content,
           tools,
+          childOutputContract,
         );
         let result: AgentChildResult;
         try {

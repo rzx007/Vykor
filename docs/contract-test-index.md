@@ -188,6 +188,15 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/resources/plugins/__test__/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
+## 日常续做与交付闭环
+
+| 检查目标 | 具体证据 | 定向入口 |
+| --- | --- | --- |
+| 可信内置读取不继承同名覆盖，未知操作核对检查归属、版本和真实结果 | [daemon 读取](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts)、[宿主核对](../packages/server/src/application/session/execution/__test__/tool-operation-review.test.ts)、[HTTP 认证与兼容](../packages/server/src/http/__test__/tool-operation-review.test.ts)、[Client 入口](../packages/client/src/resources/session/__test__/tool-operation-review.test.ts) | 对应包的定向 Vitest |
+| Run 结束后实际调用仍受保护，合法迟到回执保存，未保存回执提供恢复提示 | [实际调用跟踪](../packages/server/src/application/session/execution/__test__/tool-operation-invocation.test.ts)、[调用前登记](../packages/core/src/engine/tools/__test__/query-tool-limits.test.ts)、[迟到回执](../packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts)、[待保存列表](../packages/server/src/application/session/execution/__test__/tool-operation-review.test.ts) | Server、Core、Services 对应文件的定向 Vitest |
+| 重开不重发原任务，压缩保留执行状态和结果引用，未知写入继续阻断 | [日常重开](../packages/server/src/application/__test__/daemon-daily-continuation.integration.test.ts)、[摘要原文事实](../packages/core/src/engine/compaction/__test__/compact-continuity.test.ts) | Server、Core 对应文件的定向 Vitest |
+| 自动评审消费真实结构化回执，普通文本不能冒充；交付与 Goal 完成矛盾时暂停 | [真实系统子 Agent 评审](../packages/server/src/application/auto-review/__test__/auto-review.integration.test.ts)、[消费与核验](../packages/server/src/application/auto-review/__test__/session-auto-review-service.test.ts)、[Goal 结算](../packages/server/src/application/session/goals/__test__/session-goal-service.test.ts)、[回执投影](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) | Server 对应文件的定向 Vitest |
+
 ## 维护规则
 
 跨包 API/Engine/工具组合回归见 [Agent 集成测试](../tests/agent-integration/README.md)，命令为 `pnpm test:agent-integration`，已接入普通 CI 的 `pnpm test`。ToolSearch 与 Job 工具测试分别由 [搜索测试](../packages/tools/src/meta/__test__/tool-search.test.ts)和 [Job 测试](../packages/tools/src/job/__test__/job-tools.test.ts)覆盖；依赖真实 Engine/ToolRegistry 的用例保留在集成组，不引入 tools → core 的依赖。

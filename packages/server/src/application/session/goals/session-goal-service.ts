@@ -489,6 +489,18 @@ export class SessionGoalService {
         if (this.control.hasUserWork(sessionId)) return;
         const update = run.metadata.goalUpdate === undefined ? undefined : parseGoalUpdateInput(run.metadata.goalUpdate);
         if (update && "status" in update) {
+          // delivery is persisted from the Kernel's run.completed receipt by the event projector.
+          const delivery = run.metadata.delivery;
+          const deliveryStatus = delivery && typeof delivery === "object" && !Array.isArray(delivery)
+            && "validation" in delivery && delivery.validation === "schema_valid" && "status" in delivery
+            ? delivery.status : undefined;
+          if (update.status === "completed"
+            && (deliveryStatus === "partial" || deliveryStatus === "blocked" || deliveryStatus === "waiting")) {
+            change({ status: "paused", wait: null,
+              reason: `GoalUpdate 要求完成，但本轮交付状态为 ${deliveryStatus}，请核对尚未完成的工作后继续`,
+              stopReason: { code: "run_error", at: Date.now(), runId } });
+            return;
+          }
           change({ status: update.status, reason: update.reason, wait: null,
             stopReason: update.status === "paused" ? { code: "user_paused", at: Date.now(), runId } : null });
           return;

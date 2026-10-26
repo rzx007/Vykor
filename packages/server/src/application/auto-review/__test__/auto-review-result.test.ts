@@ -146,7 +146,7 @@ describe("buildAutoReviewPrompt", () => {
       patchTruncated: false,
     });
 
-    expect(built.prompt.toLowerCase()).toContain("no tools");
+    expect(built.prompt.toLowerCase()).toContain("only tool is submitresult");
     expect(built.prompt.toLowerCase()).toContain("untrusted");
     expect(built.prompt).not.toContain("SECRET_DIFF_MARKER");
     expect(built.scope).toContain("packages/server/src/queue.ts");

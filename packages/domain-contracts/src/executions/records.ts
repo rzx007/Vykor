@@ -53,3 +53,23 @@ export interface ToolDispatchAttemptRecord extends ToolDispatchReceipt {
   result?: ToolExecutionResult;
   reconciliations?: ToolReconciliationRecord[];
 }
+
+/** List identities without copying inputs, full results or implementation details. */
+export type ToolOperationSummary = Pick<ToolOperationRecord, "operationId" | "sessionId" | "runId" | "executionId" | "toolCallId" | "toolName" | "kind" | "state" | "revision" | "createdAt" | "updatedAt"> & {
+  /** Host guidance for a receipt that must be recovered before manual reconciliation. */
+  recoveryHint?: string;
+};
+export interface ToolOperationReviewPreview extends ToolOperationSummary {
+  activeAttemptId?: string;
+  inputPreview: string;
+  resultPreview?: string;
+  reconciliations: Array<{ outcome: "applied" | "not_applied" | "unknown"; evidence: string; at: number }>;
+}
+export interface ReconcileToolOperationRequest {
+  expectedRevision: number;
+  outcome: "applied" | "not_applied" | "unknown";
+  /** Authorized host read-only evidence; model text cannot confirm the external outcome. */
+  evidence: string;
+  /** Actual completed response verified by the human caller, never inferred from model text. */
+  result?: ToolExecutionResult;
+}

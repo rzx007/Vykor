@@ -4,11 +4,11 @@ import { readAutoReviewRunMetadata } from "@vykor/domain-contracts/approvals";
 import type { AutoReviewMode, AutoReviewReason, AutoReviewRunMetadata, AutoReviewSeverity, AutoReviewStatus } from "@vykor/domain-contracts/approvals";
 import { getBuiltinAgentDefinitions } from "@vykor/coordinator";
 import { readonlyMap } from "@vykor/agent-contracts";
-import type { AgentExecutionLimits } from "@vykor/agent-contracts";
+import type { AgentChildResult, AgentExecutionLimits } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime";
 
 import { classifyAutoReviewRisk, type AutoReviewChangeSet } from "./auto-review-policy.js";
-import { buildAutoReviewPrompt, parseAutoReviewResult } from "./auto-review-result.js";
+import { buildAutoReviewPrompt, createAutoReviewOutputContract, parseAutoReviewDelivery } from "./auto-review-result.js";
 import type {
   GitRunBaseline,
   GitRunChangeInspector,
@@ -268,7 +268,8 @@ export class SessionAutoReviewService {
     ].join("\n");
 
     let invocationId: string | undefined;
-    let childResult: { status: string; output: string; failureKind?: string };
+    const allowedPaths = new Set(changeSet.files.map((file) => file.path));
+    let childResult: AgentChildResult;
     try {
       const outcome = await input.agent.runChildForCompletedRun(
         {
@@ -290,7 +291,8 @@ export class SessionAutoReviewService {
           scope: built.scope,
           expectedResult: built.expectedResult,
         },
-        { inputId: input.inputId, runId: input.runId, traceId: input.traceId, signal: input.signal, limits: input.limits },
+        { inputId: input.inputId, runId: input.runId, traceId: input.traceId, signal: input.signal, limits: input.limits,
+          childOutputContract: createAutoReviewOutputContract(allowedPaths) },
         sensitiveInitialContent,
         readonlyMap(new Map()),
       );
@@ -338,8 +340,7 @@ export class SessionAutoReviewService {
       });
     }
 
-    const allowedPaths = new Set(changeSet.files.map((file) => file.path));
-    const parsed = parseAutoReviewResult(childResult.output, allowedPaths);
+    const parsed = parseAutoReviewDelivery(childResult.delivery, allowedPaths);
     if (!parsed) {
       return this.settle(input.sessionId, input.runId, {
         mode,
