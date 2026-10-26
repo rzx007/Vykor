@@ -19,20 +19,19 @@ export class SessionRunEngine {
   private readonly runCoordinator = new SessionRunCoordinator();
 
   readonly runtimeBridge = {
-    activeRunId: (sessionId: string) => this.runCoordinator.activeRunId(sessionId),
-    queuedRunIds: (sessionId: string) => this.runCoordinator.queuedRunIds(sessionId),
-    hasWork: (sessionId: string) => this.runCoordinator.hasWork(sessionId),
-    sessionIds: () => this.runCoordinator.sessionIds(),
-    interruptSession: (sessionId: string, reason?: string) => this.runCoordinator.interrupt(sessionId, reason),
-    interruptRun: (sessionId: string, runId: string, reason?: string) => this.runCoordinator.interruptRun(sessionId, runId, reason),
-    interruptQueuedRun: (sessionId: string, runId: string, reason?: string) => this.runCoordinator.interruptQueuedRun(sessionId, runId, reason),
-    promoteQueuedRun: (sessionId: string, queuedRunId: string, expectedActiveRunId: string, steer: Parameters<SessionRunCoordinator["promoteQueuedRun"]>[3]) =>
-      this.runCoordinator.promoteQueuedRun(sessionId, queuedRunId, expectedActiveRunId, steer),
-    waitForRun: (runId: string) => this.runCoordinator.waitForRun(runId),
-    waitForRuns: (runIds: string[]) => this.runCoordinator.waitForRuns(runIds),
-    enqueueRun: (run: SessionRunRecord, inputId: string) => this.enqueueRun(run, inputId),
-    runState: (sessionId: string, runId: string): "running" | "queued" | undefined => this.runCoordinator.runState(sessionId, runId),
-    steer: (sessionId: string, input: Parameters<SessionRunCoordinator["steer"]>[1]) => this.runCoordinator.steer(sessionId, input),
+    activeRunId: this.runCoordinator.activeRunId.bind(this.runCoordinator),
+    queuedRunIds: this.runCoordinator.queuedRunIds.bind(this.runCoordinator),
+    hasWork: this.runCoordinator.hasWork.bind(this.runCoordinator),
+    sessionIds: this.runCoordinator.sessionIds.bind(this.runCoordinator),
+    interruptSession: this.runCoordinator.interrupt.bind(this.runCoordinator),
+    interruptRun: this.runCoordinator.interruptRun.bind(this.runCoordinator),
+    interruptQueuedRun: this.runCoordinator.interruptQueuedRun.bind(this.runCoordinator),
+    promoteQueuedRun: this.runCoordinator.promoteQueuedRun.bind(this.runCoordinator),
+    waitForRun: this.runCoordinator.waitForRun.bind(this.runCoordinator),
+    waitForRuns: this.runCoordinator.waitForRuns.bind(this.runCoordinator),
+    enqueueRun: this.enqueueRun.bind(this),
+    runState: this.runCoordinator.runState.bind(this.runCoordinator),
+    steer: this.runCoordinator.steer.bind(this.runCoordinator),
   };
 
   constructor(private readonly context: SessionRunEngineContext) {}

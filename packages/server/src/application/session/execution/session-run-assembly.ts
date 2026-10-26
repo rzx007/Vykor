@@ -3,8 +3,8 @@ import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import type { GoalOperations, SessionStore } from "@vykor/services";
 import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
-import { RunAdmissionService } from "./run-admission-service.js";
-import { RunControlService } from "./run-control-service.js";
+import { RunAdmissionService, type RunAdmissionRuntimeQueue } from "./run-admission-service.js";
+import { RunControlService, type RunControlRuntime } from "./run-control-service.js";
 import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
@@ -26,14 +26,33 @@ export interface SessionRunAssemblyOptions {
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
 }
 
-/** Explicit two-phase wiring for the shared lane runtime, Admission and Control services. */
+/** Admission and Control share the Engine's queue capabilities, with accepted-run policy applied once. */
 export function assembleSessionRunServices(options: SessionRunAssemblyOptions): {
   admission: RunAdmissionService;
   control: RunControlService;
   engine: SessionRunEngine;
 } {
-  let engine!: SessionRunEngine;
   let admission!: RunAdmissionService;
+  const engine = new SessionRunEngine({
+    runExecutor: options.runExecutor,
+    events: options.events,
+    settleGoalRun: options.settleGoalRun,
+    execution: {
+      prepareRunExecution: (runId) => admission.prepareRunExecution(runId),
+      recoverRejectedSteer: (sessionId, input) => admission.recoverRejectedSteer(sessionId, input),
+    },
+  });
+  const runtime: RunControlRuntime & RunAdmissionRuntimeQueue = {
+    ...engine.runtimeBridge,
+    hasRuntime: options.agentPool.configured,
+    enqueueRun: (run, inputId) => {
+      // Admission, replay and recovered steering all pass this accepted-run boundary.
+      if (!run.metadata?.goalRunKind || run.metadata.goalRunKind === "user") {
+        options.preemptAutoReview?.(run.sessionId);
+      }
+      return engine.runtimeBridge.enqueueRun(run, inputId);
+    },
+  };
   const transaction = options.store["transaction"].bind(options.store);
   const durableRuns = {
     getRun: (runId: string) => options.store.runs.getRun(runId),
@@ -51,18 +70,7 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     },
     durableRuns,
     durableInputs: options.store.conversations,
-    runtime: {
-      activeRunId: (sessionId) => engine.runtimeBridge.activeRunId(sessionId),
-      queuedRunIds: (sessionId) => engine.runtimeBridge.queuedRunIds(sessionId),
-      hasWork: (sessionId) => engine.runtimeBridge.hasWork(sessionId),
-      sessionIds: () => engine.runtimeBridge.sessionIds(),
-      interruptSession: (sessionId, reason) => engine.runtimeBridge.interruptSession(sessionId, reason),
-      interruptRun: (sessionId, runId, reason) => engine.runtimeBridge.interruptRun(sessionId, runId, reason),
-      interruptQueuedRun: (sessionId, runId, reason) => engine.runtimeBridge.interruptQueuedRun(sessionId, runId, reason),
-      promoteQueuedRun: (sessionId, queuedRunId, activeRunId, steer) => engine.runtimeBridge.promoteQueuedRun(sessionId, queuedRunId, activeRunId, steer),
-      waitForRun: (runId) => engine.runtimeBridge.waitForRun(runId),
-      waitForRuns: (runIds) => engine.runtimeBridge.waitForRuns(runIds),
-    },
+    runtime,
     events: options.events,
     goals: options.goals,
     admission: { hasPendingAdmission: (sessionId) => admission.hasPendingAdmission(sessionId) },
@@ -87,18 +95,7 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
       appendEvent: (input) => options.store.conversations.appendEvent(input),
       transaction: (work) => transaction(work),
     },
-    runtimeQueue: {
-      hasRuntime: options.agentPool.configured,
-      enqueueRun: (run, inputId) => {
-        // Admission, replay and recovered steering all pass this accepted-run boundary.
-        if (!run.metadata?.goalRunKind || run.metadata.goalRunKind === "user") {
-          options.preemptAutoReview?.(run.sessionId);
-        }
-        return engine.runtimeBridge.enqueueRun(run, inputId);
-      },
-      runState: (sessionId, runId) => engine.runtimeBridge.runState(sessionId, runId),
-      steer: (sessionId, input) => engine.runtimeBridge.steer(sessionId, input),
-    },
+    runtimeQueue: runtime,
     events: options.events,
     attachmentLimits: options.attachmentLimits,
     goals: {
@@ -121,15 +118,6 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     },
     materializer: { materializeSteerInput: options.materializeSteerInput },
     assertReady: options.assertReady,
-  });
-  engine = new SessionRunEngine({
-    runExecutor: options.runExecutor,
-    events: options.events,
-    settleGoalRun: options.settleGoalRun,
-    execution: {
-      prepareRunExecution: (runId) => admission.prepareRunExecution(runId),
-      recoverRejectedSteer: (sessionId, input) => admission.recoverRejectedSteer(sessionId, input),
-    },
   });
   return { admission, control, engine };
 }

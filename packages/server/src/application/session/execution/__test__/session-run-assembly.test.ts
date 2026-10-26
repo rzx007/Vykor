@@ -11,6 +11,74 @@ import { SessionAutoReviewService } from "../../../auto-review/session-auto-revi
 import { SessionEventPublisher } from "../../transcript/session-event-publisher.js";
 import { assembleSessionRunServices } from "../session-run-assembly.js";
 
+it("cancels host and admitted model work together and waits for host cleanup and model Goal settlement", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vykor-shared-lane-"));
+  const store = new SessionStore({ path: join(dir, "sessions.db") });
+  const sessionId = store.sessions.create({ cwd: dir, model: "test-model" }).id;
+  const events = new SessionEventPublisher(store.conversations, {
+    broadcastSince: () => undefined, broadcastEvent: () => undefined,
+  });
+  let releaseCleanup!: () => void;
+  const cleanup = new Promise<void>((resolve) => { releaseCleanup = resolve; });
+  let releaseGoal!: () => void;
+  const goal = new Promise<void>((resolve) => { releaseGoal = resolve; });
+  let goalStarted!: () => void;
+  const settling = new Promise<void>((resolve) => { goalStarted = resolve; });
+  const steps: string[] = [];
+  const preempted: string[] = [];
+  const services = assembleSessionRunServices({
+    store, goals: store.goals, agentPool: { configured: true } as never, events,
+    assertReady: () => {}, materializeSteerInput: async () => "",
+    runExecutor: { execute: async () => { steps.push("model"); } },
+    preemptAutoReview: (id) => { preempted.push(id); },
+    settleGoalRun: async () => { goalStarted(); await goal; steps.push("goal"); },
+  });
+  const host = store.runs.createRun({ sessionId });
+  let modelId: string | undefined;
+  try {
+    services.engine.enqueueHostWork({ sessionId, runId: host.id, work: async ({ signal }) => {
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+      steps.push("host-aborted");
+      await cleanup;
+      steps.push("host-cleaned");
+    } });
+    const model = await services.admission.admitPromptAndMaybeRun(sessionId, {
+      items: [{ type: "text", text: "queued task" }],
+    });
+    modelId = model.run!.id;
+    expect(model.queue_state).toBe("queued");
+    expect(services.control.activeRunId(sessionId)).toBe(host.id);
+    expect(services.control.queuedRunIds(sessionId)).toEqual([modelId]);
+    expect(preempted).toEqual([sessionId]);
+    let hostFinished = false;
+    let modelFinished = false;
+    const hostWait = services.engine.runtimeBridge.waitForRun(host.id).then(() => { hostFinished = true; });
+    const modelWait = services.engine.runtimeBridge.waitForRun(modelId).then(() => { modelFinished = true; });
+    expect(services.control.interruptSession(sessionId, "stop mixed work")).toEqual({
+      activeRunId: host.id, queuedRunIds: [modelId], interrupted: true,
+    });
+    await settling;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(store.runs.getRun(modelId)?.status).toBe("interrupted");
+    expect(steps).toEqual(["host-aborted"]);
+    expect([hostFinished, modelFinished]).toEqual([false, false]);
+    releaseCleanup();
+    await hostWait;
+    expect(modelFinished).toBe(false);
+    releaseGoal();
+    await modelWait;
+    expect(steps).toEqual(["host-aborted", "host-cleaned", "goal"]);
+    expect(services.control.hasWork(sessionId)).toBe(false);
+  } finally {
+    services.engine.runtimeBridge.interruptSession(sessionId);
+    releaseCleanup();
+    releaseGoal();
+    await services.engine.runtimeBridge.waitForRuns([host.id, ...(modelId ? [modelId] : [])]);
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 it("lets an accepted user run preempt review and execute in the same session lane", async () => {
   const dir = mkdtempSync(join(tmpdir(), "vykor-review-lane-"));
   const store = new SessionStore({ path: join(dir, "sessions.db") });
