@@ -25,13 +25,16 @@ describe("host tool safety wiring", () => {
     await agent.close();
   });
   it("includes host safety in direct runTool with no caller safety context", async () => {
-    const engine = runtime();
+    const engine = runtime(), release = vi.fn();
+    const prepare = vi.fn(async () => ({ run: { tools: readonlyMap([]) }, release }));
     let captured: AgentExecutionContext | undefined;
     engine.executeTool = async (_tool, options) => { captured = options?.execution; return { content: "ok", toolUseId: "call", toolName: "Tool" }; };
-    const agent = await createAgentKernel({ sessionId: "s", cwd: "/work", engine, effects, toolSafety: safety, preparation: { prepare: async () => ({ run: { tools: readonlyMap([]) } }) } });
+    const agent = await createAgentKernel({ sessionId: "s", cwd: "/work", engine, effects, toolSafety: safety, preparation: { prepare } });
     await agent.runTool({ type: "tool_use", id: "call", name: "Tool", input: {} }, { tools: readonlyMap([]), scope: { agentId: "wrong", sessionId: "wrong", runId: "r", inputId: "i", traceId: "t", cwd: "/wrong", signal: new AbortController().signal } });
     expect(captured?.toolSafety).toBe(safety);
     expect(captured?.scope.sessionId).toBe("s");
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledTimes(1);
     await agent.close();
   });
   it("inherits the same trusted pair in child configuration", () => {

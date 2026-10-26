@@ -12,7 +12,7 @@ describe("SessionInteractionService editLatestPrompt", () => {
       metadata: { outputSchema: { type: "string" }, edit: { kind: "latest_prompt", sourceMessageId: "message-1" } },
     })) });
     const service = new SessionInteractionService(context as any);
-    await expect(service.editLatestPrompt("session-1", { id: "edit-1", content: "replacement", sourceMessageId: "message-1", traceId: "trace-edit", metadata: { outputSchema: { type: "object" } } } as any)).rejects.toMatchObject({ status: 409 });
+    await expect(service.editLatestPrompt("session-1", { id: "edit-1", content: "replacement", sourceMessageId: "message-1", traceId: "trace-edit", outputSchema: { type: "object" } })).rejects.toMatchObject({ status: 409 });
     expect(context.agentPool.close).not.toHaveBeenCalled();
     expect(context.runEngine.replaceLatestPrompt).not.toHaveBeenCalled();
   });
@@ -23,6 +23,16 @@ describe("SessionInteractionService editLatestPrompt", () => {
       id: "edit-1", items: [{ type: "text", text: "replacement" }], sourceMessageId: "message-1",
       traceId: "trace-edit", metadata: { [name]: {} },
     })).rejects.toMatchObject({ code: "invalid_request" });
+    expect(context.agentPool.close).not.toHaveBeenCalled();
+    expect(context.runEngine.replaceLatestPrompt).not.toHaveBeenCalled();
+  });
+  it("rejects an output schema in metadata before closing the agent or editing the transcript", async () => {
+    const context = editContext();
+    const service = new SessionInteractionService(context as any);
+    await expect(service.editLatestPrompt("session-1", {
+      id: "edit-1", content: "replacement", sourceMessageId: "message-1", traceId: "trace-edit",
+      metadata: { outputSchema: { type: "string" } },
+    })).rejects.toMatchObject({ code: "invalid_request", field: "metadata.outputSchema" });
     expect(context.agentPool.close).not.toHaveBeenCalled();
     expect(context.runEngine.replaceLatestPrompt).not.toHaveBeenCalled();
   });
