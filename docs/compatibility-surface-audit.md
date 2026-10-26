@@ -1,6 +1,6 @@
 # Compatibility surface 实施审计
 
-> 状态：当前。Stage 8A 已完成 Client facade 与兼容发行治理的删除裁定。
+> 状态：历史实施审计，记录 Stage 8A 的删除裁定。当前边界见[架构收口记录](./architecture-migration-status.md)，公开接口见 [Client SDK](./client-sdk.md)。
 
 本页记录 clean-slate Stage 8A 的语义审计结论。它不是迁移指南；旧名称的唯一机器事实源是测试专用的 `scripts/forbidden-compatibility-surfaces.json`。
 

@@ -4,6 +4,10 @@
 
 这份文档回答一个简单问题：改了某条关键规则，至少要跑哪些测试。测试文件是证据，不是文档附件；表里的链接由 `pnpm check-docs` 检查是否仍存在。
 
+## 文档维护
+
+`pnpm check-docs` 先运行[文档检查器回归](../scripts/__test__/documentation-policy.test.mjs)，再检查根说明、docs Markdown 及模块 README 的链接、章节、状态、当前源码路径、导航和协议版本声明。历史正文只验证链接，不将旧路径和旧协议当作当前实现检查。内容权威性与维护入口见[文档维护约定](./documentation-policy.md)。
+
 ## 生命周期契约编号
 
 | 编号 | 主要测试 |

@@ -1,12 +1,15 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { collectReadmeFiles, documentationKind, protocolVersionErrors, sourcePathReferences } from "./documentation-policy.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const docsRoot = join(root, "docs");
 const errors = [];
 
-const markdownFiles = [join(root, "README.md"), ...walkMarkdown(docsRoot)];
+const moduleReadmes = ["apps", "packages", "tests", "scripts"].flatMap(directory => collectReadmeFiles(join(root, directory)));
+const rootDocs = ["README.md", "PLAN-NEXT.md", "PLAN-REMAINING.md", "MEMORIES.md", "CLAUDE.md"].map(file => join(root, file));
+const markdownFiles = [...rootDocs, ...walkMarkdown(docsRoot), ...moduleReadmes];
 for (const file of markdownFiles) checkLinks(file);
 
 for (const file of readdirSync(docsRoot, { withFileTypes: true })) {
@@ -16,9 +19,8 @@ for (const file of readdirSync(docsRoot, { withFileTypes: true })) {
   if (!firstLines.some((line) => line.startsWith("> 状态："))) {
     errors.push(`${display(path)}: 前 8 行缺少“> 状态：...”`);
   } else {
-    const status = firstLines.find((line) => line.startsWith("> 状态："));
-    if (!/(?:当前|权威|历史|测试夹具)/u.test(status)) {
-      errors.push(`${display(path)}: 状态必须明确归类为当前、权威、历史或测试夹具`);
+    if (!documentationKind(readFileSync(path, "utf-8"))) {
+      errors.push(`${display(path)}: 状态必须明确归类为当前、权威、提案、历史或测试夹具`);
     }
   }
 }
@@ -33,6 +35,7 @@ for (const required of [
   "product-surface-integration.md",
   "security-and-trust-boundaries.md",
   "contract-test-index.md",
+  "documentation-policy.md",
 ]) {
   if (!docsIndex.includes(`./${required}`)) {
     errors.push(`${display(docsIndexPath)}: 总目录缺少 ${required}`);
@@ -42,14 +45,21 @@ for (const required of [
 for (const entry of readdirSync(docsRoot, { withFileTypes: true })) {
   if (!entry.isFile() || extname(entry.name) !== ".md" || entry.name === "README.md") continue;
   const path = join(docsRoot, entry.name);
-  const firstLines = readFileSync(path, "utf-8").split(/\r?\n/u).slice(0, 8);
-  const status = firstLines.find((line) => line.startsWith("> 状态：")) ?? "";
-  if (/(?:当前|权威)/u.test(status) && !/历史/u.test(status) && !docsIndex.includes(`./${entry.name}`)) {
-    errors.push(`${display(path)}: 当前文档没有从 docs/README.md 建立入口`);
+  const kind = documentationKind(readFileSync(path, "utf-8"));
+  if ((kind === "current" || kind === "proposal") && !docsIndex.includes(`./${entry.name}`)) {
+    errors.push(`${display(path)}: 当前文档或提案没有从 docs/README.md 建立入口`);
   }
 }
 
-for (const file of currentTopLevelDocs()) checkSourcePaths(file);
+const currentDocs = [...currentTopLevelDocs(), ...rootDocs, ...moduleReadmes]
+  .filter(file => !["history", "fixture", "proposal"].includes(documentationKind(readFileSync(file, "utf-8"))));
+const protocolSource = readFileSync(join(root, "packages/protocol/src/runtime/capabilities.ts"), "utf-8");
+const protocolVersion = Number(/export const CURRENT_PROTOCOL_VERSION = (\d+);/u.exec(protocolSource)?.[1]);
+if (!Number.isInteger(protocolVersion)) throw new Error("无法读取 CURRENT_PROTOCOL_VERSION");
+for (const file of currentDocs) {
+  checkSourcePaths(file);
+  for (const error of protocolVersionErrors(readFileSync(file, "utf-8"), protocolVersion)) errors.push(`${display(file)}: ${error}`);
+}
 
 const lifecycle = readFileSync(join(docsRoot, "agent-lifecycle-contract.md"), "utf-8");
 const testIndex = readFileSync(join(docsRoot, "contract-test-index.md"), "utf-8");
@@ -110,7 +120,7 @@ if (errors.length > 0) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`文档检查通过：${markdownFiles.length} 个 Markdown 文件；链接、章节、源码路径、状态、入口和契约测试映射均有效。`);
+  console.log(`文档检查通过：${markdownFiles.length} 个 Markdown 文件（含 ${moduleReadmes.length} 个模块 README）；链接、章节、源码路径、状态、入口、协议版本声明和契约测试映射均有效。`);
 }
 
 function walkMarkdown(directory) {
@@ -134,15 +144,14 @@ function checkLinks(file) {
     let target = match[1].trim();
     if (target.startsWith("<") && target.endsWith(">")) target = target.slice(1, -1);
     target = target.split(/\s+["']/u, 1)[0];
-    if (!target || target.startsWith("#") || /^(?:https?:|mailto:)/iu.test(target)) continue;
+    if (!target || /^(?:https?:|mailto:)/iu.test(target)) continue;
     const filePart = decodeURIComponent(target.split("#", 1)[0]);
-    if (!filePart) continue;
     // Research notes may cite an optional local checkout (for example Orkas or
     // Rome) using a machine-specific path. Those sources are not part of this
     // repository and cannot be validated in CI; repository-owned links still
     // go through the normal existence and anchor checks below.
     if (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/u.test(filePart)) continue;
-    const resolved = resolve(dirname(file), filePart);
+    const resolved = filePart ? resolve(dirname(file), filePart) : file;
     const fromRoot = relative(root, resolved);
     if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) continue;
     if (!existsSync(resolved)) {
@@ -163,20 +172,14 @@ function currentTopLevelDocs() {
     .filter((entry) => entry.isFile() && extname(entry.name) === ".md")
     .map((entry) => join(docsRoot, entry.name))
     .filter((file) => {
-      const head = readFileSync(file, "utf-8").split(/\r?\n/u).slice(0, 8);
-      const status = head.find((line) => line.startsWith("> 状态：")) ?? "";
-      return /(?:当前|权威)/u.test(status) && !/历史/u.test(status);
+      return documentationKind(readFileSync(file, "utf-8")) === "current";
     });
 }
 
 function checkSourcePaths(file) {
   const content = readFileSync(file, "utf-8");
-  const pattern = /`((?:packages|apps|scripts|tests|drizzle|docs)\/[^`\s#()]+)`/gu;
-  for (const match of content.matchAll(pattern)) {
-    const target = match[1].replace(/[.,;:]$/u, "");
-    if (/[<>*]/u.test(target)) continue;
+  for (const { target, line } of sourcePathReferences(content)) {
     if (!existsSync(resolve(root, target))) {
-      const line = content.slice(0, match.index).split(/\r?\n/u).length;
       errors.push(`${display(file)}:${line}: 源码路径不存在：${target}`);
     }
   }

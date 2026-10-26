@@ -401,12 +401,6 @@
       "reason": "Pure parser/type for original schemaVersion 2 historical records; no bridge or runtime."
     },
     {
-      "path": "README.md",
-      "line": 256,
-      "text": "页面统一使用官方 MCP Apps，由 `components.apps` 声明；Native Tool 与 MCP Server 后台复用原工具权限、审计和持久 Run。旧 Native UI 已退役，历史工具文字和回执保留，新导入不再接受 `components.ui`。见 [原生插件编写指南](docs/native-plugin-authoring.md)与 [MCP Apps 设计](docs/superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)。",
-      "reason": "Current retirement notice or historical verification reference."
-    },
-    {
       "path": "apps/desktop/scripts/test-plugin-apps-electron.mjs",
       "line": 10,
       "text": "  resolve(root, \".superpowers/sdd/2026-10-03-native-plugin-ui-a3/electron-runtime/electron.exe\")",
@@ -579,12 +573,6 @@
       "line": 92,
       "text": "  child.parts = [{ ...sourcePart, sessionId: \"child-1\", metadata: { pluginUi: childInstance } }]",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
-    },
-    {
-      "path": "docs/README.md",
-      "line": 143,
-      "text": "- [旧 Native UI 设计](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)与 [旧固定位置设计](./superpowers/specs/2026-10-11-native-plugin-ui-continuity-design.md)：历史资料，运行入口已退役；当前页面以 [MCP Apps 设计](./superpowers/specs/2026-10-20-mcp-apps-resident-panels-design.md)为准。",
-      "reason": "Current retirement notice or historical verification reference."
     },
     {
       "path": "docs/desktop-conversation-performance.md",

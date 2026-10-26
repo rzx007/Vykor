@@ -1,11 +1,13 @@
 # 归档：Vykor 后续计划（LegacyJSON / BackendHost 时代）
 
+> 状态：历史计划，保留旧入口与阶段背景。当前使用说明从 [文档目录](docs/README.md) 进入。
+
 > ⚠️ **本文档已归档，禁止作为当前任务执行。**
 >
 > 正文描述的是三进程 TUI（CLI → frontend → `BackendHost` / LegacyJSON）时期的 P0–P5 backlog。该路径已从主线删除；`vk --tui` 现为 daemon attach：
 > `frontend → @rzx/client → vk serve`。
 >
-> **当前权威计划以 [PLAN-REMAINING.md](PLAN-REMAINING.md) 为准。**
+> [PLAN-REMAINING.md](PLAN-REMAINING.md) 也已归档，不再作为当前待办或能力清单。待评审需求见[文档目录的提案部分](docs/README.md#待实施或待评审的提案)。
 > 当前 TUI / 会话同步见 [docs/tui-flow.md](docs/tui-flow.md)、[docs/client-sync-flow.md](docs/client-sync-flow.md)、[docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)。
 
 ## 历史状态（仅供追溯）

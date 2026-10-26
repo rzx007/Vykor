@@ -94,14 +94,13 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 |---|---|---|
 | daemon SQLite | `__drizzle_migrations` 水位线 | 每次打开应用迁移链；水位线早于基线的库会失败，需删除重建 |
 | Durable Event | `schemaVersion = 1` | registry 只接受当前版本，不在读取时升级 |
-| 项目会话快照 | `schema_version = 1` | 缺失或不同版本直接失败 |
 | Memory Markdown | frontmatter `schema_version: 1` | 缺字段、类型错误、文件名与 ID 不同都失败 |
-| Swarm team/permission | `schema_version: 1` | 不接受旧字段名或缺失标记 |
-| Swarm mailbox | `schemaVersion: 1` | 读取、标记已读时都严格检查 |
 | settings | `_formatVersion: 1` | 缺失、不同版本或旧字段直接失败 |
 | Agent 定义 | YAML frontmatter 当前 camelCase 字段 | YAML 无效直接失败，不回退到逐行猜测 |
 
 数据库 migrations 建立新库并对已存在库应用增量迁移。不做旧库接管、字段猜测、别名或读取时降级。
+
+会话快照来自 daemon SQLite 的读取结果，不再使用项目级 JSON 会话文件。旧 Swarm 包及其 team、permission、mailbox 文件已退役，不属于当前数据格式。
 
 ## 重启后怎样处理活动记录
 

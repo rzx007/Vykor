@@ -60,9 +60,9 @@ daemon hosting 时，同一份字段同时写入 child session metadata，供 du
 ## Code
 
 ```text
-packages/coordinator/src/agent-loader.ts
+packages/coordinator/src/definitions/loader.ts
 packages/tools/src/agent/index.ts
-packages/tools/src/agent/workflow/runner.ts
+packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts
 packages/agent-runtime/src/kernel/children/child-agent.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 ```

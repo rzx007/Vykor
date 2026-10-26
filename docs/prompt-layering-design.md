@@ -6,9 +6,9 @@
 > 自动抽取写入仍留后续显式接入。
 > 参考对象：Hermes Agent 的 `stable / context / volatile` prompt 分层。
 
-## 背景
+## 迁移前背景
 
-Vykor 当前的 system prompt 是线性拼接：
+迁移前的 system prompt 使用以下线性拼接，保留在这里解释改造动机；当前运行入口见[提示词运行入口](./prompt-runtime-audit.md)：
 
 ```text
 Base System Prompt
@@ -22,13 +22,13 @@ Local Environment Rules: ~/.vykor/local_rules/rules.md
 Project Memory
 ```
 
-这套结构已经可用，但几个概念混在一起：
+当时这套结构可用，但几个概念混在一起：
 
 - “Agent 是谁、如何说话”写死在 `BASE_SYSTEM_PROMPT` 中，没有用户可编辑的身份槽。
 - “用户是谁、偏好什么”没有独立文件，只能落在 project memory 或自动抽取规则里。
 - 自动环境事实、项目记忆、项目规则都直接排在线性顺序里，缺少稳定性/缓存边界说明。
 
-因此迁移目标是借鉴 Hermes 的三层模型，把 prompt 来源按语义和变动频率分开。
+后续已接入三层模型，将 prompt 来源按语义和变动频率分开；自动写入用户偏好的接线仍未完成，见下方安全与预算部分。
 
 ---
 
@@ -93,7 +93,7 @@ Per-turn Relevant Memory (transient system-reminder)
 说明：
 
 - `USER.md` 是用户档案：偏好、沟通方式、长期习惯、期望，而不是项目规则。
-- `local_rules/rules.md` 是自动抽取的本机环境事实，仍保持自动生成、用户不手改的定位。
+- 本机环境事实由项目对应的 `facts.json` 保存来源和状态，当前 prompt 根据其中有效条目构建；`local_rules/rules.md` 是旧设计中的生成摘要位置，不能作为当前事实入口。实际路径与筛选规则见[上下文与记忆索引](./context-memory-map.md)。
 - `Project Memory` 继续表示项目级长期语义记忆。
 - per-turn relevant memory 仍不写入持久历史，只作为本轮 `system-reminder` 注入。
 - `session_memory` 不属于常规 system prompt；它只在 compact 边界注入摘要 prompt，作为压缩连续性附件。
@@ -144,10 +144,10 @@ $VYKOR_CONFIG_DIR/SOUL.md
 
 - 只从 config home 加载，不从 cwd 加载。
 - 不存在、为空或读取失败时回退到内置 identity。
-- 注入前做长度截断；后续实现应复用或新增 prompt-injection 扫描。
+- 注入前限制长度并执行轻量扫描；实际阻断和诊断规则见下方安全与预算部分。
 - 只出现在 stable identity slot 一次，不再作为普通 context file 重复出现。
 
-实现上需要先把当前 `BASE_SYSTEM_PROMPT` 拆成：
+实现已把基础提示词拆成：
 
 ```text
 Default Identity
@@ -184,7 +184,7 @@ renderPromptLayers(layers): string
 buildRuntimeSystemPrompt(options): Promise<string>
 ```
 
-`buildRuntimeSystemPrompt()` 保持兼容，对外仍返回字符串；测试从断言零散片段，逐步补充为断言层顺序。
+`buildRuntimeSystemPrompt()` 对外返回字符串；层顺序由提示词模块的测试核对。
 
 ---
 
@@ -263,15 +263,12 @@ compact-only
 
 ## 文件定位
 
-首版建议：
+个人提示文件位于配置目录；项目环境事实的路径以[上下文与记忆索引](./context-memory-map.md)为准：
 
 ```text
 $VYKOR_CONFIG_DIR/
   SOUL.md
   USER.md
-  local_rules/
-    facts.json
-    rules.md
 ```
 
 不建议首版支持 repo 内 `SOUL.md`，原因：
@@ -318,14 +315,14 @@ $VYKOR_CONFIG_DIR/
 - `/context` 和 `/profile status` 展示加载、阻断与截断诊断。
 - `/profile init` 创建缺失模板且不覆盖已有文件。
 - `USER.md` pending 更新可入队、列出、批准合并；高风险候选不能入队。
-- 三模式一致：REPL、print、backend/TUI 走同一 prompt builder 语义。
+- CLI print、TUI 和 Desktop 通过 daemon 接入同一 Node Runtime 提示词构建流程，不恢复独立 REPL 或旧 backend 的拼装逻辑。
 
 ---
 
 ## 相关文档
 
-- [memory-system.md](./memory-system.md) — 当前记忆体系总览
-- [personalization-design.md](./personalization-design.md) — `local_rules` 自动环境事实
-- [skills-flow.md](./skills-flow.md) — skills 如何进入 system prompt
-- [compact-service-design.md](./compact-service-design.md) — compact-only 的 session memory 附件
-- [prompt-runtime-audit.md](./prompt-runtime-audit.md) — prompt builder 全链路入口审计
+- [memory-system.md](./memory-system.md)：当前记忆体系总览。
+- [personalization-design.md](./personalization-design.md)：项目环境事实。
+- [skills-flow.md](./skills-flow.md)：Skill 如何进入 system prompt。
+- [compact-service-design.md](./compact-service-design.md)：压缩时使用的会话记忆附件。
+- [prompt-runtime-audit.md](./prompt-runtime-audit.md)：提示词构建的当前调用入口。

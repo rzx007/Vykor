@@ -9,7 +9,7 @@ MCP 配置来自当前 settings 或已通过校验的插件贡献，交给 `pack
 ## 现状
 
 - `McpClientManager`（packages/mcp）已支持 stdio、streamable HTTP 和 SSE，并保持失败隔离。
-- `McpServerConfig`（packages/core/src/types/settings.ts）已支持 `type`、stdio 的 `command/args/env`，以及 HTTP/SSE 的 `url/headers`。
+- `McpServerConfig`（`packages/host-config/src/settings/settings-types.ts`）定义 `type`、stdio 的 `command/args/env`，以及 HTTP/SSE 的 `url/headers`。
 - HTTP/SSE 走 headers 静态鉴权；stdio 走 env 静态鉴权；连接状态记录 `authConfigured`。
 - `McpAuth` 工具已支持配置静态 Bearer、自定义 Header 或 stdio 环境变量，保存 settings 后重连 live MCP server。
 - Streamable HTTP 支持 OAuth discovery、DCR、PKCE、callback、独立凭据存储、连接前刷新和单次 401 恢复；SSE/stdio OAuth 不在本阶段范围内。
@@ -38,11 +38,11 @@ type McpServerConfig =
 - `transports` map 值类型从 `StdioClientTransport` 放宽为 SDK `Transport`。
 
 ### 4. resources "Method not found"
-- 现 `.catch(()=>[])` 吞所有错。改为：错误信息含 "Method not found"（server 不支持 resources）→ 正常返回 `[]`；其他错误记录到 connection（不致命）。
+- 错误信息含 "Method not found"（server 不支持 resources）时返回空资源列表；其他错误记录到 connection 的 `resourceError`，不影响其他 server。
 
 ## 测试
 
-- `resolveTransportKind`（纯函数）：url→http、command→stdio、type 显式优先、缺字段→error、http+SSE type 用 url。
+- `resolveTransportKind`（纯函数）：必须显式 `type`，缺失或无效值返回 error；stdio 验证 command，HTTP/SSE 验证 url，不从字段猜测传输类型。
 - `connect`：mock SDK transport，断言 http 用 StreamableHTTPClientTransport 且 headers 进了 requestInit；sse 同理；stdio 不变。
 - `authConfigured`：http+headers→true、stdio+env→true、无→false。
 - resources：Method-not-found→[]、其他错误不崩。

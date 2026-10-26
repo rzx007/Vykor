@@ -1,10 +1,10 @@
 # Vykor 插件系统最终形态交接
 
-> 状态：当前架构与实现交接。
+> 状态：历史架构与阶段交接。正文混合当时目标和实现，不作为现行能力清单；当前以[插件体系](./plugin-system.md)、[插件市场](./plugin-marketplace.md)和[作者指南](./native-plugin-authoring.md)为准。
 
 日期：2026-09-14
 
-状态：目标架构与当前实现交接
+阶段：2026-09-14 的目标架构与实现交接
 
 适用范围：Native Plugin、外部格式转换、安装、运行时激活、CLI、Desktop 和后续 Marketplace
 

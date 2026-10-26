@@ -79,8 +79,10 @@ VYKOR_CONFIG_DIR
 |---|---|
 | `settings.json` | 非机密运行时设置，如 `provider`、`model`、`baseUrl`、`apiFormat`、`customProviders`（含请求头模板原文）、权限、插件与 UI 偏好 |
 | `credentials.json` | Vykor 管理的凭证，按 provider 分组（API Key 等机密） |
-| daemon SQLite | TUI/Web/Desktop/Bot 共用的 Session、Run、消息和权限记录 |
-| `plugins`、`skills`、`data/*` | 用户安装的插件、技能、日志、任务、cron 状态及其他本地数据 |
+| `mcp-oauth.json` | MCP OAuth 凭据，与供应商 API Key 分开保存 |
+| `channel-credentials.json` | 渠道配置与密钥，不写入 settings |
+| `data/session-runtime/sessions.db` | TUI/Web/Desktop/Bot 共用的 Session、Run、消息、权限和已安排任务记录 |
+| `plugins`、`skills`、`data/*` | 用户安装的插件、技能、记忆、日志及其他本地数据 |
 
 `settings.json` 示例：
 
@@ -90,7 +92,7 @@ VYKOR_CONFIG_DIR
   "provider": "deepseek",
   "model": "deepseek-chat",
   "apiFormat": "openai",
-  "permission": { "mode": "default" }
+  "permission": { "mode": "ask" }
 }
 ```
 
@@ -163,12 +165,19 @@ Vykor 不会把 Codex token 复制进 `credentials.json`；`auth logout codex` �
 
 ```text
 defaults
-settings.json
+用户 settings.json
+项目 .vykor/settings.json（调用方启用 includeProject 时）
 environment variables
 CLI overrides
 ```
 
-凭证按以下顺序解析：
+当前默认值在 `packages/host-config/src/settings/settings.ts` 的 `DEFAULT_SETTINGS` 维护：供应商 `openrouter`、模型 `minimax/minimax-m2.5`、`maxTurns: 0`（不限轮数）、`effort: medium`、`agentEnvironment.kind: native`。示例模型名只解释配置方式，实际可用性以接入的供应商为准。
+
+常用环境变量包括 `VYKOR_MODEL`、`VYKOR_BASE_URL`、`VYKOR_API_FORMAT`、`VYKOR_MAX_TURNS` 和 `VYKOR_OUTPUT_TOKEN_MAX`。`VYKOR_BASE_URL` 是通用地址覆盖；`ANTHROPIC_BASE_URL` 只影响对应 SDK，不是所有供应商的代理开关。输出上限的计算以同文件 `resolveOutputTokenCap()` 为准。
+
+授权档位使用 `ask | auto_review | full_access`，计划模式单独使用 `execute | plan`。存量 `permission.mode` 仍接受明确的旧值映射，详见[权限流程](./permission-flow.md#三档授权与独立计划模式)，不要把旧 `full_auto` 理解为完全访问。
+
+凭证由 `packages/auth/src/credentials/credential-resolution.ts` 的 `resolveApiKey()` 解析：
 
 ```text
 explicit CLI/settings apiKey
@@ -180,3 +189,5 @@ empty string
 ```
 
 这样可以把密钥排除在 `settings.json` 之外，同时仍允许通过 CLI 做临时覆盖。
+
+真正自定义供应商不会读取 `settings.apiKey` 或其他供应商的环境凭据作为兜底：只接受显式运行参数或该供应商在 `credentials.json` 中的条目，缺失时返回未配置。Codex 外部认证缺失也直接返回未配置，不回退到其他供应商的 key。上面的通用顺序只适用于相应内置或自动检测分支。

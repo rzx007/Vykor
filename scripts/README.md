@@ -4,7 +4,7 @@
 
 - 官方插件的构建和单测由 `vykor-plugins` 仓库负责。宿主不再包含或准备这些插件的源码；需要跨仓库兼容性检查时，显式设置测试环境变量 `VYKOR_OFFICIAL_PLUGINS_DIR` 指向该仓库的 `plugins` 目录。
 - `prepare-office-engine.mjs`：按宿主 Office 模块的固定摘要准备引擎并复制该模块的许可证；下载和缓存均独立于插件，不分发或安装插件。插件发行准备由独立的插件市场仓库负责。
-- `check-docs.mjs`：文档链接与当前源码入口检查。
+- `check-docs.mjs`：检查根说明、全部 docs Markdown 和各模块 README 的链接与章节、当前源码入口、状态、总目录及协议版本声明。根 `pnpm check-docs` 先运行检查器回归测试，再扫描文档；`documentation-policy.mjs` 负责状态分类、协议版本比较和模块 README 收集。
 - `sync-plugin-app-client.mjs`：从 `packages/plugins/src/app-client/client.ts` 生成独立插件使用的浏览器模块和类型声明；`--check` 核对示例、参考资产和天气模板中的副本，不改文件。
 - `pnpm check:retired-ui`：旧 UI 引用及实现退役检查，历史引用需在精确到行的登记表中注明原因。
 

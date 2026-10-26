@@ -33,7 +33,7 @@ Client 的源码导出名有一项迁移：旧 `PLUGIN_APP_LIMITS` 聚合对象�
 GET /capabilities
 ```
 
-响应固定包含：
+响应包含 `serverVersion`、`protocol` 和 `features`。下面只展示部分能力，实际能力及可选字段以服务端返回为准：
 
 ```json
 {
