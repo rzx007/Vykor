@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { SessionEventRecord, SessionStateSnapshot } from "../../types/index"
 import { syncEvents } from "../sync"
+import { SessionSyncController } from "../session-sync-controller"
+import type { SyncEventsClient } from "../sync"
+import type { EventSyncOptions, SyncEventUpdate } from "../../types/index"
 
 function snapshot(cursor: number): SessionStateSnapshot {
   return {
@@ -27,6 +30,188 @@ function snapshot(cursor: number): SessionStateSnapshot {
 function emptyStream(): AsyncIterable<SessionEventRecord> {
   return (async function* () {})()
 }
+
+// The same consumer-visible scenarios protect both public synchronization APIs.
+describe.each(["iterator", "controller"] as const)("shared sync behavior: %s", api => {
+  async function consume(client: SyncEventsClient, options: EventSyncOptions,
+    onUpdate: (update: SyncEventUpdate) => void, generation = 42): Promise<void> {
+    if (api === "iterator") {
+      for await (const update of syncEvents(client, options)) onUpdate(update)
+    } else {
+      const controller = new SessionSyncController({ client, ...options, generation,
+        onUpdate: (update, actualGeneration) => { expect(actualGeneration).toBe(generation); onUpdate(update) } })
+      await controller.start()
+    }
+  }
+
+  const record = (seq: number): SessionEventRecord => ({
+    id: `e${seq}`, seq, type: "session.updated", schemaVersion: 1, sessionId: "s1",
+    payload: { session: { ...snapshot(seq).session, title: `title-${seq}` } }, createdAt: seq,
+  })
+
+  it.each(["clean end", "stream error"])("refreshes before reopening after %s and skips duplicates", async failure => {
+    const abort = new AbortController()
+    const calls: string[] = []
+    let streams = 0
+    let snapshots = 0
+    const updates: SyncEventUpdate[] = []
+    await consume({ sessions: { getState: async () => {
+      calls.push("snapshot"); return snapshot(++snapshots === 1 ? 1 : 5)
+    } }, events: { list: async () => [], stream: async function* (options) {
+      calls.push(`stream:${options?.cursor}`)
+      if (++streams === 1) {
+        yield record(2); yield record(2)
+        if (failure === "stream error") throw new Error("lost connection")
+      } else { yield record(4); yield record(6); abort.abort() }
+    } } }, { sessionId: "s1", signal: abort.signal, reconnectDelayMs: () => 0 }, update => updates.push(update))
+    expect(calls).toEqual(["snapshot", "stream:1", "snapshot", "stream:5"])
+    expect(updates.filter(update => update.source === "live").map(update => update.event?.seq)).toEqual([2, 6])
+    expect(updates.at(-1)?.state.buckets.s1?.session?.title).toBe("title-6")
+  })
+
+  it("retries failed snapshots before reopening and retains the displayed state", async () => {
+    const abort = new AbortController()
+    const calls: string[] = []
+    const updates: SyncEventUpdate[] = []
+    let snapshots = 0
+    let streams = 0
+    await consume({ sessions: { getState: async () => {
+      calls.push("snapshot")
+      if (++snapshots === 2 || snapshots === 3) throw new Error("snapshot unavailable")
+      return snapshot(snapshots === 1 ? 1 : 5)
+    } }, events: { list: async () => [], stream: async function* (options) {
+      calls.push(`stream:${options?.cursor}`)
+      if (++streams === 1) yield record(2)
+      else abort.abort()
+    } } }, { sessionId: "s1", signal: abort.signal, reconnectDelayMs: () => 0 }, update => updates.push(update))
+    expect(calls).toEqual(["snapshot", "stream:1", "snapshot", "snapshot", "snapshot", "stream:5"])
+    expect(updates.filter(update => update.source === "reconnecting").map(update => update.state.buckets.s1?.session?.title))
+      .toEqual(["title-2", "title-2", "title-2"])
+  })
+
+  it("fills global gaps once before applying the live event", async () => {
+    const abort = new AbortController()
+    const updates: SyncEventUpdate[] = []
+    await consume({ sessions: { getState: async () => snapshot(1) }, events: {
+      list: async options => options?.cursor === 1 ? [record(2), record(3)] : [record(1)],
+      stream: async function* () { yield record(3); yield record(3); yield record(4); abort.abort() },
+    } }, { signal: abort.signal }, update => updates.push(update))
+    expect(updates.filter(update => update.event).map(update => [update.source, update.event?.seq]))
+      .toEqual([["replay", 1], ["replay", 2], ["replay", 3], ["live", 4]])
+  })
+
+  it.each(["initial snapshot", "refresh snapshot", "gap replay", "live event"])("discards a late %s after cancellation", async stage => {
+    const abort = new AbortController()
+    let ready!: () => void
+    const started = new Promise<void>(resolve => { ready = resolve })
+    let release!: () => void
+    const pending = new Promise<void>(resolve => { release = resolve })
+    let snapshots = 0
+    const updates: SyncEventUpdate[] = []
+    const syncing = consume({ sessions: { getState: async () => {
+      snapshots++
+      if (stage === "initial snapshot" || snapshots > 1) { ready(); await pending }
+      return snapshot(snapshots === 1 ? 1 : 5)
+    } }, events: {
+      list: async options => {
+        if (options?.cursor === 1) { ready(); await pending; return [record(2), record(3)] }
+        return [record(1)]
+      },
+      stream: async function* () {
+        if (stage === "refresh snapshot") return
+        if (stage === "gap replay") { yield record(3); return }
+        ready(); await pending; yield record(2)
+      },
+    } }, { sessionId: stage === "gap replay" ? undefined : "s1", signal: abort.signal, reconnectDelayMs: () => 0 },
+    update => updates.push(update))
+    await started
+    const before = [...updates]
+    abort.abort(); release()
+    await syncing
+    expect(updates).toEqual(before)
+  })
+
+  it("keeps a replacement subscription when the old generation resolves late", async () => {
+    let ready!: () => void
+    const started = new Promise<void>(resolve => { ready = resolve })
+    let release!: (value: SessionStateSnapshot) => void
+    const pending = new Promise<SessionStateSnapshot>(resolve => { release = resolve })
+    const oldAbort = new AbortController()
+    const newAbort = new AbortController()
+    let visible: SyncEventUpdate | undefined
+    const old = consume({ sessions: { getState: async () => { ready(); return pending } },
+      events: { list: async () => [], stream: emptyStream } },
+    { sessionId: "s1", signal: oldAbort.signal }, update => { visible = update })
+    await started
+    oldAbort.abort()
+    await consume({ sessions: { getState: async () => ({ ...snapshot(8), session: { ...snapshot(8).session, title: "new generation" } }) },
+      events: { list: async () => [], stream: emptyStream } },
+    { sessionId: "s1", signal: newAbort.signal }, update => { visible = update; newAbort.abort() }, 43)
+    release(snapshot(1))
+    await old
+    expect(visible?.state.buckets.s1?.session?.title).toBe("new generation")
+    expect(visible?.state.lastSeq).toBe(8)
+  })
+
+  it("stops during reconnect backoff without refreshing or reopening", async () => {
+    const abort = new AbortController()
+    const calls: string[] = []
+    await consume({ sessions: { getState: async () => { calls.push("snapshot"); return snapshot(1) } },
+      events: { list: async () => [], stream: async function* () { calls.push("stream") } } },
+    { sessionId: "s1", signal: abort.signal, reconnectDelayMs: () => 30_000 }, update => {
+      if (update.source === "reconnecting") queueMicrotask(() => abort.abort())
+    })
+    expect(calls).toEqual(["snapshot", "stream"])
+  })
+
+  it("does not reopen when the refreshed snapshot consumer cancels", async () => {
+    const abort = new AbortController()
+    let snapshots = 0
+    let streams = 0
+    await consume({ sessions: { getState: async () => snapshot(++snapshots === 1 ? 1 : 5) },
+      events: { list: async () => [], stream: async function* () { streams++ } } },
+    { sessionId: "s1", signal: abort.signal, reconnectDelayMs: () => 0 }, update => {
+      if (update.source === "snapshot" && update.state.lastSeq === 5) abort.abort()
+    })
+    expect(streams).toBe(1)
+  })
+
+  it("retains each API's transport idle timeout default", async () => {
+    const abort = new AbortController()
+    let timeout: number | undefined
+    await consume({ sessions: { getState: async () => snapshot(1) }, events: {
+      list: async () => [], stream: async function* (options) { timeout = options?.idleTimeoutMs; abort.abort() },
+    } }, { sessionId: "s1", signal: abort.signal }, () => {})
+    expect(timeout).toBe(api === "iterator" ? 60_000 : undefined)
+  })
+})
+
+describe("iterator transport options", () => {
+  it("starts a session stream at its snapshot cursor rather than an unrelated requested cursor", async () => {
+    const abort = new AbortController()
+    let cursor: number | "latest" | undefined
+    const client: SyncEventsClient = { sessions: { getState: async () => snapshot(5) }, events: {
+      list: async () => [], stream: async function* (options) { cursor = options?.cursor; abort.abort() },
+    } }
+    for await (const _ of syncEvents(client, { sessionId: "s1", cursor: 100, signal: abort.signal })) { /* consume */ }
+    expect(cursor).toBe(5)
+  })
+  it("forwards summary and a custom idle timeout through attach and reconnect", async () => {
+    const abort = new AbortController()
+    const snapshots: unknown[] = []
+    const streams: unknown[] = []
+    const client: SyncEventsClient = { sessions: { getState: async (_, options) => {
+      snapshots.push(options?.partView); return snapshot(1)
+    } }, events: { list: async () => [], stream: async function* (options) {
+      streams.push([options?.partView, options?.idleTimeoutMs, options?.transportReconnect])
+      if (streams.length === 2) abort.abort()
+    } } }
+    for await (const _ of syncEvents(client, { sessionId: "s1", partView: "summary", idleTimeoutMs: 123,
+      signal: abort.signal, reconnectDelayMs: () => 0 })) { /* consume */ }
+    expect(snapshots).toEqual(["summary", "summary"])
+    expect(streams).toEqual([["summary", 123, false], ["summary", 123, false]])
+  })
+})
 
 describe("syncEvents reconnect", () => {
   it("forwards a usage-only event without adding a second Goal state", async () => {

@@ -1,12 +1,7 @@
 /**
- * 客户端事件同步：session 使用原子 HTTP snapshot + SSE live；
- * 无 sessionId 的全局视图使用 HTTP replay + SSE live。
- *
- * UI（如 `useServerSync`）通常消费 `syncEvents`，而不是分别调 listEvents / streamEvents。
- * live SSE 非 abort 断流后指数退避重连；session 路径重连时重新取快照（`source: "snapshot"`），
- * 全局路径按 `state.lastSeq` 续传并补 replay 空洞。
+ * 唯一同步流程：单会话先取快照，全局先补历史；断流后退避重连。
+ * 会话必须刷新快照成功后才重新开流，恢复未持久化的临时正文。
  */
-
 import {
   applyEvent,
   applyEvents,
@@ -16,12 +11,8 @@ import {
 } from "./reducer.js";
 import { applySessionStreamEvent, applySessionStreamSnapshot } from "./session-stream-state.js";
 import type {
-  EventSyncOptions,
-  ListEventsOptions,
-  VykorClientState,
-  SessionEventRecord,
-  SessionStateSnapshot,
-  SyncEventUpdate,
+  EventSyncOptions, ListEventsOptions, VykorClientState, SessionEventRecord,
+  SessionStateSnapshot, SyncEventUpdate,
 } from "../types/index.js";
 
 export interface SyncEventsClient {
@@ -34,187 +25,137 @@ export interface SyncEventsClient {
   };
 }
 
-type GlobalEventReducer = (
-  state: VykorClientState,
-  event: SessionEventRecord,
-) => VykorClientState;
-
+type GlobalEventReducer = (state: VykorClientState, event: SessionEventRecord) => VykorClientState;
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
-
-/** 会话事件流空闲超时：服务端 keepalive 每 15s 一次，取 4 倍余量。 */
+/** 服务端 keepalive 每 15s 一次，迭代接口保留 4 倍余量。 */
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60_000;
 
-/** 用已有事件列表一次性 hydrate 出客户端状态（离线/测试常用）。 */
 export function hydrateState(events: Iterable<SessionEventRecord>): VykorClientState {
   return applyEvents(createInitialClientState(), events);
 }
 
-/**
- * session attach 主路径：`getSessionState` snapshot → `streamEvents` live。
- * 每应用一条（或 live 下状态确有变化的）事件就 yield `{ event, state, source }`。
- * live 阶段若 `applyEvent` 因重复 seq 返回同一引用，则跳过 yield。
- */
+/** 公开迭代接口保留原有默认空闲超时和全局 replay 结束标记。 */
 export async function* syncEvents(
   client: SyncEventsClient,
   options: EventSyncOptions & { globalReducer?: GlobalEventReducer } = {},
 ): AsyncIterable<SyncEventUpdate> {
-  let state = createInitialClientState();
-  if (options.sessionId) {
-    const sessionId = options.sessionId;
-    const snapshot = await client.sessions.getState(sessionId, { signal: options.signal, partView: options.partView });
-    state = applySessionSnapshot(state, snapshot);
-    yield { state, source: "snapshot" };
-
-    yield* liveWithReconnect(client, state, options, snapshot.cursor, async (current) => {
-      const refreshed = await client.sessions.getState(sessionId, { signal: options.signal, partView: options.partView });
-      const next = applySessionStreamSnapshot(current, refreshed);
-      return { state: next, cursor: refreshed.cursor };
-    }, applySessionStreamEvent);
-    return;
-  }
-  const replay = await client.events.list({
-    cursor: options.cursor,
-    partView: options.partView,
-    sessionId: options.sessionId,
-    signal: options.signal,
+  yield* runEventSync(client, {
+    ...options,
+    // 会话迭代接口从完整快照开始；只有全局 replay 使用调用方游标。
+    cursor: options.sessionId ? undefined : options.cursor,
+    idleTimeoutMs: options.idleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS,
   });
-  const reduce = options.globalReducer ?? applyEvent;
-
-  for (const event of replay) {
-    state = reduce(state, event);
-    yield { event, state, source: "replay" };
-  }
-
-  // Global consumers need an explicit boundary between initial history and live updates.
-  yield { state, source: "snapshot" };
-
-  yield* liveWithReconnect(client, state, options, state.lastSeq, undefined, reduce);
 }
 
-async function* liveWithReconnect(
+/** @internal 共用算法。控制器只提供初始状态，消费更新并适配连接状态。 */
+export async function* runEventSync(
   client: SyncEventsClient,
-  initialState: VykorClientState,
-  options: EventSyncOptions,
-  initialCursor: number,
-  resync?: (
-    current: VykorClientState,
-  ) => Promise<{ state: VykorClientState; cursor: number }>,
-  reduce: GlobalEventReducer = applyEvent,
+  options: EventSyncOptions & { globalReducer?: GlobalEventReducer },
+  initialState: VykorClientState = createInitialClientState(),
+  onLiveEvent?: () => void,
 ): AsyncIterable<SyncEventUpdate> {
   let state = initialState;
-  let cursor = initialCursor;
+  let cursor = Math.max(0, options.cursor ?? 0, state.lastSeq);
   let attempt = 0;
+  const signal = options.signal;
   const delayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
+  const reduce = options.sessionId ? applySessionStreamEvent : options.globalReducer ?? applyEvent;
+  if (signal?.aborted) return;
 
-  const applyResync = async (): Promise<"resynced" | "resumed" | "aborted"> => {
-    if (!resync) {
-      cursor = state.lastSeq;
-      return "resumed";
-    }
-    try {
-      const refreshed = await resync(state);
-      state = refreshed.state;
-      cursor = Math.max(refreshed.cursor, state.lastSeq);
-      return "resynced";
-    } catch (error) {
-      if (isAbortError(error) || options.signal?.aborted) return "aborted";
-      cursor = state.lastSeq;
-      return "resumed";
-    }
+  const refreshSession = async (initial: boolean): Promise<void> => {
+    const snapshot = await client.sessions.getState(options.sessionId!, {
+      signal, partView: options.partView,
+    });
+    if (signal?.aborted) return;
+    // 初次 attach 按会话判断缓存新旧，不能被其他会话的较大游标挡住。
+    const next = initial ? applySessionSnapshot(state, snapshot) : applySessionStreamSnapshot(state, snapshot);
+    state = Object.keys(next.eventsBySeq).length ? { ...next, eventsBySeq: {} } : next;
+    cursor = Math.max(cursor, snapshot.cursor, state.lastSeq);
   };
 
-  while (!options.signal?.aborted) {
-    try {
-      for await (const event of client.events.stream({
-        cursor,
-        partView: options.partView,
-        sessionId: options.sessionId,
-        signal: options.signal,
-        transportReconnect: false,
-        idleTimeoutMs: options.idleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS,
-      })) {
-        attempt = 0;
-        if (event.seq > state.lastSeq + 1 && !options.sessionId) {
-          const gap = await client.events.list({
-            cursor: state.lastSeq,
-            partView: options.partView,
-            signal: options.signal,
-          });
-          for (const missed of gap) {
-            const beforeGap = state;
-            state = reduce(state, missed);
-            if (state !== beforeGap) yield { event: missed, state, source: "replay" };
-          }
-          cursor = state.lastSeq;
-        }
-
-        const before = state;
+  try {
+    if (options.sessionId) {
+      await refreshSession(true);
+    } else {
+      const replay = await client.events.list({
+        cursor: options.cursor, partView: options.partView, signal,
+      });
+      if (signal?.aborted) return;
+      for (const event of replay) {
+        if (signal?.aborted) return;
         state = reduce(state, event);
-        cursor = state.lastSeq;
-        if (state !== before) yield { event, state, source: "live" };
+        yield { event, state, source: "replay" };
       }
-
-      // Clean stream end is treated as a disconnect that should resume.
-      if (options.signal?.aborted) return;
-      yield { state, source: "reconnecting" };
-      if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
-      attempt += 1;
-      const outcome = await applyResync();
-      if (outcome === "aborted") return;
-      if (outcome === "resynced") yield { state, source: "snapshot" };
-    } catch (error) {
-      if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error;
-      if (isAbortError(error) || options.signal?.aborted) return;
-      yield { state, source: "reconnecting" };
-      if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
-      attempt += 1;
-      const outcome = await applyResync();
-      if (outcome === "aborted") return;
-      if (outcome === "resynced") yield { state, source: "snapshot" };
+      cursor = Math.max(cursor, state.lastSeq);
     }
+    if (signal?.aborted) return;
+    yield { state, source: "snapshot" };
+
+    let needsSnapshot = false;
+    while (!signal?.aborted) {
+      try {
+        if (needsSnapshot) {
+          await refreshSession(false);
+          if (signal?.aborted) return;
+          needsSnapshot = false;
+          yield { state, source: "snapshot" };
+        }
+        if (signal?.aborted) return;
+        for await (const event of client.events.stream({
+          cursor, sessionId: options.sessionId, signal, partView: options.partView,
+          transportReconnect: false, idleTimeoutMs: options.idleTimeoutMs,
+        })) {
+          if (signal?.aborted) return;
+          onLiveEvent?.();
+          if (signal?.aborted) return;
+          attempt = 0;
+          if (event.seq > cursor + 1 && !options.sessionId) {
+            const gap = await client.events.list({ cursor, partView: options.partView, signal });
+            if (signal?.aborted) return;
+            for (const missed of gap) {
+              if (signal?.aborted) return;
+              const before = state;
+              state = reduce(state, missed);
+              if (state !== before) yield { event: missed, state, source: "replay" };
+            }
+            cursor = Math.max(cursor, state.lastSeq);
+          }
+          if (signal?.aborted) return;
+          const before = state;
+          state = reduce(state, event);
+          cursor = Math.max(cursor, state.lastSeq);
+          if (state !== before) yield { event, state, source: "live" };
+        }
+      } catch (error) {
+        if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error;
+        if (isAbortError(error) || signal?.aborted) return;
+      }
+      if (signal?.aborted) return;
+      // 刷新失败也走同一退避入口；needsSnapshot 保持为真，绝不跳过快照恢复。
+      needsSnapshot = Boolean(options.sessionId);
+      yield { state, source: "reconnecting" };
+      if (!(await waitForReconnect(delayMs(attempt), signal))) return;
+      attempt += 1;
+    }
+  } catch (error) {
+    if (!isAbortError(error) && !signal?.aborted) throw error;
   }
 }
 
 async function waitForReconnect(ms: number, signal?: AbortSignal): Promise<boolean> {
-  try {
-    await sleep(ms, signal);
-    return !signal?.aborted;
-  } catch (error) {
-    if (isAbortError(error) || signal?.aborted) return false;
-    throw error;
-  }
-}
-
-function isAbortError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  if ("name" in error && (error as { name?: string }).name === "AbortError") return true;
-  return false;
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) {
-    if (signal?.aborted) return Promise.reject(abortError(signal));
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortError(signal));
-      return;
-    }
+  if (signal?.aborted) return false;
+  if (ms <= 0) return true;
+  return new Promise<boolean>(resolve => {
+    const onAbort = () => { clearTimeout(timer); resolve(false); };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
-      resolve();
+      resolve(!signal?.aborted);
     }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(abortError(signal!));
-    };
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
-function abortError(signal: AbortSignal): Error {
-  if (signal.reason instanceof Error) return signal.reason;
-  return new DOMException("Aborted", "AbortError");
+function isAbortError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "name" in error && error.name === "AbortError");
 }

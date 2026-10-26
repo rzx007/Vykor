@@ -42,6 +42,40 @@ function event(seq: number, schemaVersion = 1): SessionEventRecord {
 }
 
 describe("SessionSyncController", () => {
+  it("exposes hydrated state when reporting a snapshot connection", async () => {
+    const observed: Array<string | undefined> = [];
+    let controller!: SessionSyncController;
+    controller = new SessionSyncController({ sessionId: "s1",
+      client: { sessions: { getState: async () => snapshot(1, "ready") },
+        events: { list: async () => [], stream: async function* () { controller.abort(); } } },
+      onStatusChange: status => {
+        if (status === "connected") observed.push(controller.currentState.buckets.s1?.session?.title);
+      },
+    });
+    await controller.start();
+    expect(observed).toEqual(["ready"]);
+  });
+  it("marks a resumed stream connected even when its first event is a duplicate", async () => {
+    const statuses: string[] = [];
+    let resumedStatus: string | undefined;
+    let streams = 0;
+    let controller!: SessionSyncController;
+    controller = new SessionSyncController({
+      client: { sessions: { getState: async () => snapshot(1, "unused") }, events: {
+        list: async () => [event(1)],
+        stream: async function* () {
+          if (++streams === 1) return;
+          yield event(1);
+          resumedStatus = controller.currentStatus;
+          controller.abort();
+        },
+      } }, reconnectDelayMs: () => 0,
+      onStatusChange: status => statuses.push(status),
+    });
+    await controller.start();
+    expect(resumedStatus).toBe("connected");
+    expect(statuses).toEqual(["connecting", "connected", "reconnecting", "connected", "idle"]);
+  });
   it("hydrates a session snapshot behind an unrelated cached session's cursor", async () => {
     const cached = snapshot(20, "other session");
     cached.session = { ...cached.session, id: "s2" };

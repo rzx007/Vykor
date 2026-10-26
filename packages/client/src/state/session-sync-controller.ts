@@ -1,23 +1,10 @@
 /**
- * 无 UI 框架依赖的 Session 同步控制器。
- *
- * 封装 snapshot-first attach、cursor 维护、gap catch-up、SSE 重连、abort 与 generation fencing。
- * 平台层（Frontend Hook、Desktop Main Subscription Service）直接使用此控制器，
- * 避免重复编写 stream pump、重连定时器、generation 丢弃等逻辑。
+ * 无 UI 依赖的回调适配器。同步规则统一由 sync.ts 执行；这里保存当前状态，
+ * 转发连接状态和代次，并隔离取消后迟到的更新。
  */
-
-import {
-  applyEvent,
-  applySessionSnapshot,
-  createInitialClientState,
-  UnsupportedSessionEventSchemaVersionError,
-} from "./reducer.js";
-import { applySessionStreamEvent, applySessionStreamSnapshot } from "./session-stream-state.js";
-import type { SyncEventsClient } from "./sync.js";
-import type {
-  VykorClientState,
-  SyncEventUpdate,
-} from "../types/index.js";
+import { createInitialClientState } from "./reducer.js";
+import { runEventSync, type SyncEventsClient } from "./sync.js";
+import type { VykorClientState, SyncEventUpdate } from "../types/index.js";
 
 export type SyncConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 
@@ -34,233 +21,75 @@ export interface SessionSyncControllerOptions {
   onError?: (error: unknown, generation: number) => void;
 }
 
-const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
-  Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
-
 export class SessionSyncController {
-  private readonly client: SyncEventsClient;
-  private readonly sessionId?: string;
+  private readonly options: SessionSyncControllerOptions;
   private readonly initialCursor: number;
   private readonly generation: number;
-  private readonly externalSignal?: AbortSignal;
-  private readonly reconnectDelayMs: (attempt: number) => number;
-  private readonly onUpdate?: (update: SyncEventUpdate, generation: number) => void;
-  private readonly onStatusChange?: (status: SyncConnectionStatus, generation: number) => void;
-  private readonly onError?: (error: unknown, generation: number) => void;
-
   private readonly abortController = new AbortController();
   private state: VykorClientState;
   private status: SyncConnectionStatus = "idle";
   private running = false;
 
   constructor(options: SessionSyncControllerOptions) {
-    this.client = options.client;
-    this.sessionId = options.sessionId;
+    this.options = { ...options };
     this.state = options.initialState ?? createInitialClientState();
     if ((options.cursor ?? 0) > 0 && !options.initialState) {
       throw new Error("A non-zero cursor requires initialState so durable state is not skipped");
     }
     this.initialCursor = Math.max(0, options.cursor ?? 0, this.state.lastSeq);
     this.generation = options.generation ?? 0;
-    this.externalSignal = options.signal;
-    this.reconnectDelayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
-    this.onUpdate = options.onUpdate;
-    this.onStatusChange = options.onStatusChange;
-    this.onError = options.onError;
-
-    if (this.externalSignal) {
-      if (this.externalSignal.aborted) {
-        this.abortController.abort(this.externalSignal.reason);
-      } else {
-        this.externalSignal.addEventListener(
-          "abort",
-          () => this.abortController.abort(this.externalSignal?.reason),
-          { once: true },
-        );
-      }
+    if (options.signal?.aborted) {
+      this.abortController.abort(options.signal.reason);
+    } else {
+      options.signal?.addEventListener("abort", () => this.abort(options.signal?.reason), { once: true });
     }
   }
 
-  get currentStatus(): SyncConnectionStatus {
-    return this.status;
-  }
+  get currentStatus(): SyncConnectionStatus { return this.status; }
+  get currentState(): VykorClientState { return this.state; }
+  get currentGeneration(): number { return this.generation; }
+  get signal(): AbortSignal { return this.abortController.signal; }
 
-  get currentState(): VykorClientState {
-    return this.state;
-  }
-
-  get currentGeneration(): number {
-    return this.generation;
-  }
-
-  get signal(): AbortSignal {
-    return this.abortController.signal;
-  }
-
-  abort(reason?: unknown): void {
-    this.abortController.abort(reason);
-  }
+  abort(reason?: unknown): void { this.abortController.abort(reason); }
 
   private setStatus(status: SyncConnectionStatus): void {
     if (this.status === status) return;
     this.status = status;
-    this.onStatusChange?.(status, this.generation);
+    this.options.onStatusChange?.(status, this.generation);
   }
 
-  private emitUpdate(update: SyncEventUpdate): void {
-    if (this.abortController.signal.aborted) return;
-    this.state = update.state;
-    this.onUpdate?.(update, this.generation);
-  }
-
-  /**
-   * 启动同步循环。
-   * 返回一个在同步正常结束（如 abort）或不可恢复错误已通过 onError 上报后 resolve 的 Promise。
-   */
+  /** 不可恢复错误通过 onError 上报；取消和正常结束都 resolve。 */
   async start(): Promise<void> {
     if (this.running) return;
+    const signal = this.signal;
+    if (signal.aborted) { this.setStatus("idle"); return; }
     this.running = true;
-    const signal = this.abortController.signal;
-    if (signal.aborted) {
-      this.setStatus("idle");
-      return;
-    }
-
-    let cursor = this.initialCursor;
-    let attempt = 0;
-
-    const refreshSession = async (sessionId: string): Promise<void> => {
-      const snapshot = await this.client.sessions.getState(sessionId, { signal });
-      if (signal.aborted) return;
-      // The initial cache may include newer cursors from unrelated sessions.
-      const next = this.status === "connecting"
-        ? applySessionSnapshot(this.state, snapshot)
-        : applySessionStreamSnapshot(this.state, snapshot);
-      this.state = Object.keys(next.eventsBySeq).length ? { ...next, eventsBySeq: {} } : next;
-      cursor = Math.max(cursor, snapshot.cursor, this.state.lastSeq);
-      this.setStatus("connected");
-      this.emitUpdate({ state: this.state, source: "snapshot" });
-    };
-
     try {
       this.setStatus("connecting");
-
-      if (this.sessionId) {
-        await refreshSession(this.sessionId);
-      } else {
-        const replay = await this.client.events.list({
-          cursor,
-          sessionId: this.sessionId,
-          signal,
-        });
+      // 回调接口保持传输层原有的空闲超时默认值，不套用迭代接口的 60s。
+      for await (const update of runEventSync(this.options.client, {
+        sessionId: this.options.sessionId,
+        cursor: this.initialCursor,
+        signal,
+        reconnectDelayMs: this.options.reconnectDelayMs,
+      }, this.state, () => this.setStatus("connected"))) {
         if (signal.aborted) return;
-        for (const event of replay) {
-          this.state = applyEvent(this.state, event);
-          this.emitUpdate({ event, state: this.state, source: "replay" });
-        }
-        cursor = Math.max(cursor, this.state.lastSeq);
-        this.setStatus("connected");
-      }
-
-      while (!signal.aborted) {
-        try {
-          // Transient updates cannot be recovered from durable event replay alone.
-          if (this.sessionId && attempt > 0) {
-            await refreshSession(this.sessionId);
-            if (signal.aborted) return;
-          }
-          for await (const event of this.client.events.stream({
-            cursor,
-            sessionId: this.sessionId,
-            signal,
-            transportReconnect: false,
-          })) {
-            if (signal.aborted) return;
-            attempt = 0;
-            this.setStatus("connected");
-
-            if (event.seq > cursor + 1 && !this.sessionId) {
-              const gap = await this.client.events.list({
-                cursor,
-                sessionId: this.sessionId,
-                signal,
-              });
-              if (signal.aborted) return;
-              for (const missed of gap) {
-                const beforeGap = this.state;
-                this.state = applyEvent(this.state, missed);
-                if (this.state !== beforeGap) {
-                  this.emitUpdate({ event: missed, state: this.state, source: "replay" });
-                }
-              }
-              cursor = Math.max(cursor, this.state.lastSeq);
-            }
-
-            const before = this.state;
-            this.state = this.sessionId
-              ? applySessionStreamEvent(this.state, event)
-              : applyEvent(this.state, event);
-            cursor = Math.max(cursor, this.state.lastSeq);
-            if (this.state !== before) {
-              this.emitUpdate({ event, state: this.state, source: "live" });
-            }
-          }
-
-          if (signal.aborted) return;
-          this.setStatus("reconnecting");
-          this.emitUpdate({ state: this.state, source: "reconnecting" });
-          const delay = this.reconnectDelayMs(attempt);
-          attempt += 1;
-          cursor = this.state.lastSeq;
-          if (!(await this.waitForDelay(delay, signal))) return;
-        } catch (error) {
-          if (error instanceof UnsupportedSessionEventSchemaVersionError) {
-            throw error;
-          }
-          if (this.isAbortError(error) || signal.aborted) return;
-          this.setStatus("reconnecting");
-          this.emitUpdate({ state: this.state, source: "reconnecting" });
-          const delay = this.reconnectDelayMs(attempt);
-          attempt += 1;
-          cursor = this.state.lastSeq;
-          if (!(await this.waitForDelay(delay, signal))) return;
-        }
+        this.state = update.state;
+        if (update.source === "reconnecting") this.setStatus("reconnecting");
+        else if (update.source !== "replay") this.setStatus("connected");
+        if (signal.aborted) return;
+        // 全局 snapshot 在共用流程中标记 replay 结束，回调接口不新增这条更新。
+        if (update.source === "snapshot" && !this.options.sessionId) continue;
+        this.options.onUpdate?.(update, this.generation);
       }
     } catch (error) {
-      if (!this.isAbortError(error) && !signal.aborted) {
+      if (!signal.aborted && !(error instanceof Error && error.name === "AbortError")) {
         this.setStatus("error");
-        this.onError?.(error, this.generation);
+        this.options.onError?.(error, this.generation);
       }
     } finally {
       this.running = false;
-      if (signal.aborted && this.status !== "error") {
-        this.setStatus("idle");
-      }
+      if (signal.aborted && this.status !== "error") this.setStatus("idle");
     }
-  }
-
-  private isAbortError(error: unknown): boolean {
-    if (!error || typeof error !== "object") return false;
-    if ("name" in error && (error as { name?: string }).name === "AbortError") return true;
-    return false;
-  }
-
-  private waitForDelay(ms: number, signal: AbortSignal): Promise<boolean> {
-    if (ms <= 0) return Promise.resolve(!signal.aborted);
-    return new Promise<boolean>((resolve) => {
-      if (signal.aborted) {
-        resolve(false);
-        return;
-      }
-      const timer = setTimeout(() => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(!signal.aborted);
-      }, ms);
-      const onAbort = () => {
-        clearTimeout(timer);
-        resolve(false);
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-    });
   }
 }
