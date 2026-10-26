@@ -102,7 +102,7 @@
     },
     {
       "path": "packages/domain-contracts/src/inputs/metadata.ts",
-      "line": 16,
+      "line": 20,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -3534,7 +3534,7 @@
     },
     {
       "path": "packages/protocol/src/requests/__test__/requests.test.ts",
-      "line": 47,
+      "line": 50,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3660,25 +3660,25 @@
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 343,
+      "line": 370,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 437,
+      "line": 464,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 454,
+      "line": 481,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 466,
+      "line": 493,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3696,13 +3696,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
-      "line": 390,
+      "line": 399,
       "text": "      uiAction: { schemaVersion: 2, instanceId: \"00000000-0000-0000-0000-000000000002\", requestId: \"00000000-0000-0000-0000-000000000001\",",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
-      "line": 395,
+      "line": 404,
       "text": "    await expect(service.resumeRun(\"s1\", \"ui-run\", {})).rejects.toMatchObject({ code: \"plugin_ui_action_not_resumable\" });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3882,13 +3882,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 470,
+      "line": 472,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 474,
+      "line": 476,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },

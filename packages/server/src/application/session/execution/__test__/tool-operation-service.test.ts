@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +29,11 @@ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.int
   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
 }
 describe("daemon tool operation host", () => {
+  it("allows writes without copying full historical operation records for the safety check", async () => {
+    const f = await fixture();
+    vi.spyOn(f.store.toolOperations, "list").mockImplementation(() => { throw new Error("Full operation bodies must not be copied for safety checks"); });
+    await expect(authorized(f)).resolves.toBeDefined();
+  });
   it("dispatches an operation only once and creates its execution header", async () => {
     const f = await fixture(), input = await authorized(f);
     const receipt = await f.service.operations.dispatch(input);

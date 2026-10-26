@@ -46,6 +46,7 @@ export interface SessionInteractionServiceContext {
 }
 
 export interface EditLatestPromptInput {
+  outputSchema?: Record<string, unknown>;
   id: string;
   items: SessionUserInputItem[];
   attachments?: AdmitPromptAttachmentInput[];
@@ -55,6 +56,7 @@ export interface EditLatestPromptInput {
 }
 
 export interface ResumeRunInput {
+  outputSchema?: Record<string, unknown>;
   id?: string;
   metadata?: Record<string, unknown>;
   traceId: string;

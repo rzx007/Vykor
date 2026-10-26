@@ -8,29 +8,40 @@ import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 import type { AdmitPromptInput, AdmitPromptResult, RunAdmissionServiceOptions } from "./run-admission-service.js";
 
-/** Snapshot the requested contract before admitting either the Input or its Run. */
-export function normalizeOutputSchema<T extends {
+/** Validate a new request; metadata snapshots are never request aliases. */
+export function validateOutputSchemaRequest<T extends {
   outputSchema?: Record<string, unknown>;
   delivery?: "queue" | "steer";
-  metadata?: Record<string, unknown>;
-  runMetadata?: Record<string, unknown>;
 }>(input: T): T & { outputSchema?: Record<string, unknown> } {
-  const candidates = [input.outputSchema, input.metadata?.outputSchema, input.runMetadata?.outputSchema]
-    .filter(value => value !== undefined);
-  if (!candidates.length) return input;
+  if (input.outputSchema === undefined) return input;
   if (input.delivery === "steer") throw new SessionApplicationError(400, "outputSchema requires a queued Run; steer cannot change its contract");
+  return { ...input, outputSchema: validateSchema(input.outputSchema) };
+}
+
+function validateSchema(value: unknown): Record<string, unknown> {
   try {
-    for (const candidate of candidates) assertSupportedOutputSchema(candidate as Record<string, unknown>);
-    if (candidates.some(value => !jsonEqual(value, candidates[0]))) throw new Error("Conflicting output schemas");
-    const serialized = JSON.stringify(candidates[0]);
+    assertSupportedOutputSchema(value as Record<string, unknown>);
+    const serialized = JSON.stringify(value);
     if (Buffer.byteLength(serialized, "utf8") > 65_536) throw new Error("Output schema exceeds 64 KiB");
-    const schema = JSON.parse(serialized) as Record<string, unknown>;
-    return { ...input, outputSchema: schema,
-      metadata: { ...input.metadata, outputSchema: schema },
-      runMetadata: { ...input.runMetadata, outputSchema: schema } };
+    return JSON.parse(serialized) as Record<string, unknown>;
   } catch (error) {
     throw new SessionApplicationError(400, `Invalid output schema: ${error instanceof Error ? error.message : "unsupported constraint"}`);
   }
+}
+
+/** Read legacy Input/Run snapshots without treating them as new request parameters. */
+export function readStoredOutputSchema(inputMetadata: Record<string, unknown>, runMetadata?: Record<string, unknown>): Record<string, unknown> | undefined {
+  const input = inputMetadata.outputSchema, run = runMetadata?.outputSchema;
+  if (input !== undefined && run !== undefined && !jsonEqual(input, run)) {
+    throw new SessionApplicationError(400, "Conflicting stored output schemas");
+  }
+  const schema = input !== undefined ? input : run;
+  return schema === undefined ? undefined : validateSchema(schema);
+}
+
+/** Persist the validated explicit contract in the existing record shape. */
+export function outputSchemaMetadata(metadata: Record<string, unknown> | undefined, outputSchema: Record<string, unknown> | undefined): Record<string, unknown> {
+  return { ...metadata, ...(outputSchema === undefined ? {} : { outputSchema }) };
 }
 
 export function inputItems(input: {
@@ -63,8 +74,8 @@ export async function admitPromptWork(
     normalizeTraceId(input.traceId) ??
     normalizeTraceId(input.metadata?.traceId) ??
     randomUUID();
-  const metadata = { ...(input.metadata ?? {}), traceId };
-  const runMetadata = { ...(input.runMetadata ?? {}), traceId };
+  const metadata = { ...outputSchemaMetadata(input.metadata, input.outputSchema), traceId };
+  const runMetadata = { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId };
   const existingInput = input.id
     ? options.conversationTransactions.getInput(input.id)
     : undefined;

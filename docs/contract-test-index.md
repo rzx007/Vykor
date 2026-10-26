@@ -29,6 +29,8 @@
 | 实际默认 Agent 补读 | [SDK 跨 Run](../packages/agent-runtime/src/node/agent/__test__/tool-result-reading.test.ts)、[daemon 重启](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts) | 保存先于截断、历史清理后找回、SQLite 重开、真实只读分类、同名伪造及查询不递归归档 |
 | 交付收尾与业务核验 | [实际 Kernel 循环](../packages/agent-runtime/src/kernel/delivery/__test__/delivery-run.test.ts)、[真实 S1 与产物](../tests/agent-integration/__test__/result-delivery.integration.test.ts) | 结构纠错、派发前业务核验、回执归属、普通文本兼容与取消后的迟到核验 |
 | 公共交付入口 | [请求解析](../packages/protocol/src/requests/__test__/requests.test.ts)、[准入](../packages/server/src/application/session/execution/__test__/run-admission-service.test.ts)、[客户端](../packages/client/src/resources/session/__test__/structured-delivery.test.ts) | Schema 保留、ID 冲突、格式拒绝、附加能力检查后发送 |
+| 能力简化与旧数据 | [HTTP 编辑/重放](../packages/server/src/http/routes/__test__/run-execution.test.ts)、[执行入口](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts)、[应用交互](../packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts) | 只接受显式 schema、旧快照读取、合同冲突与重复编辑 |
+| 查询搬运与绑定顺序 | [安全检查](../packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts)、[结果查询](../packages/server/src/application/session/execution/__test__/tool-result-service.test.ts)、[Kernel 绑定](../packages/agent-runtime/src/kernel/__test__/result-store-binding.test.ts)、[真实子 Run](../packages/server/src/application/__test__/durable-agent-application.test.ts) | 安全判断无完整记录复制、授权后分页、单次文本读取、投影后绑定、旧 store 兼容 |
 
 ### 其余生命周期契约
 

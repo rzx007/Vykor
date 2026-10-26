@@ -91,6 +91,7 @@ export type CreateClientSessionInput = CreateSessionInput;
 export type ForkClientSessionInput = ForkSessionInput;
 
 export interface EditLatestClientPromptInput {
+  outputSchema?: Record<string, unknown>;
   id: string;
   items: SessionUserInputItem[];
   sourceMessageId: string;
@@ -131,6 +132,8 @@ export interface AdmitClientPromptInput {
 
 /** `POST /sessions/:id/runs/:runId/resume` 请求体。`id` 用于安全重试。 */
 export interface ResumeInterruptedRunInput {
+  /** If supplied, must equal the original prompt's contract. */
+  outputSchema?: Record<string, unknown>;
   id?: string;
   metadata?: Record<string, unknown>;
 }

@@ -8,6 +8,8 @@
 
 `authorize` 记录当前强制规则版本；`dispatch` 再检查操作修订、规则版本、owner、会话、Run 和未知写操作阻塞，随后保存独立 Attempt 并返回派发回执。工具实际调用由 core 负责。`settle` 检查回执及结果身份，保存完整结果；重复相同结果可重复提交，不同结果不能覆盖已确认结果。`reject` 只接受可信执行层的失败且未启动结果，派发前中断记为 cancelled，其余拒绝记为 rejected。所有方法同步提交，Server 将其适配为异步 Gate。
 
+安全判断使用 `listSafetyStates()`，只返回 id、sessionId、runId、kind、state，不复制输入和正文。补读使用 `listResultCandidates(sessionId)` / `getResultCandidate(operationId)` 读取已完成结果的身份和来源；授权与分页之后才调用 `readResultText(operationId)` 生成单条文本。`get/list` 仍供需要完整审计记录的调用方使用，Operation 与 Attempt 的正文保存策略不变。
+
 未知写操作阻止同一会话后续危险派发，换工具或新建操作不能绕过，只读工具仍可核对。`reconcile` 仅供可信宿主传入只读查询的非空证据；不能从错误文本推断未生效。核对为 `not_applied` 后，经过当前授权才可创建新的 Attempt。确认已生效需要可信完整结果，缺失结果时保持 unknown。每次核对证据追加到操作及原尝试，保留历史。
 
 启动时宿主确认旧 owner 失活，在取得写入权的同一事务内重新读取持久状态，再调用 `recoverDispatching` 将所有遗留未结算尝试标记 unknown；固定 ownerId 也不能跳过旧派发。不重新调用工具。合法迟到结果可将同一个 unknown Attempt 确认为 completed，即使 Run 已结束，但不能重新交付模型或取得新派发权。

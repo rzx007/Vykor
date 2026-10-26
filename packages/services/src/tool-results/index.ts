@@ -1,1 +1,1 @@
-export { ToolResultReader, type StoredToolResultReference } from "./tool-result-reader.js";
+export { ToolResultReader, type StoredToolResultReference, type ToolResultSource } from "./tool-result-reader.js";

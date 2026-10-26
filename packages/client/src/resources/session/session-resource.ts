@@ -3,7 +3,7 @@
  */
 
 import type { CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
-import { decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
+import { assertPromptMetadataAllowed, decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../../transport/http-transport.js";
 import type {
   AdmitClientPromptInput,
@@ -48,7 +48,8 @@ export class SessionResource {
   constructor(private readonly transport: HttpTransport) {}
 
   private async checkOutputSchema(input: { outputSchema?: unknown; metadata?: Record<string, unknown> }, signal?: AbortSignal): Promise<void> {
-    if (input.outputSchema === undefined && input.metadata?.outputSchema === undefined) return;
+    assertPromptMetadataAllowed(input);
+    if (input.outputSchema === undefined) return;
     const capabilities = await this.transport.ensureProtocol(signal);
     if ((capabilities.features.structuredDelivery ?? 0) < 1) {
       throw new Error("Server does not support structured delivery (outputSchema)");

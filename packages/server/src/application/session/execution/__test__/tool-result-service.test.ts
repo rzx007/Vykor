@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +30,46 @@ function fixture() {
   return { store, service, scope, bindings, binding, result, lease, controller };
 }
 describe("host-bound historical tool result access", () => {
+  it("pages authorized results without copying the complete operation list", async () => {
+    const f = fixture(), view = f.service.forRun(f.scope, f.bindings), ref = await view.retain(f.result);
+    vi.spyOn(f.store.toolOperations, "list").mockImplementation(() => { throw new Error("Full operation bodies must not be copied for result lists"); });
+    expect(await view.list({ limit: 1 })).toEqual({ items: [ref] });
+    expect(await f.service.forRun(f.scope, new Map()).list()).toEqual({ items: [] });
+  });
+  it.each(["read", "search"] as const)("does not fetch the full operation twice for %s", async action => {
+    const f = fixture(), view = f.service.forRun(f.scope, f.bindings), ref = await view.retain(f.result);
+    const get = vi.spyOn(f.store.toolOperations, "get");
+    const text = vi.spyOn(f.store.toolOperations, "readResultText");
+    const candidate = vi.spyOn(f.store.toolOperations, "getResultCandidate");
+    const value = action === "read" ? (await view.read({ id: ref.id, offset: 300_000 })).text
+      : (await view.search({ id: ref.id, query: "TAIL" })).matches[0]?.text;
+    expect(value).toBe("TAIL");
+    expect(get).not.toHaveBeenCalled();
+    expect(text).toHaveBeenCalledTimes(1);
+    expect(candidate).toHaveBeenCalledTimes(1);
+  });
+  it("reads bodies only for the authorized page and counts text blocks in UTF-16", async () => {
+    const f = fixture();
+    const save = (call: string, sourceId: string, content: typeof f.result.content) => {
+      const intent = { scope: f.scope, toolUse: { type: "tool_use" as const, id: call, name: "Read", input: {} } };
+      const operation = f.store.toolOperations.prepare({ ...intent, toolIdentity: JSON.stringify({ source: { kind: "plugin", id: sourceId } }) });
+      const authorized = f.store.toolOperations.authorize({ intent, operation, policyVersion: "p" });
+      const receipt = f.store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p", ownerId: "owner" });
+      f.store.toolOperations.settle({ receipt, result: { ...f.result, toolUseId: call, operationId: operation.operationId, content } });
+      return operation.operationId;
+    };
+    save("hidden", "revoked", [{ type: "text", text: "SECRET".repeat(50_000) }]);
+    const selected = save("page", "selected", [{ type: "text", text: "😀" }, { type: "text", text: "TAIL" }]);
+    save("later", "selected", [{ type: "text", text: "not this page" }]);
+    const text = vi.spyOn(f.store.toolOperations, "readResultText");
+    const view = f.service.forRun(f.scope, f.bindings);
+    expect(await view.list({ offset: 1, limit: 1 })).toMatchObject({ items: [{ totalChars: 7 }], nextOffset: 2 });
+    expect(text.mock.calls).toEqual([[selected]]);
+    text.mockClear();
+    expect(await view.list({ offset: 3, limit: 1 })).toEqual({ items: [] });
+    await expect(view.list({ offset: 4 })).rejects.toThrow();
+    expect(text).not.toHaveBeenCalled();
+  });
   it("excludes a captured builtin reader's saved operations from list, read and search after restart", async () => {
     const f = fixture();
     const definition = markToolResultReader(createToolResultTool());

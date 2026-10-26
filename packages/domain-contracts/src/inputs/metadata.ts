@@ -13,6 +13,10 @@ export function assertPromptMetadataAllowed(input: {
   for (const namespace of ["metadata", "runMetadata"] as const) {
     const metadata = input[namespace];
     if (!metadata || typeof metadata !== "object") continue;
+    if (Object.hasOwn(metadata, "outputSchema")) {
+      const field = `${namespace}.outputSchema`;
+      throw new DomainValidationError(`${field} is a stored snapshot; use explicit outputSchema`, field);
+    }
     for (const name of ["pluginUi", "uiAction", "pluginUiSubmission", "pluginAppAction", "pluginAppSubmission", "pluginAppSource"]) {
       if (Object.hasOwn(metadata, name)) {
         const field = `${namespace}.${name}`;

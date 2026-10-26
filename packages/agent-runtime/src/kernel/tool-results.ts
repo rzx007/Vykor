@@ -4,8 +4,13 @@ import type { PreparedAgentRun, RunToolBinding, RunToolResultStore } from "@vyko
 export async function bindPreparedToolResults(
   prepared: PreparedAgentRun,
   tools: ReadonlyMap<string, RunToolBinding>,
+  /** Deprecated trusted manual-call store; adapted here so callers share one binding path. */
+  legacyManualStore?: RunToolResultStore,
 ): Promise<RunToolResultStore | undefined> {
+  if (legacyManualStore) return legacyManualStore;
   if (prepared.bindToolResults) return await prepared.bindToolResults(tools);
+  // Published prebound preparation contract: narrowing or replacement must close access.
+  if (!prepared.toolResults) return undefined;
   if (tools.size !== prepared.tools.size) return undefined;
   for (const [name, binding] of tools) {
     const captured = prepared.tools.get(name);

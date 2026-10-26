@@ -19,7 +19,7 @@ import {
 } from "../../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
-import { normalizeOutputSchema } from "../execution/run-admission-work.js";
+import { validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
@@ -96,7 +96,7 @@ export class SessionInteractionService {
     input: EditLatestPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
-    input = normalizeOutputSchema(input);
+    input = validateOutputSchemaRequest(input);
     return this.context.operationRunner.run(sessionId, async () => {
       const session = this.requireSession(sessionId);
       const items = inputItems(input);
@@ -126,7 +126,7 @@ export class SessionInteractionService {
             })),
           ) !== promptAttachmentFingerprint(attachments) ||
           edit?.kind !== "latest_prompt" ||
-          !jsonEqual(existingInput.metadata.outputSchema, input.metadata?.outputSchema) ||
+          !jsonEqual(readStoredOutputSchema(existingInput.metadata), input.outputSchema) ||
           edit.sourceMessageId !== input.sourceMessageId
         ) {
           throw new SessionApplicationError(
@@ -192,6 +192,7 @@ export class SessionInteractionService {
         {
           id: input.id,
           items,
+          outputSchema: input.outputSchema,
           attachments,
           traceId: input.traceId,
           metadata: {
@@ -220,8 +221,7 @@ export class SessionInteractionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
-    input = normalizeOutputSchema(input);
-    if (input.outputSchema && this.context.liveChildren.has(sessionId)) {
+    if (input.outputSchema !== undefined && this.context.liveChildren.has(sessionId)) {
       throw new SessionApplicationError(409, "A live child cannot change its output schema; submit a separate queued Run");
     }
     const work = () => this.context.operationRunner.run(sessionId, () =>
@@ -462,6 +462,8 @@ export class SessionInteractionService {
     runId: string,
     input: ResumeRunInput,
   ): Promise<ResumeRunResult> {
+    assertPromptMetadataAllowed(input);
+    input = validateOutputSchemaRequest(input);
     return this.context.operationRunner.run(sessionId, async () => {
       const sourceRun = this.context.runs.getRun(runId);
       if (!sourceRun || sourceRun.sessionId !== sessionId) {
@@ -495,7 +497,8 @@ export class SessionInteractionService {
           "The original prompt is unavailable",
         );
       }
-      if (input.metadata?.outputSchema !== undefined && !jsonEqual(input.metadata.outputSchema, sourceInput.metadata.outputSchema)) {
+      const outputSchema = readStoredOutputSchema(sourceInput.metadata, sourceRun.metadata);
+      if (input.outputSchema !== undefined && !jsonEqual(input.outputSchema, outputSchema)) {
         throw new SessionApplicationError(400, "Replay must preserve the original output schema contract");
       }
 
@@ -576,6 +579,7 @@ export class SessionInteractionService {
           : undefined;
       const resumed = this.context.admission.replayInput(sourceInput.id, {
         id: input.id,
+        outputSchema: input.outputSchema,
         metadata: {
           ...(withoutPluginId(input.metadata) ?? {}),
           ...(pluginId ? { pluginId } : {}),

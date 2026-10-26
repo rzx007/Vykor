@@ -11,4 +11,6 @@
 
 调用方先用 `parseSessionInputItems` 解析未知值，再按需用 `sessionUserInputText` 得到文本表示；附件引用交给 `parsePromptAttachments`。普通输入的元数据可用 `assertPromptMetadataAllowed` 检查，防止冒充宿主创建的插件动作。
 
+`assertPromptMetadataAllowed` 也拒绝新请求的 `metadata.outputSchema` 和 `runMetadata.outputSchema`；请求应使用显式 `outputSchema`。Input/Run 中既有的同名快照由 Server 记录读取函数处理，不把持久化记录重新当作请求校验。
+
 输入队列、附件内容和已接收输入由消费方保存，本目录只返回校验或整理结果。新增输入类型与对应校验放本目录，测试放 [__test__](__test__/)。

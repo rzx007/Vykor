@@ -124,7 +124,7 @@ export interface AgentRunHandle {
 export interface PreparedAgentRun {
   /** Called after the framework fixes the final Run tool ceiling; never exposed to tools. */
   readonly bindToolResults?: (tools: ReadonlyMap<string, RunToolBinding>) => import("../tools/result-data.js").RunToolResultStore | Promise<import("../tools/result-data.js").RunToolResultStore>;
-  /** Prebound stores stay usable only while final tool bindings remain equivalent to this preparation. */
+  /** @deprecated Use bindToolResults. Legacy stores require final bindings equivalent to this preparation. */
   readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
   readonly toolSafety?: import("../tools/operations.js").AgentToolSafety;
   readonly tools: ReadonlyMap<string, RunToolBinding>;

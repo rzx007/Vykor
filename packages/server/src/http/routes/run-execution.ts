@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { parseAdmitPromptRequest, parsePromptAttachments, parsePromptItems } from "@vykor/protocol";
+import { assertPromptMetadataAllowed, parseAdmitPromptRequest, ProtocolValidationError } from "@vykor/protocol";
 
 import {
   applicationErrorResponse,
@@ -59,10 +59,10 @@ export function createRunExecutionRoutes(
       let body;
       let attachments;
       let items;
+      let outputSchema;
       try {
         body = await readJson(c);
-        attachments = parsePromptAttachments(body.attachments);
-        items = parsePromptItems(body);
+        ({ attachments, items, outputSchema } = parseAdmitPromptRequest(body));
       } catch (error) {
         return protocolValidationErrorResponse(error);
       }
@@ -82,6 +82,7 @@ export function createRunExecutionRoutes(
           items,
           sourceMessageId: body.sourceMessageId,
           attachments,
+          ...(outputSchema !== undefined ? { outputSchema } : {}),
           ...(isRecord(body.metadata) ? { metadata: body.metadata } : {}),
           traceId: context.traces.get(c.req.raw),
         });
@@ -155,9 +156,18 @@ export function createRunExecutionRoutes(
         return errorResponse(400, "metadata must be an object");
 
       try {
+        assertPromptMetadataAllowed(body);
+        if (body.outputSchema !== undefined && !isRecord(body.outputSchema)) {
+          throw new ProtocolValidationError("outputSchema must be an object", "outputSchema");
+        }
+      } catch (error) {
+        return protocolValidationErrorResponse(error);
+      }
+      try {
         const resumed = await context.application.resumeRun(sessionId, runId, {
           id: typeof body.id === "string" ? body.id : undefined,
           metadata: isRecord(body.metadata) ? body.metadata : undefined,
+          ...(isRecord(body.outputSchema) ? { outputSchema: body.outputSchema } : {}),
           traceId: context.traces.get(c.req.raw),
         });
         return jsonResponse(resumed, 202);

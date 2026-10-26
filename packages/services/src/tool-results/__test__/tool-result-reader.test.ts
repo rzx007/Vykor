@@ -42,7 +42,7 @@ describe("S1 tool result reader", () => {
       attemptId = receipt.toolAttemptId;
       f.store.toolOperations.settle({ receipt, result });
     }
-    expect(f.reader.list("s")).toEqual([]);
+    expect(f.reader.list("s")).toEqual({ items: [] });
     expect(() => f.reader.retain("s", "r", result)).toThrow();
     expect(() => f.reader.read("s", { id: `result:${operation.operationId}:${attemptId}` })).toThrow();
   });
@@ -64,7 +64,7 @@ describe("S1 tool result reader", () => {
     f.store.close();
     const reopened = new SessionStore({ path: f.path }); cleanup.push(() => reopened.close());
     const reader = new ToolResultReader(reopened.toolOperations);
-    expect(reader.list("s").map(row => row.ref)).toEqual([first]);
+    expect(reader.list("s").items).toEqual([first]);
     expect(reader.read("s", { id: first.id, offset: 300_000, limit: 100 }).text).toBe("TAIL-EVIDENCE");
     expect(reader.search("s", { id: first.id, query: "TAIL-EVIDENCE" }).matches).toEqual([{ offset: 300_000, text: "TAIL-EVIDENCE" }]);
     expect(reader.resolve("s", first.id).source).toEqual({ kind: "plugin", id: "selected" });
@@ -76,7 +76,7 @@ describe("S1 tool result reader", () => {
     expect(() => f.reader.retain("s", "r", absent)).toThrow();
     const result = save(f, "partial", "unknown");
     expect(() => f.reader.retain("s", "r", result)).toThrow();
-    expect(f.reader.list("s")).toEqual([]);
+    expect(f.reader.list("s")).toEqual({ items: [] });
     expect(() => f.reader.retain("s", "r", { ...result, operationId: "operation_missing" })).toThrow();
   });
   it("keeps failed saved output readable and validates record identity instead of forged body metadata", () => {

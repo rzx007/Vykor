@@ -9,7 +9,7 @@
 
 **技术：** 现有 TypeScript、ToolResult、QueryEngine、Kernel、Node 绑定、SessionStore 操作账本与消息投影；Vitest、真实临时 SQLite 与 SDK 打包检查。业务数据只走纯数据合同。
 
-**依据：** [原方案 P1-A/P1-B](../specs/2026-10-26-agent-core-capability-completion-design.md#h1-p1-的明确范围)与用户本轮调整。本轮解除这两项对 S2/S3 的实施顺序依赖，不实现完整 P0。
+**依据：** [能力方案](../specs/2026-10-26-agent-core-capability-completion-design.md)与用户本轮调整。当前方案已按简化目标更新；本交付计划保留为先前实现记录，不实现完整 P0。
 
 ## 范围与成本判断
 
@@ -56,7 +56,7 @@ interface RunToolResultStore {
 }
 ```
 
-RunToolResultStore 在宿主中绑定实际 session、Run、当前工具集合和来源授权，不从模型输入取得授权身份。SDK/Kernel 通过 PreparedAgentRun.toolResults 或执行上下文接收能力。
+RunToolResultStore 在宿主中绑定实际 session、Run、当前工具集合和来源授权，不从模型输入取得授权身份。当前生产路径通过 PreparedAgentRun.bindToolResults(finalTools) 在最终工具确定后绑定，再由执行上下文接收；旧预绑定字段暂保留弃用兼容，见[简化计划](2026-10-26-agent-capability-simplification.md)。
 
 - [x] 先写失败测试：超过原有 256 KB 限制仍可读取尾部；分页没有重复/遗漏；字面检索可定位尾部；非法游标与超限返回明确错误。
 - [x] core 提供通用文本视图与有容量上限的内存实现；读取页最多 16000 字符，列表最多 100 项，检索最多 100 项，查询不执行正则。单个不可容纳结果应明确失败，不能生成读不到的成功引用。

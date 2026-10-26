@@ -29,6 +29,9 @@ describe("HTTP request parsers", () => {
     const outputSchema = { type: "object", properties: { report: { type: "string" } }, required: ["report"] };
     expect(parseAdmitPromptRequest({ content: "report", outputSchema })).toHaveProperty("outputSchema", outputSchema);
     expectInvalid(() => parseAdmitPromptRequest({ content: "report", outputSchema: [] }), "outputSchema");
+    for (const field of ["metadata", "runMetadata"]) {
+      expectInvalid(() => parseAdmitPromptRequest({ content: "report", [field]: { outputSchema } }), `${field}.outputSchema`);
+    }
   });
   it("preserves an optional machine-readable reason when converting validation errors", () => {
     const error = new ProtocolValidationError("too large", "args", "payload_too_large");

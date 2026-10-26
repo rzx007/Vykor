@@ -42,6 +42,8 @@ S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身�
 
 用户可为排队输入指定 `outputSchema`。准入前验证支持范围并固定快照，保存到 Input/Run 的既有 metadata；相同输入 ID 更换格式会冲突。执行器据此建立本轮 `outputContract`，完成投影保存 `metadata.delivery`。`steer` 与活跃子 Agent 的补充输入不能更换正在运行的合同。重试/重放沿用原输入合同，未配置时仍使用普通聊天。
 
+新请求用 `validateOutputSchemaRequest` 处理显式字段，拒绝 metadata/runMetadata 隐式入口；保存快照使用 `outputSchemaMetadata`。执行、重放使用 `readStoredOutputSchema` 读取旧 Input/Run 快照并拒绝两者冲突，不迁移旧数据。编辑与 resume 的 HTTP 和客户端入口也使用显式字段。
+
 `ToolResultService.forRun(scope, bindings)` 从当前实际工具集合建立只读补读能力。旧记录的来源必须与当前获准工具来源精确相符，历史实现版本不影响读取。每次查询重新检查应用 owner、精确会话、运行是否结束或取消、工作目录及权限配置版本；父子或兄弟会话不能互读。正文仍由 S1 操作记录保存，本服务不复制正文，也不重新执行原操作。
 
 当前捕获的内置结果读取工具自身输出不进入 `list`，也不能通过推测引用再 `read/search`，避免查询结果逐层变成新的补读正文。识别依赖定义身份和执行函数，不按名称屏蔽普通替换工具。历史权限仍按工具名和来源核对：可信宿主以相同 builtin 来源更换实现时，视为同一授权来源；如需区分这类历史实现语义，需另行保存持久能力标记。

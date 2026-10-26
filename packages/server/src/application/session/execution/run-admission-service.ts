@@ -10,7 +10,7 @@ import {
   promptAttachmentFingerprint,
 } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
-import { admitPromptWork, inputItems, normalizeOutputSchema } from "./run-admission-work.js";
+import { admitPromptWork, inputItems, validateOutputSchemaRequest, outputSchemaMetadata, readStoredOutputSchema } from "./run-admission-work.js";
 import { SessionApplicationError } from "../session-application-error.js";
 
 function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
@@ -358,9 +358,10 @@ export class RunAdmissionService {
   /** Save an accepted Goal answer/change while a budget prevents any Run. */
   persistGoalInput(sessionId: string, input: AdmitPromptInput): SessionInputRecord {
     assertPromptMetadataAllowed(input);
+    input = validateOutputSchemaRequest(input);
     return this.options.conversationTransactions.admitPrompt({
       id: input.id, sessionId, delivery: "queue", items: input.items, content: input.content,
-      attachments: normalizePromptAttachments(input.attachments), metadata: input.metadata,
+      attachments: normalizePromptAttachments(input.attachments), metadata: outputSchemaMetadata(input.metadata, input.outputSchema),
     }, this.options.attachmentLimits ? { attachmentLimits: this.options.attachmentLimits } : undefined);
   }
 
@@ -399,6 +400,7 @@ export class RunAdmissionService {
     sessionId: string,
     input: AdmitPromptInput,
   ): { input: SessionInputRecord; run: SessionRunRecord } {
+    input = validateOutputSchemaRequest(input);
     return this.options.conversationTransactions.admitPromptWithRun(
       {
         prompt: {
@@ -408,9 +410,9 @@ export class RunAdmissionService {
           items: input.items,
           content: input.content,
           attachments: normalizePromptAttachments(input.attachments),
-          metadata: input.metadata,
+          metadata: outputSchemaMetadata(input.metadata, input.outputSchema),
         },
-        run: { id: undefined, metadata: input.runMetadata },
+        run: { id: undefined, metadata: outputSchemaMetadata(input.runMetadata, input.outputSchema) },
       },
       this.options.attachmentLimits ? { attachmentLimits: this.options.attachmentLimits } : undefined,
     );
@@ -422,14 +424,14 @@ export class RunAdmissionService {
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
     assertPromptMetadataAllowed(input);
-    input = normalizeOutputSchema(input);
+    input = validateOutputSchemaRequest(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
       normalizeTraceId(input.metadata?.traceId) ??
       randomUUID();
-    const metadata = { ...(input.metadata ?? {}), traceId };
-    const runMetadata = { ...(input.runMetadata ?? {}), traceId };
+    const metadata = { ...outputSchemaMetadata(input.metadata, input.outputSchema), traceId };
+    const runMetadata = { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId };
     const before = this.options.events.checkpoint();
     const admitted = this.options.conversationTransactions.replaceTranscriptAndAdmitPrompt({
       transcript: { sessionId, messages },
@@ -461,13 +463,13 @@ export class RunAdmissionService {
     input: Omit<AdmitPromptInput, "delivery">,
   ): AdmitPromptResult {
     assertPromptMetadataAllowed(input);
-    input = normalizeOutputSchema(input);
+    input = validateOutputSchemaRequest(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const traceId =
       normalizeTraceId(input.traceId) ??
       normalizeTraceId(input.metadata?.traceId) ??
       randomUUID();
-    const metadata = { ...(input.metadata ?? {}), traceId };
+    const metadata = { ...outputSchemaMetadata(input.metadata, input.outputSchema), traceId };
     const before = this.options.events.checkpoint();
     const admitted = this.options.conversationTransactions.replaceLatestPromptWithAdmission({
       sessionId,
@@ -481,7 +483,7 @@ export class RunAdmissionService {
           attachments: input.attachments,
           metadata,
         },
-        run: { metadata: { ...(input.runMetadata ?? {}), traceId } },
+        run: { metadata: { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId } },
       },
       createRun: this.options.runtimeQueue.hasRuntime,
     });
@@ -496,16 +498,17 @@ export class RunAdmissionService {
 
   replayInput(
     inputId: string,
-    input: { id?: string; metadata?: Record<string, unknown>; traceId?: string },
+    input: { id?: string; outputSchema?: Record<string, unknown>; metadata?: Record<string, unknown>; traceId?: string },
   ): AdmitPromptResult {
     assertPromptMetadataAllowed(input);
+    input = validateOutputSchemaRequest(input);
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const sourceInput = this.options.conversationTransactions.getInput(inputId);
     if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
-    if (input.metadata?.outputSchema !== undefined && !jsonEqual(input.metadata.outputSchema, sourceInput.metadata.outputSchema)) {
+    const outputSchema = readStoredOutputSchema(sourceInput.metadata, this.options.runOperations.findRunByInput(sourceInput.id)?.metadata);
+    if (input.outputSchema !== undefined && !jsonEqual(input.outputSchema, outputSchema)) {
       throw new SessionApplicationError(400, "Replay must preserve the original output schema contract");
     }
-    const contract = normalizeOutputSchema({ metadata: { outputSchema: sourceInput.metadata.outputSchema } });
     const existing = input.id ? this.options.runOperations.getRun(input.id) : undefined;
     const traceId =
       normalizeTraceId(input.traceId) ??
@@ -514,7 +517,7 @@ export class RunAdmissionService {
     const before = this.options.events.checkpoint();
     const run = this.options.runOperations.createReplayRun(inputId, {
       id: input.id,
-      metadata: { ...(input.metadata ?? {}), ...(contract.outputSchema ? { outputSchema: contract.outputSchema } : {}), traceId },
+      metadata: { ...outputSchemaMetadata(input.metadata, outputSchema), traceId },
     });
     this.options.events.publishSince(before);
     if (existing || run.status !== "pending") {
@@ -537,7 +540,7 @@ export class RunAdmissionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
-    input = normalizeOutputSchema(input);
+    input = validateOutputSchemaRequest(input);
     this.assertReady();
     if (!this.accepting) {
       return Promise.reject(new Error("Session run engine is stopping"));
@@ -556,7 +559,7 @@ export class RunAdmissionService {
         ? "queue"
         : (input.delivery ?? "queue");
     const attachmentFingerprint = promptAttachmentFingerprint(attachments);
-    const metadata = withoutTraceId(input.metadata ?? {});
+    const metadata = withoutTraceId(outputSchemaMetadata(input.metadata, input.outputSchema));
     const pending = this.pendingAdmissions.get(input.id);
     if (pending) {
       if (

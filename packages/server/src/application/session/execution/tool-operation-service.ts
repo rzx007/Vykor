@@ -128,7 +128,7 @@ export class ToolOperationService implements AgentToolSafety {
   private assertUnblocked(intent: ToolOperationIntent, kind: ToolOperationKind): void {
     if (kind === "read_only") return;
     const rootSessionId = this.rootSessionId(intent.scope.sessionId);
-    const blocked = this.options.store.toolOperations.list().some(row => {
+    const blocked = this.options.store.toolOperations.listSafetyStates().some(row => {
       const settlementFailed = this.unsettledFailures.has(row.id);
       if (row.kind === "read_only" && !settlementFailed) return false;
       const run = row.state === "dispatching" ? this.options.store.runs.getRun(row.runId) : undefined;

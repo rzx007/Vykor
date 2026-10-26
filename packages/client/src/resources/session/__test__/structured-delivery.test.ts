@@ -4,11 +4,23 @@ import { HttpTransport } from "../../../transport/http-transport.js";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 
 describe("structured prompt delivery", () => {
+  it.each([["edit", false], ["edit", true], ["resume", false], ["resume", true]] as const)("gates explicit schema in %s (supported=%s)", async (method, supported) => {
+    const posted: unknown[] = [], outputSchema = { type: "string" };
+    const fetcher = async (_url: unknown, init?: RequestInit) => {
+      if (init?.method === "POST") { posted.push(JSON.parse(String(init.body))); return Response.json({ input: { id: "i" } }); }
+      return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: supported ? { structuredDelivery: 1 } : {} });
+    };
+    const resource = new SessionResource(new HttpTransport({ baseUrl: "http://localhost:9000", fetch: fetcher as typeof fetch }));
+    const result = method === "edit" ? resource.editLatestPrompt("s", { id: "i", items: [{ type: "text", text: "report" }], sourceMessageId: "m", outputSchema })
+      : resource.resumeInterruptedRun("s", "r", { outputSchema });
+    if (supported) { await result; expect(posted).toEqual([expect.objectContaining({ outputSchema })]); }
+    else { await expect(result).rejects.toThrow(/outputSchema/); expect(posted).toEqual([]); }
+  });
   it.each(["edit", "resume"])("also gates metadata.outputSchema in %s requests", async method => {
     const posted: unknown[] = [];
     const fetcher = vi.fn(async (_url: unknown, init?: RequestInit) => {
       if (init?.method === "POST") { posted.push(init.body); return Response.json({ input: { id: "i1" } }); }
-      return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {} });
+      return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { structuredDelivery: 1 } });
     });
     const resource = new SessionResource(new HttpTransport({ baseUrl: "http://localhost:9000", fetch: fetcher as typeof fetch }));
     const metadata = { outputSchema: { type: "string" } };
@@ -18,7 +30,7 @@ describe("structured prompt delivery", () => {
     await expect(result).rejects.toThrow(/structured.*delivery|outputSchema/i);
     expect(posted).toEqual([]);
   });
-  it.each([[false, false], [true, false], [false, true], [true, true]])("requires advertised support before submitting outputSchema (supported=%s metadata=%s)", async (supported, metadata) => {
+  it.each([[false, false], [true, false], [false, true], [true, true]])("requires explicit outputSchema and advertised support (supported=%s metadata=%s)", async (supported, metadata) => {
     const outputSchema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
     const posted: unknown[] = [];
     const fetcher = vi.fn(async (_url: unknown, init?: RequestInit) => {
@@ -28,7 +40,7 @@ describe("structured prompt delivery", () => {
     const resource = new SessionResource(new HttpTransport({ baseUrl: "http://localhost:9000", fetch: fetcher as typeof fetch }));
     const constraint = metadata ? { metadata: { outputSchema } } : { outputSchema };
     const result = resource.admitPrompt("s1", { id: "i1", items: [{ type: "text", text: "report" }], ...constraint });
-    if (supported) { await result; expect(posted).toEqual([expect.objectContaining(constraint)]); }
+    if (supported && !metadata) { await result; expect(posted).toEqual([expect.objectContaining(constraint)]); }
     else { await expect(result).rejects.toThrow(/structured.*delivery|outputSchema/i); expect(posted).toEqual([]); }
   });
 });

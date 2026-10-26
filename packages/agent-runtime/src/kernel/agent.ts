@@ -70,6 +70,7 @@ export interface VykorAgentSubmitOptions {
   };
 }
 export interface VykorAgentRunToolOptions {
+  /** @deprecated Use PreparedAgentRun.bindToolResults; legacy stores remain trusted host capabilities. */
   toolResults?: import("@vykor/agent-contracts").RunToolResultStore;
   tools: ReadonlyMap<string, RunToolBinding>;
   scope: AgentRunScope;
@@ -261,11 +262,11 @@ export class KernelAgent implements VykorAgent {
     return this.runMaintenance(
       "tool",
       async () => {
-        const prepared = options.toolResults && this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
-        const toolSafety = this.options.toolSafety ?? prepared?.run.toolSafety;
+        const prepared = await this.options.preparation.prepare(scope);
+        const toolSafety = this.options.toolSafety ?? prepared.run.toolSafety;
         try {
           validateToolSafety(toolSafety);
-          const toolResults = options.toolResults ?? (prepared ? await bindPreparedToolResults(prepared.run, tools) : undefined);
+          const toolResults = await bindPreparedToolResults(prepared.run, tools, options.toolResults);
           signal.throwIfAborted();
           await options.onToolEvent?.({
             type: "tool.started",
@@ -298,7 +299,7 @@ export class KernelAgent implements VykorAgent {
           });
           if (!attempted) await deliver(result);
           return result;
-        } finally { await prepared?.release?.(); }
+        } finally { await prepared.release(); }
       },
       controller,
     );

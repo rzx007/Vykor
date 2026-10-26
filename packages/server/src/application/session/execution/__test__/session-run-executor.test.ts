@@ -30,6 +30,19 @@ describe("SessionRunExecutor", () => {
       { signal: new AbortController().signal, registerHandle: async () => {} });
     expect(submitMessage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ outputContract: { schema } }));
   });
+  it("rejects conflicting stored Input and Run schemas before submitting to the agent", async () => {
+    const store = createStore({ metadata: { outputSchema: { type: "string" } } });
+    Object.assign(store.spies.getRun(), { metadata: { outputSchema: { type: "object" } } });
+    const submitMessage = vi.fn(() => completedHandle());
+    const executor = new SessionRunExecutor({ data: store.data, attachments: store.attachments,
+      agentPool: { configured: true, acquireHostedSession: async () => hostedAgentFixture({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 0, publishSince: () => {} }, transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" }, { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitMessage).not.toHaveBeenCalled();
+    expect(store.spies.getRun()).toMatchObject({ status: "failed", error: expect.stringContaining("Conflicting stored output schemas") });
+  });
   it("exposes multiple eligible plugins without a selection request or a manual session selection", async () => {
     const f = autoSelectionFixture();
     await f.execute();

@@ -2,7 +2,7 @@
 
 > 状态：已实施并完成本轮限定范围验证；独立审查和合并验证发现的问题已修复，源代码通过 `main` 交付。
 
-依据：[实施计划](../plans/2026-10-26-result-reading-and-structured-delivery.md)和[原方案](../specs/2026-10-26-agent-core-capability-completion-design.md#h1-p1-的明确范围)。基线为 `b38f4735`，分支为 `codex/result-reading-and-structured-delivery`。主工作区的其他改动未纳入本轮。
+依据：[实施计划](../plans/2026-10-26-result-reading-and-structured-delivery.md)和[能力方案](../specs/2026-10-26-agent-core-capability-completion-design.md)。方案已按后续简化目标更新；本验收保留为先前交付记录。基线为 `b38f4735`，分支为 `codex/result-reading-and-structured-delivery`。主工作区的其他改动未纳入本轮。
 
 ## 已接入的行为
 

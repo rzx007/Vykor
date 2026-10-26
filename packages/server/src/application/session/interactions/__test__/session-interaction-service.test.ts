@@ -381,8 +381,17 @@ describe("SessionInteractionService", () => {
       input: { id: "source-input", sessionId: "s1", metadata: { outputSchema: { type: "string" } } },
     });
     store.listRunsByInput.mockReturnValue([{ id: "recovery-run", status: "pending", metadata: { recovery: { sourceRunId: "source-run" } } }] as any);
-    await expect(service.resumeRun("s1", "source-run", { traceId: "trace-1", metadata: { outputSchema: { type: "object" } } })).rejects.toMatchObject({ status: 400 });
+    await expect(service.resumeRun("s1", "source-run", { traceId: "trace-1", outputSchema: { type: "object" } })).rejects.toMatchObject({ status: 400 });
     expect(runEngine.replayInput).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit schema conflicts on repeated edit IDs", async () => {
+    const schema = { type: "string" }, items = [{ type: "text" as const, text: "report" }];
+    const { service } = createService({ input: { id: "edited", sessionId: "s1", items, attachments: [],
+      metadata: { outputSchema: schema, edit: { kind: "latest_prompt", sourceMessageId: "m" } } } });
+    const request = { id: "edited", items, sourceMessageId: "m", traceId: "t", outputSchema: schema };
+    await expect(service.editLatestPrompt("s1", request)).resolves.toMatchObject({ input: { id: "edited" } });
+    await expect(service.editLatestPrompt("s1", { ...request, outputSchema: { type: "object" } })).rejects.toMatchObject({ status: 409 });
   });
 
   it("explicitly rejects UI action prompt replay even if an input ID is present", async () => {

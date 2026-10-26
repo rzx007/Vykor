@@ -1,7 +1,7 @@
 import type { AgentRunScope, RunToolBinding, RunToolResultStore } from "@vykor/agent-contracts";
-import { isToolResultReader, ToolResultAccessError, toolResultList } from "@vykor/core";
+import { isToolResultReader, ToolResultAccessError } from "@vykor/core";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
-import { ToolResultReader, type ApplicationOwnerLease, type SessionStore, type StoredToolResultReference } from "@vykor/services";
+import { ToolResultReader, type ApplicationOwnerLease, type SessionStore, type ToolResultSource } from "@vykor/services";
 
 export interface ToolResultServiceOptions {
   store: Pick<SessionStore, "transaction" | "assertApplicationOwner" | "sessions" | "runs" | "toolOperations">;
@@ -26,25 +26,22 @@ export class ToolResultService {
       if (this.current(captured) !== revision) throw new ToolResultAccessError("Tool result policy changed since Run capture.");
       return action();
     });
-    const allowed = (reference: StoredToolResultReference): boolean => {
-      const binding = bindings.get(reference.ref.toolName);
+    const allowed = (reference: ToolResultSource): boolean => {
+      const binding = bindings.get(reference.toolName);
       return !!binding?.source && binding.source.kind === reference.source.kind && binding.source.id === reference.source.id
         && !(binding.source.kind === "builtin" && isToolResultReader(binding.definition, binding.definitionIdentity));
     };
-    const authorize = (id: string) => {
-      const reference = this.reader.resolve(captured.sessionId, id);
-      if (!allowed(reference)) throw new ToolResultAccessError("Tool result source is not authorized in the current Run.");
-      return reference;
-    };
     return {
       retain: async (result, claimedSource) => atomic(() => {
-        const ref = this.reader.retain(captured.sessionId, captured.runId, result), reference = authorize(ref.id);
-        if (claimedSource && (claimedSource.kind !== reference.source.kind || claimedSource.id !== reference.source.id)) throw new ToolResultAccessError("Tool result source does not match the captured binding.");
-        return ref;
+        return this.reader.retain(captured.sessionId, captured.runId, result, reference => {
+          if (!allowed(reference)) return false;
+          if (claimedSource && (claimedSource.kind !== reference.source.kind || claimedSource.id !== reference.source.id)) throw new ToolResultAccessError("Tool result source does not match the captured binding.");
+          return true;
+        });
       }),
-      list: async input => atomic(() => toolResultList(this.reader.list(captured.sessionId).filter(allowed).map(row => row.ref), input)),
-      read: async input => atomic(() => { authorize(input.id); return this.reader.read(captured.sessionId, input); }),
-      search: async input => atomic(() => { authorize(input.id); return this.reader.search(captured.sessionId, input); }),
+      list: async input => atomic(() => this.reader.list(captured.sessionId, input, allowed)),
+      read: async input => atomic(() => this.reader.read(captured.sessionId, input, allowed)),
+      search: async input => atomic(() => this.reader.search(captured.sessionId, input, allowed)),
     };
   }
   private current(scope: AgentRunScope): number {

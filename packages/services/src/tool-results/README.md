@@ -10,4 +10,8 @@
 
 状态仍归 `SessionStore.toolOperations`；memory 会话随存储关闭丢弃。分页、边界和字面搜索使用 agent-contracts 的纯文本规则。新增持久读取规则放在本目录，权限和运行生命周期规则放在 Server 的 `tool-result-service.ts`。
 
+查询先通过 `listResultCandidates` / `getResultCandidate` 获取有限元数据。Server 以当前工具名和来源提供授权判断，`list` 在授权后确定分页，再调用 `readResultText` 处理当前页正文，返回 `{ items, nextOffset? }`。`read/search/retain` 每次只查一次候选、核对一次来源、生成一次文本，不再先 resolve 再复制完整 Operation。
+
+`totalChars` 来自所选正文的 `toolResultText` 长度，包含块间换行及非文本占位文本，使用 UTF-16 位置。当前页仍生成完整文本；分页外和未授权正文不读取、不复制、不计算长度。候选元数据仍需扫描，SQLite 启动时已有状态加载方式不变，无新增缓存或长度表。
+
 测试在 [__test__/tool-result-reader.test.ts](./__test__/tool-result-reader.test.ts)，覆盖真实 SQLite 重新打开、超过 256 KB 的尾部、伪造引用、未知操作和 memory 会话。

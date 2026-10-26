@@ -7,6 +7,16 @@ import type { StorageContext } from "../database/storage-context.js";
 import { ExecutionRepository, type ExecutionFilter } from "../execution-records/execution-repository.js";
 import { assertMutableSession, assertSession, clone } from "../session-runtime/persistence/store-state.js";
 import { applicationOwners } from "../session-runtime/schema.js";
+import { toolResultText } from "@vykor/agent-contracts/tool-data";
+
+export type ToolOperationSafetyState = Pick<ToolOperationRecord, "id" | "sessionId" | "runId" | "kind" | "state">;
+export type ToolResultCandidate = Pick<ToolOperationRecord, "operationId" | "activeAttemptId" | "sessionId" | "runId" | "toolCallId" | "toolName" | "toolIdentity">;
+
+function resultCandidate(row: ToolOperationRecord): ToolResultCandidate | undefined {
+  if ((row.state !== "confirmed" && row.state !== "not_applied") || row.result?.executionState !== "completed") return;
+  const { operationId, activeAttemptId, sessionId, runId, toolCallId, toolName, toolIdentity } = row;
+  return { operationId, activeAttemptId, sessionId, runId, toolCallId, toolName, toolIdentity };
+}
 
 export type PrepareToolOperationInput = StoredToolOperationIntent & {
   kind?: ToolOperationKind;
@@ -196,6 +206,26 @@ export class ToolOperationRepository {
   }
 
   get(operationId: string): ToolOperationRecord | undefined { const row = this.storage.state.toolOperations[operationId]; return row && clone(row); }
+  /** Safety checks never need normalized inputs, receipts or result bodies. */
+  listSafetyStates(): ToolOperationSafetyState[] {
+    return Object.values(this.storage.state.toolOperations).map(({ id, sessionId, runId, kind, state }) => ({ id, sessionId, runId, kind, state }));
+  }
+  getResultCandidate(operationId: string): ToolResultCandidate | undefined {
+    const row = this.storage.state.toolOperations[operationId];
+    return row && resultCandidate(row);
+  }
+  listResultCandidates(sessionId: string): ToolResultCandidate[] {
+    return Object.values(this.storage.state.toolOperations).flatMap(row => {
+      const candidate = row.sessionId === sessionId ? resultCandidate(row) : undefined;
+      return candidate ? [candidate] : [];
+    });
+  }
+  /** Only call after candidate authorization/pagination; no Operation or Attempt body copy. */
+  readResultText(operationId: string): string {
+    const row = this.storage.state.toolOperations[operationId];
+    if (!row?.result || !resultCandidate(row)) throw new Error("Complete tool result is unavailable");
+    return toolResultText(row.result);
+  }
   list(filter: ExecutionFilter = {}): ToolOperationRecord[] {
     return clone(Object.values(this.storage.state.toolOperations).filter(row => (!filter.sessionId || row.sessionId === filter.sessionId) && (!filter.runId || row.runId === filter.runId)));
   }

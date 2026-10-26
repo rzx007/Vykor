@@ -26,7 +26,7 @@ import {
 import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionAutoReviewService } from "../../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
-import { normalizeOutputSchema } from "./run-admission-work.js";
+import { readStoredOutputSchema } from "./run-admission-work.js";
 import type { SessionPostRunMaintenance } from "../maintenance/session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import type { SessionTranscriptProjection } from "../transcript/transcript-projection.js";
@@ -181,10 +181,7 @@ export class SessionRunExecutor {
       if (!admitted) throw new Error(`Session input not found: ${inputId}`);
       const storedRun = this.context.data.runs.getRun(runId);
       if (!storedRun) throw new Error(`Run not found: ${runId}`);
-      const { outputSchema } = normalizeOutputSchema({
-        metadata: { outputSchema: admitted.metadata?.outputSchema },
-        runMetadata: { outputSchema: storedRun.metadata?.outputSchema },
-      });
+      const outputSchema = readStoredOutputSchema(admitted.metadata, storedRun.metadata);
       workContext.signal.throwIfAborted();
       const hasStructuredContext = admitted.items.some(
         (item) =>

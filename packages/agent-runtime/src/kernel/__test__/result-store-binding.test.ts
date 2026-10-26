@@ -10,6 +10,21 @@ function deferred() {
 }
 
 describe("Kernel final result-store binding", () => {
+  it("does not bypass failed preparation when manual callers supply both safety and a legacy store", async () => {
+    const scope: AgentRunScope = { agentId: "manual", sessionId: "manual", runId: "r", inputId: "i", traceId: "t", cwd: "/workspace", signal: new AbortController().signal };
+    const unavailable = async (): Promise<never> => { throw new Error("Tool execution must wait for preparation"); };
+    const agent = await createAgentKernel({ id: "manual", cwd: "/workspace",
+      effects: { requestPermission: async () => ({ status: "approved" }) },
+      engine: createBasicAgentKernelRuntime({ cwd: "/workspace", client: { async *streamMessage() { throw new Error("No model request expected"); } } }),
+      toolSafety: { operations: { prepare: unavailable, authorize: unavailable, dispatch: unavailable, settle: unavailable, reject: unavailable }, requiredPolicy: { check: unavailable } },
+      preparation: { async prepare() { throw new Error("Preparation is unavailable"); } },
+    });
+    try {
+      await expect(agent.runTool({ type: "tool_use", id: "call", name: "Read", input: {} }, {
+        scope, tools: new Map(), toolResults: new MemoryToolResultArchive().forRun(scope, new Map()),
+      })).rejects.toThrow("Preparation is unavailable");
+    } finally { await agent.close(); }
+  });
   it("waits for reliable Run start projection before binding and for binding before acknowledging or requesting a model", async () => {
     const archive = new MemoryToolResultArchive();
     const projecting = deferred(), releaseProjection = deferred(), binding = deferred(), releaseBinding = deferred();
@@ -63,7 +78,7 @@ describe("Kernel final result-store binding", () => {
     }
   });
 
-  it("binds an async provider after filtering and keeps the provider outside tool execution capabilities", async () => {
+  it.each([false, true])("binds an async provider after filtering and keeps it outside tool capabilities (manual=%s)", async manual => {
     const archive = new MemoryToolResultArchive();
     let bound: ReadonlyMap<string, RunToolBinding> | undefined, turn = 0;
     const probe: ToolDefinition = { name: "Probe", description: "inspect execution capabilities", inputSchema: {}, execute: async (_input, context) => ({
@@ -83,8 +98,11 @@ describe("Kernel final result-store binding", () => {
         await Promise.resolve(); bound = finalTools; return archive.forRun(scope, finalTools);
       } }, release() { archive.releaseRun(scope.runId); } }; } } });
     try {
-      const result = await agent.runMessage("inspect", { tools: new Map([["Probe", bindings.get("Probe")!]]) });
-      expect(result.output).toContain('"providerVisible":false');
+      const tools = new Map([["Probe", bindings.get("Probe")!]]);
+      const scope: AgentRunScope = { runId: "manual", agentId: agent.id, sessionId: agent.id, cwd: "/workspace", inputId: "i", traceId: "t", signal: new AbortController().signal };
+      const output = manual ? (await agent.runTool({ type: "tool_use", id: "probe", name: "Probe", input: {} }, { tools, scope })).content.filter(block => block.type === "text").map(block => block.text).join("")
+        : (await agent.runMessage("inspect", { tools })).output;
+      expect(output).toContain('"providerVisible":false');
       expect([...bound!.keys()]).toEqual(["Probe"]);
       expect(bound!.get("Probe")?.source).toEqual({ kind: "builtin" });
     } finally { await agent.close(); }

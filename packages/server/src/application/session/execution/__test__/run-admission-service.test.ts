@@ -170,6 +170,31 @@ function createStoredAdmission() {
 }
 
 describe("RunAdmissionService synchronous queued persistence", () => {
+  it.each(["metadata", "runMetadata"])("rejects an implicit output schema in %s before creating records", async field => {
+    const f = createStoredAdmission();
+    await expect(async () => f.service.admitPromptAndMaybeRun("s1", {
+      id: "implicit", items: [{ type: "text", text: "report" }], [field]: { outputSchema: { type: "string" } },
+    })).rejects.toThrow(/outputSchema/);
+    expect(f.store.conversations.getInput("implicit")).toBeUndefined();
+  });
+  it("checks explicit replay schemas before creating a Run", async () => {
+    const f = createStoredAdmission(), schema = { type: "string" };
+    const original = await f.service.admitPromptAndMaybeRun("s1", { items: [{ type: "text", text: "report" }], outputSchema: schema });
+    f.store.runs.updateRun(original.run!.id, { status: "interrupted" });
+    expect(() => f.service.replayInput(original.input.id, { id: "conflict", outputSchema: { type: "object" } })).toThrow(/schema|contract/i);
+    expect(f.store.runs.getRun("conflict")).toBeUndefined();
+    expect(f.service.replayInput(original.input.id, { id: "same", outputSchema: schema }).run?.metadata.outputSchema).toEqual(schema);
+  });
+  it("preserves an old Run-only schema snapshot when replaying its Input", () => {
+    const f = createStoredAdmission(), schema = { type: "string" };
+    const original = f.store.conversationTransactions.admitPromptWithRun({
+      prompt: { id: "legacy-input", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "report" }] },
+      run: { metadata: { outputSchema: schema } },
+    });
+    f.store.runs.updateRun(original.run.id, { status: "interrupted" });
+    expect(f.service.replayInput(original.input.id, { id: "legacy-replayed", outputSchema: schema }).run?.metadata.outputSchema).toEqual(schema);
+    expect(f.store.conversations.getInput(original.input.id)?.metadata.outputSchema).toBeUndefined();
+  });
   it("keeps the original output contract on replay and cannot add one through replay metadata", async () => {
     const f = createStoredAdmission();
     const first = await f.service.admitPromptAndMaybeRun("s1", { id: "plain", items: [{ type: "text", text: "report" }] });
@@ -194,8 +219,10 @@ describe("RunAdmissionService synchronous queued persistence", () => {
     const f = createStoredAdmission();
     await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "invalid-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", pattern: "x" } })).rejects.toThrow(/schema|constraint/i);
     await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "steered-output", items: [{ type: "text", text: "report" }], delivery: "steer", outputSchema: { type: "object" } })).rejects.toThrow(/queue|steer/i);
+    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "oversized-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", description: "x".repeat(65_536) } })).rejects.toThrow(/64 KiB/);
     expect(f.store.conversations.getInput("invalid-output")).toBeUndefined();
     expect(f.store.conversations.getInput("steered-output")).toBeUndefined();
+    expect(f.store.conversations.getInput("oversized-output")).toBeUndefined();
   });
   it.each([false, true])("notifies queued Goal resumes after clearing an admission, including preparation failure (%s)", async failed => {
     const { options, conversationTransactions } = createMockOptions();
