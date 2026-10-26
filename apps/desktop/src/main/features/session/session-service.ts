@@ -91,6 +91,17 @@ import {
   toDesktopProject,
 } from "./session-operations"
 
+export type DesktopSessionConnection = Pick<
+  DaemonConnectionService,
+  | "getClient"
+  | "getDaemonStatus"
+  | "onInvalidated"
+  | "refreshClient"
+  | "restart"
+  | "switchDataDirectory"
+  | "dispose"
+>
+
 export class DesktopSessionService {
   async readWorkflows(
     owner: WebContents,
@@ -125,9 +136,7 @@ export class DesktopSessionService {
       throw new Error("会话已切换。")
     await client.jobs.cancel(jobId, { sessionId, reason: "用户在编排面板中停止了执行" })
   }
-  readonly connection = new DaemonConnectionService({
-    browserHost: browserAgentService,
-  })
+  readonly connection: DesktopSessionConnection
   readonly subscriptions = new SessionSubscriptionService()
   readonly activitySubscriptions = new GlobalActivitySubscriptionService(
     undefined,
@@ -135,7 +144,12 @@ export class DesktopSessionService {
   )
   readonly operations = new SessionOperations()
 
-  constructor() {
+  constructor(
+    connection: DesktopSessionConnection = new DaemonConnectionService({
+      browserHost: browserAgentService,
+    })
+  ) {
+    this.connection = connection
     this.connection.onInvalidated(() => this.subscriptions.clearAll())
   }
 
@@ -312,16 +326,14 @@ export class DesktopSessionService {
     input: CheckoutDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const client = await this.getClient()
-    this.operations.setEphemeralClient(client)
-    return await this.operations.checkoutProjectBranch(input)
+    return await this.operations.checkoutProjectBranch(client, input)
   }
 
   async createProjectBranch(
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const client = await this.getClient()
-    this.operations.setEphemeralClient(client)
-    return await this.operations.createProjectBranch(input)
+    return await this.operations.createProjectBranch(client, input)
   }
 
   async createSession(input: CreateDesktopSessionInput): Promise<DesktopSessionRecord> {
@@ -617,16 +629,6 @@ export class DesktopSessionService {
     } finally {
       detach()
     }
-  }
-
-  get clientPromise(): Promise<VykorClient> | null {
-    return (this.connection as unknown as { clientPromise: Promise<VykorClient> | null })
-      .clientPromise
-  }
-
-  set clientPromise(promise: Promise<VykorClient> | null) {
-    ;(this.connection as unknown as { clientPromise: Promise<VykorClient> | null }).clientPromise =
-      promise
   }
 
   private getClient(): Promise<VykorClient> {

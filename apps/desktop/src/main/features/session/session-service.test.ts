@@ -7,6 +7,7 @@ import {
 } from "./runtime-selection"
 import { browserAgentService } from "../browser/browser-agent-service"
 import { DesktopSessionService } from "./session-service"
+import { DaemonConnectionService } from "./daemon-connection-service"
 import { resolveProviderForModel } from "./session-operations"
 
 const models: DesktopModel[] = [
@@ -326,11 +327,7 @@ describe("DesktopSessionService.deleteSession", () => {
 })
 
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
-  const service = new DesktopSessionService()
-  ;(
-    service as unknown as {
-      clientPromise: Promise<typeof client>
-    }
-  ).clientPromise = Promise.resolve(client)
-  return service
+  const connection = new DaemonConnectionService()
+  vi.spyOn(connection, "getClient").mockResolvedValue(client as never)
+  return new DesktopSessionService(connection)
 }

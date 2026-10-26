@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises"
 
 import {
-  VykorClient,
+  type VykorClient,
   parseCreateSessionGoalInput,
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
@@ -189,15 +189,17 @@ export class SessionOperations {
   }
 
   async checkoutProjectBranch(
+    client: SessionOperationsClient,
     input: CheckoutDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
     const branch = requireGitBranchName(input.branch)
     await execGit(path, ["switch", branch])
-    return await this.inspectProject(await this.getEphemeralClient(path), path)
+    return await this.inspectProject(client, path)
   }
 
   async createProjectBranch(
+    client: SessionOperationsClient,
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
@@ -205,7 +207,7 @@ export class SessionOperations {
     const branch = requireGitBranchName(await gitSettingsService.uniqueBranch(path, input.branch))
     await execGit(path, ["check-ref-format", "--branch", branch])
     await execGit(path, ["switch", "-c", branch])
-    return await this.inspectProject(await this.getEphemeralClient(path), path)
+    return await this.inspectProject(client, path)
   }
 
   async createSession(
@@ -545,13 +547,5 @@ export class SessionOperations {
         metadata: { desktop, runtime: { model: session.model } },
       })
     )
-  }
-
-  private ephemeralClient: VykorClient | null = null
-  private async getEphemeralClient(cwd: string): Promise<VykorClient> {
-    return this.ephemeralClient!
-  }
-  setEphemeralClient(client: VykorClient) {
-    this.ephemeralClient = client
   }
 }
