@@ -1,5 +1,5 @@
 import type { DesktopSessionPart } from "@shared/session-types"
-import { toolOutputText } from "../message-content"
+import { toolOutputText } from "../models/message-content"
 import { readImagePath } from "../attachments/read-image-preview"
 
 export function readFileReference(call: DesktopSessionPart, result?: DesktopSessionPart) {

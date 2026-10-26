@@ -1,5 +1,5 @@
-import { buildAssistantContent, toolCallStatus } from "../message/message-render-model"
-import { agentJobId, toolOutputText } from "../message/message-content"
+import { buildAssistantContent, toolCallStatus } from "../message/models/message-render-model"
+import { agentJobId, toolOutputText } from "../message/models/message-content"
 import type { DesktopSessionTask } from "@shared/session-types"
 import type { TurnBlockPlanItem } from "./turn-block-plan"
 

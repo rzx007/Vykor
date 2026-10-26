@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { DesktopSessionPart, DesktopSessionView } from "@shared/session-types"
 import type { DesktopTerminalEvent, DesktopTerminalRecord } from "@shared/terminal-types"
 import { terminalErrorMessage } from "@renderer/components/desktop/tools/terminal/terminal-display"
-import { toolOutputText } from "../message/message-content"
+import { toolOutputText } from "../message/models/message-content"
 
 type SummaryTerminals = {
   records: DesktopTerminalRecord[]

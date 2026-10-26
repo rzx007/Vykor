@@ -60,7 +60,7 @@ Vykor 截图是一段含表格、文件引用和大量代码标识的技术回�
 | 内容宽度 | body 的基础上限为 48rem；另有容器宽度和不同窗口类型的条件规则 | 外列默认 760px，左右 padding 各 24px，文本约 712px |
 | 窄窗口 | 通过内容容器条件与 padding 调整 | 内容列流式缩小；Composer 最大 760px，窄窗口减去左右留白 |
 
-依据：C06–C14、C21、C26、J05；Vykor [会话列](../apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx) 第 631 行、[消息滚动容器](../apps/desktop/src/renderer/src/components/ui/message-scroller.tsx) 第 51 行、[助手内容](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx) 第 144 行。
+依据：C06–C14、C21、C26、J05；Vykor [会话列](../apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx) 第 631 行、[消息滚动容器](../apps/desktop/src/renderer/src/components/ui/message-scroller.tsx) 第 51 行、[助手内容](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx) 第 144 行。
 
 截图中的 Codex 正文从 x≈483 开始，阅读列大约 800–810 个图像像素；Vykor 表格和正文从 x≈87 到 x≈799，约 712 像素。这是截图中的几何观察，不能反推原始 CSS px 或唯一布局分支。48rem 在根字号 16px 的条件下为 768px，也不是所有窗口永远固定 768px。
 
@@ -127,7 +127,7 @@ Codex 截图中运行命令、文件编辑和代理完成记录主要是浅灰�
 
 ## 7. 过程与结果的层级
 
-我们的 [AssistantMarkdown](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx) 第 316 行已输出 `data-phase="commentary" | "final_answer"`，目前两者使用相同排版。
+我们的 [AssistantMarkdown](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx) 第 316 行已输出 `data-phase="commentary" | "final_answer"`，目前两者使用相同排版。
 
 可采用三层：
 

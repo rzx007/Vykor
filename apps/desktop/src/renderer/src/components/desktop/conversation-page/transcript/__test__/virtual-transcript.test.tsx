@@ -11,7 +11,7 @@ import {
 import { useConversationScroller } from "../conversation-scroll-context"
 import { VirtualTranscript, type TranscriptRow } from "../virtual-transcript"
 import { ConversationPreviewRail } from "../conversation-preview-rail"
-import { MessageBlock } from "../../message/message-block"
+import { MessageBlock } from "../../message/blocks/message-block"
 import {
   $createParagraphNode,
   $createTextNode,
@@ -22,7 +22,7 @@ import { ConversationTranscript } from "../transcript"
 import type { DesktopSessionMessage, DesktopSessionPart } from "@shared/session-types"
 
 // Keep real row grouping, scroll controls and editors; replace only rich assistant rendering.
-vi.mock("../../message/assistant-message", async () => {
+vi.mock("../../message/blocks/assistant-message", async () => {
   const { createElement } = await import("react")
   return {
     AssistantMessage: ({

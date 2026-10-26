@@ -1,6 +1,6 @@
 import type { DesktopSessionPart } from "@shared/session-types"
 
-import { summarizeToolCall } from "../message/message-render-model"
+import { summarizeToolCall } from "../message/models/message-render-model"
 
 export type ScrollerAgentStatusKind = "permission" | "tool" | "agent" | "processing"
 

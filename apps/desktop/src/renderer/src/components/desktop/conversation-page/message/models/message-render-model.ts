@@ -7,7 +7,7 @@ import type {
   DesktopSessionRun,
 } from "@shared/session-types"
 import { readPluginUiInstance, type PluginUiInstanceRecord } from "@rzx/client"
-import { isToolGenerationPresentation } from "./activity/tool-generation-presentation"
+import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
 
 export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }

@@ -1578,7 +1578,7 @@
       "sha256": "3b3214c7228f34c5a1ef98fc09aff60ffb891cc095a0571dc48d234e96522ddf"
     },
     {
-      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx",
+      "file": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
       "sha256": "2eedff64de8c6ff0622ee4e7b54132e5298cf3d2ac92012d20f2ed38462896ae"
     },
     {

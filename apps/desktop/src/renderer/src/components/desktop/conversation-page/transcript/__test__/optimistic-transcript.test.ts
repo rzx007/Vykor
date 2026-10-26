@@ -7,7 +7,7 @@ import type {
   DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
-import { buildConversationEntries } from "../../message/conversation-turn-model"
+import { buildConversationEntries } from "../../message/models/conversation-turn-model"
 import { derivePendingHandoffSubmission, mergeOptimisticTranscript } from "../optimistic-transcript"
 
 const submission: PendingPromptSubmission = {

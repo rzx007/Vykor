@@ -55,8 +55,8 @@ Markdown 链接和行内代码中的文件路径都可以成为文件入口。�
 ## 组件边界
 
 - `apps/desktop/src/renderer/src/components/desktop/conversation-page/`：会话布局、输入框、消息分组和文件打开请求转发。
-- 该目录下的 `message/message-render-model.ts`：合并文本、配对工具、统一工具状态、提取文件引用与成功文件变更，保持为可测试的纯函数。
-- `message/assistant-message.tsx`：Streamdown、自定义文件节点、工具活动、错误和变更摘要。
+- 该目录下的 `message/models/message-render-model.ts`：合并文本、配对工具、统一工具状态、提取文件引用与成功文件变更，保持为可测试的纯函数。
+- `message/blocks/assistant-message.tsx`：Streamdown、自定义文件节点、工具活动、错误和变更摘要。
 - `layout/main-layout/utility-panel/` 与 `tools/files-tool.tsx`（均位于 `components/desktop/`）：传递并消费一次性文件打开请求。
 
 ### 长对话的性能边界

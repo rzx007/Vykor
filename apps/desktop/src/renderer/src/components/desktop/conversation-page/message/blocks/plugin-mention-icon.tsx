@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 import type { DesktopPluginCatalogEntry } from "@shared/session-types"
-import { ExtensionIcon } from "../../plugin-page/shared/plugin-catalog"
+import { ExtensionIcon } from "../../../plugin-page/shared/plugin-catalog"
 
 export const MessagePluginCatalog = createContext<readonly DesktopPluginCatalogEntry[]>([])
 

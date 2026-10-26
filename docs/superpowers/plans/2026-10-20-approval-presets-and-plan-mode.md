@@ -167,7 +167,7 @@ pnpm --filter @vykor/agent-runtime run check-types
 
 ```powershell
 pnpm --filter @vykor/server exec vitest run src/permissions/__test__/approval-review-service.test.ts src/permissions/__test__/permission-broker.test.ts src/permissions/__test__/permission-controller.test.ts
-pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/permission-card.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/blocks/__test__/permission-card.test.ts
 ```
 
 ## Task 5: 当前会话完全访问的真实执行范围

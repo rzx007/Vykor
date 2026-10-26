@@ -23,7 +23,7 @@
 - 修改 `apps/desktop/src/main/features/workspace/workspace-service.test.ts`：真实临时目录测 extra-root 读取和 symlink 拒绝。
 - 修改 `apps/desktop/src/main/features/workspace/opener-service.ts`：复用分类；`rootPath` 缺失时拒绝。
 - 修改 `apps/desktop/src/main/features/session/session-service.ts`：启动时把 `configDir` 和 `documents` 路径注入 workspace 服务。
-- 修改 `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`：卡片点击按分流函数走 Review 或预览。
+- 修改 `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`：卡片点击按分流函数走 Review 或预览。
 - 修改 `apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx`：只接受能收成项目相对路径的 `openRequest`。
 - 修改 `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx`：打开 Files 时不再用剥过的相对路径占位。
 - 修改 `apps/desktop/src/renderer/src/components/desktop/tools/files-tool.tsx`：原始路径交给 `readFile`，面包屑和跳行用返回值。
@@ -496,7 +496,7 @@ git commit -m "fix(desktop): keep workspace openers inside allowed roots"
 
 **文件：**
 
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx`
 - 测试：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message-open-path.test.ts`（新建，测抽出的 `routeChangedFileClick`）
 - 测试：`apps/desktop/src/shared/workspace-open-path.test.ts`（若路由函数放 shared，就写在这里，不要再新建文件）

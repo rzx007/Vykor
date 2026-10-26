@@ -443,85 +443,85 @@
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/assistant-message.tool-details.test.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/__test__/assistant-message.tool-details.test.tsx",
       "line": 14,
-      "text": "import { sourcePart as pluginSource } from \"./plugin-ui-history-fixture\"",
+      "text": "import { sourcePart as pluginSource } from \"../../tool-details/__test__/plugin-ui-history-fixture\"",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/plugin-ui-history-fixture.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/__test__/plugin-ui-history-fixture.ts",
       "line": 1,
       "text": "import type { PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/plugin-ui-history-fixture.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/__test__/plugin-ui-history-fixture.ts",
       "line": 4,
       "text": "export const instance: PluginUiInstanceRecord = {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/plugin-ui-history-fixture.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/__test__/plugin-ui-history-fixture.ts",
       "line": 34,
       "text": "  metadata: { pluginUi: instance },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
       "line": 54,
-      "text": "import { PluginUiHistoryCard } from \"./plugin-ui-history-card\"",
+      "text": "import { PluginUiHistoryCard } from \"../tool-details/plugin-ui-history-card\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
       "line": 171,
       "text": "        if (unit.type === \"plugin-ui\") {",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
       "line": 173,
       "text": "            <PluginUiHistoryCard",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
       "line": 9,
       "text": "import { readPluginUiInstance, type PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
       "line": 18,
       "text": "      type: \"plugin-ui\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
       "line": 21,
       "text": "      instance: PluginUiInstanceRecord",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
       "line": 112,
       "text": "      const source = readPluginUiInstance(part.metadata) ?? readPluginUiInstance(result?.metadata)",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
       "line": 120,
       "text": "        units.push({ id: part.id, type: \"plugin-ui\", call: part, result, instance: source })",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/plugin-ui-history-card.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/plugin-ui-history-card.tsx",
       "line": 2,
       "text": "import type { PluginUiInstanceRecord } from \"@rzx/client\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
-      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/plugin-ui-history-card.tsx",
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/plugin-ui-history-card.tsx",
       "line": 7,
       "text": "export function PluginUiHistoryCard({ instance, call, result }: { instance: PluginUiInstanceRecord; call: DesktopSessionPart; result?: DesktopSessionPart }) {",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
@@ -565,7 +565,7 @@
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/tools/agents/__test__/agents-tool.test.tsx",
       "line": 8,
-      "text": "import { instance, sourcePart } from \"../../../conversation-page/message/__test__/plugin-ui-history-fixture\"",
+      "text": "import { instance, sourcePart } from \"../../../conversation-page/message/tool-details/__test__/plugin-ui-history-fixture\"",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
@@ -1561,7 +1561,7 @@
     {
       "path": "docs/superpowers/plans/2026-10-03-native-plugin-ui-a3.md",
       "line": 175,
-      "text": "**Files:** 新增 conversation-page/plugin-ui 下的 `plugin-ui-provider.tsx`、`plugin-ui-card.tsx`、`plugin-ui-frame.tsx`、`plugin-ui-bridge.ts`、`plugin-ui-confirmation.tsx` 及聚焦测试；修改 `message/message-render-model.ts / assistant-message.tsx`、`conversation-page.tsx`、`utility-panel-tabs.ts / utility-panel.tsx` 以及需要的 panel controller 类型。",
+      "text": "**Files:** 新增 conversation-page/plugin-ui 下的 `plugin-ui-provider.tsx`、`plugin-ui-card.tsx`、`plugin-ui-frame.tsx`、`plugin-ui-bridge.ts`、`plugin-ui-confirmation.tsx` 及聚焦测试；修改 `message/models/message-render-model.ts / assistant-message.tsx`、`conversation-page.tsx`、`utility-panel-tabs.ts / utility-panel.tsx` 以及需要的 panel controller 类型。",
       "reason": "Historical design, migration plan or recorded review; not a live interface."
     },
     {

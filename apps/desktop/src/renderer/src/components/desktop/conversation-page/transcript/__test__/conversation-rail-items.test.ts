@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import type { DesktopSessionMessage, DesktopSessionPart } from "@shared/session-types"
 
-import { buildConversationEntries } from "../../message/conversation-turn-model"
+import { buildConversationEntries } from "../../message/models/conversation-turn-model"
 import {
   buildConversationRailItems,
   CONVERSATION_RAIL_MIN_CONTAINER_WIDTH,

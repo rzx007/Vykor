@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { AgentsTool } from "../agents-tool"
-import { instance, sourcePart } from "../../../conversation-page/message/__test__/plugin-ui-history-fixture"
+import { instance, sourcePart } from "../../../conversation-page/message/tool-details/__test__/plugin-ui-history-fixture"
 import type {
   DesktopAuxSessionUpdate,
   DesktopSessionUpdate,

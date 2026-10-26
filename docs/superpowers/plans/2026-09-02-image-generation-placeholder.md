@@ -22,7 +22,7 @@
 
 **文件：**
 
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts`
 - 测试：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts`
 
 - [x] **步骤 1：编写失败测试**
@@ -53,7 +53,7 @@ pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop
 
 - 创建：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/image-generation-message.tsx`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 
 - [x] **步骤 1：编写失败测试**
 
@@ -89,7 +89,7 @@ pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message-attachment.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/attachment-image-preview.tsx`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript.test.ts`
 
 - [x] **步骤 1：编写失败测试**

@@ -435,9 +435,9 @@ git commit -m "refactor(prompts): describe the resolved session shell"
 **文件：**
 - 修改：`packages/server/src/application/session/transcript-projection.ts`
 - 修改：`packages/server/src/application/session/__test__/transcript-projection.test.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 
 - [ ] **步骤 1：编写新旧 metadata 展示测试**
 

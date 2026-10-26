@@ -1,6 +1,6 @@
 # 消息工具详情
 
-Read、Shell 等工具调用的详情、结果和展开行。
+Read、Shell 等工具调用的详情、结果、展开行和完整内容的按需读取。
 
 ## 放置边界
 
@@ -13,6 +13,15 @@ Read、Shell 等工具调用的详情、结果和展开行。
 - [index.tsx](index.tsx)
 - [read-tool-row.tsx](read-tool-row.tsx)
 - [shell-tool-details.tsx](shell-tool-details.tsx)
+- [use-tool-details.ts](use-tool-details.ts)：仅为当前展开的调用读取完整输入与结果，并在来源变化后丢弃过期读取。
+
+历史结果卡片也由本目录维护，仅展示已有结果和按需读取的完整文本，不恢复已经停用的执行入口。历史测试数据放在本层 `__test__/`，供消息组合和工具面板的相关测试复用。
+
+## 调用与状态
+
+消息块和工具面板传入调用与结果片段，详情组件按工具类型选择展开内容。`useToolDetails` 只在需要查看完整预览时调用宿主读取接口，校验返回片段的所属会话、消息和时间，再把结果交给当前组件。
+
+展开状态和临时读取结果由对应组件与 hook 保存；会话摘要存储不会接收这些临时完整内容。新增工具详情和读取逻辑放本目录，测试放同层 `__test__/`；通用数据整理放 [models](../models/README.md)，整条消息组合放 [blocks](../blocks/README.md)。
 
 ## 维护约定
 

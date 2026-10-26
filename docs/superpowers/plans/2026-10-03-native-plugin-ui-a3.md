@@ -172,7 +172,7 @@ type PluginUiHostState = {
 
 ## Task 4: 工具卡片、侧栏、宿主确认与消息处理
 
-**Files:** 新增 conversation-page/plugin-ui 下的 `plugin-ui-provider.tsx`、`plugin-ui-card.tsx`、`plugin-ui-frame.tsx`、`plugin-ui-bridge.ts`、`plugin-ui-confirmation.tsx` 及聚焦测试；修改 `message/message-render-model.ts / assistant-message.tsx`、`conversation-page.tsx`、`utility-panel-tabs.ts / utility-panel.tsx` 以及需要的 panel controller 类型。
+**Files:** 新增 conversation-page/plugin-ui 下的 `plugin-ui-provider.tsx`、`plugin-ui-card.tsx`、`plugin-ui-frame.tsx`、`plugin-ui-bridge.ts`、`plugin-ui-confirmation.tsx` 及聚焦测试；修改 `message/models/message-render-model.ts / assistant-message.tsx`、`conversation-page.tsx`、`utility-panel-tabs.ts / utility-panel.tsx` 以及需要的 panel controller 类型。
 
 **Interfaces:** `PluginUiProvider` 拥有窗口内挂载和确认；`PluginUiCard` 消费实际源 Part；`PluginUiFrame` 消费 Task 3 的 mount 结果。`createPluginUiBridge({iframe,mountId,isActive,handlers})` 只处理 Spec 五个方法，返回 pushSnapshot / dispose。handlers 的 requestAction / dismiss 先取得宿主确认，再走 Task 3。
 

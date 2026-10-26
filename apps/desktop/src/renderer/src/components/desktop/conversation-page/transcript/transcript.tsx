@@ -9,9 +9,9 @@ import {
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionInput } from "@shared/session-types"
 
-import { messageTextContent } from "../message/message-content"
-import { AssistantMessage } from "../message/assistant-message"
-import { buildConversationEntries } from "../message/conversation-turn-model"
+import { messageTextContent } from "../message/models/message-content"
+import { AssistantMessage } from "../message/blocks/assistant-message"
+import { buildConversationEntries } from "../message/models/conversation-turn-model"
 import { ContextCompactionDivider } from "../message/notices/context-compaction-divider"
 import { ModelRetryNotice } from "../message/notices/model-retry-notice"
 import { ModelUsageNotice } from "../message/notices/model-usage-notice"
@@ -22,7 +22,7 @@ import { selectRunNotices } from "./run-notices"
 import { pluginPreparationLabel } from "./plugin-preparation-label"
 import { TaskDuration } from "../message/activity/task-duration"
 import { taskTiming } from "../message/activity/task-timing"
-import { conversationActivity, type ActivityStep } from "../message/message-render-model"
+import { conversationActivity, type ActivityStep } from "../message/models/message-render-model"
 import {
   isToolGenerationPresentation,
   withToolGenerationPresentation,
@@ -36,10 +36,11 @@ import type {
   DesktopSessionRun,
   DesktopSessionTask,
 } from "@shared/session-types"
-import type { ConversationTurn, ConversationEntry } from "../message/conversation-turn-model"
-import { AssistantMessageActions, MessageBlock } from "../message/message-block"
+import type { ConversationTurn, ConversationEntry } from "../message/models/conversation-turn-model"
+import { AssistantMessageActions } from "../message/blocks/message-actions"
+import { MessageBlock } from "../message/blocks/message-block"
 import { RunErrorNotice } from "../message/notices/run-error-notice"
-import { ContentEntrance } from "../message/content-entrance"
+import { ContentEntrance } from "../message/blocks/content-entrance"
 import { usePluginAppResults } from "../../shell/plugin-apps/use-plugin-app-results"
 
 const emptyInputs: DesktopSessionInput[] = []

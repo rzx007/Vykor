@@ -5,13 +5,13 @@ import { cn } from "@renderer/lib/utils"
 import type { DesktopAttachmentSessionPart, DesktopSessionPart } from "@shared/session-types"
 
 import { MessageAttachment } from "./message-attachment"
-import { useToolDetails } from "../use-tool-details"
+import { useToolDetails } from "../tool-details/use-tool-details"
 
 import {
   formatValue,
   normalizeImageGenerationRatio,
   type ImageGenerationRatio,
-} from "../message-render-model"
+} from "../models/message-render-model"
 
 const ratioClassNames: Record<ImageGenerationRatio, string> = {
   "1:1": "aspect-square max-w-sm",

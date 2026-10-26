@@ -7,7 +7,7 @@ import type {
 
 import { PreviewRail, type PreviewRailItem } from "@renderer/components/motion/preview-rail"
 import { useConversationScroller } from "./conversation-scroll-context"
-import { buildConversationEntries } from "../message/conversation-turn-model"
+import { buildConversationEntries } from "../message/models/conversation-turn-model"
 import {
   CONVERSATION_RAIL_MIN_CONTAINER_WIDTH,
   CONVERSATION_RAIL_MIN_TURNS,

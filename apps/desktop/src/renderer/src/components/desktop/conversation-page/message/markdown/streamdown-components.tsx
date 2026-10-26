@@ -3,7 +3,7 @@ import { Globe } from "lucide-react"
 import { Streamdown } from "streamdown"
 import { cn } from "@renderer/lib/utils"
 
-import { parseFileReference } from "../message-render-model"
+import { parseFileReference } from "../models/message-render-model"
 import { ConversationCodeBlock, FileButton, StreamdownCodeBlock } from "./streamdown-renderers"
 
 const HTTP_LINK = /^https?:\/\//i

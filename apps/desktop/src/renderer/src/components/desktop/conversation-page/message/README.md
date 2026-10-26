@@ -1,27 +1,25 @@
 # 消息展示
 
-用户与助手消息的组合、展示模型和交互。
+按消息展示的职责维护组件、数据整理和交互。根目录只保留导航，相关实现和测试放在同一分类中。
 
-## 放置边界
+| 分类                                   | 放置内容                                                     |
+| -------------------------------------- | ------------------------------------------------------------ |
+| [blocks](blocks/README.md)             | 消息入口、用户与助手消息、正文气泡、消息操作、权限与提问卡片 |
+| [models](models/README.md)             | 消息内容读取、助手展示条目、回合整理、工具摘要与推理文本裁剪 |
+| [activity](activity/README.md)         | 工具调用、智能体活动、终端卡片和耗时展示                     |
+| [attachments](attachments/README.md)   | 附件、图片结果和读取图片的展示                               |
+| [markdown](markdown/README.md)         | Markdown、代码块、图表和流式渲染适配                         |
+| [notices](notices/README.md)           | 重试、模型切换、用量、压缩和错误提示                         |
+| [tool-details](tool-details/README.md) | 工具调用详情、完整内容按需读取和历史结果展示                 |
 
-消息内部复杂功能按子目录分类；不要在这里接管整段对话的虚拟滚动。
+## 入口与状态
 
-组件、模型、类型和 hook 按本功能共同维护。测试、测试辅助文件和基准测试统一放在同级 `__test__`，沿用被测功能的文件名。
+对话记录通过 [MessageBlock](blocks/message-block.tsx) 按角色选择消息组件。组件从 models 取得展示内容，再组合附件、Markdown、工具详情与活动状态。权限和提问卡片由主会话或侧聊直接使用 blocks 中的对应组件。
 
-## 主要文件
-
-- [assistant-message.tsx](assistant-message.tsx)
-- [message-block.tsx](message-block.tsx)
-- [message-render-model.ts](message-render-model.ts)
-
-## 子分类
-
-- [消息活动状态](activity/README.md)：工具调用、智能体活动、终端卡片和耗时展示。
-- [消息附件](attachments/README.md)：消息附件、图片结果及读取图片的展示。
-- [Markdown 消息渲染](markdown/README.md)：Markdown、代码块、图表和流式渲染适配。
-- [消息提示通知](notices/README.md)：重试、模型切换、用量、压缩和错误提示。
-- [消息工具详情](tool-details/README.md)：Read、Shell 等工具调用的详情、结果和展开行。
+编辑草稿、展开和复制反馈由具体组件保存；消息和运行数据由外部会话存储管理。models 只整理输入数据。对话记录的排序组合、虚拟滚动和行保留机制仍由上层 transcript 负责。
 
 ## 维护约定
 
-新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../AGENTS.md)。
+一起理解和修改的代码放在同一分类，避免把一个功能拆散到根目录。新增文件先复用现有分类，只有出现独立职责时才新增目录。测试、测试辅助文件和基准测试放所属分类的同层 `__test__/`；跨分类的输入和滚动场景保留在 composer、transcript 对应测试中。
+
+迁移时同步更新导入、测试 mock、文档链接和旧引用清单，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../AGENTS.md)。

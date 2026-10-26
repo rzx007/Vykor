@@ -1687,10 +1687,10 @@ git commit -m "feat(desktop): 设置页新增思考过程开关"
 ### Task 13: 桌面会话页读取开关与超长省略
 
 **Files:**
-- Create: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/reasoning-text.ts`
+- Create: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/reasoning-text.ts`
 - Create: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts`
 - Create: `apps/desktop/src/renderer/src/components/desktop/conversation-page/use-show-reasoning.ts`
-- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx:91-100`
+- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx:91-100`
 - Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx:526-544`
 
 **Interfaces:**
@@ -1803,7 +1803,7 @@ Expected: PASS（现有 reasoning 显示/隐藏用例仍通过）。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add apps/desktop/src/renderer/src/components/desktop/conversation-page/message/reasoning-text.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/use-show-reasoning.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx
+git add apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/reasoning-text.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/use-show-reasoning.ts apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx
 git commit -m "feat(desktop): 会话页按设置展示思考过程并省略超长内容"
 ```
 

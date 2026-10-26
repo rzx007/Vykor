@@ -1,4 +1,4 @@
-import { formatValue } from "../message-render-model"
+import { formatValue } from "../models/message-render-model"
 import { ToolResult } from "./tool-result"
 
 export function ShellToolDetails({

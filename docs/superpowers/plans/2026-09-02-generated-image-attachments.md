@@ -130,9 +130,9 @@ pnpm --filter @vykor/services exec vitest run src/session-runtime/__test__/store
 
 **文件：**
 
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 
 - [ ] **步骤 1：编写失败测试**
 

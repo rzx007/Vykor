@@ -28,8 +28,8 @@
 |------|------|------|
 | `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/compaction-presentation.ts` | 新建 | 压缩分割线的 phase 类型、metadata 读取、文案（A1） |
 | `.../message/context-compaction-divider.tsx` | 修改 | 按 phase 渲染图标（含 interrupted）（A1） |
-| `.../message/message-block.tsx` | 修改 | 改为从新模块导入 reader（A1） |
-| `.../message/conversation-turn-model.ts` | 修改 | 分割线配对/归属/轮内 blocks（A2） |
+| `.../message/blocks/message-block.tsx` | 修改 | 改为从新模块导入 reader（A1） |
+| `.../message/models/conversation-turn-model.ts` | 修改 | 分割线配对/归属/轮内 blocks（A2） |
 | `.../transcript/turn-block-plan.ts` | 新建 | 把 turn.blocks 映射成渲染计划（streaming/actions 归属）（A3） |
 | `.../transcript/transcript.tsx` | 修改 | 按渲染计划输出（A3） |
 | `packages/client/src/transport/sse-transport.ts` | 修改 | 原始帧空闲超时（B1） |
@@ -52,7 +52,7 @@
 **Files:**
 - Create: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/compaction-presentation.ts`
 - Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/context-compaction-divider.tsx`
-- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-block.tsx:36-39`
+- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/message-block.tsx:36-39`
 - Test: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/compaction-presentation.test.ts`
 
 **Interfaces:**
@@ -183,7 +183,7 @@ export function ContextCompactionDivider({
 
 - [ ] **Step 5: 改 message-block 的导入**
 
-`.../message/message-block.tsx` 中把：
+`.../message/blocks/message-block.tsx` 中把：
 
 ```ts
 import {
@@ -212,8 +212,8 @@ Expected: 现有相关用例全部 PASS
 ### Task A2: turn model 合并分割线并放进所属轮次
 
 **Files:**
-- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/conversation-turn-model.ts`（全文替换）
-- Test: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`（新增用例）
+- Modify: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/conversation-turn-model.ts`（全文替换）
+- Test: `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/__test__/conversation-turn-model.test.ts`（新增用例）
 
 **Interfaces:**
 - Consumes: A1 的 `readContextCompactionPresentation`、`ContextCompactionPhase`。
@@ -225,7 +225,7 @@ Expected: 现有相关用例全部 PASS
 
 - [ ] **Step 1: 写失败测试**
 
-在 `.../message/__test__/conversation-turn-model.test.ts` 的 `describe` 内追加（并在文件底部 helper 区追加 `compactionMessage`）：
+在 `.../message/models/__test__/conversation-turn-model.test.ts` 的 `describe` 内追加（并在文件底部 helper 区追加 `compactionMessage`）：
 
 ```ts
   it("merges an auto-compaction divider pair inside the turn that triggered it", () => {
@@ -345,12 +345,12 @@ function compactionMessage(
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/models/__test__/conversation-turn-model.test.ts`
 Expected: FAIL（`turn.blocks` 为 undefined / 分割线是顶层 system entry）
 
 - [ ] **Step 3: 实现 turn model**
 
-`.../message/conversation-turn-model.ts` 全文替换为：
+`.../message/models/conversation-turn-model.ts` 全文替换为：
 
 ```ts
 import type {
@@ -676,7 +676,7 @@ function compareMessages(a: DesktopSessionMessage, b: DesktopSessionMessage): nu
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/models/__test__/conversation-turn-model.test.ts`
 Expected: PASS（含全部既有用例）
 
 ---
@@ -700,7 +700,7 @@ Expected: PASS（含全部既有用例）
 ```ts
 import { describe, expect, it } from "vitest"
 
-import type { ConversationTurn } from "../../message/conversation-turn-model"
+import type { ConversationTurn } from "../../message/models/conversation-turn-model"
 import { planTurnBlocks } from "../turn-block-plan"
 
 describe("turn block plan", () => {
@@ -814,7 +814,7 @@ Expected: FAIL（模块不存在）
 import type { DesktopSessionPart } from "@shared/session-types"
 
 import type { ContextCompactionPhase } from "../message/compaction-presentation"
-import type { ConversationTurn } from "../message/conversation-turn-model"
+import type { ConversationTurn } from "../message/models/conversation-turn-model"
 
 export interface TurnBlockPlanItem {
   key: string

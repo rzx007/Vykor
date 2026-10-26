@@ -1,6 +1,6 @@
 import type { DesktopWorkflowRun, DesktopWorkflowTask } from "@shared/workflow-types"
 import type { DesktopSessionPart } from "@shared/session-types"
-import { toolOutputText } from "../../conversation-page/message/message-content"
+import { toolOutputText } from "../../conversation-page/message/models/message-content"
 
 export function workflowToolRunId(output: unknown): string | undefined {
   try {

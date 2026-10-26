@@ -3,7 +3,7 @@ import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { RichPromptInput } from "../rich-prompt-input"
-import { MessageBlock } from "../../message/message-block"
+import { MessageBlock } from "../../message/blocks/message-block"
 import {
   $getRoot,
   $getSelection,

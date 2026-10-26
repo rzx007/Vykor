@@ -12,7 +12,7 @@ import {
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { DesktopEmptyState } from "@renderer/components/desktop/shared/desktop-empty-state"
-import { collectChangedFiles } from "@renderer/components/desktop/conversation-page/message/message-render-model"
+import { collectChangedFiles } from "@renderer/components/desktop/conversation-page/message/models/message-render-model"
 import { Button } from "@renderer/components/ui/button"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"

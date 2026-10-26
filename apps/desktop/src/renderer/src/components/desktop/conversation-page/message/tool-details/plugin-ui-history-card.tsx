@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { PluginUiInstanceRecord } from "@rzx/client"
 import type { DesktopSessionPart } from "@shared/session-types"
-import { toolOutputText } from "./message-content"
+import { toolOutputText } from "../models/message-content"
 import { useToolDetails } from "./use-tool-details"
 /** Historical output remains readable; retired UI never mounts or issues requests. */
 export function PluginUiHistoryCard({ instance, call, result }: { instance: PluginUiInstanceRecord; call: DesktopSessionPart; result?: DesktopSessionPart }) {

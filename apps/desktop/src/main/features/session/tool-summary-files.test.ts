@@ -7,7 +7,7 @@ import { fileEditTool } from "../../../../../../packages/tools/src/file/editing/
 import { VykorHttpServer } from "../../../../../../packages/server/src/http/server.js";
 import { VykorClient } from "@rzx/client";
 import type { DesktopSessionPart } from "@shared/session-types";
-import { collectChangedFiles } from "../../../renderer/src/components/desktop/conversation-page/message/message-render-model";
+import { collectChangedFiles } from "../../../renderer/src/components/desktop/conversation-page/message/models/message-render-model";
 import { SessionStore } from "../../../../../../packages/services/src/index.js";
 import { SessionTranscriptProjection } from "../../../../../../packages/server/src/application/session/transcript/transcript-projection.js";
 import { QueryEngine, ToolRegistry } from "../../../../../../packages/core/src/index.js";

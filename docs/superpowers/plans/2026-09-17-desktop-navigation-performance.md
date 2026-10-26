@@ -30,7 +30,7 @@
   - 提供唯一的 renderer Git changes 查询协调入口。
 - 创建：`apps/desktop/src/renderer/src/lib/git-changes-query.test.ts`
   - 覆盖键隔离、并发合并、TTL、强制刷新与失败重试。
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
   - `ChangedFilesSummary` 改用共享查询入口；为了定向渲染测试导出该组件。
 - 创建：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx`
   - 验证多个摘要共用一次 IPC，且增删行数显示不变。
@@ -397,7 +397,7 @@ git commit -m "feat(desktop): coordinate git changes queries"
 ### 任务 3：让文件改动摘要复用 Git 查询
 
 **文件：**
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx`
 
 - [ ] **步骤 1：编写多个摘要的失败回归测试**
@@ -512,7 +512,7 @@ pnpm --filter @vykor/desktop run typecheck:web
 - [ ] **步骤 5：提交独立变更**
 
 ```powershell
-git add apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx
+git add apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx
 git commit -m "fix(desktop): deduplicate message git summaries"
 ```
 
@@ -670,7 +670,7 @@ pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop
 
 ```powershell
 pnpm --filter @vykor/desktop run typecheck:web
-pnpm --filter @vykor/desktop exec eslint src/renderer/src/components/desktop/desktop-session-event-bridge.tsx src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/routes/__root.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx
+pnpm --filter @vykor/desktop exec eslint src/renderer/src/components/desktop/desktop-session-event-bridge.tsx src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/routes/__root.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx
 ```
 
 预期：两条命令退出码均为 0。

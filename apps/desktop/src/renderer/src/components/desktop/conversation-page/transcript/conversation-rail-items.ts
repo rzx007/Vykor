@@ -1,6 +1,6 @@
-import type { ConversationEntry } from "../message/conversation-turn-model"
+import type { ConversationEntry } from "../message/models/conversation-turn-model"
 import type { DesktopSessionPart } from "@shared/session-types"
-import { messageTextContent } from "../message/message-content"
+import { messageTextContent } from "../message/models/message-content"
 
 export interface ConversationRailItem {
   id: string

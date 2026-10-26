@@ -89,10 +89,10 @@
 
 ### 涉及文件
 
-- `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/conversation-turn-model.ts`
+- `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/conversation-turn-model.ts`
 - `apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/transcript.tsx`
 - `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/context-compaction-divider.tsx`
-- 对应测试：`message/__test__/conversation-turn-model.test.ts`（新增用例）、必要时新增组件级测试
+- 对应测试：`message/models/__test__/conversation-turn-model.test.ts`（新增用例）、必要时新增组件级测试
 
 ## 方案 B：桌面端事件流断流兜底
 

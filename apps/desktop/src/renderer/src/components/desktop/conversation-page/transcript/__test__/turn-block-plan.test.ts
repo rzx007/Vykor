@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { ConversationTurn } from "../../message/conversation-turn-model"
+import type { ConversationTurn } from "../../message/models/conversation-turn-model"
 import { planTurnBlocks } from "../turn-block-plan"
 
 describe("turn block plan", () => {

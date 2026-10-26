@@ -2,51 +2,86 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-import { PermissionCard } from "../message-block"
+import { PermissionCard } from "../permission-card"
 
 describe("PermissionCard", () => {
   it.each([
     ["ask_user", "需要你确认"],
     ["timed_out", "审查超时"],
   ])("shows automatic review state %s and its escaped reason", (status, title) => {
-    const html = renderToStaticMarkup(createElement(PermissionCard, {
-      permission: {
-        id: "review", sessionId: "session", toolName: "Shell", status: "pending",
-        payload: { approvalReview: { status, startedAt: 1, reason: "<script>reason</script>" } },
-        createdAt: 1, updatedAt: 1,
-      },
-      onReply: vi.fn(),
-    }))
+    const html = renderToStaticMarkup(
+      createElement(PermissionCard, {
+        permission: {
+          id: "review",
+          sessionId: "session",
+          toolName: "Shell",
+          status: "pending",
+          payload: { approvalReview: { status, startedAt: 1, reason: "<script>reason</script>" } },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        onReply: vi.fn(),
+      })
+    )
     expect(html).toContain(title)
     expect(html).toContain("&lt;script&gt;reason")
     expect(html).not.toContain("<script>")
   })
 
-  it.each(["approved", "denied", "expired"] as const)("does not render a settled %s request, regardless of review state", (status) => {
-    for (const reviewStatus of [undefined, "reviewing", "ask_user", "timed_out", "approved", "denied"]) {
-      const html = renderToStaticMarkup(createElement(PermissionCard, {
-        permission: {
-          id: "review", sessionId: "session", toolName: "Shell", status,
-          payload: reviewStatus ? { approvalReview: { status: reviewStatus, startedAt: 1 } } : {},
-          createdAt: 1, updatedAt: 2,
-        },
-        onReply: vi.fn(),
-      }))
-      expect(html, "settled " + status + " with review " + reviewStatus).toBe("")
+  it.each(["approved", "denied", "expired"] as const)(
+    "does not render a settled %s request, regardless of review state",
+    (status) => {
+      for (const reviewStatus of [
+        undefined,
+        "reviewing",
+        "ask_user",
+        "timed_out",
+        "approved",
+        "denied",
+      ]) {
+        const html = renderToStaticMarkup(
+          createElement(PermissionCard, {
+            permission: {
+              id: "review",
+              sessionId: "session",
+              toolName: "Shell",
+              status,
+              payload: reviewStatus
+                ? { approvalReview: { status: reviewStatus, startedAt: 1 } }
+                : {},
+              createdAt: 1,
+              updatedAt: 2,
+            },
+            onReply: vi.fn(),
+          })
+        )
+        expect(html, "settled " + status + " with review " + reviewStatus).toBe("")
+      }
     }
-  })
+  )
 
-  it.each(["reviewing", "approved", "denied"] as const)("does not ask for a human decision while automatic review is %s", (reviewStatus) => {
-    const html = renderToStaticMarkup(createElement(PermissionCard, {
-      permission: {
-        id: "review", sessionId: "session", toolName: "Shell", status: "pending",
-        payload: { approvalReview: { status: reviewStatus, startedAt: 1, reason: "符合已授权任务" } },
-        createdAt: 1, updatedAt: 1,
-      },
-      onReply: vi.fn(),
-    }))
-    expect(html).toBe("")
-  })
+  it.each(["reviewing", "approved", "denied"] as const)(
+    "does not ask for a human decision while automatic review is %s",
+    (reviewStatus) => {
+      const html = renderToStaticMarkup(
+        createElement(PermissionCard, {
+          permission: {
+            id: "review",
+            sessionId: "session",
+            toolName: "Shell",
+            status: "pending",
+            payload: {
+              approvalReview: { status: reviewStatus, startedAt: 1, reason: "符合已授权任务" },
+            },
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          onReply: vi.fn(),
+        })
+      )
+      expect(html).toBe("")
+    }
+  )
 
   it("disables both decisions and shows the scoped error while a reply is pending", () => {
     const html = renderToStaticMarkup(

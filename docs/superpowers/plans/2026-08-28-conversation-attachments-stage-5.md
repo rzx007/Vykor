@@ -79,8 +79,8 @@
 - 修改：`packages/core/src/types/settings.ts`
 - 修改：`apps/desktop/src/shared/attachment-types.ts`
 - 修改：`apps/desktop/src/main/features/session/session-service.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-render-model.ts`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message-attachment.tsx`
 - 修改并新增对应测试。
 

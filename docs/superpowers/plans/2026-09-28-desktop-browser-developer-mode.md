@@ -49,12 +49,12 @@
 
 ### Task 2: Make developer approval visible and non-reusable
 
-**Files:** Modify `packages/server/src/permissions/permission-broker.ts` and `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/message-block.tsx`. Test in their existing `permission-broker.test.ts` and `message/__test__/permission-card.test.ts`.
+**Files:** Modify `packages/server/src/permissions/permission-broker.ts` and `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/message-block.tsx`. Test in their existing `permission-broker.test.ts` and `message/blocks/__test__/permission-card.test.ts`.
 
 **Interfaces:** The tool name is exactly `BrowserDeveloper`. `ask()` keeps its actual session ID, skips session approval lookup, and `reply()` records `decision: "once"` for this tool even when the client sends `"session"`.
 
 - [ ] **Step 1: Write failing tests**: a parent approval does not satisfy a child request; two developer asks in one session each remain pending until separately answered; a submitted `session` reply is stored as `once`. Render an authorization card with `payload.reason` and `payload.input.action`, and verify the site/risk text appears as escaped text while unrelated cards keep their layout.
-- [ ] **Step 2: Run** `pnpm --filter @vykor/server exec vitest run src/permissions/__test__/permission-broker.test.ts` and `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/permission-card.test.ts`; confirm the new cases fail.
+- [ ] **Step 2: Run** `pnpm --filter @vykor/server exec vitest run src/permissions/__test__/permission-broker.test.ts` and `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/blocks/__test__/permission-card.test.ts`; confirm the new cases fail.
 - [ ] **Step 3: Add the narrow broker special case and card branch.** Do not change generic approval semantics:
 
   ```ts

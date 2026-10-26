@@ -11,10 +11,10 @@ vi.mock("@renderer/stores/desktop-session", async (importOriginal) => {
 
 import { AssistantMessage } from "../assistant-message"
 import { TooltipProvider } from "@renderer/components/ui/tooltip"
-import { sourcePart as pluginSource } from "./plugin-ui-history-fixture"
-import { summarizePart } from "../../../../../../../../../../packages/server/src/http/mappers/part-wire-view.js"
-import { buildAssistantContent } from "../message-render-model"
-import { useToolDetails } from "../use-tool-details"
+import { sourcePart as pluginSource } from "../../tool-details/__test__/plugin-ui-history-fixture"
+import { summarizePart } from "../../../../../../../../../../../packages/server/src/http/mappers/part-wire-view.js"
+import { buildAssistantContent } from "../../models/message-render-model"
+import { useToolDetails } from "../../tool-details/use-tool-details"
 import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
 
 const openReadImage = vi.fn()

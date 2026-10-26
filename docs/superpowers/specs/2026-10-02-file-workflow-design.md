@@ -308,7 +308,7 @@ expect(cancelledBatchResults[1]).toMatchObject({ failureKind: "interrupted" });
 
 ### Task C：现有状态投影与 Desktop 展示（子代理）
 
-**Files:** server application/agent/daemon-agent-event-projector.ts、session/transcript-projection.ts；services/conversations/conversation-transactions.ts；desktop renderer conversation-page/transcript/transcript.tsx、message/assistant-message.tsx、message-render-model.ts；可新增一个小的纯 presentation helper，复用现有组件；相关测试。
+**Files:** server application/agent/daemon-agent-event-projector.ts、session/transcript-projection.ts；services/conversations/conversation-transactions.ts；desktop renderer conversation-page/transcript/transcript.tsx、message/blocks/assistant-message.tsx、message-render-model.ts；可新增一个小的纯 presentation helper，复用现有组件；相关测试。
 
 **Consumes:** §10.1 事件/metadata 契约；Task B 的宿主事实。可以针对固定契约先测试投影，不依赖 Task B 提前改动自身代码。
 

@@ -44,8 +44,8 @@ vi.mock("../turn-process", async (importOriginal) => {
   }
 })
 
-vi.mock("../../message/conversation-turn-model", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../message/conversation-turn-model")>()
+vi.mock("../../message/models/conversation-turn-model", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../message/models/conversation-turn-model")>()
   return {
     ...actual,
     buildConversationEntries: (...args: Parameters<typeof actual.buildConversationEntries>) => {
@@ -63,7 +63,7 @@ vi.mock("@renderer/components/ui/message-scroller", async () => {
   }
 })
 
-vi.mock("../../message/assistant-message", async () => {
+vi.mock("../../message/blocks/assistant-message", async () => {
   const { createElement } = await import("react")
   return {
     AssistantMessage: ({ parts }: { parts: DesktopSessionPart[] }) =>
@@ -75,10 +75,8 @@ vi.mock("../../message/assistant-message", async () => {
   }
 })
 
-vi.mock("../../message/message-block", () => ({
-  AssistantMessageActions: () => null,
-  MessageBlock: () => null,
-}))
+vi.mock("../../message/blocks/message-block", () => ({ MessageBlock: () => null }))
+vi.mock("../../message/blocks/message-actions", () => ({ AssistantMessageActions: () => null }))
 vi.mock("../../message/notices/context-compaction-divider", () => ({
   ContextCompactionDivider: () => null,
 }))
@@ -86,7 +84,7 @@ vi.mock("../../message/notices/model-retry-notice", () => ({ ModelRetryNotice: (
 vi.mock("../../message/notices/model-usage-notice", () => ({ ModelUsageNotice: () => null }))
 vi.mock("../../message/activity/task-duration", () => ({ TaskDuration: () => null }))
 vi.mock("../../message/notices/run-error-notice", () => ({ RunErrorNotice: () => null }))
-vi.mock("../../message/content-entrance", () => ({
+vi.mock("../../message/blocks/content-entrance", () => ({
   ContentEntrance: ({ children }: { children?: ReactNode }) => children,
 }))
 

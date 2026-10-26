@@ -3,12 +3,12 @@ import type {
   DesktopSessionRun,
   DesktopSessionView,
 } from "@shared/session-types"
-import { isAskUserPermission } from "@renderer/components/desktop/conversation-page/message/ask-user-payload"
+import { isAskUserPermission } from "@renderer/components/desktop/conversation-page/message/blocks/ask-user-payload"
 import {
   buildAssistantContent,
   isToolActivityActive,
   summarizeToolCall,
-} from "@renderer/components/desktop/conversation-page/message/message-render-model"
+} from "@renderer/components/desktop/conversation-page/message/models/message-render-model"
 import {
   taskTiming,
   type TaskTiming,

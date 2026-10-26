@@ -1,4 +1,4 @@
-// 展示上限语义与桌面端 conversation-page/message/reasoning-text.ts 保持一致。
+// 展示上限语义与桌面端 conversation-page/message/models/reasoning-text.ts 保持一致。
 export const REASONING_DISPLAY_LIMIT = 20_000;
 
 export function truncateReasoning(

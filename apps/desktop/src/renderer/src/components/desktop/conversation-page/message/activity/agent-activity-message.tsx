@@ -4,8 +4,8 @@ import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { agentTaskStatusLabel } from "../../../tools/agents/agent-task-model"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { cn } from "@renderer/lib/utils"
-import { summarizeToolCall, toolCallStatus } from "../message-render-model"
-import { agentJobId, toolOutputText } from "../message-content"
+import { summarizeToolCall, toolCallStatus } from "../models/message-render-model"
+import { agentJobId, toolOutputText } from "../models/message-content"
 import { ElapsedTime } from "./task-duration"
 
 const dispatchStatusLabels = {

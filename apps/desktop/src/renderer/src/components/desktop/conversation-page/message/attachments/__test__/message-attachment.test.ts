@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopAttachmentSessionPart, DesktopSessionMessage } from "@shared/session-types"
 import { attachmentRoutingMessage } from "../attachment-routing-message"
-import { MessageBlock } from "../../message-block"
+import { MessageBlock } from "../../blocks/message-block"
 import { MessageAttachment } from "../message-attachment"
 
 describe("MessageAttachment", () => {

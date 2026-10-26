@@ -566,7 +566,7 @@ git commit -m "feat(desktop): add useActiveWorkspaceIsGit hook"
 
 **文件：**
 - 修改：`apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx`（`:88`、`:90`、`:201-210`）
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`（`:400`）
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`（`:400`）
 - 修改：`apps/desktop/src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx`
 
 - [ ] **步骤 1：编写失败的测试**
@@ -631,7 +631,7 @@ it("loads changes for an outside-project session instead of showing the empty st
 
 - [ ] **步骤 4：把 `assistant-message` 的 diff 统计路径来源改成工作区项目**
 
-在 `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx` 的 `ChangedFilesSummary` 里，把
+在 `apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx` 的 `ChangedFilesSummary` 里，把
 
 ```ts
   const selectedProjectPath = useDesktopSessionStore((state) => state.selectedProject?.path)
@@ -654,7 +654,7 @@ it("loads changes for an outside-project session instead of showing the empty st
 - [ ] **步骤 6：Commit**
 
 ```bash
-git add apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx
+git add apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx apps/desktop/src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx
 git commit -m "fix(desktop): source review paths from the active workspace project"
 ```
 
@@ -795,7 +795,7 @@ git commit -m "feat(desktop): gate the review tool on the active workspace git p
 
 - [ ] **步骤 4：跑改动文件的 lint**
 
-运行：`pnpm --filter @vykor/desktop exec eslint --no-cache src/main/features/git/git-service.ts src/main/features/git/ipc.ts src/preload/desktop-api.ts src/shared/git-types.ts src/shared/ipc-channels.ts src/shared/desktop-api-contract.ts src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/workspace-git-probe.ts src/renderer/src/lib/workspace-git-probe.test.ts src/renderer/src/hooks/use-active-workspace-is-git.ts src/renderer/src/hooks/use-active-workspace-is-git.test.ts src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx`
+运行：`pnpm --filter @vykor/desktop exec eslint --no-cache src/main/features/git/git-service.ts src/main/features/git/ipc.ts src/preload/desktop-api.ts src/shared/git-types.ts src/shared/ipc-channels.ts src/shared/desktop-api-contract.ts src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/workspace-git-probe.ts src/renderer/src/lib/workspace-git-probe.test.ts src/renderer/src/hooks/use-active-workspace-is-git.ts src/renderer/src/hooks/use-active-workspace-is-git.test.ts src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx`
 预期：0 error。行尾风格（CRLF）警告可用 `--fix` 处理。
 
 - [ ] **步骤 5：手动验证真实场景**

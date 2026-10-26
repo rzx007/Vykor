@@ -2,7 +2,7 @@ import { cjk } from "@streamdown/cjk"
 import { defaultRehypePlugins, type CustomRenderer, type PluginConfig } from "streamdown"
 
 import { MermaidDiagram } from "./mermaid-diagram"
-import { parseFileReference } from "../message-render-model"
+import { parseFileReference } from "../models/message-render-model"
 
 type LinkNode = {
   type: string

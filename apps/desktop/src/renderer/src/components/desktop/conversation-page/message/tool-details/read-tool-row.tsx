@@ -2,7 +2,7 @@ import { BookOpen, ChevronDown } from "lucide-react"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
-import { toolActivityLabel, toolCallStatus } from "../message-render-model"
+import { toolActivityLabel, toolCallStatus } from "../models/message-render-model"
 
 export function ReadToolRow({
   call,

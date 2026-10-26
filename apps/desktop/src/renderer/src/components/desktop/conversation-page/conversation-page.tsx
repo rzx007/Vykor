@@ -14,7 +14,7 @@ import {
   ConversationScrollerViewport as MessageScrollerViewport,
 } from "./transcript/conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MessagePluginCatalog } from "./message/plugin-mention-icon"
+import { MessagePluginCatalog } from "./message/blocks/plugin-mention-icon"
 import {
   Select,
   SelectContent,
@@ -73,9 +73,10 @@ import { HeaderIconButton } from "./composer/controls"
 import { resolveEffortTiers } from "./composer/effort-picker"
 import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 import { NewConversationStart } from "./session/new-conversation-start"
-import { PermissionCard, requiresPermissionReply } from "./message/message-block"
-import { AskUserCard } from "./message/ask-user-card"
-import { isAskUserPermission } from "./message/ask-user-payload"
+import { PermissionCard } from "./message/blocks/permission-card"
+import { requiresPermissionReply } from "./message/blocks/permission-presentation"
+import { AskUserCard } from "./message/blocks/ask-user-card"
+import { isAskUserPermission } from "./message/blocks/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionSummaryPopover } from "./session/session-summary-popover"
 import { SessionMoreMenu } from "./session/session-more-menu"

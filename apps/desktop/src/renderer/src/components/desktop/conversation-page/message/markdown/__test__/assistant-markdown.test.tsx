@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { AssistantMessage } from "../../assistant-message"
+import { AssistantMessage } from "../../blocks/assistant-message"
 import { AppearanceProvider } from "@renderer/components/appearance/appearance-provider"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { prepareFileOpenRequest } from "@renderer/components/desktop/layout/main-layout/utility-panel/file-open-request"

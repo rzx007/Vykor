@@ -524,7 +524,7 @@ git commit -m "feat(desktop): unify appearance runtime"
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/controls.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message-block.tsx`
-- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx`
+- 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/message/image-generation-message.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/model-picker.tsx`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/conversation-page/new-conversation-start.tsx`

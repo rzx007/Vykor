@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { DesktopSessionMessage, DesktopSessionPart, DesktopSessionRun } from "@shared/session-types"
-import { buildAssistantContent, collectChangedFiles } from "../../message-render-model"
+import { buildAssistantContent, collectChangedFiles } from "../../models/message-render-model"
 import { isToolGenerationPresentation, withToolGenerationPresentation } from "../tool-generation-presentation"
 
 const entry = { generationId: "g", attempt: 1, toolKey: "0", toolUseId: "call-a", toolName: "Write", receivedChars: 100 }
