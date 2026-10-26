@@ -1,4 +1,5 @@
 import { Bot, ChevronRight } from "lucide-react"
+import { AgentAvatar } from "@renderer/components/desktop/shared/agent-avatar/agent-avatar"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { agentTaskStatusLabel } from "../../../tools/agents/agent-task-model"
@@ -50,6 +51,7 @@ export function AgentActivityMessage({
       : agentTaskStatusLabel(task.status)
     : dispatchStatusLabels[dispatchStatus]
   const label = task?.description || summarizeToolCall(call).detail || "派出子智能体"
+  const avatarId = task?.id ?? jobId
   return (
     <button
       type="button"
@@ -59,7 +61,11 @@ export function AgentActivityMessage({
       title={task?.error || (!task && failed ? output : label)}
       className="text-ui-small flex max-w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none enabled:hover:text-foreground"
     >
-      <Bot className="size-4 shrink-0" strokeWidth={1.7} />
+      {avatarId ? (
+        <AgentAvatar agentId={avatarId} size={20} />
+      ) : (
+        <Bot className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      )}
       <span className="shrink-0">子智能体</span>
       <span className="truncate font-medium text-foreground">{label}</span>
       {active && !needsInput ? <Spinner className="size-3 shrink-0" aria-hidden="true" /> : null}

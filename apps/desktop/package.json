@@ -46,6 +46,8 @@
   "devDependencies": {
     "@annotorious/annotorious": "3.9.3",
     "@base-ui/react": "^1.7.0",
+    "@dicebear/core": "10.6.0",
+    "@dicebear/styles": "10.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/preload": "^3.0.2",

@@ -1,7 +1,8 @@
-import { AlertCircle, ArrowLeft, Bot, CircleCheck } from "lucide-react"
+import { AlertCircle, ArrowLeft, Bot } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { ConversationTranscript } from "@renderer/components/desktop/conversation-page/transcript/transcript"
+import { AgentAvatar } from "@renderer/components/desktop/shared/agent-avatar/agent-avatar"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
@@ -95,6 +96,7 @@ export function AgentsTool({
         selectedTaskId ? (
           <AgentDetails
             key={selectedTask?.childSessionId ?? selectedTaskId}
+            taskId={selectedTaskId}
             task={selectedTask}
             onBack={showList}
             onOpenFile={onOpenFile}
@@ -190,8 +192,8 @@ function AgentTaskItem({
       render={<button type="button" onClick={() => onOpen(task)} />}
       className="cursor-pointer flex-nowrap text-left hover:bg-muted"
     >
-      <ItemMedia variant="icon" className="text-muted-foreground">
-        {running ? <Spinner /> : <CircleCheck />}
+      <ItemMedia>
+        <AgentAvatar agentId={task.id} size={32} />
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full truncate">{task.description}</ItemTitle>
@@ -201,6 +203,7 @@ function AgentTaskItem({
       </ItemContent>
       <ItemActions>
         <Badge variant={failed ? "destructive" : running ? "secondary" : "outline"}>
+          {running ? <Spinner className="size-3" aria-hidden="true" /> : null}
           {agentTaskStatusLabel(task.status)}
         </Badge>
       </ItemActions>
@@ -209,6 +212,7 @@ function AgentTaskItem({
 }
 
 function AgentDetails({
+  taskId,
   task,
   onBack,
   onOpenFile,
@@ -216,6 +220,7 @@ function AgentDetails({
   onOpenReview,
   onOpenTerminal,
 }: {
+  taskId: string
   task?: DesktopSessionTask
   onBack: () => void
   onOpenFile: (path: string, line?: number) => void
@@ -316,7 +321,7 @@ function AgentDetails({
         >
           <ArrowLeft />
         </Button>
-        <Bot className="size-4 shrink-0 text-muted-foreground" />
+        <AgentAvatar agentId={taskId} size={24} />
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
           {task?.description ?? view?.session.title ?? "子智能体"}
         </h2>
@@ -352,36 +357,34 @@ function AgentDetails({
           </Alert>
         </div>
       ) : view ? (
-          <MessageScrollerProvider
-            key={view.session.id}
-            autoScroll
-            defaultScrollPosition="last-anchor"
-          >
-            <MessageScroller className="min-h-0 flex-1">
-              <MessageScrollerViewport>
-                <MessageScrollerContent className="min-h-full gap-6 px-5 py-5">
-                  <ConversationTranscript
-                    tasks={view.tasks}
-                    messages={view.messages}
-                    parts={view.parts}
-                    runs={view.runs}
-                    running={running}
-                    canEditLastUserMessage={false}
-                    onEditLastUserMessage={() => {}}
-                    onCopyAssistantMessage={(content) =>
-                      window.desktop.clipboard.writeText(content)
-                    }
-                    showReasoning={false}
-                    onOpenFile={onOpenFile}
-                    canOpenReview={canOpenReview}
-                    onOpenReview={onOpenReview}
-                    onOpenTerminal={onOpenTerminal}
-                  />
-                </MessageScrollerContent>
-              </MessageScrollerViewport>
-              <MessageScrollerButton />
-            </MessageScroller>
-          </MessageScrollerProvider>
+        <MessageScrollerProvider
+          key={view.session.id}
+          autoScroll
+          defaultScrollPosition="last-anchor"
+        >
+          <MessageScroller className="min-h-0 flex-1">
+            <MessageScrollerViewport>
+              <MessageScrollerContent className="min-h-full gap-6 px-5 py-5">
+                <ConversationTranscript
+                  tasks={view.tasks}
+                  messages={view.messages}
+                  parts={view.parts}
+                  runs={view.runs}
+                  running={running}
+                  canEditLastUserMessage={false}
+                  onEditLastUserMessage={() => {}}
+                  onCopyAssistantMessage={(content) => window.desktop.clipboard.writeText(content)}
+                  showReasoning={false}
+                  onOpenFile={onOpenFile}
+                  canOpenReview={canOpenReview}
+                  onOpenReview={onOpenReview}
+                  onOpenTerminal={onOpenTerminal}
+                />
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+        </MessageScrollerProvider>
       ) : null}
     </>
   )

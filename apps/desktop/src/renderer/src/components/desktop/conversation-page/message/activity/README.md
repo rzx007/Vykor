@@ -14,6 +14,8 @@
 - [terminal-activity-card.tsx](terminal-activity-card.tsx)
 - [task-duration.tsx](task-duration.tsx)
 
+子智能体条目复用 [AgentAvatar](../../../shared/agent-avatar/README.md)，派发结果中的任务 ID 与列表、详情保持一致；尚无任务 ID 时保留通用图标。头像本地生成，任务状态与等待处理提示仍单独展示。
+
 ## 维护约定
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../../AGENTS.md)。
