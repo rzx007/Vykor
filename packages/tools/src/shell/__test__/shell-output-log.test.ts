@@ -110,7 +110,7 @@ describe("foreground Shell log consumption", () => {
   it("keeps unavailable Shell log Read distinct from invalid byte cursors", async () => {
     const ref = "shell-output://00000000-0000-4000-8000-000000000001";
     for (const [status, failureKind, executionState] of [
-      ["unavailable", "unknown_outcome", "unknown"],
+      ["unavailable", "precondition", "completed"],
       ["invalid_cursor", "invalid_input", "not_started"],
     ] as const) {
       const result = await executeToolFixture(host => createFileReadTool(host), { file_path: ref }, {

@@ -5,6 +5,7 @@ import {
   AUTO_REVIEW_RESULT_MAX_BYTES,
   buildAutoReviewPrompt,
   parseAutoReviewResult,
+  parseAutoReviewDelivery,
 } from "../auto-review-result.js";
 
 const ALLOWED = new Set(["packages/server/src/queue.ts", "docs/a.md"]);
@@ -29,6 +30,15 @@ function validResult() {
 function parse(value: unknown) {
   return parseAutoReviewResult(JSON.stringify(value), ALLOWED);
 }
+
+describe("structured review data", () => {
+  it.each([
+    ["root", { ...validResult(), extra: undefined }],
+    ["finding", { ...validResult(), findings: [{ ...validResult().findings[0], extra: undefined }] }],
+  ])("rejects an unknown %s property before serialization can erase it", (_label, data) => {
+    expect(parseAutoReviewDelivery({ status: "done", summary: "Review complete", data, validation: "schema_valid", verification: "passed" }, ALLOWED)).toBeUndefined();
+  });
+});
 
 describe("parseAutoReviewResult", () => {
   it("round-trips a valid failing result", () => {

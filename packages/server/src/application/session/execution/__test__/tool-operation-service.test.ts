@@ -34,6 +34,18 @@ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.int
   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
 }
 describe("daemon tool operation host", () => {
+  it("observes the current dispatch without copying the complete operation", async () => {
+    const f = await fixture(), input = await authorized(f);
+    const receipt = await f.service.operations.dispatch(input);
+    const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Invocation tracking must not copy the complete input"); });
+    let finish!: () => void;
+    const settled = new Promise<void>(resolve => { finish = resolve; });
+    try {
+      expect(() => f.service.operations.observeInvocation!({ receipt, settled })).not.toThrow();
+      expect(fullRead).not.toHaveBeenCalled();
+      expect(() => f.service.operations.observeInvocation!({ receipt: { ...receipt, toolAttemptId: "stale" }, settled })).toThrow(/no longer current/);
+    } finally { finish(); }
+  });
   it("allows writes without copying full historical operation records for the safety check", async () => {
     const f = await fixture();
     vi.spyOn(f.store.toolOperations, "list").mockImplementation(() => { throw new Error("Full operation bodies must not be copied for safety checks"); });

@@ -56,8 +56,7 @@ export class ToolOperationService implements AgentToolSafety {
       observeInvocation: ({ receipt, settled }) => {
         this.atomic(() => {
           this.assertOwner();
-          const operation = store.toolOperations.get(receipt.operationId);
-          if (receipt.ownerId !== this.options.ownerLease().ownerId || operation?.activeAttemptId !== receipt.toolAttemptId || operation.state !== "dispatching")
+          if (receipt.ownerId !== this.options.ownerLease().ownerId || !store.toolOperations.isCurrentDispatch(receipt.operationId, receipt.toolAttemptId))
             throw new Error("Tool invocation receipt is no longer current");
         });
         this.pendingInvocations.set(receipt.operationId, settled);

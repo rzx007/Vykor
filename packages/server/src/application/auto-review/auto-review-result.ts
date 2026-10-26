@@ -84,12 +84,13 @@ export function parseAutoReviewDelivery(
 }
 
 function readDeliveryReport(delivery: StructuredDelivery, allowedPaths: ReadonlySet<string>): AutoReviewResult | undefined {
-  let serialized: string | undefined;
-  try { serialized = JSON.stringify(delivery.data); } catch { return undefined; }
-  if (serialized === undefined) return undefined;
-  const report = parseAutoReviewResult(serialized, allowedPaths);
-  if (!report || delivery.status !== (report.verdict === "partial" ? "partial" : "done")) return undefined;
-  return report;
+  try {
+    const serialized = JSON.stringify(delivery.data);
+    if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > AUTO_REVIEW_RESULT_MAX_BYTES) return undefined;
+    const report = parseAutoReviewData(delivery.data, allowedPaths);
+    if (!report || delivery.status !== (report.verdict === "partial" ? "partial" : "done")) return undefined;
+    return report;
+  } catch { return undefined; }
 }
 
 /**
@@ -114,6 +115,11 @@ export function parseAutoReviewResult(
   } catch {
     return undefined;
   }
+  return parseAutoReviewData(parsed, allowedPaths);
+}
+
+/** Shared shape and business checks for text and already structured reports. */
+function parseAutoReviewData(parsed: unknown, allowedPaths: ReadonlySet<string>): AutoReviewResult | undefined {
   if (!isRecord(parsed)) return undefined;
   if (!hasOnlyKeys(parsed, ROOT_KEYS)) return undefined;
   if (parsed.version !== 1) return undefined;

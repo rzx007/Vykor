@@ -207,6 +207,11 @@ export class ToolOperationRepository {
   }
 
   get(operationId: string): ToolOperationRecord | undefined { const row = this.storage.state.toolOperations[operationId]; return row && clone(row); }
+  /** Invocation tracking needs only the current dispatch identity, never input or result copies. */
+  isCurrentDispatch(operationId: string, toolAttemptId: string): boolean {
+    const row = this.storage.state.toolOperations[operationId];
+    return !!row && row.state === "dispatching" && row.activeAttemptId === toolAttemptId;
+  }
   /** Safety checks never need normalized inputs, receipts or result bodies. */
   listSafetyStates(): ToolOperationSafetyState[] {
     return Object.values(this.storage.state.toolOperations).map(({ id, sessionId, runId, kind, state }) => ({ id, sessionId, runId, kind, state }));

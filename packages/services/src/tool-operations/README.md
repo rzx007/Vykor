@@ -20,4 +20,6 @@
 
 人工检查使用 `listReviewCandidates()` 先投影 unknown 和 dispatching 的有限身份、状态和版本字段，不复制输入、原始结果或内部实现身份；Server 再排除原 Run 仍活跃的 dispatching。`getSummary()` 用于宿主先核验归属，之后 `getReviewPreview()` 才生成各最多 4000 字符的输入和原始结果预览，以及最近 20 条有界证据。详情可能含原始工具数据，只供已认证宿主人工查看，不自动写入模型上下文。原始正文与 Attempt 仍只保存在原操作记录中。
 
+实际调用登记使用 `isCurrentDispatch(operationId, toolAttemptId)`，只返回该 Attempt 是否仍在当前派发中，不复制输入或结果。当前 owner 与实际调用是否结束仍由 Server 检查，此查询不授权执行或人工解除保护。
+
 `reconcile` 的 `applied` 只有收到明确标记 `executionState: completed` 且身份匹配的真实结果才转为 confirmed；省略执行状态、结果缺失或仍未知都继续保持 unknown。证据追加到操作和原 Attempt，原未知回执不被核对结果覆盖。
