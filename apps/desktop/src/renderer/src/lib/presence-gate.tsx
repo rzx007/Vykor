@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import { useIsPresent } from "motion/react";
-import type { ReactNode } from "react";
+import { useIsPresent } from "motion/react"
+import type { ReactNode } from "react"
 
 export interface PresenceGateRenderProps {
   /**
@@ -10,7 +10,7 @@ export interface PresenceGateRenderProps {
    * page, so anything it decides from `open` alone stays true for the whole
    * exit — this is the boolean that already knows the overlay is leaving.
    */
-  isPresent: boolean;
+  isPresent: boolean
   /**
    * Spread onto every layer that takes pointer events while the overlay is
    * open. Interaction releases in the same commit that starts the exit while
@@ -22,13 +22,13 @@ export interface PresenceGateRenderProps {
    * `pointer-events-none` is not overwritten.
    */
   gate: {
-    inert: boolean;
-    style: { pointerEvents: "auto" | "none" };
-  };
+    inert: boolean
+    style: { pointerEvents: "auto" | "none" }
+  }
 }
 
 export interface PresenceGateProps {
-  children: (props: PresenceGateRenderProps) => ReactNode;
+  children: (props: PresenceGateRenderProps) => ReactNode
 }
 
 /**
@@ -40,7 +40,7 @@ export interface PresenceGateProps {
  * component, and the render prop is how it reaches the layers.
  */
 export function PresenceGate({ children }: PresenceGateProps) {
-  const isPresent = useIsPresent();
+  const isPresent = useIsPresent()
 
   return children({
     isPresent,
@@ -48,5 +48,5 @@ export function PresenceGate({ children }: PresenceGateProps) {
       inert: !isPresent,
       style: { pointerEvents: isPresent ? "auto" : "none" },
     },
-  });
+  })
 }

@@ -523,7 +523,13 @@
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/plugin-ui-history-card.tsx",
       "line": 7,
-      "text": "export function PluginUiHistoryCard({ instance, call, result }: { instance: PluginUiInstanceRecord; call: DesktopSessionPart; result?: DesktopSessionPart }) {",
+      "text": "export function PluginUiHistoryCard({",
+      "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
+    },
+    {
+      "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/tool-details/plugin-ui-history-card.tsx",
+      "line": 12,
+      "text": "  instance: PluginUiInstanceRecord",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {

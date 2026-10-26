@@ -15,7 +15,15 @@ import type { FileViewerTab } from "@renderer/components/desktop/tools/files/fil
 import type { ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
 
 export type UtilityTool =
-  "review" | "terminal" | "browser" | "files" | "side-chat" | "agents" | "workflows" | "plugin-app" | "image"
+  | "review"
+  | "terminal"
+  | "browser"
+  | "files"
+  | "side-chat"
+  | "agents"
+  | "workflows"
+  | "plugin-app"
+  | "image"
 
 export type UtilityToolRequest = Extract<
   UtilityTool,

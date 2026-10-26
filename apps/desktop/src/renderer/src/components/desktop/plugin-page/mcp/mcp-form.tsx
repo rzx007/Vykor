@@ -2,7 +2,14 @@ import { useId } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
-import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@renderer/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@renderer/components/ui/field"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import type { McpForm, McpPairs } from "./mcp-config"
 

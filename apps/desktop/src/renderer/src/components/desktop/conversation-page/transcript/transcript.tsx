@@ -106,9 +106,12 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   )
   // Supplemental input can split one Run across turns; only its last segment owns live status.
   const runningTurn = useMemo(
-    () => activeRun
-      ? [...entries].reverse().find((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
-      : undefined,
+    () =>
+      activeRun
+        ? [...entries]
+            .reverse()
+            .find((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
+        : undefined,
     [entries, activeRun]
   )
   const lastUserMessage = useMemo(

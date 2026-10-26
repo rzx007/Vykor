@@ -15,7 +15,9 @@ export const DEFAULT_SIDEBAR_SECTION_EXPANSION: SidebarSectionExpansion = {
 /**
  * 解析并校验存储的折叠展开状态，若数据损坏或缺失则安全回退到默认展开状态
  */
-export function parseSidebarSectionExpansion(raw: string | null | undefined): SidebarSectionExpansion {
+export function parseSidebarSectionExpansion(
+  raw: string | null | undefined
+): SidebarSectionExpansion {
   if (!raw) {
     return { ...DEFAULT_SIDEBAR_SECTION_EXPANSION }
   }
@@ -30,8 +32,7 @@ export function parseSidebarSectionExpansion(raw: string | null | undefined): Si
         typeof record.projects === "boolean"
           ? record.projects
           : DEFAULT_SIDEBAR_SECTION_EXPANSION.projects,
-      im:
-        typeof record.im === "boolean" ? record.im : DEFAULT_SIDEBAR_SECTION_EXPANSION.im,
+      im: typeof record.im === "boolean" ? record.im : DEFAULT_SIDEBAR_SECTION_EXPANSION.im,
       recent:
         typeof record.recent === "boolean"
           ? record.recent

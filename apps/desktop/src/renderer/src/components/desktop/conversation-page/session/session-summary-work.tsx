@@ -91,10 +91,7 @@ export function SessionSummaryWork({
           ))}
         </section>
       )}
-      {(runs.length > 0 ||
-        terminals.length > 0 ||
-        workflowError ||
-        terminalError) && (
+      {(runs.length > 0 || terminals.length > 0 || workflowError || terminalError) && (
         <section aria-label="聊天工作流和长任务" className="flex flex-col gap-1 py-3">
           <span className="text-xs text-muted-foreground">工作流与长任务</span>
           {workflowReconnecting && (

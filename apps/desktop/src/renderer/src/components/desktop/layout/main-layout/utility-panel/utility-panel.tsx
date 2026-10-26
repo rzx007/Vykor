@@ -2,7 +2,10 @@ import {
   usePluginApps,
   usePluginAppPages,
 } from "@renderer/components/desktop/shell/plugin-apps/provider"
-import { PluginAppPanel, PluginAppCatalog } from "@renderer/components/desktop/shell/plugin-apps/panel"
+import {
+  PluginAppPanel,
+  PluginAppCatalog,
+} from "@renderer/components/desktop/shell/plugin-apps/panel"
 import { toast } from "@renderer/lib/toast"
 import type * as React from "react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
@@ -208,8 +211,9 @@ export function UtilityPanel({
       (!tab.projectPath || tab.projectPath === selectedProjectPath) &&
       (activeWorkspaceIsGit === true || tab.tool !== "review")
   )
-  const appTabs: UtilityTab[] = appPages.filter(page => page.controller.state.source.sessionId === activeSessionId)
-    .map(page => ({ id: "plugin-app:" + page.id, tool: "plugin-app", title: page.title }))
+  const appTabs: UtilityTab[] = appPages
+    .filter((page) => page.controller.state.source.sessionId === activeSessionId)
+    .map((page) => ({ id: "plugin-app:" + page.id, tool: "plugin-app", title: page.title }))
   const visibleTabs = [...storedVisibleTabs, ...appTabs]
   const visibleActiveFilePath =
     fileStateVisible || visibleTabs.some((tab) => tab.filePath === activeFilePath)
@@ -223,11 +227,25 @@ export function UtilityPanel({
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? storedVisibleTabs[0]
   const appPanelRequest = pluginApps?.panelRequest
   useEffect(() => {
-    if (!appPanelRequest || appPanelRequest.sessionId !== activeSessionId || appPanelRequest.sequence === handledAppRequestId) return
+    if (
+      !appPanelRequest ||
+      appPanelRequest.sessionId !== activeSessionId ||
+      appPanelRequest.sequence === handledAppRequestId
+    )
+      return
     setActiveTabId("plugin-app:" + appPanelRequest.pageId)
     setHandledAppRequestId(appPanelRequest.sequence)
-  }, [appPanelRequest, activeSessionId, handledAppRequestId, setActiveTabId, setHandledAppRequestId])
-  const activeApp = activeTab?.tool === "plugin-app" ? appPages.find(page => "plugin-app:" + page.id === activeTab.id) : undefined
+  }, [
+    appPanelRequest,
+    activeSessionId,
+    handledAppRequestId,
+    setActiveTabId,
+    setHandledAppRequestId,
+  ])
+  const activeApp =
+    activeTab?.tool === "plugin-app"
+      ? appPages.find((page) => "plugin-app:" + page.id === activeTab.id)
+      : undefined
   const terminalCommand = terminalCommands[0] ?? null
   const pendingTerminalOpenRequest =
     terminalOpenRequest?.id !== handledTerminalRequestId ? terminalOpenRequest : null
@@ -316,10 +334,23 @@ export function UtilityPanel({
     if (!prepared.browserUrl) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
-      openBrowserTab(prepared.browserUrl!, fileOpenRequest.path.replace(/\\/g, "/").split("/").pop()?.replace(/:\d+(?::\d+)?$/, ""))
+      openBrowserTab(
+        prepared.browserUrl!,
+        fileOpenRequest.path
+          .replace(/\\/g, "/")
+          .split("/")
+          .pop()
+          ?.replace(/:\d+(?::\d+)?$/, "")
+      )
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [fileOpenRequest, handledFileRequestId, selectedProjectPath, openBrowserTab, setHandledFileRequestId])
+  }, [
+    fileOpenRequest,
+    handledFileRequestId,
+    selectedProjectPath,
+    openBrowserTab,
+    setHandledFileRequestId,
+  ])
 
   const addTab = useCallback(
     (tool: UtilityTool): void => {
@@ -431,9 +462,9 @@ export function UtilityPanel({
   }
 
   const finishCloseTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
-    const appId = tabIds.find(id => id.startsWith("plugin-app:"))
+    const appId = tabIds.find((id) => id.startsWith("plugin-app:"))
     if (appId) setClosingApp(appId.slice("plugin-app:".length))
-    const closingIds = new Set(tabIds.filter(id => !id.startsWith("plugin-app:")))
+    const closingIds = new Set(tabIds.filter((id) => !id.startsWith("plugin-app:")))
     if (closingIds.size === 0) return
 
     const closingTabs = tabs.filter((tab) => closingIds.has(tab.id))
@@ -638,7 +669,10 @@ export function UtilityPanel({
   }
 
   const closeTab = (tabId: string): void => {
-    if (tabId.startsWith("plugin-app:")) { setClosingApp(tabId.slice("plugin-app:".length)); return }
+    if (tabId.startsWith("plugin-app:")) {
+      setClosingApp(tabId.slice("plugin-app:".length))
+      return
+    }
     closeTabs([tabId])
   }
 
@@ -876,13 +910,36 @@ export function UtilityPanel({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        <AlertDialog open={closingApp !== null} onOpenChange={next => { if (!next) setClosingApp(null) }}>
+        <AlertDialog
+          open={closingApp !== null}
+          onOpenChange={(next) => {
+            if (!next) setClosingApp(null)
+          }}
+        >
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>关闭插件应用？</AlertDialogTitle><AlertDialogDescription>页面中的未保存草稿将丢失，其他窗口也会停止使用此应用。</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => {
-              if (closingApp) void pluginApps?.remove(closingApp, true).catch(() => toast.error("未能关闭应用，页面草稿已保留。请查看最新状态后重试。"))
-              setClosingApp(null)
-            }}>关闭应用</AlertDialogAction></AlertDialogFooter>
+            <AlertDialogHeader>
+              <AlertDialogTitle>关闭插件应用？</AlertDialogTitle>
+              <AlertDialogDescription>
+                页面中的未保存草稿将丢失，其他窗口也会停止使用此应用。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>返回</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => {
+                  if (closingApp)
+                    void pluginApps
+                      ?.remove(closingApp, true)
+                      .catch(() =>
+                        toast.error("未能关闭应用，页面草稿已保留。请查看最新状态后重试。")
+                      )
+                  setClosingApp(null)
+                }}
+              >
+                关闭应用
+              </AlertDialogAction>
+            </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
         <UtilityPanelTabStrip
@@ -904,9 +961,15 @@ export function UtilityPanel({
         />
 
         <div className="relative min-h-0 flex-1 bg-conversation">
-          {activeTab?.tool === "plugin-app" && (activeTab.id.startsWith("plugin-app:")
-            ? activeApp && <PluginAppPanel key={activeApp.id} page={activeApp} visible={open} />
-            : <PluginAppCatalog sessionId={activeSessionId} onSelect={id => setActiveTabId("plugin-app:" + id)} />)}
+          {activeTab?.tool === "plugin-app" &&
+            (activeTab.id.startsWith("plugin-app:") ? (
+              activeApp && <PluginAppPanel key={activeApp.id} page={activeApp} visible={open} />
+            ) : (
+              <PluginAppCatalog
+                sessionId={activeSessionId}
+                onSelect={(id) => setActiveTabId("plugin-app:" + id)}
+              />
+            ))}
           {open && activeTab?.tool === "image" && activeTab.imageSource && (
             <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />
           )}
@@ -944,7 +1007,12 @@ export function UtilityPanel({
               }}
               restoreActivePath={persistedFileState?.activePath ?? null}
               restorePaths={persistedFileState?.paths ?? []}
-              openRequest={fileOpenRequest && prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath).browserUrl ? null : fileOpenRequest}
+              openRequest={
+                fileOpenRequest &&
+                prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath).browserUrl
+                  ? null
+                  : fileOpenRequest
+              }
               onOpenHtmlInBrowser={(projectPath, relativePath, name) =>
                 openBrowserTab(toLocalFileUrl(projectPath, relativePath), name)
               }

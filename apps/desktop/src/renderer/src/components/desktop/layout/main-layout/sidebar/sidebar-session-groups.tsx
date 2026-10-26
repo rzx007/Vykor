@@ -1,9 +1,26 @@
-import { FolderClosed, FolderOpen, FolderSync, MoreHorizontal, Pencil, Pin, PinOff, Smartphone, SquarePen, Trash2 } from "lucide-react"
+import {
+  FolderClosed,
+  FolderOpen,
+  FolderSync,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Smartphone,
+  SquarePen,
+  Trash2,
+} from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type * as React from "react"
 import { Fragment, useRef, useState } from "react"
 import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@renderer/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@renderer/components/ui/dropdown-menu"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"

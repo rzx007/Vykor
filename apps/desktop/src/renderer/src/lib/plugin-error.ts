@@ -1,14 +1,19 @@
 /** Electron preserves only the error message across IPC, including API error names. */
 export function pluginErrorMessage(error: unknown): string {
-  let message = typeof error === "string"
-    ? error
-    : error && typeof error === "object" && "message" in error && typeof error.message === "string"
-      ? error.message
-      : ""
+  let message =
+    typeof error === "string"
+      ? error
+      : error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : ""
 
   for (let depth = 0; depth < 4; depth++) {
     const previous = message
-    message = message.trim()
+    message = message
+      .trim()
       .replace(/^Error invoking remote method (?:'[^']+'|"[^"]+"):\s*/, "")
       .replace(/^(?:Error|[A-Za-z_$][\w$]*Error)(?: \[[^\]]+\])?:\s*/, "")
     if (message === previous) break

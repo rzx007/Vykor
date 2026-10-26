@@ -218,9 +218,7 @@ export function McpEditor({
             </FieldError>
           )}
           <DialogFooter className="flex-row items-center justify-between sm:justify-between">
-            <span className="text-xs text-muted-foreground">
-              保存到全局配置，与 CLI 共用
-            </span>
+            <span className="text-xs text-muted-foreground">保存到全局配置，与 CLI 共用</span>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={close} disabled={saving}>
                 取消

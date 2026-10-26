@@ -4,14 +4,29 @@ import type { DesktopSessionPart } from "@shared/session-types"
 import { toolOutputText } from "../models/message-content"
 import { useToolDetails } from "./use-tool-details"
 /** Historical output remains readable; retired UI never mounts or issues requests. */
-export function PluginUiHistoryCard({ instance, call, result }: { instance: PluginUiInstanceRecord; call: DesktopSessionPart; result?: DesktopSessionPart }) {
+export function PluginUiHistoryCard({
+  instance,
+  call,
+  result,
+}: {
+  instance: PluginUiInstanceRecord
+  call: DesktopSessionPart
+  result?: DesktopSessionPart
+}) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const outputPreview = (result?.output != null ? result : call).bodyView?.output === "preview"
   const details = useToolDetails(call, result, detailsOpen && outputPreview)
-  const text = toolOutputText(details.result?.output ?? details.call.output) ?? result?.text ?? call.text
-  return <section aria-label={instance.title} className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-background">
-    <header className="px-4 py-3"><h3 className="text-sm font-medium">{instance.title}</h3>
-      <p className="mt-1 text-xs text-muted-foreground">旧插件界面已停用，历史结果保留。</p></header>
+  const text =
+    toolOutputText(details.result?.output ?? details.call.output) ?? result?.text ?? call.text
+  return (
+    <section
+      aria-label={instance.title}
+      className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-background"
+    >
+      <header className="px-4 py-3">
+        <h3 className="text-sm font-medium">{instance.title}</h3>
+        <p className="mt-1 text-xs text-muted-foreground">旧插件界面已停用，历史结果保留。</p>
+      </header>
       {text && outputPreview ? (
         <details
           className="px-4 pb-4 text-xs"
@@ -33,5 +48,6 @@ export function PluginUiHistoryCard({ instance, call, result }: { instance: Plug
           {text}
         </pre>
       ) : null}
-  </section>
+    </section>
+  )
 }

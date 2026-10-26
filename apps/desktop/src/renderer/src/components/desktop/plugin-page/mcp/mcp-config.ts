@@ -16,7 +16,17 @@ type ParseOptions = {
 }
 export type McpPairs = [string, string][]
 
-const REAL_FIELDS = new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth", "enabled"])
+const REAL_FIELDS = new Set([
+  "type",
+  "command",
+  "args",
+  "env",
+  "cwd",
+  "url",
+  "headers",
+  "oauth",
+  "enabled",
+])
 const REMOVED_FIELDS = new Set([
   "env_vars",
   "bearer_token_env_var",

@@ -113,9 +113,7 @@ export function SessionMoreMenu({
               <DropdownMenuItem onClick={() => copyText(session.cwd)}>
                 复制工作目录
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyText(session.id)}>
-                复制会话 ID
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => copyText(session.id)}>复制会话 ID</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {!archived ? (

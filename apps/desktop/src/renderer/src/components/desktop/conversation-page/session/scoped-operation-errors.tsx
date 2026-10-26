@@ -19,7 +19,14 @@ export function ScopedOperationError({
       <CircleAlert />
       <AlertDescription>
         {error}
-        <button type="button" className="ml-2 underline" onClick={() => { setDismissed(error); onDismiss?.() }}>
+        <button
+          type="button"
+          className="ml-2 underline"
+          onClick={() => {
+            setDismissed(error)
+            onDismiss?.()
+          }}
+        >
           关闭
         </button>
       </AlertDescription>
