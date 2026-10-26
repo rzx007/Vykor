@@ -1171,14 +1171,14 @@ describe("SessionStore", () => {
     });
   });
 
-  it("keeps the legacy Workflow methods and mirrors owner-session events", () => {
+  it("stores Workflow runs through the repository and mirrors owner-session events", () => {
     withStore((store) => {
       store.sessions.create({ id: "workflow-session", cwd: process.cwd(), model: "m" });
-      store.saveWorkflowRun({ runId: "workflow-legacy", ownerSessionId: "workflow-session", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
-      expect(store.loadWorkflowRun("workflow-legacy")?.runId).toBe("workflow-legacy");
-      expect(store.listWorkflowRuns({ ownerSessionId: "workflow-session" })).toHaveLength(1);
+      store.workflows.saveRun({ runId: "workflow-legacy", ownerSessionId: "workflow-session", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      expect(store.workflows.loadRun("workflow-legacy")?.runId).toBe("workflow-legacy");
+      expect(store.workflows.listRuns({ ownerSessionId: "workflow-session" })).toHaveLength(1);
       store.appendWorkflowEvent({ runId: "workflow-legacy", sessionId: "workflow-session", type: "workflow_started", eventJson: '{"type":"workflow_started","runId":"workflow-legacy"}', createdAt: 2 });
-      expect(store.listWorkflowEvents("workflow-legacy")).toEqual(['{"type":"workflow_started","runId":"workflow-legacy"}']);
+      expect(store.workflows.listEvents("workflow-legacy")).toEqual(['{"type":"workflow_started","runId":"workflow-legacy"}']);
       expect(store.conversations.listEvents({ sessionId: "workflow-session" }).map((event) => event.type)).toContain("workflow.workflow_started");
       const claim = store.claimWorkflowRun("workflow-legacy", "owner");
       expect(claim.generation).toBe(1);

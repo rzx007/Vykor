@@ -17,7 +17,7 @@ async function fixture() {
   cleanup.push(store.close.bind(store));
   store.sessions.create({ id: "session", cwd: directory, model: "offline", metadata: { runtime: { model: "offline" } } });
   store.conversationTransactions.admitPrompt({ id: "input", sessionId: "session", items: [{ type: "text", text: "work" }] });
-  const projector = new DaemonAgentEventProjector({ store, rootAgent: {} as any,
+  const projector = new DaemonAgentEventProjector({ projectorId: "daemon-agent:session", rootSessionId: "session", store, rootAgent: {} as any,
     transcriptProjection: new SessionTranscriptProjection(store), executionProjector: {} as any,
     liveChildren: { register() {}, unregister() {} },
     events: { checkpoint: () => store.conversations.latestEventSeq(), publish() {}, publishSince() {} }, log() {},

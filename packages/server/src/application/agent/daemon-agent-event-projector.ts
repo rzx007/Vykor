@@ -49,9 +49,8 @@ interface PendingEventSettlement {
 }
 
 export interface DaemonAgentEventProjectorContext {
-  /** Required in production; optional only for narrow projector test doubles. */
-  projectorId?: string;
-  rootSessionId?: string;
+  projectorId: string;
+  rootSessionId: string;
   rootAgent: VykorAgent;
   store: Pick<SessionStore,
     "conversations" | "conversationTransactions" | "incrementalOutput" | "runs" | "sessions" | "goals" |
@@ -78,13 +77,11 @@ export class DaemonAgentEventProjector {
   private readonly transcripts = new Map<string, ActiveTranscriptProjectionState>();
   private readonly children = new Map<string, ChildProjectionState>();
   private lastAppliedSequence = 0;
-  private pendingSettlement?: PendingEventSettlement;
 
   constructor(private readonly context: DaemonAgentEventProjectorContext) { }
 
   async apply(event: AgentEvent): Promise<void> {
-    if (this.hasDurableSettlementStore()) await this.reconcileDurableSettlements();
-    else await this.reconcilePendingSettlement();
+    await this.reconcileDurableSettlements();
     if (event.sequence <= this.lastAppliedSequence) return;
     try {
       await this.project(event);
@@ -98,9 +95,7 @@ export class DaemonAgentEventProjector {
           action: event.type === "child.closed" ? "retry-projection" : "compensate-child",
           cause: error,
         };
-        recovered = this.hasDurableSettlementStore()
-          ? await this.persistAndSettle(settlement, error)
-          : await this.settleInMemory(settlement);
+        recovered = await this.persistAndSettle(settlement, error);
       }
       if (recovered) return;
       throw error;
@@ -1006,35 +1001,18 @@ export class DaemonAgentEventProjector {
     }
   }
 
-  private async reconcilePendingSettlement(): Promise<void> {
-    const pending = this.pendingSettlement;
-    if (!pending) return;
-    await this.settle(pending);
-    this.lastAppliedSequence = Math.max(this.lastAppliedSequence, pending.event.sequence);
-    if (this.pendingSettlement === pending) this.pendingSettlement = undefined;
-  }
-
   private projectUsage(event: Extract<AgentEvent, { type: "usage.updated" }>): void {
     // The matching model.attempt.finished event settles this usage atomically
     // with its durable deduplication marker. Keep this event for live observers.
     void event;
   }
 
-  private hasDurableSettlementStore(): boolean {
-    return Boolean(
-      this.context.projectorId &&
-      this.context.rootSessionId &&
-      typeof this.context.store.createProjectionSettlement === "function" &&
-      typeof this.context.store.listProjectionSettlements === "function",
-    );
-  }
-
   private async persistAndSettle(pending: PendingEventSettlement, originalError: unknown): Promise<boolean> {
     let record;
     try {
       record = this.context.store.createProjectionSettlement(projectionSettlementInput(
-        this.context.projectorId!,
-        this.context.rootSessionId!,
+        this.context.projectorId,
+        this.context.rootSessionId,
         pending.event,
         pending.action === "retry-projection" ? "retry-terminal-projection" : "compensate-child",
         pending.cause,
@@ -1074,28 +1052,9 @@ export class DaemonAgentEventProjector {
     }
   }
 
-  private async settleInMemory(pending: PendingEventSettlement): Promise<boolean> {
-    try {
-      await this.settle(pending);
-      this.lastAppliedSequence = pending.event.sequence;
-      return pending.action === "retry-projection";
-    } catch (settlementError) {
-      this.pendingSettlement = pending;
-      this.context.log({
-        level: "error",
-        event: "session.child_projection.compensation_failed",
-        traceId: pending.event.context.traceId,
-        sessionId: pending.event.context.sessionId,
-        runId: pending.event.context.runId,
-        error: settlementError instanceof Error ? settlementError.message : String(settlementError),
-      });
-      return false;
-    }
-  }
-
   private async reconcileDurableSettlements(): Promise<void> {
     const records = this.context.store.listProjectionSettlements({
-      rootSessionId: this.context.rootSessionId!,
+      rootSessionId: this.context.rootSessionId,
       status: ["pending", "retrying"],
     });
     for (const record of records) {
@@ -1124,7 +1083,7 @@ export class DaemonAgentEventProjector {
       }
     }
     const pendingCount = this.context.store.listProjectionSettlements({
-      rootSessionId: this.context.rootSessionId!,
+      rootSessionId: this.context.rootSessionId,
       status: ["pending", "retrying"],
     }).length;
     if (pendingCount > 0) {
@@ -1133,8 +1092,8 @@ export class DaemonAgentEventProjector {
       );
     }
     const resolvedSequence = this.context.store.listProjectionSettlements({
-      projector: this.context.projectorId!,
-      rootSessionId: this.context.rootSessionId!,
+      projector: this.context.projectorId,
+      rootSessionId: this.context.rootSessionId,
       status: "resolved",
     }).reduce((maximum, record) => Math.max(maximum, record.eventSequence), 0);
     this.lastAppliedSequence = Math.max(this.lastAppliedSequence, resolvedSequence);

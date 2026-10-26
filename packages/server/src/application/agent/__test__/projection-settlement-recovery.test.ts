@@ -4,7 +4,11 @@ import { join } from "node:path";
 
 import type { AgentEvent } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { ChildAgentExecutionRegistry } from "@vykor/execution-node";
+import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
+import { SessionExecutionProjector } from "../../session/transcript/session-execution-projector.js";
+import { SessionTranscriptProjection } from "../../session/transcript/transcript-projection.js";
 
 import {
   projectionSettlementInput,
@@ -12,6 +16,63 @@ import {
 } from "../projection-settlement-recovery.js";
 
 describe("projection settlement recovery", () => {
+  // Missing durable persistence or replay deduplication must leave this test
+  // with a running task after restart, or more than one terminal event.
+  it.each(["completed", "failed", "interrupted", "stopped"] as const)(
+    "persists a failed %s child close and recovers it once after restart",
+    async (status) => {
+      const directory = mkdtempSync(join(tmpdir(), "vk-child-close-restart-"));
+      const path = join(directory, "store.db");
+      let store = new SessionStore({ path });
+      const publisher = { checkpoint: () => store.conversations.latestEventSeq(), publish() {}, publishSince() {} };
+      const makeProjector = (projectorId: string) => new DaemonAgentEventProjector({
+        projectorId, rootSessionId: "parent", store, rootAgent: {} as any,
+        transcriptProjection: new SessionTranscriptProjection(store),
+        executionProjector: new SessionExecutionProjector({
+          store, events: publisher,
+          getChildAgentExecutionRegistry: () => new ChildAgentExecutionRegistry(),
+          traceIdForRun: id => id, log() {},
+        }),
+        liveChildren: { register() {}, unregister() {} }, events: publisher, log() {},
+      });
+      try {
+        store.sessions.create({ id: "parent", cwd: directory, model: "m", metadata: { runtime: { model: "m" } } });
+        const projector = makeProjector("daemon-agent:old-agent");
+        await projector.apply(childEvent("child.created", 1, {
+          childId: "child-1", sessionId: "child-session", cwd: directory,
+          spawn: { agent: "worker", prompt: "inspect", description: "child", cwd: directory },
+        }));
+        const updateTask = store.updateSessionTask.bind(store);
+        vi.spyOn(store, "updateSessionTask").mockImplementation((id, input) => {
+          if (input.status === status) throw new Error("terminal task write unavailable");
+          return updateTask(id, input);
+        });
+        const result = { status, output: status === "failed" ? "child failed" : "child finished" };
+        const closed = childEvent("child.closed", 2, { childId: "child-1", sessionId: "child-session", result });
+        await expect(projector.apply(closed)).rejects.toThrow("terminal task write unavailable");
+        expect(store.getSessionTask("child-1")?.status).not.toBe(status);
+        expect(store.listProjectionSettlements()).toMatchObject([{
+          status: "pending", attemptCount: 1, lastError: "terminal task write unavailable",
+          payload: { event: { id: closed.id, type: "child.closed", data: { result } } },
+        }]);
+        expect(store.conversations.listEvents().filter(event => event.type === "agent.child.closed")).toHaveLength(0);
+        store.close();
+        store = new SessionStore({ path });
+
+        const restarted = makeProjector("daemon-agent:new-agent");
+        await restarted.apply(closed);
+        await restarted.apply(closed);
+        expect(store.getSessionTask("child-1")).toMatchObject({ status, output: result.output });
+        expect(store.listProjectionSettlements()).toMatchObject([{ status: "resolved", attemptCount: 2 }]);
+        expect(recoverProjectionSettlements(store)).toEqual({ resolved: 0, pending: 0 });
+        expect(store.conversations.listEvents().filter(event => event.type === "agent.child.closed")).toHaveLength(1);
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("completes a child terminal projection after a daemon restart and is idempotent", () => {
     withStorePath((path) => {
       const first = new SessionStore({ path });

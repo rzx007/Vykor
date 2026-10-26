@@ -6,6 +6,8 @@
 
 `new SessionStore()` 打开数据库并装入共享状态，创建各领域 Repository 与 Transaction；提交后发布事件通知，关闭时保存剩余增量并释放资源。`executions` 与 `toolOperations` 分别提供执行头和工具操作审计入口。取得 owner 写入权时，在同一事务内重新读取数据库，保留本进程 memory 会话并重建事件序号；有未保存本地增量时拒绝接管，防止覆盖状态。启动时由可信宿主确认旧 owner 已失活，再将所有遗留未结算派发标记 unknown，不自动重新调用工具。
 
+Workflow 的保存、查询和事件读取直接使用 `store.workflows.saveRun/loadRun/listRuns/listEvents`。`store.appendWorkflowEvent` 同时保存 Workflow 事件并向所属会话追加可订阅事件，因此仍作为跨领域写入入口保留。
+
 ## 状态归属
 
 SessionStore 持有当前连接、共享状态、订阅与使用许可；正式记录写入 SQLite，临时会话保存在内存。

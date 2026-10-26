@@ -54,7 +54,7 @@ describe("resolved-child-mode survives event persistence and cold daemon recover
     const publisher = new SessionEventPublisher(store.conversations, { broadcastSince: () => {}, broadcastEvent: () => {} });
     const registry = new ChildAgentExecutionRegistry();
     const liveChildren = new LiveChildAgentDirectory();
-    projector = new DaemonAgentEventProjector({ rootAgent: root, store, liveChildren, events: publisher, log: () => {},
+    projector = new DaemonAgentEventProjector({ projectorId: `daemon-agent:${root.id}`, rootSessionId: parent.id, rootAgent: root, store, liveChildren, events: publisher, log: () => {},
       transcriptProjection: new SessionTranscriptProjection(store),
       executionProjector: new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => registry, events: publisher, traceIdForRun: id => id, log: () => {} }),
     });

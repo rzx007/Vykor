@@ -33,6 +33,7 @@ function harness(client: StreamingMessageClient, tools: ToolDefinition[] = []) {
       modelRetry: { baseDelayMs: 0, maxDelayMs: 0, maxTotalRetries: 2 } });
   const events: AgentEvent[] = [];
   const projector = new DaemonAgentEventProjector({
+    projectorId: "daemon-agent:a", rootSessionId: session.id,
     rootAgent: {} as any, store,
     transcriptProjection: new SessionTranscriptProjection(store),
     executionProjector: {} as any,

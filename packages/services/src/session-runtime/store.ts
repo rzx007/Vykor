@@ -76,10 +76,6 @@ import {
   type SessionGoalRequestRecord,
   type UpdateSessionGoalStoreInput,
 } from "../goals/index.js";
-import type {
-  StoredWorkflowRunInput,
-  StoredWorkflowRunRecord,
-} from "../workflows/workflow-records.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "../sessions/title.js";
 import {
   defaultDurableEventRegistry,
@@ -349,20 +345,6 @@ export class SessionStore {
     }
   }
 
-  saveWorkflowRun(input: StoredWorkflowRunInput): void {
-    this.workflows.saveRun(input);
-  }
-
-  loadWorkflowRun(runId: string): StoredWorkflowRunRecord | undefined {
-    return this.workflows.loadRun(runId);
-  }
-
-  listWorkflowRuns(
-    options: { ownerSessionId?: string; status?: string } = {},
-  ): StoredWorkflowRunRecord[] {
-    return this.workflows.listRuns(options);
-  }
-
   appendWorkflowEvent(input: {
     runId: string;
     sessionId?: string;
@@ -381,10 +363,6 @@ export class SessionStore {
       });
     }
     return seq;
-  }
-
-  listWorkflowEvents(runId: string): string[] {
-    return this.workflows.listEvents(runId);
   }
 
   acquireApplicationOwner(input: {

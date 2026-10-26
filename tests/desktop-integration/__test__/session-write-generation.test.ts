@@ -61,6 +61,7 @@ describe("Write generation through runtime, projection and desktop", () => {
         },
       })
       const projector = new DaemonAgentEventProjector({
+        projectorId: "daemon-agent:agent", rootSessionId: session.id,
         rootAgent: {} as never, store, transcriptProjection: new SessionTranscriptProjection(store),
         executionProjector: {} as never, liveChildren: { register() {}, unregister() {} },
         events: publisher, log() {},

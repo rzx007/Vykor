@@ -25,6 +25,10 @@ afterEach(() => {
 });
 
 function projectorStore(flat: Record<string, any>) {
+  // The real settlement repository preserves filters, identity and retry state.
+  const directory = mkdtempSync(join(tmpdir(), "vk-projector-settlements-"));
+  const settlements = new SessionStore({ path: join(directory, "store.db") });
+  compactionCleanup.push(() => { settlements.close(); rmSync(directory, { recursive: true, force: true }); });
   return {
     goals: { getGoal: flat.getGoal ?? vi.fn() },
     sessions: {
@@ -69,13 +73,13 @@ function projectorStore(flat: Record<string, any>) {
       getSessionTask: flat.runsGetSessionTask ?? flat.getSessionTask ?? vi.fn(),
       updateSessionTask: flat.runsUpdateSessionTask ?? flat.updateSessionTask ?? vi.fn(),
     },
-    createProjectionSettlement: flat.createProjectionSettlement ?? vi.fn(),
-    failProjectionSettlement: flat.failProjectionSettlement ?? vi.fn(),
-    getProjectionSettlement: flat.getProjectionSettlement ?? vi.fn(),
+    createProjectionSettlement: flat.createProjectionSettlement ?? settlements.createProjectionSettlement.bind(settlements),
+    failProjectionSettlement: flat.failProjectionSettlement ?? settlements.failProjectionSettlement.bind(settlements),
+    getProjectionSettlement: flat.getProjectionSettlement ?? settlements.getProjectionSettlement.bind(settlements),
     getSessionTask: flat.getSessionTask ?? vi.fn(),
-    listProjectionSettlements: flat.listProjectionSettlements ?? vi.fn(() => []),
-    markProjectionSettlementRetrying: flat.markProjectionSettlementRetrying ?? vi.fn(),
-    resolveProjectionSettlement: flat.resolveProjectionSettlement ?? vi.fn(),
+    listProjectionSettlements: flat.listProjectionSettlements ?? settlements.listProjectionSettlements.bind(settlements),
+    markProjectionSettlementRetrying: flat.markProjectionSettlementRetrying ?? settlements.markProjectionSettlementRetrying.bind(settlements),
+    resolveProjectionSettlement: flat.resolveProjectionSettlement ?? settlements.resolveProjectionSettlement.bind(settlements),
     transaction: flat.transaction ?? (<T>(work: () => T) => work()),
     updateSessionTask: flat.updateSessionTask ?? vi.fn(),
   } satisfies DaemonAgentEventProjectorContext["store"];
@@ -129,6 +133,7 @@ describe("DaemonAgentEventProjector", () => {
       store.runs.updateRun(id, { status: "completed" });
     }
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store, rootAgent: { children: { get: () => undefined } } as any,
       transcriptProjection: new SessionTranscriptProjection(store), executionProjector: {} as any,
       liveChildren: { register: vi.fn(), unregister: vi.fn() },
@@ -243,6 +248,7 @@ describe("DaemonAgentEventProjector", () => {
       events, traceIdForRun: () => "trace", log: () => {},
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: () => ({ send }) } } as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -276,6 +282,7 @@ describe("DaemonAgentEventProjector", () => {
       metadata: { runtime: { model: "model-b", effort: "high", sessionMode: "coordinator", baseUrl: "https://new.example/v1" }, appliedRequestModel: "model-a" },
     }]]);
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -306,6 +313,7 @@ describe("DaemonAgentEventProjector", () => {
       metadata: { runtime: { model: "model-a", approvalMode: "full_access", workMode: "execute" } },
     }]]);
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -332,6 +340,7 @@ describe("DaemonAgentEventProjector", () => {
     }]]);
     const updateSessionTask = vi.fn();
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -379,6 +388,7 @@ describe("DaemonAgentEventProjector", () => {
     }]]);
     const updateSessionTask = vi.fn();
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -411,6 +421,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const messages: Array<Record<string, unknown>> = [];
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: () => session,
@@ -446,6 +457,7 @@ describe("DaemonAgentEventProjector", () => {
     const transaction = vi.fn((work: () => unknown) => work());
     const projectStreamEvent = vi.fn(() => ({}));
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({ transaction }),
       transcriptProjection: { projectStreamEvent } as any,
@@ -474,6 +486,7 @@ describe("DaemonAgentEventProjector", () => {
     const runs = new Map<string, any>([["root-run", { id: "root-run", sessionId: "parent", status: "running" }]]);
     let task: any;
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
@@ -527,6 +540,7 @@ describe("DaemonAgentEventProjector", () => {
       return row;
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -653,6 +667,7 @@ describe("DaemonAgentEventProjector", () => {
       });
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
@@ -748,6 +763,7 @@ describe("DaemonAgentEventProjector", () => {
     const updateRun = vi.fn();
     const appendEvent = vi.fn();
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store: projectorStore({
         getRun: () => run,
         updateRun,
@@ -783,6 +799,7 @@ describe("DaemonAgentEventProjector", () => {
       attachments: [],
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store: projectorStore({
         transaction: (work: () => unknown) => work(),
         getInput: () => input,
@@ -837,6 +854,7 @@ describe("DaemonAgentEventProjector", () => {
     const items = [{ type: "skill", name: "review", path: "/review/SKILL.md" }];
     let persisted: unknown;
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store: projectorStore({
         transaction: (work: () => unknown) => work(),
         getInput: () => undefined,
@@ -975,6 +993,7 @@ describe("DaemonAgentEventProjector", () => {
       publishSince: vi.fn(),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent,
       store: projectorStore(store),
       transcriptProjection: transcript as any,
@@ -1179,6 +1198,7 @@ describe("DaemonAgentEventProjector", () => {
       unregister: vi.fn(),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
@@ -1233,6 +1253,7 @@ describe("DaemonAgentEventProjector", () => {
       })),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
@@ -1282,6 +1303,7 @@ describe("DaemonAgentEventProjector", () => {
       publishSince: vi.fn(),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
@@ -1337,6 +1359,7 @@ describe("DaemonAgentEventProjector", () => {
       publishSince: vi.fn(),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
@@ -1384,6 +1407,7 @@ describe("DaemonAgentEventProjector", () => {
       ),
     };
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
@@ -1416,6 +1440,7 @@ describe("DaemonAgentEventProjector", () => {
 
   it("rejects child creation after the parent session starts closing", async () => {
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore({
         getSession: vi.fn(() => ({
@@ -1455,53 +1480,23 @@ describe("DaemonAgentEventProjector", () => {
   });
 
   it("retains and retries child close projection state after durable completion fails", async () => {
+    const task = { id: "child-1", status: "running", output: "" };
     const completeChildExecution = vi
-      .fn()
+      .fn(async (_id: string, result: { status: string; output: string }) => {
+        Object.assign(task, result);
+      })
       .mockRejectedValueOnce(new Error("store unavailable"))
-      .mockRejectedValueOnce(new Error("store still unavailable"))
-      .mockResolvedValueOnce(undefined);
+      .mockRejectedValueOnce(new Error("store still unavailable"));
     const liveChildren = { unregister: vi.fn() };
-    let settlement: any;
-    const store = {
-      getSessionTask: vi.fn(() => ({ id: "child-1", status: "running" })),
+    const store = projectorStore({
+      getSessionTask: vi.fn(() => task),
       appendEvent: vi.fn(),
-      createProjectionSettlement: vi.fn((input) => {
-        settlement ??= {
-          ...input,
-          id: "settlement-1",
-          status: "pending",
-          attemptCount: 0,
-          createdAt: 1,
-          updatedAt: 1,
-        };
-        return settlement;
-      }),
-      listProjectionSettlements: vi.fn(() =>
-        settlement && (settlement.status === "pending" || settlement.status === "retrying")
-          ? [settlement]
-          : [],
-      ),
-      markProjectionSettlementRetrying: vi.fn(() => {
-        Object.assign(settlement, {
-          status: "retrying",
-          attemptCount: settlement.attemptCount + 1,
-        });
-        return settlement;
-      }),
-      failProjectionSettlement: vi.fn((_id, error) => {
-        Object.assign(settlement, { status: "pending", lastError: error });
-        return settlement;
-      }),
-      resolveProjectionSettlement: vi.fn(() => {
-        Object.assign(settlement, { status: "resolved" });
-        return settlement;
-      }),
-    };
+    });
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1",
       rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: projectorStore(store),
+      store,
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: liveChildren as any,
@@ -1529,14 +1524,18 @@ describe("DaemonAgentEventProjector", () => {
 
     expect(liveChildren.unregister).toHaveBeenCalledWith("child-session", "child-1");
     expect((projector as any).children.size).toBe(1);
+    expect(task.status).toBe("running");
+    expect(store.listProjectionSettlements()).toMatchObject([{
+      status: "pending", attemptCount: 1, lastError: "store still unavailable",
+    }]);
 
     await projector.apply(closed);
 
     expect(completeChildExecution).toHaveBeenCalledTimes(3);
-    expect(store.appendEvent).toHaveBeenCalledOnce();
+    expect(store.conversations.appendEvent).toHaveBeenCalledOnce();
     expect((projector as any).children.size).toBe(0);
-    expect(store.createProjectionSettlement).toHaveBeenCalledOnce();
-    expect(settlement).toMatchObject({ status: "resolved", attemptCount: 2 });
+    expect(task).toMatchObject({ status: "completed", output: "done" });
+    expect(store.listProjectionSettlements()).toMatchObject([{ status: "resolved", attemptCount: 2 }]);
   });
 
   it("does not hide the original projection error when settlement persistence also fails", async () => {
@@ -1589,6 +1588,7 @@ describe("DaemonAgentEventProjector", () => {
   it("does not reopen a terminal durable run", async () => {
     const updateRun = vi.fn();
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore({
         transaction: <T>(work: () => T) => work(),
@@ -1641,6 +1641,7 @@ describe("DaemonAgentEventProjector", () => {
       durableEvents.push(input);
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore({ appendEvent, listEvents: vi.fn(() => durableEvents) }),
       transcriptProjection: {} as any,
@@ -1759,6 +1760,7 @@ describe("DaemonAgentEventProjector", () => {
       return run;
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({ getRun: () => run, updateRun }),
       transcriptProjection: {} as any,
@@ -1792,6 +1794,7 @@ describe("DaemonAgentEventProjector", () => {
       return run;
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({
         getGoal: () => ({ id: "g1", sessionId: "s1", status: "active", objectiveVersion: 2, currentRunId: "r1" }),
@@ -1841,6 +1844,7 @@ describe("DaemonAgentEventProjector", () => {
       listEvents: () => records,
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any, store, transcriptProjection: {} as any,
       executionProjector: {} as any, liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
@@ -1868,6 +1872,7 @@ describe("DaemonAgentEventProjector", () => {
       return run;
     });
     const projector = new DaemonAgentEventProjector({
+      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
       store: projectorStore({ getRun: () => run, updateRun }),
       transcriptProjection: { beginGeneration } as any,
@@ -1921,6 +1926,7 @@ function compactionHarness() {
   };
   const published: SessionEventRecord[] = [];
   const projector = new DaemonAgentEventProjector({
+    projectorId: "daemon-agent:compaction", rootSessionId: sessionId,
     rootAgent: {} as any, store, transcriptProjection: {} as any,
     executionProjector: {} as any, liveChildren: { register() {}, unregister() {} },
     events: {
