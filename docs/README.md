@@ -86,7 +86,7 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
-- [架构、拆分粒度与复杂度审查计划](./superpowers/plans/2026-10-26-architecture-complexity-review-plan.md)：当前工作区的审查证据，以及同步、测试分支和运行编排的分批简化建议，尚未实施。
+- [剩余复杂度评估与下一阶段计划](./superpowers/plans/2026-10-27-next-architecture-simplification-plan.md)：评估工具面板、启动资源归属和全历史加载；包含合成历史测量及四个独立实施批次，尚未实施。
 - [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
 - [记忆归属与写入规则](./memory-policy.md)：记忆优化目标及验收用例。
@@ -97,6 +97,7 @@
 旧文件保留路径，开头链接当前说明。阶段计划只证明当时的安排，验收记录只证明当次验证的范围；历史统计和旧路径不作为当前 API。
 
 - [阶段计划目录](./plans/README.md)、[方案与验收记录目录](./superpowers/README.md)、[研究资料目录](./research/README.md)。
+- [首轮架构简化计划与实施记录](./superpowers/plans/2026-10-26-architecture-complexity-review-plan.md)：同步、持久投影、Desktop client、队列桥接和 Core 恢复决策五批已完成；保留当时证据和验收范围。
 - [Agent 包收敛验收](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)、[Protocol 分层验收](./superpowers/reviews/2026-10-22-protocol-layering-closeout.md)、[Swarm 退役与测试迁移](./superpowers/reviews/2026-10-23-swarm-retirement-and-agent-tests.md)：各阶段的代码与检查证据；后续决定以较新的实现和验收为准。
 - [兼容面实施审计](./compatibility-surface-audit.md)：旧入口的删除与保留裁定。
 - [插件系统交接](./plugin-system-handoff.md)、[插件后续阶段交接](./native-plugin-next-stage-handoff.md)、[插件机制调研](./plugin-mechanism-report.md)：旧阶段能力和路线快照。
